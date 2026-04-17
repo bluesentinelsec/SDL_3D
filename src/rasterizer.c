@@ -391,8 +391,7 @@ static void sdl3d_rasterize_screen_triangle(sdl3d_framebuffer *framebuffer, sdl3
 /* --- Public: triangle, line, point --------------------------------------- */
 
 void sdl3d_rasterize_triangle(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0, sdl3d_vec3 v1,
-                              sdl3d_vec3 v2, sdl3d_color color, bool backface_culling_enabled,
-                              bool wireframe_enabled)
+                              sdl3d_vec3 v2, sdl3d_color color, bool backface_culling_enabled, bool wireframe_enabled)
 {
     if (framebuffer == NULL || framebuffer->color_pixels == NULL || framebuffer->depth_pixels == NULL)
     {

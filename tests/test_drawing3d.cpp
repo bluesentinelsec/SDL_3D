@@ -345,7 +345,7 @@ TEST_F(SDL3DDrawingFixture, ClearResetsDepthBuffer)
     sdl3d_destroy_render_context(ctx);
 }
 
-TEST_F(SDL3DDrawingFixture, ScissorRestrictsRasterizationToClippedRegion)
+TEST_F(SDL3DDrawingFixture, ScissorRestrictsDrawingToClippedRegion)
 {
     WindowRenderer wr(64, 64);
     ASSERT_TRUE(wr.ok());
@@ -365,14 +365,15 @@ TEST_F(SDL3DDrawingFixture, ScissorRestrictsRasterizationToClippedRegion)
 
     ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
     ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeCamera()));
-    ASSERT_TRUE(sdl3d_draw_triangle_3d(ctx, sdl3d_vec3_make(-1.0f, -1.0f, 0.0f), sdl3d_vec3_make(1.0f, -1.0f, 0.0f),
-                                       sdl3d_vec3_make(0.0f, 1.0f, 0.0f), kRed));
+    ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), kRed));
     ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
 
     EXPECT_EQ(CountColor(ctx, kRed), 1);
     sdl3d_color c{};
     ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 32, 32, &c));
     EXPECT_TRUE(PixelEquals(c, kRed));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 31, 32, &c));
+    EXPECT_TRUE(PixelEquals(c, kBlack));
 
     ASSERT_TRUE(sdl3d_set_scissor_rect(ctx, nullptr));
     EXPECT_FALSE(sdl3d_is_scissor_enabled(ctx));
