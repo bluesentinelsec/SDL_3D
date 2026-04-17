@@ -1,27 +1,53 @@
 include(FetchContent)
 include(GoogleTest)
 
-FetchContent_Declare(
-    googletest
-    URL https://github.com/google/googletest/archive/refs/tags/v1.15.2.zip
-    DOWNLOAD_EXTRACT_TIMESTAMP OFF
-)
+find_package(GTest CONFIG QUIET)
 
-set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
+if(NOT TARGET GTest::gtest)
+    FetchContent_Declare(
+        googletest
+        URL https://github.com/google/googletest/archive/refs/tags/v1.15.2.zip
+        DOWNLOAD_EXTRACT_TIMESTAMP OFF
+    )
 
-add_executable(sdl3d_greet_test test_greet.cpp)
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+endif()
 
-target_link_libraries(
-    sdl3d_greet_test
-    PRIVATE
-        SDL3D::sdl3d
-        GTest::gtest_main
-)
+function(sdl3d_add_test target_name source_file test_label)
+    add_executable(${target_name} ${source_file})
 
-target_compile_features(sdl3d_greet_test PRIVATE cxx_std_17)
+    target_link_libraries(
+        ${target_name}
+        PRIVATE
+            SDL3D::sdl3d
+            GTest::gtest
+            GTest::gtest_main
+    )
 
-sdl3d_enable_sanitizers(sdl3d_greet_test)
+    target_compile_features(${target_name} PRIVATE cxx_std_17)
 
-gtest_discover_tests(sdl3d_greet_test)
+    sdl3d_enable_sanitizers(${target_name})
+
+    if(WIN32)
+        add_custom_command(
+            TARGET ${target_name}
+            POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:${target_name}> $<TARGET_FILE_DIR:${target_name}>
+            COMMAND_EXPAND_LISTS
+        )
+    endif()
+
+    gtest_discover_tests(
+        ${target_name}
+        DISCOVERY_TIMEOUT 10
+        DISCOVERY_MODE PRE_TEST
+        PROPERTIES
+            LABELS ${test_label}
+            TIMEOUT 15
+    )
+endfunction()
+
+sdl3d_add_test(sdl3d_api_test test_api.cpp unit)
+sdl3d_add_test(sdl3d_render_loop_test test_render_loop.cpp render)

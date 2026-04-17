@@ -19,6 +19,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Setup SDL
+        uses: libsdl-org/setup-sdl@main
+        with:
+          version: 3-latest
+          install-linux-dependencies: true
+
       - name: Configure
         run: cmake --preset release
 
@@ -26,7 +32,12 @@ jobs:
         run: cmake --build --preset release
 
       - name: Test
+        if: runner.os != 'Linux'
         run: ctest --preset release
+
+      - name: Test
+        if: runner.os == 'Linux'
+        run: xvfb-run -a ctest --preset release
 
   sanitizers:
     name: Sanitizers
@@ -44,7 +55,13 @@ jobs:
       - name: Install toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install --yes clang ninja-build
+          sudo apt-get install --yes clang ninja-build xvfb
+
+      - name: Setup SDL
+        uses: libsdl-org/setup-sdl@main
+        with:
+          version: 3-latest
+          install-linux-dependencies: true
 
       - name: Configure
         run: cmake --preset sanitizers
@@ -53,4 +70,4 @@ jobs:
         run: cmake --build --preset sanitizers
 
       - name: Test
-        run: ctest --preset sanitizers
+        run: xvfb-run -a ctest --preset sanitizers
