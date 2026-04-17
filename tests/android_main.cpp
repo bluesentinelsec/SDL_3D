@@ -26,8 +26,7 @@ class AndroidLogListener : public ::testing::EmptyTestEventListener
 {
     void OnTestStart(const ::testing::TestInfo &info) override
     {
-        __android_log_print(ANDROID_LOG_INFO, kLogTag, "RUN  %s.%s",
-                            info.test_suite_name(), info.name());
+        __android_log_print(ANDROID_LOG_INFO, kLogTag, "RUN  %s.%s", info.test_suite_name(), info.name());
     }
 
     void OnTestPartResult(const ::testing::TestPartResult &result) override
@@ -35,21 +34,18 @@ class AndroidLogListener : public ::testing::EmptyTestEventListener
         if (result.failed())
         {
             __android_log_print(ANDROID_LOG_ERROR, kLogTag, "FAIL %s:%d %s",
-                                result.file_name() ? result.file_name() : "?",
-                                result.line_number(), result.summary());
+                                result.file_name() ? result.file_name() : "?", result.line_number(), result.summary());
         }
     }
 
     void OnTestEnd(const ::testing::TestInfo &info) override
     {
         const auto *r = info.result();
-        __android_log_print(r && r->Failed() ? ANDROID_LOG_ERROR : ANDROID_LOG_INFO, kLogTag,
-                            "%s %s.%s",
-                            (r && r->Failed()) ? "FAIL" : "OK  ",
-                            info.test_suite_name(), info.name());
+        __android_log_print(r && r->Failed() ? ANDROID_LOG_ERROR : ANDROID_LOG_INFO, kLogTag, "%s %s.%s",
+                            (r && r->Failed()) ? "FAIL" : "OK  ", info.test_suite_name(), info.name());
     }
 };
-}
+} // namespace
 
 int main(int argc, char **argv)
 {
