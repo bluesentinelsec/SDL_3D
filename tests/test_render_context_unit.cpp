@@ -192,8 +192,8 @@ TEST(SDL3DCreateRenderContext, RejectsNullRenderer)
 TEST(SDL3DCreateRenderContext, RejectsNullOutputPointer)
 {
     SDL_ClearError();
-    EXPECT_FALSE(sdl3d_create_render_context(reinterpret_cast<SDL_Window *>(0x1),
-                                             reinterpret_cast<SDL_Renderer *>(0x1), nullptr, nullptr));
+    EXPECT_FALSE(sdl3d_create_render_context(reinterpret_cast<SDL_Window *>(0x1), reinterpret_cast<SDL_Renderer *>(0x1),
+                                             nullptr, nullptr));
     EXPECT_NE(std::string_view(SDL_GetError()).find("Parameter 'out_context' is invalid"), std::string_view::npos);
 }
 
@@ -206,8 +206,8 @@ TEST(SDL3DCreateRenderContext, RejectsNegativeLogicalDimensions)
     config.logical_height = 0;
 
     SDL_ClearError();
-    EXPECT_FALSE(sdl3d_create_render_context(reinterpret_cast<SDL_Window *>(0x1),
-                                             reinterpret_cast<SDL_Renderer *>(0x1), &config, &context));
+    EXPECT_FALSE(sdl3d_create_render_context(reinterpret_cast<SDL_Window *>(0x1), reinterpret_cast<SDL_Renderer *>(0x1),
+                                             &config, &context));
     EXPECT_EQ(nullptr, context);
     EXPECT_NE(std::string_view(SDL_GetError()).find("Logical dimensions must be zero or positive"),
               std::string_view::npos);
@@ -222,8 +222,8 @@ TEST(SDL3DCreateRenderContext, RejectsMismatchedLogicalDimensions)
     config.logical_height = 0;
 
     SDL_ClearError();
-    EXPECT_FALSE(sdl3d_create_render_context(reinterpret_cast<SDL_Window *>(0x1),
-                                             reinterpret_cast<SDL_Renderer *>(0x1), &config, &context));
+    EXPECT_FALSE(sdl3d_create_render_context(reinterpret_cast<SDL_Window *>(0x1), reinterpret_cast<SDL_Renderer *>(0x1),
+                                             &config, &context));
     EXPECT_EQ(nullptr, context);
     EXPECT_NE(std::string_view(SDL_GetError()).find("Logical width and height must both be zero or both be non-zero"),
               std::string_view::npos);
@@ -235,8 +235,8 @@ TEST(SDL3DCreateRenderContext, InvalidEnvOverrideFailsBeforeTouchingRenderer)
     sdl3d_render_context *context = nullptr;
 
     SDL_ClearError();
-    EXPECT_FALSE(sdl3d_create_render_context(reinterpret_cast<SDL_Window *>(0x1),
-                                             reinterpret_cast<SDL_Renderer *>(0x1), nullptr, &context));
+    EXPECT_FALSE(sdl3d_create_render_context(reinterpret_cast<SDL_Window *>(0x1), reinterpret_cast<SDL_Renderer *>(0x1),
+                                             nullptr, &context));
     EXPECT_EQ(nullptr, context);
     EXPECT_NE(std::string_view(SDL_GetError()).find("Unsupported SDL3D backend override"), std::string_view::npos);
 }
@@ -251,8 +251,8 @@ TEST(SDL3DCreateRenderContext, SdlGpuWithoutFallbackFailsBeforeTouchingRenderer)
     config.allow_backend_fallback = false;
 
     SDL_ClearError();
-    EXPECT_FALSE(sdl3d_create_render_context(reinterpret_cast<SDL_Window *>(0x1),
-                                             reinterpret_cast<SDL_Renderer *>(0x1), &config, &context));
+    EXPECT_FALSE(sdl3d_create_render_context(reinterpret_cast<SDL_Window *>(0x1), reinterpret_cast<SDL_Renderer *>(0x1),
+                                             &config, &context));
     EXPECT_EQ(nullptr, context);
     EXPECT_NE(std::string_view(SDL_GetError()).find("not implemented"), std::string_view::npos);
 }
