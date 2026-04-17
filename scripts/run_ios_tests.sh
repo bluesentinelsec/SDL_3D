@@ -57,8 +57,15 @@ DEVICE_TYPE_ID="${SIM_DEVICE_TYPE_ID:-}"
 if [ -z "$DEVICE_TYPE_ID" ]; then
     for device_name in "iPhone 17" "iPhone 16" "iPhone 15" "iPhone 14"; do
         DEVICE_TYPE_ID="$(
-            xcrun simctl list devicetypes | sed -En \
-                "/^${device_name// /[[:space:]]+} /s/.*\\((com\\.apple\\.CoreSimulator\\.SimDeviceType\\.[^)]+)\\).*/\\1/p"
+            xcrun simctl list devicetypes | awk -v want="$device_name" '
+                index($0, want " (") == 1 {
+                    line = $0
+                    sub(/^.*\(/, "", line)
+                    sub(/\)$/, "", line)
+                    print line
+                    exit
+                }
+            '
         )"
         if [ -n "$DEVICE_TYPE_ID" ]; then
             break
