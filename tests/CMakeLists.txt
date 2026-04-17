@@ -30,6 +30,14 @@ function(sdl3d_add_test target_name source_file test_label)
 
     sdl3d_enable_sanitizers(${target_name})
 
+    if(EMSCRIPTEN)
+        # Produce an .html shell so emrun can host the page and capture
+        # stdout + exit code via the Emscripten runtime hooks enabled by
+        # the --emrun link flag.
+        set_target_properties(${target_name} PROPERTIES SUFFIX ".html")
+        target_link_options(${target_name} PRIVATE "--emrun")
+    endif()
+
     if(WIN32)
         add_custom_command(
             TARGET ${target_name}
