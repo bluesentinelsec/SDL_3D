@@ -50,4 +50,6 @@ function(sdl3d_add_test target_name source_file test_label)
 endfunction()
 
 sdl3d_add_test(sdl3d_api_test test_api.cpp unit)
+sdl3d_add_test(sdl3d_render_context_unit_test test_render_context_unit.cpp unit)
+sdl3d_add_test(sdl3d_render_context_test test_render_context.cpp render)
 sdl3d_add_test(sdl3d_render_loop_test test_render_loop.cpp render)
