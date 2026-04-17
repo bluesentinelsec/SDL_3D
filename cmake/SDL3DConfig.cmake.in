@@ -1,0 +1,5 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/SDL3DTargets.cmake")
+
+check_required_components(SDL3D)
