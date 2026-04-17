@@ -186,7 +186,10 @@ TEST_F(SDLVideoFixture, SetDepthPlanesRejectedWhileInMode)
     sdl3d_destroy_render_context(ctx);
 }
 
-TEST_F(SDLVideoFixture, NullContextIsRejected)
+// No SDL_Init: NULL-context guards are pure C checks and must not pull in
+// the X11 video subsystem (which leaks a small allocation per process on
+// Linux CI and trips ASan when no window is ever created).
+TEST(SDL3DDrawing3DNull, NullContextIsRejected)
 {
     SDL_ClearError();
     EXPECT_FALSE(sdl3d_begin_mode_3d(nullptr, MakeCamera()));
