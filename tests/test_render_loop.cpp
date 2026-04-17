@@ -3,7 +3,6 @@
 #include <SDL3/SDL.h>
 
 #include <memory>
-#include <string_view>
 
 namespace
 {
@@ -82,16 +81,7 @@ using RendererPtr = std::unique_ptr<SDL_Renderer, decltype(&SDL_DestroyRenderer)
 TEST(SDL3DRenderLoop, MinimalRendererLoopCompletesDeterministically)
 {
     SDL_ClearError();
-    if (!SDL_Init(SDL_INIT_VIDEO))
-    {
-        const std::string_view error = SDL_GetError();
-        if (error.find("did not add any displays") != std::string_view::npos)
-        {
-            GTEST_SKIP() << error;
-        }
-
-        FAIL() << error;
-    }
+    ASSERT_TRUE(SDL_Init(SDL_INIT_VIDEO)) << SDL_GetError();
     SDLQuitGuard quit_guard;
 
     SDL_Window *raw_window = nullptr;

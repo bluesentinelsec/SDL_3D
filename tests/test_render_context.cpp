@@ -13,21 +13,6 @@ extern "C"
 
 namespace
 {
-bool TryInitVideo(std::string *error_message, bool *is_displayless)
-{
-    SDL_ClearError();
-    if (!SDL_Init(SDL_INIT_VIDEO))
-    {
-        *error_message = SDL_GetError();
-        *is_displayless = error_message->find("did not add any displays") != std::string::npos;
-        return false;
-    }
-
-    error_message->clear();
-    *is_displayless = false;
-    return true;
-}
-
 bool SetBackendOverride(const char *value)
 {
     if (value == nullptr)
@@ -41,6 +26,21 @@ bool SetBackendOverride(const char *value)
 struct SDLQuitGuard
 {
     ~SDLQuitGuard()
+    {
+        SDL_Quit();
+    }
+};
+
+class SDLVideoFixture : public ::testing::Test
+{
+  protected:
+    void SetUp() override
+    {
+        SDL_ClearError();
+        ASSERT_TRUE(SDL_Init(SDL_INIT_VIDEO)) << SDL_GetError();
+    }
+
+    void TearDown() override
     {
         SDL_Quit();
     }
@@ -120,36 +120,12 @@ class SDL3DBackendOverrideGuard
 };
 } // namespace
 
-TEST(SDL3DRenderContext, DefaultConfigUsesSoftwareBackend)
+TEST_F(SDLVideoFixture, DefaultConfigUsesSoftwareBackend)
 {
-    std::string error_message;
-    bool is_displayless = false;
-
-    if (!TryInitVideo(&error_message, &is_displayless))
-    {
-        if (is_displayless)
-        {
-            GTEST_SKIP() << error_message;
-        }
-
-        FAIL() << error_message;
-    }
-
-    SDLQuitGuard quit_guard;
     SDLWindowRendererPair pair;
+    ASSERT_TRUE(pair.is_valid()) << SDL_GetError();
+
     sdl3d_render_context *context = nullptr;
-
-    if (!pair.is_valid())
-    {
-        const std::string_view error = SDL_GetError();
-        if (error.find("did not add any displays") != std::string_view::npos)
-        {
-            GTEST_SKIP() << error;
-        }
-
-        FAIL() << error;
-    }
-
     ASSERT_TRUE(sdl3d_create_render_context(pair.window(), pair.renderer(), nullptr, &context)) << SDL_GetError();
     ASSERT_NE(context, nullptr);
     EXPECT_EQ(SDL3D_BACKEND_SOFTWARE, sdl3d_get_render_context_backend(context));
@@ -159,49 +135,26 @@ TEST(SDL3DRenderContext, DefaultConfigUsesSoftwareBackend)
     sdl3d_destroy_render_context(context);
 }
 
-TEST(SDL3DRenderContext, LogicalPresentationConfigIsApplied)
+TEST_F(SDLVideoFixture, LogicalPresentationConfigIsApplied)
 {
-    std::string error_message;
-    bool is_displayless = false;
-
-    if (!TryInitVideo(&error_message, &is_displayless))
-    {
-        if (is_displayless)
-        {
-            GTEST_SKIP() << error_message;
-        }
-
-        FAIL() << error_message;
-    }
-
-    SDLQuitGuard quit_guard;
     SDLWindowRendererPair pair;
-    sdl3d_render_context *context = nullptr;
+    ASSERT_TRUE(pair.is_valid()) << SDL_GetError();
+
     sdl3d_render_context_config config;
-    int logical_width = 0;
-    int logical_height = 0;
-    SDL_RendererLogicalPresentation mode = SDL_LOGICAL_PRESENTATION_DISABLED;
-
-    if (!pair.is_valid())
-    {
-        const std::string_view error = SDL_GetError();
-        if (error.find("did not add any displays") != std::string_view::npos)
-        {
-            GTEST_SKIP() << error;
-        }
-
-        FAIL() << error;
-    }
-
     sdl3d_init_render_context_config(&config);
     config.logical_width = 320;
     config.logical_height = 180;
     config.logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
 
+    sdl3d_render_context *context = nullptr;
     ASSERT_TRUE(sdl3d_create_render_context(pair.window(), pair.renderer(), &config, &context)) << SDL_GetError();
     ASSERT_NE(context, nullptr);
     EXPECT_EQ(320, sdl3d_get_render_context_width(context));
     EXPECT_EQ(180, sdl3d_get_render_context_height(context));
+
+    int logical_width = 0;
+    int logical_height = 0;
+    SDL_RendererLogicalPresentation mode = SDL_LOGICAL_PRESENTATION_DISABLED;
     ASSERT_TRUE(SDL_GetRenderLogicalPresentation(pair.renderer(), &logical_width, &logical_height, &mode))
         << SDL_GetError();
     EXPECT_EQ(320, logical_width);
@@ -213,83 +166,35 @@ TEST(SDL3DRenderContext, LogicalPresentationConfigIsApplied)
     sdl3d_destroy_render_context(context);
 }
 
-TEST(SDL3DRenderContext, SdlGpuWithoutFallbackFails)
+TEST_F(SDLVideoFixture, SdlGpuWithoutFallbackFails)
 {
-    std::string error_message;
-    bool is_displayless = false;
-
-    if (!TryInitVideo(&error_message, &is_displayless))
-    {
-        if (is_displayless)
-        {
-            GTEST_SKIP() << error_message;
-        }
-
-        FAIL() << error_message;
-    }
-
-    SDLQuitGuard quit_guard;
     SDLWindowRendererPair pair;
-    sdl3d_render_context *context = nullptr;
+    ASSERT_TRUE(pair.is_valid()) << SDL_GetError();
+
     sdl3d_render_context_config config;
-
-    if (!pair.is_valid())
-    {
-        const std::string_view error = SDL_GetError();
-        if (error.find("did not add any displays") != std::string_view::npos)
-        {
-            GTEST_SKIP() << error;
-        }
-
-        FAIL() << error;
-    }
-
     sdl3d_init_render_context_config(&config);
     config.backend = SDL3D_BACKEND_SDLGPU;
     config.allow_backend_fallback = false;
 
+    sdl3d_render_context *context = nullptr;
     SDL_ClearError();
     EXPECT_FALSE(sdl3d_create_render_context(pair.window(), pair.renderer(), &config, &context));
     EXPECT_EQ(nullptr, context);
     EXPECT_NE(std::string_view(SDL_GetError()).find("not implemented"), std::string_view::npos);
 }
 
-TEST(SDL3DRenderContext, EnvironmentOverrideCanForceSoftwareBackend)
+TEST_F(SDLVideoFixture, EnvironmentOverrideCanForceSoftwareBackend)
 {
-    std::string error_message;
-    bool is_displayless = false;
-
-    if (!TryInitVideo(&error_message, &is_displayless))
-    {
-        if (is_displayless)
-        {
-            GTEST_SKIP() << error_message;
-        }
-
-        FAIL() << error_message;
-    }
-
-    SDLQuitGuard quit_guard;
     SDLWindowRendererPair pair;
+    ASSERT_TRUE(pair.is_valid()) << SDL_GetError();
+
     SDL3DBackendOverrideGuard backend_override("software");
-    sdl3d_render_context *context = nullptr;
     sdl3d_render_context_config config;
-
-    if (!pair.is_valid())
-    {
-        const std::string_view error = SDL_GetError();
-        if (error.find("did not add any displays") != std::string_view::npos)
-        {
-            GTEST_SKIP() << error;
-        }
-
-        FAIL() << error;
-    }
-
     sdl3d_init_render_context_config(&config);
     config.backend = SDL3D_BACKEND_SDLGPU;
     config.allow_backend_fallback = false;
 
+    sdl3d_render_context *context = nullptr;
     ASSERT_TRUE(sdl3d_create_render_context(pair.window(), pair.renderer(), &config, &context)) << SDL_GetError();
     ASSERT_NE(context, nullptr);
     EXPECT_EQ(SDL3D_BACKEND_SOFTWARE, sdl3d_get_render_context_backend(context));
@@ -297,36 +202,13 @@ TEST(SDL3DRenderContext, EnvironmentOverrideCanForceSoftwareBackend)
     sdl3d_destroy_render_context(context);
 }
 
-TEST(SDL3DRenderContext, InvalidEnvironmentOverrideFails)
+TEST_F(SDLVideoFixture, InvalidEnvironmentOverrideFails)
 {
-    std::string error_message;
-    bool is_displayless = false;
-
-    if (!TryInitVideo(&error_message, &is_displayless))
-    {
-        if (is_displayless)
-        {
-            GTEST_SKIP() << error_message;
-        }
-
-        FAIL() << error_message;
-    }
-
-    SDLQuitGuard quit_guard;
     SDLWindowRendererPair pair;
+    ASSERT_TRUE(pair.is_valid()) << SDL_GetError();
+
     SDL3DBackendOverrideGuard backend_override("bogus");
     sdl3d_render_context *context = nullptr;
-
-    if (!pair.is_valid())
-    {
-        const std::string_view error = SDL_GetError();
-        if (error.find("did not add any displays") != std::string_view::npos)
-        {
-            GTEST_SKIP() << error;
-        }
-
-        FAIL() << error;
-    }
 
     SDL_ClearError();
     EXPECT_FALSE(sdl3d_create_render_context(pair.window(), pair.renderer(), nullptr, &context));

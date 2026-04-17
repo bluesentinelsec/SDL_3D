@@ -118,7 +118,6 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
 {
     sdl3d_render_context_config local_config;
     sdl3d_backend requested_backend;
-    sdl3d_backend env_backend;
     sdl3d_backend resolved_backend;
     sdl3d_render_context *context;
     const char *env_backend_name;
@@ -161,12 +160,10 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     env_backend_name = SDL_getenv(SDL3D_BACKEND_ENV);
     if (env_backend_name != NULL && *env_backend_name != '\0')
     {
-        if (!sdl3d_parse_backend_name(env_backend_name, &env_backend))
+        if (!sdl3d_parse_backend_name(env_backend_name, &requested_backend))
         {
             return false;
         }
-
-        requested_backend = env_backend;
     }
 
     if (!sdl3d_resolve_backend(requested_backend, local_config.allow_backend_fallback, &resolved_backend))
