@@ -352,7 +352,9 @@ TEST_F(SDL3DDrawingFixture, ScissorRestrictsDrawingToClippedRegion)
     sdl3d_render_context *ctx = nullptr;
     ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
 
-    const SDL_Rect scissor = {32, 32, 1, 1};
+    const int cx = sdl3d_get_render_context_width(ctx) / 2;
+    const int cy = sdl3d_get_render_context_height(ctx) / 2;
+    const SDL_Rect scissor = {cx, cy, 1, 1};
     ASSERT_TRUE(sdl3d_set_scissor_rect(ctx, &scissor));
     EXPECT_TRUE(sdl3d_is_scissor_enabled(ctx));
 
@@ -370,9 +372,9 @@ TEST_F(SDL3DDrawingFixture, ScissorRestrictsDrawingToClippedRegion)
 
     EXPECT_EQ(CountColor(ctx, kRed), 1);
     sdl3d_color c{};
-    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 32, 32, &c));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, cx, cy, &c));
     EXPECT_TRUE(PixelEquals(c, kRed));
-    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 31, 32, &c));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, cx - 1, cy, &c));
     EXPECT_TRUE(PixelEquals(c, kBlack));
 
     ASSERT_TRUE(sdl3d_set_scissor_rect(ctx, nullptr));
