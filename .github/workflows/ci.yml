@@ -39,6 +39,39 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run -a ctest --preset release
 
+  emscripten:
+    name: Emscripten
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+
+      - name: Configure
+        run: >
+          emcmake cmake -S . -B build/emscripten
+          -DCMAKE_BUILD_TYPE=Release
+          -DSDL3D_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build/emscripten
+
+      - name: Test
+        run: |
+          set -e
+          for t in build/emscripten/tests/*.js; do
+            echo "::group::$t"
+            node "$t"
+            echo "::endgroup::"
+          done
+
   sanitizers:
     name: Sanitizers
     runs-on: ubuntu-latest
