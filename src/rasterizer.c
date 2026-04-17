@@ -35,9 +35,26 @@ static int sdl3d_min_int(int a, int b)
     return (a < b) ? a : b;
 }
 
+static bool sdl3d_scissor_contains(const sdl3d_framebuffer *framebuffer, int x, int y)
+{
+    if (!framebuffer->scissor_enabled)
+    {
+        return true;
+    }
+
+    return (x >= framebuffer->scissor_rect.x) && (y >= framebuffer->scissor_rect.y) &&
+           (x < framebuffer->scissor_rect.x + framebuffer->scissor_rect.w) &&
+           (y < framebuffer->scissor_rect.y + framebuffer->scissor_rect.h);
+}
+
 static void sdl3d_write_pixel(sdl3d_framebuffer *framebuffer, int x, int y, float depth, sdl3d_color color)
 {
     const int index = (y * framebuffer->width) + x;
+
+    if (!sdl3d_scissor_contains(framebuffer, x, y))
+    {
+        return;
+    }
 
     if (depth > framebuffer->depth_pixels[index])
     {
@@ -229,6 +246,9 @@ typedef struct sdl3d_screen_vertex
     float y_px;
 } sdl3d_screen_vertex;
 
+static void sdl3d_rasterize_screen_line(sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex start,
+                                        sdl3d_screen_vertex end, sdl3d_color color);
+
 static sdl3d_screen_vertex sdl3d_viewport_transform(sdl3d_vec4 clip, int width, int height)
 {
     sdl3d_screen_vertex out;
@@ -260,6 +280,25 @@ static Sint64 sdl3d_edge_function(int ax, int ay, int bx, int by, int px, int py
     return (Sint64)(bx - ax) * (Sint64)(py - ay) - (Sint64)(by - ay) * (Sint64)(px - ax);
 }
 
+static Sint64 sdl3d_screen_triangle_signed_area(sdl3d_screen_vertex a, sdl3d_screen_vertex b, sdl3d_screen_vertex c)
+{
+    return sdl3d_edge_function(a.x_fx, a.y_fx, b.x_fx, b.y_fx, c.x_fx, c.y_fx);
+}
+
+static Sint64 sdl3d_screen_polygon_signed_area(const sdl3d_screen_vertex *vertices, int count)
+{
+    Sint64 area_twice = 0;
+
+    for (int i = 0; i < count; ++i)
+    {
+        const sdl3d_screen_vertex current = vertices[i];
+        const sdl3d_screen_vertex next = vertices[(i + 1) % count];
+        area_twice += ((Sint64)current.x_fx * (Sint64)next.y_fx) - ((Sint64)next.x_fx * (Sint64)current.y_fx);
+    }
+
+    return area_twice;
+}
+
 /*
  * D3D-style top-left fill rule. Assumes winding has been normalized so that
  * the triangle has positive 2x-area. Returns the bias to add to the edge
@@ -282,7 +321,7 @@ static void sdl3d_rasterize_screen_triangle(sdl3d_framebuffer *framebuffer, sdl3
                                             sdl3d_screen_vertex b, sdl3d_screen_vertex c, sdl3d_color color)
 {
     /* 2x signed area in fixed-point. If negative, swap winding. Zero means degenerate. */
-    Sint64 area = sdl3d_edge_function(a.x_fx, a.y_fx, b.x_fx, b.y_fx, c.x_fx, c.y_fx);
+    Sint64 area = sdl3d_screen_triangle_signed_area(a, b, c);
     if (area == 0)
     {
         return;
@@ -352,7 +391,8 @@ static void sdl3d_rasterize_screen_triangle(sdl3d_framebuffer *framebuffer, sdl3
 /* --- Public: triangle, line, point --------------------------------------- */
 
 void sdl3d_rasterize_triangle(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0, sdl3d_vec3 v1,
-                              sdl3d_vec3 v2, sdl3d_color color)
+                              sdl3d_vec3 v2, sdl3d_color color, bool backface_culling_enabled,
+                              bool wireframe_enabled)
 {
     if (framebuffer == NULL || framebuffer->color_pixels == NULL || framebuffer->depth_pixels == NULL)
     {
@@ -374,6 +414,26 @@ void sdl3d_rasterize_triangle(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sd
     for (int i = 0; i < clipped_count; ++i)
     {
         screen[i] = sdl3d_viewport_transform(clipped[i], framebuffer->width, framebuffer->height);
+    }
+
+    const Sint64 polygon_area = sdl3d_screen_polygon_signed_area(screen, clipped_count);
+    if (polygon_area == 0)
+    {
+        return;
+    }
+
+    if (backface_culling_enabled && polygon_area >= 0)
+    {
+        return;
+    }
+
+    if (wireframe_enabled)
+    {
+        for (int i = 0; i < clipped_count; ++i)
+        {
+            sdl3d_rasterize_screen_line(framebuffer, screen[i], screen[(i + 1) % clipped_count], color);
+        }
+        return;
     }
 
     /* Fan-triangulate the clipped polygon around vertex 0. */
@@ -509,6 +569,55 @@ void sdl3d_framebuffer_clear(sdl3d_framebuffer *framebuffer, sdl3d_color color, 
         pixel[2] = color.b;
         pixel[3] = color.a;
         framebuffer->depth_pixels[i] = depth;
+    }
+}
+
+void sdl3d_framebuffer_clear_rect(sdl3d_framebuffer *framebuffer, const SDL_Rect *rect, sdl3d_color color, float depth)
+{
+    if (framebuffer == NULL || framebuffer->color_pixels == NULL || framebuffer->depth_pixels == NULL || rect == NULL)
+    {
+        return;
+    }
+
+    Sint64 min_x = rect->x;
+    Sint64 min_y = rect->y;
+    Sint64 max_x = (Sint64)rect->x + (Sint64)rect->w;
+    Sint64 max_y = (Sint64)rect->y + (Sint64)rect->h;
+
+    if (min_x < 0)
+    {
+        min_x = 0;
+    }
+    if (min_y < 0)
+    {
+        min_y = 0;
+    }
+    if (max_x > framebuffer->width)
+    {
+        max_x = framebuffer->width;
+    }
+    if (max_y > framebuffer->height)
+    {
+        max_y = framebuffer->height;
+    }
+
+    if (min_x >= max_x || min_y >= max_y)
+    {
+        return;
+    }
+
+    for (int y = (int)min_y; y < (int)max_y; ++y)
+    {
+        for (int x = (int)min_x; x < (int)max_x; ++x)
+        {
+            const int index = (y * framebuffer->width) + x;
+            Uint8 *pixel = &framebuffer->color_pixels[index * 4];
+            pixel[0] = color.r;
+            pixel[1] = color.g;
+            pixel[2] = color.b;
+            pixel[3] = color.a;
+            framebuffer->depth_pixels[index] = depth;
+        }
     }
 }
 

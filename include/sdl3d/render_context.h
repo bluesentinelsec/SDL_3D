@@ -40,6 +40,10 @@ extern "C"
     int sdl3d_get_render_context_width(const sdl3d_render_context *context);
     int sdl3d_get_render_context_height(const sdl3d_render_context *context);
     bool sdl3d_clear_render_context(sdl3d_render_context *context, sdl3d_color color);
+    bool sdl3d_clear_render_context_rect(sdl3d_render_context *context, const SDL_Rect *rect, sdl3d_color color);
+    bool sdl3d_set_scissor_rect(sdl3d_render_context *context, const SDL_Rect *rect);
+    bool sdl3d_is_scissor_enabled(const sdl3d_render_context *context);
+    bool sdl3d_get_scissor_rect(const sdl3d_render_context *context, SDL_Rect *out_rect);
     bool sdl3d_present_render_context(sdl3d_render_context *context);
 
 #ifdef __cplusplus

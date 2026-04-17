@@ -198,8 +198,12 @@ TEST(SDL3DDrawing3DNull, NullContextIsRejected)
     EXPECT_FALSE(sdl3d_begin_mode_3d(nullptr, MakeCamera()));
     EXPECT_FALSE(sdl3d_end_mode_3d(nullptr));
     EXPECT_FALSE(sdl3d_draw_point_3d(nullptr, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), kRed));
+    EXPECT_FALSE(sdl3d_set_backface_culling_enabled(nullptr, true));
+    EXPECT_FALSE(sdl3d_set_wireframe_enabled(nullptr, true));
     EXPECT_FALSE(sdl3d_set_depth_planes(nullptr, 0.1f, 100.0f));
     EXPECT_FALSE(sdl3d_is_in_mode_3d(nullptr));
+    EXPECT_FALSE(sdl3d_is_backface_culling_enabled(nullptr));
+    EXPECT_FALSE(sdl3d_is_wireframe_enabled(nullptr));
 }
 
 /* --- Drawing / readback -------------------------------------------------- */
@@ -251,6 +255,55 @@ TEST_F(SDL3DDrawingFixture, DrawTriangleFacingCameraPaintsPixels)
     sdl3d_destroy_render_context(ctx);
 }
 
+TEST_F(SDL3DDrawingFixture, BackfaceCullingRejectsBackfacingTriangle)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    EXPECT_FALSE(sdl3d_is_backface_culling_enabled(ctx));
+    ASSERT_TRUE(sdl3d_set_backface_culling_enabled(ctx, true));
+    EXPECT_TRUE(sdl3d_is_backface_culling_enabled(ctx));
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeCamera()));
+    ASSERT_TRUE(sdl3d_draw_triangle_3d(ctx, sdl3d_vec3_make(0.0f, 0.5f, 0.0f), sdl3d_vec3_make(0.5f, -0.5f, 0.0f),
+                                       sdl3d_vec3_make(-0.5f, -0.5f, 0.0f), kRed));
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+    EXPECT_EQ(CountColor(ctx, kRed), 0);
+
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, WireframeLeavesTriangleInteriorUntouched)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    ASSERT_TRUE(sdl3d_set_wireframe_enabled(ctx, true));
+    EXPECT_TRUE(sdl3d_is_wireframe_enabled(ctx));
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeCamera()));
+    ASSERT_TRUE(sdl3d_draw_triangle_3d(ctx, sdl3d_vec3_make(-0.5f, -0.5f, 0.0f), sdl3d_vec3_make(0.5f, -0.5f, 0.0f),
+                                       sdl3d_vec3_make(0.0f, 0.5f, 0.0f), kRed));
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+    EXPECT_GT(CountColor(ctx, kRed), 0);
+
+    const int cx = sdl3d_get_render_context_width(ctx) / 2;
+    const int cy = sdl3d_get_render_context_height(ctx) / 2;
+    sdl3d_color c{};
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, cx, cy, &c));
+    EXPECT_TRUE(PixelEquals(c, kBlack));
+
+    sdl3d_destroy_render_context(ctx);
+}
+
 TEST_F(SDL3DDrawingFixture, DepthOrderingNearOverFar)
 {
     WindowRenderer wr(64, 64);
@@ -288,6 +341,71 @@ TEST_F(SDL3DDrawingFixture, ClearResetsDepthBuffer)
     float d = 0.0f;
     ASSERT_TRUE(sdl3d_get_framebuffer_depth(ctx, 0, 0, &d));
     EXPECT_FLOAT_EQ(d, 1.0f);
+
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, ScissorRestrictsRasterizationToClippedRegion)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    const SDL_Rect scissor = {32, 32, 1, 1};
+    ASSERT_TRUE(sdl3d_set_scissor_rect(ctx, &scissor));
+    EXPECT_TRUE(sdl3d_is_scissor_enabled(ctx));
+
+    SDL_Rect queried{};
+    ASSERT_TRUE(sdl3d_get_scissor_rect(ctx, &queried));
+    EXPECT_EQ(queried.x, scissor.x);
+    EXPECT_EQ(queried.y, scissor.y);
+    EXPECT_EQ(queried.w, scissor.w);
+    EXPECT_EQ(queried.h, scissor.h);
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeCamera()));
+    ASSERT_TRUE(sdl3d_draw_triangle_3d(ctx, sdl3d_vec3_make(-1.0f, -1.0f, 0.0f), sdl3d_vec3_make(1.0f, -1.0f, 0.0f),
+                                       sdl3d_vec3_make(0.0f, 1.0f, 0.0f), kRed));
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+    EXPECT_EQ(CountColor(ctx, kRed), 1);
+    sdl3d_color c{};
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 32, 32, &c));
+    EXPECT_TRUE(PixelEquals(c, kRed));
+
+    ASSERT_TRUE(sdl3d_set_scissor_rect(ctx, nullptr));
+    EXPECT_FALSE(sdl3d_is_scissor_enabled(ctx));
+
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, ClearRectClearsOnlyRequestedRegionAndResetsDepth)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeCamera()));
+    ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), kRed));
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+    const SDL_Rect rect = {28, 28, 8, 8};
+    ASSERT_TRUE(sdl3d_clear_render_context_rect(ctx, &rect, kBlue));
+
+    sdl3d_color cleared{};
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 32, 32, &cleared));
+    EXPECT_TRUE(PixelEquals(cleared, kBlue));
+
+    sdl3d_color untouched{};
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 4, 4, &untouched));
+    EXPECT_TRUE(PixelEquals(untouched, kBlack));
+
+    float depth = 0.0f;
+    ASSERT_TRUE(sdl3d_get_framebuffer_depth(ctx, 32, 32, &depth));
+    EXPECT_FLOAT_EQ(depth, 1.0f);
 
     sdl3d_destroy_render_context(ctx);
 }

@@ -31,6 +31,10 @@ struct sdl3d_render_context
     float far_plane;
 
     bool in_mode_3d;
+    bool backface_culling_enabled;
+    bool wireframe_enabled;
+    bool scissor_enabled;
+    SDL_Rect scissor_rect;
     sdl3d_mat4 view;
     sdl3d_mat4 projection;
     sdl3d_mat4 view_projection;
@@ -43,6 +47,8 @@ static inline sdl3d_framebuffer sdl3d_framebuffer_from_context(sdl3d_render_cont
     framebuffer.depth_pixels = context->depth_buffer;
     framebuffer.width = context->width;
     framebuffer.height = context->height;
+    framebuffer.scissor_enabled = context->scissor_enabled;
+    framebuffer.scissor_rect = context->scissor_rect;
     return framebuffer;
 }
 
