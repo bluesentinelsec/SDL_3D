@@ -10,6 +10,10 @@ SDL3D is an idiomatic C17 project scaffold for a high-level 3D graphics API powe
 - `cmake/` reusable CMake modules and package configuration templates
 - `scripts/` repository maintenance scripts
 
+## Testing
+
+Unit tests use GoogleTest and are fetched automatically by CMake when `SDL3D_BUILD_TESTS=ON`.
+
 ## Build
 
 ```sh

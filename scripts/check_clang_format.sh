@@ -5,11 +5,13 @@ set -euo pipefail
 files=()
 
 while IFS= read -r file; do
-    files+=("${file}")
-done < <(git ls-files --cached --others --exclude-standard -- '*.c' '*.h')
+    if [ -f "${file}" ]; then
+        files+=("${file}")
+    fi
+done < <(git ls-files --cached --others --exclude-standard -- '*.c' '*.cc' '*.cpp' '*.h' '*.hh' '*.hpp')
 
 if [ "${#files[@]}" -eq 0 ]; then
-    echo "No C source files tracked by git."
+    echo "No source files tracked by git."
     exit 0
 fi
 
