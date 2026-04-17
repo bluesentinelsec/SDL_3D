@@ -19,6 +19,7 @@ CREATED_SIM=0
 LAUNCH_PID=""
 STREAM_PID=""
 LOGFILE="$(mktemp)"
+LAUNCH_STATUS_FILE="$(mktemp)"
 
 cleanup() {
     if [ -n "$LAUNCH_PID" ]; then
@@ -36,6 +37,7 @@ cleanup() {
         fi
     fi
     rm -f "$LOGFILE"
+    rm -f "$LAUNCH_STATUS_FILE"
 }
 trap cleanup EXIT
 
@@ -156,22 +158,30 @@ xcrun simctl bootstatus "$SIM_UDID" -b
 # Capture the unified log stream in the background; the app's stdout/stderr
 # is collected separately by simctl launch --console-pty and appended to the
 # same logfile so CI shows both the gtest transcript and our os_log lines.
+echo "Listening for subsystem logs: $LOG_SUBSYSTEM" >>"$LOGFILE"
 log stream \
     --style compact \
     --level debug \
-    --predicate "subsystem == \"$LOG_SUBSYSTEM\"" >"$LOGFILE" 2>&1 &
+    --predicate "subsystem == \"$LOG_SUBSYSTEM\"" >>"$LOGFILE" 2>&1 &
 STREAM_PID=$!
 
 xcrun simctl install "$SIM_UDID" "$APP"
-xcrun simctl launch --console-pty "$SIM_UDID" "$BUNDLE_ID" >>"$LOGFILE" 2>&1 &
+( xcrun simctl launch --console-pty "$SIM_UDID" "$BUNDLE_ID" >>"$LOGFILE" 2>&1; echo $? >"$LAUNCH_STATUS_FILE" ) &
 LAUNCH_PID=$!
 
 deadline=$((SECONDS + TIMEOUT_SECONDS))
 rc=""
+launch_status=""
 while [ -z "$rc" ] && [ $SECONDS -lt $deadline ]; do
     if grep -q "$SENTINEL:" "$LOGFILE" 2>/dev/null; then
         rc="$(grep "$SENTINEL:" "$LOGFILE" | tail -n 1 | sed -E "s/.*${SENTINEL}: ([0-9]+).*/\\1/")"
         break
+    fi
+    if [ -s "$LAUNCH_STATUS_FILE" ]; then
+        launch_status="$(tr -d '\n' <"$LAUNCH_STATUS_FILE")"
+        if [ "$launch_status" != "0" ]; then
+            break
+        fi
     fi
     sleep 2
 done
@@ -188,6 +198,9 @@ cat "$LOGFILE"
 echo "----- end iOS test log -----"
 
 if [ -z "$rc" ]; then
+    if [ -n "$launch_status" ]; then
+        echo "simctl launch exit code: $launch_status" >&2
+    fi
     echo "Test run did not report $SENTINEL within ${TIMEOUT_SECONDS}s" >&2
     exit 1
 fi

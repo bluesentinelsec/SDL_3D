@@ -42,6 +42,14 @@ if(NOT TARGET SDL3::SDL3 AND SDL3D_FETCH_SDL3)
         GIT_SHALLOW TRUE
     )
 
+    if(IOS)
+        # iOS app bundles cannot rely on a build-tree SDL dylib at runtime.
+        # Force a static SDL so the simulator/device app can launch without
+        # embedding extra runtime artifacts into the .app.
+        set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+        set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    endif()
+
     set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
     set(SDL_TESTS OFF CACHE BOOL "" FORCE)
     set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -50,8 +58,15 @@ if(NOT TARGET SDL3::SDL3 AND SDL3D_FETCH_SDL3)
     set(SDL3D_USING_FETCHED_SDL3 ON)
 endif()
 
-if(NOT TARGET SDL3::SDL3)
-    message(FATAL_ERROR "SDL3::SDL3 was not found. Provide SDL3 via a parent target, find_package(SDL3), or enable SDL3D_FETCH_SDL3.")
+if(NOT TARGET SDL3::SDL3 AND NOT TARGET SDL3::SDL3-static)
+    message(FATAL_ERROR "SDL3 was not found. Provide SDL3 via a parent target, find_package(SDL3), or enable SDL3D_FETCH_SDL3.")
+endif()
+
+set(SDL3D_SDL_TARGET SDL3::SDL3)
+if(NOT TARGET ${SDL3D_SDL_TARGET} AND TARGET SDL3::SDL3-static)
+    set(SDL3D_SDL_TARGET SDL3::SDL3-static)
+elseif(IOS AND TARGET SDL3::SDL3-static)
+    set(SDL3D_SDL_TARGET SDL3::SDL3-static)
 endif()
 
 add_library(sdl3d STATIC)
@@ -85,22 +100,22 @@ set_target_properties(
 target_include_directories(
     sdl3d
     PRIVATE
-        $<TARGET_PROPERTY:SDL3::SDL3,INTERFACE_INCLUDE_DIRECTORIES>
+        $<TARGET_PROPERTY:${SDL3D_SDL_TARGET},INTERFACE_INCLUDE_DIRECTORIES>
 )
 
 target_compile_definitions(
     sdl3d
     PRIVATE
-        $<TARGET_PROPERTY:SDL3::SDL3,INTERFACE_COMPILE_DEFINITIONS>
+        $<TARGET_PROPERTY:${SDL3D_SDL_TARGET},INTERFACE_COMPILE_DEFINITIONS>
 )
 
 target_compile_options(
     sdl3d
     PRIVATE
-        $<TARGET_PROPERTY:SDL3::SDL3,INTERFACE_COMPILE_OPTIONS>
+        $<TARGET_PROPERTY:${SDL3D_SDL_TARGET},INTERFACE_COMPILE_OPTIONS>
 )
 
-set_property(TARGET sdl3d APPEND PROPERTY INTERFACE_LINK_LIBRARIES SDL3::SDL3)
+set_property(TARGET sdl3d APPEND PROPERTY INTERFACE_LINK_LIBRARIES ${SDL3D_SDL_TARGET})
 
 target_include_directories(
     sdl3d
