@@ -32,6 +32,24 @@ ctest --preset release
 cmake --install build/release
 ```
 
+## Consume With FetchContent
+
+```cmake
+include(FetchContent)
+
+FetchContent_Declare(
+    SDL3D
+    GIT_REPOSITORY git@github.com:bluesentinelsec/SDL_3D.git
+    GIT_TAG main
+)
+
+FetchContent_MakeAvailable(SDL3D)
+
+target_link_libraries(your_target PRIVATE SDL3D::sdl3d)
+```
+
+When SDL3D is consumed as a subproject, its tests default to `OFF` so it behaves cleanly inside a parent build. To force them on, set `SDL3D_BUILD_TESTS=ON` before `FetchContent_MakeAvailable`.
+
 ## Formatting
 
 ```sh

@@ -9,8 +9,13 @@ project(
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
+include(CTest)
 
-option(SDL3D_BUILD_TESTS "Build SDL3D tests" ON)
+if(PROJECT_IS_TOP_LEVEL)
+    option(SDL3D_BUILD_TESTS "Build SDL3D tests" ${BUILD_TESTING})
+else()
+    option(SDL3D_BUILD_TESTS "Build SDL3D tests" OFF)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(SDL3DCompilerWarnings)
@@ -52,7 +57,6 @@ if(MSVC)
 endif()
 
 if(SDL3D_BUILD_TESTS)
-    enable_testing()
     add_subdirectory(tests)
 endif()
 
