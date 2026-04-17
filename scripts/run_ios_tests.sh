@@ -14,6 +14,8 @@ SIM_NAME="${SIM_NAME:-SDL3D Tests}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-240}"
 
 SIM_UDID=""
+SIM_DEVICE_NAME=""
+CREATED_SIM=0
 LAUNCH_PID=""
 STREAM_PID=""
 LOGFILE="$(mktemp)"
@@ -29,7 +31,9 @@ cleanup() {
     fi
     if [ -n "$SIM_UDID" ]; then
         xcrun simctl shutdown "$SIM_UDID" >/dev/null 2>&1 || true
-        xcrun simctl delete "$SIM_UDID" >/dev/null 2>&1 || true
+        if [ "$CREATED_SIM" -eq 1 ]; then
+            xcrun simctl delete "$SIM_UDID" >/dev/null 2>&1 || true
+        fi
     fi
     rm -f "$LOGFILE"
 }
@@ -50,6 +54,21 @@ if [ -z "$RUNTIME_ID" ]; then
     RUNTIME_ID="$(
         xcrun simctl list runtimes | sed -En \
             '/^[[:space:]]*iOS /{/unavailable/d;s/.* - (com\.apple\.CoreSimulator\.SimRuntime\.iOS[-A-Za-z0-9]+).*/\1/p;q;}'
+    )"
+fi
+
+RUNTIME_NAME="${SIM_RUNTIME_NAME:-}"
+if [ -z "$RUNTIME_NAME" ]; then
+    RUNTIME_NAME="$(
+        xcrun simctl list runtimes | awk -v id="$RUNTIME_ID" '
+            index($0, id) {
+                line = $0
+                sub(/[[:space:]]+\(.*/, "", line)
+                sub(/^[[:space:]]*/, "", line)
+                print line
+                exit
+            }
+        '
     )"
 fi
 
@@ -83,9 +102,54 @@ fi
 xcrun simctl delete unavailable >/dev/null 2>&1 || true
 
 echo "Using runtime: $RUNTIME_ID"
-echo "Using device type: $DEVICE_TYPE_ID"
+SIM_UDID="$(
+    xcrun simctl list devices available | awk -v runtime="$RUNTIME_NAME" '
+        $0 == "-- " runtime " --" {
+            in_runtime = 1
+            next
+        }
+        /^-- / {
+            in_runtime = 0
+        }
+        in_runtime && /^[[:space:]]*iPhone / {
+            line = $0
+            sub(/^[[:space:]]*/, "", line)
+            name = line
+            sub(/[[:space:]]+\(.*/, "", name)
+            if (match(line, /\(([0-9A-F-]+)\)/)) {
+                print substr(line, RSTART + 1, RLENGTH - 2)
+                exit
+            }
+        }
+    '
+)"
 
-SIM_UDID="$(xcrun simctl create "$SIM_NAME" "$DEVICE_TYPE_ID" "$RUNTIME_ID")"
+if [ -n "$SIM_UDID" ]; then
+    SIM_DEVICE_NAME="$(
+        xcrun simctl list devices available | awk -v runtime="$RUNTIME_NAME" '
+            $0 == "-- " runtime " --" {
+                in_runtime = 1
+                next
+            }
+            /^-- / {
+                in_runtime = 0
+            }
+            in_runtime && /^[[:space:]]*iPhone / {
+                line = $0
+                sub(/^[[:space:]]*/, "", line)
+                sub(/[[:space:]]+\(.*/, "", line)
+                print line
+                exit
+            }
+        '
+    )"
+    echo "Using existing simulator: ${SIM_DEVICE_NAME:-$SIM_UDID}"
+else
+    echo "Using device type: $DEVICE_TYPE_ID"
+    SIM_UDID="$(xcrun simctl create "$SIM_NAME" "$DEVICE_TYPE_ID" "$RUNTIME_ID")"
+    CREATED_SIM=1
+fi
+
 xcrun simctl boot "$SIM_UDID" >/dev/null
 xcrun simctl bootstatus "$SIM_UDID" -b
 
