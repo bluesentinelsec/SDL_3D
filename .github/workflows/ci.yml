@@ -160,6 +160,55 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: bash scripts/run_android_tests.sh
 
+  ios:
+    name: iOS (${{ matrix.sdk }})
+    runs-on: macos-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sdk: iphoneos
+            arch: arm64
+            run_tests: false
+          - sdk: iphonesimulator
+            arch: runner
+            run_tests: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Select target architecture
+        run: |
+          if [ "${{ matrix.arch }}" = "runner" ]; then
+            echo "CMAKE_OSX_ARCHITECTURES=$(uname -m)" >> "$GITHUB_ENV"
+          else
+            echo "CMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Configure
+        run: >
+          cmake -S . -B build/ios/${{ matrix.sdk }}
+          -G Xcode
+          -DCMAKE_SYSTEM_NAME=iOS
+          -DCMAKE_OSX_SYSROOT=${{ matrix.sdk }}
+          -DCMAKE_OSX_ARCHITECTURES=${{ env.CMAKE_OSX_ARCHITECTURES }}
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO
+          -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED=NO
+          -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY=
+          -DSDL3D_BUILD_TESTS=ON
+
+      - name: Build iOS test app
+        run: cmake --build build/ios/${{ matrix.sdk }} --config Release --target sdl3d_ios_tests
+
+      - name: Run tests on iOS simulator
+        if: matrix.run_tests
+        env:
+          BUILD_DIR: build/ios/${{ matrix.sdk }}
+        run: bash scripts/run_ios_tests.sh
+
   sanitizers:
     name: Sanitizers
     runs-on: ubuntu-latest
