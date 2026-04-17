@@ -23,6 +23,7 @@ struct sdl3d_render_context
     SDL_Texture *color_texture;
     Uint8 *color_buffer;
     float *depth_buffer;
+    sdl3d_parallel_rasterizer *parallel_rasterizer;
     sdl3d_backend backend;
     int width;
     int height;
@@ -47,6 +48,7 @@ static inline sdl3d_framebuffer sdl3d_framebuffer_from_context(sdl3d_render_cont
     framebuffer.depth_pixels = context->depth_buffer;
     framebuffer.width = context->width;
     framebuffer.height = context->height;
+    framebuffer.parallel_rasterizer = context->parallel_rasterizer;
     framebuffer.scissor_enabled = context->scissor_enabled;
     framebuffer.scissor_rect = context->scissor_rect;
     return framebuffer;
