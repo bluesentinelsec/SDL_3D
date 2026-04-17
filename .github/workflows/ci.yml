@@ -64,11 +64,19 @@ jobs:
         run: cmake --build build/emscripten
 
       - name: Test
+        # Only run display-free (unit-labelled) tests. The render tests
+        # drive SDL_CreateWindowAndRenderer, which has no DOM canvas
+        # under Node, so they cannot run in this environment.
         run: |
           set -e
-          for t in build/emscripten/tests/*.js; do
+          for t in \
+            sdl3d_api_test \
+            sdl3d_math_test \
+            sdl3d_rasterizer_test \
+            sdl3d_render_context_unit_test
+          do
             echo "::group::$t"
-            node "$t"
+            node "build/emscripten/tests/${t}.js"
             echo "::endgroup::"
           done
 
