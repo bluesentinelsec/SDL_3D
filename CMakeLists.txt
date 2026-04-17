@@ -4,7 +4,7 @@ project(
     SDL3D
     VERSION 0.1.0
     DESCRIPTION "High-level 3D graphics API powered by SDL3 GPU"
-    LANGUAGES C
+    LANGUAGES C CXX
 )
 
 include(GNUInstallDirs)
