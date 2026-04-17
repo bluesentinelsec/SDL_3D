@@ -12,7 +12,13 @@ if(NOT TARGET GTest::gtest)
 
     set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    # Build GoogleTest as a static library regardless of BUILD_SHARED_LIBS
+    # so we don't have to ship libgtest.so alongside the test binaries
+    # (needed for Android APK packaging in particular).
+    set(_sdl3d_saved_build_shared_libs ${BUILD_SHARED_LIBS})
+    set(BUILD_SHARED_LIBS OFF)
     FetchContent_MakeAvailable(googletest)
+    set(BUILD_SHARED_LIBS ${_sdl3d_saved_build_shared_libs})
 endif()
 
 function(sdl3d_add_test target_name source_file test_label)
