@@ -22,6 +22,7 @@ class SDLVideoFixture : public ::testing::Test
   protected:
     void SetUp() override
     {
+        SDL_SetMainReady();
         SDL_ClearError();
         ASSERT_TRUE(SDL_Init(SDL_INIT_VIDEO)) << SDL_GetError();
     }

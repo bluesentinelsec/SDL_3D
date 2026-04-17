@@ -80,6 +80,7 @@ using RendererPtr = std::unique_ptr<SDL_Renderer, decltype(&SDL_DestroyRenderer)
 
 TEST(SDL3DRenderLoop, MinimalRendererLoopCompletesDeterministically)
 {
+    SDL_SetMainReady();
     SDL_ClearError();
     ASSERT_TRUE(SDL_Init(SDL_INIT_VIDEO)) << SDL_GetError();
     SDLQuitGuard quit_guard;
