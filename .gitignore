@@ -58,5 +58,21 @@ dkms.conf
 build/
 build-*/
 
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+Makefile
+build.ninja
+.ninja_deps
+.ninja_log
+Testing/
+
+# Local CMake presets
+CMakeUserPresets.json
+
 # Platform cruft
 .DS_Store
