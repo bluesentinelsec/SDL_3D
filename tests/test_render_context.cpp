@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 
+#define SDL_MAIN_HANDLED
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 
 extern "C"
 {
@@ -36,6 +38,7 @@ class SDLVideoFixture : public ::testing::Test
   protected:
     void SetUp() override
     {
+        SDL_SetMainReady();
         SDL_ClearError();
         ASSERT_TRUE(SDL_Init(SDL_INIT_VIDEO)) << SDL_GetError();
     }

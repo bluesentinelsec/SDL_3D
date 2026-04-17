@@ -80,6 +80,86 @@ jobs:
             echo "::endgroup::"
           done
 
+  android:
+    name: Android (${{ matrix.abi }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            run_tests: false
+          - abi: x86_64
+            run_tests: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup JDK 17
+        if: matrix.run_tests
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Configure
+        # ANDROID_STL=c++_shared so SDL3's android-project runtime (which
+        # uses libc++_shared.so) and our test library share the same STL.
+        run: >
+          cmake -S . -B build/android
+          -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake
+          -DANDROID_ABI=${{ matrix.abi }}
+          -DANDROID_PLATFORM=android-21
+          -DANDROID_STL=c++_shared
+          -DBUILD_SHARED_LIBS=ON
+          -DCMAKE_BUILD_TYPE=Release
+          -DSDL3D_BUILD_TESTS=ON
+
+      - name: Build native libraries
+        run: cmake --build build/android
+
+      - name: Stage native libs and SDL Java sources
+        if: matrix.run_tests
+        run: |
+          set -euo pipefail
+          JNI_DIR=tests/android/app/src/main/jniLibs/${{ matrix.abi }}
+          mkdir -p "$JNI_DIR"
+          cp build/android/tests/libmain.so "$JNI_DIR/"
+          cp "$(find build/android -name 'libSDL3.so' | head -1)" "$JNI_DIR/"
+          # libc++_shared.so comes from the NDK.
+          cp "$(find $ANDROID_NDK_HOME/toolchains -name 'libc++_shared.so' -path "*/${{ matrix.abi }}*" | head -1)" "$JNI_DIR/"
+          # Drop SDL3's Java sources into the Gradle source set so
+          # SDLActivity and friends are compiled into the APK.
+          SDL_SRC=$(find build/android -maxdepth 5 -type d -name 'sdl3-src' | head -1)
+          DEST=tests/android/app/src/main/sdl-java
+          mkdir -p "$DEST"
+          cp -r "$SDL_SRC/android-project/app/src/main/java/"* "$DEST/"
+          ls -R "$JNI_DIR" "$DEST" | head -40
+
+      - name: Build APK
+        if: matrix.run_tests
+        working-directory: tests/android
+        run: gradle --no-daemon assembleDebug
+
+      - name: Enable KVM
+        if: matrix.run_tests
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run tests on Android emulator
+        if: matrix.run_tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: bash scripts/run_android_tests.sh
+
   sanitizers:
     name: Sanitizers
     runs-on: ubuntu-latest

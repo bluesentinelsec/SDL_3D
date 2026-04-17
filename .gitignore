@@ -76,3 +76,4 @@ CMakeUserPresets.json
 
 # Platform cruft
 .DS_Store
+.claude/
