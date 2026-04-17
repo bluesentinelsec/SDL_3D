@@ -60,6 +60,7 @@ add_library(SDL3D::sdl3d ALIAS sdl3d)
 target_sources(
     sdl3d
     PRIVATE
+        src/render_context.c
         src/sdl3d.c
 )
 

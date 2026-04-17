@@ -6,6 +6,9 @@
 
 #include <SDL3/SDL_log.h>
 
+#include "sdl3d/render_context.h"
+#include "sdl3d/types.h"
+
 #ifdef __cplusplus
 extern "C"
 {
