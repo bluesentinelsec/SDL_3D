@@ -23,6 +23,10 @@ extern "C"
     bool sdl3d_end_mode_3d(sdl3d_render_context *context);
 
     bool sdl3d_is_in_mode_3d(const sdl3d_render_context *context);
+    bool sdl3d_set_backface_culling_enabled(sdl3d_render_context *context, bool enabled);
+    bool sdl3d_is_backface_culling_enabled(const sdl3d_render_context *context);
+    bool sdl3d_set_wireframe_enabled(sdl3d_render_context *context, bool enabled);
+    bool sdl3d_is_wireframe_enabled(const sdl3d_render_context *context);
 
     /*
      * Override the depth planes used by sdl3d_begin_mode_3d. Must be called

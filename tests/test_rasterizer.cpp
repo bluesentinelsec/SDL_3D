@@ -106,6 +106,25 @@ TEST(SDL3DFramebuffer, AccessorsRejectOutOfBounds)
     EXPECT_FALSE(sdl3d_framebuffer_get_depth(&f.fb, kW, 0, &d));
 }
 
+TEST(SDL3DFramebuffer, ClearRectOnlyTouchesRequestedPixels)
+{
+    Framebuffer f;
+    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+
+    const SDL_Rect rect = {4, 5, 3, 2};
+    sdl3d_framebuffer_clear_rect(&f.fb, &rect, kBlue, 0.25f);
+
+    for (int y = 0; y < kH; ++y)
+    {
+        for (int x = 0; x < kW; ++x)
+        {
+            const bool in_rect = (x >= rect.x) && (x < rect.x + rect.w) && (y >= rect.y) && (y < rect.y + rect.h);
+            EXPECT_TRUE(PixelEquals(f.GetPixel(x, y), in_rect ? kBlue : kBlack));
+            EXPECT_FLOAT_EQ(f.GetDepth(x, y), in_rect ? 0.25f : 1.0f);
+        }
+    }
+}
+
 /* --- Triangle coverage --------------------------------------------------- */
 
 TEST(SDL3DRasterizeTriangle, FullscreenTriangleCoversAllPixels)
@@ -115,7 +134,7 @@ TEST(SDL3DRasterizeTriangle, FullscreenTriangleCoversAllPixels)
     const sdl3d_mat4 id = sdl3d_mat4_identity();
     // Oversized triangle (NDC) that covers the whole viewport [-1, 1]^2.
     sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-3.0f, -1.0f, 0.0f), sdl3d_vec3_make(3.0f, -1.0f, 0.0f),
-                             sdl3d_vec3_make(0.0f, 3.0f, 0.0f), kRed);
+                             sdl3d_vec3_make(0.0f, 3.0f, 0.0f), kRed, false, false);
     EXPECT_EQ(CountPixelsEqual(f, kRed), kW * kH);
 }
 
@@ -126,7 +145,7 @@ TEST(SDL3DRasterizeTriangle, BehindNearPlaneProducesNoPixels)
     const sdl3d_mat4 id = sdl3d_mat4_identity();
     // z = -2 in NDC means clip-space z < -w, entirely behind near plane.
     sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-1.0f, -1.0f, -2.0f), sdl3d_vec3_make(1.0f, -1.0f, -2.0f),
-                             sdl3d_vec3_make(0.0f, 1.0f, -2.0f), kRed);
+                             sdl3d_vec3_make(0.0f, 1.0f, -2.0f), kRed, false, false);
     EXPECT_EQ(CountPixelsEqual(f, kRed), 0);
 }
 
@@ -137,7 +156,7 @@ TEST(SDL3DRasterizeTriangle, DegenerateTriangleProducesNoPixels)
     const sdl3d_mat4 id = sdl3d_mat4_identity();
     // Collinear vertices: zero area.
     sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-0.5f, -0.5f, 0.0f), sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
-                             sdl3d_vec3_make(0.5f, 0.5f, 0.0f), kRed);
+                             sdl3d_vec3_make(0.5f, 0.5f, 0.0f), kRed, false, false);
     EXPECT_EQ(CountPixelsEqual(f, kRed), 0);
 }
 
@@ -148,9 +167,9 @@ TEST(SDL3DRasterizeTriangle, DepthTestNearHidesFar)
     const sdl3d_mat4 id = sdl3d_mat4_identity();
     // Far triangle first (z = 0.5), then near (z = -0.5). Near must win.
     sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-3.0f, -1.0f, 0.5f), sdl3d_vec3_make(3.0f, -1.0f, 0.5f),
-                             sdl3d_vec3_make(0.0f, 3.0f, 0.5f), kBlue);
+                             sdl3d_vec3_make(0.0f, 3.0f, 0.5f), kBlue, false, false);
     sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-3.0f, -1.0f, -0.5f), sdl3d_vec3_make(3.0f, -1.0f, -0.5f),
-                             sdl3d_vec3_make(0.0f, 3.0f, -0.5f), kRed);
+                             sdl3d_vec3_make(0.0f, 3.0f, -0.5f), kRed, false, false);
     EXPECT_EQ(CountPixelsEqual(f, kRed), kW * kH);
     EXPECT_EQ(CountPixelsEqual(f, kBlue), 0);
 
@@ -158,9 +177,9 @@ TEST(SDL3DRasterizeTriangle, DepthTestNearHidesFar)
     Framebuffer g;
     sdl3d_framebuffer_clear(&g.fb, kBlack, 1.0f);
     sdl3d_rasterize_triangle(&g.fb, id, sdl3d_vec3_make(-3.0f, -1.0f, -0.5f), sdl3d_vec3_make(3.0f, -1.0f, -0.5f),
-                             sdl3d_vec3_make(0.0f, 3.0f, -0.5f), kRed);
+                             sdl3d_vec3_make(0.0f, 3.0f, -0.5f), kRed, false, false);
     sdl3d_rasterize_triangle(&g.fb, id, sdl3d_vec3_make(-3.0f, -1.0f, 0.5f), sdl3d_vec3_make(3.0f, -1.0f, 0.5f),
-                             sdl3d_vec3_make(0.0f, 3.0f, 0.5f), kBlue);
+                             sdl3d_vec3_make(0.0f, 3.0f, 0.5f), kBlue, false, false);
     EXPECT_EQ(CountPixelsEqual(g, kRed), kW * kH);
     EXPECT_EQ(CountPixelsEqual(g, kBlue), 0);
 }
@@ -179,11 +198,11 @@ TEST(SDL3DRasterizeTriangle, AdjacentTrianglesNoGapsNoOverlap)
     const sdl3d_vec3 bl = sdl3d_vec3_make(-1.0f, -1.0f, 0.0f);
 
     // First triangle: tl, tr, br. Uses kRed. Writes depth 0.
-    sdl3d_rasterize_triangle(&f.fb, id, tl, tr, br, kRed);
+    sdl3d_rasterize_triangle(&f.fb, id, tl, tr, br, kRed, false, false);
     // Second triangle: tl, br, bl. Uses kBlue. Due to depth test (<=)
     // pixels shared across the diagonal go to whichever writes first;
     // the fill rule ensures no pixel is actually shared.
-    sdl3d_rasterize_triangle(&f.fb, id, tl, br, bl, kBlue);
+    sdl3d_rasterize_triangle(&f.fb, id, tl, br, bl, kBlue, false, false);
 
     const int red = CountPixelsEqual(f, kRed);
     const int blue = CountPixelsEqual(f, kBlue);
@@ -311,6 +330,45 @@ TEST(SDL3DRasterizeTriangle, TriangleStraddlingNearPlaneRenders)
     const sdl3d_vec3 v1 = sdl3d_vec3_make(-1.0f, -1.0f, -0.3f);
     const sdl3d_vec3 v2 = sdl3d_vec3_make(1.0f, -1.0f, -0.3f);
 
-    sdl3d_rasterize_triangle(&f.fb, proj, v0, v1, v2, kRed);
+    sdl3d_rasterize_triangle(&f.fb, proj, v0, v1, v2, kRed, false, false);
     EXPECT_GT(CountPixelsEqual(f, kRed), 0);
+}
+
+TEST(SDL3DRasterizeTriangle, BackfaceCullingRejectsClockwiseScreenFaces)
+{
+    Framebuffer f;
+    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    const sdl3d_mat4 id = sdl3d_mat4_identity();
+
+    sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(0.0f, 0.5f, 0.0f), sdl3d_vec3_make(0.5f, -0.5f, 0.0f),
+                             sdl3d_vec3_make(-0.5f, -0.5f, 0.0f), kRed, true, false);
+    EXPECT_EQ(CountPixelsEqual(f, kRed), 0);
+}
+
+TEST(SDL3DRasterizeTriangle, WireframeDrawsEdgesWithoutFillingInterior)
+{
+    Framebuffer f;
+    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    const sdl3d_mat4 id = sdl3d_mat4_identity();
+
+    sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-0.5f, -0.5f, 0.0f), sdl3d_vec3_make(0.5f, -0.5f, 0.0f),
+                             sdl3d_vec3_make(0.0f, 0.5f, 0.0f), kRed, false, true);
+
+    EXPECT_GT(CountPixelsEqual(f, kRed), 0);
+    EXPECT_TRUE(PixelEquals(f.GetPixel(kW / 2, kH / 2), kBlack));
+}
+
+TEST(SDL3DRasterizeTriangle, ScissorClipsTriangleCoverage)
+{
+    Framebuffer f;
+    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    f.fb.scissor_enabled = true;
+    f.fb.scissor_rect = SDL_Rect{8, 8, 1, 1};
+
+    const sdl3d_mat4 id = sdl3d_mat4_identity();
+    sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-3.0f, -1.0f, 0.0f), sdl3d_vec3_make(3.0f, -1.0f, 0.0f),
+                             sdl3d_vec3_make(0.0f, 3.0f, 0.0f), kRed, false, false);
+
+    EXPECT_EQ(CountPixelsEqual(f, kRed), 1);
+    EXPECT_TRUE(PixelEquals(f.GetPixel(8, 8), kRed));
 }

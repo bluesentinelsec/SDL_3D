@@ -53,6 +53,50 @@ bool sdl3d_is_in_mode_3d(const sdl3d_render_context *context)
     return context->in_mode_3d;
 }
 
+bool sdl3d_set_backface_culling_enabled(sdl3d_render_context *context, bool enabled)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+
+    context->backface_culling_enabled = enabled;
+    return true;
+}
+
+bool sdl3d_is_backface_culling_enabled(const sdl3d_render_context *context)
+{
+    if (context == NULL)
+    {
+        SDL_InvalidParamError("context");
+        return false;
+    }
+
+    return context->backface_culling_enabled;
+}
+
+bool sdl3d_set_wireframe_enabled(sdl3d_render_context *context, bool enabled)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+
+    context->wireframe_enabled = enabled;
+    return true;
+}
+
+bool sdl3d_is_wireframe_enabled(const sdl3d_render_context *context)
+{
+    if (context == NULL)
+    {
+        SDL_InvalidParamError("context");
+        return false;
+    }
+
+    return context->wireframe_enabled;
+}
+
 bool sdl3d_set_depth_planes(sdl3d_render_context *context, float near_plane, float far_plane)
 {
     if (context == NULL)
@@ -97,7 +141,8 @@ bool sdl3d_draw_triangle_3d(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_
     }
 
     sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
-    sdl3d_rasterize_triangle(&framebuffer, context->view_projection, v0, v1, v2, color);
+    sdl3d_rasterize_triangle(&framebuffer, context->view_projection, v0, v1, v2, color,
+                             context->backface_culling_enabled, context->wireframe_enabled);
     return true;
 }
 

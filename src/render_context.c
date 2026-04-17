@@ -237,6 +237,10 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     context->near_plane = SDL3D_DEFAULT_NEAR_PLANE;
     context->far_plane = SDL3D_DEFAULT_FAR_PLANE;
     context->in_mode_3d = false;
+    context->backface_culling_enabled = false;
+    context->wireframe_enabled = false;
+    context->scissor_enabled = false;
+    context->scissor_rect = (SDL_Rect){0, 0, render_width, render_height};
     context->view = sdl3d_mat4_identity();
     context->projection = sdl3d_mat4_identity();
     context->view_projection = sdl3d_mat4_identity();
@@ -300,6 +304,123 @@ bool sdl3d_clear_render_context(sdl3d_render_context *context, sdl3d_color color
 
     sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
     sdl3d_framebuffer_clear(&framebuffer, color, 1.0f);
+    return true;
+}
+
+bool sdl3d_clear_render_context_rect(sdl3d_render_context *context, const SDL_Rect *rect, sdl3d_color color)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (rect == NULL)
+    {
+        return SDL_InvalidParamError("rect");
+    }
+    if (rect->w < 0 || rect->h < 0)
+    {
+        return SDL_SetError("Clear rect dimensions must be non-negative.");
+    }
+
+    sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
+    sdl3d_framebuffer_clear_rect(&framebuffer, rect, color, 1.0f);
+    return true;
+}
+
+bool sdl3d_set_scissor_rect(sdl3d_render_context *context, const SDL_Rect *rect)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+
+    if (rect == NULL)
+    {
+        context->scissor_enabled = false;
+        context->scissor_rect = (SDL_Rect){0, 0, context->width, context->height};
+        return true;
+    }
+
+    if (rect->w < 0 || rect->h < 0)
+    {
+        return SDL_SetError("Scissor rect dimensions must be non-negative.");
+    }
+
+    Sint64 x = rect->x;
+    Sint64 y = rect->y;
+    Sint64 w = rect->w;
+    Sint64 h = rect->h;
+
+    if (x < 0)
+    {
+        w += x;
+        x = 0;
+    }
+    if (y < 0)
+    {
+        h += y;
+        y = 0;
+    }
+
+    if (x > context->width)
+    {
+        x = context->width;
+    }
+    if (y > context->height)
+    {
+        y = context->height;
+    }
+
+    if (w > context->width - x)
+    {
+        w = context->width - x;
+    }
+    if (h > context->height - y)
+    {
+        h = context->height - y;
+    }
+
+    if (w < 0)
+    {
+        w = 0;
+    }
+    if (h < 0)
+    {
+        h = 0;
+    }
+
+    context->scissor_enabled = true;
+    context->scissor_rect = (SDL_Rect){(int)x, (int)y, (int)w, (int)h};
+    return true;
+}
+
+bool sdl3d_is_scissor_enabled(const sdl3d_render_context *context)
+{
+    if (context == NULL)
+    {
+        SDL_InvalidParamError("context");
+        return false;
+    }
+
+    return context->scissor_enabled;
+}
+
+bool sdl3d_get_scissor_rect(const sdl3d_render_context *context, SDL_Rect *out_rect)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (out_rect == NULL)
+    {
+        return SDL_InvalidParamError("out_rect");
+    }
+    if (!context->scissor_enabled)
+    {
+        return SDL_SetError("Scissor is not enabled on this render context.");
+    }
+
+    *out_rect = context->scissor_rect;
     return true;
 }
 

@@ -84,6 +84,15 @@ TEST(SDL3DRenderContextConfig, InitRenderContextConfigRejectsNull)
     EXPECT_NE(std::string_view(SDL_GetError()).find("Parameter 'config' is invalid"), std::string_view::npos);
 }
 
+TEST(SDL3DRenderContextState, NullStateAccessorsAreRejected)
+{
+    SDL_ClearError();
+    EXPECT_FALSE(sdl3d_set_scissor_rect(nullptr, nullptr));
+    EXPECT_FALSE(sdl3d_is_scissor_enabled(nullptr));
+    EXPECT_FALSE(sdl3d_get_scissor_rect(nullptr, reinterpret_cast<SDL_Rect *>(0x1)));
+    EXPECT_FALSE(sdl3d_clear_render_context_rect(nullptr, reinterpret_cast<const SDL_Rect *>(0x1), sdl3d_color{}));
+}
+
 TEST(SDL3DBackendName, MapsKnownBackendsToStableStrings)
 {
     EXPECT_EQ(std::string_view("auto"), sdl3d_get_backend_name(SDL3D_BACKEND_AUTO));
