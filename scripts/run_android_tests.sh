@@ -29,7 +29,17 @@ adb shell am start -W -n "$PKG/$ACTIVITY" >/dev/null
 LOGFILE="$(mktemp)"
 trap 'rm -f "$LOGFILE"' EXIT
 
-adb logcat -v brief SDL3D_TEST:I SDL:V SDL/APP:V stdout:V stderr:V AndroidRuntime:E *:S > "$LOGFILE" &
+adb logcat -v brief \
+    SDL3D_TEST:V \
+    SDL:V \
+    SDL/APP:V \
+    stdout:V \
+    stderr:V \
+    System.err:V \
+    AndroidRuntime:V \
+    DEBUG:V \
+    libc:V \
+    *:W > "$LOGFILE" &
 LOGCAT_PID=$!
 
 deadline=$(( SECONDS + TIMEOUT_SECONDS ))
