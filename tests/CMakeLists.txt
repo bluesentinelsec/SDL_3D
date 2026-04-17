@@ -30,9 +30,19 @@ function(sdl3d_add_test target_name source_file test_label)
 
     sdl3d_enable_sanitizers(${target_name})
 
+    if(WIN32)
+        add_custom_command(
+            TARGET ${target_name}
+            POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:${target_name}> $<TARGET_FILE_DIR:${target_name}>
+            COMMAND_EXPAND_LISTS
+        )
+    endif()
+
     gtest_discover_tests(
         ${target_name}
         DISCOVERY_TIMEOUT 10
+        DISCOVERY_MODE PRE_TEST
         PROPERTIES
             LABELS ${test_label}
             TIMEOUT 15
