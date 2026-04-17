@@ -19,7 +19,7 @@ extern "C"
 
 namespace
 {
-class SDLVideoFixture : public ::testing::Test
+class SDL3DDrawingFixture : public ::testing::Test
 {
   protected:
     void SetUp() override
@@ -112,7 +112,7 @@ constexpr sdl3d_color kBlue = {0, 0, 255, 255};
 
 /* --- Lifecycle ----------------------------------------------------------- */
 
-TEST_F(SDLVideoFixture, BeginEndModeRoundTrip)
+TEST_F(SDL3DDrawingFixture, BeginEndModeRoundTrip)
 {
     WindowRenderer wr;
     ASSERT_TRUE(wr.ok());
@@ -128,7 +128,7 @@ TEST_F(SDLVideoFixture, BeginEndModeRoundTrip)
     sdl3d_destroy_render_context(ctx);
 }
 
-TEST_F(SDLVideoFixture, DoubleBeginRejected)
+TEST_F(SDL3DDrawingFixture, DoubleBeginRejected)
 {
     WindowRenderer wr;
     ASSERT_TRUE(wr.ok());
@@ -144,7 +144,7 @@ TEST_F(SDLVideoFixture, DoubleBeginRejected)
     sdl3d_destroy_render_context(ctx);
 }
 
-TEST_F(SDLVideoFixture, EndWithoutBeginRejected)
+TEST_F(SDL3DDrawingFixture, EndWithoutBeginRejected)
 {
     WindowRenderer wr;
     ASSERT_TRUE(wr.ok());
@@ -158,7 +158,7 @@ TEST_F(SDLVideoFixture, EndWithoutBeginRejected)
     sdl3d_destroy_render_context(ctx);
 }
 
-TEST_F(SDLVideoFixture, DrawOutsideModeRejected)
+TEST_F(SDL3DDrawingFixture, DrawOutsideModeRejected)
 {
     WindowRenderer wr;
     ASSERT_TRUE(wr.ok());
@@ -172,7 +172,7 @@ TEST_F(SDLVideoFixture, DrawOutsideModeRejected)
     sdl3d_destroy_render_context(ctx);
 }
 
-TEST_F(SDLVideoFixture, SetDepthPlanesRejectedWhileInMode)
+TEST_F(SDL3DDrawingFixture, SetDepthPlanesRejectedWhileInMode)
 {
     WindowRenderer wr;
     ASSERT_TRUE(wr.ok());
@@ -204,7 +204,7 @@ TEST(SDL3DDrawing3DNull, NullContextIsRejected)
 
 /* --- Drawing / readback -------------------------------------------------- */
 
-TEST_F(SDLVideoFixture, DrawPointAtOriginPaintsCenterPixel)
+TEST_F(SDL3DDrawingFixture, DrawPointAtOriginPaintsCenterPixel)
 {
     WindowRenderer wr(64, 64);
     ASSERT_TRUE(wr.ok());
@@ -227,7 +227,7 @@ TEST_F(SDLVideoFixture, DrawPointAtOriginPaintsCenterPixel)
     sdl3d_destroy_render_context(ctx);
 }
 
-TEST_F(SDLVideoFixture, DrawTriangleFacingCameraPaintsPixels)
+TEST_F(SDL3DDrawingFixture, DrawTriangleFacingCameraPaintsPixels)
 {
     WindowRenderer wr(64, 64);
     ASSERT_TRUE(wr.ok());
@@ -251,7 +251,7 @@ TEST_F(SDLVideoFixture, DrawTriangleFacingCameraPaintsPixels)
     sdl3d_destroy_render_context(ctx);
 }
 
-TEST_F(SDLVideoFixture, DepthOrderingNearOverFar)
+TEST_F(SDL3DDrawingFixture, DepthOrderingNearOverFar)
 {
     WindowRenderer wr(64, 64);
     ASSERT_TRUE(wr.ok());
@@ -277,7 +277,7 @@ TEST_F(SDLVideoFixture, DepthOrderingNearOverFar)
     sdl3d_destroy_render_context(ctx);
 }
 
-TEST_F(SDLVideoFixture, ClearResetsDepthBuffer)
+TEST_F(SDL3DDrawingFixture, ClearResetsDepthBuffer)
 {
     WindowRenderer wr(32, 32);
     ASSERT_TRUE(wr.ok());
@@ -294,7 +294,7 @@ TEST_F(SDLVideoFixture, ClearResetsDepthBuffer)
 
 /* --- Logical presentation interop --------------------------------------- */
 
-TEST_F(SDLVideoFixture, LogicalLetterboxRendersAtLogicalResolution)
+TEST_F(SDL3DDrawingFixture, LogicalLetterboxRendersAtLogicalResolution)
 {
     WindowRenderer wr(320, 240);
     ASSERT_TRUE(wr.ok());
