@@ -1,0 +1,31 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace = "com.sdl3d.tests"
+    compileSdk 35
+    defaultConfig {
+        applicationId "com.sdl3d.tests"
+        minSdk 21
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+    sourceSets.main {
+        // Native libs (libmain.so, libSDL3.so) are built externally by
+        // CMake and staged into jniLibs/<abi>/ before this project builds.
+        jniLibs.srcDirs = ['src/main/jniLibs']
+        // SDL3 Java sources (SDLActivity et al.) are copied in from the
+        // fetched SDL3 source tree by the CI driver script.
+        java.srcDirs = ['src/main/java', 'src/main/sdl-java']
+    }
+    lint {
+        abortOnError = false
+    }
+}

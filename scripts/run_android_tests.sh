@@ -1,45 +1,62 @@
 #!/usr/bin/env bash
-# Invoked by the Android CI job (reactivecircus/android-emulator-runner)
-# *after* the emulator has booted. The action executes each line of its
-# `script:` input as a separate `sh -c`, so we keep all control flow here
-# in a single script file and invoke it from the workflow as one command.
+# Invoked from inside reactivecircus/android-emulator-runner after the
+# emulator is booted. Installs the pre-built APK, launches the SDLActivity
+# that hosts our GoogleTest binary, and tails logcat for a sentinel line
+# emitted by tests/android_main.cpp.
 set -euo pipefail
 
-BUILD_DIR="${BUILD_DIR:-build/android}"
-DEVICE_DIR="/data/local/tmp"
+APK="${APK:-tests/android/app/build/outputs/apk/debug/app-debug.apk}"
+PKG="${PKG:-com.sdl3d.tests}"
+ACTIVITY="${ACTIVITY:-com.sdl3d.tests.TestActivity}"
+SENTINEL="SDL3D_TEST_RESULT"
+TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-180}"
+
+if [ ! -f "$APK" ]; then
+    echo "APK not found at $APK" >&2
+    exit 2
+fi
 
 adb wait-for-device
+adb install -r -g "$APK"
 
-# SDL3 may build as a shared library; push it next to the tests if so.
-SDL_SO="$(find "$BUILD_DIR" -name 'libSDL3.so' | head -n 1 || true)"
-if [ -n "$SDL_SO" ]; then
-    adb push "$SDL_SO" "$DEVICE_DIR/libSDL3.so"
-fi
+# Start with an empty logcat buffer so we only see test output from this run.
+adb logcat -c
 
-# The NDK's libc++_shared.so is only needed when ANDROID_STL=c++_shared,
-# but pushing it is cheap insurance and matches the Vigil reference.
-LIBCXX="$(find "$ANDROID_NDK_HOME/toolchains" \
-    -name 'libc++_shared.so' \
-    -path '*/x86_64-linux-android/*' | head -n 1 || true)"
-if [ -n "$LIBCXX" ]; then
-    adb push "$LIBCXX" "$DEVICE_DIR/libc++_shared.so"
-fi
+adb shell am start -W -n "$PKG/$ACTIVITY" >/dev/null
 
-failures=0
-for t in "$BUILD_DIR"/tests/sdl3d_*_test; do
-    [ -f "$t" ] || continue
-    name="$(basename "$t")"
-    echo "::group::$name"
-    adb push "$t" "$DEVICE_DIR/$name"
-    adb shell chmod 755 "$DEVICE_DIR/$name"
-    if ! adb shell "cd $DEVICE_DIR && LD_LIBRARY_PATH=$DEVICE_DIR SDL_VIDEO_DRIVER=offscreen ./$name"; then
-        failures=$((failures + 1))
-        echo "::error::$name failed"
+# Stream the SDL / stdout / stderr / our sentinel tags to the job log and
+# watch for the sentinel line. Backgrounded so we can enforce a timeout.
+LOGFILE="$(mktemp)"
+trap 'rm -f "$LOGFILE"' EXIT
+
+adb logcat -v brief SDL3D_TEST:I SDL:V SDL/APP:V stdout:V stderr:V AndroidRuntime:E *:S > "$LOGFILE" &
+LOGCAT_PID=$!
+
+deadline=$(( SECONDS + TIMEOUT_SECONDS ))
+rc=""
+while [ -z "$rc" ] && [ $SECONDS -lt $deadline ]; do
+    if grep -q "$SENTINEL:" "$LOGFILE" 2>/dev/null; then
+        rc=$(grep "$SENTINEL:" "$LOGFILE" | tail -n 1 | sed -E "s/.*${SENTINEL}: ([0-9]+).*/\1/")
+        break
     fi
-    echo "::endgroup::"
+    # Quit early if the process crashed.
+    if grep -q "FATAL EXCEPTION" "$LOGFILE" 2>/dev/null; then
+        break
+    fi
+    sleep 2
 done
 
-if [ "$failures" -ne 0 ]; then
-    echo "$failures test binary(ies) failed"
+kill "$LOGCAT_PID" 2>/dev/null || true
+wait "$LOGCAT_PID" 2>/dev/null || true
+
+echo "----- logcat tail -----"
+cat "$LOGFILE"
+echo "----- end logcat -----"
+
+if [ -z "$rc" ]; then
+    echo "Test run did not report $SENTINEL within ${TIMEOUT_SECONDS}s"
     exit 1
 fi
+
+echo "GoogleTest exit code: $rc"
+exit "$rc"
