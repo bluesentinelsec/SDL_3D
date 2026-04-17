@@ -125,27 +125,7 @@ jobs:
           arch: x86_64
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: |
-            set -e
-            adb wait-for-device
-            # SDL3 may ship as a shared library; push it alongside each test.
-            SDL_SO=$(find build/android -name "libSDL3.so" | head -1 || true)
-            if [ -n "$SDL_SO" ]; then
-              adb push "$SDL_SO" /data/local/tmp/libSDL3.so
-            fi
-            LIBCXX=$(find $ANDROID_NDK_HOME/toolchains -name "libc++_shared.so" -path "*/x86_64-linux-android/*" | head -1 || true)
-            if [ -n "$LIBCXX" ]; then
-              adb push "$LIBCXX" /data/local/tmp/libc++_shared.so
-            fi
-            for t in build/android/tests/sdl3d_*_test; do
-              [ -f "$t" ] || continue
-              name=$(basename "$t")
-              echo "::group::$name"
-              adb push "$t" /data/local/tmp/$name
-              adb shell chmod 755 /data/local/tmp/$name
-              adb shell "cd /data/local/tmp && LD_LIBRARY_PATH=/data/local/tmp SDL_VIDEO_DRIVER=offscreen ./$name"
-              echo "::endgroup::"
-            done
+          script: bash scripts/run_android_tests.sh
 
   sanitizers:
     name: Sanitizers
