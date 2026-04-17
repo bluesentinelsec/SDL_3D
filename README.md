@@ -26,6 +26,14 @@ cmake --build --preset release
 ctest --preset release
 ```
 
+For a sanitizer-enabled build with AddressSanitizer and UndefinedBehaviorSanitizer:
+
+```sh
+CC=clang cmake --preset sanitizers
+cmake --build --preset sanitizers
+ctest --preset sanitizers
+```
+
 ## Install
 
 ```sh

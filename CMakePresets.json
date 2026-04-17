@@ -24,6 +24,16 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
+        },
+        {
+            "name": "sanitizers",
+            "displayName": "Sanitizers",
+            "inherits": "default",
+            "binaryDir": "${sourceDir}/build/sanitizers",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "SDL3D_ENABLE_SANITIZERS": "ON"
+            }
         }
     ],
     "buildPresets": [
@@ -34,6 +44,10 @@
         {
             "name": "release",
             "configurePreset": "release"
+        },
+        {
+            "name": "sanitizers",
+            "configurePreset": "sanitizers"
         }
     ],
     "testPresets": [
@@ -47,6 +61,13 @@
         {
             "name": "release",
             "configurePreset": "release",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "sanitizers",
+            "configurePreset": "sanitizers",
             "output": {
                 "outputOnFailure": true
             }

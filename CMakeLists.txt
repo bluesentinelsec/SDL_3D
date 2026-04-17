@@ -16,9 +16,11 @@ if(PROJECT_IS_TOP_LEVEL)
 else()
     option(SDL3D_BUILD_TESTS "Build SDL3D tests" OFF)
 endif()
+option(SDL3D_ENABLE_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(SDL3DCompilerWarnings)
+include(SDL3DSanitizers)
 
 add_library(sdl3d)
 add_library(SDL3D::sdl3d ALIAS sdl3d)
@@ -51,6 +53,7 @@ target_include_directories(
 )
 
 sdl3d_enable_warnings(sdl3d)
+sdl3d_enable_sanitizers(sdl3d)
 
 if(MSVC)
     target_compile_options(sdl3d PRIVATE /permissive-)
