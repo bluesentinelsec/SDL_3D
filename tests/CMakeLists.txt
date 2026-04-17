@@ -63,21 +63,21 @@ function(sdl3d_add_test target_name source_file test_label)
     )
 endfunction()
 
+set(SDL3D_TEST_SOURCES
+    test_api.cpp
+    test_math.cpp
+    test_rasterizer.cpp
+    test_render_context_unit.cpp
+    test_render_context.cpp
+    test_drawing3d.cpp
+    test_render_loop.cpp
+)
+
 if(ANDROID)
     # SDLActivity expects libmain.so with an SDL_main entry point. Combine
     # all GoogleTest translation units into one shared library so a single
     # APK can run the entire suite.
-    add_library(
-        main SHARED
-        android_main.cpp
-        test_api.cpp
-        test_math.cpp
-        test_rasterizer.cpp
-        test_render_context_unit.cpp
-        test_render_context.cpp
-        test_drawing3d.cpp
-        test_render_loop.cpp
-    )
+    add_library(main SHARED android_main.cpp ${SDL3D_TEST_SOURCES})
 
     target_link_libraries(
         main
@@ -91,6 +91,39 @@ if(ANDROID)
     target_compile_features(main PRIVATE cxx_std_17)
     target_include_directories(main PRIVATE ${CMAKE_SOURCE_DIR}/src)
     sdl3d_enable_sanitizers(main)
+elseif(IOS)
+    # iOS apps must be bundled as .app directories and cannot launch bare
+    # executables; as on Android we combine every test TU into a single
+    # app bundle whose SDL_main runs the full suite. SDL's iOS bootstrap
+    # creates UIApplication + a window and then calls into our SDL_main.
+    set(SDL3D_IOS_BUNDLE_ID "com.sdl3d.tests")
+
+    add_executable(sdl3d_ios_tests MACOSX_BUNDLE ios_main.cpp ${SDL3D_TEST_SOURCES})
+
+    target_link_libraries(
+        sdl3d_ios_tests
+        PRIVATE
+            SDL3D::sdl3d
+            GTest::gtest
+    )
+
+    target_compile_features(sdl3d_ios_tests PRIVATE cxx_std_17)
+    target_include_directories(sdl3d_ios_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    sdl3d_enable_sanitizers(sdl3d_ios_tests)
+
+    set_target_properties(
+        sdl3d_ios_tests
+        PROPERTIES
+            MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/ios/Info.plist.in"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "${SDL3D_IOS_BUNDLE_ID}"
+            MACOSX_BUNDLE_BUNDLE_NAME "SDL3D Tests"
+            MACOSX_BUNDLE_BUNDLE_VERSION "1"
+            MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
+            XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "${SDL3D_IOS_BUNDLE_ID}"
+            XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
+            XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY ""
+            XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
+    )
 else()
     sdl3d_add_test(sdl3d_api_test test_api.cpp unit)
     sdl3d_add_test(sdl3d_math_test test_math.cpp unit)
