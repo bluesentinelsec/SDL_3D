@@ -1,8 +1,7 @@
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_log.h>
+#include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_version.h>
-
-#include <string.h>
 
 #include "sdl3d/sdl3d.h"
 
@@ -26,7 +25,7 @@ bool sdl3d_copy_greeting(char *buffer, size_t buffer_size)
         return SDL_SetError("Buffer is too small for the SDL3D greeting.");
     }
 
-    memcpy(buffer, SDL3D_GREETING, sizeof(SDL3D_GREETING));
+    SDL_memcpy(buffer, SDL3D_GREETING, sizeof(SDL3D_GREETING));
     return true;
 }
 
