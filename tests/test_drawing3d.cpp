@@ -81,6 +81,17 @@ sdl3d_camera3d MakeCamera(float fovy_degrees = 60.0f)
     return cam;
 }
 
+sdl3d_camera3d MakeOrthoCamera(float view_height = 4.0f)
+{
+    sdl3d_camera3d cam{};
+    cam.position = sdl3d_vec3_make(0.0f, 0.0f, 3.0f);
+    cam.target = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    cam.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.fovy = view_height;
+    cam.projection = SDL3D_CAMERA_ORTHOGRAPHIC;
+    return cam;
+}
+
 bool PixelEquals(sdl3d_color a, sdl3d_color b)
 {
     return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
@@ -198,12 +209,47 @@ TEST(SDL3DDrawing3DNull, NullContextIsRejected)
     EXPECT_FALSE(sdl3d_begin_mode_3d(nullptr, MakeCamera()));
     EXPECT_FALSE(sdl3d_end_mode_3d(nullptr));
     EXPECT_FALSE(sdl3d_draw_point_3d(nullptr, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), kRed));
+    EXPECT_FALSE(sdl3d_push_matrix(nullptr));
+    EXPECT_FALSE(sdl3d_pop_matrix(nullptr));
+    EXPECT_FALSE(sdl3d_translate(nullptr, 1.0f, 2.0f, 3.0f));
+    EXPECT_FALSE(sdl3d_rotate(nullptr, sdl3d_vec3_make(0.0f, 1.0f, 0.0f), sdl3d_degrees_to_radians(45.0f)));
+    EXPECT_FALSE(sdl3d_scale(nullptr, 2.0f, 2.0f, 2.0f));
     EXPECT_FALSE(sdl3d_set_backface_culling_enabled(nullptr, true));
     EXPECT_FALSE(sdl3d_set_wireframe_enabled(nullptr, true));
     EXPECT_FALSE(sdl3d_set_depth_planes(nullptr, 0.1f, 100.0f));
     EXPECT_FALSE(sdl3d_is_in_mode_3d(nullptr));
     EXPECT_FALSE(sdl3d_is_backface_culling_enabled(nullptr));
     EXPECT_FALSE(sdl3d_is_wireframe_enabled(nullptr));
+}
+
+TEST_F(SDL3DDrawingFixture, MatrixStackMutatorsRejectedOutsideMode)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    SDL_ClearError();
+    EXPECT_FALSE(sdl3d_push_matrix(ctx));
+    EXPECT_NE(*SDL_GetError(), '\0');
+
+    SDL_ClearError();
+    EXPECT_FALSE(sdl3d_pop_matrix(ctx));
+    EXPECT_NE(*SDL_GetError(), '\0');
+
+    SDL_ClearError();
+    EXPECT_FALSE(sdl3d_translate(ctx, 1.0f, 0.0f, 0.0f));
+    EXPECT_NE(*SDL_GetError(), '\0');
+
+    SDL_ClearError();
+    EXPECT_FALSE(sdl3d_rotate(ctx, sdl3d_vec3_make(0.0f, 0.0f, 1.0f), sdl3d_degrees_to_radians(90.0f)));
+    EXPECT_NE(*SDL_GetError(), '\0');
+
+    SDL_ClearError();
+    EXPECT_FALSE(sdl3d_scale(ctx, 2.0f, 1.0f, 1.0f));
+    EXPECT_NE(*SDL_GetError(), '\0');
+
+    sdl3d_destroy_render_context(ctx);
 }
 
 /* --- Drawing / readback -------------------------------------------------- */
@@ -251,6 +297,139 @@ TEST_F(SDL3DDrawingFixture, DrawTriangleFacingCameraPaintsPixels)
     sdl3d_color c{};
     ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, cx, cy, &c));
     EXPECT_TRUE(PixelEquals(c, kRed));
+
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, TranslateMovesPointUnderOrthographicCamera)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeOrthoCamera()));
+    ASSERT_TRUE(sdl3d_translate(ctx, 1.0f, 0.0f, 0.0f));
+    ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), kRed));
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+    sdl3d_color c{};
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 48, 32, &c));
+    EXPECT_TRUE(PixelEquals(c, kRed));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 32, 32, &c));
+    EXPECT_TRUE(PixelEquals(c, kBlack));
+
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, RotateTransformsPointsAroundOrigin)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeOrthoCamera()));
+    ASSERT_TRUE(sdl3d_rotate(ctx, sdl3d_vec3_make(0.0f, 0.0f, 1.0f), sdl3d_degrees_to_radians(90.0f)));
+    ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(1.0f, 0.0f, 0.0f), kRed));
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+    sdl3d_color c{};
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 32, 16, &c));
+    EXPECT_TRUE(PixelEquals(c, kRed));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 48, 32, &c));
+    EXPECT_TRUE(PixelEquals(c, kBlack));
+
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, ScaleTransformsPointsUnderOrthographicCamera)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeOrthoCamera()));
+    ASSERT_TRUE(sdl3d_scale(ctx, 2.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(0.5f, 0.0f, 0.0f), kRed));
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+    sdl3d_color c{};
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 48, 32, &c));
+    EXPECT_TRUE(PixelEquals(c, kRed));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 40, 32, &c));
+    EXPECT_TRUE(PixelEquals(c, kBlack));
+
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, PushPopRestoresPreviousTransform)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeOrthoCamera()));
+    ASSERT_TRUE(sdl3d_translate(ctx, 0.5f, 0.0f, 0.0f));
+    ASSERT_TRUE(sdl3d_push_matrix(ctx));
+    ASSERT_TRUE(sdl3d_translate(ctx, 0.5f, 0.0f, 0.0f));
+    ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), kRed));
+    ASSERT_TRUE(sdl3d_pop_matrix(ctx));
+    ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), kBlue));
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+    sdl3d_color c{};
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 48, 32, &c));
+    EXPECT_TRUE(PixelEquals(c, kRed));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 40, 32, &c));
+    EXPECT_TRUE(PixelEquals(c, kBlue));
+
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, MatrixStackGrowsDynamicallyAndRejectsRootPop)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeOrthoCamera()));
+    for (int i = 0; i < 40; ++i)
+    {
+        ASSERT_TRUE(sdl3d_push_matrix(ctx));
+    }
+    for (int i = 0; i < 40; ++i)
+    {
+        ASSERT_TRUE(sdl3d_pop_matrix(ctx));
+    }
+
+    SDL_ClearError();
+    EXPECT_FALSE(sdl3d_pop_matrix(ctx));
+    EXPECT_NE(*SDL_GetError(), '\0');
+
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, RotateRejectsZeroAxis)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeCamera()));
+    SDL_ClearError();
+    EXPECT_FALSE(sdl3d_rotate(ctx, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), sdl3d_degrees_to_radians(45.0f)));
+    EXPECT_NE(*SDL_GetError(), '\0');
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
 
     sdl3d_destroy_render_context(ctx);
 }
