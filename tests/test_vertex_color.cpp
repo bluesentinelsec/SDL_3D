@@ -183,9 +183,15 @@ TEST_F(SDL3DVertexColorFixture, CornersTakeVertexColorsUnderOrtho)
     const sdl3d_camera3d cam = MakeOrtho(4.0f);
     ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, cam));
 
-    const sdl3d_vec3 v0 = sdl3d_vec3_make(-1.0f, -1.0f, 0.0f);
-    const sdl3d_vec3 v1 = sdl3d_vec3_make(1.0f, -1.0f, 0.0f);
-    const sdl3d_vec3 v2 = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    /*
+     * Keep the triangle well inside half-width even on steeply portrait
+     * framebuffers (Android emulators hand us device aspect, not the 1:1 we
+     * ask for). half-width = half-height * aspect = 2 * aspect; coords in
+     * [-0.6, 0.6] stay visible for aspect >= 0.3.
+     */
+    const sdl3d_vec3 v0 = sdl3d_vec3_make(-0.6f, -0.6f, 0.0f);
+    const sdl3d_vec3 v1 = sdl3d_vec3_make(0.6f, -0.6f, 0.0f);
+    const sdl3d_vec3 v2 = sdl3d_vec3_make(0.0f, 0.6f, 0.0f);
     ASSERT_TRUE(sdl3d_draw_triangle_3d_ex(ctx, v0, v1, v2, kRed, kGreen, kBlue));
     ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
 
@@ -229,9 +235,9 @@ TEST_F(SDL3DVertexColorFixture, OrthoMidpointIsLinearBlend)
      * collapses to linear screen-space interpolation. The midpoint of the
      * bottom edge (v0 red, v1 green) should be close to (127, 127, 0).
      */
-    const sdl3d_vec3 v0 = sdl3d_vec3_make(-1.5f, -1.0f, 0.0f);
-    const sdl3d_vec3 v1 = sdl3d_vec3_make(1.5f, -1.0f, 0.0f);
-    const sdl3d_vec3 v2 = sdl3d_vec3_make(0.0f, 1.5f, 0.0f);
+    const sdl3d_vec3 v0 = sdl3d_vec3_make(-0.6f, -0.5f, 0.0f);
+    const sdl3d_vec3 v1 = sdl3d_vec3_make(0.6f, -0.5f, 0.0f);
+    const sdl3d_vec3 v2 = sdl3d_vec3_make(0.0f, 0.6f, 0.0f);
     ASSERT_TRUE(sdl3d_draw_triangle_3d_ex(ctx, v0, v1, v2, kRed, kGreen, kBlack));
     ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
 
@@ -259,9 +265,9 @@ TEST_F(SDL3DVertexColorFixture, FlatColorMatchesFlatPath)
 
     const sdl3d_color mauve = {180, 90, 140, 255};
     const sdl3d_camera3d cam = MakeOrtho(4.0f);
-    const sdl3d_vec3 v0 = sdl3d_vec3_make(-1.0f, -0.8f, 0.0f);
-    const sdl3d_vec3 v1 = sdl3d_vec3_make(1.0f, -0.8f, 0.0f);
-    const sdl3d_vec3 v2 = sdl3d_vec3_make(0.0f, 0.8f, 0.0f);
+    const sdl3d_vec3 v0 = sdl3d_vec3_make(-0.6f, -0.5f, 0.0f);
+    const sdl3d_vec3 v1 = sdl3d_vec3_make(0.6f, -0.5f, 0.0f);
+    const sdl3d_vec3 v2 = sdl3d_vec3_make(0.0f, 0.5f, 0.0f);
 
     ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
     ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, cam));
@@ -325,9 +331,15 @@ TEST_F(SDL3DVertexColorFixture, PerspectiveCorrectNearVertexDominates)
         MakePerspective(sdl3d_vec3_make(0.0f, 0.0f, 0.0f), sdl3d_vec3_make(0.0f, 0.0f, -1.0f), 60.0f);
     ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, cam));
 
+    /*
+     * v1/v2 at z=-10 project to screen-x = (x / 10) / tan(fov_h/2); keep
+     * x=2 so the vertex stays inside the horizontal frustum even on a
+     * portrait aspect (~0.56 on Android), where horizontal half-FOV shrinks
+     * relative to vertical.
+     */
     const sdl3d_vec3 v0 = sdl3d_vec3_make(0.0f, 0.0f, -1.0f);
-    const sdl3d_vec3 v1 = sdl3d_vec3_make(3.0f, 0.0f, -10.0f);
-    const sdl3d_vec3 v2 = sdl3d_vec3_make(0.0f, 3.0f, -10.0f);
+    const sdl3d_vec3 v1 = sdl3d_vec3_make(2.0f, 0.0f, -10.0f);
+    const sdl3d_vec3 v2 = sdl3d_vec3_make(0.0f, 2.0f, -10.0f);
     ASSERT_TRUE(sdl3d_draw_triangle_3d_ex(ctx, v0, v1, v2, kRed, kGreen, kGreen));
     ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
 
@@ -367,9 +379,9 @@ TEST_F(SDL3DVertexColorFixture, AlphaInterpolates)
 
     const sdl3d_color red_opaque = {255, 0, 0, 255};
     const sdl3d_color red_transparent = {255, 0, 0, 0};
-    const sdl3d_vec3 v0 = sdl3d_vec3_make(-1.5f, -1.0f, 0.0f);
-    const sdl3d_vec3 v1 = sdl3d_vec3_make(1.5f, -1.0f, 0.0f);
-    const sdl3d_vec3 v2 = sdl3d_vec3_make(0.0f, 1.5f, 0.0f);
+    const sdl3d_vec3 v0 = sdl3d_vec3_make(-0.6f, -0.5f, 0.0f);
+    const sdl3d_vec3 v1 = sdl3d_vec3_make(0.6f, -0.5f, 0.0f);
+    const sdl3d_vec3 v2 = sdl3d_vec3_make(0.0f, 0.6f, 0.0f);
     ASSERT_TRUE(sdl3d_draw_triangle_3d_ex(ctx, v0, v1, v2, red_opaque, red_transparent, red_opaque));
     ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
 
@@ -399,9 +411,9 @@ TEST_F(SDL3DVertexColorFixture, WireframeInterpolatesAlongEdges)
     const sdl3d_camera3d cam = MakeOrtho(4.0f);
     ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, cam));
 
-    const sdl3d_vec3 v0 = sdl3d_vec3_make(-1.5f, -1.0f, 0.0f);
-    const sdl3d_vec3 v1 = sdl3d_vec3_make(1.5f, -1.0f, 0.0f);
-    const sdl3d_vec3 v2 = sdl3d_vec3_make(0.0f, 1.5f, 0.0f);
+    const sdl3d_vec3 v0 = sdl3d_vec3_make(-0.6f, -0.5f, 0.0f);
+    const sdl3d_vec3 v1 = sdl3d_vec3_make(0.6f, -0.5f, 0.0f);
+    const sdl3d_vec3 v2 = sdl3d_vec3_make(0.0f, 0.6f, 0.0f);
     ASSERT_TRUE(sdl3d_draw_triangle_3d_ex(ctx, v0, v1, v2, kRed, kGreen, kBlack));
     ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
     ASSERT_TRUE(sdl3d_set_wireframe_enabled(ctx, false));
