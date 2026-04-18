@@ -139,6 +139,21 @@ SDL_Point ProjectPointToFramebuffer(const sdl3d_render_context *ctx, sdl3d_camer
     return out;
 }
 
+float FramebufferAspect(const sdl3d_render_context *ctx)
+{
+    return (float)sdl3d_get_render_context_width(ctx) / (float)sdl3d_get_render_context_height(ctx);
+}
+
+float OrthoHalfHeight(sdl3d_camera3d camera)
+{
+    return camera.fovy * 0.5f;
+}
+
+float OrthoHalfWidth(const sdl3d_render_context *ctx, sdl3d_camera3d camera)
+{
+    return OrthoHalfHeight(camera) * FramebufferAspect(ctx);
+}
+
 constexpr sdl3d_color kBlack = {0, 0, 0, 255};
 constexpr sdl3d_color kRed = {255, 0, 0, 255};
 constexpr sdl3d_color kBlue = {0, 0, 255, 255};
@@ -330,15 +345,17 @@ TEST_F(SDL3DDrawingFixture, TranslateMovesPointUnderOrthographicCamera)
     ASSERT_TRUE(wr.ok());
     sdl3d_render_context *ctx = nullptr;
     ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+    const sdl3d_camera3d camera = MakeOrthoCamera();
+    const float translate_x = OrthoHalfWidth(ctx, camera) * 0.5f;
 
     ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
-    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeOrthoCamera()));
-    ASSERT_TRUE(sdl3d_translate(ctx, 1.0f, 0.0f, 0.0f));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, camera));
+    ASSERT_TRUE(sdl3d_translate(ctx, translate_x, 0.0f, 0.0f));
     ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), kRed));
     ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
 
-    const SDL_Point translated = ProjectPointToFramebuffer(ctx, MakeOrthoCamera(), sdl3d_vec3_make(1.0f, 0.0f, 0.0f));
-    const SDL_Point origin = ProjectPointToFramebuffer(ctx, MakeOrthoCamera(), sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const SDL_Point translated = ProjectPointToFramebuffer(ctx, camera, sdl3d_vec3_make(translate_x, 0.0f, 0.0f));
+    const SDL_Point origin = ProjectPointToFramebuffer(ctx, camera, sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
 
     sdl3d_color c{};
     ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, translated.x, translated.y, &c));
@@ -355,15 +372,17 @@ TEST_F(SDL3DDrawingFixture, RotateTransformsPointsAroundOrigin)
     ASSERT_TRUE(wr.ok());
     sdl3d_render_context *ctx = nullptr;
     ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+    const sdl3d_camera3d camera = MakeOrthoCamera();
+    const float radius = std::fmin(OrthoHalfWidth(ctx, camera), OrthoHalfHeight(camera)) * 0.5f;
 
     ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
-    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeOrthoCamera()));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, camera));
     ASSERT_TRUE(sdl3d_rotate(ctx, sdl3d_vec3_make(0.0f, 0.0f, 1.0f), sdl3d_degrees_to_radians(90.0f)));
-    ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(1.0f, 0.0f, 0.0f), kRed));
+    ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(radius, 0.0f, 0.0f), kRed));
     ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
 
-    const SDL_Point rotated = ProjectPointToFramebuffer(ctx, MakeOrthoCamera(), sdl3d_vec3_make(0.0f, 1.0f, 0.0f));
-    const SDL_Point unrotated = ProjectPointToFramebuffer(ctx, MakeOrthoCamera(), sdl3d_vec3_make(1.0f, 0.0f, 0.0f));
+    const SDL_Point rotated = ProjectPointToFramebuffer(ctx, camera, sdl3d_vec3_make(0.0f, radius, 0.0f));
+    const SDL_Point unrotated = ProjectPointToFramebuffer(ctx, camera, sdl3d_vec3_make(radius, 0.0f, 0.0f));
 
     sdl3d_color c{};
     ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, rotated.x, rotated.y, &c));
@@ -380,15 +399,18 @@ TEST_F(SDL3DDrawingFixture, ScaleTransformsPointsUnderOrthographicCamera)
     ASSERT_TRUE(wr.ok());
     sdl3d_render_context *ctx = nullptr;
     ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+    const sdl3d_camera3d camera = MakeOrthoCamera();
+    const float scaled_x = OrthoHalfWidth(ctx, camera) * 0.5f;
+    const float local_x = scaled_x * 0.5f;
 
     ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
-    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeOrthoCamera()));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, camera));
     ASSERT_TRUE(sdl3d_scale(ctx, 2.0f, 1.0f, 1.0f));
-    ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(0.5f, 0.0f, 0.0f), kRed));
+    ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(local_x, 0.0f, 0.0f), kRed));
     ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
 
-    const SDL_Point scaled = ProjectPointToFramebuffer(ctx, MakeOrthoCamera(), sdl3d_vec3_make(1.0f, 0.0f, 0.0f));
-    const SDL_Point unscaled = ProjectPointToFramebuffer(ctx, MakeOrthoCamera(), sdl3d_vec3_make(0.5f, 0.0f, 0.0f));
+    const SDL_Point scaled = ProjectPointToFramebuffer(ctx, camera, sdl3d_vec3_make(scaled_x, 0.0f, 0.0f));
+    const SDL_Point unscaled = ProjectPointToFramebuffer(ctx, camera, sdl3d_vec3_make(local_x, 0.0f, 0.0f));
 
     sdl3d_color c{};
     ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, scaled.x, scaled.y, &c));
@@ -405,19 +427,22 @@ TEST_F(SDL3DDrawingFixture, PushPopRestoresPreviousTransform)
     ASSERT_TRUE(wr.ok());
     sdl3d_render_context *ctx = nullptr;
     ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+    const sdl3d_camera3d camera = MakeOrthoCamera();
+    const float base_x = OrthoHalfWidth(ctx, camera) * 0.25f;
+    const float pushed_x = base_x * 2.0f;
 
     ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
-    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeOrthoCamera()));
-    ASSERT_TRUE(sdl3d_translate(ctx, 0.5f, 0.0f, 0.0f));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, camera));
+    ASSERT_TRUE(sdl3d_translate(ctx, base_x, 0.0f, 0.0f));
     ASSERT_TRUE(sdl3d_push_matrix(ctx));
-    ASSERT_TRUE(sdl3d_translate(ctx, 0.5f, 0.0f, 0.0f));
+    ASSERT_TRUE(sdl3d_translate(ctx, base_x, 0.0f, 0.0f));
     ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), kRed));
     ASSERT_TRUE(sdl3d_pop_matrix(ctx));
     ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), kBlue));
     ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
 
-    const SDL_Point red_point = ProjectPointToFramebuffer(ctx, MakeOrthoCamera(), sdl3d_vec3_make(1.0f, 0.0f, 0.0f));
-    const SDL_Point blue_point = ProjectPointToFramebuffer(ctx, MakeOrthoCamera(), sdl3d_vec3_make(0.5f, 0.0f, 0.0f));
+    const SDL_Point red_point = ProjectPointToFramebuffer(ctx, camera, sdl3d_vec3_make(pushed_x, 0.0f, 0.0f));
+    const SDL_Point blue_point = ProjectPointToFramebuffer(ctx, camera, sdl3d_vec3_make(base_x, 0.0f, 0.0f));
 
     sdl3d_color c{};
     ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, red_point.x, red_point.y, &c));
