@@ -86,6 +86,7 @@ target_sources(
         src/shapes.c
         $<TARGET_OBJECTS:sdl3d_cgltf>
         $<TARGET_OBJECTS:sdl3d_ufbx>
+        $<TARGET_OBJECTS:sdl3d_stb>
 )
 
 target_compile_features(sdl3d PUBLIC c_std_17)
