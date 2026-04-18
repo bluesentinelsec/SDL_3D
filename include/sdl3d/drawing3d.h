@@ -51,6 +51,19 @@ extern "C"
 
     bool sdl3d_draw_triangle_3d(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_vec3 v1, sdl3d_vec3 v2,
                                 sdl3d_color color);
+
+    /*
+     * Triangle with per-vertex colors. Colors are interpolated across the
+     * triangle with perspective correction: each attribute is linearly
+     * interpolated in screen space as (attribute / w) and divided by the
+     * linearly interpolated (1 / w) at each pixel, which reproduces the
+     * correct 3D-space blend even under heavy perspective foreshortening.
+     *
+     * When wireframe is enabled, edges use linear screen-space color
+     * interpolation between their endpoints.
+     */
+    bool sdl3d_draw_triangle_3d_ex(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_vec3 v1, sdl3d_vec3 v2,
+                                   sdl3d_color c0, sdl3d_color c1, sdl3d_color c2);
     bool sdl3d_draw_line_3d(sdl3d_render_context *context, sdl3d_vec3 start, sdl3d_vec3 end, sdl3d_color color);
     bool sdl3d_draw_point_3d(sdl3d_render_context *context, sdl3d_vec3 position, sdl3d_color color);
 

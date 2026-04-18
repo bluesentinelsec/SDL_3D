@@ -285,6 +285,20 @@ bool sdl3d_draw_triangle_3d(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_
     return true;
 }
 
+bool sdl3d_draw_triangle_3d_ex(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_vec3 v1, sdl3d_vec3 v2,
+                               sdl3d_color c0, sdl3d_color c1, sdl3d_color c2)
+{
+    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_triangle_3d_ex"))
+    {
+        return false;
+    }
+
+    sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
+    sdl3d_rasterize_triangle_colored(&framebuffer, context->model_view_projection, v0, v1, v2, c0, c1, c2,
+                                     context->backface_culling_enabled, context->wireframe_enabled);
+    return true;
+}
+
 bool sdl3d_draw_line_3d(sdl3d_render_context *context, sdl3d_vec3 start, sdl3d_vec3 end, sdl3d_color color)
 {
     if (!sdl3d_require_mode_3d(context, "sdl3d_draw_line_3d"))

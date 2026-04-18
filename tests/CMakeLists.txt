@@ -72,6 +72,7 @@ set(SDL3D_TEST_SOURCES
     test_drawing3d.cpp
     test_render_loop.cpp
     test_shapes.cpp
+    test_vertex_color.cpp
 )
 
 if(ANDROID)
@@ -135,4 +136,5 @@ else()
     sdl3d_add_test(sdl3d_drawing3d_test test_drawing3d.cpp render)
     sdl3d_add_test(sdl3d_render_loop_test test_render_loop.cpp render)
     sdl3d_add_test(sdl3d_shapes_test test_shapes.cpp render)
+    sdl3d_add_test(sdl3d_vertex_color_test test_vertex_color.cpp render)
 endif()

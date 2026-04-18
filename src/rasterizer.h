@@ -56,6 +56,16 @@ bool sdl3d_framebuffer_get_depth(const sdl3d_framebuffer *framebuffer, int x, in
 void sdl3d_rasterize_triangle(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0, sdl3d_vec3 v1,
                               sdl3d_vec3 v2, sdl3d_color color, bool backface_culling_enabled, bool wireframe_enabled);
 
+/*
+ * Triangle with per-vertex RGBA colors. Attributes are interpolated with
+ * perspective correction in the fill loop (attr/w linearly in screen space,
+ * divided by the linearly interpolated 1/w per pixel). Wireframe edges use
+ * linear (screen-space) color interpolation along each edge.
+ */
+void sdl3d_rasterize_triangle_colored(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0, sdl3d_vec3 v1,
+                                      sdl3d_vec3 v2, sdl3d_color c0, sdl3d_color c1, sdl3d_color c2,
+                                      bool backface_culling_enabled, bool wireframe_enabled);
+
 void sdl3d_rasterize_line(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 start, sdl3d_vec3 end,
                           sdl3d_color color);
 
