@@ -258,13 +258,18 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     context->near_plane = SDL3D_DEFAULT_NEAR_PLANE;
     context->far_plane = SDL3D_DEFAULT_FAR_PLANE;
     context->in_mode_3d = false;
+    context->model_stack = NULL;
+    context->model_stack_depth = 0;
+    context->model_stack_capacity = 0;
     context->backface_culling_enabled = false;
     context->wireframe_enabled = false;
     context->scissor_enabled = false;
     context->scissor_rect = (SDL_Rect){0, 0, render_width, render_height};
+    context->model = sdl3d_mat4_identity();
     context->view = sdl3d_mat4_identity();
     context->projection = sdl3d_mat4_identity();
     context->view_projection = sdl3d_mat4_identity();
+    context->model_view_projection = sdl3d_mat4_identity();
     sdl3d_try_create_parallel_rasterizer(context);
 
     *out_context = context;
@@ -279,6 +284,7 @@ void sdl3d_destroy_render_context(sdl3d_render_context *context)
     }
 
     sdl3d_parallel_rasterizer_destroy(context->parallel_rasterizer);
+    SDL_free(context->model_stack);
     SDL_DestroyTexture(context->color_texture);
     SDL_free(context->color_buffer);
     SDL_free(context->depth_buffer);

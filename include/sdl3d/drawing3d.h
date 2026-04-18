@@ -29,6 +29,20 @@ extern "C"
     bool sdl3d_is_wireframe_enabled(const sdl3d_render_context *context);
 
     /*
+     * Matrix stack for immediate-mode model transforms. These functions are
+     * only valid between sdl3d_begin_mode_3d and sdl3d_end_mode_3d.
+     *
+     * The current model matrix starts as identity when 3D mode begins.
+     * Transform mutators post-multiply the current model matrix, so calling
+     * translate, then rotate, then scale produces Model = T * R * S.
+     */
+    bool sdl3d_push_matrix(sdl3d_render_context *context);
+    bool sdl3d_pop_matrix(sdl3d_render_context *context);
+    bool sdl3d_translate(sdl3d_render_context *context, float x, float y, float z);
+    bool sdl3d_rotate(sdl3d_render_context *context, sdl3d_vec3 axis, float angle_radians);
+    bool sdl3d_scale(sdl3d_render_context *context, float x, float y, float z);
+
+    /*
      * Override the depth planes used by sdl3d_begin_mode_3d. Must be called
      * before begin_mode_3d. near_plane and far_plane must satisfy 0 < near < far.
      * Defaults: near=0.01, far=1000.

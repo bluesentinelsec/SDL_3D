@@ -15,6 +15,7 @@ extern "C"
 #include "sdl3d/sdl3d.h"
 }
 
+#include <cmath>
 #include <memory>
 
 namespace
@@ -81,6 +82,17 @@ sdl3d_camera3d MakeCamera(float fovy_degrees = 60.0f)
     return cam;
 }
 
+sdl3d_camera3d MakeOrthoCamera(float view_height = 4.0f)
+{
+    sdl3d_camera3d cam{};
+    cam.position = sdl3d_vec3_make(0.0f, 0.0f, 3.0f);
+    cam.target = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    cam.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.fovy = view_height;
+    cam.projection = SDL3D_CAMERA_ORTHOGRAPHIC;
+    return cam;
+}
+
 bool PixelEquals(sdl3d_color a, sdl3d_color b)
 {
     return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
@@ -103,6 +115,43 @@ int CountColor(sdl3d_render_context *ctx, sdl3d_color c)
         }
     }
     return n;
+}
+
+SDL_Point ProjectPointToFramebuffer(const sdl3d_render_context *ctx, sdl3d_camera3d camera, sdl3d_vec3 point)
+{
+    sdl3d_mat4 view{};
+    sdl3d_mat4 projection{};
+    EXPECT_TRUE(sdl3d_camera3d_compute_matrices(&camera, sdl3d_get_render_context_width(ctx),
+                                                sdl3d_get_render_context_height(ctx), 0.01f, 1000.0f, &view,
+                                                &projection));
+
+    const sdl3d_mat4 view_projection = sdl3d_mat4_multiply(projection, view);
+    const sdl3d_vec4 clip = sdl3d_mat4_transform_vec4(view_projection, sdl3d_vec4_from_vec3(point, 1.0f));
+    const float inverse_w = 1.0f / clip.w;
+    const float ndc_x = clip.x * inverse_w;
+    const float ndc_y = clip.y * inverse_w;
+    const float screen_x = (ndc_x + 1.0f) * 0.5f * (float)sdl3d_get_render_context_width(ctx);
+    const float screen_y = (1.0f - ndc_y) * 0.5f * (float)sdl3d_get_render_context_height(ctx);
+
+    SDL_Point out{};
+    out.x = (int)std::lround(screen_x);
+    out.y = (int)std::lround(screen_y);
+    return out;
+}
+
+float FramebufferAspect(const sdl3d_render_context *ctx)
+{
+    return (float)sdl3d_get_render_context_width(ctx) / (float)sdl3d_get_render_context_height(ctx);
+}
+
+float OrthoHalfHeight(sdl3d_camera3d camera)
+{
+    return camera.fovy * 0.5f;
+}
+
+float OrthoHalfWidth(const sdl3d_render_context *ctx, sdl3d_camera3d camera)
+{
+    return OrthoHalfHeight(camera) * FramebufferAspect(ctx);
 }
 
 constexpr sdl3d_color kBlack = {0, 0, 0, 255};
@@ -198,12 +247,47 @@ TEST(SDL3DDrawing3DNull, NullContextIsRejected)
     EXPECT_FALSE(sdl3d_begin_mode_3d(nullptr, MakeCamera()));
     EXPECT_FALSE(sdl3d_end_mode_3d(nullptr));
     EXPECT_FALSE(sdl3d_draw_point_3d(nullptr, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), kRed));
+    EXPECT_FALSE(sdl3d_push_matrix(nullptr));
+    EXPECT_FALSE(sdl3d_pop_matrix(nullptr));
+    EXPECT_FALSE(sdl3d_translate(nullptr, 1.0f, 2.0f, 3.0f));
+    EXPECT_FALSE(sdl3d_rotate(nullptr, sdl3d_vec3_make(0.0f, 1.0f, 0.0f), sdl3d_degrees_to_radians(45.0f)));
+    EXPECT_FALSE(sdl3d_scale(nullptr, 2.0f, 2.0f, 2.0f));
     EXPECT_FALSE(sdl3d_set_backface_culling_enabled(nullptr, true));
     EXPECT_FALSE(sdl3d_set_wireframe_enabled(nullptr, true));
     EXPECT_FALSE(sdl3d_set_depth_planes(nullptr, 0.1f, 100.0f));
     EXPECT_FALSE(sdl3d_is_in_mode_3d(nullptr));
     EXPECT_FALSE(sdl3d_is_backface_culling_enabled(nullptr));
     EXPECT_FALSE(sdl3d_is_wireframe_enabled(nullptr));
+}
+
+TEST_F(SDL3DDrawingFixture, MatrixStackMutatorsRejectedOutsideMode)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    SDL_ClearError();
+    EXPECT_FALSE(sdl3d_push_matrix(ctx));
+    EXPECT_NE(*SDL_GetError(), '\0');
+
+    SDL_ClearError();
+    EXPECT_FALSE(sdl3d_pop_matrix(ctx));
+    EXPECT_NE(*SDL_GetError(), '\0');
+
+    SDL_ClearError();
+    EXPECT_FALSE(sdl3d_translate(ctx, 1.0f, 0.0f, 0.0f));
+    EXPECT_NE(*SDL_GetError(), '\0');
+
+    SDL_ClearError();
+    EXPECT_FALSE(sdl3d_rotate(ctx, sdl3d_vec3_make(0.0f, 0.0f, 1.0f), sdl3d_degrees_to_radians(90.0f)));
+    EXPECT_NE(*SDL_GetError(), '\0');
+
+    SDL_ClearError();
+    EXPECT_FALSE(sdl3d_scale(ctx, 2.0f, 1.0f, 1.0f));
+    EXPECT_NE(*SDL_GetError(), '\0');
+
+    sdl3d_destroy_render_context(ctx);
 }
 
 /* --- Drawing / readback -------------------------------------------------- */
@@ -251,6 +335,161 @@ TEST_F(SDL3DDrawingFixture, DrawTriangleFacingCameraPaintsPixels)
     sdl3d_color c{};
     ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, cx, cy, &c));
     EXPECT_TRUE(PixelEquals(c, kRed));
+
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, TranslateMovesPointUnderOrthographicCamera)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+    const sdl3d_camera3d camera = MakeOrthoCamera();
+    const float translate_x = OrthoHalfWidth(ctx, camera) * 0.5f;
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, camera));
+    ASSERT_TRUE(sdl3d_translate(ctx, translate_x, 0.0f, 0.0f));
+    ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), kRed));
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+    const SDL_Point translated = ProjectPointToFramebuffer(ctx, camera, sdl3d_vec3_make(translate_x, 0.0f, 0.0f));
+    const SDL_Point origin = ProjectPointToFramebuffer(ctx, camera, sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+
+    sdl3d_color c{};
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, translated.x, translated.y, &c));
+    EXPECT_TRUE(PixelEquals(c, kRed));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, origin.x, origin.y, &c));
+    EXPECT_TRUE(PixelEquals(c, kBlack));
+
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, RotateTransformsPointsAroundOrigin)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+    const sdl3d_camera3d camera = MakeOrthoCamera();
+    const float radius = std::fmin(OrthoHalfWidth(ctx, camera), OrthoHalfHeight(camera)) * 0.5f;
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, camera));
+    ASSERT_TRUE(sdl3d_rotate(ctx, sdl3d_vec3_make(0.0f, 0.0f, 1.0f), sdl3d_degrees_to_radians(90.0f)));
+    ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(radius, 0.0f, 0.0f), kRed));
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+    const SDL_Point rotated = ProjectPointToFramebuffer(ctx, camera, sdl3d_vec3_make(0.0f, radius, 0.0f));
+    const SDL_Point unrotated = ProjectPointToFramebuffer(ctx, camera, sdl3d_vec3_make(radius, 0.0f, 0.0f));
+
+    sdl3d_color c{};
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, rotated.x, rotated.y, &c));
+    EXPECT_TRUE(PixelEquals(c, kRed));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, unrotated.x, unrotated.y, &c));
+    EXPECT_TRUE(PixelEquals(c, kBlack));
+
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, ScaleTransformsPointsUnderOrthographicCamera)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+    const sdl3d_camera3d camera = MakeOrthoCamera();
+    const float scaled_x = OrthoHalfWidth(ctx, camera) * 0.5f;
+    const float local_x = scaled_x * 0.5f;
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, camera));
+    ASSERT_TRUE(sdl3d_scale(ctx, 2.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(local_x, 0.0f, 0.0f), kRed));
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+    const SDL_Point scaled = ProjectPointToFramebuffer(ctx, camera, sdl3d_vec3_make(scaled_x, 0.0f, 0.0f));
+    const SDL_Point unscaled = ProjectPointToFramebuffer(ctx, camera, sdl3d_vec3_make(local_x, 0.0f, 0.0f));
+
+    sdl3d_color c{};
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, scaled.x, scaled.y, &c));
+    EXPECT_TRUE(PixelEquals(c, kRed));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, unscaled.x, unscaled.y, &c));
+    EXPECT_TRUE(PixelEquals(c, kBlack));
+
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, PushPopRestoresPreviousTransform)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+    const sdl3d_camera3d camera = MakeOrthoCamera();
+    const float base_x = OrthoHalfWidth(ctx, camera) * 0.25f;
+    const float pushed_x = base_x * 2.0f;
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, camera));
+    ASSERT_TRUE(sdl3d_translate(ctx, base_x, 0.0f, 0.0f));
+    ASSERT_TRUE(sdl3d_push_matrix(ctx));
+    ASSERT_TRUE(sdl3d_translate(ctx, base_x, 0.0f, 0.0f));
+    ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), kRed));
+    ASSERT_TRUE(sdl3d_pop_matrix(ctx));
+    ASSERT_TRUE(sdl3d_draw_point_3d(ctx, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), kBlue));
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+    const SDL_Point red_point = ProjectPointToFramebuffer(ctx, camera, sdl3d_vec3_make(pushed_x, 0.0f, 0.0f));
+    const SDL_Point blue_point = ProjectPointToFramebuffer(ctx, camera, sdl3d_vec3_make(base_x, 0.0f, 0.0f));
+
+    sdl3d_color c{};
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, red_point.x, red_point.y, &c));
+    EXPECT_TRUE(PixelEquals(c, kRed));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, blue_point.x, blue_point.y, &c));
+    EXPECT_TRUE(PixelEquals(c, kBlue));
+
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, MatrixStackGrowsDynamicallyAndRejectsRootPop)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeOrthoCamera()));
+    for (int i = 0; i < 40; ++i)
+    {
+        ASSERT_TRUE(sdl3d_push_matrix(ctx));
+    }
+    for (int i = 0; i < 40; ++i)
+    {
+        ASSERT_TRUE(sdl3d_pop_matrix(ctx));
+    }
+
+    SDL_ClearError();
+    EXPECT_FALSE(sdl3d_pop_matrix(ctx));
+    EXPECT_NE(*SDL_GetError(), '\0');
+
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, RotateRejectsZeroAxis)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, MakeCamera()));
+    SDL_ClearError();
+    EXPECT_FALSE(sdl3d_rotate(ctx, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), sdl3d_degrees_to_radians(45.0f)));
+    EXPECT_NE(*SDL_GetError(), '\0');
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
 
     sdl3d_destroy_render_context(ctx);
 }

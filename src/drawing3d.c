@@ -1,9 +1,55 @@
 #include "sdl3d/drawing3d.h"
 
 #include <SDL3/SDL_error.h>
+#include <SDL3/SDL_stdinc.h>
 
 #include "rasterizer.h"
 #include "render_context_internal.h"
+
+static const int SDL3D_MODEL_STACK_INITIAL_CAPACITY = 8;
+
+static bool sdl3d_ensure_model_stack_capacity(sdl3d_render_context *context, int required_depth)
+{
+    if (context->model_stack_capacity >= required_depth)
+    {
+        return true;
+    }
+
+    int new_capacity = context->model_stack_capacity;
+    if (new_capacity <= 0)
+    {
+        new_capacity = SDL3D_MODEL_STACK_INITIAL_CAPACITY;
+    }
+
+    while (new_capacity < required_depth)
+    {
+        new_capacity *= 2;
+    }
+
+    sdl3d_mat4 *new_stack = (sdl3d_mat4 *)SDL_realloc(context->model_stack, (size_t)new_capacity * sizeof(*new_stack));
+    if (new_stack == NULL)
+    {
+        return SDL_OutOfMemory();
+    }
+
+    context->model_stack = new_stack;
+    context->model_stack_capacity = new_capacity;
+    return true;
+}
+
+static void sdl3d_update_current_model_matrices(sdl3d_render_context *context)
+{
+    if (context->model_stack_depth <= 0)
+    {
+        context->model = sdl3d_mat4_identity();
+    }
+    else
+    {
+        context->model = context->model_stack[context->model_stack_depth - 1];
+    }
+
+    context->model_view_projection = sdl3d_mat4_multiply(context->view_projection, context->model);
+}
 
 bool sdl3d_begin_mode_3d(sdl3d_render_context *context, sdl3d_camera3d camera)
 {
@@ -24,6 +70,14 @@ bool sdl3d_begin_mode_3d(sdl3d_render_context *context, sdl3d_camera3d camera)
     }
 
     context->view_projection = sdl3d_mat4_multiply(context->projection, context->view);
+    if (!sdl3d_ensure_model_stack_capacity(context, 1))
+    {
+        return false;
+    }
+
+    context->model_stack_depth = 1;
+    context->model_stack[0] = sdl3d_mat4_identity();
+    sdl3d_update_current_model_matrices(context);
     context->in_mode_3d = true;
     return true;
 }
@@ -41,6 +95,9 @@ bool sdl3d_end_mode_3d(sdl3d_render_context *context)
     }
 
     context->in_mode_3d = false;
+    context->model_stack_depth = 0;
+    context->model = sdl3d_mat4_identity();
+    context->model_view_projection = context->view_projection;
     return true;
 }
 
@@ -132,6 +189,88 @@ static bool sdl3d_require_mode_3d(const sdl3d_render_context *context, const cha
     return true;
 }
 
+bool sdl3d_push_matrix(sdl3d_render_context *context)
+{
+    if (!sdl3d_require_mode_3d(context, "sdl3d_push_matrix"))
+    {
+        return false;
+    }
+
+    if (!sdl3d_ensure_model_stack_capacity(context, context->model_stack_depth + 1))
+    {
+        return false;
+    }
+
+    context->model_stack[context->model_stack_depth] = context->model_stack[context->model_stack_depth - 1];
+    context->model_stack_depth += 1;
+    sdl3d_update_current_model_matrices(context);
+    return true;
+}
+
+bool sdl3d_pop_matrix(sdl3d_render_context *context)
+{
+    if (!sdl3d_require_mode_3d(context, "sdl3d_pop_matrix"))
+    {
+        return false;
+    }
+
+    if (context->model_stack_depth <= 1)
+    {
+        return SDL_SetError("sdl3d_pop_matrix cannot pop the root model matrix.");
+    }
+
+    context->model_stack_depth -= 1;
+    sdl3d_update_current_model_matrices(context);
+    return true;
+}
+
+bool sdl3d_translate(sdl3d_render_context *context, float x, float y, float z)
+{
+    if (!sdl3d_require_mode_3d(context, "sdl3d_translate"))
+    {
+        return false;
+    }
+
+    const sdl3d_mat4 translation = sdl3d_mat4_translate(sdl3d_vec3_make(x, y, z));
+    context->model_stack[context->model_stack_depth - 1] =
+        sdl3d_mat4_multiply(context->model_stack[context->model_stack_depth - 1], translation);
+    sdl3d_update_current_model_matrices(context);
+    return true;
+}
+
+bool sdl3d_rotate(sdl3d_render_context *context, sdl3d_vec3 axis, float angle_radians)
+{
+    if (!sdl3d_require_mode_3d(context, "sdl3d_rotate"))
+    {
+        return false;
+    }
+
+    if (!(sdl3d_vec3_length_squared(axis) > 0.0f))
+    {
+        return SDL_SetError("sdl3d_rotate requires a non-zero rotation axis.");
+    }
+
+    const sdl3d_mat4 rotation = sdl3d_mat4_rotate(axis, angle_radians);
+    context->model_stack[context->model_stack_depth - 1] =
+        sdl3d_mat4_multiply(context->model_stack[context->model_stack_depth - 1], rotation);
+    sdl3d_update_current_model_matrices(context);
+    return true;
+}
+
+bool sdl3d_scale(sdl3d_render_context *context, float x, float y, float z)
+{
+    if (!sdl3d_require_mode_3d(context, "sdl3d_scale"))
+    {
+        return false;
+    }
+
+    const sdl3d_mat4 scale = sdl3d_mat4_scale(sdl3d_vec3_make(x, y, z));
+    context->model_stack[context->model_stack_depth - 1] =
+        sdl3d_mat4_multiply(context->model_stack[context->model_stack_depth - 1], scale);
+    sdl3d_update_current_model_matrices(context);
+    return true;
+}
+
 bool sdl3d_draw_triangle_3d(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_vec3 v1, sdl3d_vec3 v2,
                             sdl3d_color color)
 {
@@ -141,7 +280,7 @@ bool sdl3d_draw_triangle_3d(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_
     }
 
     sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
-    sdl3d_rasterize_triangle(&framebuffer, context->view_projection, v0, v1, v2, color,
+    sdl3d_rasterize_triangle(&framebuffer, context->model_view_projection, v0, v1, v2, color,
                              context->backface_culling_enabled, context->wireframe_enabled);
     return true;
 }
@@ -154,7 +293,7 @@ bool sdl3d_draw_line_3d(sdl3d_render_context *context, sdl3d_vec3 start, sdl3d_v
     }
 
     sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
-    sdl3d_rasterize_line(&framebuffer, context->view_projection, start, end, color);
+    sdl3d_rasterize_line(&framebuffer, context->model_view_projection, start, end, color);
     return true;
 }
 
@@ -166,7 +305,7 @@ bool sdl3d_draw_point_3d(sdl3d_render_context *context, sdl3d_vec3 position, sdl
     }
 
     sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
-    sdl3d_rasterize_point(&framebuffer, context->view_projection, position, color);
+    sdl3d_rasterize_point(&framebuffer, context->model_view_projection, position, color);
     return true;
 }
 

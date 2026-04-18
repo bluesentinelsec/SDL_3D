@@ -32,13 +32,18 @@ struct sdl3d_render_context
     float far_plane;
 
     bool in_mode_3d;
+    sdl3d_mat4 *model_stack;
+    int model_stack_depth;
+    int model_stack_capacity;
     bool backface_culling_enabled;
     bool wireframe_enabled;
     bool scissor_enabled;
     SDL_Rect scissor_rect;
+    sdl3d_mat4 model;
     sdl3d_mat4 view;
     sdl3d_mat4 projection;
     sdl3d_mat4 view_projection;
+    sdl3d_mat4 model_view_projection;
 };
 
 static inline sdl3d_framebuffer sdl3d_framebuffer_from_context(sdl3d_render_context *context)
