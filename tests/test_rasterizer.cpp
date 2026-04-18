@@ -16,6 +16,7 @@ extern "C"
 #include "sdl3d/types.h"
 }
 
+#include <cstring>
 #include <vector>
 
 namespace
@@ -371,4 +372,48 @@ TEST(SDL3DRasterizeTriangle, ScissorClipsTriangleCoverage)
 
     EXPECT_EQ(CountPixelsEqual(f, kRed), 1);
     EXPECT_TRUE(PixelEquals(f.GetPixel(8, 8), kRed));
+}
+
+TEST(SDL3DRasterizeTriangle, ParallelTilesMatchReferenceByteForByte)
+{
+    Framebuffer reference(96, 80);
+    Framebuffer parallel(96, 80);
+
+    sdl3d_parallel_rasterizer *parallel_rasterizer = nullptr;
+    if (!sdl3d_parallel_rasterizer_create(2, &parallel_rasterizer))
+    {
+        GTEST_SKIP() << "Parallel rasterizer is unavailable on this platform/toolchain: " << SDL_GetError();
+    }
+    ASSERT_NE(parallel_rasterizer, nullptr);
+    EXPECT_EQ(sdl3d_parallel_rasterizer_get_worker_count(parallel_rasterizer), 2);
+
+    parallel.fb.parallel_rasterizer = parallel_rasterizer;
+
+    const auto draw_scene = [](Framebuffer &f) {
+        f.fb.scissor_enabled = true;
+        f.fb.scissor_rect = SDL_Rect{7, 5, 73, 61};
+        sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+
+        const sdl3d_mat4 id = sdl3d_mat4_identity();
+        sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-3.0f, -1.0f, 0.7f), sdl3d_vec3_make(3.0f, -1.0f, 0.7f),
+                                 sdl3d_vec3_make(0.0f, 3.0f, 0.7f), kBlue, false, false);
+        sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-2.2f, -1.5f, -0.2f), sdl3d_vec3_make(2.5f, -0.8f, -0.2f),
+                                 sdl3d_vec3_make(-0.2f, 2.4f, -0.2f), kRed, false, false);
+        sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(0.3f, 0.8f, 0.1f), sdl3d_vec3_make(0.8f, -0.7f, 0.1f),
+                                 sdl3d_vec3_make(-0.9f, -0.6f, 0.1f), kGreen, true, false);
+
+        sdl3d_mat4 proj;
+        ASSERT_TRUE(sdl3d_mat4_perspective(sdl3d_degrees_to_radians(65.0f), 1.2f, 0.5f, 100.0f, &proj));
+        sdl3d_rasterize_triangle(&f.fb, proj, sdl3d_vec3_make(0.0f, 1.2f, -2.5f), sdl3d_vec3_make(-1.4f, -1.0f, -0.2f),
+                                 sdl3d_vec3_make(1.1f, -0.8f, -0.3f), kGreen, false, false);
+    };
+
+    draw_scene(reference);
+    draw_scene(parallel);
+
+    EXPECT_EQ(reference.color, parallel.color);
+    ASSERT_EQ(reference.depth.size(), parallel.depth.size());
+    EXPECT_EQ(std::memcmp(reference.depth.data(), parallel.depth.data(), reference.depth.size() * sizeof(float)), 0);
+
+    sdl3d_parallel_rasterizer_destroy(parallel_rasterizer);
 }

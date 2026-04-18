@@ -30,15 +30,22 @@
 #include "sdl3d/math.h"
 #include "sdl3d/types.h"
 
+typedef struct sdl3d_parallel_rasterizer sdl3d_parallel_rasterizer;
+
 typedef struct sdl3d_framebuffer
 {
     Uint8 *color_pixels; /* RGBA8888, width * height * 4 bytes */
     float *depth_pixels; /* width * height floats in [-1, 1] */
     int width;
     int height;
+    sdl3d_parallel_rasterizer *parallel_rasterizer;
     bool scissor_enabled;
     SDL_Rect scissor_rect;
 } sdl3d_framebuffer;
+
+bool sdl3d_parallel_rasterizer_create(int worker_count, sdl3d_parallel_rasterizer **out_rasterizer);
+void sdl3d_parallel_rasterizer_destroy(sdl3d_parallel_rasterizer *rasterizer);
+int sdl3d_parallel_rasterizer_get_worker_count(const sdl3d_parallel_rasterizer *rasterizer);
 
 void sdl3d_framebuffer_clear(sdl3d_framebuffer *framebuffer, sdl3d_color color, float depth);
 void sdl3d_framebuffer_clear_rect(sdl3d_framebuffer *framebuffer, const SDL_Rect *rect, sdl3d_color color, float depth);

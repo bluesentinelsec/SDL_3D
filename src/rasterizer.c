@@ -1,7 +1,11 @@
 #include "rasterizer.h"
 
 #include <SDL3/SDL_assert.h>
+#include <SDL3/SDL_atomic.h>
+#include <SDL3/SDL_error.h>
+#include <SDL3/SDL_mutex.h>
 #include <SDL3/SDL_stdinc.h>
+#include <SDL3/SDL_thread.h>
 
 /*
  * Subpixel precision: 8 bits (256 subpixel positions per pixel).
@@ -16,6 +20,33 @@ static const int SDL3D_SUBPIXEL_HALF = 1 << (8 - 1); /* 128 */
  * produce at most 3 + 6 = 9 vertices. Round up to 10 for safety.
  */
 #define SDL3D_CLIP_MAX_VERTICES 10
+
+/*
+ * Fixed tile width/height for the parallel solid-triangle path. Tiles own
+ * disjoint pixel rectangles, so workers never contend on a framebuffer write
+ * and the output remains byte-identical to the single-threaded reference.
+ */
+static const int SDL3D_RASTER_TILE_SIZE = 32;
+
+typedef void (*sdl3d_parallel_tile_function)(void *userdata, int tile_index);
+
+typedef struct sdl3d_parallel_job
+{
+    sdl3d_parallel_tile_function run_tile;
+    void *userdata;
+    int tile_count;
+    SDL_AtomicInt next_tile_index;
+} sdl3d_parallel_job;
+
+struct sdl3d_parallel_rasterizer
+{
+    int worker_count;
+    SDL_Thread **threads;
+    SDL_Semaphore *work_ready;
+    SDL_Semaphore *work_complete;
+    SDL_AtomicInt stop_requested;
+    void *current_job;
+};
 
 /* --- Helpers -------------------------------------------------------------- */
 
@@ -33,6 +64,70 @@ static int sdl3d_max_int(int a, int b)
 static int sdl3d_min_int(int a, int b)
 {
     return (a < b) ? a : b;
+}
+
+static void sdl3d_parallel_run_job(sdl3d_parallel_job *job)
+{
+    if (job == NULL || job->run_tile == NULL)
+    {
+        return;
+    }
+
+    while (true)
+    {
+        const int tile_index = SDL_AddAtomicInt(&job->next_tile_index, 1);
+        if (tile_index >= job->tile_count)
+        {
+            return;
+        }
+
+        job->run_tile(job->userdata, tile_index);
+    }
+}
+
+static int sdl3d_parallel_rasterizer_thread_main(void *userdata)
+{
+    sdl3d_parallel_rasterizer *rasterizer = (sdl3d_parallel_rasterizer *)userdata;
+
+    for (;;)
+    {
+        SDL_WaitSemaphore(rasterizer->work_ready);
+
+        if (SDL_GetAtomicInt(&rasterizer->stop_requested) != 0)
+        {
+            return 0;
+        }
+
+        sdl3d_parallel_job *job = (sdl3d_parallel_job *)SDL_GetAtomicPointer(&rasterizer->current_job);
+        sdl3d_parallel_run_job(job);
+        SDL_SignalSemaphore(rasterizer->work_complete);
+    }
+}
+
+static void sdl3d_parallel_rasterizer_execute(sdl3d_parallel_rasterizer *rasterizer, sdl3d_parallel_job *job)
+{
+    if (rasterizer == NULL || rasterizer->worker_count <= 0 || job == NULL || job->tile_count <= 0)
+    {
+        sdl3d_parallel_run_job(job);
+        return;
+    }
+
+    SDL_SetAtomicInt(&job->next_tile_index, 0);
+    SDL_SetAtomicPointer(&rasterizer->current_job, job);
+
+    for (int i = 0; i < rasterizer->worker_count; ++i)
+    {
+        SDL_SignalSemaphore(rasterizer->work_ready);
+    }
+
+    sdl3d_parallel_run_job(job);
+
+    for (int i = 0; i < rasterizer->worker_count; ++i)
+    {
+        SDL_WaitSemaphore(rasterizer->work_complete);
+    }
+
+    SDL_SetAtomicPointer(&rasterizer->current_job, NULL);
 }
 
 static bool sdl3d_scissor_contains(const sdl3d_framebuffer *framebuffer, int x, int y)
@@ -246,6 +341,37 @@ typedef struct sdl3d_screen_vertex
     float y_px;
 } sdl3d_screen_vertex;
 
+typedef struct sdl3d_triangle_bounds
+{
+    int min_px_x;
+    int max_px_x;
+    int min_px_y;
+    int max_px_y;
+} sdl3d_triangle_bounds;
+
+typedef struct sdl3d_prepared_triangle
+{
+    sdl3d_screen_vertex a;
+    sdl3d_screen_vertex b;
+    sdl3d_screen_vertex c;
+    Sint64 area;
+    int bias_ab;
+    int bias_bc;
+    int bias_ca;
+    float inverse_area;
+    sdl3d_triangle_bounds bounds;
+} sdl3d_prepared_triangle;
+
+typedef struct sdl3d_parallel_triangle_job
+{
+    sdl3d_framebuffer *framebuffer;
+    sdl3d_prepared_triangle triangle;
+    sdl3d_color color;
+    int first_tile_x;
+    int first_tile_y;
+    int tiles_w;
+} sdl3d_parallel_triangle_job;
+
 static void sdl3d_rasterize_screen_line(sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex start,
                                         sdl3d_screen_vertex end, sdl3d_color color);
 
@@ -317,14 +443,15 @@ static int sdl3d_fill_bias(int ax, int ay, int bx, int by)
 
 /* --- Triangle rasterization --------------------------------------------- */
 
-static void sdl3d_rasterize_screen_triangle(sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex a,
-                                            sdl3d_screen_vertex b, sdl3d_screen_vertex c, sdl3d_color color)
+static bool sdl3d_prepare_screen_triangle(const sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex a,
+                                          sdl3d_screen_vertex b, sdl3d_screen_vertex c,
+                                          sdl3d_prepared_triangle *out_triangle)
 {
     /* 2x signed area in fixed-point. If negative, swap winding. Zero means degenerate. */
     Sint64 area = sdl3d_screen_triangle_signed_area(a, b, c);
     if (area == 0)
     {
-        return;
+        return false;
     }
     if (area < 0)
     {
@@ -347,14 +474,31 @@ static void sdl3d_rasterize_screen_triangle(sdl3d_framebuffer *framebuffer, sdl3
 
     if (min_px_x > max_px_x || min_px_y > max_px_y)
     {
-        return;
+        return false;
     }
 
-    const int bias_ab = sdl3d_fill_bias(a.x_fx, a.y_fx, b.x_fx, b.y_fx);
-    const int bias_bc = sdl3d_fill_bias(b.x_fx, b.y_fx, c.x_fx, c.y_fx);
-    const int bias_ca = sdl3d_fill_bias(c.x_fx, c.y_fx, a.x_fx, a.y_fx);
+    out_triangle->a = a;
+    out_triangle->b = b;
+    out_triangle->c = c;
+    out_triangle->area = area;
+    out_triangle->bias_ab = sdl3d_fill_bias(a.x_fx, a.y_fx, b.x_fx, b.y_fx);
+    out_triangle->bias_bc = sdl3d_fill_bias(b.x_fx, b.y_fx, c.x_fx, c.y_fx);
+    out_triangle->bias_ca = sdl3d_fill_bias(c.x_fx, c.y_fx, a.x_fx, a.y_fx);
+    out_triangle->inverse_area = 1.0f / (float)area;
+    out_triangle->bounds.min_px_x = min_px_x;
+    out_triangle->bounds.max_px_x = max_px_x;
+    out_triangle->bounds.min_px_y = min_px_y;
+    out_triangle->bounds.max_px_y = max_px_y;
+    return true;
+}
 
-    const float inverse_area = 1.0f / (float)area;
+static void sdl3d_rasterize_prepared_triangle_region(sdl3d_framebuffer *framebuffer,
+                                                     const sdl3d_prepared_triangle *triangle, sdl3d_color color,
+                                                     int min_px_x, int max_px_x, int min_px_y, int max_px_y)
+{
+    const sdl3d_screen_vertex a = triangle->a;
+    const sdl3d_screen_vertex b = triangle->b;
+    const sdl3d_screen_vertex c = triangle->c;
 
     for (int py = min_px_y; py <= max_px_y; ++py)
     {
@@ -363,9 +507,12 @@ static void sdl3d_rasterize_screen_triangle(sdl3d_framebuffer *framebuffer, sdl3
         {
             const int sample_x = (px << SDL3D_SUBPIXEL_BITS) + SDL3D_SUBPIXEL_HALF;
 
-            const Sint64 w_ab = sdl3d_edge_function(a.x_fx, a.y_fx, b.x_fx, b.y_fx, sample_x, sample_y) + bias_ab;
-            const Sint64 w_bc = sdl3d_edge_function(b.x_fx, b.y_fx, c.x_fx, c.y_fx, sample_x, sample_y) + bias_bc;
-            const Sint64 w_ca = sdl3d_edge_function(c.x_fx, c.y_fx, a.x_fx, a.y_fx, sample_x, sample_y) + bias_ca;
+            const Sint64 w_ab =
+                sdl3d_edge_function(a.x_fx, a.y_fx, b.x_fx, b.y_fx, sample_x, sample_y) + triangle->bias_ab;
+            const Sint64 w_bc =
+                sdl3d_edge_function(b.x_fx, b.y_fx, c.x_fx, c.y_fx, sample_x, sample_y) + triangle->bias_bc;
+            const Sint64 w_ca =
+                sdl3d_edge_function(c.x_fx, c.y_fx, a.x_fx, a.y_fx, sample_x, sample_y) + triangle->bias_ca;
 
             if ((w_ab | w_bc | w_ca) < 0)
             {
@@ -378,14 +525,92 @@ static void sdl3d_rasterize_screen_triangle(sdl3d_framebuffer *framebuffer, sdl3
              * in screen space after perspective divide, so barycentric
              * interpolation on z is correct.
              */
-            const float bary_a = (float)w_bc * inverse_area;
-            const float bary_b = (float)w_ca * inverse_area;
-            const float bary_c = (float)w_ab * inverse_area;
+            const float bary_a = (float)w_bc * triangle->inverse_area;
+            const float bary_b = (float)w_ca * triangle->inverse_area;
+            const float bary_c = (float)w_ab * triangle->inverse_area;
             const float depth = (bary_a * a.z) + (bary_b * b.z) + (bary_c * c.z);
 
             sdl3d_write_pixel(framebuffer, px, py, depth, color);
         }
     }
+}
+
+static void sdl3d_parallel_triangle_job_run_tile(void *userdata, int tile_index)
+{
+    sdl3d_parallel_triangle_job *job = (sdl3d_parallel_triangle_job *)userdata;
+    const int tile_x = job->first_tile_x + (tile_index % job->tiles_w);
+    const int tile_y = job->first_tile_y + (tile_index / job->tiles_w);
+
+    const int tile_min_px_x = sdl3d_max_int(job->triangle.bounds.min_px_x, tile_x * SDL3D_RASTER_TILE_SIZE);
+    const int tile_max_px_x = sdl3d_min_int(job->triangle.bounds.max_px_x, ((tile_x + 1) * SDL3D_RASTER_TILE_SIZE) - 1);
+    const int tile_min_px_y = sdl3d_max_int(job->triangle.bounds.min_px_y, tile_y * SDL3D_RASTER_TILE_SIZE);
+    const int tile_max_px_y = sdl3d_min_int(job->triangle.bounds.max_px_y, ((tile_y + 1) * SDL3D_RASTER_TILE_SIZE) - 1);
+
+    if (tile_min_px_x > tile_max_px_x || tile_min_px_y > tile_max_px_y)
+    {
+        return;
+    }
+
+    sdl3d_rasterize_prepared_triangle_region(job->framebuffer, &job->triangle, job->color, tile_min_px_x, tile_max_px_x,
+                                             tile_min_px_y, tile_max_px_y);
+}
+
+static bool sdl3d_try_rasterize_prepared_triangle_parallel(sdl3d_framebuffer *framebuffer,
+                                                           const sdl3d_prepared_triangle *triangle, sdl3d_color color)
+{
+    if (framebuffer->parallel_rasterizer == NULL)
+    {
+        return false;
+    }
+
+    const int first_tile_x = triangle->bounds.min_px_x / SDL3D_RASTER_TILE_SIZE;
+    const int last_tile_x = triangle->bounds.max_px_x / SDL3D_RASTER_TILE_SIZE;
+    const int first_tile_y = triangle->bounds.min_px_y / SDL3D_RASTER_TILE_SIZE;
+    const int last_tile_y = triangle->bounds.max_px_y / SDL3D_RASTER_TILE_SIZE;
+    const int tiles_w = last_tile_x - first_tile_x + 1;
+    const int tiles_h = last_tile_y - first_tile_y + 1;
+    const int tile_count = tiles_w * tiles_h;
+
+    if (tile_count <= 1)
+    {
+        return false;
+    }
+
+    sdl3d_parallel_triangle_job triangle_job;
+    triangle_job.framebuffer = framebuffer;
+    triangle_job.triangle = *triangle;
+    triangle_job.color = color;
+    triangle_job.first_tile_x = first_tile_x;
+    triangle_job.first_tile_y = first_tile_y;
+    triangle_job.tiles_w = tiles_w;
+
+    sdl3d_parallel_job job;
+    job.run_tile = sdl3d_parallel_triangle_job_run_tile;
+    job.userdata = &triangle_job;
+    job.tile_count = tile_count;
+    SDL_SetAtomicInt(&job.next_tile_index, 0);
+
+    sdl3d_parallel_rasterizer_execute(framebuffer->parallel_rasterizer, &job);
+    return true;
+}
+
+static void sdl3d_rasterize_screen_triangle(sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex a,
+                                            sdl3d_screen_vertex b, sdl3d_screen_vertex c, sdl3d_color color)
+{
+    sdl3d_prepared_triangle triangle;
+    if (!sdl3d_prepare_screen_triangle(framebuffer, a, b, c, &triangle))
+    {
+        return;
+    }
+
+    if (sdl3d_try_rasterize_prepared_triangle_parallel(framebuffer, &triangle, color))
+    {
+        return;
+    }
+
+    sdl3d_rasterize_prepared_triangle_region(framebuffer, &triangle, color, triangle.bounds.min_px_x,
+                                             triangle.bounds.max_px_x, triangle.bounds.min_px_y,
+                                             triangle.bounds.max_px_y);
 }
 
 /* --- Public: triangle, line, point --------------------------------------- */
@@ -548,6 +773,107 @@ void sdl3d_rasterize_point(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d
         return;
     }
     sdl3d_write_pixel(framebuffer, px, py, sv.z, color);
+}
+
+bool sdl3d_parallel_rasterizer_create(int worker_count, sdl3d_parallel_rasterizer **out_rasterizer)
+{
+    if (out_rasterizer == NULL)
+    {
+        return SDL_InvalidParamError("out_rasterizer");
+    }
+    if (worker_count <= 0)
+    {
+        return SDL_SetError("Parallel rasterizer worker count must be positive.");
+    }
+
+    *out_rasterizer = NULL;
+
+    sdl3d_parallel_rasterizer *rasterizer = (sdl3d_parallel_rasterizer *)SDL_calloc(1, sizeof(*rasterizer));
+    if (rasterizer == NULL)
+    {
+        return SDL_OutOfMemory();
+    }
+
+    rasterizer->threads = (SDL_Thread **)SDL_calloc((size_t)worker_count, sizeof(*rasterizer->threads));
+    if (rasterizer->threads == NULL)
+    {
+        SDL_free(rasterizer);
+        return SDL_OutOfMemory();
+    }
+
+    rasterizer->work_ready = SDL_CreateSemaphore(0);
+    if (rasterizer->work_ready == NULL)
+    {
+        SDL_free(rasterizer->threads);
+        SDL_free(rasterizer);
+        return false;
+    }
+
+    rasterizer->work_complete = SDL_CreateSemaphore(0);
+    if (rasterizer->work_complete == NULL)
+    {
+        SDL_DestroySemaphore(rasterizer->work_ready);
+        SDL_free(rasterizer->threads);
+        SDL_free(rasterizer);
+        return false;
+    }
+
+    rasterizer->worker_count = worker_count;
+    SDL_SetAtomicInt(&rasterizer->stop_requested, 0);
+    SDL_SetAtomicPointer(&rasterizer->current_job, NULL);
+
+    for (int i = 0; i < worker_count; ++i)
+    {
+        char thread_name[32];
+        (void)SDL_snprintf(thread_name, sizeof(thread_name), "sdl3d-rast-%d", i);
+        rasterizer->threads[i] = SDL_CreateThread(sdl3d_parallel_rasterizer_thread_main, thread_name, rasterizer);
+        if (rasterizer->threads[i] == NULL)
+        {
+            rasterizer->worker_count = i;
+            sdl3d_parallel_rasterizer_destroy(rasterizer);
+            return false;
+        }
+    }
+
+    *out_rasterizer = rasterizer;
+    return true;
+}
+
+void sdl3d_parallel_rasterizer_destroy(sdl3d_parallel_rasterizer *rasterizer)
+{
+    if (rasterizer == NULL)
+    {
+        return;
+    }
+
+    SDL_SetAtomicInt(&rasterizer->stop_requested, 1);
+    for (int i = 0; i < rasterizer->worker_count; ++i)
+    {
+        SDL_SignalSemaphore(rasterizer->work_ready);
+    }
+
+    for (int i = 0; i < rasterizer->worker_count; ++i)
+    {
+        if (rasterizer->threads[i] != NULL)
+        {
+            SDL_WaitThread(rasterizer->threads[i], NULL);
+        }
+    }
+
+    SDL_DestroySemaphore(rasterizer->work_complete);
+    SDL_DestroySemaphore(rasterizer->work_ready);
+    SDL_free(rasterizer->threads);
+    SDL_free(rasterizer);
+}
+
+int sdl3d_parallel_rasterizer_get_worker_count(const sdl3d_parallel_rasterizer *rasterizer)
+{
+    if (rasterizer == NULL)
+    {
+        return 0;
+    }
+
+    return rasterizer->worker_count;
 }
 
 /* --- Framebuffer utilities ---------------------------------------------- */

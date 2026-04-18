@@ -1,5 +1,6 @@
 #include "sdl3d/render_context.h"
 
+#include <SDL3/SDL_cpuinfo.h>
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_stdinc.h>
 
@@ -9,6 +10,25 @@
 static const char *const SDL3D_BACKEND_ENV = "SDL3D_BACKEND";
 static const float SDL3D_DEFAULT_NEAR_PLANE = 0.01f;
 static const float SDL3D_DEFAULT_FAR_PLANE = 1000.0f;
+
+static void sdl3d_try_create_parallel_rasterizer(sdl3d_render_context *context)
+{
+    const int logical_cores = SDL_GetNumLogicalCPUCores();
+
+    if (context == NULL || logical_cores <= 1)
+    {
+        return;
+    }
+
+    sdl3d_parallel_rasterizer *parallel_rasterizer = NULL;
+    if (sdl3d_parallel_rasterizer_create(logical_cores - 1, &parallel_rasterizer))
+    {
+        context->parallel_rasterizer = parallel_rasterizer;
+        return;
+    }
+
+    SDL_ClearError();
+}
 
 static bool sdl3d_parse_backend_name(const char *name, sdl3d_backend *backend)
 {
@@ -231,6 +251,7 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
 
     context->window = window;
     context->renderer = renderer;
+    context->parallel_rasterizer = NULL;
     context->backend = resolved_backend;
     context->width = render_width;
     context->height = render_height;
@@ -244,6 +265,7 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     context->view = sdl3d_mat4_identity();
     context->projection = sdl3d_mat4_identity();
     context->view_projection = sdl3d_mat4_identity();
+    sdl3d_try_create_parallel_rasterizer(context);
 
     *out_context = context;
     return true;
@@ -256,6 +278,7 @@ void sdl3d_destroy_render_context(sdl3d_render_context *context)
         return;
     }
 
+    sdl3d_parallel_rasterizer_destroy(context->parallel_rasterizer);
     SDL_DestroyTexture(context->color_texture);
     SDL_free(context->color_buffer);
     SDL_free(context->depth_buffer);
