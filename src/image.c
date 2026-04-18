@@ -70,7 +70,7 @@ bool sdl3d_load_image_from_memory(const void *data, size_t size, sdl3d_image *ou
     }
     if (size == 0 || size > (size_t)INT_MAX)
     {
-        return SDL_SetError("Image buffer size %zu is out of range for stbi.", size);
+        return SDL_SetError("Image buffer size %llu is out of range for stbi.", (unsigned long long)size);
     }
 
     int w = 0;
