@@ -667,6 +667,512 @@ void sdl3d_rasterize_triangle(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sd
     }
 }
 
+/* --- Colored triangle rasterization -------------------------------------- */
+
+/*
+ * Clip-space vertex carrying per-vertex color as a float RGBA attribute.
+ * Colors are in [0, 255] (matching sdl3d_color) so no separate scale is
+ * needed when converting back to the framebuffer. During Sutherland-Hodgman
+ * clipping the color is interpolated linearly in the clip-space edge
+ * parameter `t`, which is the same parameter used for positions.
+ */
+typedef struct sdl3d_clip_vertex_colored
+{
+    sdl3d_vec4 position;
+    float r;
+    float g;
+    float b;
+    float a;
+} sdl3d_clip_vertex_colored;
+
+static sdl3d_clip_vertex_colored sdl3d_clip_vertex_colored_lerp(sdl3d_clip_vertex_colored a,
+                                                                sdl3d_clip_vertex_colored b, float t)
+{
+    sdl3d_clip_vertex_colored out;
+    out.position = sdl3d_vec4_lerp(a.position, b.position, t);
+    out.r = a.r + (b.r - a.r) * t;
+    out.g = a.g + (b.g - a.g) * t;
+    out.b = a.b + (b.b - a.b) * t;
+    out.a = a.a + (b.a - a.a) * t;
+    return out;
+}
+
+static int sdl3d_clip_polygon_against_plane_colored(const sdl3d_clip_vertex_colored *in, int count_in,
+                                                    sdl3d_clip_vertex_colored *out, sdl3d_clip_plane plane)
+{
+    if (count_in < 3)
+    {
+        return 0;
+    }
+
+    int count_out = 0;
+    sdl3d_clip_vertex_colored prev = in[count_in - 1];
+    float prev_distance = sdl3d_clip_distance(prev.position, plane);
+
+    for (int i = 0; i < count_in; ++i)
+    {
+        const sdl3d_clip_vertex_colored curr = in[i];
+        const float curr_distance = sdl3d_clip_distance(curr.position, plane);
+
+        const bool prev_inside = prev_distance >= 0.0f;
+        const bool curr_inside = curr_distance >= 0.0f;
+
+        if (prev_inside != curr_inside)
+        {
+            const float t = prev_distance / (prev_distance - curr_distance);
+            if (count_out < SDL3D_CLIP_MAX_VERTICES)
+            {
+                out[count_out++] = sdl3d_clip_vertex_colored_lerp(prev, curr, t);
+            }
+        }
+
+        if (curr_inside)
+        {
+            if (count_out < SDL3D_CLIP_MAX_VERTICES)
+            {
+                out[count_out++] = curr;
+            }
+        }
+
+        prev = curr;
+        prev_distance = curr_distance;
+    }
+
+    return count_out;
+}
+
+static int sdl3d_clip_triangle_colored(sdl3d_clip_vertex_colored v0, sdl3d_clip_vertex_colored v1,
+                                       sdl3d_clip_vertex_colored v2, sdl3d_clip_vertex_colored *out)
+{
+    sdl3d_clip_vertex_colored buffer_a[SDL3D_CLIP_MAX_VERTICES];
+    sdl3d_clip_vertex_colored buffer_b[SDL3D_CLIP_MAX_VERTICES];
+
+    buffer_a[0] = v0;
+    buffer_a[1] = v1;
+    buffer_a[2] = v2;
+    int count = 3;
+
+    sdl3d_clip_vertex_colored *src = buffer_a;
+    sdl3d_clip_vertex_colored *dst = buffer_b;
+
+    for (int plane = 0; plane < 6; ++plane)
+    {
+        count = sdl3d_clip_polygon_against_plane_colored(src, count, dst, (sdl3d_clip_plane)plane);
+        if (count == 0)
+        {
+            return 0;
+        }
+        sdl3d_clip_vertex_colored *swap = src;
+        src = dst;
+        dst = swap;
+    }
+
+    for (int i = 0; i < count; ++i)
+    {
+        out[i] = src[i];
+    }
+    return count;
+}
+
+/*
+ * Screen vertex augmented for perspective-correct attribute interpolation.
+ * `inverse_w` is 1/w at the vertex; `r_over_w` etc. are the per-vertex color
+ * pre-divided by w. Linear barycentric interpolation of these quantities in
+ * screen space, followed by division by the interpolated 1/w, yields the
+ * perspective-correct attribute at each pixel.
+ */
+typedef struct sdl3d_screen_vertex_colored
+{
+    sdl3d_screen_vertex base;
+    float inverse_w;
+    float r_over_w;
+    float g_over_w;
+    float b_over_w;
+    float a_over_w;
+} sdl3d_screen_vertex_colored;
+
+static sdl3d_screen_vertex_colored sdl3d_viewport_transform_colored(sdl3d_clip_vertex_colored v, int width, int height)
+{
+    sdl3d_screen_vertex_colored out;
+    out.base = sdl3d_viewport_transform(v.position, width, height);
+    const float inv_w = 1.0f / v.position.w;
+    out.inverse_w = inv_w;
+    out.r_over_w = v.r * inv_w;
+    out.g_over_w = v.g * inv_w;
+    out.b_over_w = v.b * inv_w;
+    out.a_over_w = v.a * inv_w;
+    return out;
+}
+
+typedef struct sdl3d_prepared_triangle_colored
+{
+    sdl3d_screen_vertex_colored a;
+    sdl3d_screen_vertex_colored b;
+    sdl3d_screen_vertex_colored c;
+    Sint64 area;
+    int bias_ab;
+    int bias_bc;
+    int bias_ca;
+    float inverse_area;
+    sdl3d_triangle_bounds bounds;
+} sdl3d_prepared_triangle_colored;
+
+typedef struct sdl3d_parallel_triangle_colored_job
+{
+    sdl3d_framebuffer *framebuffer;
+    sdl3d_prepared_triangle_colored triangle;
+    int first_tile_x;
+    int first_tile_y;
+    int tiles_w;
+} sdl3d_parallel_triangle_colored_job;
+
+static bool sdl3d_prepare_screen_triangle_colored(const sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex_colored a,
+                                                  sdl3d_screen_vertex_colored b, sdl3d_screen_vertex_colored c,
+                                                  sdl3d_prepared_triangle_colored *out_triangle)
+{
+    Sint64 area = sdl3d_screen_triangle_signed_area(a.base, b.base, c.base);
+    if (area == 0)
+    {
+        return false;
+    }
+    if (area < 0)
+    {
+        sdl3d_screen_vertex_colored tmp = b;
+        b = c;
+        c = tmp;
+        area = -area;
+    }
+
+    const int min_fx = sdl3d_min_int(a.base.x_fx, sdl3d_min_int(b.base.x_fx, c.base.x_fx));
+    const int max_fx = sdl3d_max_int(a.base.x_fx, sdl3d_max_int(b.base.x_fx, c.base.x_fx));
+    const int min_fy = sdl3d_min_int(a.base.y_fx, sdl3d_min_int(b.base.y_fx, c.base.y_fx));
+    const int max_fy = sdl3d_max_int(a.base.y_fx, sdl3d_max_int(b.base.y_fx, c.base.y_fx));
+
+    const int min_px_x = sdl3d_max_int(0, min_fx >> SDL3D_SUBPIXEL_BITS);
+    const int max_px_x = sdl3d_min_int(framebuffer->width - 1, (max_fx - 1) >> SDL3D_SUBPIXEL_BITS);
+    const int min_px_y = sdl3d_max_int(0, min_fy >> SDL3D_SUBPIXEL_BITS);
+    const int max_px_y = sdl3d_min_int(framebuffer->height - 1, (max_fy - 1) >> SDL3D_SUBPIXEL_BITS);
+
+    if (min_px_x > max_px_x || min_px_y > max_px_y)
+    {
+        return false;
+    }
+
+    out_triangle->a = a;
+    out_triangle->b = b;
+    out_triangle->c = c;
+    out_triangle->area = area;
+    out_triangle->bias_ab = sdl3d_fill_bias(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx);
+    out_triangle->bias_bc = sdl3d_fill_bias(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx);
+    out_triangle->bias_ca = sdl3d_fill_bias(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx);
+    out_triangle->inverse_area = 1.0f / (float)area;
+    out_triangle->bounds.min_px_x = min_px_x;
+    out_triangle->bounds.max_px_x = max_px_x;
+    out_triangle->bounds.min_px_y = min_px_y;
+    out_triangle->bounds.max_px_y = max_px_y;
+    return true;
+}
+
+static Uint8 sdl3d_color_channel_clamp(float value)
+{
+    if (value <= 0.0f)
+    {
+        return 0;
+    }
+    if (value >= 255.0f)
+    {
+        return 255;
+    }
+    return (Uint8)SDL_lroundf(value);
+}
+
+static void sdl3d_rasterize_prepared_triangle_colored_region(sdl3d_framebuffer *framebuffer,
+                                                             const sdl3d_prepared_triangle_colored *triangle,
+                                                             int min_px_x, int max_px_x, int min_px_y, int max_px_y)
+{
+    const sdl3d_screen_vertex_colored a = triangle->a;
+    const sdl3d_screen_vertex_colored b = triangle->b;
+    const sdl3d_screen_vertex_colored c = triangle->c;
+
+    for (int py = min_px_y; py <= max_px_y; ++py)
+    {
+        const int sample_y = (py << SDL3D_SUBPIXEL_BITS) + SDL3D_SUBPIXEL_HALF;
+        for (int px = min_px_x; px <= max_px_x; ++px)
+        {
+            const int sample_x = (px << SDL3D_SUBPIXEL_BITS) + SDL3D_SUBPIXEL_HALF;
+
+            const Sint64 w_ab =
+                sdl3d_edge_function(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx, sample_x, sample_y) +
+                triangle->bias_ab;
+            const Sint64 w_bc =
+                sdl3d_edge_function(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx, sample_x, sample_y) +
+                triangle->bias_bc;
+            const Sint64 w_ca =
+                sdl3d_edge_function(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx, sample_x, sample_y) +
+                triangle->bias_ca;
+
+            if ((w_ab | w_bc | w_ca) < 0)
+            {
+                continue;
+            }
+
+            const float bary_a = (float)w_bc * triangle->inverse_area;
+            const float bary_b = (float)w_ca * triangle->inverse_area;
+            const float bary_c = (float)w_ab * triangle->inverse_area;
+            const float depth = (bary_a * a.base.z) + (bary_b * b.base.z) + (bary_c * c.base.z);
+
+            const float inverse_w_pixel = (bary_a * a.inverse_w) + (bary_b * b.inverse_w) + (bary_c * c.inverse_w);
+            /*
+             * Post-clip w is strictly positive (both near and far planes are
+             * one-sided so v.w >= max(|v.z|, 0)), so dividing by the
+             * barycentric blend of 1/w is safe inside a covered pixel.
+             */
+            const float w_pixel = 1.0f / inverse_w_pixel;
+            const float r = ((bary_a * a.r_over_w) + (bary_b * b.r_over_w) + (bary_c * c.r_over_w)) * w_pixel;
+            const float g = ((bary_a * a.g_over_w) + (bary_b * b.g_over_w) + (bary_c * c.g_over_w)) * w_pixel;
+            const float blue = ((bary_a * a.b_over_w) + (bary_b * b.b_over_w) + (bary_c * c.b_over_w)) * w_pixel;
+            const float alpha = ((bary_a * a.a_over_w) + (bary_b * b.a_over_w) + (bary_c * c.a_over_w)) * w_pixel;
+
+            sdl3d_color color;
+            color.r = sdl3d_color_channel_clamp(r);
+            color.g = sdl3d_color_channel_clamp(g);
+            color.b = sdl3d_color_channel_clamp(blue);
+            color.a = sdl3d_color_channel_clamp(alpha);
+
+            sdl3d_write_pixel(framebuffer, px, py, depth, color);
+        }
+    }
+}
+
+static void sdl3d_parallel_triangle_colored_job_run_tile(void *userdata, int tile_index)
+{
+    sdl3d_parallel_triangle_colored_job *job = (sdl3d_parallel_triangle_colored_job *)userdata;
+    const int tile_x = job->first_tile_x + (tile_index % job->tiles_w);
+    const int tile_y = job->first_tile_y + (tile_index / job->tiles_w);
+
+    const int tile_min_px_x = sdl3d_max_int(job->triangle.bounds.min_px_x, tile_x * SDL3D_RASTER_TILE_SIZE);
+    const int tile_max_px_x = sdl3d_min_int(job->triangle.bounds.max_px_x, ((tile_x + 1) * SDL3D_RASTER_TILE_SIZE) - 1);
+    const int tile_min_px_y = sdl3d_max_int(job->triangle.bounds.min_px_y, tile_y * SDL3D_RASTER_TILE_SIZE);
+    const int tile_max_px_y = sdl3d_min_int(job->triangle.bounds.max_px_y, ((tile_y + 1) * SDL3D_RASTER_TILE_SIZE) - 1);
+
+    if (tile_min_px_x > tile_max_px_x || tile_min_px_y > tile_max_px_y)
+    {
+        return;
+    }
+
+    sdl3d_rasterize_prepared_triangle_colored_region(job->framebuffer, &job->triangle, tile_min_px_x, tile_max_px_x,
+                                                     tile_min_px_y, tile_max_px_y);
+}
+
+static bool sdl3d_try_rasterize_prepared_triangle_colored_parallel(sdl3d_framebuffer *framebuffer,
+                                                                   const sdl3d_prepared_triangle_colored *triangle)
+{
+    if (framebuffer->parallel_rasterizer == NULL)
+    {
+        return false;
+    }
+
+    const int first_tile_x = triangle->bounds.min_px_x / SDL3D_RASTER_TILE_SIZE;
+    const int last_tile_x = triangle->bounds.max_px_x / SDL3D_RASTER_TILE_SIZE;
+    const int first_tile_y = triangle->bounds.min_px_y / SDL3D_RASTER_TILE_SIZE;
+    const int last_tile_y = triangle->bounds.max_px_y / SDL3D_RASTER_TILE_SIZE;
+    const int tiles_w = last_tile_x - first_tile_x + 1;
+    const int tiles_h = last_tile_y - first_tile_y + 1;
+    const int tile_count = tiles_w * tiles_h;
+
+    if (tile_count <= 1)
+    {
+        return false;
+    }
+
+    sdl3d_parallel_triangle_colored_job triangle_job;
+    triangle_job.framebuffer = framebuffer;
+    triangle_job.triangle = *triangle;
+    triangle_job.first_tile_x = first_tile_x;
+    triangle_job.first_tile_y = first_tile_y;
+    triangle_job.tiles_w = tiles_w;
+
+    sdl3d_parallel_job job;
+    job.run_tile = sdl3d_parallel_triangle_colored_job_run_tile;
+    job.userdata = &triangle_job;
+    job.tile_count = tile_count;
+    SDL_SetAtomicInt(&job.next_tile_index, 0);
+
+    sdl3d_parallel_rasterizer_execute(framebuffer->parallel_rasterizer, &job);
+    return true;
+}
+
+static void sdl3d_rasterize_screen_triangle_colored(sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex_colored a,
+                                                    sdl3d_screen_vertex_colored b, sdl3d_screen_vertex_colored c)
+{
+    sdl3d_prepared_triangle_colored triangle;
+    if (!sdl3d_prepare_screen_triangle_colored(framebuffer, a, b, c, &triangle))
+    {
+        return;
+    }
+
+    if (sdl3d_try_rasterize_prepared_triangle_colored_parallel(framebuffer, &triangle))
+    {
+        return;
+    }
+
+    sdl3d_rasterize_prepared_triangle_colored_region(framebuffer, &triangle, triangle.bounds.min_px_x,
+                                                     triangle.bounds.max_px_x, triangle.bounds.min_px_y,
+                                                     triangle.bounds.max_px_y);
+}
+
+/*
+ * Colored line rasterizer for wireframe edges of a vertex-colored triangle.
+ * Linear interpolation along the screen-space segment; not perspective
+ * correct (lines have no meaningful barycentric area), which is acceptable
+ * for wireframe visualization.
+ */
+static void sdl3d_rasterize_screen_line_colored(sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex_colored start,
+                                                sdl3d_screen_vertex_colored end)
+{
+    const float dx = end.base.x_px - start.base.x_px;
+    const float dy = end.base.y_px - start.base.y_px;
+    const float abs_dx = SDL_fabsf(dx);
+    const float abs_dy = SDL_fabsf(dy);
+    const float length = (abs_dx > abs_dy) ? abs_dx : abs_dy;
+
+    if (length <= 0.0f)
+    {
+        const int px = (int)SDL_lroundf(start.base.x_px);
+        const int py = (int)SDL_lroundf(start.base.y_px);
+        if (px >= 0 && px < framebuffer->width && py >= 0 && py < framebuffer->height)
+        {
+            const float w_start = 1.0f / start.inverse_w;
+            sdl3d_color color;
+            color.r = sdl3d_color_channel_clamp(start.r_over_w * w_start);
+            color.g = sdl3d_color_channel_clamp(start.g_over_w * w_start);
+            color.b = sdl3d_color_channel_clamp(start.b_over_w * w_start);
+            color.a = sdl3d_color_channel_clamp(start.a_over_w * w_start);
+            sdl3d_write_pixel(framebuffer, px, py, start.base.z, color);
+        }
+        return;
+    }
+
+    const int steps = (int)length + 1;
+    const float inverse_steps = 1.0f / (float)steps;
+
+    const float start_w = 1.0f / start.inverse_w;
+    const float end_w = 1.0f / end.inverse_w;
+    const float start_r = start.r_over_w * start_w;
+    const float start_g = start.g_over_w * start_w;
+    const float start_b = start.b_over_w * start_w;
+    const float start_a = start.a_over_w * start_w;
+    const float end_r = end.r_over_w * end_w;
+    const float end_g = end.g_over_w * end_w;
+    const float end_b = end.b_over_w * end_w;
+    const float end_a = end.a_over_w * end_w;
+
+    const float step_x = dx * inverse_steps;
+    const float step_y = dy * inverse_steps;
+    const float step_z = (end.base.z - start.base.z) * inverse_steps;
+    const float step_r = (end_r - start_r) * inverse_steps;
+    const float step_g = (end_g - start_g) * inverse_steps;
+    const float step_b = (end_b - start_b) * inverse_steps;
+    const float step_a = (end_a - start_a) * inverse_steps;
+
+    float x = start.base.x_px;
+    float y = start.base.y_px;
+    float z = start.base.z;
+    float r = start_r;
+    float g = start_g;
+    float blue = start_b;
+    float alpha = start_a;
+
+    for (int i = 0; i <= steps; ++i)
+    {
+        const int px = (int)SDL_lroundf(x);
+        const int py = (int)SDL_lroundf(y);
+        if (px >= 0 && px < framebuffer->width && py >= 0 && py < framebuffer->height)
+        {
+            sdl3d_color color;
+            color.r = sdl3d_color_channel_clamp(r);
+            color.g = sdl3d_color_channel_clamp(g);
+            color.b = sdl3d_color_channel_clamp(blue);
+            color.a = sdl3d_color_channel_clamp(alpha);
+            sdl3d_write_pixel(framebuffer, px, py, z, color);
+        }
+        x += step_x;
+        y += step_y;
+        z += step_z;
+        r += step_r;
+        g += step_g;
+        blue += step_b;
+        alpha += step_a;
+    }
+}
+
+void sdl3d_rasterize_triangle_colored(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0, sdl3d_vec3 v1,
+                                      sdl3d_vec3 v2, sdl3d_color c0, sdl3d_color c1, sdl3d_color c2,
+                                      bool backface_culling_enabled, bool wireframe_enabled)
+{
+    if (framebuffer == NULL || framebuffer->color_pixels == NULL || framebuffer->depth_pixels == NULL)
+    {
+        return;
+    }
+
+    sdl3d_clip_vertex_colored clip[3];
+    clip[0].position = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v0, 1.0f));
+    clip[0].r = (float)c0.r;
+    clip[0].g = (float)c0.g;
+    clip[0].b = (float)c0.b;
+    clip[0].a = (float)c0.a;
+    clip[1].position = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v1, 1.0f));
+    clip[1].r = (float)c1.r;
+    clip[1].g = (float)c1.g;
+    clip[1].b = (float)c1.b;
+    clip[1].a = (float)c1.a;
+    clip[2].position = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v2, 1.0f));
+    clip[2].r = (float)c2.r;
+    clip[2].g = (float)c2.g;
+    clip[2].b = (float)c2.b;
+    clip[2].a = (float)c2.a;
+
+    sdl3d_clip_vertex_colored clipped[SDL3D_CLIP_MAX_VERTICES];
+    const int clipped_count = sdl3d_clip_triangle_colored(clip[0], clip[1], clip[2], clipped);
+    if (clipped_count < 3)
+    {
+        return;
+    }
+
+    sdl3d_screen_vertex_colored screen[SDL3D_CLIP_MAX_VERTICES];
+    sdl3d_screen_vertex screen_positions[SDL3D_CLIP_MAX_VERTICES];
+    for (int i = 0; i < clipped_count; ++i)
+    {
+        screen[i] = sdl3d_viewport_transform_colored(clipped[i], framebuffer->width, framebuffer->height);
+        screen_positions[i] = screen[i].base;
+    }
+
+    const Sint64 polygon_area = sdl3d_screen_polygon_signed_area(screen_positions, clipped_count);
+    if (polygon_area == 0)
+    {
+        return;
+    }
+
+    if (backface_culling_enabled && polygon_area >= 0)
+    {
+        return;
+    }
+
+    if (wireframe_enabled)
+    {
+        for (int i = 0; i < clipped_count; ++i)
+        {
+            sdl3d_rasterize_screen_line_colored(framebuffer, screen[i], screen[(i + 1) % clipped_count]);
+        }
+        return;
+    }
+
+    for (int i = 1; i + 1 < clipped_count; ++i)
+    {
+        sdl3d_rasterize_screen_triangle_colored(framebuffer, screen[0], screen[i], screen[i + 1]);
+    }
+}
+
 /* --- Line rasterization -------------------------------------------------- */
 
 static void sdl3d_rasterize_screen_line(sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex start,
