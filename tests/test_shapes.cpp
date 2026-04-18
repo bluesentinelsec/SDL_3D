@@ -237,7 +237,7 @@ TEST_F(SDL3DShapesFixture, CubeFacesAreOutwardFromEachDirection)
      * from exactly one direction.
      */
     const sdl3d_vec3 eyes[] = {
-        sdl3d_vec3_make(0, 0, 4),  sdl3d_vec3_make(0, 0, -4), sdl3d_vec3_make(4, 0, 0),
+        sdl3d_vec3_make(0, 0, 4),  sdl3d_vec3_make(0, 0, -4),     sdl3d_vec3_make(4, 0, 0),
         sdl3d_vec3_make(-4, 0, 0), sdl3d_vec3_make(0, 4, 0.001f), sdl3d_vec3_make(0, -4, 0.001f),
     };
     for (const auto &eye : eyes)
@@ -399,7 +399,7 @@ TEST_F(SDL3DShapesFixture, SolidSphereHasOutwardFaces)
 
     ASSERT_TRUE(sdl3d_set_backface_culling_enabled(c.ctx, true));
     const sdl3d_vec3 eyes[] = {
-        sdl3d_vec3_make(0, 0, 4),  sdl3d_vec3_make(0, 0, -4), sdl3d_vec3_make(4, 0, 0),
+        sdl3d_vec3_make(0, 0, 4),  sdl3d_vec3_make(0, 0, -4),     sdl3d_vec3_make(4, 0, 0),
         sdl3d_vec3_make(-4, 0, 0), sdl3d_vec3_make(0, 4, 0.001f),
     };
     for (const auto &eye : eyes)
@@ -507,8 +507,8 @@ TEST_F(SDL3DShapesFixture, SolidCapsuleHasOutwardFaces)
     {
         ASSERT_TRUE(sdl3d_clear_render_context(c.ctx, kBlack));
         ASSERT_TRUE(sdl3d_begin_mode_3d(c.ctx, MakeCamera(eye)));
-        ASSERT_TRUE(sdl3d_draw_capsule(c.ctx, sdl3d_vec3_make(0.0f, -0.4f, 0.0f),
-                                       sdl3d_vec3_make(0.0f, 0.4f, 0.0f), 0.35f, 16, 6, kRed));
+        ASSERT_TRUE(sdl3d_draw_capsule(c.ctx, sdl3d_vec3_make(0.0f, -0.4f, 0.0f), sdl3d_vec3_make(0.0f, 0.4f, 0.0f),
+                                       0.35f, 16, 6, kRed));
         ASSERT_TRUE(sdl3d_end_mode_3d(c.ctx));
 
         const int cx = sdl3d_get_render_context_width(c.ctx) / 2;
@@ -552,8 +552,8 @@ TEST_F(SDL3DShapesFixture, CapsuleAcceptsArbitraryAxis)
     ASSERT_TRUE(sdl3d_clear_render_context(c.ctx, kBlack));
     ASSERT_TRUE(sdl3d_begin_mode_3d(c.ctx, MakeCamera()));
     /* Capsule along X axis, in front of camera. */
-    ASSERT_TRUE(sdl3d_draw_capsule(c.ctx, sdl3d_vec3_make(-0.5f, 0.0f, 0.0f),
-                                   sdl3d_vec3_make(0.5f, 0.0f, 0.0f), 0.3f, 16, 6, kRed));
+    ASSERT_TRUE(sdl3d_draw_capsule(c.ctx, sdl3d_vec3_make(-0.5f, 0.0f, 0.0f), sdl3d_vec3_make(0.5f, 0.0f, 0.0f), 0.3f,
+                                   16, 6, kRed));
     ASSERT_TRUE(sdl3d_end_mode_3d(c.ctx));
 
     const int cx = sdl3d_get_render_context_width(c.ctx) / 2;
@@ -575,10 +575,14 @@ TEST_F(SDL3DShapesFixture, CubeHonorsModelMatrixStack)
     ASSERT_TRUE(sdl3d_clear_render_context(c.ctx, kBlack));
     ASSERT_TRUE(sdl3d_begin_mode_3d(c.ctx, MakeCamera()));
 
-    /* Shift a small cube off-origin via the matrix stack and confirm it
-     * no longer covers the screen center. */
+    /*
+     * Shift a small cube off-origin via the matrix stack and confirm it
+     * no longer covers the screen center. Y-axis translation is aspect-
+     * independent under a perspective camera, so the test is portable
+     * across portrait/landscape window sizes we may encounter in CI.
+     */
     ASSERT_TRUE(sdl3d_push_matrix(c.ctx));
-    ASSERT_TRUE(sdl3d_translate(c.ctx, 1.5f, 0.0f, 0.0f));
+    ASSERT_TRUE(sdl3d_translate(c.ctx, 0.0f, 0.8f, 0.0f));
     ASSERT_TRUE(sdl3d_draw_cube(c.ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(0.4f, 0.4f, 0.4f), kRed));
     ASSERT_TRUE(sdl3d_pop_matrix(c.ctx));
     ASSERT_TRUE(sdl3d_end_mode_3d(c.ctx));

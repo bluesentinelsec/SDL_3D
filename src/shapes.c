@@ -469,59 +469,44 @@ static bool sdl3d_draw_capsule_solid(sdl3d_render_context *context, sdl3d_vec3 s
     sdl3d_vec3 bitangent;
     sdl3d_shape_basis_from_axis(axis, &tangent, &bitangent);
 
-    const int total_rings = 2 * rings + 2; /* ring samples, 0..total_rings-1 */
+    /*
+     * Ring `k` sits on `end` for k in [0, rings] and on `start` for k in
+     * [rings+1, 2*rings+1]. The quad band between ring `rings` and ring
+     * `rings+1` forms the cylindrical side; it collapses to a seam when
+     * start == end.
+     */
+    struct ring_sample
+    {
+        float radius;
+        sdl3d_vec3 center;
+    };
+    const int total_rings = 2 * rings + 2;
     for (int i = 0; i + 1 < total_rings; ++i)
     {
-        float r_this;
-        float along_this;
-        sdl3d_vec3 center_this;
-        float r_next;
-        float along_next;
-        sdl3d_vec3 center_next;
-
-        /*
-         * Evaluate ring `k`: returns its circle radius around the axis
-         * and a center point in world space. Rings 0..rings ride on
-         * `end`; rings rings+1..2*rings+1 ride on `start`.
-         */
+        struct ring_sample samples[2] = {0};
         for (int pass = 0; pass < 2; ++pass)
         {
             const int k = i + pass;
-            float r;
-            float along;
-            sdl3d_vec3 c;
             if (k <= rings)
             {
                 const float hemisphere_t = (float)k / (float)rings; /* 0 at pole, 1 at equator */
                 const float theta_h = SDL3D_SHAPES_PI * 0.5f * hemisphere_t;
-                r = radius * SDL_sinf(theta_h);
-                along = radius * SDL_cosf(theta_h);
-                c = sdl3d_vec3_add(end, sdl3d_vec3_scale(axis, along));
+                samples[pass].radius = radius * SDL_sinf(theta_h);
+                samples[pass].center = sdl3d_vec3_add(end, sdl3d_vec3_scale(axis, radius * SDL_cosf(theta_h)));
             }
             else
             {
-                const int kb = k - (rings + 1);                      /* 0 at start equator, rings at start pole */
+                const int kb = k - (rings + 1);                      /* 0 at start equator, rings at pole */
                 const float hemisphere_t = (float)kb / (float)rings; /* 0..1 */
                 const float theta_h = SDL3D_SHAPES_PI * 0.5f * hemisphere_t;
-                r = radius * SDL_cosf(theta_h);
-                along = -radius * SDL_sinf(theta_h);
-                c = sdl3d_vec3_add(start, sdl3d_vec3_scale(axis, along));
-            }
-            if (pass == 0)
-            {
-                r_this = r;
-                along_this = along;
-                center_this = c;
-            }
-            else
-            {
-                r_next = r;
-                along_next = along;
-                center_next = c;
+                samples[pass].radius = radius * SDL_cosf(theta_h);
+                samples[pass].center = sdl3d_vec3_add(start, sdl3d_vec3_scale(axis, -radius * SDL_sinf(theta_h)));
             }
         }
-        (void)along_this;
-        (void)along_next;
+        const float r_this = samples[0].radius;
+        const float r_next = samples[1].radius;
+        const sdl3d_vec3 center_this = samples[0].center;
+        const sdl3d_vec3 center_next = samples[1].center;
 
         for (int j = 0; j < slices; ++j)
         {
