@@ -10,6 +10,7 @@
 #include "sdl3d/drawing3d.h"
 #include "sdl3d/math.h"
 #include "sdl3d/render_context.h"
+#include "sdl3d/shapes.h"
 #include "sdl3d/types.h"
 
 #ifdef __cplusplus

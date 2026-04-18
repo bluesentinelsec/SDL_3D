@@ -81,6 +81,7 @@ target_sources(
         src/rasterizer.c
         src/render_context.c
         src/sdl3d.c
+        src/shapes.c
 )
 
 target_compile_features(sdl3d PUBLIC c_std_17)
