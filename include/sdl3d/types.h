@@ -42,4 +42,25 @@ typedef struct sdl3d_mat4
     float m[16];
 } sdl3d_mat4;
 
+/*
+ * Ray defined by an origin and a direction. The direction is drawn at
+ * the magnitude the caller supplies; it is not normalized.
+ */
+typedef struct sdl3d_ray
+{
+    sdl3d_vec3 position;
+    sdl3d_vec3 direction;
+} sdl3d_ray;
+
+/*
+ * Axis-aligned bounding box in the coordinate frame where it is drawn.
+ * The current model matrix is applied, so an AABB in local space can be
+ * rendered in any world orientation.
+ */
+typedef struct sdl3d_bounding_box
+{
+    sdl3d_vec3 min;
+    sdl3d_vec3 max;
+} sdl3d_bounding_box;
+
 #endif
