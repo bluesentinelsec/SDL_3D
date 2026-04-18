@@ -1,0 +1,8 @@
+Box.glb
+Origin: Khronos glTF-Sample-Assets
+  https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Box
+Author: Cesium
+License: CC-BY 4.0 (see LICENSE.md)
+Attribution: "Box" by Cesium, https://github.com/CesiumGS/cesium
+Purpose: minimal real-world glTF-Binary fixture for cgltf integration tests.
+Fetched: 2026-04-18

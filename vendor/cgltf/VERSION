@@ -1,0 +1,5 @@
+cgltf v1.15
+https://github.com/jkuhlmann/cgltf/releases/tag/v1.15
+Vendored: 2026-04-18
+License: MIT (see LICENSE)
+Files: cgltf.h (cgltf_write.h intentionally omitted — SDL3D only reads)

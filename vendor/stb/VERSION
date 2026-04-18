@@ -1,0 +1,6 @@
+stb_image v2.30, stb_image_write v1.16
+https://github.com/nothings/stb
+Vendored: 2026-04-18 from master (stb pins via filename version strings,
+not git tags — see each header's top-of-file banner).
+License: Public domain (MIT alternative available, see LICENSE).
+Files: stb_image.h, stb_image_write.h

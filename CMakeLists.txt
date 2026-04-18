@@ -69,6 +69,8 @@ elseif(IOS AND TARGET SDL3::SDL3-static)
     set(SDL3D_SDL_TARGET SDL3::SDL3-static)
 endif()
 
+add_subdirectory(vendor)
+
 add_library(sdl3d STATIC)
 add_library(SDL3D::sdl3d ALIAS sdl3d)
 
@@ -82,6 +84,9 @@ target_sources(
         src/render_context.c
         src/sdl3d.c
         src/shapes.c
+        $<TARGET_OBJECTS:sdl3d_cgltf>
+        $<TARGET_OBJECTS:sdl3d_ufbx>
+        $<TARGET_OBJECTS:sdl3d_stb>
 )
 
 target_compile_features(sdl3d PUBLIC c_std_17)

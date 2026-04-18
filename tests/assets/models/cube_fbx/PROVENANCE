@@ -1,0 +1,7 @@
+cube.fbx
+Origin: ufbx test corpus, file `data/blender_272_cube_7400_binary.fbx`
+  https://github.com/ufbx/ufbx/blob/v0.21.3/data/blender_272_cube_7400_binary.fbx
+Authored by: Blender 2.72 export pipeline, committed to ufbx by the ufbx authors.
+License: MIT (per ufbx LICENSE at repo root).
+Purpose: minimal FBX-7400 binary fixture for ufbx integration tests.
+Fetched: 2026-04-18
