@@ -1,0 +1,5 @@
+ufbx v0.21.3
+https://github.com/ufbx/ufbx/releases/tag/v0.21.3
+Vendored: 2026-04-18
+License: MIT or Unlicense — dual-licensed, see LICENSE (SDL3D uses under MIT)
+Files: ufbx.c, ufbx.h

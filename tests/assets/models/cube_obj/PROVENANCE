@@ -1,0 +1,4 @@
+cube.obj + cube.mtl
+Origin: authored in-tree for SDL3D tests.
+License: SDL3D repository license.
+Purpose: smoke / unit fixtures for the in-house OBJ parser.
