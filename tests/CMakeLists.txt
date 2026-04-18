@@ -33,6 +33,11 @@ function(sdl3d_add_test target_name source_file test_label)
     )
 
     target_compile_features(${target_name} PRIVATE cxx_std_17)
+    target_compile_definitions(
+        ${target_name}
+        PRIVATE
+            SDL3D_TEST_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets"
+    )
 
     sdl3d_enable_sanitizers(${target_name})
 
@@ -73,6 +78,14 @@ set(SDL3D_TEST_SOURCES
     test_render_loop.cpp
     test_shapes.cpp
     test_vertex_color.cpp
+)
+
+# Tests that read filesystem fixtures via SDL3D_TEST_ASSETS_DIR are desktop-only.
+# The Android APK, iOS .app bundle, and Emscripten virtual FS don't expose the
+# host source tree, so we skip these tests on those platforms for now.
+set(SDL3D_DESKTOP_ONLY_TEST_SOURCES
+    test_image.cpp
+    test_obj_loader.cpp
 )
 
 if(ANDROID)
@@ -137,4 +150,9 @@ else()
     sdl3d_add_test(sdl3d_render_loop_test test_render_loop.cpp render)
     sdl3d_add_test(sdl3d_shapes_test test_shapes.cpp render)
     sdl3d_add_test(sdl3d_vertex_color_test test_vertex_color.cpp render)
+
+    if(NOT EMSCRIPTEN)
+        sdl3d_add_test(sdl3d_image_test test_image.cpp unit)
+        sdl3d_add_test(sdl3d_obj_loader_test test_obj_loader.cpp unit)
+    endif()
 endif()

@@ -1,0 +1,103 @@
+#ifndef SDL3D_MODEL_H
+#define SDL3D_MODEL_H
+
+#include <stdbool.h>
+
+#include "sdl3d/types.h"
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+    /*
+     * Unified PBR-friendly material description. Every loader fills the
+     * subset of fields its source format supports; unknown fields keep
+     * their defaults so consumers never have to branch on the source
+     * format.
+     *
+     * Texture fields are file paths resolved relative to the model's
+     * source directory. Images are NOT decoded at load time — callers
+     * choose when to realize them into sdl3d_texture2d, so scenes can be
+     * loaded without touching disk twice.
+     */
+    typedef struct sdl3d_material
+    {
+        char *name;
+
+        float albedo[4];   /* RGBA factor; default {1,1,1,1} */
+        float metallic;    /* [0,1]; default 0 */
+        float roughness;   /* [0,1]; default 1 */
+        float emissive[3]; /* linear RGB factor; default {0,0,0} */
+
+        char *albedo_map;
+        char *normal_map;
+        char *metallic_roughness_map;
+        char *emissive_map;
+    } sdl3d_material;
+
+    /*
+     * A single renderable submesh. Positions are required; every other
+     * attribute array is optional (NULL when absent).
+     *
+     * Vertex attributes are de-interleaved: each pointer is an array of
+     * `vertex_count` entries with the stride implied by its semantic
+     * (3 floats for positions/normals, 2 for uvs, 4 for colors).
+     *
+     * Indices are always 32-bit unsigned and index into this mesh's
+     * vertex arrays. `material_index` is -1 when no material is bound.
+     */
+    typedef struct sdl3d_mesh
+    {
+        char *name;
+
+        float *positions;
+        float *normals;
+        float *uvs;
+        float *colors;
+        int vertex_count;
+
+        unsigned int *indices;
+        int index_count;
+
+        int material_index;
+    } sdl3d_mesh;
+
+    /*
+     * A loaded model is a flat list of meshes plus the material palette
+     * they reference by index. `source_path` is kept so higher layers
+     * can resolve texture paths relative to the original file.
+     */
+    typedef struct sdl3d_model
+    {
+        sdl3d_mesh *meshes;
+        int mesh_count;
+
+        sdl3d_material *materials;
+        int material_count;
+
+        char *source_path;
+    } sdl3d_model;
+
+    /*
+     * Dispatching entry point. Picks a loader by file extension:
+     *   .obj            -> in-house OBJ + MTL parser
+     *   .gltf / .glb    -> cgltf (reserved; returns error until M3 slice)
+     *   .fbx            -> ufbx (reserved; returns error until M3 slice)
+     *
+     * Returns false with SDL_GetError populated on any failure.
+     */
+    bool sdl3d_load_model_from_file(const char *path, sdl3d_model *out);
+
+    /*
+     * Release everything owned by the model, including mesh vertex
+     * buffers, material strings, and the source path. Safe on a zero-
+     * initialized struct.
+     */
+    void sdl3d_free_model(sdl3d_model *model);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

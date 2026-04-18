@@ -79,7 +79,10 @@ target_sources(
     PRIVATE
         src/camera.c
         src/drawing3d.c
+        src/image.c
         src/math.c
+        src/model.c
+        src/obj_loader.c
         src/rasterizer.c
         src/render_context.c
         src/sdl3d.c
@@ -107,6 +110,9 @@ target_include_directories(
     sdl3d
     PRIVATE
         $<TARGET_PROPERTY:${SDL3D_SDL_TARGET},INTERFACE_INCLUDE_DIRECTORIES>
+        $<TARGET_PROPERTY:sdl3d_cgltf,INCLUDE_DIRECTORIES>
+        $<TARGET_PROPERTY:sdl3d_ufbx,INCLUDE_DIRECTORIES>
+        $<TARGET_PROPERTY:sdl3d_stb,INCLUDE_DIRECTORIES>
 )
 
 target_compile_definitions(
