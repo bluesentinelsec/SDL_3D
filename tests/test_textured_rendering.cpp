@@ -270,13 +270,13 @@ TEST_F(SDL3DTexturedFixture, NearestClampSamplerMapsQuadrantsCorrectly)
 
     sdl3d_color sample{};
     ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, 40, 40, &sample));
-    EXPECT_TRUE(pixel_near(sample, kBlue));
-    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, 88, 40, &sample));
-    EXPECT_TRUE(pixel_near(sample, kYellow));
-    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, 40, 88, &sample));
     EXPECT_TRUE(pixel_near(sample, kRed));
-    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, 88, 88, &sample));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, 88, 40, &sample));
     EXPECT_TRUE(pixel_near(sample, kGreen));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, 40, 88, &sample));
+    EXPECT_TRUE(pixel_near(sample, kBlue));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, 88, 88, &sample));
+    EXPECT_TRUE(pixel_near(sample, kYellow));
 
     sdl3d_free_texture(&texture);
     sdl3d_destroy_render_context(context);
