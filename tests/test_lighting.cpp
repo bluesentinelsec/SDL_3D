@@ -1,0 +1,391 @@
+/*
+ * Comprehensive tests for M4-1/2/3: lighting API, PBR shading,
+ * directional/point/spot lights.
+ */
+
+#include <gtest/gtest.h>
+
+#define SDL_MAIN_HANDLED
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_error.h>
+#include <SDL3/SDL_main.h>
+
+#include <cmath>
+
+extern "C"
+{
+#include "lighting_internal.h"
+#include "sdl3d/lighting.h"
+#include "sdl3d/sdl3d.h"
+}
+
+/* ================================================================== */
+/* Lighting API tests (unit, no SDL video)                            */
+/* ================================================================== */
+
+/* Fixture that creates a real render context for API testing. */
+class SDL3DLightingFixture : public ::testing::Test
+{
+  protected:
+    SDL_Window *window = nullptr;
+    SDL_Renderer *renderer = nullptr;
+    sdl3d_render_context *ctx = nullptr;
+
+    void SetUp() override
+    {
+        SDL_SetMainReady();
+        ASSERT_TRUE(SDL_Init(SDL_INIT_VIDEO));
+        window = SDL_CreateWindow("test", 64, 64, SDL_WINDOW_HIDDEN);
+        ASSERT_NE(window, nullptr);
+        renderer = SDL_CreateRenderer(window, NULL);
+        ASSERT_NE(renderer, nullptr);
+        sdl3d_render_context_config config;
+        sdl3d_init_render_context_config(&config);
+        ASSERT_TRUE(sdl3d_create_render_context(window, renderer, &config, &ctx));
+    }
+
+    void TearDown() override
+    {
+        sdl3d_destroy_render_context(ctx);
+        if (renderer)
+            SDL_DestroyRenderer(renderer);
+        if (window)
+            SDL_DestroyWindow(window);
+        SDL_Quit();
+    }
+};
+
+TEST_F(SDL3DLightingFixture, DefaultState)
+{
+    EXPECT_FALSE(sdl3d_is_lighting_enabled(ctx));
+    EXPECT_EQ(sdl3d_get_light_count(ctx), 0);
+}
+
+TEST_F(SDL3DLightingFixture, EnableDisable)
+{
+    ASSERT_TRUE(sdl3d_set_lighting_enabled(ctx, true));
+    EXPECT_TRUE(sdl3d_is_lighting_enabled(ctx));
+    ASSERT_TRUE(sdl3d_set_lighting_enabled(ctx, false));
+    EXPECT_FALSE(sdl3d_is_lighting_enabled(ctx));
+}
+
+TEST_F(SDL3DLightingFixture, AddAndClearLights)
+{
+    sdl3d_light light{};
+    light.type = SDL3D_LIGHT_DIRECTIONAL;
+    light.direction = {0.0f, -1.0f, 0.0f};
+    light.color[0] = light.color[1] = light.color[2] = 1.0f;
+    light.intensity = 1.0f;
+
+    ASSERT_TRUE(sdl3d_add_light(ctx, &light));
+    EXPECT_EQ(sdl3d_get_light_count(ctx), 1);
+
+    ASSERT_TRUE(sdl3d_add_light(ctx, &light));
+    EXPECT_EQ(sdl3d_get_light_count(ctx), 2);
+
+    ASSERT_TRUE(sdl3d_clear_lights(ctx));
+    EXPECT_EQ(sdl3d_get_light_count(ctx), 0);
+}
+
+TEST_F(SDL3DLightingFixture, MaxLightsEnforced)
+{
+    sdl3d_light light{};
+    light.type = SDL3D_LIGHT_POINT;
+    light.intensity = 1.0f;
+
+    for (int i = 0; i < SDL3D_MAX_LIGHTS; ++i)
+    {
+        ASSERT_TRUE(sdl3d_add_light(ctx, &light)) << "light " << i;
+    }
+    EXPECT_EQ(sdl3d_get_light_count(ctx), SDL3D_MAX_LIGHTS);
+    EXPECT_FALSE(sdl3d_add_light(ctx, &light));
+    EXPECT_EQ(sdl3d_get_light_count(ctx), SDL3D_MAX_LIGHTS);
+}
+
+TEST_F(SDL3DLightingFixture, SetAmbientLight)
+{
+    ASSERT_TRUE(sdl3d_set_ambient_light(ctx, 0.1f, 0.2f, 0.3f));
+}
+
+/* ================================================================== */
+/* Null context rejection                                             */
+/* ================================================================== */
+
+struct NullCtxCase
+{
+    const char *label;
+};
+
+TEST(SDL3DLightingNullCtx, AllFunctionsRejectNull)
+{
+    sdl3d_light light{};
+    EXPECT_FALSE(sdl3d_add_light(nullptr, &light));
+    EXPECT_FALSE(sdl3d_add_light(nullptr, nullptr));
+    EXPECT_FALSE(sdl3d_clear_lights(nullptr));
+    EXPECT_FALSE(sdl3d_set_lighting_enabled(nullptr, true));
+    EXPECT_FALSE(sdl3d_is_lighting_enabled(nullptr));
+    EXPECT_EQ(sdl3d_get_light_count(nullptr), 0);
+    EXPECT_FALSE(sdl3d_set_ambient_light(nullptr, 0, 0, 0));
+}
+
+/* ================================================================== */
+/* PBR shading unit tests (sdl3d_shade_fragment_pbr)                  */
+/* ================================================================== */
+
+static sdl3d_lighting_params make_params(float metallic, float roughness)
+{
+    sdl3d_lighting_params p{};
+    p.lights = nullptr;
+    p.light_count = 0;
+    p.ambient[0] = p.ambient[1] = p.ambient[2] = 0.0f;
+    p.camera_pos = {0.0f, 0.0f, 5.0f};
+    p.metallic = metallic;
+    p.roughness = roughness;
+    p.emissive[0] = p.emissive[1] = p.emissive[2] = 0.0f;
+    return p;
+}
+
+static sdl3d_light make_directional(float dx, float dy, float dz, float intensity)
+{
+    sdl3d_light l{};
+    l.type = SDL3D_LIGHT_DIRECTIONAL;
+    l.direction = {dx, dy, dz};
+    l.color[0] = l.color[1] = l.color[2] = 1.0f;
+    l.intensity = intensity;
+    return l;
+}
+
+static sdl3d_light make_point(float px, float py, float pz, float intensity, float range)
+{
+    sdl3d_light l{};
+    l.type = SDL3D_LIGHT_POINT;
+    l.position = {px, py, pz};
+    l.color[0] = l.color[1] = l.color[2] = 1.0f;
+    l.intensity = intensity;
+    l.range = range;
+    return l;
+}
+
+static sdl3d_light make_spot(float px, float py, float pz, float dx, float dy, float dz, float intensity, float range,
+                             float inner_cos, float outer_cos)
+{
+    sdl3d_light l{};
+    l.type = SDL3D_LIGHT_SPOT;
+    l.position = {px, py, pz};
+    l.direction = {dx, dy, dz};
+    l.color[0] = l.color[1] = l.color[2] = 1.0f;
+    l.intensity = intensity;
+    l.range = range;
+    l.inner_cutoff = inner_cos;
+    l.outer_cutoff = outer_cos;
+    return l;
+}
+
+TEST(SDL3DPBRShading, NoLightsNoAmbientProducesBlack)
+{
+    sdl3d_lighting_params p = make_params(0.0f, 1.0f);
+    float r, g, b;
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r, &g, &b);
+    EXPECT_NEAR(r, 0.0f, 0.001f);
+    EXPECT_NEAR(g, 0.0f, 0.001f);
+    EXPECT_NEAR(b, 0.0f, 0.001f);
+}
+
+TEST(SDL3DPBRShading, AmbientOnlyProducesAmbientTimesAlbedo)
+{
+    sdl3d_lighting_params p = make_params(0.0f, 1.0f);
+    p.ambient[0] = 0.1f;
+    p.ambient[1] = 0.2f;
+    p.ambient[2] = 0.3f;
+    float r, g, b;
+    sdl3d_shade_fragment_pbr(&p, 0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r, &g, &b);
+    EXPECT_NEAR(r, 0.05f, 0.001f);
+    EXPECT_NEAR(g, 0.10f, 0.001f);
+    EXPECT_NEAR(b, 0.15f, 0.001f);
+}
+
+TEST(SDL3DPBRShading, EmissiveAddsToOutput)
+{
+    sdl3d_lighting_params p = make_params(0.0f, 1.0f);
+    p.emissive[0] = 0.5f;
+    p.emissive[1] = 0.0f;
+    p.emissive[2] = 0.0f;
+    float r, g, b;
+    sdl3d_shade_fragment_pbr(&p, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r, &g, &b);
+    EXPECT_NEAR(r, 0.5f, 0.001f);
+    EXPECT_NEAR(g, 0.0f, 0.001f);
+    EXPECT_NEAR(b, 0.0f, 0.001f);
+}
+
+TEST(SDL3DPBRShading, DirectionalLightFacingNormalProducesLight)
+{
+    sdl3d_light dl = make_directional(0.0f, -1.0f, 0.0f, 1.0f);
+    sdl3d_lighting_params p = make_params(0.0f, 1.0f);
+    p.lights = &dl;
+    p.light_count = 1;
+
+    float r, g, b;
+    /* Normal pointing up, light pointing down → N·L = 1. */
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r, &g, &b);
+    EXPECT_GT(r, 0.1f);
+    EXPECT_GT(g, 0.1f);
+    EXPECT_GT(b, 0.1f);
+}
+
+TEST(SDL3DPBRShading, DirectionalLightBackfaceProducesNoLight)
+{
+    sdl3d_light dl = make_directional(0.0f, 1.0f, 0.0f, 1.0f);
+    sdl3d_lighting_params p = make_params(0.0f, 1.0f);
+    p.lights = &dl;
+    p.light_count = 1;
+
+    float r, g, b;
+    /* Normal pointing up, light pointing up → N·L = -1 → clamped to 0. */
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r, &g, &b);
+    EXPECT_NEAR(r, 0.0f, 0.001f);
+}
+
+TEST(SDL3DPBRShading, PointLightAttenuatesWithDistance)
+{
+    sdl3d_light pl = make_point(0.0f, 2.0f, 0.0f, 1.0f, 10.0f);
+    sdl3d_lighting_params p = make_params(0.0f, 1.0f);
+    p.lights = &pl;
+    p.light_count = 1;
+
+    float r_near, g_near, b_near;
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r_near, &g_near, &b_near);
+
+    /* Move fragment far away. */
+    float r_far, g_far, b_far;
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, -8.0f, 0.0f, &r_far, &g_far, &b_far);
+
+    EXPECT_GT(r_near, r_far);
+}
+
+TEST(SDL3DPBRShading, PointLightOutOfRangeProducesNoLight)
+{
+    sdl3d_light pl = make_point(0.0f, 2.0f, 0.0f, 1.0f, 1.0f);
+    sdl3d_lighting_params p = make_params(0.0f, 1.0f);
+    p.lights = &pl;
+    p.light_count = 1;
+
+    float r, g, b;
+    /* Fragment at origin, light at y=2, range=1 → distance > range. */
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r, &g, &b);
+    EXPECT_NEAR(r, 0.0f, 0.01f);
+}
+
+TEST(SDL3DPBRShading, SpotLightInsideConeProducesLight)
+{
+    /* Spot at y=2 pointing down, fragment at origin with normal up. */
+    sdl3d_light sl = make_spot(0.0f, 2.0f, 0.0f, 0.0f, -1.0f, 0.0f, 1.0f, 10.0f, cosf(0.3f), cosf(0.5f));
+    sdl3d_lighting_params p = make_params(0.0f, 1.0f);
+    p.lights = &sl;
+    p.light_count = 1;
+
+    float r, g, b;
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r, &g, &b);
+    EXPECT_GT(r, 0.05f);
+}
+
+TEST(SDL3DPBRShading, SpotLightOutsideConeProducesNoLight)
+{
+    /* Spot at y=2 pointing down, fragment far to the side. */
+    sdl3d_light sl = make_spot(0.0f, 2.0f, 0.0f, 0.0f, -1.0f, 0.0f, 1.0f, 100.0f, cosf(0.1f), cosf(0.2f));
+    sdl3d_lighting_params p = make_params(0.0f, 1.0f);
+    p.lights = &sl;
+    p.light_count = 1;
+
+    float r, g, b;
+    /* Fragment at x=100, well outside the narrow cone. */
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 100.0f, 0.0f, 0.0f, &r, &g, &b);
+    EXPECT_NEAR(r, 0.0f, 0.01f);
+}
+
+TEST(SDL3DPBRShading, MetallicSurfaceHasNoLambertianDiffuse)
+{
+    sdl3d_light dl = make_directional(0.0f, -1.0f, 0.0f, 1.0f);
+    sdl3d_lighting_params p_metal = make_params(1.0f, 0.5f);
+    p_metal.lights = &dl;
+    p_metal.light_count = 1;
+
+    sdl3d_lighting_params p_dielectric = make_params(0.0f, 0.5f);
+    p_dielectric.lights = &dl;
+    p_dielectric.light_count = 1;
+
+    float rm, gm, bm;
+    float rd, gd, bd;
+    sdl3d_shade_fragment_pbr(&p_metal, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &rm, &gm, &bm);
+    sdl3d_shade_fragment_pbr(&p_dielectric, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &rd, &gd, &bd);
+
+    /* Metal should have less red (no diffuse) but more specular. The green
+     * channel should be near zero for both since albedo green is 0. */
+    EXPECT_NEAR(gm, 0.0f, 0.05f);
+    EXPECT_NEAR(gd, 0.0f, 0.05f);
+}
+
+TEST(SDL3DPBRShading, MultipleLightsAccumulate)
+{
+    sdl3d_light lights[2];
+    lights[0] = make_directional(0.0f, -1.0f, 0.0f, 1.0f);
+    lights[1] = make_directional(0.0f, -1.0f, 0.0f, 1.0f);
+
+    sdl3d_lighting_params p1 = make_params(0.0f, 1.0f);
+    p1.lights = lights;
+    p1.light_count = 1;
+
+    sdl3d_lighting_params p2 = make_params(0.0f, 1.0f);
+    p2.lights = lights;
+    p2.light_count = 2;
+
+    float r1, g1, b1, r2, g2, b2;
+    sdl3d_shade_fragment_pbr(&p1, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r1, &g1, &b1);
+    sdl3d_shade_fragment_pbr(&p2, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r2, &g2, &b2);
+
+    /* Two identical lights should produce roughly double the output. */
+    EXPECT_NEAR(r2, r1 * 2.0f, 0.01f);
+}
+
+TEST(SDL3DPBRShading, ColoredLightTintsOutput)
+{
+    sdl3d_light dl{};
+    dl.type = SDL3D_LIGHT_DIRECTIONAL;
+    dl.direction = {0.0f, -1.0f, 0.0f};
+    dl.color[0] = 1.0f;
+    dl.color[1] = 0.0f;
+    dl.color[2] = 0.0f;
+    dl.intensity = 1.0f;
+
+    sdl3d_lighting_params p = make_params(0.0f, 1.0f);
+    p.lights = &dl;
+    p.light_count = 1;
+
+    float r, g, b;
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r, &g, &b);
+    EXPECT_GT(r, 0.1f);
+    EXPECT_NEAR(g, 0.0f, 0.001f);
+    EXPECT_NEAR(b, 0.0f, 0.001f);
+}
+
+TEST(SDL3DPBRShading, RoughnessAffectsSpecular)
+{
+    sdl3d_light dl = make_directional(0.0f, -1.0f, 0.0f, 1.0f);
+
+    sdl3d_lighting_params p_smooth = make_params(0.0f, 0.1f);
+    p_smooth.lights = &dl;
+    p_smooth.light_count = 1;
+
+    sdl3d_lighting_params p_rough = make_params(0.0f, 1.0f);
+    p_rough.lights = &dl;
+    p_rough.light_count = 1;
+
+    float rs, gs, bs, rr, gr, br;
+    /* View from directly above → specular highlight should be stronger for smooth. */
+    p_smooth.camera_pos = (sdl3d_vec3){0.0f, 5.0f, 0.0f};
+    p_rough.camera_pos = (sdl3d_vec3){0.0f, 5.0f, 0.0f};
+    sdl3d_shade_fragment_pbr(&p_smooth, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &rs, &gs, &bs);
+    sdl3d_shade_fragment_pbr(&p_rough, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &rr, &gr, &br);
+
+    /* Smooth surface should have higher total output due to specular peak. */
+    EXPECT_GT(rs, rr);
+}
