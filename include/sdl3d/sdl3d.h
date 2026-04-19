@@ -7,6 +7,7 @@
 #include <SDL3/SDL_log.h>
 
 #include "sdl3d/camera.h"
+#include "sdl3d/collision.h"
 #include "sdl3d/drawing3d.h"
 #include "sdl3d/image.h"
 #include "sdl3d/lighting.h"
