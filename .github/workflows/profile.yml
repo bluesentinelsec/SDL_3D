@@ -1,0 +1,63 @@
+name: Profile
+
+on:
+  pull_request:
+
+jobs:
+  profile:
+    name: perf profile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq linux-tools-common linux-tools-$(uname -r) || true
+          # Fallback: install linux-tools-generic if kernel-specific package unavailable
+          sudo apt-get install -y -qq linux-tools-generic || true
+
+      - name: Setup SDL3
+        uses: libsdl-org/setup-sdl@main
+        with:
+          version: 3-latest
+          build-type: Release
+
+      - name: Configure
+        run: >
+          cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DSDL3D_BUILD_TESTS=OFF
+          -DSDL3D_BUILD_BENCHMARKS=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Benchmark (timing)
+        run: |
+          export SDL_VIDEODRIVER=dummy
+          export SDL_AUDIODRIVER=dummy
+          ./build/benchmarks/sdl3d_bench 120
+
+      - name: Profile (perf stat)
+        run: |
+          export SDL_VIDEODRIVER=dummy
+          export SDL_AUDIODRIVER=dummy
+          sudo sysctl -w kernel.perf_event_paranoid=-1 || true
+          perf stat -d ./build/benchmarks/sdl3d_bench 120 2>&1 | tee build/perf_stat.txt
+
+      - name: Profile (perf record + report)
+        run: |
+          export SDL_VIDEODRIVER=dummy
+          export SDL_AUDIODRIVER=dummy
+          sudo sysctl -w kernel.perf_event_paranoid=-1 || true
+          perf record -g --call-graph dwarf -o build/perf.data ./build/benchmarks/sdl3d_bench 120
+          perf report -i build/perf.data --stdio --no-children --percent-limit 1.0 2>&1 | tee build/perf_report.txt
+
+      - name: Upload profile artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: profile-report
+          path: |
+            build/perf_stat.txt
+            build/perf_report.txt
+          retention-days: 30
