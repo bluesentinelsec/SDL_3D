@@ -51,6 +51,15 @@ struct sdl3d_render_context
     sdl3d_light lights[SDL3D_MAX_LIGHTS];
     int light_count;
     float ambient[3];
+
+    sdl3d_fog fog;
+    sdl3d_tonemap_mode tonemap_mode;
+
+    /* Per-light shadow maps (only directional lights supported). */
+    float *shadow_depth[SDL3D_MAX_LIGHTS];
+    sdl3d_mat4 shadow_vp[SDL3D_MAX_LIGHTS];
+    bool shadow_enabled[SDL3D_MAX_LIGHTS];
+    float shadow_bias;
 };
 
 static inline sdl3d_framebuffer sdl3d_framebuffer_from_context(sdl3d_render_context *context)

@@ -291,6 +291,11 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     context->ambient[0] = 0.03f;
     context->ambient[1] = 0.03f;
     context->ambient[2] = 0.03f;
+    context->fog.mode = SDL3D_FOG_NONE;
+    context->tonemap_mode = SDL3D_TONEMAP_NONE;
+    SDL_memset(context->shadow_depth, 0, sizeof(context->shadow_depth));
+    SDL_memset(context->shadow_enabled, 0, sizeof(context->shadow_enabled));
+    context->shadow_bias = 0.005f;
     sdl3d_try_create_parallel_rasterizer(context);
 
     *out_context = context;
@@ -310,6 +315,10 @@ void sdl3d_destroy_render_context(sdl3d_render_context *context)
     SDL_DestroyTexture(context->color_texture);
     SDL_free(context->color_buffer);
     SDL_free(context->depth_buffer);
+    for (int i = 0; i < SDL3D_MAX_LIGHTS; ++i)
+    {
+        SDL_free(context->shadow_depth[i]);
+    }
     SDL_free(context);
 }
 

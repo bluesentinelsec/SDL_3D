@@ -161,6 +161,48 @@ static bool sdl3d_compute_light_contribution(const sdl3d_light *light, float px,
     return true;
 }
 
+static float sdl3d_sample_shadow(const sdl3d_lighting_params *params, int light_index, float wpx, float wpy, float wpz)
+{
+    sdl3d_vec4 lp;
+    float ndc_x, ndc_y, ndc_z;
+    int sx, sy, idx;
+    float map_depth;
+
+    if (!params->shadow_enabled[light_index] || params->shadow_depth[light_index] == NULL)
+    {
+        return 1.0f;
+    }
+
+    /* Transform world position to light clip space. */
+    lp = sdl3d_mat4_transform_vec4(params->shadow_vp[light_index], sdl3d_vec4_make(wpx, wpy, wpz, 1.0f));
+    if (lp.w <= 0.0f)
+    {
+        return 1.0f;
+    }
+
+    ndc_x = lp.x / lp.w;
+    ndc_y = lp.y / lp.w;
+    ndc_z = lp.z / lp.w;
+
+    /* Map NDC [-1,1] to [0, shadow_map_size). */
+    sx = (int)((ndc_x * 0.5f + 0.5f) * (float)SDL3D_SHADOW_MAP_SIZE);
+    sy = (int)((ndc_y * 0.5f + 0.5f) * (float)SDL3D_SHADOW_MAP_SIZE);
+
+    if (sx < 0 || sx >= SDL3D_SHADOW_MAP_SIZE || sy < 0 || sy >= SDL3D_SHADOW_MAP_SIZE)
+    {
+        return 1.0f; /* Outside shadow map → lit. */
+    }
+
+    idx = sy * SDL3D_SHADOW_MAP_SIZE + sx;
+    map_depth = params->shadow_depth[light_index][idx];
+
+    /* Fragment depth in [0,1] range. */
+    {
+        float frag_depth = ndc_z * 0.5f + 0.5f;
+        return (frag_depth - params->shadow_bias > map_depth) ? 0.0f : 1.0f;
+    }
+}
+
 void sdl3d_shade_fragment_pbr(const sdl3d_lighting_params *params, float albedo_r, float albedo_g, float albedo_b,
                               float world_nx, float world_ny, float world_nz, float world_px, float world_py,
                               float world_pz, float *out_r, float *out_g, float *out_b)
@@ -239,13 +281,87 @@ void sdl3d_shade_fragment_pbr(const sdl3d_lighting_params *params, float albedo_
         float diff_g = (1.0f - fg) * kd * albedo_g / SDL3D_PI;
         float diff_b = (1.0f - fb) * kd * albedo_b / SDL3D_PI;
 
-        lo_r += (diff_r + spec_r) * rad_r * n_dot_l;
-        lo_g += (diff_g + spec_g) * rad_g * n_dot_l;
-        lo_b += (diff_b + spec_b) * rad_b * n_dot_l;
+        {
+            float shadow = sdl3d_sample_shadow(params, i, world_px, world_py, world_pz);
+            lo_r += (diff_r + spec_r) * rad_r * n_dot_l * shadow;
+            lo_g += (diff_g + spec_g) * rad_g * n_dot_l * shadow;
+            lo_b += (diff_b + spec_b) * rad_b * n_dot_l * shadow;
+        }
     }
 
     /* Ambient + emissive. */
     *out_r = params->ambient[0] * albedo_r + lo_r + params->emissive[0];
     *out_g = params->ambient[1] * albedo_g + lo_g + params->emissive[1];
     *out_b = params->ambient[2] * albedo_b + lo_b + params->emissive[2];
+}
+
+/* ------------------------------------------------------------------ */
+/* Tonemapping                                                         */
+/* ------------------------------------------------------------------ */
+
+static float sdl3d_tonemap_reinhard(float x)
+{
+    return x / (1.0f + x);
+}
+
+void sdl3d_tonemap(sdl3d_tonemap_mode mode, float *r, float *g, float *b)
+{
+    if (mode == SDL3D_TONEMAP_REINHARD)
+    {
+        *r = sdl3d_tonemap_reinhard(*r);
+        *g = sdl3d_tonemap_reinhard(*g);
+        *b = sdl3d_tonemap_reinhard(*b);
+    }
+    else if (mode == SDL3D_TONEMAP_ACES)
+    {
+        /* ACES filmic approximation (Narkowicz 2015). */
+        float a = 2.51f, bt = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
+        float ri = *r, gi = *g, bi = *b;
+        *r = sdl3d_clampf((ri * (a * ri + bt)) / (ri * (c * ri + d) + e), 0.0f, 1.0f);
+        *g = sdl3d_clampf((gi * (a * gi + bt)) / (gi * (c * gi + d) + e), 0.0f, 1.0f);
+        *b = sdl3d_clampf((bi * (a * bi + bt)) / (bi * (c * bi + d) + e), 0.0f, 1.0f);
+    }
+
+    /* Apply sRGB gamma curve when any tonemapping is active. */
+    if (mode != SDL3D_TONEMAP_NONE)
+    {
+        float inv_gamma = 1.0f / 2.2f;
+        *r = powf(sdl3d_clampf(*r, 0.0f, 1.0f), inv_gamma);
+        *g = powf(sdl3d_clampf(*g, 0.0f, 1.0f), inv_gamma);
+        *b = powf(sdl3d_clampf(*b, 0.0f, 1.0f), inv_gamma);
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Fog                                                                 */
+/* ------------------------------------------------------------------ */
+
+float sdl3d_compute_fog_factor(const sdl3d_fog *fog, float distance)
+{
+    if (fog->mode == SDL3D_FOG_NONE)
+    {
+        return 0.0f;
+    }
+
+    if (fog->mode == SDL3D_FOG_LINEAR)
+    {
+        if (fog->end <= fog->start)
+        {
+            return 0.0f;
+        }
+        return sdl3d_clampf((distance - fog->start) / (fog->end - fog->start), 0.0f, 1.0f);
+    }
+
+    if (fog->mode == SDL3D_FOG_EXP)
+    {
+        float f = expf(-fog->density * distance);
+        return sdl3d_clampf(1.0f - f, 0.0f, 1.0f);
+    }
+
+    /* SDL3D_FOG_EXP2 */
+    {
+        float d = fog->density * distance;
+        float f = expf(-d * d);
+        return sdl3d_clampf(1.0f - f, 0.0f, 1.0f);
+    }
 }

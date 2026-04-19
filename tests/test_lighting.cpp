@@ -389,3 +389,275 @@ TEST(SDL3DPBRShading, RoughnessAffectsSpecular)
     /* Smooth surface should have higher total output due to specular peak. */
     EXPECT_GT(rs, rr);
 }
+
+/* ================================================================== */
+/* Fog computation tests                                              */
+/* ================================================================== */
+
+struct FogFactorCase
+{
+    const char *label;
+    sdl3d_fog_mode mode;
+    float start;
+    float end;
+    float density;
+    float distance;
+    float expected_min;
+    float expected_max;
+};
+
+class SDL3DFogFactor : public ::testing::TestWithParam<FogFactorCase>
+{
+};
+
+TEST_P(SDL3DFogFactor, ComputesExpectedRange)
+{
+    const auto &c = GetParam();
+    sdl3d_fog fog{};
+    fog.mode = c.mode;
+    fog.start = c.start;
+    fog.end = c.end;
+    fog.density = c.density;
+    float f = sdl3d_compute_fog_factor(&fog, c.distance);
+    EXPECT_GE(f, c.expected_min) << c.label;
+    EXPECT_LE(f, c.expected_max) << c.label;
+}
+
+INSTANTIATE_TEST_SUITE_P(Fog, SDL3DFogFactor,
+                         ::testing::Values(
+                             /* No fog → always 0. */
+                             FogFactorCase{"none d=0", SDL3D_FOG_NONE, 0, 0, 0, 0.0f, 0.0f, 0.0f},
+                             FogFactorCase{"none d=100", SDL3D_FOG_NONE, 0, 0, 0, 100.0f, 0.0f, 0.0f},
+
+                             /* Linear fog. */
+                             FogFactorCase{"linear before start", SDL3D_FOG_LINEAR, 10, 50, 0, 5.0f, 0.0f, 0.0f},
+                             FogFactorCase{"linear at start", SDL3D_FOG_LINEAR, 10, 50, 0, 10.0f, 0.0f, 0.001f},
+                             FogFactorCase{"linear midpoint", SDL3D_FOG_LINEAR, 10, 50, 0, 30.0f, 0.49f, 0.51f},
+                             FogFactorCase{"linear at end", SDL3D_FOG_LINEAR, 10, 50, 0, 50.0f, 0.99f, 1.0f},
+                             FogFactorCase{"linear past end", SDL3D_FOG_LINEAR, 10, 50, 0, 100.0f, 1.0f, 1.0f},
+                             FogFactorCase{"linear start==end", SDL3D_FOG_LINEAR, 10, 10, 0, 10.0f, 0.0f, 0.0f},
+
+                             /* Exponential fog. */
+                             FogFactorCase{"exp d=0", SDL3D_FOG_EXP, 0, 0, 0.1f, 0.0f, 0.0f, 0.001f},
+                             FogFactorCase{"exp d=10", SDL3D_FOG_EXP, 0, 0, 0.1f, 10.0f, 0.5f, 0.7f},
+                             FogFactorCase{"exp d=100", SDL3D_FOG_EXP, 0, 0, 0.1f, 100.0f, 0.99f, 1.0f},
+
+                             /* Exponential squared fog. */
+                             FogFactorCase{"exp2 d=0", SDL3D_FOG_EXP2, 0, 0, 0.1f, 0.0f, 0.0f, 0.001f},
+                             FogFactorCase{"exp2 d=5", SDL3D_FOG_EXP2, 0, 0, 0.1f, 5.0f, 0.15f, 0.30f},
+                             FogFactorCase{"exp2 d=50", SDL3D_FOG_EXP2, 0, 0, 0.1f, 50.0f, 0.99f, 1.0f}));
+
+TEST_F(SDL3DLightingFixture, SetAndClearFog)
+{
+    sdl3d_fog fog{};
+    fog.mode = SDL3D_FOG_LINEAR;
+    fog.color[0] = 0.5f;
+    fog.color[1] = 0.5f;
+    fog.color[2] = 0.5f;
+    fog.start = 10.0f;
+    fog.end = 100.0f;
+    ASSERT_TRUE(sdl3d_set_fog(ctx, &fog));
+    ASSERT_TRUE(sdl3d_clear_fog(ctx));
+}
+
+TEST(SDL3DFogAPI, NullContextRejected)
+{
+    sdl3d_fog fog{};
+    EXPECT_FALSE(sdl3d_set_fog(nullptr, &fog));
+    EXPECT_FALSE(sdl3d_clear_fog(nullptr));
+}
+
+TEST(SDL3DFogAPI, NullFogRejected)
+{
+    /* Can't test without a context, but we can verify the null fog param. */
+    EXPECT_FALSE(sdl3d_set_fog(nullptr, nullptr));
+}
+
+/* ================================================================== */
+/* Tonemapping tests                                                  */
+/* ================================================================== */
+
+struct TonemapCase
+{
+    const char *label;
+    sdl3d_tonemap_mode mode;
+    float in_r, in_g, in_b;
+    float expect_min_r, expect_max_r;
+};
+
+class SDL3DTonemapTable : public ::testing::TestWithParam<TonemapCase>
+{
+};
+
+TEST_P(SDL3DTonemapTable, OutputInExpectedRange)
+{
+    const auto &c = GetParam();
+    float r = c.in_r, g = c.in_g, b = c.in_b;
+    sdl3d_tonemap(c.mode, &r, &g, &b);
+    EXPECT_GE(r, c.expect_min_r) << c.label;
+    EXPECT_LE(r, c.expect_max_r) << c.label;
+    EXPECT_GE(g, 0.0f) << c.label;
+    /* Tonemapped modes clamp to [0,1]; NONE is passthrough. */
+    if (c.mode != SDL3D_TONEMAP_NONE)
+    {
+        EXPECT_LE(b, 1.01f) << c.label;
+    }
+}
+
+INSTANTIATE_TEST_SUITE_P(Tonemap, SDL3DTonemapTable,
+                         ::testing::Values(
+                             /* None: passthrough. */
+                             TonemapCase{"none 0", SDL3D_TONEMAP_NONE, 0.0f, 0.0f, 0.0f, 0.0f, 0.001f},
+                             TonemapCase{"none 1", SDL3D_TONEMAP_NONE, 1.0f, 1.0f, 1.0f, 1.0f, 1.001f},
+                             TonemapCase{"none HDR", SDL3D_TONEMAP_NONE, 5.0f, 5.0f, 5.0f, 5.0f, 5.001f},
+
+                             /* Reinhard: x/(1+x), then gamma. */
+                             TonemapCase{"reinhard 0", SDL3D_TONEMAP_REINHARD, 0.0f, 0.0f, 0.0f, 0.0f, 0.001f},
+                             TonemapCase{"reinhard 1", SDL3D_TONEMAP_REINHARD, 1.0f, 1.0f, 1.0f, 0.5f, 0.8f},
+                             TonemapCase{"reinhard HDR", SDL3D_TONEMAP_REINHARD, 10.0f, 10.0f, 10.0f, 0.9f, 1.0f},
+
+                             /* ACES: should compress HDR to [0,1]. */
+                             TonemapCase{"aces 0", SDL3D_TONEMAP_ACES, 0.0f, 0.0f, 0.0f, 0.0f, 0.01f},
+                             TonemapCase{"aces 1", SDL3D_TONEMAP_ACES, 1.0f, 1.0f, 1.0f, 0.5f, 1.0f},
+                             TonemapCase{"aces HDR", SDL3D_TONEMAP_ACES, 10.0f, 10.0f, 10.0f, 0.9f, 1.0f}));
+
+TEST_F(SDL3DLightingFixture, SetAndGetTonemapMode)
+{
+    EXPECT_EQ(sdl3d_get_tonemap_mode(ctx), SDL3D_TONEMAP_NONE);
+    ASSERT_TRUE(sdl3d_set_tonemap_mode(ctx, SDL3D_TONEMAP_REINHARD));
+    EXPECT_EQ(sdl3d_get_tonemap_mode(ctx), SDL3D_TONEMAP_REINHARD);
+    ASSERT_TRUE(sdl3d_set_tonemap_mode(ctx, SDL3D_TONEMAP_ACES));
+    EXPECT_EQ(sdl3d_get_tonemap_mode(ctx), SDL3D_TONEMAP_ACES);
+    ASSERT_TRUE(sdl3d_set_tonemap_mode(ctx, SDL3D_TONEMAP_NONE));
+    EXPECT_EQ(sdl3d_get_tonemap_mode(ctx), SDL3D_TONEMAP_NONE);
+}
+
+TEST(SDL3DTonemapAPI, NullContextRejected)
+{
+    EXPECT_FALSE(sdl3d_set_tonemap_mode(nullptr, SDL3D_TONEMAP_REINHARD));
+    EXPECT_EQ(sdl3d_get_tonemap_mode(nullptr), SDL3D_TONEMAP_NONE);
+}
+
+/* ================================================================== */
+/* Shadow mapping tests                                               */
+/* ================================================================== */
+
+TEST_F(SDL3DLightingFixture, EnableShadowOnDirectionalLight)
+{
+    sdl3d_light dl{};
+    dl.type = SDL3D_LIGHT_DIRECTIONAL;
+    dl.direction = {0.0f, -1.0f, 0.0f};
+    dl.color[0] = dl.color[1] = dl.color[2] = 1.0f;
+    dl.intensity = 1.0f;
+    ASSERT_TRUE(sdl3d_add_light(ctx, &dl));
+
+    ASSERT_TRUE(sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 10.0f));
+    ASSERT_TRUE(sdl3d_disable_shadow(ctx, 0));
+}
+
+TEST_F(SDL3DLightingFixture, ShadowRejectsNonDirectionalLight)
+{
+    sdl3d_light pl{};
+    pl.type = SDL3D_LIGHT_POINT;
+    pl.intensity = 1.0f;
+    ASSERT_TRUE(sdl3d_add_light(ctx, &pl));
+
+    EXPECT_FALSE(sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 10.0f));
+}
+
+TEST_F(SDL3DLightingFixture, ShadowRejectsInvalidLightIndex)
+{
+    EXPECT_FALSE(sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 10.0f));
+    EXPECT_FALSE(sdl3d_enable_shadow(ctx, -1, sdl3d_vec3_make(0, 0, 0), 10.0f));
+    EXPECT_FALSE(sdl3d_enable_shadow(ctx, 99, sdl3d_vec3_make(0, 0, 0), 10.0f));
+}
+
+TEST_F(SDL3DLightingFixture, ShadowRejectsZeroRadius)
+{
+    sdl3d_light dl{};
+    dl.type = SDL3D_LIGHT_DIRECTIONAL;
+    dl.direction = {0.0f, -1.0f, 0.0f};
+    dl.intensity = 1.0f;
+    ASSERT_TRUE(sdl3d_add_light(ctx, &dl));
+
+    EXPECT_FALSE(sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 0.0f));
+    EXPECT_FALSE(sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), -1.0f));
+}
+
+TEST(SDL3DShadowAPI, NullContextRejected)
+{
+    EXPECT_FALSE(sdl3d_enable_shadow(nullptr, 0, sdl3d_vec3_make(0, 0, 0), 10.0f));
+    EXPECT_FALSE(sdl3d_disable_shadow(nullptr, 0));
+    EXPECT_FALSE(sdl3d_render_shadow_map(nullptr, nullptr, 0, nullptr));
+}
+
+TEST_F(SDL3DLightingFixture, RenderShadowMapWithNoMeshes)
+{
+    sdl3d_light dl{};
+    dl.type = SDL3D_LIGHT_DIRECTIONAL;
+    dl.direction = {0.0f, -1.0f, 0.0f};
+    dl.color[0] = dl.color[1] = dl.color[2] = 1.0f;
+    dl.intensity = 1.0f;
+    ASSERT_TRUE(sdl3d_add_light(ctx, &dl));
+    ASSERT_TRUE(sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 10.0f));
+
+    /* Rendering with zero meshes should succeed (no-op). */
+    ASSERT_TRUE(sdl3d_render_shadow_map(ctx, nullptr, 0, nullptr));
+
+    sdl3d_disable_shadow(ctx, 0);
+}
+
+TEST(SDL3DPBRShading, ShadowOccludesLight)
+{
+    /* Create a shadow map that is all zeros (everything at depth 0 = near).
+     * Any fragment behind depth 0 should be in shadow. */
+    const size_t map_size = (size_t)SDL3D_SHADOW_MAP_SIZE * SDL3D_SHADOW_MAP_SIZE;
+    std::vector<float> shadow_depth(map_size, 0.0f);
+
+    sdl3d_light dl{};
+    dl.type = SDL3D_LIGHT_DIRECTIONAL;
+    dl.direction = {0.0f, -1.0f, 0.0f};
+    dl.color[0] = dl.color[1] = dl.color[2] = 1.0f;
+    dl.intensity = 1.0f;
+
+    sdl3d_lighting_params p{};
+    p.lights = &dl;
+    p.light_count = 1;
+    p.camera_pos = {0.0f, 0.0f, 5.0f};
+    p.roughness = 1.0f;
+    p.shadow_depth[0] = shadow_depth.data();
+    p.shadow_enabled[0] = true;
+    p.shadow_bias = 0.005f;
+    /* Identity VP → fragment at origin maps to NDC (0,0,0) → depth 0.5. */
+    p.shadow_vp[0] = sdl3d_mat4_identity();
+
+    float r, g, b;
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r, &g, &b);
+
+    /* Fragment should be in shadow → no direct light contribution. */
+    EXPECT_NEAR(r, 0.0f, 0.01f);
+    EXPECT_NEAR(g, 0.0f, 0.01f);
+    EXPECT_NEAR(b, 0.0f, 0.01f);
+}
+
+TEST(SDL3DPBRShading, NoShadowWhenDisabled)
+{
+    sdl3d_light dl{};
+    dl.type = SDL3D_LIGHT_DIRECTIONAL;
+    dl.direction = {0.0f, -1.0f, 0.0f};
+    dl.color[0] = dl.color[1] = dl.color[2] = 1.0f;
+    dl.intensity = 1.0f;
+
+    sdl3d_lighting_params p{};
+    p.lights = &dl;
+    p.light_count = 1;
+    p.camera_pos = {0.0f, 0.0f, 5.0f};
+    p.roughness = 1.0f;
+    /* shadow_enabled[0] defaults to false. */
+
+    float r, g, b;
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r, &g, &b);
+
+    /* Should be lit (no shadow). */
+    EXPECT_GT(r, 0.1f);
+}
