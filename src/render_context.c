@@ -286,7 +286,7 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     context->projection = sdl3d_mat4_identity();
     context->view_projection = sdl3d_mat4_identity();
     context->model_view_projection = sdl3d_mat4_identity();
-    context->lighting_enabled = false;
+    context->shading_mode = SDL3D_SHADING_UNLIT;
     context->light_count = 0;
     context->ambient[0] = 0.03f;
     context->ambient[1] = 0.03f;
@@ -296,6 +296,12 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     SDL_memset(context->shadow_depth, 0, sizeof(context->shadow_depth));
     SDL_memset(context->shadow_enabled, 0, sizeof(context->shadow_enabled));
     context->shadow_bias = 0.005f;
+    context->uv_mode = SDL3D_UV_PERSPECTIVE;
+    context->fog_eval = SDL3D_FOG_EVAL_FRAGMENT;
+    context->vertex_snap = false;
+    context->vertex_snap_precision = 1;
+    context->color_quantize = false;
+    context->color_depth = 0;
     sdl3d_try_create_parallel_rasterizer(context);
 
     *out_context = context;

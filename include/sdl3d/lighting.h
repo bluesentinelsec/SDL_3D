@@ -5,6 +5,7 @@
 
 #include "sdl3d/math.h"
 #include "sdl3d/render_context.h"
+#include "sdl3d/texture.h"
 #include "sdl3d/types.h"
 
 #ifdef __cplusplus
@@ -15,6 +16,21 @@ extern "C"
     struct sdl3d_mesh;
 
 #define SDL3D_MAX_LIGHTS 8
+
+    /* ============================================================== */
+    /* Shading modes                                                  */
+    /* ============================================================== */
+
+    typedef enum sdl3d_shading_mode
+    {
+        SDL3D_SHADING_UNLIT = 0,   /* texture × tint, no lighting */
+        SDL3D_SHADING_FLAT = 1,    /* one PBR eval per triangle (face normal) */
+        SDL3D_SHADING_GOURAUD = 2, /* PBR eval at vertices, interpolate color */
+        SDL3D_SHADING_PHONG = 3    /* interpolate normals, PBR per pixel */
+    } sdl3d_shading_mode;
+
+    bool sdl3d_set_shading_mode(sdl3d_render_context *context, sdl3d_shading_mode mode);
+    sdl3d_shading_mode sdl3d_get_shading_mode(const sdl3d_render_context *context);
 
     typedef enum sdl3d_light_type
     {
@@ -55,12 +71,8 @@ extern "C"
     bool sdl3d_clear_lights(sdl3d_render_context *context);
 
     /*
-     * Enable or disable lighting. When disabled, DrawModel/DrawMesh
-     * use the existing unlit path (texture × tint). When enabled,
-     * per-fragment PBR shading is applied using the active lights
-     * and the mesh's material properties.
-     *
-     * Lighting is disabled by default.
+     * Convenience wrapper: enabled=true sets PHONG, enabled=false sets UNLIT.
+     * Prefer sdl3d_set_shading_mode for finer control.
      */
     bool sdl3d_set_lighting_enabled(sdl3d_render_context *context, bool enabled);
 
@@ -110,6 +122,52 @@ extern "C"
 
     bool sdl3d_set_tonemap_mode(sdl3d_render_context *context, sdl3d_tonemap_mode mode);
     sdl3d_tonemap_mode sdl3d_get_tonemap_mode(const sdl3d_render_context *context);
+
+    /* ============================================================== */
+    /* UV mapping mode                                                */
+    /* ============================================================== */
+
+    typedef enum sdl3d_uv_mode
+    {
+        SDL3D_UV_PERSPECTIVE = 0,
+        SDL3D_UV_AFFINE = 1
+    } sdl3d_uv_mode;
+
+    /* ============================================================== */
+    /* Fog evaluation mode                                            */
+    /* ============================================================== */
+
+    typedef enum sdl3d_fog_eval
+    {
+        SDL3D_FOG_EVAL_FRAGMENT = 0,
+        SDL3D_FOG_EVAL_VERTEX = 1
+    } sdl3d_fog_eval;
+
+    /* ============================================================== */
+    /* Render profile                                                 */
+    /* ============================================================== */
+
+    typedef struct sdl3d_render_profile
+    {
+        sdl3d_shading_mode shading;
+        sdl3d_texture_filter texture_filter;
+        sdl3d_uv_mode uv_mode;
+        sdl3d_fog_eval fog_eval;
+        sdl3d_tonemap_mode tonemap;
+        bool vertex_snap;
+        int vertex_snap_precision;
+        bool color_quantize;
+        int color_depth;
+    } sdl3d_render_profile;
+
+    bool sdl3d_set_render_profile(sdl3d_render_context *context, const sdl3d_render_profile *profile);
+    bool sdl3d_get_render_profile(const sdl3d_render_context *context, sdl3d_render_profile *out);
+
+    sdl3d_render_profile sdl3d_profile_modern(void);
+    sdl3d_render_profile sdl3d_profile_ps1(void);
+    sdl3d_render_profile sdl3d_profile_n64(void);
+    sdl3d_render_profile sdl3d_profile_dos(void);
+    sdl3d_render_profile sdl3d_profile_snes(void);
 
     /* ============================================================== */
     /* Shadow mapping                                                 */

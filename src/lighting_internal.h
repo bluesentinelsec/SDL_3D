@@ -34,6 +34,14 @@ typedef struct sdl3d_lighting_params
 
     /* Tonemapping. */
     sdl3d_tonemap_mode tonemap_mode;
+
+    /* Render profile flags. */
+    sdl3d_uv_mode uv_mode;
+    sdl3d_fog_eval fog_eval;
+    bool vertex_snap;
+    int vertex_snap_precision;
+    bool color_quantize;
+    int color_depth;
 } sdl3d_lighting_params;
 
 /*
