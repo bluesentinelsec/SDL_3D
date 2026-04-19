@@ -7,6 +7,8 @@
 #include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_thread.h>
 
+#include "texture_internal.h"
+
 /*
  * Subpixel precision: 8 bits (256 subpixel positions per pixel).
  * Sample point is pixel center at (x + 0.5, y + 0.5).
@@ -1170,6 +1172,472 @@ void sdl3d_rasterize_triangle_colored(sdl3d_framebuffer *framebuffer, sdl3d_mat4
     for (int i = 1; i + 1 < clipped_count; ++i)
     {
         sdl3d_rasterize_screen_triangle_colored(framebuffer, screen[0], screen[i], screen[i + 1]);
+    }
+}
+
+/* --- Textured triangle rasterization ------------------------------------ */
+
+typedef struct sdl3d_clip_vertex_textured
+{
+    sdl3d_vec4 position;
+    float u;
+    float v;
+    float modulate_r;
+    float modulate_g;
+    float modulate_b;
+    float modulate_a;
+} sdl3d_clip_vertex_textured;
+
+static sdl3d_clip_vertex_textured sdl3d_clip_vertex_textured_lerp(sdl3d_clip_vertex_textured a,
+                                                                  sdl3d_clip_vertex_textured b, float t)
+{
+    sdl3d_clip_vertex_textured out;
+    out.position = sdl3d_vec4_lerp(a.position, b.position, t);
+    out.u = a.u + (b.u - a.u) * t;
+    out.v = a.v + (b.v - a.v) * t;
+    out.modulate_r = a.modulate_r + (b.modulate_r - a.modulate_r) * t;
+    out.modulate_g = a.modulate_g + (b.modulate_g - a.modulate_g) * t;
+    out.modulate_b = a.modulate_b + (b.modulate_b - a.modulate_b) * t;
+    out.modulate_a = a.modulate_a + (b.modulate_a - a.modulate_a) * t;
+    return out;
+}
+
+static int sdl3d_clip_polygon_against_plane_textured(const sdl3d_clip_vertex_textured *in, int count_in,
+                                                     sdl3d_clip_vertex_textured *out, sdl3d_clip_plane plane)
+{
+    if (count_in < 3)
+    {
+        return 0;
+    }
+
+    int count_out = 0;
+    sdl3d_clip_vertex_textured prev = in[count_in - 1];
+    float prev_distance = sdl3d_clip_distance(prev.position, plane);
+
+    for (int i = 0; i < count_in; ++i)
+    {
+        const sdl3d_clip_vertex_textured curr = in[i];
+        const float curr_distance = sdl3d_clip_distance(curr.position, plane);
+        const bool prev_inside = prev_distance >= 0.0f;
+        const bool curr_inside = curr_distance >= 0.0f;
+
+        if (prev_inside != curr_inside)
+        {
+            const float t = prev_distance / (prev_distance - curr_distance);
+            if (count_out < SDL3D_CLIP_MAX_VERTICES)
+            {
+                out[count_out++] = sdl3d_clip_vertex_textured_lerp(prev, curr, t);
+            }
+        }
+
+        if (curr_inside)
+        {
+            if (count_out < SDL3D_CLIP_MAX_VERTICES)
+            {
+                out[count_out++] = curr;
+            }
+        }
+
+        prev = curr;
+        prev_distance = curr_distance;
+    }
+
+    return count_out;
+}
+
+static int sdl3d_clip_triangle_textured(sdl3d_clip_vertex_textured v0, sdl3d_clip_vertex_textured v1,
+                                        sdl3d_clip_vertex_textured v2, sdl3d_clip_vertex_textured *out)
+{
+    sdl3d_clip_vertex_textured buffer_a[SDL3D_CLIP_MAX_VERTICES];
+    sdl3d_clip_vertex_textured buffer_b[SDL3D_CLIP_MAX_VERTICES];
+
+    buffer_a[0] = v0;
+    buffer_a[1] = v1;
+    buffer_a[2] = v2;
+    int count = 3;
+
+    sdl3d_clip_vertex_textured *src = buffer_a;
+    sdl3d_clip_vertex_textured *dst = buffer_b;
+
+    for (int plane = 0; plane < 6; ++plane)
+    {
+        count = sdl3d_clip_polygon_against_plane_textured(src, count, dst, (sdl3d_clip_plane)plane);
+        if (count == 0)
+        {
+            return 0;
+        }
+        sdl3d_clip_vertex_textured *swap = src;
+        src = dst;
+        dst = swap;
+    }
+
+    for (int i = 0; i < count; ++i)
+    {
+        out[i] = src[i];
+    }
+    return count;
+}
+
+typedef struct sdl3d_screen_vertex_textured
+{
+    sdl3d_screen_vertex base;
+    float inverse_w;
+    float u_over_w;
+    float v_over_w;
+    float modulate_r_over_w;
+    float modulate_g_over_w;
+    float modulate_b_over_w;
+    float modulate_a_over_w;
+} sdl3d_screen_vertex_textured;
+
+static sdl3d_screen_vertex_textured sdl3d_viewport_transform_textured(sdl3d_clip_vertex_textured v, int width,
+                                                                      int height)
+{
+    sdl3d_screen_vertex_textured out;
+    const float inverse_w = 1.0f / v.position.w;
+
+    out.base = sdl3d_viewport_transform(v.position, width, height);
+    out.inverse_w = inverse_w;
+    out.u_over_w = v.u * inverse_w;
+    out.v_over_w = v.v * inverse_w;
+    out.modulate_r_over_w = v.modulate_r * inverse_w;
+    out.modulate_g_over_w = v.modulate_g * inverse_w;
+    out.modulate_b_over_w = v.modulate_b * inverse_w;
+    out.modulate_a_over_w = v.modulate_a * inverse_w;
+    return out;
+}
+
+typedef struct sdl3d_prepared_triangle_textured
+{
+    sdl3d_screen_vertex_textured a;
+    sdl3d_screen_vertex_textured b;
+    sdl3d_screen_vertex_textured c;
+    Sint64 area;
+    int bias_ab;
+    int bias_bc;
+    int bias_ca;
+    float inverse_area;
+    sdl3d_triangle_bounds bounds;
+} sdl3d_prepared_triangle_textured;
+
+typedef struct sdl3d_parallel_triangle_textured_job
+{
+    sdl3d_framebuffer *framebuffer;
+    sdl3d_prepared_triangle_textured triangle;
+    const sdl3d_texture2d *texture;
+    int first_tile_x;
+    int first_tile_y;
+    int tiles_w;
+} sdl3d_parallel_triangle_textured_job;
+
+static bool sdl3d_prepare_screen_triangle_textured(const sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex_textured a,
+                                                   sdl3d_screen_vertex_textured b, sdl3d_screen_vertex_textured c,
+                                                   sdl3d_prepared_triangle_textured *out_triangle)
+{
+    Sint64 area = sdl3d_screen_triangle_signed_area(a.base, b.base, c.base);
+    if (area == 0)
+    {
+        return false;
+    }
+    if (area < 0)
+    {
+        sdl3d_screen_vertex_textured tmp = b;
+        b = c;
+        c = tmp;
+        area = -area;
+    }
+
+    const int min_fx = sdl3d_min_int(a.base.x_fx, sdl3d_min_int(b.base.x_fx, c.base.x_fx));
+    const int max_fx = sdl3d_max_int(a.base.x_fx, sdl3d_max_int(b.base.x_fx, c.base.x_fx));
+    const int min_fy = sdl3d_min_int(a.base.y_fx, sdl3d_min_int(b.base.y_fx, c.base.y_fx));
+    const int max_fy = sdl3d_max_int(a.base.y_fx, sdl3d_max_int(b.base.y_fx, c.base.y_fx));
+
+    const int min_px_x = sdl3d_max_int(0, min_fx >> SDL3D_SUBPIXEL_BITS);
+    const int max_px_x = sdl3d_min_int(framebuffer->width - 1, (max_fx - 1) >> SDL3D_SUBPIXEL_BITS);
+    const int min_px_y = sdl3d_max_int(0, min_fy >> SDL3D_SUBPIXEL_BITS);
+    const int max_px_y = sdl3d_min_int(framebuffer->height - 1, (max_fy - 1) >> SDL3D_SUBPIXEL_BITS);
+
+    if (min_px_x > max_px_x || min_px_y > max_px_y)
+    {
+        return false;
+    }
+
+    out_triangle->a = a;
+    out_triangle->b = b;
+    out_triangle->c = c;
+    out_triangle->area = area;
+    out_triangle->bias_ab = sdl3d_fill_bias(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx);
+    out_triangle->bias_bc = sdl3d_fill_bias(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx);
+    out_triangle->bias_ca = sdl3d_fill_bias(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx);
+    out_triangle->inverse_area = 1.0f / (float)area;
+    out_triangle->bounds.min_px_x = min_px_x;
+    out_triangle->bounds.max_px_x = max_px_x;
+    out_triangle->bounds.min_px_y = min_px_y;
+    out_triangle->bounds.max_px_y = max_px_y;
+    return true;
+}
+
+static void sdl3d_rasterize_prepared_triangle_textured_region(sdl3d_framebuffer *framebuffer,
+                                                              const sdl3d_prepared_triangle_textured *triangle,
+                                                              const sdl3d_texture2d *texture, int min_px_x,
+                                                              int max_px_x, int min_px_y, int max_px_y)
+{
+    const sdl3d_screen_vertex_textured a = triangle->a;
+    const sdl3d_screen_vertex_textured b = triangle->b;
+    const sdl3d_screen_vertex_textured c = triangle->c;
+
+    for (int py = min_px_y; py <= max_px_y; ++py)
+    {
+        const int sample_y = (py << SDL3D_SUBPIXEL_BITS) + SDL3D_SUBPIXEL_HALF;
+        for (int px = min_px_x; px <= max_px_x; ++px)
+        {
+            float texture_r = 1.0f;
+            float texture_g = 1.0f;
+            float texture_b = 1.0f;
+            float texture_a = 1.0f;
+            float output_r = 0.0f;
+            float output_g = 0.0f;
+            float output_b = 0.0f;
+            float output_a = 0.0f;
+
+            const int sample_x = (px << SDL3D_SUBPIXEL_BITS) + SDL3D_SUBPIXEL_HALF;
+            const Sint64 w_ab =
+                sdl3d_edge_function(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx, sample_x, sample_y) +
+                triangle->bias_ab;
+            const Sint64 w_bc =
+                sdl3d_edge_function(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx, sample_x, sample_y) +
+                triangle->bias_bc;
+            const Sint64 w_ca =
+                sdl3d_edge_function(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx, sample_x, sample_y) +
+                triangle->bias_ca;
+
+            if ((w_ab | w_bc | w_ca) < 0)
+            {
+                continue;
+            }
+
+            const float bary_a = (float)w_bc * triangle->inverse_area;
+            const float bary_b = (float)w_ca * triangle->inverse_area;
+            const float bary_c = (float)w_ab * triangle->inverse_area;
+            const float depth = (bary_a * a.base.z) + (bary_b * b.base.z) + (bary_c * c.base.z);
+            const float inverse_w_pixel = (bary_a * a.inverse_w) + (bary_b * b.inverse_w) + (bary_c * c.inverse_w);
+            const float pixel_w = 1.0f / inverse_w_pixel;
+            const float u = ((bary_a * a.u_over_w) + (bary_b * b.u_over_w) + (bary_c * c.u_over_w)) * pixel_w;
+            const float v = ((bary_a * a.v_over_w) + (bary_b * b.v_over_w) + (bary_c * c.v_over_w)) * pixel_w;
+            const float modulate_r =
+                ((bary_a * a.modulate_r_over_w) + (bary_b * b.modulate_r_over_w) + (bary_c * c.modulate_r_over_w)) *
+                pixel_w;
+            const float modulate_g =
+                ((bary_a * a.modulate_g_over_w) + (bary_b * b.modulate_g_over_w) + (bary_c * c.modulate_g_over_w)) *
+                pixel_w;
+            const float modulate_b =
+                ((bary_a * a.modulate_b_over_w) + (bary_b * b.modulate_b_over_w) + (bary_c * c.modulate_b_over_w)) *
+                pixel_w;
+            const float modulate_a =
+                ((bary_a * a.modulate_a_over_w) + (bary_b * b.modulate_a_over_w) + (bary_c * c.modulate_a_over_w)) *
+                pixel_w;
+
+            if (texture != NULL)
+            {
+                sdl3d_texture_sample_rgba(texture, u, v, &texture_r, &texture_g, &texture_b, &texture_a);
+            }
+
+            output_r = texture_r * modulate_r;
+            output_g = texture_g * modulate_g;
+            output_b = texture_b * modulate_b;
+            output_a = texture_a * modulate_a;
+
+            if (output_a <= 0.0f)
+            {
+                continue;
+            }
+
+            sdl3d_color color;
+            color.r = sdl3d_color_channel_clamp(output_r * 255.0f);
+            color.g = sdl3d_color_channel_clamp(output_g * 255.0f);
+            color.b = sdl3d_color_channel_clamp(output_b * 255.0f);
+            color.a = sdl3d_color_channel_clamp(output_a * 255.0f);
+
+            sdl3d_write_pixel(framebuffer, px, py, depth, color);
+        }
+    }
+}
+
+static void sdl3d_parallel_triangle_textured_job_run_tile(void *userdata, int tile_index)
+{
+    sdl3d_parallel_triangle_textured_job *job = (sdl3d_parallel_triangle_textured_job *)userdata;
+    const int tile_x = job->first_tile_x + (tile_index % job->tiles_w);
+    const int tile_y = job->first_tile_y + (tile_index / job->tiles_w);
+
+    const int tile_min_px_x = sdl3d_max_int(job->triangle.bounds.min_px_x, tile_x * SDL3D_RASTER_TILE_SIZE);
+    const int tile_max_px_x = sdl3d_min_int(job->triangle.bounds.max_px_x, ((tile_x + 1) * SDL3D_RASTER_TILE_SIZE) - 1);
+    const int tile_min_px_y = sdl3d_max_int(job->triangle.bounds.min_px_y, tile_y * SDL3D_RASTER_TILE_SIZE);
+    const int tile_max_px_y = sdl3d_min_int(job->triangle.bounds.max_px_y, ((tile_y + 1) * SDL3D_RASTER_TILE_SIZE) - 1);
+
+    if (tile_min_px_x > tile_max_px_x || tile_min_px_y > tile_max_px_y)
+    {
+        return;
+    }
+
+    sdl3d_rasterize_prepared_triangle_textured_region(job->framebuffer, &job->triangle, job->texture, tile_min_px_x,
+                                                      tile_max_px_x, tile_min_px_y, tile_max_px_y);
+}
+
+static bool sdl3d_try_rasterize_prepared_triangle_textured_parallel(sdl3d_framebuffer *framebuffer,
+                                                                    const sdl3d_prepared_triangle_textured *triangle,
+                                                                    const sdl3d_texture2d *texture)
+{
+    if (framebuffer->parallel_rasterizer == NULL)
+    {
+        return false;
+    }
+
+    const int first_tile_x = triangle->bounds.min_px_x / SDL3D_RASTER_TILE_SIZE;
+    const int last_tile_x = triangle->bounds.max_px_x / SDL3D_RASTER_TILE_SIZE;
+    const int first_tile_y = triangle->bounds.min_px_y / SDL3D_RASTER_TILE_SIZE;
+    const int last_tile_y = triangle->bounds.max_px_y / SDL3D_RASTER_TILE_SIZE;
+    const int tiles_w = last_tile_x - first_tile_x + 1;
+    const int tiles_h = last_tile_y - first_tile_y + 1;
+    const int tile_count = tiles_w * tiles_h;
+
+    if (tile_count <= 1)
+    {
+        return false;
+    }
+
+    sdl3d_parallel_triangle_textured_job triangle_job;
+    triangle_job.framebuffer = framebuffer;
+    triangle_job.triangle = *triangle;
+    triangle_job.texture = texture;
+    triangle_job.first_tile_x = first_tile_x;
+    triangle_job.first_tile_y = first_tile_y;
+    triangle_job.tiles_w = tiles_w;
+
+    sdl3d_parallel_job job;
+    job.run_tile = sdl3d_parallel_triangle_textured_job_run_tile;
+    job.userdata = &triangle_job;
+    job.tile_count = tile_count;
+    SDL_SetAtomicInt(&job.next_tile_index, 0);
+
+    sdl3d_parallel_rasterizer_execute(framebuffer->parallel_rasterizer, &job);
+    return true;
+}
+
+static void sdl3d_rasterize_screen_triangle_textured(sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex_textured a,
+                                                     sdl3d_screen_vertex_textured b, sdl3d_screen_vertex_textured c,
+                                                     const sdl3d_texture2d *texture)
+{
+    sdl3d_prepared_triangle_textured triangle;
+    if (!sdl3d_prepare_screen_triangle_textured(framebuffer, a, b, c, &triangle))
+    {
+        return;
+    }
+
+    if (sdl3d_try_rasterize_prepared_triangle_textured_parallel(framebuffer, &triangle, texture))
+    {
+        return;
+    }
+
+    sdl3d_rasterize_prepared_triangle_textured_region(framebuffer, &triangle, texture, triangle.bounds.min_px_x,
+                                                      triangle.bounds.max_px_x, triangle.bounds.min_px_y,
+                                                      triangle.bounds.max_px_y);
+}
+
+void sdl3d_rasterize_triangle_textured(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0, sdl3d_vec3 v1,
+                                       sdl3d_vec3 v2, sdl3d_vec2 uv0, sdl3d_vec2 uv1, sdl3d_vec2 uv2,
+                                       sdl3d_vec4 modulate0, sdl3d_vec4 modulate1, sdl3d_vec4 modulate2,
+                                       const sdl3d_texture2d *texture, bool backface_culling_enabled,
+                                       bool wireframe_enabled)
+{
+    if (framebuffer == NULL || framebuffer->color_pixels == NULL || framebuffer->depth_pixels == NULL)
+    {
+        return;
+    }
+
+    sdl3d_clip_vertex_textured clip[3];
+    clip[0].position = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v0, 1.0f));
+    clip[0].u = uv0.x;
+    clip[0].v = uv0.y;
+    clip[0].modulate_r = modulate0.x;
+    clip[0].modulate_g = modulate0.y;
+    clip[0].modulate_b = modulate0.z;
+    clip[0].modulate_a = modulate0.w;
+    clip[1].position = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v1, 1.0f));
+    clip[1].u = uv1.x;
+    clip[1].v = uv1.y;
+    clip[1].modulate_r = modulate1.x;
+    clip[1].modulate_g = modulate1.y;
+    clip[1].modulate_b = modulate1.z;
+    clip[1].modulate_a = modulate1.w;
+    clip[2].position = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v2, 1.0f));
+    clip[2].u = uv2.x;
+    clip[2].v = uv2.y;
+    clip[2].modulate_r = modulate2.x;
+    clip[2].modulate_g = modulate2.y;
+    clip[2].modulate_b = modulate2.z;
+    clip[2].modulate_a = modulate2.w;
+
+    sdl3d_clip_vertex_textured clipped[SDL3D_CLIP_MAX_VERTICES];
+    const int clipped_count = sdl3d_clip_triangle_textured(clip[0], clip[1], clip[2], clipped);
+    if (clipped_count < 3)
+    {
+        return;
+    }
+
+    sdl3d_screen_vertex_textured screen[SDL3D_CLIP_MAX_VERTICES];
+    sdl3d_screen_vertex screen_positions[SDL3D_CLIP_MAX_VERTICES];
+    for (int i = 0; i < clipped_count; ++i)
+    {
+        screen[i] = sdl3d_viewport_transform_textured(clipped[i], framebuffer->width, framebuffer->height);
+        screen_positions[i] = screen[i].base;
+    }
+
+    const Sint64 polygon_area = sdl3d_screen_polygon_signed_area(screen_positions, clipped_count);
+    if (polygon_area == 0)
+    {
+        return;
+    }
+
+    if (backface_culling_enabled && polygon_area >= 0)
+    {
+        return;
+    }
+
+    if (wireframe_enabled)
+    {
+        for (int i = 0; i < clipped_count; ++i)
+        {
+            sdl3d_screen_vertex_colored line_start;
+            sdl3d_screen_vertex_colored line_end;
+            const float start_w = 1.0f / screen[i].inverse_w;
+            const float end_w = 1.0f / screen[(i + 1) % clipped_count].inverse_w;
+
+            line_start.base = screen[i].base;
+            line_start.inverse_w = screen[i].inverse_w;
+            line_start.r_over_w = (screen[i].modulate_r_over_w * start_w) * screen[i].inverse_w * 255.0f;
+            line_start.g_over_w = (screen[i].modulate_g_over_w * start_w) * screen[i].inverse_w * 255.0f;
+            line_start.b_over_w = (screen[i].modulate_b_over_w * start_w) * screen[i].inverse_w * 255.0f;
+            line_start.a_over_w = (screen[i].modulate_a_over_w * start_w) * screen[i].inverse_w * 255.0f;
+
+            line_end.base = screen[(i + 1) % clipped_count].base;
+            line_end.inverse_w = screen[(i + 1) % clipped_count].inverse_w;
+            line_end.r_over_w = (screen[(i + 1) % clipped_count].modulate_r_over_w * end_w) *
+                                screen[(i + 1) % clipped_count].inverse_w * 255.0f;
+            line_end.g_over_w = (screen[(i + 1) % clipped_count].modulate_g_over_w * end_w) *
+                                screen[(i + 1) % clipped_count].inverse_w * 255.0f;
+            line_end.b_over_w = (screen[(i + 1) % clipped_count].modulate_b_over_w * end_w) *
+                                screen[(i + 1) % clipped_count].inverse_w * 255.0f;
+            line_end.a_over_w = (screen[(i + 1) % clipped_count].modulate_a_over_w * end_w) *
+                                screen[(i + 1) % clipped_count].inverse_w * 255.0f;
+
+            sdl3d_rasterize_screen_line_colored(framebuffer, line_start, line_end);
+        }
+        return;
+    }
+
+    for (int i = 1; i + 1 < clipped_count; ++i)
+    {
+        sdl3d_rasterize_screen_triangle_textured(framebuffer, screen[0], screen[i], screen[i + 1], texture);
     }
 }
 

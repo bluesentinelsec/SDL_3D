@@ -6,6 +6,7 @@
 
 #include "rasterizer.h"
 #include "render_context_internal.h"
+#include "texture_internal.h"
 
 static const char *const SDL3D_BACKEND_ENV = "SDL3D_BACKEND";
 static const float SDL3D_DEFAULT_NEAR_PLANE = 0.01f;
@@ -251,6 +252,7 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
 
     context->window = window;
     context->renderer = renderer;
+    context->texture_cache = NULL;
     context->parallel_rasterizer = NULL;
     context->backend = resolved_backend;
     context->width = render_width;
@@ -284,6 +286,7 @@ void sdl3d_destroy_render_context(sdl3d_render_context *context)
     }
 
     sdl3d_parallel_rasterizer_destroy(context->parallel_rasterizer);
+    sdl3d_texture_cache_destroy(context->texture_cache);
     SDL_free(context->model_stack);
     SDL_DestroyTexture(context->color_texture);
     SDL_free(context->color_buffer);

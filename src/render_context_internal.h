@@ -21,6 +21,7 @@ struct sdl3d_render_context
     SDL_Window *window;
     SDL_Renderer *renderer;
     SDL_Texture *color_texture;
+    struct sdl3d_texture_cache_entry *texture_cache;
     Uint8 *color_buffer;
     float *depth_buffer;
     sdl3d_parallel_rasterizer *parallel_rasterizer;
