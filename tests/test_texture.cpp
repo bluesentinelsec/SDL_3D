@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <SDL3/SDL_error.h>
+#include <SDL3/SDL_filesystem.h>
 
 #include "sdl3d/texture.h"
 
@@ -13,9 +14,22 @@ namespace
 
 std::filesystem::path make_temp_dir(const char *leaf)
 {
+    std::filesystem::path root;
+    char *pref_path = SDL_GetPrefPath("bluesentinelsec", "SDL3DTests");
+    if (pref_path != nullptr)
+    {
+        root = pref_path;
+        SDL_free(pref_path);
+    }
+    else
+    {
+        SDL_ClearError();
+        root = std::filesystem::temp_directory_path();
+    }
+
     const auto unique =
         std::to_string((long long)std::filesystem::file_time_type::clock::now().time_since_epoch().count());
-    std::filesystem::path dir = std::filesystem::temp_directory_path() / (std::string(leaf) + "_" + unique);
+    std::filesystem::path dir = root / (std::string(leaf) + "_" + unique);
     std::filesystem::create_directories(dir);
     return dir;
 }
