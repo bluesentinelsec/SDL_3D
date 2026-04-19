@@ -9,14 +9,28 @@
 #include "texture_internal.h"
 
 static const char *const SDL3D_BACKEND_ENV = "SDL3D_BACKEND";
+static const char *const SDL3D_DISABLE_PARALLEL_RASTERIZER_ENV = "SDL3D_DISABLE_PARALLEL_RASTERIZER";
 static const float SDL3D_DEFAULT_NEAR_PLANE = 0.01f;
 static const float SDL3D_DEFAULT_FAR_PLANE = 1000.0f;
+
+static bool sdl3d_parallel_rasterizer_disabled_by_environment(void)
+{
+    const char *value = SDL_getenv(SDL3D_DISABLE_PARALLEL_RASTERIZER_ENV);
+
+    if (value == NULL || *value == '\0')
+    {
+        return false;
+    }
+
+    return SDL_strcasecmp(value, "0") != 0 && SDL_strcasecmp(value, "false") != 0 &&
+           SDL_strcasecmp(value, "no") != 0 && SDL_strcasecmp(value, "off") != 0;
+}
 
 static void sdl3d_try_create_parallel_rasterizer(sdl3d_render_context *context)
 {
     const int logical_cores = SDL_GetNumLogicalCPUCores();
 
-    if (context == NULL || logical_cores <= 1)
+    if (context == NULL || logical_cores <= 1 || sdl3d_parallel_rasterizer_disabled_by_environment())
     {
         return;
     }
@@ -218,7 +232,7 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     }
 
     context->color_texture =
-        SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, render_width, render_height);
+        SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, render_width, render_height);
     if (context->color_texture == NULL)
     {
         SDL_free(context);
