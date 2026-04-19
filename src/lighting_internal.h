@@ -22,6 +22,18 @@ typedef struct sdl3d_lighting_params
     float metallic;
     float roughness;
     float emissive[3];
+
+    /* Shadow maps (per-light, NULL when no shadow for that light). */
+    const float *shadow_depth[SDL3D_MAX_LIGHTS];
+    sdl3d_mat4 shadow_vp[SDL3D_MAX_LIGHTS];
+    bool shadow_enabled[SDL3D_MAX_LIGHTS];
+    float shadow_bias;
+
+    /* Fog. */
+    sdl3d_fog fog;
+
+    /* Tonemapping. */
+    sdl3d_tonemap_mode tonemap_mode;
 } sdl3d_lighting_params;
 
 /*
@@ -37,5 +49,15 @@ typedef struct sdl3d_lighting_params
 void sdl3d_shade_fragment_pbr(const sdl3d_lighting_params *params, float albedo_r, float albedo_g, float albedo_b,
                               float world_nx, float world_ny, float world_nz, float world_px, float world_py,
                               float world_pz, float *out_r, float *out_g, float *out_b);
+
+/*
+ * Apply tonemapping to HDR linear RGB. Modifies values in-place.
+ */
+void sdl3d_tonemap(sdl3d_tonemap_mode mode, float *r, float *g, float *b);
+
+/*
+ * Compute fog factor in [0,1] where 0 = no fog, 1 = fully fogged.
+ */
+float sdl3d_compute_fog_factor(const sdl3d_fog *fog, float distance);
 
 #endif

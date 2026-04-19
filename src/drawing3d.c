@@ -467,14 +467,74 @@ bool sdl3d_scale(sdl3d_render_context *context, float x, float y, float z)
 bool sdl3d_draw_triangle_3d(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_vec3 v1, sdl3d_vec3 v2,
                             sdl3d_color color)
 {
+    sdl3d_framebuffer framebuffer;
+
     if (!sdl3d_require_mode_3d(context, "sdl3d_draw_triangle_3d"))
     {
         return false;
     }
 
-    sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
-    sdl3d_rasterize_triangle(&framebuffer, context->model_view_projection, v0, v1, v2, color,
-                             context->backface_culling_enabled, context->wireframe_enabled);
+    framebuffer = sdl3d_framebuffer_from_context(context);
+
+    if (context->lighting_enabled && context->light_count > 0)
+    {
+        /* Compute flat face normal from the triangle edges. */
+        sdl3d_vec3 edge1 = sdl3d_vec3_sub(v1, v0);
+        sdl3d_vec3 edge2 = sdl3d_vec3_sub(v2, v0);
+        sdl3d_vec3 face_normal = sdl3d_vec3_normalize(sdl3d_vec3_cross(edge1, edge2));
+
+        /* Transform normal by upper-left 3x3 of model matrix. */
+        const sdl3d_mat4 m = context->model;
+        sdl3d_vec3 wn;
+        wn.x = m.m[0] * face_normal.x + m.m[4] * face_normal.y + m.m[8] * face_normal.z;
+        wn.y = m.m[1] * face_normal.x + m.m[5] * face_normal.y + m.m[9] * face_normal.z;
+        wn.z = m.m[2] * face_normal.x + m.m[6] * face_normal.y + m.m[10] * face_normal.z;
+        wn = sdl3d_vec3_normalize(wn);
+
+        /* Transform positions to world space. */
+        sdl3d_vec4 w0 = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(v0, 1.0f));
+        sdl3d_vec4 w1 = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(v1, 1.0f));
+        sdl3d_vec4 w2 = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(v2, 1.0f));
+
+        /* Build lighting params. */
+        sdl3d_lighting_params lp;
+        SDL_zerop(&lp);
+        lp.lights = context->lights;
+        lp.light_count = context->light_count;
+        lp.ambient[0] = context->ambient[0];
+        lp.ambient[1] = context->ambient[1];
+        lp.ambient[2] = context->ambient[2];
+        lp.roughness = 1.0f;
+        lp.fog = context->fog;
+        lp.tonemap_mode = context->tonemap_mode;
+        lp.shadow_bias = context->shadow_bias;
+        for (int i = 0; i < SDL3D_MAX_LIGHTS; ++i)
+        {
+            lp.shadow_depth[i] = context->shadow_depth[i];
+            lp.shadow_vp[i] = context->shadow_vp[i];
+            lp.shadow_enabled[i] = context->shadow_enabled[i];
+        }
+        {
+            const sdl3d_mat4 v = context->view;
+            lp.camera_pos.x = -(v.m[0] * v.m[12] + v.m[1] * v.m[13] + v.m[2] * v.m[14]);
+            lp.camera_pos.y = -(v.m[4] * v.m[12] + v.m[5] * v.m[13] + v.m[6] * v.m[14]);
+            lp.camera_pos.z = -(v.m[8] * v.m[12] + v.m[9] * v.m[13] + v.m[10] * v.m[14]);
+        }
+
+        sdl3d_vec4 modulate = sdl3d_color_to_modulate(color);
+        sdl3d_vec2 uv0 = {0.0f, 0.0f};
+
+        sdl3d_rasterize_triangle_lit(&framebuffer, context->model_view_projection, v0, v1, v2, uv0, uv0, uv0, wn, wn,
+                                     wn, sdl3d_vec3_make(w0.x, w0.y, w0.z), sdl3d_vec3_make(w1.x, w1.y, w1.z),
+                                     sdl3d_vec3_make(w2.x, w2.y, w2.z), modulate, modulate, modulate, NULL, &lp,
+                                     context->backface_culling_enabled, context->wireframe_enabled);
+    }
+    else
+    {
+        sdl3d_rasterize_triangle(&framebuffer, context->model_view_projection, v0, v1, v2, color,
+                                 context->backface_culling_enabled, context->wireframe_enabled);
+    }
+
     return true;
 }
 
@@ -643,6 +703,17 @@ bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model
                     lp_storage.emissive[0] = 0.0f;
                     lp_storage.emissive[1] = 0.0f;
                     lp_storage.emissive[2] = 0.0f;
+                }
+
+                /* Fog, tonemapping, shadows. */
+                lp_storage.fog = context->fog;
+                lp_storage.tonemap_mode = context->tonemap_mode;
+                lp_storage.shadow_bias = context->shadow_bias;
+                for (int si = 0; si < SDL3D_MAX_LIGHTS; ++si)
+                {
+                    lp_storage.shadow_depth[si] = context->shadow_depth[si];
+                    lp_storage.shadow_vp[si] = context->shadow_vp[si];
+                    lp_storage.shadow_enabled[si] = context->shadow_enabled[si];
                 }
 
                 lp_ptr = &lp_storage;

@@ -1907,6 +1907,22 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
             sdl3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, nx, ny, nz, wpx, wpy, wpz, &lit_r, &lit_g,
                                      &lit_b);
 
+            /* Tonemapping: HDR → LDR + sRGB gamma. */
+            sdl3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
+
+            /* Fog: blend toward fog color based on distance from camera. */
+            if (lp->fog.mode != SDL3D_FOG_NONE)
+            {
+                float dx = wpx - lp->camera_pos.x;
+                float dy = wpy - lp->camera_pos.y;
+                float dz = wpz - lp->camera_pos.z;
+                float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
+                float fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
+                lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
+                lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
+                lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
+            }
+
             sdl3d_color color;
             color.r = sdl3d_color_channel_clamp(lit_r * 255.0f);
             color.g = sdl3d_color_channel_clamp(lit_g * 255.0f);
@@ -1974,6 +1990,82 @@ static bool sdl3d_prepare_triangle_lit(sdl3d_screen_vertex_lit sv0, sdl3d_screen
     out->bounds.max_px_x = max_px_x;
     out->bounds.min_px_y = min_px_y;
     out->bounds.max_px_y = max_px_y;
+    return true;
+}
+
+typedef struct sdl3d_parallel_triangle_lit_job
+{
+    sdl3d_framebuffer *framebuffer;
+    sdl3d_prepared_triangle_lit triangle;
+    const sdl3d_texture2d *texture;
+    const sdl3d_lighting_params *lp;
+    int first_tile_x;
+    int first_tile_y;
+    int tiles_w;
+} sdl3d_parallel_triangle_lit_job;
+
+static void sdl3d_parallel_triangle_lit_job_run_tile(void *userdata, int tile_index)
+{
+    sdl3d_parallel_triangle_lit_job *job = (sdl3d_parallel_triangle_lit_job *)userdata;
+    const int tile_x = job->first_tile_x + (tile_index % job->tiles_w);
+    const int tile_y = job->first_tile_y + (tile_index / job->tiles_w);
+
+    const int tile_min_px_x = sdl3d_max_int(job->triangle.bounds.min_px_x, tile_x * SDL3D_RASTER_TILE_SIZE);
+    const int tile_max_px_x = sdl3d_min_int(job->triangle.bounds.max_px_x, ((tile_x + 1) * SDL3D_RASTER_TILE_SIZE) - 1);
+    const int tile_min_px_y = sdl3d_max_int(job->triangle.bounds.min_px_y, tile_y * SDL3D_RASTER_TILE_SIZE);
+    const int tile_max_px_y = sdl3d_min_int(job->triangle.bounds.max_px_y, ((tile_y + 1) * SDL3D_RASTER_TILE_SIZE) - 1);
+
+    if (tile_min_px_x > tile_max_px_x || tile_min_px_y > tile_max_px_y)
+    {
+        return;
+    }
+
+    sdl3d_rasterize_prepared_triangle_lit_region(job->framebuffer, &job->triangle, job->texture, job->lp, tile_min_px_x,
+                                                 tile_max_px_x, tile_min_px_y, tile_max_px_y);
+}
+
+static bool sdl3d_try_rasterize_prepared_triangle_lit_parallel(sdl3d_framebuffer *framebuffer,
+                                                               const sdl3d_prepared_triangle_lit *triangle,
+                                                               const sdl3d_texture2d *texture,
+                                                               const sdl3d_lighting_params *lp)
+{
+    int first_tile_x, last_tile_x, first_tile_y, last_tile_y;
+    int tiles_w, tiles_h, tile_count;
+    sdl3d_parallel_triangle_lit_job triangle_job;
+    sdl3d_parallel_job job;
+
+    if (framebuffer->parallel_rasterizer == NULL)
+    {
+        return false;
+    }
+
+    first_tile_x = triangle->bounds.min_px_x / SDL3D_RASTER_TILE_SIZE;
+    last_tile_x = triangle->bounds.max_px_x / SDL3D_RASTER_TILE_SIZE;
+    first_tile_y = triangle->bounds.min_px_y / SDL3D_RASTER_TILE_SIZE;
+    last_tile_y = triangle->bounds.max_px_y / SDL3D_RASTER_TILE_SIZE;
+    tiles_w = last_tile_x - first_tile_x + 1;
+    tiles_h = last_tile_y - first_tile_y + 1;
+    tile_count = tiles_w * tiles_h;
+
+    if (tile_count <= 1)
+    {
+        return false;
+    }
+
+    triangle_job.framebuffer = framebuffer;
+    triangle_job.triangle = *triangle;
+    triangle_job.texture = texture;
+    triangle_job.lp = lp;
+    triangle_job.first_tile_x = first_tile_x;
+    triangle_job.first_tile_y = first_tile_y;
+    triangle_job.tiles_w = tiles_w;
+
+    job.run_tile = sdl3d_parallel_triangle_lit_job_run_tile;
+    job.userdata = &triangle_job;
+    job.tile_count = tile_count;
+    SDL_SetAtomicInt(&job.next_tile_index, 0);
+
+    sdl3d_parallel_rasterizer_execute(framebuffer->parallel_rasterizer, &job);
     return true;
 }
 
@@ -2052,10 +2144,14 @@ void sdl3d_rasterize_triangle_lit(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp
         screen[i] = sdl3d_viewport_transform_lit(clip[i], framebuffer->width, framebuffer->height);
     }
 
-    /* Backface culling on the first sub-triangle. */
+    /* Backface culling: positive signed area = CW screen winding = backface. */
     signed_area = sdl3d_edge_function(screen[0].base.x_fx, screen[0].base.y_fx, screen[1].base.x_fx,
                                       screen[1].base.y_fx, screen[2].base.x_fx, screen[2].base.y_fx);
-    if (backface_culling_enabled && signed_area <= 0)
+    if (signed_area == 0)
+    {
+        return;
+    }
+    if (backface_culling_enabled && signed_area >= 0)
     {
         return;
     }
@@ -2095,9 +2191,12 @@ void sdl3d_rasterize_triangle_lit(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp
         {
             continue;
         }
-        sdl3d_rasterize_prepared_triangle_lit_region(framebuffer, &prepared, texture, lighting_params,
-                                                     prepared.bounds.min_px_x, prepared.bounds.max_px_x,
-                                                     prepared.bounds.min_px_y, prepared.bounds.max_px_y);
+        if (!sdl3d_try_rasterize_prepared_triangle_lit_parallel(framebuffer, &prepared, texture, lighting_params))
+        {
+            sdl3d_rasterize_prepared_triangle_lit_region(framebuffer, &prepared, texture, lighting_params,
+                                                         prepared.bounds.min_px_x, prepared.bounds.max_px_x,
+                                                         prepared.bounds.min_px_y, prepared.bounds.max_px_y);
+        }
     }
 }
 

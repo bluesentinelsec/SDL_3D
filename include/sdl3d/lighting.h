@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 
+#include "sdl3d/math.h"
 #include "sdl3d/render_context.h"
 #include "sdl3d/types.h"
 
@@ -10,6 +11,8 @@
 extern "C"
 {
 #endif
+
+    struct sdl3d_mesh;
 
 #define SDL3D_MAX_LIGHTS 8
 
@@ -69,6 +72,73 @@ extern "C"
     bool sdl3d_set_ambient_light(sdl3d_render_context *context, float r, float g, float b);
 
     int sdl3d_get_light_count(const sdl3d_render_context *context);
+
+    /* ============================================================== */
+    /* Fog                                                            */
+    /* ============================================================== */
+
+    typedef enum sdl3d_fog_mode
+    {
+        SDL3D_FOG_NONE = 0,
+        SDL3D_FOG_LINEAR = 1,
+        SDL3D_FOG_EXP = 2,
+        SDL3D_FOG_EXP2 = 3
+    } sdl3d_fog_mode;
+
+    typedef struct sdl3d_fog
+    {
+        sdl3d_fog_mode mode;
+        float color[3];
+        float start;   /* LINEAR: distance where fog begins */
+        float end;     /* LINEAR: distance where fog is fully opaque */
+        float density; /* EXP / EXP2: fog density coefficient */
+    } sdl3d_fog;
+
+    bool sdl3d_set_fog(sdl3d_render_context *context, const sdl3d_fog *fog);
+    bool sdl3d_clear_fog(sdl3d_render_context *context);
+
+    /* ============================================================== */
+    /* Tonemapping                                                    */
+    /* ============================================================== */
+
+    typedef enum sdl3d_tonemap_mode
+    {
+        SDL3D_TONEMAP_NONE = 0,
+        SDL3D_TONEMAP_REINHARD = 1,
+        SDL3D_TONEMAP_ACES = 2
+    } sdl3d_tonemap_mode;
+
+    bool sdl3d_set_tonemap_mode(sdl3d_render_context *context, sdl3d_tonemap_mode mode);
+    sdl3d_tonemap_mode sdl3d_get_tonemap_mode(const sdl3d_render_context *context);
+
+    /* ============================================================== */
+    /* Shadow mapping                                                 */
+    /* ============================================================== */
+
+#define SDL3D_SHADOW_MAP_SIZE 512
+
+    /*
+     * Enable shadow casting for a directional light at the given index.
+     * Allocates a depth-only shadow map and computes the light-space
+     * orthographic projection covering the specified scene bounds.
+     *
+     * `light_index` must refer to a SDL3D_LIGHT_DIRECTIONAL light.
+     * `scene_radius` defines the half-extent of the ortho projection.
+     * `scene_center` is the world-space center the shadow map covers.
+     */
+    bool sdl3d_enable_shadow(sdl3d_render_context *context, int light_index, sdl3d_vec3 scene_center,
+                             float scene_radius);
+
+    bool sdl3d_disable_shadow(sdl3d_render_context *context, int light_index);
+
+    /*
+     * Render shadow maps for all shadow-enabled lights. Call after
+     * adding lights and before drawing lit geometry. Renders the
+     * provided meshes into each shadow map's depth buffer from the
+     * light's point of view.
+     */
+    bool sdl3d_render_shadow_map(sdl3d_render_context *context, const struct sdl3d_mesh *meshes, int mesh_count,
+                                 const sdl3d_mat4 *model_matrices);
 
 #ifdef __cplusplus
 }
