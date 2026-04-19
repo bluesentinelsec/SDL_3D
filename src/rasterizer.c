@@ -1866,134 +1866,148 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
             const float bb = (float)w_ca * tri->inverse_area;
             const float bc = (float)w_ab * tri->inverse_area;
             const float depth = ba * a.base.z + bb * b.base.z + bc * c.base.z;
-            const float iw_px = ba * a.inverse_w + bb * b.inverse_w + bc * c.inverse_w;
-            const float pw = 1.0f / iw_px;
 
-            float u, v, mr, mg, mb, ma;
-
-            if (lp->uv_mode == SDL3D_UV_AFFINE)
+            /* Early depth test: skip all attribute interpolation + PBR
+             * shading for pixels that would fail the depth test anyway. */
             {
-                /* Affine: linear interpolation in screen space (no /w correction). */
-                float aw = a.inverse_w > 0.0f ? 1.0f / a.inverse_w : 1.0f;
-                float bw = b.inverse_w > 0.0f ? 1.0f / b.inverse_w : 1.0f;
-                float cw = c.inverse_w > 0.0f ? 1.0f / c.inverse_w : 1.0f;
-                u = ba * (a.u_over_w * aw) + bb * (b.u_over_w * bw) + bc * (c.u_over_w * cw);
-                v = ba * (a.v_over_w * aw) + bb * (b.v_over_w * bw) + bc * (c.v_over_w * cw);
-            }
-            else
-            {
-                u = (ba * a.u_over_w + bb * b.u_over_w + bc * c.u_over_w) * pw;
-                v = (ba * a.v_over_w + bb * b.v_over_w + bc * c.v_over_w) * pw;
-            }
-
-            mr = (ba * a.mod_r_over_w + bb * b.mod_r_over_w + bc * c.mod_r_over_w) * pw;
-            mg = (ba * a.mod_g_over_w + bb * b.mod_g_over_w + bc * c.mod_g_over_w) * pw;
-            mb = (ba * a.mod_b_over_w + bb * b.mod_b_over_w + bc * c.mod_b_over_w) * pw;
-            ma = (ba * a.mod_a_over_w + bb * b.mod_a_over_w + bc * c.mod_a_over_w) * pw;
-
-            {
-                float tr = 1.0f, tg = 1.0f, tb = 1.0f, ta = 1.0f;
-                float albedo_r, albedo_g, albedo_b, out_a;
-                float nx, ny, nz, n_len, wpx, wpy, wpz;
-                float lit_r, lit_g, lit_b;
-                sdl3d_color color;
-
-                if (texture != NULL)
-                {
-                    sdl3d_texture_sample_rgba(texture, u, v, 0.0f, &tr, &tg, &tb, &ta);
-                }
-
-                albedo_r = tr * mr;
-                albedo_g = tg * mg;
-                albedo_b = tb * mb;
-                out_a = ta * ma;
-                if (out_a <= 0.0f)
+                const int depth_idx = py * framebuffer->width + px;
+                if (depth > framebuffer->depth_pixels[depth_idx])
                 {
                     continue;
                 }
+            }
 
-                nx = (ba * a.nx_over_w + bb * b.nx_over_w + bc * c.nx_over_w) * pw;
-                ny = (ba * a.ny_over_w + bb * b.ny_over_w + bc * c.ny_over_w) * pw;
-                nz = (ba * a.nz_over_w + bb * b.nz_over_w + bc * c.nz_over_w) * pw;
-                n_len = nx * nx + ny * ny + nz * nz;
-                if (n_len > 1e-12f)
+            {
+                const float iw_px = ba * a.inverse_w + bb * b.inverse_w + bc * c.inverse_w;
+                const float pw = 1.0f / iw_px;
+
+                float u, v, mr, mg, mb, ma;
+
+                if (lp->uv_mode == SDL3D_UV_AFFINE)
                 {
-                    float inv = 1.0f / SDL_sqrtf(n_len);
-                    nx *= inv;
-                    ny *= inv;
-                    nz *= inv;
+                    /* Affine: linear interpolation in screen space (no /w correction). */
+                    float aw = a.inverse_w > 0.0f ? 1.0f / a.inverse_w : 1.0f;
+                    float bw = b.inverse_w > 0.0f ? 1.0f / b.inverse_w : 1.0f;
+                    float cw = c.inverse_w > 0.0f ? 1.0f / c.inverse_w : 1.0f;
+                    u = ba * (a.u_over_w * aw) + bb * (b.u_over_w * bw) + bc * (c.u_over_w * cw);
+                    v = ba * (a.v_over_w * aw) + bb * (b.v_over_w * bw) + bc * (c.v_over_w * cw);
                 }
-                wpx = (ba * a.wx_over_w + bb * b.wx_over_w + bc * c.wx_over_w) * pw;
-                wpy = (ba * a.wy_over_w + bb * b.wy_over_w + bc * c.wy_over_w) * pw;
-                wpz = (ba * a.wz_over_w + bb * b.wz_over_w + bc * c.wz_over_w) * pw;
-
-                sdl3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, nx, ny, nz, wpx, wpy, wpz, &lit_r, &lit_g,
-                                         &lit_b);
-
-                sdl3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
-
-                /* Fog: vertex or fragment evaluation. */
-                if (lp->fog.mode != SDL3D_FOG_NONE)
+                else
                 {
-                    float fog_f;
-                    if (lp->fog_eval == SDL3D_FOG_EVAL_VERTEX)
+                    u = (ba * a.u_over_w + bb * b.u_over_w + bc * c.u_over_w) * pw;
+                    v = (ba * a.v_over_w + bb * b.v_over_w + bc * c.v_over_w) * pw;
+                }
+
+                mr = (ba * a.mod_r_over_w + bb * b.mod_r_over_w + bc * c.mod_r_over_w) * pw;
+                mg = (ba * a.mod_g_over_w + bb * b.mod_g_over_w + bc * c.mod_g_over_w) * pw;
+                mb = (ba * a.mod_b_over_w + bb * b.mod_b_over_w + bc * c.mod_b_over_w) * pw;
+                ma = (ba * a.mod_a_over_w + bb * b.mod_a_over_w + bc * c.mod_a_over_w) * pw;
+
+                {
+                    float tr = 1.0f, tg = 1.0f, tb = 1.0f, ta = 1.0f;
+                    float albedo_r, albedo_g, albedo_b, out_a;
+                    float nx, ny, nz, n_len, wpx, wpy, wpz;
+                    float lit_r, lit_g, lit_b;
+                    sdl3d_color color;
+
+                    if (texture != NULL)
                     {
-                        /* Interpolate pre-computed vertex fog factors. */
-                        fog_f = (ba * a.fog_over_w + bb * b.fog_over_w + bc * c.fog_over_w) * pw;
-                        if (fog_f < 0.0f)
+                        sdl3d_texture_sample_rgba(texture, u, v, 0.0f, &tr, &tg, &tb, &ta);
+                    }
+
+                    albedo_r = tr * mr;
+                    albedo_g = tg * mg;
+                    albedo_b = tb * mb;
+                    out_a = ta * ma;
+                    if (out_a <= 0.0f)
+                    {
+                        continue;
+                    }
+
+                    nx = (ba * a.nx_over_w + bb * b.nx_over_w + bc * c.nx_over_w) * pw;
+                    ny = (ba * a.ny_over_w + bb * b.ny_over_w + bc * c.ny_over_w) * pw;
+                    nz = (ba * a.nz_over_w + bb * b.nz_over_w + bc * c.nz_over_w) * pw;
+                    n_len = nx * nx + ny * ny + nz * nz;
+                    if (n_len > 1e-12f)
+                    {
+                        float inv = 1.0f / SDL_sqrtf(n_len);
+                        nx *= inv;
+                        ny *= inv;
+                        nz *= inv;
+                    }
+                    wpx = (ba * a.wx_over_w + bb * b.wx_over_w + bc * c.wx_over_w) * pw;
+                    wpy = (ba * a.wy_over_w + bb * b.wy_over_w + bc * c.wy_over_w) * pw;
+                    wpz = (ba * a.wz_over_w + bb * b.wz_over_w + bc * c.wz_over_w) * pw;
+
+                    sdl3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, nx, ny, nz, wpx, wpy, wpz, &lit_r,
+                                             &lit_g, &lit_b);
+
+                    sdl3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
+
+                    /* Fog: vertex or fragment evaluation. */
+                    if (lp->fog.mode != SDL3D_FOG_NONE)
+                    {
+                        float fog_f;
+                        if (lp->fog_eval == SDL3D_FOG_EVAL_VERTEX)
                         {
-                            fog_f = 0.0f;
+                            /* Interpolate pre-computed vertex fog factors. */
+                            fog_f = (ba * a.fog_over_w + bb * b.fog_over_w + bc * c.fog_over_w) * pw;
+                            if (fog_f < 0.0f)
+                            {
+                                fog_f = 0.0f;
+                            }
+                            if (fog_f > 1.0f)
+                            {
+                                fog_f = 1.0f;
+                            }
                         }
-                        if (fog_f > 1.0f)
+                        else
                         {
-                            fog_f = 1.0f;
+                            float dx = wpx - lp->camera_pos.x;
+                            float dy = wpy - lp->camera_pos.y;
+                            float dz = wpz - lp->camera_pos.z;
+                            float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
+                            fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
+                        }
+                        lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
+                        lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
+                        lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
+                    }
+
+                    /* Color quantization with optional Bayer dithering. */
+                    if (lp->color_quantize && lp->color_depth > 0)
+                    {
+                        static const float bayer4x4[4][4] = {
+                            {0.0f / 16.0f, 8.0f / 16.0f, 2.0f / 16.0f, 10.0f / 16.0f},
+                            {12.0f / 16.0f, 4.0f / 16.0f, 14.0f / 16.0f, 6.0f / 16.0f},
+                            {3.0f / 16.0f, 11.0f / 16.0f, 1.0f / 16.0f, 9.0f / 16.0f},
+                            {15.0f / 16.0f, 7.0f / 16.0f, 13.0f / 16.0f, 5.0f / 16.0f}};
+                        float levels = (float)lp->color_depth;
+                        float step = 1.0f / levels;
+                        float dither = (bayer4x4[py & 3][px & 3] - 0.5f) * step;
+                        lit_r = SDL_floorf((lit_r + dither) * levels + 0.5f) / levels;
+                        lit_g = SDL_floorf((lit_g + dither) * levels + 0.5f) / levels;
+                        lit_b = SDL_floorf((lit_b + dither) * levels + 0.5f) / levels;
+                        if (lit_r < 0.0f)
+                        {
+                            lit_r = 0.0f;
+                        }
+                        if (lit_g < 0.0f)
+                        {
+                            lit_g = 0.0f;
+                        }
+                        if (lit_b < 0.0f)
+                        {
+                            lit_b = 0.0f;
                         }
                     }
-                    else
-                    {
-                        float dx = wpx - lp->camera_pos.x;
-                        float dy = wpy - lp->camera_pos.y;
-                        float dz = wpz - lp->camera_pos.z;
-                        float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
-                        fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
-                    }
-                    lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
-                    lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
-                    lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
-                }
 
-                /* Color quantization with optional Bayer dithering. */
-                if (lp->color_quantize && lp->color_depth > 0)
-                {
-                    static const float bayer4x4[4][4] = {{0.0f / 16.0f, 8.0f / 16.0f, 2.0f / 16.0f, 10.0f / 16.0f},
-                                                         {12.0f / 16.0f, 4.0f / 16.0f, 14.0f / 16.0f, 6.0f / 16.0f},
-                                                         {3.0f / 16.0f, 11.0f / 16.0f, 1.0f / 16.0f, 9.0f / 16.0f},
-                                                         {15.0f / 16.0f, 7.0f / 16.0f, 13.0f / 16.0f, 5.0f / 16.0f}};
-                    float levels = (float)lp->color_depth;
-                    float step = 1.0f / levels;
-                    float dither = (bayer4x4[py & 3][px & 3] - 0.5f) * step;
-                    lit_r = SDL_floorf((lit_r + dither) * levels + 0.5f) / levels;
-                    lit_g = SDL_floorf((lit_g + dither) * levels + 0.5f) / levels;
-                    lit_b = SDL_floorf((lit_b + dither) * levels + 0.5f) / levels;
-                    if (lit_r < 0.0f)
-                    {
-                        lit_r = 0.0f;
-                    }
-                    if (lit_g < 0.0f)
-                    {
-                        lit_g = 0.0f;
-                    }
-                    if (lit_b < 0.0f)
-                    {
-                        lit_b = 0.0f;
-                    }
+                    color.r = sdl3d_color_channel_clamp(lit_r * 255.0f);
+                    color.g = sdl3d_color_channel_clamp(lit_g * 255.0f);
+                    color.b = sdl3d_color_channel_clamp(lit_b * 255.0f);
+                    color.a = sdl3d_color_channel_clamp(out_a * 255.0f);
+                    sdl3d_write_pixel(framebuffer, px, py, depth, color);
                 }
-
-                color.r = sdl3d_color_channel_clamp(lit_r * 255.0f);
-                color.g = sdl3d_color_channel_clamp(lit_g * 255.0f);
-                color.b = sdl3d_color_channel_clamp(lit_b * 255.0f);
-                color.a = sdl3d_color_channel_clamp(out_a * 255.0f);
-                sdl3d_write_pixel(framebuffer, px, py, depth, color);
             }
         }
     }
