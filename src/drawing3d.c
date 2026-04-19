@@ -24,6 +24,19 @@ static float sdl3d_clamp01(float value)
     return value;
 }
 
+static Uint8 sdl3d_color_channel_clamp(float value)
+{
+    if (value <= 0.0f)
+    {
+        return 0;
+    }
+    if (value >= 255.0f)
+    {
+        return 255;
+    }
+    return (Uint8)(value + 0.5f);
+}
+
 static sdl3d_vec4 sdl3d_color_to_modulate(sdl3d_color color)
 {
     sdl3d_vec4 out;
@@ -265,13 +278,88 @@ static sdl3d_vec3 sdl3d_mesh_normal(const sdl3d_mesh *mesh, unsigned int vertex_
     return sdl3d_vec3_make(n[0], n[1], n[2]);
 }
 
+/* Build lighting params from render context state. Material fields
+ * (metallic, roughness, emissive) are set by the caller. */
+static void sdl3d_build_lighting_params(const sdl3d_render_context *context, sdl3d_lighting_params *lp)
+{
+    SDL_zerop(lp);
+    lp->lights = context->lights;
+    lp->light_count = context->light_count;
+    lp->ambient[0] = context->ambient[0];
+    lp->ambient[1] = context->ambient[1];
+    lp->ambient[2] = context->ambient[2];
+    lp->fog = context->fog;
+    lp->tonemap_mode = context->tonemap_mode;
+    lp->shadow_bias = context->shadow_bias;
+    for (int i = 0; i < SDL3D_MAX_LIGHTS; ++i)
+    {
+        lp->shadow_depth[i] = context->shadow_depth[i];
+        lp->shadow_vp[i] = context->shadow_vp[i];
+        lp->shadow_enabled[i] = context->shadow_enabled[i];
+    }
+    {
+        const sdl3d_mat4 v = context->view;
+        lp->camera_pos.x = -(v.m[0] * v.m[12] + v.m[1] * v.m[13] + v.m[2] * v.m[14]);
+        lp->camera_pos.y = -(v.m[4] * v.m[12] + v.m[5] * v.m[13] + v.m[6] * v.m[14]);
+        lp->camera_pos.z = -(v.m[8] * v.m[12] + v.m[9] * v.m[13] + v.m[10] * v.m[14]);
+    }
+}
+
+/* Transform an object-space normal to world space via the model matrix upper-left 3x3. */
+static sdl3d_vec3 sdl3d_transform_normal(sdl3d_mat4 m, sdl3d_vec3 n)
+{
+    sdl3d_vec3 out;
+    out.x = m.m[0] * n.x + m.m[4] * n.y + m.m[8] * n.z;
+    out.y = m.m[1] * n.x + m.m[5] * n.y + m.m[9] * n.z;
+    out.z = m.m[2] * n.x + m.m[6] * n.y + m.m[10] * n.z;
+    return sdl3d_vec3_normalize(out);
+}
+
+/* Transform an object-space position to world space. */
+static sdl3d_vec3 sdl3d_transform_position(sdl3d_mat4 m, sdl3d_vec3 p)
+{
+    sdl3d_vec4 w = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(p, 1.0f));
+    return sdl3d_vec3_make(w.x, w.y, w.z);
+}
+
+/* Evaluate PBR shading at a single point and return the result as an sdl3d_color.
+ * Used by FLAT (once per triangle) and GOURAUD (once per vertex). */
+static sdl3d_color sdl3d_shade_point(const sdl3d_lighting_params *lp, float albedo_r, float albedo_g, float albedo_b,
+                                     float albedo_a, sdl3d_vec3 world_normal, sdl3d_vec3 world_pos)
+{
+    float lit_r, lit_g, lit_b;
+    sdl3d_color c;
+    sdl3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, world_normal.x, world_normal.y, world_normal.z,
+                             world_pos.x, world_pos.y, world_pos.z, &lit_r, &lit_g, &lit_b);
+    sdl3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
+
+    /* Fog. */
+    if (lp->fog.mode != SDL3D_FOG_NONE)
+    {
+        float dx = world_pos.x - lp->camera_pos.x;
+        float dy = world_pos.y - lp->camera_pos.y;
+        float dz = world_pos.z - lp->camera_pos.z;
+        float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
+        float fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
+        lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
+        lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
+        lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
+    }
+
+    c.r = sdl3d_color_channel_clamp(lit_r * 255.0f);
+    c.g = sdl3d_color_channel_clamp(lit_g * 255.0f);
+    c.b = sdl3d_color_channel_clamp(lit_b * 255.0f);
+    c.a = sdl3d_color_channel_clamp(albedo_a * 255.0f);
+    return c;
+}
+
 static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_mesh *mesh,
                                      const sdl3d_texture2d *texture, sdl3d_vec4 base_modulate,
                                      const sdl3d_lighting_params *lighting)
 {
     const bool indexed = mesh->indices != NULL;
     const int triangle_count = indexed ? (mesh->index_count / 3) : (mesh->vertex_count / 3);
-    const bool lit = lighting != NULL && mesh->normals != NULL;
+    const bool lit = lighting != NULL && (context->shading_mode == SDL3D_SHADING_FLAT || mesh->normals != NULL);
     sdl3d_framebuffer framebuffer;
 
     if (!sdl3d_require_mode_3d(context, "sdl3d_draw_mesh"))
@@ -329,37 +417,68 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
             uv2 = sdl3d_mesh_uv(mesh, i2);
         }
 
-        if (lit)
+        if (lit && context->shading_mode == SDL3D_SHADING_FLAT)
         {
-            /* Transform normals by upper-left 3x3 of model matrix. */
-            const sdl3d_mat4 m = context->model;
-            sdl3d_vec3 rn0, rn1, rn2;
-            sdl3d_vec3 on0 = sdl3d_mesh_normal(mesh, i0);
-            sdl3d_vec3 on1 = sdl3d_mesh_normal(mesh, i1);
-            sdl3d_vec3 on2 = sdl3d_mesh_normal(mesh, i2);
-            rn0.x = m.m[0] * on0.x + m.m[4] * on0.y + m.m[8] * on0.z;
-            rn0.y = m.m[1] * on0.x + m.m[5] * on0.y + m.m[9] * on0.z;
-            rn0.z = m.m[2] * on0.x + m.m[6] * on0.y + m.m[10] * on0.z;
-            rn1.x = m.m[0] * on1.x + m.m[4] * on1.y + m.m[8] * on1.z;
-            rn1.y = m.m[1] * on1.x + m.m[5] * on1.y + m.m[9] * on1.z;
-            rn1.z = m.m[2] * on1.x + m.m[6] * on1.y + m.m[10] * on1.z;
-            rn2.x = m.m[0] * on2.x + m.m[4] * on2.y + m.m[8] * on2.z;
-            rn2.y = m.m[1] * on2.x + m.m[5] * on2.y + m.m[9] * on2.z;
-            rn2.z = m.m[2] * on2.x + m.m[6] * on2.y + m.m[10] * on2.z;
-            rn0 = sdl3d_vec3_normalize(rn0);
-            rn1 = sdl3d_vec3_normalize(rn1);
-            rn2 = sdl3d_vec3_normalize(rn2);
-
-            /* Transform positions to world space. */
+            /* FLAT: one PBR eval per triangle using face normal at centroid. */
             sdl3d_vec3 p0 = sdl3d_mesh_position(mesh, i0);
             sdl3d_vec3 p1 = sdl3d_mesh_position(mesh, i1);
             sdl3d_vec3 p2 = sdl3d_mesh_position(mesh, i2);
-            sdl3d_vec4 wp0_4 = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(p0, 1.0f));
-            sdl3d_vec4 wp1_4 = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(p1, 1.0f));
-            sdl3d_vec4 wp2_4 = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(p2, 1.0f));
-            sdl3d_vec3 wp0 = sdl3d_vec3_make(wp0_4.x, wp0_4.y, wp0_4.z);
-            sdl3d_vec3 wp1 = sdl3d_vec3_make(wp1_4.x, wp1_4.y, wp1_4.z);
-            sdl3d_vec3 wp2 = sdl3d_vec3_make(wp2_4.x, wp2_4.y, wp2_4.z);
+            sdl3d_vec3 edge1 = sdl3d_vec3_sub(p1, p0);
+            sdl3d_vec3 edge2 = sdl3d_vec3_sub(p2, p0);
+            sdl3d_vec3 fn = sdl3d_vec3_normalize(sdl3d_vec3_cross(edge1, edge2));
+            sdl3d_vec3 wn = sdl3d_transform_normal(context->model, fn);
+            sdl3d_vec3 wp0 = sdl3d_transform_position(context->model, p0);
+            sdl3d_vec3 wp1 = sdl3d_transform_position(context->model, p1);
+            sdl3d_vec3 wp2 = sdl3d_transform_position(context->model, p2);
+            sdl3d_vec3 centroid = sdl3d_vec3_scale(sdl3d_vec3_add(sdl3d_vec3_add(wp0, wp1), wp2), 1.0f / 3.0f);
+            sdl3d_vec4 mod0 = sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate);
+            sdl3d_color flat_color = sdl3d_shade_point(lighting, mod0.x, mod0.y, mod0.z, mod0.w, wn, centroid);
+            sdl3d_rasterize_triangle(&framebuffer, context->model_view_projection, p0, p1, p2, flat_color,
+                                     context->backface_culling_enabled, context->wireframe_enabled);
+        }
+        else if (lit && context->shading_mode == SDL3D_SHADING_GOURAUD)
+        {
+            /* GOURAUD: PBR eval at each vertex, interpolate colors. */
+            sdl3d_vec3 p0 = sdl3d_mesh_position(mesh, i0);
+            sdl3d_vec3 p1 = sdl3d_mesh_position(mesh, i1);
+            sdl3d_vec3 p2 = sdl3d_mesh_position(mesh, i2);
+            sdl3d_vec3 wn0, wn1, wn2;
+            if (mesh->normals != NULL)
+            {
+                wn0 = sdl3d_transform_normal(context->model, sdl3d_mesh_normal(mesh, i0));
+                wn1 = sdl3d_transform_normal(context->model, sdl3d_mesh_normal(mesh, i1));
+                wn2 = sdl3d_transform_normal(context->model, sdl3d_mesh_normal(mesh, i2));
+            }
+            else
+            {
+                sdl3d_vec3 fn = sdl3d_vec3_normalize(sdl3d_vec3_cross(sdl3d_vec3_sub(p1, p0), sdl3d_vec3_sub(p2, p0)));
+                wn0 = wn1 = wn2 = sdl3d_transform_normal(context->model, fn);
+            }
+            sdl3d_vec3 wp0 = sdl3d_transform_position(context->model, p0);
+            sdl3d_vec3 wp1 = sdl3d_transform_position(context->model, p1);
+            sdl3d_vec3 wp2 = sdl3d_transform_position(context->model, p2);
+            sdl3d_vec4 mod0 = sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate);
+            sdl3d_vec4 mod1 = sdl3d_mesh_vertex_modulate(mesh, i1, base_modulate);
+            sdl3d_vec4 mod2 = sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate);
+            sdl3d_color c0 = sdl3d_shade_point(lighting, mod0.x, mod0.y, mod0.z, mod0.w, wn0, wp0);
+            sdl3d_color c1 = sdl3d_shade_point(lighting, mod1.x, mod1.y, mod1.z, mod1.w, wn1, wp1);
+            sdl3d_color c2 = sdl3d_shade_point(lighting, mod2.x, mod2.y, mod2.z, mod2.w, wn2, wp2);
+            sdl3d_rasterize_triangle_colored(&framebuffer, context->model_view_projection, p0, p1, p2, c0, c1, c2,
+                                             context->backface_culling_enabled, context->wireframe_enabled);
+        }
+        else if (lit)
+        {
+            /* PHONG: per-fragment PBR with interpolated normals. */
+            const sdl3d_mat4 m = context->model;
+            sdl3d_vec3 rn0 = sdl3d_transform_normal(m, sdl3d_mesh_normal(mesh, i0));
+            sdl3d_vec3 rn1 = sdl3d_transform_normal(m, sdl3d_mesh_normal(mesh, i1));
+            sdl3d_vec3 rn2 = sdl3d_transform_normal(m, sdl3d_mesh_normal(mesh, i2));
+            sdl3d_vec3 p0 = sdl3d_mesh_position(mesh, i0);
+            sdl3d_vec3 p1 = sdl3d_mesh_position(mesh, i1);
+            sdl3d_vec3 p2 = sdl3d_mesh_position(mesh, i2);
+            sdl3d_vec3 wp0 = sdl3d_transform_position(m, p0);
+            sdl3d_vec3 wp1 = sdl3d_transform_position(m, p1);
+            sdl3d_vec3 wp2 = sdl3d_transform_position(m, p2);
 
             sdl3d_rasterize_triangle_lit(&framebuffer, context->model_view_projection, p0, p1, p2, uv0, uv1, uv2, rn0,
                                          rn1, rn2, wp0, wp1, wp2, sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate),
@@ -468,6 +587,7 @@ bool sdl3d_draw_triangle_3d(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_
                             sdl3d_color color)
 {
     sdl3d_framebuffer framebuffer;
+    sdl3d_shading_mode mode;
 
     if (!sdl3d_require_mode_3d(context, "sdl3d_draw_triangle_3d"))
     {
@@ -475,59 +595,47 @@ bool sdl3d_draw_triangle_3d(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_
     }
 
     framebuffer = sdl3d_framebuffer_from_context(context);
+    mode = context->shading_mode;
 
-    if (context->lighting_enabled && context->light_count > 0)
+    if (mode != SDL3D_SHADING_UNLIT && context->light_count > 0)
     {
-        /* Compute flat face normal from the triangle edges. */
         sdl3d_vec3 edge1 = sdl3d_vec3_sub(v1, v0);
         sdl3d_vec3 edge2 = sdl3d_vec3_sub(v2, v0);
         sdl3d_vec3 face_normal = sdl3d_vec3_normalize(sdl3d_vec3_cross(edge1, edge2));
-
-        /* Transform normal by upper-left 3x3 of model matrix. */
-        const sdl3d_mat4 m = context->model;
-        sdl3d_vec3 wn;
-        wn.x = m.m[0] * face_normal.x + m.m[4] * face_normal.y + m.m[8] * face_normal.z;
-        wn.y = m.m[1] * face_normal.x + m.m[5] * face_normal.y + m.m[9] * face_normal.z;
-        wn.z = m.m[2] * face_normal.x + m.m[6] * face_normal.y + m.m[10] * face_normal.z;
-        wn = sdl3d_vec3_normalize(wn);
-
-        /* Transform positions to world space. */
-        sdl3d_vec4 w0 = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(v0, 1.0f));
-        sdl3d_vec4 w1 = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(v1, 1.0f));
-        sdl3d_vec4 w2 = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(v2, 1.0f));
-
-        /* Build lighting params. */
-        sdl3d_lighting_params lp;
-        SDL_zerop(&lp);
-        lp.lights = context->lights;
-        lp.light_count = context->light_count;
-        lp.ambient[0] = context->ambient[0];
-        lp.ambient[1] = context->ambient[1];
-        lp.ambient[2] = context->ambient[2];
-        lp.roughness = 1.0f;
-        lp.fog = context->fog;
-        lp.tonemap_mode = context->tonemap_mode;
-        lp.shadow_bias = context->shadow_bias;
-        for (int i = 0; i < SDL3D_MAX_LIGHTS; ++i)
-        {
-            lp.shadow_depth[i] = context->shadow_depth[i];
-            lp.shadow_vp[i] = context->shadow_vp[i];
-            lp.shadow_enabled[i] = context->shadow_enabled[i];
-        }
-        {
-            const sdl3d_mat4 v = context->view;
-            lp.camera_pos.x = -(v.m[0] * v.m[12] + v.m[1] * v.m[13] + v.m[2] * v.m[14]);
-            lp.camera_pos.y = -(v.m[4] * v.m[12] + v.m[5] * v.m[13] + v.m[6] * v.m[14]);
-            lp.camera_pos.z = -(v.m[8] * v.m[12] + v.m[9] * v.m[13] + v.m[10] * v.m[14]);
-        }
-
+        sdl3d_vec3 wn = sdl3d_transform_normal(context->model, face_normal);
+        sdl3d_vec3 wp0 = sdl3d_transform_position(context->model, v0);
+        sdl3d_vec3 wp1 = sdl3d_transform_position(context->model, v1);
+        sdl3d_vec3 wp2 = sdl3d_transform_position(context->model, v2);
         sdl3d_vec4 modulate = sdl3d_color_to_modulate(color);
-        sdl3d_vec2 uv0 = {0.0f, 0.0f};
 
-        sdl3d_rasterize_triangle_lit(&framebuffer, context->model_view_projection, v0, v1, v2, uv0, uv0, uv0, wn, wn,
-                                     wn, sdl3d_vec3_make(w0.x, w0.y, w0.z), sdl3d_vec3_make(w1.x, w1.y, w1.z),
-                                     sdl3d_vec3_make(w2.x, w2.y, w2.z), modulate, modulate, modulate, NULL, &lp,
+        sdl3d_lighting_params lp;
+        sdl3d_build_lighting_params(context, &lp);
+        lp.roughness = 1.0f;
+
+        if (mode == SDL3D_SHADING_FLAT)
+        {
+            /* One PBR eval at centroid with face normal. */
+            sdl3d_vec3 centroid = sdl3d_vec3_scale(sdl3d_vec3_add(sdl3d_vec3_add(wp0, wp1), wp2), 1.0f / 3.0f);
+            sdl3d_color lit = sdl3d_shade_point(&lp, modulate.x, modulate.y, modulate.z, modulate.w, wn, centroid);
+            sdl3d_rasterize_triangle(&framebuffer, context->model_view_projection, v0, v1, v2, lit,
                                      context->backface_culling_enabled, context->wireframe_enabled);
+        }
+        else if (mode == SDL3D_SHADING_GOURAUD)
+        {
+            /* PBR eval at each vertex, interpolate colors. */
+            sdl3d_color c0 = sdl3d_shade_point(&lp, modulate.x, modulate.y, modulate.z, modulate.w, wn, wp0);
+            sdl3d_color c1 = sdl3d_shade_point(&lp, modulate.x, modulate.y, modulate.z, modulate.w, wn, wp1);
+            sdl3d_color c2 = sdl3d_shade_point(&lp, modulate.x, modulate.y, modulate.z, modulate.w, wn, wp2);
+            sdl3d_rasterize_triangle_colored(&framebuffer, context->model_view_projection, v0, v1, v2, c0, c1, c2,
+                                             context->backface_culling_enabled, context->wireframe_enabled);
+        }
+        else /* SDL3D_SHADING_PHONG */
+        {
+            sdl3d_vec2 uv0 = {0.0f, 0.0f};
+            sdl3d_rasterize_triangle_lit(&framebuffer, context->model_view_projection, v0, v1, v2, uv0, uv0, uv0, wn,
+                                         wn, wn, wp0, wp1, wp2, modulate, modulate, modulate, NULL, &lp,
+                                         context->backface_culling_enabled, context->wireframe_enabled);
+        }
     }
     else
     {
@@ -666,7 +774,7 @@ bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model
             sdl3d_lighting_params lp_storage;
             const sdl3d_lighting_params *lp_ptr = NULL;
 
-            if (context->lighting_enabled && context->light_count > 0)
+            if (context->shading_mode != SDL3D_SHADING_UNLIT && context->light_count > 0)
             {
                 lp_storage.lights = context->lights;
                 lp_storage.light_count = context->light_count;

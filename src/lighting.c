@@ -45,7 +45,7 @@ bool sdl3d_set_lighting_enabled(sdl3d_render_context *context, bool enabled)
         return SDL_InvalidParamError("context");
     }
 
-    context->lighting_enabled = enabled;
+    context->shading_mode = enabled ? SDL3D_SHADING_PHONG : SDL3D_SHADING_UNLIT;
     return true;
 }
 
@@ -55,7 +55,26 @@ bool sdl3d_is_lighting_enabled(const sdl3d_render_context *context)
     {
         return false;
     }
-    return context->lighting_enabled;
+    return context->shading_mode != SDL3D_SHADING_UNLIT;
+}
+
+bool sdl3d_set_shading_mode(sdl3d_render_context *context, sdl3d_shading_mode mode)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    context->shading_mode = mode;
+    return true;
+}
+
+sdl3d_shading_mode sdl3d_get_shading_mode(const sdl3d_render_context *context)
+{
+    if (context == NULL)
+    {
+        return SDL3D_SHADING_UNLIT;
+    }
+    return context->shading_mode;
 }
 
 bool sdl3d_set_ambient_light(sdl3d_render_context *context, float r, float g, float b)

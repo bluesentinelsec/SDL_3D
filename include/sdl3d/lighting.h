@@ -16,6 +16,21 @@ extern "C"
 
 #define SDL3D_MAX_LIGHTS 8
 
+    /* ============================================================== */
+    /* Shading modes                                                  */
+    /* ============================================================== */
+
+    typedef enum sdl3d_shading_mode
+    {
+        SDL3D_SHADING_UNLIT = 0,   /* texture × tint, no lighting */
+        SDL3D_SHADING_FLAT = 1,    /* one PBR eval per triangle (face normal) */
+        SDL3D_SHADING_GOURAUD = 2, /* PBR eval at vertices, interpolate color */
+        SDL3D_SHADING_PHONG = 3    /* interpolate normals, PBR per pixel */
+    } sdl3d_shading_mode;
+
+    bool sdl3d_set_shading_mode(sdl3d_render_context *context, sdl3d_shading_mode mode);
+    sdl3d_shading_mode sdl3d_get_shading_mode(const sdl3d_render_context *context);
+
     typedef enum sdl3d_light_type
     {
         SDL3D_LIGHT_DIRECTIONAL = 0,
@@ -55,12 +70,8 @@ extern "C"
     bool sdl3d_clear_lights(sdl3d_render_context *context);
 
     /*
-     * Enable or disable lighting. When disabled, DrawModel/DrawMesh
-     * use the existing unlit path (texture × tint). When enabled,
-     * per-fragment PBR shading is applied using the active lights
-     * and the mesh's material properties.
-     *
-     * Lighting is disabled by default.
+     * Convenience wrapper: enabled=true sets PHONG, enabled=false sets UNLIT.
+     * Prefer sdl3d_set_shading_mode for finer control.
      */
     bool sdl3d_set_lighting_enabled(sdl3d_render_context *context, bool enabled);
 

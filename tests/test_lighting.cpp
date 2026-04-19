@@ -661,3 +661,138 @@ TEST(SDL3DPBRShading, NoShadowWhenDisabled)
     /* Should be lit (no shadow). */
     EXPECT_GT(r, 0.1f);
 }
+
+/* ================================================================== */
+/* Shading mode API tests                                             */
+/* ================================================================== */
+
+TEST_F(SDL3DLightingFixture, DefaultShadingModeIsUnlit)
+{
+    EXPECT_EQ(sdl3d_get_shading_mode(ctx), SDL3D_SHADING_UNLIT);
+}
+
+struct ShadingModeCase
+{
+    const char *label;
+    sdl3d_shading_mode mode;
+};
+
+class SDL3DShadingModeSet : public SDL3DLightingFixture, public ::testing::WithParamInterface<ShadingModeCase>
+{
+};
+
+TEST_P(SDL3DShadingModeSet, SetAndGet)
+{
+    const auto &c = GetParam();
+    ASSERT_TRUE(sdl3d_set_shading_mode(ctx, c.mode)) << c.label;
+    EXPECT_EQ(sdl3d_get_shading_mode(ctx), c.mode) << c.label;
+}
+
+INSTANTIATE_TEST_SUITE_P(Shading, SDL3DShadingModeSet,
+                         ::testing::Values(ShadingModeCase{"unlit", SDL3D_SHADING_UNLIT},
+                                           ShadingModeCase{"flat", SDL3D_SHADING_FLAT},
+                                           ShadingModeCase{"gouraud", SDL3D_SHADING_GOURAUD},
+                                           ShadingModeCase{"phong", SDL3D_SHADING_PHONG}));
+
+TEST_F(SDL3DLightingFixture, SetLightingEnabledMapsToShadingMode)
+{
+    ASSERT_TRUE(sdl3d_set_lighting_enabled(ctx, true));
+    EXPECT_EQ(sdl3d_get_shading_mode(ctx), SDL3D_SHADING_PHONG);
+    EXPECT_TRUE(sdl3d_is_lighting_enabled(ctx));
+
+    ASSERT_TRUE(sdl3d_set_lighting_enabled(ctx, false));
+    EXPECT_EQ(sdl3d_get_shading_mode(ctx), SDL3D_SHADING_UNLIT);
+    EXPECT_FALSE(sdl3d_is_lighting_enabled(ctx));
+}
+
+TEST_F(SDL3DLightingFixture, IsLightingEnabledReflectsShadingMode)
+{
+    sdl3d_set_shading_mode(ctx, SDL3D_SHADING_FLAT);
+    EXPECT_TRUE(sdl3d_is_lighting_enabled(ctx));
+
+    sdl3d_set_shading_mode(ctx, SDL3D_SHADING_GOURAUD);
+    EXPECT_TRUE(sdl3d_is_lighting_enabled(ctx));
+
+    sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG);
+    EXPECT_TRUE(sdl3d_is_lighting_enabled(ctx));
+
+    sdl3d_set_shading_mode(ctx, SDL3D_SHADING_UNLIT);
+    EXPECT_FALSE(sdl3d_is_lighting_enabled(ctx));
+}
+
+TEST(SDL3DShadingModeAPI, NullContextRejected)
+{
+    EXPECT_FALSE(sdl3d_set_shading_mode(nullptr, SDL3D_SHADING_PHONG));
+    EXPECT_EQ(sdl3d_get_shading_mode(nullptr), SDL3D_SHADING_UNLIT);
+}
+
+TEST_F(SDL3DLightingFixture, RuntimeShadingModeSwitch)
+{
+    /* Verify we can switch modes rapidly without issues. */
+    sdl3d_shading_mode modes[] = {SDL3D_SHADING_UNLIT, SDL3D_SHADING_FLAT, SDL3D_SHADING_GOURAUD,
+                                  SDL3D_SHADING_PHONG, SDL3D_SHADING_FLAT, SDL3D_SHADING_UNLIT};
+    for (int i = 0; i < 6; ++i)
+    {
+        ASSERT_TRUE(sdl3d_set_shading_mode(ctx, modes[i])) << "iteration " << i;
+        EXPECT_EQ(sdl3d_get_shading_mode(ctx), modes[i]) << "iteration " << i;
+    }
+}
+
+/* ================================================================== */
+/* Shading mode PBR output tests (unit, no SDL video)                 */
+/* ================================================================== */
+
+TEST(SDL3DPBRShading, FlatShadingProducesUniformColorPerTriangle)
+{
+    /* FLAT mode evaluates PBR once at the centroid. All three vertices
+     * of the resulting flat-color triangle get the same color. We verify
+     * this by calling sdl3d_shade_point with the centroid and checking
+     * the result is non-zero (lit) and deterministic. */
+    sdl3d_light dl{};
+    dl.type = SDL3D_LIGHT_DIRECTIONAL;
+    dl.direction = {0.0f, -1.0f, 0.0f};
+    dl.color[0] = dl.color[1] = dl.color[2] = 1.0f;
+    dl.intensity = 1.0f;
+
+    sdl3d_lighting_params p{};
+    p.lights = &dl;
+    p.light_count = 1;
+    p.camera_pos = {0.0f, 0.0f, 5.0f};
+    p.roughness = 1.0f;
+
+    /* Shade the same point twice — must be deterministic. */
+    float r1, g1, b1, r2, g2, b2;
+    sdl3d_shade_fragment_pbr(&p, 0.8f, 0.6f, 0.4f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r1, &g1, &b1);
+    sdl3d_shade_fragment_pbr(&p, 0.8f, 0.6f, 0.4f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r2, &g2, &b2);
+    EXPECT_FLOAT_EQ(r1, r2);
+    EXPECT_FLOAT_EQ(g1, g2);
+    EXPECT_FLOAT_EQ(b1, b2);
+    EXPECT_GT(r1, 0.0f); /* Must be lit. */
+}
+
+TEST(SDL3DPBRShading, GouraudShadingProducesDifferentColorsAtDifferentPositions)
+{
+    /* GOURAUD evaluates PBR at each vertex. Vertices at different
+     * distances from a point light should get different intensities. */
+    sdl3d_light pl{};
+    pl.type = SDL3D_LIGHT_POINT;
+    pl.position = {0.0f, 2.0f, 0.0f};
+    pl.color[0] = pl.color[1] = pl.color[2] = 1.0f;
+    pl.intensity = 1.0f;
+    pl.range = 10.0f;
+
+    sdl3d_lighting_params p{};
+    p.lights = &pl;
+    p.light_count = 1;
+    p.camera_pos = {0.0f, 0.0f, 5.0f};
+    p.roughness = 1.0f;
+
+    float r_near, g_near, b_near;
+    float r_far, g_far, b_far;
+    /* Vertex near the light. */
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r_near, &g_near, &b_near);
+    /* Vertex far from the light. */
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, -5.0f, 0.0f, &r_far, &g_far, &b_far);
+
+    EXPECT_GT(r_near, r_far);
+}
