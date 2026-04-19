@@ -16,6 +16,12 @@ struct sdl3d_actor
     bool visible;
     sdl3d_actor *next;
     sdl3d_actor *prev;
+
+    /* Animation playback state. */
+    int anim_clip;
+    float anim_time;
+    bool anim_playing;
+    bool anim_looping;
 };
 
 struct sdl3d_scene
@@ -83,6 +89,10 @@ sdl3d_actor *sdl3d_scene_add_actor(sdl3d_scene *scene, const sdl3d_model *model)
     actor->tint.b = 255;
     actor->tint.a = 255;
     actor->visible = true;
+    actor->anim_clip = -1;
+    actor->anim_time = 0.0f;
+    actor->anim_playing = false;
+    actor->anim_looping = false;
 
     /* Prepend to linked list. */
     actor->next = scene->first;
@@ -251,4 +261,60 @@ bool sdl3d_draw_scene(sdl3d_render_context *context, const sdl3d_scene *scene)
     }
 
     return true;
+}
+
+/* ------------------------------------------------------------------ */
+/* Animation state accessors (called from animation.c)                 */
+/* ------------------------------------------------------------------ */
+
+void sdl3d_actor_set_anim_state(sdl3d_actor *actor, int clip, float time, bool playing, bool looping)
+{
+    if (actor == NULL)
+    {
+        return;
+    }
+    actor->anim_clip = clip;
+    actor->anim_time = time;
+    actor->anim_playing = playing;
+    actor->anim_looping = looping;
+}
+
+void sdl3d_actor_get_anim_state(const sdl3d_actor *actor, int *clip, float *time, bool *playing, bool *looping)
+{
+    if (actor == NULL)
+    {
+        if (clip)
+        {
+            *clip = -1;
+        }
+        if (time)
+        {
+            *time = 0.0f;
+        }
+        if (playing)
+        {
+            *playing = false;
+        }
+        if (looping)
+        {
+            *looping = false;
+        }
+        return;
+    }
+    if (clip)
+    {
+        *clip = actor->anim_clip;
+    }
+    if (time)
+    {
+        *time = actor->anim_time;
+    }
+    if (playing)
+    {
+        *playing = actor->anim_playing;
+    }
+    if (looping)
+    {
+        *looping = actor->anim_looping;
+    }
 }
