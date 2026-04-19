@@ -81,6 +81,7 @@ set(SDL3D_TEST_SOURCES
     test_texture.cpp
     test_textured_rendering.cpp
     test_lighting.cpp
+    test_scene.cpp
 )
 
 # Tests that read filesystem fixtures via SDL3D_TEST_ASSETS_DIR are desktop-only.
@@ -158,6 +159,7 @@ else()
     sdl3d_add_test(sdl3d_textured_rendering_test test_textured_rendering.cpp render)
     sdl3d_add_test(sdl3d_lighting_test test_lighting.cpp render)
     target_include_directories(sdl3d_lighting_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    sdl3d_add_test(sdl3d_scene_test test_scene.cpp unit)
 
     if(NOT EMSCRIPTEN)
         sdl3d_add_test(sdl3d_image_test test_image.cpp unit)
