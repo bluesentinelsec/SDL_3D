@@ -278,6 +278,48 @@ static sdl3d_vec3 sdl3d_mesh_normal(const sdl3d_mesh *mesh, unsigned int vertex_
     return sdl3d_vec3_make(n[0], n[1], n[2]);
 }
 
+/* Apply vertex skinning: transform a position or normal by the weighted
+ * sum of up to 4 joint matrices. */
+static sdl3d_vec3 sdl3d_skin_position(const sdl3d_mesh *mesh, unsigned int vi, const sdl3d_mat4 *joint_matrices,
+                                      sdl3d_vec3 pos)
+{
+    const unsigned short *ji = &mesh->joint_indices[vi * 4];
+    const float *jw = &mesh->joint_weights[vi * 4];
+    float rx = 0, ry = 0, rz = 0;
+    for (int i = 0; i < 4; ++i)
+    {
+        if (jw[i] <= 0.0f)
+        {
+            continue;
+        }
+        sdl3d_vec4 tp = sdl3d_mat4_transform_vec4(joint_matrices[ji[i]], sdl3d_vec4_from_vec3(pos, 1.0f));
+        rx += tp.x * jw[i];
+        ry += tp.y * jw[i];
+        rz += tp.z * jw[i];
+    }
+    return sdl3d_vec3_make(rx, ry, rz);
+}
+
+static sdl3d_vec3 sdl3d_skin_normal(const sdl3d_mesh *mesh, unsigned int vi, const sdl3d_mat4 *joint_matrices,
+                                    sdl3d_vec3 n)
+{
+    const unsigned short *ji = &mesh->joint_indices[vi * 4];
+    const float *jw = &mesh->joint_weights[vi * 4];
+    float rx = 0, ry = 0, rz = 0;
+    for (int i = 0; i < 4; ++i)
+    {
+        if (jw[i] <= 0.0f)
+        {
+            continue;
+        }
+        const sdl3d_mat4 *m = &joint_matrices[ji[i]];
+        rx += (m->m[0] * n.x + m->m[4] * n.y + m->m[8] * n.z) * jw[i];
+        ry += (m->m[1] * n.x + m->m[5] * n.y + m->m[9] * n.z) * jw[i];
+        rz += (m->m[2] * n.x + m->m[6] * n.y + m->m[10] * n.z) * jw[i];
+    }
+    return sdl3d_vec3_normalize(sdl3d_vec3_make(rx, ry, rz));
+}
+
 /* Build lighting params from render context state. Material fields
  * (metallic, roughness, emissive) are set by the caller. */
 static void sdl3d_build_lighting_params(const sdl3d_render_context *context, sdl3d_lighting_params *lp)
@@ -361,12 +403,21 @@ static sdl3d_color sdl3d_shade_point(const sdl3d_lighting_params *lp, float albe
 
 static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_mesh *mesh,
                                      const sdl3d_texture2d *texture, sdl3d_vec4 base_modulate,
-                                     const sdl3d_lighting_params *lighting)
+                                     const sdl3d_lighting_params *lighting, const sdl3d_mat4 *joint_matrices)
 {
     const bool indexed = mesh->indices != NULL;
     const int triangle_count = indexed ? (mesh->index_count / 3) : (mesh->vertex_count / 3);
     const bool lit = lighting != NULL && (context->shading_mode == SDL3D_SHADING_FLAT || mesh->normals != NULL);
+    const bool skinned = joint_matrices != NULL && mesh->joint_indices != NULL && mesh->joint_weights != NULL;
     sdl3d_framebuffer framebuffer;
+
+/* Macro to read a position with optional skinning applied. */
+#define SKIN_POS(idx)                                                                                                  \
+    (skinned ? sdl3d_skin_position(mesh, (idx), joint_matrices, sdl3d_mesh_position(mesh, (idx)))                      \
+             : sdl3d_mesh_position(mesh, (idx)))
+#define SKIN_NORM(idx)                                                                                                 \
+    (skinned ? sdl3d_skin_normal(mesh, (idx), joint_matrices, sdl3d_mesh_normal(mesh, (idx)))                          \
+             : sdl3d_mesh_normal(mesh, (idx)))
 
     if (!sdl3d_require_mode_3d(context, "sdl3d_draw_mesh"))
     {
@@ -426,9 +477,9 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         if (lit && context->shading_mode == SDL3D_SHADING_FLAT)
         {
             /* FLAT: one PBR eval per triangle using face normal at centroid. */
-            sdl3d_vec3 p0 = sdl3d_mesh_position(mesh, i0);
-            sdl3d_vec3 p1 = sdl3d_mesh_position(mesh, i1);
-            sdl3d_vec3 p2 = sdl3d_mesh_position(mesh, i2);
+            sdl3d_vec3 p0 = SKIN_POS(i0);
+            sdl3d_vec3 p1 = SKIN_POS(i1);
+            sdl3d_vec3 p2 = SKIN_POS(i2);
             sdl3d_vec3 edge1 = sdl3d_vec3_sub(p1, p0);
             sdl3d_vec3 edge2 = sdl3d_vec3_sub(p2, p0);
             sdl3d_vec3 fn = sdl3d_vec3_normalize(sdl3d_vec3_cross(edge1, edge2));
@@ -445,15 +496,15 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         else if (lit && context->shading_mode == SDL3D_SHADING_GOURAUD)
         {
             /* GOURAUD: PBR eval at each vertex, interpolate colors. */
-            sdl3d_vec3 p0 = sdl3d_mesh_position(mesh, i0);
-            sdl3d_vec3 p1 = sdl3d_mesh_position(mesh, i1);
-            sdl3d_vec3 p2 = sdl3d_mesh_position(mesh, i2);
+            sdl3d_vec3 p0 = SKIN_POS(i0);
+            sdl3d_vec3 p1 = SKIN_POS(i1);
+            sdl3d_vec3 p2 = SKIN_POS(i2);
             sdl3d_vec3 wn0, wn1, wn2;
             if (mesh->normals != NULL)
             {
-                wn0 = sdl3d_transform_normal(context->model, sdl3d_mesh_normal(mesh, i0));
-                wn1 = sdl3d_transform_normal(context->model, sdl3d_mesh_normal(mesh, i1));
-                wn2 = sdl3d_transform_normal(context->model, sdl3d_mesh_normal(mesh, i2));
+                wn0 = sdl3d_transform_normal(context->model, SKIN_NORM(i0));
+                wn1 = sdl3d_transform_normal(context->model, SKIN_NORM(i1));
+                wn2 = sdl3d_transform_normal(context->model, SKIN_NORM(i2));
             }
             else
             {
@@ -476,12 +527,12 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         {
             /* PHONG: per-fragment PBR with interpolated normals. */
             const sdl3d_mat4 m = context->model;
-            sdl3d_vec3 rn0 = sdl3d_transform_normal(m, sdl3d_mesh_normal(mesh, i0));
-            sdl3d_vec3 rn1 = sdl3d_transform_normal(m, sdl3d_mesh_normal(mesh, i1));
-            sdl3d_vec3 rn2 = sdl3d_transform_normal(m, sdl3d_mesh_normal(mesh, i2));
-            sdl3d_vec3 p0 = sdl3d_mesh_position(mesh, i0);
-            sdl3d_vec3 p1 = sdl3d_mesh_position(mesh, i1);
-            sdl3d_vec3 p2 = sdl3d_mesh_position(mesh, i2);
+            sdl3d_vec3 rn0 = sdl3d_transform_normal(m, SKIN_NORM(i0));
+            sdl3d_vec3 rn1 = sdl3d_transform_normal(m, SKIN_NORM(i1));
+            sdl3d_vec3 rn2 = sdl3d_transform_normal(m, SKIN_NORM(i2));
+            sdl3d_vec3 p0 = SKIN_POS(i0);
+            sdl3d_vec3 p1 = SKIN_POS(i1);
+            sdl3d_vec3 p2 = SKIN_POS(i2);
             sdl3d_vec3 wp0 = sdl3d_transform_position(m, p0);
             sdl3d_vec3 wp1 = sdl3d_transform_position(m, p1);
             sdl3d_vec3 wp2 = sdl3d_transform_position(m, p2);
@@ -494,9 +545,8 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         }
         else
         {
-            sdl3d_rasterize_triangle_textured(&framebuffer, context->model_view_projection,
-                                              sdl3d_mesh_position(mesh, i0), sdl3d_mesh_position(mesh, i1),
-                                              sdl3d_mesh_position(mesh, i2), uv0, uv1, uv2,
+            sdl3d_rasterize_triangle_textured(&framebuffer, context->model_view_projection, SKIN_POS(i0), SKIN_POS(i1),
+                                              SKIN_POS(i2), uv0, uv1, uv2,
                                               sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate),
                                               sdl3d_mesh_vertex_modulate(mesh, i1, base_modulate),
                                               sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate), texture,
@@ -504,6 +554,8 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         }
     }
 
+#undef SKIN_POS
+#undef SKIN_NORM
     return true;
 }
 
@@ -693,7 +745,7 @@ bool sdl3d_draw_point_3d(sdl3d_render_context *context, sdl3d_vec3 position, sdl
 bool sdl3d_draw_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, const sdl3d_texture2d *texture,
                      sdl3d_color tint)
 {
-    return sdl3d_draw_mesh_internal(context, mesh, texture, sdl3d_color_to_modulate(tint), NULL);
+    return sdl3d_draw_mesh_internal(context, mesh, texture, sdl3d_color_to_modulate(tint), NULL, NULL);
 }
 
 bool sdl3d_draw_model(sdl3d_render_context *context, const sdl3d_model *model, sdl3d_vec3 position, float scale,
@@ -833,7 +885,7 @@ bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model
                 lp_ptr = &lp_storage;
             }
 
-            ok = sdl3d_draw_mesh_internal(context, mesh, texture, mesh_modulate, lp_ptr);
+            ok = sdl3d_draw_mesh_internal(context, mesh, texture, mesh_modulate, lp_ptr, NULL);
         }
     }
 

@@ -13,6 +13,8 @@
 
 #include <cgltf.h>
 
+#include "sdl3d/animation.h"
+
 #include "model_internal.h"
 
 /* ------------------------------------------------------------------ */
@@ -122,6 +124,8 @@ static bool sdl3d_gltf_convert_primitive(const cgltf_data *data, const cgltf_pri
     const cgltf_accessor *norm_accessor = NULL;
     const cgltf_accessor *uv_accessor = NULL;
     const cgltf_accessor *color_accessor = NULL;
+    const cgltf_accessor *joints_accessor = NULL;
+    const cgltf_accessor *weights_accessor = NULL;
     int vertex_count = 0;
 
     SDL_zerop(dst);
@@ -162,6 +166,18 @@ static bool sdl3d_gltf_convert_primitive(const cgltf_data *data, const cgltf_pri
             if (attr->index == 0)
             {
                 color_accessor = attr->data;
+            }
+            break;
+        case cgltf_attribute_type_joints:
+            if (attr->index == 0)
+            {
+                joints_accessor = attr->data;
+            }
+            break;
+        case cgltf_attribute_type_weights:
+            if (attr->index == 0)
+            {
+                weights_accessor = attr->data;
             }
             break;
         default:
@@ -254,6 +270,33 @@ static bool sdl3d_gltf_convert_primitive(const cgltf_data *data, const cgltf_pri
                 dst->colors[v * 4 + 3] = 1.0f;
             }
             SDL_free(tmp);
+        }
+    }
+
+    /* Unpack joint indices and weights for skinning. */
+    if (joints_accessor != NULL && weights_accessor != NULL && (int)joints_accessor->count == vertex_count &&
+        (int)weights_accessor->count == vertex_count)
+    {
+        dst->joint_indices = (unsigned short *)SDL_calloc((size_t)vertex_count * 4, sizeof(unsigned short));
+        dst->joint_weights = (float *)SDL_calloc((size_t)vertex_count * 4, sizeof(float));
+        if (dst->joint_indices == NULL || dst->joint_weights == NULL)
+        {
+            return SDL_OutOfMemory();
+        }
+        for (int v = 0; v < vertex_count; ++v)
+        {
+            cgltf_uint ji[4] = {0, 0, 0, 0};
+            cgltf_float jw[4] = {0, 0, 0, 0};
+            cgltf_accessor_read_uint(joints_accessor, (cgltf_size)v, ji, 4);
+            cgltf_accessor_read_float(weights_accessor, (cgltf_size)v, jw, 4);
+            dst->joint_indices[v * 4 + 0] = (unsigned short)ji[0];
+            dst->joint_indices[v * 4 + 1] = (unsigned short)ji[1];
+            dst->joint_indices[v * 4 + 2] = (unsigned short)ji[2];
+            dst->joint_indices[v * 4 + 3] = (unsigned short)ji[3];
+            dst->joint_weights[v * 4 + 0] = jw[0];
+            dst->joint_weights[v * 4 + 1] = jw[1];
+            dst->joint_weights[v * 4 + 2] = jw[2];
+            dst->joint_weights[v * 4 + 3] = jw[3];
         }
     }
 
@@ -415,6 +458,152 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
                 return false;
             }
             ++mesh_index;
+        }
+    }
+
+    /* Extract skeleton from the first skin. */
+    if (data->skins_count > 0)
+    {
+        const cgltf_skin *skin = &data->skins[0];
+        sdl3d_skeleton *skel = (sdl3d_skeleton *)SDL_calloc(1, sizeof(sdl3d_skeleton));
+        if (skel != NULL && skin->joints_count > 0)
+        {
+            skel->joint_count = (int)skin->joints_count;
+            skel->joints = (sdl3d_joint *)SDL_calloc(skin->joints_count, sizeof(sdl3d_joint));
+            if (skel->joints != NULL)
+            {
+                for (cgltf_size j = 0; j < skin->joints_count; ++j)
+                {
+                    const cgltf_node *node = skin->joints[j];
+                    sdl3d_joint *jt = &skel->joints[j];
+                    jt->name = sdl3d_gltf_strdup(node->name);
+                    jt->parent_index = -1;
+                    if (node->parent != NULL)
+                    {
+                        for (cgltf_size k = 0; k < skin->joints_count; ++k)
+                        {
+                            if (skin->joints[k] == node->parent)
+                            {
+                                jt->parent_index = (int)k;
+                                break;
+                            }
+                        }
+                    }
+                    if (skin->inverse_bind_matrices != NULL)
+                    {
+                        cgltf_accessor_read_float(skin->inverse_bind_matrices, j, jt->inverse_bind_matrix.m, 16);
+                    }
+                    else
+                    {
+                        jt->inverse_bind_matrix = sdl3d_mat4_identity();
+                    }
+                    if (node->has_translation)
+                    {
+                        jt->local_translation[0] = node->translation[0];
+                        jt->local_translation[1] = node->translation[1];
+                        jt->local_translation[2] = node->translation[2];
+                    }
+                    if (node->has_rotation)
+                    {
+                        jt->local_rotation[0] = node->rotation[0];
+                        jt->local_rotation[1] = node->rotation[1];
+                        jt->local_rotation[2] = node->rotation[2];
+                        jt->local_rotation[3] = node->rotation[3];
+                    }
+                    else
+                    {
+                        jt->local_rotation[3] = 1.0f;
+                    }
+                    jt->local_scale[0] = node->has_scale ? node->scale[0] : 1.0f;
+                    jt->local_scale[1] = node->has_scale ? node->scale[1] : 1.0f;
+                    jt->local_scale[2] = node->has_scale ? node->scale[2] : 1.0f;
+                }
+                out->skeleton = skel;
+            }
+            else
+            {
+                SDL_free(skel);
+            }
+        }
+        else
+        {
+            SDL_free(skel);
+        }
+    }
+
+    /* Extract animations. */
+    if (data->animations_count > 0 && out->skeleton != NULL)
+    {
+        out->animation_count = (int)data->animations_count;
+        out->animations = (sdl3d_animation_clip *)SDL_calloc(data->animations_count, sizeof(sdl3d_animation_clip));
+        if (out->animations != NULL)
+        {
+            for (cgltf_size ai = 0; ai < data->animations_count; ++ai)
+            {
+                const cgltf_animation *anim = &data->animations[ai];
+                sdl3d_animation_clip *clip = &out->animations[ai];
+                clip->name = sdl3d_gltf_strdup(anim->name);
+                clip->channel_count = (int)anim->channels_count;
+                clip->channels = (sdl3d_anim_channel *)SDL_calloc(anim->channels_count, sizeof(sdl3d_anim_channel));
+                if (clip->channels == NULL)
+                {
+                    continue;
+                }
+                for (cgltf_size ci = 0; ci < anim->channels_count; ++ci)
+                {
+                    const cgltf_animation_channel *src_ch = &anim->channels[ci];
+                    sdl3d_anim_channel *dst_ch = &clip->channels[ci];
+                    const cgltf_animation_sampler *sampler = src_ch->sampler;
+                    int kf_count;
+                    dst_ch->joint_index = -1;
+                    if (src_ch->target_node != NULL && data->skins_count > 0)
+                    {
+                        const cgltf_skin *skin = &data->skins[0];
+                        for (cgltf_size k = 0; k < skin->joints_count; ++k)
+                        {
+                            if (skin->joints[k] == src_ch->target_node)
+                            {
+                                dst_ch->joint_index = (int)k;
+                                break;
+                            }
+                        }
+                    }
+                    switch (src_ch->target_path)
+                    {
+                    case cgltf_animation_path_type_translation:
+                        dst_ch->path = SDL3D_ANIM_TRANSLATION;
+                        break;
+                    case cgltf_animation_path_type_rotation:
+                        dst_ch->path = SDL3D_ANIM_ROTATION;
+                        break;
+                    case cgltf_animation_path_type_scale:
+                        dst_ch->path = SDL3D_ANIM_SCALE;
+                        break;
+                    default:
+                        continue;
+                    }
+                    if (sampler == NULL || sampler->input == NULL || sampler->output == NULL)
+                    {
+                        continue;
+                    }
+                    kf_count = (int)sampler->input->count;
+                    dst_ch->keyframe_count = kf_count;
+                    dst_ch->keyframes = (sdl3d_keyframe *)SDL_calloc((size_t)kf_count, sizeof(sdl3d_keyframe));
+                    if (dst_ch->keyframes == NULL)
+                    {
+                        continue;
+                    }
+                    for (int k = 0; k < kf_count; ++k)
+                    {
+                        cgltf_accessor_read_float(sampler->input, (cgltf_size)k, &dst_ch->keyframes[k].time, 1);
+                        cgltf_accessor_read_float(sampler->output, (cgltf_size)k, dst_ch->keyframes[k].value, 4);
+                        if (dst_ch->keyframes[k].time > clip->duration)
+                        {
+                            clip->duration = dst_ch->keyframes[k].time;
+                        }
+                    }
+                }
+            }
         }
     }
 
