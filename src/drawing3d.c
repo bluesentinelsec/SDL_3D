@@ -7,6 +7,8 @@
 #include "render_context_internal.h"
 #include "texture_internal.h"
 
+#include "lighting_internal.h"
+
 static const int SDL3D_MODEL_STACK_INITIAL_CAPACITY = 8;
 
 static float sdl3d_clamp01(float value)
@@ -257,11 +259,19 @@ static sdl3d_vec2 sdl3d_mesh_uv(const sdl3d_mesh *mesh, unsigned int vertex_inde
     return out;
 }
 
+static sdl3d_vec3 sdl3d_mesh_normal(const sdl3d_mesh *mesh, unsigned int vertex_index)
+{
+    const float *n = &mesh->normals[(size_t)vertex_index * 3U];
+    return sdl3d_vec3_make(n[0], n[1], n[2]);
+}
+
 static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_mesh *mesh,
-                                     const sdl3d_texture2d *texture, sdl3d_vec4 base_modulate)
+                                     const sdl3d_texture2d *texture, sdl3d_vec4 base_modulate,
+                                     const sdl3d_lighting_params *lighting)
 {
     const bool indexed = mesh->indices != NULL;
     const int triangle_count = indexed ? (mesh->index_count / 3) : (mesh->vertex_count / 3);
+    const bool lit = lighting != NULL && mesh->normals != NULL;
     sdl3d_framebuffer framebuffer;
 
     if (!sdl3d_require_mode_3d(context, "sdl3d_draw_mesh"))
@@ -319,11 +329,54 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
             uv2 = sdl3d_mesh_uv(mesh, i2);
         }
 
-        sdl3d_rasterize_triangle_textured(
-            &framebuffer, context->model_view_projection, sdl3d_mesh_position(mesh, i0), sdl3d_mesh_position(mesh, i1),
-            sdl3d_mesh_position(mesh, i2), uv0, uv1, uv2, sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate),
-            sdl3d_mesh_vertex_modulate(mesh, i1, base_modulate), sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate),
-            texture, context->backface_culling_enabled, context->wireframe_enabled);
+        if (lit)
+        {
+            /* Transform normals by upper-left 3x3 of model matrix. */
+            const sdl3d_mat4 m = context->model;
+            sdl3d_vec3 rn0, rn1, rn2;
+            sdl3d_vec3 on0 = sdl3d_mesh_normal(mesh, i0);
+            sdl3d_vec3 on1 = sdl3d_mesh_normal(mesh, i1);
+            sdl3d_vec3 on2 = sdl3d_mesh_normal(mesh, i2);
+            rn0.x = m.m[0] * on0.x + m.m[4] * on0.y + m.m[8] * on0.z;
+            rn0.y = m.m[1] * on0.x + m.m[5] * on0.y + m.m[9] * on0.z;
+            rn0.z = m.m[2] * on0.x + m.m[6] * on0.y + m.m[10] * on0.z;
+            rn1.x = m.m[0] * on1.x + m.m[4] * on1.y + m.m[8] * on1.z;
+            rn1.y = m.m[1] * on1.x + m.m[5] * on1.y + m.m[9] * on1.z;
+            rn1.z = m.m[2] * on1.x + m.m[6] * on1.y + m.m[10] * on1.z;
+            rn2.x = m.m[0] * on2.x + m.m[4] * on2.y + m.m[8] * on2.z;
+            rn2.y = m.m[1] * on2.x + m.m[5] * on2.y + m.m[9] * on2.z;
+            rn2.z = m.m[2] * on2.x + m.m[6] * on2.y + m.m[10] * on2.z;
+            rn0 = sdl3d_vec3_normalize(rn0);
+            rn1 = sdl3d_vec3_normalize(rn1);
+            rn2 = sdl3d_vec3_normalize(rn2);
+
+            /* Transform positions to world space. */
+            sdl3d_vec3 p0 = sdl3d_mesh_position(mesh, i0);
+            sdl3d_vec3 p1 = sdl3d_mesh_position(mesh, i1);
+            sdl3d_vec3 p2 = sdl3d_mesh_position(mesh, i2);
+            sdl3d_vec4 wp0_4 = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(p0, 1.0f));
+            sdl3d_vec4 wp1_4 = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(p1, 1.0f));
+            sdl3d_vec4 wp2_4 = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(p2, 1.0f));
+            sdl3d_vec3 wp0 = sdl3d_vec3_make(wp0_4.x, wp0_4.y, wp0_4.z);
+            sdl3d_vec3 wp1 = sdl3d_vec3_make(wp1_4.x, wp1_4.y, wp1_4.z);
+            sdl3d_vec3 wp2 = sdl3d_vec3_make(wp2_4.x, wp2_4.y, wp2_4.z);
+
+            sdl3d_rasterize_triangle_lit(&framebuffer, context->model_view_projection, p0, p1, p2, uv0, uv1, uv2, rn0,
+                                         rn1, rn2, wp0, wp1, wp2, sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate),
+                                         sdl3d_mesh_vertex_modulate(mesh, i1, base_modulate),
+                                         sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate), texture, lighting,
+                                         context->backface_culling_enabled, context->wireframe_enabled);
+        }
+        else
+        {
+            sdl3d_rasterize_triangle_textured(&framebuffer, context->model_view_projection,
+                                              sdl3d_mesh_position(mesh, i0), sdl3d_mesh_position(mesh, i1),
+                                              sdl3d_mesh_position(mesh, i2), uv0, uv1, uv2,
+                                              sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate),
+                                              sdl3d_mesh_vertex_modulate(mesh, i1, base_modulate),
+                                              sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate), texture,
+                                              context->backface_culling_enabled, context->wireframe_enabled);
+        }
     }
 
     return true;
@@ -466,7 +519,7 @@ bool sdl3d_draw_point_3d(sdl3d_render_context *context, sdl3d_vec3 position, sdl
 bool sdl3d_draw_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, const sdl3d_texture2d *texture,
                      sdl3d_color tint)
 {
-    return sdl3d_draw_mesh_internal(context, mesh, texture, sdl3d_color_to_modulate(tint));
+    return sdl3d_draw_mesh_internal(context, mesh, texture, sdl3d_color_to_modulate(tint), NULL);
 }
 
 bool sdl3d_draw_model(sdl3d_render_context *context, const sdl3d_model *model, sdl3d_vec3 position, float scale,
@@ -514,6 +567,7 @@ bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model
     {
         const sdl3d_mesh *mesh = &model->meshes[mesh_index];
         const sdl3d_texture2d *texture = NULL;
+        const sdl3d_material *material = NULL;
         sdl3d_vec4 mesh_modulate = tint_modulate;
 
         if (mesh->material_index < -1)
@@ -524,8 +578,6 @@ bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model
 
         if (mesh->material_index >= 0)
         {
-            const sdl3d_material *material = NULL;
-
             if (mesh->material_index >= model->material_count || model->materials == NULL)
             {
                 ok = SDL_SetError("Mesh material index %d is outside material_count=%d.", mesh->material_index,
@@ -550,7 +602,54 @@ bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model
             }
         }
 
-        ok = sdl3d_draw_mesh_internal(context, mesh, texture, mesh_modulate);
+        {
+            sdl3d_lighting_params lp_storage;
+            const sdl3d_lighting_params *lp_ptr = NULL;
+
+            if (context->lighting_enabled && context->light_count > 0)
+            {
+                lp_storage.lights = context->lights;
+                lp_storage.light_count = context->light_count;
+                lp_storage.ambient[0] = context->ambient[0];
+                lp_storage.ambient[1] = context->ambient[1];
+                lp_storage.ambient[2] = context->ambient[2];
+
+                /* Camera position: extract from the inverse of the view matrix.
+                 * For a look-at view matrix, the camera position is the negated
+                 * translation of the transpose of the upper-left 3x3 applied to
+                 * the translation column. Simpler: we stored it during begin_mode_3d
+                 * — but we didn't. Instead, recover from view matrix: the camera
+                 * world position is -(R^T * t) where R is upper-left 3x3 and t is
+                 * column 3. */
+                {
+                    const sdl3d_mat4 v = context->view;
+                    lp_storage.camera_pos.x = -(v.m[0] * v.m[12] + v.m[1] * v.m[13] + v.m[2] * v.m[14]);
+                    lp_storage.camera_pos.y = -(v.m[4] * v.m[12] + v.m[5] * v.m[13] + v.m[6] * v.m[14]);
+                    lp_storage.camera_pos.z = -(v.m[8] * v.m[12] + v.m[9] * v.m[13] + v.m[10] * v.m[14]);
+                }
+
+                if (material != NULL)
+                {
+                    lp_storage.metallic = material->metallic;
+                    lp_storage.roughness = material->roughness;
+                    lp_storage.emissive[0] = material->emissive[0];
+                    lp_storage.emissive[1] = material->emissive[1];
+                    lp_storage.emissive[2] = material->emissive[2];
+                }
+                else
+                {
+                    lp_storage.metallic = 0.0f;
+                    lp_storage.roughness = 1.0f;
+                    lp_storage.emissive[0] = 0.0f;
+                    lp_storage.emissive[1] = 0.0f;
+                    lp_storage.emissive[2] = 0.0f;
+                }
+
+                lp_ptr = &lp_storage;
+            }
+
+            ok = sdl3d_draw_mesh_internal(context, mesh, texture, mesh_modulate, lp_ptr);
+        }
     }
 
     if (!sdl3d_pop_matrix(context))

@@ -32,6 +32,7 @@
 #include "sdl3d/types.h"
 
 typedef struct sdl3d_parallel_rasterizer sdl3d_parallel_rasterizer;
+struct sdl3d_lighting_params;
 
 typedef struct sdl3d_framebuffer
 {
@@ -72,6 +73,18 @@ void sdl3d_rasterize_triangle_textured(sdl3d_framebuffer *framebuffer, sdl3d_mat
                                        sdl3d_vec4 modulate0, sdl3d_vec4 modulate1, sdl3d_vec4 modulate2,
                                        const sdl3d_texture2d *texture, bool backface_culling_enabled,
                                        bool wireframe_enabled);
+
+/*
+ * Lit textured triangle. Carries per-vertex world-space normals and
+ * world-space positions through clipping for per-fragment PBR shading.
+ * Falls back to the unlit textured path when lighting_params is NULL.
+ */
+void sdl3d_rasterize_triangle_lit(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0, sdl3d_vec3 v1,
+                                  sdl3d_vec3 v2, sdl3d_vec2 uv0, sdl3d_vec2 uv1, sdl3d_vec2 uv2, sdl3d_vec3 n0,
+                                  sdl3d_vec3 n1, sdl3d_vec3 n2, sdl3d_vec3 wp0, sdl3d_vec3 wp1, sdl3d_vec3 wp2,
+                                  sdl3d_vec4 modulate0, sdl3d_vec4 modulate1, sdl3d_vec4 modulate2,
+                                  const sdl3d_texture2d *texture, const struct sdl3d_lighting_params *lighting_params,
+                                  bool backface_culling_enabled, bool wireframe_enabled);
 
 void sdl3d_rasterize_line(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 start, sdl3d_vec3 end,
                           sdl3d_color color);

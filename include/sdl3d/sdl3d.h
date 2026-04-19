@@ -9,6 +9,7 @@
 #include "sdl3d/camera.h"
 #include "sdl3d/drawing3d.h"
 #include "sdl3d/image.h"
+#include "sdl3d/lighting.h"
 #include "sdl3d/math.h"
 #include "sdl3d/model.h"
 #include "sdl3d/render_context.h"

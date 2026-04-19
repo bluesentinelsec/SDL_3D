@@ -82,12 +82,14 @@ target_sources(
         src/fbx_loader.c
         src/gltf_loader.c
         src/image.c
+        src/lighting.c
         src/math.c
         src/model.c
         src/obj_loader.c
         src/rasterizer.c
         src/render_context.c
         src/sdl3d.c
+        src/shading.c
         src/shapes.c
         src/texture.c
         $<TARGET_OBJECTS:sdl3d_cgltf>

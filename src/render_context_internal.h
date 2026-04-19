@@ -13,6 +13,7 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "rasterizer.h"
+#include "sdl3d/lighting.h"
 #include "sdl3d/math.h"
 #include "sdl3d/render_context.h"
 
@@ -45,6 +46,11 @@ struct sdl3d_render_context
     sdl3d_mat4 projection;
     sdl3d_mat4 view_projection;
     sdl3d_mat4 model_view_projection;
+
+    bool lighting_enabled;
+    sdl3d_light lights[SDL3D_MAX_LIGHTS];
+    int light_count;
+    float ambient[3];
 };
 
 static inline sdl3d_framebuffer sdl3d_framebuffer_from_context(sdl3d_render_context *context)

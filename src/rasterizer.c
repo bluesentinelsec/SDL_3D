@@ -9,6 +9,8 @@
 
 #include "texture_internal.h"
 
+#include "lighting_internal.h"
+
 /*
  * Subpixel precision: 8 bits (256 subpixel positions per pixel).
  * Sample point is pixel center at (x + 0.5, y + 0.5).
@@ -1689,6 +1691,413 @@ static void sdl3d_rasterize_screen_line(sdl3d_framebuffer *framebuffer, sdl3d_sc
         x += step_x;
         y += step_y;
         z += step_z;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Lit textured triangle: normals + world positions through clipping   */
+/* ------------------------------------------------------------------ */
+
+typedef struct sdl3d_clip_vertex_lit
+{
+    sdl3d_vec4 position;
+    float u, v;
+    float mod_r, mod_g, mod_b, mod_a;
+    float nx, ny, nz;
+    float wx, wy, wz;
+} sdl3d_clip_vertex_lit;
+
+static sdl3d_clip_vertex_lit sdl3d_clip_vertex_lit_lerp(sdl3d_clip_vertex_lit a, sdl3d_clip_vertex_lit b, float t)
+{
+    sdl3d_clip_vertex_lit out;
+    out.position = sdl3d_vec4_lerp(a.position, b.position, t);
+    out.u = a.u + (b.u - a.u) * t;
+    out.v = a.v + (b.v - a.v) * t;
+    out.mod_r = a.mod_r + (b.mod_r - a.mod_r) * t;
+    out.mod_g = a.mod_g + (b.mod_g - a.mod_g) * t;
+    out.mod_b = a.mod_b + (b.mod_b - a.mod_b) * t;
+    out.mod_a = a.mod_a + (b.mod_a - a.mod_a) * t;
+    out.nx = a.nx + (b.nx - a.nx) * t;
+    out.ny = a.ny + (b.ny - a.ny) * t;
+    out.nz = a.nz + (b.nz - a.nz) * t;
+    out.wx = a.wx + (b.wx - a.wx) * t;
+    out.wy = a.wy + (b.wy - a.wy) * t;
+    out.wz = a.wz + (b.wz - a.wz) * t;
+    return out;
+}
+
+static int sdl3d_clip_polygon_against_plane_lit(const sdl3d_clip_vertex_lit *in_verts, int in_count,
+                                                sdl3d_clip_vertex_lit *out_verts, sdl3d_clip_plane plane)
+{
+    int out_count = 0;
+    if (in_count < 1)
+    {
+        return 0;
+    }
+    sdl3d_clip_vertex_lit prev = in_verts[in_count - 1];
+    float prev_dist = sdl3d_clip_distance(prev.position, plane);
+    for (int i = 0; i < in_count; ++i)
+    {
+        sdl3d_clip_vertex_lit curr = in_verts[i];
+        float curr_dist = sdl3d_clip_distance(curr.position, plane);
+        if (prev_dist >= 0.0f)
+        {
+            if (curr_dist >= 0.0f)
+            {
+                out_verts[out_count++] = curr;
+            }
+            else
+            {
+                float t = prev_dist / (prev_dist - curr_dist);
+                out_verts[out_count++] = sdl3d_clip_vertex_lit_lerp(prev, curr, t);
+            }
+        }
+        else if (curr_dist >= 0.0f)
+        {
+            float t = prev_dist / (prev_dist - curr_dist);
+            out_verts[out_count++] = sdl3d_clip_vertex_lit_lerp(prev, curr, t);
+            out_verts[out_count++] = curr;
+        }
+        prev = curr;
+        prev_dist = curr_dist;
+    }
+    return out_count;
+}
+
+static int sdl3d_clip_triangle_lit(sdl3d_clip_vertex_lit *verts)
+{
+    sdl3d_clip_vertex_lit buf_a[SDL3D_CLIP_MAX_VERTICES];
+    sdl3d_clip_vertex_lit buf_b[SDL3D_CLIP_MAX_VERTICES];
+    int count = 3;
+    sdl3d_clip_vertex_lit *src = verts;
+    sdl3d_clip_vertex_lit *dst = buf_a;
+    for (int p = 0; p < 6; ++p)
+    {
+        count = sdl3d_clip_polygon_against_plane_lit(src, count, dst, (sdl3d_clip_plane)p);
+        if (count < 3)
+        {
+            return 0;
+        }
+        src = dst;
+        dst = (src == buf_a) ? buf_b : buf_a;
+    }
+    if (src != verts)
+    {
+        for (int i = 0; i < count; ++i)
+        {
+            verts[i] = src[i];
+        }
+    }
+    return count;
+}
+
+typedef struct sdl3d_screen_vertex_lit
+{
+    sdl3d_screen_vertex base;
+    float inverse_w;
+    float u_over_w, v_over_w;
+    float mod_r_over_w, mod_g_over_w, mod_b_over_w, mod_a_over_w;
+    float nx_over_w, ny_over_w, nz_over_w;
+    float wx_over_w, wy_over_w, wz_over_w;
+} sdl3d_screen_vertex_lit;
+
+static sdl3d_screen_vertex_lit sdl3d_viewport_transform_lit(sdl3d_clip_vertex_lit v, int width, int height)
+{
+    sdl3d_screen_vertex_lit out;
+    float iw = 1.0f / v.position.w;
+    out.base = sdl3d_viewport_transform(v.position, width, height);
+    out.inverse_w = iw;
+    out.u_over_w = v.u * iw;
+    out.v_over_w = v.v * iw;
+    out.mod_r_over_w = v.mod_r * iw;
+    out.mod_g_over_w = v.mod_g * iw;
+    out.mod_b_over_w = v.mod_b * iw;
+    out.mod_a_over_w = v.mod_a * iw;
+    out.nx_over_w = v.nx * iw;
+    out.ny_over_w = v.ny * iw;
+    out.nz_over_w = v.nz * iw;
+    out.wx_over_w = v.wx * iw;
+    out.wy_over_w = v.wy * iw;
+    out.wz_over_w = v.wz * iw;
+    return out;
+}
+
+typedef struct sdl3d_prepared_triangle_lit
+{
+    sdl3d_screen_vertex_lit a, b, c;
+    Sint64 area;
+    int bias_ab, bias_bc, bias_ca;
+    float inverse_area;
+    sdl3d_triangle_bounds bounds;
+} sdl3d_prepared_triangle_lit;
+
+static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *framebuffer,
+                                                         const sdl3d_prepared_triangle_lit *tri,
+                                                         const sdl3d_texture2d *texture,
+                                                         const sdl3d_lighting_params *lp, int min_px_x, int max_px_x,
+                                                         int min_px_y, int max_px_y)
+{
+    const sdl3d_screen_vertex_lit a = tri->a;
+    const sdl3d_screen_vertex_lit b = tri->b;
+    const sdl3d_screen_vertex_lit c = tri->c;
+
+    for (int py = min_px_y; py <= max_px_y; ++py)
+    {
+        const int sy = (py << SDL3D_SUBPIXEL_BITS) + SDL3D_SUBPIXEL_HALF;
+        for (int px = min_px_x; px <= max_px_x; ++px)
+        {
+            const int sx = (px << SDL3D_SUBPIXEL_BITS) + SDL3D_SUBPIXEL_HALF;
+            const Sint64 w_ab =
+                sdl3d_edge_function(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx, sx, sy) + tri->bias_ab;
+            const Sint64 w_bc =
+                sdl3d_edge_function(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx, sx, sy) + tri->bias_bc;
+            const Sint64 w_ca =
+                sdl3d_edge_function(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx, sx, sy) + tri->bias_ca;
+            if ((w_ab | w_bc | w_ca) < 0)
+            {
+                continue;
+            }
+
+            const float ba = (float)w_bc * tri->inverse_area;
+            const float bb = (float)w_ca * tri->inverse_area;
+            const float bc = (float)w_ab * tri->inverse_area;
+            const float depth = ba * a.base.z + bb * b.base.z + bc * c.base.z;
+            const float iw_px = ba * a.inverse_w + bb * b.inverse_w + bc * c.inverse_w;
+            const float pw = 1.0f / iw_px;
+
+            const float u = (ba * a.u_over_w + bb * b.u_over_w + bc * c.u_over_w) * pw;
+            const float v = (ba * a.v_over_w + bb * b.v_over_w + bc * c.v_over_w) * pw;
+            const float mr = (ba * a.mod_r_over_w + bb * b.mod_r_over_w + bc * c.mod_r_over_w) * pw;
+            const float mg = (ba * a.mod_g_over_w + bb * b.mod_g_over_w + bc * c.mod_g_over_w) * pw;
+            const float mb = (ba * a.mod_b_over_w + bb * b.mod_b_over_w + bc * c.mod_b_over_w) * pw;
+            const float ma = (ba * a.mod_a_over_w + bb * b.mod_a_over_w + bc * c.mod_a_over_w) * pw;
+
+            float tr = 1.0f, tg = 1.0f, tb = 1.0f, ta = 1.0f;
+            if (texture != NULL)
+            {
+                sdl3d_texture_sample_rgba(texture, u, v, 0.0f, &tr, &tg, &tb, &ta);
+            }
+
+            float albedo_r = tr * mr;
+            float albedo_g = tg * mg;
+            float albedo_b = tb * mb;
+            float out_a = ta * ma;
+            if (out_a <= 0.0f)
+            {
+                continue;
+            }
+
+            /* Interpolate and normalize world normal + world position. */
+            float nx = (ba * a.nx_over_w + bb * b.nx_over_w + bc * c.nx_over_w) * pw;
+            float ny = (ba * a.ny_over_w + bb * b.ny_over_w + bc * c.ny_over_w) * pw;
+            float nz = (ba * a.nz_over_w + bb * b.nz_over_w + bc * c.nz_over_w) * pw;
+            float n_len = nx * nx + ny * ny + nz * nz;
+            if (n_len > 1e-12f)
+            {
+                float inv = 1.0f / SDL_sqrtf(n_len);
+                nx *= inv;
+                ny *= inv;
+                nz *= inv;
+            }
+            float wpx = (ba * a.wx_over_w + bb * b.wx_over_w + bc * c.wx_over_w) * pw;
+            float wpy = (ba * a.wy_over_w + bb * b.wy_over_w + bc * c.wy_over_w) * pw;
+            float wpz = (ba * a.wz_over_w + bb * b.wz_over_w + bc * c.wz_over_w) * pw;
+
+            float lit_r, lit_g, lit_b;
+            sdl3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, nx, ny, nz, wpx, wpy, wpz, &lit_r, &lit_g,
+                                     &lit_b);
+
+            sdl3d_color color;
+            color.r = sdl3d_color_channel_clamp(lit_r * 255.0f);
+            color.g = sdl3d_color_channel_clamp(lit_g * 255.0f);
+            color.b = sdl3d_color_channel_clamp(lit_b * 255.0f);
+            color.a = sdl3d_color_channel_clamp(out_a * 255.0f);
+            sdl3d_write_pixel(framebuffer, px, py, depth, color);
+        }
+    }
+}
+
+static bool sdl3d_prepare_triangle_lit(sdl3d_screen_vertex_lit sv0, sdl3d_screen_vertex_lit sv1,
+                                       sdl3d_screen_vertex_lit sv2, sdl3d_framebuffer *framebuffer,
+                                       sdl3d_prepared_triangle_lit *out)
+{
+    sdl3d_screen_vertex_lit a = sv0, b = sv1, c = sv2;
+    Sint64 area = sdl3d_edge_function(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx);
+    int min_fx, max_fx, min_fy, max_fy;
+    int min_px_x, max_px_x, min_px_y, max_px_y;
+
+    if (area < 0)
+    {
+        sdl3d_screen_vertex_lit tmp = b;
+        b = c;
+        c = tmp;
+        area = -area;
+    }
+    if (area == 0)
+    {
+        return false;
+    }
+
+    min_fx = sdl3d_min_int(a.base.x_fx, sdl3d_min_int(b.base.x_fx, c.base.x_fx));
+    max_fx = sdl3d_max_int(a.base.x_fx, sdl3d_max_int(b.base.x_fx, c.base.x_fx));
+    min_fy = sdl3d_min_int(a.base.y_fx, sdl3d_min_int(b.base.y_fx, c.base.y_fx));
+    max_fy = sdl3d_max_int(a.base.y_fx, sdl3d_max_int(b.base.y_fx, c.base.y_fx));
+
+    if (framebuffer->scissor_enabled)
+    {
+        const SDL_Rect *sr = &framebuffer->scissor_rect;
+        min_fx = sdl3d_max_int(min_fx, sr->x << SDL3D_SUBPIXEL_BITS);
+        max_fx = sdl3d_min_int(max_fx, ((sr->x + sr->w) << SDL3D_SUBPIXEL_BITS) - 1);
+        min_fy = sdl3d_max_int(min_fy, sr->y << SDL3D_SUBPIXEL_BITS);
+        max_fy = sdl3d_min_int(max_fy, ((sr->y + sr->h) << SDL3D_SUBPIXEL_BITS) - 1);
+    }
+
+    min_px_x = sdl3d_max_int(0, min_fx >> SDL3D_SUBPIXEL_BITS);
+    max_px_x = sdl3d_min_int(framebuffer->width - 1, (max_fx - 1) >> SDL3D_SUBPIXEL_BITS);
+    min_px_y = sdl3d_max_int(0, min_fy >> SDL3D_SUBPIXEL_BITS);
+    max_px_y = sdl3d_min_int(framebuffer->height - 1, (max_fy - 1) >> SDL3D_SUBPIXEL_BITS);
+
+    if (min_px_x > max_px_x || min_px_y > max_px_y)
+    {
+        return false;
+    }
+
+    out->a = a;
+    out->b = b;
+    out->c = c;
+    out->area = area;
+    out->inverse_area = 1.0f / (float)area;
+    out->bias_ab = sdl3d_fill_bias(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx);
+    out->bias_bc = sdl3d_fill_bias(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx);
+    out->bias_ca = sdl3d_fill_bias(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx);
+    out->bounds.min_px_x = min_px_x;
+    out->bounds.max_px_x = max_px_x;
+    out->bounds.min_px_y = min_px_y;
+    out->bounds.max_px_y = max_px_y;
+    return true;
+}
+
+void sdl3d_rasterize_triangle_lit(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0, sdl3d_vec3 v1,
+                                  sdl3d_vec3 v2, sdl3d_vec2 uv0, sdl3d_vec2 uv1, sdl3d_vec2 uv2, sdl3d_vec3 n0,
+                                  sdl3d_vec3 n1, sdl3d_vec3 n2, sdl3d_vec3 wp0, sdl3d_vec3 wp1, sdl3d_vec3 wp2,
+                                  sdl3d_vec4 modulate0, sdl3d_vec4 modulate1, sdl3d_vec4 modulate2,
+                                  const sdl3d_texture2d *texture, const sdl3d_lighting_params *lighting_params,
+                                  bool backface_culling_enabled, bool wireframe_enabled)
+{
+    sdl3d_clip_vertex_lit clip[SDL3D_CLIP_MAX_VERTICES];
+    sdl3d_screen_vertex_lit screen[SDL3D_CLIP_MAX_VERTICES];
+    int count;
+    Sint64 signed_area;
+
+    if (framebuffer == NULL || framebuffer->color_pixels == NULL || framebuffer->depth_pixels == NULL)
+    {
+        return;
+    }
+
+    /* Build clip vertices with all attributes. */
+    sdl3d_vec4 p0 = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v0, 1.0f));
+    sdl3d_vec4 p1 = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v1, 1.0f));
+    sdl3d_vec4 p2 = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v2, 1.0f));
+
+    clip[0].position = p0;
+    clip[0].u = uv0.x;
+    clip[0].v = uv0.y;
+    clip[0].mod_r = modulate0.x;
+    clip[0].mod_g = modulate0.y;
+    clip[0].mod_b = modulate0.z;
+    clip[0].mod_a = modulate0.w;
+    clip[0].nx = n0.x;
+    clip[0].ny = n0.y;
+    clip[0].nz = n0.z;
+    clip[0].wx = wp0.x;
+    clip[0].wy = wp0.y;
+    clip[0].wz = wp0.z;
+
+    clip[1].position = p1;
+    clip[1].u = uv1.x;
+    clip[1].v = uv1.y;
+    clip[1].mod_r = modulate1.x;
+    clip[1].mod_g = modulate1.y;
+    clip[1].mod_b = modulate1.z;
+    clip[1].mod_a = modulate1.w;
+    clip[1].nx = n1.x;
+    clip[1].ny = n1.y;
+    clip[1].nz = n1.z;
+    clip[1].wx = wp1.x;
+    clip[1].wy = wp1.y;
+    clip[1].wz = wp1.z;
+
+    clip[2].position = p2;
+    clip[2].u = uv2.x;
+    clip[2].v = uv2.y;
+    clip[2].mod_r = modulate2.x;
+    clip[2].mod_g = modulate2.y;
+    clip[2].mod_b = modulate2.z;
+    clip[2].mod_a = modulate2.w;
+    clip[2].nx = n2.x;
+    clip[2].ny = n2.y;
+    clip[2].nz = n2.z;
+    clip[2].wx = wp2.x;
+    clip[2].wy = wp2.y;
+    clip[2].wz = wp2.z;
+
+    count = sdl3d_clip_triangle_lit(clip);
+    if (count < 3)
+    {
+        return;
+    }
+
+    for (int i = 0; i < count; ++i)
+    {
+        screen[i] = sdl3d_viewport_transform_lit(clip[i], framebuffer->width, framebuffer->height);
+    }
+
+    /* Backface culling on the first sub-triangle. */
+    signed_area = sdl3d_edge_function(screen[0].base.x_fx, screen[0].base.y_fx, screen[1].base.x_fx,
+                                      screen[1].base.y_fx, screen[2].base.x_fx, screen[2].base.y_fx);
+    if (backface_culling_enabled && signed_area <= 0)
+    {
+        return;
+    }
+
+    if (wireframe_enabled)
+    {
+        for (int i = 0; i < count; ++i)
+        {
+            int j = (i + 1) % count;
+            float iw_i = screen[i].inverse_w > 0.0f ? screen[i].inverse_w : 1.0f;
+            float iw_j = screen[j].inverse_w > 0.0f ? screen[j].inverse_w : 1.0f;
+            sdl3d_screen_vertex_colored sa, sb;
+            sa.base = screen[i].base;
+            sa.inverse_w = screen[i].inverse_w;
+            sa.r_over_w = screen[i].mod_r_over_w;
+            sa.g_over_w = screen[i].mod_g_over_w;
+            sa.b_over_w = screen[i].mod_b_over_w;
+            sa.a_over_w = screen[i].mod_a_over_w;
+            sb.base = screen[j].base;
+            sb.inverse_w = screen[j].inverse_w;
+            sb.r_over_w = screen[j].mod_r_over_w;
+            sb.g_over_w = screen[j].mod_g_over_w;
+            sb.b_over_w = screen[j].mod_b_over_w;
+            sb.a_over_w = screen[j].mod_a_over_w;
+            (void)iw_i;
+            (void)iw_j;
+            sdl3d_rasterize_screen_line_colored(framebuffer, sa, sb);
+        }
+        return;
+    }
+
+    /* Fan-triangulate and rasterize. */
+    for (int i = 1; i + 1 < count; ++i)
+    {
+        sdl3d_prepared_triangle_lit prepared;
+        if (!sdl3d_prepare_triangle_lit(screen[0], screen[i], screen[i + 1], framebuffer, &prepared))
+        {
+            continue;
+        }
+        sdl3d_rasterize_prepared_triangle_lit_region(framebuffer, &prepared, texture, lighting_params,
+                                                     prepared.bounds.min_px_x, prepared.bounds.max_px_x,
+                                                     prepared.bounds.min_px_y, prepared.bounds.max_px_y);
     }
 }
 
