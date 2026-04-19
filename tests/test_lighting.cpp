@@ -796,3 +796,173 @@ TEST(SDL3DPBRShading, GouraudShadingProducesDifferentColorsAtDifferentPositions)
 
     EXPECT_GT(r_near, r_far);
 }
+
+/* ================================================================== */
+/* Render profile API tests                                           */
+/* ================================================================== */
+
+TEST_F(SDL3DLightingFixture, SetAndGetRenderProfile)
+{
+    sdl3d_render_profile p = sdl3d_profile_ps1();
+    ASSERT_TRUE(sdl3d_set_render_profile(ctx, &p));
+
+    sdl3d_render_profile out{};
+    ASSERT_TRUE(sdl3d_get_render_profile(ctx, &out));
+    EXPECT_EQ(out.shading, SDL3D_SHADING_GOURAUD);
+    EXPECT_EQ(out.uv_mode, SDL3D_UV_AFFINE);
+    EXPECT_EQ(out.fog_eval, SDL3D_FOG_EVAL_VERTEX);
+    EXPECT_EQ(out.tonemap, SDL3D_TONEMAP_NONE);
+    EXPECT_TRUE(out.vertex_snap);
+    EXPECT_EQ(out.vertex_snap_precision, 1);
+    EXPECT_FALSE(out.color_quantize);
+}
+
+TEST_F(SDL3DLightingFixture, RuntimeProfileSwitch)
+{
+    sdl3d_render_profile profiles[] = {
+        sdl3d_profile_modern(), sdl3d_profile_ps1(), sdl3d_profile_n64(), sdl3d_profile_dos(), sdl3d_profile_snes(),
+    };
+    for (int i = 0; i < 5; ++i)
+    {
+        ASSERT_TRUE(sdl3d_set_render_profile(ctx, &profiles[i])) << "profile " << i;
+        sdl3d_render_profile out{};
+        ASSERT_TRUE(sdl3d_get_render_profile(ctx, &out));
+        EXPECT_EQ(out.shading, profiles[i].shading) << "profile " << i;
+        EXPECT_EQ(out.uv_mode, profiles[i].uv_mode) << "profile " << i;
+    }
+}
+
+TEST(SDL3DRenderProfileAPI, NullContextRejected)
+{
+    sdl3d_render_profile p = sdl3d_profile_modern();
+    sdl3d_render_profile out{};
+    EXPECT_FALSE(sdl3d_set_render_profile(nullptr, &p));
+    EXPECT_FALSE(sdl3d_set_render_profile(nullptr, nullptr));
+    EXPECT_FALSE(sdl3d_get_render_profile(nullptr, &out));
+}
+
+TEST(SDL3DRenderProfileAPI, NullProfileRejected)
+{
+    EXPECT_FALSE(sdl3d_set_render_profile(nullptr, nullptr));
+}
+
+/* ================================================================== */
+/* Named preset validation                                            */
+/* ================================================================== */
+
+struct PresetCase
+{
+    const char *label;
+    sdl3d_render_profile (*fn)(void);
+    sdl3d_shading_mode expected_shading;
+    sdl3d_uv_mode expected_uv;
+    sdl3d_tonemap_mode expected_tonemap;
+    bool expected_snap;
+    bool expected_quantize;
+};
+
+class SDL3DPresetTable : public ::testing::TestWithParam<PresetCase>
+{
+};
+
+TEST_P(SDL3DPresetTable, FieldsMatchSpec)
+{
+    const auto &c = GetParam();
+    sdl3d_render_profile p = c.fn();
+    EXPECT_EQ(p.shading, c.expected_shading) << c.label;
+    EXPECT_EQ(p.uv_mode, c.expected_uv) << c.label;
+    EXPECT_EQ(p.tonemap, c.expected_tonemap) << c.label;
+    EXPECT_EQ(p.vertex_snap, c.expected_snap) << c.label;
+    EXPECT_EQ(p.color_quantize, c.expected_quantize) << c.label;
+}
+
+INSTANTIATE_TEST_SUITE_P(Presets, SDL3DPresetTable,
+                         ::testing::Values(PresetCase{"modern", sdl3d_profile_modern, SDL3D_SHADING_PHONG,
+                                                      SDL3D_UV_PERSPECTIVE, SDL3D_TONEMAP_ACES, false, false},
+                                           PresetCase{"ps1", sdl3d_profile_ps1, SDL3D_SHADING_GOURAUD, SDL3D_UV_AFFINE,
+                                                      SDL3D_TONEMAP_NONE, true, false},
+                                           PresetCase{"n64", sdl3d_profile_n64, SDL3D_SHADING_GOURAUD,
+                                                      SDL3D_UV_PERSPECTIVE, SDL3D_TONEMAP_NONE, false, false},
+                                           PresetCase{"dos", sdl3d_profile_dos, SDL3D_SHADING_GOURAUD, SDL3D_UV_AFFINE,
+                                                      SDL3D_TONEMAP_NONE, false, true},
+                                           PresetCase{"snes", sdl3d_profile_snes, SDL3D_SHADING_FLAT, SDL3D_UV_AFFINE,
+                                                      SDL3D_TONEMAP_NONE, false, false}));
+
+/* ================================================================== */
+/* Color quantization unit tests                                      */
+/* ================================================================== */
+
+TEST(SDL3DColorQuantize, DosProfileSets256Colors)
+{
+    sdl3d_render_profile p = sdl3d_profile_dos();
+    EXPECT_TRUE(p.color_quantize);
+    EXPECT_EQ(p.color_depth, 256);
+}
+
+/* ================================================================== */
+/* Custom profile: mix and match                                      */
+/* ================================================================== */
+
+TEST_F(SDL3DLightingFixture, CustomProfileMixAndMatch)
+{
+    /* Start from PS1, override texture filter. */
+    sdl3d_render_profile p = sdl3d_profile_ps1();
+    p.texture_filter = SDL3D_TEXTURE_FILTER_BILINEAR;
+    p.vertex_snap = false;
+    ASSERT_TRUE(sdl3d_set_render_profile(ctx, &p));
+
+    sdl3d_render_profile out{};
+    ASSERT_TRUE(sdl3d_get_render_profile(ctx, &out));
+    EXPECT_EQ(out.shading, SDL3D_SHADING_GOURAUD);
+    EXPECT_EQ(out.uv_mode, SDL3D_UV_AFFINE);
+    EXPECT_FALSE(out.vertex_snap);
+}
+
+/* ================================================================== */
+/* Fog evaluation mode                                                */
+/* ================================================================== */
+
+TEST(SDL3DFogEval, PS1ProfileUsesVertexFog)
+{
+    sdl3d_render_profile p = sdl3d_profile_ps1();
+    EXPECT_EQ(p.fog_eval, SDL3D_FOG_EVAL_VERTEX);
+}
+
+TEST(SDL3DFogEval, ModernProfileUsesFragmentFog)
+{
+    sdl3d_render_profile p = sdl3d_profile_modern();
+    EXPECT_EQ(p.fog_eval, SDL3D_FOG_EVAL_FRAGMENT);
+}
+
+/* ================================================================== */
+/* UV mode                                                            */
+/* ================================================================== */
+
+TEST(SDL3DUVMode, PS1ProfileUsesAffine)
+{
+    sdl3d_render_profile p = sdl3d_profile_ps1();
+    EXPECT_EQ(p.uv_mode, SDL3D_UV_AFFINE);
+}
+
+TEST(SDL3DUVMode, ModernProfileUsesPerspective)
+{
+    sdl3d_render_profile p = sdl3d_profile_modern();
+    EXPECT_EQ(p.uv_mode, SDL3D_UV_PERSPECTIVE);
+}
+
+/* ================================================================== */
+/* Vertex snap                                                        */
+/* ================================================================== */
+
+TEST(SDL3DVertexSnap, PS1ProfileEnablesSnap)
+{
+    sdl3d_render_profile p = sdl3d_profile_ps1();
+    EXPECT_TRUE(p.vertex_snap);
+    EXPECT_EQ(p.vertex_snap_precision, 1);
+}
+
+TEST(SDL3DVertexSnap, ModernProfileDisablesSnap)
+{
+    sdl3d_render_profile p = sdl3d_profile_modern();
+    EXPECT_FALSE(p.vertex_snap);
+}

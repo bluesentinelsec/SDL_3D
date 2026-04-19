@@ -60,6 +60,14 @@ struct sdl3d_render_context
     sdl3d_mat4 shadow_vp[SDL3D_MAX_LIGHTS];
     bool shadow_enabled[SDL3D_MAX_LIGHTS];
     float shadow_bias;
+
+    /* Render profile flags. */
+    sdl3d_uv_mode uv_mode;
+    sdl3d_fog_eval fog_eval;
+    bool vertex_snap;
+    int vertex_snap_precision;
+    bool color_quantize;
+    int color_depth;
 };
 
 static inline sdl3d_framebuffer sdl3d_framebuffer_from_context(sdl3d_render_context *context)

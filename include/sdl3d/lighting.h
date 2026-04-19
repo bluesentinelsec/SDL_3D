@@ -5,6 +5,7 @@
 
 #include "sdl3d/math.h"
 #include "sdl3d/render_context.h"
+#include "sdl3d/texture.h"
 #include "sdl3d/types.h"
 
 #ifdef __cplusplus
@@ -121,6 +122,52 @@ extern "C"
 
     bool sdl3d_set_tonemap_mode(sdl3d_render_context *context, sdl3d_tonemap_mode mode);
     sdl3d_tonemap_mode sdl3d_get_tonemap_mode(const sdl3d_render_context *context);
+
+    /* ============================================================== */
+    /* UV mapping mode                                                */
+    /* ============================================================== */
+
+    typedef enum sdl3d_uv_mode
+    {
+        SDL3D_UV_PERSPECTIVE = 0,
+        SDL3D_UV_AFFINE = 1
+    } sdl3d_uv_mode;
+
+    /* ============================================================== */
+    /* Fog evaluation mode                                            */
+    /* ============================================================== */
+
+    typedef enum sdl3d_fog_eval
+    {
+        SDL3D_FOG_EVAL_FRAGMENT = 0,
+        SDL3D_FOG_EVAL_VERTEX = 1
+    } sdl3d_fog_eval;
+
+    /* ============================================================== */
+    /* Render profile                                                 */
+    /* ============================================================== */
+
+    typedef struct sdl3d_render_profile
+    {
+        sdl3d_shading_mode shading;
+        sdl3d_texture_filter texture_filter;
+        sdl3d_uv_mode uv_mode;
+        sdl3d_fog_eval fog_eval;
+        sdl3d_tonemap_mode tonemap;
+        bool vertex_snap;
+        int vertex_snap_precision;
+        bool color_quantize;
+        int color_depth;
+    } sdl3d_render_profile;
+
+    bool sdl3d_set_render_profile(sdl3d_render_context *context, const sdl3d_render_profile *profile);
+    bool sdl3d_get_render_profile(const sdl3d_render_context *context, sdl3d_render_profile *out);
+
+    sdl3d_render_profile sdl3d_profile_modern(void);
+    sdl3d_render_profile sdl3d_profile_ps1(void);
+    sdl3d_render_profile sdl3d_profile_n64(void);
+    sdl3d_render_profile sdl3d_profile_dos(void);
+    sdl3d_render_profile sdl3d_profile_snes(void);
 
     /* ============================================================== */
     /* Shadow mapping                                                 */

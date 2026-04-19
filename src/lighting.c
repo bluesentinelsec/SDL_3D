@@ -413,3 +413,114 @@ bool sdl3d_render_shadow_map(sdl3d_render_context *context, const sdl3d_mesh *me
 
     return true;
 }
+
+/* ------------------------------------------------------------------ */
+/* Render profiles                                                     */
+/* ------------------------------------------------------------------ */
+
+bool sdl3d_set_render_profile(sdl3d_render_context *context, const sdl3d_render_profile *profile)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (profile == NULL)
+    {
+        return SDL_InvalidParamError("profile");
+    }
+    context->shading_mode = profile->shading;
+    context->tonemap_mode = profile->tonemap;
+    context->uv_mode = profile->uv_mode;
+    context->fog_eval = profile->fog_eval;
+    context->vertex_snap = profile->vertex_snap;
+    context->vertex_snap_precision = profile->vertex_snap_precision > 0 ? profile->vertex_snap_precision : 1;
+    context->color_quantize = profile->color_quantize;
+    context->color_depth = profile->color_depth;
+    return true;
+}
+
+bool sdl3d_get_render_profile(const sdl3d_render_context *context, sdl3d_render_profile *out)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (out == NULL)
+    {
+        return SDL_InvalidParamError("out");
+    }
+    out->shading = context->shading_mode;
+    out->tonemap = context->tonemap_mode;
+    out->uv_mode = context->uv_mode;
+    out->fog_eval = context->fog_eval;
+    out->vertex_snap = context->vertex_snap;
+    out->vertex_snap_precision = context->vertex_snap_precision;
+    out->color_quantize = context->color_quantize;
+    out->color_depth = context->color_depth;
+    out->texture_filter = SDL3D_TEXTURE_FILTER_BILINEAR;
+    return true;
+}
+
+sdl3d_render_profile sdl3d_profile_modern(void)
+{
+    sdl3d_render_profile p;
+    SDL_zerop(&p);
+    p.shading = SDL3D_SHADING_PHONG;
+    p.texture_filter = SDL3D_TEXTURE_FILTER_BILINEAR;
+    p.uv_mode = SDL3D_UV_PERSPECTIVE;
+    p.fog_eval = SDL3D_FOG_EVAL_FRAGMENT;
+    p.tonemap = SDL3D_TONEMAP_ACES;
+    return p;
+}
+
+sdl3d_render_profile sdl3d_profile_ps1(void)
+{
+    sdl3d_render_profile p;
+    SDL_zerop(&p);
+    p.shading = SDL3D_SHADING_GOURAUD;
+    p.texture_filter = SDL3D_TEXTURE_FILTER_NEAREST;
+    p.uv_mode = SDL3D_UV_AFFINE;
+    p.fog_eval = SDL3D_FOG_EVAL_VERTEX;
+    p.tonemap = SDL3D_TONEMAP_NONE;
+    p.vertex_snap = true;
+    p.vertex_snap_precision = 1;
+    return p;
+}
+
+sdl3d_render_profile sdl3d_profile_n64(void)
+{
+    sdl3d_render_profile p;
+    SDL_zerop(&p);
+    p.shading = SDL3D_SHADING_GOURAUD;
+    p.texture_filter = SDL3D_TEXTURE_FILTER_BILINEAR;
+    p.uv_mode = SDL3D_UV_PERSPECTIVE;
+    p.fog_eval = SDL3D_FOG_EVAL_VERTEX;
+    p.tonemap = SDL3D_TONEMAP_NONE;
+    return p;
+}
+
+sdl3d_render_profile sdl3d_profile_dos(void)
+{
+    sdl3d_render_profile p;
+    SDL_zerop(&p);
+    p.shading = SDL3D_SHADING_GOURAUD;
+    p.texture_filter = SDL3D_TEXTURE_FILTER_NEAREST;
+    p.uv_mode = SDL3D_UV_AFFINE;
+    p.fog_eval = SDL3D_FOG_EVAL_FRAGMENT;
+    p.tonemap = SDL3D_TONEMAP_NONE;
+    p.color_quantize = true;
+    p.color_depth = 256;
+    return p;
+}
+
+sdl3d_render_profile sdl3d_profile_snes(void)
+{
+    sdl3d_render_profile p;
+    SDL_zerop(&p);
+    p.shading = SDL3D_SHADING_FLAT;
+    p.texture_filter = SDL3D_TEXTURE_FILTER_NEAREST;
+    p.uv_mode = SDL3D_UV_AFFINE;
+    p.fog_eval = SDL3D_FOG_EVAL_FRAGMENT;
+    p.tonemap = SDL3D_TONEMAP_NONE;
+    return p;
+}

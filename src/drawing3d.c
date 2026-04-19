@@ -303,6 +303,12 @@ static void sdl3d_build_lighting_params(const sdl3d_render_context *context, sdl
         lp->camera_pos.y = -(v.m[4] * v.m[12] + v.m[5] * v.m[13] + v.m[6] * v.m[14]);
         lp->camera_pos.z = -(v.m[8] * v.m[12] + v.m[9] * v.m[13] + v.m[10] * v.m[14]);
     }
+    lp->uv_mode = context->uv_mode;
+    lp->fog_eval = context->fog_eval;
+    lp->vertex_snap = context->vertex_snap;
+    lp->vertex_snap_precision = context->vertex_snap_precision;
+    lp->color_quantize = context->color_quantize;
+    lp->color_depth = context->color_depth;
 }
 
 /* Transform an object-space normal to world space via the model matrix upper-left 3x3. */
