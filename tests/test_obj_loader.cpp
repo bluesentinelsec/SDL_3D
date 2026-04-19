@@ -108,7 +108,7 @@ TEST(SDL3DObjLoader, RejectsUnknownExtension)
     EXPECT_EQ(model.meshes, nullptr);
 }
 
-TEST(SDL3DObjLoader, GltfAndFbxReturnNotImplemented)
+TEST(SDL3DObjLoader, GltfAndFbxRejectMissingFiles)
 {
     sdl3d_model m{};
     EXPECT_FALSE(sdl3d_load_model_from_file("foo.gltf", &m));

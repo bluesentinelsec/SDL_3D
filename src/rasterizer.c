@@ -1439,7 +1439,7 @@ static void sdl3d_rasterize_prepared_triangle_textured_region(sdl3d_framebuffer 
 
             if (texture != NULL)
             {
-                sdl3d_texture_sample_rgba(texture, u, v, &texture_r, &texture_g, &texture_b, &texture_a);
+                sdl3d_texture_sample_rgba(texture, u, v, 0.0f, &texture_r, &texture_g, &texture_b, &texture_a);
             }
 
             output_r = texture_r * modulate_r;

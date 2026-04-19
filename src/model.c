@@ -70,11 +70,11 @@ bool sdl3d_load_model_from_file(const char *path, sdl3d_model *out)
     }
     if (sdl3d_endswith_ci(path, ".gltf") || sdl3d_endswith_ci(path, ".glb"))
     {
-        return SDL_SetError("glTF loading is not implemented yet (path '%s').", path);
+        return sdl3d_load_model_gltf(path, out);
     }
     if (sdl3d_endswith_ci(path, ".fbx"))
     {
-        return SDL_SetError("FBX loading is not implemented yet (path '%s').", path);
+        return sdl3d_load_model_fbx(path, out);
     }
     return SDL_SetError("Unrecognized model file extension: '%s'.", path);
 }

@@ -79,6 +79,8 @@ target_sources(
     PRIVATE
         src/camera.c
         src/drawing3d.c
+        src/fbx_loader.c
+        src/gltf_loader.c
         src/image.c
         src/math.c
         src/model.c
