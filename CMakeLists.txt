@@ -80,6 +80,7 @@ target_sources(
     sdl3d
     PRIVATE
         src/camera.c
+        src/collision.c
         src/drawing3d.c
         src/fbx_loader.c
         src/gltf_loader.c

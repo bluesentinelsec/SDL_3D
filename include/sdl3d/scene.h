@@ -39,6 +39,11 @@ extern "C"
 
     int sdl3d_scene_get_actor_count(const sdl3d_scene *scene);
 
+    /*
+     * Get actor by index (0-based). Returns NULL if out of range.
+     */
+    sdl3d_actor *sdl3d_scene_get_actor_at(const sdl3d_scene *scene, int index);
+
     /* ============================================================== */
     /* Actor properties                                               */
     /* ============================================================== */

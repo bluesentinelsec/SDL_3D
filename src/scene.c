@@ -130,6 +130,22 @@ int sdl3d_scene_get_actor_count(const sdl3d_scene *scene)
     return scene->actor_count;
 }
 
+sdl3d_actor *sdl3d_scene_get_actor_at(const sdl3d_scene *scene, int index)
+{
+    sdl3d_actor *actor;
+    int i;
+    if (scene == NULL || index < 0 || index >= scene->actor_count)
+    {
+        return NULL;
+    }
+    actor = scene->first;
+    for (i = 0; i < index && actor != NULL; ++i)
+    {
+        actor = actor->next;
+    }
+    return actor;
+}
+
 void sdl3d_actor_set_position(sdl3d_actor *actor, sdl3d_vec3 position)
 {
     if (actor != NULL)
