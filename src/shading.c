@@ -247,33 +247,45 @@ void sdl3d_shade_fragment_pbr(const sdl3d_lighting_params *params, float albedo_
             continue;
         }
 
-        /* Half vector. */
-        float hx = lx + vx;
-        float hy = ly + vy;
-        float hz = lz + vz;
-        float h_len = sdl3d_vec3_length_raw(hx, hy, hz);
-        if (h_len > 1e-7f)
-        {
-            float inv = 1.0f / h_len;
-            hx *= inv;
-            hy *= inv;
-            hz *= inv;
-        }
-
-        float n_dot_h = sdl3d_maxf(sdl3d_vec3_dot_raw(world_nx, world_ny, world_nz, hx, hy, hz), 0.0f);
-        float h_dot_v = sdl3d_maxf(sdl3d_vec3_dot_raw(hx, hy, hz, vx, vy, vz), 0.0f);
-
-        /* Cook-Torrance specular BRDF. */
-        float ndf = sdl3d_distribution_ggx(n_dot_h, params->roughness);
-        float geo = sdl3d_geometry_smith(n_dot_v, n_dot_l, params->roughness);
+        /* Cook-Torrance specular BRDF. Skip for very rough dielectric
+         * surfaces where the specular contribution is negligible —
+         * avoids half-vector, GGX, geometry, and Fresnel computation. */
+        float spec_r = 0.0f, spec_g = 0.0f, spec_b = 0.0f;
         float fr, fg, fb;
-        sdl3d_fresnel_schlick(h_dot_v, f0_r, f0_g, f0_b, &fr, &fg, &fb);
 
-        float denom = 4.0f * n_dot_v * n_dot_l + 1e-4f;
-        float spec_scale = ndf * geo / denom;
-        float spec_r = fr * spec_scale;
-        float spec_g = fg * spec_scale;
-        float spec_b = fb * spec_scale;
+        if (params->roughness < 0.95f || params->metallic > 0.05f)
+        {
+            float hx = lx + vx;
+            float hy = ly + vy;
+            float hz = lz + vz;
+            float h_len = sdl3d_vec3_length_raw(hx, hy, hz);
+            float n_dot_h, h_dot_v, ndf, geo, denom, spec_scale;
+            if (h_len > 1e-7f)
+            {
+                float inv = 1.0f / h_len;
+                hx *= inv;
+                hy *= inv;
+                hz *= inv;
+            }
+            n_dot_h = sdl3d_maxf(sdl3d_vec3_dot_raw(world_nx, world_ny, world_nz, hx, hy, hz), 0.0f);
+            h_dot_v = sdl3d_maxf(sdl3d_vec3_dot_raw(hx, hy, hz, vx, vy, vz), 0.0f);
+
+            ndf = sdl3d_distribution_ggx(n_dot_h, params->roughness);
+            geo = sdl3d_geometry_smith(n_dot_v, n_dot_l, params->roughness);
+            sdl3d_fresnel_schlick(h_dot_v, f0_r, f0_g, f0_b, &fr, &fg, &fb);
+
+            denom = 4.0f * n_dot_v * n_dot_l + 1e-4f;
+            spec_scale = ndf * geo / denom;
+            spec_r = fr * spec_scale;
+            spec_g = fg * spec_scale;
+            spec_b = fb * spec_scale;
+        }
+        else
+        {
+            fr = f0_r;
+            fg = f0_g;
+            fb = f0_b;
+        }
 
         /* Energy-conserving diffuse: kD = (1 - F) * (1 - metallic). */
         float kd = (1.0f - params->metallic);
