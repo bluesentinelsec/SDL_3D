@@ -4,7 +4,9 @@
 #include <stdbool.h>
 
 #include "sdl3d/camera.h"
+#include "sdl3d/model.h"
 #include "sdl3d/render_context.h"
+#include "sdl3d/texture.h"
 #include "sdl3d/types.h"
 
 #ifdef __cplusplus
@@ -66,6 +68,35 @@ extern "C"
                                    sdl3d_color c0, sdl3d_color c1, sdl3d_color c2);
     bool sdl3d_draw_line_3d(sdl3d_render_context *context, sdl3d_vec3 start, sdl3d_vec3 end, sdl3d_color color);
     bool sdl3d_draw_point_3d(sdl3d_render_context *context, sdl3d_vec3 position, sdl3d_color color);
+
+    /*
+     * Draw a single mesh using the current model matrix stack. If `texture`
+     * is NULL, the mesh is rendered untextured and `tint` supplies the flat
+     * color. If `texture` is non-NULL, mesh UVs are interpreted as normalized
+     * coordinates with (0, 0) at the lower-left of the texture.
+     *
+     * Mesh vertex colors, when present, modulate the texture/tint.
+     */
+    bool sdl3d_draw_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, const sdl3d_texture2d *texture,
+                         sdl3d_color tint);
+
+    /*
+     * Draw every mesh in a model with a uniform translation + scale. Material
+     * albedo factors and albedo textures modulate the supplied tint. Texture
+     * paths are resolved relative to the model's source path and cached on
+     * the render context after first use.
+     */
+    bool sdl3d_draw_model(sdl3d_render_context *context, const sdl3d_model *model, sdl3d_vec3 position, float scale,
+                          sdl3d_color tint);
+
+    /*
+     * Same as sdl3d_draw_model, but applies translation, axis-angle rotation,
+     * and non-uniform scale before submitting the model. The transform
+     * composes with the current matrix stack.
+     */
+    bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model, sdl3d_vec3 position,
+                             sdl3d_vec3 rotation_axis, float rotation_angle_radians, sdl3d_vec3 scale,
+                             sdl3d_color tint);
 
     /*
      * Read a single pixel from the color backbuffer. Returns false if x or y

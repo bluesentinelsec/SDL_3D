@@ -87,6 +87,7 @@ target_sources(
         src/render_context.c
         src/sdl3d.c
         src/shapes.c
+        src/texture.c
         $<TARGET_OBJECTS:sdl3d_cgltf>
         $<TARGET_OBJECTS:sdl3d_ufbx>
         $<TARGET_OBJECTS:sdl3d_stb>

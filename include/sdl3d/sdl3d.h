@@ -13,6 +13,7 @@
 #include "sdl3d/model.h"
 #include "sdl3d/render_context.h"
 #include "sdl3d/shapes.h"
+#include "sdl3d/texture.h"
 #include "sdl3d/types.h"
 
 #ifdef __cplusplus

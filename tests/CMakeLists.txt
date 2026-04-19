@@ -78,6 +78,8 @@ set(SDL3D_TEST_SOURCES
     test_render_loop.cpp
     test_shapes.cpp
     test_vertex_color.cpp
+    test_texture.cpp
+    test_textured_rendering.cpp
 )
 
 # Tests that read filesystem fixtures via SDL3D_TEST_ASSETS_DIR are desktop-only.
@@ -150,6 +152,8 @@ else()
     sdl3d_add_test(sdl3d_render_loop_test test_render_loop.cpp render)
     sdl3d_add_test(sdl3d_shapes_test test_shapes.cpp render)
     sdl3d_add_test(sdl3d_vertex_color_test test_vertex_color.cpp render)
+    sdl3d_add_test(sdl3d_texture_test test_texture.cpp unit)
+    sdl3d_add_test(sdl3d_textured_rendering_test test_textured_rendering.cpp render)
 
     if(NOT EMSCRIPTEN)
         sdl3d_add_test(sdl3d_image_test test_image.cpp unit)

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <SDL3/SDL_error.h>
+#include <SDL3/SDL_filesystem.h>
 
 #include "sdl3d/image.h"
 
@@ -14,8 +15,21 @@ namespace
 
 std::string make_temp_path(const char *leaf)
 {
-    std::filesystem::path tmp = std::filesystem::temp_directory_path() / leaf;
-    return tmp.string();
+    std::filesystem::path root;
+    char *pref_path = SDL_GetPrefPath("bluesentinelsec", "SDL3DTests");
+    if (pref_path != nullptr)
+    {
+        root = pref_path;
+        SDL_free(pref_path);
+    }
+    else
+    {
+        SDL_ClearError();
+        root = std::filesystem::temp_directory_path();
+    }
+
+    std::filesystem::create_directories(root);
+    return (root / leaf).string();
 }
 
 } // namespace

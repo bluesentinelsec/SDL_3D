@@ -28,6 +28,7 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "sdl3d/math.h"
+#include "sdl3d/texture.h"
 #include "sdl3d/types.h"
 
 typedef struct sdl3d_parallel_rasterizer sdl3d_parallel_rasterizer;
@@ -65,6 +66,12 @@ void sdl3d_rasterize_triangle(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sd
 void sdl3d_rasterize_triangle_colored(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0, sdl3d_vec3 v1,
                                       sdl3d_vec3 v2, sdl3d_color c0, sdl3d_color c1, sdl3d_color c2,
                                       bool backface_culling_enabled, bool wireframe_enabled);
+
+void sdl3d_rasterize_triangle_textured(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0, sdl3d_vec3 v1,
+                                       sdl3d_vec3 v2, sdl3d_vec2 uv0, sdl3d_vec2 uv1, sdl3d_vec2 uv2,
+                                       sdl3d_vec4 modulate0, sdl3d_vec4 modulate1, sdl3d_vec4 modulate2,
+                                       const sdl3d_texture2d *texture, bool backface_culling_enabled,
+                                       bool wireframe_enabled);
 
 void sdl3d_rasterize_line(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 start, sdl3d_vec3 end,
                           sdl3d_color color);

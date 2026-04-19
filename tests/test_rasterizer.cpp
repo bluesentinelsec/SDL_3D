@@ -16,6 +16,7 @@ extern "C"
 #include "sdl3d/types.h"
 }
 
+#include <cmath>
 #include <cstring>
 #include <vector>
 
@@ -79,6 +80,59 @@ constexpr sdl3d_color kRed = {255, 0, 0, 255};
 constexpr sdl3d_color kGreen = {0, 255, 0, 255};
 constexpr sdl3d_color kBlue = {0, 0, 255, 255};
 constexpr sdl3d_color kBlack = {0, 0, 0, 0};
+
+sdl3d_texture2d MakeTextureFromPixels(const std::vector<Uint8> &pixels, int width, int height)
+{
+    sdl3d_image image{};
+    image.pixels = const_cast<Uint8 *>(pixels.data());
+    image.width = width;
+    image.height = height;
+
+    sdl3d_texture2d texture{};
+    EXPECT_TRUE(sdl3d_create_texture_from_image(&image, &texture));
+    return texture;
+}
+
+bool PixelNear(sdl3d_color actual, sdl3d_color expected, int tolerance = 12)
+{
+    return std::abs((int)actual.r - (int)expected.r) <= tolerance &&
+           std::abs((int)actual.g - (int)expected.g) <= tolerance &&
+           std::abs((int)actual.b - (int)expected.b) <= tolerance &&
+           std::abs((int)actual.a - (int)expected.a) <= tolerance;
+}
+
+bool SampleNearColor(const Framebuffer &f, int cx, int cy, int window, sdl3d_color expected)
+{
+    for (int dy = -window; dy <= window; ++dy)
+    {
+        for (int dx = -window; dx <= window; ++dx)
+        {
+            const int x = cx + dx;
+            const int y = cy + dy;
+            if (x < 0 || x >= f.fb.width || y < 0 || y >= f.fb.height)
+            {
+                continue;
+            }
+            if (PixelNear(f.GetPixel(x, y), expected))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+SDL_Point ProjectToFramebuffer(const sdl3d_mat4 &mvp, int width, int height, sdl3d_vec3 point)
+{
+    const sdl3d_vec4 clip = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(point, 1.0f));
+    const float inverse_w = 1.0f / clip.w;
+    const float ndc_x = clip.x * inverse_w;
+    const float ndc_y = clip.y * inverse_w;
+    SDL_Point out{};
+    out.x = (int)std::lround((ndc_x + 1.0f) * 0.5f * (float)width);
+    out.y = (int)std::lround((1.0f - ndc_y) * 0.5f * (float)height);
+    return out;
+}
 } // namespace
 
 /* --- Framebuffer clear --------------------------------------------------- */
@@ -357,6 +411,102 @@ TEST(SDL3DRasterizeTriangle, WireframeDrawsEdgesWithoutFillingInterior)
 
     EXPECT_GT(CountPixelsEqual(f, kRed), 0);
     EXPECT_TRUE(PixelEquals(f.GetPixel(kW / 2, kH / 2), kBlack));
+}
+
+TEST(SDL3DRasterizeTriangle, TexturedNearestMapsQuadrantsCorrectly)
+{
+    Framebuffer f(32, 32);
+    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+
+    const std::vector<Uint8> pixels = {
+        255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255,
+    };
+    sdl3d_texture2d texture = MakeTextureFromPixels(pixels, 2, 2);
+    ASSERT_TRUE(sdl3d_set_texture_filter(&texture, SDL3D_TEXTURE_FILTER_NEAREST));
+    ASSERT_TRUE(sdl3d_set_texture_wrap(&texture, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP));
+
+    const sdl3d_mat4 id = sdl3d_mat4_identity();
+    const sdl3d_vec4 modulate = {1.0f, 1.0f, 1.0f, 1.0f};
+
+    sdl3d_rasterize_triangle_textured(&f.fb, id, sdl3d_vec3_make(-1.0f, -1.0f, 0.0f),
+                                      sdl3d_vec3_make(1.0f, -1.0f, 0.0f), sdl3d_vec3_make(1.0f, 1.0f, 0.0f),
+                                      sdl3d_vec2{0.0f, 0.0f}, sdl3d_vec2{1.0f, 0.0f}, sdl3d_vec2{1.0f, 1.0f}, modulate,
+                                      modulate, modulate, &texture, false, false);
+    sdl3d_rasterize_triangle_textured(&f.fb, id, sdl3d_vec3_make(-1.0f, -1.0f, 0.0f), sdl3d_vec3_make(1.0f, 1.0f, 0.0f),
+                                      sdl3d_vec3_make(-1.0f, 1.0f, 0.0f), sdl3d_vec2{0.0f, 0.0f},
+                                      sdl3d_vec2{1.0f, 1.0f}, sdl3d_vec2{0.0f, 1.0f}, modulate, modulate, modulate,
+                                      &texture, false, false);
+
+    EXPECT_TRUE(PixelNear(f.GetPixel(8, 8), kRed));
+    EXPECT_TRUE(PixelNear(f.GetPixel(24, 8), kGreen));
+    EXPECT_TRUE(PixelNear(f.GetPixel(8, 24), kBlue));
+    EXPECT_TRUE(PixelNear(f.GetPixel(24, 24), sdl3d_color{255, 255, 0, 255}));
+
+    sdl3d_free_texture(&texture);
+}
+
+TEST(SDL3DRasterizeTriangle, TexturedBilinearBlendsAtCenter)
+{
+    Framebuffer f(32, 32);
+    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+
+    const std::vector<Uint8> pixels = {
+        0, 0, 0, 255, 255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255,
+    };
+    sdl3d_texture2d texture = MakeTextureFromPixels(pixels, 2, 2);
+    ASSERT_TRUE(sdl3d_set_texture_filter(&texture, SDL3D_TEXTURE_FILTER_BILINEAR));
+
+    const sdl3d_mat4 id = sdl3d_mat4_identity();
+    const sdl3d_vec4 modulate = {1.0f, 1.0f, 1.0f, 1.0f};
+
+    sdl3d_rasterize_triangle_textured(&f.fb, id, sdl3d_vec3_make(-1.0f, -1.0f, 0.0f),
+                                      sdl3d_vec3_make(1.0f, -1.0f, 0.0f), sdl3d_vec3_make(1.0f, 1.0f, 0.0f),
+                                      sdl3d_vec2{0.0f, 0.0f}, sdl3d_vec2{1.0f, 0.0f}, sdl3d_vec2{1.0f, 1.0f}, modulate,
+                                      modulate, modulate, &texture, false, false);
+    sdl3d_rasterize_triangle_textured(&f.fb, id, sdl3d_vec3_make(-1.0f, -1.0f, 0.0f), sdl3d_vec3_make(1.0f, 1.0f, 0.0f),
+                                      sdl3d_vec3_make(-1.0f, 1.0f, 0.0f), sdl3d_vec2{0.0f, 0.0f},
+                                      sdl3d_vec2{1.0f, 1.0f}, sdl3d_vec2{0.0f, 1.0f}, modulate, modulate, modulate,
+                                      &texture, false, false);
+
+    const sdl3d_color center = f.GetPixel(16, 16);
+    EXPECT_NEAR((int)center.r, 64, 20);
+    EXPECT_NEAR((int)center.g, 64, 20);
+    EXPECT_NEAR((int)center.b, 64, 20);
+
+    sdl3d_free_texture(&texture);
+}
+
+TEST(SDL3DRasterizeTriangle, TexturedPerspectiveCorrectNearTexelDominates)
+{
+    Framebuffer f(64, 64);
+    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+
+    const std::vector<Uint8> pixels = {
+        255, 0, 0, 255, 0, 255, 0, 255,
+    };
+    sdl3d_texture2d texture = MakeTextureFromPixels(pixels, 2, 1);
+    ASSERT_TRUE(sdl3d_set_texture_filter(&texture, SDL3D_TEXTURE_FILTER_NEAREST));
+
+    sdl3d_mat4 proj;
+    ASSERT_TRUE(sdl3d_mat4_perspective(sdl3d_degrees_to_radians(60.0f), 1.0f, 0.01f, 100.0f, &proj));
+
+    const sdl3d_vec4 modulate = {1.0f, 1.0f, 1.0f, 1.0f};
+    const sdl3d_vec3 v0 = sdl3d_vec3_make(0.0f, 0.0f, -1.0f);
+    const sdl3d_vec3 v1 = sdl3d_vec3_make(2.0f, 0.0f, -10.0f);
+    const sdl3d_vec3 v2 = sdl3d_vec3_make(0.0f, 2.0f, -10.0f);
+
+    sdl3d_rasterize_triangle_textured(&f.fb, proj, v0, v1, v2, sdl3d_vec2{0.0f, 0.0f}, sdl3d_vec2{1.0f, 0.0f},
+                                      sdl3d_vec2{1.0f, 1.0f}, modulate, modulate, modulate, &texture, false, false);
+
+    const SDL_Point p0 = ProjectToFramebuffer(proj, f.fb.width, f.fb.height, v0);
+    const SDL_Point p1 = ProjectToFramebuffer(proj, f.fb.width, f.fb.height, v1);
+    const SDL_Point p2 = ProjectToFramebuffer(proj, f.fb.width, f.fb.height, v2);
+    const int cx = (p0.x + p1.x + p2.x) / 3;
+    const int cy = (p0.y + p1.y + p2.y) / 3;
+
+    EXPECT_TRUE(SampleNearColor(f, cx, cy, 2, kRed));
+
+    sdl3d_free_texture(&texture);
 }
 
 TEST(SDL3DRasterizeTriangle, ScissorClipsTriangleCoverage)

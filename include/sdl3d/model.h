@@ -16,8 +16,9 @@ extern "C"
      * their defaults so consumers never have to branch on the source
      * format.
      *
-     * Texture fields are file paths resolved relative to the model's
-     * source directory. Images are NOT decoded at load time — callers
+     * Texture fields are stored exactly as authored by the source asset
+     * (typically paths relative to the model's source directory). Images
+     * are NOT decoded at load time — callers
      * choose when to realize them into sdl3d_texture2d, so scenes can be
      * loaded without touching disk twice.
      */
@@ -43,6 +44,7 @@ extern "C"
      * Vertex attributes are de-interleaved: each pointer is an array of
      * `vertex_count` entries with the stride implied by its semantic
      * (3 floats for positions/normals, 2 for uvs, 4 for colors).
+     * Colors, when present, are RGBA floats in [0, 1].
      *
      * Indices are always 32-bit unsigned and index into this mesh's
      * vertex arrays. `material_index` is -1 when no material is bound.
