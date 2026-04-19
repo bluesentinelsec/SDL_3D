@@ -79,6 +79,7 @@ add_library(SDL3D::sdl3d ALIAS sdl3d)
 target_sources(
     sdl3d
     PRIVATE
+        src/animation.c
         src/camera.c
         src/collision.c
         src/drawing3d.c

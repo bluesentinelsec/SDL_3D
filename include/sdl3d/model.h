@@ -63,6 +63,12 @@ extern "C"
         int index_count;
 
         int material_index;
+
+        /* Skinning attributes (NULL when no skeleton). Up to 4 joints
+         * per vertex. joint_indices indexes into the model's skeleton
+         * joint array. joint_weights sum to 1.0 per vertex. */
+        unsigned short *joint_indices; /* vertex_count * 4 */
+        float *joint_weights;          /* vertex_count * 4 */
     } sdl3d_mesh;
 
     /*
@@ -70,6 +76,9 @@ extern "C"
      * they reference by index. `source_path` is kept so higher layers
      * can resolve texture paths relative to the original file.
      */
+    struct sdl3d_skeleton;
+    struct sdl3d_animation_clip;
+
     typedef struct sdl3d_model
     {
         sdl3d_mesh *meshes;
@@ -79,6 +88,10 @@ extern "C"
         int material_count;
 
         char *source_path;
+
+        struct sdl3d_skeleton *skeleton;
+        struct sdl3d_animation_clip *animations;
+        int animation_count;
     } sdl3d_model;
 
     /*

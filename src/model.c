@@ -3,6 +3,8 @@
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include "sdl3d/animation.h"
+
 #include "model_internal.h"
 
 void sdl3d_free_model(sdl3d_model *model)
@@ -21,6 +23,8 @@ void sdl3d_free_model(sdl3d_model *model)
         SDL_free(mesh->uvs);
         SDL_free(mesh->colors);
         SDL_free(mesh->indices);
+        SDL_free(mesh->joint_indices);
+        SDL_free(mesh->joint_weights);
     }
     SDL_free(model->meshes);
 
@@ -34,6 +38,28 @@ void sdl3d_free_model(sdl3d_model *model)
         SDL_free(mat->emissive_map);
     }
     SDL_free(model->materials);
+
+    if (model->skeleton != NULL)
+    {
+        for (int i = 0; i < model->skeleton->joint_count; ++i)
+        {
+            SDL_free(model->skeleton->joints[i].name);
+        }
+        SDL_free(model->skeleton->joints);
+        SDL_free(model->skeleton);
+    }
+
+    for (int i = 0; i < model->animation_count; ++i)
+    {
+        sdl3d_animation_clip *clip = &model->animations[i];
+        SDL_free(clip->name);
+        for (int c = 0; c < clip->channel_count; ++c)
+        {
+            SDL_free(clip->channels[c].keyframes);
+        }
+        SDL_free(clip->channels);
+    }
+    SDL_free(model->animations);
 
     SDL_free(model->source_path);
 
