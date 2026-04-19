@@ -264,18 +264,23 @@ TEST_F(SDL3DTexturedFixture, NearestClampSamplerMapsQuadrantsCorrectly)
     const sdl3d_mesh mesh = make_textured_quad_mesh();
 
     ASSERT_TRUE(sdl3d_clear_render_context(context, kBlack));
-    ASSERT_TRUE(sdl3d_begin_mode_3d(context, make_ortho()));
+    const sdl3d_camera3d camera = make_ortho();
+    ASSERT_TRUE(sdl3d_begin_mode_3d(context, camera));
     ASSERT_TRUE(sdl3d_draw_mesh(context, &mesh, &texture, kWhite)) << SDL_GetError();
     ASSERT_TRUE(sdl3d_end_mode_3d(context));
 
     sdl3d_color sample{};
-    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, 40, 40, &sample));
+    SDL_Point probe = project_to_screen(context, camera, sdl3d_vec3_make(-0.5f, 0.5f, 0.0f));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, probe.x, probe.y, &sample));
     EXPECT_TRUE(pixel_near(sample, kRed));
-    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, 88, 40, &sample));
+    probe = project_to_screen(context, camera, sdl3d_vec3_make(0.5f, 0.5f, 0.0f));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, probe.x, probe.y, &sample));
     EXPECT_TRUE(pixel_near(sample, kGreen));
-    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, 40, 88, &sample));
+    probe = project_to_screen(context, camera, sdl3d_vec3_make(-0.5f, -0.5f, 0.0f));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, probe.x, probe.y, &sample));
     EXPECT_TRUE(pixel_near(sample, kBlue));
-    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, 88, 88, &sample));
+    probe = project_to_screen(context, camera, sdl3d_vec3_make(0.5f, -0.5f, 0.0f));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, probe.x, probe.y, &sample));
     EXPECT_TRUE(pixel_near(sample, kYellow));
 
     sdl3d_free_texture(&texture);
@@ -299,12 +304,14 @@ TEST_F(SDL3DTexturedFixture, BilinearSamplerBlendsTexelsAtCenter)
     const sdl3d_mesh mesh = make_textured_quad_mesh();
 
     ASSERT_TRUE(sdl3d_clear_render_context(context, kBlack));
-    ASSERT_TRUE(sdl3d_begin_mode_3d(context, make_ortho()));
+    const sdl3d_camera3d camera = make_ortho();
+    ASSERT_TRUE(sdl3d_begin_mode_3d(context, camera));
     ASSERT_TRUE(sdl3d_draw_mesh(context, &mesh, &texture, kWhite)) << SDL_GetError();
     ASSERT_TRUE(sdl3d_end_mode_3d(context));
 
     sdl3d_color center{};
-    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, 64, 64, &center));
+    const SDL_Point center_probe = project_to_screen(context, camera, sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, center_probe.x, center_probe.y, &center));
     EXPECT_NEAR((int)center.r, 64, 20);
     EXPECT_NEAR((int)center.g, 64, 20);
     EXPECT_NEAR((int)center.b, 64, 20);
