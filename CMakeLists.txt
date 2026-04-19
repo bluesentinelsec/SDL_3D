@@ -24,6 +24,7 @@ endif()
 option(SDL3D_FETCH_SDL3 "Fetch SDL3 if it is not already available" ON)
 option(SDL3D_ENABLE_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 option(SDL3D_BUILD_BENCHMARKS "Build SDL3D benchmarks" OFF)
+option(SDL3D_BUILD_DEMOS "Build SDL3D demo programs" OFF)
 
 set(SDL3D_USING_FETCHED_SDL3 OFF)
 
@@ -155,6 +156,10 @@ endif()
 
 if(SDL3D_BUILD_BENCHMARKS)
     add_subdirectory(benchmarks)
+endif()
+
+if(SDL3D_BUILD_DEMOS)
+    add_subdirectory(demos)
 endif()
 
 if(SDL3D_USING_FETCHED_SDL3)
