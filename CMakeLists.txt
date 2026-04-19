@@ -83,6 +83,7 @@ target_sources(
         src/camera.c
         src/collision.c
         src/drawing3d.c
+        src/effects.c
         src/fbx_loader.c
         src/gltf_loader.c
         src/image.c
