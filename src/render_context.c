@@ -482,6 +482,16 @@ bool sdl3d_present_render_context(sdl3d_render_context *context)
         return false;
     }
 
+    if (!SDL_SetRenderDrawColor(context->renderer, 0, 0, 0, 255))
+    {
+        return false;
+    }
+
+    if (!SDL_RenderClear(context->renderer))
+    {
+        return false;
+    }
+
     if (!SDL_RenderTexture(context->renderer, context->color_texture, NULL, NULL))
     {
         return false;
