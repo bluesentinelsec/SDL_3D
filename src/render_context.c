@@ -22,8 +22,8 @@ static bool sdl3d_parallel_rasterizer_disabled_by_environment(void)
         return false;
     }
 
-    return SDL_strcasecmp(value, "0") != 0 && SDL_strcasecmp(value, "false") != 0 &&
-           SDL_strcasecmp(value, "no") != 0 && SDL_strcasecmp(value, "off") != 0;
+    return SDL_strcasecmp(value, "0") != 0 && SDL_strcasecmp(value, "false") != 0 && SDL_strcasecmp(value, "no") != 0 &&
+           SDL_strcasecmp(value, "off") != 0;
 }
 
 static void sdl3d_try_create_parallel_rasterizer(sdl3d_render_context *context)
