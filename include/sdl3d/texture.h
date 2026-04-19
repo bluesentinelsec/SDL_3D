@@ -15,7 +15,8 @@ extern "C"
     typedef enum sdl3d_texture_filter
     {
         SDL3D_TEXTURE_FILTER_NEAREST = 0,
-        SDL3D_TEXTURE_FILTER_BILINEAR = 1
+        SDL3D_TEXTURE_FILTER_BILINEAR = 1,
+        SDL3D_TEXTURE_FILTER_TRILINEAR = 2
     } sdl3d_texture_filter;
 
     typedef enum sdl3d_texture_wrap
@@ -31,7 +32,20 @@ extern "C"
      * Defaults:
      * - filter: bilinear
      * - wrap_u / wrap_v: clamp
+     *
+     * When filter is SDL3D_TEXTURE_FILTER_TRILINEAR, a mipmap chain is
+     * generated automatically. Each level is a box-filtered half-size
+     * copy of the previous level, down to 1x1. The chain is stored in
+     * `mip_levels` (level 0 is the base image). `mip_count` is the
+     * total number of levels including the base.
      */
+    typedef struct sdl3d_texture_mip_level
+    {
+        Uint8 *pixels;
+        int width;
+        int height;
+    } sdl3d_texture_mip_level;
+
     typedef struct sdl3d_texture2d
     {
         Uint8 *pixels;
@@ -40,6 +54,8 @@ extern "C"
         sdl3d_texture_filter filter;
         sdl3d_texture_wrap wrap_u;
         sdl3d_texture_wrap wrap_v;
+        sdl3d_texture_mip_level *mip_levels;
+        int mip_count;
     } sdl3d_texture2d;
 
     /*

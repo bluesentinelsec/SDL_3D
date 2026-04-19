@@ -88,6 +88,7 @@ set(SDL3D_TEST_SOURCES
 set(SDL3D_DESKTOP_ONLY_TEST_SOURCES
     test_image.cpp
     test_obj_loader.cpp
+    test_m3_loaders.cpp
 )
 
 if(ANDROID)
@@ -158,5 +159,7 @@ else()
     if(NOT EMSCRIPTEN)
         sdl3d_add_test(sdl3d_image_test test_image.cpp unit)
         sdl3d_add_test(sdl3d_obj_loader_test test_obj_loader.cpp unit)
+        sdl3d_add_test(sdl3d_m3_loaders_test test_m3_loaders.cpp unit)
+        target_include_directories(sdl3d_m3_loaders_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     endif()
 endif()

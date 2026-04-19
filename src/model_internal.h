@@ -16,6 +16,8 @@ extern "C"
      * SDL_SetError on failure (the model is cleared either way).
      */
     bool sdl3d_load_model_obj(const char *path, sdl3d_model *out);
+    bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out);
+    bool sdl3d_load_model_fbx(const char *path, sdl3d_model *out);
 
 #ifdef __cplusplus
 }
