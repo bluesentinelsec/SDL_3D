@@ -25,6 +25,10 @@ struct sdl3d_gl_context
     /* Shader programs. */
     GLuint unlit_program;
     GLuint lit_program;
+    GLuint ps1_program;
+    GLuint n64_program;
+    GLuint dos_program;
+    GLuint snes_program;
 
     /* Unlit shader uniforms. */
     GLint unlit_mvp_loc;
@@ -175,6 +179,10 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     /* Compile shaders. */
     ctx->unlit_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_unlit_vert, sdl3d_shader_unlit_frag);
     ctx->lit_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_lit_vert, sdl3d_shader_lit_frag);
+    ctx->ps1_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_ps1_vert, sdl3d_shader_ps1_frag);
+    ctx->n64_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_n64_vert, sdl3d_shader_n64_frag);
+    ctx->dos_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_dos_vert, sdl3d_shader_dos_frag);
+    ctx->snes_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_snes_vert, sdl3d_shader_snes_frag);
 
     if (ctx->unlit_program == 0 || ctx->lit_program == 0)
     {
@@ -242,6 +250,22 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     {
         ctx->gl.DeleteProgram(ctx->lit_program);
     }
+    if (ctx->ps1_program)
+    {
+        ctx->gl.DeleteProgram(ctx->ps1_program);
+    }
+    if (ctx->n64_program)
+    {
+        ctx->gl.DeleteProgram(ctx->n64_program);
+    }
+    if (ctx->dos_program)
+    {
+        ctx->gl.DeleteProgram(ctx->dos_program);
+    }
+    if (ctx->snes_program)
+    {
+        ctx->gl.DeleteProgram(ctx->snes_program);
+    }
     if (ctx->white_texture)
     {
         ctx->gl.DeleteTextures(1, &ctx->white_texture);
@@ -278,6 +302,30 @@ const sdl3d_gl_funcs *sdl3d_gl_get_funcs(const sdl3d_gl_context *ctx)
 GLuint sdl3d_gl_get_white_texture(const sdl3d_gl_context *ctx)
 {
     return ctx ? ctx->white_texture : 0;
+}
+
+GLuint sdl3d_gl_get_program_for_profile(const sdl3d_gl_context *ctx, int shading_mode, bool has_lights)
+{
+    if (ctx == NULL)
+    {
+        return 0;
+    }
+    /* Map shading mode to shader program:
+     * FLAT → SNES shader (flat, no per-vertex lighting)
+     * GOURAUD → N64 shader (per-vertex lighting)
+     * PHONG → lit shader (per-fragment PBR)
+     * UNLIT → unlit shader */
+    switch (shading_mode)
+    {
+    case 1: /* SDL3D_SHADING_FLAT */
+        return ctx->snes_program ? ctx->snes_program : ctx->unlit_program;
+    case 2: /* SDL3D_SHADING_GOURAUD */
+        return ctx->n64_program ? ctx->n64_program : ctx->unlit_program;
+    case 3: /* SDL3D_SHADING_PHONG */
+        return has_lights ? ctx->lit_program : ctx->unlit_program;
+    default: /* SDL3D_SHADING_UNLIT */
+        return ctx->unlit_program;
+    }
 }
 
 /* ------------------------------------------------------------------ */
