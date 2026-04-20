@@ -18,6 +18,7 @@
  *   WASD      — move
  *   Mouse     — look
  *   1-5       — render profiles (Modern/PS1/N64/DOS/SNES)
+ *   Tab       — toggle backend (Software ↔ OpenGL)
  *   Space     — jump
  *   ESC       — quit
  *
@@ -170,7 +171,7 @@ int main(int argc, char *argv[])
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
     win = SDL_CreateWindow("SDL3D Showcase", 960, 720, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
-    ren = SDL_CreateRenderer(win, "opengl");
+    ren = SDL_CreateRenderer(win, NULL);
     sdl3d_init_render_context_config(&cfg);
     cfg.logical_width = RENDER_W;
     cfg.logical_height = RENDER_H;
