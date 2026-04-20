@@ -15,6 +15,8 @@
 #include "gl_funcs.h"
 #include "gl_shaders.h"
 
+#include "sdl3d/lighting.h"
+
 struct sdl3d_gl_context
 {
     SDL_GLContext gl_context;
@@ -276,4 +278,277 @@ const sdl3d_gl_funcs *sdl3d_gl_get_funcs(const sdl3d_gl_context *ctx)
 GLuint sdl3d_gl_get_white_texture(const sdl3d_gl_context *ctx)
 {
     return ctx ? ctx->white_texture : 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Mesh rendering                                                      */
+/* ------------------------------------------------------------------ */
+
+void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const float *positions, const float *uvs, const float *colors,
+                              const unsigned int *indices, int vertex_count, int index_count, GLuint texture,
+                              const float *mvp, const float *tint)
+{
+    GLuint vao, vbo_pos, vbo_uv, vbo_col, ebo;
+    const sdl3d_gl_funcs *gl;
+
+    if (ctx == NULL || positions == NULL || vertex_count <= 0)
+    {
+        return;
+    }
+
+    gl = &ctx->gl;
+    gl->UseProgram(ctx->unlit_program);
+    gl->UniformMatrix4fv(ctx->unlit_mvp_loc, 1, GL_FALSE, mvp);
+    gl->Uniform4f(ctx->unlit_tint_loc, tint[0], tint[1], tint[2], tint[3]);
+
+    gl->ActiveTexture(GL_TEXTURE0);
+    gl->BindTexture(GL_TEXTURE_2D, texture ? texture : ctx->white_texture);
+    gl->Uniform1i(ctx->unlit_texture_loc, 0);
+    gl->Uniform1i(ctx->unlit_has_texture_loc, texture ? 1 : 0);
+
+    gl->GenVertexArrays(1, &vao);
+    gl->BindVertexArray(vao);
+
+    /* Positions. */
+    gl->GenBuffers(1, &vbo_pos);
+    gl->BindBuffer(GL_ARRAY_BUFFER, vbo_pos);
+    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 3 * sizeof(float)), positions, GL_DYNAMIC_DRAW);
+    gl->EnableVertexAttribArray(0);
+    gl->VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+
+    /* UVs. */
+    gl->GenBuffers(1, &vbo_uv);
+    gl->BindBuffer(GL_ARRAY_BUFFER, vbo_uv);
+    if (uvs != NULL)
+    {
+        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 2 * sizeof(float)), uvs, GL_DYNAMIC_DRAW);
+    }
+    else
+    {
+        float zero[2] = {0, 0};
+        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(2 * sizeof(float)), zero, GL_DYNAMIC_DRAW);
+    }
+    gl->EnableVertexAttribArray(1);
+    gl->VertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+
+    /* Colors. */
+    gl->GenBuffers(1, &vbo_col);
+    gl->BindBuffer(GL_ARRAY_BUFFER, vbo_col);
+    if (colors != NULL)
+    {
+        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 4 * sizeof(float)), colors,
+                       GL_DYNAMIC_DRAW);
+    }
+    else
+    {
+        /* Default white. */
+        float *white = (float *)SDL_calloc((size_t)vertex_count * 4, sizeof(float));
+        if (white != NULL)
+        {
+            for (int i = 0; i < vertex_count; ++i)
+            {
+                white[i * 4 + 0] = 1.0f;
+                white[i * 4 + 1] = 1.0f;
+                white[i * 4 + 2] = 1.0f;
+                white[i * 4 + 3] = 1.0f;
+            }
+            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 4 * sizeof(float)), white,
+                           GL_DYNAMIC_DRAW);
+            SDL_free(white);
+        }
+    }
+    gl->EnableVertexAttribArray(2);
+    gl->VertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 0, NULL);
+
+    /* Indices + draw. */
+    if (indices != NULL && index_count > 0)
+    {
+        gl->GenBuffers(1, &ebo);
+        gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+        gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)index_count * sizeof(unsigned int)), indices,
+                       GL_DYNAMIC_DRAW);
+        gl->DrawElements(GL_TRIANGLES, (GLsizei)index_count, GL_UNSIGNED_INT, NULL);
+        gl->DeleteBuffers(1, &ebo);
+    }
+    else
+    {
+        gl->DrawArrays(GL_TRIANGLES, 0, (GLsizei)vertex_count);
+    }
+
+    gl->BindVertexArray(0);
+    gl->DeleteBuffers(1, &vbo_pos);
+    gl->DeleteBuffers(1, &vbo_uv);
+    gl->DeleteBuffers(1, &vbo_col);
+    gl->DeleteVertexArrays(1, &vao);
+}
+
+void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const float *positions, const float *normals, const float *uvs,
+                            const float *colors, const unsigned int *indices, int vertex_count, int index_count,
+                            GLuint texture, const float *mvp, const float *model_matrix, const float *normal_matrix,
+                            const float *tint, const float *camera_pos, const float *ambient, float metallic,
+                            float roughness, const float *emissive, const void *lights, int light_count,
+                            int tonemap_mode, int fog_mode, const float *fog_color, float fog_start, float fog_end,
+                            float fog_density)
+{
+    GLuint vao, vbo_pos, vbo_norm, vbo_uv, vbo_col, ebo;
+    const sdl3d_gl_funcs *gl;
+
+    if (ctx == NULL || positions == NULL || vertex_count <= 0)
+    {
+        return;
+    }
+
+    gl = &ctx->gl;
+    gl->UseProgram(ctx->lit_program);
+    gl->UniformMatrix4fv(ctx->lit_mvp_loc, 1, GL_FALSE, mvp);
+    gl->UniformMatrix4fv(ctx->lit_model_loc, 1, GL_FALSE, model_matrix);
+    /* Normal matrix is 3x3 — pass as 3 vec3 uniforms or use mat3 uniform. */
+    /* For now, pass the upper-left 3x3 of the model matrix. */
+    {
+        float nm[9] = {normal_matrix[0], normal_matrix[1], normal_matrix[2], normal_matrix[3], normal_matrix[4],
+                       normal_matrix[5], normal_matrix[6], normal_matrix[7], normal_matrix[8]};
+        GLint loc = ctx->lit_normal_matrix_loc;
+        /* glUniformMatrix3fv — we need to add this to our function table. For now skip. */
+        (void)nm;
+        (void)loc;
+    }
+    gl->Uniform4f(ctx->lit_tint_loc, tint[0], tint[1], tint[2], tint[3]);
+    gl->Uniform3f(ctx->lit_camera_pos_loc, camera_pos[0], camera_pos[1], camera_pos[2]);
+    gl->Uniform3f(ctx->lit_ambient_loc, ambient[0], ambient[1], ambient[2]);
+    gl->Uniform1f(ctx->lit_metallic_loc, metallic);
+    gl->Uniform1f(ctx->lit_roughness_loc, roughness);
+    gl->Uniform3f(ctx->lit_emissive_loc, emissive[0], emissive[1], emissive[2]);
+    gl->Uniform1i(ctx->lit_light_count_loc, light_count);
+    gl->Uniform1i(ctx->lit_tonemap_mode_loc, tonemap_mode);
+    gl->Uniform1i(ctx->lit_fog_mode_loc, fog_mode);
+    if (fog_color != NULL)
+    {
+        gl->Uniform3f(ctx->lit_fog_color_loc, fog_color[0], fog_color[1], fog_color[2]);
+    }
+    gl->Uniform1f(ctx->lit_fog_start_loc, fog_start);
+    gl->Uniform1f(ctx->lit_fog_end_loc, fog_end);
+    gl->Uniform1f(ctx->lit_fog_density_loc, fog_density);
+
+    /* Upload light uniforms. */
+    if (lights != NULL && light_count > 0)
+    {
+        const sdl3d_light *lt = (const sdl3d_light *)lights;
+        char name[64];
+        for (int i = 0; i < light_count && i < 8; ++i)
+        {
+            GLint loc;
+            SDL_snprintf(name, sizeof(name), "uLights[%d].type", i);
+            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            gl->Uniform1i(loc, (int)lt[i].type);
+            SDL_snprintf(name, sizeof(name), "uLights[%d].position", i);
+            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            gl->Uniform3f(loc, lt[i].position.x, lt[i].position.y, lt[i].position.z);
+            SDL_snprintf(name, sizeof(name), "uLights[%d].direction", i);
+            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            gl->Uniform3f(loc, lt[i].direction.x, lt[i].direction.y, lt[i].direction.z);
+            SDL_snprintf(name, sizeof(name), "uLights[%d].color", i);
+            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            gl->Uniform3f(loc, lt[i].color[0], lt[i].color[1], lt[i].color[2]);
+            SDL_snprintf(name, sizeof(name), "uLights[%d].intensity", i);
+            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            gl->Uniform1f(loc, lt[i].intensity);
+            SDL_snprintf(name, sizeof(name), "uLights[%d].range", i);
+            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            gl->Uniform1f(loc, lt[i].range);
+            SDL_snprintf(name, sizeof(name), "uLights[%d].innerCutoff", i);
+            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            gl->Uniform1f(loc, lt[i].inner_cutoff);
+            SDL_snprintf(name, sizeof(name), "uLights[%d].outerCutoff", i);
+            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            gl->Uniform1f(loc, lt[i].outer_cutoff);
+        }
+    }
+
+    gl->ActiveTexture(GL_TEXTURE0);
+    gl->BindTexture(GL_TEXTURE_2D, texture ? texture : ctx->white_texture);
+    gl->Uniform1i(ctx->lit_texture_loc, 0);
+    gl->Uniform1i(ctx->lit_has_texture_loc, texture ? 1 : 0);
+
+    gl->GenVertexArrays(1, &vao);
+    gl->BindVertexArray(vao);
+
+    gl->GenBuffers(1, &vbo_pos);
+    gl->BindBuffer(GL_ARRAY_BUFFER, vbo_pos);
+    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 3 * sizeof(float)), positions, GL_DYNAMIC_DRAW);
+    gl->EnableVertexAttribArray(0);
+    gl->VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+
+    gl->GenBuffers(1, &vbo_norm);
+    gl->BindBuffer(GL_ARRAY_BUFFER, vbo_norm);
+    if (normals != NULL)
+    {
+        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 3 * sizeof(float)), normals,
+                       GL_DYNAMIC_DRAW);
+    }
+    else
+    {
+        float zero[3] = {0, 1, 0};
+        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(3 * sizeof(float)), zero, GL_DYNAMIC_DRAW);
+    }
+    gl->EnableVertexAttribArray(1);
+    gl->VertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+
+    gl->GenBuffers(1, &vbo_uv);
+    gl->BindBuffer(GL_ARRAY_BUFFER, vbo_uv);
+    if (uvs != NULL)
+    {
+        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 2 * sizeof(float)), uvs, GL_DYNAMIC_DRAW);
+    }
+    else
+    {
+        float zero[2] = {0, 0};
+        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(2 * sizeof(float)), zero, GL_DYNAMIC_DRAW);
+    }
+    gl->EnableVertexAttribArray(2);
+    gl->VertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+
+    gl->GenBuffers(1, &vbo_col);
+    gl->BindBuffer(GL_ARRAY_BUFFER, vbo_col);
+    if (colors != NULL)
+    {
+        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 4 * sizeof(float)), colors,
+                       GL_DYNAMIC_DRAW);
+    }
+    else
+    {
+        float *white = (float *)SDL_calloc((size_t)vertex_count * 4, sizeof(float));
+        if (white != NULL)
+        {
+            for (int i = 0; i < vertex_count; ++i)
+            {
+                white[i * 4] = white[i * 4 + 1] = white[i * 4 + 2] = white[i * 4 + 3] = 1.0f;
+            }
+            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 4 * sizeof(float)), white,
+                           GL_DYNAMIC_DRAW);
+            SDL_free(white);
+        }
+    }
+    gl->EnableVertexAttribArray(3);
+    gl->VertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, 0, NULL);
+
+    if (indices != NULL && index_count > 0)
+    {
+        gl->GenBuffers(1, &ebo);
+        gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+        gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)index_count * sizeof(unsigned int)), indices,
+                       GL_DYNAMIC_DRAW);
+        gl->DrawElements(GL_TRIANGLES, (GLsizei)index_count, GL_UNSIGNED_INT, NULL);
+        gl->DeleteBuffers(1, &ebo);
+    }
+    else
+    {
+        gl->DrawArrays(GL_TRIANGLES, 0, (GLsizei)vertex_count);
+    }
+
+    gl->BindVertexArray(0);
+    gl->DeleteBuffers(1, &vbo_pos);
+    gl->DeleteBuffers(1, &vbo_norm);
+    gl->DeleteBuffers(1, &vbo_uv);
+    gl->DeleteBuffers(1, &vbo_col);
+    gl->DeleteVertexArrays(1, &vao);
 }

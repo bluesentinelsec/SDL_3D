@@ -17,6 +17,8 @@
 #include "sdl3d/math.h"
 #include "sdl3d/render_context.h"
 
+struct sdl3d_gl_context;
+
 struct sdl3d_render_context
 {
     SDL_Window *window;
@@ -68,6 +70,9 @@ struct sdl3d_render_context
     int vertex_snap_precision;
     bool color_quantize;
     int color_depth;
+
+    /* OpenGL backend (NULL when using software backend). */
+    struct sdl3d_gl_context *gl;
 };
 
 static inline sdl3d_framebuffer sdl3d_framebuffer_from_context(sdl3d_render_context *context)

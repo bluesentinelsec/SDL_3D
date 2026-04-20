@@ -4,6 +4,7 @@
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include "gl_backend.h"
 #include "rasterizer.h"
 #include "render_context_internal.h"
 #include "texture_internal.h"
@@ -88,13 +89,9 @@ static bool sdl3d_resolve_backend(sdl3d_backend requested_backend, bool allow_ba
         *resolved_backend = SDL3D_BACKEND_SOFTWARE;
         return true;
     case SDL3D_BACKEND_SDLGPU:
-        if (allow_backend_fallback)
-        {
-            *resolved_backend = SDL3D_BACKEND_SOFTWARE;
-            return true;
-        }
-
-        return SDL_SetError("The SDL GPU backend is not implemented yet.");
+        (void)allow_backend_fallback;
+        *resolved_backend = SDL3D_BACKEND_SDLGPU;
+        return true;
     default:
         return SDL_SetError("Unknown SDL3D backend value: %d", (int)requested_backend);
     }
@@ -147,7 +144,7 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
 {
     sdl3d_render_context_config local_config;
     sdl3d_backend requested_backend;
-    sdl3d_backend resolved_backend;
+    sdl3d_backend resolved_backend = SDL3D_BACKEND_SOFTWARE;
     sdl3d_render_context *context;
     const char *env_backend_name;
     int render_width;
@@ -239,29 +236,45 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
         return false;
     }
 
-    color_buffer_size = (size_t)render_width * (size_t)render_height * 4U;
-    context->color_buffer = SDL_calloc(1, color_buffer_size);
-    if (context->color_buffer == NULL)
+    if (resolved_backend == SDL3D_BACKEND_SOFTWARE)
     {
-        SDL_DestroyTexture(context->color_texture);
-        SDL_free(context);
-        return SDL_OutOfMemory();
-    }
+        color_buffer_size = (size_t)render_width * (size_t)render_height * 4U;
+        context->color_buffer = SDL_calloc(1, color_buffer_size);
+        if (context->color_buffer == NULL)
+        {
+            SDL_DestroyTexture(context->color_texture);
+            SDL_free(context);
+            return SDL_OutOfMemory();
+        }
 
-    depth_buffer_size = (size_t)render_width * (size_t)render_height * sizeof(float);
-    context->depth_buffer = SDL_malloc(depth_buffer_size);
-    if (context->depth_buffer == NULL)
-    {
-        SDL_free(context->color_buffer);
-        SDL_DestroyTexture(context->color_texture);
-        SDL_free(context);
-        return SDL_OutOfMemory();
-    }
+        depth_buffer_size = (size_t)render_width * (size_t)render_height * sizeof(float);
+        context->depth_buffer = SDL_malloc(depth_buffer_size);
+        if (context->depth_buffer == NULL)
+        {
+            SDL_free(context->color_buffer);
+            SDL_DestroyTexture(context->color_texture);
+            SDL_free(context);
+            return SDL_OutOfMemory();
+        }
 
-    const size_t pixel_count = (size_t)render_width * (size_t)render_height;
-    for (size_t i = 0; i < pixel_count; ++i)
+        {
+            const size_t pixel_count = (size_t)render_width * (size_t)render_height;
+            for (size_t i = 0; i < pixel_count; ++i)
+            {
+                context->depth_buffer[i] = 1.0f;
+            }
+        }
+    }
+    else
     {
-        context->depth_buffer[i] = 1.0f;
+        /* GL backend: create OpenGL context and compile shaders. */
+        context->gl = sdl3d_gl_create(window, render_width, render_height);
+        if (context->gl == NULL)
+        {
+            SDL_DestroyTexture(context->color_texture);
+            SDL_free(context);
+            return false;
+        }
     }
 
     context->window = window;
@@ -302,7 +315,10 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     context->vertex_snap_precision = 1;
     context->color_quantize = false;
     context->color_depth = 0;
-    sdl3d_try_create_parallel_rasterizer(context);
+    if (context->backend == SDL3D_BACKEND_SOFTWARE)
+    {
+        sdl3d_try_create_parallel_rasterizer(context);
+    }
 
     *out_context = context;
     return true;
@@ -325,6 +341,7 @@ void sdl3d_destroy_render_context(sdl3d_render_context *context)
     {
         SDL_free(context->shadow_depth[i]);
     }
+    sdl3d_gl_destroy(context->gl);
     SDL_free(context);
 }
 
@@ -368,8 +385,17 @@ bool sdl3d_clear_render_context(sdl3d_render_context *context, sdl3d_color color
         return SDL_InvalidParamError("context");
     }
 
-    sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
-    sdl3d_framebuffer_clear(&framebuffer, color, 1.0f);
+    if (context->backend == SDL3D_BACKEND_SDLGPU && context->gl != NULL)
+    {
+        sdl3d_gl_clear(context->gl, (float)color.r / 255.0f, (float)color.g / 255.0f, (float)color.b / 255.0f,
+                       (float)color.a / 255.0f);
+        return true;
+    }
+
+    {
+        sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
+        sdl3d_framebuffer_clear(&framebuffer, color, 1.0f);
+    }
     return true;
 }
 
@@ -495,6 +521,11 @@ bool sdl3d_present_render_context(sdl3d_render_context *context)
     if (context == NULL)
     {
         return SDL_InvalidParamError("context");
+    }
+
+    if (context->backend == SDL3D_BACKEND_SDLGPU && context->gl != NULL)
+    {
+        return SDL_GL_SwapWindow(context->window);
     }
 
     if (!SDL_UpdateTexture(context->color_texture, NULL, context->color_buffer, context->width * 4))
