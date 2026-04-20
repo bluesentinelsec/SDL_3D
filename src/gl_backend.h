@@ -38,6 +38,6 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const float *positions, const
                             const float *tint, const float *camera_pos, const float *ambient, float metallic,
                             float roughness, const float *emissive, const void *lights, int light_count,
                             int tonemap_mode, int fog_mode, const float *fog_color, float fog_start, float fog_end,
-                            float fog_density);
+                            float fog_density, int shading_mode);
 
 #endif

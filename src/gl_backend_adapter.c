@@ -58,7 +58,7 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
                            params->model_matrix, params->normal_matrix, params->tint, params->camera_pos,
                            params->ambient, params->metallic, params->roughness, params->emissive, params->lights,
                            params->light_count, params->tonemap_mode, params->fog_mode, params->fog_color,
-                           params->fog_start, params->fog_end, params->fog_density);
+                           params->fog_start, params->fog_end, params->fog_density, params->shading_mode);
     return true;
 }
 

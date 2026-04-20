@@ -501,6 +501,7 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         lp.fog_start = context->fog.start;
         lp.fog_end = context->fog.end;
         lp.fog_density = context->fog.density;
+        lp.shading_mode = (int)context->shading_mode;
 
         if (context->backend_iface.draw_mesh_lit(context, &lp))
         {

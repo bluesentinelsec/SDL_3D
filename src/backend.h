@@ -68,6 +68,7 @@ typedef struct sdl3d_draw_params_lit
     float fog_start;
     float fog_end;
     float fog_density;
+    int shading_mode;
 } sdl3d_draw_params_lit;
 
 /* ------------------------------------------------------------------ */

@@ -507,10 +507,11 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const float *positions, const
                             const float *tint, const float *camera_pos, const float *ambient, float metallic,
                             float roughness, const float *emissive, const void *lights, int light_count,
                             int tonemap_mode, int fog_mode, const float *fog_color, float fog_start, float fog_end,
-                            float fog_density)
+                            float fog_density, int shading_mode)
 {
     GLuint vao, vbo_pos, vbo_norm, vbo_uv, vbo_col, ebo;
     const sdl3d_gl_funcs *gl;
+    GLuint program;
 
     if (ctx == NULL || positions == NULL || vertex_count <= 0)
     {
@@ -518,35 +519,37 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const float *positions, const
     }
 
     gl = &ctx->gl;
-    gl->UseProgram(ctx->lit_program);
-    gl->UniformMatrix4fv(ctx->lit_mvp_loc, 1, GL_FALSE, mvp);
-    gl->UniformMatrix4fv(ctx->lit_model_loc, 1, GL_FALSE, model_matrix);
-    /* Normal matrix is 3x3 — pass as 3 vec3 uniforms or use mat3 uniform. */
-    /* For now, pass the upper-left 3x3 of the model matrix. */
+    program = sdl3d_gl_get_program_for_profile(ctx, shading_mode, light_count > 0);
+    gl->UseProgram(program);
+
+    /* Set uniforms — query locations dynamically since each profile
+     * shader has a different uniform set.  Unused uniforms return -1
+     * and the gl->Uniform* calls silently ignore location -1. */
+    gl->UniformMatrix4fv(gl->GetUniformLocation(program, "uMVP"), 1, GL_FALSE, mvp);
+    gl->UniformMatrix4fv(gl->GetUniformLocation(program, "uModel"), 1, GL_FALSE, model_matrix);
     {
         float nm[9] = {normal_matrix[0], normal_matrix[1], normal_matrix[2], normal_matrix[3], normal_matrix[4],
                        normal_matrix[5], normal_matrix[6], normal_matrix[7], normal_matrix[8]};
-        GLint loc = ctx->lit_normal_matrix_loc;
-        /* glUniformMatrix3fv — we need to add this to our function table. For now skip. */
+        GLint loc = gl->GetUniformLocation(program, "uNormalMatrix");
         (void)nm;
         (void)loc;
     }
-    gl->Uniform4f(ctx->lit_tint_loc, tint[0], tint[1], tint[2], tint[3]);
-    gl->Uniform3f(ctx->lit_camera_pos_loc, camera_pos[0], camera_pos[1], camera_pos[2]);
-    gl->Uniform3f(ctx->lit_ambient_loc, ambient[0], ambient[1], ambient[2]);
-    gl->Uniform1f(ctx->lit_metallic_loc, metallic);
-    gl->Uniform1f(ctx->lit_roughness_loc, roughness);
-    gl->Uniform3f(ctx->lit_emissive_loc, emissive[0], emissive[1], emissive[2]);
-    gl->Uniform1i(ctx->lit_light_count_loc, light_count);
-    gl->Uniform1i(ctx->lit_tonemap_mode_loc, tonemap_mode);
-    gl->Uniform1i(ctx->lit_fog_mode_loc, fog_mode);
+    gl->Uniform4f(gl->GetUniformLocation(program, "uTint"), tint[0], tint[1], tint[2], tint[3]);
+    gl->Uniform3f(gl->GetUniformLocation(program, "uCameraPos"), camera_pos[0], camera_pos[1], camera_pos[2]);
+    gl->Uniform3f(gl->GetUniformLocation(program, "uAmbient"), ambient[0], ambient[1], ambient[2]);
+    gl->Uniform1f(gl->GetUniformLocation(program, "uMetallic"), metallic);
+    gl->Uniform1f(gl->GetUniformLocation(program, "uRoughness"), roughness);
+    gl->Uniform3f(gl->GetUniformLocation(program, "uEmissive"), emissive[0], emissive[1], emissive[2]);
+    gl->Uniform1i(gl->GetUniformLocation(program, "uLightCount"), light_count);
+    gl->Uniform1i(gl->GetUniformLocation(program, "uTonemapMode"), tonemap_mode);
+    gl->Uniform1i(gl->GetUniformLocation(program, "uFogMode"), fog_mode);
     if (fog_color != NULL)
     {
-        gl->Uniform3f(ctx->lit_fog_color_loc, fog_color[0], fog_color[1], fog_color[2]);
+        gl->Uniform3f(gl->GetUniformLocation(program, "uFogColor"), fog_color[0], fog_color[1], fog_color[2]);
     }
-    gl->Uniform1f(ctx->lit_fog_start_loc, fog_start);
-    gl->Uniform1f(ctx->lit_fog_end_loc, fog_end);
-    gl->Uniform1f(ctx->lit_fog_density_loc, fog_density);
+    gl->Uniform1f(gl->GetUniformLocation(program, "uFogStart"), fog_start);
+    gl->Uniform1f(gl->GetUniformLocation(program, "uFogEnd"), fog_end);
+    gl->Uniform1f(gl->GetUniformLocation(program, "uFogDensity"), fog_density);
 
     /* Upload light uniforms. */
     if (lights != NULL && light_count > 0)
@@ -557,36 +560,36 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const float *positions, const
         {
             GLint loc;
             SDL_snprintf(name, sizeof(name), "uLights[%d].type", i);
-            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            loc = gl->GetUniformLocation(program, name);
             gl->Uniform1i(loc, (int)lt[i].type);
             SDL_snprintf(name, sizeof(name), "uLights[%d].position", i);
-            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            loc = gl->GetUniformLocation(program, name);
             gl->Uniform3f(loc, lt[i].position.x, lt[i].position.y, lt[i].position.z);
             SDL_snprintf(name, sizeof(name), "uLights[%d].direction", i);
-            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            loc = gl->GetUniformLocation(program, name);
             gl->Uniform3f(loc, lt[i].direction.x, lt[i].direction.y, lt[i].direction.z);
             SDL_snprintf(name, sizeof(name), "uLights[%d].color", i);
-            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            loc = gl->GetUniformLocation(program, name);
             gl->Uniform3f(loc, lt[i].color[0], lt[i].color[1], lt[i].color[2]);
             SDL_snprintf(name, sizeof(name), "uLights[%d].intensity", i);
-            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            loc = gl->GetUniformLocation(program, name);
             gl->Uniform1f(loc, lt[i].intensity);
             SDL_snprintf(name, sizeof(name), "uLights[%d].range", i);
-            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            loc = gl->GetUniformLocation(program, name);
             gl->Uniform1f(loc, lt[i].range);
             SDL_snprintf(name, sizeof(name), "uLights[%d].innerCutoff", i);
-            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            loc = gl->GetUniformLocation(program, name);
             gl->Uniform1f(loc, lt[i].inner_cutoff);
             SDL_snprintf(name, sizeof(name), "uLights[%d].outerCutoff", i);
-            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            loc = gl->GetUniformLocation(program, name);
             gl->Uniform1f(loc, lt[i].outer_cutoff);
         }
     }
 
     gl->ActiveTexture(GL_TEXTURE0);
     gl->BindTexture(GL_TEXTURE_2D, texture ? texture : ctx->white_texture);
-    gl->Uniform1i(ctx->lit_texture_loc, 0);
-    gl->Uniform1i(ctx->lit_has_texture_loc, texture ? 1 : 0);
+    gl->Uniform1i(gl->GetUniformLocation(program, "uTexture"), 0);
+    gl->Uniform1i(gl->GetUniformLocation(program, "uHasTexture"), texture ? 1 : 0);
 
     gl->GenVertexArrays(1, &vao);
     gl->BindVertexArray(vao);
