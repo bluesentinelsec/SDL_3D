@@ -159,6 +159,8 @@ static bool sdl3d_demo_create_backend(SDL_Window **out_win, SDL_Renderer **out_r
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+        SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
         flags |= SDL_WINDOW_OPENGL;
     }
 
@@ -293,9 +295,9 @@ int main(int argc, char *argv[])
     /* Fog. */
     SDL_zerop(&fog);
     fog.mode = SDL3D_FOG_EXP2;
-    fog.color[0] = 0.55f;
-    fog.color[1] = 0.65f;
-    fog.color[2] = 0.75f;
+    fog.color[0] = 0.549f;
+    fog.color[1] = 0.686f;
+    fog.color[2] = 0.824f;
     fog.density = 0.025f;
     sdl3d_set_fog(ctx, &fog);
 

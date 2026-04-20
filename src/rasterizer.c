@@ -1327,6 +1327,7 @@ typedef struct sdl3d_parallel_triangle_textured_job
     sdl3d_framebuffer *framebuffer;
     sdl3d_prepared_triangle_textured triangle;
     const sdl3d_texture2d *texture;
+    const struct sdl3d_lighting_params *lighting_params;
     int first_tile_x;
     int first_tile_y;
     int tiles_w;
@@ -1381,8 +1382,9 @@ static bool sdl3d_prepare_screen_triangle_textured(const sdl3d_framebuffer *fram
 
 static void sdl3d_rasterize_prepared_triangle_textured_region(sdl3d_framebuffer *framebuffer,
                                                               const sdl3d_prepared_triangle_textured *triangle,
-                                                              const sdl3d_texture2d *texture, int min_px_x,
-                                                              int max_px_x, int min_px_y, int max_px_y)
+                                                              const sdl3d_texture2d *texture,
+                                                              const struct sdl3d_lighting_params *lighting_params,
+                                                              int min_px_x, int max_px_x, int min_px_y, int max_px_y)
 {
     const sdl3d_screen_vertex_textured a = triangle->a;
     const sdl3d_screen_vertex_textured b = triangle->b;
@@ -1424,8 +1426,8 @@ static void sdl3d_rasterize_prepared_triangle_textured_region(sdl3d_framebuffer 
             const float depth = (bary_a * a.base.z) + (bary_b * b.base.z) + (bary_c * c.base.z);
             const float inverse_w_pixel = (bary_a * a.inverse_w) + (bary_b * b.inverse_w) + (bary_c * c.inverse_w);
             const float pixel_w = 1.0f / inverse_w_pixel;
-            const float u = ((bary_a * a.u_over_w) + (bary_b * b.u_over_w) + (bary_c * c.u_over_w)) * pixel_w;
-            const float v = ((bary_a * a.v_over_w) + (bary_b * b.v_over_w) + (bary_c * c.v_over_w)) * pixel_w;
+            float u;
+            float v;
             const float modulate_r =
                 ((bary_a * a.modulate_r_over_w) + (bary_b * b.modulate_r_over_w) + (bary_c * c.modulate_r_over_w)) *
                 pixel_w;
@@ -1438,6 +1440,20 @@ static void sdl3d_rasterize_prepared_triangle_textured_region(sdl3d_framebuffer 
             const float modulate_a =
                 ((bary_a * a.modulate_a_over_w) + (bary_b * b.modulate_a_over_w) + (bary_c * c.modulate_a_over_w)) *
                 pixel_w;
+
+            if (lighting_params != NULL && lighting_params->uv_mode == SDL3D_UV_AFFINE)
+            {
+                const float aw = a.inverse_w > 0.0f ? 1.0f / a.inverse_w : 1.0f;
+                const float bw = b.inverse_w > 0.0f ? 1.0f / b.inverse_w : 1.0f;
+                const float cw = c.inverse_w > 0.0f ? 1.0f / c.inverse_w : 1.0f;
+                u = bary_a * (a.u_over_w * aw) + bary_b * (b.u_over_w * bw) + bary_c * (c.u_over_w * cw);
+                v = bary_a * (a.v_over_w * aw) + bary_b * (b.v_over_w * bw) + bary_c * (c.v_over_w * cw);
+            }
+            else
+            {
+                u = ((bary_a * a.u_over_w) + (bary_b * b.u_over_w) + (bary_c * c.u_over_w)) * pixel_w;
+                v = ((bary_a * a.v_over_w) + (bary_b * b.v_over_w) + (bary_c * c.v_over_w)) * pixel_w;
+            }
 
             if (texture != NULL)
             {
@@ -1452,6 +1468,33 @@ static void sdl3d_rasterize_prepared_triangle_textured_region(sdl3d_framebuffer 
             if (output_a <= 0.0f)
             {
                 continue;
+            }
+
+            if (lighting_params != NULL && lighting_params->color_quantize && lighting_params->color_depth > 0)
+            {
+                static const float bayer4x4[4][4] = {
+                    {0.0f / 16.0f, 8.0f / 16.0f, 2.0f / 16.0f, 10.0f / 16.0f},
+                    {12.0f / 16.0f, 4.0f / 16.0f, 14.0f / 16.0f, 6.0f / 16.0f},
+                    {3.0f / 16.0f, 11.0f / 16.0f, 1.0f / 16.0f, 9.0f / 16.0f},
+                    {15.0f / 16.0f, 7.0f / 16.0f, 13.0f / 16.0f, 5.0f / 16.0f}};
+                const float levels = (float)lighting_params->color_depth;
+                const float step = 1.0f / levels;
+                const float dither = (bayer4x4[py & 3][px & 3] - 0.5f) * step;
+                output_r = SDL_floorf((output_r + dither) * levels + 0.5f) / levels;
+                output_g = SDL_floorf((output_g + dither) * levels + 0.5f) / levels;
+                output_b = SDL_floorf((output_b + dither) * levels + 0.5f) / levels;
+                if (output_r < 0.0f)
+                {
+                    output_r = 0.0f;
+                }
+                if (output_g < 0.0f)
+                {
+                    output_g = 0.0f;
+                }
+                if (output_b < 0.0f)
+                {
+                    output_b = 0.0f;
+                }
             }
 
             sdl3d_color color;
@@ -1481,13 +1524,15 @@ static void sdl3d_parallel_triangle_textured_job_run_tile(void *userdata, int ti
         return;
     }
 
-    sdl3d_rasterize_prepared_triangle_textured_region(job->framebuffer, &job->triangle, job->texture, tile_min_px_x,
-                                                      tile_max_px_x, tile_min_px_y, tile_max_px_y);
+    sdl3d_rasterize_prepared_triangle_textured_region(job->framebuffer, &job->triangle, job->texture,
+                                                      job->lighting_params, tile_min_px_x, tile_max_px_x,
+                                                      tile_min_px_y, tile_max_px_y);
 }
 
 static bool sdl3d_try_rasterize_prepared_triangle_textured_parallel(sdl3d_framebuffer *framebuffer,
                                                                     const sdl3d_prepared_triangle_textured *triangle,
-                                                                    const sdl3d_texture2d *texture)
+                                                                    const sdl3d_texture2d *texture,
+                                                                    const struct sdl3d_lighting_params *lighting_params)
 {
     if (framebuffer->parallel_rasterizer == NULL)
     {
@@ -1511,6 +1556,7 @@ static bool sdl3d_try_rasterize_prepared_triangle_textured_parallel(sdl3d_frameb
     triangle_job.framebuffer = framebuffer;
     triangle_job.triangle = *triangle;
     triangle_job.texture = texture;
+    triangle_job.lighting_params = lighting_params;
     triangle_job.first_tile_x = first_tile_x;
     triangle_job.first_tile_y = first_tile_y;
     triangle_job.tiles_w = tiles_w;
@@ -1527,7 +1573,8 @@ static bool sdl3d_try_rasterize_prepared_triangle_textured_parallel(sdl3d_frameb
 
 static void sdl3d_rasterize_screen_triangle_textured(sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex_textured a,
                                                      sdl3d_screen_vertex_textured b, sdl3d_screen_vertex_textured c,
-                                                     const sdl3d_texture2d *texture)
+                                                     const sdl3d_texture2d *texture,
+                                                     const struct sdl3d_lighting_params *lighting_params)
 {
     sdl3d_prepared_triangle_textured triangle;
     if (!sdl3d_prepare_screen_triangle_textured(framebuffer, a, b, c, &triangle))
@@ -1535,21 +1582,22 @@ static void sdl3d_rasterize_screen_triangle_textured(sdl3d_framebuffer *framebuf
         return;
     }
 
-    if (sdl3d_try_rasterize_prepared_triangle_textured_parallel(framebuffer, &triangle, texture))
+    if (sdl3d_try_rasterize_prepared_triangle_textured_parallel(framebuffer, &triangle, texture, lighting_params))
     {
         return;
     }
 
-    sdl3d_rasterize_prepared_triangle_textured_region(framebuffer, &triangle, texture, triangle.bounds.min_px_x,
-                                                      triangle.bounds.max_px_x, triangle.bounds.min_px_y,
-                                                      triangle.bounds.max_px_y);
+    sdl3d_rasterize_prepared_triangle_textured_region(framebuffer, &triangle, texture, lighting_params,
+                                                      triangle.bounds.min_px_x, triangle.bounds.max_px_x,
+                                                      triangle.bounds.min_px_y, triangle.bounds.max_px_y);
 }
 
-void sdl3d_rasterize_triangle_textured(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0, sdl3d_vec3 v1,
-                                       sdl3d_vec3 v2, sdl3d_vec2 uv0, sdl3d_vec2 uv1, sdl3d_vec2 uv2,
-                                       sdl3d_vec4 modulate0, sdl3d_vec4 modulate1, sdl3d_vec4 modulate2,
-                                       const sdl3d_texture2d *texture, bool backface_culling_enabled,
-                                       bool wireframe_enabled)
+void sdl3d_rasterize_triangle_textured_profiled(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0,
+                                                sdl3d_vec3 v1, sdl3d_vec3 v2, sdl3d_vec2 uv0, sdl3d_vec2 uv1,
+                                                sdl3d_vec2 uv2, sdl3d_vec4 modulate0, sdl3d_vec4 modulate1,
+                                                sdl3d_vec4 modulate2, const sdl3d_texture2d *texture,
+                                                const struct sdl3d_lighting_params *lighting_params,
+                                                bool backface_culling_enabled, bool wireframe_enabled)
 {
     if (framebuffer == NULL || framebuffer->color_pixels == NULL || framebuffer->depth_pixels == NULL)
     {
@@ -1591,6 +1639,16 @@ void sdl3d_rasterize_triangle_textured(sdl3d_framebuffer *framebuffer, sdl3d_mat
     for (int i = 0; i < clipped_count; ++i)
     {
         screen[i] = sdl3d_viewport_transform_textured(clipped[i], framebuffer->width, framebuffer->height);
+        if (lighting_params != NULL && lighting_params->vertex_snap)
+        {
+            const int prec = lighting_params->vertex_snap_precision > 0 ? lighting_params->vertex_snap_precision : 1;
+            const float snapped_x = SDL_roundf(screen[i].base.x_px / (float)prec) * (float)prec;
+            const float snapped_y = SDL_roundf(screen[i].base.y_px / (float)prec) * (float)prec;
+            screen[i].base.x_px = snapped_x;
+            screen[i].base.y_px = snapped_y;
+            screen[i].base.x_fx = sdl3d_round_subpixel(snapped_x);
+            screen[i].base.y_fx = sdl3d_round_subpixel(snapped_y);
+        }
         screen_positions[i] = screen[i].base;
     }
 
@@ -1639,8 +1697,20 @@ void sdl3d_rasterize_triangle_textured(sdl3d_framebuffer *framebuffer, sdl3d_mat
 
     for (int i = 1; i + 1 < clipped_count; ++i)
     {
-        sdl3d_rasterize_screen_triangle_textured(framebuffer, screen[0], screen[i], screen[i + 1], texture);
+        sdl3d_rasterize_screen_triangle_textured(framebuffer, screen[0], screen[i], screen[i + 1], texture,
+                                                lighting_params);
     }
+}
+
+void sdl3d_rasterize_triangle_textured(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0, sdl3d_vec3 v1,
+                                       sdl3d_vec3 v2, sdl3d_vec2 uv0, sdl3d_vec2 uv1, sdl3d_vec2 uv2,
+                                       sdl3d_vec4 modulate0, sdl3d_vec4 modulate1, sdl3d_vec4 modulate2,
+                                       const sdl3d_texture2d *texture, bool backface_culling_enabled,
+                                       bool wireframe_enabled)
+{
+    sdl3d_rasterize_triangle_textured_profiled(framebuffer, mvp, v0, v1, v2, uv0, uv1, uv2, modulate0, modulate1,
+                                               modulate2, texture, NULL, backface_culling_enabled,
+                                               wireframe_enabled);
 }
 
 /* --- Line rasterization -------------------------------------------------- */
@@ -1942,37 +2012,73 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
                     sdl3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, nx, ny, nz, wpx, wpy, wpz, &lit_r,
                                              &lit_g, &lit_b);
 
-                    /* Fog: blend in linear space before tonemapping/gamma. */
-                    if (lp->fog.mode != SDL3D_FOG_NONE)
+                    /* Fog + tonemapping.  When using a real tonemap operator
+                     * (ACES/Reinhard), fog blends in linear space before the
+                     * operator compresses the range.  With TONEMAP_NONE the fog
+                     * color is already sRGB (matches the sky), so we gamma-encode
+                     * the lit color first, then mix fog to avoid brightening it. */
+                    if (lp->tonemap_mode != SDL3D_TONEMAP_NONE)
                     {
-                        float fog_f;
-                        if (lp->fog_eval == SDL3D_FOG_EVAL_VERTEX)
+                        if (lp->fog.mode != SDL3D_FOG_NONE)
                         {
-                            fog_f = (ba * a.fog_over_w + bb * b.fog_over_w + bc * c.fog_over_w) * pw;
-                            if (fog_f < 0.0f)
+                            float fog_f;
+                            if (lp->fog_eval == SDL3D_FOG_EVAL_VERTEX)
                             {
-                                fog_f = 0.0f;
+                                fog_f = (ba * a.fog_over_w + bb * b.fog_over_w + bc * c.fog_over_w) * pw;
+                                if (fog_f < 0.0f)
+                                {
+                                    fog_f = 0.0f;
+                                }
+                                if (fog_f > 1.0f)
+                                {
+                                    fog_f = 1.0f;
+                                }
                             }
-                            if (fog_f > 1.0f)
+                            else
                             {
-                                fog_f = 1.0f;
+                                float dx = wpx - lp->camera_pos.x;
+                                float dy = wpy - lp->camera_pos.y;
+                                float dz = wpz - lp->camera_pos.z;
+                                float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
+                                fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
                             }
+                            lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
+                            lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
+                            lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
                         }
-                        else
-                        {
-                            float dx = wpx - lp->camera_pos.x;
-                            float dy = wpy - lp->camera_pos.y;
-                            float dz = wpz - lp->camera_pos.z;
-                            float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
-                            fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
-                        }
-                        lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
-                        lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
-                        lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
+                        sdl3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
                     }
-
-                    /* Tonemapping + sRGB gamma (after fog, so fog blends in linear space). */
-                    sdl3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
+                    else
+                    {
+                        sdl3d_tonemap(SDL3D_TONEMAP_NONE, &lit_r, &lit_g, &lit_b);
+                        if (lp->fog.mode != SDL3D_FOG_NONE)
+                        {
+                            float fog_f;
+                            if (lp->fog_eval == SDL3D_FOG_EVAL_VERTEX)
+                            {
+                                fog_f = (ba * a.fog_over_w + bb * b.fog_over_w + bc * c.fog_over_w) * pw;
+                                if (fog_f < 0.0f)
+                                {
+                                    fog_f = 0.0f;
+                                }
+                                if (fog_f > 1.0f)
+                                {
+                                    fog_f = 1.0f;
+                                }
+                            }
+                            else
+                            {
+                                float dx = wpx - lp->camera_pos.x;
+                                float dy = wpy - lp->camera_pos.y;
+                                float dz = wpz - lp->camera_pos.z;
+                                float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
+                                fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
+                            }
+                            lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
+                            lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
+                            lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
+                        }
+                    }
 
                     /* Color quantization with optional Bayer dithering. */
                     if (lp->color_quantize && lp->color_depth > 0)
