@@ -169,7 +169,7 @@ TEST_F(SDLVideoFixture, LogicalPresentationConfigIsApplied)
     sdl3d_destroy_render_context(context);
 }
 
-TEST_F(SDLVideoFixture, SdlGpuWithoutFallbackFails)
+TEST_F(SDLVideoFixture, SdlGpuBackendAcceptsRequest)
 {
     SDLWindowRendererPair pair;
     ASSERT_TRUE(pair.is_valid()) << SDL_GetError();
@@ -180,10 +180,17 @@ TEST_F(SDLVideoFixture, SdlGpuWithoutFallbackFails)
     config.allow_backend_fallback = false;
 
     sdl3d_render_context *context = nullptr;
-    SDL_ClearError();
-    EXPECT_FALSE(sdl3d_create_render_context(pair.window(), pair.renderer(), &config, &context));
-    EXPECT_EQ(nullptr, context);
-    EXPECT_NE(std::string_view(SDL_GetError()).find("not implemented"), std::string_view::npos);
+    bool ok = sdl3d_create_render_context(pair.window(), pair.renderer(), &config, &context);
+    /* GL context creation may fail in headless CI, but should not say "not implemented". */
+    if (!ok)
+    {
+        std::string_view err = SDL_GetError();
+        EXPECT_EQ(err.find("not implemented"), std::string_view::npos);
+    }
+    if (context != nullptr)
+    {
+        sdl3d_destroy_render_context(context);
+    }
 }
 
 TEST_F(SDLVideoFixture, EnvironmentOverrideCanForceSoftwareBackend)

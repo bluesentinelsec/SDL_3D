@@ -250,20 +250,29 @@ TEST(SDL3DCreateRenderContext, InvalidEnvOverrideFailsBeforeTouchingRenderer)
     EXPECT_NE(std::string_view(SDL_GetError()).find("Unsupported SDL3D backend override"), std::string_view::npos);
 }
 
-TEST(SDL3DCreateRenderContext, SdlGpuWithoutFallbackFailsBeforeTouchingRenderer)
+TEST(SDL3DCreateRenderContext, SdlGpuBackendAcceptsRequest)
 {
     SDL3DBackendEnvGuard guard(nullptr);
-    sdl3d_render_context *context = nullptr;
     sdl3d_render_context_config config;
     sdl3d_init_render_context_config(&config);
     config.backend = SDL3D_BACKEND_SDLGPU;
     config.allow_backend_fallback = false;
 
-    SDL_ClearError();
-    EXPECT_FALSE(sdl3d_create_render_context(reinterpret_cast<SDL_Window *>(0x1), reinterpret_cast<SDL_Renderer *>(0x1),
-                                             &config, &context));
-    EXPECT_EQ(nullptr, context);
-    EXPECT_NE(std::string_view(SDL_GetError()).find("not implemented"), std::string_view::npos);
+    /* The GL backend is now implemented. Creating with a fake window will
+     * fail at GL context creation, but the backend selection itself should
+     * not produce a "not implemented" error. */
+    sdl3d_render_context *context = nullptr;
+    bool ok = sdl3d_create_render_context(reinterpret_cast<SDL_Window *>(0x1), reinterpret_cast<SDL_Renderer *>(0x1),
+                                          &config, &context);
+    if (!ok)
+    {
+        std::string_view err = SDL_GetError();
+        EXPECT_EQ(err.find("not implemented"), std::string_view::npos) << "Backend should be accepted, got: " << err;
+    }
+    if (context != nullptr)
+    {
+        sdl3d_destroy_render_context(context);
+    }
 }
 
 TEST(SDL3DRenderContextAccessors, NullContextReturnsZeroSizedAuto)
