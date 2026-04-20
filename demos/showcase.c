@@ -135,6 +135,77 @@ static void draw_scene(sdl3d_render_context *ctx)
     sdl3d_draw_sphere(ctx, sdl3d_vec3_make(9, 0.15f, -10), 0.25f, 5, 5, stone);
 }
 
+/*
+ * Create (or recreate) the window, renderer, and render context for a
+ * given backend.  Each backend has different window requirements:
+ *   - Software: any window + SDL renderer for texture upload
+ *   - OpenGL:   SDL_WINDOW_OPENGL + SDL renderer (unused but required by API)
+ *   - SDL_GPU:  (future) SDL_WINDOW_VULKAN or similar
+ *
+ * On toggle, the caller destroys the old resources and calls this again.
+ */
+static bool sdl3d_demo_create_backend(SDL_Window **out_win, SDL_Renderer **out_ren, sdl3d_render_context **out_ctx,
+                                      sdl3d_backend backend)
+{
+    SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE;
+    SDL_Window *w;
+    SDL_Renderer *r;
+    sdl3d_render_context *c = NULL;
+    sdl3d_render_context_config cfg;
+
+    if (backend == SDL3D_BACKEND_SDLGPU)
+    {
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+        flags |= SDL_WINDOW_OPENGL;
+    }
+
+    w = SDL_CreateWindow("SDL3D Showcase", 960, 720, flags);
+    if (w == NULL)
+    {
+        return false;
+    }
+
+    r = SDL_CreateRenderer(w, NULL);
+    if (r == NULL)
+    {
+        SDL_DestroyWindow(w);
+        return false;
+    }
+
+    sdl3d_init_render_context_config(&cfg);
+    cfg.backend = backend;
+    cfg.allow_backend_fallback = false;
+    cfg.logical_width = RENDER_W;
+    cfg.logical_height = RENDER_H;
+    cfg.logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
+
+    if (!sdl3d_create_render_context(w, r, &cfg, &c))
+    {
+        SDL_DestroyRenderer(r);
+        SDL_DestroyWindow(w);
+        return false;
+    }
+
+    SDL_SetWindowRelativeMouseMode(w, true);
+    *out_win = w;
+    *out_ren = r;
+    *out_ctx = c;
+    return true;
+}
+
+static void sdl3d_demo_destroy_backend(SDL_Window **win, SDL_Renderer **ren, sdl3d_render_context **ctx)
+{
+    sdl3d_destroy_render_context(*ctx);
+    *ctx = NULL;
+    SDL_DestroyRenderer(*ren);
+    *ren = NULL;
+    SDL_DestroyWindow(*win);
+    *win = NULL;
+}
+
 int main(int argc, char *argv[])
 {
     SDL_Window *win;
@@ -164,21 +235,15 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    /* Set GL attributes before window creation for OpenGL support. */
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-
-    win = SDL_CreateWindow("SDL3D Showcase", 960, 720, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
-    ren = SDL_CreateRenderer(win, "software");
-    sdl3d_init_render_context_config(&cfg);
-    cfg.logical_width = RENDER_W;
-    cfg.logical_height = RENDER_H;
-    cfg.logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
-    sdl3d_create_render_context(win, ren, &cfg, &ctx);
-
-    SDL_SetWindowRelativeMouseMode(win, true);
+    win = NULL;
+    ren = NULL;
+    ctx = NULL;
+    if (!sdl3d_demo_create_backend(&win, &ren, &ctx, current_backend))
+    {
+        fprintf(stderr, "Initial backend setup failed: %s\n", SDL_GetError());
+        SDL_Quit();
+        return 1;
+    }
 
     /* Lighting. */
     SDL_zerop(&sun);
@@ -382,21 +447,14 @@ int main(int argc, char *argv[])
                     }
                     break;
                 case SDLK_TAB: {
-                    /* Toggle backend: destroy and recreate render context. */
+                    /* Toggle backend: destroy window/renderer/context and recreate
+                     * with the correct window flags for the new backend. */
                     sdl3d_backend new_backend =
                         (current_backend == SDL3D_BACKEND_SOFTWARE) ? SDL3D_BACKEND_SDLGPU : SDL3D_BACKEND_SOFTWARE;
-                    sdl3d_destroy_render_context(ctx);
-                    ctx = NULL;
-                    sdl3d_render_context_config new_cfg;
-                    sdl3d_init_render_context_config(&new_cfg);
-                    new_cfg.backend = new_backend;
-                    new_cfg.logical_width = RENDER_W;
-                    new_cfg.logical_height = RENDER_H;
-                    new_cfg.logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
-                    if (sdl3d_create_render_context(win, ren, &new_cfg, &ctx))
+                    sdl3d_demo_destroy_backend(&win, &ren, &ctx);
+                    if (sdl3d_demo_create_backend(&win, &ren, &ctx, new_backend))
                     {
                         current_backend = new_backend;
-                        /* Re-apply lighting and fog. */
                         sdl3d_add_light(ctx, &sun);
                         sdl3d_add_light(ctx, &lamp1);
                         sdl3d_add_light(ctx, &lamp2);
@@ -411,10 +469,15 @@ int main(int argc, char *argv[])
                     }
                     else
                     {
-                        fprintf(stderr, "Backend switch failed: %s\n", SDL_GetError());
+                        fprintf(stderr, "Backend switch to %s failed: %s\n",
+                                new_backend == SDL3D_BACKEND_SOFTWARE ? "Software" : "OpenGL", SDL_GetError());
                         /* Fall back to software. */
-                        new_cfg.backend = SDL3D_BACKEND_SOFTWARE;
-                        sdl3d_create_render_context(win, ren, &new_cfg, &ctx);
+                        if (!sdl3d_demo_create_backend(&win, &ren, &ctx, SDL3D_BACKEND_SOFTWARE))
+                        {
+                            fprintf(stderr, "Fatal: cannot create software fallback\n");
+                            running = false;
+                            break;
+                        }
                         current_backend = SDL3D_BACKEND_SOFTWARE;
                         sdl3d_add_light(ctx, &sun);
                         sdl3d_add_light(ctx, &lamp1);
