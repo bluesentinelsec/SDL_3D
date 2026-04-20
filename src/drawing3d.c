@@ -793,8 +793,8 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
             sdl3d_rasterize_triangle_textured_profiled(
                 &framebuffer, context->model_view_projection, p0, p1, p2, uv0, uv1, uv2,
                 sdl3d_shade_point_retro(lighting, m0, wn0, wp0), sdl3d_shade_point_retro(lighting, m1, wn1, wp1),
-                sdl3d_shade_point_retro(lighting, m2, wn2, wp2), texture, lighting,
-                context->backface_culling_enabled, context->wireframe_enabled);
+                sdl3d_shade_point_retro(lighting, m2, wn2, wp2), texture, lighting, context->backface_culling_enabled,
+                context->wireframe_enabled);
         }
         else if (lit)
         {
@@ -1046,11 +1046,11 @@ bool sdl3d_draw_triangle_3d(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_
         else if (mode == SDL3D_SHADING_GOURAUD)
         {
             sdl3d_vec2 uv0 = {0.0f, 0.0f};
-            sdl3d_rasterize_triangle_textured_profiled(
-                &framebuffer, context->model_view_projection, v0, v1, v2, uv0, uv0, uv0,
-                sdl3d_shade_point_retro(&lp, modulate, wn, wp0), sdl3d_shade_point_retro(&lp, modulate, wn, wp1),
-                sdl3d_shade_point_retro(&lp, modulate, wn, wp2), NULL, &lp,
-                context->backface_culling_enabled, context->wireframe_enabled);
+            sdl3d_rasterize_triangle_textured_profiled(&framebuffer, context->model_view_projection, v0, v1, v2, uv0,
+                                                       uv0, uv0, sdl3d_shade_point_retro(&lp, modulate, wn, wp0),
+                                                       sdl3d_shade_point_retro(&lp, modulate, wn, wp1),
+                                                       sdl3d_shade_point_retro(&lp, modulate, wn, wp2), NULL, &lp,
+                                                       context->backface_culling_enabled, context->wireframe_enabled);
         }
         else /* SDL3D_SHADING_PHONG */
         {

@@ -157,8 +157,10 @@ bool sdl3d_draw_plane(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_ve
 
     cols = (int)(size.x / CELL_SIZE);
     rows = (int)(size.y / CELL_SIZE);
-    if (cols < 1) cols = 1;
-    if (rows < 1) rows = 1;
+    if (cols < 1)
+        cols = 1;
+    if (rows < 1)
+        rows = 1;
 
     hx = size.x * 0.5f;
     hz = size.y * 0.5f;

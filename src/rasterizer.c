@@ -1472,11 +1472,10 @@ static void sdl3d_rasterize_prepared_triangle_textured_region(sdl3d_framebuffer 
 
             if (lighting_params != NULL && lighting_params->color_quantize && lighting_params->color_depth > 0)
             {
-                static const float bayer4x4[4][4] = {
-                    {0.0f / 16.0f, 8.0f / 16.0f, 2.0f / 16.0f, 10.0f / 16.0f},
-                    {12.0f / 16.0f, 4.0f / 16.0f, 14.0f / 16.0f, 6.0f / 16.0f},
-                    {3.0f / 16.0f, 11.0f / 16.0f, 1.0f / 16.0f, 9.0f / 16.0f},
-                    {15.0f / 16.0f, 7.0f / 16.0f, 13.0f / 16.0f, 5.0f / 16.0f}};
+                static const float bayer4x4[4][4] = {{0.0f / 16.0f, 8.0f / 16.0f, 2.0f / 16.0f, 10.0f / 16.0f},
+                                                     {12.0f / 16.0f, 4.0f / 16.0f, 14.0f / 16.0f, 6.0f / 16.0f},
+                                                     {3.0f / 16.0f, 11.0f / 16.0f, 1.0f / 16.0f, 9.0f / 16.0f},
+                                                     {15.0f / 16.0f, 7.0f / 16.0f, 13.0f / 16.0f, 5.0f / 16.0f}};
                 const float levels = (float)lighting_params->color_depth;
                 const float step = 1.0f / levels;
                 const float dither = (bayer4x4[py & 3][px & 3] - 0.5f) * step;
@@ -1525,8 +1524,8 @@ static void sdl3d_parallel_triangle_textured_job_run_tile(void *userdata, int ti
     }
 
     sdl3d_rasterize_prepared_triangle_textured_region(job->framebuffer, &job->triangle, job->texture,
-                                                      job->lighting_params, tile_min_px_x, tile_max_px_x,
-                                                      tile_min_px_y, tile_max_px_y);
+                                                      job->lighting_params, tile_min_px_x, tile_max_px_x, tile_min_px_y,
+                                                      tile_max_px_y);
 }
 
 static bool sdl3d_try_rasterize_prepared_triangle_textured_parallel(sdl3d_framebuffer *framebuffer,
@@ -1698,7 +1697,7 @@ void sdl3d_rasterize_triangle_textured_profiled(sdl3d_framebuffer *framebuffer, 
     for (int i = 1; i + 1 < clipped_count; ++i)
     {
         sdl3d_rasterize_screen_triangle_textured(framebuffer, screen[0], screen[i], screen[i + 1], texture,
-                                                lighting_params);
+                                                 lighting_params);
     }
 }
 
@@ -1709,8 +1708,7 @@ void sdl3d_rasterize_triangle_textured(sdl3d_framebuffer *framebuffer, sdl3d_mat
                                        bool wireframe_enabled)
 {
     sdl3d_rasterize_triangle_textured_profiled(framebuffer, mvp, v0, v1, v2, uv0, uv1, uv2, modulate0, modulate1,
-                                               modulate2, texture, NULL, backface_culling_enabled,
-                                               wireframe_enabled);
+                                               modulate2, texture, NULL, backface_culling_enabled, wireframe_enabled);
 }
 
 /* --- Line rasterization -------------------------------------------------- */

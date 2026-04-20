@@ -367,8 +367,7 @@ static const float *sdl3d_gl_get_white_colors(sdl3d_gl_context *ctx, int vertex_
     required_floats = vertex_count * 4;
     old_capacity = ctx->white_color_capacity;
     {
-        float *new_buffer =
-            (float *)SDL_realloc(ctx->white_color_buffer, (size_t)required_floats * sizeof(float));
+        float *new_buffer = (float *)SDL_realloc(ctx->white_color_buffer, (size_t)required_floats * sizeof(float));
         if (new_buffer == NULL)
         {
             return NULL;
@@ -758,8 +757,8 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->n64_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_n64_vert, sdl3d_shader_n64_frag, ctx->is_es);
     ctx->dos_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_dos_vert, sdl3d_shader_dos_frag, ctx->is_es);
     ctx->snes_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_snes_vert, sdl3d_shader_snes_frag, ctx->is_es);
-    ctx->copy_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_fullscreen_vert, sdl3d_shader_copy_frag,
-                                              ctx->is_es);
+    ctx->copy_program =
+        sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_fullscreen_vert, sdl3d_shader_copy_frag, ctx->is_es);
     ctx->postprocess_program =
         sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_fullscreen_vert, sdl3d_shader_postprocess_frag, ctx->is_es);
 
@@ -884,7 +883,8 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
         SDL_GL_GetAttribute(SDL_GL_DOUBLEBUFFER, &doublebuffer);
         ctx->doublebuffered = (doublebuffer != 0);
         (void)SDL_GL_GetSwapInterval(&swap_interval);
-        SDL_Log("SDL3D GL create: ctx=%p window=%p profile=%d version=%d.%d logical=%dx%d fbo=%u color=%u depth=%u doublebuffer=%d swap=%d disable_post=%d",
+        SDL_Log("SDL3D GL create: ctx=%p window=%p profile=%d version=%d.%d logical=%dx%d fbo=%u color=%u depth=%u "
+                "doublebuffer=%d swap=%d disable_post=%d",
                 (void *)ctx->gl_context, (void *)window, profile, major, minor, width, height, (unsigned)ctx->fbo,
                 (unsigned)ctx->fbo_color_texture, (unsigned)ctx->fbo_depth_rbo, doublebuffer, swap_interval,
                 (int)ctx->disable_postprocess);
@@ -1005,7 +1005,6 @@ void sdl3d_gl_present(sdl3d_gl_context *ctx, SDL_Window *window)
     sdl3d_gl_debug_log_pixel(ctx, GL_FRAMEBUFFER, 0, window_w, window_h, "after-present-copy");
     ctx->gl.Enable(GL_CULL_FACE);
     ctx->gl.Enable(GL_DEPTH_TEST);
-
 }
 
 void sdl3d_gl_flush(sdl3d_gl_context *ctx)
@@ -1303,8 +1302,7 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *
         }
     }
     gl->Uniform1i(cache ? cache->texture_loc : gl->GetUniformLocation(program, "uTexture"), 0);
-    gl->Uniform1i(cache ? cache->has_texture_loc : gl->GetUniformLocation(program, "uHasTexture"),
-                  has_texture ? 1 : 0);
+    gl->Uniform1i(cache ? cache->has_texture_loc : gl->GetUniformLocation(program, "uHasTexture"), has_texture ? 1 : 0);
 
     gl->BindVertexArray(buffers->vao);
 
@@ -1410,8 +1408,7 @@ void sdl3d_gl_post_process(sdl3d_gl_context *ctx, int effects, float bloom_thres
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     gl->Uniform1i(ctx->postprocess_scene_loc, 0);
-    gl->Uniform2f(ctx->postprocess_texel_size_loc, 1.0f / (float)ctx->logical_width,
-                  1.0f / (float)ctx->logical_height);
+    gl->Uniform2f(ctx->postprocess_texel_size_loc, 1.0f / (float)ctx->logical_width, 1.0f / (float)ctx->logical_height);
     gl->Uniform1i(ctx->postprocess_effects_loc, effects);
     gl->Uniform1f(ctx->postprocess_bloom_threshold_loc, bloom_threshold);
     gl->Uniform1f(ctx->postprocess_bloom_intensity_loc, bloom_intensity);
