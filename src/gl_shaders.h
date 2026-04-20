@@ -188,3 +188,215 @@ static const char *sdl3d_shader_lit_frag = SDL3D_GLSL_VERSION
     "}\n";
 
 #endif
+
+/* ================================================================== */
+/* PS1 shader: vertex snap + affine UVs + nearest + dither            */
+/* ================================================================== */
+
+static const char *sdl3d_shader_ps1_vert = SDL3D_GLSL_VERSION
+    "in vec3 aPosition;\n"
+    "in vec3 aNormal;\n"
+    "in vec2 aTexCoord;\n"
+    "in vec4 aColor;\n"
+    "uniform mat4 uMVP;\n"
+    "uniform mat4 uModel;\n"
+    "uniform int uSnapPrecision;\n"
+    "out vec2 vTexCoord;\n"
+    "out vec4 vColor;\n"
+    "out float vFogFactor;\n"
+    "uniform vec3 uCameraPos;\n"
+    "uniform int uFogMode;\n"
+    "uniform float uFogStart;\n"
+    "uniform float uFogEnd;\n"
+    "uniform float uFogDensity;\n"
+    "void main() {\n"
+    "    vec4 clipPos = uMVP * vec4(aPosition, 1.0);\n"
+    "    /* Vertex snap: quantize screen position. */\n"
+    "    float prec = float(uSnapPrecision > 0 ? uSnapPrecision : 1);\n"
+    "    clipPos.xy = floor(clipPos.xy / clipPos.w * 120.0 / prec + 0.5) * prec / 120.0 * clipPos.w;\n"
+    "    gl_Position = clipPos;\n"
+    "    /* Affine UVs: use noperspective would be ideal but pass raw. */\n"
+    "    vTexCoord = aTexCoord;\n"
+    "    vColor = aColor;\n"
+    "    /* Vertex fog. */\n"
+    "    vec3 worldPos = (uModel * vec4(aPosition, 1.0)).xyz;\n"
+    "    float dist = length(uCameraPos - worldPos);\n"
+    "    vFogFactor = 0.0;\n"
+    "    if (uFogMode == 1) vFogFactor = clamp((dist - uFogStart) / (uFogEnd - uFogStart), 0.0, 1.0);\n"
+    "    else if (uFogMode == 2) vFogFactor = 1.0 - exp(-uFogDensity * dist);\n"
+    "    else if (uFogMode == 3) { float d = uFogDensity * dist; vFogFactor = 1.0 - exp(-d * d); }\n"
+    "}\n";
+
+static const char *sdl3d_shader_ps1_frag =
+    SDL3D_GLSL_VERSION "in vec2 vTexCoord;\n"
+                       "in vec4 vColor;\n"
+                       "in float vFogFactor;\n"
+                       "uniform sampler2D uTexture;\n"
+                       "uniform int uHasTexture;\n"
+                       "uniform vec4 uTint;\n"
+                       "uniform vec3 uFogColor;\n"
+                       "out vec4 fragColor;\n"
+                       "void main() {\n"
+                       "    vec4 texel = (uHasTexture != 0) ? texture(uTexture, vTexCoord) : vec4(1.0);\n"
+                       "    vec3 color = texel.rgb * vColor.rgb * uTint.rgb;\n"
+                       "    float alpha = texel.a * vColor.a * uTint.a;\n"
+                       "    if (alpha <= 0.0) discard;\n"
+                       "    /* Fog. */\n"
+                       "    color = mix(color, uFogColor, vFogFactor);\n"
+                       "    /* sRGB gamma. */\n"
+                       "    color = pow(clamp(color, 0.0, 1.0), vec3(1.0/2.2));\n"
+                       "    /* Bayer dithering. */\n"
+                       "    float bayer[16] = float[16](0.0/16.0, 8.0/16.0, 2.0/16.0, 10.0/16.0,\n"
+                       "                                12.0/16.0, 4.0/16.0, 14.0/16.0, 6.0/16.0,\n"
+                       "                                3.0/16.0, 11.0/16.0, 1.0/16.0, 9.0/16.0,\n"
+                       "                                15.0/16.0, 7.0/16.0, 13.0/16.0, 5.0/16.0);\n"
+                       "    ivec2 px = ivec2(gl_FragCoord.xy);\n"
+                       "    float dither = bayer[(px.y % 4) * 4 + (px.x % 4)] - 0.5;\n"
+                       "    color = floor((color + dither * 0.03) * 32.0 + 0.5) / 32.0;\n"
+                       "    fragColor = vec4(color, alpha);\n"
+                       "}\n";
+
+/* ================================================================== */
+/* N64 shader: Gouraud + bilinear + vertex fog                        */
+/* ================================================================== */
+
+static const char *sdl3d_shader_n64_vert = SDL3D_GLSL_VERSION
+    "in vec3 aPosition;\n"
+    "in vec3 aNormal;\n"
+    "in vec2 aTexCoord;\n"
+    "in vec4 aColor;\n"
+    "uniform mat4 uMVP;\n"
+    "uniform mat4 uModel;\n"
+    "uniform mat3 uNormalMatrix;\n"
+    "uniform vec3 uCameraPos;\n"
+    "uniform vec3 uLightDir;\n"
+    "uniform vec3 uLightColor;\n"
+    "uniform vec3 uAmbient;\n"
+    "uniform int uFogMode;\n"
+    "uniform float uFogStart;\n"
+    "uniform float uFogEnd;\n"
+    "uniform float uFogDensity;\n"
+    "out vec2 vTexCoord;\n"
+    "out vec4 vColor;\n"
+    "out float vFogFactor;\n"
+    "void main() {\n"
+    "    gl_Position = uMVP * vec4(aPosition, 1.0);\n"
+    "    vTexCoord = aTexCoord;\n"
+    "    /* Per-vertex Gouraud lighting. */\n"
+    "    vec3 N = normalize(uNormalMatrix * aNormal);\n"
+    "    float NdotL = max(dot(N, -normalize(uLightDir)), 0.0);\n"
+    "    vec3 lit = uAmbient + uLightColor * NdotL;\n"
+    "    vColor = vec4(lit * aColor.rgb, aColor.a);\n"
+    "    /* Vertex fog. */\n"
+    "    vec3 worldPos = (uModel * vec4(aPosition, 1.0)).xyz;\n"
+    "    float dist = length(uCameraPos - worldPos);\n"
+    "    vFogFactor = 0.0;\n"
+    "    if (uFogMode == 1) vFogFactor = clamp((dist - uFogStart) / (uFogEnd - uFogStart), 0.0, 1.0);\n"
+    "    else if (uFogMode == 2) vFogFactor = 1.0 - exp(-uFogDensity * dist);\n"
+    "    else if (uFogMode == 3) { float d = uFogDensity * dist; vFogFactor = 1.0 - exp(-d * d); }\n"
+    "}\n";
+
+static const char *sdl3d_shader_n64_frag =
+    SDL3D_GLSL_VERSION "in vec2 vTexCoord;\n"
+                       "in vec4 vColor;\n"
+                       "in float vFogFactor;\n"
+                       "uniform sampler2D uTexture;\n"
+                       "uniform int uHasTexture;\n"
+                       "uniform vec4 uTint;\n"
+                       "uniform vec3 uFogColor;\n"
+                       "out vec4 fragColor;\n"
+                       "void main() {\n"
+                       "    vec4 texel = (uHasTexture != 0) ? texture(uTexture, vTexCoord) : vec4(1.0);\n"
+                       "    vec3 color = texel.rgb * vColor.rgb * uTint.rgb;\n"
+                       "    float alpha = texel.a * vColor.a * uTint.a;\n"
+                       "    if (alpha <= 0.0) discard;\n"
+                       "    color = mix(color, uFogColor, vFogFactor);\n"
+                       "    color = pow(clamp(color, 0.0, 1.0), vec3(1.0/2.2));\n"
+                       "    /* Subtle color banding (5-bit per channel). */\n"
+                       "    color = floor(color * 31.0 + 0.5) / 31.0;\n"
+                       "    fragColor = vec4(color, alpha);\n"
+                       "}\n";
+
+/* ================================================================== */
+/* DOS shader: nearest + 256-color palette quantize + Bayer dither    */
+/* ================================================================== */
+
+static const char *sdl3d_shader_dos_vert =
+    SDL3D_GLSL_VERSION "in vec3 aPosition;\n"
+                       "in vec3 aNormal;\n"
+                       "in vec2 aTexCoord;\n"
+                       "in vec4 aColor;\n"
+                       "uniform mat4 uMVP;\n"
+                       "uniform mat4 uModel;\n"
+                       "uniform mat3 uNormalMatrix;\n"
+                       "uniform vec3 uLightDir;\n"
+                       "uniform vec3 uLightColor;\n"
+                       "uniform vec3 uAmbient;\n"
+                       "out vec2 vTexCoord;\n"
+                       "out vec4 vColor;\n"
+                       "void main() {\n"
+                       "    gl_Position = uMVP * vec4(aPosition, 1.0);\n"
+                       "    vTexCoord = aTexCoord;\n"
+                       "    vec3 N = normalize(uNormalMatrix * aNormal);\n"
+                       "    float NdotL = max(dot(N, -normalize(uLightDir)), 0.0);\n"
+                       "    vec3 lit = uAmbient + uLightColor * NdotL;\n"
+                       "    vColor = vec4(lit * aColor.rgb, aColor.a);\n"
+                       "}\n";
+
+static const char *sdl3d_shader_dos_frag =
+    SDL3D_GLSL_VERSION "in vec2 vTexCoord;\n"
+                       "in vec4 vColor;\n"
+                       "uniform sampler2D uTexture;\n"
+                       "uniform int uHasTexture;\n"
+                       "uniform vec4 uTint;\n"
+                       "out vec4 fragColor;\n"
+                       "void main() {\n"
+                       "    vec4 texel = (uHasTexture != 0) ? texture(uTexture, vTexCoord) : vec4(1.0);\n"
+                       "    vec3 color = texel.rgb * vColor.rgb * uTint.rgb;\n"
+                       "    float alpha = texel.a * vColor.a * uTint.a;\n"
+                       "    if (alpha <= 0.0) discard;\n"
+                       "    color = pow(clamp(color, 0.0, 1.0), vec3(1.0/2.2));\n"
+                       "    /* 256-color quantize with Bayer dither. */\n"
+                       "    float bayer[16] = float[16](0.0/16.0, 8.0/16.0, 2.0/16.0, 10.0/16.0,\n"
+                       "                                12.0/16.0, 4.0/16.0, 14.0/16.0, 6.0/16.0,\n"
+                       "                                3.0/16.0, 11.0/16.0, 1.0/16.0, 9.0/16.0,\n"
+                       "                                15.0/16.0, 7.0/16.0, 13.0/16.0, 5.0/16.0);\n"
+                       "    ivec2 px = ivec2(gl_FragCoord.xy);\n"
+                       "    float dither = bayer[(px.y % 4) * 4 + (px.x % 4)] - 0.5;\n"
+                       "    color = floor((color + dither * 0.06) * 6.0 + 0.5) / 6.0;\n"
+                       "    fragColor = vec4(color, alpha);\n"
+                       "}\n";
+
+/* ================================================================== */
+/* SNES shader: flat shading + low color depth                        */
+/* ================================================================== */
+
+static const char *sdl3d_shader_snes_vert = SDL3D_GLSL_VERSION "in vec3 aPosition;\n"
+                                                               "in vec2 aTexCoord;\n"
+                                                               "in vec4 aColor;\n"
+                                                               "uniform mat4 uMVP;\n"
+                                                               "out vec2 vTexCoord;\n"
+                                                               "out vec4 vColor;\n"
+                                                               "void main() {\n"
+                                                               "    gl_Position = uMVP * vec4(aPosition, 1.0);\n"
+                                                               "    vTexCoord = aTexCoord;\n"
+                                                               "    vColor = aColor;\n"
+                                                               "}\n";
+
+static const char *sdl3d_shader_snes_frag =
+    SDL3D_GLSL_VERSION "in vec2 vTexCoord;\n"
+                       "in vec4 vColor;\n"
+                       "uniform sampler2D uTexture;\n"
+                       "uniform int uHasTexture;\n"
+                       "uniform vec4 uTint;\n"
+                       "out vec4 fragColor;\n"
+                       "void main() {\n"
+                       "    vec4 texel = (uHasTexture != 0) ? texture(uTexture, vTexCoord) : vec4(1.0);\n"
+                       "    vec3 color = texel.rgb * vColor.rgb * uTint.rgb;\n"
+                       "    float alpha = texel.a * vColor.a * uTint.a;\n"
+                       "    if (alpha <= 0.0) discard;\n"
+                       "    color = pow(clamp(color, 0.0, 1.0), vec3(1.0/2.2));\n"
+                       "    /* 15-bit color (5 bits per channel). */\n"
+                       "    color = floor(color * 31.0 + 0.5) / 31.0;\n"
+                       "    fragColor = vec4(color, alpha);\n"
+                       "}\n";

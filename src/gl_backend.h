@@ -20,6 +20,9 @@ GLuint sdl3d_gl_get_unlit_program(const sdl3d_gl_context *ctx);
 GLuint sdl3d_gl_get_lit_program(const sdl3d_gl_context *ctx);
 GLuint sdl3d_gl_get_white_texture(const sdl3d_gl_context *ctx);
 
+/* Get the shader program for a given shading mode. */
+GLuint sdl3d_gl_get_program_for_profile(const sdl3d_gl_context *ctx, int shading_mode, bool has_lights);
+
 /*
  * Draw a mesh using the unlit shader. Positions, UVs, and colors are
  * uploaded as a dynamic VBO each call (immediate-mode style, matching
