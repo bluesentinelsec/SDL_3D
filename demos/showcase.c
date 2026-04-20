@@ -168,11 +168,16 @@ static bool sdl3d_demo_create_backend(SDL_Window **out_win, SDL_Renderer **out_r
         return false;
     }
 
-    r = SDL_CreateRenderer(w, NULL);
-    if (r == NULL)
+    /* Only the software backend needs an SDL renderer for presentation. */
+    r = NULL;
+    if (backend != SDL3D_BACKEND_SDLGPU)
     {
-        SDL_DestroyWindow(w);
-        return false;
+        r = SDL_CreateRenderer(w, NULL);
+        if (r == NULL)
+        {
+            SDL_DestroyWindow(w);
+            return false;
+        }
     }
 
     sdl3d_init_render_context_config(&cfg);

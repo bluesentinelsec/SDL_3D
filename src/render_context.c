@@ -157,7 +157,8 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
         return SDL_InvalidParamError("window");
     }
 
-    if (renderer == NULL)
+    if (renderer == NULL &&
+        (config == NULL || config->backend == SDL3D_BACKEND_AUTO || config->backend == SDL3D_BACKEND_SOFTWARE))
     {
         return SDL_InvalidParamError("renderer");
     }
@@ -200,10 +201,13 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
 
     if (local_config.logical_width > 0)
     {
-        if (!SDL_SetRenderLogicalPresentation(renderer, local_config.logical_width, local_config.logical_height,
-                                              local_config.logical_presentation))
+        if (renderer != NULL)
         {
-            return false;
+            if (!SDL_SetRenderLogicalPresentation(renderer, local_config.logical_width, local_config.logical_height,
+                                                  local_config.logical_presentation))
+            {
+                return false;
+            }
         }
 
         render_width = local_config.logical_width;
@@ -211,9 +215,19 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     }
     else
     {
-        if (!SDL_GetCurrentRenderOutputSize(renderer, &render_width, &render_height))
+        if (renderer != NULL)
         {
-            return false;
+            if (!SDL_GetCurrentRenderOutputSize(renderer, &render_width, &render_height))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            if (!SDL_GetWindowSizeInPixels(window, &render_width, &render_height))
+            {
+                return false;
+            }
         }
 
         if (render_width <= 0 || render_height <= 0)
@@ -228,16 +242,16 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
         return SDL_OutOfMemory();
     }
 
-    context->color_texture =
-        SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, render_width, render_height);
-    if (context->color_texture == NULL)
-    {
-        SDL_free(context);
-        return false;
-    }
-
     if (resolved_backend == SDL3D_BACKEND_SOFTWARE)
     {
+        context->color_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING,
+                                                   render_width, render_height);
+        if (context->color_texture == NULL)
+        {
+            SDL_free(context);
+            return false;
+        }
+
         color_buffer_size = (size_t)render_width * (size_t)render_height * 4U;
         context->color_buffer = SDL_calloc(1, color_buffer_size);
         if (context->color_buffer == NULL)
@@ -271,7 +285,6 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
         context->gl = sdl3d_gl_create(window, render_width, render_height);
         if (context->gl == NULL)
         {
-            SDL_DestroyTexture(context->color_texture);
             SDL_free(context);
             return false;
         }
