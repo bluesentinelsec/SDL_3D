@@ -18,6 +18,7 @@
 
 struct sdl3d_gl_context
 {
+    SDL_Window *window;
     SDL_GLContext gl_context;
     sdl3d_gl_funcs gl;
     bool is_es; /* true if running OpenGL ES */
@@ -190,6 +191,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     }
 
     SDL_GL_MakeCurrent(window, ctx->gl_context);
+    ctx->window = window;
 
     /* Detect if we're running ES (either compiled for ES or fell back to ES). */
 #ifdef SDL3D_OPENGL_ES
@@ -361,6 +363,8 @@ void sdl3d_gl_clear(sdl3d_gl_context *ctx, float r, float g, float b, float a)
     {
         return;
     }
+    /* Ensure our GL context is current (may have been lost after window recreation). */
+    SDL_GL_MakeCurrent(ctx->window, ctx->gl_context);
     /* Ensure we're rendering to the offscreen FBO. */
     ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
     ctx->gl.ClearColor(r, g, b, a);
