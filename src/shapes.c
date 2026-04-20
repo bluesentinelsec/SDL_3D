@@ -86,12 +86,20 @@ bool sdl3d_draw_cube(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec
     const float hy = size.y * 0.5f;
     const float hz = size.z * 0.5f;
 
-    /*
-     * Corner indices encoded as bit patterns: bit 0 = +X, bit 1 = +Y,
-     * bit 2 = +Z. Every quad below lists the four corners in CCW order
-     * when viewed from outside along the face normal. The faces are
-     * expanded into two triangles each.
-     */
+    const int vert_count = 24;
+    const int idx_count = 36;
+
+    float *positions = (float *)SDL_malloc((size_t)vert_count * 3 * sizeof(float));
+    float *normals = (float *)SDL_malloc((size_t)vert_count * 3 * sizeof(float));
+    unsigned int *indices = (unsigned int *)SDL_malloc((size_t)idx_count * sizeof(unsigned int));
+    if (positions == NULL || normals == NULL || indices == NULL)
+    {
+        SDL_free(positions);
+        SDL_free(normals);
+        SDL_free(indices);
+        return SDL_OutOfMemory();
+    }
+
     const sdl3d_vec3 c[8] = {
         {center.x - hx, center.y - hy, center.z - hz}, {center.x + hx, center.y - hy, center.z - hz},
         {center.x - hx, center.y + hy, center.z - hz}, {center.x + hx, center.y + hy, center.z - hz},
@@ -108,22 +116,48 @@ bool sdl3d_draw_cube(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec
         {0, 1, 5, 4}, /* -Y */
     };
 
+    static const float face_normals[6][3] = {
+        {0.0f, 0.0f, 1.0f},  {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f},
+        {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f},  {0.0f, -1.0f, 0.0f},
+    };
+
     for (int f = 0; f < 6; ++f)
     {
-        const sdl3d_vec3 a = c[faces[f][0]];
-        const sdl3d_vec3 b = c[faces[f][1]];
-        const sdl3d_vec3 d = c[faces[f][2]];
-        const sdl3d_vec3 e = c[faces[f][3]];
-        if (!sdl3d_draw_triangle_3d(context, a, b, d, color))
+        int base = f * 4;
+        for (int v = 0; v < 4; ++v)
         {
-            return false;
+            int vi = base + v;
+            positions[vi * 3 + 0] = c[faces[f][v]].x;
+            positions[vi * 3 + 1] = c[faces[f][v]].y;
+            positions[vi * 3 + 2] = c[faces[f][v]].z;
+            normals[vi * 3 + 0] = face_normals[f][0];
+            normals[vi * 3 + 1] = face_normals[f][1];
+            normals[vi * 3 + 2] = face_normals[f][2];
         }
-        if (!sdl3d_draw_triangle_3d(context, a, d, e, color))
-        {
-            return false;
-        }
+        int ii = f * 6;
+        unsigned int b = (unsigned int)base;
+        indices[ii + 0] = b + 0;
+        indices[ii + 1] = b + 1;
+        indices[ii + 2] = b + 2;
+        indices[ii + 3] = b + 0;
+        indices[ii + 4] = b + 2;
+        indices[ii + 5] = b + 3;
     }
-    return true;
+
+    sdl3d_mesh mesh;
+    SDL_zerop(&mesh);
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.indices = indices;
+    mesh.vertex_count = vert_count;
+    mesh.index_count = idx_count;
+
+    bool result = sdl3d_draw_mesh(context, &mesh, NULL, color);
+
+    SDL_free(positions);
+    SDL_free(normals);
+    SDL_free(indices);
+    return result;
 }
 
 bool sdl3d_draw_cube_wires(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, sdl3d_color color)
@@ -330,31 +364,71 @@ bool sdl3d_draw_sphere(sdl3d_render_context *context, sdl3d_vec3 center, float r
         return SDL_SetError("sdl3d_draw_sphere requires slices >= 3.");
     }
 
-    for (int i = 0; i < rings; ++i)
+    const int vert_count = (rings + 1) * (slices + 1);
+    const int idx_count = rings * slices * 6;
+
+    float *positions = (float *)SDL_malloc((size_t)vert_count * 3 * sizeof(float));
+    float *normals = (float *)SDL_malloc((size_t)vert_count * 3 * sizeof(float));
+    unsigned int *indices = (unsigned int *)SDL_malloc((size_t)idx_count * sizeof(unsigned int));
+    if (positions == NULL || normals == NULL || indices == NULL)
     {
-        const float theta1 = SDL3D_SHAPES_PI * (float)i / (float)rings;
-        const float theta2 = SDL3D_SHAPES_PI * (float)(i + 1) / (float)rings;
-        for (int j = 0; j < slices; ++j)
+        SDL_free(positions);
+        SDL_free(normals);
+        SDL_free(indices);
+        return SDL_OutOfMemory();
+    }
+
+    for (int i = 0; i <= rings; ++i)
+    {
+        const float theta = SDL3D_SHAPES_PI * (float)i / (float)rings;
+        for (int j = 0; j <= slices; ++j)
         {
-            const float phi1 = 2.0f * SDL3D_SHAPES_PI * (float)j / (float)slices;
-            const float phi2 = 2.0f * SDL3D_SHAPES_PI * (float)(j + 1) / (float)slices;
-
-            const sdl3d_vec3 v00 = sdl3d_sphere_point(center, radius, theta1, phi1);
-            const sdl3d_vec3 v01 = sdl3d_sphere_point(center, radius, theta1, phi2);
-            const sdl3d_vec3 v10 = sdl3d_sphere_point(center, radius, theta2, phi1);
-            const sdl3d_vec3 v11 = sdl3d_sphere_point(center, radius, theta2, phi2);
-
-            if (!sdl3d_draw_triangle_3d(context, v00, v01, v11, color))
-            {
-                return false;
-            }
-            if (!sdl3d_draw_triangle_3d(context, v00, v11, v10, color))
-            {
-                return false;
-            }
+            const float phi = 2.0f * SDL3D_SHAPES_PI * (float)j / (float)slices;
+            int vi = i * (slices + 1) + j;
+            float nx = SDL_sinf(theta) * SDL_cosf(phi);
+            float ny = SDL_cosf(theta);
+            float nz = SDL_sinf(theta) * SDL_sinf(phi);
+            positions[vi * 3 + 0] = center.x + radius * nx;
+            positions[vi * 3 + 1] = center.y + radius * ny;
+            positions[vi * 3 + 2] = center.z + radius * nz;
+            normals[vi * 3 + 0] = nx;
+            normals[vi * 3 + 1] = ny;
+            normals[vi * 3 + 2] = nz;
         }
     }
-    return true;
+
+    int ii = 0;
+    for (int i = 0; i < rings; ++i)
+    {
+        for (int j = 0; j < slices; ++j)
+        {
+            unsigned int v00 = (unsigned int)(i * (slices + 1) + j);
+            unsigned int v01 = v00 + 1;
+            unsigned int v10 = (unsigned int)((i + 1) * (slices + 1) + j);
+            unsigned int v11 = v10 + 1;
+            indices[ii++] = v00;
+            indices[ii++] = v01;
+            indices[ii++] = v11;
+            indices[ii++] = v00;
+            indices[ii++] = v11;
+            indices[ii++] = v10;
+        }
+    }
+
+    sdl3d_mesh mesh;
+    SDL_zerop(&mesh);
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.indices = indices;
+    mesh.vertex_count = vert_count;
+    mesh.index_count = idx_count;
+
+    bool result = sdl3d_draw_mesh(context, &mesh, NULL, color);
+
+    SDL_free(positions);
+    SDL_free(normals);
+    SDL_free(indices);
+    return result;
 }
 
 bool sdl3d_draw_sphere_wires(sdl3d_render_context *context, sdl3d_vec3 center, float radius, int rings, int slices,
@@ -426,47 +500,137 @@ bool sdl3d_draw_cylinder(sdl3d_render_context *context, sdl3d_vec3 center, float
     const float hh = height * 0.5f;
     const sdl3d_vec3 top_center = sdl3d_vec3_make(center.x, center.y + hh, center.z);
     const sdl3d_vec3 bottom_center = sdl3d_vec3_make(center.x, center.y - hh, center.z);
-    const sdl3d_vec3 tangent = sdl3d_vec3_make(1.0f, 0.0f, 0.0f);
-    const sdl3d_vec3 bitangent = sdl3d_vec3_make(0.0f, 0.0f, 1.0f);
 
+    const int side_verts = 2 * (slices + 1);
+    const int cap_verts = (slices + 2) * 2;
+    const int vert_count = side_verts + cap_verts;
+    const int side_idx = slices * 6;
+    const int cap_idx = slices * 3 * 2;
+    const int idx_count = side_idx + cap_idx;
+
+    float *positions = (float *)SDL_malloc((size_t)vert_count * 3 * sizeof(float));
+    float *normals = (float *)SDL_malloc((size_t)vert_count * 3 * sizeof(float));
+    unsigned int *indices = (unsigned int *)SDL_malloc((size_t)idx_count * sizeof(unsigned int));
+    if (positions == NULL || normals == NULL || indices == NULL)
+    {
+        SDL_free(positions);
+        SDL_free(normals);
+        SDL_free(indices);
+        return SDL_OutOfMemory();
+    }
+
+    /* Side vertices: top ring then bottom ring, each with slices+1 verts */
+    for (int j = 0; j <= slices; ++j)
+    {
+        const float phi = 2.0f * SDL3D_SHAPES_PI * (float)j / (float)slices;
+        const float c = SDL_cosf(phi);
+        const float s = SDL_sinf(phi);
+        float nx = c;
+        float nz = s;
+
+        int vi_top = j;
+        positions[vi_top * 3 + 0] = top_center.x + radius_top * c;
+        positions[vi_top * 3 + 1] = top_center.y;
+        positions[vi_top * 3 + 2] = top_center.z + radius_top * s;
+        normals[vi_top * 3 + 0] = nx;
+        normals[vi_top * 3 + 1] = 0.0f;
+        normals[vi_top * 3 + 2] = nz;
+
+        int vi_bot = (slices + 1) + j;
+        positions[vi_bot * 3 + 0] = bottom_center.x + radius_bottom * c;
+        positions[vi_bot * 3 + 1] = bottom_center.y;
+        positions[vi_bot * 3 + 2] = bottom_center.z + radius_bottom * s;
+        normals[vi_bot * 3 + 0] = nx;
+        normals[vi_bot * 3 + 1] = 0.0f;
+        normals[vi_bot * 3 + 2] = nz;
+    }
+
+    /* Side indices */
+    int ii = 0;
     for (int j = 0; j < slices; ++j)
     {
-        const float phi1 = 2.0f * SDL3D_SHAPES_PI * (float)j / (float)slices;
-        const float phi2 = 2.0f * SDL3D_SHAPES_PI * (float)(j + 1) / (float)slices;
-
-        const sdl3d_vec3 top1 = sdl3d_shape_circle_point(top_center, tangent, bitangent, radius_top, phi1);
-        const sdl3d_vec3 top2 = sdl3d_shape_circle_point(top_center, tangent, bitangent, radius_top, phi2);
-        const sdl3d_vec3 bot1 = sdl3d_shape_circle_point(bottom_center, tangent, bitangent, radius_bottom, phi1);
-        const sdl3d_vec3 bot2 = sdl3d_shape_circle_point(bottom_center, tangent, bitangent, radius_bottom, phi2);
-
-        /* Side: outward-facing, CCW from outside. */
-        if (!sdl3d_draw_triangle_3d(context, bot1, top1, top2, color))
-        {
-            return false;
-        }
-        if (!sdl3d_draw_triangle_3d(context, bot1, top2, bot2, color))
-        {
-            return false;
-        }
-
-        /* Top cap (+Y outward): CCW from +Y requires order (center, v_{j+1}, v_j). */
-        if (radius_top > 0.0f)
-        {
-            if (!sdl3d_draw_triangle_3d(context, top_center, top2, top1, color))
-            {
-                return false;
-            }
-        }
-        /* Bottom cap (-Y outward): opposite winding. */
-        if (radius_bottom > 0.0f)
-        {
-            if (!sdl3d_draw_triangle_3d(context, bottom_center, bot1, bot2, color))
-            {
-                return false;
-            }
-        }
+        unsigned int t0 = (unsigned int)j;
+        unsigned int t1 = (unsigned int)(j + 1);
+        unsigned int b0 = (unsigned int)(slices + 1 + j);
+        unsigned int b1 = (unsigned int)(slices + 1 + j + 1);
+        indices[ii++] = b0;
+        indices[ii++] = t0;
+        indices[ii++] = t1;
+        indices[ii++] = b0;
+        indices[ii++] = t1;
+        indices[ii++] = b1;
     }
-    return true;
+
+    /* Top cap vertices */
+    int cap_base = side_verts;
+    positions[cap_base * 3 + 0] = top_center.x;
+    positions[cap_base * 3 + 1] = top_center.y;
+    positions[cap_base * 3 + 2] = top_center.z;
+    normals[cap_base * 3 + 0] = 0.0f;
+    normals[cap_base * 3 + 1] = 1.0f;
+    normals[cap_base * 3 + 2] = 0.0f;
+    for (int j = 0; j <= slices; ++j)
+    {
+        const float phi = 2.0f * SDL3D_SHAPES_PI * (float)j / (float)slices;
+        int vi = cap_base + 1 + j;
+        positions[vi * 3 + 0] = top_center.x + radius_top * SDL_cosf(phi);
+        positions[vi * 3 + 1] = top_center.y;
+        positions[vi * 3 + 2] = top_center.z + radius_top * SDL_sinf(phi);
+        normals[vi * 3 + 0] = 0.0f;
+        normals[vi * 3 + 1] = 1.0f;
+        normals[vi * 3 + 2] = 0.0f;
+    }
+
+    /* Top cap indices: CCW from +Y means center, v_{j+1}, v_j */
+    for (int j = 0; j < slices; ++j)
+    {
+        indices[ii++] = (unsigned int)cap_base;
+        indices[ii++] = (unsigned int)(cap_base + 1 + j + 1);
+        indices[ii++] = (unsigned int)(cap_base + 1 + j);
+    }
+
+    /* Bottom cap vertices */
+    int bot_cap_base = cap_base + slices + 2;
+    positions[bot_cap_base * 3 + 0] = bottom_center.x;
+    positions[bot_cap_base * 3 + 1] = bottom_center.y;
+    positions[bot_cap_base * 3 + 2] = bottom_center.z;
+    normals[bot_cap_base * 3 + 0] = 0.0f;
+    normals[bot_cap_base * 3 + 1] = -1.0f;
+    normals[bot_cap_base * 3 + 2] = 0.0f;
+    for (int j = 0; j <= slices; ++j)
+    {
+        const float phi = 2.0f * SDL3D_SHAPES_PI * (float)j / (float)slices;
+        int vi = bot_cap_base + 1 + j;
+        positions[vi * 3 + 0] = bottom_center.x + radius_bottom * SDL_cosf(phi);
+        positions[vi * 3 + 1] = bottom_center.y;
+        positions[vi * 3 + 2] = bottom_center.z + radius_bottom * SDL_sinf(phi);
+        normals[vi * 3 + 0] = 0.0f;
+        normals[vi * 3 + 1] = -1.0f;
+        normals[vi * 3 + 2] = 0.0f;
+    }
+
+    /* Bottom cap indices: CCW from -Y means center, v_j, v_{j+1} */
+    for (int j = 0; j < slices; ++j)
+    {
+        indices[ii++] = (unsigned int)bot_cap_base;
+        indices[ii++] = (unsigned int)(bot_cap_base + 1 + j);
+        indices[ii++] = (unsigned int)(bot_cap_base + 1 + j + 1);
+    }
+
+    sdl3d_mesh mesh;
+    SDL_zerop(&mesh);
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.indices = indices;
+    mesh.vertex_count = vert_count;
+    mesh.index_count = idx_count;
+
+    bool result = sdl3d_draw_mesh(context, &mesh, NULL, color);
+
+    SDL_free(positions);
+    SDL_free(normals);
+    SDL_free(indices);
+    return result;
 }
 
 bool sdl3d_draw_cylinder_wires(sdl3d_render_context *context, sdl3d_vec3 center, float radius_top, float radius_bottom,
