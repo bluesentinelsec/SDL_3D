@@ -36,8 +36,21 @@ static bool gl_clear(sdl3d_render_context *context, sdl3d_color color)
 
 static bool gl_present(sdl3d_render_context *context)
 {
+    bool swapped;
+
     sdl3d_gl_present(context->gl, context->window);
-    return SDL_GL_SwapWindow(context->window);
+    if (!sdl3d_gl_is_doublebuffered(context->gl))
+    {
+        sdl3d_gl_finish(context->gl);
+        (void)SDL_GL_SwapWindow(context->window);
+        return true;
+    }
+    swapped = SDL_GL_SwapWindow(context->window);
+    if (!swapped)
+    {
+        SDL_Log("SDL3D GL swap failed: %s", SDL_GetError());
+    }
+    return swapped;
 }
 
 /* ------------------------------------------------------------------ */

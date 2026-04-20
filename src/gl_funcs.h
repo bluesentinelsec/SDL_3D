@@ -29,6 +29,8 @@ typedef unsigned int GLbitfield;
 #define GL_DEPTH_TEST 0x0B71
 #define GL_CULL_FACE 0x0B44
 #define GL_BACK 0x0405
+#define GL_CW 0x0900
+#define GL_CCW 0x0901
 #define GL_LESS 0x0201
 #define GL_LEQUAL 0x0203
 #define GL_COLOR_BUFFER_BIT 0x00004000
@@ -38,7 +40,7 @@ typedef unsigned int GLbitfield;
 #define GL_COMPILE_STATUS 0x8B81
 #define GL_LINK_STATUS 0x8B82
 #define GL_INFO_LOG_LENGTH 0x8B84
-#define GL_ARRAY_BUFFER 0x8889
+#define GL_ARRAY_BUFFER 0x8892
 #define GL_ELEMENT_ARRAY_BUFFER 0x8893
 #define GL_STATIC_DRAW 0x88E4
 #define GL_DYNAMIC_DRAW 0x88E8
@@ -52,6 +54,7 @@ typedef unsigned int GLbitfield;
 #define GL_TEXTURE_WRAP_T 0x2803
 #define GL_LINEAR 0x2601
 #define GL_NEAREST 0x2600
+#define GL_LINEAR_MIPMAP_LINEAR 0x2703
 #define GL_CLAMP_TO_EDGE 0x812F
 #define GL_REPEAT 0x2901
 #define GL_FRAMEBUFFER 0x8D40
@@ -76,9 +79,12 @@ typedef void (*PFNGLENABLEPROC)(GLenum);
 typedef void (*PFNGLDISABLEPROC)(GLenum);
 typedef void (*PFNGLDEPTHFUNCPROC)(GLenum);
 typedef void (*PFNGLCULLFACEPROC)(GLenum);
+typedef void (*PFNGLFRONTFACEPROC)(GLenum);
 typedef void (*PFNGLVIEWPORTPROC)(GLint, GLint, GLsizei, GLsizei);
 typedef void (*PFNGLBLENDFUNCPROC)(GLenum, GLenum);
 typedef GLenum (*PFNGLGETERRORPROC)(void);
+typedef void (*PFNGLFLUSHPROC)(void);
+typedef void (*PFNGLFINISHPROC)(void);
 typedef GLuint (*PFNGLCREATESHADERPROC)(GLenum);
 typedef void (*PFNGLSHADERSOURCEPROC)(GLuint, GLsizei, const GLchar **, const GLint *);
 typedef void (*PFNGLCOMPILESHADERPROC)(GLuint);
@@ -98,6 +104,7 @@ typedef void (*PFNGLUNIFORM1FPROC)(GLint, GLfloat);
 typedef void (*PFNGLUNIFORM2FPROC)(GLint, GLfloat, GLfloat);
 typedef void (*PFNGLUNIFORM3FPROC)(GLint, GLfloat, GLfloat, GLfloat);
 typedef void (*PFNGLUNIFORM4FPROC)(GLint, GLfloat, GLfloat, GLfloat, GLfloat);
+typedef void (*PFNGLUNIFORMMATRIX3FVPROC)(GLint, GLsizei, GLboolean, const GLfloat *);
 typedef void (*PFNGLUNIFORMMATRIX4FVPROC)(GLint, GLsizei, GLboolean, const GLfloat *);
 typedef void (*PFNGLGENVERTEXARRAYSPROC)(GLsizei, GLuint *);
 typedef void (*PFNGLBINDVERTEXARRAYPROC)(GLuint);
@@ -128,6 +135,7 @@ typedef void (*PFNGLFRAMEBUFFERRENDERBUFFERPROC)(GLenum, GLenum, GLenum, GLuint)
 typedef void (*PFNGLDELETERENDERBUFFERSPROC)(GLsizei, const GLuint *);
 typedef void (*PFNGLBLITFRAMEBUFFERPROC)(GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum);
 typedef GLint (*PFNGLGETATTRIBLOCATIONPROC)(GLuint, const GLchar *);
+typedef void (*PFNGLREADPIXELSPROC)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *);
 
 /* Global function pointers. */
 typedef struct sdl3d_gl_funcs
@@ -138,9 +146,12 @@ typedef struct sdl3d_gl_funcs
     PFNGLDISABLEPROC Disable;
     PFNGLDEPTHFUNCPROC DepthFunc;
     PFNGLCULLFACEPROC CullFace;
+    PFNGLFRONTFACEPROC FrontFace;
     PFNGLVIEWPORTPROC Viewport;
     PFNGLBLENDFUNCPROC BlendFunc;
     PFNGLGETERRORPROC GetError;
+    PFNGLFLUSHPROC Flush;
+    PFNGLFINISHPROC Finish;
     PFNGLCREATESHADERPROC CreateShader;
     PFNGLSHADERSOURCEPROC ShaderSource;
     PFNGLCOMPILESHADERPROC CompileShader;
@@ -160,6 +171,7 @@ typedef struct sdl3d_gl_funcs
     PFNGLUNIFORM2FPROC Uniform2f;
     PFNGLUNIFORM3FPROC Uniform3f;
     PFNGLUNIFORM4FPROC Uniform4f;
+    PFNGLUNIFORMMATRIX3FVPROC UniformMatrix3fv;
     PFNGLUNIFORMMATRIX4FVPROC UniformMatrix4fv;
     PFNGLGENVERTEXARRAYSPROC GenVertexArrays;
     PFNGLBINDVERTEXARRAYPROC BindVertexArray;
@@ -190,6 +202,7 @@ typedef struct sdl3d_gl_funcs
     PFNGLDELETERENDERBUFFERSPROC DeleteRenderbuffers;
     PFNGLBLITFRAMEBUFFERPROC BlitFramebuffer;
     PFNGLGETATTRIBLOCATIONPROC GetAttribLocation;
+    PFNGLREADPIXELSPROC ReadPixels;
 } sdl3d_gl_funcs;
 
 static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
@@ -210,9 +223,12 @@ static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
     LOAD(Disable);
     LOAD(DepthFunc);
     LOAD(CullFace);
+    LOAD(FrontFace);
     LOAD(Viewport);
     LOAD(BlendFunc);
     LOAD(GetError);
+    LOAD(Flush);
+    LOAD(Finish);
     LOAD(CreateShader);
     LOAD(ShaderSource);
     LOAD(CompileShader);
@@ -232,6 +248,7 @@ static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
     LOAD(Uniform2f);
     LOAD(Uniform3f);
     LOAD(Uniform4f);
+    LOAD(UniformMatrix3fv);
     LOAD(UniformMatrix4fv);
     LOAD(GenVertexArrays);
     LOAD(BindVertexArray);
@@ -262,6 +279,7 @@ static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
     LOAD(DeleteRenderbuffers);
     LOAD(BlitFramebuffer);
     LOAD(GetAttribLocation);
+    LOAD(ReadPixels);
 #undef LOAD
     return true;
 }

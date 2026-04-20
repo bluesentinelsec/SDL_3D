@@ -18,6 +18,9 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height);
 void sdl3d_gl_destroy(sdl3d_gl_context *ctx);
 void sdl3d_gl_clear(sdl3d_gl_context *ctx, float r, float g, float b, float a);
 void sdl3d_gl_present(sdl3d_gl_context *ctx, SDL_Window *window);
+void sdl3d_gl_flush(sdl3d_gl_context *ctx);
+void sdl3d_gl_finish(sdl3d_gl_context *ctx);
+bool sdl3d_gl_is_doublebuffered(const sdl3d_gl_context *ctx);
 
 GLuint sdl3d_gl_get_unlit_program(const sdl3d_gl_context *ctx);
 GLuint sdl3d_gl_get_lit_program(const sdl3d_gl_context *ctx);
