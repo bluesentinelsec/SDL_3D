@@ -85,6 +85,10 @@ static const char *sdl3d_shader_lit_vert =
                        "    gl_Position = uMVP * vec4(pos, 1.0);\n"
                        "}\n";
 
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Woverlength-strings"
+#endif
 static const char *sdl3d_shader_lit_frag = SDL3D_GLSL_VERSION
     "#define MAX_LIGHTS 8\n"
     "#define PI 3.14159265\n"
@@ -121,6 +125,10 @@ static const char *sdl3d_shader_lit_frag = SDL3D_GLSL_VERSION
     "uniform float uFogStart;\n"
     "uniform float uFogEnd;\n"
     "uniform float uFogDensity;\n"
+    "uniform sampler2D uShadowMap;\n"
+    "uniform mat4 uShadowVP;\n"
+    "uniform int uShadowEnabled;\n"
+    "uniform float uShadowBias;\n"
     "\n"
     "out vec4 fragColor;\n"
     "\n"
@@ -185,6 +193,17 @@ static const char *sdl3d_shader_lit_frag = SDL3D_GLSL_VERSION
     "        Lo += (diff + spec) * radiance * NdotL;\n"
     "    }\n"
     "\n"
+    "    /* Shadow map sampling for directional light (light 0). */\n"
+    "    if (uShadowEnabled != 0) {\n"
+    "        vec4 lpos = uShadowVP * vec4(vWorldPos, 1.0);\n"
+    "        vec3 sndc = lpos.xyz / lpos.w;\n"
+    "        vec2 suv = sndc.xy * 0.5 + 0.5;\n"
+    "        if (suv.x >= 0.0 && suv.x <= 1.0 && suv.y >= 0.0 && suv.y <= 1.0) {\n"
+    "            float closest = texture(uShadowMap, suv).r;\n"
+    "            float current = sndc.z * 0.5 + 0.5;\n"
+    "            if (current - uShadowBias > closest) Lo = vec3(0.0);\n"
+    "        }\n"
+    "    }\n"
     "    vec3 color = uAmbient * albedo + Lo + uEmissive;\n"
     "\n"
     "    /* Fog. */\n"
@@ -207,6 +226,9 @@ static const char *sdl3d_shader_lit_frag = SDL3D_GLSL_VERSION
     "\n"
     "    fragColor = vec4(color, alpha);\n"
     "}\n";
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #endif
 

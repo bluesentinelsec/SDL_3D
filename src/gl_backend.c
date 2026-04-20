@@ -163,6 +163,13 @@ struct sdl3d_gl_context
     int logical_width;
     int logical_height;
 
+    /* Shadow mapping. */
+    GLuint shadow_texture;
+    GLint lit_shadow_map_loc;
+    GLint lit_shadow_vp_loc;
+    GLint lit_shadow_enabled_loc;
+    GLint lit_shadow_bias_loc;
+
     int width;
     int height;
 };
@@ -798,6 +805,20 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     sdl3d_gl_init_lit_uniform_cache(ctx, ctx->n64_program, &ctx->n64_uniforms);
     sdl3d_gl_init_lit_uniform_cache(ctx, ctx->dos_program, &ctx->dos_uniforms);
     sdl3d_gl_init_lit_uniform_cache(ctx, ctx->snes_program, &ctx->snes_uniforms);
+
+    /* Shadow map uniform locations and texture. */
+    ctx->lit_shadow_map_loc = ctx->gl.GetUniformLocation(ctx->lit_program, "uShadowMap");
+    ctx->lit_shadow_vp_loc = ctx->gl.GetUniformLocation(ctx->lit_program, "uShadowVP");
+    ctx->lit_shadow_enabled_loc = ctx->gl.GetUniformLocation(ctx->lit_program, "uShadowEnabled");
+    ctx->lit_shadow_bias_loc = ctx->gl.GetUniformLocation(ctx->lit_program, "uShadowBias");
+
+    ctx->gl.GenTextures(1, &ctx->shadow_texture);
+    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->shadow_texture);
+    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_R32F, 512, 512, 0, GL_RED, GL_FLOAT, NULL);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     ctx->copy_texture_loc = ctx->gl.GetUniformLocation(ctx->copy_program, "uScene");
     ctx->postprocess_scene_loc = ctx->gl.GetUniformLocation(ctx->postprocess_program, "uScene");
     ctx->postprocess_texel_size_loc = ctx->gl.GetUniformLocation(ctx->postprocess_program, "uTexelSize");
@@ -940,6 +961,10 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     if (ctx->white_texture)
     {
         ctx->gl.DeleteTextures(1, &ctx->white_texture);
+    }
+    if (ctx->shadow_texture)
+    {
+        ctx->gl.DeleteTextures(1, &ctx->shadow_texture);
     }
     sdl3d_gl_destroy_texture_cache(ctx);
     sdl3d_gl_delete_stream_buffers(&ctx->gl, &ctx->unlit_buffers);
@@ -1303,6 +1328,23 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *
     }
     gl->Uniform1i(cache ? cache->texture_loc : gl->GetUniformLocation(program, "uTexture"), 0);
     gl->Uniform1i(cache ? cache->has_texture_loc : gl->GetUniformLocation(program, "uHasTexture"), has_texture ? 1 : 0);
+
+    /* Shadow map uniforms. */
+    if (program == ctx->lit_program && params->shadow_depth_data != NULL)
+    {
+        ctx->gl.ActiveTexture(GL_TEXTURE0 + 1);
+        ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->shadow_texture);
+        ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 512, 512, GL_RED, GL_FLOAT, params->shadow_depth_data);
+        gl->Uniform1i(ctx->lit_shadow_map_loc, 1);
+        gl->UniformMatrix4fv(ctx->lit_shadow_vp_loc, 1, GL_FALSE, params->shadow_vp);
+        gl->Uniform1i(ctx->lit_shadow_enabled_loc, 1);
+        gl->Uniform1f(ctx->lit_shadow_bias_loc, params->shadow_bias);
+        ctx->gl.ActiveTexture(GL_TEXTURE0);
+    }
+    else if (program == ctx->lit_program)
+    {
+        gl->Uniform1i(ctx->lit_shadow_enabled_loc, 0);
+    }
 
     gl->BindVertexArray(buffers->vao);
 

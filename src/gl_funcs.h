@@ -70,6 +70,8 @@ typedef unsigned int GLbitfield;
 #define GL_BLEND 0x0BE2
 #define GL_SRC_ALPHA 0x0302
 #define GL_ONE_MINUS_SRC_ALPHA 0x0303
+#define GL_RED 0x1903
+#define GL_R32F 0x822E
 #define GL_NO_ERROR 0
 
 /* Function pointer types. */
@@ -136,6 +138,7 @@ typedef void (*PFNGLDELETERENDERBUFFERSPROC)(GLsizei, const GLuint *);
 typedef void (*PFNGLBLITFRAMEBUFFERPROC)(GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum);
 typedef GLint (*PFNGLGETATTRIBLOCATIONPROC)(GLuint, const GLchar *);
 typedef void (*PFNGLREADPIXELSPROC)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *);
+typedef void (*PFNGLTEXSUBIMAGE2DPROC)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void *);
 
 /* Global function pointers. */
 typedef struct sdl3d_gl_funcs
@@ -203,6 +206,7 @@ typedef struct sdl3d_gl_funcs
     PFNGLBLITFRAMEBUFFERPROC BlitFramebuffer;
     PFNGLGETATTRIBLOCATIONPROC GetAttribLocation;
     PFNGLREADPIXELSPROC ReadPixels;
+    PFNGLTEXSUBIMAGE2DPROC TexSubImage2D;
 } sdl3d_gl_funcs;
 
 static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
@@ -280,6 +284,7 @@ static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
     LOAD(BlitFramebuffer);
     LOAD(GetAttribLocation);
     LOAD(ReadPixels);
+    LOAD(TexSubImage2D);
 #undef LOAD
     return true;
 }
