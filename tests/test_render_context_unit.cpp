@@ -5,6 +5,7 @@
 
 extern "C"
 {
+#include "backend.h"
 #include "sdl3d/sdl3d.h"
 }
 
@@ -301,4 +302,47 @@ TEST(SDL3DRenderContextMutators, NullContextIsRejectedSafely)
     EXPECT_NE(std::string_view(SDL_GetError()).find("Parameter 'context' is invalid"), std::string_view::npos);
 
     sdl3d_destroy_render_context(nullptr);
+}
+
+TEST(SDL3DBackendInterface, SoftwareBackendPopulatesAllSlots)
+{
+    sdl3d_backend_interface iface{};
+    sdl3d_sw_backend_init(&iface);
+
+    EXPECT_NE(nullptr, iface.destroy);
+    EXPECT_NE(nullptr, iface.clear);
+    EXPECT_NE(nullptr, iface.present);
+    EXPECT_NE(nullptr, iface.draw_mesh_unlit);
+    EXPECT_NE(nullptr, iface.draw_mesh_lit);
+}
+
+TEST(SDL3DBackendInterface, GlBackendPopulatesAllSlots)
+{
+    sdl3d_backend_interface iface{};
+    sdl3d_gl_backend_init(&iface);
+
+    EXPECT_NE(nullptr, iface.destroy);
+    EXPECT_NE(nullptr, iface.clear);
+    EXPECT_NE(nullptr, iface.present);
+    EXPECT_NE(nullptr, iface.draw_mesh_unlit);
+    EXPECT_NE(nullptr, iface.draw_mesh_lit);
+}
+
+TEST(SDL3DBackendInterface, SoftwareDrawMeshUnlitReturnsFalseForFallthrough)
+{
+    sdl3d_backend_interface iface{};
+    sdl3d_sw_backend_init(&iface);
+
+    sdl3d_draw_params_unlit params{};
+    /* Software draw returns false to signal "use inline software path". */
+    EXPECT_FALSE(iface.draw_mesh_unlit(nullptr, &params));
+}
+
+TEST(SDL3DBackendInterface, SoftwareDrawMeshLitReturnsFalseForFallthrough)
+{
+    sdl3d_backend_interface iface{};
+    sdl3d_sw_backend_init(&iface);
+
+    sdl3d_draw_params_lit params{};
+    EXPECT_FALSE(iface.draw_mesh_lit(nullptr, &params));
 }

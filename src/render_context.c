@@ -282,6 +282,17 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     context->texture_cache = NULL;
     context->parallel_rasterizer = NULL;
     context->backend = resolved_backend;
+
+    /* Initialize the backend dispatch table. */
+    if (resolved_backend == SDL3D_BACKEND_SDLGPU)
+    {
+        sdl3d_gl_backend_init(&context->backend_iface);
+    }
+    else
+    {
+        sdl3d_sw_backend_init(&context->backend_iface);
+    }
+
     context->width = render_width;
     context->height = render_height;
     context->near_plane = SDL3D_DEFAULT_NEAR_PLANE;
@@ -331,17 +342,19 @@ void sdl3d_destroy_render_context(sdl3d_render_context *context)
         return;
     }
 
-    sdl3d_parallel_rasterizer_destroy(context->parallel_rasterizer);
+    /* Backend-specific cleanup. */
+    if (context->backend_iface.destroy != NULL)
+    {
+        context->backend_iface.destroy(context);
+    }
+
+    /* Shared cleanup. */
     sdl3d_texture_cache_destroy(context->texture_cache);
     SDL_free(context->model_stack);
-    SDL_DestroyTexture(context->color_texture);
-    SDL_free(context->color_buffer);
-    SDL_free(context->depth_buffer);
     for (int i = 0; i < SDL3D_MAX_LIGHTS; ++i)
     {
         SDL_free(context->shadow_depth[i]);
     }
-    sdl3d_gl_destroy(context->gl);
     SDL_free(context);
 }
 
@@ -385,18 +398,7 @@ bool sdl3d_clear_render_context(sdl3d_render_context *context, sdl3d_color color
         return SDL_InvalidParamError("context");
     }
 
-    if (context->backend == SDL3D_BACKEND_SDLGPU && context->gl != NULL)
-    {
-        sdl3d_gl_clear(context->gl, (float)color.r / 255.0f, (float)color.g / 255.0f, (float)color.b / 255.0f,
-                       (float)color.a / 255.0f);
-        return true;
-    }
-
-    {
-        sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
-        sdl3d_framebuffer_clear(&framebuffer, color, 1.0f);
-    }
-    return true;
+    return context->backend_iface.clear(context, color);
 }
 
 bool sdl3d_clear_render_context_rect(sdl3d_render_context *context, const SDL_Rect *rect, sdl3d_color color)
@@ -523,30 +525,5 @@ bool sdl3d_present_render_context(sdl3d_render_context *context)
         return SDL_InvalidParamError("context");
     }
 
-    if (context->backend == SDL3D_BACKEND_SDLGPU && context->gl != NULL)
-    {
-        return SDL_GL_SwapWindow(context->window);
-    }
-
-    if (!SDL_UpdateTexture(context->color_texture, NULL, context->color_buffer, context->width * 4))
-    {
-        return false;
-    }
-
-    if (!SDL_SetRenderDrawColor(context->renderer, 0, 0, 0, 255))
-    {
-        return false;
-    }
-
-    if (!SDL_RenderClear(context->renderer))
-    {
-        return false;
-    }
-
-    if (!SDL_RenderTexture(context->renderer, context->color_texture, NULL, NULL))
-    {
-        return false;
-    }
-
-    return SDL_RenderPresent(context->renderer);
+    return context->backend_iface.present(context);
 }
