@@ -21,6 +21,7 @@ struct sdl3d_gl_context
 {
     SDL_GLContext gl_context;
     sdl3d_gl_funcs gl;
+    bool is_es; /* true if running OpenGL ES */
 
     /* Shader programs. */
     GLuint unlit_program;
@@ -67,11 +68,14 @@ struct sdl3d_gl_context
 /* Shader compilation                                                  */
 /* ------------------------------------------------------------------ */
 
-static GLuint sdl3d_gl_compile_shader(sdl3d_gl_funcs *gl, GLenum type, const char *source)
+static GLuint sdl3d_gl_compile_shader(sdl3d_gl_funcs *gl, GLenum type, const char *source, bool is_es)
 {
     GLuint shader = gl->CreateShader(type);
     GLint status;
-    gl->ShaderSource(shader, 1, &source, NULL);
+    const char *sources[2];
+    sources[0] = is_es ? SDL3D_GLSL_VERSION_ES300 : SDL3D_GLSL_VERSION_330;
+    sources[1] = source;
+    gl->ShaderSource(shader, 2, sources, NULL);
     gl->CompileShader(shader);
     gl->GetShaderiv(shader, GL_COMPILE_STATUS, &status);
     if (!status)
@@ -85,10 +89,10 @@ static GLuint sdl3d_gl_compile_shader(sdl3d_gl_funcs *gl, GLenum type, const cha
     return shader;
 }
 
-static GLuint sdl3d_gl_link_program(sdl3d_gl_funcs *gl, const char *vert_src, const char *frag_src)
+static GLuint sdl3d_gl_link_program(sdl3d_gl_funcs *gl, const char *vert_src, const char *frag_src, bool is_es)
 {
-    GLuint vert = sdl3d_gl_compile_shader(gl, GL_VERTEX_SHADER, vert_src);
-    GLuint frag = sdl3d_gl_compile_shader(gl, GL_FRAGMENT_SHADER, frag_src);
+    GLuint vert = sdl3d_gl_compile_shader(gl, GL_VERTEX_SHADER, vert_src, is_es);
+    GLuint frag = sdl3d_gl_compile_shader(gl, GL_FRAGMENT_SHADER, frag_src, is_es);
     GLuint program;
     GLint status;
 
@@ -162,11 +166,32 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->gl_context = SDL_GL_CreateContext(window);
     if (ctx->gl_context == NULL)
     {
+#ifndef SDL3D_OPENGL_ES
+        /* Desktop GL failed — try OpenGL ES 3.0 as fallback (e.g. Raspberry Pi). */
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+        ctx->gl_context = SDL_GL_CreateContext(window);
+#endif
+    }
+    if (ctx->gl_context == NULL)
+    {
         SDL_free(ctx);
         return NULL;
     }
 
     SDL_GL_MakeCurrent(window, ctx->gl_context);
+
+    /* Detect if we're running ES (either compiled for ES or fell back to ES). */
+#ifdef SDL3D_OPENGL_ES
+    ctx->is_es = true;
+#else
+    {
+        int profile = 0;
+        SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, &profile);
+        ctx->is_es = (profile == SDL_GL_CONTEXT_PROFILE_ES);
+    }
+#endif
 
     if (!sdl3d_gl_load_funcs(&ctx->gl))
     {
@@ -177,12 +202,12 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     }
 
     /* Compile shaders. */
-    ctx->unlit_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_unlit_vert, sdl3d_shader_unlit_frag);
-    ctx->lit_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_lit_vert, sdl3d_shader_lit_frag);
-    ctx->ps1_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_ps1_vert, sdl3d_shader_ps1_frag);
-    ctx->n64_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_n64_vert, sdl3d_shader_n64_frag);
-    ctx->dos_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_dos_vert, sdl3d_shader_dos_frag);
-    ctx->snes_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_snes_vert, sdl3d_shader_snes_frag);
+    ctx->unlit_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_unlit_vert, sdl3d_shader_unlit_frag, ctx->is_es);
+    ctx->lit_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_lit_vert, sdl3d_shader_lit_frag, ctx->is_es);
+    ctx->ps1_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_ps1_vert, sdl3d_shader_ps1_frag, ctx->is_es);
+    ctx->n64_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_n64_vert, sdl3d_shader_n64_frag, ctx->is_es);
+    ctx->dos_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_dos_vert, sdl3d_shader_dos_frag, ctx->is_es);
+    ctx->snes_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_snes_vert, sdl3d_shader_snes_frag, ctx->is_es);
 
     if (ctx->unlit_program == 0 || ctx->lit_program == 0)
     {
@@ -338,6 +363,7 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const float *positions, con
 {
     GLuint vao, vbo_pos, vbo_uv, vbo_col, ebo;
     const sdl3d_gl_funcs *gl;
+    static int draw_count = 0;
 
     if (ctx == NULL || positions == NULL || vertex_count <= 0)
     {
@@ -345,17 +371,51 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const float *positions, con
     }
 
     gl = &ctx->gl;
+
+    /* Log first few draw calls for debugging. */
+    if (draw_count < 3)
+    {
+        SDL_Log("GL draw_mesh_unlit: verts=%d, indices=%d, program=%u, tint=(%.2f,%.2f,%.2f,%.2f)", vertex_count,
+                index_count, ctx->unlit_program, tint[0], tint[1], tint[2], tint[3]);
+        SDL_Log("  MVP[0..3]: %.3f %.3f %.3f %.3f", mvp[0], mvp[1], mvp[2], mvp[3]);
+        SDL_Log("  pos[0..2]: %.3f %.3f %.3f", positions[0], positions[1], positions[2]);
+    }
+
     gl->UseProgram(ctx->unlit_program);
+    if (draw_count < 1)
+    {
+        GLenum e = gl->GetError();
+        if (e)
+            SDL_Log("  err after UseProgram: 0x%04X", (unsigned)e);
+    }
     gl->UniformMatrix4fv(ctx->unlit_mvp_loc, 1, GL_FALSE, mvp);
+    if (draw_count < 1)
+    {
+        GLenum e = gl->GetError();
+        if (e)
+            SDL_Log("  err after UniformMatrix4fv: 0x%04X", (unsigned)e);
+    }
     gl->Uniform4f(ctx->unlit_tint_loc, tint[0], tint[1], tint[2], tint[3]);
 
     gl->ActiveTexture(GL_TEXTURE0);
     gl->BindTexture(GL_TEXTURE_2D, texture ? texture : ctx->white_texture);
     gl->Uniform1i(ctx->unlit_texture_loc, 0);
     gl->Uniform1i(ctx->unlit_has_texture_loc, texture ? 1 : 0);
+    if (draw_count < 1)
+    {
+        GLenum e = gl->GetError();
+        if (e)
+            SDL_Log("  err after texture setup: 0x%04X", (unsigned)e);
+    }
 
     gl->GenVertexArrays(1, &vao);
     gl->BindVertexArray(vao);
+    if (draw_count < 1)
+    {
+        GLenum e = gl->GetError();
+        if (e)
+            SDL_Log("  err after VAO: 0x%04X", (unsigned)e);
+    }
 
     /* Positions. */
     gl->GenBuffers(1, &vbo_pos);
@@ -363,6 +423,12 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const float *positions, con
     gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 3 * sizeof(float)), positions, GL_DYNAMIC_DRAW);
     gl->EnableVertexAttribArray(0);
     gl->VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    if (draw_count < 1)
+    {
+        GLenum e = gl->GetError();
+        if (e)
+            SDL_Log("  err after pos VBO: 0x%04X", (unsigned)e);
+    }
 
     /* UVs. */
     gl->GenBuffers(1, &vbo_uv);
@@ -373,8 +439,7 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const float *positions, con
     }
     else
     {
-        float zero[2] = {0, 0};
-        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(2 * sizeof(float)), zero, GL_DYNAMIC_DRAW);
+        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 2 * sizeof(float)), NULL, GL_DYNAMIC_DRAW);
     }
     gl->EnableVertexAttribArray(1);
     gl->VertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, NULL);
@@ -423,6 +488,13 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const float *positions, con
         gl->DrawArrays(GL_TRIANGLES, 0, (GLsizei)vertex_count);
     }
 
+
+    if (draw_count < 3)
+    {
+        GLenum err = gl->GetError();
+        SDL_Log("  GL draw result: err=0x%04X", (unsigned)err);
+        draw_count++;
+    }
     gl->BindVertexArray(0);
     gl->DeleteBuffers(1, &vbo_pos);
     gl->DeleteBuffers(1, &vbo_uv);
@@ -535,8 +607,7 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const float *positions, const
     }
     else
     {
-        float zero[3] = {0, 1, 0};
-        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(3 * sizeof(float)), zero, GL_DYNAMIC_DRAW);
+        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 3 * sizeof(float)), NULL, GL_DYNAMIC_DRAW);
     }
     gl->EnableVertexAttribArray(1);
     gl->VertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, NULL);
@@ -549,8 +620,7 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const float *positions, const
     }
     else
     {
-        float zero[2] = {0, 0};
-        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(2 * sizeof(float)), zero, GL_DYNAMIC_DRAW);
+        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 2 * sizeof(float)), NULL, GL_DYNAMIC_DRAW);
     }
     gl->EnableVertexAttribArray(2);
     gl->VertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, NULL);
