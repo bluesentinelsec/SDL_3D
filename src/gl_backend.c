@@ -9,7 +9,6 @@
 #include "gl_backend.h"
 
 #include <SDL3/SDL_error.h>
-#include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
 #include "gl_funcs.h"
@@ -433,7 +432,6 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const sdl3d_draw_params_unl
 {
     GLuint vao, vbo_pos, vbo_uv, vbo_col, ebo;
     const sdl3d_gl_funcs *gl;
-    static int draw_count = 0;
     const float *positions = params->positions;
     const float *uvs = params->uvs;
     const float *colors = params->colors;
@@ -451,50 +449,17 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const sdl3d_draw_params_unl
 
     gl = &ctx->gl;
 
-    /* Log first few draw calls for debugging. */
-    if (draw_count < 3)
-    {
-        SDL_Log("GL draw_mesh_unlit: verts=%d, indices=%d, program=%u, tint=(%.2f,%.2f,%.2f,%.2f)", vertex_count,
-                index_count, ctx->unlit_program, tint[0], tint[1], tint[2], tint[3]);
-        SDL_Log("  MVP[0..3]: %.3f %.3f %.3f %.3f", mvp[0], mvp[1], mvp[2], mvp[3]);
-        SDL_Log("  pos[0..2]: %.3f %.3f %.3f", positions[0], positions[1], positions[2]);
-    }
-
     gl->UseProgram(ctx->unlit_program);
-    if (draw_count < 1)
-    {
-        GLenum e = gl->GetError();
-        if (e)
-            SDL_Log("  err after UseProgram: 0x%04X", (unsigned)e);
-    }
     gl->UniformMatrix4fv(ctx->unlit_mvp_loc, 1, GL_FALSE, mvp);
-    if (draw_count < 1)
-    {
-        GLenum e = gl->GetError();
-        if (e)
-            SDL_Log("  err after UniformMatrix4fv: 0x%04X", (unsigned)e);
-    }
     gl->Uniform4f(ctx->unlit_tint_loc, tint[0], tint[1], tint[2], tint[3]);
 
     gl->ActiveTexture(GL_TEXTURE0);
     gl->BindTexture(GL_TEXTURE_2D, texture ? texture : ctx->white_texture);
     gl->Uniform1i(ctx->unlit_texture_loc, 0);
     gl->Uniform1i(ctx->unlit_has_texture_loc, texture ? 1 : 0);
-    if (draw_count < 1)
-    {
-        GLenum e = gl->GetError();
-        if (e)
-            SDL_Log("  err after texture setup: 0x%04X", (unsigned)e);
-    }
 
     gl->GenVertexArrays(1, &vao);
     gl->BindVertexArray(vao);
-    if (draw_count < 1)
-    {
-        GLenum e = gl->GetError();
-        if (e)
-            SDL_Log("  err after VAO: 0x%04X", (unsigned)e);
-    }
 
     /* Positions. */
     gl->GenBuffers(1, &vbo_pos);
@@ -502,12 +467,6 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const sdl3d_draw_params_unl
     gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 3 * sizeof(float)), positions, GL_DYNAMIC_DRAW);
     gl->EnableVertexAttribArray(0);
     gl->VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
-    if (draw_count < 1)
-    {
-        GLenum e = gl->GetError();
-        if (e)
-            SDL_Log("  err after pos VBO: 0x%04X", (unsigned)e);
-    }
 
     /* UVs. */
     gl->GenBuffers(1, &vbo_uv);
@@ -567,12 +526,6 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const sdl3d_draw_params_unl
         gl->DrawArrays(GL_TRIANGLES, 0, (GLsizei)vertex_count);
     }
 
-    if (draw_count < 3)
-    {
-        GLenum err = gl->GetError();
-        SDL_Log("  GL draw result: err=0x%04X", (unsigned)err);
-        draw_count++;
-    }
     gl->BindVertexArray(0);
     gl->DeleteBuffers(1, &vbo_pos);
     gl->DeleteBuffers(1, &vbo_uv);
