@@ -143,11 +143,16 @@ bool sdl3d_draw_cube_wires(sdl3d_render_context *context, sdl3d_vec3 center, sdl
 
 bool sdl3d_draw_plane(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec2 size, sdl3d_color color)
 {
-    /* Subdivide into a grid so vertex fog/lighting interpolates correctly
-     * on large planes.  Target roughly 4-unit cells. */
+    /* Subdivide into a grid so vertex fog/lighting interpolates correctly.
+     * All triangles are batched into a single mesh draw call. */
     static const float CELL_SIZE = 4.0f;
-    int cols, rows, cx, rz;
+    int cols, rows, vert_count, idx_count, ii;
     float hx, hz, cell_w, cell_h;
+    float *positions;
+    float *normals;
+    unsigned int *indices;
+    sdl3d_mesh mesh;
+    bool result;
 
     if (!sdl3d_shape_require_nonnegative(size.x, "size.x", "sdl3d_draw_plane") ||
         !sdl3d_shape_require_nonnegative(size.y, "size.y", "sdl3d_draw_plane"))
@@ -158,38 +163,78 @@ bool sdl3d_draw_plane(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_ve
     cols = (int)(size.x / CELL_SIZE);
     rows = (int)(size.y / CELL_SIZE);
     if (cols < 1)
+    {
         cols = 1;
+    }
     if (rows < 1)
+    {
         rows = 1;
+    }
+
+    vert_count = (cols + 1) * (rows + 1);
+    idx_count = cols * rows * 6;
+
+    positions = (float *)SDL_malloc((size_t)vert_count * 3 * sizeof(float));
+    normals = (float *)SDL_malloc((size_t)vert_count * 3 * sizeof(float));
+    indices = (unsigned int *)SDL_malloc((size_t)idx_count * sizeof(unsigned int));
+    if (positions == NULL || normals == NULL || indices == NULL)
+    {
+        SDL_free(positions);
+        SDL_free(normals);
+        SDL_free(indices);
+        return SDL_OutOfMemory();
+    }
 
     hx = size.x * 0.5f;
     hz = size.y * 0.5f;
     cell_w = size.x / (float)cols;
     cell_h = size.y / (float)rows;
 
-    for (rz = 0; rz < rows; ++rz)
+    for (int rz = 0; rz <= rows; ++rz)
     {
-        for (cx = 0; cx < cols; ++cx)
+        for (int cx = 0; cx <= cols; ++cx)
         {
-            float x0 = center.x - hx + (float)cx * cell_w;
-            float x1 = x0 + cell_w;
-            float z0 = center.z - hz + (float)rz * cell_h;
-            float z1 = z0 + cell_h;
-            sdl3d_vec3 v0 = sdl3d_vec3_make(x0, center.y, z1);
-            sdl3d_vec3 v1 = sdl3d_vec3_make(x1, center.y, z1);
-            sdl3d_vec3 v2 = sdl3d_vec3_make(x1, center.y, z0);
-            sdl3d_vec3 v3 = sdl3d_vec3_make(x0, center.y, z0);
-            if (!sdl3d_draw_triangle_3d(context, v0, v1, v2, color))
-            {
-                return false;
-            }
-            if (!sdl3d_draw_triangle_3d(context, v0, v2, v3, color))
-            {
-                return false;
-            }
+            int vi = rz * (cols + 1) + cx;
+            positions[vi * 3 + 0] = center.x - hx + (float)cx * cell_w;
+            positions[vi * 3 + 1] = center.y;
+            positions[vi * 3 + 2] = center.z - hz + (float)rz * cell_h;
+            normals[vi * 3 + 0] = 0.0f;
+            normals[vi * 3 + 1] = 1.0f;
+            normals[vi * 3 + 2] = 0.0f;
         }
     }
-    return true;
+
+    ii = 0;
+    for (int rz = 0; rz < rows; ++rz)
+    {
+        for (int cx = 0; cx < cols; ++cx)
+        {
+            unsigned int tl = (unsigned int)(rz * (cols + 1) + cx);
+            unsigned int tr = tl + 1;
+            unsigned int bl = (unsigned int)((rz + 1) * (cols + 1) + cx);
+            unsigned int br = bl + 1;
+            indices[ii++] = bl;
+            indices[ii++] = tr;
+            indices[ii++] = tl;
+            indices[ii++] = bl;
+            indices[ii++] = br;
+            indices[ii++] = tr;
+        }
+    }
+
+    SDL_zerop(&mesh);
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.indices = indices;
+    mesh.vertex_count = vert_count;
+    mesh.index_count = idx_count;
+
+    result = sdl3d_draw_mesh(context, &mesh, NULL, color);
+
+    SDL_free(positions);
+    SDL_free(normals);
+    SDL_free(indices);
+    return result;
 }
 
 bool sdl3d_draw_grid(sdl3d_render_context *context, int slices, float spacing, sdl3d_color color)
