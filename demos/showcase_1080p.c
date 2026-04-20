@@ -184,8 +184,8 @@ static bool create_backend(SDL_Window **out_win, SDL_Renderer **out_ren, sdl3d_r
     sdl3d_init_render_context_config(&cfg);
     cfg.backend = backend;
     cfg.allow_backend_fallback = false;
-    cfg.logical_width = (backend == SDL3D_BACKEND_SOFTWARE) ? 640 : WINDOW_W;
-    cfg.logical_height = (backend == SDL3D_BACKEND_SOFTWARE) ? 360 : WINDOW_H;
+    cfg.logical_width = WINDOW_W;
+    cfg.logical_height = WINDOW_H;
     cfg.logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
 
     if (!sdl3d_create_render_context(w, r, &cfg, &c))
