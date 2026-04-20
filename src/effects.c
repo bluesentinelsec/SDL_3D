@@ -352,6 +352,12 @@ bool sdl3d_apply_post_process(sdl3d_render_context *context, const sdl3d_post_pr
         return true;
     }
 
+    /* Post-process operates on the CPU framebuffer — skip for GL backend. */
+    if (context->color_buffer == NULL)
+    {
+        return true;
+    }
+
     w = context->width;
     h = context->height;
     total = w * h;

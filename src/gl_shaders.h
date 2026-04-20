@@ -9,16 +9,20 @@
 #ifdef SDL3D_OPENGL_ES
 #define SDL3D_GLSL_VERSION "#version 300 es\nprecision highp float;\n"
 #else
-#define SDL3D_GLSL_VERSION "#version 330\n"
+#define SDL3D_GLSL_VERSION ""
 #endif
+
+/* Runtime version prefix — selected based on actual GL context type. */
+#define SDL3D_GLSL_VERSION_330 "#version 330\n"
+#define SDL3D_GLSL_VERSION_ES300 "#version 300 es\nprecision highp float;\n"
 
 /* ================================================================== */
 /* Unlit shader: texture × vertex color × tint                        */
 /* ================================================================== */
 
-static const char *sdl3d_shader_unlit_vert = SDL3D_GLSL_VERSION "in vec3 aPosition;\n"
-                                                                "in vec2 aTexCoord;\n"
-                                                                "in vec4 aColor;\n"
+static const char *sdl3d_shader_unlit_vert = SDL3D_GLSL_VERSION "layout(location = 0) in vec3 aPosition;\n"
+                                                                "layout(location = 1) in vec2 aTexCoord;\n"
+                                                                "layout(location = 2) in vec4 aColor;\n"
                                                                 "uniform mat4 uMVP;\n"
                                                                 "out vec2 vTexCoord;\n"
                                                                 "out vec4 vColor;\n"
@@ -45,25 +49,40 @@ static const char *sdl3d_shader_unlit_frag =
 /* PBR lit shader: Cook-Torrance with lights, fog, tonemapping        */
 /* ================================================================== */
 
-static const char *sdl3d_shader_lit_vert = SDL3D_GLSL_VERSION "in vec3 aPosition;\n"
-                                                              "in vec3 aNormal;\n"
-                                                              "in vec2 aTexCoord;\n"
-                                                              "in vec4 aColor;\n"
-                                                              "uniform mat4 uMVP;\n"
-                                                              "uniform mat4 uModel;\n"
-                                                              "uniform mat3 uNormalMatrix;\n"
-                                                              "out vec3 vWorldPos;\n"
-                                                              "out vec3 vWorldNormal;\n"
-                                                              "out vec2 vTexCoord;\n"
-                                                              "out vec4 vColor;\n"
-                                                              "void main() {\n"
-                                                              "    vec4 worldPos = uModel * vec4(aPosition, 1.0);\n"
-                                                              "    vWorldPos = worldPos.xyz;\n"
-                                                              "    vWorldNormal = normalize(uNormalMatrix * aNormal);\n"
-                                                              "    vTexCoord = aTexCoord;\n"
-                                                              "    vColor = aColor;\n"
-                                                              "    gl_Position = uMVP * vec4(aPosition, 1.0);\n"
-                                                              "}\n";
+static const char *sdl3d_shader_lit_vert =
+    SDL3D_GLSL_VERSION "layout(location = 0) in vec3 aPosition;\n"
+                       "layout(location = 1) in vec3 aNormal;\n"
+                       "layout(location = 2) in vec2 aTexCoord;\n"
+                       "layout(location = 3) in vec4 aColor;\n"
+                       "layout(location = 4) in vec4 aJointIndices;\n"
+                       "layout(location = 5) in vec4 aJointWeights;\n"
+                       "uniform mat4 uMVP;\n"
+                       "uniform mat4 uModel;\n"
+                       "uniform mat3 uNormalMatrix;\n"
+                       "uniform int uSkinned;\n"
+                       "uniform mat4 uJointMatrices[64];\n"
+                       "out vec3 vWorldPos;\n"
+                       "out vec3 vWorldNormal;\n"
+                       "out vec2 vTexCoord;\n"
+                       "out vec4 vColor;\n"
+                       "void main() {\n"
+                       "    vec3 pos = aPosition;\n"
+                       "    vec3 norm = aNormal;\n"
+                       "    if (uSkinned != 0) {\n"
+                       "        mat4 skin = uJointMatrices[int(aJointIndices.x)] * aJointWeights.x\n"
+                       "                  + uJointMatrices[int(aJointIndices.y)] * aJointWeights.y\n"
+                       "                  + uJointMatrices[int(aJointIndices.z)] * aJointWeights.z\n"
+                       "                  + uJointMatrices[int(aJointIndices.w)] * aJointWeights.w;\n"
+                       "        pos = (skin * vec4(aPosition, 1.0)).xyz;\n"
+                       "        norm = mat3(skin) * aNormal;\n"
+                       "    }\n"
+                       "    vec4 worldPos = uModel * vec4(pos, 1.0);\n"
+                       "    vWorldPos = worldPos.xyz;\n"
+                       "    vWorldNormal = normalize(uNormalMatrix * norm);\n"
+                       "    vTexCoord = aTexCoord;\n"
+                       "    vColor = aColor;\n"
+                       "    gl_Position = uMVP * vec4(pos, 1.0);\n"
+                       "}\n";
 
 static const char *sdl3d_shader_lit_frag = SDL3D_GLSL_VERSION
     "#define MAX_LIGHTS 8\n"
@@ -194,10 +213,10 @@ static const char *sdl3d_shader_lit_frag = SDL3D_GLSL_VERSION
 /* ================================================================== */
 
 static const char *sdl3d_shader_ps1_vert = SDL3D_GLSL_VERSION
-    "in vec3 aPosition;\n"
-    "in vec3 aNormal;\n"
-    "in vec2 aTexCoord;\n"
-    "in vec4 aColor;\n"
+    "layout(location = 0) in vec3 aPosition;\n"
+    "layout(location = 1) in vec3 aNormal;\n"
+    "layout(location = 2) in vec2 aTexCoord;\n"
+    "layout(location = 3) in vec4 aColor;\n"
     "uniform mat4 uMVP;\n"
     "uniform mat4 uModel;\n"
     "uniform int uSnapPrecision;\n"
@@ -261,10 +280,10 @@ static const char *sdl3d_shader_ps1_frag =
 /* ================================================================== */
 
 static const char *sdl3d_shader_n64_vert = SDL3D_GLSL_VERSION
-    "in vec3 aPosition;\n"
-    "in vec3 aNormal;\n"
-    "in vec2 aTexCoord;\n"
-    "in vec4 aColor;\n"
+    "layout(location = 0) in vec3 aPosition;\n"
+    "layout(location = 1) in vec3 aNormal;\n"
+    "layout(location = 2) in vec2 aTexCoord;\n"
+    "layout(location = 3) in vec4 aColor;\n"
     "uniform mat4 uMVP;\n"
     "uniform mat4 uModel;\n"
     "uniform mat3 uNormalMatrix;\n"
@@ -322,10 +341,10 @@ static const char *sdl3d_shader_n64_frag =
 /* ================================================================== */
 
 static const char *sdl3d_shader_dos_vert =
-    SDL3D_GLSL_VERSION "in vec3 aPosition;\n"
-                       "in vec3 aNormal;\n"
-                       "in vec2 aTexCoord;\n"
-                       "in vec4 aColor;\n"
+    SDL3D_GLSL_VERSION "layout(location = 0) in vec3 aPosition;\n"
+                       "layout(location = 1) in vec3 aNormal;\n"
+                       "layout(location = 2) in vec2 aTexCoord;\n"
+                       "layout(location = 3) in vec4 aColor;\n"
                        "uniform mat4 uMVP;\n"
                        "uniform mat4 uModel;\n"
                        "uniform mat3 uNormalMatrix;\n"
@@ -371,9 +390,9 @@ static const char *sdl3d_shader_dos_frag =
 /* SNES shader: flat shading + low color depth                        */
 /* ================================================================== */
 
-static const char *sdl3d_shader_snes_vert = SDL3D_GLSL_VERSION "in vec3 aPosition;\n"
-                                                               "in vec2 aTexCoord;\n"
-                                                               "in vec4 aColor;\n"
+static const char *sdl3d_shader_snes_vert = SDL3D_GLSL_VERSION "layout(location = 0) in vec3 aPosition;\n"
+                                                               "layout(location = 1) in vec2 aTexCoord;\n"
+                                                               "layout(location = 2) in vec4 aColor;\n"
                                                                "uniform mat4 uMVP;\n"
                                                                "out vec2 vTexCoord;\n"
                                                                "out vec4 vColor;\n"

@@ -150,6 +150,7 @@ int main(int argc, char *argv[])
     bool running = true;
     Uint64 last_time;
     int current_profile = 0;
+    sdl3d_backend current_backend = SDL3D_BACKEND_SOFTWARE;
     const char *profile_names[] = {"Modern", "PS1", "N64", "DOS", "SNES"};
     sdl3d_render_profile (*profile_fns[])(void) = {sdl3d_profile_modern, sdl3d_profile_ps1, sdl3d_profile_n64,
                                                    sdl3d_profile_dos, sdl3d_profile_snes};
@@ -162,8 +163,14 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    win = SDL_CreateWindow("SDL3D Showcase", 960, 720, SDL_WINDOW_RESIZABLE);
-    ren = SDL_CreateRenderer(win, NULL);
+    /* Set GL attributes before window creation for OpenGL support. */
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+
+    win = SDL_CreateWindow("SDL3D Showcase", 960, 720, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
+    ren = SDL_CreateRenderer(win, "opengl");
     sdl3d_init_render_context_config(&cfg);
     cfg.logical_width = RENDER_W;
     cfg.logical_height = RENDER_H;
@@ -373,6 +380,53 @@ int main(int argc, char *argv[])
                         player.on_ground = false;
                     }
                     break;
+                case SDLK_TAB: {
+                    /* Toggle backend: destroy and recreate render context. */
+                    sdl3d_backend new_backend =
+                        (current_backend == SDL3D_BACKEND_SOFTWARE) ? SDL3D_BACKEND_SDLGPU : SDL3D_BACKEND_SOFTWARE;
+                    sdl3d_destroy_render_context(ctx);
+                    ctx = NULL;
+                    sdl3d_render_context_config new_cfg;
+                    sdl3d_init_render_context_config(&new_cfg);
+                    new_cfg.backend = new_backend;
+                    new_cfg.logical_width = RENDER_W;
+                    new_cfg.logical_height = RENDER_H;
+                    new_cfg.logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
+                    if (sdl3d_create_render_context(win, ren, &new_cfg, &ctx))
+                    {
+                        current_backend = new_backend;
+                        /* Re-apply lighting and fog. */
+                        sdl3d_add_light(ctx, &sun);
+                        sdl3d_add_light(ctx, &lamp1);
+                        sdl3d_add_light(ctx, &lamp2);
+                        sdl3d_add_light(ctx, &lamp3);
+                        sdl3d_set_fog(ctx, &fog);
+                        {
+                            sdl3d_render_profile p = profile_fns[current_profile]();
+                            sdl3d_set_render_profile(ctx, &p);
+                        }
+                        fprintf(stderr, "Backend: %s\n",
+                                current_backend == SDL3D_BACKEND_SOFTWARE ? "Software" : "OpenGL");
+                    }
+                    else
+                    {
+                        fprintf(stderr, "Backend switch failed: %s\n", SDL_GetError());
+                        /* Fall back to software. */
+                        new_cfg.backend = SDL3D_BACKEND_SOFTWARE;
+                        sdl3d_create_render_context(win, ren, &new_cfg, &ctx);
+                        current_backend = SDL3D_BACKEND_SOFTWARE;
+                        sdl3d_add_light(ctx, &sun);
+                        sdl3d_add_light(ctx, &lamp1);
+                        sdl3d_add_light(ctx, &lamp2);
+                        sdl3d_add_light(ctx, &lamp3);
+                        sdl3d_set_fog(ctx, &fog);
+                        {
+                            sdl3d_render_profile p = profile_fns[current_profile]();
+                            sdl3d_set_render_profile(ctx, &p);
+                        }
+                    }
+                }
+                break;
                 default:
                     break;
                 }
