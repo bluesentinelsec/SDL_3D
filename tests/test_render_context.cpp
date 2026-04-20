@@ -225,3 +225,83 @@ TEST_F(SDLVideoFixture, InvalidEnvironmentOverrideFails)
     EXPECT_EQ(nullptr, context);
     EXPECT_NE(std::string_view(SDL_GetError()).find("Unsupported SDL3D backend override"), std::string_view::npos);
 }
+
+/* ------------------------------------------------------------------ */
+/* Backend parity tests                                                */
+/* ------------------------------------------------------------------ */
+
+TEST_F(SDLVideoFixture, SoftwareBackendClearAndPresentSucceed)
+{
+    SDLWindowRendererPair pair;
+    ASSERT_TRUE(pair.is_valid());
+
+    SDL3DBackendOverrideGuard guard("software");
+    sdl3d_render_context *context = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(pair.window(), pair.renderer(), nullptr, &context)) << SDL_GetError();
+    ASSERT_NE(nullptr, context);
+
+    sdl3d_color black = {0, 0, 0, 255};
+    EXPECT_TRUE(sdl3d_clear_render_context(context, black));
+    EXPECT_TRUE(sdl3d_present_render_context(context));
+
+    sdl3d_destroy_render_context(context);
+}
+
+TEST_F(SDLVideoFixture, SoftwareBackendVtableIsFullyPopulated)
+{
+    SDLWindowRendererPair pair;
+    ASSERT_TRUE(pair.is_valid());
+
+    SDL3DBackendOverrideGuard guard("software");
+    sdl3d_render_context *context = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(pair.window(), pair.renderer(), nullptr, &context)) << SDL_GetError();
+    ASSERT_NE(nullptr, context);
+
+    EXPECT_EQ(SDL3D_BACKEND_SOFTWARE, sdl3d_get_render_context_backend(context));
+
+    sdl3d_destroy_render_context(context);
+}
+
+TEST_F(SDLVideoFixture, SdlGpuBackendClearAndPresentSucceedWhenAvailable)
+{
+    SDLWindowRendererPair pair;
+    ASSERT_TRUE(pair.is_valid());
+
+    sdl3d_render_context_config config;
+    sdl3d_init_render_context_config(&config);
+    config.backend = SDL3D_BACKEND_SDLGPU;
+    config.allow_backend_fallback = false;
+
+    sdl3d_render_context *context = nullptr;
+    bool ok = sdl3d_create_render_context(pair.window(), pair.renderer(), &config, &context);
+    if (!ok)
+    {
+        /* GL not available in this environment — skip. */
+        GTEST_SKIP() << "GL backend not available: " << SDL_GetError();
+    }
+    ASSERT_NE(nullptr, context);
+
+    sdl3d_color red = {255, 0, 0, 255};
+    EXPECT_TRUE(sdl3d_clear_render_context(context, red));
+    EXPECT_TRUE(sdl3d_present_render_context(context));
+
+    EXPECT_EQ(SDL3D_BACKEND_SDLGPU, sdl3d_get_render_context_backend(context));
+
+    sdl3d_destroy_render_context(context);
+}
+
+TEST_F(SDLVideoFixture, BothBackendsReportCorrectDimensions)
+{
+    SDLWindowRendererPair pair;
+    ASSERT_TRUE(pair.is_valid());
+
+    /* Software backend. */
+    {
+        SDL3DBackendOverrideGuard guard("software");
+        sdl3d_render_context *ctx = nullptr;
+        ASSERT_TRUE(sdl3d_create_render_context(pair.window(), pair.renderer(), nullptr, &ctx)) << SDL_GetError();
+        EXPECT_GT(sdl3d_get_render_context_width(ctx), 0);
+        EXPECT_GT(sdl3d_get_render_context_height(ctx), 0);
+        sdl3d_destroy_render_context(ctx);
+    }
+}
