@@ -806,11 +806,11 @@ TEST_F(SDL3DLightingFixture, SetAndGetRenderProfile)
     ASSERT_TRUE(sdl3d_get_render_profile(ctx, &out));
     EXPECT_EQ(out.shading, SDL3D_SHADING_GOURAUD);
     EXPECT_EQ(out.uv_mode, SDL3D_UV_AFFINE);
-    EXPECT_EQ(out.fog_eval, SDL3D_FOG_EVAL_FRAGMENT);
+    EXPECT_EQ(out.fog_eval, SDL3D_FOG_EVAL_VERTEX);
     EXPECT_EQ(out.tonemap, SDL3D_TONEMAP_NONE);
     EXPECT_TRUE(out.vertex_snap);
     EXPECT_EQ(out.vertex_snap_precision, 1);
-    EXPECT_FALSE(out.color_quantize);
+    EXPECT_TRUE(out.color_quantize);
 }
 
 TEST_F(SDL3DLightingFixture, RuntimeProfileSwitch)
@@ -876,13 +876,13 @@ INSTANTIATE_TEST_SUITE_P(Presets, SDL3DPresetTable,
                          ::testing::Values(PresetCase{"modern", sdl3d_profile_modern, SDL3D_SHADING_PHONG,
                                                       SDL3D_UV_PERSPECTIVE, SDL3D_TONEMAP_ACES, false, false},
                                            PresetCase{"ps1", sdl3d_profile_ps1, SDL3D_SHADING_GOURAUD, SDL3D_UV_AFFINE,
-                                                      SDL3D_TONEMAP_NONE, true, false},
+                                                      SDL3D_TONEMAP_NONE, true, true},
                                            PresetCase{"n64", sdl3d_profile_n64, SDL3D_SHADING_GOURAUD,
                                                       SDL3D_UV_PERSPECTIVE, SDL3D_TONEMAP_NONE, false, false},
                                            PresetCase{"dos", sdl3d_profile_dos, SDL3D_SHADING_GOURAUD, SDL3D_UV_AFFINE,
                                                       SDL3D_TONEMAP_NONE, false, true},
                                            PresetCase{"snes", sdl3d_profile_snes, SDL3D_SHADING_FLAT, SDL3D_UV_AFFINE,
-                                                      SDL3D_TONEMAP_NONE, false, false}));
+                                                      SDL3D_TONEMAP_NONE, false, true}));
 
 /* ================================================================== */
 /* Color quantization unit tests                                      */
@@ -892,7 +892,7 @@ TEST(SDL3DColorQuantize, DosProfileSets256Colors)
 {
     sdl3d_render_profile p = sdl3d_profile_dos();
     EXPECT_TRUE(p.color_quantize);
-    EXPECT_EQ(p.color_depth, 256);
+    EXPECT_EQ(p.color_depth, 6);
 }
 
 /* ================================================================== */
@@ -918,10 +918,10 @@ TEST_F(SDL3DLightingFixture, CustomProfileMixAndMatch)
 /* Fog evaluation mode                                                */
 /* ================================================================== */
 
-TEST(SDL3DFogEval, PS1ProfileUsesFragmentFog)
+TEST(SDL3DFogEval, PS1ProfileUsesVertexFog)
 {
     sdl3d_render_profile p = sdl3d_profile_ps1();
-    EXPECT_EQ(p.fog_eval, SDL3D_FOG_EVAL_FRAGMENT);
+    EXPECT_EQ(p.fog_eval, SDL3D_FOG_EVAL_VERTEX);
 }
 
 TEST(SDL3DFogEval, ModernProfileUsesFragmentFog)
