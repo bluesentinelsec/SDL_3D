@@ -488,7 +488,6 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const float *positions, con
         gl->DrawArrays(GL_TRIANGLES, 0, (GLsizei)vertex_count);
     }
 
-
     if (draw_count < 3)
     {
         GLenum err = gl->GetError();
