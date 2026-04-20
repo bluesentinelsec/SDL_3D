@@ -1,0 +1,27 @@
+Demo Assets Provenance
+=====================
+
+BoxTextured.glb
+  Origin: Khronos glTF-Sample-Assets
+  URL: https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/BoxTextured
+  Author: Cesium
+  License: CC-BY 4.0
+
+DamagedHelmet.glb
+  Origin: Khronos glTF-Sample-Assets
+  URL: https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/DamagedHelmet
+  Author: theblueturtle_ (Sketchfab), converted by ctxwing
+  License: CC-BY 4.0
+
+Duck.glb
+  Origin: Khronos glTF-Sample-Assets
+  URL: https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Duck
+  Author: Sony Computer Entertainment
+  License: SCEA Shared Source License 1.0
+
+CesiumMan.glb
+  Origin: Khronos glTF-Sample-Assets
+  URL: https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/CesiumMan
+  Author: Cesium
+  License: CC-BY 4.0
+  Notes: Animated humanoid with skeletal animation and texture

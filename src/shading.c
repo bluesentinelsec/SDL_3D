@@ -334,8 +334,8 @@ void sdl3d_tonemap(sdl3d_tonemap_mode mode, float *r, float *g, float *b)
         *b = sdl3d_clampf((bi * (a * bi + bt)) / (bi * (c * bi + d) + e), 0.0f, 1.0f);
     }
 
-    /* Apply sRGB gamma curve when any tonemapping is active. */
-    if (mode != SDL3D_TONEMAP_NONE)
+    /* Always apply sRGB gamma curve. Monitors expect sRGB input;
+     * outputting linear values produces incorrect (too dark) colors. */
     {
         float inv_gamma = 1.0f / 2.2f;
         *r = powf(sdl3d_clampf(*r, 0.0f, 1.0f), inv_gamma);

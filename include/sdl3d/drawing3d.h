@@ -99,6 +99,15 @@ extern "C"
                              sdl3d_color tint);
 
     /*
+     * Draw a model with skeletal animation applied. `joint_matrices` is
+     * an array of skeleton->joint_count mat4 entries from
+     * sdl3d_evaluate_animation. Pass NULL for bind pose (same as draw_model_ex).
+     */
+    bool sdl3d_draw_model_skinned(sdl3d_render_context *context, const sdl3d_model *model, sdl3d_vec3 position,
+                                  sdl3d_vec3 rotation_axis, float rotation_angle_radians, sdl3d_vec3 scale,
+                                  sdl3d_color tint, const sdl3d_mat4 *joint_matrices);
+
+    /*
      * Read a single pixel from the color backbuffer. Returns false if x or y
      * fall outside the backbuffer. Intended for tests, screenshots, and
      * pixel-pick queries.

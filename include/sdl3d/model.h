@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 
+#include "sdl3d/image.h"
 #include "sdl3d/types.h"
 
 #ifdef __cplusplus
@@ -92,6 +93,11 @@ extern "C"
         struct sdl3d_skeleton *skeleton;
         struct sdl3d_animation_clip *animations;
         int animation_count;
+
+        /* Embedded textures decoded at load time (e.g. from GLB buffer views).
+         * Materials reference these by index via albedo_map = "#0", "#1", etc. */
+        sdl3d_image *embedded_textures;
+        int embedded_texture_count;
     } sdl3d_model;
 
     /*

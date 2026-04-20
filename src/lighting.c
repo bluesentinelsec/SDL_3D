@@ -480,7 +480,7 @@ sdl3d_render_profile sdl3d_profile_ps1(void)
     p.shading = SDL3D_SHADING_GOURAUD;
     p.texture_filter = SDL3D_TEXTURE_FILTER_NEAREST;
     p.uv_mode = SDL3D_UV_AFFINE;
-    p.fog_eval = SDL3D_FOG_EVAL_VERTEX;
+    p.fog_eval = SDL3D_FOG_EVAL_FRAGMENT;
     p.tonemap = SDL3D_TONEMAP_NONE;
     p.vertex_snap = true;
     p.vertex_snap_precision = 1;
@@ -494,7 +494,7 @@ sdl3d_render_profile sdl3d_profile_n64(void)
     p.shading = SDL3D_SHADING_GOURAUD;
     p.texture_filter = SDL3D_TEXTURE_FILTER_BILINEAR;
     p.uv_mode = SDL3D_UV_PERSPECTIVE;
-    p.fog_eval = SDL3D_FOG_EVAL_VERTEX;
+    p.fog_eval = SDL3D_FOG_EVAL_FRAGMENT;
     p.tonemap = SDL3D_TONEMAP_NONE;
     return p;
 }
