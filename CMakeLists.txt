@@ -86,6 +86,7 @@ target_sources(
         src/effects.c
         src/fbx_loader.c
         src/gltf_loader.c
+        src/gl_backend.c
         src/image.c
         src/lighting.c
         src/math.c
