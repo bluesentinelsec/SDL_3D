@@ -15,6 +15,7 @@ typedef struct sdl3d_gl_context sdl3d_gl_context;
 sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height);
 void sdl3d_gl_destroy(sdl3d_gl_context *ctx);
 void sdl3d_gl_clear(sdl3d_gl_context *ctx, float r, float g, float b, float a);
+void sdl3d_gl_present(sdl3d_gl_context *ctx, SDL_Window *window);
 
 GLuint sdl3d_gl_get_unlit_program(const sdl3d_gl_context *ctx);
 GLuint sdl3d_gl_get_lit_program(const sdl3d_gl_context *ctx);

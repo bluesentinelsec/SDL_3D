@@ -55,10 +55,14 @@ typedef unsigned int GLbitfield;
 #define GL_CLAMP_TO_EDGE 0x812F
 #define GL_REPEAT 0x2901
 #define GL_FRAMEBUFFER 0x8D40
+#define GL_READ_FRAMEBUFFER 0x8CA8
+#define GL_DRAW_FRAMEBUFFER 0x8CA9
 #define GL_COLOR_ATTACHMENT0 0x8CE0
 #define GL_DEPTH_ATTACHMENT 0x8D00
 #define GL_DEPTH_COMPONENT 0x1902
 #define GL_DEPTH_COMPONENT16 0x81A5
+#define GL_DEPTH_COMPONENT24 0x81A6
+#define GL_RENDERBUFFER 0x8D41
 #define GL_FRAMEBUFFER_COMPLETE 0x8CD5
 #define GL_BLEND 0x0BE2
 #define GL_SRC_ALPHA 0x0302
@@ -116,6 +120,12 @@ typedef void (*PFNGLBINDFRAMEBUFFERPROC)(GLenum, GLuint);
 typedef void (*PFNGLFRAMEBUFFERTEXTURE2DPROC)(GLenum, GLenum, GLenum, GLuint, GLint);
 typedef GLenum (*PFNGLCHECKFRAMEBUFFERSTATUSPROC)(GLenum);
 typedef void (*PFNGLDELETEFRAMEBUFFERSPROC)(GLsizei, const GLuint *);
+typedef void (*PFNGLGENRENDERBUFFERSPROC)(GLsizei, GLuint *);
+typedef void (*PFNGLBINDRENDERBUFFERPROC)(GLenum, GLuint);
+typedef void (*PFNGLRENDERBUFFERSTORAGEPROC)(GLenum, GLenum, GLsizei, GLsizei);
+typedef void (*PFNGLFRAMEBUFFERRENDERBUFFERPROC)(GLenum, GLenum, GLenum, GLuint);
+typedef void (*PFNGLDELETERENDERBUFFERSPROC)(GLsizei, const GLuint *);
+typedef void (*PFNGLBLITFRAMEBUFFERPROC)(GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum);
 typedef GLint (*PFNGLGETATTRIBLOCATIONPROC)(GLuint, const GLchar *);
 
 /* Global function pointers. */
@@ -171,6 +181,12 @@ typedef struct sdl3d_gl_funcs
     PFNGLFRAMEBUFFERTEXTURE2DPROC FramebufferTexture2D;
     PFNGLCHECKFRAMEBUFFERSTATUSPROC CheckFramebufferStatus;
     PFNGLDELETEFRAMEBUFFERSPROC DeleteFramebuffers;
+    PFNGLGENRENDERBUFFERSPROC GenRenderbuffers;
+    PFNGLBINDRENDERBUFFERPROC BindRenderbuffer;
+    PFNGLRENDERBUFFERSTORAGEPROC RenderbufferStorage;
+    PFNGLFRAMEBUFFERRENDERBUFFERPROC FramebufferRenderbuffer;
+    PFNGLDELETERENDERBUFFERSPROC DeleteRenderbuffers;
+    PFNGLBLITFRAMEBUFFERPROC BlitFramebuffer;
     PFNGLGETATTRIBLOCATIONPROC GetAttribLocation;
 } sdl3d_gl_funcs;
 
@@ -236,6 +252,12 @@ static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
     LOAD(FramebufferTexture2D);
     LOAD(CheckFramebufferStatus);
     LOAD(DeleteFramebuffers);
+    LOAD(GenRenderbuffers);
+    LOAD(BindRenderbuffer);
+    LOAD(RenderbufferStorage);
+    LOAD(FramebufferRenderbuffer);
+    LOAD(DeleteRenderbuffers);
+    LOAD(BlitFramebuffer);
     LOAD(GetAttribLocation);
 #undef LOAD
     return true;

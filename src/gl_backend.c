@@ -60,6 +60,13 @@ struct sdl3d_gl_context
     /* Default white texture for untextured meshes. */
     GLuint white_texture;
 
+    /* Offscreen FBO for logical-resolution rendering. */
+    GLuint fbo;
+    GLuint fbo_color_texture;
+    GLuint fbo_depth_rbo;
+    int logical_width;
+    int logical_height;
+
     int width;
     int height;
 };
@@ -256,6 +263,35 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
 
     ctx->width = width;
     ctx->height = height;
+
+    /* Create offscreen FBO at logical resolution. */
+    ctx->logical_width = width;
+    ctx->logical_height = height;
+    ctx->gl.GenFramebuffers(1, &ctx->fbo);
+    ctx->gl.GenTextures(1, &ctx->fbo_color_texture);
+    ctx->gl.GenRenderbuffers(1, &ctx->fbo_depth_rbo);
+
+    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->fbo_color_texture);
+    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    ctx->gl.BindRenderbuffer(GL_RENDERBUFFER, ctx->fbo_depth_rbo);
+    ctx->gl.RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
+
+    ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+    ctx->gl.FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ctx->fbo_color_texture, 0);
+    ctx->gl.FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, ctx->fbo_depth_rbo);
+
+    if (ctx->gl.CheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    {
+        SDL_SetError("Failed to create OpenGL offscreen framebuffer.");
+        ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, 0);
+        sdl3d_gl_destroy(ctx);
+        return NULL;
+    }
+
+    /* Leave the FBO bound — all rendering targets the offscreen buffer. */
     ctx->gl.Viewport(0, 0, width, height);
 
     return ctx;
@@ -295,6 +331,18 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     {
         ctx->gl.DeleteTextures(1, &ctx->white_texture);
     }
+    if (ctx->fbo)
+    {
+        ctx->gl.DeleteFramebuffers(1, &ctx->fbo);
+    }
+    if (ctx->fbo_color_texture)
+    {
+        ctx->gl.DeleteTextures(1, &ctx->fbo_color_texture);
+    }
+    if (ctx->fbo_depth_rbo)
+    {
+        ctx->gl.DeleteRenderbuffers(1, &ctx->fbo_depth_rbo);
+    }
     SDL_GL_DestroyContext(ctx->gl_context);
     SDL_free(ctx);
 }
@@ -305,8 +353,32 @@ void sdl3d_gl_clear(sdl3d_gl_context *ctx, float r, float g, float b, float a)
     {
         return;
     }
+    /* Ensure we're rendering to the offscreen FBO. */
+    ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
     ctx->gl.ClearColor(r, g, b, a);
     ctx->gl.Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+
+void sdl3d_gl_present(sdl3d_gl_context *ctx, SDL_Window *window)
+{
+    int window_w = 0;
+    int window_h = 0;
+
+    if (ctx == NULL || window == NULL)
+    {
+        return;
+    }
+
+    SDL_GetWindowSizeInPixels(window, &window_w, &window_h);
+
+    /* Blit the logical-resolution FBO to the default framebuffer. */
+    ctx->gl.BindFramebuffer(GL_READ_FRAMEBUFFER, ctx->fbo);
+    ctx->gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    ctx->gl.BlitFramebuffer(0, 0, ctx->logical_width, ctx->logical_height, 0, 0, window_w, window_h,
+                            GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+    /* Re-bind the offscreen FBO for the next frame. */
+    ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
 }
 
 GLuint sdl3d_gl_get_unlit_program(const sdl3d_gl_context *ctx)

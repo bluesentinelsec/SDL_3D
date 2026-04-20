@@ -36,6 +36,7 @@ static bool gl_clear(sdl3d_render_context *context, sdl3d_color color)
 
 static bool gl_present(sdl3d_render_context *context)
 {
+    sdl3d_gl_present(context->gl, context->window);
     return SDL_GL_SwapWindow(context->window);
 }
 
