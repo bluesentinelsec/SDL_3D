@@ -46,20 +46,13 @@ static bool gl_present(sdl3d_render_context *context)
 
 static bool gl_draw_mesh_unlit(sdl3d_render_context *context, const sdl3d_draw_params_unlit *params)
 {
-    /* Texture upload is not yet implemented — pass 0 (white fallback). */
-    sdl3d_gl_draw_mesh_unlit(context->gl, params->positions, params->uvs, params->colors, params->indices,
-                             params->vertex_count, params->index_count, 0, params->mvp, params->tint);
+    sdl3d_gl_draw_mesh_unlit(context->gl, params);
     return true;
 }
 
 static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_params_lit *params)
 {
-    sdl3d_gl_draw_mesh_lit(context->gl, params->positions, params->normals, params->uvs, params->colors,
-                           params->indices, params->vertex_count, params->index_count, 0, params->mvp,
-                           params->model_matrix, params->normal_matrix, params->tint, params->camera_pos,
-                           params->ambient, params->metallic, params->roughness, params->emissive, params->lights,
-                           params->light_count, params->tonemap_mode, params->fog_mode, params->fog_color,
-                           params->fog_start, params->fog_end, params->fog_density, params->shading_mode);
+    sdl3d_gl_draw_mesh_lit(context->gl, params);
     return true;
 }
 

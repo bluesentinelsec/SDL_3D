@@ -429,13 +429,20 @@ GLuint sdl3d_gl_get_program_for_profile(const sdl3d_gl_context *ctx, int shading
 /* Mesh rendering                                                      */
 /* ------------------------------------------------------------------ */
 
-void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const float *positions, const float *uvs, const float *colors,
-                              const unsigned int *indices, int vertex_count, int index_count, GLuint texture,
-                              const float *mvp, const float *tint)
+void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const sdl3d_draw_params_unlit *params)
 {
     GLuint vao, vbo_pos, vbo_uv, vbo_col, ebo;
     const sdl3d_gl_funcs *gl;
     static int draw_count = 0;
+    const float *positions = params->positions;
+    const float *uvs = params->uvs;
+    const float *colors = params->colors;
+    const unsigned int *indices = params->indices;
+    int vertex_count = params->vertex_count;
+    int index_count = params->index_count;
+    const float *mvp = params->mvp;
+    const float *tint = params->tint;
+    GLuint texture = 0; /* texture upload handled by caller */
 
     if (ctx == NULL || positions == NULL || vertex_count <= 0)
     {
@@ -573,17 +580,36 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const float *positions, con
     gl->DeleteVertexArrays(1, &vao);
 }
 
-void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const float *positions, const float *normals, const float *uvs,
-                            const float *colors, const unsigned int *indices, int vertex_count, int index_count,
-                            GLuint texture, const float *mvp, const float *model_matrix, const float *normal_matrix,
-                            const float *tint, const float *camera_pos, const float *ambient, float metallic,
-                            float roughness, const float *emissive, const void *lights, int light_count,
-                            int tonemap_mode, int fog_mode, const float *fog_color, float fog_start, float fog_end,
-                            float fog_density, int shading_mode)
+void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *params)
 {
     GLuint vao, vbo_pos, vbo_norm, vbo_uv, vbo_col, ebo;
     const sdl3d_gl_funcs *gl;
     GLuint program;
+    const float *positions = params->positions;
+    const float *normals = params->normals;
+    const float *uvs = params->uvs;
+    const float *colors = params->colors;
+    const unsigned int *indices = params->indices;
+    int vertex_count = params->vertex_count;
+    int index_count = params->index_count;
+    const float *mvp = params->mvp;
+    const float *model_matrix = params->model_matrix;
+    const float *normal_matrix = params->normal_matrix;
+    const float *tint = params->tint;
+    const float *camera_pos = params->camera_pos;
+    const float *ambient = params->ambient;
+    float metallic = params->metallic;
+    float roughness = params->roughness;
+    const float *emissive = params->emissive;
+    const struct sdl3d_light *lights = params->lights;
+    int light_count = params->light_count;
+    int tonemap_mode = params->tonemap_mode;
+    int fog_mode = params->fog_mode;
+    const float *fog_color = params->fog_color;
+    float fog_start = params->fog_start;
+    float fog_end = params->fog_end;
+    float fog_density = params->fog_density;
+    GLuint texture = 0; /* texture upload handled by caller */
 
     if (ctx == NULL || positions == NULL || vertex_count <= 0)
     {
@@ -591,7 +617,7 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const float *positions, const
     }
 
     gl = &ctx->gl;
-    program = sdl3d_gl_get_program_for_profile(ctx, shading_mode, light_count > 0);
+    program = sdl3d_gl_get_program_for_profile(ctx, params->shading_mode, light_count > 0);
     gl->UseProgram(program);
 
     /* Set uniforms — query locations dynamically since each profile
