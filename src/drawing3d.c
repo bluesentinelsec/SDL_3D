@@ -505,6 +505,7 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         lp.uv_mode = (int)context->uv_mode;
         lp.vertex_snap = context->vertex_snap;
         lp.vertex_snap_precision = context->vertex_snap_precision;
+        lp.texture_filter = (int)context->texture_filter;
 
         if (context->backend_iface.draw_mesh_lit(context, &lp))
         {
@@ -527,6 +528,7 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         up.tint[1] = base_modulate.y;
         up.tint[2] = base_modulate.z;
         up.tint[3] = base_modulate.w;
+        up.texture_filter = (int)context->texture_filter;
 
         if (context->backend_iface.draw_mesh_unlit(context, &up))
         {

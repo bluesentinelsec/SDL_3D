@@ -39,6 +39,7 @@ typedef struct sdl3d_draw_params_unlit
     const sdl3d_texture2d *texture;
     const float *mvp;
     float tint[4];
+    int texture_filter; /* 0=nearest, 1=bilinear */
 } sdl3d_draw_params_unlit;
 
 typedef struct sdl3d_draw_params_lit
@@ -72,6 +73,7 @@ typedef struct sdl3d_draw_params_lit
     int uv_mode; /* 0=perspective, 1=affine */
     bool vertex_snap;
     int vertex_snap_precision;
+    int texture_filter;
 } sdl3d_draw_params_lit;
 
 /* ------------------------------------------------------------------ */

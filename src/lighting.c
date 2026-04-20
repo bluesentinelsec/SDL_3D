@@ -432,6 +432,7 @@ bool sdl3d_set_render_profile(sdl3d_render_context *context, const sdl3d_render_
     context->tonemap_mode = profile->tonemap;
     context->uv_mode = profile->uv_mode;
     context->fog_eval = profile->fog_eval;
+    context->texture_filter = profile->texture_filter;
     context->vertex_snap = profile->vertex_snap;
     context->vertex_snap_precision = profile->vertex_snap_precision > 0 ? profile->vertex_snap_precision : 1;
     context->color_quantize = profile->color_quantize;
@@ -457,7 +458,7 @@ bool sdl3d_get_render_profile(const sdl3d_render_context *context, sdl3d_render_
     out->vertex_snap_precision = context->vertex_snap_precision;
     out->color_quantize = context->color_quantize;
     out->color_depth = context->color_depth;
-    out->texture_filter = SDL3D_TEXTURE_FILTER_BILINEAR;
+    out->texture_filter = context->texture_filter;
     return true;
 }
 

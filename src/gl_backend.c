@@ -454,6 +454,11 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const sdl3d_draw_params_unl
 
     gl->ActiveTexture(GL_TEXTURE0);
     gl->BindTexture(GL_TEXTURE_2D, texture ? texture : ctx->white_texture);
+    {
+        GLint filter = (params->texture_filter == 0) ? GL_NEAREST : GL_LINEAR;
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+    }
     gl->Uniform1i(ctx->unlit_texture_loc, 0);
     gl->Uniform1i(ctx->unlit_has_texture_loc, texture ? 1 : 0);
 
@@ -652,6 +657,11 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *
 
     gl->ActiveTexture(GL_TEXTURE0);
     gl->BindTexture(GL_TEXTURE_2D, texture ? texture : ctx->white_texture);
+    {
+        GLint filter = (params->texture_filter == 0) ? GL_NEAREST : GL_LINEAR;
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+    }
     gl->Uniform1i(gl->GetUniformLocation(program, "uTexture"), 0);
     gl->Uniform1i(gl->GetUniformLocation(program, "uHasTexture"), texture ? 1 : 0);
 
