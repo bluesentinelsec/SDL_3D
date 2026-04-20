@@ -379,9 +379,8 @@ static sdl3d_color sdl3d_shade_point(const sdl3d_lighting_params *lp, float albe
     sdl3d_color c;
     sdl3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, world_normal.x, world_normal.y, world_normal.z,
                              world_pos.x, world_pos.y, world_pos.z, &lit_r, &lit_g, &lit_b);
-    sdl3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
 
-    /* Fog. */
+    /* Fog in linear space, then tonemap+gamma. */
     if (lp->fog.mode != SDL3D_FOG_NONE)
     {
         float dx = world_pos.x - lp->camera_pos.x;
@@ -393,6 +392,7 @@ static sdl3d_color sdl3d_shade_point(const sdl3d_lighting_params *lp, float albe
         lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
         lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
     }
+    sdl3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
 
     c.r = sdl3d_color_channel_clamp(lit_r * 255.0f);
     c.g = sdl3d_color_channel_clamp(lit_g * 255.0f);
@@ -476,7 +476,8 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
 
         if (lit && context->shading_mode == SDL3D_SHADING_FLAT)
         {
-            /* FLAT: one PBR eval per triangle using face normal at centroid. */
+            /* FLAT: use lit rasterizer with face normal for all three vertices.
+             * The lit rasterizer handles tonemapping, fog, and color quantization. */
             sdl3d_vec3 p0 = SKIN_POS(i0);
             sdl3d_vec3 p1 = SKIN_POS(i1);
             sdl3d_vec3 p2 = SKIN_POS(i2);
@@ -487,15 +488,16 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
             sdl3d_vec3 wp0 = sdl3d_transform_position(context->model, p0);
             sdl3d_vec3 wp1 = sdl3d_transform_position(context->model, p1);
             sdl3d_vec3 wp2 = sdl3d_transform_position(context->model, p2);
-            sdl3d_vec3 centroid = sdl3d_vec3_scale(sdl3d_vec3_add(sdl3d_vec3_add(wp0, wp1), wp2), 1.0f / 3.0f);
-            sdl3d_vec4 mod0 = sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate);
-            sdl3d_color flat_color = sdl3d_shade_point(lighting, mod0.x, mod0.y, mod0.z, mod0.w, wn, centroid);
-            sdl3d_rasterize_triangle(&framebuffer, context->model_view_projection, p0, p1, p2, flat_color,
-                                     context->backface_culling_enabled, context->wireframe_enabled);
+            sdl3d_rasterize_triangle_lit(&framebuffer, context->model_view_projection, p0, p1, p2, uv0, uv1, uv2, wn,
+                                         wn, wn, wp0, wp1, wp2, sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate),
+                                         sdl3d_mesh_vertex_modulate(mesh, i1, base_modulate),
+                                         sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate), texture, lighting,
+                                         context->backface_culling_enabled, context->wireframe_enabled);
         }
         else if (lit && context->shading_mode == SDL3D_SHADING_GOURAUD)
         {
-            /* GOURAUD: PBR eval at each vertex, interpolate colors. */
+            /* GOURAUD: use lit rasterizer with per-vertex normals.
+             * The lit rasterizer handles tonemapping, fog, and color quantization. */
             sdl3d_vec3 p0 = SKIN_POS(i0);
             sdl3d_vec3 p1 = SKIN_POS(i1);
             sdl3d_vec3 p2 = SKIN_POS(i2);
@@ -514,14 +516,11 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
             sdl3d_vec3 wp0 = sdl3d_transform_position(context->model, p0);
             sdl3d_vec3 wp1 = sdl3d_transform_position(context->model, p1);
             sdl3d_vec3 wp2 = sdl3d_transform_position(context->model, p2);
-            sdl3d_vec4 mod0 = sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate);
-            sdl3d_vec4 mod1 = sdl3d_mesh_vertex_modulate(mesh, i1, base_modulate);
-            sdl3d_vec4 mod2 = sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate);
-            sdl3d_color c0 = sdl3d_shade_point(lighting, mod0.x, mod0.y, mod0.z, mod0.w, wn0, wp0);
-            sdl3d_color c1 = sdl3d_shade_point(lighting, mod1.x, mod1.y, mod1.z, mod1.w, wn1, wp1);
-            sdl3d_color c2 = sdl3d_shade_point(lighting, mod2.x, mod2.y, mod2.z, mod2.w, wn2, wp2);
-            sdl3d_rasterize_triangle_colored(&framebuffer, context->model_view_projection, p0, p1, p2, c0, c1, c2,
-                                             context->backface_culling_enabled, context->wireframe_enabled);
+            sdl3d_rasterize_triangle_lit(&framebuffer, context->model_view_projection, p0, p1, p2, uv0, uv1, uv2, wn0,
+                                         wn1, wn2, wp0, wp1, wp2, sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate),
+                                         sdl3d_mesh_vertex_modulate(mesh, i1, base_modulate),
+                                         sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate), texture, lighting,
+                                         context->backface_culling_enabled, context->wireframe_enabled);
         }
         else if (lit)
         {
@@ -680,12 +679,12 @@ bool sdl3d_draw_triangle_3d(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_
         }
         else if (mode == SDL3D_SHADING_GOURAUD)
         {
-            /* PBR eval at each vertex, interpolate colors. */
-            sdl3d_color c0 = sdl3d_shade_point(&lp, modulate.x, modulate.y, modulate.z, modulate.w, wn, wp0);
-            sdl3d_color c1 = sdl3d_shade_point(&lp, modulate.x, modulate.y, modulate.z, modulate.w, wn, wp1);
-            sdl3d_color c2 = sdl3d_shade_point(&lp, modulate.x, modulate.y, modulate.z, modulate.w, wn, wp2);
-            sdl3d_rasterize_triangle_colored(&framebuffer, context->model_view_projection, v0, v1, v2, c0, c1, c2,
-                                             context->backface_culling_enabled, context->wireframe_enabled);
+            /* Use lit rasterizer with face normal at all vertices — same
+             * pipeline as PHONG but with uniform normals per face. */
+            sdl3d_vec2 uv0 = {0.0f, 0.0f};
+            sdl3d_rasterize_triangle_lit(&framebuffer, context->model_view_projection, v0, v1, v2, uv0, uv0, uv0, wn,
+                                         wn, wn, wp0, wp1, wp2, modulate, modulate, modulate, NULL, &lp,
+                                         context->backface_culling_enabled, context->wireframe_enabled);
         }
         else /* SDL3D_SHADING_PHONG */
         {
@@ -819,11 +818,53 @@ bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model
 
             if (material->albedo_map != NULL && material->albedo_map[0] != '\0')
             {
-                ok = sdl3d_texture_cache_get_or_load(&context->texture_cache, model->source_path, material->albedo_map,
-                                                     &texture);
-                if (!ok)
+                if (material->albedo_map[0] == '#' && model->embedded_textures != NULL)
                 {
-                    break;
+                    /* Embedded texture reference: "#N" where N is the image index. */
+                    int tex_idx = SDL_atoi(&material->albedo_map[1]);
+                    if (tex_idx >= 0 && tex_idx < model->embedded_texture_count &&
+                        model->embedded_textures[tex_idx].pixels != NULL)
+                    {
+                        /* Create texture from embedded image via cache (keyed by "#N"). */
+                        sdl3d_texture_cache_entry *entry = NULL;
+                        for (entry = context->texture_cache; entry != NULL; entry = entry->next)
+                        {
+                            if (SDL_strcmp(entry->path, material->albedo_map) == 0)
+                            {
+                                texture = &entry->texture;
+                                break;
+                            }
+                        }
+                        if (texture == NULL)
+                        {
+                            entry = (sdl3d_texture_cache_entry *)SDL_calloc(1, sizeof(*entry));
+                            if (entry != NULL)
+                            {
+                                entry->path = SDL_strdup(material->albedo_map);
+                                if (sdl3d_create_texture_from_image(&model->embedded_textures[tex_idx],
+                                                                    &entry->texture))
+                                {
+                                    entry->next = context->texture_cache;
+                                    context->texture_cache = entry;
+                                    texture = &entry->texture;
+                                }
+                                else
+                                {
+                                    SDL_free(entry->path);
+                                    SDL_free(entry);
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    ok = sdl3d_texture_cache_get_or_load(&context->texture_cache, model->source_path,
+                                                         material->albedo_map, &texture);
+                    if (!ok)
+                    {
+                        break;
+                    }
                 }
             }
         }
@@ -886,6 +927,146 @@ bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model
             }
 
             ok = sdl3d_draw_mesh_internal(context, mesh, texture, mesh_modulate, lp_ptr, NULL);
+        }
+    }
+
+    if (!sdl3d_pop_matrix(context))
+    {
+        return false;
+    }
+
+    return ok;
+}
+
+bool sdl3d_draw_model_skinned(sdl3d_render_context *context, const sdl3d_model *model, sdl3d_vec3 position,
+                              sdl3d_vec3 rotation_axis, float rotation_angle_radians, sdl3d_vec3 scale,
+                              sdl3d_color tint, const sdl3d_mat4 *joint_matrices)
+{
+    /* Re-use draw_model_ex logic but pass joint_matrices through.
+     * For now, call draw_model_ex for the non-skinned parts and
+     * handle skinning by replacing the NULL. */
+    /* This is a simplified version — we duplicate the draw_model_ex
+     * body but pass joint_matrices to draw_mesh_internal. */
+    const sdl3d_vec4 tint_modulate = sdl3d_color_to_modulate(tint);
+    bool ok = false;
+
+    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_model_skinned"))
+    {
+        return false;
+    }
+    if (model == NULL)
+    {
+        return SDL_InvalidParamError("model");
+    }
+    if (model->meshes == NULL || model->mesh_count <= 0)
+    {
+        return SDL_SetError("Model draw requires at least one mesh.");
+    }
+
+    if (!sdl3d_push_matrix(context))
+    {
+        return false;
+    }
+
+    ok = sdl3d_translate(context, position.x, position.y, position.z);
+    if (ok && rotation_angle_radians != 0.0f)
+    {
+        ok = sdl3d_rotate(context, rotation_axis, rotation_angle_radians);
+    }
+    if (ok)
+    {
+        ok = sdl3d_scale(context, scale.x, scale.y, scale.z);
+    }
+
+    for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
+    {
+        const sdl3d_mesh *mesh = &model->meshes[mesh_index];
+        const sdl3d_texture2d *texture = NULL;
+        const sdl3d_material *material = NULL;
+        sdl3d_vec4 mesh_modulate = tint_modulate;
+
+        if (mesh->material_index >= 0 && mesh->material_index < model->material_count && model->materials != NULL)
+        {
+            material = &model->materials[mesh->material_index];
+            mesh_modulate.x = sdl3d_clamp01(mesh_modulate.x * material->albedo[0]);
+            mesh_modulate.y = sdl3d_clamp01(mesh_modulate.y * material->albedo[1]);
+            mesh_modulate.z = sdl3d_clamp01(mesh_modulate.z * material->albedo[2]);
+            mesh_modulate.w = sdl3d_clamp01(mesh_modulate.w * material->albedo[3]);
+
+            if (material->albedo_map != NULL && material->albedo_map[0] != '\0')
+            {
+                if (material->albedo_map[0] == '#' && model->embedded_textures != NULL)
+                {
+                    int tex_idx = SDL_atoi(&material->albedo_map[1]);
+                    if (tex_idx >= 0 && tex_idx < model->embedded_texture_count &&
+                        model->embedded_textures[tex_idx].pixels != NULL)
+                    {
+                        sdl3d_texture_cache_entry *entry = NULL;
+                        for (entry = context->texture_cache; entry != NULL; entry = entry->next)
+                        {
+                            if (SDL_strcmp(entry->path, material->albedo_map) == 0)
+                            {
+                                texture = &entry->texture;
+                                break;
+                            }
+                        }
+                        if (texture == NULL)
+                        {
+                            entry = (sdl3d_texture_cache_entry *)SDL_calloc(1, sizeof(*entry));
+                            if (entry != NULL)
+                            {
+                                entry->path = SDL_strdup(material->albedo_map);
+                                if (sdl3d_create_texture_from_image(&model->embedded_textures[tex_idx],
+                                                                    &entry->texture))
+                                {
+                                    entry->next = context->texture_cache;
+                                    context->texture_cache = entry;
+                                    texture = &entry->texture;
+                                }
+                                else
+                                {
+                                    SDL_free(entry->path);
+                                    SDL_free(entry);
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    ok = sdl3d_texture_cache_get_or_load(&context->texture_cache, model->source_path,
+                                                         material->albedo_map, &texture);
+                    if (!ok)
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+
+        {
+            sdl3d_lighting_params lp_storage;
+            const sdl3d_lighting_params *lp_ptr = NULL;
+
+            if (context->shading_mode != SDL3D_SHADING_UNLIT && context->light_count > 0)
+            {
+                sdl3d_build_lighting_params(context, &lp_storage);
+                if (material != NULL)
+                {
+                    lp_storage.metallic = material->metallic;
+                    lp_storage.roughness = material->roughness;
+                    lp_storage.emissive[0] = material->emissive[0];
+                    lp_storage.emissive[1] = material->emissive[1];
+                    lp_storage.emissive[2] = material->emissive[2];
+                }
+                else
+                {
+                    lp_storage.roughness = 1.0f;
+                }
+                lp_ptr = &lp_storage;
+            }
+
+            ok = sdl3d_draw_mesh_internal(context, mesh, texture, mesh_modulate, lp_ptr, joint_matrices);
         }
     }
 

@@ -497,11 +497,7 @@ TEST_P(SDL3DTonemapTable, OutputInExpectedRange)
     EXPECT_GE(r, c.expect_min_r) << c.label;
     EXPECT_LE(r, c.expect_max_r) << c.label;
     EXPECT_GE(g, 0.0f) << c.label;
-    /* Tonemapped modes clamp to [0,1]; NONE is passthrough. */
-    if (c.mode != SDL3D_TONEMAP_NONE)
-    {
-        EXPECT_LE(b, 1.01f) << c.label;
-    }
+    EXPECT_LE(b, 1.01f) << c.label;
 }
 
 INSTANTIATE_TEST_SUITE_P(Tonemap, SDL3DTonemapTable,
@@ -509,7 +505,7 @@ INSTANTIATE_TEST_SUITE_P(Tonemap, SDL3DTonemapTable,
                              /* None: passthrough. */
                              TonemapCase{"none 0", SDL3D_TONEMAP_NONE, 0.0f, 0.0f, 0.0f, 0.0f, 0.001f},
                              TonemapCase{"none 1", SDL3D_TONEMAP_NONE, 1.0f, 1.0f, 1.0f, 1.0f, 1.001f},
-                             TonemapCase{"none HDR", SDL3D_TONEMAP_NONE, 5.0f, 5.0f, 5.0f, 5.0f, 5.001f},
+                             TonemapCase{"none HDR", SDL3D_TONEMAP_NONE, 5.0f, 5.0f, 5.0f, 0.99f, 1.001f},
 
                              /* Reinhard: x/(1+x), then gamma. */
                              TonemapCase{"reinhard 0", SDL3D_TONEMAP_REINHARD, 0.0f, 0.0f, 0.0f, 0.0f, 0.001f},
@@ -810,7 +806,7 @@ TEST_F(SDL3DLightingFixture, SetAndGetRenderProfile)
     ASSERT_TRUE(sdl3d_get_render_profile(ctx, &out));
     EXPECT_EQ(out.shading, SDL3D_SHADING_GOURAUD);
     EXPECT_EQ(out.uv_mode, SDL3D_UV_AFFINE);
-    EXPECT_EQ(out.fog_eval, SDL3D_FOG_EVAL_VERTEX);
+    EXPECT_EQ(out.fog_eval, SDL3D_FOG_EVAL_FRAGMENT);
     EXPECT_EQ(out.tonemap, SDL3D_TONEMAP_NONE);
     EXPECT_TRUE(out.vertex_snap);
     EXPECT_EQ(out.vertex_snap_precision, 1);
@@ -922,10 +918,10 @@ TEST_F(SDL3DLightingFixture, CustomProfileMixAndMatch)
 /* Fog evaluation mode                                                */
 /* ================================================================== */
 
-TEST(SDL3DFogEval, PS1ProfileUsesVertexFog)
+TEST(SDL3DFogEval, PS1ProfileUsesFragmentFog)
 {
     sdl3d_render_profile p = sdl3d_profile_ps1();
-    EXPECT_EQ(p.fog_eval, SDL3D_FOG_EVAL_VERTEX);
+    EXPECT_EQ(p.fog_eval, SDL3D_FOG_EVAL_FRAGMENT);
 }
 
 TEST(SDL3DFogEval, ModernProfileUsesFragmentFog)

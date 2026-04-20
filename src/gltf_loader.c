@@ -55,7 +55,8 @@ static void sdl3d_gltf_material_init(sdl3d_material *mat)
     mat->roughness = 1.0f;
 }
 
-static char *sdl3d_gltf_texture_uri(const cgltf_texture_view *view)
+/* Store the cgltf_data pointer so we can resolve image indices. */
+static char *sdl3d_gltf_texture_ref(const cgltf_texture_view *view, const cgltf_data *data)
 {
     if (view->texture == NULL || view->texture->image == NULL)
     {
@@ -65,11 +66,18 @@ static char *sdl3d_gltf_texture_uri(const cgltf_texture_view *view)
     {
         return sdl3d_gltf_strdup(view->texture->image->uri);
     }
-    /* Embedded buffer_view textures have no URI — skip for now. */
+    /* Embedded buffer_view texture: reference by image index "#N". */
+    if (view->texture->image->buffer_view != NULL)
+    {
+        char buf[16];
+        int idx = (int)cgltf_image_index(data, view->texture->image);
+        SDL_snprintf(buf, sizeof(buf), "#%d", idx);
+        return sdl3d_gltf_strdup(buf);
+    }
     return NULL;
 }
 
-static bool sdl3d_gltf_convert_material(const cgltf_material *src, sdl3d_material *dst)
+static bool sdl3d_gltf_convert_material(const cgltf_data *data, const cgltf_material *src, sdl3d_material *dst)
 {
     sdl3d_gltf_material_init(dst);
     dst->name = sdl3d_gltf_strdup(src->name);
@@ -83,8 +91,8 @@ static bool sdl3d_gltf_convert_material(const cgltf_material *src, sdl3d_materia
         dst->albedo[3] = pbr->base_color_factor[3];
         dst->metallic = pbr->metallic_factor;
         dst->roughness = pbr->roughness_factor;
-        dst->albedo_map = sdl3d_gltf_texture_uri(&pbr->base_color_texture);
-        dst->metallic_roughness_map = sdl3d_gltf_texture_uri(&pbr->metallic_roughness_texture);
+        dst->albedo_map = sdl3d_gltf_texture_ref(&pbr->base_color_texture, data);
+        dst->metallic_roughness_map = sdl3d_gltf_texture_ref(&pbr->metallic_roughness_texture, data);
     }
 
     dst->emissive[0] = src->emissive_factor[0];
@@ -98,8 +106,8 @@ static bool sdl3d_gltf_convert_material(const cgltf_material *src, sdl3d_materia
         dst->emissive[2] *= src->emissive_strength.emissive_strength;
     }
 
-    dst->normal_map = sdl3d_gltf_texture_uri(&src->normal_texture);
-    dst->emissive_map = sdl3d_gltf_texture_uri(&src->emissive_texture);
+    dst->normal_map = sdl3d_gltf_texture_ref(&src->normal_texture, data);
+    dst->emissive_map = sdl3d_gltf_texture_ref(&src->emissive_texture, data);
 
     return true;
 }
@@ -414,7 +422,7 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
         }
         for (cgltf_size i = 0; i < data->materials_count; ++i)
         {
-            if (!sdl3d_gltf_convert_material(&data->materials[i], &out->materials[i]))
+            if (!sdl3d_gltf_convert_material(data, &data->materials[i], &out->materials[i]))
             {
                 cgltf_free(data);
                 sdl3d_free_model(out);
@@ -458,6 +466,26 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
                 return false;
             }
             ++mesh_index;
+        }
+    }
+
+    /* Decode embedded images (buffer_view textures in GLB files). */
+    if (data->images_count > 0)
+    {
+        out->embedded_textures = (sdl3d_image *)SDL_calloc(data->images_count, sizeof(sdl3d_image));
+        if (out->embedded_textures != NULL)
+        {
+            out->embedded_texture_count = (int)data->images_count;
+            for (cgltf_size i = 0; i < data->images_count; ++i)
+            {
+                const cgltf_image *img = &data->images[i];
+                if (img->buffer_view != NULL && img->buffer_view->buffer != NULL &&
+                    img->buffer_view->buffer->data != NULL)
+                {
+                    const void *img_data = (const char *)img->buffer_view->buffer->data + img->buffer_view->offset;
+                    sdl3d_load_image_from_memory(img_data, img->buffer_view->size, &out->embedded_textures[i]);
+                }
+            }
         }
     }
 

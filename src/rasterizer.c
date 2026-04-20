@@ -1942,15 +1942,12 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
                     sdl3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, nx, ny, nz, wpx, wpy, wpz, &lit_r,
                                              &lit_g, &lit_b);
 
-                    sdl3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
-
-                    /* Fog: vertex or fragment evaluation. */
+                    /* Fog: blend in linear space before tonemapping/gamma. */
                     if (lp->fog.mode != SDL3D_FOG_NONE)
                     {
                         float fog_f;
                         if (lp->fog_eval == SDL3D_FOG_EVAL_VERTEX)
                         {
-                            /* Interpolate pre-computed vertex fog factors. */
                             fog_f = (ba * a.fog_over_w + bb * b.fog_over_w + bc * c.fog_over_w) * pw;
                             if (fog_f < 0.0f)
                             {
@@ -1973,6 +1970,9 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
                         lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
                         lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
                     }
+
+                    /* Tonemapping + sRGB gamma (after fog, so fog blends in linear space). */
+                    sdl3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
 
                     /* Color quantization with optional Bayer dithering. */
                     if (lp->color_quantize && lp->color_depth > 0)

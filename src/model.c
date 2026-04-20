@@ -61,6 +61,12 @@ void sdl3d_free_model(sdl3d_model *model)
     }
     SDL_free(model->animations);
 
+    for (int i = 0; i < model->embedded_texture_count; ++i)
+    {
+        sdl3d_free_image(&model->embedded_textures[i]);
+    }
+    SDL_free(model->embedded_textures);
+
     SDL_free(model->source_path);
 
     SDL_zerop(model);
