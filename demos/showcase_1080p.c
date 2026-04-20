@@ -235,7 +235,7 @@ int main(int argc, char *argv[])
     bool running = true;
     Uint64 last_time;
     int current_profile = 0;
-    sdl3d_backend current_backend = SDL3D_BACKEND_SOFTWARE;
+    sdl3d_backend current_backend = SDL3D_BACKEND_SDLGPU;
     const char *profile_names[] = {"Modern", "PS1", "N64", "DOS", "SNES"};
     sdl3d_render_profile (*profile_fns[])(void) = {sdl3d_profile_modern, sdl3d_profile_ps1, sdl3d_profile_n64,
                                                    sdl3d_profile_dos, sdl3d_profile_snes};
@@ -255,14 +255,16 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    /* --- Lighting --- */
+    /* --- Lighting (nighttime) --- */
+    sdl3d_set_ambient_light(ctx, 0.03f, 0.03f, 0.05f);
+
     SDL_zerop(&sun);
     sun.type = SDL3D_LIGHT_DIRECTIONAL;
-    sun.direction = sdl3d_vec3_make(0.4f, -0.8f, -0.4f);
-    sun.color[0] = 1.0f;
-    sun.color[1] = 0.95f;
-    sun.color[2] = 0.85f;
-    sun.intensity = 1.0f;
+    sun.direction = sdl3d_vec3_make(0.3f, -0.9f, -0.3f);
+    sun.color[0] = 0.4f;
+    sun.color[1] = 0.45f;
+    sun.color[2] = 0.6f;
+    sun.intensity = 0.3f;
     sdl3d_add_light(ctx, &sun);
 
     {
@@ -274,21 +276,21 @@ int main(int argc, char *argv[])
             lamp[i].type = SDL3D_LIGHT_POINT;
             lamp[i].position = sdl3d_vec3_make(lamp_x[i], 3.5f, lamp_z[i]);
             lamp[i].color[0] = 1.0f;
-            lamp[i].color[1] = 0.9f;
-            lamp[i].color[2] = 0.7f;
-            lamp[i].intensity = 2.0f;
-            lamp[i].range = 12.0f;
+            lamp[i].color[1] = 0.75f;
+            lamp[i].color[2] = 0.4f;
+            lamp[i].intensity = 3.5f;
+            lamp[i].range = 14.0f;
             sdl3d_add_light(ctx, &lamp[i]);
         }
     }
 
-    /* --- Fog --- */
+    /* --- Fog (nighttime) --- */
     SDL_zerop(&fog);
     fog.mode = SDL3D_FOG_EXP2;
-    fog.color[0] = 0.549f;
-    fog.color[1] = 0.686f;
-    fog.color[2] = 0.824f;
-    fog.density = 0.018f;
+    fog.color[0] = 0.02f;
+    fog.color[1] = 0.03f;
+    fog.color[2] = 0.06f;
+    fog.density = 0.03f;
     sdl3d_set_fog(ctx, &fog);
 
     /* --- Post-process --- */
@@ -300,7 +302,7 @@ int main(int argc, char *argv[])
 
     /* --- Particles --- */
     SDL_zerop(&fire_cfg);
-    fire_cfg.position = sdl3d_vec3_make(0, 0.2f, -3);
+    fire_cfg.position = sdl3d_vec3_make(0, 0.2f, 0);
     fire_cfg.direction = sdl3d_vec3_make(0, 1, 0);
     fire_cfg.spread = 0.25f;
     fire_cfg.speed_min = 0.6f;
@@ -317,7 +319,7 @@ int main(int argc, char *argv[])
     fire_em = sdl3d_create_particle_emitter(&fire_cfg);
 
     SDL_zerop(&smoke_cfg);
-    smoke_cfg.position = sdl3d_vec3_make(0, 0.9f, -3);
+    smoke_cfg.position = sdl3d_vec3_make(0, 0.9f, 0);
     smoke_cfg.direction = sdl3d_vec3_make(0, 1, 0);
     smoke_cfg.spread = 0.4f;
     smoke_cfg.speed_min = 0.2f;
@@ -373,7 +375,7 @@ int main(int argc, char *argv[])
         const bool *keys;
         float fx, fz, rx, rz;
         sdl3d_camera3d cam;
-        sdl3d_color sky = {140, 175, 210, 255};
+        sdl3d_color sky = {10, 12, 25, 255};
 
         last_time = now;
         if (dt > 0.1f)
@@ -427,6 +429,7 @@ int main(int argc, char *argv[])
                         nb = SDL3D_BACKEND_SOFTWARE;
                     }
                     current_backend = nb;
+                    sdl3d_set_ambient_light(ctx, 0.03f, 0.03f, 0.05f);
                     sdl3d_add_light(ctx, &sun);
                     for (int i = 0; i < 5; ++i)
                     {
@@ -532,7 +535,7 @@ int main(int argc, char *argv[])
         sdl3d_set_backface_culling_enabled(ctx, true);
         sdl3d_begin_mode_3d(ctx, cam);
 
-        sdl3d_draw_skybox_gradient(ctx, (sdl3d_color){90, 140, 210, 255}, (sdl3d_color){200, 215, 230, 255});
+        sdl3d_draw_skybox_gradient(ctx, (sdl3d_color){5, 8, 20, 255}, (sdl3d_color){15, 18, 35, 255});
         draw_scene(ctx);
 
         /* Models */

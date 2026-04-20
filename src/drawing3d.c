@@ -1110,6 +1110,14 @@ bool sdl3d_draw_point_3d(sdl3d_render_context *context, sdl3d_vec3 position, sdl
 bool sdl3d_draw_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, const sdl3d_texture2d *texture,
                      sdl3d_color tint)
 {
+    if (context != NULL && context->shading_mode != SDL3D_SHADING_UNLIT && context->light_count > 0 && mesh != NULL &&
+        mesh->normals != NULL)
+    {
+        sdl3d_lighting_params lp;
+        sdl3d_build_lighting_params(context, &lp);
+        lp.roughness = 1.0f;
+        return sdl3d_draw_mesh_internal(context, mesh, texture, sdl3d_color_to_modulate(tint), &lp, NULL);
+    }
     return sdl3d_draw_mesh_internal(context, mesh, texture, sdl3d_color_to_modulate(tint), NULL, NULL);
 }
 
