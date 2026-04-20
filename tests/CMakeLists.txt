@@ -167,6 +167,7 @@ else()
     sdl3d_add_test(sdl3d_collision_test test_collision.cpp unit)
     sdl3d_add_test(sdl3d_animation_test test_animation.cpp unit)
     sdl3d_add_test(sdl3d_effects_test test_effects.cpp unit)
+    sdl3d_add_test(sdl3d_parity_test test_parity.cpp render)
 
     if(NOT EMSCRIPTEN)
         sdl3d_add_test(sdl3d_image_test test_image.cpp unit)
