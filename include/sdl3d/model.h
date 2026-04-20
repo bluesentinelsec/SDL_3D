@@ -103,8 +103,8 @@ extern "C"
     /*
      * Dispatching entry point. Picks a loader by file extension:
      *   .obj            -> in-house OBJ + MTL parser
-     *   .gltf / .glb    -> cgltf (reserved; returns error until M3 slice)
-     *   .fbx            -> ufbx (reserved; returns error until M3 slice)
+     *   .gltf / .glb    -> cgltf
+     *   .fbx            -> ufbx
      *
      * Returns false with SDL_GetError populated on any failure.
      */

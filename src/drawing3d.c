@@ -875,25 +875,7 @@ bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model
 
             if (context->shading_mode != SDL3D_SHADING_UNLIT && context->light_count > 0)
             {
-                lp_storage.lights = context->lights;
-                lp_storage.light_count = context->light_count;
-                lp_storage.ambient[0] = context->ambient[0];
-                lp_storage.ambient[1] = context->ambient[1];
-                lp_storage.ambient[2] = context->ambient[2];
-
-                /* Camera position: extract from the inverse of the view matrix.
-                 * For a look-at view matrix, the camera position is the negated
-                 * translation of the transpose of the upper-left 3x3 applied to
-                 * the translation column. Simpler: we stored it during begin_mode_3d
-                 * — but we didn't. Instead, recover from view matrix: the camera
-                 * world position is -(R^T * t) where R is upper-left 3x3 and t is
-                 * column 3. */
-                {
-                    const sdl3d_mat4 v = context->view;
-                    lp_storage.camera_pos.x = -(v.m[0] * v.m[12] + v.m[1] * v.m[13] + v.m[2] * v.m[14]);
-                    lp_storage.camera_pos.y = -(v.m[4] * v.m[12] + v.m[5] * v.m[13] + v.m[6] * v.m[14]);
-                    lp_storage.camera_pos.z = -(v.m[8] * v.m[12] + v.m[9] * v.m[13] + v.m[10] * v.m[14]);
-                }
+                sdl3d_build_lighting_params(context, &lp_storage);
 
                 if (material != NULL)
                 {
@@ -905,22 +887,7 @@ bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model
                 }
                 else
                 {
-                    lp_storage.metallic = 0.0f;
                     lp_storage.roughness = 1.0f;
-                    lp_storage.emissive[0] = 0.0f;
-                    lp_storage.emissive[1] = 0.0f;
-                    lp_storage.emissive[2] = 0.0f;
-                }
-
-                /* Fog, tonemapping, shadows. */
-                lp_storage.fog = context->fog;
-                lp_storage.tonemap_mode = context->tonemap_mode;
-                lp_storage.shadow_bias = context->shadow_bias;
-                for (int si = 0; si < SDL3D_MAX_LIGHTS; ++si)
-                {
-                    lp_storage.shadow_depth[si] = context->shadow_depth[si];
-                    lp_storage.shadow_vp[si] = context->shadow_vp[si];
-                    lp_storage.shadow_enabled[si] = context->shadow_enabled[si];
                 }
 
                 lp_ptr = &lp_storage;
@@ -985,8 +952,21 @@ bool sdl3d_draw_model_skinned(sdl3d_render_context *context, const sdl3d_model *
         const sdl3d_material *material = NULL;
         sdl3d_vec4 mesh_modulate = tint_modulate;
 
-        if (mesh->material_index >= 0 && mesh->material_index < model->material_count && model->materials != NULL)
+        if (mesh->material_index < -1)
         {
+            ok = SDL_SetError("Mesh material index %d is invalid.", mesh->material_index);
+            break;
+        }
+
+        if (mesh->material_index >= 0)
+        {
+            if (mesh->material_index >= model->material_count || model->materials == NULL)
+            {
+                ok = SDL_SetError("Mesh material index %d is outside material_count=%d.", mesh->material_index,
+                                  model->material_count);
+                break;
+            }
+
             material = &model->materials[mesh->material_index];
             mesh_modulate.x = sdl3d_clamp01(mesh_modulate.x * material->albedo[0]);
             mesh_modulate.y = sdl3d_clamp01(mesh_modulate.y * material->albedo[1]);

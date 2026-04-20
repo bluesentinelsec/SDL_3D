@@ -3,8 +3,6 @@
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_stdinc.h>
 
-#include <math.h>
-
 #include "sdl3d/drawing3d.h"
 #include "sdl3d/math.h"
 #include "sdl3d/shapes.h"
@@ -112,18 +110,18 @@ static void sdl3d_emit_one(sdl3d_particle_emitter *em)
         float speed = sdl3d_randf_range(em->config.speed_min, em->config.speed_max);
         float theta = sdl3d_randf() * 6.28318f;
         float phi = sdl3d_randf() * em->config.spread;
-        float sp = sinf(phi);
+        float sp = SDL_sinf(phi);
 
         sdl3d_vec3 dir = sdl3d_vec3_normalize(em->config.direction);
         /* Build a random direction within the cone. */
-        sdl3d_vec3 up = (fabsf(dir.y) < 0.99f) ? sdl3d_vec3_make(0, 1, 0) : sdl3d_vec3_make(1, 0, 0);
+        sdl3d_vec3 up = (SDL_fabsf(dir.y) < 0.99f) ? sdl3d_vec3_make(0, 1, 0) : sdl3d_vec3_make(1, 0, 0);
         sdl3d_vec3 right = sdl3d_vec3_normalize(sdl3d_vec3_cross(up, dir));
         sdl3d_vec3 fwd = sdl3d_vec3_cross(dir, right);
 
         sdl3d_vec3 offset;
-        offset.x = dir.x * cosf(phi) + right.x * sp * cosf(theta) + fwd.x * sp * sinf(theta);
-        offset.y = dir.y * cosf(phi) + right.y * sp * cosf(theta) + fwd.y * sp * sinf(theta);
-        offset.z = dir.z * cosf(phi) + right.z * sp * cosf(theta) + fwd.z * sp * sinf(theta);
+        offset.x = dir.x * SDL_cosf(phi) + right.x * sp * SDL_cosf(theta) + fwd.x * sp * SDL_sinf(theta);
+        offset.y = dir.y * SDL_cosf(phi) + right.y * sp * SDL_cosf(theta) + fwd.y * sp * SDL_sinf(theta);
+        offset.z = dir.z * SDL_cosf(phi) + right.z * sp * SDL_cosf(theta) + fwd.z * sp * SDL_sinf(theta);
 
         p->position = em->config.position;
         p->velocity = sdl3d_vec3_scale(offset, speed);
@@ -272,10 +270,10 @@ bool sdl3d_draw_skybox_gradient(sdl3d_render_context *context, sdl3d_color top_c
         float t1 = (float)(r + 1) / (float)rings;
         float phi0 = t0 * 3.14159265f;
         float phi1 = t1 * 3.14159265f;
-        float y0 = cosf(phi0) * radius;
-        float y1 = cosf(phi1) * radius;
-        float r0 = sinf(phi0) * radius;
-        float r1 = sinf(phi1) * radius;
+        float y0 = SDL_cosf(phi0) * radius;
+        float y1 = SDL_cosf(phi1) * radius;
+        float r0 = SDL_sinf(phi0) * radius;
+        float r1 = SDL_sinf(phi1) * radius;
 
         /* Interpolate color from top to bottom. */
         sdl3d_color c0, c1;
@@ -300,10 +298,10 @@ bool sdl3d_draw_skybox_gradient(sdl3d_render_context *context, sdl3d_color top_c
             float theta0 = (float)s / (float)slices * 6.28318f;
             float theta1 = (float)(s + 1) / (float)slices * 6.28318f;
 
-            sdl3d_vec3 v00 = sdl3d_vec3_make(cosf(theta0) * r0, y0, sinf(theta0) * r0);
-            sdl3d_vec3 v10 = sdl3d_vec3_make(cosf(theta1) * r0, y0, sinf(theta1) * r0);
-            sdl3d_vec3 v01 = sdl3d_vec3_make(cosf(theta0) * r1, y1, sinf(theta0) * r1);
-            sdl3d_vec3 v11 = sdl3d_vec3_make(cosf(theta1) * r1, y1, sinf(theta1) * r1);
+            sdl3d_vec3 v00 = sdl3d_vec3_make(SDL_cosf(theta0) * r0, y0, SDL_sinf(theta0) * r0);
+            sdl3d_vec3 v10 = sdl3d_vec3_make(SDL_cosf(theta1) * r0, y0, SDL_sinf(theta1) * r0);
+            sdl3d_vec3 v01 = sdl3d_vec3_make(SDL_cosf(theta0) * r1, y1, SDL_sinf(theta0) * r1);
+            sdl3d_vec3 v11 = sdl3d_vec3_make(SDL_cosf(theta1) * r1, y1, SDL_sinf(theta1) * r1);
 
             /* Inward-facing triangles (we're inside the sphere). */
             sdl3d_draw_triangle_3d(context, v00, v01, v10, avg);
@@ -412,14 +410,14 @@ bool sdl3d_apply_post_process(sdl3d_render_context *context, const sdl3d_post_pr
     {
         float cx = (float)w * 0.5f;
         float cy = (float)h * 0.5f;
-        float max_dist = sqrtf(cx * cx + cy * cy);
+        float max_dist = SDL_sqrtf(cx * cx + cy * cy);
         for (int y = 0; y < h; ++y)
         {
             for (int x = 0; x < w; ++x)
             {
                 float dx = (float)x - cx;
                 float dy = (float)y - cy;
-                float dist = sqrtf(dx * dx + dy * dy) / max_dist;
+                float dist = SDL_sqrtf(dx * dx + dy * dy) / max_dist;
                 float factor = 1.0f - dist * dist * config->vignette_intensity;
                 if (factor < 0.0f)
                 {
