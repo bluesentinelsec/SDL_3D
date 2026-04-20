@@ -143,24 +143,53 @@ bool sdl3d_draw_cube_wires(sdl3d_render_context *context, sdl3d_vec3 center, sdl
 
 bool sdl3d_draw_plane(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec2 size, sdl3d_color color)
 {
+    /* Subdivide into a grid so vertex fog/lighting interpolates correctly
+     * on large planes.  Target roughly 4-unit cells. */
+    static const float CELL_SIZE = 4.0f;
+    int cols, rows, cx, rz;
+    float hx, hz, cell_w, cell_h;
+
     if (!sdl3d_shape_require_nonnegative(size.x, "size.x", "sdl3d_draw_plane") ||
         !sdl3d_shape_require_nonnegative(size.y, "size.y", "sdl3d_draw_plane"))
     {
         return false;
     }
 
-    const float hx = size.x * 0.5f;
-    const float hz = size.y * 0.5f;
-    const sdl3d_vec3 v0 = sdl3d_vec3_make(center.x - hx, center.y, center.z + hz);
-    const sdl3d_vec3 v1 = sdl3d_vec3_make(center.x + hx, center.y, center.z + hz);
-    const sdl3d_vec3 v2 = sdl3d_vec3_make(center.x + hx, center.y, center.z - hz);
-    const sdl3d_vec3 v3 = sdl3d_vec3_make(center.x - hx, center.y, center.z - hz);
+    cols = (int)(size.x / CELL_SIZE);
+    rows = (int)(size.y / CELL_SIZE);
+    if (cols < 1)
+        cols = 1;
+    if (rows < 1)
+        rows = 1;
 
-    if (!sdl3d_draw_triangle_3d(context, v0, v1, v2, color))
+    hx = size.x * 0.5f;
+    hz = size.y * 0.5f;
+    cell_w = size.x / (float)cols;
+    cell_h = size.y / (float)rows;
+
+    for (rz = 0; rz < rows; ++rz)
     {
-        return false;
+        for (cx = 0; cx < cols; ++cx)
+        {
+            float x0 = center.x - hx + (float)cx * cell_w;
+            float x1 = x0 + cell_w;
+            float z0 = center.z - hz + (float)rz * cell_h;
+            float z1 = z0 + cell_h;
+            sdl3d_vec3 v0 = sdl3d_vec3_make(x0, center.y, z1);
+            sdl3d_vec3 v1 = sdl3d_vec3_make(x1, center.y, z1);
+            sdl3d_vec3 v2 = sdl3d_vec3_make(x1, center.y, z0);
+            sdl3d_vec3 v3 = sdl3d_vec3_make(x0, center.y, z0);
+            if (!sdl3d_draw_triangle_3d(context, v0, v1, v2, color))
+            {
+                return false;
+            }
+            if (!sdl3d_draw_triangle_3d(context, v0, v2, v3, color))
+            {
+                return false;
+            }
+        }
     }
-    return sdl3d_draw_triangle_3d(context, v0, v2, v3, color);
+    return true;
 }
 
 bool sdl3d_draw_grid(sdl3d_render_context *context, int slices, float spacing, sdl3d_color color)

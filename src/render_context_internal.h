@@ -68,6 +68,7 @@ struct sdl3d_render_context
     /* Render profile flags. */
     sdl3d_uv_mode uv_mode;
     sdl3d_fog_eval fog_eval;
+    sdl3d_texture_filter texture_filter;
     bool vertex_snap;
     int vertex_snap_precision;
     bool color_quantize;
