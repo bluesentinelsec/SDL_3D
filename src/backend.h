@@ -69,6 +69,9 @@ typedef struct sdl3d_draw_params_lit
     float fog_end;
     float fog_density;
     int shading_mode;
+    int uv_mode; /* 0=perspective, 1=affine */
+    bool vertex_snap;
+    int vertex_snap_precision;
 } sdl3d_draw_params_lit;
 
 /* ------------------------------------------------------------------ */

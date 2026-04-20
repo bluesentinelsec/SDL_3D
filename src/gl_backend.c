@@ -406,11 +406,10 @@ GLuint sdl3d_gl_get_program_for_profile(const sdl3d_gl_context *ctx, int shading
     {
         return 0;
     }
-    /* Map shading mode to shader program:
-     * FLAT → SNES shader (flat, no per-vertex lighting)
-     * GOURAUD → N64 shader (per-vertex lighting)
-     * PHONG → lit shader (per-fragment PBR)
-     * UNLIT → unlit shader */
+    /* Map shading mode to shader program. For GOURAUD, further
+     * disambiguate by checking which profile program to use via the
+     * draw params (handled by caller selecting ps1/n64/dos). For now,
+     * default GOURAUD to N64 (the generic Gouraud program). */
     switch (shading_mode)
     {
     case 1: /* SDL3D_SHADING_FLAT */
@@ -570,7 +569,20 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *
     }
 
     gl = &ctx->gl;
-    program = sdl3d_gl_get_program_for_profile(ctx, params->shading_mode, light_count > 0);
+
+    /* Select shader program based on profile characteristics. */
+    if (params->shading_mode == 2 /* GOURAUD */ && params->vertex_snap)
+    {
+        program = ctx->ps1_program ? ctx->ps1_program : ctx->n64_program;
+    }
+    else if (params->shading_mode == 2 /* GOURAUD */ && params->uv_mode == 1 /* AFFINE */)
+    {
+        program = ctx->dos_program ? ctx->dos_program : ctx->n64_program;
+    }
+    else
+    {
+        program = sdl3d_gl_get_program_for_profile(ctx, params->shading_mode, light_count > 0);
+    }
     gl->UseProgram(program);
 
     /* Set uniforms — query locations dynamically since each profile
@@ -578,6 +590,7 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *
      * and the gl->Uniform* calls silently ignore location -1. */
     gl->UniformMatrix4fv(gl->GetUniformLocation(program, "uMVP"), 1, GL_FALSE, mvp);
     gl->UniformMatrix4fv(gl->GetUniformLocation(program, "uModel"), 1, GL_FALSE, model_matrix);
+    gl->Uniform1i(gl->GetUniformLocation(program, "uSnapPrecision"), params->vertex_snap_precision);
     {
         float nm[9] = {normal_matrix[0], normal_matrix[1], normal_matrix[2], normal_matrix[3], normal_matrix[4],
                        normal_matrix[5], normal_matrix[6], normal_matrix[7], normal_matrix[8]};
