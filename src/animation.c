@@ -8,15 +8,13 @@
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_stdinc.h>
 
-#include <math.h>
-
 /* ------------------------------------------------------------------ */
 /* Quaternion helpers                                                   */
 /* ------------------------------------------------------------------ */
 
 static void sdl3d_quat_normalize(float *q)
 {
-    float len = sqrtf(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
+    float len = SDL_sqrtf(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
     if (len > 1e-7f)
     {
         float inv = 1.0f / len;
@@ -61,10 +59,10 @@ static void sdl3d_quat_slerp(const float *a, const float *b, float t, float *out
         return;
     }
 
-    theta = acosf(dot);
-    sin_theta = sinf(theta);
-    wa = sinf((1.0f - t) * theta) / sin_theta;
-    wb = sinf(t * theta) / sin_theta;
+    theta = SDL_acosf(dot);
+    sin_theta = SDL_sinf(theta);
+    wa = SDL_sinf((1.0f - t) * theta) / sin_theta;
+    wb = SDL_sinf(t * theta) / sin_theta;
     out[0] = wa * a[0] + wb * nb[0];
     out[1] = wa * a[1] + wb * nb[1];
     out[2] = wa * a[2] + wb * nb[2];
@@ -329,7 +327,7 @@ bool sdl3d_actor_advance_animation(sdl3d_actor *actor, float delta_time)
             float dur = model->animations[clip].duration;
             if (dur > 0.0f)
             {
-                time = fmodf(time, dur);
+                time = SDL_fmodf(time, dur);
             }
             else
             {

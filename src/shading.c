@@ -11,8 +11,6 @@
 
 #include "lighting_internal.h"
 
-#include <math.h>
-
 static const float SDL3D_PI = 3.14159265358979323846f;
 
 static float sdl3d_maxf(float a, float b)
@@ -75,7 +73,7 @@ static float sdl3d_vec3_dot_raw(float ax, float ay, float az, float bx, float by
 
 static float sdl3d_vec3_length_raw(float x, float y, float z)
 {
-    return sqrtf(x * x + y * y + z * z);
+    return SDL_sqrtf(x * x + y * y + z * z);
 }
 
 /*
@@ -142,7 +140,7 @@ static bool sdl3d_compute_light_contribution(const sdl3d_light *light, float px,
             float sdz = light->direction.z * inv_sd;
             float cos_angle = sdl3d_vec3_dot_raw(-(*out_lx), -(*out_ly), -(*out_lz), sdx, sdy, sdz);
             float epsilon = light->inner_cutoff - light->outer_cutoff;
-            if (fabsf(epsilon) < 1e-7f)
+            if (SDL_fabsf(epsilon) < 1e-7f)
             {
                 attenuation *= (cos_angle >= light->outer_cutoff) ? 1.0f : 0.0f;
             }
@@ -338,9 +336,9 @@ void sdl3d_tonemap(sdl3d_tonemap_mode mode, float *r, float *g, float *b)
      * outputting linear values produces incorrect (too dark) colors. */
     {
         float inv_gamma = 1.0f / 2.2f;
-        *r = powf(sdl3d_clampf(*r, 0.0f, 1.0f), inv_gamma);
-        *g = powf(sdl3d_clampf(*g, 0.0f, 1.0f), inv_gamma);
-        *b = powf(sdl3d_clampf(*b, 0.0f, 1.0f), inv_gamma);
+        *r = SDL_powf(sdl3d_clampf(*r, 0.0f, 1.0f), inv_gamma);
+        *g = SDL_powf(sdl3d_clampf(*g, 0.0f, 1.0f), inv_gamma);
+        *b = SDL_powf(sdl3d_clampf(*b, 0.0f, 1.0f), inv_gamma);
     }
 }
 
@@ -366,14 +364,14 @@ float sdl3d_compute_fog_factor(const sdl3d_fog *fog, float distance)
 
     if (fog->mode == SDL3D_FOG_EXP)
     {
-        float f = expf(-fog->density * distance);
+        float f = SDL_expf(-fog->density * distance);
         return sdl3d_clampf(1.0f - f, 0.0f, 1.0f);
     }
 
     /* SDL3D_FOG_EXP2 */
     {
         float d = fog->density * distance;
-        float f = expf(-d * d);
+        float f = SDL_expf(-d * d);
         return sdl3d_clampf(1.0f - f, 0.0f, 1.0f);
     }
 }
