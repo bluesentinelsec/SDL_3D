@@ -35,4 +35,8 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const sdl3d_draw_params_unl
 
 void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *params);
 
+/* Apply post-processing effects to the GL FBO as a fullscreen shader pass. */
+void sdl3d_gl_post_process(sdl3d_gl_context *ctx, int effects, float bloom_threshold, float bloom_intensity,
+                           float vignette_intensity, float contrast, float brightness, float saturation);
+
 #endif

@@ -499,3 +499,57 @@ static const char *sdl3d_shader_snes_frag =
     "    color = floor(color * 32.0 + 0.5) / 32.0;\n"
     "    fragColor = vec4(color, alpha);\n"
     "}\n";
+
+/* ================================================================== */
+/* Post-process fullscreen shader: bloom + vignette + color grading   */
+/* ================================================================== */
+
+static const char *sdl3d_shader_postprocess_vert = "out vec2 vTexCoord;\n"
+                                                   "void main() {\n"
+                                                   "    /* Fullscreen triangle covering the viewport. */\n"
+                                                   "    float x = float((gl_VertexID & 1) << 2) - 1.0;\n"
+                                                   "    float y = float((gl_VertexID & 2) << 1) - 1.0;\n"
+                                                   "    vTexCoord = vec2(x * 0.5 + 0.5, y * 0.5 + 0.5);\n"
+                                                   "    gl_Position = vec4(x, y, 0.0, 1.0);\n"
+                                                   "}\n";
+
+static const char *sdl3d_shader_postprocess_frag =
+    "in vec2 vTexCoord;\n"
+    "uniform sampler2D uScene;\n"
+    "uniform vec2 uTexelSize;\n"
+    "uniform int uEffects;\n"
+    "uniform float uBloomThreshold;\n"
+    "uniform float uBloomIntensity;\n"
+    "uniform float uVignetteIntensity;\n"
+    "uniform float uContrast;\n"
+    "uniform float uBrightness;\n"
+    "uniform float uSaturation;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "    vec3 color = texture(uScene, vTexCoord).rgb;\n"
+    "    /* Bloom: simple 5-tap cross blur of bright pixels. */\n"
+    "    if ((uEffects & 1) != 0) {\n"
+    "        vec3 bloom = vec3(0.0);\n"
+    "        for (int i = -2; i <= 2; ++i) {\n"
+    "            for (int j = -2; j <= 2; ++j) {\n"
+    "                vec3 s = texture(uScene, vTexCoord + vec2(float(i), float(j)) * uTexelSize).rgb;\n"
+    "                float lum = dot(s, vec3(0.2126, 0.7152, 0.0722));\n"
+    "                if (lum > uBloomThreshold) bloom += s;\n"
+    "            }\n"
+    "        }\n"
+    "        color += bloom * uBloomIntensity / 25.0;\n"
+    "    }\n"
+    "    /* Vignette. */\n"
+    "    if ((uEffects & 2) != 0) {\n"
+    "        vec2 uv = vTexCoord * 2.0 - 1.0;\n"
+    "        float d = dot(uv, uv);\n"
+    "        color *= 1.0 - d * uVignetteIntensity;\n"
+    "    }\n"
+    "    /* Color grading. */\n"
+    "    if ((uEffects & 4) != 0) {\n"
+    "        color = (color - 0.5) * uContrast + 0.5 + uBrightness;\n"
+    "        float gray = dot(color, vec3(0.2126, 0.7152, 0.0722));\n"
+    "        color = mix(vec3(gray), color, uSaturation);\n"
+    "    }\n"
+    "    fragColor = vec4(max(color, 0.0), 1.0);\n"
+    "}\n";

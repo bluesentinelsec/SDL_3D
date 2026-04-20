@@ -9,6 +9,8 @@
 
 #include "render_context_internal.h"
 
+#include "gl_backend.h"
+
 /* ------------------------------------------------------------------ */
 /* Particle system                                                     */
 /* ------------------------------------------------------------------ */
@@ -352,9 +354,15 @@ bool sdl3d_apply_post_process(sdl3d_render_context *context, const sdl3d_post_pr
         return true;
     }
 
-    /* Post-process operates on the CPU framebuffer — skip for GL backend. */
+    /* GL backend: apply post-processing as a fullscreen shader pass. */
     if (context->color_buffer == NULL)
     {
+        if (context->gl != NULL)
+        {
+            sdl3d_gl_post_process(context->gl, config->effects, config->bloom_threshold, config->bloom_intensity,
+                                  config->vignette_intensity, config->color_grade_contrast,
+                                  config->color_grade_brightness, config->color_grade_saturation);
+        }
         return true;
     }
 

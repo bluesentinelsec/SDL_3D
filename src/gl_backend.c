@@ -30,6 +30,9 @@ struct sdl3d_gl_context
     GLuint dos_program;
     GLuint snes_program;
 
+    /* Post-process shader. */
+    GLuint postprocess_program;
+
     /* Unlit shader uniforms. */
     GLint unlit_mvp_loc;
     GLint unlit_tint_loc;
@@ -214,6 +217,8 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->n64_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_n64_vert, sdl3d_shader_n64_frag, ctx->is_es);
     ctx->dos_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_dos_vert, sdl3d_shader_dos_frag, ctx->is_es);
     ctx->snes_program = sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_snes_vert, sdl3d_shader_snes_frag, ctx->is_es);
+    ctx->postprocess_program =
+        sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_postprocess_vert, sdl3d_shader_postprocess_frag, ctx->is_es);
 
     if (ctx->unlit_program == 0 || ctx->lit_program == 0)
     {
@@ -325,6 +330,10 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     if (ctx->snes_program)
     {
         ctx->gl.DeleteProgram(ctx->snes_program);
+    }
+    if (ctx->postprocess_program)
+    {
+        ctx->gl.DeleteProgram(ctx->postprocess_program);
     }
     if (ctx->white_texture)
     {
@@ -745,4 +754,85 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *
     gl->DeleteBuffers(1, &vbo_uv);
     gl->DeleteBuffers(1, &vbo_col);
     gl->DeleteVertexArrays(1, &vao);
+}
+
+void sdl3d_gl_post_process(sdl3d_gl_context *ctx, int effects, float bloom_threshold, float bloom_intensity,
+                           float vignette_intensity, float contrast, float brightness, float saturation)
+{
+    const sdl3d_gl_funcs *gl;
+    GLuint vao;
+    GLuint program;
+
+    if (ctx == NULL || ctx->postprocess_program == 0 || effects == 0)
+    {
+        return;
+    }
+
+    gl = &ctx->gl;
+    program = ctx->postprocess_program;
+
+    /* Read from the FBO color texture, write to a temporary copy, then
+     * blit back.  For simplicity, render the fullscreen pass directly
+     * into the FBO by binding the FBO color texture as input and
+     * rendering to the default framebuffer, then copy back.
+     *
+     * Simpler approach: use the FBO color texture as input and render
+     * to the FBO itself via a second FBO or ping-pong.  For now, use
+     * the simplest correct path: copy texture, render to FBO. */
+
+    /* Bind the FBO and draw a fullscreen triangle with the post-process
+     * shader reading from the FBO color texture.  We temporarily unbind
+     * the FBO, draw to it via glFramebufferTexture2D with a temp texture,
+     * then swap back.
+     *
+     * Actually the simplest correct approach: just render in-place.
+     * glTextureBarrier or read-then-write is undefined behavior.
+     * Use a copy instead. */
+    GLuint copy_tex;
+    gl->GenTextures(1, &copy_tex);
+    gl->BindTexture(GL_TEXTURE_2D, copy_tex);
+    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ctx->logical_width, ctx->logical_height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                   NULL);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    /* Copy FBO contents to the temp texture via blit. */
+    {
+        GLuint copy_fbo;
+        gl->GenFramebuffers(1, &copy_fbo);
+        gl->BindFramebuffer(GL_DRAW_FRAMEBUFFER, copy_fbo);
+        gl->FramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, copy_tex, 0);
+        gl->BindFramebuffer(GL_READ_FRAMEBUFFER, ctx->fbo);
+        gl->BlitFramebuffer(0, 0, ctx->logical_width, ctx->logical_height, 0, 0, ctx->logical_width,
+                            ctx->logical_height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        gl->DeleteFramebuffers(1, &copy_fbo);
+    }
+
+    /* Now render the fullscreen post-process pass to the main FBO. */
+    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+    gl->Disable(GL_DEPTH_TEST);
+
+    gl->UseProgram(program);
+    gl->ActiveTexture(GL_TEXTURE0);
+    gl->BindTexture(GL_TEXTURE_2D, copy_tex);
+    gl->Uniform1i(gl->GetUniformLocation(program, "uScene"), 0);
+    gl->Uniform2f(gl->GetUniformLocation(program, "uTexelSize"), 1.0f / (float)ctx->logical_width,
+                  1.0f / (float)ctx->logical_height);
+    gl->Uniform1i(gl->GetUniformLocation(program, "uEffects"), effects);
+    gl->Uniform1f(gl->GetUniformLocation(program, "uBloomThreshold"), bloom_threshold);
+    gl->Uniform1f(gl->GetUniformLocation(program, "uBloomIntensity"), bloom_intensity);
+    gl->Uniform1f(gl->GetUniformLocation(program, "uVignetteIntensity"), vignette_intensity);
+    gl->Uniform1f(gl->GetUniformLocation(program, "uContrast"), contrast);
+    gl->Uniform1f(gl->GetUniformLocation(program, "uBrightness"), brightness);
+    gl->Uniform1f(gl->GetUniformLocation(program, "uSaturation"), saturation);
+
+    /* Draw fullscreen triangle (no VBO needed — vertex shader generates coords). */
+    gl->GenVertexArrays(1, &vao);
+    gl->BindVertexArray(vao);
+    gl->DrawArrays(GL_TRIANGLES, 0, 3);
+    gl->BindVertexArray(0);
+    gl->DeleteVertexArrays(1, &vao);
+
+    gl->DeleteTextures(1, &copy_tex);
+    gl->Enable(GL_DEPTH_TEST);
 }
