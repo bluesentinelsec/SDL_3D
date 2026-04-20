@@ -7,7 +7,6 @@
 #include "render_context_internal.h"
 #include "texture_internal.h"
 
-#include "gl_backend.h"
 #include "lighting_internal.h"
 
 static const int SDL3D_MODEL_STACK_INITIAL_CAPACITY = 8;
@@ -452,39 +451,84 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         return SDL_SetError("Non-indexed mesh draw requires vertex_count divisible by 3.");
     }
 
-    /* GL backend: submit entire mesh in one draw call. */
-    if (context->backend == SDL3D_BACKEND_SDLGPU && context->gl != NULL)
+    /* Backend dispatch: try the vtable first. Software returns false to
+     * fall through to the per-triangle loop below. */
+    if (lit)
     {
-        float tint[4] = {base_modulate.x, base_modulate.y, base_modulate.z, base_modulate.w};
-        if (lit)
+        sdl3d_draw_params_lit lp;
+        SDL_zero(lp);
+        lp.positions = mesh->positions;
+        lp.normals = mesh->normals;
+        lp.uvs = mesh->uvs;
+        lp.colors = mesh->colors;
+        lp.indices = mesh->indices;
+        lp.vertex_count = mesh->vertex_count;
+        lp.index_count = mesh->index_count;
+        lp.texture = texture;
+        lp.mvp = context->model_view_projection.m;
+        lp.model_matrix = context->model.m;
+        lp.normal_matrix[0] = context->model.m[0];
+        lp.normal_matrix[1] = context->model.m[1];
+        lp.normal_matrix[2] = context->model.m[2];
+        lp.normal_matrix[3] = context->model.m[4];
+        lp.normal_matrix[4] = context->model.m[5];
+        lp.normal_matrix[5] = context->model.m[6];
+        lp.normal_matrix[6] = context->model.m[8];
+        lp.normal_matrix[7] = context->model.m[9];
+        lp.normal_matrix[8] = context->model.m[10];
+        lp.tint[0] = base_modulate.x;
+        lp.tint[1] = base_modulate.y;
+        lp.tint[2] = base_modulate.z;
+        lp.tint[3] = base_modulate.w;
         {
-            float nm[9] = {context->model.m[0], context->model.m[1], context->model.m[2],
-                           context->model.m[4], context->model.m[5], context->model.m[6],
-                           context->model.m[8], context->model.m[9], context->model.m[10]};
-            float cam[3];
-            {
-                const sdl3d_mat4 v = context->view;
-                cam[0] = -(v.m[0] * v.m[12] + v.m[1] * v.m[13] + v.m[2] * v.m[14]);
-                cam[1] = -(v.m[4] * v.m[12] + v.m[5] * v.m[13] + v.m[6] * v.m[14]);
-                cam[2] = -(v.m[8] * v.m[12] + v.m[9] * v.m[13] + v.m[10] * v.m[14]);
-            }
-            float amb[3] = {context->ambient[0], context->ambient[1], context->ambient[2]};
-            float emis[3] = {0, 0, 0};
-            float metallic = 0.0f, roughness = 1.0f;
-            float fog_color[3] = {context->fog.color[0], context->fog.color[1], context->fog.color[2]};
+            const sdl3d_mat4 v = context->view;
+            lp.camera_pos[0] = -(v.m[0] * v.m[12] + v.m[1] * v.m[13] + v.m[2] * v.m[14]);
+            lp.camera_pos[1] = -(v.m[4] * v.m[12] + v.m[5] * v.m[13] + v.m[6] * v.m[14]);
+            lp.camera_pos[2] = -(v.m[8] * v.m[12] + v.m[9] * v.m[13] + v.m[10] * v.m[14]);
+        }
+        lp.ambient[0] = context->ambient[0];
+        lp.ambient[1] = context->ambient[1];
+        lp.ambient[2] = context->ambient[2];
+        lp.metallic = 0.0f;
+        lp.roughness = 1.0f;
+        lp.lights = context->lights;
+        lp.light_count = context->light_count;
+        lp.tonemap_mode = (int)context->tonemap_mode;
+        lp.fog_mode = (int)context->fog.mode;
+        lp.fog_color[0] = context->fog.color[0];
+        lp.fog_color[1] = context->fog.color[1];
+        lp.fog_color[2] = context->fog.color[2];
+        lp.fog_start = context->fog.start;
+        lp.fog_end = context->fog.end;
+        lp.fog_density = context->fog.density;
+        lp.shading_mode = (int)context->shading_mode;
 
-            sdl3d_gl_draw_mesh_lit(context->gl, mesh->positions, mesh->normals, mesh->uvs, mesh->colors, mesh->indices,
-                                   mesh->vertex_count, mesh->index_count, 0, context->model_view_projection.m,
-                                   context->model.m, nm, tint, cam, amb, metallic, roughness, emis, context->lights,
-                                   context->light_count, (int)context->tonemap_mode, (int)context->fog.mode, fog_color,
-                                   context->fog.start, context->fog.end, context->fog.density);
-        }
-        else
+        if (context->backend_iface.draw_mesh_lit(context, &lp))
         {
-            sdl3d_gl_draw_mesh_unlit(context->gl, mesh->positions, mesh->uvs, mesh->colors, mesh->indices,
-                                     mesh->vertex_count, mesh->index_count, 0, context->model_view_projection.m, tint);
+            return true;
         }
-        return true;
+    }
+    else
+    {
+        sdl3d_draw_params_unlit up;
+        SDL_zero(up);
+        up.positions = mesh->positions;
+        up.uvs = mesh->uvs;
+        up.colors = mesh->colors;
+        up.indices = mesh->indices;
+        up.vertex_count = mesh->vertex_count;
+        up.index_count = mesh->index_count;
+        up.texture = texture;
+        up.mvp = context->model_view_projection.m;
+        up.tint[0] = base_modulate.x;
+        up.tint[1] = base_modulate.y;
+        up.tint[2] = base_modulate.z;
+        up.tint[3] = base_modulate.w;
+
+        if (context->backend_iface.draw_mesh_unlit(context, &up))
+        {
+            return true;
+        }
     }
 
     framebuffer = sdl3d_framebuffer_from_context(context);
@@ -687,15 +731,23 @@ bool sdl3d_draw_triangle_3d(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_
         return false;
     }
 
-    /* GL backend: submit triangle directly. */
-    if (context->backend == SDL3D_BACKEND_SDLGPU && context->gl != NULL)
+    /* Backend dispatch: try the vtable first. */
     {
         float positions[9] = {v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, v2.x, v2.y, v2.z};
-        float tint[4] = {(float)color.r / 255.0f, (float)color.g / 255.0f, (float)color.b / 255.0f,
-                         (float)color.a / 255.0f};
-        sdl3d_gl_draw_mesh_unlit(context->gl, positions, NULL, NULL, NULL, 3, 0, 0, context->model_view_projection.m,
-                                 tint);
-        return true;
+        sdl3d_draw_params_unlit up;
+        SDL_zero(up);
+        up.positions = positions;
+        up.vertex_count = 3;
+        up.mvp = context->model_view_projection.m;
+        up.tint[0] = (float)color.r / 255.0f;
+        up.tint[1] = (float)color.g / 255.0f;
+        up.tint[2] = (float)color.b / 255.0f;
+        up.tint[3] = (float)color.a / 255.0f;
+
+        if (context->backend_iface.draw_mesh_unlit(context, &up))
+        {
+            return true;
+        }
     }
 
     framebuffer = sdl3d_framebuffer_from_context(context);

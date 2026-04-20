@@ -87,6 +87,7 @@ target_sources(
         src/fbx_loader.c
         src/gltf_loader.c
         src/gl_backend.c
+        src/gl_backend_adapter.c
         src/image.c
         src/lighting.c
         src/math.c
@@ -98,6 +99,7 @@ target_sources(
         src/sdl3d.c
         src/shading.c
         src/shapes.c
+        src/sw_backend.c
         src/texture.c
         $<TARGET_OBJECTS:sdl3d_cgltf>
         $<TARGET_OBJECTS:sdl3d_ufbx>

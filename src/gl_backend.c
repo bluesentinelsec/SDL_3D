@@ -9,7 +9,6 @@
 #include "gl_backend.h"
 
 #include <SDL3/SDL_error.h>
-#include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
 #include "gl_funcs.h"
@@ -59,6 +58,13 @@ struct sdl3d_gl_context
 
     /* Default white texture for untextured meshes. */
     GLuint white_texture;
+
+    /* Offscreen FBO for logical-resolution rendering. */
+    GLuint fbo;
+    GLuint fbo_color_texture;
+    GLuint fbo_depth_rbo;
+    int logical_width;
+    int logical_height;
 
     int width;
     int height;
@@ -256,6 +262,35 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
 
     ctx->width = width;
     ctx->height = height;
+
+    /* Create offscreen FBO at logical resolution. */
+    ctx->logical_width = width;
+    ctx->logical_height = height;
+    ctx->gl.GenFramebuffers(1, &ctx->fbo);
+    ctx->gl.GenTextures(1, &ctx->fbo_color_texture);
+    ctx->gl.GenRenderbuffers(1, &ctx->fbo_depth_rbo);
+
+    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->fbo_color_texture);
+    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    ctx->gl.BindRenderbuffer(GL_RENDERBUFFER, ctx->fbo_depth_rbo);
+    ctx->gl.RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
+
+    ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+    ctx->gl.FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ctx->fbo_color_texture, 0);
+    ctx->gl.FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, ctx->fbo_depth_rbo);
+
+    if (ctx->gl.CheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    {
+        SDL_SetError("Failed to create OpenGL offscreen framebuffer.");
+        ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, 0);
+        sdl3d_gl_destroy(ctx);
+        return NULL;
+    }
+
+    /* Leave the FBO bound — all rendering targets the offscreen buffer. */
     ctx->gl.Viewport(0, 0, width, height);
 
     return ctx;
@@ -295,6 +330,18 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     {
         ctx->gl.DeleteTextures(1, &ctx->white_texture);
     }
+    if (ctx->fbo)
+    {
+        ctx->gl.DeleteFramebuffers(1, &ctx->fbo);
+    }
+    if (ctx->fbo_color_texture)
+    {
+        ctx->gl.DeleteTextures(1, &ctx->fbo_color_texture);
+    }
+    if (ctx->fbo_depth_rbo)
+    {
+        ctx->gl.DeleteRenderbuffers(1, &ctx->fbo_depth_rbo);
+    }
     SDL_GL_DestroyContext(ctx->gl_context);
     SDL_free(ctx);
 }
@@ -305,8 +352,32 @@ void sdl3d_gl_clear(sdl3d_gl_context *ctx, float r, float g, float b, float a)
     {
         return;
     }
+    /* Ensure we're rendering to the offscreen FBO. */
+    ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
     ctx->gl.ClearColor(r, g, b, a);
     ctx->gl.Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+
+void sdl3d_gl_present(sdl3d_gl_context *ctx, SDL_Window *window)
+{
+    int window_w = 0;
+    int window_h = 0;
+
+    if (ctx == NULL || window == NULL)
+    {
+        return;
+    }
+
+    SDL_GetWindowSizeInPixels(window, &window_w, &window_h);
+
+    /* Blit the logical-resolution FBO to the default framebuffer. */
+    ctx->gl.BindFramebuffer(GL_READ_FRAMEBUFFER, ctx->fbo);
+    ctx->gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    ctx->gl.BlitFramebuffer(0, 0, ctx->logical_width, ctx->logical_height, 0, 0, window_w, window_h,
+                            GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+    /* Re-bind the offscreen FBO for the next frame. */
+    ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
 }
 
 GLuint sdl3d_gl_get_unlit_program(const sdl3d_gl_context *ctx)
@@ -357,13 +428,19 @@ GLuint sdl3d_gl_get_program_for_profile(const sdl3d_gl_context *ctx, int shading
 /* Mesh rendering                                                      */
 /* ------------------------------------------------------------------ */
 
-void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const float *positions, const float *uvs, const float *colors,
-                              const unsigned int *indices, int vertex_count, int index_count, GLuint texture,
-                              const float *mvp, const float *tint)
+void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const sdl3d_draw_params_unlit *params)
 {
     GLuint vao, vbo_pos, vbo_uv, vbo_col, ebo;
     const sdl3d_gl_funcs *gl;
-    static int draw_count = 0;
+    const float *positions = params->positions;
+    const float *uvs = params->uvs;
+    const float *colors = params->colors;
+    const unsigned int *indices = params->indices;
+    int vertex_count = params->vertex_count;
+    int index_count = params->index_count;
+    const float *mvp = params->mvp;
+    const float *tint = params->tint;
+    GLuint texture = 0; /* texture upload handled by caller */
 
     if (ctx == NULL || positions == NULL || vertex_count <= 0)
     {
@@ -372,50 +449,17 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const float *positions, con
 
     gl = &ctx->gl;
 
-    /* Log first few draw calls for debugging. */
-    if (draw_count < 3)
-    {
-        SDL_Log("GL draw_mesh_unlit: verts=%d, indices=%d, program=%u, tint=(%.2f,%.2f,%.2f,%.2f)", vertex_count,
-                index_count, ctx->unlit_program, tint[0], tint[1], tint[2], tint[3]);
-        SDL_Log("  MVP[0..3]: %.3f %.3f %.3f %.3f", mvp[0], mvp[1], mvp[2], mvp[3]);
-        SDL_Log("  pos[0..2]: %.3f %.3f %.3f", positions[0], positions[1], positions[2]);
-    }
-
     gl->UseProgram(ctx->unlit_program);
-    if (draw_count < 1)
-    {
-        GLenum e = gl->GetError();
-        if (e)
-            SDL_Log("  err after UseProgram: 0x%04X", (unsigned)e);
-    }
     gl->UniformMatrix4fv(ctx->unlit_mvp_loc, 1, GL_FALSE, mvp);
-    if (draw_count < 1)
-    {
-        GLenum e = gl->GetError();
-        if (e)
-            SDL_Log("  err after UniformMatrix4fv: 0x%04X", (unsigned)e);
-    }
     gl->Uniform4f(ctx->unlit_tint_loc, tint[0], tint[1], tint[2], tint[3]);
 
     gl->ActiveTexture(GL_TEXTURE0);
     gl->BindTexture(GL_TEXTURE_2D, texture ? texture : ctx->white_texture);
     gl->Uniform1i(ctx->unlit_texture_loc, 0);
     gl->Uniform1i(ctx->unlit_has_texture_loc, texture ? 1 : 0);
-    if (draw_count < 1)
-    {
-        GLenum e = gl->GetError();
-        if (e)
-            SDL_Log("  err after texture setup: 0x%04X", (unsigned)e);
-    }
 
     gl->GenVertexArrays(1, &vao);
     gl->BindVertexArray(vao);
-    if (draw_count < 1)
-    {
-        GLenum e = gl->GetError();
-        if (e)
-            SDL_Log("  err after VAO: 0x%04X", (unsigned)e);
-    }
 
     /* Positions. */
     gl->GenBuffers(1, &vbo_pos);
@@ -423,12 +467,6 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const float *positions, con
     gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 3 * sizeof(float)), positions, GL_DYNAMIC_DRAW);
     gl->EnableVertexAttribArray(0);
     gl->VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
-    if (draw_count < 1)
-    {
-        GLenum e = gl->GetError();
-        if (e)
-            SDL_Log("  err after pos VBO: 0x%04X", (unsigned)e);
-    }
 
     /* UVs. */
     gl->GenBuffers(1, &vbo_uv);
@@ -488,12 +526,6 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const float *positions, con
         gl->DrawArrays(GL_TRIANGLES, 0, (GLsizei)vertex_count);
     }
 
-    if (draw_count < 3)
-    {
-        GLenum err = gl->GetError();
-        SDL_Log("  GL draw result: err=0x%04X", (unsigned)err);
-        draw_count++;
-    }
     gl->BindVertexArray(0);
     gl->DeleteBuffers(1, &vbo_pos);
     gl->DeleteBuffers(1, &vbo_uv);
@@ -501,16 +533,36 @@ void sdl3d_gl_draw_mesh_unlit(sdl3d_gl_context *ctx, const float *positions, con
     gl->DeleteVertexArrays(1, &vao);
 }
 
-void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const float *positions, const float *normals, const float *uvs,
-                            const float *colors, const unsigned int *indices, int vertex_count, int index_count,
-                            GLuint texture, const float *mvp, const float *model_matrix, const float *normal_matrix,
-                            const float *tint, const float *camera_pos, const float *ambient, float metallic,
-                            float roughness, const float *emissive, const void *lights, int light_count,
-                            int tonemap_mode, int fog_mode, const float *fog_color, float fog_start, float fog_end,
-                            float fog_density)
+void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *params)
 {
     GLuint vao, vbo_pos, vbo_norm, vbo_uv, vbo_col, ebo;
     const sdl3d_gl_funcs *gl;
+    GLuint program;
+    const float *positions = params->positions;
+    const float *normals = params->normals;
+    const float *uvs = params->uvs;
+    const float *colors = params->colors;
+    const unsigned int *indices = params->indices;
+    int vertex_count = params->vertex_count;
+    int index_count = params->index_count;
+    const float *mvp = params->mvp;
+    const float *model_matrix = params->model_matrix;
+    const float *normal_matrix = params->normal_matrix;
+    const float *tint = params->tint;
+    const float *camera_pos = params->camera_pos;
+    const float *ambient = params->ambient;
+    float metallic = params->metallic;
+    float roughness = params->roughness;
+    const float *emissive = params->emissive;
+    const struct sdl3d_light *lights = params->lights;
+    int light_count = params->light_count;
+    int tonemap_mode = params->tonemap_mode;
+    int fog_mode = params->fog_mode;
+    const float *fog_color = params->fog_color;
+    float fog_start = params->fog_start;
+    float fog_end = params->fog_end;
+    float fog_density = params->fog_density;
+    GLuint texture = 0; /* texture upload handled by caller */
 
     if (ctx == NULL || positions == NULL || vertex_count <= 0)
     {
@@ -518,35 +570,37 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const float *positions, const
     }
 
     gl = &ctx->gl;
-    gl->UseProgram(ctx->lit_program);
-    gl->UniformMatrix4fv(ctx->lit_mvp_loc, 1, GL_FALSE, mvp);
-    gl->UniformMatrix4fv(ctx->lit_model_loc, 1, GL_FALSE, model_matrix);
-    /* Normal matrix is 3x3 — pass as 3 vec3 uniforms or use mat3 uniform. */
-    /* For now, pass the upper-left 3x3 of the model matrix. */
+    program = sdl3d_gl_get_program_for_profile(ctx, params->shading_mode, light_count > 0);
+    gl->UseProgram(program);
+
+    /* Set uniforms — query locations dynamically since each profile
+     * shader has a different uniform set.  Unused uniforms return -1
+     * and the gl->Uniform* calls silently ignore location -1. */
+    gl->UniformMatrix4fv(gl->GetUniformLocation(program, "uMVP"), 1, GL_FALSE, mvp);
+    gl->UniformMatrix4fv(gl->GetUniformLocation(program, "uModel"), 1, GL_FALSE, model_matrix);
     {
         float nm[9] = {normal_matrix[0], normal_matrix[1], normal_matrix[2], normal_matrix[3], normal_matrix[4],
                        normal_matrix[5], normal_matrix[6], normal_matrix[7], normal_matrix[8]};
-        GLint loc = ctx->lit_normal_matrix_loc;
-        /* glUniformMatrix3fv — we need to add this to our function table. For now skip. */
+        GLint loc = gl->GetUniformLocation(program, "uNormalMatrix");
         (void)nm;
         (void)loc;
     }
-    gl->Uniform4f(ctx->lit_tint_loc, tint[0], tint[1], tint[2], tint[3]);
-    gl->Uniform3f(ctx->lit_camera_pos_loc, camera_pos[0], camera_pos[1], camera_pos[2]);
-    gl->Uniform3f(ctx->lit_ambient_loc, ambient[0], ambient[1], ambient[2]);
-    gl->Uniform1f(ctx->lit_metallic_loc, metallic);
-    gl->Uniform1f(ctx->lit_roughness_loc, roughness);
-    gl->Uniform3f(ctx->lit_emissive_loc, emissive[0], emissive[1], emissive[2]);
-    gl->Uniform1i(ctx->lit_light_count_loc, light_count);
-    gl->Uniform1i(ctx->lit_tonemap_mode_loc, tonemap_mode);
-    gl->Uniform1i(ctx->lit_fog_mode_loc, fog_mode);
+    gl->Uniform4f(gl->GetUniformLocation(program, "uTint"), tint[0], tint[1], tint[2], tint[3]);
+    gl->Uniform3f(gl->GetUniformLocation(program, "uCameraPos"), camera_pos[0], camera_pos[1], camera_pos[2]);
+    gl->Uniform3f(gl->GetUniformLocation(program, "uAmbient"), ambient[0], ambient[1], ambient[2]);
+    gl->Uniform1f(gl->GetUniformLocation(program, "uMetallic"), metallic);
+    gl->Uniform1f(gl->GetUniformLocation(program, "uRoughness"), roughness);
+    gl->Uniform3f(gl->GetUniformLocation(program, "uEmissive"), emissive[0], emissive[1], emissive[2]);
+    gl->Uniform1i(gl->GetUniformLocation(program, "uLightCount"), light_count);
+    gl->Uniform1i(gl->GetUniformLocation(program, "uTonemapMode"), tonemap_mode);
+    gl->Uniform1i(gl->GetUniformLocation(program, "uFogMode"), fog_mode);
     if (fog_color != NULL)
     {
-        gl->Uniform3f(ctx->lit_fog_color_loc, fog_color[0], fog_color[1], fog_color[2]);
+        gl->Uniform3f(gl->GetUniformLocation(program, "uFogColor"), fog_color[0], fog_color[1], fog_color[2]);
     }
-    gl->Uniform1f(ctx->lit_fog_start_loc, fog_start);
-    gl->Uniform1f(ctx->lit_fog_end_loc, fog_end);
-    gl->Uniform1f(ctx->lit_fog_density_loc, fog_density);
+    gl->Uniform1f(gl->GetUniformLocation(program, "uFogStart"), fog_start);
+    gl->Uniform1f(gl->GetUniformLocation(program, "uFogEnd"), fog_end);
+    gl->Uniform1f(gl->GetUniformLocation(program, "uFogDensity"), fog_density);
 
     /* Upload light uniforms. */
     if (lights != NULL && light_count > 0)
@@ -557,36 +611,36 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const float *positions, const
         {
             GLint loc;
             SDL_snprintf(name, sizeof(name), "uLights[%d].type", i);
-            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            loc = gl->GetUniformLocation(program, name);
             gl->Uniform1i(loc, (int)lt[i].type);
             SDL_snprintf(name, sizeof(name), "uLights[%d].position", i);
-            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            loc = gl->GetUniformLocation(program, name);
             gl->Uniform3f(loc, lt[i].position.x, lt[i].position.y, lt[i].position.z);
             SDL_snprintf(name, sizeof(name), "uLights[%d].direction", i);
-            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            loc = gl->GetUniformLocation(program, name);
             gl->Uniform3f(loc, lt[i].direction.x, lt[i].direction.y, lt[i].direction.z);
             SDL_snprintf(name, sizeof(name), "uLights[%d].color", i);
-            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            loc = gl->GetUniformLocation(program, name);
             gl->Uniform3f(loc, lt[i].color[0], lt[i].color[1], lt[i].color[2]);
             SDL_snprintf(name, sizeof(name), "uLights[%d].intensity", i);
-            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            loc = gl->GetUniformLocation(program, name);
             gl->Uniform1f(loc, lt[i].intensity);
             SDL_snprintf(name, sizeof(name), "uLights[%d].range", i);
-            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            loc = gl->GetUniformLocation(program, name);
             gl->Uniform1f(loc, lt[i].range);
             SDL_snprintf(name, sizeof(name), "uLights[%d].innerCutoff", i);
-            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            loc = gl->GetUniformLocation(program, name);
             gl->Uniform1f(loc, lt[i].inner_cutoff);
             SDL_snprintf(name, sizeof(name), "uLights[%d].outerCutoff", i);
-            loc = gl->GetUniformLocation(ctx->lit_program, name);
+            loc = gl->GetUniformLocation(program, name);
             gl->Uniform1f(loc, lt[i].outer_cutoff);
         }
     }
 
     gl->ActiveTexture(GL_TEXTURE0);
     gl->BindTexture(GL_TEXTURE_2D, texture ? texture : ctx->white_texture);
-    gl->Uniform1i(ctx->lit_texture_loc, 0);
-    gl->Uniform1i(ctx->lit_has_texture_loc, texture ? 1 : 0);
+    gl->Uniform1i(gl->GetUniformLocation(program, "uTexture"), 0);
+    gl->Uniform1i(gl->GetUniformLocation(program, "uHasTexture"), texture ? 1 : 0);
 
     gl->GenVertexArrays(1, &vao);
     gl->BindVertexArray(vao);

@@ -12,6 +12,7 @@
 #include <SDL3/SDL_render.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include "backend.h"
 #include "rasterizer.h"
 #include "sdl3d/lighting.h"
 #include "sdl3d/math.h"
@@ -29,6 +30,7 @@ struct sdl3d_render_context
     float *depth_buffer;
     sdl3d_parallel_rasterizer *parallel_rasterizer;
     sdl3d_backend backend;
+    sdl3d_backend_interface backend_iface;
     int width;
     int height;
 
