@@ -164,18 +164,11 @@ struct sdl3d_gl_context
     int logical_height;
 
     /* Shadow mapping. */
-    /* Shadow mapping — GPU depth pass. */
-    GLuint shadow_fbo;
-    GLuint shadow_depth_tex;
-    GLuint shadow_program;
-    GLint shadow_mvp_loc;
+    GLuint shadow_texture;
     GLint lit_shadow_map_loc;
     GLint lit_shadow_vp_loc;
     GLint lit_shadow_enabled_loc;
     GLint lit_shadow_bias_loc;
-    bool in_shadow_pass;
-    float shadow_vp_matrix[16];
-    float shadow_bias_value;
 
     int width;
     int height;
@@ -813,33 +806,19 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     sdl3d_gl_init_lit_uniform_cache(ctx, ctx->dos_program, &ctx->dos_uniforms);
     sdl3d_gl_init_lit_uniform_cache(ctx, ctx->snes_program, &ctx->snes_uniforms);
 
-    /* Shadow map: depth-only FBO + depth texture + shader. */
+    /* Shadow map uniform locations and texture. */
     ctx->lit_shadow_map_loc = ctx->gl.GetUniformLocation(ctx->lit_program, "uShadowMap");
     ctx->lit_shadow_vp_loc = ctx->gl.GetUniformLocation(ctx->lit_program, "uShadowVP");
     ctx->lit_shadow_enabled_loc = ctx->gl.GetUniformLocation(ctx->lit_program, "uShadowEnabled");
     ctx->lit_shadow_bias_loc = ctx->gl.GetUniformLocation(ctx->lit_program, "uShadowBias");
 
-    ctx->gl.GenFramebuffers(1, &ctx->shadow_fbo);
-    ctx->gl.GenTextures(1, &ctx->shadow_depth_tex);
-    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->shadow_depth_tex);
-    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, 1024, 1024, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+    ctx->gl.GenTextures(1, &ctx->shadow_texture);
+    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->shadow_texture);
+    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_R32F, 512, 512, 0, GL_RED, GL_FLOAT, NULL);
     ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
-    ctx->gl.FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, ctx->shadow_depth_tex, 0);
-    ctx->gl.DrawBuffer(GL_NONE);
-    ctx->gl.ReadBuffer(GL_NONE);
-    ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-
-    ctx->shadow_program =
-        sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_shadow_vert, sdl3d_shader_shadow_frag, ctx->is_es);
-    if (ctx->shadow_program != 0)
-    {
-        ctx->shadow_mvp_loc = ctx->gl.GetUniformLocation(ctx->shadow_program, "uMVP");
-    }
-
     ctx->copy_texture_loc = ctx->gl.GetUniformLocation(ctx->copy_program, "uScene");
     ctx->postprocess_scene_loc = ctx->gl.GetUniformLocation(ctx->postprocess_program, "uScene");
     ctx->postprocess_texel_size_loc = ctx->gl.GetUniformLocation(ctx->postprocess_program, "uTexelSize");
@@ -987,17 +966,9 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     {
         ctx->gl.DeleteTextures(1, &ctx->white_texture);
     }
-    if (ctx->shadow_fbo)
+    if (ctx->shadow_texture)
     {
-        ctx->gl.DeleteFramebuffers(1, &ctx->shadow_fbo);
-    }
-    if (ctx->shadow_depth_tex)
-    {
-        ctx->gl.DeleteTextures(1, &ctx->shadow_depth_tex);
-    }
-    if (ctx->shadow_program)
-    {
-        ctx->gl.DeleteProgram(ctx->shadow_program);
+        ctx->gl.DeleteTextures(1, &ctx->shadow_texture);
     }
     sdl3d_gl_destroy_texture_cache(ctx);
     sdl3d_gl_delete_stream_buffers(&ctx->gl, &ctx->unlit_buffers);
@@ -1283,32 +1254,6 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *
         return;
     }
 
-    /* During shadow pass: render depth only with shadow program. */
-    if (ctx->in_shadow_pass && ctx->shadow_program != 0)
-    {
-        gl = &ctx->gl;
-        buffers = &ctx->lit_buffers;
-        gl->UseProgram(ctx->shadow_program);
-        gl->UniformMatrix4fv(ctx->shadow_mvp_loc, 1, GL_FALSE, mvp);
-        gl->BindVertexArray(buffers->vao);
-        gl->BindBuffer(GL_ARRAY_BUFFER, buffers->position_vbo);
-        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 3 * sizeof(float)), positions,
-                       GL_DYNAMIC_DRAW);
-        if (indices != NULL && index_count > 0)
-        {
-            gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers->index_ebo);
-            gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)index_count * sizeof(unsigned int)), indices,
-                           GL_DYNAMIC_DRAW);
-            gl->DrawElements(GL_TRIANGLES, (GLsizei)index_count, GL_UNSIGNED_INT, NULL);
-        }
-        else
-        {
-            gl->DrawArrays(GL_TRIANGLES, 0, (GLsizei)vertex_count);
-        }
-        gl->BindVertexArray(0);
-        return;
-    }
-
     ctx->lit_draw_calls += 1;
 
     gl = &ctx->gl;
@@ -1415,17 +1360,17 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *
     gl->Uniform1i(cache ? cache->texture_loc : gl->GetUniformLocation(program, "uTexture"), 0);
     gl->Uniform1i(cache ? cache->has_texture_loc : gl->GetUniformLocation(program, "uHasTexture"), has_texture ? 1 : 0);
 
-    /* Shadow map: bind the GPU depth texture if shadow pass was completed. */
-    if (program == ctx->lit_program && !ctx->in_shadow_pass && ctx->shadow_depth_tex != 0 &&
-        ctx->shadow_vp_matrix[0] != 0.0f)
+    /* Shadow map uniforms. */
+    if (program == ctx->lit_program && params->shadow_depth_data != NULL)
     {
-        gl->ActiveTexture(GL_TEXTURE0 + 1);
-        gl->BindTexture(GL_TEXTURE_2D, ctx->shadow_depth_tex);
+        ctx->gl.ActiveTexture(GL_TEXTURE0 + 1);
+        ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->shadow_texture);
+        ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 512, 512, GL_RED, GL_FLOAT, params->shadow_depth_data);
         gl->Uniform1i(ctx->lit_shadow_map_loc, 1);
-        gl->UniformMatrix4fv(ctx->lit_shadow_vp_loc, 1, GL_FALSE, ctx->shadow_vp_matrix);
+        gl->UniformMatrix4fv(ctx->lit_shadow_vp_loc, 1, GL_FALSE, params->shadow_vp);
         gl->Uniform1i(ctx->lit_shadow_enabled_loc, 1);
-        gl->Uniform1f(ctx->lit_shadow_bias_loc, ctx->shadow_bias_value);
-        gl->ActiveTexture(GL_TEXTURE0);
+        gl->Uniform1f(ctx->lit_shadow_bias_loc, params->shadow_bias);
+        ctx->gl.ActiveTexture(GL_TEXTURE0);
     }
     else if (program == ctx->lit_program)
     {
@@ -1557,47 +1502,4 @@ void sdl3d_gl_post_process(sdl3d_gl_context *ctx, int effects, float bloom_thres
     gl->Viewport(0, 0, ctx->logical_width, ctx->logical_height);
     sdl3d_gl_debug_log_pixel(ctx, GL_FRAMEBUFFER, ctx->fbo, ctx->logical_width, ctx->logical_height,
                              "after-postprocess");
-}
-
-/* ------------------------------------------------------------------ */
-/* Shadow pass                                                         */
-/* ------------------------------------------------------------------ */
-
-void sdl3d_gl_begin_shadow_pass(sdl3d_gl_context *ctx, const float *light_vp, float bias)
-{
-    if (ctx == NULL || light_vp == NULL || ctx->shadow_fbo == 0)
-    {
-        return;
-    }
-
-    SDL_memcpy(ctx->shadow_vp_matrix, light_vp, 16 * sizeof(float));
-    ctx->shadow_bias_value = bias;
-    ctx->in_shadow_pass = true;
-
-    /* Bind shadow FBO, clear depth, set viewport. */
-    ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
-    ctx->gl.Viewport(0, 0, 1024, 1024);
-    ctx->gl.Clear(GL_DEPTH_BUFFER_BIT);
-    ctx->gl.Enable(GL_DEPTH_TEST);
-    /* Cull front faces: only back faces write to the shadow map.
-     * This eliminates self-shadowing (shadow acne) entirely because
-     * the stored depth is always behind the lit surface. */
-    ctx->gl.Enable(GL_CULL_FACE);
-    ctx->gl.CullFace(GL_FRONT);
-}
-
-void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx)
-{
-    if (ctx == NULL)
-    {
-        return;
-    }
-
-    ctx->in_shadow_pass = false;
-
-    /* Restore main FBO. */
-    ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-    ctx->gl.Viewport(0, 0, ctx->logical_width, ctx->logical_height);
-    ctx->gl.CullFace(GL_BACK);
-    ctx->gl.Enable(GL_CULL_FACE);
 }

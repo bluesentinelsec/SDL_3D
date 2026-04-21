@@ -29,7 +29,6 @@ typedef unsigned int GLbitfield;
 #define GL_DEPTH_TEST 0x0B71
 #define GL_CULL_FACE 0x0B44
 #define GL_BACK 0x0405
-#define GL_FRONT 0x0404
 #define GL_CW 0x0900
 #define GL_CCW 0x0901
 #define GL_LESS 0x0201
@@ -66,7 +65,6 @@ typedef unsigned int GLbitfield;
 #define GL_DEPTH_COMPONENT 0x1902
 #define GL_DEPTH_COMPONENT16 0x81A5
 #define GL_DEPTH_COMPONENT24 0x81A6
-#define GL_NONE 0
 #define GL_RENDERBUFFER 0x8D41
 #define GL_FRAMEBUFFER_COMPLETE 0x8CD5
 #define GL_BLEND 0x0BE2
@@ -83,8 +81,6 @@ typedef void (*PFNGLENABLEPROC)(GLenum);
 typedef void (*PFNGLDISABLEPROC)(GLenum);
 typedef void (*PFNGLDEPTHFUNCPROC)(GLenum);
 typedef void (*PFNGLCULLFACEPROC)(GLenum);
-typedef void (*PFNGLDRAWBUFFERPROC)(GLenum);
-typedef void (*PFNGLREADBUFFERPROC)(GLenum);
 typedef void (*PFNGLFRONTFACEPROC)(GLenum);
 typedef void (*PFNGLVIEWPORTPROC)(GLint, GLint, GLsizei, GLsizei);
 typedef void (*PFNGLBLENDFUNCPROC)(GLenum, GLenum);
@@ -153,8 +149,6 @@ typedef struct sdl3d_gl_funcs
     PFNGLDISABLEPROC Disable;
     PFNGLDEPTHFUNCPROC DepthFunc;
     PFNGLCULLFACEPROC CullFace;
-    PFNGLDRAWBUFFERPROC DrawBuffer;
-    PFNGLREADBUFFERPROC ReadBuffer;
     PFNGLFRONTFACEPROC FrontFace;
     PFNGLVIEWPORTPROC Viewport;
     PFNGLBLENDFUNCPROC BlendFunc;
@@ -233,8 +227,6 @@ static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
     LOAD(Disable);
     LOAD(DepthFunc);
     LOAD(CullFace);
-    LOAD(DrawBuffer);
-    LOAD(ReadBuffer);
     LOAD(FrontFace);
     LOAD(Viewport);
     LOAD(BlendFunc);

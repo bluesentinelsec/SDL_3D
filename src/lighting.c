@@ -5,7 +5,6 @@
 
 #include "sdl3d/model.h"
 
-#include "gl_backend.h"
 #include "render_context_internal.h"
 
 bool sdl3d_add_light(sdl3d_render_context *context, const sdl3d_light *light)
@@ -535,72 +534,4 @@ sdl3d_render_profile sdl3d_profile_snes(void)
     p.color_quantize = true;
     p.color_depth = 32;
     return p;
-}
-
-/* ------------------------------------------------------------------ */
-/* Shadow pass (two-pass API)                                          */
-/* ------------------------------------------------------------------ */
-
-bool sdl3d_begin_shadow_pass(sdl3d_render_context *context)
-{
-    if (context == NULL)
-    {
-        return SDL_InvalidParamError("context");
-    }
-    if (context->in_mode_3d)
-    {
-        return SDL_SetError("sdl3d_begin_shadow_pass cannot be called inside begin_mode_3d/end_mode_3d.");
-    }
-    if (!context->shadow_enabled[0])
-    {
-        return SDL_SetError("No shadow-enabled light. Call sdl3d_enable_shadow first.");
-    }
-
-    context->in_shadow_pass = true;
-
-    /* Ensure model stack is allocated. */
-    if (context->model_stack == NULL)
-    {
-        context->model_stack = (sdl3d_mat4 *)SDL_malloc(8 * sizeof(sdl3d_mat4));
-        if (context->model_stack == NULL)
-        {
-            context->in_shadow_pass = false;
-            return SDL_OutOfMemory();
-        }
-        context->model_stack_capacity = 8;
-    }
-
-    /* Set up matrices to render from the light's POV. */
-    context->view_projection = context->shadow_vp[0];
-    context->model_stack_depth = 1;
-    context->model_stack[0] = sdl3d_mat4_identity();
-    context->model = sdl3d_mat4_identity();
-    context->model_view_projection = context->shadow_vp[0];
-    context->in_mode_3d = true;
-
-    if (context->gl != NULL)
-    {
-        sdl3d_gl_begin_shadow_pass(context->gl, context->shadow_vp[0].m,
-                                   context->shadow_bias > 0 ? context->shadow_bias : 0.02f);
-    }
-
-    return true;
-}
-
-bool sdl3d_end_shadow_pass(sdl3d_render_context *context)
-{
-    if (context == NULL)
-    {
-        return SDL_InvalidParamError("context");
-    }
-
-    context->in_shadow_pass = false;
-    context->in_mode_3d = false;
-
-    if (context->gl != NULL)
-    {
-        sdl3d_gl_end_shadow_pass(context->gl);
-    }
-
-    return true;
 }

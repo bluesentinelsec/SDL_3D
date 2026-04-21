@@ -194,7 +194,6 @@ static const char *sdl3d_shader_lit_frag = SDL3D_GLSL_VERSION
     "    }\n"
     "\n"
     "    /* Shadow map sampling for directional light (light 0). */\n"
-    "    /* Shadow map sampling for directional light (light 0). */\n"
     "    if (uShadowEnabled != 0) {\n"
     "        vec4 lpos = uShadowVP * vec4(vWorldPos, 1.0);\n"
     "        vec3 sndc = lpos.xyz / lpos.w;\n"
@@ -582,21 +581,6 @@ static const char *sdl3d_shader_snes_frag = "noperspective in vec2 vTexCoord;\n"
                                             "    color *= vec3(0.95, 0.97, 1.05);\n"
                                             "    fragColor = vec4(color, alpha);\n"
                                             "}\n";
-
-/* ================================================================== */
-/* Shadow depth pass: position-only, writes depth to FBO              */
-/* ================================================================== */
-
-static const char *sdl3d_shader_shadow_vert = "layout(location = 0) in vec3 aPosition;\n"
-                                              "uniform mat4 uMVP;\n"
-                                              "void main() {\n"
-                                              "    gl_Position = uMVP * vec4(aPosition, 1.0);\n"
-                                              "}\n";
-
-static const char *sdl3d_shader_shadow_frag = "out vec4 fragColor;\n"
-                                              "void main() {\n"
-                                              "    fragColor = vec4(1.0);\n"
-                                              "}\n";
 
 /* ================================================================== */
 /* Fullscreen shaders for present and post-processing                  */
