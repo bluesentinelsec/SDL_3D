@@ -67,6 +67,10 @@ static void draw_doom_scene(sdl3d_render_context *ctx)
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 3.5f, 8), sdl3d_vec3_make(4, 0.2f, 8), dark_ceil);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(-2, 1.75f, 8), sdl3d_vec3_make(0.3f, 3.5f, 8), wall_dark);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(2, 1.75f, 8), sdl3d_vec3_make(0.3f, 3.5f, 8), wall_dark);
+    /* Fill above corridor where it meets room 1 (step from 4 to 3.5) */
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 3.85f, 4), sdl3d_vec3_make(4, 0.5f, 0.3f), wall_dark);
+    /* Fill above corridor where it meets room 2 (step from 3.5 to 4.5) */
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 4.0f, 12), sdl3d_vec3_make(4, 1.0f, 0.3f), wall_dark);
 
     /* ROOM 2: nukage (x:-6..6, z:12..22) */
     sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, -0.5f, 17), (sdl3d_vec2){12, 10}, dark_floor);
@@ -285,7 +289,7 @@ int main(int argc, char *argv[])
     fog.density = 0.04f;
     sdl3d_set_fog(ctx, &fog);
 
-    sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 30.0f);
+    /* sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 30.0f); */
 
     {
         sdl3d_render_profile p = sdl3d_profile_modern();
@@ -302,7 +306,7 @@ int main(int argc, char *argv[])
         const bool *keys;
         float fx, fz, rx, rz;
         sdl3d_camera3d cam;
-        sdl3d_color sky = {5, 8, 15, 255};
+        sdl3d_color sky = {0, 0, 0, 255};
 
         last_time = now;
         if (dt > 0.1f)
@@ -410,7 +414,7 @@ int main(int argc, char *argv[])
         sdl3d_set_backface_culling_enabled(ctx, true);
         sdl3d_begin_mode_3d(ctx, cam);
 
-        sdl3d_draw_skybox_gradient(ctx, (sdl3d_color){3, 5, 12, 255}, (sdl3d_color){8, 12, 25, 255});
+        sdl3d_draw_skybox_gradient(ctx, (sdl3d_color){0, 0, 0, 255}, (sdl3d_color){0, 0, 0, 255});
         draw_doom_scene(ctx);
 
         /* Nukage glow emissive */
