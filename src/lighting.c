@@ -558,6 +558,18 @@ bool sdl3d_begin_shadow_pass(sdl3d_render_context *context)
 
     context->in_shadow_pass = true;
 
+    /* Ensure model stack is allocated. */
+    if (context->model_stack == NULL)
+    {
+        context->model_stack = (sdl3d_mat4 *)SDL_malloc(8 * sizeof(sdl3d_mat4));
+        if (context->model_stack == NULL)
+        {
+            context->in_shadow_pass = false;
+            return SDL_OutOfMemory();
+        }
+        context->model_stack_capacity = 8;
+    }
+
     /* Set up matrices to render from the light's POV. */
     context->view_projection = context->shadow_vp[0];
     context->model_stack_depth = 1;
