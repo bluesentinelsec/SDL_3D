@@ -603,18 +603,21 @@ int main(int argc, char *argv[])
         /* Neon signs */
         if (show_neon)
         {
-            float pulse_green = 15.0f + 10.0f * sinf(man_anim_time * 3.0f);
-            float pulse_pink = 15.0f + 10.0f * sinf(man_anim_time * 2.3f + 1.0f);
+            /* Smooth slow pulse using sin^2 for gradual transitions. */
+            float t_green = sinf(man_anim_time * 1.2f);
+            float pulse_green = 10.0f + 5.0f * t_green * t_green;
+            float t_pink = sinf(man_anim_time * 0.9f + 0.7f);
+            float pulse_pink = 12.0f + 6.0f * t_pink * t_pink;
 
-            /* Green neon on front face of building at (-8, -6), face at z=-3.5 */
-            sdl3d_set_emissive(ctx, 0.0f, pulse_green, pulse_green * 0.2f);
+            /* Green neon — keep it pure green, no white blowout */
+            sdl3d_set_emissive(ctx, 0.0f, pulse_green, 0.0f);
             sdl3d_draw_cube(ctx, sdl3d_vec3_make(-8.0f, 4.0f, -3.4f), sdl3d_vec3_make(3.0f, 1.2f, 0.15f),
-                            (sdl3d_color){0, 255, 80, 255});
+                            (sdl3d_color){10, 255, 30, 255});
 
-            /* Hot pink neon on front face of building at (8, -4), face at z=-1 */
-            sdl3d_set_emissive(ctx, pulse_pink, pulse_pink * 0.08f, pulse_pink * 0.4f);
+            /* Hot pink neon — heavy red, no green, moderate blue */
+            sdl3d_set_emissive(ctx, pulse_pink, 0.0f, pulse_pink * 0.45f);
             sdl3d_draw_cube(ctx, sdl3d_vec3_make(8.0f, 3.0f, -0.9f), sdl3d_vec3_make(2.5f, 0.8f, 0.15f),
-                            (sdl3d_color){255, 20, 100, 255});
+                            (sdl3d_color){255, 0, 115, 255});
 
             sdl3d_set_emissive(ctx, 0.0f, 0.0f, 0.0f);
         }
