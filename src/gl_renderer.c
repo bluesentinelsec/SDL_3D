@@ -151,16 +151,12 @@ struct sdl3d_gl_context
     GLuint shadow_program;
     GLint shadow_light_vp_loc;
     GLint shadow_model_loc;
-    GLint shadow_light_dir_loc;
-    GLint shadow_normal_bias_loc;
     GLuint shadow_vao;
     GLuint shadow_position_vbo;
-    GLuint shadow_normal_vbo;
     GLuint shadow_ebo;
     bool in_shadow_pass;
     float shadow_light_vp[16];
     float shadow_bias;
-    float shadow_light_dir[3];
 
     /* PBR shadow uniform locations */
     GLint pbr_shadow_map_loc;
@@ -361,22 +357,24 @@ static const char k_pbr_frag_main[] =
     "        Lo += (diff + spec) * radiance * NdotL;\n"
     "    }\n"
     "\n"
-    "    /* Shadow (PCF 3x3 for soft edges). */\n"
+    "    /* Shadow (LearnOpenGL PCF 3x3). */\n"
     "    if (uShadowEnabled != 0) {\n"
-    "        vec4 lpos = uShadowVP * vec4(vWorldPos, 1.0);\n"
-    "        vec3 proj = lpos.xyz / lpos.w * 0.5 + 0.5;\n"
-    "        if (proj.x >= 0.0 && proj.x <= 1.0 && proj.y >= 0.0 && proj.y <= 1.0 && proj.z <= 1.0) {\n"
-    "            float shadow = 0.0;\n"
-    "            vec2 texelSize = vec2(1.0 / 2048.0);\n"
-    "            for (int x = -1; x <= 1; x++) {\n"
-    "                for (int y = -1; y <= 1; y++) {\n"
-    "                    float d = texture(uShadowMap, proj.xy + vec2(x, y) * texelSize).r;\n"
-    "                    shadow += (proj.z - uShadowBias > d) ? 1.0 : 0.0;\n"
-    "                }\n"
+    "        vec3 projCoords = (uShadowVP * vec4(vWorldPos, 1.0)).xyz;\n"
+    "        projCoords = projCoords * 0.5 + 0.5;\n"
+    "        float currentDepth = projCoords.z;\n"
+    "        vec3 lightDir = normalize(-uLights[0].direction);\n"
+    "        float bias = max(0.05 * (1.0 - dot(N, lightDir)), 0.005);\n"
+    "        float shadow = 0.0;\n"
+    "        vec2 texelSize = 1.0 / vec2(2048.0);\n"
+    "        for (int x = -1; x <= 1; ++x) {\n"
+    "            for (int y = -1; y <= 1; ++y) {\n"
+    "                float pcfDepth = texture(uShadowMap, projCoords.xy + vec2(x, y) * texelSize).r;\n"
+    "                shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;\n"
     "            }\n"
-    "            shadow /= 9.0;\n"
-    "            Lo *= (1.0 - shadow);\n"
     "        }\n"
+    "        shadow /= 9.0;\n"
+    "        if (projCoords.z > 1.0) shadow = 0.0;\n"
+    "        Lo *= (1.0 - shadow);\n"
     "    }\n"
     "\n"
     "    vec3 color = uAmbient * albedo + Lo + uEmissive;\n"
@@ -451,17 +449,10 @@ static const char k_copy_frag[] = "in vec2 vTexCoord;\n"
 
 static const char k_shadow_vert[] =
     "layout(location = 0) in vec3 aPosition;\n"
-    "layout(location = 1) in vec3 aNormal;\n"
     "uniform mat4 uLightVP;\n"
     "uniform mat4 uModel;\n"
-    "uniform vec3 uLightDir;\n"
-    "uniform float uNormalBias;\n"
     "void main() {\n"
-    "    vec3 wn = normalize(mat3(uModel) * aNormal);\n"
-    "    float NdotL = dot(wn, -uLightDir);\n"
-    "    float bias = uNormalBias * sqrt(max(1.0 - NdotL * NdotL, 0.0));\n"
-    "    vec3 wp = (uModel * vec4(aPosition, 1.0)).xyz + wn * bias;\n"
-    "    gl_Position = uLightVP * vec4(wp, 1.0);\n"
+    "    gl_Position = uLightVP * uModel * vec4(aPosition, 1.0);\n"
     "}\n";
 
 static const char k_shadow_frag[] = "out vec4 fragColor;\nvoid main() { fragColor = vec4(1.0); }\n";
@@ -684,9 +675,6 @@ static void replay_draw_list_shadow(sdl3d_gl_context *ctx)
     gl->BindVertexArray(ctx->shadow_vao);
 
     gl->UniformMatrix4fv(ctx->shadow_light_vp_loc, 1, GL_FALSE, ctx->shadow_light_vp);
-    gl->Uniform3f(ctx->shadow_light_dir_loc, ctx->shadow_light_dir[0], ctx->shadow_light_dir[1],
-                  ctx->shadow_light_dir[2]);
-    gl->Uniform1f(ctx->shadow_normal_bias_loc, ctx->shadow_bias * 2.0f);
 
     for (int i = 0; i < ctx->draw_count; i++)
     {
@@ -698,9 +686,6 @@ static void replay_draw_list_shadow(sdl3d_gl_context *ctx)
 
         gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
         gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->positions,
-                       GL_DYNAMIC_DRAW);
-        gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_normal_vbo);
-        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->normals,
                        GL_DYNAMIC_DRAW);
 
         if (e->indices && e->index_count > 0)
@@ -1092,25 +1077,25 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     gl->TexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, 2048, 2048, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    {
+        float border_color[] = {1.0f, 1.0f, 1.0f, 1.0f};
+        gl->TexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, border_color);
+    }
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
     gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, ctx->shadow_depth_tex, 0);
     gl->DrawBuffer(GL_NONE);
     gl->ReadBuffer(GL_NONE);
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo); /* restore */
 
-    /* Shadow VAO: position + normal for normal-bias offset. */
+    /* Shadow VAO: position only (simple depth shader). */
     gl->GenVertexArrays(1, &ctx->shadow_vao);
     gl->BindVertexArray(ctx->shadow_vao);
     gl->GenBuffers(1, &ctx->shadow_position_vbo);
     gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
     gl->EnableVertexAttribArray(0);
     gl->VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
-    gl->GenBuffers(1, &ctx->shadow_normal_vbo);
-    gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_normal_vbo);
-    gl->EnableVertexAttribArray(1);
-    gl->VertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, NULL);
     gl->GenBuffers(1, &ctx->shadow_ebo);
     gl->BindVertexArray(0);
 
@@ -1120,8 +1105,6 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     {
         ctx->shadow_light_vp_loc = gl->GetUniformLocation(ctx->shadow_program, "uLightVP");
         ctx->shadow_model_loc = gl->GetUniformLocation(ctx->shadow_program, "uModel");
-        ctx->shadow_light_dir_loc = gl->GetUniformLocation(ctx->shadow_program, "uLightDir");
-        ctx->shadow_normal_bias_loc = gl->GetUniformLocation(ctx->shadow_program, "uNormalBias");
     }
 
     gl->BindVertexArray(0);
@@ -1202,8 +1185,8 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     if (ctx->shadow_depth_tex)
         gl->DeleteTextures(1, &ctx->shadow_depth_tex);
     {
-        GLuint shadow_bufs[] = {ctx->shadow_position_vbo, ctx->shadow_normal_vbo, ctx->shadow_ebo};
-        gl->DeleteBuffers(3, shadow_bufs);
+        GLuint shadow_bufs[] = {ctx->shadow_position_vbo, ctx->shadow_ebo};
+        gl->DeleteBuffers(2, shadow_bufs);
     }
     if (ctx->shadow_vao)
         gl->DeleteVertexArrays(1, &ctx->shadow_vao);
@@ -1243,16 +1226,6 @@ static bool gl_clear(sdl3d_render_context *context, sdl3d_color color)
     {
         SDL_memcpy(ctx->shadow_light_vp, context->shadow_vp[0].m, 16 * sizeof(float));
         ctx->shadow_bias = context->shadow_bias > 0 ? context->shadow_bias : 0.005f;
-        float dx = context->lights[0].direction.x;
-        float dy = context->lights[0].direction.y;
-        float dz = context->lights[0].direction.z;
-        float len = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
-        if (len > 0.0f)
-        {
-            ctx->shadow_light_dir[0] = dx / len;
-            ctx->shadow_light_dir[1] = dy / len;
-            ctx->shadow_light_dir[2] = dz / len;
-        }
     }
 
     SDL_GL_MakeCurrent(ctx->window, ctx->gl_context);
@@ -1334,9 +1307,7 @@ void sdl3d_gl_begin_shadow_pass(sdl3d_gl_context *ctx, const float *light_vp, fl
     gl->Viewport(0, 0, 2048, 2048);
     gl->Clear(GL_DEPTH_BUFFER_BIT);
     gl->Enable(GL_DEPTH_TEST);
-    /* Lesson #6: cull front faces so back faces write depth. */
-    gl->Enable(GL_CULL_FACE);
-    gl->CullFace(GL_FRONT);
+    gl->Disable(GL_CULL_FACE);
 }
 
 void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx)
@@ -1349,6 +1320,7 @@ void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx)
     /* Restore main FBO and normal culling. */
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
     gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+    gl->Enable(GL_CULL_FACE);
     gl->CullFace(GL_BACK);
 }
 
@@ -1367,13 +1339,13 @@ static bool gl_present(sdl3d_render_context *context)
         gl->Viewport(0, 0, 2048, 2048);
         gl->Clear(GL_DEPTH_BUFFER_BIT);
         gl->Enable(GL_DEPTH_TEST);
-        gl->Enable(GL_CULL_FACE);
-        gl->CullFace(GL_FRONT);
+        gl->Disable(GL_CULL_FACE);
 
         replay_draw_list_shadow(ctx);
 
         gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
         gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+        gl->Enable(GL_CULL_FACE);
         gl->CullFace(GL_BACK);
     }
 
@@ -1459,11 +1431,11 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
             gl->Viewport(0, 0, 2048, 2048);
             gl->Clear(GL_DEPTH_BUFFER_BIT);
             gl->Enable(GL_DEPTH_TEST);
-            gl->Enable(GL_CULL_FACE);
-            gl->CullFace(GL_FRONT);
+            gl->Disable(GL_CULL_FACE);
             replay_draw_list_shadow(ctx);
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
             gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+            gl->Enable(GL_CULL_FACE);
             gl->CullFace(GL_BACK);
         }
         replay_draw_list_geometry(ctx);

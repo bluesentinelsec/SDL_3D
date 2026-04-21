@@ -77,6 +77,8 @@ typedef unsigned int GLbitfield;
 #define GL_NONE 0
 #define GL_FRONT 0x0404
 #define GL_NO_ERROR 0
+#define GL_CLAMP_TO_BORDER 0x812D
+#define GL_TEXTURE_BORDER_COLOR 0x1004
 
 /* Function pointer types. */
 typedef void (*PFNGLCLEARPROC)(GLbitfield);
@@ -127,6 +129,7 @@ typedef void (*PFNGLGENTEXTURESPROC)(GLsizei, GLuint *);
 typedef void (*PFNGLBINDTEXTUREPROC)(GLenum, GLuint);
 typedef void (*PFNGLTEXIMAGE2DPROC)(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const void *);
 typedef void (*PFNGLTEXPARAMETERIPROC)(GLenum, GLenum, GLint);
+typedef void (*PFNGLTEXPARAMETERFVPROC)(GLenum, GLenum, const GLfloat *);
 typedef void (*PFNGLDELETETEXTURESPROC)(GLsizei, const GLuint *);
 typedef void (*PFNGLACTIVETEXTUREPROC)(GLenum);
 typedef void (*PFNGLGENFRAMEBUFFERSPROC)(GLsizei, GLuint *);
@@ -200,6 +203,7 @@ typedef struct sdl3d_gl_funcs
     PFNGLBINDTEXTUREPROC BindTexture;
     PFNGLTEXIMAGE2DPROC TexImage2D;
     PFNGLTEXPARAMETERIPROC TexParameteri;
+    PFNGLTEXPARAMETERFVPROC TexParameterfv;
     PFNGLDELETETEXTURESPROC DeleteTextures;
     PFNGLACTIVETEXTUREPROC ActiveTexture;
     PFNGLGENFRAMEBUFFERSPROC GenFramebuffers;
@@ -283,6 +287,7 @@ static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
     LOAD(BindTexture);
     LOAD(TexImage2D);
     LOAD(TexParameteri);
+    LOAD(TexParameterfv);
     LOAD(DeleteTextures);
     LOAD(ActiveTexture);
     LOAD(GenFramebuffers);
