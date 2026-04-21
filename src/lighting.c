@@ -581,7 +581,7 @@ bool sdl3d_begin_shadow_pass(sdl3d_render_context *context)
     if (context->gl != NULL)
     {
         sdl3d_gl_begin_shadow_pass(context->gl, context->shadow_vp[0].m,
-                                   context->shadow_bias > 0 ? context->shadow_bias : 0.005f);
+                                   context->shadow_bias > 0 ? context->shadow_bias : 0.02f);
     }
 
     return true;
