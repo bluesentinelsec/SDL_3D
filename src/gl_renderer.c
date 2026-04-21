@@ -143,8 +143,33 @@ static const char k_pbr_vert[] =
     "layout(location = 2) in vec2 aTexCoord;\n"
     "layout(location = 3) in vec4 aColor;\n"
     "\n"
+    "#define MAX_LIGHTS 8\n"
+    "struct Light {\n"
+    "    int type;\n"
+    "    vec3 position;\n"
+    "    vec3 direction;\n"
+    "    vec3 color;\n"
+    "    float intensity;\n"
+    "    float range;\n"
+    "    float innerCutoff;\n"
+    "    float outerCutoff;\n"
+    "};\n"
+    "layout(std140) uniform SceneUBO {\n"
+    "    mat4 uViewProjection;\n"
+    "    vec3 uCameraPos;\n"
+    "    float _pad0;\n"
+    "    vec3 uAmbient;\n"
+    "    int uLightCount;\n"
+    "    Light uLights[MAX_LIGHTS];\n"
+    "    int uFogMode;\n"
+    "    float uFogStart;\n"
+    "    float uFogEnd;\n"
+    "    float uFogDensity;\n"
+    "    vec3 uFogColor;\n"
+    "    int uTonemapMode;\n"
+    "};\n"
+    "\n"
     "uniform mat4 uModel;\n"
-    "uniform mat4 uViewProjection;\n"
     "uniform mat3 uNormalMatrix;\n"
     "\n"
     "out vec3 vWorldPos;\n"
@@ -567,6 +592,15 @@ static void flush_scene_ubo(sdl3d_gl_context *ctx)
     sdl3d_gl_funcs *gl = &ctx->gl;
     gl->BindBuffer(GL_UNIFORM_BUFFER, ctx->scene_ubo);
     gl->BufferData(GL_UNIFORM_BUFFER, (GLsizeiptr)sizeof(ubo), &ubo, GL_DYNAMIC_DRAW);
+    gl->BindBufferBase(GL_UNIFORM_BUFFER, 0, ctx->scene_ubo);
+
+    if (ctx->frame_index <= 2)
+    {
+        SDL_Log("SDL3D GL UBO flush frame=%llu lights=%d vp[0]=%.3f vp[5]=%.3f cam=(%.1f,%.1f,%.1f)",
+                (unsigned long long)ctx->frame_index, ubo.light_count,
+                ubo.view_projection[0], ubo.view_projection[5],
+                ubo.camera_pos[0], ubo.camera_pos[1], ubo.camera_pos[2]);
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -726,9 +760,15 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     gl->DepthFunc(GL_LEQUAL);
     gl->Enable(GL_CULL_FACE);
     gl->CullFace(GL_BACK);
-    gl->FrontFace(GL_CCW);
+    gl->FrontFace(GL_CW);
+    /* DIAGNOSTIC: disable culling entirely to rule out winding issues */
+    gl->Disable(GL_CULL_FACE);
 
     SDL_Log("SDL3D GL create: ctx=%p logical=%dx%d fbo=%u", (void *)ctx, width, height, ctx->fbo);
+    SDL_Log("SDL3D GL renderer created: %dx%d pbr=%u unlit=%u copy=%u fbo=%u ubo=%u",
+            width, height, ctx->pbr_program, ctx->unlit_program, ctx->copy_program,
+            ctx->fbo, ctx->scene_ubo);
+
     return ctx;
 }
 
@@ -799,6 +839,12 @@ static bool gl_draw_mesh_unlit(sdl3d_render_context *context, const sdl3d_draw_p
 
     gl->UseProgram(ctx->unlit_program);
 
+    if (ctx->frame_index <= 2)
+    {
+        SDL_Log("SDL3D GL draw_unlit frame=%llu verts=%d idx=%d",
+                (unsigned long long)ctx->frame_index, params->vertex_count, params->index_count);
+    }
+
     /* MVP */
     gl->UniformMatrix4fv(ctx->unlit_mvp_loc, 1, GL_FALSE, params->mvp);
 
@@ -853,6 +899,15 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     flush_scene_ubo(ctx);
 
     gl->UseProgram(ctx->pbr_program);
+
+    if (ctx->frame_index <= 2)
+    {
+        GLenum err = gl->GetError();
+        SDL_Log("SDL3D GL draw_lit frame=%llu verts=%d idx=%d program=%u err=0x%x model[12..14]=(%.1f,%.1f,%.1f)",
+                (unsigned long long)ctx->frame_index, params->vertex_count, params->index_count,
+                ctx->pbr_program, (unsigned)err,
+                params->model_matrix[12], params->model_matrix[13], params->model_matrix[14]);
+    }
 
     /* Per-draw uniforms */
     gl->UniformMatrix4fv(ctx->pbr_model_loc, 1, GL_FALSE, params->model_matrix);
@@ -932,12 +987,14 @@ static bool gl_present(sdl3d_render_context *context)
 
     /* Draw fullscreen triangle sampling the FBO color attachment. */
     gl->Disable(GL_DEPTH_TEST);
+    gl->Disable(GL_CULL_FACE);
     gl->UseProgram(ctx->copy_program);
     gl->ActiveTexture(GL_TEXTURE0);
     gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
     gl->Uniform1i(ctx->copy_texture_loc, 0);
     gl->BindVertexArray(ctx->fullscreen_vao);
     gl->DrawArrays(GL_TRIANGLES, 0, 3);
+    gl->Enable(GL_CULL_FACE);
     gl->Enable(GL_DEPTH_TEST);
 
     SDL_GL_SwapWindow(ctx->window);
