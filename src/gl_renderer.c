@@ -370,7 +370,9 @@ static const char k_pbr_frag_main[] =
     "        vec3 diff = kD * albedo / PI;\n"
     "\n"
     "        Lo += (diff + spec) * radiance * NdotL;\n"
-    "    }\n"
+    "    }\n";
+
+static const char k_pbr_frag_post[] =
     "\n"
     "    /* Shadow (CSM cascade selection with PCF 3x3). */\n"
     "    if (uShadowEnabled != 0) {\n"
@@ -401,7 +403,12 @@ static const char k_pbr_frag_main[] =
     "        Lo *= (1.0 - shadow);\n"
     "    }\n"
     "\n"
-    "    vec3 color = uAmbient * albedo + Lo + uEmissive;\n"
+    "    /* Hemisphere ambient: sky color from above, ground bounce from below. */\n"
+    "    vec3 skyColor = uAmbient * 1.2;\n"
+    "    vec3 groundColor = uAmbient * vec3(0.6, 0.5, 0.4);\n"
+    "    float hemi = dot(N, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5;\n"
+    "    vec3 ambient = mix(groundColor, skyColor, hemi) * albedo;\n"
+    "    vec3 color = ambient + Lo + uEmissive;\n"
     "\n"
     "    if (uFogMode > 0) {\n"
     "        float dist = length(uCameraPos - vWorldPos);\n"
@@ -1145,8 +1152,8 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     /* PBR frag is split into two arrays to stay under C99 string length limits. */
     {
         GLuint vs = compile_shader(gl, GL_VERTEX_SHADER, version_prefix, k_pbr_vert);
-        const char *frag_srcs[3] = {version_prefix, k_pbr_frag_decl, k_pbr_frag_main};
-        GLuint fs = vs ? compile_shader_multi(gl, GL_FRAGMENT_SHADER, 3, frag_srcs) : 0;
+        const char *frag_srcs[4] = {version_prefix, k_pbr_frag_decl, k_pbr_frag_main, k_pbr_frag_post};
+        GLuint fs = vs ? compile_shader_multi(gl, GL_FRAGMENT_SHADER, 4, frag_srcs) : 0;
         ctx->pbr_program = (vs && fs) ? link_program(gl, vs, fs) : 0;
         if (vs)
             gl->DeleteShader(vs);
