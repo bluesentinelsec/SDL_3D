@@ -21,4 +21,8 @@ void sdl3d_gl_post_process(sdl3d_gl_context *ctx, int effects, float bloom_thres
  * Used for automated testing. */
 void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgba);
 
+/* Shadow pass control. */
+void sdl3d_gl_begin_shadow_pass(sdl3d_gl_context *ctx, const float *light_vp, float bias);
+void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx);
+
 #endif

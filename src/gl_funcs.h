@@ -74,6 +74,8 @@ typedef unsigned int GLbitfield;
 #define GL_R32F 0x822E
 #define GL_UNIFORM_BUFFER 0x8A11
 #define GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT 0x8A34
+#define GL_NONE 0
+#define GL_FRONT 0x0404
 #define GL_NO_ERROR 0
 
 /* Function pointer types. */
@@ -144,6 +146,8 @@ typedef void (*PFNGLTEXSUBIMAGE2DPROC)(GLenum, GLint, GLint, GLint, GLsizei, GLs
 typedef void (*PFNGLBINDBUFFERBASEPROC)(GLenum, GLuint, GLuint);
 typedef void (*PFNGLUNIFORMBLOCKBINDINGPROC)(GLuint, GLuint, GLuint);
 typedef GLuint (*PFNGLGETUNIFORMBLOCKINDEXPROC)(GLuint, const char *);
+typedef void (*PFNGLDRAWBUFFERPROC)(GLenum);
+typedef void (*PFNGLREADBUFFERPROC)(GLenum);
 
 /* Global function pointers. */
 typedef struct sdl3d_gl_funcs
@@ -215,6 +219,8 @@ typedef struct sdl3d_gl_funcs
     PFNGLBINDBUFFERBASEPROC BindBufferBase;
     PFNGLUNIFORMBLOCKBINDINGPROC UniformBlockBinding;
     PFNGLGETUNIFORMBLOCKINDEXPROC GetUniformBlockIndex;
+    PFNGLDRAWBUFFERPROC DrawBuffer;
+    PFNGLREADBUFFERPROC ReadBuffer;
 } sdl3d_gl_funcs;
 
 static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
@@ -296,6 +302,8 @@ static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
     LOAD(BindBufferBase);
     LOAD(UniformBlockBinding);
     LOAD(GetUniformBlockIndex);
+    LOAD(DrawBuffer);
+    LOAD(ReadBuffer);
 #undef LOAD
     return true;
 }

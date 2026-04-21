@@ -120,6 +120,25 @@ struct sdl3d_gl_context
     GLuint unlit_ebo;
 
     GLuint fullscreen_vao;
+
+    /* Shadow mapping */
+    GLuint shadow_fbo;
+    GLuint shadow_depth_tex;
+    GLuint shadow_program;
+    GLint shadow_light_mvp_loc;
+    GLuint shadow_vao;
+    GLuint shadow_position_vbo;
+    GLuint shadow_ebo;
+    bool in_shadow_pass;
+    float shadow_light_vp[16];
+    float shadow_bias;
+
+    /* PBR shadow uniform locations */
+    GLint pbr_shadow_map_loc;
+    GLint pbr_shadow_vp_loc;
+    GLint pbr_shadow_enabled_loc;
+    GLint pbr_shadow_bias_loc;
+
     GLuint white_texture;
 
     sdl3d_gl_tex_entry *tex_cache;
@@ -189,66 +208,71 @@ static const char k_pbr_vert[] = "layout(location = 0) in vec3 aPosition;\n"
                                  "    gl_Position = uViewProjection * worldPos;\n"
                                  "}\n";
 
-static const char k_pbr_frag[] =
-    "#define MAX_LIGHTS 8\n"
-    "#define PI 3.14159265\n"
-    "\n"
-    "struct Light {\n"
-    "    int type;\n"
-    "    vec3 position;\n"
-    "    vec3 direction;\n"
-    "    vec3 color;\n"
-    "    float intensity;\n"
-    "    float range;\n"
-    "    float innerCutoff;\n"
-    "    float outerCutoff;\n"
-    "};\n"
-    "\n"
-    "layout(std140) uniform SceneUBO {\n"
-    "    mat4 uViewProjection;\n"
-    "    vec3 uCameraPos;\n"
-    "    float _pad0;\n"
-    "    vec3 uAmbient;\n"
-    "    int uLightCount;\n"
-    "    Light uLights[MAX_LIGHTS];\n"
-    "    int uFogMode;\n"
-    "    float uFogStart;\n"
-    "    float uFogEnd;\n"
-    "    float uFogDensity;\n"
-    "    vec3 uFogColor;\n"
-    "    int uTonemapMode;\n"
-    "};\n"
-    "\n"
-    "in vec3 vWorldPos;\n"
-    "in vec3 vWorldNormal;\n"
-    "in vec2 vTexCoord;\n"
-    "in vec4 vColor;\n"
-    "\n"
-    "uniform sampler2D uTexture;\n"
-    "uniform int uHasTexture;\n"
-    "uniform vec4 uTint;\n"
-    "uniform float uMetallic;\n"
-    "uniform float uRoughness;\n"
-    "uniform vec3 uEmissive;\n"
-    "\n"
-    "out vec4 fragColor;\n"
-    "\n"
-    "float DistributionGGX(float NdotH, float r) {\n"
-    "    float a = r * r;\n"
-    "    float a2 = a * a;\n"
-    "    float d = NdotH * NdotH * (a2 - 1.0) + 1.0;\n"
-    "    return a2 / (PI * d * d + 0.0001);\n"
-    "}\n"
-    "\n"
-    "float GeometrySchlickGGX(float NdotV, float r) {\n"
-    "    float k = (r + 1.0) * (r + 1.0) / 8.0;\n"
-    "    return NdotV / (NdotV * (1.0 - k) + k + 0.0001);\n"
-    "}\n"
-    "\n"
-    "vec3 FresnelSchlick(float cosTheta, vec3 F0) {\n"
-    "    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);\n"
-    "}\n"
-    "\n"
+static const char k_pbr_frag_decl[] = "#define MAX_LIGHTS 8\n"
+                                      "#define PI 3.14159265\n"
+                                      "\n"
+                                      "struct Light {\n"
+                                      "    int type;\n"
+                                      "    vec3 position;\n"
+                                      "    vec3 direction;\n"
+                                      "    vec3 color;\n"
+                                      "    float intensity;\n"
+                                      "    float range;\n"
+                                      "    float innerCutoff;\n"
+                                      "    float outerCutoff;\n"
+                                      "};\n"
+                                      "\n"
+                                      "layout(std140) uniform SceneUBO {\n"
+                                      "    mat4 uViewProjection;\n"
+                                      "    vec3 uCameraPos;\n"
+                                      "    float _pad0;\n"
+                                      "    vec3 uAmbient;\n"
+                                      "    int uLightCount;\n"
+                                      "    Light uLights[MAX_LIGHTS];\n"
+                                      "    int uFogMode;\n"
+                                      "    float uFogStart;\n"
+                                      "    float uFogEnd;\n"
+                                      "    float uFogDensity;\n"
+                                      "    vec3 uFogColor;\n"
+                                      "    int uTonemapMode;\n"
+                                      "};\n"
+                                      "\n"
+                                      "in vec3 vWorldPos;\n"
+                                      "in vec3 vWorldNormal;\n"
+                                      "in vec2 vTexCoord;\n"
+                                      "in vec4 vColor;\n"
+                                      "\n"
+                                      "uniform sampler2D uTexture;\n"
+                                      "uniform int uHasTexture;\n"
+                                      "uniform vec4 uTint;\n"
+                                      "uniform float uMetallic;\n"
+                                      "uniform float uRoughness;\n"
+                                      "uniform vec3 uEmissive;\n"
+                                      "\n"
+                                      "uniform sampler2D uShadowMap;\n"
+                                      "uniform mat4 uShadowVP;\n"
+                                      "uniform int uShadowEnabled;\n"
+                                      "uniform float uShadowBias;\n"
+                                      "\n"
+                                      "out vec4 fragColor;\n"
+                                      "\n"
+                                      "float DistributionGGX(float NdotH, float r) {\n"
+                                      "    float a = r * r;\n"
+                                      "    float a2 = a * a;\n"
+                                      "    float d = NdotH * NdotH * (a2 - 1.0) + 1.0;\n"
+                                      "    return a2 / (PI * d * d + 0.0001);\n"
+                                      "}\n"
+                                      "\n"
+                                      "float GeometrySchlickGGX(float NdotV, float r) {\n"
+                                      "    float k = (r + 1.0) * (r + 1.0) / 8.0;\n"
+                                      "    return NdotV / (NdotV * (1.0 - k) + k + 0.0001);\n"
+                                      "}\n"
+                                      "\n"
+                                      "vec3 FresnelSchlick(float cosTheta, vec3 F0) {\n"
+                                      "    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);\n"
+                                      "}\n";
+
+static const char k_pbr_frag_main[] =
     "void main() {\n"
     "    vec2 uv = vec2(vTexCoord.x, 1.0 - vTexCoord.y);\n"
     "    vec4 texel = (uHasTexture != 0) ? texture(uTexture, uv) : vec4(1.0);\n"
@@ -301,6 +325,24 @@ static const char k_pbr_frag[] =
     "        vec3 diff = kD * albedo / PI;\n"
     "\n"
     "        Lo += (diff + spec) * radiance * NdotL;\n"
+    "    }\n"
+    "\n"
+    "    /* Shadow (PCF 3x3 for soft edges). */\n"
+    "    if (uShadowEnabled != 0) {\n"
+    "        vec4 lpos = uShadowVP * vec4(vWorldPos, 1.0);\n"
+    "        vec3 proj = lpos.xyz / lpos.w * 0.5 + 0.5;\n"
+    "        if (proj.x >= 0.0 && proj.x <= 1.0 && proj.y >= 0.0 && proj.y <= 1.0 && proj.z <= 1.0) {\n"
+    "            float shadow = 0.0;\n"
+    "            vec2 texelSize = vec2(1.0 / 2048.0);\n"
+    "            for (int x = -1; x <= 1; x++) {\n"
+    "                for (int y = -1; y <= 1; y++) {\n"
+    "                    float d = texture(uShadowMap, proj.xy + vec2(x, y) * texelSize).r;\n"
+    "                    shadow += (proj.z - uShadowBias > d) ? 1.0 : 0.0;\n"
+    "                }\n"
+    "            }\n"
+    "            shadow /= 9.0;\n"
+    "            Lo *= (1.0 - shadow);\n"
+    "        }\n"
     "    }\n"
     "\n"
     "    vec3 color = uAmbient * albedo + Lo + uEmissive;\n"
@@ -373,6 +415,14 @@ static const char k_copy_frag[] = "in vec2 vTexCoord;\n"
                                   "    fragColor = texture(uScene, vTexCoord);\n"
                                   "}\n";
 
+static const char k_shadow_vert[] = "layout(location = 0) in vec3 aPosition;\n"
+                                    "uniform mat4 uLightMVP;\n"
+                                    "void main() {\n"
+                                    "    gl_Position = uLightMVP * vec4(aPosition, 1.0);\n"
+                                    "}\n";
+
+static const char k_shadow_frag[] = "void main() {}\n";
+
 /* ------------------------------------------------------------------ */
 /* Shader helpers                                                      */
 /* ------------------------------------------------------------------ */
@@ -382,6 +432,25 @@ static GLuint compile_shader(sdl3d_gl_funcs *gl, GLenum type, const char *versio
     GLuint s = gl->CreateShader(type);
     const char *srcs[2] = {version, body};
     gl->ShaderSource(s, 2, srcs, NULL);
+    gl->CompileShader(s);
+
+    GLint ok = 0;
+    gl->GetShaderiv(s, GL_COMPILE_STATUS, &ok);
+    if (!ok)
+    {
+        char buf[1024];
+        gl->GetShaderInfoLog(s, sizeof(buf), NULL, buf);
+        SDL_Log("SDL3D GL shader compile error: %s", buf);
+        gl->DeleteShader(s);
+        return 0;
+    }
+    return s;
+}
+
+static GLuint compile_shader_multi(sdl3d_gl_funcs *gl, GLenum type, int count, const char **srcs)
+{
+    GLuint s = gl->CreateShader(type);
+    gl->ShaderSource(s, count, srcs, NULL);
     gl->CompileShader(s);
 
     GLint ok = 0;
@@ -662,7 +731,17 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     const char *version_prefix = ctx->is_es ? "#version 300 es\nprecision highp float;\n" : "#version 330\n";
 
     /* Compile shader programs. */
-    ctx->pbr_program = build_program(gl, version_prefix, k_pbr_vert, k_pbr_frag);
+    /* PBR frag is split into two arrays to stay under C99 string length limits. */
+    {
+        GLuint vs = compile_shader(gl, GL_VERTEX_SHADER, version_prefix, k_pbr_vert);
+        const char *frag_srcs[3] = {version_prefix, k_pbr_frag_decl, k_pbr_frag_main};
+        GLuint fs = vs ? compile_shader_multi(gl, GL_FRAGMENT_SHADER, 3, frag_srcs) : 0;
+        ctx->pbr_program = (vs && fs) ? link_program(gl, vs, fs) : 0;
+        if (vs)
+            gl->DeleteShader(vs);
+        if (fs)
+            gl->DeleteShader(fs);
+    }
     ctx->unlit_program = build_program(gl, version_prefix, k_unlit_vert, k_unlit_frag);
     ctx->copy_program = build_program(gl, version_prefix, k_fullscreen_vert, k_copy_frag);
 
@@ -682,6 +761,12 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->pbr_metallic_loc = gl->GetUniformLocation(ctx->pbr_program, "uMetallic");
     ctx->pbr_roughness_loc = gl->GetUniformLocation(ctx->pbr_program, "uRoughness");
     ctx->pbr_emissive_loc = gl->GetUniformLocation(ctx->pbr_program, "uEmissive");
+
+    /* PBR shadow uniform locations. */
+    ctx->pbr_shadow_map_loc = gl->GetUniformLocation(ctx->pbr_program, "uShadowMap");
+    ctx->pbr_shadow_vp_loc = gl->GetUniformLocation(ctx->pbr_program, "uShadowVP");
+    ctx->pbr_shadow_enabled_loc = gl->GetUniformLocation(ctx->pbr_program, "uShadowEnabled");
+    ctx->pbr_shadow_bias_loc = gl->GetUniformLocation(ctx->pbr_program, "uShadowBias");
 
     /* Unlit uniform locations. */
     ctx->unlit_mvp_loc = gl->GetUniformLocation(ctx->unlit_program, "uMVP");
@@ -755,6 +840,38 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     /* ---- Fullscreen VAO (empty, vertex ID driven) ---- */
     gl->GenVertexArrays(1, &ctx->fullscreen_vao);
 
+    /* Shadow map: 2048x2048 depth-only FBO with its own VAO. */
+    gl->GenFramebuffers(1, &ctx->shadow_fbo);
+    gl->GenTextures(1, &ctx->shadow_depth_tex);
+    gl->BindTexture(GL_TEXTURE_2D, ctx->shadow_depth_tex);
+    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, 2048, 2048, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
+    gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, ctx->shadow_depth_tex, 0);
+    gl->DrawBuffer(GL_NONE);
+    gl->ReadBuffer(GL_NONE);
+    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo); /* restore */
+
+    /* Shadow VAO: position-only (lesson #2: never share VAOs between passes). */
+    gl->GenVertexArrays(1, &ctx->shadow_vao);
+    gl->BindVertexArray(ctx->shadow_vao);
+    gl->GenBuffers(1, &ctx->shadow_position_vbo);
+    gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
+    gl->EnableVertexAttribArray(0);
+    gl->VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    gl->GenBuffers(1, &ctx->shadow_ebo);
+    gl->BindVertexArray(0);
+
+    /* Compile shadow program. */
+    ctx->shadow_program = build_program(gl, version_prefix, k_shadow_vert, k_shadow_frag);
+    if (ctx->shadow_program)
+    {
+        ctx->shadow_light_mvp_loc = gl->GetUniformLocation(ctx->shadow_program, "uLightMVP");
+    }
+
     gl->BindVertexArray(0);
 
     /* ---- 1×1 white texture ---- */
@@ -821,6 +938,21 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
 
     if (ctx->fullscreen_vao)
         gl->DeleteVertexArrays(1, &ctx->fullscreen_vao);
+
+    /* Shadow resources. */
+    if (ctx->shadow_program)
+        gl->DeleteProgram(ctx->shadow_program);
+    if (ctx->shadow_fbo)
+        gl->DeleteFramebuffers(1, &ctx->shadow_fbo);
+    if (ctx->shadow_depth_tex)
+        gl->DeleteTextures(1, &ctx->shadow_depth_tex);
+    {
+        GLuint shadow_bufs[] = {ctx->shadow_position_vbo, ctx->shadow_ebo};
+        gl->DeleteBuffers(2, shadow_bufs);
+    }
+    if (ctx->shadow_vao)
+        gl->DeleteVertexArrays(1, &ctx->shadow_vao);
+
     if (ctx->white_texture)
         gl->DeleteTextures(1, &ctx->white_texture);
 
@@ -917,6 +1049,44 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     sdl3d_gl_context *ctx = context->gl;
     sdl3d_gl_funcs *gl = &ctx->gl;
 
+    /* During shadow pass: render depth-only with shadow program and shadow VAO. */
+    if (ctx->in_shadow_pass && ctx->shadow_program)
+    {
+        float light_mvp[16];
+        for (int r = 0; r < 4; r++)
+        {
+            for (int c = 0; c < 4; c++)
+            {
+                float sum = 0;
+                for (int k = 0; k < 4; k++)
+                    sum += ctx->shadow_light_vp[r + k * 4] * params->model_matrix[k + c * 4];
+                light_mvp[r + c * 4] = sum;
+            }
+        }
+
+        gl->UseProgram(ctx->shadow_program);
+        gl->UniformMatrix4fv(ctx->shadow_light_mvp_loc, 1, GL_FALSE, light_mvp);
+
+        gl->BindVertexArray(ctx->shadow_vao);
+        gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
+        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->vertex_count * 3 * sizeof(float)),
+                       params->positions, GL_DYNAMIC_DRAW);
+
+        if (params->indices && params->index_count > 0)
+        {
+            gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->shadow_ebo);
+            gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->index_count * sizeof(unsigned int)),
+                           params->indices, GL_DYNAMIC_DRAW);
+            gl->DrawElements(GL_TRIANGLES, params->index_count, GL_UNSIGNED_INT, NULL);
+        }
+        else
+        {
+            gl->DrawArrays(GL_TRIANGLES, 0, params->vertex_count);
+        }
+        gl->BindVertexArray(0);
+        return true;
+    }
+
     flush_scene_ubo(ctx);
 
     gl->UseProgram(ctx->pbr_program);
@@ -935,6 +1105,22 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     gl->BindTexture(GL_TEXTURE_2D, tex);
     gl->Uniform1i(ctx->pbr_texture_loc, 0);
     gl->Uniform1i(ctx->pbr_has_texture_loc, params->texture ? 1 : 0);
+
+    /* Shadow map uniforms. */
+    if (ctx->shadow_depth_tex && ctx->shadow_bias > 0.0f)
+    {
+        gl->ActiveTexture(GL_TEXTURE0 + 1);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->shadow_depth_tex);
+        gl->Uniform1i(ctx->pbr_shadow_map_loc, 1);
+        gl->UniformMatrix4fv(ctx->pbr_shadow_vp_loc, 1, GL_FALSE, ctx->shadow_light_vp);
+        gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 1);
+        gl->Uniform1f(ctx->pbr_shadow_bias_loc, ctx->shadow_bias > 0 ? ctx->shadow_bias : 0.005f);
+        gl->ActiveTexture(GL_TEXTURE0);
+    }
+    else
+    {
+        gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 0);
+    }
 
     /* Upload vertex data */
     const float *colors = params->colors ? params->colors : ensure_white_colors(ctx, params->vertex_count);
@@ -970,6 +1156,41 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     }
 
     return true;
+}
+
+/* ------------------------------------------------------------------ */
+/* Shadow pass                                                         */
+/* ------------------------------------------------------------------ */
+
+void sdl3d_gl_begin_shadow_pass(sdl3d_gl_context *ctx, const float *light_vp, float bias)
+{
+    if (!ctx || !light_vp || !ctx->shadow_fbo)
+        return;
+    SDL_memcpy(ctx->shadow_light_vp, light_vp, 16 * sizeof(float));
+    ctx->shadow_bias = bias;
+    ctx->in_shadow_pass = true;
+
+    sdl3d_gl_funcs *gl = &ctx->gl;
+    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
+    gl->Viewport(0, 0, 2048, 2048);
+    gl->Clear(GL_DEPTH_BUFFER_BIT);
+    gl->Enable(GL_DEPTH_TEST);
+    /* Lesson #6: cull front faces so back faces write depth. */
+    gl->Enable(GL_CULL_FACE);
+    gl->CullFace(GL_FRONT);
+}
+
+void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx)
+{
+    if (!ctx)
+        return;
+    ctx->in_shadow_pass = false;
+
+    sdl3d_gl_funcs *gl = &ctx->gl;
+    /* Restore main FBO and normal culling. */
+    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+    gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+    gl->CullFace(GL_BACK);
 }
 
 static bool gl_present(sdl3d_render_context *context)

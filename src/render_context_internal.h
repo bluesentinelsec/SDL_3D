@@ -65,6 +65,8 @@ struct sdl3d_render_context
     bool shadow_enabled[SDL3D_MAX_LIGHTS];
     float shadow_bias;
 
+    bool in_shadow_pass;
+
     /* Render profile flags. */
     sdl3d_uv_mode uv_mode;
     sdl3d_fog_eval fog_eval;
