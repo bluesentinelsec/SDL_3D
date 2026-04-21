@@ -14,4 +14,7 @@ typedef struct sdl3d_gl_context sdl3d_gl_context;
 sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height);
 void sdl3d_gl_destroy(sdl3d_gl_context *ctx);
 
+void sdl3d_gl_post_process(sdl3d_gl_context *ctx, int effects, float bloom_threshold, float bloom_intensity,
+                           float vignette_intensity, float contrast, float brightness, float saturation);
+
 #endif

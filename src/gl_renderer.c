@@ -604,8 +604,6 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     sdl3d_gl_funcs *gl = &ctx->gl;
 
     /* Detect ES. */
-    const char *ver = (const char *)SDL_GL_GetProcAddress("glGetString")
-        ? NULL : NULL; /* not needed — we requested core */
     ctx->is_es = false;
 
     const char *version_prefix = ctx->is_es
@@ -823,21 +821,21 @@ static bool gl_draw_mesh_unlit(sdl3d_render_context *context, const sdl3d_draw_p
     gl->BindVertexArray(ctx->unlit_vao);
 
     gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_position_vbo);
-    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(params->vertex_count * 3 * sizeof(float)),
+    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->vertex_count * 3 * sizeof(float)),
                    params->positions, GL_DYNAMIC_DRAW);
 
     gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_uv_vbo);
-    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(params->vertex_count * 2 * sizeof(float)),
+    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->vertex_count * 2 * sizeof(float)),
                    params->uvs, GL_DYNAMIC_DRAW);
 
     gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_color_vbo);
-    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(params->vertex_count * 4 * sizeof(float)),
+    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->vertex_count * 4 * sizeof(float)),
                    colors, GL_DYNAMIC_DRAW);
 
     if (params->indices && params->index_count > 0) {
         gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->unlit_ebo);
         gl->BufferData(GL_ELEMENT_ARRAY_BUFFER,
-                       (GLsizeiptr)(params->index_count * sizeof(unsigned int)),
+                       (GLsizeiptr)((size_t)params->index_count * sizeof(unsigned int)),
                        params->indices, GL_DYNAMIC_DRAW);
         gl->DrawElements(GL_TRIANGLES, params->index_count, GL_UNSIGNED_INT, NULL);
     } else {
@@ -880,25 +878,25 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     gl->BindVertexArray(ctx->lit_vao);
 
     gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_position_vbo);
-    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(params->vertex_count * 3 * sizeof(float)),
+    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->vertex_count * 3 * sizeof(float)),
                    params->positions, GL_DYNAMIC_DRAW);
 
     gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_normal_vbo);
-    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(params->vertex_count * 3 * sizeof(float)),
+    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->vertex_count * 3 * sizeof(float)),
                    params->normals, GL_DYNAMIC_DRAW);
 
     gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_uv_vbo);
-    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(params->vertex_count * 2 * sizeof(float)),
+    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->vertex_count * 2 * sizeof(float)),
                    params->uvs, GL_DYNAMIC_DRAW);
 
     gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_color_vbo);
-    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(params->vertex_count * 4 * sizeof(float)),
+    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->vertex_count * 4 * sizeof(float)),
                    colors, GL_DYNAMIC_DRAW);
 
     if (params->indices && params->index_count > 0) {
         gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->lit_ebo);
         gl->BufferData(GL_ELEMENT_ARRAY_BUFFER,
-                       (GLsizeiptr)(params->index_count * sizeof(unsigned int)),
+                       (GLsizeiptr)((size_t)params->index_count * sizeof(unsigned int)),
                        params->indices, GL_DYNAMIC_DRAW);
         gl->DrawElements(GL_TRIANGLES, params->index_count, GL_UNSIGNED_INT, NULL);
     } else {
@@ -959,6 +957,13 @@ static void gl_destroy_adapter(sdl3d_render_context *context)
 /* ------------------------------------------------------------------ */
 /* Backend interface initializer                                       */
 /* ------------------------------------------------------------------ */
+
+void sdl3d_gl_post_process(sdl3d_gl_context *ctx, int effects, float bloom_threshold, float bloom_intensity,
+                          float vignette_intensity, float contrast, float brightness, float saturation)
+{
+    (void)ctx; (void)effects; (void)bloom_threshold; (void)bloom_intensity;
+    (void)vignette_intensity; (void)contrast; (void)brightness; (void)saturation;
+}
 
 void sdl3d_gl_backend_init(sdl3d_backend_interface *iface)
 {
