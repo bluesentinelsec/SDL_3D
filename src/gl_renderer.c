@@ -421,7 +421,7 @@ static const char k_shadow_vert[] = "layout(location = 0) in vec3 aPosition;\n"
                                     "    gl_Position = uLightMVP * vec4(aPosition, 1.0);\n"
                                     "}\n";
 
-static const char k_shadow_frag[] = "void main() {}\n";
+static const char k_shadow_frag[] = "out vec4 fragColor;\nvoid main() { fragColor = vec4(1.0); }\n";
 
 /* ------------------------------------------------------------------ */
 /* Shader helpers                                                      */
