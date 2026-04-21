@@ -256,7 +256,7 @@ int main(int argc, char *argv[])
     bool running = true;
     bool mouse_initialized = false;
     bool show_bloom = true;
-    bool show_ssao = true;
+    bool show_ssao = false;
     bool show_fog = true;
     Uint64 last_time;
     float game_time = 0.0f;
@@ -280,12 +280,13 @@ int main(int argc, char *argv[])
     }
 
     setup_lighting(ctx);
+    sdl3d_set_ssao_enabled(ctx, false);
 
     SDL_zerop(&fog);
     fog.mode = SDL3D_FOG_EXP2;
-    fog.color[0] = 0.02f;
-    fog.color[1] = 0.02f;
-    fog.color[2] = 0.04f;
+    fog.color[0] = 0.0f;
+    fog.color[1] = 0.0f;
+    fog.color[2] = 0.0f;
     fog.density = 0.04f;
     sdl3d_set_fog(ctx, &fog);
 
