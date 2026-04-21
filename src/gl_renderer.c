@@ -1970,7 +1970,7 @@ static bool gl_present(sdl3d_render_context *context)
 
     /* Shadow pass: render original VP into layer 0 (backward compatible),
      * then CSM cascades 1-3 into layers 1-3 for Slice 3. */
-    if (ctx->shadow_program && ctx->shadow_fbo && ctx->shadow_bias > 0.0f)
+    if (0 && ctx->shadow_program && ctx->shadow_fbo && ctx->shadow_bias > 0.0f)
     {
         compute_csm_matrices(ctx, context);
 
@@ -2239,7 +2239,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
     {
         sdl3d_gl_funcs *gl = &ctx->gl;
         flush_scene_ubo(ctx);
-        if (ctx->shadow_program && ctx->shadow_fbo && ctx->shadow_bias > 0.0f)
+        if (0 && ctx->shadow_program && ctx->shadow_fbo && ctx->shadow_bias > 0.0f)
         {
             compute_csm_matrices(ctx, ctx->current_ctx);
 
