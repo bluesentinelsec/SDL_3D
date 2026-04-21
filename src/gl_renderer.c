@@ -727,7 +727,7 @@ static void compute_csm_matrices(sdl3d_gl_context *ctx, const sdl3d_render_conte
 {
     float near_p = rc->near_plane;
     float far_p = rc->far_plane;
-    if (far_p > 50.0f) far_p = 50.0f;
+    if (far_p > 150.0f) far_p = 150.0f;
 
     /* Practical split scheme: lambda=0.5 blend of log and uniform. */
     for (int i = 0; i < SDL3D_CSM_CASCADE_COUNT; i++)
