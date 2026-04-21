@@ -1972,7 +1972,7 @@ static bool gl_present(sdl3d_render_context *context)
 
     /* Shadow pass: render original VP into layer 0 (backward compatible),
      * then CSM cascades 1-3 into layers 1-3 for Slice 3. */
-    if (0 && ctx->shadow_program && ctx->shadow_fbo && ctx->shadow_bias > 0.0f)
+    if (ctx->shadow_program && ctx->shadow_fbo && ctx->shadow_bias > 0.0f)
     {
         compute_csm_matrices(ctx, context);
 
@@ -2001,7 +2001,7 @@ static bool gl_present(sdl3d_render_context *context)
 
     /* Point shadow pass: 6-face cubemap per light. */
     compute_point_shadow_matrices(ctx, context);
-    if (0 && ctx->point_shadow_program && ctx->point_shadow_count > 0) {
+    if (SDL3D_POINT_SHADOWS_ENABLED && ctx->point_shadow_program && ctx->point_shadow_count > 0) {
         gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->point_shadow_fbo);
         gl->Viewport(0, 0, 512, 512);
         gl->Enable(GL_DEPTH_TEST);
@@ -2127,7 +2127,7 @@ static bool gl_present(sdl3d_render_context *context)
 
     /* Step 2: Blur bright pixels (ping-pong, 10 passes = 5 iterations). */
     gl->UseProgram(ctx->bloom_blur_program);
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 6; i++)
     {
         bool horizontal = (i % 2 == 0);
         gl->BindFramebuffer(GL_FRAMEBUFFER, horizontal ? ctx->pp_fbo_b : ctx->pp_fbo_a);
@@ -2241,7 +2241,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
     {
         sdl3d_gl_funcs *gl = &ctx->gl;
         flush_scene_ubo(ctx);
-        if (0 && ctx->shadow_program && ctx->shadow_fbo && ctx->shadow_bias > 0.0f)
+        if (ctx->shadow_program && ctx->shadow_fbo && ctx->shadow_bias > 0.0f)
         {
             compute_csm_matrices(ctx, ctx->current_ctx);
 
@@ -2268,7 +2268,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
             gl->CullFace(GL_BACK);
         }
         compute_point_shadow_matrices(ctx, ctx->current_ctx);
-        if (0 && ctx->point_shadow_program && ctx->point_shadow_count > 0) {
+        if (SDL3D_POINT_SHADOWS_ENABLED && ctx->point_shadow_program && ctx->point_shadow_count > 0) {
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->point_shadow_fbo);
             gl->Viewport(0, 0, 512, 512);
             gl->Enable(GL_DEPTH_TEST);

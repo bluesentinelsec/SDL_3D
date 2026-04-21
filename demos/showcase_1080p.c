@@ -300,7 +300,7 @@ int main(int argc, char *argv[])
     sdl3d_set_fog(ctx, &fog);
 
     /* --- Shadows (moonlight casts shadows) --- */
-    /* sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 30.0f); */
+    sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 30.0f);
 
     SDL_zerop(&post);
     post.effects = SDL3D_POST_BLOOM | SDL3D_POST_VIGNETTE;
@@ -444,7 +444,7 @@ int main(int argc, char *argv[])
                         sdl3d_add_light(ctx, &lamp[i]);
                     }
                     sdl3d_set_fog(ctx, &fog);
-                    /* sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 30.0f); */
+                    sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 30.0f);
                     {
                         sdl3d_render_profile p = profile_fns[current_profile]();
                         sdl3d_set_render_profile(ctx, &p);
