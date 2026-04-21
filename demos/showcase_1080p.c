@@ -583,8 +583,7 @@ int main(int argc, char *argv[])
         }
         if (has_man)
         {
-            sdl3d_draw_model_skinned(ctx, &man_model, sdl3d_vec3_make(-5, 0.0f, man_walk_pos),
-                                     sdl3d_vec3_make(1, 0, 0),
+            sdl3d_draw_model_skinned(ctx, &man_model, sdl3d_vec3_make(-5, 0.0f, man_walk_pos), sdl3d_vec3_make(1, 0, 0),
                                      sdl3d_degrees_to_radians(-90.0f), sdl3d_vec3_make(1.5f, 1.5f, 1.5f),
                                      (sdl3d_color){255, 255, 255, 255}, man_joints);
         }

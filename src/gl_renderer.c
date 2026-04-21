@@ -442,7 +442,8 @@ static const char k_pbr_frag_post[] =
     "        vec2 texelSize = 1.0 / vec2(2048.0);\n"
     "        for (int x = -1; x <= 1; ++x) {\n"
     "            for (int y = -1; y <= 1; ++y) {\n"
-    "                float pcfDepth = texture(uShadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize, float(layer))).r;\n"
+    "                float pcfDepth = texture(uShadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize, "
+    "float(layer))).r;\n"
     "                shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;\n"
     "            }\n"
     "        }\n"
@@ -537,35 +538,32 @@ static const char k_copy_frag[] = "in vec2 vTexCoord;\n"
                                   "    fragColor = texture(uScene, vTexCoord);\n"
                                   "}\n";
 
-static const char k_shadow_vert[] =
-    "layout(location = 0) in vec3 aPosition;\n"
-    "uniform mat4 uLightVP;\n"
-    "uniform mat4 uModel;\n"
-    "void main() {\n"
-    "    gl_Position = uLightVP * uModel * vec4(aPosition, 1.0);\n"
-    "}\n";
+static const char k_shadow_vert[] = "layout(location = 0) in vec3 aPosition;\n"
+                                    "uniform mat4 uLightVP;\n"
+                                    "uniform mat4 uModel;\n"
+                                    "void main() {\n"
+                                    "    gl_Position = uLightVP * uModel * vec4(aPosition, 1.0);\n"
+                                    "}\n";
 
 static const char k_shadow_frag[] = "out vec4 fragColor;\nvoid main() { fragColor = vec4(1.0); }\n";
 
-static const char k_point_shadow_vert[] =
-    "layout(location = 0) in vec3 aPos;\n"
-    "uniform mat4 model;\n"
-    "uniform mat4 lightVP;\n"
-    "out vec3 vWorldPos;\n"
-    "void main() {\n"
-    "    vec4 wp = model * vec4(aPos, 1.0);\n"
-    "    vWorldPos = wp.xyz;\n"
-    "    gl_Position = lightVP * wp;\n"
-    "}\n";
+static const char k_point_shadow_vert[] = "layout(location = 0) in vec3 aPos;\n"
+                                          "uniform mat4 model;\n"
+                                          "uniform mat4 lightVP;\n"
+                                          "out vec3 vWorldPos;\n"
+                                          "void main() {\n"
+                                          "    vec4 wp = model * vec4(aPos, 1.0);\n"
+                                          "    vWorldPos = wp.xyz;\n"
+                                          "    gl_Position = lightVP * wp;\n"
+                                          "}\n";
 
-static const char k_point_shadow_frag[] =
-    "in vec3 vWorldPos;\n"
-    "uniform vec3 lightPos;\n"
-    "uniform float farPlane;\n"
-    "void main() {\n"
-    "    float dist = length(vWorldPos - lightPos);\n"
-    "    gl_FragDepth = dist / farPlane;\n"
-    "}\n";
+static const char k_point_shadow_frag[] = "in vec3 vWorldPos;\n"
+                                          "uniform vec3 lightPos;\n"
+                                          "uniform float farPlane;\n"
+                                          "void main() {\n"
+                                          "    float dist = length(vWorldPos - lightPos);\n"
+                                          "    gl_FragDepth = dist / farPlane;\n"
+                                          "}\n";
 
 /* ---- Post-process fragment shaders ---- */
 
@@ -603,120 +601,117 @@ static const char k_blur_frag[] =
     "    fragColor = vec4(result, 1.0);\n"
     "}\n";
 
-static const char k_composite_frag[] =
-    "in vec2 vTexCoord;\n"
-    "uniform sampler2D uScene;\n"
-    "uniform sampler2D uBloom;\n"
-    "uniform float uVignetteStrength;\n"
-    "uniform float uContrast;\n"
-    "uniform float uSaturation;\n"
-    "out vec4 fragColor;\n"
-    "void main() {\n"
-    "    vec3 color = texture(uScene, vTexCoord).rgb;\n"
-    "    vec3 bloom = texture(uBloom, vTexCoord).rgb;\n"
-    "    color += bloom * 0.3;\n"
-    "    vec2 uv = vTexCoord * 2.0 - 1.0;\n"
-    "    float vig = 1.0 - dot(uv, uv) * uVignetteStrength;\n"
-    "    color *= clamp(vig, 0.0, 1.0);\n"
-    "    color = (color - 0.5) * uContrast + 0.5;\n"
-    "    float grey = dot(color, vec3(0.2126, 0.7152, 0.0722));\n"
-    "    color = mix(vec3(grey), color, uSaturation);\n"
-    "    fragColor = vec4(max(color, 0.0), 1.0);\n"
-    "}\n";
+static const char k_composite_frag[] = "in vec2 vTexCoord;\n"
+                                       "uniform sampler2D uScene;\n"
+                                       "uniform sampler2D uBloom;\n"
+                                       "uniform float uVignetteStrength;\n"
+                                       "uniform float uContrast;\n"
+                                       "uniform float uSaturation;\n"
+                                       "out vec4 fragColor;\n"
+                                       "void main() {\n"
+                                       "    vec3 color = texture(uScene, vTexCoord).rgb;\n"
+                                       "    vec3 bloom = texture(uBloom, vTexCoord).rgb;\n"
+                                       "    color += bloom * 0.3;\n"
+                                       "    vec2 uv = vTexCoord * 2.0 - 1.0;\n"
+                                       "    float vig = 1.0 - dot(uv, uv) * uVignetteStrength;\n"
+                                       "    color *= clamp(vig, 0.0, 1.0);\n"
+                                       "    color = (color - 0.5) * uContrast + 0.5;\n"
+                                       "    float grey = dot(color, vec3(0.2126, 0.7152, 0.0722));\n"
+                                       "    color = mix(vec3(grey), color, uSaturation);\n"
+                                       "    fragColor = vec4(max(color, 0.0), 1.0);\n"
+                                       "}\n";
 
-static const char k_retro_frag[] =
-    "in vec2 vTexCoord;\n"
-    "uniform sampler2D uScene;\n"
-    "uniform int uProfile;\n"
-    "uniform vec2 uResolution;\n"
-    "out vec4 fragColor;\n"
-    "void main() {\n"
-    "    vec2 uv = vTexCoord;\n"
-    "    vec3 color;\n"
-    "    if (uProfile == 1) {\n"
-    "        vec2 lowRes = vec2(320.0, 240.0);\n"
-    "        vec2 pixelUV = floor(uv * lowRes) / lowRes;\n"
-    "        color = texture(uScene, pixelUV).rgb;\n"
-    "        ivec2 px = ivec2(gl_FragCoord.xy);\n"
-    "        float bayer[16] = float[16](0.0/16.0, 8.0/16.0, 2.0/16.0, 10.0/16.0,\n"
-    "                                    12.0/16.0, 4.0/16.0, 14.0/16.0, 6.0/16.0,\n"
-    "                                    3.0/16.0, 11.0/16.0, 1.0/16.0, 9.0/16.0,\n"
-    "                                    15.0/16.0, 7.0/16.0, 13.0/16.0, 5.0/16.0);\n"
-    "        float dither = (bayer[(px.y % 4) * 4 + (px.x % 4)] - 0.5) / 24.0;\n"
-    "        color = floor((color + dither) * 32.0 + 0.5) / 32.0;\n"
-    "        float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
-    "        color = mix(vec3(lum), color, 0.8);\n"
-    "    } else if (uProfile == 2) {\n"
-    "        vec2 lowRes = vec2(320.0, 240.0);\n"
-    "        vec2 pixelUV = floor(uv * lowRes + 0.5) / lowRes;\n"
-    "        color = texture(uScene, pixelUV).rgb;\n"
-    "        color *= vec3(1.05, 1.0, 0.92);\n"
-    "        color = (color - 0.5) * 1.08 + 0.5;\n"
-    "        color = clamp(color, 0.0, 1.0);\n"
-    "    } else if (uProfile == 3) {\n"
-    "        vec2 lowRes = vec2(320.0, 200.0);\n"
-    "        vec2 pixelUV = floor(uv * lowRes) / lowRes;\n"
-    "        color = texture(uScene, pixelUV).rgb;\n"
-    "        ivec2 px = ivec2(gl_FragCoord.xy);\n"
-    "        float bayer[16] = float[16](0.0/16.0, 8.0/16.0, 2.0/16.0, 10.0/16.0,\n"
-    "                                    12.0/16.0, 4.0/16.0, 14.0/16.0, 6.0/16.0,\n"
-    "                                    3.0/16.0, 11.0/16.0, 1.0/16.0, 9.0/16.0,\n"
-    "                                    15.0/16.0, 7.0/16.0, 13.0/16.0, 5.0/16.0);\n"
-    "        float dither = (bayer[(px.y % 4) * 4 + (px.x % 4)] - 0.5) / 5.0;\n"
-    "        color = floor((color + dither) * 6.0 + 0.5) / 6.0;\n"
-    "        float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
-    "        color = mix(vec3(lum), color, 0.65);\n"
-    "        color *= vec3(1.08, 0.98, 0.88);\n"
-    "    } else if (uProfile == 4) {\n"
-    "        vec2 lowRes = vec2(256.0, 224.0);\n"
-    "        vec2 pixelUV = floor(uv * lowRes) / lowRes;\n"
-    "        color = texture(uScene, pixelUV).rgb;\n"
-    "        color = floor(color * 32.0 + 0.5) / 32.0;\n"
-    "        int row = int(gl_FragCoord.y);\n"
-    "        if ((row & 1) == 0) color *= 0.8;\n"
-    "        color *= vec3(0.93, 0.96, 1.08);\n"
-    "    } else {\n"
-    "        color = texture(uScene, uv).rgb;\n"
-    "    }\n"
-    "    fragColor = vec4(max(color, 0.0), 1.0);\n"
-    "}\n";
+static const char k_retro_frag[] = "in vec2 vTexCoord;\n"
+                                   "uniform sampler2D uScene;\n"
+                                   "uniform int uProfile;\n"
+                                   "uniform vec2 uResolution;\n"
+                                   "out vec4 fragColor;\n"
+                                   "void main() {\n"
+                                   "    vec2 uv = vTexCoord;\n"
+                                   "    vec3 color;\n"
+                                   "    if (uProfile == 1) {\n"
+                                   "        vec2 lowRes = vec2(320.0, 240.0);\n"
+                                   "        vec2 pixelUV = floor(uv * lowRes) / lowRes;\n"
+                                   "        color = texture(uScene, pixelUV).rgb;\n"
+                                   "        ivec2 px = ivec2(gl_FragCoord.xy);\n"
+                                   "        float bayer[16] = float[16](0.0/16.0, 8.0/16.0, 2.0/16.0, 10.0/16.0,\n"
+                                   "                                    12.0/16.0, 4.0/16.0, 14.0/16.0, 6.0/16.0,\n"
+                                   "                                    3.0/16.0, 11.0/16.0, 1.0/16.0, 9.0/16.0,\n"
+                                   "                                    15.0/16.0, 7.0/16.0, 13.0/16.0, 5.0/16.0);\n"
+                                   "        float dither = (bayer[(px.y % 4) * 4 + (px.x % 4)] - 0.5) / 24.0;\n"
+                                   "        color = floor((color + dither) * 32.0 + 0.5) / 32.0;\n"
+                                   "        float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
+                                   "        color = mix(vec3(lum), color, 0.8);\n"
+                                   "    } else if (uProfile == 2) {\n"
+                                   "        vec2 lowRes = vec2(320.0, 240.0);\n"
+                                   "        vec2 pixelUV = floor(uv * lowRes + 0.5) / lowRes;\n"
+                                   "        color = texture(uScene, pixelUV).rgb;\n"
+                                   "        color *= vec3(1.05, 1.0, 0.92);\n"
+                                   "        color = (color - 0.5) * 1.08 + 0.5;\n"
+                                   "        color = clamp(color, 0.0, 1.0);\n"
+                                   "    } else if (uProfile == 3) {\n"
+                                   "        vec2 lowRes = vec2(320.0, 200.0);\n"
+                                   "        vec2 pixelUV = floor(uv * lowRes) / lowRes;\n"
+                                   "        color = texture(uScene, pixelUV).rgb;\n"
+                                   "        ivec2 px = ivec2(gl_FragCoord.xy);\n"
+                                   "        float bayer[16] = float[16](0.0/16.0, 8.0/16.0, 2.0/16.0, 10.0/16.0,\n"
+                                   "                                    12.0/16.0, 4.0/16.0, 14.0/16.0, 6.0/16.0,\n"
+                                   "                                    3.0/16.0, 11.0/16.0, 1.0/16.0, 9.0/16.0,\n"
+                                   "                                    15.0/16.0, 7.0/16.0, 13.0/16.0, 5.0/16.0);\n"
+                                   "        float dither = (bayer[(px.y % 4) * 4 + (px.x % 4)] - 0.5) / 5.0;\n"
+                                   "        color = floor((color + dither) * 6.0 + 0.5) / 6.0;\n"
+                                   "        float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
+                                   "        color = mix(vec3(lum), color, 0.65);\n"
+                                   "        color *= vec3(1.08, 0.98, 0.88);\n"
+                                   "    } else if (uProfile == 4) {\n"
+                                   "        vec2 lowRes = vec2(256.0, 224.0);\n"
+                                   "        vec2 pixelUV = floor(uv * lowRes) / lowRes;\n"
+                                   "        color = texture(uScene, pixelUV).rgb;\n"
+                                   "        color = floor(color * 32.0 + 0.5) / 32.0;\n"
+                                   "        int row = int(gl_FragCoord.y);\n"
+                                   "        if ((row & 1) == 0) color *= 0.8;\n"
+                                   "        color *= vec3(0.93, 0.96, 1.08);\n"
+                                   "    } else {\n"
+                                   "        color = texture(uScene, uv).rgb;\n"
+                                   "    }\n"
+                                   "    fragColor = vec4(max(color, 0.0), 1.0);\n"
+                                   "}\n";
 
-static const char k_ssao_frag[] =
-    "in vec2 vTexCoord;\n"
-    "uniform sampler2D uScene;\n"
-    "uniform sampler2D uDepth;\n"
-    "uniform vec2 uTexelSize;\n"
-    "uniform float uNear;\n"
-    "uniform float uFar;\n"
-    "out vec4 fragColor;\n"
-    "float linearizeDepth(float d) {\n"
-    "    float z = d * 2.0 - 1.0;\n"
-    "    return (2.0 * uNear * uFar) / (uFar + uNear - z * (uFar - uNear));\n"
-    "}\n"
-    "void main() {\n"
-    "    float rawDepth = texture(uDepth, vTexCoord).r;\n"
-    "    vec3 color = texture(uScene, vTexCoord).rgb;\n"
-    "    if (rawDepth > 0.999) { fragColor = vec4(color, 1.0); return; }\n"
-    "    float depth = linearizeDepth(rawDepth);\n"
-    "    /* Scattered sample offsets (avoids grid banding). */\n"
-    "    const vec2 offsets[8] = vec2[8](\n"
-    "        vec2(-0.94, -0.34), vec2( 0.76,  0.65),\n"
-    "        vec2(-0.09, -0.93), vec2( 0.97, -0.22),\n"
-    "        vec2(-0.71,  0.71), vec2( 0.33,  0.94),\n"
-    "        vec2( 0.52, -0.85), vec2(-0.86,  0.12)\n"
-    "    );\n"
-    "    float radius = clamp(1.0 / depth, 1.0, 8.0);\n"
-    "    float ao = 0.0;\n"
-    "    for (int i = 0; i < 8; i++) {\n"
-    "        vec2 sampleUV = vTexCoord + offsets[i] * uTexelSize * radius;\n"
-    "        float sd = linearizeDepth(texture(uDepth, sampleUV).r);\n"
-    "        float diff = depth - sd;\n"
-    "        if (diff > 0.1 && diff < 2.0) ao += 1.0;\n"
-    "    }\n"
-    "    ao /= 8.0;\n"
-    "    color *= (1.0 - ao * 0.35);\n"
-    "    fragColor = vec4(color, 1.0);\n"
-    "}\n";
+static const char k_ssao_frag[] = "in vec2 vTexCoord;\n"
+                                  "uniform sampler2D uScene;\n"
+                                  "uniform sampler2D uDepth;\n"
+                                  "uniform vec2 uTexelSize;\n"
+                                  "uniform float uNear;\n"
+                                  "uniform float uFar;\n"
+                                  "out vec4 fragColor;\n"
+                                  "float linearizeDepth(float d) {\n"
+                                  "    float z = d * 2.0 - 1.0;\n"
+                                  "    return (2.0 * uNear * uFar) / (uFar + uNear - z * (uFar - uNear));\n"
+                                  "}\n"
+                                  "void main() {\n"
+                                  "    float rawDepth = texture(uDepth, vTexCoord).r;\n"
+                                  "    vec3 color = texture(uScene, vTexCoord).rgb;\n"
+                                  "    if (rawDepth > 0.999) { fragColor = vec4(color, 1.0); return; }\n"
+                                  "    float depth = linearizeDepth(rawDepth);\n"
+                                  "    /* Scattered sample offsets (avoids grid banding). */\n"
+                                  "    const vec2 offsets[8] = vec2[8](\n"
+                                  "        vec2(-0.94, -0.34), vec2( 0.76,  0.65),\n"
+                                  "        vec2(-0.09, -0.93), vec2( 0.97, -0.22),\n"
+                                  "        vec2(-0.71,  0.71), vec2( 0.33,  0.94),\n"
+                                  "        vec2( 0.52, -0.85), vec2(-0.86,  0.12)\n"
+                                  "    );\n"
+                                  "    float radius = clamp(1.0 / depth, 1.0, 8.0);\n"
+                                  "    float ao = 0.0;\n"
+                                  "    for (int i = 0; i < 8; i++) {\n"
+                                  "        vec2 sampleUV = vTexCoord + offsets[i] * uTexelSize * radius;\n"
+                                  "        float sd = linearizeDepth(texture(uDepth, sampleUV).r);\n"
+                                  "        float diff = depth - sd;\n"
+                                  "        if (diff > 0.1 && diff < 2.0) ao += 1.0;\n"
+                                  "    }\n"
+                                  "    ao /= 8.0;\n"
+                                  "    color *= (1.0 - ao * 0.35);\n"
+                                  "    fragColor = vec4(color, 1.0);\n"
+                                  "}\n";
 
 static GLuint compile_shader(sdl3d_gl_funcs *gl, GLenum type, const char *version, const char *body)
 {
@@ -928,27 +923,45 @@ static unsigned int *copy_indices(const unsigned int *src, size_t count)
 static bool mat4_inverse(const float *m, float *out)
 {
     float inv[16];
-    inv[0]  =  m[5]*m[10]*m[15] - m[5]*m[11]*m[14] - m[9]*m[6]*m[15] + m[9]*m[7]*m[14] + m[13]*m[6]*m[11] - m[13]*m[7]*m[10];
-    inv[4]  = -m[4]*m[10]*m[15] + m[4]*m[11]*m[14] + m[8]*m[6]*m[15] - m[8]*m[7]*m[14] - m[12]*m[6]*m[11] + m[12]*m[7]*m[10];
-    inv[8]  =  m[4]*m[9]*m[15]  - m[4]*m[11]*m[13] - m[8]*m[5]*m[15] + m[8]*m[7]*m[13] + m[12]*m[5]*m[11] - m[12]*m[7]*m[9];
-    inv[12] = -m[4]*m[9]*m[14]  + m[4]*m[10]*m[13] + m[8]*m[5]*m[14] - m[8]*m[6]*m[13] - m[12]*m[5]*m[10] + m[12]*m[6]*m[9];
-    inv[1]  = -m[1]*m[10]*m[15] + m[1]*m[11]*m[14] + m[9]*m[2]*m[15] - m[9]*m[3]*m[14] - m[13]*m[2]*m[11] + m[13]*m[3]*m[10];
-    inv[5]  =  m[0]*m[10]*m[15] - m[0]*m[11]*m[14] - m[8]*m[2]*m[15] + m[8]*m[3]*m[14] + m[12]*m[2]*m[11] - m[12]*m[3]*m[10];
-    inv[9]  = -m[0]*m[9]*m[15]  + m[0]*m[11]*m[13] + m[8]*m[1]*m[15] - m[8]*m[3]*m[13] - m[12]*m[1]*m[11] + m[12]*m[3]*m[9];
-    inv[13] =  m[0]*m[9]*m[14]  - m[0]*m[10]*m[13] - m[8]*m[1]*m[14] + m[8]*m[2]*m[13] + m[12]*m[1]*m[10] - m[12]*m[2]*m[9];
-    inv[2]  =  m[1]*m[6]*m[15]  - m[1]*m[7]*m[14]  - m[5]*m[2]*m[15] + m[5]*m[3]*m[14] + m[13]*m[2]*m[7]  - m[13]*m[3]*m[6];
-    inv[6]  = -m[0]*m[6]*m[15]  + m[0]*m[7]*m[14]  + m[4]*m[2]*m[15] - m[4]*m[3]*m[14] - m[12]*m[2]*m[7]  + m[12]*m[3]*m[6];
-    inv[10] =  m[0]*m[5]*m[15]  - m[0]*m[7]*m[13]  - m[4]*m[1]*m[15] + m[4]*m[3]*m[13] + m[12]*m[1]*m[7]  - m[12]*m[3]*m[5];
-    inv[14] = -m[0]*m[5]*m[14]  + m[0]*m[6]*m[13]  + m[4]*m[1]*m[14] - m[4]*m[2]*m[13] - m[12]*m[1]*m[6]  + m[12]*m[2]*m[5];
-    inv[3]  = -m[1]*m[6]*m[11]  + m[1]*m[7]*m[10]  + m[5]*m[2]*m[11] - m[5]*m[3]*m[10] - m[9]*m[2]*m[7]   + m[9]*m[3]*m[6];
-    inv[7]  =  m[0]*m[6]*m[11]  - m[0]*m[7]*m[10]  - m[4]*m[2]*m[11] + m[4]*m[3]*m[10] + m[8]*m[2]*m[7]   - m[8]*m[3]*m[6];
-    inv[11] = -m[0]*m[5]*m[11]  + m[0]*m[7]*m[9]   + m[4]*m[1]*m[11] - m[4]*m[3]*m[9]  - m[8]*m[1]*m[7]   + m[8]*m[3]*m[5];
-    inv[15] =  m[0]*m[5]*m[10]  - m[0]*m[6]*m[9]   - m[4]*m[1]*m[10] + m[4]*m[2]*m[9]  + m[8]*m[1]*m[6]   - m[8]*m[2]*m[5];
+    inv[0] = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] + m[9] * m[7] * m[14] +
+             m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
+    inv[4] = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] - m[8] * m[7] * m[14] -
+             m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
+    inv[8] = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] + m[8] * m[7] * m[13] +
+             m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
+    inv[12] = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] - m[8] * m[6] * m[13] -
+              m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
+    inv[1] = -m[1] * m[10] * m[15] + m[1] * m[11] * m[14] + m[9] * m[2] * m[15] - m[9] * m[3] * m[14] -
+             m[13] * m[2] * m[11] + m[13] * m[3] * m[10];
+    inv[5] = m[0] * m[10] * m[15] - m[0] * m[11] * m[14] - m[8] * m[2] * m[15] + m[8] * m[3] * m[14] +
+             m[12] * m[2] * m[11] - m[12] * m[3] * m[10];
+    inv[9] = -m[0] * m[9] * m[15] + m[0] * m[11] * m[13] + m[8] * m[1] * m[15] - m[8] * m[3] * m[13] -
+             m[12] * m[1] * m[11] + m[12] * m[3] * m[9];
+    inv[13] = m[0] * m[9] * m[14] - m[0] * m[10] * m[13] - m[8] * m[1] * m[14] + m[8] * m[2] * m[13] +
+              m[12] * m[1] * m[10] - m[12] * m[2] * m[9];
+    inv[2] = m[1] * m[6] * m[15] - m[1] * m[7] * m[14] - m[5] * m[2] * m[15] + m[5] * m[3] * m[14] +
+             m[13] * m[2] * m[7] - m[13] * m[3] * m[6];
+    inv[6] = -m[0] * m[6] * m[15] + m[0] * m[7] * m[14] + m[4] * m[2] * m[15] - m[4] * m[3] * m[14] -
+             m[12] * m[2] * m[7] + m[12] * m[3] * m[6];
+    inv[10] = m[0] * m[5] * m[15] - m[0] * m[7] * m[13] - m[4] * m[1] * m[15] + m[4] * m[3] * m[13] +
+              m[12] * m[1] * m[7] - m[12] * m[3] * m[5];
+    inv[14] = -m[0] * m[5] * m[14] + m[0] * m[6] * m[13] + m[4] * m[1] * m[14] - m[4] * m[2] * m[13] -
+              m[12] * m[1] * m[6] + m[12] * m[2] * m[5];
+    inv[3] = -m[1] * m[6] * m[11] + m[1] * m[7] * m[10] + m[5] * m[2] * m[11] - m[5] * m[3] * m[10] -
+             m[9] * m[2] * m[7] + m[9] * m[3] * m[6];
+    inv[7] = m[0] * m[6] * m[11] - m[0] * m[7] * m[10] - m[4] * m[2] * m[11] + m[4] * m[3] * m[10] +
+             m[8] * m[2] * m[7] - m[8] * m[3] * m[6];
+    inv[11] = -m[0] * m[5] * m[11] + m[0] * m[7] * m[9] + m[4] * m[1] * m[11] - m[4] * m[3] * m[9] -
+              m[8] * m[1] * m[7] + m[8] * m[3] * m[5];
+    inv[15] = m[0] * m[5] * m[10] - m[0] * m[6] * m[9] - m[4] * m[1] * m[10] + m[4] * m[2] * m[9] + m[8] * m[1] * m[6] -
+              m[8] * m[2] * m[5];
 
-    float det = m[0]*inv[0] + m[1]*inv[4] + m[2]*inv[8] + m[3]*inv[12];
-    if (det == 0.0f) return false;
+    float det = m[0] * inv[0] + m[1] * inv[4] + m[2] * inv[8] + m[3] * inv[12];
+    if (det == 0.0f)
+        return false;
     det = 1.0f / det;
-    for (int i = 0; i < 16; i++) out[i] = inv[i] * det;
+    for (int i = 0; i < 16; i++)
+        out[i] = inv[i] * det;
     return true;
 }
 
@@ -1003,8 +1016,8 @@ static void compute_csm_matrices(sdl3d_gl_context *ctx, const sdl3d_render_conte
             {
                 for (int x = 0; x < 2; x++)
                 {
-                    sdl3d_vec4 ndc = sdl3d_vec4_make(
-                        (float)x * 2.0f - 1.0f, (float)y * 2.0f - 1.0f, (float)z * 2.0f - 1.0f, 1.0f);
+                    sdl3d_vec4 ndc =
+                        sdl3d_vec4_make((float)x * 2.0f - 1.0f, (float)y * 2.0f - 1.0f, (float)z * 2.0f - 1.0f, 1.0f);
                     sdl3d_mat4 inv_m;
                     SDL_memcpy(inv_m.m, inv_pv, sizeof(inv_pv));
                     sdl3d_vec4 ws = sdl3d_mat4_transform_vec4(inv_m, ndc);
@@ -1018,8 +1031,15 @@ static void compute_csm_matrices(sdl3d_gl_context *ctx, const sdl3d_render_conte
 
         /* Frustum center. */
         float cx = 0, cy = 0, cz = 0;
-        for (int j = 0; j < 8; j++) { cx += corners[j][0]; cy += corners[j][1]; cz += corners[j][2]; }
-        cx /= 8.0f; cy /= 8.0f; cz /= 8.0f;
+        for (int j = 0; j < 8; j++)
+        {
+            cx += corners[j][0];
+            cy += corners[j][1];
+            cz += corners[j][2];
+        }
+        cx /= 8.0f;
+        cy /= 8.0f;
+        cz /= 8.0f;
 
         /* Light view: lookAt(center + lightDir, center, up). */
         sdl3d_vec3 center = sdl3d_vec3_make(cx, cy, cz);
@@ -1038,20 +1058,32 @@ static void compute_csm_matrices(sdl3d_gl_context *ctx, const sdl3d_render_conte
         float minZ = 1e30f, maxZ = -1e30f;
         for (int j = 0; j < 8; j++)
         {
-            sdl3d_vec4 lv = sdl3d_mat4_transform_vec4(light_view,
-                sdl3d_vec4_make(corners[j][0], corners[j][1], corners[j][2], 1.0f));
-            if (lv.x < minX) minX = lv.x;
-            if (lv.x > maxX) maxX = lv.x;
-            if (lv.y < minY) minY = lv.y;
-            if (lv.y > maxY) maxY = lv.y;
-            if (lv.z < minZ) minZ = lv.z;
-            if (lv.z > maxZ) maxZ = lv.z;
+            sdl3d_vec4 lv = sdl3d_mat4_transform_vec4(
+                light_view, sdl3d_vec4_make(corners[j][0], corners[j][1], corners[j][2], 1.0f));
+            if (lv.x < minX)
+                minX = lv.x;
+            if (lv.x > maxX)
+                maxX = lv.x;
+            if (lv.y < minY)
+                minY = lv.y;
+            if (lv.y > maxY)
+                maxY = lv.y;
+            if (lv.z < minZ)
+                minZ = lv.z;
+            if (lv.z > maxZ)
+                maxZ = lv.z;
         }
 
         /* Extend Z range to catch shadow casters behind the frustum. */
         float z_mult = 10.0f;
-        if (minZ < 0) minZ *= z_mult; else minZ /= z_mult;
-        if (maxZ < 0) maxZ /= z_mult; else maxZ *= z_mult;
+        if (minZ < 0)
+            minZ *= z_mult;
+        else
+            minZ /= z_mult;
+        if (maxZ < 0)
+            maxZ /= z_mult;
+        else
+            maxZ *= z_mult;
 
         sdl3d_mat4 light_proj;
         sdl3d_mat4_orthographic(minX, maxX, minY, maxY, minZ, maxZ, &light_proj);
@@ -1069,8 +1101,10 @@ static void compute_csm_matrices(sdl3d_gl_context *ctx, const sdl3d_render_conte
 static void compute_point_shadow_matrices(sdl3d_gl_context *ctx, const sdl3d_render_context *rc)
 {
     ctx->point_shadow_count = 0;
-    for (int i = 0; i < rc->light_count && ctx->point_shadow_count < SDL3D_MAX_POINT_SHADOWS; i++) {
-        if (rc->lights[i].type != SDL3D_LIGHT_POINT) continue;
+    for (int i = 0; i < rc->light_count && ctx->point_shadow_count < SDL3D_MAX_POINT_SHADOWS; i++)
+    {
+        if (rc->lights[i].type != SDL3D_LIGHT_POINT)
+            continue;
         int s = ctx->point_shadow_count;
         ctx->point_shadow_light_index[s] = i;
 
@@ -1082,15 +1116,11 @@ static void compute_point_shadow_matrices(sdl3d_gl_context *ctx, const sdl3d_ren
         sdl3d_mat4_perspective(3.14159265f * 0.5f, 1.0f, 0.1f, far, &proj);
 
         sdl3d_vec3 pos = l->position;
-        sdl3d_vec3 targets[6] = {
-            {pos.x+1, pos.y, pos.z}, {pos.x-1, pos.y, pos.z},
-            {pos.x, pos.y+1, pos.z}, {pos.x, pos.y-1, pos.z},
-            {pos.x, pos.y, pos.z+1}, {pos.x, pos.y, pos.z-1}
-        };
-        sdl3d_vec3 ups[6] = {
-            {0,-1,0}, {0,-1,0}, {0,0,1}, {0,0,-1}, {0,-1,0}, {0,-1,0}
-        };
-        for (int f = 0; f < 6; f++) {
+        sdl3d_vec3 targets[6] = {{pos.x + 1, pos.y, pos.z}, {pos.x - 1, pos.y, pos.z}, {pos.x, pos.y + 1, pos.z},
+                                 {pos.x, pos.y - 1, pos.z}, {pos.x, pos.y, pos.z + 1}, {pos.x, pos.y, pos.z - 1}};
+        sdl3d_vec3 ups[6] = {{0, -1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}, {0, -1, 0}};
+        for (int f = 0; f < 6; f++)
+        {
             sdl3d_mat4 view;
             sdl3d_mat4_look_at(pos, targets[f], ups[f], &view);
             sdl3d_mat4 vp = sdl3d_mat4_multiply(proj, view);
@@ -1179,14 +1209,17 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
                 gl->UniformMatrix4fv(ctx->pbr_shadow_vp_loc, 1, GL_FALSE, ctx->shadow_light_vp);
                 gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 0); /* CSM disabled */
                 gl->Uniform1f(ctx->pbr_shadow_bias_loc, ctx->shadow_bias);
-                if (ctx->csm_fragment_enabled) {
+                if (ctx->csm_fragment_enabled)
+                {
                     gl->UniformMatrix4fv(ctx->pbr_csm_vp_loc[0], 1, GL_FALSE, ctx->shadow_light_vp);
                     for (int c = 1; c < 4; c++)
                         gl->UniformMatrix4fv(ctx->pbr_csm_vp_loc[c], 1, GL_FALSE, ctx->csm_light_vp[c]);
                     gl->Uniform1fv(ctx->pbr_csm_splits_loc, 4, ctx->csm_split_depths);
                     gl->UniformMatrix4fv(ctx->pbr_view_matrix_loc, 1, GL_FALSE, ctx->current_ctx->view.m);
                     gl->Uniform1i(ctx->pbr_csm_enabled_loc, 1);
-                } else {
+                }
+                else
+                {
                     gl->Uniform1i(ctx->pbr_csm_enabled_loc, 0);
                 }
             }
@@ -1198,13 +1231,16 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
             gl->ActiveTexture(GL_TEXTURE0);
 
             /* Point shadow uniforms. */
-            for (int ps = 0; ps < SDL3D_MAX_POINT_SHADOWS; ps++) {
+            for (int ps = 0; ps < SDL3D_MAX_POINT_SHADOWS; ps++)
+            {
                 gl->ActiveTexture(GL_TEXTURE0 + 2 + (GLenum)ps);
                 gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->point_shadow_cubemap[ps]);
                 gl->Uniform1i(ctx->pbr_point_shadow_map_loc[ps], 2 + ps);
-                if (ps < ctx->point_shadow_count) {
+                if (ps < ctx->point_shadow_count)
+                {
                     const sdl3d_light *pl = &ctx->current_ctx->lights[ctx->point_shadow_light_index[ps]];
-                    gl->Uniform3f(ctx->pbr_point_shadow_light_pos_loc[ps], pl->position.x, pl->position.y, pl->position.z);
+                    gl->Uniform3f(ctx->pbr_point_shadow_light_pos_loc[ps], pl->position.x, pl->position.y,
+                                  pl->position.z);
                     gl->Uniform1f(ctx->pbr_point_shadow_far_loc[ps], ctx->point_shadow_far_plane[ps]);
                 }
             }
@@ -1478,7 +1514,8 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     /* CSM uniform locations. */
     {
         char name[32];
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 4; i++)
+        {
             SDL_snprintf(name, sizeof(name), "uCSMVP[%d]", i);
             ctx->pbr_csm_vp_loc[i] = gl->GetUniformLocation(ctx->pbr_program, name);
         }
@@ -1490,7 +1527,8 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     /* Point shadow PBR uniform locations. */
     {
         char name[64];
-        for (int s = 0; s < SDL3D_MAX_POINT_SHADOWS; s++) {
+        for (int s = 0; s < SDL3D_MAX_POINT_SHADOWS; s++)
+        {
             SDL_snprintf(name, sizeof(name), "uPointShadowMap[%d]", s);
             ctx->pbr_point_shadow_map_loc[s] = gl->GetUniformLocation(ctx->pbr_program, name);
             SDL_snprintf(name, sizeof(name), "uPointShadowLightPos[%d]", s);
@@ -1577,8 +1615,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     gl->GenFramebuffers(1, &ctx->shadow_fbo);
     gl->GenTextures(1, &ctx->shadow_depth_tex);
     gl->BindTexture(GL_TEXTURE_2D_ARRAY, ctx->shadow_depth_tex);
-    gl->TexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_DEPTH_COMPONENT32F, 2048, 2048, 4, 0, GL_DEPTH_COMPONENT, GL_FLOAT,
-                   NULL);
+    gl->TexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_DEPTH_COMPONENT32F, 2048, 2048, 4, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
     gl->TexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     gl->TexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     gl->TexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
@@ -1616,12 +1653,14 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     for (int s = 0; s < SDL3D_MAX_POINT_SHADOWS; s++)
         ctx->point_shadow_light_index[s] = -1;
     gl->GenFramebuffers(1, &ctx->point_shadow_fbo);
-    for (int s = 0; s < SDL3D_MAX_POINT_SHADOWS; s++) {
+    for (int s = 0; s < SDL3D_MAX_POINT_SHADOWS; s++)
+    {
         gl->GenTextures(1, &ctx->point_shadow_cubemap[s]);
         gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->point_shadow_cubemap[s]);
-        for (int i = 0; i < 6; i++) {
-            gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_DEPTH_COMPONENT24,
-                           512, 512, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+        for (int i = 0; i < 6; i++)
+        {
+            gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_DEPTH_COMPONENT24, 512, 512, 0,
+                           GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
         }
         gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -1631,7 +1670,8 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     }
 
     ctx->point_shadow_program = build_program(gl, version_prefix, k_point_shadow_vert, k_point_shadow_frag);
-    if (ctx->point_shadow_program) {
+    if (ctx->point_shadow_program)
+    {
         ctx->point_shadow_model_loc = gl->GetUniformLocation(ctx->point_shadow_program, "model");
         ctx->point_shadow_light_vp_loc = gl->GetUniformLocation(ctx->point_shadow_program, "lightVP");
         ctx->point_shadow_light_pos_loc = gl->GetUniformLocation(ctx->point_shadow_program, "lightPos");
@@ -1989,13 +2029,11 @@ static bool gl_present(sdl3d_render_context *context)
 
         for (int cascade = 0; cascade < SDL3D_CSM_CASCADE_COUNT; cascade++)
         {
-            gl->FramebufferTextureLayer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                                        ctx->shadow_depth_tex, 0, cascade);
+            gl->FramebufferTextureLayer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, ctx->shadow_depth_tex, 0, cascade);
             gl->Clear(GL_DEPTH_BUFFER_BIT);
             gl->UseProgram(ctx->shadow_program);
             gl->UniformMatrix4fv(ctx->shadow_light_vp_loc, 1, GL_FALSE,
-                                 (cascade == 0) ? ctx->shadow_light_vp
-                                                : ctx->csm_light_vp[cascade]);
+                                 (cascade == 0) ? ctx->shadow_light_vp : ctx->csm_light_vp[cascade]);
             replay_draw_list_shadow(ctx);
         }
 
@@ -2007,27 +2045,32 @@ static bool gl_present(sdl3d_render_context *context)
 
     /* Point shadow pass: 6-face cubemap per light. */
     compute_point_shadow_matrices(ctx, context);
-    if (SDL3D_POINT_SHADOWS_ENABLED && ctx->point_shadow_program && ctx->point_shadow_count > 0) {
+    if (SDL3D_POINT_SHADOWS_ENABLED && ctx->point_shadow_program && ctx->point_shadow_count > 0)
+    {
         gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->point_shadow_fbo);
         gl->Viewport(0, 0, 512, 512);
         gl->Enable(GL_DEPTH_TEST);
         gl->Disable(GL_CULL_FACE);
         gl->UseProgram(ctx->point_shadow_program);
 
-        for (int s = 0; s < ctx->point_shadow_count; s++) {
+        for (int s = 0; s < ctx->point_shadow_count; s++)
+        {
             const sdl3d_light *pl = &context->lights[ctx->point_shadow_light_index[s]];
             gl->Uniform3f(ctx->point_shadow_light_pos_loc, pl->position.x, pl->position.y, pl->position.z);
             gl->Uniform1f(ctx->point_shadow_far_loc, ctx->point_shadow_far_plane[s]);
 
-            for (int face = 0; face < 6; face++) {
+            for (int face = 0; face < 6; face++)
+            {
                 gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                                         GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)face,
-                                         ctx->point_shadow_cubemap[s], 0);
+                                         GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)face, ctx->point_shadow_cubemap[s],
+                                         0);
                 gl->Clear(GL_DEPTH_BUFFER_BIT);
                 gl->UniformMatrix4fv(ctx->point_shadow_light_vp_loc, 1, GL_FALSE, ctx->point_shadow_vp[s][face]);
-                for (int i = 0; i < ctx->draw_count; i++) {
+                for (int i = 0; i < ctx->draw_count; i++)
+                {
                     sdl3d_draw_entry *e = &ctx->draw_list[i];
-                    if (!e->lit) continue;
+                    if (!e->lit)
+                        continue;
                     /* Only dynamic actors cast point shadows. */
                     if (e->model_matrix[12] == 0.0f && e->model_matrix[13] == 0.0f && e->model_matrix[14] == 0.0f &&
                         e->model_matrix[0] == 1.0f && e->model_matrix[5] == 1.0f && e->model_matrix[10] == 1.0f)
@@ -2037,13 +2080,16 @@ static bool gl_present(sdl3d_render_context *context)
                     gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
                     gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)),
                                    e->positions, GL_DYNAMIC_DRAW);
-                    if (e->indices && e->index_count > 0) {
+                    if (e->indices && e->index_count > 0)
+                    {
                         gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->shadow_ebo);
                         gl->BufferData(GL_ELEMENT_ARRAY_BUFFER,
-                                       (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
-                                       e->indices, GL_DYNAMIC_DRAW);
+                                       (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)), e->indices,
+                                       GL_DYNAMIC_DRAW);
                         gl->DrawElements(GL_TRIANGLES, e->index_count, GL_UNSIGNED_INT, NULL);
-                    } else {
+                    }
+                    else
+                    {
                         gl->DrawArrays(GL_TRIANGLES, 0, e->vertex_count);
                     }
                 }
@@ -2262,13 +2308,11 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
 
             for (int cascade = 0; cascade < SDL3D_CSM_CASCADE_COUNT; cascade++)
             {
-                gl->FramebufferTextureLayer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                                            ctx->shadow_depth_tex, 0, cascade);
+                gl->FramebufferTextureLayer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, ctx->shadow_depth_tex, 0, cascade);
                 gl->Clear(GL_DEPTH_BUFFER_BIT);
                 gl->UseProgram(ctx->shadow_program);
                 gl->UniformMatrix4fv(ctx->shadow_light_vp_loc, 1, GL_FALSE,
-                                     (cascade == 0) ? ctx->shadow_light_vp
-                                                    : ctx->csm_light_vp[cascade]);
+                                     (cascade == 0) ? ctx->shadow_light_vp : ctx->csm_light_vp[cascade]);
                 replay_draw_list_shadow(ctx);
             }
 
@@ -2278,25 +2322,30 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
             gl->CullFace(GL_BACK);
         }
         compute_point_shadow_matrices(ctx, ctx->current_ctx);
-        if (SDL3D_POINT_SHADOWS_ENABLED && ctx->point_shadow_program && ctx->point_shadow_count > 0) {
+        if (SDL3D_POINT_SHADOWS_ENABLED && ctx->point_shadow_program && ctx->point_shadow_count > 0)
+        {
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->point_shadow_fbo);
             gl->Viewport(0, 0, 512, 512);
             gl->Enable(GL_DEPTH_TEST);
             gl->Disable(GL_CULL_FACE);
             gl->UseProgram(ctx->point_shadow_program);
-            for (int s = 0; s < ctx->point_shadow_count; s++) {
+            for (int s = 0; s < ctx->point_shadow_count; s++)
+            {
                 const sdl3d_light *pl = &ctx->current_ctx->lights[ctx->point_shadow_light_index[s]];
                 gl->Uniform3f(ctx->point_shadow_light_pos_loc, pl->position.x, pl->position.y, pl->position.z);
                 gl->Uniform1f(ctx->point_shadow_far_loc, ctx->point_shadow_far_plane[s]);
-                for (int face = 0; face < 6; face++) {
+                for (int face = 0; face < 6; face++)
+                {
                     gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
                                              GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)face,
                                              ctx->point_shadow_cubemap[s], 0);
                     gl->Clear(GL_DEPTH_BUFFER_BIT);
                     gl->UniformMatrix4fv(ctx->point_shadow_light_vp_loc, 1, GL_FALSE, ctx->point_shadow_vp[s][face]);
-                    for (int i = 0; i < ctx->draw_count; i++) {
+                    for (int i = 0; i < ctx->draw_count; i++)
+                    {
                         sdl3d_draw_entry *e = &ctx->draw_list[i];
-                        if (!e->lit) continue;
+                        if (!e->lit)
+                            continue;
                         if (e->model_matrix[12] == 0.0f && e->model_matrix[13] == 0.0f && e->model_matrix[14] == 0.0f &&
                             e->model_matrix[0] == 1.0f && e->model_matrix[5] == 1.0f && e->model_matrix[10] == 1.0f)
                             continue;
@@ -2305,13 +2354,16 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
                         gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
                         gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)),
                                        e->positions, GL_DYNAMIC_DRAW);
-                        if (e->indices && e->index_count > 0) {
+                        if (e->indices && e->index_count > 0)
+                        {
                             gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->shadow_ebo);
                             gl->BufferData(GL_ELEMENT_ARRAY_BUFFER,
-                                           (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
-                                           e->indices, GL_DYNAMIC_DRAW);
+                                           (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)), e->indices,
+                                           GL_DYNAMIC_DRAW);
                             gl->DrawElements(GL_TRIANGLES, e->index_count, GL_UNSIGNED_INT, NULL);
-                        } else {
+                        }
+                        else
+                        {
                             gl->DrawArrays(GL_TRIANGLES, 0, e->vertex_count);
                         }
                     }
