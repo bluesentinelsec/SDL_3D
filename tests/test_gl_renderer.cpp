@@ -138,8 +138,7 @@ TEST_F(GLRendererTest, CubeVisibleOnFirstFrame)
     readPixel(160, 120, px);
 
     EXPECT_GT(px[1], 50) << "Green channel should be visible on first frame. "
-                         << "Got RGBA=(" << (int)px[0] << "," << (int)px[1] << "," << (int)px[2] << "," << (int)px[3]
-                         << ")";
+                         << "Got RGBA=(" << (int)px[0] << "," << (int)px[1] << "," << (int)px[2] << (int)px[3] << ")";
 }
 
 TEST_F(GLRendererTest, BackfaceCullingShowsFrontFaces)
@@ -168,8 +167,7 @@ TEST_F(GLRendererTest, BackfaceCullingShowsFrontFaces)
 
     /* With correct culling, we should see the front face (red), not black. */
     EXPECT_GT(px[0], 50) << "Front face should be visible with backface culling. "
-                         << "Got RGBA=(" << (int)px[0] << "," << (int)px[1] << "," << (int)px[2] << "," << (int)px[3]
-                         << ")";
+                         << "Got RGBA=(" << (int)px[0] << "," << (int)px[1] << "," << (int)px[2] << (int)px[3] << ")";
 }
 
 TEST_F(GLRendererTest, ToggleRecreateProducesCorrectOutput)
