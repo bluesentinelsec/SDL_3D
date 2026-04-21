@@ -94,6 +94,7 @@ typedef struct sdl3d_draw_entry
 /* ------------------------------------------------------------------ */
 
 #define SDL3D_MAX_POINT_SHADOWS 2
+#define SDL3D_POINT_SHADOWS_ENABLED 1
 
 struct sdl3d_gl_context
 {
@@ -1226,6 +1227,13 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     }
     SDL_GL_MakeCurrent(window, glctx);
 
+    /* Adaptive vsync: allows tearing only when a frame is late,
+     * preventing stutter. Falls back to regular vsync if unsupported. */
+    if (!SDL_GL_SetSwapInterval(-1))
+    {
+        SDL_GL_SetSwapInterval(1);
+    }
+
     sdl3d_gl_context *ctx = SDL_calloc(1, sizeof(*ctx));
     if (!ctx)
     {
@@ -1682,6 +1690,8 @@ static bool gl_present(sdl3d_render_context *context)
     sdl3d_gl_context *ctx = context->gl;
     sdl3d_gl_funcs *gl = &ctx->gl;
 
+    Uint64 t0 = SDL_GetPerformanceCounter();
+
     /* Flush UBO before any replay. */
     flush_scene_ubo(ctx);
 
@@ -1716,7 +1726,7 @@ static bool gl_present(sdl3d_render_context *context)
 
     /* Point shadow pass: 6-face cubemap per light. */
     compute_point_shadow_matrices(ctx, context);
-    if (ctx->point_shadow_program && ctx->point_shadow_count > 0) {
+    if (SDL3D_POINT_SHADOWS_ENABLED && ctx->point_shadow_program && ctx->point_shadow_count > 0) {
         gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->point_shadow_fbo);
         gl->Viewport(0, 0, 512, 512);
         gl->Enable(GL_DEPTH_TEST);
@@ -1794,6 +1804,15 @@ static bool gl_present(sdl3d_render_context *context)
     gl->Enable(GL_CULL_FACE);
     gl->Enable(GL_DEPTH_TEST);
 
+    {
+        Uint64 t1 = SDL_GetPerformanceCounter();
+        double ms = (double)(t1 - t0) / (double)SDL_GetPerformanceFrequency() * 1000.0;
+        if (ctx->frame_index % 60 == 0)
+        {
+            SDL_Log("SDL3D frame %llu: %.1fms, %d draws", (unsigned long long)ctx->frame_index, ms,
+                    ctx->draw_count);
+        }
+    }
     SDL_GL_SwapWindow(ctx->window);
     return true;
 }
@@ -1863,7 +1882,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
             gl->CullFace(GL_BACK);
         }
         compute_point_shadow_matrices(ctx, ctx->current_ctx);
-        if (ctx->point_shadow_program && ctx->point_shadow_count > 0) {
+        if (SDL3D_POINT_SHADOWS_ENABLED && ctx->point_shadow_program && ctx->point_shadow_count > 0) {
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->point_shadow_fbo);
             gl->Viewport(0, 0, 512, 512);
             gl->Enable(GL_DEPTH_TEST);
