@@ -459,15 +459,19 @@ int main(int argc, char *argv[])
             }
             else if (ev.type == SDL_EVENT_MOUSE_MOTION)
             {
-                player.yaw += ev.motion.xrel * MOUSE_SENS;
-                player.pitch -= ev.motion.yrel * MOUSE_SENS;
-                if (player.pitch > 1.4f)
+                /* Ignore large deltas from initial mouse warp. */
+                if (SDL_fabsf(ev.motion.xrel) < 50.0f && SDL_fabsf(ev.motion.yrel) < 50.0f)
                 {
-                    player.pitch = 1.4f;
-                }
-                if (player.pitch < -1.4f)
-                {
-                    player.pitch = -1.4f;
+                    player.yaw += ev.motion.xrel * MOUSE_SENS;
+                    player.pitch -= ev.motion.yrel * MOUSE_SENS;
+                    if (player.pitch > 1.4f)
+                    {
+                        player.pitch = 1.4f;
+                    }
+                    if (player.pitch < -1.4f)
+                    {
+                        player.pitch = -1.4f;
+                    }
                 }
             }
         }

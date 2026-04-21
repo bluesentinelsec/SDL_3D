@@ -158,6 +158,10 @@ struct sdl3d_gl_context
     float shadow_light_vp[16];
     float shadow_bias;
 
+#define SDL3D_CSM_CASCADE_COUNT 4
+    float csm_light_vp[SDL3D_CSM_CASCADE_COUNT][16];
+    float csm_split_depths[SDL3D_CSM_CASCADE_COUNT];
+
     /* PBR shadow uniform locations */
     GLint pbr_shadow_map_loc;
     GLint pbr_shadow_vp_loc;
@@ -665,6 +669,151 @@ static unsigned int *copy_indices(const unsigned int *src, size_t count)
 }
 
 /* ------------------------------------------------------------------ */
+/* 4x4 matrix inverse (Cramer's rule, column-major float[16])          */
+/* ------------------------------------------------------------------ */
+
+static bool mat4_inverse(const float *m, float *out)
+{
+    float inv[16];
+    inv[0]  =  m[5]*m[10]*m[15] - m[5]*m[11]*m[14] - m[9]*m[6]*m[15] + m[9]*m[7]*m[14] + m[13]*m[6]*m[11] - m[13]*m[7]*m[10];
+    inv[4]  = -m[4]*m[10]*m[15] + m[4]*m[11]*m[14] + m[8]*m[6]*m[15] - m[8]*m[7]*m[14] - m[12]*m[6]*m[11] + m[12]*m[7]*m[10];
+    inv[8]  =  m[4]*m[9]*m[15]  - m[4]*m[11]*m[13] - m[8]*m[5]*m[15] + m[8]*m[7]*m[13] + m[12]*m[5]*m[11] - m[12]*m[7]*m[9];
+    inv[12] = -m[4]*m[9]*m[14]  + m[4]*m[10]*m[13] + m[8]*m[5]*m[14] - m[8]*m[6]*m[13] - m[12]*m[5]*m[10] + m[12]*m[6]*m[9];
+    inv[1]  = -m[1]*m[10]*m[15] + m[1]*m[11]*m[14] + m[9]*m[2]*m[15] - m[9]*m[3]*m[14] - m[13]*m[2]*m[11] + m[13]*m[3]*m[10];
+    inv[5]  =  m[0]*m[10]*m[15] - m[0]*m[11]*m[14] - m[8]*m[2]*m[15] + m[8]*m[3]*m[14] + m[12]*m[2]*m[11] - m[12]*m[3]*m[10];
+    inv[9]  = -m[0]*m[9]*m[15]  + m[0]*m[11]*m[13] + m[8]*m[1]*m[15] - m[8]*m[3]*m[13] - m[12]*m[1]*m[11] + m[12]*m[3]*m[9];
+    inv[13] =  m[0]*m[9]*m[14]  - m[0]*m[10]*m[13] - m[8]*m[1]*m[14] + m[8]*m[2]*m[13] + m[12]*m[1]*m[10] - m[12]*m[2]*m[9];
+    inv[2]  =  m[1]*m[6]*m[15]  - m[1]*m[7]*m[14]  - m[5]*m[2]*m[15] + m[5]*m[3]*m[14] + m[13]*m[2]*m[7]  - m[13]*m[3]*m[6];
+    inv[6]  = -m[0]*m[6]*m[15]  + m[0]*m[7]*m[14]  + m[4]*m[2]*m[15] - m[4]*m[3]*m[14] - m[12]*m[2]*m[7]  + m[12]*m[3]*m[6];
+    inv[10] =  m[0]*m[5]*m[15]  - m[0]*m[7]*m[13]  - m[4]*m[1]*m[15] + m[4]*m[3]*m[13] + m[12]*m[1]*m[7]  - m[12]*m[3]*m[5];
+    inv[14] = -m[0]*m[5]*m[14]  + m[0]*m[6]*m[13]  + m[4]*m[1]*m[14] - m[4]*m[2]*m[13] - m[12]*m[1]*m[6]  + m[12]*m[2]*m[5];
+    inv[3]  = -m[1]*m[6]*m[11]  + m[1]*m[7]*m[10]  + m[5]*m[2]*m[11] - m[5]*m[3]*m[10] - m[9]*m[2]*m[7]   + m[9]*m[3]*m[6];
+    inv[7]  =  m[0]*m[6]*m[11]  - m[0]*m[7]*m[10]  - m[4]*m[2]*m[11] + m[4]*m[3]*m[10] + m[8]*m[2]*m[7]   - m[8]*m[3]*m[6];
+    inv[11] = -m[0]*m[5]*m[11]  + m[0]*m[7]*m[9]   + m[4]*m[1]*m[11] - m[4]*m[3]*m[9]  - m[8]*m[1]*m[7]   + m[8]*m[3]*m[5];
+    inv[15] =  m[0]*m[5]*m[10]  - m[0]*m[6]*m[9]   - m[4]*m[1]*m[10] + m[4]*m[2]*m[9]  + m[8]*m[1]*m[6]   - m[8]*m[2]*m[5];
+
+    float det = m[0]*inv[0] + m[1]*inv[4] + m[2]*inv[8] + m[3]*inv[12];
+    if (det == 0.0f) return false;
+    det = 1.0f / det;
+    for (int i = 0; i < 16; i++) out[i] = inv[i] * det;
+    return true;
+}
+
+/* ------------------------------------------------------------------ */
+/* CSM cascade computation                                             */
+/* ------------------------------------------------------------------ */
+
+static void compute_csm_matrices(sdl3d_gl_context *ctx, const sdl3d_render_context *rc)
+{
+    float near_p = rc->near_plane;
+    float far_p = rc->far_plane;
+    if (far_p > 50.0f) far_p = 50.0f;
+
+    /* Practical split scheme: lambda=0.5 blend of log and uniform. */
+    for (int i = 0; i < SDL3D_CSM_CASCADE_COUNT; i++)
+    {
+        float p = (float)(i + 1) / (float)SDL3D_CSM_CASCADE_COUNT;
+        float log_split = near_p * SDL_powf(far_p / near_p, p);
+        float uni_split = near_p + (far_p - near_p) * p;
+        ctx->csm_split_depths[i] = 0.5f * log_split + 0.5f * uni_split;
+    }
+
+    /* Extract FOV and aspect from the projection matrix (column-major).
+     * proj[5] = m[1][1] = f = 1/tan(fovy/2)
+     * proj[0] = m[0][0] = f/aspect                                    */
+    float f = rc->projection.m[5];
+    float aspect = f / rc->projection.m[0];
+    float fovy = 2.0f * SDL_atanf(1.0f / f);
+
+    /* Light direction (normalized). */
+    sdl3d_vec3 light_dir = sdl3d_vec3_normalize(rc->lights[0].direction);
+
+    for (int i = 0; i < SDL3D_CSM_CASCADE_COUNT; i++)
+    {
+        float c_near = (i == 0) ? rc->near_plane : ctx->csm_split_depths[i - 1];
+        float c_far = ctx->csm_split_depths[i];
+
+        /* Build sub-frustum projection and invert (proj * view). */
+        sdl3d_mat4 sub_proj;
+        sdl3d_mat4_perspective(fovy, aspect, c_near, c_far, &sub_proj);
+        sdl3d_mat4 pv = sdl3d_mat4_multiply(sub_proj, rc->view);
+
+        float inv_pv[16];
+        mat4_inverse(pv.m, inv_pv);
+
+        /* 8 NDC corners -> world space. */
+        float corners[8][3];
+        int ci = 0;
+        for (int z = 0; z < 2; z++)
+        {
+            for (int y = 0; y < 2; y++)
+            {
+                for (int x = 0; x < 2; x++)
+                {
+                    sdl3d_vec4 ndc = sdl3d_vec4_make(
+                        (float)x * 2.0f - 1.0f, (float)y * 2.0f - 1.0f, (float)z * 2.0f - 1.0f, 1.0f);
+                    sdl3d_mat4 inv_m;
+                    SDL_memcpy(inv_m.m, inv_pv, sizeof(inv_pv));
+                    sdl3d_vec4 ws = sdl3d_mat4_transform_vec4(inv_m, ndc);
+                    corners[ci][0] = ws.x / ws.w;
+                    corners[ci][1] = ws.y / ws.w;
+                    corners[ci][2] = ws.z / ws.w;
+                    ci++;
+                }
+            }
+        }
+
+        /* Frustum center. */
+        float cx = 0, cy = 0, cz = 0;
+        for (int j = 0; j < 8; j++) { cx += corners[j][0]; cy += corners[j][1]; cz += corners[j][2]; }
+        cx /= 8.0f; cy /= 8.0f; cz /= 8.0f;
+
+        /* Light view: lookAt(center + lightDir, center, up). */
+        sdl3d_vec3 center = sdl3d_vec3_make(cx, cy, cz);
+        sdl3d_vec3 eye = sdl3d_vec3_add(center, light_dir);
+        sdl3d_vec3 up = sdl3d_vec3_make(0, 1, 0);
+        /* If light is nearly vertical, use alternative up. */
+        if (SDL_fabsf(sdl3d_vec3_dot(sdl3d_vec3_normalize(light_dir), up)) > 0.99f)
+            up = sdl3d_vec3_make(1, 0, 0);
+
+        sdl3d_mat4 light_view;
+        sdl3d_mat4_look_at(eye, center, up, &light_view);
+
+        /* Transform corners to light view space, find AABB. */
+        float minX = 1e30f, maxX = -1e30f;
+        float minY = 1e30f, maxY = -1e30f;
+        float minZ = 1e30f, maxZ = -1e30f;
+        for (int j = 0; j < 8; j++)
+        {
+            sdl3d_vec4 lv = sdl3d_mat4_transform_vec4(light_view,
+                sdl3d_vec4_make(corners[j][0], corners[j][1], corners[j][2], 1.0f));
+            if (lv.x < minX) minX = lv.x;
+            if (lv.x > maxX) maxX = lv.x;
+            if (lv.y < minY) minY = lv.y;
+            if (lv.y > maxY) maxY = lv.y;
+            if (lv.z < minZ) minZ = lv.z;
+            if (lv.z > maxZ) maxZ = lv.z;
+        }
+
+        /* Extend Z range to catch shadow casters behind the frustum. */
+        float z_mult = 10.0f;
+        if (minZ < 0) minZ *= z_mult; else minZ /= z_mult;
+        if (maxZ < 0) maxZ /= z_mult; else maxZ *= z_mult;
+
+        sdl3d_mat4 light_proj;
+        sdl3d_mat4_orthographic(minX, maxX, minY, maxY, minZ, maxZ, &light_proj);
+
+        sdl3d_mat4 lp_lv = sdl3d_mat4_multiply(light_proj, light_view);
+        SDL_memcpy(ctx->csm_light_vp[i], lp_lv.m, 16 * sizeof(float));
+    }
+
+    /* Use cascade 0 VP as the main shadow VP for the fragment shader (layer 0).
+     * NOTE: ctx->shadow_light_vp is already set from sdl3d_enable_shadow in gl_clear.
+     * We keep that original VP for the fragment shader since it covers the full scene.
+     * Slice 3 will switch the fragment shader to per-cascade selection. */
+}
+
+/* ------------------------------------------------------------------ */
 /* Draw list replay                                                    */
 /* ------------------------------------------------------------------ */
 
@@ -674,7 +823,7 @@ static void replay_draw_list_shadow(sdl3d_gl_context *ctx)
     gl->UseProgram(ctx->shadow_program);
     gl->BindVertexArray(ctx->shadow_vao);
 
-    gl->UniformMatrix4fv(ctx->shadow_light_vp_loc, 1, GL_FALSE, ctx->shadow_light_vp);
+    /* lightVP uniform is set by the caller per cascade. */
 
     for (int i = 0; i < ctx->draw_count; i++)
     {
@@ -1335,16 +1484,28 @@ static bool gl_present(sdl3d_render_context *context)
     /* Flush UBO before any replay. */
     flush_scene_ubo(ctx);
 
-    /* Shadow pass: replay lit entries into shadow FBO. */
+    /* Shadow pass: render original VP into layer 0 (backward compatible),
+     * then CSM cascades 1-3 into layers 1-3 for Slice 3. */
     if (ctx->shadow_program && ctx->shadow_fbo && ctx->shadow_bias > 0.0f)
     {
+        compute_csm_matrices(ctx, context);
+
         gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
         gl->Viewport(0, 0, 2048, 2048);
-        gl->Clear(GL_DEPTH_BUFFER_BIT);
         gl->Enable(GL_DEPTH_TEST);
         gl->Disable(GL_CULL_FACE);
 
-        replay_draw_list_shadow(ctx);
+        for (int cascade = 0; cascade < SDL3D_CSM_CASCADE_COUNT; cascade++)
+        {
+            gl->FramebufferTextureLayer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                                        ctx->shadow_depth_tex, 0, cascade);
+            gl->Clear(GL_DEPTH_BUFFER_BIT);
+            gl->UseProgram(ctx->shadow_program);
+            gl->UniformMatrix4fv(ctx->shadow_light_vp_loc, 1, GL_FALSE,
+                                 (cascade == 0) ? ctx->shadow_light_vp
+                                                : ctx->csm_light_vp[cascade]);
+            replay_draw_list_shadow(ctx);
+        }
 
         gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
         gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
@@ -1430,12 +1591,25 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
         flush_scene_ubo(ctx);
         if (ctx->shadow_program && ctx->shadow_fbo && ctx->shadow_bias > 0.0f)
         {
+            compute_csm_matrices(ctx, ctx->current_ctx);
+
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
             gl->Viewport(0, 0, 2048, 2048);
-            gl->Clear(GL_DEPTH_BUFFER_BIT);
             gl->Enable(GL_DEPTH_TEST);
             gl->Disable(GL_CULL_FACE);
-            replay_draw_list_shadow(ctx);
+
+            for (int cascade = 0; cascade < SDL3D_CSM_CASCADE_COUNT; cascade++)
+            {
+                gl->FramebufferTextureLayer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                                            ctx->shadow_depth_tex, 0, cascade);
+                gl->Clear(GL_DEPTH_BUFFER_BIT);
+                gl->UseProgram(ctx->shadow_program);
+                gl->UniformMatrix4fv(ctx->shadow_light_vp_loc, 1, GL_FALSE,
+                                     (cascade == 0) ? ctx->shadow_light_vp
+                                                    : ctx->csm_light_vp[cascade]);
+                replay_draw_list_shadow(ctx);
+            }
+
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
             gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
             gl->Enable(GL_CULL_FACE);
