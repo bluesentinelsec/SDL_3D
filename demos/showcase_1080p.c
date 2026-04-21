@@ -294,7 +294,8 @@ int main(int argc, char *argv[])
     sdl3d_set_fog(ctx, &fog);
 
     /* --- Shadows (moonlight casts shadows) --- */
-    sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 30.0f);
+    /* --- Shadows disabled for debugging --- */
+    /* sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 30.0f); */
     SDL_zerop(&post);
     post.effects = SDL3D_POST_BLOOM | SDL3D_POST_VIGNETTE;
     post.bloom_threshold = 0.8f;
