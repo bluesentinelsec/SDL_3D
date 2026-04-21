@@ -294,8 +294,10 @@ int main(int argc, char *argv[])
     sdl3d_set_fog(ctx, &fog);
 
     /* --- Shadows (moonlight casts shadows) --- */
-    /* --- Shadows disabled for debugging --- */
-    /* sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 30.0f); */
+    /* Shadow mapping disabled — needs proper GPU-side implementation.
+     * The current CPU-upload hybrid has a first-frame initialization bug
+     * in the shader's light-space transform. Will be reimplemented with
+     * GPU shadow pass in the SDL3_GPU backend. */
     SDL_zerop(&post);
     post.effects = SDL3D_POST_BLOOM | SDL3D_POST_VIGNETTE;
     post.bloom_threshold = 0.8f;
@@ -531,33 +533,6 @@ int main(int argc, char *argv[])
         cam.up = sdl3d_vec3_make(0, 1, 0);
         cam.fovy = 65.0f;
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
-
-        /* Render shadow map from loaded models. */
-        if (has_box || has_duck)
-        {
-            sdl3d_mesh shadow_meshes[4];
-            sdl3d_mat4 shadow_mats[4];
-            int shadow_count = 0;
-            if (has_box)
-            {
-                for (int mi = 0; mi < box_model.mesh_count && shadow_count < 4; ++mi)
-                {
-                    shadow_meshes[shadow_count] = box_model.meshes[mi];
-                    shadow_mats[shadow_count] = sdl3d_mat4_translate(sdl3d_vec3_make(-2.5f, 0.5f, -2));
-                    shadow_count++;
-                }
-            }
-            if (has_duck)
-            {
-                for (int mi = 0; mi < duck_model.mesh_count && shadow_count < 4; ++mi)
-                {
-                    shadow_meshes[shadow_count] = duck_model.meshes[mi];
-                    shadow_mats[shadow_count] = sdl3d_mat4_translate(sdl3d_vec3_make(12, 0.1f, -8));
-                    shadow_count++;
-                }
-            }
-            sdl3d_render_shadow_map(ctx, shadow_meshes, shadow_count, shadow_mats);
-        }
 
         /* Render */
         sdl3d_clear_render_context(ctx, sky);

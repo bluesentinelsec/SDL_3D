@@ -1017,6 +1017,8 @@ void sdl3d_gl_present(sdl3d_gl_context *ctx, SDL_Window *window)
 {
     int window_w = 0;
     int window_h = 0;
+    int vp_x, vp_y, vp_w, vp_h;
+    float scale_x, scale_y, scale;
 
     if (ctx == NULL || window == NULL)
     {
@@ -1026,11 +1028,36 @@ void sdl3d_gl_present(sdl3d_gl_context *ctx, SDL_Window *window)
     SDL_GetWindowSizeInPixels(window, &window_w, &window_h);
     SDL_GL_MakeCurrent(ctx->window, ctx->gl_context);
 
-    /* Avoid framebuffer blits on macOS: draw a textured fullscreen pass instead. */
+    /* Compute letterbox viewport to maintain aspect ratio. */
+    scale_x = (float)window_w / (float)ctx->logical_width;
+    scale_y = (float)window_h / (float)ctx->logical_height;
+    scale = (scale_x < scale_y) ? scale_x : scale_y;
+    vp_w = (int)((float)ctx->logical_width * scale);
+    vp_h = (int)((float)ctx->logical_height * scale);
+    vp_x = (window_w - vp_w) / 2;
+    vp_y = (window_h - vp_h) / 2;
+
     ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, 0);
     ctx->gl.Disable(GL_DEPTH_TEST);
     ctx->gl.Disable(GL_CULL_FACE);
-    sdl3d_gl_copy_texture_to_bound_framebuffer(ctx, ctx->fbo_color_texture, window_w, window_h);
+
+    /* Clear to black for letterbox bars. */
+    ctx->gl.Viewport(0, 0, window_w, window_h);
+    ctx->gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    ctx->gl.Clear(GL_COLOR_BUFFER_BIT);
+
+    /* Copy FBO into the letterboxed viewport. */
+    sdl3d_gl_copy_texture_to_bound_framebuffer(ctx, ctx->fbo_color_texture, vp_w, vp_h);
+    /* The copy function sets viewport internally; override with letterbox offset. */
+    ctx->gl.Viewport(vp_x, vp_y, vp_w, vp_h);
+    ctx->gl.BindVertexArray(ctx->fullscreen_vao);
+    ctx->gl.UseProgram(ctx->copy_program);
+    ctx->gl.ActiveTexture(GL_TEXTURE0);
+    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->fbo_color_texture);
+    ctx->gl.Uniform1i(ctx->copy_texture_loc, 0);
+    sdl3d_gl_draw_fullscreen_triangle(&ctx->gl);
+    ctx->gl.BindVertexArray(0);
+
     sdl3d_gl_debug_log_pixel(ctx, GL_FRAMEBUFFER, 0, window_w, window_h, "after-present-copy");
     ctx->gl.Enable(GL_CULL_FACE);
     ctx->gl.Enable(GL_DEPTH_TEST);
