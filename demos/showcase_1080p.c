@@ -603,13 +603,15 @@ int main(int argc, char *argv[])
         /* Neon signs */
         if (show_neon)
         {
-            sdl3d_set_emissive(ctx, 0.0f, 3.0f, 0.5f);
-            sdl3d_draw_cube(ctx, sdl3d_vec3_make(-7.5f, 3.5f, -5.5f), sdl3d_vec3_make(0.1f, 1.5f, 3.0f),
+            /* Green neon on front face of building at (-8, -6), face at z=-3.5 */
+            sdl3d_set_emissive(ctx, 0.0f, 8.0f, 1.5f);
+            sdl3d_draw_cube(ctx, sdl3d_vec3_make(-8.0f, 4.0f, -3.4f), sdl3d_vec3_make(3.0f, 1.2f, 0.15f),
                             (sdl3d_color){0, 255, 80, 255});
 
-            sdl3d_set_emissive(ctx, 3.0f, 0.3f, 2.0f);
-            sdl3d_draw_cube(ctx, sdl3d_vec3_make(7.5f, 3.0f, -3.5f), sdl3d_vec3_make(0.1f, 1.0f, 2.5f),
-                            (sdl3d_color){255, 50, 200, 255});
+            /* Pink neon on front face of building at (8, -4), face at z=-1 */
+            sdl3d_set_emissive(ctx, 8.0f, 0.5f, 5.0f);
+            sdl3d_draw_cube(ctx, sdl3d_vec3_make(8.0f, 3.0f, -0.9f), sdl3d_vec3_make(2.5f, 0.8f, 0.15f),
+                            (sdl3d_color){255, 50, 220, 255});
 
             sdl3d_set_emissive(ctx, 0.0f, 0.0f, 0.0f);
         }
