@@ -233,6 +233,7 @@ int main(int argc, char *argv[])
     sdl3d_mat4 *man_joints = NULL;
     float man_anim_time = 0.0f;
     bool running = true;
+    bool mouse_initialized = false;
     Uint64 last_time;
     int current_profile = 0;
     sdl3d_backend current_backend = SDL3D_BACKEND_SDLGPU;
@@ -459,8 +460,11 @@ int main(int argc, char *argv[])
             }
             else if (ev.type == SDL_EVENT_MOUSE_MOTION)
             {
-                /* Ignore large deltas from initial mouse warp. */
-                if (SDL_fabsf(ev.motion.xrel) < 50.0f && SDL_fabsf(ev.motion.yrel) < 50.0f)
+                if (!mouse_initialized)
+                {
+                    mouse_initialized = true;
+                }
+                else
                 {
                     player.yaw += ev.motion.xrel * MOUSE_SENS;
                     player.pitch -= ev.motion.yrel * MOUSE_SENS;
