@@ -694,8 +694,8 @@ static const char k_ssao_frag[] =
     "    return (2.0 * uNear * uFar) / (uFar + uNear - z * (uFar - uNear));\n"
     "}\n"
     "void main() {\n"
-    "    vec3 color = texture(uScene, vTexCoord).rgb;\n"
     "    float rawDepth = texture(uDepth, vTexCoord).r;\n"
+    "    vec3 color = texture(uScene, vTexCoord).rgb;\n"
     "    /* Skip SSAO for sky pixels (depth at far plane). */\n"
     "    if (rawDepth > 0.999) { fragColor = vec4(color, 1.0); return; }\n"
     "    float depth = linearizeDepth(rawDepth);\n"
@@ -712,7 +712,6 @@ static const char k_ssao_frag[] =
     "        }\n"
     "    }\n"
     "    ao /= float(count);\n"
-    "    vec3 color = texture(uScene, vTexCoord).rgb;\n"
     "    color *= (1.0 - ao * 0.4);\n"
     "    fragColor = vec4(color, 1.0);\n"
     "}\n";
