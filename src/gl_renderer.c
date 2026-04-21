@@ -232,6 +232,10 @@ struct sdl3d_gl_context
     GLint retro_resolution_loc;
     int active_retro_profile; /* 0=modern, 1=PS1, 2=N64, 3=DOS, 4=SNES */
 
+    /* SSAO post-process */
+    GLuint ssao_program;
+    GLint ssao_scene_loc, ssao_depth_loc, ssao_texel_size_loc, ssao_near_loc, ssao_far_loc;
+
     /* Cached render context pointer for lazy UBO upload */
     sdl3d_render_context *current_ctx;
 };
@@ -677,9 +681,37 @@ static const char k_retro_frag[] =
     "    fragColor = vec4(max(color, 0.0), 1.0);\n"
     "}\n";
 
-/* ------------------------------------------------------------------ */
-/* Shader helpers                                                      */
-/* ------------------------------------------------------------------ */
+static const char k_ssao_frag[] =
+    "in vec2 vTexCoord;\n"
+    "uniform sampler2D uScene;\n"
+    "uniform sampler2D uDepth;\n"
+    "uniform vec2 uTexelSize;\n"
+    "uniform float uNear;\n"
+    "uniform float uFar;\n"
+    "out vec4 fragColor;\n"
+    "float linearizeDepth(float d) {\n"
+    "    float z = d * 2.0 - 1.0;\n"
+    "    return (2.0 * uNear * uFar) / (uFar + uNear - z * (uFar - uNear));\n"
+    "}\n"
+    "void main() {\n"
+    "    float depth = linearizeDepth(texture(uDepth, vTexCoord).r);\n"
+    "    float ao = 0.0;\n"
+    "    float radius = 2.0;\n"
+    "    int count = 0;\n"
+    "    for (int x = -2; x <= 2; x++) {\n"
+    "        for (int y = -2; y <= 2; y++) {\n"
+    "            if (x == 0 && y == 0) continue;\n"
+    "            float sd = linearizeDepth(texture(uDepth, vTexCoord + vec2(x, y) * uTexelSize * radius).r);\n"
+    "            float diff = depth - sd;\n"
+    "            if (diff > 0.05 && diff < 1.0) ao += 1.0;\n"
+    "            count++;\n"
+    "        }\n"
+    "    }\n"
+    "    ao /= float(count);\n"
+    "    vec3 color = texture(uScene, vTexCoord).rgb;\n"
+    "    color *= (1.0 - ao * 0.4);\n"
+    "    fragColor = vec4(color, 1.0);\n"
+    "}\n";
 
 static GLuint compile_shader(sdl3d_gl_funcs *gl, GLenum type, const char *version, const char *body)
 {
@@ -1247,14 +1279,16 @@ static bool create_fbo(sdl3d_gl_context *ctx, int w, int h)
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    gl->GenRenderbuffers(1, &ctx->fbo_depth);
-    gl->BindRenderbuffer(GL_RENDERBUFFER, ctx->fbo_depth);
-    gl->RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, w, h);
+    gl->GenTextures(1, &ctx->fbo_depth);
+    gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_depth);
+    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, w, h, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     gl->GenFramebuffers(1, &ctx->fbo);
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
     gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ctx->fbo_color, 0);
-    gl->FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, ctx->fbo_depth);
+    gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, ctx->fbo_depth, 0);
 
     GLenum status = gl->CheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE)
@@ -1673,6 +1707,20 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->retro_profile_loc = gl->GetUniformLocation(ctx->retro_program, "uProfile");
     ctx->retro_resolution_loc = gl->GetUniformLocation(ctx->retro_program, "uResolution");
 
+    /* ---- SSAO shader ---- */
+    ctx->ssao_program = build_program(gl, version_prefix, k_fullscreen_vert, k_ssao_frag);
+    if (!ctx->ssao_program)
+    {
+        SDL_Log("SDL3D GL: SSAO shader compilation failed");
+        sdl3d_gl_destroy(ctx);
+        return NULL;
+    }
+    ctx->ssao_scene_loc = gl->GetUniformLocation(ctx->ssao_program, "uScene");
+    ctx->ssao_depth_loc = gl->GetUniformLocation(ctx->ssao_program, "uDepth");
+    ctx->ssao_texel_size_loc = gl->GetUniformLocation(ctx->ssao_program, "uTexelSize");
+    ctx->ssao_near_loc = gl->GetUniformLocation(ctx->ssao_program, "uNear");
+    ctx->ssao_far_loc = gl->GetUniformLocation(ctx->ssao_program, "uFar");
+
     /* ---- Initial GL state ---- */
     gl->Enable(GL_DEPTH_TEST);
     gl->DepthFunc(GL_LEQUAL);
@@ -1747,6 +1795,8 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     /* Post-process resources. */
     if (ctx->retro_program)
         gl->DeleteProgram(ctx->retro_program);
+    if (ctx->ssao_program)
+        gl->DeleteProgram(ctx->ssao_program);
     if (ctx->bloom_program)
         gl->DeleteProgram(ctx->bloom_program);
     if (ctx->bloom_blur_program)
@@ -1770,7 +1820,7 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     if (ctx->fbo_color)
         gl->DeleteTextures(1, &ctx->fbo_color);
     if (ctx->fbo_depth)
-        gl->DeleteRenderbuffers(1, &ctx->fbo_depth);
+        gl->DeleteTextures(1, &ctx->fbo_depth);
 
     if (ctx->gl_context)
         SDL_GL_DestroyContext(ctx->gl_context);
@@ -2023,6 +2073,40 @@ static bool gl_present(sdl3d_render_context *context)
         gl->BindTexture(GL_TEXTURE_2D, ctx->pp_tex_a);
         gl->Uniform1i(ctx->copy_texture_loc, 0);
         gl->DrawArrays(GL_TRIANGLES, 0, 3);
+    }
+
+    /* SSAO pass: darken pixels where nearby depth samples indicate occlusion.
+     * Reads fbo_color + fbo_depth, writes to pp_fbo_a, then copies back. */
+    {
+        float near_p = ctx->current_ctx->near_plane;
+        float far_p = ctx->current_ctx->far_plane;
+        if (near_p > 0.0f && far_p > near_p)
+        {
+            gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->pp_fbo_a);
+            gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+            gl->Clear(GL_COLOR_BUFFER_BIT);
+            gl->UseProgram(ctx->ssao_program);
+            gl->ActiveTexture(GL_TEXTURE0);
+            gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
+            gl->Uniform1i(ctx->ssao_scene_loc, 0);
+            gl->ActiveTexture(GL_TEXTURE0 + 1);
+            gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_depth);
+            gl->Uniform1i(ctx->ssao_depth_loc, 1);
+            gl->Uniform2f(ctx->ssao_texel_size_loc, 1.0f / (float)ctx->logical_w, 1.0f / (float)ctx->logical_h);
+            gl->Uniform1f(ctx->ssao_near_loc, near_p);
+            gl->Uniform1f(ctx->ssao_far_loc, far_p);
+            gl->DrawArrays(GL_TRIANGLES, 0, 3);
+            gl->ActiveTexture(GL_TEXTURE0);
+
+            /* Copy SSAO result back to fbo_color. */
+            gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+            gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+            gl->UseProgram(ctx->copy_program);
+            gl->ActiveTexture(GL_TEXTURE0);
+            gl->BindTexture(GL_TEXTURE_2D, ctx->pp_tex_a);
+            gl->Uniform1i(ctx->copy_texture_loc, 0);
+            gl->DrawArrays(GL_TRIANGLES, 0, 3);
+        }
     }
 
     /* Step 1: Extract bright pixels from main FBO into pp_tex_a. */
