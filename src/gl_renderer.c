@@ -66,6 +66,30 @@ typedef struct sdl3d_scene_ubo_data
 } sdl3d_scene_ubo_data;
 
 /* ------------------------------------------------------------------ */
+/* Draw list entry                                                     */
+/* ------------------------------------------------------------------ */
+
+typedef struct sdl3d_draw_entry
+{
+    float *positions;
+    float *normals;
+    float *uvs;
+    float *colors;
+    unsigned int *indices;
+    int vertex_count;
+    int index_count;
+    float model_matrix[16];
+    float normal_matrix[9];
+    float tint[4];
+    float metallic;
+    float roughness;
+    float emissive[3];
+    const sdl3d_texture2d *texture;
+    bool lit;
+    float mvp[16];
+} sdl3d_draw_entry;
+
+/* ------------------------------------------------------------------ */
 /* Context                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -138,6 +162,11 @@ struct sdl3d_gl_context
     GLint pbr_shadow_vp_loc;
     GLint pbr_shadow_enabled_loc;
     GLint pbr_shadow_bias_loc;
+
+    /* Deferred draw list */
+    sdl3d_draw_entry *draw_list;
+    int draw_count;
+    int draw_capacity;
 
     GLuint white_texture;
 
@@ -577,6 +606,209 @@ static const float *ensure_white_colors(sdl3d_gl_context *ctx, int vertex_count)
 }
 
 /* ------------------------------------------------------------------ */
+/* Draw list helpers                                                   */
+/* ------------------------------------------------------------------ */
+
+static void free_draw_list(sdl3d_gl_context *ctx)
+{
+    for (int i = 0; i < ctx->draw_count; i++)
+    {
+        sdl3d_draw_entry *e = &ctx->draw_list[i];
+        SDL_free(e->positions);
+        SDL_free(e->normals);
+        SDL_free(e->uvs);
+        SDL_free(e->colors);
+        SDL_free(e->indices);
+    }
+    ctx->draw_count = 0;
+}
+
+static sdl3d_draw_entry *append_draw_entry(sdl3d_gl_context *ctx)
+{
+    if (ctx->draw_count == ctx->draw_capacity)
+    {
+        int cap = ctx->draw_capacity ? ctx->draw_capacity * 2 : 64;
+        sdl3d_draw_entry *buf = SDL_realloc(ctx->draw_list, (size_t)cap * sizeof(sdl3d_draw_entry));
+        if (!buf)
+            return NULL;
+        ctx->draw_list = buf;
+        ctx->draw_capacity = cap;
+    }
+    sdl3d_draw_entry *e = &ctx->draw_list[ctx->draw_count++];
+    SDL_memset(e, 0, sizeof(*e));
+    return e;
+}
+
+static float *copy_floats(const float *src, size_t count)
+{
+    if (!src || count == 0)
+        return NULL;
+    float *dst = SDL_malloc(count * sizeof(float));
+    if (dst)
+        SDL_memcpy(dst, src, count * sizeof(float));
+    return dst;
+}
+
+static unsigned int *copy_indices(const unsigned int *src, size_t count)
+{
+    if (!src || count == 0)
+        return NULL;
+    unsigned int *dst = SDL_malloc(count * sizeof(unsigned int));
+    if (dst)
+        SDL_memcpy(dst, src, count * sizeof(unsigned int));
+    return dst;
+}
+
+/* ------------------------------------------------------------------ */
+/* Draw list replay                                                    */
+/* ------------------------------------------------------------------ */
+
+static void replay_draw_list_shadow(sdl3d_gl_context *ctx)
+{
+    sdl3d_gl_funcs *gl = &ctx->gl;
+    gl->UseProgram(ctx->shadow_program);
+    gl->BindVertexArray(ctx->shadow_vao);
+
+    for (int i = 0; i < ctx->draw_count; i++)
+    {
+        sdl3d_draw_entry *e = &ctx->draw_list[i];
+        if (!e->lit)
+            continue;
+
+        float light_mvp[16];
+        for (int r = 0; r < 4; r++)
+            for (int c = 0; c < 4; c++)
+            {
+                float sum = 0;
+                for (int k = 0; k < 4; k++)
+                    sum += ctx->shadow_light_vp[r + k * 4] * e->model_matrix[k + c * 4];
+                light_mvp[r + c * 4] = sum;
+            }
+
+        gl->UniformMatrix4fv(ctx->shadow_light_mvp_loc, 1, GL_FALSE, light_mvp);
+        gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
+        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->positions,
+                       GL_DYNAMIC_DRAW);
+
+        if (e->indices && e->index_count > 0)
+        {
+            gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->shadow_ebo);
+            gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
+                           e->indices, GL_DYNAMIC_DRAW);
+            gl->DrawElements(GL_TRIANGLES, e->index_count, GL_UNSIGNED_INT, NULL);
+        }
+        else
+        {
+            gl->DrawArrays(GL_TRIANGLES, 0, e->vertex_count);
+        }
+    }
+    gl->BindVertexArray(0);
+}
+
+static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
+{
+    sdl3d_gl_funcs *gl = &ctx->gl;
+
+    for (int i = 0; i < ctx->draw_count; i++)
+    {
+        sdl3d_draw_entry *e = &ctx->draw_list[i];
+        GLuint tex = resolve_texture(ctx, e->texture);
+
+        if (e->lit)
+        {
+            gl->UseProgram(ctx->pbr_program);
+            gl->UniformMatrix4fv(ctx->pbr_model_loc, 1, GL_FALSE, e->model_matrix);
+            gl->UniformMatrix3fv(ctx->pbr_normal_matrix_loc, 1, GL_FALSE, e->normal_matrix);
+            gl->Uniform4f(ctx->pbr_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
+            gl->Uniform1f(ctx->pbr_metallic_loc, e->metallic);
+            gl->Uniform1f(ctx->pbr_roughness_loc, e->roughness);
+            gl->Uniform3f(ctx->pbr_emissive_loc, e->emissive[0], e->emissive[1], e->emissive[2]);
+
+            gl->ActiveTexture(GL_TEXTURE0);
+            gl->BindTexture(GL_TEXTURE_2D, tex);
+            gl->Uniform1i(ctx->pbr_texture_loc, 0);
+            gl->Uniform1i(ctx->pbr_has_texture_loc, e->texture ? 1 : 0);
+
+            /* Shadow uniforms */
+            if (ctx->shadow_depth_tex && ctx->shadow_bias > 0.0f)
+            {
+                gl->ActiveTexture(GL_TEXTURE0 + 1);
+                gl->BindTexture(GL_TEXTURE_2D, ctx->shadow_depth_tex);
+                gl->Uniform1i(ctx->pbr_shadow_map_loc, 1);
+                gl->UniformMatrix4fv(ctx->pbr_shadow_vp_loc, 1, GL_FALSE, ctx->shadow_light_vp);
+                gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 1);
+                gl->Uniform1f(ctx->pbr_shadow_bias_loc, ctx->shadow_bias);
+                gl->ActiveTexture(GL_TEXTURE0);
+            }
+            else
+            {
+                gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 0);
+            }
+
+            gl->BindVertexArray(ctx->lit_vao);
+            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_position_vbo);
+            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->positions,
+                           GL_DYNAMIC_DRAW);
+            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_normal_vbo);
+            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->normals,
+                           GL_DYNAMIC_DRAW);
+            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_uv_vbo);
+            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 2 * sizeof(float)), e->uvs,
+                           GL_DYNAMIC_DRAW);
+            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_color_vbo);
+            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 4 * sizeof(float)), e->colors,
+                           GL_DYNAMIC_DRAW);
+
+            if (e->indices && e->index_count > 0)
+            {
+                gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->lit_ebo);
+                gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
+                               e->indices, GL_DYNAMIC_DRAW);
+                gl->DrawElements(GL_TRIANGLES, e->index_count, GL_UNSIGNED_INT, NULL);
+            }
+            else
+            {
+                gl->DrawArrays(GL_TRIANGLES, 0, e->vertex_count);
+            }
+        }
+        else
+        {
+            gl->UseProgram(ctx->unlit_program);
+            gl->UniformMatrix4fv(ctx->unlit_mvp_loc, 1, GL_FALSE, e->mvp);
+            gl->Uniform4f(ctx->unlit_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
+
+            gl->ActiveTexture(GL_TEXTURE0);
+            gl->BindTexture(GL_TEXTURE_2D, tex);
+            gl->Uniform1i(ctx->unlit_texture_loc, 0);
+            gl->Uniform1i(ctx->unlit_has_texture_loc, e->texture ? 1 : 0);
+
+            gl->BindVertexArray(ctx->unlit_vao);
+            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_position_vbo);
+            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->positions,
+                           GL_DYNAMIC_DRAW);
+            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_uv_vbo);
+            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 2 * sizeof(float)), e->uvs,
+                           GL_DYNAMIC_DRAW);
+            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_color_vbo);
+            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 4 * sizeof(float)), e->colors,
+                           GL_DYNAMIC_DRAW);
+
+            if (e->indices && e->index_count > 0)
+            {
+                gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->unlit_ebo);
+                gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
+                               e->indices, GL_DYNAMIC_DRAW);
+                gl->DrawElements(GL_TRIANGLES, e->index_count, GL_UNSIGNED_INT, NULL);
+            }
+            else
+            {
+                gl->DrawArrays(GL_TRIANGLES, 0, e->vertex_count);
+            }
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ */
 /* FBO helpers                                                         */
 /* ------------------------------------------------------------------ */
 
@@ -913,6 +1145,9 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
         return;
     sdl3d_gl_funcs *gl = &ctx->gl;
 
+    free_draw_list(ctx);
+    SDL_free(ctx->draw_list);
+
     tex_cache_free(ctx);
     SDL_free(ctx->white_colors);
 
@@ -977,9 +1212,18 @@ static bool gl_clear(sdl3d_render_context *context, sdl3d_color color)
     sdl3d_gl_context *ctx = context->gl;
     sdl3d_gl_funcs *gl = &ctx->gl;
 
+    free_draw_list(ctx);
+
     ctx->frame_index++;
     ctx->current_ctx = context;
     ctx->ubo_dirty = true;
+
+    /* Sync shadow state from render context so deferred replay works. */
+    if (context->shadow_enabled[0])
+    {
+        SDL_memcpy(ctx->shadow_light_vp, context->shadow_vp[0].m, 16 * sizeof(float));
+        ctx->shadow_bias = context->shadow_bias > 0 ? context->shadow_bias : 0.005f;
+    }
 
     SDL_GL_MakeCurrent(ctx->window, ctx->gl_context);
 
@@ -993,53 +1237,23 @@ static bool gl_clear(sdl3d_render_context *context, sdl3d_color color)
 static bool gl_draw_mesh_unlit(sdl3d_render_context *context, const sdl3d_draw_params_unlit *params)
 {
     sdl3d_gl_context *ctx = context->gl;
-    sdl3d_gl_funcs *gl = &ctx->gl;
 
-    flush_scene_ubo(ctx);
-
-    gl->UseProgram(ctx->unlit_program);
-
-    /* MVP */
-    gl->UniformMatrix4fv(ctx->unlit_mvp_loc, 1, GL_FALSE, params->mvp);
-
-    /* Tint */
-    gl->Uniform4f(ctx->unlit_tint_loc, params->tint[0], params->tint[1], params->tint[2], params->tint[3]);
-
-    /* Texture */
-    GLuint tex = resolve_texture(ctx, params->texture);
-    gl->ActiveTexture(GL_TEXTURE0);
-    gl->BindTexture(GL_TEXTURE_2D, tex);
-    gl->Uniform1i(ctx->unlit_texture_loc, 0);
-    gl->Uniform1i(ctx->unlit_has_texture_loc, params->texture ? 1 : 0);
-
-    /* Upload vertex data */
     const float *colors = params->colors ? params->colors : ensure_white_colors(ctx, params->vertex_count);
 
-    gl->BindVertexArray(ctx->unlit_vao);
+    sdl3d_draw_entry *e = append_draw_entry(ctx);
+    if (!e)
+        return false;
 
-    gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_position_vbo);
-    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->vertex_count * 3 * sizeof(float)), params->positions,
-                   GL_DYNAMIC_DRAW);
-
-    gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_uv_vbo);
-    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->vertex_count * 2 * sizeof(float)), params->uvs,
-                   GL_DYNAMIC_DRAW);
-
-    gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_color_vbo);
-    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->vertex_count * 4 * sizeof(float)), colors,
-                   GL_DYNAMIC_DRAW);
-
-    if (params->indices && params->index_count > 0)
-    {
-        gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->unlit_ebo);
-        gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->index_count * sizeof(unsigned int)),
-                       params->indices, GL_DYNAMIC_DRAW);
-        gl->DrawElements(GL_TRIANGLES, params->index_count, GL_UNSIGNED_INT, NULL);
-    }
-    else
-    {
-        gl->DrawArrays(GL_TRIANGLES, 0, params->vertex_count);
-    }
+    e->lit = false;
+    e->vertex_count = params->vertex_count;
+    e->index_count = (params->indices && params->index_count > 0) ? params->index_count : 0;
+    e->positions = copy_floats(params->positions, (size_t)params->vertex_count * 3);
+    e->uvs = copy_floats(params->uvs, (size_t)params->vertex_count * 2);
+    e->colors = copy_floats(colors, (size_t)params->vertex_count * 4);
+    e->indices = copy_indices(params->indices, (size_t)e->index_count);
+    e->texture = params->texture;
+    SDL_memcpy(e->mvp, params->mvp, 16 * sizeof(float));
+    SDL_memcpy(e->tint, params->tint, 4 * sizeof(float));
 
     return true;
 }
@@ -1047,113 +1261,28 @@ static bool gl_draw_mesh_unlit(sdl3d_render_context *context, const sdl3d_draw_p
 static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_params_lit *params)
 {
     sdl3d_gl_context *ctx = context->gl;
-    sdl3d_gl_funcs *gl = &ctx->gl;
 
-    /* During shadow pass: render depth-only with shadow program and shadow VAO. */
-    if (ctx->in_shadow_pass && ctx->shadow_program)
-    {
-        float light_mvp[16];
-        for (int r = 0; r < 4; r++)
-        {
-            for (int c = 0; c < 4; c++)
-            {
-                float sum = 0;
-                for (int k = 0; k < 4; k++)
-                    sum += ctx->shadow_light_vp[r + k * 4] * params->model_matrix[k + c * 4];
-                light_mvp[r + c * 4] = sum;
-            }
-        }
-
-        gl->UseProgram(ctx->shadow_program);
-        gl->UniformMatrix4fv(ctx->shadow_light_mvp_loc, 1, GL_FALSE, light_mvp);
-
-        gl->BindVertexArray(ctx->shadow_vao);
-        gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
-        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->vertex_count * 3 * sizeof(float)),
-                       params->positions, GL_DYNAMIC_DRAW);
-
-        if (params->indices && params->index_count > 0)
-        {
-            gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->shadow_ebo);
-            gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->index_count * sizeof(unsigned int)),
-                           params->indices, GL_DYNAMIC_DRAW);
-            gl->DrawElements(GL_TRIANGLES, params->index_count, GL_UNSIGNED_INT, NULL);
-        }
-        else
-        {
-            gl->DrawArrays(GL_TRIANGLES, 0, params->vertex_count);
-        }
-        gl->BindVertexArray(0);
-        return true;
-    }
-
-    flush_scene_ubo(ctx);
-
-    gl->UseProgram(ctx->pbr_program);
-
-    /* Per-draw uniforms */
-    gl->UniformMatrix4fv(ctx->pbr_model_loc, 1, GL_FALSE, params->model_matrix);
-    gl->UniformMatrix3fv(ctx->pbr_normal_matrix_loc, 1, GL_FALSE, params->normal_matrix);
-    gl->Uniform4f(ctx->pbr_tint_loc, params->tint[0], params->tint[1], params->tint[2], params->tint[3]);
-    gl->Uniform1f(ctx->pbr_metallic_loc, params->metallic);
-    gl->Uniform1f(ctx->pbr_roughness_loc, params->roughness);
-    gl->Uniform3f(ctx->pbr_emissive_loc, params->emissive[0], params->emissive[1], params->emissive[2]);
-
-    /* Texture */
-    GLuint tex = resolve_texture(ctx, params->texture);
-    gl->ActiveTexture(GL_TEXTURE0);
-    gl->BindTexture(GL_TEXTURE_2D, tex);
-    gl->Uniform1i(ctx->pbr_texture_loc, 0);
-    gl->Uniform1i(ctx->pbr_has_texture_loc, params->texture ? 1 : 0);
-
-    /* Shadow map uniforms. */
-    if (ctx->shadow_depth_tex && ctx->shadow_bias > 0.0f)
-    {
-        gl->ActiveTexture(GL_TEXTURE0 + 1);
-        gl->BindTexture(GL_TEXTURE_2D, ctx->shadow_depth_tex);
-        gl->Uniform1i(ctx->pbr_shadow_map_loc, 1);
-        gl->UniformMatrix4fv(ctx->pbr_shadow_vp_loc, 1, GL_FALSE, ctx->shadow_light_vp);
-        gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 1);
-        gl->Uniform1f(ctx->pbr_shadow_bias_loc, ctx->shadow_bias > 0 ? ctx->shadow_bias : 0.005f);
-        gl->ActiveTexture(GL_TEXTURE0);
-    }
-    else
-    {
-        gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 0);
-    }
-
-    /* Upload vertex data */
     const float *colors = params->colors ? params->colors : ensure_white_colors(ctx, params->vertex_count);
 
-    gl->BindVertexArray(ctx->lit_vao);
+    sdl3d_draw_entry *e = append_draw_entry(ctx);
+    if (!e)
+        return false;
 
-    gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_position_vbo);
-    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->vertex_count * 3 * sizeof(float)), params->positions,
-                   GL_DYNAMIC_DRAW);
-
-    gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_normal_vbo);
-    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->vertex_count * 3 * sizeof(float)), params->normals,
-                   GL_DYNAMIC_DRAW);
-
-    gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_uv_vbo);
-    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->vertex_count * 2 * sizeof(float)), params->uvs,
-                   GL_DYNAMIC_DRAW);
-
-    gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_color_vbo);
-    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->vertex_count * 4 * sizeof(float)), colors,
-                   GL_DYNAMIC_DRAW);
-
-    if (params->indices && params->index_count > 0)
-    {
-        gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->lit_ebo);
-        gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)params->index_count * sizeof(unsigned int)),
-                       params->indices, GL_DYNAMIC_DRAW);
-        gl->DrawElements(GL_TRIANGLES, params->index_count, GL_UNSIGNED_INT, NULL);
-    }
-    else
-    {
-        gl->DrawArrays(GL_TRIANGLES, 0, params->vertex_count);
-    }
+    e->lit = true;
+    e->vertex_count = params->vertex_count;
+    e->index_count = (params->indices && params->index_count > 0) ? params->index_count : 0;
+    e->positions = copy_floats(params->positions, (size_t)params->vertex_count * 3);
+    e->normals = copy_floats(params->normals, (size_t)params->vertex_count * 3);
+    e->uvs = copy_floats(params->uvs, (size_t)params->vertex_count * 2);
+    e->colors = copy_floats(colors, (size_t)params->vertex_count * 4);
+    e->indices = copy_indices(params->indices, (size_t)e->index_count);
+    e->texture = params->texture;
+    SDL_memcpy(e->model_matrix, params->model_matrix, 16 * sizeof(float));
+    SDL_memcpy(e->normal_matrix, params->normal_matrix, 9 * sizeof(float));
+    SDL_memcpy(e->tint, params->tint, 4 * sizeof(float));
+    e->metallic = params->metallic;
+    e->roughness = params->roughness;
+    SDL_memcpy(e->emissive, params->emissive, 3 * sizeof(float));
 
     return true;
 }
@@ -1197,6 +1326,29 @@ static bool gl_present(sdl3d_render_context *context)
 {
     sdl3d_gl_context *ctx = context->gl;
     sdl3d_gl_funcs *gl = &ctx->gl;
+
+    /* Flush UBO before any replay. */
+    flush_scene_ubo(ctx);
+
+    /* Shadow pass: replay lit entries into shadow FBO. */
+    if (ctx->shadow_program && ctx->shadow_fbo && ctx->shadow_bias > 0.0f)
+    {
+        gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
+        gl->Viewport(0, 0, 2048, 2048);
+        gl->Clear(GL_DEPTH_BUFFER_BIT);
+        gl->Enable(GL_DEPTH_TEST);
+        gl->Enable(GL_CULL_FACE);
+        gl->CullFace(GL_FRONT);
+
+        replay_draw_list_shadow(ctx);
+
+        gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+        gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+        gl->CullFace(GL_BACK);
+    }
+
+    /* Geometry pass: replay all entries into main FBO. */
+    replay_draw_list_geometry(ctx);
 
     /* Compute letterbox viewport. */
     int win_w, win_h;
@@ -1265,6 +1417,26 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
     if (ctx == NULL || rgba == NULL)
     {
         return;
+    }
+    /* Flush any pending draw list so pixels are up to date. */
+    if (ctx->draw_count > 0)
+    {
+        sdl3d_gl_funcs *gl = &ctx->gl;
+        flush_scene_ubo(ctx);
+        if (ctx->shadow_program && ctx->shadow_fbo && ctx->shadow_bias > 0.0f)
+        {
+            gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
+            gl->Viewport(0, 0, 2048, 2048);
+            gl->Clear(GL_DEPTH_BUFFER_BIT);
+            gl->Enable(GL_DEPTH_TEST);
+            gl->Enable(GL_CULL_FACE);
+            gl->CullFace(GL_FRONT);
+            replay_draw_list_shadow(ctx);
+            gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+            gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+            gl->CullFace(GL_BACK);
+        }
+        replay_draw_list_geometry(ctx);
     }
     rgba[0] = rgba[1] = rgba[2] = rgba[3] = 0;
     SDL_GL_MakeCurrent(ctx->window, ctx->gl_context);

@@ -533,10 +533,7 @@ int main(int argc, char *argv[])
         cam.fovy = 65.0f;
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
 
-        /* Shadow pass: draw scene from moonlight's perspective. */
-        sdl3d_begin_shadow_pass(ctx);
-        draw_scene(ctx);
-        sdl3d_end_shadow_pass(ctx);
+        /* Shadow pass is now automatic via the deferred draw list. */
 
         /* Render */
         sdl3d_clear_render_context(ctx, sky);

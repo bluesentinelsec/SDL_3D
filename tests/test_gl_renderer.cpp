@@ -240,12 +240,7 @@ TEST_F(GLRendererTest, ShadowPassProducesNonUniformDepth)
     sdl3d_add_light(ctx, &sun);
     sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 10.0f);
 
-    /* Shadow pass: draw a cube from the light's perspective. */
-    sdl3d_begin_shadow_pass(ctx);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(2, 2, 2), (sdl3d_color){255, 255, 255, 255});
-    sdl3d_end_shadow_pass(ctx);
-
-    /* Main pass: draw the same cube with lighting. */
+    /* Main pass: draw a cube — shadow pass is automatic. */
     sdl3d_camera3d cam;
     cam.position = sdl3d_vec3_make(0, 3, 5);
     cam.target = sdl3d_vec3_make(0, 0, 0);
@@ -299,15 +294,12 @@ TEST_F(GLRendererTest, ShadowMakesShadowedPixelDarker)
     readPixel(160, 120, px_no_shadow);
     int bright_no_shadow = px_no_shadow[0] + px_no_shadow[1] + px_no_shadow[2];
 
-    /* Render WITH shadow — a cube above the ground casts shadow. */
+    /* Render WITH shadow — a cube above the ground casts shadow automatically. */
     sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 10.0f);
-
-    sdl3d_begin_shadow_pass(ctx);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 2, 0), sdl3d_vec3_make(3, 0.5f, 3), (sdl3d_color){255, 255, 255, 255});
-    sdl3d_end_shadow_pass(ctx);
 
     sdl3d_clear_render_context(ctx, (sdl3d_color){0, 0, 0, 255});
     sdl3d_begin_mode_3d(ctx, cam);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 2, 0), sdl3d_vec3_make(3, 0.5f, 3), (sdl3d_color){255, 255, 255, 255});
     sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, 0, 0), (sdl3d_vec2){10, 10}, (sdl3d_color){200, 200, 200, 255});
     sdl3d_end_mode_3d(ctx);
 
@@ -342,11 +334,7 @@ TEST_F(GLRendererTest, ShadowWorksOnFirstFrame)
     cam.fovy = 60.0f;
     cam.projection = SDL3D_CAMERA_PERSPECTIVE;
 
-    /* First frame ever — shadow pass then main pass. */
-    sdl3d_begin_shadow_pass(ctx);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(2, 2, 2), (sdl3d_color){255, 255, 255, 255});
-    sdl3d_end_shadow_pass(ctx);
-
+    /* First frame ever — shadow pass is now automatic. */
     sdl3d_clear_render_context(ctx, (sdl3d_color){0, 0, 0, 255});
     sdl3d_begin_mode_3d(ctx, cam);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(2, 2, 2), (sdl3d_color){255, 255, 255, 255});
