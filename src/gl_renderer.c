@@ -696,23 +696,25 @@ static const char k_ssao_frag[] =
     "void main() {\n"
     "    float rawDepth = texture(uDepth, vTexCoord).r;\n"
     "    vec3 color = texture(uScene, vTexCoord).rgb;\n"
-    "    /* Skip SSAO for sky pixels (depth at far plane). */\n"
     "    if (rawDepth > 0.999) { fragColor = vec4(color, 1.0); return; }\n"
     "    float depth = linearizeDepth(rawDepth);\n"
+    "    /* Scattered sample offsets (avoids grid banding). */\n"
+    "    const vec2 offsets[8] = vec2[8](\n"
+    "        vec2(-0.94, -0.34), vec2( 0.76,  0.65),\n"
+    "        vec2(-0.09, -0.93), vec2( 0.97, -0.22),\n"
+    "        vec2(-0.71,  0.71), vec2( 0.33,  0.94),\n"
+    "        vec2( 0.52, -0.85), vec2(-0.86,  0.12)\n"
+    "    );\n"
+    "    float radius = clamp(1.0 / depth, 1.0, 8.0);\n"
     "    float ao = 0.0;\n"
-    "    float radius = 2.0;\n"
-    "    int count = 0;\n"
-    "    for (int x = -2; x <= 2; x++) {\n"
-    "        for (int y = -2; y <= 2; y++) {\n"
-    "            if (x == 0 && y == 0) continue;\n"
-    "            float sd = linearizeDepth(texture(uDepth, vTexCoord + vec2(x, y) * uTexelSize * radius).r);\n"
-    "            float diff = depth - sd;\n"
-    "            if (diff > 0.05 && diff < 1.0) ao += 1.0;\n"
-    "            count++;\n"
-    "        }\n"
+    "    for (int i = 0; i < 8; i++) {\n"
+    "        vec2 sampleUV = vTexCoord + offsets[i] * uTexelSize * radius;\n"
+    "        float sd = linearizeDepth(texture(uDepth, sampleUV).r);\n"
+    "        float diff = depth - sd;\n"
+    "        if (diff > 0.1 && diff < 2.0) ao += 1.0;\n"
     "    }\n"
-    "    ao /= float(count);\n"
-    "    color *= (1.0 - ao * 0.4);\n"
+    "    ao /= 8.0;\n"
+    "    color *= (1.0 - ao * 0.35);\n"
     "    fragColor = vec4(color, 1.0);\n"
     "}\n";
 
@@ -1999,7 +2001,7 @@ static bool gl_present(sdl3d_render_context *context)
 
     /* Point shadow pass: 6-face cubemap per light. */
     compute_point_shadow_matrices(ctx, context);
-    if (SDL3D_POINT_SHADOWS_ENABLED && ctx->point_shadow_program && ctx->point_shadow_count > 0) {
+    if (0 && ctx->point_shadow_program && ctx->point_shadow_count > 0) {
         gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->point_shadow_fbo);
         gl->Viewport(0, 0, 512, 512);
         gl->Enable(GL_DEPTH_TEST);
@@ -2266,7 +2268,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
             gl->CullFace(GL_BACK);
         }
         compute_point_shadow_matrices(ctx, ctx->current_ctx);
-        if (SDL3D_POINT_SHADOWS_ENABLED && ctx->point_shadow_program && ctx->point_shadow_count > 0) {
+        if (0 && ctx->point_shadow_program && ctx->point_shadow_count > 0) {
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->point_shadow_fbo);
             gl->Viewport(0, 0, 512, 512);
             gl->Enable(GL_DEPTH_TEST);
