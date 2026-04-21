@@ -2138,6 +2138,7 @@ static bool gl_present(sdl3d_render_context *context)
 
     /* SSAO pass: darken pixels where nearby depth samples indicate occlusion.
      * Reads fbo_color + fbo_depth, writes to pp_fbo_a, then copies back. */
+    if (context->ssao_enabled)
     {
         float near_p = ctx->current_ctx->near_plane;
         float far_p = ctx->current_ctx->far_plane;
@@ -2171,55 +2172,58 @@ static bool gl_present(sdl3d_render_context *context)
     }
 
     /* Step 1: Extract bright pixels from main FBO into pp_tex_a. */
-    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->pp_fbo_a);
-    gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
-    gl->Clear(GL_COLOR_BUFFER_BIT);
-    gl->UseProgram(ctx->bloom_program);
-    gl->ActiveTexture(GL_TEXTURE0);
-    gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
-    gl->Uniform1i(ctx->bloom_scene_loc, 0);
-    gl->Uniform1f(ctx->bloom_threshold_loc, 0.8f);
-    gl->DrawArrays(GL_TRIANGLES, 0, 3);
-
-    /* Step 2: Blur bright pixels (ping-pong, 10 passes = 5 iterations). */
-    gl->UseProgram(ctx->bloom_blur_program);
-    for (int i = 0; i < 6; i++)
+    if (context->bloom_enabled)
     {
-        bool horizontal = (i % 2 == 0);
-        gl->BindFramebuffer(GL_FRAMEBUFFER, horizontal ? ctx->pp_fbo_b : ctx->pp_fbo_a);
+        gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->pp_fbo_a);
+        gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+        gl->Clear(GL_COLOR_BUFFER_BIT);
+        gl->UseProgram(ctx->bloom_program);
         gl->ActiveTexture(GL_TEXTURE0);
-        gl->BindTexture(GL_TEXTURE_2D, horizontal ? ctx->pp_tex_a : ctx->pp_tex_b);
-        gl->Uniform1i(ctx->blur_image_loc, 0);
-        gl->Uniform1i(ctx->blur_horizontal_loc, horizontal ? 1 : 0);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
+        gl->Uniform1i(ctx->bloom_scene_loc, 0);
+        gl->Uniform1f(ctx->bloom_threshold_loc, 0.8f);
         gl->DrawArrays(GL_TRIANGLES, 0, 3);
-    }
-    /* After 10 passes (even count), last write was to pp_fbo_b with horizontal=false reading pp_tex_b...
-     * Actually: i=9 -> horizontal=false -> writes to pp_fbo_a, reads pp_tex_b.
-     * So final blurred result is in pp_tex_a. */
 
-    /* Step 3: Copy fbo_color to pp_tex_b to avoid read-write conflict. */
-    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->pp_fbo_b);
-    gl->UseProgram(ctx->copy_program);
-    gl->ActiveTexture(GL_TEXTURE0);
-    gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
-    gl->Uniform1i(ctx->copy_texture_loc, 0);
-    gl->DrawArrays(GL_TRIANGLES, 0, 3);
+        /* Step 2: Blur bright pixels (ping-pong, 10 passes = 5 iterations). */
+        gl->UseProgram(ctx->bloom_blur_program);
+        for (int i = 0; i < 6; i++)
+        {
+            bool horizontal = (i % 2 == 0);
+            gl->BindFramebuffer(GL_FRAMEBUFFER, horizontal ? ctx->pp_fbo_b : ctx->pp_fbo_a);
+            gl->ActiveTexture(GL_TEXTURE0);
+            gl->BindTexture(GL_TEXTURE_2D, horizontal ? ctx->pp_tex_a : ctx->pp_tex_b);
+            gl->Uniform1i(ctx->blur_image_loc, 0);
+            gl->Uniform1i(ctx->blur_horizontal_loc, horizontal ? 1 : 0);
+            gl->DrawArrays(GL_TRIANGLES, 0, 3);
+        }
+        /* After 10 passes (even count), last write was to pp_fbo_b with horizontal=false reading pp_tex_b...
+         * Actually: i=9 -> horizontal=false -> writes to pp_fbo_a, reads pp_tex_b.
+         * So final blurred result is in pp_tex_a. */
 
-    /* Step 4: Composite (bloom + vignette + grading) into main FBO.
-     * Read scene from pp_tex_b, bloom from pp_tex_a, write to fbo. */
-    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-    gl->UseProgram(ctx->composite_program);
-    gl->ActiveTexture(GL_TEXTURE0);
-    gl->BindTexture(GL_TEXTURE_2D, ctx->pp_tex_b);
-    gl->ActiveTexture(GL_TEXTURE0 + 1);
-    gl->BindTexture(GL_TEXTURE_2D, ctx->pp_tex_a);
-    gl->Uniform1i(ctx->comp_scene_loc, 0);
-    gl->Uniform1i(ctx->comp_bloom_loc, 1);
-    gl->Uniform1f(ctx->comp_vignette_loc, 0.4f);
-    gl->Uniform1f(ctx->comp_contrast_loc, 1.1f);
-    gl->Uniform1f(ctx->comp_saturation_loc, 1.15f);
-    gl->DrawArrays(GL_TRIANGLES, 0, 3);
-    gl->ActiveTexture(GL_TEXTURE0);
+        /* Step 3: Copy fbo_color to pp_tex_b to avoid read-write conflict. */
+        gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->pp_fbo_b);
+        gl->UseProgram(ctx->copy_program);
+        gl->ActiveTexture(GL_TEXTURE0);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
+        gl->Uniform1i(ctx->copy_texture_loc, 0);
+        gl->DrawArrays(GL_TRIANGLES, 0, 3);
+
+        /* Step 4: Composite (bloom + vignette + grading) into main FBO.
+         * Read scene from pp_tex_b, bloom from pp_tex_a, write to fbo. */
+        gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+        gl->UseProgram(ctx->composite_program);
+        gl->ActiveTexture(GL_TEXTURE0);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->pp_tex_b);
+        gl->ActiveTexture(GL_TEXTURE0 + 1);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->pp_tex_a);
+        gl->Uniform1i(ctx->comp_scene_loc, 0);
+        gl->Uniform1i(ctx->comp_bloom_loc, 1);
+        gl->Uniform1f(ctx->comp_vignette_loc, 0.4f);
+        gl->Uniform1f(ctx->comp_contrast_loc, 1.1f);
+        gl->Uniform1f(ctx->comp_saturation_loc, 1.15f);
+        gl->DrawArrays(GL_TRIANGLES, 0, 3);
+        gl->ActiveTexture(GL_TEXTURE0);
+    } /* bloom_enabled */
 
     gl->Enable(GL_CULL_FACE);
     gl->Enable(GL_DEPTH_TEST);

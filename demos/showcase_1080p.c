@@ -235,6 +235,10 @@ int main(int argc, char *argv[])
     float man_walk_pos = 0.0f;
     float man_walk_dir = 1.0f;
     bool running = true;
+    bool show_neon = true;
+    bool show_bloom = true;
+    bool show_ssao = true;
+    bool show_fog = true;
     bool mouse_initialized = false;
     Uint64 last_time;
     int current_profile = 0;
@@ -427,6 +431,24 @@ int main(int argc, char *argv[])
                         player.on_ground = false;
                     }
                     break;
+                case SDLK_6:
+                    show_neon = !show_neon;
+                    fprintf(stderr, "Neon: %s\n", show_neon ? "ON" : "OFF");
+                    break;
+                case SDLK_7:
+                    show_bloom = !show_bloom;
+                    sdl3d_set_bloom_enabled(ctx, show_bloom);
+                    fprintf(stderr, "Bloom: %s\n", show_bloom ? "ON" : "OFF");
+                    break;
+                case SDLK_8:
+                    show_ssao = !show_ssao;
+                    sdl3d_set_ssao_enabled(ctx, show_ssao);
+                    fprintf(stderr, "SSAO: %s\n", show_ssao ? "ON" : "OFF");
+                    break;
+                case SDLK_9:
+                    show_fog = !show_fog;
+                    fprintf(stderr, "Fog: %s\n", show_fog ? "ON" : "OFF");
+                    break;
                 case SDLK_TAB: {
                     sdl3d_backend nb =
                         (current_backend == SDL3D_BACKEND_SOFTWARE) ? SDL3D_BACKEND_SDLGPU : SDL3D_BACKEND_SOFTWARE;
@@ -445,6 +467,8 @@ int main(int argc, char *argv[])
                     }
                     sdl3d_set_fog(ctx, &fog);
                     sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 30.0f);
+                    sdl3d_set_bloom_enabled(ctx, show_bloom);
+                    sdl3d_set_ssao_enabled(ctx, show_ssao);
                     {
                         sdl3d_render_profile p = profile_fns[current_profile]();
                         sdl3d_set_render_profile(ctx, &p);
@@ -561,10 +585,34 @@ int main(int argc, char *argv[])
         /* Render */
         sdl3d_clear_render_context(ctx, sky);
         sdl3d_set_backface_culling_enabled(ctx, true);
+
+        if (show_fog)
+        {
+            sdl3d_set_fog(ctx, &fog);
+        }
+        else
+        {
+            sdl3d_clear_fog(ctx);
+        }
+
         sdl3d_begin_mode_3d(ctx, cam);
 
         sdl3d_draw_skybox_gradient(ctx, (sdl3d_color){5, 8, 18, 255}, (sdl3d_color){12, 15, 30, 255});
         draw_scene(ctx);
+
+        /* Neon signs */
+        if (show_neon)
+        {
+            sdl3d_set_emissive(ctx, 0.0f, 3.0f, 0.5f);
+            sdl3d_draw_cube(ctx, sdl3d_vec3_make(-7.5f, 3.5f, -5.5f), sdl3d_vec3_make(0.1f, 1.5f, 3.0f),
+                            (sdl3d_color){0, 255, 80, 255});
+
+            sdl3d_set_emissive(ctx, 3.0f, 0.3f, 2.0f);
+            sdl3d_draw_cube(ctx, sdl3d_vec3_make(7.5f, 3.0f, -3.5f), sdl3d_vec3_make(0.1f, 1.0f, 2.5f),
+                            (sdl3d_color){255, 50, 200, 255});
+
+            sdl3d_set_emissive(ctx, 0.0f, 0.0f, 0.0f);
+        }
 
         /* Models */
         if (has_box)

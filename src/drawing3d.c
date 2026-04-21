@@ -330,6 +330,9 @@ static void sdl3d_build_lighting_params(const sdl3d_render_context *context, sdl
     lp->ambient[0] = context->ambient[0];
     lp->ambient[1] = context->ambient[1];
     lp->ambient[2] = context->ambient[2];
+    lp->emissive[0] = context->emissive[0];
+    lp->emissive[1] = context->emissive[1];
+    lp->emissive[2] = context->emissive[2];
     lp->fog = context->fog;
     lp->tonemap_mode = context->tonemap_mode;
     lp->shadow_bias = context->shadow_bias;

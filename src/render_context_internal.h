@@ -55,6 +55,10 @@ struct sdl3d_render_context
     sdl3d_light lights[SDL3D_MAX_LIGHTS];
     int light_count;
     float ambient[3];
+    float emissive[3];
+
+    bool bloom_enabled;
+    bool ssao_enabled;
 
     sdl3d_fog fog;
     sdl3d_tonemap_mode tonemap_mode;
