@@ -1822,8 +1822,6 @@ static bool gl_present(sdl3d_render_context *context)
     sdl3d_gl_context *ctx = context->gl;
     sdl3d_gl_funcs *gl = &ctx->gl;
 
-    Uint64 t0 = SDL_GetPerformanceCounter();
-
     /* Flush UBO before any replay. */
     flush_scene_ubo(ctx);
 
@@ -1995,15 +1993,6 @@ static bool gl_present(sdl3d_render_context *context)
     gl->Enable(GL_CULL_FACE);
     gl->Enable(GL_DEPTH_TEST);
 
-    {
-        Uint64 t1 = SDL_GetPerformanceCounter();
-        double ms = (double)(t1 - t0) / (double)SDL_GetPerformanceFrequency() * 1000.0;
-        if (ctx->frame_index % 60 == 0)
-        {
-            SDL_Log("SDL3D frame %llu: %.1fms, %d draws", (unsigned long long)ctx->frame_index, ms,
-                    ctx->draw_count);
-        }
-    }
     SDL_GL_SwapWindow(ctx->window);
     return true;
 }
