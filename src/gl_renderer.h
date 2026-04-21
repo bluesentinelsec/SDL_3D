@@ -17,4 +17,8 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx);
 void sdl3d_gl_post_process(sdl3d_gl_context *ctx, int effects, float bloom_threshold, float bloom_intensity,
                            float vignette_intensity, float contrast, float brightness, float saturation);
 
+/* Read a pixel from the GL FBO at (x, y). Returns RGBA as 4 bytes.
+ * Used for automated testing. */
+void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgba);
+
 #endif
