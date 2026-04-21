@@ -93,7 +93,7 @@ typedef struct sdl3d_draw_entry
 /* Context                                                             */
 /* ------------------------------------------------------------------ */
 
-#define SDL3D_MAX_POINT_SHADOWS 3
+#define SDL3D_MAX_POINT_SHADOWS 2
 
 struct sdl3d_gl_context
 {
@@ -319,9 +319,9 @@ static const char k_pbr_frag_decl[] = "#define MAX_LIGHTS 8\n"
                                       "uniform mat4 uViewMatrix;\n"
                                       "uniform int uCSMEnabled;\n"
                                       "\n"
-                                      "uniform samplerCube uPointShadowMap[3];\n"
-                                      "uniform vec3 uPointShadowLightPos[3];\n"
-                                      "uniform float uPointShadowFar[3];\n"
+                                      "uniform samplerCube uPointShadowMap[2];\n"
+                                      "uniform vec3 uPointShadowLightPos[2];\n"
+                                      "uniform float uPointShadowFar[2];\n"
                                       "uniform int uPointShadowCount;\n"
                                       "\n"
                                       "out vec4 fragColor;\n"
@@ -429,7 +429,7 @@ static const char k_pbr_frag_post[] =
     "    }\n"
     "\n"
     "    /* Point light shadows. */\n"
-    "    for (int ps = 0; ps < uPointShadowCount && ps < 3; ps++) {\n"
+    "    for (int ps = 0; ps < uPointShadowCount && ps < 2; ps++) {\n"
     "        vec3 fragToLight = vWorldPos - uPointShadowLightPos[ps];\n"
     "        float closestDepth = texture(uPointShadowMap[ps], fragToLight).r * uPointShadowFar[ps];\n"
     "        float currentDepth = length(fragToLight);\n"

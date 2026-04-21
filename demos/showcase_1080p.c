@@ -255,16 +255,16 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    /* --- Lighting (daytime) --- */
-    sdl3d_set_ambient_light(ctx, 0.15f, 0.15f, 0.18f);
+    /* --- Lighting (nighttime) --- */
+    sdl3d_set_ambient_light(ctx, 0.04f, 0.04f, 0.06f);
 
     SDL_zerop(&sun);
     sun.type = SDL3D_LIGHT_DIRECTIONAL;
-    sun.direction = sdl3d_vec3_make(0.4f, -0.8f, -0.3f);
-    sun.color[0] = 1.0f;
-    sun.color[1] = 0.95f;
-    sun.color[2] = 0.85f;
-    sun.intensity = 1.5f;
+    sun.direction = sdl3d_vec3_make(0.3f, -0.9f, -0.3f);
+    sun.color[0] = 0.3f;
+    sun.color[1] = 0.35f;
+    sun.color[2] = 0.5f;
+    sun.intensity = 0.25f;
     sdl3d_add_light(ctx, &sun);
 
     {
@@ -276,21 +276,21 @@ int main(int argc, char *argv[])
             lamp[i].type = SDL3D_LIGHT_POINT;
             lamp[i].position = sdl3d_vec3_make(lamp_x[i], 3.5f, lamp_z[i]);
             lamp[i].color[0] = 1.0f;
-            lamp[i].color[1] = 0.9f;
-            lamp[i].color[2] = 0.7f;
-            lamp[i].intensity = 0.5f;
-            lamp[i].range = 8.0f;
+            lamp[i].color[1] = 0.8f;
+            lamp[i].color[2] = 0.5f;
+            lamp[i].intensity = 3.0f;
+            lamp[i].range = 15.0f;
             sdl3d_add_light(ctx, &lamp[i]);
         }
     }
 
-    /* --- Fog (daytime haze) --- */
+    /* --- Fog (nighttime) --- */
     SDL_zerop(&fog);
     fog.mode = SDL3D_FOG_EXP2;
-    fog.color[0] = 0.55f;
-    fog.color[1] = 0.65f;
-    fog.color[2] = 0.80f;
-    fog.density = 0.015f;
+    fog.color[0] = 0.03f;
+    fog.color[1] = 0.03f;
+    fog.color[2] = 0.06f;
+    fog.density = 0.025f;
     sdl3d_set_fog(ctx, &fog);
 
     /* --- Shadows (moonlight casts shadows) --- */
@@ -377,7 +377,7 @@ int main(int argc, char *argv[])
         const bool *keys;
         float fx, fz, rx, rz;
         sdl3d_camera3d cam;
-        sdl3d_color sky = {135, 175, 220, 255};
+        sdl3d_color sky = {8, 10, 20, 255};
 
         last_time = now;
         if (dt > 0.1f)
@@ -431,7 +431,7 @@ int main(int argc, char *argv[])
                         nb = SDL3D_BACKEND_SOFTWARE;
                     }
                     current_backend = nb;
-                    sdl3d_set_ambient_light(ctx, 0.15f, 0.15f, 0.18f);
+                    sdl3d_set_ambient_light(ctx, 0.04f, 0.04f, 0.06f);
                     sdl3d_add_light(ctx, &sun);
                     for (int i = 0; i < 5; ++i)
                     {
@@ -544,7 +544,7 @@ int main(int argc, char *argv[])
         sdl3d_set_backface_culling_enabled(ctx, true);
         sdl3d_begin_mode_3d(ctx, cam);
 
-        sdl3d_draw_skybox_gradient(ctx, (sdl3d_color){100, 150, 220, 255}, (sdl3d_color){200, 215, 235, 255});
+        sdl3d_draw_skybox_gradient(ctx, (sdl3d_color){5, 8, 18, 255}, (sdl3d_color){12, 15, 30, 255});
         draw_scene(ctx);
 
         /* Models */
