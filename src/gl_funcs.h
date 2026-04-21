@@ -111,6 +111,7 @@ typedef void (*PFNGLDELETEPROGRAMPROC)(GLuint);
 typedef GLint (*PFNGLGETUNIFORMLOCATIONPROC)(GLuint, const GLchar *);
 typedef void (*PFNGLUNIFORM1IPROC)(GLint, GLint);
 typedef void (*PFNGLUNIFORM1FPROC)(GLint, GLfloat);
+typedef void (*PFNGLUNIFORM1FVPROC)(GLint, GLsizei, const GLfloat *);
 typedef void (*PFNGLUNIFORM2FPROC)(GLint, GLfloat, GLfloat);
 typedef void (*PFNGLUNIFORM3FPROC)(GLint, GLfloat, GLfloat, GLfloat);
 typedef void (*PFNGLUNIFORM4FPROC)(GLint, GLfloat, GLfloat, GLfloat, GLfloat);
@@ -188,6 +189,7 @@ typedef struct sdl3d_gl_funcs
     PFNGLGETUNIFORMLOCATIONPROC GetUniformLocation;
     PFNGLUNIFORM1IPROC Uniform1i;
     PFNGLUNIFORM1FPROC Uniform1f;
+    PFNGLUNIFORM1FVPROC Uniform1fv;
     PFNGLUNIFORM2FPROC Uniform2f;
     PFNGLUNIFORM3FPROC Uniform3f;
     PFNGLUNIFORM4FPROC Uniform4f;
@@ -274,6 +276,7 @@ static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
     LOAD(GetUniformLocation);
     LOAD(Uniform1i);
     LOAD(Uniform1f);
+    LOAD(Uniform1fv);
     LOAD(Uniform2f);
     LOAD(Uniform3f);
     LOAD(Uniform4f);
