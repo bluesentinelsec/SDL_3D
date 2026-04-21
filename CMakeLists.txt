@@ -79,6 +79,7 @@ add_library(SDL3D::sdl3d ALIAS sdl3d)
 target_sources(
     sdl3d
     PRIVATE
+        src/app.c
         src/animation.c
         src/camera.c
         src/collision.c
@@ -86,8 +87,7 @@ target_sources(
         src/effects.c
         src/fbx_loader.c
         src/gltf_loader.c
-        src/gl_backend.c
-        src/gl_backend_adapter.c
+        src/gl_renderer.c
         src/image.c
         src/lighting.c
         src/math.c

@@ -9,7 +9,7 @@
 
 #include "render_context_internal.h"
 
-#include "gl_backend.h"
+#include "gl_renderer.h"
 
 /* ------------------------------------------------------------------ */
 /* Particle system                                                     */

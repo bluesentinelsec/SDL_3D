@@ -5,6 +5,7 @@
 
 #include "sdl3d/model.h"
 
+#include "gl_renderer.h"
 #include "render_context_internal.h"
 
 bool sdl3d_add_light(sdl3d_render_context *context, const sdl3d_light *light)
@@ -417,6 +418,63 @@ bool sdl3d_render_shadow_map(sdl3d_render_context *context, const sdl3d_mesh *me
         }
     }
 
+    return true;
+}
+
+bool sdl3d_begin_shadow_pass(sdl3d_render_context *context)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (context->in_mode_3d)
+    {
+        return SDL_SetError("Cannot begin shadow pass inside begin_mode_3d.");
+    }
+    if (!context->shadow_enabled[0])
+    {
+        return SDL_SetError("No shadow-enabled light.");
+    }
+
+    context->in_shadow_pass = true;
+
+    /* Set up model stack for shadow pass draws. */
+    if (!context->model_stack)
+    {
+        context->model_stack = (sdl3d_mat4 *)SDL_malloc(8 * sizeof(sdl3d_mat4));
+        if (!context->model_stack)
+        {
+            return SDL_OutOfMemory();
+        }
+        context->model_stack_capacity = 8;
+    }
+    context->view_projection = context->shadow_vp[0];
+    context->model_stack_depth = 1;
+    context->model_stack[0] = sdl3d_mat4_identity();
+    context->model = sdl3d_mat4_identity();
+    context->model_view_projection = context->shadow_vp[0];
+    context->in_mode_3d = true;
+
+    if (context->gl)
+    {
+        sdl3d_gl_begin_shadow_pass(context->gl, context->shadow_vp[0].m,
+                                   context->shadow_bias > 0 ? context->shadow_bias : 0.005f);
+    }
+    return true;
+}
+
+bool sdl3d_end_shadow_pass(sdl3d_render_context *context)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    context->in_shadow_pass = false;
+    context->in_mode_3d = false;
+    if (context->gl)
+    {
+        sdl3d_gl_end_shadow_pass(context->gl);
+    }
     return true;
 }
 

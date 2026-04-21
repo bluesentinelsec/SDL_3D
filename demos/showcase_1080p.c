@@ -232,7 +232,10 @@ int main(int argc, char *argv[])
     bool has_box = false, has_duck = false, has_man = false;
     sdl3d_mat4 *man_joints = NULL;
     float man_anim_time = 0.0f;
+    float man_walk_pos = 0.0f;
+    float man_walk_dir = 1.0f;
     bool running = true;
+    bool mouse_initialized = false;
     Uint64 last_time;
     int current_profile = 0;
     sdl3d_backend current_backend = SDL3D_BACKEND_SDLGPU;
@@ -256,30 +259,33 @@ int main(int argc, char *argv[])
     }
 
     /* --- Lighting (nighttime) --- */
-    sdl3d_set_ambient_light(ctx, 0.03f, 0.03f, 0.05f);
+    sdl3d_set_ambient_light(ctx, 0.04f, 0.04f, 0.06f);
 
     SDL_zerop(&sun);
     sun.type = SDL3D_LIGHT_DIRECTIONAL;
     sun.direction = sdl3d_vec3_make(0.3f, -0.9f, -0.3f);
-    sun.color[0] = 0.4f;
-    sun.color[1] = 0.45f;
-    sun.color[2] = 0.6f;
-    sun.intensity = 0.3f;
+    sun.color[0] = 0.3f;
+    sun.color[1] = 0.35f;
+    sun.color[2] = 0.5f;
+    sun.intensity = 0.25f;
     sdl3d_add_light(ctx, &sun);
 
     {
-        float lamp_x[] = {-1.8f, 1.8f, -1.8f, 1.8f, -1.8f};
-        float lamp_z[] = {-6, 0, 6, 14, -14};
+        float lamp_x[] = {0.0f, -15.0f, 15.0f, -10.0f, 10.0f};
+        float lamp_z[] = {0.0f, -15.0f, -15.0f, 15.0f, 15.0f};
+        float lamp_r[] = {1.0f, 0.2f, 0.1f, 1.0f, 0.5f};
+        float lamp_g[] = {0.9f, 0.6f, 0.4f, 0.3f, 1.0f};
+        float lamp_b[] = {0.3f, 1.0f, 1.0f, 0.1f, 0.2f};
         for (int i = 0; i < 5; ++i)
         {
             SDL_zerop(&lamp[i]);
             lamp[i].type = SDL3D_LIGHT_POINT;
-            lamp[i].position = sdl3d_vec3_make(lamp_x[i], 3.5f, lamp_z[i]);
-            lamp[i].color[0] = 1.0f;
-            lamp[i].color[1] = 0.75f;
-            lamp[i].color[2] = 0.4f;
-            lamp[i].intensity = 3.5f;
-            lamp[i].range = 14.0f;
+            lamp[i].position = sdl3d_vec3_make(lamp_x[i], 6.0f, lamp_z[i]);
+            lamp[i].color[0] = lamp_r[i];
+            lamp[i].color[1] = lamp_g[i];
+            lamp[i].color[2] = lamp_b[i];
+            lamp[i].intensity = 5.0f;
+            lamp[i].range = 20.0f;
             sdl3d_add_light(ctx, &lamp[i]);
         }
     }
@@ -287,17 +293,15 @@ int main(int argc, char *argv[])
     /* --- Fog (nighttime) --- */
     SDL_zerop(&fog);
     fog.mode = SDL3D_FOG_EXP2;
-    fog.color[0] = 0.02f;
+    fog.color[0] = 0.03f;
     fog.color[1] = 0.03f;
     fog.color[2] = 0.06f;
-    fog.density = 0.03f;
+    fog.density = 0.025f;
     sdl3d_set_fog(ctx, &fog);
 
     /* --- Shadows (moonlight casts shadows) --- */
-    /* Shadow mapping disabled — needs proper GPU-side implementation.
-     * The current CPU-upload hybrid has a first-frame initialization bug
-     * in the shader's light-space transform. Will be reimplemented with
-     * GPU shadow pass in the SDL3_GPU backend. */
+    sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 30.0f);
+
     SDL_zerop(&post);
     post.effects = SDL3D_POST_BLOOM | SDL3D_POST_VIGNETTE;
     post.bloom_threshold = 0.8f;
@@ -379,7 +383,7 @@ int main(int argc, char *argv[])
         const bool *keys;
         float fx, fz, rx, rz;
         sdl3d_camera3d cam;
-        sdl3d_color sky = {10, 12, 25, 255};
+        sdl3d_color sky = {8, 10, 20, 255};
 
         last_time = now;
         if (dt > 0.1f)
@@ -433,13 +437,14 @@ int main(int argc, char *argv[])
                         nb = SDL3D_BACKEND_SOFTWARE;
                     }
                     current_backend = nb;
-                    sdl3d_set_ambient_light(ctx, 0.03f, 0.03f, 0.05f);
+                    sdl3d_set_ambient_light(ctx, 0.04f, 0.04f, 0.06f);
                     sdl3d_add_light(ctx, &sun);
                     for (int i = 0; i < 5; ++i)
                     {
                         sdl3d_add_light(ctx, &lamp[i]);
                     }
                     sdl3d_set_fog(ctx, &fog);
+                    sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 30.0f);
                     {
                         sdl3d_render_profile p = profile_fns[current_profile]();
                         sdl3d_set_render_profile(ctx, &p);
@@ -460,15 +465,22 @@ int main(int argc, char *argv[])
             }
             else if (ev.type == SDL_EVENT_MOUSE_MOTION)
             {
-                player.yaw += ev.motion.xrel * MOUSE_SENS;
-                player.pitch -= ev.motion.yrel * MOUSE_SENS;
-                if (player.pitch > 1.4f)
+                if (!mouse_initialized)
                 {
-                    player.pitch = 1.4f;
+                    mouse_initialized = true;
                 }
-                if (player.pitch < -1.4f)
+                else
                 {
-                    player.pitch = -1.4f;
+                    player.yaw += ev.motion.xrel * MOUSE_SENS;
+                    player.pitch -= ev.motion.yrel * MOUSE_SENS;
+                    if (player.pitch > 1.4f)
+                    {
+                        player.pitch = 1.4f;
+                    }
+                    if (player.pitch < -1.4f)
+                    {
+                        player.pitch = -1.4f;
+                    }
                 }
             }
         }
@@ -524,6 +536,16 @@ int main(int argc, char *argv[])
                 man_anim_time = fmodf(man_anim_time, man_model.animations[0].duration);
             }
             sdl3d_evaluate_animation(man_model.skeleton, &man_model.animations[0], man_anim_time, man_joints);
+            /* Walk back and forth along Z axis. */
+            man_walk_pos += man_walk_dir * 2.0f * dt;
+            if (man_walk_pos > 8.0f)
+            {
+                man_walk_dir = -1.0f;
+            }
+            else if (man_walk_pos < -8.0f)
+            {
+                man_walk_dir = 1.0f;
+            }
         }
 
         /* Camera */
@@ -534,12 +556,14 @@ int main(int argc, char *argv[])
         cam.fovy = 65.0f;
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
 
+        /* Shadow pass is now automatic via the deferred draw list. */
+
         /* Render */
         sdl3d_clear_render_context(ctx, sky);
         sdl3d_set_backface_culling_enabled(ctx, true);
         sdl3d_begin_mode_3d(ctx, cam);
 
-        sdl3d_draw_skybox_gradient(ctx, (sdl3d_color){5, 8, 20, 255}, (sdl3d_color){15, 18, 35, 255});
+        sdl3d_draw_skybox_gradient(ctx, (sdl3d_color){5, 8, 18, 255}, (sdl3d_color){12, 15, 30, 255});
         draw_scene(ctx);
 
         /* Models */
@@ -559,7 +583,7 @@ int main(int argc, char *argv[])
         }
         if (has_man)
         {
-            sdl3d_draw_model_skinned(ctx, &man_model, sdl3d_vec3_make(-5, 1.0f, 6), sdl3d_vec3_make(1, 0, 0),
+            sdl3d_draw_model_skinned(ctx, &man_model, sdl3d_vec3_make(-5, 0.0f, man_walk_pos), sdl3d_vec3_make(1, 0, 0),
                                      sdl3d_degrees_to_radians(-90.0f), sdl3d_vec3_make(1.5f, 1.5f, 1.5f),
                                      (sdl3d_color){255, 255, 255, 255}, man_joints);
         }

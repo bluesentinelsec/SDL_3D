@@ -72,7 +72,20 @@ typedef unsigned int GLbitfield;
 #define GL_ONE_MINUS_SRC_ALPHA 0x0303
 #define GL_RED 0x1903
 #define GL_R32F 0x822E
+#define GL_UNIFORM_BUFFER 0x8A11
+#define GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT 0x8A34
+#define GL_NONE 0
+#define GL_FRONT 0x0404
 #define GL_NO_ERROR 0
+#define GL_CLAMP_TO_BORDER 0x812D
+#define GL_TEXTURE_BORDER_COLOR 0x1004
+#define GL_TEXTURE_2D_ARRAY 0x8C1A
+#define GL_DEPTH_COMPONENT32F 0x8CAC
+#define GL_TEXTURE_CUBE_MAP 0x8513
+#define GL_TEXTURE_CUBE_MAP_POSITIVE_X 0x8515
+#define GL_TEXTURE_WRAP_R 0x8072
+#define GL_RGBA16F 0x881A
+#define GL_HALF_FLOAT 0x140B
 
 /* Function pointer types. */
 typedef void (*PFNGLCLEARPROC)(GLbitfield);
@@ -122,7 +135,11 @@ typedef void (*PFNGLDRAWELEMENTSPROC)(GLenum, GLsizei, GLenum, const void *);
 typedef void (*PFNGLGENTEXTURESPROC)(GLsizei, GLuint *);
 typedef void (*PFNGLBINDTEXTUREPROC)(GLenum, GLuint);
 typedef void (*PFNGLTEXIMAGE2DPROC)(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const void *);
+typedef void (*PFNGLTEXIMAGE3DPROC)(GLenum, GLint, GLint, GLsizei, GLsizei, GLsizei, GLint, GLenum, GLenum,
+                                    const void *);
+typedef void (*PFNGLFRAMEBUFFERTEXTURELAYERPROC)(GLenum, GLenum, GLuint, GLint, GLint);
 typedef void (*PFNGLTEXPARAMETERIPROC)(GLenum, GLenum, GLint);
+typedef void (*PFNGLTEXPARAMETERFVPROC)(GLenum, GLenum, const GLfloat *);
 typedef void (*PFNGLDELETETEXTURESPROC)(GLsizei, const GLuint *);
 typedef void (*PFNGLACTIVETEXTUREPROC)(GLenum);
 typedef void (*PFNGLGENFRAMEBUFFERSPROC)(GLsizei, GLuint *);
@@ -139,6 +156,12 @@ typedef void (*PFNGLBLITFRAMEBUFFERPROC)(GLint, GLint, GLint, GLint, GLint, GLin
 typedef GLint (*PFNGLGETATTRIBLOCATIONPROC)(GLuint, const GLchar *);
 typedef void (*PFNGLREADPIXELSPROC)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *);
 typedef void (*PFNGLTEXSUBIMAGE2DPROC)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void *);
+typedef void (*PFNGLBINDBUFFERBASEPROC)(GLenum, GLuint, GLuint);
+typedef void (*PFNGLUNIFORMBLOCKBINDINGPROC)(GLuint, GLuint, GLuint);
+typedef GLuint (*PFNGLGETUNIFORMBLOCKINDEXPROC)(GLuint, const char *);
+typedef void (*PFNGLDRAWBUFFERPROC)(GLenum);
+typedef void (*PFNGLREADBUFFERPROC)(GLenum);
+typedef void (*PFNGLUNIFORM1FVPROC)(GLint, GLsizei, const GLfloat *);
 
 /* Global function pointers. */
 typedef struct sdl3d_gl_funcs
@@ -190,7 +213,10 @@ typedef struct sdl3d_gl_funcs
     PFNGLGENTEXTURESPROC GenTextures;
     PFNGLBINDTEXTUREPROC BindTexture;
     PFNGLTEXIMAGE2DPROC TexImage2D;
+    PFNGLTEXIMAGE3DPROC TexImage3D;
+    PFNGLFRAMEBUFFERTEXTURELAYERPROC FramebufferTextureLayer;
     PFNGLTEXPARAMETERIPROC TexParameteri;
+    PFNGLTEXPARAMETERFVPROC TexParameterfv;
     PFNGLDELETETEXTURESPROC DeleteTextures;
     PFNGLACTIVETEXTUREPROC ActiveTexture;
     PFNGLGENFRAMEBUFFERSPROC GenFramebuffers;
@@ -207,6 +233,12 @@ typedef struct sdl3d_gl_funcs
     PFNGLGETATTRIBLOCATIONPROC GetAttribLocation;
     PFNGLREADPIXELSPROC ReadPixels;
     PFNGLTEXSUBIMAGE2DPROC TexSubImage2D;
+    PFNGLBINDBUFFERBASEPROC BindBufferBase;
+    PFNGLUNIFORMBLOCKBINDINGPROC UniformBlockBinding;
+    PFNGLGETUNIFORMBLOCKINDEXPROC GetUniformBlockIndex;
+    PFNGLDRAWBUFFERPROC DrawBuffer;
+    PFNGLREADBUFFERPROC ReadBuffer;
+    PFNGLUNIFORM1FVPROC Uniform1fv;
 } sdl3d_gl_funcs;
 
 static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
@@ -268,7 +300,10 @@ static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
     LOAD(GenTextures);
     LOAD(BindTexture);
     LOAD(TexImage2D);
+    LOAD(TexImage3D);
+    LOAD(FramebufferTextureLayer);
     LOAD(TexParameteri);
+    LOAD(TexParameterfv);
     LOAD(DeleteTextures);
     LOAD(ActiveTexture);
     LOAD(GenFramebuffers);
@@ -285,6 +320,12 @@ static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
     LOAD(GetAttribLocation);
     LOAD(ReadPixels);
     LOAD(TexSubImage2D);
+    LOAD(BindBufferBase);
+    LOAD(UniformBlockBinding);
+    LOAD(GetUniformBlockIndex);
+    LOAD(DrawBuffer);
+    LOAD(ReadBuffer);
+    LOAD(Uniform1fv);
 #undef LOAD
     return true;
 }

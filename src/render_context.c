@@ -4,7 +4,7 @@
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_stdinc.h>
 
-#include "gl_backend.h"
+#include "gl_renderer.h"
 #include "rasterizer.h"
 #include "render_context_internal.h"
 #include "texture_internal.h"

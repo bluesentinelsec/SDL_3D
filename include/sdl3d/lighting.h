@@ -198,6 +198,15 @@ extern "C"
     bool sdl3d_render_shadow_map(sdl3d_render_context *context, const struct sdl3d_mesh *meshes, int mesh_count,
                                  const sdl3d_mat4 *model_matrices);
 
+    /*
+     * Begin/end a GPU shadow pass. The application calls begin, draws
+     * shadow-casting geometry with the normal draw calls, then calls end.
+     * The shadow pass must run to completion before the geometry pass
+     * (lesson #5). Requires a shadow-enabled directional light.
+     */
+    bool sdl3d_begin_shadow_pass(sdl3d_render_context *context);
+    bool sdl3d_end_shadow_pass(sdl3d_render_context *context);
+
 #ifdef __cplusplus
 }
 #endif
