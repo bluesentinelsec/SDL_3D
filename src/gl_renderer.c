@@ -1177,7 +1177,7 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
             if (ctx->shadow_depth_tex && ctx->shadow_bias > 0.0f)
             {
                 gl->UniformMatrix4fv(ctx->pbr_shadow_vp_loc, 1, GL_FALSE, ctx->shadow_light_vp);
-                gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 1);
+                gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 0); /* CSM disabled */
                 gl->Uniform1f(ctx->pbr_shadow_bias_loc, ctx->shadow_bias);
                 if (ctx->csm_fragment_enabled) {
                     gl->UniformMatrix4fv(ctx->pbr_csm_vp_loc[0], 1, GL_FALSE, ctx->shadow_light_vp);
@@ -1978,7 +1978,7 @@ static bool gl_present(sdl3d_render_context *context)
 
     /* Shadow pass: render original VP into layer 0 (backward compatible),
      * then CSM cascades 1-3 into layers 1-3 for Slice 3. */
-    if (ctx->shadow_program && ctx->shadow_fbo && ctx->shadow_bias > 0.0f)
+    if (0 && ctx->shadow_program)
     {
         compute_csm_matrices(ctx, context);
 
@@ -2251,7 +2251,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
     {
         sdl3d_gl_funcs *gl = &ctx->gl;
         flush_scene_ubo(ctx);
-        if (ctx->shadow_program && ctx->shadow_fbo && ctx->shadow_bias > 0.0f)
+        if (0 && ctx->shadow_program)
         {
             compute_csm_matrices(ctx, ctx->current_ctx);
 
