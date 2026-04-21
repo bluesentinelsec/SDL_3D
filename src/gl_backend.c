@@ -163,6 +163,13 @@ struct sdl3d_gl_context
     int logical_width;
     int logical_height;
 
+    /* Shadow mapping. */
+    GLuint shadow_texture;
+    GLint lit_shadow_map_loc;
+    GLint lit_shadow_vp_loc;
+    GLint lit_shadow_enabled_loc;
+    GLint lit_shadow_bias_loc;
+
     int width;
     int height;
 };
@@ -798,6 +805,20 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     sdl3d_gl_init_lit_uniform_cache(ctx, ctx->n64_program, &ctx->n64_uniforms);
     sdl3d_gl_init_lit_uniform_cache(ctx, ctx->dos_program, &ctx->dos_uniforms);
     sdl3d_gl_init_lit_uniform_cache(ctx, ctx->snes_program, &ctx->snes_uniforms);
+
+    /* Shadow map uniform locations and texture. */
+    ctx->lit_shadow_map_loc = ctx->gl.GetUniformLocation(ctx->lit_program, "uShadowMap");
+    ctx->lit_shadow_vp_loc = ctx->gl.GetUniformLocation(ctx->lit_program, "uShadowVP");
+    ctx->lit_shadow_enabled_loc = ctx->gl.GetUniformLocation(ctx->lit_program, "uShadowEnabled");
+    ctx->lit_shadow_bias_loc = ctx->gl.GetUniformLocation(ctx->lit_program, "uShadowBias");
+
+    ctx->gl.GenTextures(1, &ctx->shadow_texture);
+    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->shadow_texture);
+    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_R32F, 512, 512, 0, GL_RED, GL_FLOAT, NULL);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     ctx->copy_texture_loc = ctx->gl.GetUniformLocation(ctx->copy_program, "uScene");
     ctx->postprocess_scene_loc = ctx->gl.GetUniformLocation(ctx->postprocess_program, "uScene");
     ctx->postprocess_texel_size_loc = ctx->gl.GetUniformLocation(ctx->postprocess_program, "uTexelSize");
@@ -896,6 +917,10 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
         ctx->doublebuffered = (doublebuffer != 0);
     }
 
+    /* Start at 1 so the zero-initialized uniform caches don't falsely
+     * match on the first frame (scene_uniform_frame defaults to 0). */
+    ctx->frame_index = 1;
+
     return ctx;
 }
 
@@ -940,6 +965,10 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     if (ctx->white_texture)
     {
         ctx->gl.DeleteTextures(1, &ctx->white_texture);
+    }
+    if (ctx->shadow_texture)
+    {
+        ctx->gl.DeleteTextures(1, &ctx->shadow_texture);
     }
     sdl3d_gl_destroy_texture_cache(ctx);
     sdl3d_gl_delete_stream_buffers(&ctx->gl, &ctx->unlit_buffers);
@@ -988,6 +1017,8 @@ void sdl3d_gl_present(sdl3d_gl_context *ctx, SDL_Window *window)
 {
     int window_w = 0;
     int window_h = 0;
+    int vp_x, vp_y, vp_w, vp_h;
+    float scale_x, scale_y, scale;
 
     if (ctx == NULL || window == NULL)
     {
@@ -997,11 +1028,36 @@ void sdl3d_gl_present(sdl3d_gl_context *ctx, SDL_Window *window)
     SDL_GetWindowSizeInPixels(window, &window_w, &window_h);
     SDL_GL_MakeCurrent(ctx->window, ctx->gl_context);
 
-    /* Avoid framebuffer blits on macOS: draw a textured fullscreen pass instead. */
+    /* Compute letterbox viewport to maintain aspect ratio. */
+    scale_x = (float)window_w / (float)ctx->logical_width;
+    scale_y = (float)window_h / (float)ctx->logical_height;
+    scale = (scale_x < scale_y) ? scale_x : scale_y;
+    vp_w = (int)((float)ctx->logical_width * scale);
+    vp_h = (int)((float)ctx->logical_height * scale);
+    vp_x = (window_w - vp_w) / 2;
+    vp_y = (window_h - vp_h) / 2;
+
     ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, 0);
     ctx->gl.Disable(GL_DEPTH_TEST);
     ctx->gl.Disable(GL_CULL_FACE);
-    sdl3d_gl_copy_texture_to_bound_framebuffer(ctx, ctx->fbo_color_texture, window_w, window_h);
+
+    /* Clear to black for letterbox bars. */
+    ctx->gl.Viewport(0, 0, window_w, window_h);
+    ctx->gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    ctx->gl.Clear(GL_COLOR_BUFFER_BIT);
+
+    /* Copy FBO into the letterboxed viewport. */
+    sdl3d_gl_copy_texture_to_bound_framebuffer(ctx, ctx->fbo_color_texture, vp_w, vp_h);
+    /* The copy function sets viewport internally; override with letterbox offset. */
+    ctx->gl.Viewport(vp_x, vp_y, vp_w, vp_h);
+    ctx->gl.BindVertexArray(ctx->fullscreen_vao);
+    ctx->gl.UseProgram(ctx->copy_program);
+    ctx->gl.ActiveTexture(GL_TEXTURE0);
+    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->fbo_color_texture);
+    ctx->gl.Uniform1i(ctx->copy_texture_loc, 0);
+    sdl3d_gl_draw_fullscreen_triangle(&ctx->gl);
+    ctx->gl.BindVertexArray(0);
+
     sdl3d_gl_debug_log_pixel(ctx, GL_FRAMEBUFFER, 0, window_w, window_h, "after-present-copy");
     ctx->gl.Enable(GL_CULL_FACE);
     ctx->gl.Enable(GL_DEPTH_TEST);
@@ -1303,6 +1359,23 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *
     }
     gl->Uniform1i(cache ? cache->texture_loc : gl->GetUniformLocation(program, "uTexture"), 0);
     gl->Uniform1i(cache ? cache->has_texture_loc : gl->GetUniformLocation(program, "uHasTexture"), has_texture ? 1 : 0);
+
+    /* Shadow map uniforms. */
+    if (program == ctx->lit_program && params->shadow_depth_data != NULL)
+    {
+        ctx->gl.ActiveTexture(GL_TEXTURE0 + 1);
+        ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->shadow_texture);
+        ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 512, 512, GL_RED, GL_FLOAT, params->shadow_depth_data);
+        gl->Uniform1i(ctx->lit_shadow_map_loc, 1);
+        gl->UniformMatrix4fv(ctx->lit_shadow_vp_loc, 1, GL_FALSE, params->shadow_vp);
+        gl->Uniform1i(ctx->lit_shadow_enabled_loc, 1);
+        gl->Uniform1f(ctx->lit_shadow_bias_loc, params->shadow_bias);
+        ctx->gl.ActiveTexture(GL_TEXTURE0);
+    }
+    else if (program == ctx->lit_program)
+    {
+        gl->Uniform1i(ctx->lit_shadow_enabled_loc, 0);
+    }
 
     gl->BindVertexArray(buffers->vao);
 

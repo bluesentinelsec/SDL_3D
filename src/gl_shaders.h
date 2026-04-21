@@ -85,6 +85,10 @@ static const char *sdl3d_shader_lit_vert =
                        "    gl_Position = uMVP * vec4(pos, 1.0);\n"
                        "}\n";
 
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Woverlength-strings"
+#endif
 static const char *sdl3d_shader_lit_frag = SDL3D_GLSL_VERSION
     "#define MAX_LIGHTS 8\n"
     "#define PI 3.14159265\n"
@@ -121,6 +125,10 @@ static const char *sdl3d_shader_lit_frag = SDL3D_GLSL_VERSION
     "uniform float uFogStart;\n"
     "uniform float uFogEnd;\n"
     "uniform float uFogDensity;\n"
+    "uniform sampler2D uShadowMap;\n"
+    "uniform mat4 uShadowVP;\n"
+    "uniform int uShadowEnabled;\n"
+    "uniform float uShadowBias;\n"
     "\n"
     "out vec4 fragColor;\n"
     "\n"
@@ -185,6 +193,17 @@ static const char *sdl3d_shader_lit_frag = SDL3D_GLSL_VERSION
     "        Lo += (diff + spec) * radiance * NdotL;\n"
     "    }\n"
     "\n"
+    "    /* Shadow map sampling for directional light (light 0). */\n"
+    "    if (uShadowEnabled != 0) {\n"
+    "        vec4 lpos = uShadowVP * vec4(vWorldPos, 1.0);\n"
+    "        vec3 sndc = lpos.xyz / lpos.w;\n"
+    "        vec2 suv = sndc.xy * 0.5 + 0.5;\n"
+    "        if (suv.x >= 0.0 && suv.x <= 1.0 && suv.y >= 0.0 && suv.y <= 1.0) {\n"
+    "            float closest = texture(uShadowMap, suv).r;\n"
+    "            float current = sndc.z * 0.5 + 0.5;\n"
+    "            if (current - uShadowBias > closest) Lo = vec3(0.0);\n"
+    "        }\n"
+    "    }\n"
     "    vec3 color = uAmbient * albedo + Lo + uEmissive;\n"
     "\n"
     "    /* Fog. */\n"
@@ -207,6 +226,9 @@ static const char *sdl3d_shader_lit_frag = SDL3D_GLSL_VERSION
     "\n"
     "    fragColor = vec4(color, alpha);\n"
     "}\n";
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #endif
 
@@ -291,14 +313,17 @@ static const char *sdl3d_shader_ps1_frag =
     "    if (alpha <= 0.0) discard;\n"
     "    color = pow(clamp(color, 0.0, 1.0), vec3(1.0/2.2));\n"
     "    color = mix(color, uFogColor, vFogFactor);\n"
-    "    /* Bayer dithering + 5-bit quantization. */\n"
+    "    /* PS1: aggressive 4x4 Bayer dither + 5-bit (32-level) quantize. */\n"
     "    float bayer[16] = float[16](0.0/16.0, 8.0/16.0, 2.0/16.0, 10.0/16.0,\n"
     "                                12.0/16.0, 4.0/16.0, 14.0/16.0, 6.0/16.0,\n"
     "                                3.0/16.0, 11.0/16.0, 1.0/16.0, 9.0/16.0,\n"
     "                                15.0/16.0, 7.0/16.0, 13.0/16.0, 5.0/16.0);\n"
     "    ivec2 px = ivec2(gl_FragCoord.xy);\n"
-    "    float dither = (bayer[(px.y % 4) * 4 + (px.x % 4)] - 0.5) / 32.0;\n"
+    "    float dither = (bayer[(px.y % 4) * 4 + (px.x % 4)] - 0.5) / 24.0;\n"
     "    color = floor((color + dither) * 32.0 + 0.5) / 32.0;\n"
+    "    /* Slight color desaturation — PS1 had limited color precision. */\n"
+    "    float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
+    "    color = mix(vec3(lum), color, 0.85);\n"
     "    fragColor = vec4(max(color, 0.0), alpha);\n"
     "}\n";
 
@@ -376,6 +401,9 @@ static const char *sdl3d_shader_n64_frag = "in vec2 vTexCoord;\n"
                                            "    if (alpha <= 0.0) discard;\n"
                                            "    color = pow(clamp(color, 0.0, 1.0), vec3(1.0/2.2));\n"
                                            "    color = mix(color, uFogColor, vFogFactor);\n"
+                                           "    /* N64: slight warm tint + soft contrast. */\n"
+                                           "    color *= vec3(1.02, 1.0, 0.95);\n"
+                                           "    color = clamp((color - 0.5) * 1.05 + 0.5, 0.0, 1.0);\n"
                                            "    fragColor = vec4(color, alpha);\n"
                                            "}\n";
 
@@ -402,7 +430,7 @@ static const char *sdl3d_shader_dos_vert =
     "uniform float uFogEnd;\n"
     "uniform float uFogDensity;\n"
     "noperspective out vec2 vTexCoord;\n"
-    "out vec4 vColor;\n"
+    "flat out vec4 vColor;\n"
     "out float vFogFactor;\n"
     "void main() {\n"
     "    gl_Position = uMVP * vec4(aPosition, 1.0);\n"
@@ -439,7 +467,7 @@ static const char *sdl3d_shader_dos_vert =
 
 static const char *sdl3d_shader_dos_frag =
     "noperspective in vec2 vTexCoord;\n"
-    "in vec4 vColor;\n"
+    "flat in vec4 vColor;\n"
     "in float vFogFactor;\n"
     "uniform sampler2D uTexture;\n"
     "uniform int uHasTexture;\n"
@@ -454,14 +482,19 @@ static const char *sdl3d_shader_dos_frag =
     "    if (alpha <= 0.0) discard;\n"
     "    color = pow(clamp(color, 0.0, 1.0), vec3(1.0/2.2));\n"
     "    color = mix(color, uFogColor, vFogFactor);\n"
-    "    /* 6-level quantize with Bayer dither. */\n"
+    "    /* DOS VGA: 6-level per channel (216 colors) + heavy Bayer dither. */\n"
     "    float bayer[16] = float[16](0.0/16.0, 8.0/16.0, 2.0/16.0, 10.0/16.0,\n"
     "                                12.0/16.0, 4.0/16.0, 14.0/16.0, 6.0/16.0,\n"
     "                                3.0/16.0, 11.0/16.0, 1.0/16.0, 9.0/16.0,\n"
     "                                15.0/16.0, 7.0/16.0, 13.0/16.0, 5.0/16.0);\n"
     "    ivec2 px = ivec2(gl_FragCoord.xy);\n"
-    "    float dither = (bayer[(px.y % 4) * 4 + (px.x % 4)] - 0.5) / 6.0;\n"
+    "    float dither = (bayer[(px.y % 4) * 4 + (px.x % 4)] - 0.5) / 5.0;\n"
     "    color = floor((color + dither) * 6.0 + 0.5) / 6.0;\n"
+    "    /* Desaturate toward VGA palette feel. */\n"
+    "    float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
+    "    color = mix(vec3(lum), color, 0.7);\n"
+    "    /* Slight warm CRT tint. */\n"
+    "    color *= vec3(1.05, 0.98, 0.9);\n"
     "    fragColor = vec4(max(color, 0.0), alpha);\n"
     "}\n";
 
@@ -539,8 +572,13 @@ static const char *sdl3d_shader_snes_frag = "noperspective in vec2 vTexCoord;\n"
                                             "    if (alpha <= 0.0) discard;\n"
                                             "    color = pow(clamp(color, 0.0, 1.0), vec3(1.0/2.2));\n"
                                             "    color = mix(color, uFogColor, vFogFactor);\n"
-                                            "    /* 5-bit per channel (15-bit color). */\n"
+                                            "    /* SNES: 5-bit per channel (15-bit color). */\n"
                                             "    color = floor(color * 32.0 + 0.5) / 32.0;\n"
+                                            "    /* Scanline darkening — every other row. */\n"
+                                            "    int row = int(gl_FragCoord.y);\n"
+                                            "    if ((row & 1) == 0) color *= 0.82;\n"
+                                            "    /* Slight cool tint — SNES had a blue-ish palette bias. */\n"
+                                            "    color *= vec3(0.95, 0.97, 1.05);\n"
                                             "    fragColor = vec4(color, alpha);\n"
                                             "}\n";
 

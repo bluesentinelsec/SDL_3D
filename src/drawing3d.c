@@ -689,6 +689,13 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         lp.vertex_snap_precision = context->vertex_snap_precision;
         lp.texture_filter = (int)context->texture_filter;
 
+        if (lighting->shadow_enabled[0] && lighting->shadow_depth[0] != NULL)
+        {
+            lp.shadow_depth_data = lighting->shadow_depth[0];
+            lp.shadow_vp = lighting->shadow_vp[0].m;
+            lp.shadow_bias = lighting->shadow_bias > 0 ? lighting->shadow_bias : 0.005f;
+        }
+
         if (context->backend_iface.draw_mesh_lit(context, &lp))
         {
             SDL_free(skinned_positions);
@@ -1110,6 +1117,14 @@ bool sdl3d_draw_point_3d(sdl3d_render_context *context, sdl3d_vec3 position, sdl
 bool sdl3d_draw_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, const sdl3d_texture2d *texture,
                      sdl3d_color tint)
 {
+    if (context != NULL && context->shading_mode != SDL3D_SHADING_UNLIT && context->light_count > 0 && mesh != NULL &&
+        mesh->normals != NULL)
+    {
+        sdl3d_lighting_params lp;
+        sdl3d_build_lighting_params(context, &lp);
+        lp.roughness = 1.0f;
+        return sdl3d_draw_mesh_internal(context, mesh, texture, sdl3d_color_to_modulate(tint), &lp, NULL);
+    }
     return sdl3d_draw_mesh_internal(context, mesh, texture, sdl3d_color_to_modulate(tint), NULL, NULL);
 }
 
