@@ -689,6 +689,13 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         lp.vertex_snap_precision = context->vertex_snap_precision;
         lp.texture_filter = (int)context->texture_filter;
 
+        if (lighting->shadow_enabled[0] && lighting->shadow_depth[0] != NULL)
+        {
+            lp.shadow_depth_data = lighting->shadow_depth[0];
+            lp.shadow_vp = lighting->shadow_vp[0].m;
+            lp.shadow_bias = lighting->shadow_bias > 0 ? lighting->shadow_bias : 0.005f;
+        }
+
         if (context->backend_iface.draw_mesh_lit(context, &lp))
         {
             SDL_free(skinned_positions);

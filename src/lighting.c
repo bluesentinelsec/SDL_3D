@@ -5,7 +5,6 @@
 
 #include "sdl3d/model.h"
 
-#include "gl_backend.h"
 #include "render_context_internal.h"
 
 bool sdl3d_add_light(sdl3d_render_context *context, const sdl3d_light *light)
@@ -231,14 +230,6 @@ bool sdl3d_enable_shadow(sdl3d_render_context *context, int light_index, sdl3d_v
 
     context->shadow_vp[light_index] = sdl3d_mat4_multiply(light_proj, light_view);
     context->shadow_enabled[light_index] = true;
-
-    /* Notify the GL backend if active. */
-    if (context->gl != NULL && light_index == 0)
-    {
-        sdl3d_gl_enable_shadow(context->gl, context->shadow_vp[0].m,
-                               context->shadow_bias > 0 ? context->shadow_bias : 0.005f);
-    }
-
     return true;
 }
 

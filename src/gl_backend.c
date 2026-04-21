@@ -16,7 +16,6 @@
 #include "gl_shaders.h"
 
 #include "sdl3d/lighting.h"
-#include "sdl3d/math.h"
 #include "sdl3d/texture.h"
 
 static const char *const SDL3D_GL_DEBUG_ENV = "SDL3D_GL_DEBUG";
@@ -164,18 +163,12 @@ struct sdl3d_gl_context
     int logical_width;
     int logical_height;
 
-    /* Shadow mapping — GPU-side depth pass. */
-    GLuint shadow_fbo;
-    GLuint shadow_depth_texture;
-    GLuint shadow_program;
-    GLint shadow_mvp_loc;
+    /* Shadow mapping. */
+    GLuint shadow_texture;
     GLint lit_shadow_map_loc;
     GLint lit_shadow_vp_loc;
     GLint lit_shadow_enabled_loc;
     GLint lit_shadow_bias_loc;
-    bool shadow_active;  /* true if shadow pass is enabled this frame */
-    float shadow_vp[16]; /* light-space VP matrix */
-    float shadow_bias;
 
     int width;
     int height;
@@ -813,33 +806,19 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     sdl3d_gl_init_lit_uniform_cache(ctx, ctx->dos_program, &ctx->dos_uniforms);
     sdl3d_gl_init_lit_uniform_cache(ctx, ctx->snes_program, &ctx->snes_uniforms);
 
-    /* Shadow map: depth-only FBO at 1024x1024. */
-    ctx->gl.GenFramebuffers(1, &ctx->shadow_fbo);
-    ctx->gl.GenTextures(1, &ctx->shadow_depth_texture);
-    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->shadow_depth_texture);
-    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, 1024, 1024, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
-    ctx->gl.FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, ctx->shadow_depth_texture, 0);
-    ctx->gl.DrawBuffer(GL_NONE);
-    ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-
-    /* Compile shadow depth shader. */
-    ctx->shadow_program =
-        sdl3d_gl_link_program(&ctx->gl, sdl3d_shader_shadow_vert, sdl3d_shader_shadow_frag, ctx->is_es);
-    if (ctx->shadow_program)
-    {
-        ctx->shadow_mvp_loc = ctx->gl.GetUniformLocation(ctx->shadow_program, "uMVP");
-    }
-
-    /* Shadow map uniform locations. */
+    /* Shadow map uniform locations and texture. */
     ctx->lit_shadow_map_loc = ctx->gl.GetUniformLocation(ctx->lit_program, "uShadowMap");
     ctx->lit_shadow_vp_loc = ctx->gl.GetUniformLocation(ctx->lit_program, "uShadowVP");
     ctx->lit_shadow_enabled_loc = ctx->gl.GetUniformLocation(ctx->lit_program, "uShadowEnabled");
     ctx->lit_shadow_bias_loc = ctx->gl.GetUniformLocation(ctx->lit_program, "uShadowBias");
+
+    ctx->gl.GenTextures(1, &ctx->shadow_texture);
+    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->shadow_texture);
+    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_R32F, 512, 512, 0, GL_RED, GL_FLOAT, NULL);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     ctx->copy_texture_loc = ctx->gl.GetUniformLocation(ctx->copy_program, "uScene");
     ctx->postprocess_scene_loc = ctx->gl.GetUniformLocation(ctx->postprocess_program, "uScene");
     ctx->postprocess_texel_size_loc = ctx->gl.GetUniformLocation(ctx->postprocess_program, "uTexelSize");
@@ -987,17 +966,9 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     {
         ctx->gl.DeleteTextures(1, &ctx->white_texture);
     }
-    if (ctx->shadow_fbo)
+    if (ctx->shadow_texture)
     {
-        ctx->gl.DeleteFramebuffers(1, &ctx->shadow_fbo);
-    }
-    if (ctx->shadow_depth_texture)
-    {
-        ctx->gl.DeleteTextures(1, &ctx->shadow_depth_texture);
-    }
-    if (ctx->shadow_program)
-    {
-        ctx->gl.DeleteProgram(ctx->shadow_program);
+        ctx->gl.DeleteTextures(1, &ctx->shadow_texture);
     }
     sdl3d_gl_destroy_texture_cache(ctx);
     sdl3d_gl_delete_stream_buffers(&ctx->gl, &ctx->unlit_buffers);
@@ -1039,12 +1010,6 @@ void sdl3d_gl_clear(sdl3d_gl_context *ctx, float r, float g, float b, float a)
     ctx->gl.Viewport(0, 0, ctx->logical_width, ctx->logical_height);
     ctx->gl.ClearColor(r, g, b, a);
     ctx->gl.Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    if (ctx->shadow_active)
-    {
-        ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
-        ctx->gl.Clear(GL_DEPTH_BUFFER_BIT);
-        ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-    }
     sdl3d_gl_debug_log_pixel(ctx, GL_FRAMEBUFFER, ctx->fbo, ctx->logical_width, ctx->logical_height, "after-clear");
 }
 
@@ -1302,52 +1267,6 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *
     texture = sdl3d_gl_bind_texture_for_draw(ctx, params->texture, params->texture_filter);
     has_texture = (params->texture != NULL && texture != ctx->white_texture);
 
-    /* Shadow depth pass: render this mesh from the light's POV. */
-    if (ctx->shadow_active && ctx->shadow_program != 0)
-    {
-        sdl3d_mat4 svp, model, result;
-        SDL_memcpy(svp.m, ctx->shadow_vp, sizeof(svp.m));
-        SDL_memcpy(model.m, params->model_matrix, sizeof(model.m));
-        result = sdl3d_mat4_multiply(svp, model);
-
-        gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
-        gl->Viewport(0, 0, 1024, 1024);
-        gl->UseProgram(ctx->shadow_program);
-        gl->UniformMatrix4fv(ctx->shadow_mvp_loc, 1, GL_FALSE, result.m);
-        gl->BindVertexArray(buffers->vao);
-
-        /* Disable attributes the shadow shader doesn't use to avoid
-         * reading from uninitialized VBOs on the first frame. */
-        gl->DisableVertexAttribArray(1);
-        gl->DisableVertexAttribArray(2);
-        gl->DisableVertexAttribArray(3);
-
-        gl->BindBuffer(GL_ARRAY_BUFFER, buffers->position_vbo);
-        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 3 * sizeof(float)), positions,
-                       GL_DYNAMIC_DRAW);
-        if (indices != NULL && index_count > 0)
-        {
-            gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers->index_ebo);
-            gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)index_count * sizeof(unsigned int)), indices,
-                           GL_DYNAMIC_DRAW);
-            gl->DrawElements(GL_TRIANGLES, (GLsizei)index_count, GL_UNSIGNED_INT, NULL);
-        }
-        else
-        {
-            gl->DrawArrays(GL_TRIANGLES, 0, (GLsizei)vertex_count);
-        }
-
-        /* Re-enable attributes for the main draw. */
-        gl->EnableVertexAttribArray(1);
-        gl->EnableVertexAttribArray(2);
-        gl->EnableVertexAttribArray(3);
-        gl->BindVertexArray(0);
-
-        /* Restore main FBO. */
-        gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-        gl->Viewport(0, 0, ctx->logical_width, ctx->logical_height);
-    }
-
     /* Select shader program based on profile characteristics. */
     if (params->shading_mode == 2 /* GOURAUD */ && params->vertex_snap)
     {
@@ -1441,16 +1360,17 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *
     gl->Uniform1i(cache ? cache->texture_loc : gl->GetUniformLocation(program, "uTexture"), 0);
     gl->Uniform1i(cache ? cache->has_texture_loc : gl->GetUniformLocation(program, "uHasTexture"), has_texture ? 1 : 0);
 
-    /* GPU shadow map uniforms. */
-    if (program == ctx->lit_program && ctx->shadow_active)
+    /* Shadow map uniforms. */
+    if (program == ctx->lit_program && params->shadow_depth_data != NULL)
     {
-        gl->ActiveTexture(GL_TEXTURE0 + 1);
-        gl->BindTexture(GL_TEXTURE_2D, ctx->shadow_depth_texture);
+        ctx->gl.ActiveTexture(GL_TEXTURE0 + 1);
+        ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->shadow_texture);
+        ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 512, 512, GL_RED, GL_FLOAT, params->shadow_depth_data);
         gl->Uniform1i(ctx->lit_shadow_map_loc, 1);
-        gl->UniformMatrix4fv(ctx->lit_shadow_vp_loc, 1, GL_FALSE, ctx->shadow_vp);
+        gl->UniformMatrix4fv(ctx->lit_shadow_vp_loc, 1, GL_FALSE, params->shadow_vp);
         gl->Uniform1i(ctx->lit_shadow_enabled_loc, 1);
-        gl->Uniform1f(ctx->lit_shadow_bias_loc, ctx->shadow_bias);
-        gl->ActiveTexture(GL_TEXTURE0);
+        gl->Uniform1f(ctx->lit_shadow_bias_loc, params->shadow_bias);
+        ctx->gl.ActiveTexture(GL_TEXTURE0);
     }
     else if (program == ctx->lit_program)
     {
@@ -1582,13 +1502,4 @@ void sdl3d_gl_post_process(sdl3d_gl_context *ctx, int effects, float bloom_thres
     gl->Viewport(0, 0, ctx->logical_width, ctx->logical_height);
     sdl3d_gl_debug_log_pixel(ctx, GL_FRAMEBUFFER, ctx->fbo, ctx->logical_width, ctx->logical_height,
                              "after-postprocess");
-}
-
-void sdl3d_gl_enable_shadow(sdl3d_gl_context *ctx, const float *light_vp, float bias)
-{
-    if (ctx == NULL || light_vp == NULL)
-        return;
-    SDL_memcpy(ctx->shadow_vp, light_vp, 16 * sizeof(float));
-    ctx->shadow_bias = bias;
-    ctx->shadow_active = true;
 }
