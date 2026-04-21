@@ -1315,6 +1315,13 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *
         gl->UseProgram(ctx->shadow_program);
         gl->UniformMatrix4fv(ctx->shadow_mvp_loc, 1, GL_FALSE, result.m);
         gl->BindVertexArray(buffers->vao);
+
+        /* Disable attributes the shadow shader doesn't use to avoid
+         * reading from uninitialized VBOs on the first frame. */
+        gl->DisableVertexAttribArray(1);
+        gl->DisableVertexAttribArray(2);
+        gl->DisableVertexAttribArray(3);
+
         gl->BindBuffer(GL_ARRAY_BUFFER, buffers->position_vbo);
         gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)vertex_count * 3 * sizeof(float)), positions,
                        GL_DYNAMIC_DRAW);
@@ -1329,6 +1336,11 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *
         {
             gl->DrawArrays(GL_TRIANGLES, 0, (GLsizei)vertex_count);
         }
+
+        /* Re-enable attributes for the main draw. */
+        gl->EnableVertexAttribArray(1);
+        gl->EnableVertexAttribArray(2);
+        gl->EnableVertexAttribArray(3);
         gl->BindVertexArray(0);
 
         /* Restore main FBO. */

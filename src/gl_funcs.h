@@ -117,6 +117,7 @@ typedef void (*PFNGLBINDBUFFERPROC)(GLenum, GLuint);
 typedef void (*PFNGLBUFFERDATAPROC)(GLenum, GLsizeiptr, const void *, GLenum);
 typedef void (*PFNGLDELETEBUFFERSPROC)(GLsizei, const GLuint *);
 typedef void (*PFNGLENABLEVERTEXATTRIBARRAYPROC)(GLuint);
+typedef void (*PFNGLDISABLEVERTEXATTRIBARRAYPROC)(GLuint);
 typedef void (*PFNGLVERTEXATTRIBPOINTERPROC)(GLuint, GLint, GLenum, GLboolean, GLsizei, const void *);
 typedef void (*PFNGLDRAWARRAYSPROC)(GLenum, GLint, GLsizei);
 typedef void (*PFNGLDRAWELEMENTSPROC)(GLenum, GLsizei, GLenum, const void *);
@@ -186,6 +187,7 @@ typedef struct sdl3d_gl_funcs
     PFNGLBUFFERDATAPROC BufferData;
     PFNGLDELETEBUFFERSPROC DeleteBuffers;
     PFNGLENABLEVERTEXATTRIBARRAYPROC EnableVertexAttribArray;
+    PFNGLDISABLEVERTEXATTRIBARRAYPROC DisableVertexAttribArray;
     PFNGLVERTEXATTRIBPOINTERPROC VertexAttribPointer;
     PFNGLDRAWARRAYSPROC DrawArrays;
     PFNGLDRAWELEMENTSPROC DrawElements;
@@ -265,6 +267,7 @@ static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
     LOAD(BufferData);
     LOAD(DeleteBuffers);
     LOAD(EnableVertexAttribArray);
+    LOAD(DisableVertexAttribArray);
     LOAD(VertexAttribPointer);
     LOAD(DrawArrays);
     LOAD(DrawElements);
