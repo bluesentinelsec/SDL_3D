@@ -161,12 +161,19 @@ struct sdl3d_gl_context
 #define SDL3D_CSM_CASCADE_COUNT 4
     float csm_light_vp[SDL3D_CSM_CASCADE_COUNT][16];
     float csm_split_depths[SDL3D_CSM_CASCADE_COUNT];
+    bool csm_fragment_enabled;
 
     /* PBR shadow uniform locations */
     GLint pbr_shadow_map_loc;
     GLint pbr_shadow_vp_loc;
     GLint pbr_shadow_enabled_loc;
     GLint pbr_shadow_bias_loc;
+
+    /* CSM uniform locations */
+    GLint pbr_csm_vp_loc[4];
+    GLint pbr_csm_splits_loc;
+    GLint pbr_view_matrix_loc;
+    GLint pbr_csm_enabled_loc;
 
     /* Deferred draw list */
     sdl3d_draw_entry *draw_list;
@@ -287,6 +294,10 @@ static const char k_pbr_frag_decl[] = "#define MAX_LIGHTS 8\n"
                                       "uniform mat4 uShadowVP;\n"
                                       "uniform int uShadowEnabled;\n"
                                       "uniform float uShadowBias;\n"
+                                      "uniform mat4 uCSMVP[4];\n"
+                                      "uniform float uCSMSplits[4];\n"
+                                      "uniform mat4 uViewMatrix;\n"
+                                      "uniform int uCSMEnabled;\n"
                                       "\n"
                                       "out vec4 fragColor;\n"
                                       "\n"
@@ -361,10 +372,19 @@ static const char k_pbr_frag_main[] =
     "        Lo += (diff + spec) * radiance * NdotL;\n"
     "    }\n"
     "\n"
-    "    /* Shadow (LearnOpenGL PCF 3x3). */\n"
+    "    /* Shadow (CSM cascade selection with PCF 3x3). */\n"
     "    if (uShadowEnabled != 0) {\n"
-    "        vec3 projCoords = (uShadowVP * vec4(vWorldPos, 1.0)).xyz;\n"
-    "        projCoords = projCoords * 0.5 + 0.5;\n"
+    "        int layer = 0;\n"
+    "        if (uCSMEnabled != 0) {\n"
+    "            float fragDepth = abs((uViewMatrix * vec4(vWorldPos, 1.0)).z);\n"
+    "            layer = 3;\n"
+    "            for (int i = 0; i < 4; ++i) {\n"
+    "                if (fragDepth < uCSMSplits[i]) { layer = i; break; }\n"
+    "            }\n"
+    "        }\n"
+    "        mat4 shadowVP = (uCSMEnabled != 0) ? uCSMVP[layer] : uShadowVP;\n"
+    "        vec4 lpos = shadowVP * vec4(vWorldPos, 1.0);\n"
+    "        vec3 projCoords = lpos.xyz / lpos.w * 0.5 + 0.5;\n"
     "        float currentDepth = projCoords.z;\n"
     "        vec3 lightDir = normalize(-uLights[0].direction);\n"
     "        float bias = max(0.05 * (1.0 - dot(N, lightDir)), 0.005);\n"
@@ -372,7 +392,7 @@ static const char k_pbr_frag_main[] =
     "        vec2 texelSize = 1.0 / vec2(2048.0);\n"
     "        for (int x = -1; x <= 1; ++x) {\n"
     "            for (int y = -1; y <= 1; ++y) {\n"
-    "                float pcfDepth = texture(uShadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize, 0.0)).r;\n"
+    "                float pcfDepth = texture(uShadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize, float(layer))).r;\n"
     "                shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;\n"
     "            }\n"
     "        }\n"
@@ -809,8 +829,8 @@ static void compute_csm_matrices(sdl3d_gl_context *ctx, const sdl3d_render_conte
 
     /* Use cascade 0 VP as the main shadow VP for the fragment shader (layer 0).
      * NOTE: ctx->shadow_light_vp is already set from sdl3d_enable_shadow in gl_clear.
-     * We keep that original VP for the fragment shader since it covers the full scene.
-     * Slice 3 will switch the fragment shader to per-cascade selection. */
+     * We keep that original VP as fallback. CSM fragment path is now active. */
+    ctx->csm_fragment_enabled = true;
 }
 
 /* ------------------------------------------------------------------ */
@@ -886,10 +906,21 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
                 gl->UniformMatrix4fv(ctx->pbr_shadow_vp_loc, 1, GL_FALSE, ctx->shadow_light_vp);
                 gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 1);
                 gl->Uniform1f(ctx->pbr_shadow_bias_loc, ctx->shadow_bias);
+                if (ctx->csm_fragment_enabled) {
+                    gl->UniformMatrix4fv(ctx->pbr_csm_vp_loc[0], 1, GL_FALSE, ctx->shadow_light_vp);
+                    for (int c = 1; c < 4; c++)
+                        gl->UniformMatrix4fv(ctx->pbr_csm_vp_loc[c], 1, GL_FALSE, ctx->csm_light_vp[c]);
+                    gl->Uniform1fv(ctx->pbr_csm_splits_loc, 4, ctx->csm_split_depths);
+                    gl->UniformMatrix4fv(ctx->pbr_view_matrix_loc, 1, GL_FALSE, ctx->current_ctx->view.m);
+                    gl->Uniform1i(ctx->pbr_csm_enabled_loc, 1);
+                } else {
+                    gl->Uniform1i(ctx->pbr_csm_enabled_loc, 0);
+                }
             }
             else
             {
                 gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 0);
+                gl->Uniform1i(ctx->pbr_csm_enabled_loc, 0);
             }
             gl->ActiveTexture(GL_TEXTURE0);
 
@@ -1147,6 +1178,18 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->pbr_shadow_vp_loc = gl->GetUniformLocation(ctx->pbr_program, "uShadowVP");
     ctx->pbr_shadow_enabled_loc = gl->GetUniformLocation(ctx->pbr_program, "uShadowEnabled");
     ctx->pbr_shadow_bias_loc = gl->GetUniformLocation(ctx->pbr_program, "uShadowBias");
+
+    /* CSM uniform locations. */
+    {
+        char name[32];
+        for (int i = 0; i < 4; i++) {
+            SDL_snprintf(name, sizeof(name), "uCSMVP[%d]", i);
+            ctx->pbr_csm_vp_loc[i] = gl->GetUniformLocation(ctx->pbr_program, name);
+        }
+    }
+    ctx->pbr_csm_splits_loc = gl->GetUniformLocation(ctx->pbr_program, "uCSMSplits");
+    ctx->pbr_view_matrix_loc = gl->GetUniformLocation(ctx->pbr_program, "uViewMatrix");
+    ctx->pbr_csm_enabled_loc = gl->GetUniformLocation(ctx->pbr_program, "uCSMEnabled");
 
     /* Unlit uniform locations. */
     ctx->unlit_mvp_loc = gl->GetUniformLocation(ctx->unlit_program, "uMVP");

@@ -156,6 +156,7 @@ typedef void (*PFNGLUNIFORMBLOCKBINDINGPROC)(GLuint, GLuint, GLuint);
 typedef GLuint (*PFNGLGETUNIFORMBLOCKINDEXPROC)(GLuint, const char *);
 typedef void (*PFNGLDRAWBUFFERPROC)(GLenum);
 typedef void (*PFNGLREADBUFFERPROC)(GLenum);
+typedef void (*PFNGLUNIFORM1FVPROC)(GLint, GLsizei, const GLfloat *);
 
 /* Global function pointers. */
 typedef struct sdl3d_gl_funcs
@@ -232,6 +233,7 @@ typedef struct sdl3d_gl_funcs
     PFNGLGETUNIFORMBLOCKINDEXPROC GetUniformBlockIndex;
     PFNGLDRAWBUFFERPROC DrawBuffer;
     PFNGLREADBUFFERPROC ReadBuffer;
+    PFNGLUNIFORM1FVPROC Uniform1fv;
 } sdl3d_gl_funcs;
 
 static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
@@ -318,6 +320,7 @@ static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
     LOAD(GetUniformBlockIndex);
     LOAD(DrawBuffer);
     LOAD(ReadBuffer);
+    LOAD(Uniform1fv);
 #undef LOAD
     return true;
 }

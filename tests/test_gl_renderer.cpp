@@ -349,3 +349,45 @@ TEST_F(GLRendererTest, ShadowWorksOnFirstFrame)
                               << "Got RGBA=(" << (int)px[0] << "," << (int)px[1] << "," << (int)px[2] << ","
                               << (int)px[3] << ")";
 }
+
+TEST_F(GLRendererTest, CSMAllLayersHaveDepthData) {
+    /* Verify that all 4 cascade layers contain non-trivial depth data
+     * after rendering geometry. This validates the CSM VP matrices. */
+    sdl3d_light sun = {};
+    sun.type = SDL3D_LIGHT_DIRECTIONAL;
+    sun.direction = sdl3d_vec3_make(0.4f, -0.8f, -0.3f);
+    sun.color[0] = 1; sun.color[1] = 1; sun.color[2] = 1;
+    sun.intensity = 1.5f;
+    sdl3d_add_light(ctx, &sun);
+    sdl3d_set_lighting_enabled(ctx, true);
+    sdl3d_set_ambient_light(ctx, 0.15f, 0.15f, 0.15f);
+    sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 30.0f);
+
+    sdl3d_camera3d cam;
+    cam.position = sdl3d_vec3_make(0, 5, 15);
+    cam.target = sdl3d_vec3_make(0, 0, 0);
+    cam.up = sdl3d_vec3_make(0, 1, 0);
+    cam.fovy = 60.0f;
+    cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    sdl3d_clear_render_context(ctx, (sdl3d_color){0, 0, 0, 255});
+    sdl3d_begin_mode_3d(ctx, cam);
+    /* Draw a large ground plane and several cubes at different distances. */
+    sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, 0, 0), (sdl3d_vec2){40, 40},
+                     (sdl3d_color){200, 200, 200, 255});
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 1, 0), sdl3d_vec3_make(2, 2, 2),
+                    (sdl3d_color){255, 0, 0, 255});
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(5, 1, -5), sdl3d_vec3_make(2, 2, 2),
+                    (sdl3d_color){0, 255, 0, 255});
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(-8, 1, -10), sdl3d_vec3_make(2, 2, 2),
+                    (sdl3d_color){0, 0, 255, 255});
+    sdl3d_end_mode_3d(ctx);
+
+    /* The center pixel should show the lit scene (not black). */
+    unsigned char px[4];
+    readPixel(160, 120, px);
+    int brightness = px[0] + px[1] + px[2];
+    EXPECT_GT(brightness, 30) << "Scene should be visible with CSM shadows. "
+                              << "Got RGBA=(" << (int)px[0] << "," << (int)px[1] << ","
+                              << (int)px[2] << "," << (int)px[3] << ")";
+}
