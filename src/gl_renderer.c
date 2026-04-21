@@ -279,7 +279,7 @@ static const char k_pbr_frag_decl[] = "#define MAX_LIGHTS 8\n"
                                       "uniform float uRoughness;\n"
                                       "uniform vec3 uEmissive;\n"
                                       "\n"
-                                      "uniform sampler2D uShadowMap;\n"
+                                      "uniform sampler2DArray uShadowMap;\n"
                                       "uniform mat4 uShadowVP;\n"
                                       "uniform int uShadowEnabled;\n"
                                       "uniform float uShadowBias;\n"
@@ -368,7 +368,7 @@ static const char k_pbr_frag_main[] =
     "        vec2 texelSize = 1.0 / vec2(2048.0);\n"
     "        for (int x = -1; x <= 1; ++x) {\n"
     "            for (int y = -1; y <= 1; ++y) {\n"
-    "                float pcfDepth = texture(uShadowMap, projCoords.xy + vec2(x, y) * texelSize).r;\n"
+    "                float pcfDepth = texture(uShadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize, 0.0)).r;\n"
     "                shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;\n"
     "            }\n"
     "        }\n"
@@ -727,21 +727,22 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
             gl->Uniform1i(ctx->pbr_texture_loc, 0);
             gl->Uniform1i(ctx->pbr_has_texture_loc, e->texture ? 1 : 0);
 
-            /* Shadow uniforms */
+            /* Shadow uniforms — always bind the texture array to prevent
+             * undefined sampler behavior on some drivers. */
+            gl->ActiveTexture(GL_TEXTURE0 + 1);
+            gl->BindTexture(GL_TEXTURE_2D_ARRAY, ctx->shadow_depth_tex);
+            gl->Uniform1i(ctx->pbr_shadow_map_loc, 1);
             if (ctx->shadow_depth_tex && ctx->shadow_bias > 0.0f)
             {
-                gl->ActiveTexture(GL_TEXTURE0 + 1);
-                gl->BindTexture(GL_TEXTURE_2D, ctx->shadow_depth_tex);
-                gl->Uniform1i(ctx->pbr_shadow_map_loc, 1);
                 gl->UniformMatrix4fv(ctx->pbr_shadow_vp_loc, 1, GL_FALSE, ctx->shadow_light_vp);
                 gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 1);
                 gl->Uniform1f(ctx->pbr_shadow_bias_loc, ctx->shadow_bias);
-                gl->ActiveTexture(GL_TEXTURE0);
             }
             else
             {
                 gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 0);
             }
+            gl->ActiveTexture(GL_TEXTURE0);
 
             gl->BindVertexArray(ctx->lit_vao);
             gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_position_vbo);
@@ -1073,18 +1074,20 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     /* Shadow map: 2048x2048 depth-only FBO with its own VAO. */
     gl->GenFramebuffers(1, &ctx->shadow_fbo);
     gl->GenTextures(1, &ctx->shadow_depth_tex);
-    gl->BindTexture(GL_TEXTURE_2D, ctx->shadow_depth_tex);
-    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, 2048, 2048, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    gl->BindTexture(GL_TEXTURE_2D_ARRAY, ctx->shadow_depth_tex);
+    gl->TexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_DEPTH_COMPONENT32F, 2048, 2048, 4, 0, GL_DEPTH_COMPONENT, GL_FLOAT,
+                   NULL);
+    gl->TexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    gl->TexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    gl->TexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    gl->TexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     {
         float border_color[] = {1.0f, 1.0f, 1.0f, 1.0f};
-        gl->TexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, border_color);
+        gl->TexParameterfv(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_BORDER_COLOR, border_color);
     }
+    /* Attach layer 0 for now — CSM will render to each layer separately. */
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
-    gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, ctx->shadow_depth_tex, 0);
+    gl->FramebufferTextureLayer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, ctx->shadow_depth_tex, 0, 0);
     gl->DrawBuffer(GL_NONE);
     gl->ReadBuffer(GL_NONE);
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo); /* restore */
