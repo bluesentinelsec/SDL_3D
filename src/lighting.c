@@ -189,6 +189,12 @@ bool sdl3d_enable_shadow(sdl3d_render_context *context, int light_index, sdl3d_v
         {
             return SDL_OutOfMemory();
         }
+        /* Initialize to 1.0 (far plane = no shadow) so the map is safe
+         * to sample before sdl3d_render_shadow_map is first called. */
+        for (size_t p = 0; p < (size_t)SDL3D_SHADOW_MAP_SIZE * SDL3D_SHADOW_MAP_SIZE; ++p)
+        {
+            context->shadow_depth[light_index][p] = 1.0f;
+        }
     }
 
     /* Compute light-space view-projection matrix. */
