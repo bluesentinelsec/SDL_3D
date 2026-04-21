@@ -583,6 +583,21 @@ static const char *sdl3d_shader_snes_frag = "noperspective in vec2 vTexCoord;\n"
                                             "}\n";
 
 /* ================================================================== */
+/* Shadow depth shader: renders geometry from light POV (depth only)   */
+/* ================================================================== */
+
+static const char *sdl3d_shader_shadow_vert = "layout(location = 0) in vec3 aPosition;\n"
+                                              "uniform mat4 uMVP;\n"
+                                              "void main() {\n"
+                                              "    gl_Position = uMVP * vec4(aPosition, 1.0);\n"
+                                              "}\n";
+
+static const char *sdl3d_shader_shadow_frag = "out vec4 fragColor;\n"
+                                              "void main() {\n"
+                                              "    fragColor = vec4(1.0);\n"
+                                              "}\n";
+
+/* ================================================================== */
 /* Fullscreen shaders for present and post-processing                  */
 /* ================================================================== */
 

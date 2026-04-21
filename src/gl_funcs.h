@@ -65,6 +65,7 @@ typedef unsigned int GLbitfield;
 #define GL_DEPTH_COMPONENT 0x1902
 #define GL_DEPTH_COMPONENT16 0x81A5
 #define GL_DEPTH_COMPONENT24 0x81A6
+#define GL_NONE 0
 #define GL_RENDERBUFFER 0x8D41
 #define GL_FRAMEBUFFER_COMPLETE 0x8CD5
 #define GL_BLEND 0x0BE2
@@ -139,6 +140,7 @@ typedef void (*PFNGLBLITFRAMEBUFFERPROC)(GLint, GLint, GLint, GLint, GLint, GLin
 typedef GLint (*PFNGLGETATTRIBLOCATIONPROC)(GLuint, const GLchar *);
 typedef void (*PFNGLREADPIXELSPROC)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *);
 typedef void (*PFNGLTEXSUBIMAGE2DPROC)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void *);
+typedef void (*PFNGLDRAWBUFFERPROC)(GLenum);
 
 /* Global function pointers. */
 typedef struct sdl3d_gl_funcs
@@ -207,6 +209,7 @@ typedef struct sdl3d_gl_funcs
     PFNGLGETATTRIBLOCATIONPROC GetAttribLocation;
     PFNGLREADPIXELSPROC ReadPixels;
     PFNGLTEXSUBIMAGE2DPROC TexSubImage2D;
+    PFNGLDRAWBUFFERPROC DrawBuffer;
 } sdl3d_gl_funcs;
 
 static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
@@ -285,6 +288,7 @@ static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
     LOAD(GetAttribLocation);
     LOAD(ReadPixels);
     LOAD(TexSubImage2D);
+    LOAD(DrawBuffer);
 #undef LOAD
     return true;
 }
