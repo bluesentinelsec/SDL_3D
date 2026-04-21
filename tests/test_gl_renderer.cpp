@@ -109,9 +109,7 @@ TEST_F(GLRendererTest, LitCubeProducesNonClearPixels)
 
     /* The center pixel should NOT be the clear color (black). */
     int brightness = px[0] + px[1] + px[2];
-    EXPECT_GT(brightness, 30) << "Center pixel should show lit cube, not clear color. "
-                              << "Got RGBA=(" << (int)px[0] << "," << (int)px[1] << "," << (int)px[2] << ","
-                              << (int)px[3] << ")";
+    EXPECT_GT(brightness, 30);
 }
 
 TEST_F(GLRendererTest, CubeVisibleOnFirstFrame)
@@ -137,8 +135,7 @@ TEST_F(GLRendererTest, CubeVisibleOnFirstFrame)
     unsigned char px[4];
     readPixel(160, 120, px);
 
-    EXPECT_GT(px[1], 50) << "Green channel should be visible on first frame. "
-                         << "Got RGBA=(" << (int)px[0] << "," << (int)px[1] << "," << (int)px[2] << (int)px[3] << ")";
+    EXPECT_GT(px[1], 50);
 }
 
 TEST_F(GLRendererTest, BackfaceCullingShowsFrontFaces)
@@ -166,8 +163,7 @@ TEST_F(GLRendererTest, BackfaceCullingShowsFrontFaces)
     readPixel(160, 120, px);
 
     /* With correct culling, we should see the front face (red), not black. */
-    EXPECT_GT(px[0], 50) << "Front face should be visible with backface culling. "
-                         << "Got RGBA=(" << (int)px[0] << "," << (int)px[1] << "," << (int)px[2] << (int)px[3] << ")";
+    EXPECT_GT(px[0], 50);
 }
 
 TEST_F(GLRendererTest, ToggleRecreateProducesCorrectOutput)
@@ -216,12 +212,10 @@ TEST_F(GLRendererTest, ToggleRecreateProducesCorrectOutput)
     unsigned char px2[4];
     readPixel(160, 120, px2);
 
-    EXPECT_GT(px2[2], 50) << "Blue should be visible after context recreation. "
-                          << "Got RGBA=(" << (int)px2[0] << "," << (int)px2[1] << "," << (int)px2[2] << ","
-                          << (int)px2[3] << ")";
+    EXPECT_GT(px2[2], 50);
 
     /* Both renders should produce similar results. */
-    EXPECT_NEAR(px1[2], px2[2], 10) << "Output should match before and after recreation.";
+    EXPECT_NEAR(px1[2], px2[2], 10);
 }
 
 TEST_F(GLRendererTest, ShadowPassProducesNonUniformDepth)
@@ -256,9 +250,7 @@ TEST_F(GLRendererTest, ShadowPassProducesNonUniformDepth)
     unsigned char px[4];
     readPixel(160, 120, px);
     int brightness = px[0] + px[1] + px[2];
-    EXPECT_GT(brightness, 20) << "Cube should be visible after shadow pass. "
-                              << "Got RGBA=(" << (int)px[0] << "," << (int)px[1] << "," << (int)px[2] << ","
-                              << (int)px[3] << ")";
+    EXPECT_GT(brightness, 20);
 }
 
 /* ShadowMakesShadowedPixelDarker test removed — directional CSM shadows
@@ -297,9 +289,7 @@ TEST_F(GLRendererTest, ShadowWorksOnFirstFrame)
     int brightness = px[0] + px[1] + px[2];
 
     /* Must not be black (the old bug). Must not be distorted. */
-    EXPECT_GT(brightness, 20) << "Shadow must work on first frame without artifacts. "
-                              << "Got RGBA=(" << (int)px[0] << "," << (int)px[1] << "," << (int)px[2] << ","
-                              << (int)px[3] << ")";
+    EXPECT_GT(brightness, 20);
 }
 
 TEST_F(GLRendererTest, CSMAllLayersHaveDepthData)
@@ -338,7 +328,5 @@ TEST_F(GLRendererTest, CSMAllLayersHaveDepthData)
     unsigned char px[4];
     readPixel(160, 120, px);
     int brightness = px[0] + px[1] + px[2];
-    EXPECT_GT(brightness, 30) << "Scene should be visible with CSM shadows. "
-                              << "Got RGBA=(" << (int)px[0] << "," << (int)px[1] << "," << (int)px[2] << ","
-                              << (int)px[3] << ")";
+    EXPECT_GT(brightness, 30);
 }
