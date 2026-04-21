@@ -1579,7 +1579,11 @@ void sdl3d_gl_begin_shadow_pass(sdl3d_gl_context *ctx, const float *light_vp, fl
     ctx->gl.Viewport(0, 0, 1024, 1024);
     ctx->gl.Clear(GL_DEPTH_BUFFER_BIT);
     ctx->gl.Enable(GL_DEPTH_TEST);
-    ctx->gl.Disable(GL_CULL_FACE);
+    /* Cull front faces: only back faces write to the shadow map.
+     * This eliminates self-shadowing (shadow acne) entirely because
+     * the stored depth is always behind the lit surface. */
+    ctx->gl.Enable(GL_CULL_FACE);
+    ctx->gl.CullFace(GL_FRONT);
 }
 
 void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx)
@@ -1594,5 +1598,6 @@ void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx)
     /* Restore main FBO. */
     ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
     ctx->gl.Viewport(0, 0, ctx->logical_width, ctx->logical_height);
+    ctx->gl.CullFace(GL_BACK);
     ctx->gl.Enable(GL_CULL_FACE);
 }
