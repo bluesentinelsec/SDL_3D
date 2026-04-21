@@ -258,7 +258,7 @@ int main(int argc, char *argv[])
     SDL_Window *win = NULL;
     SDL_Renderer *ren = NULL;
     sdl3d_render_context *ctx = NULL;
-    player_t player = {0, EYE_HEIGHT, -3, 0, 0};
+    player_t player = {0, EYE_HEIGHT, -3, 3.14159f, 0};
     sdl3d_fog fog;
     bool running = true;
     bool mouse_initialized = false;
@@ -387,22 +387,22 @@ int main(int argc, char *argv[])
         if (keys[SDL_SCANCODE_W])
         {
             player.x += fx * MOVE_SPEED * dt;
-            player.z -= fz * MOVE_SPEED * dt;
+            player.z += fz * MOVE_SPEED * dt;
         }
         if (keys[SDL_SCANCODE_S])
         {
             player.x -= fx * MOVE_SPEED * dt;
-            player.z += fz * MOVE_SPEED * dt;
+            player.z -= fz * MOVE_SPEED * dt;
         }
         if (keys[SDL_SCANCODE_A])
         {
             player.x -= rx * MOVE_SPEED * dt;
-            player.z += rz * MOVE_SPEED * dt;
+            player.z -= rz * MOVE_SPEED * dt;
         }
         if (keys[SDL_SCANCODE_D])
         {
             player.x += rx * MOVE_SPEED * dt;
-            player.z -= rz * MOVE_SPEED * dt;
+            player.z += rz * MOVE_SPEED * dt;
         }
 
         if (show_fog)
