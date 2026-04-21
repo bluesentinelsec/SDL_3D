@@ -99,6 +99,7 @@ extern "C"
      * Enable or disable the SSAO post-process pass (default: true).
      */
     bool sdl3d_set_ssao_enabled(sdl3d_render_context *context, bool enabled);
+    bool sdl3d_set_point_shadows_enabled(sdl3d_render_context *context, bool enabled);
 
     int sdl3d_get_light_count(const sdl3d_render_context *context);
 

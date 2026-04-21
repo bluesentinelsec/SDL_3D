@@ -330,6 +330,7 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     context->ambient[2] = 0.03f;
     context->bloom_enabled = true;
     context->ssao_enabled = true;
+    context->point_shadows_enabled = true;
     context->fog.mode = SDL3D_FOG_NONE;
     context->tonemap_mode = SDL3D_TONEMAP_NONE;
     SDL_memset(context->shadow_depth, 0, sizeof(context->shadow_depth));

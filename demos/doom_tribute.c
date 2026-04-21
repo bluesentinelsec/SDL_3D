@@ -281,6 +281,7 @@ int main(int argc, char *argv[])
 
     setup_lighting(ctx);
     sdl3d_set_ssao_enabled(ctx, false);
+    sdl3d_set_point_shadows_enabled(ctx, false);
 
     SDL_zerop(&fog);
     fog.mode = SDL3D_FOG_EXP2;

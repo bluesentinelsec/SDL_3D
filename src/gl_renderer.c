@@ -2045,7 +2045,7 @@ static bool gl_present(sdl3d_render_context *context)
 
     /* Point shadow pass: 6-face cubemap per light. */
     compute_point_shadow_matrices(ctx, context);
-    if (SDL3D_POINT_SHADOWS_ENABLED && ctx->point_shadow_program && ctx->point_shadow_count > 0)
+    if (ctx->current_ctx->point_shadows_enabled && ctx->point_shadow_program && ctx->point_shadow_count > 0)
     {
         gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->point_shadow_fbo);
         gl->Viewport(0, 0, 512, 512);
@@ -2326,7 +2326,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
             gl->CullFace(GL_BACK);
         }
         compute_point_shadow_matrices(ctx, ctx->current_ctx);
-        if (SDL3D_POINT_SHADOWS_ENABLED && ctx->point_shadow_program && ctx->point_shadow_count > 0)
+        if (ctx->current_ctx->point_shadows_enabled && ctx->point_shadow_program && ctx->point_shadow_count > 0)
         {
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->point_shadow_fbo);
             gl->Viewport(0, 0, 512, 512);

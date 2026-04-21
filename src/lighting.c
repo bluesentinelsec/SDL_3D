@@ -123,6 +123,16 @@ bool sdl3d_set_ssao_enabled(sdl3d_render_context *context, bool enabled)
     return true;
 }
 
+bool sdl3d_set_point_shadows_enabled(sdl3d_render_context *context, bool enabled)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    context->point_shadows_enabled = enabled;
+    return true;
+}
+
 int sdl3d_get_light_count(const sdl3d_render_context *context)
 {
     if (context == NULL)

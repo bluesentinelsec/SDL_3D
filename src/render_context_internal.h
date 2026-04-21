@@ -59,6 +59,7 @@ struct sdl3d_render_context
 
     bool bloom_enabled;
     bool ssao_enabled;
+    bool point_shadows_enabled;
 
     sdl3d_fog fog;
     sdl3d_tonemap_mode tonemap_mode;
