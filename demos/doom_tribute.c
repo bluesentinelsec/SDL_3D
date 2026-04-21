@@ -88,12 +88,20 @@ static void draw_doom_scene(sdl3d_render_context *ctx)
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(9, 1.75f, 15), sdl3d_vec3_make(6, 3.5f, 0.3f), wall_dark);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(9, 1.75f, 19), sdl3d_vec3_make(6, 3.5f, 0.3f), wall_dark);
 
-    /* OUTDOOR (x:12..24, z:12..22, NO ceiling) */
+    /* OUTDOOR (x:12..24, z:12..22, NO ceiling — sky visible) */
     sdl3d_draw_plane(ctx, sdl3d_vec3_make(18, 0, 17), (sdl3d_vec2){12, 10}, outdoor_floor);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(24, 1, 17), sdl3d_vec3_make(0.3f, 2, 10), wall_dark);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(18, 1, 12), sdl3d_vec3_make(12, 2, 0.3f), wall_dark);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(13.5f, 1, 22), sdl3d_vec3_make(3, 2, 0.3f), wall_dark);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(22.5f, 1, 22), sdl3d_vec3_make(3, 2, 0.3f), wall_dark);
+    /* East wall */
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(24, 2, 17), sdl3d_vec3_make(0.3f, 4, 10), wall_dark);
+    /* South wall */
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(18, 2, 12), sdl3d_vec3_make(12, 4, 0.3f), wall_dark);
+    /* West wall — solid except corridor 2 opening (z:15..19) */
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(12, 2, 13.5f), sdl3d_vec3_make(0.3f, 4, 3), wall_dark);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(12, 2, 20.5f), sdl3d_vec3_make(0.3f, 4, 3), wall_dark);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(12, 3.5f, 17), sdl3d_vec3_make(0.3f, 1, 4), wall_dark);
+    /* North wall with door to exit room (gap x:16..20) */
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(14.5f, 2, 22), sdl3d_vec3_make(3, 4, 0.3f), wall_dark);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(21.5f, 2, 22), sdl3d_vec3_make(3, 4, 0.3f), wall_dark);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(18, 3.5f, 22), sdl3d_vec3_make(4, 1, 0.3f), wall_dark);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(16, 0.5f, 14), sdl3d_vec3_make(1, 1, 1), wall_brown);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(17, 0.5f, 15), sdl3d_vec3_make(1, 1, 1), wall_brown);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(16.5f, 1.5f, 14.5f), sdl3d_vec3_make(1, 1, 1), wall_brown);
