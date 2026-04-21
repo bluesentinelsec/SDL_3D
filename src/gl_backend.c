@@ -917,6 +917,10 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
         ctx->doublebuffered = (doublebuffer != 0);
     }
 
+    /* Start at 1 so the zero-initialized uniform caches don't falsely
+     * match on the first frame (scene_uniform_frame defaults to 0). */
+    ctx->frame_index = 1;
+
     return ctx;
 }
 
