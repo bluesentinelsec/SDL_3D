@@ -2181,7 +2181,7 @@ static bool gl_present(sdl3d_render_context *context)
         gl->ActiveTexture(GL_TEXTURE0);
         gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
         gl->Uniform1i(ctx->bloom_scene_loc, 0);
-        gl->Uniform1f(ctx->bloom_threshold_loc, 0.8f);
+        gl->Uniform1f(ctx->bloom_threshold_loc, 1.2f);
         gl->DrawArrays(GL_TRIANGLES, 0, 3);
 
         /* Step 2: Blur bright pixels (ping-pong, 10 passes = 5 iterations). */

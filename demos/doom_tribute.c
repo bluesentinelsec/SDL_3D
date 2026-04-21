@@ -68,9 +68,9 @@ static void draw_doom_scene(sdl3d_render_context *ctx)
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(-2, 1.75f, 8), sdl3d_vec3_make(0.3f, 3.5f, 8), wall_dark);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(2, 1.75f, 8), sdl3d_vec3_make(0.3f, 3.5f, 8), wall_dark);
     /* Fill above corridor where it meets room 1 (step from 4 to 3.5) */
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 3.85f, 4), sdl3d_vec3_make(4, 0.5f, 0.3f), wall_dark);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 3.85f, 4), sdl3d_vec3_make(4, 0.5f, 0.3f), wall_grey);
     /* Fill above corridor where it meets room 2 (step from 3.5 to 4.5) */
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 4.0f, 12), sdl3d_vec3_make(4, 1.0f, 0.3f), wall_dark);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 4.0f, 12), sdl3d_vec3_make(4, 1.0f, 0.3f), wall_brown);
 
     /* ROOM 2: nukage (x:-6..6, z:12..22) */
     sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, -0.5f, 17), (sdl3d_vec2){12, 10}, dark_floor);
