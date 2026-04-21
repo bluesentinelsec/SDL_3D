@@ -175,6 +175,23 @@ struct sdl3d_gl_context
     GLint pbr_view_matrix_loc;
     GLint pbr_csm_enabled_loc;
 
+    /* Point light shadows */
+    GLuint point_shadow_fbo;
+    GLuint point_shadow_cubemap;
+    GLuint point_shadow_program;
+    GLint point_shadow_model_loc;
+    GLint point_shadow_light_vp_loc;
+    GLint point_shadow_light_pos_loc;
+    GLint point_shadow_far_loc;
+    int point_shadow_light_index;
+    float point_shadow_far_plane;
+    float point_shadow_vp[6][16];
+
+    GLint pbr_point_shadow_map_loc;
+    GLint pbr_point_shadow_light_pos_loc;
+    GLint pbr_point_shadow_far_loc;
+    GLint pbr_point_shadow_enabled_loc;
+
     /* Deferred draw list */
     sdl3d_draw_entry *draw_list;
     int draw_count;
@@ -299,6 +316,11 @@ static const char k_pbr_frag_decl[] = "#define MAX_LIGHTS 8\n"
                                       "uniform mat4 uViewMatrix;\n"
                                       "uniform int uCSMEnabled;\n"
                                       "\n"
+                                      "uniform samplerCube uPointShadowMap;\n"
+                                      "uniform vec3 uPointShadowLightPos;\n"
+                                      "uniform float uPointShadowFar;\n"
+                                      "uniform int uPointShadowEnabled;\n"
+                                      "\n"
                                       "out vec4 fragColor;\n"
                                       "\n"
                                       "float DistributionGGX(float NdotH, float r) {\n"
@@ -403,6 +425,16 @@ static const char k_pbr_frag_post[] =
     "        Lo *= (1.0 - shadow);\n"
     "    }\n"
     "\n"
+    "    /* Point light shadow. */\n"
+    "    if (uPointShadowEnabled != 0) {\n"
+    "        vec3 fragToLight = vWorldPos - uPointShadowLightPos;\n"
+    "        float closestDepth = texture(uPointShadowMap, fragToLight).r * uPointShadowFar;\n"
+    "        float currentDepth = length(fragToLight);\n"
+    "        float pbias = 0.15;\n"
+    "        float pshadow = currentDepth - pbias > closestDepth ? 1.0 : 0.0;\n"
+    "        Lo *= (1.0 - pshadow * 0.5);\n"
+    "    }\n"
+    "\n"
     "    /* Hemisphere ambient: sky color from above, ground bounce from below. */\n"
     "    vec3 skyColor = uAmbient * 1.2;\n"
     "    vec3 groundColor = uAmbient * vec3(0.6, 0.5, 0.4);\n"
@@ -487,6 +519,26 @@ static const char k_shadow_vert[] =
     "}\n";
 
 static const char k_shadow_frag[] = "out vec4 fragColor;\nvoid main() { fragColor = vec4(1.0); }\n";
+
+static const char k_point_shadow_vert[] =
+    "layout(location = 0) in vec3 aPos;\n"
+    "uniform mat4 model;\n"
+    "uniform mat4 lightVP;\n"
+    "out vec3 vWorldPos;\n"
+    "void main() {\n"
+    "    vec4 wp = model * vec4(aPos, 1.0);\n"
+    "    vWorldPos = wp.xyz;\n"
+    "    gl_Position = lightVP * wp;\n"
+    "}\n";
+
+static const char k_point_shadow_frag[] =
+    "in vec3 vWorldPos;\n"
+    "uniform vec3 lightPos;\n"
+    "uniform float farPlane;\n"
+    "void main() {\n"
+    "    float dist = length(vWorldPos - lightPos);\n"
+    "    gl_FragDepth = dist / farPlane;\n"
+    "}\n";
 
 /* ------------------------------------------------------------------ */
 /* Shader helpers                                                      */
@@ -840,6 +892,41 @@ static void compute_csm_matrices(sdl3d_gl_context *ctx, const sdl3d_render_conte
     ctx->csm_fragment_enabled = true;
 }
 
+static void compute_point_shadow_matrices(sdl3d_gl_context *ctx, const sdl3d_render_context *rc)
+{
+    ctx->point_shadow_light_index = -1;
+    for (int i = 0; i < rc->light_count; i++) {
+        if (rc->lights[i].type == SDL3D_LIGHT_POINT) {
+            ctx->point_shadow_light_index = i;
+            break;
+        }
+    }
+    if (ctx->point_shadow_light_index < 0) return;
+
+    const sdl3d_light *l = &rc->lights[ctx->point_shadow_light_index];
+    float far = l->range > 0 ? l->range : 25.0f;
+    ctx->point_shadow_far_plane = far;
+
+    sdl3d_mat4 proj;
+    sdl3d_mat4_perspective(3.14159265f * 0.5f, 1.0f, 0.1f, far, &proj);
+
+    sdl3d_vec3 pos = l->position;
+    sdl3d_vec3 targets[6] = {
+        {pos.x+1, pos.y, pos.z}, {pos.x-1, pos.y, pos.z},
+        {pos.x, pos.y+1, pos.z}, {pos.x, pos.y-1, pos.z},
+        {pos.x, pos.y, pos.z+1}, {pos.x, pos.y, pos.z-1}
+    };
+    sdl3d_vec3 ups[6] = {
+        {0,-1,0}, {0,-1,0}, {0,0,1}, {0,0,-1}, {0,-1,0}, {0,-1,0}
+    };
+    for (int i = 0; i < 6; i++) {
+        sdl3d_mat4 view;
+        sdl3d_mat4_look_at(pos, targets[i], ups[i], &view);
+        sdl3d_mat4 vp = sdl3d_mat4_multiply(proj, view);
+        SDL_memcpy(ctx->point_shadow_vp[i], vp.m, 16 * sizeof(float));
+    }
+}
+
 /* ------------------------------------------------------------------ */
 /* Draw list replay                                                    */
 /* ------------------------------------------------------------------ */
@@ -928,6 +1015,20 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
             {
                 gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 0);
                 gl->Uniform1i(ctx->pbr_csm_enabled_loc, 0);
+            }
+            gl->ActiveTexture(GL_TEXTURE0);
+
+            /* Point shadow uniforms. */
+            gl->ActiveTexture(GL_TEXTURE0 + 2);
+            gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->point_shadow_cubemap);
+            gl->Uniform1i(ctx->pbr_point_shadow_map_loc, 2);
+            if (ctx->point_shadow_light_index >= 0) {
+                const sdl3d_light *pl = &ctx->current_ctx->lights[ctx->point_shadow_light_index];
+                gl->Uniform3f(ctx->pbr_point_shadow_light_pos_loc, pl->position.x, pl->position.y, pl->position.z);
+                gl->Uniform1f(ctx->pbr_point_shadow_far_loc, ctx->point_shadow_far_plane);
+                gl->Uniform1i(ctx->pbr_point_shadow_enabled_loc, 1);
+            } else {
+                gl->Uniform1i(ctx->pbr_point_shadow_enabled_loc, 0);
             }
             gl->ActiveTexture(GL_TEXTURE0);
 
@@ -1198,6 +1299,12 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->pbr_view_matrix_loc = gl->GetUniformLocation(ctx->pbr_program, "uViewMatrix");
     ctx->pbr_csm_enabled_loc = gl->GetUniformLocation(ctx->pbr_program, "uCSMEnabled");
 
+    /* Point shadow PBR uniform locations. */
+    ctx->pbr_point_shadow_map_loc = gl->GetUniformLocation(ctx->pbr_program, "uPointShadowMap");
+    ctx->pbr_point_shadow_light_pos_loc = gl->GetUniformLocation(ctx->pbr_program, "uPointShadowLightPos");
+    ctx->pbr_point_shadow_far_loc = gl->GetUniformLocation(ctx->pbr_program, "uPointShadowFar");
+    ctx->pbr_point_shadow_enabled_loc = gl->GetUniformLocation(ctx->pbr_program, "uPointShadowEnabled");
+
     /* Unlit uniform locations. */
     ctx->unlit_mvp_loc = gl->GetUniformLocation(ctx->unlit_program, "uMVP");
     ctx->unlit_texture_loc = gl->GetUniformLocation(ctx->unlit_program, "uTexture");
@@ -1309,6 +1416,29 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
         ctx->shadow_model_loc = gl->GetUniformLocation(ctx->shadow_program, "uModel");
     }
 
+    /* Point light shadow: 512x512 depth cubemap. */
+    ctx->point_shadow_light_index = -1;
+    gl->GenFramebuffers(1, &ctx->point_shadow_fbo);
+    gl->GenTextures(1, &ctx->point_shadow_cubemap);
+    gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->point_shadow_cubemap);
+    for (int i = 0; i < 6; i++) {
+        gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_DEPTH_COMPONENT24,
+                       512, 512, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+    }
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    ctx->point_shadow_program = build_program(gl, version_prefix, k_point_shadow_vert, k_point_shadow_frag);
+    if (ctx->point_shadow_program) {
+        ctx->point_shadow_model_loc = gl->GetUniformLocation(ctx->point_shadow_program, "model");
+        ctx->point_shadow_light_vp_loc = gl->GetUniformLocation(ctx->point_shadow_program, "lightVP");
+        ctx->point_shadow_light_pos_loc = gl->GetUniformLocation(ctx->point_shadow_program, "lightPos");
+        ctx->point_shadow_far_loc = gl->GetUniformLocation(ctx->point_shadow_program, "farPlane");
+    }
+
     gl->BindVertexArray(0);
 
     /* ---- 1×1 white texture ---- */
@@ -1392,6 +1522,14 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     }
     if (ctx->shadow_vao)
         gl->DeleteVertexArrays(1, &ctx->shadow_vao);
+
+    /* Point shadow resources. */
+    if (ctx->point_shadow_program)
+        gl->DeleteProgram(ctx->point_shadow_program);
+    if (ctx->point_shadow_fbo)
+        gl->DeleteFramebuffers(1, &ctx->point_shadow_fbo);
+    if (ctx->point_shadow_cubemap)
+        gl->DeleteTextures(1, &ctx->point_shadow_cubemap);
 
     if (ctx->white_texture)
         gl->DeleteTextures(1, &ctx->white_texture);
@@ -1563,6 +1701,49 @@ static bool gl_present(sdl3d_render_context *context)
         gl->CullFace(GL_BACK);
     }
 
+    /* Point shadow pass: 6-face cubemap. */
+    compute_point_shadow_matrices(ctx, context);
+    if (ctx->point_shadow_program && ctx->point_shadow_light_index >= 0) {
+        const sdl3d_light *pl = &context->lights[ctx->point_shadow_light_index];
+        gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->point_shadow_fbo);
+        gl->Viewport(0, 0, 512, 512);
+        gl->Enable(GL_DEPTH_TEST);
+        gl->Disable(GL_CULL_FACE);
+        gl->UseProgram(ctx->point_shadow_program);
+        gl->Uniform3f(ctx->point_shadow_light_pos_loc, pl->position.x, pl->position.y, pl->position.z);
+        gl->Uniform1f(ctx->point_shadow_far_loc, ctx->point_shadow_far_plane);
+
+        for (int face = 0; face < 6; face++) {
+            gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                                     GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)face,
+                                     ctx->point_shadow_cubemap, 0);
+            gl->Clear(GL_DEPTH_BUFFER_BIT);
+            gl->UniformMatrix4fv(ctx->point_shadow_light_vp_loc, 1, GL_FALSE, ctx->point_shadow_vp[face]);
+            for (int i = 0; i < ctx->draw_count; i++) {
+                sdl3d_draw_entry *e = &ctx->draw_list[i];
+                if (!e->lit) continue;
+                gl->UniformMatrix4fv(ctx->point_shadow_model_loc, 1, GL_FALSE, e->model_matrix);
+                gl->BindVertexArray(ctx->shadow_vao);
+                gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
+                gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)),
+                               e->positions, GL_DYNAMIC_DRAW);
+                if (e->indices && e->index_count > 0) {
+                    gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->shadow_ebo);
+                    gl->BufferData(GL_ELEMENT_ARRAY_BUFFER,
+                                   (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
+                                   e->indices, GL_DYNAMIC_DRAW);
+                    gl->DrawElements(GL_TRIANGLES, e->index_count, GL_UNSIGNED_INT, NULL);
+                } else {
+                    gl->DrawArrays(GL_TRIANGLES, 0, e->vertex_count);
+                }
+            }
+        }
+        gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+        gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+        gl->Enable(GL_CULL_FACE);
+        gl->CullFace(GL_BACK);
+    }
+
     /* Geometry pass: replay all entries into main FBO. */
     replay_draw_list_geometry(ctx);
 
@@ -1660,6 +1841,46 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
                 replay_draw_list_shadow(ctx);
             }
 
+            gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+            gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+            gl->Enable(GL_CULL_FACE);
+            gl->CullFace(GL_BACK);
+        }
+        compute_point_shadow_matrices(ctx, ctx->current_ctx);
+        if (ctx->point_shadow_program && ctx->point_shadow_light_index >= 0) {
+            const sdl3d_light *pl = &ctx->current_ctx->lights[ctx->point_shadow_light_index];
+            gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->point_shadow_fbo);
+            gl->Viewport(0, 0, 512, 512);
+            gl->Enable(GL_DEPTH_TEST);
+            gl->Disable(GL_CULL_FACE);
+            gl->UseProgram(ctx->point_shadow_program);
+            gl->Uniform3f(ctx->point_shadow_light_pos_loc, pl->position.x, pl->position.y, pl->position.z);
+            gl->Uniform1f(ctx->point_shadow_far_loc, ctx->point_shadow_far_plane);
+            for (int face = 0; face < 6; face++) {
+                gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                                         GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)face,
+                                         ctx->point_shadow_cubemap, 0);
+                gl->Clear(GL_DEPTH_BUFFER_BIT);
+                gl->UniformMatrix4fv(ctx->point_shadow_light_vp_loc, 1, GL_FALSE, ctx->point_shadow_vp[face]);
+                for (int i = 0; i < ctx->draw_count; i++) {
+                    sdl3d_draw_entry *e = &ctx->draw_list[i];
+                    if (!e->lit) continue;
+                    gl->UniformMatrix4fv(ctx->point_shadow_model_loc, 1, GL_FALSE, e->model_matrix);
+                    gl->BindVertexArray(ctx->shadow_vao);
+                    gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
+                    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)),
+                                   e->positions, GL_DYNAMIC_DRAW);
+                    if (e->indices && e->index_count > 0) {
+                        gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->shadow_ebo);
+                        gl->BufferData(GL_ELEMENT_ARRAY_BUFFER,
+                                       (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
+                                       e->indices, GL_DYNAMIC_DRAW);
+                        gl->DrawElements(GL_TRIANGLES, e->index_count, GL_UNSIGNED_INT, NULL);
+                    } else {
+                        gl->DrawArrays(GL_TRIANGLES, 0, e->vertex_count);
+                    }
+                }
+            }
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
             gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
             gl->Enable(GL_CULL_FACE);

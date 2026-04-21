@@ -81,6 +81,9 @@ typedef unsigned int GLbitfield;
 #define GL_TEXTURE_BORDER_COLOR 0x1004
 #define GL_TEXTURE_2D_ARRAY 0x8C1A
 #define GL_DEPTH_COMPONENT32F 0x8CAC
+#define GL_TEXTURE_CUBE_MAP 0x8513
+#define GL_TEXTURE_CUBE_MAP_POSITIVE_X 0x8515
+#define GL_TEXTURE_WRAP_R 0x8072
 
 /* Function pointer types. */
 typedef void (*PFNGLCLEARPROC)(GLbitfield);
