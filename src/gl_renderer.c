@@ -225,6 +225,13 @@ struct sdl3d_gl_context
     GLint comp_scene_loc, comp_bloom_loc, comp_vignette_loc, comp_contrast_loc, comp_saturation_loc;
     GLuint final_color_tex;
 
+    /* Retro profile post-process */
+    GLuint retro_program;
+    GLint retro_scene_loc;
+    GLint retro_profile_loc;
+    GLint retro_resolution_loc;
+    int active_retro_profile; /* 0=modern, 1=PS1, 2=N64, 3=DOS, 4=SNES */
+
     /* Cached render context pointer for lazy UBO upload */
     sdl3d_render_context *current_ctx;
 };
@@ -610,6 +617,63 @@ static const char k_composite_frag[] =
     "    color = (color - 0.5) * uContrast + 0.5;\n"
     "    float grey = dot(color, vec3(0.2126, 0.7152, 0.0722));\n"
     "    color = mix(vec3(grey), color, uSaturation);\n"
+    "    fragColor = vec4(max(color, 0.0), 1.0);\n"
+    "}\n";
+
+static const char k_retro_frag[] =
+    "in vec2 vTexCoord;\n"
+    "uniform sampler2D uScene;\n"
+    "uniform int uProfile;\n"
+    "uniform vec2 uResolution;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "    vec2 uv = vTexCoord;\n"
+    "    vec3 color;\n"
+    "    if (uProfile == 1) {\n"
+    "        vec2 lowRes = vec2(320.0, 240.0);\n"
+    "        vec2 pixelUV = floor(uv * lowRes) / lowRes;\n"
+    "        color = texture(uScene, pixelUV).rgb;\n"
+    "        ivec2 px = ivec2(gl_FragCoord.xy);\n"
+    "        float bayer[16] = float[16](0.0/16.0, 8.0/16.0, 2.0/16.0, 10.0/16.0,\n"
+    "                                    12.0/16.0, 4.0/16.0, 14.0/16.0, 6.0/16.0,\n"
+    "                                    3.0/16.0, 11.0/16.0, 1.0/16.0, 9.0/16.0,\n"
+    "                                    15.0/16.0, 7.0/16.0, 13.0/16.0, 5.0/16.0);\n"
+    "        float dither = (bayer[(px.y % 4) * 4 + (px.x % 4)] - 0.5) / 24.0;\n"
+    "        color = floor((color + dither) * 32.0 + 0.5) / 32.0;\n"
+    "        float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
+    "        color = mix(vec3(lum), color, 0.8);\n"
+    "    } else if (uProfile == 2) {\n"
+    "        vec2 lowRes = vec2(320.0, 240.0);\n"
+    "        vec2 pixelUV = floor(uv * lowRes + 0.5) / lowRes;\n"
+    "        color = texture(uScene, pixelUV).rgb;\n"
+    "        color *= vec3(1.05, 1.0, 0.92);\n"
+    "        color = (color - 0.5) * 1.08 + 0.5;\n"
+    "        color = clamp(color, 0.0, 1.0);\n"
+    "    } else if (uProfile == 3) {\n"
+    "        vec2 lowRes = vec2(320.0, 200.0);\n"
+    "        vec2 pixelUV = floor(uv * lowRes) / lowRes;\n"
+    "        color = texture(uScene, pixelUV).rgb;\n"
+    "        ivec2 px = ivec2(gl_FragCoord.xy);\n"
+    "        float bayer[16] = float[16](0.0/16.0, 8.0/16.0, 2.0/16.0, 10.0/16.0,\n"
+    "                                    12.0/16.0, 4.0/16.0, 14.0/16.0, 6.0/16.0,\n"
+    "                                    3.0/16.0, 11.0/16.0, 1.0/16.0, 9.0/16.0,\n"
+    "                                    15.0/16.0, 7.0/16.0, 13.0/16.0, 5.0/16.0);\n"
+    "        float dither = (bayer[(px.y % 4) * 4 + (px.x % 4)] - 0.5) / 5.0;\n"
+    "        color = floor((color + dither) * 6.0 + 0.5) / 6.0;\n"
+    "        float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
+    "        color = mix(vec3(lum), color, 0.65);\n"
+    "        color *= vec3(1.08, 0.98, 0.88);\n"
+    "    } else if (uProfile == 4) {\n"
+    "        vec2 lowRes = vec2(256.0, 224.0);\n"
+    "        vec2 pixelUV = floor(uv * lowRes) / lowRes;\n"
+    "        color = texture(uScene, pixelUV).rgb;\n"
+    "        color = floor(color * 32.0 + 0.5) / 32.0;\n"
+    "        int row = int(gl_FragCoord.y);\n"
+    "        if ((row & 1) == 0) color *= 0.8;\n"
+    "        color *= vec3(0.93, 0.96, 1.08);\n"
+    "    } else {\n"
+    "        color = texture(uScene, uv).rgb;\n"
+    "    }\n"
     "    fragColor = vec4(max(color, 0.0), 1.0);\n"
     "}\n";
 
@@ -1597,6 +1661,18 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->comp_contrast_loc = gl->GetUniformLocation(ctx->composite_program, "uContrast");
     ctx->comp_saturation_loc = gl->GetUniformLocation(ctx->composite_program, "uSaturation");
 
+    /* ---- Retro profile shader ---- */
+    ctx->retro_program = build_program(gl, version_prefix, k_fullscreen_vert, k_retro_frag);
+    if (!ctx->retro_program)
+    {
+        SDL_Log("SDL3D GL: retro shader compilation failed");
+        sdl3d_gl_destroy(ctx);
+        return NULL;
+    }
+    ctx->retro_scene_loc = gl->GetUniformLocation(ctx->retro_program, "uScene");
+    ctx->retro_profile_loc = gl->GetUniformLocation(ctx->retro_program, "uProfile");
+    ctx->retro_resolution_loc = gl->GetUniformLocation(ctx->retro_program, "uResolution");
+
     /* ---- Initial GL state ---- */
     gl->Enable(GL_DEPTH_TEST);
     gl->DepthFunc(GL_LEQUAL);
@@ -1669,6 +1745,8 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     gl->DeleteTextures(SDL3D_MAX_POINT_SHADOWS, ctx->point_shadow_cubemap);
 
     /* Post-process resources. */
+    if (ctx->retro_program)
+        gl->DeleteProgram(ctx->retro_program);
     if (ctx->bloom_program)
         gl->DeleteProgram(ctx->bloom_program);
     if (ctx->bloom_blur_program)
@@ -1713,6 +1791,18 @@ static bool gl_clear(sdl3d_render_context *context, sdl3d_color color)
     ctx->frame_index++;
     ctx->current_ctx = context;
     ctx->ubo_dirty = true;
+
+    /* Map shading mode to retro profile. */
+    if (context->shading_mode == SDL3D_SHADING_GOURAUD && context->vertex_snap)
+        ctx->active_retro_profile = 1; /* PS1 */
+    else if (context->shading_mode == SDL3D_SHADING_GOURAUD && context->uv_mode == SDL3D_UV_AFFINE)
+        ctx->active_retro_profile = 3; /* DOS */
+    else if (context->shading_mode == SDL3D_SHADING_GOURAUD)
+        ctx->active_retro_profile = 2; /* N64 */
+    else if (context->shading_mode == SDL3D_SHADING_FLAT)
+        ctx->active_retro_profile = 4; /* SNES */
+    else
+        ctx->active_retro_profile = 0; /* Modern */
 
     /* Sync shadow state from render context so deferred replay works. */
     if (context->shadow_enabled[0])
@@ -1907,6 +1997,33 @@ static bool gl_present(sdl3d_render_context *context)
     gl->Disable(GL_DEPTH_TEST);
     gl->Disable(GL_CULL_FACE);
     gl->BindVertexArray(ctx->fullscreen_vao);
+
+    /* Retro profile pass: runs before bloom so bloom operates on the
+     * retro-styled scene. Renders fbo_color through the retro uber-shader
+     * into pp_fbo_a, then bloom reads from pp_tex_a instead of fbo_color. */
+    if (ctx->active_retro_profile > 0)
+    {
+        gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->pp_fbo_a);
+        gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+        gl->Clear(GL_COLOR_BUFFER_BIT);
+        gl->UseProgram(ctx->retro_program);
+        gl->ActiveTexture(GL_TEXTURE0);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
+        gl->Uniform1i(ctx->retro_scene_loc, 0);
+        gl->Uniform1i(ctx->retro_profile_loc, ctx->active_retro_profile);
+        gl->Uniform2f(ctx->retro_resolution_loc, (float)ctx->logical_w, (float)ctx->logical_h);
+        gl->DrawArrays(GL_TRIANGLES, 0, 3);
+
+        /* Copy retro result back to fbo_color so the rest of the pipeline
+         * (bloom threshold, composite scene read) works unchanged. */
+        gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+        gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+        gl->UseProgram(ctx->copy_program);
+        gl->ActiveTexture(GL_TEXTURE0);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->pp_tex_a);
+        gl->Uniform1i(ctx->copy_texture_loc, 0);
+        gl->DrawArrays(GL_TRIANGLES, 0, 3);
+    }
 
     /* Step 1: Extract bright pixels from main FBO into pp_tex_a. */
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->pp_fbo_a);
