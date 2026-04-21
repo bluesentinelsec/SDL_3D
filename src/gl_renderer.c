@@ -214,6 +214,17 @@ struct sdl3d_gl_context
     int logical_w;
     int logical_h;
 
+    /* Post-process */
+    GLuint pp_fbo_a, pp_fbo_b;
+    GLuint pp_tex_a, pp_tex_b;
+    GLuint bloom_program;
+    GLuint bloom_blur_program;
+    GLuint composite_program;
+    GLint bloom_scene_loc, bloom_threshold_loc;
+    GLint blur_image_loc, blur_horizontal_loc;
+    GLint comp_scene_loc, comp_bloom_loc, comp_vignette_loc, comp_contrast_loc, comp_saturation_loc;
+    GLuint final_color_tex;
+
     /* Cached render context pointer for lazy UBO upload */
     sdl3d_render_context *current_ctx;
 };
@@ -543,6 +554,63 @@ static const char k_point_shadow_frag[] =
     "void main() {\n"
     "    float dist = length(vWorldPos - lightPos);\n"
     "    gl_FragDepth = dist / farPlane;\n"
+    "}\n";
+
+/* ---- Post-process fragment shaders ---- */
+
+static const char k_bloom_threshold_frag[] =
+    "in vec2 vTexCoord;\n"
+    "uniform sampler2D uScene;\n"
+    "uniform float uThreshold;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "    vec3 color = texture(uScene, vTexCoord).rgb;\n"
+    "    float brightness = dot(color, vec3(0.2126, 0.7152, 0.0722));\n"
+    "    fragColor = (brightness > uThreshold) ? vec4(color, 1.0) : vec4(0.0, 0.0, 0.0, 1.0);\n"
+    "}\n";
+
+static const char k_blur_frag[] =
+    "in vec2 vTexCoord;\n"
+    "uniform sampler2D uImage;\n"
+    "uniform int uHorizontal;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "    float weights[5] = float[](0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);\n"
+    "    vec2 texOffset = 1.0 / vec2(textureSize(uImage, 0));\n"
+    "    vec3 result = texture(uImage, vTexCoord).rgb * weights[0];\n"
+    "    if (uHorizontal == 1) {\n"
+    "        for (int i = 1; i < 5; ++i) {\n"
+    "            result += texture(uImage, vTexCoord + vec2(texOffset.x * float(i), 0.0)).rgb * weights[i];\n"
+    "            result += texture(uImage, vTexCoord - vec2(texOffset.x * float(i), 0.0)).rgb * weights[i];\n"
+    "        }\n"
+    "    } else {\n"
+    "        for (int i = 1; i < 5; ++i) {\n"
+    "            result += texture(uImage, vTexCoord + vec2(0.0, texOffset.y * float(i))).rgb * weights[i];\n"
+    "            result += texture(uImage, vTexCoord - vec2(0.0, texOffset.y * float(i))).rgb * weights[i];\n"
+    "        }\n"
+    "    }\n"
+    "    fragColor = vec4(result, 1.0);\n"
+    "}\n";
+
+static const char k_composite_frag[] =
+    "in vec2 vTexCoord;\n"
+    "uniform sampler2D uScene;\n"
+    "uniform sampler2D uBloom;\n"
+    "uniform float uVignetteStrength;\n"
+    "uniform float uContrast;\n"
+    "uniform float uSaturation;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "    vec3 color = texture(uScene, vTexCoord).rgb;\n"
+    "    vec3 bloom = texture(uBloom, vTexCoord).rgb;\n"
+    "    color += bloom * 0.3;\n"
+    "    vec2 uv = vTexCoord * 2.0 - 1.0;\n"
+    "    float vig = 1.0 - dot(uv, uv) * uVignetteStrength;\n"
+    "    color *= clamp(vig, 0.0, 1.0);\n"
+    "    color = (color - 0.5) * uContrast + 0.5;\n"
+    "    float grey = dot(color, vec3(0.2126, 0.7152, 0.0722));\n"
+    "    color = mix(vec3(grey), color, uSaturation);\n"
+    "    fragColor = vec4(max(color, 0.0), 1.0);\n"
     "}\n";
 
 /* ------------------------------------------------------------------ */
@@ -1481,6 +1549,54 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
         return NULL;
     }
 
+    /* ---- Post-process ping-pong FBOs ---- */
+    {
+        GLuint *fbos[2] = {&ctx->pp_fbo_a, &ctx->pp_fbo_b};
+        GLuint *texs[2] = {&ctx->pp_tex_a, &ctx->pp_tex_b};
+        for (int i = 0; i < 2; i++)
+        {
+            gl->GenTextures(1, texs[i]);
+            gl->BindTexture(GL_TEXTURE_2D, *texs[i]);
+            gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+            gl->GenFramebuffers(1, fbos[i]);
+            gl->BindFramebuffer(GL_FRAMEBUFFER, *fbos[i]);
+            gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *texs[i], 0);
+            GLenum status = gl->CheckFramebufferStatus(GL_FRAMEBUFFER);
+            if (status != GL_FRAMEBUFFER_COMPLETE)
+            {
+                SDL_Log("SDL3D GL: post-process FBO %d incomplete: 0x%x", i, status);
+                sdl3d_gl_destroy(ctx);
+                return NULL;
+            }
+        }
+        gl->BindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+    /* ---- Post-process shaders ---- */
+    ctx->bloom_program = build_program(gl, version_prefix, k_fullscreen_vert, k_bloom_threshold_frag);
+    ctx->bloom_blur_program = build_program(gl, version_prefix, k_fullscreen_vert, k_blur_frag);
+    ctx->composite_program = build_program(gl, version_prefix, k_fullscreen_vert, k_composite_frag);
+    if (!ctx->bloom_program || !ctx->bloom_blur_program || !ctx->composite_program)
+    {
+        SDL_Log("SDL3D GL: post-process shader compilation failed");
+        sdl3d_gl_destroy(ctx);
+        return NULL;
+    }
+    ctx->bloom_scene_loc = gl->GetUniformLocation(ctx->bloom_program, "uScene");
+    ctx->bloom_threshold_loc = gl->GetUniformLocation(ctx->bloom_program, "uThreshold");
+    ctx->blur_image_loc = gl->GetUniformLocation(ctx->bloom_blur_program, "uImage");
+    ctx->blur_horizontal_loc = gl->GetUniformLocation(ctx->bloom_blur_program, "uHorizontal");
+    ctx->comp_scene_loc = gl->GetUniformLocation(ctx->composite_program, "uScene");
+    ctx->comp_bloom_loc = gl->GetUniformLocation(ctx->composite_program, "uBloom");
+    ctx->comp_vignette_loc = gl->GetUniformLocation(ctx->composite_program, "uVignetteStrength");
+    ctx->comp_contrast_loc = gl->GetUniformLocation(ctx->composite_program, "uContrast");
+    ctx->comp_saturation_loc = gl->GetUniformLocation(ctx->composite_program, "uSaturation");
+
     /* ---- Initial GL state ---- */
     gl->Enable(GL_DEPTH_TEST);
     gl->DepthFunc(GL_LEQUAL);
@@ -1551,6 +1667,22 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     if (ctx->point_shadow_fbo)
         gl->DeleteFramebuffers(1, &ctx->point_shadow_fbo);
     gl->DeleteTextures(SDL3D_MAX_POINT_SHADOWS, ctx->point_shadow_cubemap);
+
+    /* Post-process resources. */
+    if (ctx->bloom_program)
+        gl->DeleteProgram(ctx->bloom_program);
+    if (ctx->bloom_blur_program)
+        gl->DeleteProgram(ctx->bloom_blur_program);
+    if (ctx->composite_program)
+        gl->DeleteProgram(ctx->composite_program);
+    if (ctx->pp_fbo_a)
+        gl->DeleteFramebuffers(1, &ctx->pp_fbo_a);
+    if (ctx->pp_fbo_b)
+        gl->DeleteFramebuffers(1, &ctx->pp_fbo_b);
+    if (ctx->pp_tex_a)
+        gl->DeleteTextures(1, &ctx->pp_tex_a);
+    if (ctx->pp_tex_b)
+        gl->DeleteTextures(1, &ctx->pp_tex_b);
 
     if (ctx->white_texture)
         gl->DeleteTextures(1, &ctx->white_texture);
@@ -1772,6 +1904,65 @@ static bool gl_present(sdl3d_render_context *context)
 
     /* Geometry pass: replay all entries into main FBO. */
     replay_draw_list_geometry(ctx);
+
+    /* ---- Post-process pipeline ---- */
+    gl->Disable(GL_DEPTH_TEST);
+    gl->Disable(GL_CULL_FACE);
+    gl->BindVertexArray(ctx->fullscreen_vao);
+
+    /* Step 1: Extract bright pixels from main FBO into pp_tex_a. */
+    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->pp_fbo_a);
+    gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+    gl->Clear(GL_COLOR_BUFFER_BIT);
+    gl->UseProgram(ctx->bloom_program);
+    gl->ActiveTexture(GL_TEXTURE0);
+    gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
+    gl->Uniform1i(ctx->bloom_scene_loc, 0);
+    gl->Uniform1f(ctx->bloom_threshold_loc, 0.8f);
+    gl->DrawArrays(GL_TRIANGLES, 0, 3);
+
+    /* Step 2: Blur bright pixels (ping-pong, 10 passes = 5 iterations). */
+    gl->UseProgram(ctx->bloom_blur_program);
+    for (int i = 0; i < 10; i++)
+    {
+        bool horizontal = (i % 2 == 0);
+        gl->BindFramebuffer(GL_FRAMEBUFFER, horizontal ? ctx->pp_fbo_b : ctx->pp_fbo_a);
+        gl->ActiveTexture(GL_TEXTURE0);
+        gl->BindTexture(GL_TEXTURE_2D, horizontal ? ctx->pp_tex_a : ctx->pp_tex_b);
+        gl->Uniform1i(ctx->blur_image_loc, 0);
+        gl->Uniform1i(ctx->blur_horizontal_loc, horizontal ? 1 : 0);
+        gl->DrawArrays(GL_TRIANGLES, 0, 3);
+    }
+    /* After 10 passes (even count), last write was to pp_fbo_b with horizontal=false reading pp_tex_b...
+     * Actually: i=9 -> horizontal=false -> writes to pp_fbo_a, reads pp_tex_b.
+     * So final blurred result is in pp_tex_a. */
+
+    /* Step 3: Copy fbo_color to pp_tex_b to avoid read-write conflict. */
+    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->pp_fbo_b);
+    gl->UseProgram(ctx->copy_program);
+    gl->ActiveTexture(GL_TEXTURE0);
+    gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
+    gl->Uniform1i(ctx->copy_texture_loc, 0);
+    gl->DrawArrays(GL_TRIANGLES, 0, 3);
+
+    /* Step 4: Composite (bloom + vignette + grading) into main FBO.
+     * Read scene from pp_tex_b, bloom from pp_tex_a, write to fbo. */
+    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+    gl->UseProgram(ctx->composite_program);
+    gl->ActiveTexture(GL_TEXTURE0);
+    gl->BindTexture(GL_TEXTURE_2D, ctx->pp_tex_b);
+    gl->ActiveTexture(GL_TEXTURE0 + 1);
+    gl->BindTexture(GL_TEXTURE_2D, ctx->pp_tex_a);
+    gl->Uniform1i(ctx->comp_scene_loc, 0);
+    gl->Uniform1i(ctx->comp_bloom_loc, 1);
+    gl->Uniform1f(ctx->comp_vignette_loc, 0.4f);
+    gl->Uniform1f(ctx->comp_contrast_loc, 1.1f);
+    gl->Uniform1f(ctx->comp_saturation_loc, 1.15f);
+    gl->DrawArrays(GL_TRIANGLES, 0, 3);
+    gl->ActiveTexture(GL_TEXTURE0);
+
+    gl->Enable(GL_CULL_FACE);
+    gl->Enable(GL_DEPTH_TEST);
 
     /* Compute letterbox viewport. */
     int win_w, win_h;
