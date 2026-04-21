@@ -2028,6 +2028,10 @@ static bool gl_present(sdl3d_render_context *context)
                 for (int i = 0; i < ctx->draw_count; i++) {
                     sdl3d_draw_entry *e = &ctx->draw_list[i];
                     if (!e->lit) continue;
+                    /* Only dynamic actors cast point shadows. */
+                    if (e->model_matrix[12] == 0.0f && e->model_matrix[13] == 0.0f && e->model_matrix[14] == 0.0f &&
+                        e->model_matrix[0] == 1.0f && e->model_matrix[5] == 1.0f && e->model_matrix[10] == 1.0f)
+                        continue;
                     gl->UniformMatrix4fv(ctx->point_shadow_model_loc, 1, GL_FALSE, e->model_matrix);
                     gl->BindVertexArray(ctx->shadow_vao);
                     gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
@@ -2293,6 +2297,9 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
                     for (int i = 0; i < ctx->draw_count; i++) {
                         sdl3d_draw_entry *e = &ctx->draw_list[i];
                         if (!e->lit) continue;
+                        if (e->model_matrix[12] == 0.0f && e->model_matrix[13] == 0.0f && e->model_matrix[14] == 0.0f &&
+                            e->model_matrix[0] == 1.0f && e->model_matrix[5] == 1.0f && e->model_matrix[10] == 1.0f)
+                            continue;
                         gl->UniformMatrix4fv(ctx->point_shadow_model_loc, 1, GL_FALSE, e->model_matrix);
                         gl->BindVertexArray(ctx->shadow_vao);
                         gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
