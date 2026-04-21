@@ -42,4 +42,8 @@ void sdl3d_gl_draw_mesh_lit(sdl3d_gl_context *ctx, const sdl3d_draw_params_lit *
 void sdl3d_gl_post_process(sdl3d_gl_context *ctx, int effects, float bloom_threshold, float bloom_intensity,
                            float vignette_intensity, float contrast, float brightness, float saturation);
 
+/* Shadow pass control. */
+void sdl3d_gl_begin_shadow_pass(sdl3d_gl_context *ctx, const float *light_vp, float bias);
+void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx);
+
 #endif

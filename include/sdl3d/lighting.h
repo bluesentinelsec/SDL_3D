@@ -198,6 +198,19 @@ extern "C"
     bool sdl3d_render_shadow_map(sdl3d_render_context *context, const struct sdl3d_mesh *meshes, int mesh_count,
                                  const sdl3d_mat4 *model_matrices);
 
+    /*
+     * Begin/end a shadow depth pass. Between these calls, all draw
+     * operations render depth-only into the shadow map from the light's
+     * perspective. The application draws the same scene geometry it would
+     * draw in the main pass. After sdl3d_end_shadow_pass, the main scene
+     * render will sample the shadow map for occlusion testing.
+     *
+     * Requires sdl3d_enable_shadow to have been called first.
+     * Must NOT be called between begin_mode_3d / end_mode_3d.
+     */
+    bool sdl3d_begin_shadow_pass(sdl3d_render_context *context);
+    bool sdl3d_end_shadow_pass(sdl3d_render_context *context);
+
 #ifdef __cplusplus
 }
 #endif

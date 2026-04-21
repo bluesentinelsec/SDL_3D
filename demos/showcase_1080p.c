@@ -294,10 +294,8 @@ int main(int argc, char *argv[])
     sdl3d_set_fog(ctx, &fog);
 
     /* --- Shadows (moonlight casts shadows) --- */
-    /* Shadow mapping disabled — needs proper GPU-side implementation.
-     * The current CPU-upload hybrid has a first-frame initialization bug
-     * in the shader's light-space transform. Will be reimplemented with
-     * GPU shadow pass in the SDL3_GPU backend. */
+    /* --- Shadows (moonlight casts shadows via two-pass GPU depth) --- */
+    sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 30.0f);
     SDL_zerop(&post);
     post.effects = SDL3D_POST_BLOOM | SDL3D_POST_VIGNETTE;
     post.bloom_threshold = 0.8f;
@@ -533,6 +531,11 @@ int main(int argc, char *argv[])
         cam.up = sdl3d_vec3_make(0, 1, 0);
         cam.fovy = 65.0f;
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+        /* Shadow pass: draw scene from light's POV (depth only). */
+        sdl3d_begin_shadow_pass(ctx);
+        draw_scene(ctx);
+        sdl3d_end_shadow_pass(ctx);
 
         /* Render */
         sdl3d_clear_render_context(ctx, sky);
