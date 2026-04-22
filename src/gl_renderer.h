@@ -25,4 +25,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
 void sdl3d_gl_begin_shadow_pass(sdl3d_gl_context *ctx, const float *light_vp, float bias);
 void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx);
 
+/* IBL: load an HDRI environment map and generate irradiance/prefilter/BRDF LUT. */
+bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path);
+
 #endif

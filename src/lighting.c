@@ -144,6 +144,23 @@ bool sdl3d_set_zfight_callback(sdl3d_render_context *context, sdl3d_zfight_callb
     return true;
 }
 
+bool sdl3d_load_environment_map(sdl3d_render_context *context, const char *hdr_path)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (hdr_path == NULL)
+    {
+        return SDL_InvalidParamError("hdr_path");
+    }
+    if (context->gl == NULL)
+    {
+        return SDL_SetError("IBL requires the GL backend.");
+    }
+    return sdl3d_gl_load_environment_map(context->gl, hdr_path);
+}
+
 int sdl3d_get_light_count(const sdl3d_render_context *context)
 {
     if (context == NULL)

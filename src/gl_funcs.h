@@ -86,6 +86,10 @@ typedef unsigned int GLbitfield;
 #define GL_TEXTURE_WRAP_R 0x8072
 #define GL_RGBA16F 0x881A
 #define GL_HALF_FLOAT 0x140B
+#define GL_RGB 0x1907
+#define GL_RG 0x8227
+#define GL_RGB16F 0x881B
+#define GL_RG16F 0x822F
 
 /* Function pointer types. */
 typedef void (*PFNGLCLEARPROC)(GLbitfield);
@@ -162,7 +166,7 @@ typedef GLuint (*PFNGLGETUNIFORMBLOCKINDEXPROC)(GLuint, const char *);
 typedef void (*PFNGLDRAWBUFFERPROC)(GLenum);
 typedef void (*PFNGLREADBUFFERPROC)(GLenum);
 typedef void (*PFNGLUNIFORM1FVPROC)(GLint, GLsizei, const GLfloat *);
-
+typedef void (*PFNGLGENERATEMIPMAPPROC)(GLenum);
 /* Global function pointers. */
 typedef struct sdl3d_gl_funcs
 {
@@ -239,6 +243,7 @@ typedef struct sdl3d_gl_funcs
     PFNGLDRAWBUFFERPROC DrawBuffer;
     PFNGLREADBUFFERPROC ReadBuffer;
     PFNGLUNIFORM1FVPROC Uniform1fv;
+    PFNGLGENERATEMIPMAPPROC GenerateMipmap;
 } sdl3d_gl_funcs;
 
 static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
@@ -326,6 +331,7 @@ static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
     LOAD(DrawBuffer);
     LOAD(ReadBuffer);
     LOAD(Uniform1fv);
+    LOAD(GenerateMipmap);
 #undef LOAD
     return true;
 }
