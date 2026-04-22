@@ -1894,10 +1894,8 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     /* ---- Initial GL state ---- */
     gl->Enable(GL_DEPTH_TEST);
     gl->DepthFunc(GL_LEQUAL);
-    gl->Enable(GL_CULL_FACE);
-    gl->CullFace(GL_BACK);
+    gl->Disable(GL_CULL_FACE);
     gl->FrontFace(GL_CCW);
-    gl->Enable(GL_CULL_FACE);
 
     SDL_Log("SDL3D GL create: ctx=%p logical=%dx%d fbo=%u", (void *)ctx, width, height, ctx->fbo);
     SDL_Log("SDL3D GL renderer created: %dx%d pbr=%u unlit=%u copy=%u fbo=%u ubo=%u", width, height, ctx->pbr_program,
@@ -2125,7 +2123,7 @@ void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx)
     /* Restore main FBO and normal culling. */
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
     gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
-    gl->Enable(GL_CULL_FACE);
+    gl->Disable(GL_CULL_FACE);
     gl->CullFace(GL_BACK);
 }
 
@@ -2160,7 +2158,7 @@ static bool gl_present(sdl3d_render_context *context)
 
         gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
         gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
-        gl->Enable(GL_CULL_FACE);
+        gl->Disable(GL_CULL_FACE);
         gl->CullFace(GL_BACK);
     }
 
@@ -2218,7 +2216,7 @@ static bool gl_present(sdl3d_render_context *context)
         }
         gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
         gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
-        gl->Enable(GL_CULL_FACE);
+        gl->Disable(GL_CULL_FACE);
         gl->CullFace(GL_BACK);
     }
 
@@ -2346,7 +2344,7 @@ static bool gl_present(sdl3d_render_context *context)
         gl->ActiveTexture(GL_TEXTURE0);
     } /* bloom_enabled */
 
-    gl->Enable(GL_CULL_FACE);
+    gl->Disable(GL_CULL_FACE);
     gl->Enable(GL_DEPTH_TEST);
 
     /* Compute letterbox viewport. */
@@ -2377,7 +2375,7 @@ static bool gl_present(sdl3d_render_context *context)
     gl->Uniform1i(ctx->copy_texture_loc, 0);
     gl->BindVertexArray(ctx->fullscreen_vao);
     gl->DrawArrays(GL_TRIANGLES, 0, 3);
-    gl->Enable(GL_CULL_FACE);
+    gl->Disable(GL_CULL_FACE);
     gl->Enable(GL_DEPTH_TEST);
 
     SDL_GL_SwapWindow(ctx->window);
@@ -2443,7 +2441,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
 
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
             gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
-            gl->Enable(GL_CULL_FACE);
+            gl->Disable(GL_CULL_FACE);
             gl->CullFace(GL_BACK);
         }
         compute_point_shadow_matrices(ctx, ctx->current_ctx);
@@ -2496,7 +2494,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
             }
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
             gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
-            gl->Enable(GL_CULL_FACE);
+            gl->Disable(GL_CULL_FACE);
             gl->CullFace(GL_BACK);
         }
         replay_draw_list_geometry(ctx);
