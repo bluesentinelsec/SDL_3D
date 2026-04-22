@@ -65,6 +65,7 @@ int main(int argc, char *argv[])
     }
 
     /* Lighting */
+    sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG);
     sdl3d_set_ambient_light(ctx, 0.15f, 0.15f, 0.2f);
 
     sdl3d_light sun = {0};

@@ -1,14 +1,13 @@
 # Bathroom Interior
 
-Renders a detailed bathroom interior scene with 106 meshes and 11 PBR
-materials. Tests large node hierarchies, multi-material texture loading,
-and interior lighting.
+First-person walkthrough of a detailed bathroom interior scene with
+106 meshes and 11 PBR materials. Tests large node hierarchies,
+multi-material texture loading, and interior lighting.
 
 ## Controls
 
-- **Space** — Toggle auto-orbit
-- **WASD** — Pan camera
-- **QE** — Zoom out/in
-- **Arrow keys** — Orbit / adjust height
-- **Mouse wheel** — Zoom
+- **WASD** — Move
+- **Mouse** — Look
+- **Up/Down arrows** — Fly up/down
+- **Left click** — Print camera position
 - **Escape** — Quit

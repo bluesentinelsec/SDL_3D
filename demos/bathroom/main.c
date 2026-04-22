@@ -1,11 +1,12 @@
 /*
- * Bathroom demo — interior scene with 106 meshes and 11 PBR materials.
- * Tests: large node hierarchy, multi-material texturing, interior lighting.
+ * Bathroom demo — first-person walkthrough of an interior scene.
+ * Tests: large node hierarchy, multi-material textures, interior lighting.
  */
 #define SDL_MAIN_HANDLED
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include "sdl3d/collision.h"
 #include "sdl3d/lighting.h"
 #include "sdl3d/sdl3d.h"
 
@@ -13,6 +14,9 @@
 
 #define WINDOW_W 1280
 #define WINDOW_H 720
+#define MOVE_SPEED 3.0f
+#define MOUSE_SENS 0.002f
+#define EYE_HEIGHT 1.6f
 
 int main(int argc, char *argv[])
 {
@@ -52,6 +56,8 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    SDL_SetWindowRelativeMouseMode(win, true);
+
     SDL_memset(&model, 0, sizeof(model));
     if (sdl3d_load_model_from_file(SDL3D_MEDIA_DIR "/bathroom/scene.gltf", &model))
     {
@@ -64,36 +70,19 @@ int main(int argc, char *argv[])
         SDL_Log("Failed to load bathroom: %s", SDL_GetError());
     }
 
-    /* Interior lighting */
-    sdl3d_set_ambient_light(ctx, 0.3f, 0.3f, 0.35f);
+    /* Pitch black — only the flashlight illuminates */
+    sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG);
+    sdl3d_set_ambient_light(ctx, 0.0f, 0.0f, 0.0f);
+    sdl3d_set_bloom_enabled(ctx, true);
+    sdl3d_set_ssao_enabled(ctx, true);
+    sdl3d_set_point_shadows_enabled(ctx, true);
 
-    sdl3d_light ceiling = {0};
-    ceiling.type = SDL3D_LIGHT_POINT;
-    ceiling.position = sdl3d_vec3_make(0.0f, 3.0f, 0.0f);
-    ceiling.color[0] = 1.0f;
-    ceiling.color[1] = 0.95f;
-    ceiling.color[2] = 0.85f;
-    ceiling.intensity = 8.0f;
-    ceiling.range = 15.0f;
-    sdl3d_add_light(ctx, &ceiling);
+    /* Player state */
+    float px = 2.0f, py = EYE_HEIGHT, pz = 1.0f;
+    float yaw = 3.14159f, pitch = 0.0f;
+    bool mouse_initialized = false;
 
-    sdl3d_light window_light = {0};
-    window_light.type = SDL3D_LIGHT_POINT;
-    window_light.position = sdl3d_vec3_make(3.0f, 2.0f, 0.0f);
-    window_light.color[0] = 0.7f;
-    window_light.color[1] = 0.8f;
-    window_light.color[2] = 1.0f;
-    window_light.intensity = 5.0f;
-    window_light.range = 12.0f;
-    sdl3d_add_light(ctx, &window_light);
-
-    /* Orbit camera */
-    float orbit_angle = 0.0f;
-    float orbit_radius = 6.0f;
-    float orbit_height = 2.0f;
-    bool auto_orbit = true;
-    float pan_x = 0.0f, pan_y = 0.0f;
-
+    float game_time = 0.0f;
     bool running = true;
     Uint64 last = SDL_GetPerformanceCounter();
 
@@ -104,74 +93,130 @@ int main(int argc, char *argv[])
         {
             if (ev.type == SDL_EVENT_QUIT)
                 running = false;
-            if (ev.type == SDL_EVENT_KEY_DOWN)
+            if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_ESCAPE)
+                running = false;
+            if (ev.type == SDL_EVENT_MOUSE_MOTION && mouse_initialized)
             {
-                if (ev.key.scancode == SDL_SCANCODE_ESCAPE)
-                    running = false;
-                if (ev.key.scancode == SDL_SCANCODE_SPACE)
-                    auto_orbit = !auto_orbit;
+                yaw += ev.motion.xrel * MOUSE_SENS;
+                pitch -= ev.motion.yrel * MOUSE_SENS;
+                if (pitch > 1.4f)
+                    pitch = 1.4f;
+                if (pitch < -1.4f)
+                    pitch = -1.4f;
             }
-            if (ev.type == SDL_EVENT_MOUSE_WHEEL)
+            if (ev.type == SDL_EVENT_MOUSE_MOTION)
+                mouse_initialized = true;
+            if (ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
             {
-                orbit_radius -= ev.wheel.y * 0.5f;
-                if (orbit_radius < 1.0f)
-                    orbit_radius = 1.0f;
-                if (orbit_radius > 30.0f)
-                    orbit_radius = 30.0f;
+                /* Read depth at screen center to find exact surface distance */
+                sdl3d_color center_pixel;
+                int cx = WINDOW_W / 2, cy = WINDOW_H / 2;
+                float cfx = sinf(yaw) * cosf(pitch);
+                float cfy = sinf(pitch);
+                float cfz = -cosf(yaw) * cosf(pitch);
+                /* Print at several distances — pick the one on the surface */
+                SDL_Log("Camera: (%.2f, %.2f, %.2f)", px, py, pz);
+                for (float d = 0.5f; d <= 5.0f; d += 0.5f)
+                {
+                    SDL_Log("  %.1fm: sdl3d_vec3_make(%.2ff, %.2ff, %.2ff)", d, px + cfx * d, py + cfy * d,
+                            pz + cfz * d);
+                }
             }
         }
 
         Uint64 now = SDL_GetPerformanceCounter();
         float dt = (float)(now - last) / (float)SDL_GetPerformanceFrequency();
         last = now;
+        game_time += dt;
+
+        float fx = sinf(yaw) * cosf(pitch);
+        float fz = -cosf(yaw) * cosf(pitch);
+        float rx = cosf(yaw);
+        float rz = sinf(yaw);
 
         const Uint8 *keys = (const Uint8 *)SDL_GetKeyboardState(NULL);
-        if (keys[SDL_SCANCODE_LEFT])
-            orbit_angle -= 1.5f * dt;
-        if (keys[SDL_SCANCODE_RIGHT])
-            orbit_angle += 1.5f * dt;
-        if (keys[SDL_SCANCODE_UP])
-            orbit_height += 2.0f * dt;
-        if (keys[SDL_SCANCODE_DOWN])
-            orbit_height -= 2.0f * dt;
         if (keys[SDL_SCANCODE_W])
-            pan_y += 2.0f * dt;
+        {
+            px += fx * MOVE_SPEED * dt;
+            pz += fz * MOVE_SPEED * dt;
+        }
         if (keys[SDL_SCANCODE_S])
-            pan_y -= 2.0f * dt;
+        {
+            px -= fx * MOVE_SPEED * dt;
+            pz -= fz * MOVE_SPEED * dt;
+        }
         if (keys[SDL_SCANCODE_A])
-            pan_x -= 2.0f * dt;
+        {
+            px -= rx * MOVE_SPEED * dt;
+            pz -= rz * MOVE_SPEED * dt;
+        }
         if (keys[SDL_SCANCODE_D])
-            pan_x += 2.0f * dt;
-        if (keys[SDL_SCANCODE_E])
-            orbit_radius -= 2.0f * dt;
-        if (keys[SDL_SCANCODE_Q])
-            orbit_radius += 2.0f * dt;
-        if (orbit_radius < 0.5f)
-            orbit_radius = 0.5f;
-
-        if (auto_orbit)
-            orbit_angle += 0.3f * dt;
+        {
+            px += rx * MOVE_SPEED * dt;
+            pz += rz * MOVE_SPEED * dt;
+        }
+        if (keys[SDL_SCANCODE_UP])
+            py += MOVE_SPEED * dt;
+        if (keys[SDL_SCANCODE_DOWN])
+            py -= MOVE_SPEED * dt;
 
         sdl3d_camera3d cam;
-        float cx = sinf(orbit_angle) * orbit_radius;
-        float cz = cosf(orbit_angle) * orbit_radius;
-        float right_x = cosf(orbit_angle);
-        float right_z = -sinf(orbit_angle);
-        float ox = pan_x * right_x;
-        float oz = pan_x * right_z;
-        cam.position = sdl3d_vec3_make(cx + ox, orbit_height + pan_y, cz + oz);
-        cam.target = sdl3d_vec3_make(ox, 1.0f + pan_y, oz);
+        cam.position = sdl3d_vec3_make(px, py, pz);
+        cam.target = sdl3d_vec3_make(px + fx, py + sinf(pitch), pz + fz);
         cam.up = sdl3d_vec3_make(0, 1, 0);
-        cam.fovy = 60.0f;
+        cam.fovy = 75.0f;
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
 
-        sdl3d_clear_render_context(ctx, (sdl3d_color){40, 45, 55, 255});
+        sdl3d_clear_render_context(ctx, (sdl3d_color){5, 5, 8, 255});
         sdl3d_begin_mode_3d(ctx, cam);
+
+        /* Single flashlight — nothing else */
+        sdl3d_clear_lights(ctx);
+        sdl3d_set_ambient_light(ctx, 0.0f, 0.0f, 0.0f);
+
+        sdl3d_light flashlight = {0};
+        flashlight.type = SDL3D_LIGHT_POINT;
+        flashlight.position = sdl3d_vec3_make(px, py - 0.2f, pz);
+        flashlight.color[0] = 1.0f;
+        flashlight.color[1] = 0.9f;
+        flashlight.color[2] = 0.7f;
+        flashlight.intensity = 2.0f;
+        flashlight.range = 3.5f;
+        sdl3d_add_light(ctx, &flashlight);
+
+        /* Candle — warm flicker */
+        float flicker = 1.0f + 0.3f * sinf(game_time * 12.0f) + 0.15f * sinf(game_time * 23.0f);
+        sdl3d_light candle = {0};
+        candle.type = SDL3D_LIGHT_POINT;
+        candle.position = sdl3d_vec3_make(0.67f, 1.63f, -2.68f);
+        candle.color[0] = 1.0f;
+        candle.color[1] = 0.6f;
+        candle.color[2] = 0.15f;
+        candle.intensity = 4.0f * flicker;
+        candle.range = 2.0f;
+        sdl3d_add_light(ctx, &candle);
 
         if (has_model)
         {
             sdl3d_draw_model(ctx, &model, sdl3d_vec3_make(0, 0, 0), 1.0f, (sdl3d_color){255, 255, 255, 255});
         }
+
+        /* Crosshair markers along look direction — shows where each distance lands */
+        sdl3d_set_emissive(ctx, 5.0f, 5.0f, 5.0f);
+        for (float d = 0.5f; d <= 5.0f; d += 0.5f)
+        {
+            float mx = px + fx * d;
+            float my = py + sinf(pitch) * d;
+            float mz = pz + fz * d;
+            /* Alternate colors: white at 0.5m intervals, red at 1m */
+            float r = (int)(d * 2) % 2 == 0 ? 5.0f : 0.0f;
+            float g = (int)(d * 2) % 2 == 0 ? 0.0f : 5.0f;
+            sdl3d_set_emissive(ctx, r, g, 0.0f);
+            float sz = 0.01f;
+            sdl3d_draw_cube(ctx, sdl3d_vec3_make(mx, my, mz), sdl3d_vec3_make(sz, sz, sz),
+                            (sdl3d_color){255, 255, 255, 255});
+        }
+        sdl3d_set_emissive(ctx, 0.0f, 0.0f, 0.0f);
 
         sdl3d_end_mode_3d(ctx);
         sdl3d_present_render_context(ctx);

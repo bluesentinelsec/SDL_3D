@@ -1266,12 +1266,6 @@ static void replay_draw_list_shadow(sdl3d_gl_context *ctx)
         sdl3d_draw_entry *e = &ctx->draw_list[i];
         if (!e->lit)
             continue;
-        /* Only shadow-cast entries with a non-identity model matrix
-         * (placed models / dynamic actors). Shape primitives have
-         * identity model matrix with position baked into vertices. */
-        if (e->model_matrix[12] == 0.0f && e->model_matrix[13] == 0.0f && e->model_matrix[14] == 0.0f &&
-            e->model_matrix[0] == 1.0f && e->model_matrix[5] == 1.0f && e->model_matrix[10] == 1.0f)
-            continue;
 
         gl->UniformMatrix4fv(ctx->shadow_model_loc, 1, GL_FALSE, e->model_matrix);
 
@@ -1730,7 +1724,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     /* ---- Fullscreen VAO (empty, vertex ID driven) ---- */
     gl->GenVertexArrays(1, &ctx->fullscreen_vao);
 
-    /* Shadow map: 2048x2048 depth-only FBO with its own VAO. */
+    /* Shadow map: 1024x1024 depth-only FBO with its own VAO. */
     gl->GenFramebuffers(1, &ctx->shadow_fbo);
     gl->GenTextures(1, &ctx->shadow_depth_tex);
     gl->BindTexture(GL_TEXTURE_2D_ARRAY, ctx->shadow_depth_tex);
@@ -1768,7 +1762,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
         ctx->shadow_model_loc = gl->GetUniformLocation(ctx->shadow_program, "uModel");
     }
 
-    /* Point light shadow: 512x512 depth cubemaps. */
+    /* Point light shadow: 1024x1024 depth cubemaps. */
     for (int s = 0; s < SDL3D_MAX_POINT_SHADOWS; s++)
         ctx->point_shadow_light_index[s] = -1;
     gl->GenFramebuffers(1, &ctx->point_shadow_fbo);
@@ -1778,7 +1772,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
         gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->point_shadow_cubemap[s]);
         for (int i = 0; i < 6; i++)
         {
-            gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_DEPTH_COMPONENT24, 512, 512, 0,
+            gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_DEPTH_COMPONENT24, 1024, 1024, 0,
                            GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
         }
         gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -1894,7 +1888,8 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     /* ---- Initial GL state ---- */
     gl->Enable(GL_DEPTH_TEST);
     gl->DepthFunc(GL_LEQUAL);
-    gl->Disable(GL_CULL_FACE);
+    gl->Enable(GL_CULL_FACE);
+    gl->CullFace(GL_BACK);
     gl->FrontFace(GL_CCW);
 
     SDL_Log("SDL3D GL create: ctx=%p logical=%dx%d fbo=%u", (void *)ctx, width, height, ctx->fbo);
@@ -2108,7 +2103,7 @@ void sdl3d_gl_begin_shadow_pass(sdl3d_gl_context *ctx, const float *light_vp, fl
 
     sdl3d_gl_funcs *gl = &ctx->gl;
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
-    gl->Viewport(0, 0, 2048, 2048);
+    gl->Viewport(0, 0, 1024, 1024);
     gl->Clear(GL_DEPTH_BUFFER_BIT);
     gl->Enable(GL_DEPTH_TEST);
     gl->Disable(GL_CULL_FACE);
@@ -2143,7 +2138,7 @@ static bool gl_present(sdl3d_render_context *context)
         compute_csm_matrices(ctx, context);
 
         gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
-        gl->Viewport(0, 0, 2048, 2048);
+        gl->Viewport(0, 0, 1024, 1024);
         gl->Enable(GL_DEPTH_TEST);
         gl->Disable(GL_CULL_FACE);
 
@@ -2168,7 +2163,7 @@ static bool gl_present(sdl3d_render_context *context)
     if (ctx->current_ctx->point_shadows_enabled && ctx->point_shadow_program && ctx->point_shadow_count > 0)
     {
         gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->point_shadow_fbo);
-        gl->Viewport(0, 0, 512, 512);
+        gl->Viewport(0, 0, 1024, 1024);
         gl->Enable(GL_DEPTH_TEST);
         gl->Disable(GL_CULL_FACE);
         gl->UseProgram(ctx->point_shadow_program);
@@ -2190,10 +2185,6 @@ static bool gl_present(sdl3d_render_context *context)
                 {
                     sdl3d_draw_entry *e = &ctx->draw_list[i];
                     if (!e->lit)
-                        continue;
-                    /* Only dynamic actors cast point shadows. */
-                    if (e->model_matrix[12] == 0.0f && e->model_matrix[13] == 0.0f && e->model_matrix[14] == 0.0f &&
-                        e->model_matrix[0] == 1.0f && e->model_matrix[5] == 1.0f && e->model_matrix[10] == 1.0f)
                         continue;
                     gl->UniformMatrix4fv(ctx->point_shadow_model_loc, 1, GL_FALSE, e->model_matrix);
                     gl->BindVertexArray(ctx->shadow_vao);
@@ -2217,7 +2208,7 @@ static bool gl_present(sdl3d_render_context *context)
         }
         gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
         gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
-        gl->Disable(GL_CULL_FACE);
+        gl->Enable(GL_CULL_FACE);
         gl->CullFace(GL_BACK);
     }
 
@@ -2426,7 +2417,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
             compute_csm_matrices(ctx, ctx->current_ctx);
 
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
-            gl->Viewport(0, 0, 2048, 2048);
+            gl->Viewport(0, 0, 1024, 1024);
             gl->Enable(GL_DEPTH_TEST);
             gl->Disable(GL_CULL_FACE);
 
@@ -2449,7 +2440,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
         if (ctx->current_ctx->point_shadows_enabled && ctx->point_shadow_program && ctx->point_shadow_count > 0)
         {
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->point_shadow_fbo);
-            gl->Viewport(0, 0, 512, 512);
+            gl->Viewport(0, 0, 1024, 1024);
             gl->Enable(GL_DEPTH_TEST);
             gl->Disable(GL_CULL_FACE);
             gl->UseProgram(ctx->point_shadow_program);
