@@ -52,7 +52,7 @@ static void draw_doom_scene(sdl3d_render_context *ctx)
 
     /* ROOM 1: spawn (x:-5..5, z:-4..4)
      * Walls: y=0..3.9, Ceiling: y=3.9..4.1 — no overlap. */
-    sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, 0, 0), (sdl3d_vec2){10, 8}, dark_floor);
+    sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, -0.01f, 0), (sdl3d_vec2){10.6f, 9.0f}, dark_floor);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 4.0f, 0), sdl3d_vec3_make(10.6f, 0.2f, 8.6f), dark_ceil);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(-5, 1.95f, 0), sdl3d_vec3_make(0.3f, 3.9f, 8), wall_grey);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(5, 1.95f, 0), sdl3d_vec3_make(0.3f, 3.9f, 8), wall_grey);
@@ -64,7 +64,7 @@ static void draw_doom_scene(sdl3d_render_context *ctx)
 
     /* CORRIDOR 1 (x:-2..2, z:4.2..12)
      * Walls: y=0..3.4, Ceiling: y=3.4..3.6 — no overlap. */
-    sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, 0, 8.1f), (sdl3d_vec2){4, 7.8f}, dark_floor);
+    sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, -0.01f, 8.0f), (sdl3d_vec2){4.6f, 8.4f}, dark_floor);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 3.5f, 8.1f), sdl3d_vec3_make(4.6f, 0.2f, 7.8f), dark_ceil);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(-2, 1.7f, 8.1f), sdl3d_vec3_make(0.3f, 3.4f, 7.8f), wall_dark);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(2, 1.7f, 8.1f), sdl3d_vec3_make(0.3f, 3.4f, 7.8f), wall_dark);
@@ -72,7 +72,7 @@ static void draw_doom_scene(sdl3d_render_context *ctx)
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 4.0f, 12), sdl3d_vec3_make(4, 1.0f, 0.3f), wall_brown);
 
     /* ROOM 2: nukage (x:-6..6, z:12..22) */
-    sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, -0.5f, 17), (sdl3d_vec2){12, 10}, dark_floor);
+    sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, -0.51f, 17), (sdl3d_vec2){12.6f, 10.6f}, dark_floor);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 4.5f, 17), sdl3d_vec3_make(12.6f, 0.2f, 10.6f), dark_ceil);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(-6, 1.9f, 17), sdl3d_vec3_make(0.3f, 4.8f, 10), wall_brown);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(6, 1.9f, 13.5f), sdl3d_vec3_make(0.3f, 4.8f, 3), wall_brown);
@@ -86,13 +86,13 @@ static void draw_doom_scene(sdl3d_render_context *ctx)
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(4, 0.1f, 17), sdl3d_vec3_make(1.5f, 0.5f, 8), metal);
 
     /* CORRIDOR 2 east (x:6.3..12, z:15..19) */
-    sdl3d_draw_plane(ctx, sdl3d_vec3_make(9.15f, 0, 17), (sdl3d_vec2){5.7f, 4}, dark_floor);
+    sdl3d_draw_plane(ctx, sdl3d_vec3_make(9.15f, -0.01f, 17), (sdl3d_vec2){6.3f, 4.6f}, dark_floor);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(9.15f, 3.5f, 17), sdl3d_vec3_make(5.7f, 0.2f, 4), dark_ceil);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(9.15f, 1.75f, 15), sdl3d_vec3_make(5.7f, 3.5f, 0.3f), wall_dark);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(9.15f, 1.75f, 19), sdl3d_vec3_make(5.7f, 3.5f, 0.3f), wall_dark);
 
     /* OUTDOOR (x:12..24, z:12..22, NO ceiling — sky visible) */
-    sdl3d_draw_plane(ctx, sdl3d_vec3_make(18, 0, 17), (sdl3d_vec2){12, 10}, outdoor_floor);
+    sdl3d_draw_plane(ctx, sdl3d_vec3_make(18, -0.01f, 17), (sdl3d_vec2){12.6f, 10.6f}, outdoor_floor);
     /* East wall */
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(24, 2, 17), sdl3d_vec3_make(0.3f, 4, 10), wall_dark);
     /* South wall */
@@ -112,7 +112,7 @@ static void draw_doom_scene(sdl3d_render_context *ctx)
     sdl3d_draw_cylinder(ctx, sdl3d_vec3_make(21, 0.6f, 19), 0.4f, 0.4f, 1.2f, 8, (sdl3d_color){60, 90, 60, 255});
 
     /* ROOM 3: exit (x:14..22, z:22..28, enclosed) */
-    sdl3d_draw_plane(ctx, sdl3d_vec3_make(18, 0, 25), (sdl3d_vec2){8, 6}, dark_floor);
+    sdl3d_draw_plane(ctx, sdl3d_vec3_make(18, -0.01f, 25), (sdl3d_vec2){8.6f, 6.6f}, dark_floor);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(18, 3, 25), sdl3d_vec3_make(8.6f, 0.2f, 6.6f), dark_ceil);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(14, 1.45f, 25), sdl3d_vec3_make(0.3f, 2.9f, 6), wall_grey);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(22, 1.45f, 25), sdl3d_vec3_make(0.3f, 2.9f, 6), wall_grey);
@@ -263,7 +263,7 @@ int main(int argc, char *argv[])
     bool mouse_initialized = false;
     bool show_bloom = true;
     bool show_ssao = false;
-    bool show_fog = true;
+    bool show_fog = false;
     Uint64 last_time;
     float game_time = 0.0f;
     int current_profile = 0;
