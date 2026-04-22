@@ -2088,7 +2088,8 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     e->roughness = params->roughness;
     SDL_memcpy(e->emissive, params->emissive, 3 * sizeof(float));
 
-    check_z_fighting(ctx, e);
+    /* check_z_fighting(ctx, e); — disabled: triggers on authored model geometry */
+    (void)check_z_fighting;
 
     return true;
 }
