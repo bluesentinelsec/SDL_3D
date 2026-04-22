@@ -964,11 +964,13 @@ static void check_z_fighting(sdl3d_gl_context *ctx, const sdl3d_draw_entry *new_
         }
 
         /* Check if AABBs overlap. */
-        if (max_x < o_min_x || min_x > o_max_x)
+        /* Check if AABBs overlap with at least 0.1 margin (not just touching edges). */
+        float margin = 0.1f;
+        if (max_x < o_min_x + margin || min_x > o_max_x - margin)
             continue;
-        if (max_y < o_min_y || min_y > o_max_y)
+        if (max_y < o_min_y + margin || min_y > o_max_y - margin)
             continue;
-        if (max_z < o_min_z || min_z > o_max_z)
+        if (max_z < o_min_z + margin || min_z > o_max_z - margin)
             continue;
 
         /* Z-fighting: two thin surfaces overlapping on the same thin axis.
