@@ -428,10 +428,10 @@ int main(int argc, char *argv[])
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
 
         sdl3d_clear_render_context(ctx, sky);
-        sdl3d_set_backface_culling_enabled(ctx, false);
+        sdl3d_set_backface_culling_enabled(ctx, true);
         sdl3d_begin_mode_3d(ctx, cam);
 
-        /* Level geometry — culling disabled for interior-facing glTF mesh */
+        /* Level geometry — winding correct for interior viewing */
         if (has_level)
         {
             sdl3d_draw_model(ctx, &level_model, sdl3d_vec3_make(0, 0, 0), 1.0f, (sdl3d_color){255, 255, 255, 255});
