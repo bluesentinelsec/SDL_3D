@@ -247,6 +247,8 @@ int main(int argc, char *argv[])
     player_t player = {0, EYE_HEIGHT, -3, 3.14159f, 0};
     sdl3d_fog fog;
     bool running = true;
+    sdl3d_model level_model;
+    bool has_level = false;
     bool mouse_initialized = false;
     bool show_bloom = true;
     bool show_ssao = false;
@@ -273,6 +275,17 @@ int main(int argc, char *argv[])
     }
 
     setup_lighting(ctx);
+
+    /* Load level geometry as a glTF model — watertight, no seams. */
+    if (sdl3d_load_model_from_file(SDL3D_DEMO_ASSETS_DIR "/doom_level.gltf", &level_model))
+    {
+        has_level = true;
+        fprintf(stderr, "Loaded doom_level.gltf (%d meshes)\n", level_model.mesh_count);
+    }
+    else
+    {
+        fprintf(stderr, "Could not load doom_level.gltf: %s\n", SDL_GetError());
+    }
     sdl3d_set_zfight_callback(ctx, on_zfight, NULL);
     sdl3d_set_ssao_enabled(ctx, false);
     sdl3d_set_point_shadows_enabled(ctx, false);
@@ -421,6 +434,12 @@ int main(int argc, char *argv[])
         sdl3d_draw_skybox_gradient(ctx, (sdl3d_color){255, 255, 0, 255}, (sdl3d_color){255, 255, 0, 255});
         draw_doom_scene(ctx);
 
+        /* Level geometry from glTF */
+        if (has_level)
+        {
+            sdl3d_draw_model(ctx, &level_model, sdl3d_vec3_make(0, 0, 0), 1.0f, (sdl3d_color){255, 255, 255, 255});
+        }
+
         /* Nukage glow emissive */
         sdl3d_set_emissive(ctx, 0.0f, 2.0f + sinf(game_time * 2.0f) * 0.5f, 0.0f);
         sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, -0.25f, 18), (sdl3d_vec2){5.5f, 3.5f},
@@ -447,6 +466,8 @@ int main(int argc, char *argv[])
         sdl3d_present_render_context(ctx);
     }
 
+    if (has_level)
+        sdl3d_free_model(&level_model);
     sdl3d_destroy_render_context(ctx);
     SDL_DestroyRenderer(ren);
     SDL_DestroyWindow(win);
