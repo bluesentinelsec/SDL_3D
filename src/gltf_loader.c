@@ -635,6 +635,136 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
         }
     }
 
+    /* ------------------------------------------------------------------ */
+    /* Extract node hierarchy for transform propagation.                  */
+    /* ------------------------------------------------------------------ */
+    if (data->nodes_count > 0)
+    {
+        /* Build a mapping from cgltf mesh pointer → first sdl3d_mesh index.
+         * Our mesh array is ordered: for each cgltf mesh, its triangle
+         * primitives appear consecutively starting at mesh_start[m]. */
+        int *mesh_start = (int *)SDL_calloc(data->meshes_count, sizeof(int));
+        if (mesh_start != NULL)
+        {
+            int running = 0;
+            for (cgltf_size m = 0; m < data->meshes_count; ++m)
+            {
+                mesh_start[m] = running;
+                for (cgltf_size p = 0; p < data->meshes[m].primitives_count; ++p)
+                {
+                    if (data->meshes[m].primitives[p].type == cgltf_primitive_type_triangles)
+                    {
+                        ++running;
+                    }
+                }
+            }
+
+            out->node_count = (int)data->nodes_count;
+            out->nodes = (sdl3d_model_node *)SDL_calloc(data->nodes_count, sizeof(sdl3d_model_node));
+            if (out->nodes != NULL)
+            {
+                for (cgltf_size n = 0; n < data->nodes_count; ++n)
+                {
+                    const cgltf_node *src = &data->nodes[n];
+                    sdl3d_model_node *dst = &out->nodes[n];
+
+                    /* Default TRS. */
+                    dst->translation[0] = dst->translation[1] = dst->translation[2] = 0.0f;
+                    dst->rotation[0] = dst->rotation[1] = dst->rotation[2] = 0.0f;
+                    dst->rotation[3] = 1.0f;
+                    dst->scale[0] = dst->scale[1] = dst->scale[2] = 1.0f;
+                    dst->mesh_index = -1;
+
+                    if (src->has_matrix)
+                    {
+                        dst->has_matrix = true;
+                        cgltf_node_transform_local(src, dst->local_matrix);
+                    }
+                    if (src->has_translation)
+                    {
+                        dst->translation[0] = src->translation[0];
+                        dst->translation[1] = src->translation[1];
+                        dst->translation[2] = src->translation[2];
+                    }
+                    if (src->has_rotation)
+                    {
+                        dst->rotation[0] = src->rotation[0];
+                        dst->rotation[1] = src->rotation[1];
+                        dst->rotation[2] = src->rotation[2];
+                        dst->rotation[3] = src->rotation[3];
+                    }
+                    if (src->has_scale)
+                    {
+                        dst->scale[0] = src->scale[0];
+                        dst->scale[1] = src->scale[1];
+                        dst->scale[2] = src->scale[2];
+                    }
+
+                    /* Map mesh reference. */
+                    if (src->mesh != NULL)
+                    {
+                        cgltf_size mi = (cgltf_size)(src->mesh - data->meshes);
+                        dst->mesh_index = mesh_start[mi];
+                    }
+
+                    /* Children. */
+                    if (src->children_count > 0)
+                    {
+                        dst->child_count = (int)src->children_count;
+                        dst->children = (int *)SDL_malloc(src->children_count * sizeof(int));
+                        if (dst->children != NULL)
+                        {
+                            for (cgltf_size c = 0; c < src->children_count; ++c)
+                            {
+                                dst->children[c] = (int)(src->children[c] - data->nodes);
+                            }
+                        }
+                    }
+                }
+
+                /* Identify root nodes from the default scene (or all parentless nodes). */
+                if (data->scene != NULL && data->scene->nodes_count > 0)
+                {
+                    out->root_count = (int)data->scene->nodes_count;
+                    out->root_nodes = (int *)SDL_malloc(data->scene->nodes_count * sizeof(int));
+                    if (out->root_nodes != NULL)
+                    {
+                        for (cgltf_size r = 0; r < data->scene->nodes_count; ++r)
+                        {
+                            out->root_nodes[r] = (int)(data->scene->nodes[r] - data->nodes);
+                        }
+                    }
+                }
+                else
+                {
+                    /* Fallback: nodes with no parent are roots. */
+                    int rc = 0;
+                    for (cgltf_size n = 0; n < data->nodes_count; ++n)
+                    {
+                        if (data->nodes[n].parent == NULL)
+                        {
+                            ++rc;
+                        }
+                    }
+                    out->root_nodes = (int *)SDL_malloc((size_t)rc * sizeof(int));
+                    if (out->root_nodes != NULL)
+                    {
+                        out->root_count = rc;
+                        int ri = 0;
+                        for (cgltf_size n = 0; n < data->nodes_count; ++n)
+                        {
+                            if (data->nodes[n].parent == NULL)
+                            {
+                                out->root_nodes[ri++] = (int)n;
+                            }
+                        }
+                    }
+                }
+            }
+            SDL_free(mesh_start);
+        }
+    }
+
     cgltf_free(data);
     return true;
 }

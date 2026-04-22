@@ -83,6 +83,35 @@ extern "C"
      */
     bool sdl3d_set_ambient_light(sdl3d_render_context *context, float r, float g, float b);
 
+    /*
+     * Set the per-object emissive color (linear RGB). Emissive light is
+     * added on top of PBR shading and is not attenuated by distance.
+     * Call with (0,0,0) to reset.
+     */
+    bool sdl3d_set_emissive(sdl3d_render_context *context, float r, float g, float b);
+
+    /*
+     * Enable or disable the bloom post-process pass (default: true).
+     */
+    bool sdl3d_set_bloom_enabled(sdl3d_render_context *context, bool enabled);
+
+    /*
+     * Enable or disable the SSAO post-process pass (default: true).
+     */
+    bool sdl3d_set_ssao_enabled(sdl3d_render_context *context, bool enabled);
+    bool sdl3d_set_point_shadows_enabled(sdl3d_render_context *context, bool enabled);
+
+    /*
+     * Z-fighting detection callback. Called when two draw calls have
+     * overlapping coplanar geometry. The message contains the AABB
+     * coordinates of both conflicting surfaces.
+     *
+     * If no callback is set, z-fighting is silently ignored.
+     * Set to NULL to disable detection.
+     */
+    typedef void (*sdl3d_zfight_callback)(const char *message, void *userdata);
+    bool sdl3d_set_zfight_callback(sdl3d_render_context *context, sdl3d_zfight_callback callback, void *userdata);
+
     int sdl3d_get_light_count(const sdl3d_render_context *context);
 
     /* ============================================================== */

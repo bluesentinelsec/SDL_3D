@@ -55,6 +55,15 @@ struct sdl3d_render_context
     sdl3d_light lights[SDL3D_MAX_LIGHTS];
     int light_count;
     float ambient[3];
+    float emissive[3];
+
+    bool bloom_enabled;
+    bool ssao_enabled;
+    bool point_shadows_enabled;
+
+    /* Z-fighting detection callback. */
+    void (*zfight_callback)(const char *message, void *userdata);
+    void *zfight_userdata;
 
     sdl3d_fog fog;
     sdl3d_tonemap_mode tonemap_mode;

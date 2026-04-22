@@ -91,6 +91,59 @@ bool sdl3d_set_ambient_light(sdl3d_render_context *context, float r, float g, fl
     return true;
 }
 
+bool sdl3d_set_emissive(sdl3d_render_context *context, float r, float g, float b)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    context->emissive[0] = r;
+    context->emissive[1] = g;
+    context->emissive[2] = b;
+    return true;
+}
+
+bool sdl3d_set_bloom_enabled(sdl3d_render_context *context, bool enabled)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    context->bloom_enabled = enabled;
+    return true;
+}
+
+bool sdl3d_set_ssao_enabled(sdl3d_render_context *context, bool enabled)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    context->ssao_enabled = enabled;
+    return true;
+}
+
+bool sdl3d_set_point_shadows_enabled(sdl3d_render_context *context, bool enabled)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    context->point_shadows_enabled = enabled;
+    return true;
+}
+
+bool sdl3d_set_zfight_callback(sdl3d_render_context *context, sdl3d_zfight_callback callback, void *userdata)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    context->zfight_callback = callback;
+    context->zfight_userdata = userdata;
+    return true;
+}
+
 int sdl3d_get_light_count(const sdl3d_render_context *context)
 {
     if (context == NULL)

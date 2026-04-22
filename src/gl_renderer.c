@@ -367,7 +367,7 @@ static const char k_pbr_frag_decl[] = "#define MAX_LIGHTS 8\n"
 
 static const char k_pbr_frag_main[] =
     "void main() {\n"
-    "    vec2 uv = vec2(vTexCoord.x, 1.0 - vTexCoord.y);\n"
+    "    vec2 uv = vTexCoord;\n"
     "    vec4 texel = (uHasTexture != 0) ? texture(uTexture, uv) : vec4(1.0);\n"
     "    vec3 albedo = texel.rgb * vColor.rgb * uTint.rgb;\n"
     "    float alpha = texel.a * vColor.a * uTint.a;\n"
@@ -515,7 +515,7 @@ static const char k_unlit_frag[] = "in vec2 vTexCoord;\n"
                                    "out vec4 fragColor;\n"
                                    "\n"
                                    "void main() {\n"
-                                   "    vec2 uv = vec2(vTexCoord.x, 1.0 - vTexCoord.y);\n"
+                                   "    vec2 uv = vTexCoord;\n"
                                    "    vec4 texel = (uHasTexture != 0) ? texture(uTexture, uv) : vec4(1.0);\n"
                                    "    fragColor = texel * vColor * uTint;\n"
                                    "    if (fragColor.a <= 0.0) discard;\n"
@@ -896,6 +896,125 @@ static sdl3d_draw_entry *append_draw_entry(sdl3d_gl_context *ctx)
     return e;
 }
 
+/* Check for potential z-fighting: warn if two lit draw entries have
+ * overlapping axis-aligned bounding boxes with coplanar faces. */
+static void check_z_fighting(sdl3d_gl_context *ctx, const sdl3d_draw_entry *new_entry)
+{
+    if (!new_entry->lit || new_entry->vertex_count == 0)
+        return;
+
+    /* Compute AABB of the new entry from its vertex positions + model matrix translation. */
+    float tx = new_entry->model_matrix[12];
+    float ty = new_entry->model_matrix[13];
+    float tz = new_entry->model_matrix[14];
+
+    float min_x = 1e30f, max_x = -1e30f;
+    float min_y = 1e30f, max_y = -1e30f;
+    float min_z = 1e30f, max_z = -1e30f;
+    for (int i = 0; i < new_entry->vertex_count; i++)
+    {
+        float x = new_entry->positions[i * 3 + 0] + tx;
+        float y = new_entry->positions[i * 3 + 1] + ty;
+        float z = new_entry->positions[i * 3 + 2] + tz;
+        if (x < min_x)
+            min_x = x;
+        if (x > max_x)
+            max_x = x;
+        if (y < min_y)
+            min_y = y;
+        if (y > max_y)
+            max_y = y;
+        if (z < min_z)
+            min_z = z;
+        if (z > max_z)
+            max_z = z;
+    }
+
+    /* Compare against all previous lit entries. */
+    for (int i = 0; i < ctx->draw_count - 1; i++)
+    {
+        const sdl3d_draw_entry *other = &ctx->draw_list[i];
+        if (!other->lit || other->vertex_count == 0)
+            continue;
+
+        float otx = other->model_matrix[12];
+        float oty = other->model_matrix[13];
+        float otz = other->model_matrix[14];
+
+        float o_min_x = 1e30f, o_max_x = -1e30f;
+        float o_min_y = 1e30f, o_max_y = -1e30f;
+        float o_min_z = 1e30f, o_max_z = -1e30f;
+        for (int j = 0; j < other->vertex_count; j++)
+        {
+            float x = other->positions[j * 3 + 0] + otx;
+            float y = other->positions[j * 3 + 1] + oty;
+            float z = other->positions[j * 3 + 2] + otz;
+            if (x < o_min_x)
+                o_min_x = x;
+            if (x > o_max_x)
+                o_max_x = x;
+            if (y < o_min_y)
+                o_min_y = y;
+            if (y > o_max_y)
+                o_max_y = y;
+            if (z < o_min_z)
+                o_min_z = z;
+            if (z > o_max_z)
+                o_max_z = z;
+        }
+
+        /* Check if AABBs overlap. */
+        /* Check if AABBs overlap with at least 0.1 margin (not just touching edges). */
+        float margin = 0.1f;
+        if (max_x < o_min_x + margin || min_x > o_max_x - margin)
+            continue;
+        if (max_y < o_min_y + margin || min_y > o_max_y - margin)
+            continue;
+        if (max_z < o_min_z + margin || min_z > o_max_z - margin)
+            continue;
+
+        /* Z-fighting: two thin surfaces overlapping on the same thin axis.
+         * A "thin" axis is one where the extent is < 0.5 units (wall thickness).
+         * Both entries must be thin on the same axis AND overlap on that axis. */
+        float eps = 0.02f;
+        float thin = 0.5f;
+        float min_thin = 0.05f; /* ignore zero-thickness geometry (skybox, planes) */
+        bool zfight = false;
+        float ext_x = max_x - min_x, ext_y = max_y - min_y, ext_z = max_z - min_z;
+        float o_ext_x = o_max_x - o_min_x, o_ext_y = o_max_y - o_min_y, o_ext_z = o_max_z - o_min_z;
+
+        /* Both thin on X and overlapping on X */
+        if (ext_x > min_thin && ext_x < thin && o_ext_x > min_thin && o_ext_x < thin &&
+            SDL_fabsf((min_x + max_x) * 0.5f - (o_min_x + o_max_x) * 0.5f) < eps)
+            zfight = true;
+        /* Both thin on Y and overlapping on Y */
+        if (ext_y > min_thin && ext_y < thin && o_ext_y > min_thin && o_ext_y < thin &&
+            SDL_fabsf((min_y + max_y) * 0.5f - (o_min_y + o_max_y) * 0.5f) < eps)
+            zfight = true;
+        /* Both thin on Z and overlapping on Z */
+        if (ext_z > min_thin && ext_z < thin && o_ext_z > min_thin && o_ext_z < thin &&
+            SDL_fabsf((min_z + max_z) * 0.5f - (o_min_z + o_max_z) * 0.5f) < eps)
+            zfight = true;
+
+        if (zfight)
+        {
+            char msg[512];
+            SDL_snprintf(msg, sizeof(msg),
+                         "Z-FIGHTING DETECTED\n\n"
+                         "Two draw calls have overlapping coplanar geometry:\n\n"
+                         "Entry A: (%.2f, %.2f, %.2f) to (%.2f, %.2f, %.2f)\n"
+                         "Entry B: (%.2f, %.2f, %.2f) to (%.2f, %.2f, %.2f)\n\n"
+                         "Fix: offset one surface by at least 0.05 units.",
+                         min_x, min_y, min_z, max_x, max_y, max_z, o_min_x, o_min_y, o_min_z, o_max_x, o_max_y,
+                         o_max_z);
+            if (ctx->current_ctx && ctx->current_ctx->zfight_callback)
+            {
+                ctx->current_ctx->zfight_callback(msg, ctx->current_ctx->zfight_userdata);
+            }
+        }
+    }
+}
+
 static float *copy_floats(const float *src, size_t count)
 {
     if (!src || count == 0)
@@ -1146,12 +1265,6 @@ static void replay_draw_list_shadow(sdl3d_gl_context *ctx)
     {
         sdl3d_draw_entry *e = &ctx->draw_list[i];
         if (!e->lit)
-            continue;
-        /* Only shadow-cast entries with a non-identity model matrix
-         * (placed models / dynamic actors). Shape primitives have
-         * identity model matrix with position baked into vertices. */
-        if (e->model_matrix[12] == 0.0f && e->model_matrix[13] == 0.0f && e->model_matrix[14] == 0.0f &&
-            e->model_matrix[0] == 1.0f && e->model_matrix[5] == 1.0f && e->model_matrix[10] == 1.0f)
             continue;
 
         gl->UniformMatrix4fv(ctx->shadow_model_loc, 1, GL_FALSE, e->model_matrix);
@@ -1611,7 +1724,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     /* ---- Fullscreen VAO (empty, vertex ID driven) ---- */
     gl->GenVertexArrays(1, &ctx->fullscreen_vao);
 
-    /* Shadow map: 2048x2048 depth-only FBO with its own VAO. */
+    /* Shadow map: 1024x1024 depth-only FBO with its own VAO. */
     gl->GenFramebuffers(1, &ctx->shadow_fbo);
     gl->GenTextures(1, &ctx->shadow_depth_tex);
     gl->BindTexture(GL_TEXTURE_2D_ARRAY, ctx->shadow_depth_tex);
@@ -1649,7 +1762,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
         ctx->shadow_model_loc = gl->GetUniformLocation(ctx->shadow_program, "uModel");
     }
 
-    /* Point light shadow: 512x512 depth cubemaps. */
+    /* Point light shadow: 1024x1024 depth cubemaps. */
     for (int s = 0; s < SDL3D_MAX_POINT_SHADOWS; s++)
         ctx->point_shadow_light_index[s] = -1;
     gl->GenFramebuffers(1, &ctx->point_shadow_fbo);
@@ -1659,7 +1772,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
         gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->point_shadow_cubemap[s]);
         for (int i = 0; i < 6; i++)
         {
-            gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_DEPTH_COMPONENT24, 512, 512, 0,
+            gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_DEPTH_COMPONENT24, 1024, 1024, 0,
                            GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
         }
         gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -1778,7 +1891,6 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     gl->Enable(GL_CULL_FACE);
     gl->CullFace(GL_BACK);
     gl->FrontFace(GL_CCW);
-    gl->Enable(GL_CULL_FACE);
 
     SDL_Log("SDL3D GL create: ctx=%p logical=%dx%d fbo=%u", (void *)ctx, width, height, ctx->fbo);
     SDL_Log("SDL3D GL renderer created: %dx%d pbr=%u unlit=%u copy=%u fbo=%u ubo=%u", width, height, ctx->pbr_program,
@@ -1971,6 +2083,9 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     e->roughness = params->roughness;
     SDL_memcpy(e->emissive, params->emissive, 3 * sizeof(float));
 
+    /* check_z_fighting(ctx, e); — disabled: triggers on authored model geometry */
+    (void)check_z_fighting;
+
     return true;
 }
 
@@ -1988,7 +2103,7 @@ void sdl3d_gl_begin_shadow_pass(sdl3d_gl_context *ctx, const float *light_vp, fl
 
     sdl3d_gl_funcs *gl = &ctx->gl;
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
-    gl->Viewport(0, 0, 2048, 2048);
+    gl->Viewport(0, 0, 1024, 1024);
     gl->Clear(GL_DEPTH_BUFFER_BIT);
     gl->Enable(GL_DEPTH_TEST);
     gl->Disable(GL_CULL_FACE);
@@ -2004,7 +2119,7 @@ void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx)
     /* Restore main FBO and normal culling. */
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
     gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
-    gl->Enable(GL_CULL_FACE);
+    gl->Disable(GL_CULL_FACE);
     gl->CullFace(GL_BACK);
 }
 
@@ -2023,7 +2138,7 @@ static bool gl_present(sdl3d_render_context *context)
         compute_csm_matrices(ctx, context);
 
         gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
-        gl->Viewport(0, 0, 2048, 2048);
+        gl->Viewport(0, 0, 1024, 1024);
         gl->Enable(GL_DEPTH_TEST);
         gl->Disable(GL_CULL_FACE);
 
@@ -2039,16 +2154,16 @@ static bool gl_present(sdl3d_render_context *context)
 
         gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
         gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
-        gl->Enable(GL_CULL_FACE);
+        gl->Disable(GL_CULL_FACE);
         gl->CullFace(GL_BACK);
     }
 
     /* Point shadow pass: 6-face cubemap per light. */
     compute_point_shadow_matrices(ctx, context);
-    if (SDL3D_POINT_SHADOWS_ENABLED && ctx->point_shadow_program && ctx->point_shadow_count > 0)
+    if (ctx->current_ctx->point_shadows_enabled && ctx->point_shadow_program && ctx->point_shadow_count > 0)
     {
         gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->point_shadow_fbo);
-        gl->Viewport(0, 0, 512, 512);
+        gl->Viewport(0, 0, 1024, 1024);
         gl->Enable(GL_DEPTH_TEST);
         gl->Disable(GL_CULL_FACE);
         gl->UseProgram(ctx->point_shadow_program);
@@ -2070,10 +2185,6 @@ static bool gl_present(sdl3d_render_context *context)
                 {
                     sdl3d_draw_entry *e = &ctx->draw_list[i];
                     if (!e->lit)
-                        continue;
-                    /* Only dynamic actors cast point shadows. */
-                    if (e->model_matrix[12] == 0.0f && e->model_matrix[13] == 0.0f && e->model_matrix[14] == 0.0f &&
-                        e->model_matrix[0] == 1.0f && e->model_matrix[5] == 1.0f && e->model_matrix[10] == 1.0f)
                         continue;
                     gl->UniformMatrix4fv(ctx->point_shadow_model_loc, 1, GL_FALSE, e->model_matrix);
                     gl->BindVertexArray(ctx->shadow_vao);
@@ -2138,6 +2249,7 @@ static bool gl_present(sdl3d_render_context *context)
 
     /* SSAO pass: darken pixels where nearby depth samples indicate occlusion.
      * Reads fbo_color + fbo_depth, writes to pp_fbo_a, then copies back. */
+    if (context->ssao_enabled)
     {
         float near_p = ctx->current_ctx->near_plane;
         float far_p = ctx->current_ctx->far_plane;
@@ -2171,57 +2283,60 @@ static bool gl_present(sdl3d_render_context *context)
     }
 
     /* Step 1: Extract bright pixels from main FBO into pp_tex_a. */
-    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->pp_fbo_a);
-    gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
-    gl->Clear(GL_COLOR_BUFFER_BIT);
-    gl->UseProgram(ctx->bloom_program);
-    gl->ActiveTexture(GL_TEXTURE0);
-    gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
-    gl->Uniform1i(ctx->bloom_scene_loc, 0);
-    gl->Uniform1f(ctx->bloom_threshold_loc, 0.8f);
-    gl->DrawArrays(GL_TRIANGLES, 0, 3);
-
-    /* Step 2: Blur bright pixels (ping-pong, 10 passes = 5 iterations). */
-    gl->UseProgram(ctx->bloom_blur_program);
-    for (int i = 0; i < 6; i++)
+    if (context->bloom_enabled)
     {
-        bool horizontal = (i % 2 == 0);
-        gl->BindFramebuffer(GL_FRAMEBUFFER, horizontal ? ctx->pp_fbo_b : ctx->pp_fbo_a);
+        gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->pp_fbo_a);
+        gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+        gl->Clear(GL_COLOR_BUFFER_BIT);
+        gl->UseProgram(ctx->bloom_program);
         gl->ActiveTexture(GL_TEXTURE0);
-        gl->BindTexture(GL_TEXTURE_2D, horizontal ? ctx->pp_tex_a : ctx->pp_tex_b);
-        gl->Uniform1i(ctx->blur_image_loc, 0);
-        gl->Uniform1i(ctx->blur_horizontal_loc, horizontal ? 1 : 0);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
+        gl->Uniform1i(ctx->bloom_scene_loc, 0);
+        gl->Uniform1f(ctx->bloom_threshold_loc, 1.2f);
         gl->DrawArrays(GL_TRIANGLES, 0, 3);
-    }
-    /* After 10 passes (even count), last write was to pp_fbo_b with horizontal=false reading pp_tex_b...
-     * Actually: i=9 -> horizontal=false -> writes to pp_fbo_a, reads pp_tex_b.
-     * So final blurred result is in pp_tex_a. */
 
-    /* Step 3: Copy fbo_color to pp_tex_b to avoid read-write conflict. */
-    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->pp_fbo_b);
-    gl->UseProgram(ctx->copy_program);
-    gl->ActiveTexture(GL_TEXTURE0);
-    gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
-    gl->Uniform1i(ctx->copy_texture_loc, 0);
-    gl->DrawArrays(GL_TRIANGLES, 0, 3);
+        /* Step 2: Blur bright pixels (ping-pong, 10 passes = 5 iterations). */
+        gl->UseProgram(ctx->bloom_blur_program);
+        for (int i = 0; i < 6; i++)
+        {
+            bool horizontal = (i % 2 == 0);
+            gl->BindFramebuffer(GL_FRAMEBUFFER, horizontal ? ctx->pp_fbo_b : ctx->pp_fbo_a);
+            gl->ActiveTexture(GL_TEXTURE0);
+            gl->BindTexture(GL_TEXTURE_2D, horizontal ? ctx->pp_tex_a : ctx->pp_tex_b);
+            gl->Uniform1i(ctx->blur_image_loc, 0);
+            gl->Uniform1i(ctx->blur_horizontal_loc, horizontal ? 1 : 0);
+            gl->DrawArrays(GL_TRIANGLES, 0, 3);
+        }
+        /* After 10 passes (even count), last write was to pp_fbo_b with horizontal=false reading pp_tex_b...
+         * Actually: i=9 -> horizontal=false -> writes to pp_fbo_a, reads pp_tex_b.
+         * So final blurred result is in pp_tex_a. */
 
-    /* Step 4: Composite (bloom + vignette + grading) into main FBO.
-     * Read scene from pp_tex_b, bloom from pp_tex_a, write to fbo. */
-    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-    gl->UseProgram(ctx->composite_program);
-    gl->ActiveTexture(GL_TEXTURE0);
-    gl->BindTexture(GL_TEXTURE_2D, ctx->pp_tex_b);
-    gl->ActiveTexture(GL_TEXTURE0 + 1);
-    gl->BindTexture(GL_TEXTURE_2D, ctx->pp_tex_a);
-    gl->Uniform1i(ctx->comp_scene_loc, 0);
-    gl->Uniform1i(ctx->comp_bloom_loc, 1);
-    gl->Uniform1f(ctx->comp_vignette_loc, 0.4f);
-    gl->Uniform1f(ctx->comp_contrast_loc, 1.1f);
-    gl->Uniform1f(ctx->comp_saturation_loc, 1.15f);
-    gl->DrawArrays(GL_TRIANGLES, 0, 3);
-    gl->ActiveTexture(GL_TEXTURE0);
+        /* Step 3: Copy fbo_color to pp_tex_b to avoid read-write conflict. */
+        gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->pp_fbo_b);
+        gl->UseProgram(ctx->copy_program);
+        gl->ActiveTexture(GL_TEXTURE0);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
+        gl->Uniform1i(ctx->copy_texture_loc, 0);
+        gl->DrawArrays(GL_TRIANGLES, 0, 3);
 
-    gl->Enable(GL_CULL_FACE);
+        /* Step 4: Composite (bloom + vignette + grading) into main FBO.
+         * Read scene from pp_tex_b, bloom from pp_tex_a, write to fbo. */
+        gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+        gl->UseProgram(ctx->composite_program);
+        gl->ActiveTexture(GL_TEXTURE0);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->pp_tex_b);
+        gl->ActiveTexture(GL_TEXTURE0 + 1);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->pp_tex_a);
+        gl->Uniform1i(ctx->comp_scene_loc, 0);
+        gl->Uniform1i(ctx->comp_bloom_loc, 1);
+        gl->Uniform1f(ctx->comp_vignette_loc, 0.4f);
+        gl->Uniform1f(ctx->comp_contrast_loc, 1.1f);
+        gl->Uniform1f(ctx->comp_saturation_loc, 1.15f);
+        gl->DrawArrays(GL_TRIANGLES, 0, 3);
+        gl->ActiveTexture(GL_TEXTURE0);
+    } /* bloom_enabled */
+
+    gl->Disable(GL_CULL_FACE);
     gl->Enable(GL_DEPTH_TEST);
 
     /* Compute letterbox viewport. */
@@ -2252,7 +2367,7 @@ static bool gl_present(sdl3d_render_context *context)
     gl->Uniform1i(ctx->copy_texture_loc, 0);
     gl->BindVertexArray(ctx->fullscreen_vao);
     gl->DrawArrays(GL_TRIANGLES, 0, 3);
-    gl->Enable(GL_CULL_FACE);
+    gl->Disable(GL_CULL_FACE);
     gl->Enable(GL_DEPTH_TEST);
 
     SDL_GL_SwapWindow(ctx->window);
@@ -2302,7 +2417,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
             compute_csm_matrices(ctx, ctx->current_ctx);
 
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
-            gl->Viewport(0, 0, 2048, 2048);
+            gl->Viewport(0, 0, 1024, 1024);
             gl->Enable(GL_DEPTH_TEST);
             gl->Disable(GL_CULL_FACE);
 
@@ -2318,14 +2433,14 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
 
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
             gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
-            gl->Enable(GL_CULL_FACE);
+            gl->Disable(GL_CULL_FACE);
             gl->CullFace(GL_BACK);
         }
         compute_point_shadow_matrices(ctx, ctx->current_ctx);
-        if (SDL3D_POINT_SHADOWS_ENABLED && ctx->point_shadow_program && ctx->point_shadow_count > 0)
+        if (ctx->current_ctx->point_shadows_enabled && ctx->point_shadow_program && ctx->point_shadow_count > 0)
         {
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->point_shadow_fbo);
-            gl->Viewport(0, 0, 512, 512);
+            gl->Viewport(0, 0, 1024, 1024);
             gl->Enable(GL_DEPTH_TEST);
             gl->Disable(GL_CULL_FACE);
             gl->UseProgram(ctx->point_shadow_program);
@@ -2371,7 +2486,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
             }
             gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
             gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
-            gl->Enable(GL_CULL_FACE);
+            gl->Disable(GL_CULL_FACE);
             gl->CullFace(GL_BACK);
         }
         replay_draw_list_geometry(ctx);

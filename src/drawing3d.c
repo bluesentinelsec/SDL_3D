@@ -330,6 +330,9 @@ static void sdl3d_build_lighting_params(const sdl3d_render_context *context, sdl
     lp->ambient[0] = context->ambient[0];
     lp->ambient[1] = context->ambient[1];
     lp->ambient[2] = context->ambient[2];
+    lp->emissive[0] = context->emissive[0];
+    lp->emissive[1] = context->emissive[1];
+    lp->emissive[2] = context->emissive[2];
     lp->fog = context->fog;
     lp->tonemap_mode = context->tonemap_mode;
     lp->shadow_bias = context->shadow_bias;
@@ -1128,6 +1131,201 @@ bool sdl3d_draw_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, cons
     return sdl3d_draw_mesh_internal(context, mesh, texture, sdl3d_color_to_modulate(tint), NULL, NULL);
 }
 
+/* ------------------------------------------------------------------ */
+/* Model node hierarchy helpers                                        */
+/* ------------------------------------------------------------------ */
+
+static sdl3d_mat4 sdl3d_mat4_from_trs_node(const float *t, const float *r, const float *s)
+{
+    float x = r[0], y = r[1], z = r[2], w = r[3];
+    float x2 = x + x, y2 = y + y, z2 = z + z;
+    float xx = x * x2, xy = x * y2, xz = x * z2;
+    float yy = y * y2, yz = y * z2, zz = z * z2;
+    float wx = w * x2, wy = w * y2, wz = w * z2;
+    sdl3d_mat4 m;
+    m.m[0] = (1.0f - (yy + zz)) * s[0];
+    m.m[1] = (xy + wz) * s[0];
+    m.m[2] = (xz - wy) * s[0];
+    m.m[3] = 0.0f;
+    m.m[4] = (xy - wz) * s[1];
+    m.m[5] = (1.0f - (xx + zz)) * s[1];
+    m.m[6] = (yz + wx) * s[1];
+    m.m[7] = 0.0f;
+    m.m[8] = (xz + wy) * s[2];
+    m.m[9] = (yz - wx) * s[2];
+    m.m[10] = (1.0f - (xx + yy)) * s[2];
+    m.m[11] = 0.0f;
+    m.m[12] = t[0];
+    m.m[13] = t[1];
+    m.m[14] = t[2];
+    m.m[15] = 1.0f;
+    return m;
+}
+
+/**
+ * Draw a single mesh by index, resolving material/texture/lighting.
+ * joint_matrices may be NULL for non-skinned draws.
+ */
+static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_model *model, int mesh_index,
+                                  sdl3d_vec4 tint_modulate, const sdl3d_mat4 *joint_matrices)
+{
+    const sdl3d_mesh *mesh = &model->meshes[mesh_index];
+    const sdl3d_texture2d *texture = NULL;
+    const sdl3d_material *material = NULL;
+    sdl3d_vec4 mesh_modulate = tint_modulate;
+    bool ok = true;
+
+    if (mesh->material_index < -1)
+    {
+        return SDL_SetError("Mesh material index %d is invalid.", mesh->material_index);
+    }
+
+    if (mesh->material_index >= 0)
+    {
+        if (mesh->material_index >= model->material_count || model->materials == NULL)
+        {
+            return SDL_SetError("Mesh material index %d is outside material_count=%d.", mesh->material_index,
+                                model->material_count);
+        }
+
+        material = &model->materials[mesh->material_index];
+        mesh_modulate.x = sdl3d_clamp01(mesh_modulate.x * material->albedo[0]);
+        mesh_modulate.y = sdl3d_clamp01(mesh_modulate.y * material->albedo[1]);
+        mesh_modulate.z = sdl3d_clamp01(mesh_modulate.z * material->albedo[2]);
+        mesh_modulate.w = sdl3d_clamp01(mesh_modulate.w * material->albedo[3]);
+
+        if (material->albedo_map != NULL && material->albedo_map[0] != '\0')
+        {
+            if (material->albedo_map[0] == '#' && model->embedded_textures != NULL)
+            {
+                int tex_idx = SDL_atoi(&material->albedo_map[1]);
+                if (tex_idx >= 0 && tex_idx < model->embedded_texture_count &&
+                    model->embedded_textures[tex_idx].pixels != NULL)
+                {
+                    sdl3d_texture_cache_entry *entry = NULL;
+                    for (entry = context->texture_cache; entry != NULL; entry = entry->next)
+                    {
+                        if (SDL_strcmp(entry->path, material->albedo_map) == 0)
+                        {
+                            texture = &entry->texture;
+                            break;
+                        }
+                    }
+                    if (texture == NULL)
+                    {
+                        entry = (sdl3d_texture_cache_entry *)SDL_calloc(1, sizeof(*entry));
+                        if (entry != NULL)
+                        {
+                            entry->path = SDL_strdup(material->albedo_map);
+                            if (sdl3d_create_texture_from_image(&model->embedded_textures[tex_idx], &entry->texture))
+                            {
+                                entry->next = context->texture_cache;
+                                context->texture_cache = entry;
+                                texture = &entry->texture;
+                            }
+                            else
+                            {
+                                SDL_free(entry->path);
+                                SDL_free(entry);
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                ok = sdl3d_texture_cache_get_or_load(&context->texture_cache, model->source_path, material->albedo_map,
+                                                     &texture);
+                if (!ok)
+                {
+                    return false;
+                }
+            }
+        }
+    }
+
+    {
+        sdl3d_lighting_params lp_storage;
+        const sdl3d_lighting_params *lp_ptr = NULL;
+
+        if (context->shading_mode != SDL3D_SHADING_UNLIT && context->light_count > 0)
+        {
+            sdl3d_build_lighting_params(context, &lp_storage);
+            if (material != NULL)
+            {
+                lp_storage.metallic = material->metallic;
+                lp_storage.roughness = material->roughness;
+                lp_storage.emissive[0] = material->emissive[0];
+                lp_storage.emissive[1] = material->emissive[1];
+                lp_storage.emissive[2] = material->emissive[2];
+            }
+            else
+            {
+                lp_storage.roughness = 1.0f;
+            }
+            lp_ptr = &lp_storage;
+        }
+
+        ok = sdl3d_draw_mesh_internal(context, mesh, texture, mesh_modulate, lp_ptr, joint_matrices);
+    }
+    return ok;
+}
+
+/**
+ * Recursively draw a node and its children, applying local TRS transforms
+ * via the matrix stack.
+ */
+static bool sdl3d_draw_model_node(sdl3d_render_context *context, const sdl3d_model *model, int node_index,
+                                  sdl3d_vec4 tint_modulate, const sdl3d_mat4 *joint_matrices)
+{
+    if (node_index < 0 || node_index >= model->node_count)
+    {
+        return true;
+    }
+
+    const sdl3d_model_node *node = &model->nodes[node_index];
+
+    if (!sdl3d_push_matrix(context))
+    {
+        return false;
+    }
+
+    /* Apply this node's local TRS transform. */
+    sdl3d_mat4 local;
+    if (node->has_matrix)
+    {
+        SDL_memcpy(local.m, node->local_matrix, sizeof(local.m));
+    }
+    else
+    {
+        local = sdl3d_mat4_from_trs_node(node->translation, node->rotation, node->scale);
+    }
+    context->model_stack[context->model_stack_depth - 1] =
+        sdl3d_mat4_multiply(context->model_stack[context->model_stack_depth - 1], local);
+    sdl3d_update_current_model_matrices(context);
+
+    bool ok = true;
+
+    /* Draw this node's mesh if it has one. */
+    if (node->mesh_index >= 0 && node->mesh_index < model->mesh_count)
+    {
+        ok = sdl3d_draw_model_mesh(context, model, node->mesh_index, tint_modulate, joint_matrices);
+    }
+
+    /* Recurse into children. */
+    for (int c = 0; ok && c < node->child_count; ++c)
+    {
+        ok = sdl3d_draw_model_node(context, model, node->children[c], tint_modulate, joint_matrices);
+    }
+
+    if (!sdl3d_pop_matrix(context))
+    {
+        return false;
+    }
+
+    return ok;
+}
+
 bool sdl3d_draw_model(sdl3d_render_context *context, const sdl3d_model *model, sdl3d_vec3 position, float scale,
                       sdl3d_color tint)
 {
@@ -1169,112 +1367,18 @@ bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model
         ok = sdl3d_scale(context, scale.x, scale.y, scale.z);
     }
 
-    for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
+    if (ok && model->nodes != NULL && model->root_count > 0)
     {
-        const sdl3d_mesh *mesh = &model->meshes[mesh_index];
-        const sdl3d_texture2d *texture = NULL;
-        const sdl3d_material *material = NULL;
-        sdl3d_vec4 mesh_modulate = tint_modulate;
-
-        if (mesh->material_index < -1)
+        for (int r = 0; ok && r < model->root_count; ++r)
         {
-            ok = SDL_SetError("Mesh material index %d is invalid.", mesh->material_index);
-            break;
+            ok = sdl3d_draw_model_node(context, model, model->root_nodes[r], tint_modulate, NULL);
         }
-
-        if (mesh->material_index >= 0)
+    }
+    else
+    {
+        for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
         {
-            if (mesh->material_index >= model->material_count || model->materials == NULL)
-            {
-                ok = SDL_SetError("Mesh material index %d is outside material_count=%d.", mesh->material_index,
-                                  model->material_count);
-                break;
-            }
-
-            material = &model->materials[mesh->material_index];
-            mesh_modulate.x = sdl3d_clamp01(mesh_modulate.x * material->albedo[0]);
-            mesh_modulate.y = sdl3d_clamp01(mesh_modulate.y * material->albedo[1]);
-            mesh_modulate.z = sdl3d_clamp01(mesh_modulate.z * material->albedo[2]);
-            mesh_modulate.w = sdl3d_clamp01(mesh_modulate.w * material->albedo[3]);
-
-            if (material->albedo_map != NULL && material->albedo_map[0] != '\0')
-            {
-                if (material->albedo_map[0] == '#' && model->embedded_textures != NULL)
-                {
-                    /* Embedded texture reference: "#N" where N is the image index. */
-                    int tex_idx = SDL_atoi(&material->albedo_map[1]);
-                    if (tex_idx >= 0 && tex_idx < model->embedded_texture_count &&
-                        model->embedded_textures[tex_idx].pixels != NULL)
-                    {
-                        /* Create texture from embedded image via cache (keyed by "#N"). */
-                        sdl3d_texture_cache_entry *entry = NULL;
-                        for (entry = context->texture_cache; entry != NULL; entry = entry->next)
-                        {
-                            if (SDL_strcmp(entry->path, material->albedo_map) == 0)
-                            {
-                                texture = &entry->texture;
-                                break;
-                            }
-                        }
-                        if (texture == NULL)
-                        {
-                            entry = (sdl3d_texture_cache_entry *)SDL_calloc(1, sizeof(*entry));
-                            if (entry != NULL)
-                            {
-                                entry->path = SDL_strdup(material->albedo_map);
-                                if (sdl3d_create_texture_from_image(&model->embedded_textures[tex_idx],
-                                                                    &entry->texture))
-                                {
-                                    entry->next = context->texture_cache;
-                                    context->texture_cache = entry;
-                                    texture = &entry->texture;
-                                }
-                                else
-                                {
-                                    SDL_free(entry->path);
-                                    SDL_free(entry);
-                                }
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    ok = sdl3d_texture_cache_get_or_load(&context->texture_cache, model->source_path,
-                                                         material->albedo_map, &texture);
-                    if (!ok)
-                    {
-                        break;
-                    }
-                }
-            }
-        }
-
-        {
-            sdl3d_lighting_params lp_storage;
-            const sdl3d_lighting_params *lp_ptr = NULL;
-
-            if (context->shading_mode != SDL3D_SHADING_UNLIT && context->light_count > 0)
-            {
-                sdl3d_build_lighting_params(context, &lp_storage);
-
-                if (material != NULL)
-                {
-                    lp_storage.metallic = material->metallic;
-                    lp_storage.roughness = material->roughness;
-                    lp_storage.emissive[0] = material->emissive[0];
-                    lp_storage.emissive[1] = material->emissive[1];
-                    lp_storage.emissive[2] = material->emissive[2];
-                }
-                else
-                {
-                    lp_storage.roughness = 1.0f;
-                }
-
-                lp_ptr = &lp_storage;
-            }
-
-            ok = sdl3d_draw_mesh_internal(context, mesh, texture, mesh_modulate, lp_ptr, NULL);
+            ok = sdl3d_draw_model_mesh(context, model, mesh_index, tint_modulate, NULL);
         }
     }
 
@@ -1326,108 +1430,18 @@ bool sdl3d_draw_model_skinned(sdl3d_render_context *context, const sdl3d_model *
         ok = sdl3d_scale(context, scale.x, scale.y, scale.z);
     }
 
-    for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
+    if (ok && model->nodes != NULL && model->root_count > 0)
     {
-        const sdl3d_mesh *mesh = &model->meshes[mesh_index];
-        const sdl3d_texture2d *texture = NULL;
-        const sdl3d_material *material = NULL;
-        sdl3d_vec4 mesh_modulate = tint_modulate;
-
-        if (mesh->material_index < -1)
+        for (int r = 0; ok && r < model->root_count; ++r)
         {
-            ok = SDL_SetError("Mesh material index %d is invalid.", mesh->material_index);
-            break;
+            ok = sdl3d_draw_model_node(context, model, model->root_nodes[r], tint_modulate, joint_matrices);
         }
-
-        if (mesh->material_index >= 0)
+    }
+    else
+    {
+        for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
         {
-            if (mesh->material_index >= model->material_count || model->materials == NULL)
-            {
-                ok = SDL_SetError("Mesh material index %d is outside material_count=%d.", mesh->material_index,
-                                  model->material_count);
-                break;
-            }
-
-            material = &model->materials[mesh->material_index];
-            mesh_modulate.x = sdl3d_clamp01(mesh_modulate.x * material->albedo[0]);
-            mesh_modulate.y = sdl3d_clamp01(mesh_modulate.y * material->albedo[1]);
-            mesh_modulate.z = sdl3d_clamp01(mesh_modulate.z * material->albedo[2]);
-            mesh_modulate.w = sdl3d_clamp01(mesh_modulate.w * material->albedo[3]);
-
-            if (material->albedo_map != NULL && material->albedo_map[0] != '\0')
-            {
-                if (material->albedo_map[0] == '#' && model->embedded_textures != NULL)
-                {
-                    int tex_idx = SDL_atoi(&material->albedo_map[1]);
-                    if (tex_idx >= 0 && tex_idx < model->embedded_texture_count &&
-                        model->embedded_textures[tex_idx].pixels != NULL)
-                    {
-                        sdl3d_texture_cache_entry *entry = NULL;
-                        for (entry = context->texture_cache; entry != NULL; entry = entry->next)
-                        {
-                            if (SDL_strcmp(entry->path, material->albedo_map) == 0)
-                            {
-                                texture = &entry->texture;
-                                break;
-                            }
-                        }
-                        if (texture == NULL)
-                        {
-                            entry = (sdl3d_texture_cache_entry *)SDL_calloc(1, sizeof(*entry));
-                            if (entry != NULL)
-                            {
-                                entry->path = SDL_strdup(material->albedo_map);
-                                if (sdl3d_create_texture_from_image(&model->embedded_textures[tex_idx],
-                                                                    &entry->texture))
-                                {
-                                    entry->next = context->texture_cache;
-                                    context->texture_cache = entry;
-                                    texture = &entry->texture;
-                                }
-                                else
-                                {
-                                    SDL_free(entry->path);
-                                    SDL_free(entry);
-                                }
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    ok = sdl3d_texture_cache_get_or_load(&context->texture_cache, model->source_path,
-                                                         material->albedo_map, &texture);
-                    if (!ok)
-                    {
-                        break;
-                    }
-                }
-            }
-        }
-
-        {
-            sdl3d_lighting_params lp_storage;
-            const sdl3d_lighting_params *lp_ptr = NULL;
-
-            if (context->shading_mode != SDL3D_SHADING_UNLIT && context->light_count > 0)
-            {
-                sdl3d_build_lighting_params(context, &lp_storage);
-                if (material != NULL)
-                {
-                    lp_storage.metallic = material->metallic;
-                    lp_storage.roughness = material->roughness;
-                    lp_storage.emissive[0] = material->emissive[0];
-                    lp_storage.emissive[1] = material->emissive[1];
-                    lp_storage.emissive[2] = material->emissive[2];
-                }
-                else
-                {
-                    lp_storage.roughness = 1.0f;
-                }
-                lp_ptr = &lp_storage;
-            }
-
-            ok = sdl3d_draw_mesh_internal(context, mesh, texture, mesh_modulate, lp_ptr, joint_matrices);
+            ok = sdl3d_draw_model_mesh(context, model, mesh_index, tint_modulate, joint_matrices);
         }
     }
 
