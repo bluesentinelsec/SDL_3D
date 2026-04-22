@@ -986,15 +986,19 @@ static void check_z_fighting(sdl3d_gl_context *ctx, const sdl3d_draw_entry *new_
 
         if (coplanar)
         {
-            SDL_LogError(SDL_LOG_CATEGORY_RENDER,
-                         "SDL3D Z-FIGHTING DETECTED: Two draw calls have overlapping coplanar geometry!\n"
-                         "  Entry A: AABB (%.2f,%.2f,%.2f)-(%.2f,%.2f,%.2f)\n"
-                         "  Entry B: AABB (%.2f,%.2f,%.2f)-(%.2f,%.2f,%.2f)\n"
-                         "  Fix: offset one surface by at least 0.05 units.",
-                         min_x, min_y, min_z, max_x, max_y, max_z, o_min_x, o_min_y, o_min_z, o_max_x, o_max_y,
-                         o_max_z);
-            SDL_assert_always(0 && "SDL3D: Z-fighting detected. Two surfaces occupy the same space. "
-                                  "See log output for coordinates.");
+            {
+                char msg[512];
+                SDL_snprintf(msg, sizeof(msg),
+                             "Z-FIGHTING DETECTED\n\n"
+                             "Two draw calls have overlapping coplanar geometry:\n\n"
+                             "Entry A: (%.2f, %.2f, %.2f) to (%.2f, %.2f, %.2f)\n"
+                             "Entry B: (%.2f, %.2f, %.2f) to (%.2f, %.2f, %.2f)\n\n"
+                             "Fix: offset one surface by at least 0.05 units.",
+                             min_x, min_y, min_z, max_x, max_y, max_z, o_min_x, o_min_y, o_min_z, o_max_x, o_max_y,
+                             o_max_z);
+                SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL3D", msg, NULL);
+                SDL_assert_always(0 && "SDL3D: Z-fighting detected.");
+            }
         }
     }
 }
