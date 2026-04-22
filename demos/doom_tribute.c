@@ -58,18 +58,15 @@ static void draw_doom_scene(sdl3d_render_context *ctx)
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 2, -4), sdl3d_vec3_make(10, 4, 0.3f), wall_grey);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(-3.5f, 2, 4.2f), sdl3d_vec3_make(3, 4, 0.3f), wall_grey);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(3.5f, 2, 4.2f), sdl3d_vec3_make(3, 4, 0.3f), wall_grey);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 3.4f, 4.2f), sdl3d_vec3_make(4, 0.8f, 0.3f), wall_grey);
     sdl3d_draw_cylinder(ctx, sdl3d_vec3_make(-3, 2, -2), 0.4f, 0.4f, 4, 8, wall_brown);
     sdl3d_draw_cylinder(ctx, sdl3d_vec3_make(3, 2, -2), 0.4f, 0.4f, 4, 8, wall_brown);
 
-    /* CORRIDOR 1 (x:-2..2, z:4..12) */
-    sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, 0, 8), (sdl3d_vec2){4, 8}, dark_floor);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 3.5f, 8), sdl3d_vec3_make(4, 0.2f, 8), dark_ceil);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(-2, 1.75f, 8), sdl3d_vec3_make(0.3f, 3.5f, 8), wall_dark);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(2, 1.75f, 8), sdl3d_vec3_make(0.3f, 3.5f, 8), wall_dark);
-    /* Fill above corridor where it meets room 1 (step from 4 to 3.5) */
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 3.85f, 4), sdl3d_vec3_make(4, 0.5f, 0.3f), wall_grey);
-    /* Fill above corridor where it meets room 2 (step from 3.5 to 4.5) */
+    /* CORRIDOR 1 (x:-2..2, z:4.2..12) — walls full height, ceiling fills top */
+    sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, 0, 8.1f), (sdl3d_vec2){4, 7.8f}, dark_floor);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 3.5f, 8.1f), sdl3d_vec3_make(4, 0.2f, 7.8f), dark_ceil);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(-2, 2, 8.1f), sdl3d_vec3_make(0.3f, 4, 7.8f), wall_dark);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(2, 2, 8.1f), sdl3d_vec3_make(0.3f, 4, 7.8f), wall_dark);
+    /* Fill above corridor at room 2 end */
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 4.0f, 12), sdl3d_vec3_make(4, 1.0f, 0.3f), wall_brown);
 
     /* ROOM 2: nukage (x:-6..6, z:12..22) */
