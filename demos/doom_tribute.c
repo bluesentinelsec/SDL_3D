@@ -56,9 +56,9 @@ static void draw_doom_scene(sdl3d_render_context *ctx)
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(-5, 2, 0), sdl3d_vec3_make(0.3f, 4, 8), wall_grey);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(5, 2, 0), sdl3d_vec3_make(0.3f, 4, 8), wall_grey);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 2, -4), sdl3d_vec3_make(10, 4, 0.3f), wall_grey);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(-3.5f, 2, 4), sdl3d_vec3_make(3, 4, 0.3f), wall_grey);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(3.5f, 2, 4), sdl3d_vec3_make(3, 4, 0.3f), wall_grey);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 3.4f, 4), sdl3d_vec3_make(4, 0.8f, 0.3f), wall_grey);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(-3.5f, 2, 4.2f), sdl3d_vec3_make(3, 4, 0.3f), wall_grey);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(3.5f, 2, 4.2f), sdl3d_vec3_make(3, 4, 0.3f), wall_grey);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 3.4f, 4.2f), sdl3d_vec3_make(4, 0.8f, 0.3f), wall_grey);
     sdl3d_draw_cylinder(ctx, sdl3d_vec3_make(-3, 2, -2), 0.4f, 0.4f, 4, 8, wall_brown);
     sdl3d_draw_cylinder(ctx, sdl3d_vec3_make(3, 2, -2), 0.4f, 0.4f, 4, 8, wall_brown);
 
