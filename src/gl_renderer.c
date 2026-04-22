@@ -896,6 +896,106 @@ static sdl3d_draw_entry *append_draw_entry(sdl3d_gl_context *ctx)
     return e;
 }
 
+/* Check for potential z-fighting: warn if two lit draw entries have
+ * overlapping axis-aligned bounding boxes with coplanar faces. */
+static void check_z_fighting(sdl3d_gl_context *ctx, const sdl3d_draw_entry *new_entry)
+{
+    if (!new_entry->lit || new_entry->vertex_count == 0)
+        return;
+
+    /* Compute AABB of the new entry from its vertex positions + model matrix translation. */
+    float tx = new_entry->model_matrix[12];
+    float ty = new_entry->model_matrix[13];
+    float tz = new_entry->model_matrix[14];
+
+    float min_x = 1e30f, max_x = -1e30f;
+    float min_y = 1e30f, max_y = -1e30f;
+    float min_z = 1e30f, max_z = -1e30f;
+    for (int i = 0; i < new_entry->vertex_count; i++)
+    {
+        float x = new_entry->positions[i * 3 + 0] + tx;
+        float y = new_entry->positions[i * 3 + 1] + ty;
+        float z = new_entry->positions[i * 3 + 2] + tz;
+        if (x < min_x)
+            min_x = x;
+        if (x > max_x)
+            max_x = x;
+        if (y < min_y)
+            min_y = y;
+        if (y > max_y)
+            max_y = y;
+        if (z < min_z)
+            min_z = z;
+        if (z > max_z)
+            max_z = z;
+    }
+
+    /* Compare against all previous lit entries. */
+    for (int i = 0; i < ctx->draw_count - 1; i++)
+    {
+        const sdl3d_draw_entry *other = &ctx->draw_list[i];
+        if (!other->lit || other->vertex_count == 0)
+            continue;
+
+        float otx = other->model_matrix[12];
+        float oty = other->model_matrix[13];
+        float otz = other->model_matrix[14];
+
+        float o_min_x = 1e30f, o_max_x = -1e30f;
+        float o_min_y = 1e30f, o_max_y = -1e30f;
+        float o_min_z = 1e30f, o_max_z = -1e30f;
+        for (int j = 0; j < other->vertex_count; j++)
+        {
+            float x = other->positions[j * 3 + 0] + otx;
+            float y = other->positions[j * 3 + 1] + oty;
+            float z = other->positions[j * 3 + 2] + otz;
+            if (x < o_min_x)
+                o_min_x = x;
+            if (x > o_max_x)
+                o_max_x = x;
+            if (y < o_min_y)
+                o_min_y = y;
+            if (y > o_max_y)
+                o_max_y = y;
+            if (z < o_min_z)
+                o_min_z = z;
+            if (z > o_max_z)
+                o_max_z = z;
+        }
+
+        /* Check if AABBs overlap. */
+        if (max_x < o_min_x || min_x > o_max_x)
+            continue;
+        if (max_y < o_min_y || min_y > o_max_y)
+            continue;
+        if (max_z < o_min_z || min_z > o_max_z)
+            continue;
+
+        /* AABBs overlap. Check if any face is coplanar (within epsilon). */
+        float eps = 0.01f;
+        bool coplanar = false;
+        if (SDL_fabsf(min_x - o_min_x) < eps || SDL_fabsf(max_x - o_max_x) < eps || SDL_fabsf(min_x - o_max_x) < eps ||
+            SDL_fabsf(max_x - o_min_x) < eps)
+            coplanar = true;
+        if (SDL_fabsf(min_y - o_min_y) < eps || SDL_fabsf(max_y - o_max_y) < eps || SDL_fabsf(min_y - o_max_y) < eps ||
+            SDL_fabsf(max_y - o_min_y) < eps)
+            coplanar = true;
+        if (SDL_fabsf(min_z - o_min_z) < eps || SDL_fabsf(max_z - o_max_z) < eps || SDL_fabsf(min_z - o_max_z) < eps ||
+            SDL_fabsf(max_z - o_min_z) < eps)
+            coplanar = true;
+
+        if (coplanar)
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_RENDER,
+                        "SDL3D Z-FIGHTING WARNING: Two draw calls have overlapping coplanar geometry!\n"
+                        "  Entry A: AABB (%.2f,%.2f,%.2f)-(%.2f,%.2f,%.2f)\n"
+                        "  Entry B: AABB (%.2f,%.2f,%.2f)-(%.2f,%.2f,%.2f)\n"
+                        "  Fix: offset one surface by at least 0.05 units to prevent z-fighting.",
+                        min_x, min_y, min_z, max_x, max_y, max_z, o_min_x, o_min_y, o_min_z, o_max_x, o_max_y, o_max_z);
+        }
+    }
+}
+
 static float *copy_floats(const float *src, size_t count)
 {
     if (!src || count == 0)
@@ -1970,6 +2070,10 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     e->metallic = params->metallic;
     e->roughness = params->roughness;
     SDL_memcpy(e->emissive, params->emissive, 3 * sizeof(float));
+
+#ifndef NDEBUG
+    check_z_fighting(ctx, e);
+#endif
 
     return true;
 }
