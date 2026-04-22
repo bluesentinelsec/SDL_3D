@@ -431,11 +431,13 @@ int main(int argc, char *argv[])
         sdl3d_set_backface_culling_enabled(ctx, true);
         sdl3d_begin_mode_3d(ctx, cam);
 
-        /* Level geometry — winding correct for interior viewing */
+        /* Level geometry — disable culling to show all faces */
+        sdl3d_set_backface_culling_enabled(ctx, false);
         if (has_level)
         {
             sdl3d_draw_model(ctx, &level_model, sdl3d_vec3_make(0, 0, 0), 1.0f, (sdl3d_color){255, 255, 255, 255});
         }
+        sdl3d_set_backface_culling_enabled(ctx, true);
 
         /* Nukage glow emissive */
         sdl3d_set_emissive(ctx, 0.0f, 2.0f + sinf(game_time * 2.0f) * 0.5f, 0.0f);
