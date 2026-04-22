@@ -10,3 +10,4 @@ with source URL, author, and license information.
 | Directory | Description | License |
 |-----------|-------------|---------|
 | `simple_robot/` | Multi-mesh robot with node hierarchy | CC-BY 4.0 |
+| `shiba/` | Textured Shiba dog (4.3k tris) | CC-BY 4.0 |
