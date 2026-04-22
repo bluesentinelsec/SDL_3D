@@ -58,7 +58,7 @@ add_executable(sdl3d_doom_tribute doom_tribute.c)
 
 target_link_libraries(sdl3d_doom_tribute PRIVATE SDL3D::sdl3d)
 target_compile_features(sdl3d_doom_tribute PRIVATE c_std_17)
-target_compile_definitions(sdl3d_doom_tribute PRIVATE SDL3D_DEMO_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
+target_compile_definitions(sdl3d_doom_tribute PRIVATE SDL3D_DEMO_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets" SDL3D_MODELS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../models")
 
 if(NOT WIN32)
     target_link_libraries(sdl3d_doom_tribute PRIVATE m)
