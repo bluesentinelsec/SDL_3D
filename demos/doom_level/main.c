@@ -58,6 +58,7 @@ int main(int argc, char *argv[])
     sdl3d_set_bloom_enabled(ctx, false);
     sdl3d_set_ssao_enabled(ctx, false);
     sdl3d_set_point_shadows_enabled(ctx, false);
+    sdl3d_set_backface_culling_enabled(ctx, false);
 
     /* ---- Material palette ---- */
     sdl3d_level_material mats[] = {
@@ -96,12 +97,27 @@ int main(int argc, char *argv[])
         {{{20, 26}, {28, 26}, {28, 32}, {20, 32}}, 4, 0.0f, 3.0f, 5, 1, 4},
     };
 
-    sdl3d_level level;
-    if (!sdl3d_build_level(sectors, 6, mats, 6, &level))
+    sdl3d_level_light lights[] = {
+        {{5, 3.5f, 4}, {1.0f, 0.85f, 0.6f}, 5.0f, 12.0f},  /* Start room — warm */
+        {{5, 3.0f, 12}, {1.0f, 0.7f, 0.3f}, 3.0f, 8.0f},   /* Corridor — amber */
+        {{4, 1.0f, 21}, {0.2f, 1.0f, 0.2f}, 4.0f, 14.0f},  /* Nukage — green */
+        {{22, 7.0f, 20}, {0.4f, 0.5f, 0.8f}, 6.0f, 18.0f}, /* Outdoor — moonlight */
+        {{24, 2.5f, 29}, {1.0f, 0.15f, 0.1f}, 4.0f, 8.0f}, /* Exit — red warning */
+    };
+
+    /* Build two versions: baked lighting and raw materials. */
+    sdl3d_level level_lit, level_unlit;
+    if (!sdl3d_build_level(sectors, 6, mats, 6, lights, 5, &level_lit))
     {
         SDL_Log("Level build failed: %s", SDL_GetError());
         return 1;
     }
+    if (!sdl3d_build_level(sectors, 6, mats, 6, NULL, 0, &level_unlit))
+    {
+        SDL_Log("Level build failed: %s", SDL_GetError());
+        return 1;
+    }
+    bool use_baked = true;
 
     /* ---- Lighting ---- */
     /* Start simple: unlit to verify geometry, then add lighting. */
@@ -123,6 +139,8 @@ int main(int argc, char *argv[])
                 running = false;
             if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_ESCAPE)
                 running = false;
+            if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_L)
+                use_baked = !use_baked;
             if (ev.type == SDL_EVENT_MOUSE_MOTION && mouse_init)
             {
                 yaw += ev.motion.xrel * MOUSE_SENS;
@@ -177,13 +195,15 @@ int main(int argc, char *argv[])
         sdl3d_clear_render_context(ctx, (sdl3d_color){100, 150, 200, 255});
         sdl3d_begin_mode_3d(ctx, cam);
 
-        sdl3d_draw_model(ctx, &level.model, sdl3d_vec3_make(0, 0, 0), 1.0f, (sdl3d_color){255, 255, 255, 255});
+        sdl3d_draw_model(ctx, use_baked ? &level_lit.model : &level_unlit.model, sdl3d_vec3_make(0, 0, 0), 1.0f,
+                         (sdl3d_color){255, 255, 255, 255});
 
         sdl3d_end_mode_3d(ctx);
         sdl3d_present_render_context(ctx);
     }
 
-    sdl3d_free_level(&level);
+    sdl3d_free_level(&level_lit);
+    sdl3d_free_level(&level_unlit);
     sdl3d_destroy_render_context(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();

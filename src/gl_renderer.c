@@ -202,6 +202,8 @@ struct sdl3d_gl_context
     int draw_capacity;
 
     GLuint white_texture;
+    GLuint black_texture;
+    GLuint black_cubemap;
 
     sdl3d_gl_tex_entry *tex_cache;
 
@@ -1607,7 +1609,17 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
             }
             else
             {
+                gl->ActiveTexture(GL_TEXTURE0 + 4);
+                gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->black_cubemap);
+                gl->Uniform1i(ctx->pbr_irradiance_map_loc, 4);
+                gl->ActiveTexture(GL_TEXTURE0 + 5);
+                gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->black_cubemap);
+                gl->Uniform1i(ctx->pbr_prefilter_map_loc, 5);
+                gl->ActiveTexture(GL_TEXTURE0 + 6);
+                gl->BindTexture(GL_TEXTURE_2D, ctx->black_texture);
+                gl->Uniform1i(ctx->pbr_brdf_lut_loc, 6);
                 gl->Uniform1i(ctx->pbr_ibl_enabled_loc, 0);
+                gl->ActiveTexture(GL_TEXTURE0);
             }
 
             gl->BindVertexArray(ctx->lit_vao);
@@ -2282,6 +2294,31 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
         gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     }
 
+    /* Fallback textures keep inactive IBL samplers on distinct, valid units.
+     * Without these bindings, some drivers treat the mixed sampler types as
+     * undefined even when uIBLEnabled is 0. */
+    {
+        Uint8 black[4] = {0, 0, 0, 255};
+        gl->GenTextures(1, &ctx->black_texture);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->black_texture);
+        gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, black);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        gl->GenTextures(1, &ctx->black_cubemap);
+        gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->black_cubemap);
+        for (int face = 0; face < 6; face++)
+        {
+            gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)face, 0, GL_RGBA, 1, 1, 0, GL_RGBA,
+                           GL_UNSIGNED_BYTE, black);
+        }
+        gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    }
+
     /* ---- Main FBO ---- */
     if (!create_fbo(ctx, width, height))
     {
@@ -2456,6 +2493,10 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
 
     if (ctx->white_texture)
         gl->DeleteTextures(1, &ctx->white_texture);
+    if (ctx->black_texture)
+        gl->DeleteTextures(1, &ctx->black_texture);
+    if (ctx->black_cubemap)
+        gl->DeleteTextures(1, &ctx->black_cubemap);
 
     if (ctx->fbo)
         gl->DeleteFramebuffers(1, &ctx->fbo);

@@ -184,7 +184,7 @@ static bool add_floor_ceil(macc *a, const sdl3d_sector *s, float y, float ny, co
 /* ------------------------------------------------------------------ */
 
 bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3d_level_material *materials,
-                       int material_count, sdl3d_level *out)
+                       int material_count, const sdl3d_level_light *lights, int light_count, sdl3d_level *out)
 {
     if (!sectors || sector_count <= 0 || !out)
         return SDL_InvalidParamError("sectors");
@@ -337,6 +337,68 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
     }
 
     SDL_free(edges);
+
+    /* ---- Bake vertex lighting ---- */
+    if (lights && light_count > 0)
+    {
+        for (int v = 0; v < acc.vc; v++)
+        {
+            float px = acc.pos[v * 3];
+            float py = acc.pos[v * 3 + 1];
+            float pz = acc.pos[v * 3 + 2];
+            float nx = acc.nrm[v * 3];
+            float ny = acc.nrm[v * 3 + 1];
+            float nz = acc.nrm[v * 3 + 2];
+
+            /* Base color from material (already in vertex color). */
+            float base_r = acc.col[v * 4];
+            float base_g = acc.col[v * 4 + 1];
+            float base_b = acc.col[v * 4 + 2];
+
+            /* Accumulate light contribution. */
+            float lit_r = 0.2f * base_r; /* ambient */
+            float lit_g = 0.2f * base_g;
+            float lit_b = 0.2f * base_b;
+
+            for (int li = 0; li < light_count; li++)
+            {
+                float lx = lights[li].position[0] - px;
+                float ly = lights[li].position[1] - py;
+                float lz = lights[li].position[2] - pz;
+                float dist = sqrtf(lx * lx + ly * ly + lz * lz);
+                if (dist < 0.0001f || dist > lights[li].range)
+                    continue;
+
+                /* Normalize light direction. */
+                float inv = 1.0f / dist;
+                lx *= inv;
+                ly *= inv;
+                lz *= inv;
+
+                /* N dot L */
+                float ndotl = nx * lx + ny * ly + nz * lz;
+                if (ndotl <= 0.0f)
+                    continue;
+
+                /* Attenuation: smooth falloff. */
+                float r = dist / lights[li].range;
+                float atten = (1.0f - r * r);
+                if (atten < 0.0f)
+                    atten = 0.0f;
+                atten *= atten;
+
+                float scale = lights[li].intensity * atten * ndotl;
+                lit_r += base_r * lights[li].color[0] * scale;
+                lit_g += base_g * lights[li].color[1] * scale;
+                lit_b += base_b * lights[li].color[2] * scale;
+            }
+
+            /* Clamp and store. */
+            acc.col[v * 4] = lit_r > 1.0f ? 1.0f : lit_r;
+            acc.col[v * 4 + 1] = lit_g > 1.0f ? 1.0f : lit_g;
+            acc.col[v * 4 + 2] = lit_b > 1.0f ? 1.0f : lit_b;
+        }
+    }
 
     /* Package into sdl3d_model. */
     sdl3d_mesh *mesh = SDL_calloc(1, sizeof(sdl3d_mesh));

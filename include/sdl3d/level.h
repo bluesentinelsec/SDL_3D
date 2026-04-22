@@ -54,13 +54,25 @@ extern "C"
         sdl3d_model model;
     } sdl3d_level;
 
+    typedef struct sdl3d_level_light
+    {
+        float position[3]; /* world XYZ */
+        float color[3];    /* RGB, 0-1 */
+        float intensity;
+        float range;
+    } sdl3d_level_light;
+
     /*
      * Build a watertight mesh from sector definitions.
      * Shared edges between sectors become doorways (no wall generated).
+     * If lights are provided, vertex lighting is baked into vertex colors
+     * (render in UNLIT mode — no real-time lighting needed).
+     * Pass NULL/0 for lights to use raw material colors.
      * Returns false with SDL_GetError on failure.
      */
     bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count,
                            const sdl3d_level_material *materials, int material_count,
+                           const sdl3d_level_light *lights, int light_count,
                            sdl3d_level *out);
 
     void sdl3d_free_level(sdl3d_level *level);
