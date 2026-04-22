@@ -244,7 +244,7 @@ int main(int argc, char *argv[])
     SDL_Window *win = NULL;
     SDL_Renderer *ren = NULL;
     sdl3d_render_context *ctx = NULL;
-    player_t player = {1, 0.5f, 2, 3.14159f, 0};
+    player_t player = {0, 1.5f, 5, 3.14159f, 0};
     sdl3d_fog fog;
     bool running = true;
     sdl3d_model level_model;
@@ -277,7 +277,7 @@ int main(int argc, char *argv[])
     setup_lighting(ctx);
 
     /* Load level geometry as a glTF model — watertight, no seams. */
-    if (sdl3d_load_model_from_file(SDL3D_DEMO_ASSETS_DIR "/bathroom_interior/scene.gltf", &level_model))
+    if (sdl3d_load_model_from_file(SDL3D_DEMO_ASSETS_DIR "/simple_robot/scene.gltf", &level_model))
     {
         has_level = true;
         fprintf(stderr, "Loaded doom_level.gltf (%d meshes)\n", level_model.mesh_count);
@@ -442,7 +442,7 @@ int main(int argc, char *argv[])
         /* Loaded model only */
         if (has_level)
         {
-            sdl3d_draw_model(ctx, &level_model, sdl3d_vec3_make(0, 0, 0), 0.1f, (sdl3d_color){255, 255, 255, 255});
+            sdl3d_draw_model(ctx, &level_model, sdl3d_vec3_make(0, 0, 0), 1.0f, (sdl3d_color){255, 255, 255, 255});
         }
 
         sdl3d_end_mode_3d(ctx);
