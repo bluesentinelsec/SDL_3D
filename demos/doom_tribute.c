@@ -428,11 +428,10 @@ int main(int argc, char *argv[])
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
 
         sdl3d_clear_render_context(ctx, sky);
-        sdl3d_set_backface_culling_enabled(ctx, true);
+        sdl3d_set_backface_culling_enabled(ctx, false);
         sdl3d_begin_mode_3d(ctx, cam);
 
-        sdl3d_draw_skybox_gradient(ctx, (sdl3d_color){255, 255, 0, 255}, (sdl3d_color){255, 255, 0, 255});
-        /* Level geometry from glTF — watertight, no seams */
+        /* Level geometry — culling disabled for interior-facing glTF mesh */
         if (has_level)
         {
             sdl3d_draw_model(ctx, &level_model, sdl3d_vec3_make(0, 0, 0), 1.0f, (sdl3d_color){255, 255, 255, 255});
