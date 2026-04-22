@@ -80,6 +80,20 @@ extern "C"
     struct sdl3d_skeleton;
     struct sdl3d_animation_clip;
 
+    /**
+     * A node in the model's scene graph. Each node carries a local TRS
+     * transform and optionally references one mesh by index.
+     */
+    typedef struct sdl3d_model_node
+    {
+        float translation[3];
+        float rotation[4]; /* quaternion (x, y, z, w) */
+        float scale[3];
+        int mesh_index; /* -1 when no mesh attached */
+        int *children;
+        int child_count;
+    } sdl3d_model_node;
+
     typedef struct sdl3d_model
     {
         sdl3d_mesh *meshes;
@@ -89,6 +103,11 @@ extern "C"
         int material_count;
 
         char *source_path;
+
+        sdl3d_model_node *nodes;
+        int node_count;
+        int *root_nodes; /* indices into nodes[] for scene roots */
+        int root_count;
 
         struct sdl3d_skeleton *skeleton;
         struct sdl3d_animation_clip *animations;

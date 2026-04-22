@@ -69,6 +69,13 @@ void sdl3d_free_model(sdl3d_model *model)
 
     SDL_free(model->source_path);
 
+    for (int i = 0; i < model->node_count; ++i)
+    {
+        SDL_free(model->nodes[i].children);
+    }
+    SDL_free(model->nodes);
+    SDL_free(model->root_nodes);
+
     SDL_zerop(model);
 }
 
