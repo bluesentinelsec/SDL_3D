@@ -50,35 +50,37 @@ static void draw_doom_scene(sdl3d_render_context *ctx)
     sdl3d_color nukage = {30, 120, 30, 200};
     sdl3d_color metal = {70, 75, 80, 255};
 
-    /* ROOM 1: spawn (x:-5..5, z:-4..4) */
+    /* ROOM 1: spawn (x:-5..5, z:-4..4)
+     * Walls: y=0..3.9, Ceiling: y=3.9..4.1 — no overlap. */
     sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, 0, 0), (sdl3d_vec2){10, 8}, dark_floor);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 4, 0), sdl3d_vec3_make(10, 0.2f, 8), dark_ceil);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(-5, 2, 0), sdl3d_vec3_make(0.3f, 4, 8), wall_grey);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(5, 2, 0), sdl3d_vec3_make(0.3f, 4, 8), wall_grey);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 2, -4), sdl3d_vec3_make(10, 4, 0.3f), wall_grey);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(-3.5f, 2, 4.2f), sdl3d_vec3_make(3, 4, 0.3f), wall_grey);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(3.5f, 2, 4.2f), sdl3d_vec3_make(3, 4, 0.3f), wall_grey);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 4.0f, 0), sdl3d_vec3_make(10.6f, 0.2f, 8.6f), dark_ceil);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(-5, 1.95f, 0), sdl3d_vec3_make(0.3f, 3.9f, 8), wall_grey);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(5, 1.95f, 0), sdl3d_vec3_make(0.3f, 3.9f, 8), wall_grey);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 1.95f, -4), sdl3d_vec3_make(10, 3.9f, 0.3f), wall_grey);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(-3.5f, 1.95f, 4.2f), sdl3d_vec3_make(3, 3.9f, 0.3f), wall_grey);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(3.5f, 1.95f, 4.2f), sdl3d_vec3_make(3, 3.9f, 0.3f), wall_grey);
     sdl3d_draw_cylinder(ctx, sdl3d_vec3_make(-3, 2, -2), 0.4f, 0.4f, 4, 8, wall_brown);
     sdl3d_draw_cylinder(ctx, sdl3d_vec3_make(3, 2, -2), 0.4f, 0.4f, 4, 8, wall_brown);
 
-    /* CORRIDOR 1 (x:-2..2, z:4.2..12) — walls full height, ceiling fills top */
+    /* CORRIDOR 1 (x:-2..2, z:4.2..12)
+     * Walls: y=0..3.4, Ceiling: y=3.4..3.6 — no overlap. */
     sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, 0, 8.1f), (sdl3d_vec2){4, 7.8f}, dark_floor);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 3.5f, 8.1f), sdl3d_vec3_make(4, 0.2f, 7.8f), dark_ceil);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(-2, 2, 8.1f), sdl3d_vec3_make(0.3f, 4, 7.8f), wall_dark);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(2, 2, 8.1f), sdl3d_vec3_make(0.3f, 4, 7.8f), wall_dark);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 3.5f, 8.1f), sdl3d_vec3_make(4.6f, 0.2f, 7.8f), dark_ceil);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(-2, 1.7f, 8.1f), sdl3d_vec3_make(0.3f, 3.4f, 7.8f), wall_dark);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(2, 1.7f, 8.1f), sdl3d_vec3_make(0.3f, 3.4f, 7.8f), wall_dark);
     /* Fill above corridor at room 2 end */
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 4.0f, 12), sdl3d_vec3_make(4, 1.0f, 0.3f), wall_brown);
 
     /* ROOM 2: nukage (x:-6..6, z:12..22) */
     sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, -0.5f, 17), (sdl3d_vec2){12, 10}, dark_floor);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 4.5f, 17), sdl3d_vec3_make(12, 0.2f, 10), dark_ceil);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(-6, 2, 17), sdl3d_vec3_make(0.3f, 5, 10), wall_brown);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(6, 2, 13.5f), sdl3d_vec3_make(0.3f, 5, 3), wall_brown);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(6, 2, 20.5f), sdl3d_vec3_make(0.3f, 5, 3), wall_brown);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(6, 4, 17), sdl3d_vec3_make(0.3f, 1, 4), wall_brown);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(-4, 2, 12), sdl3d_vec3_make(4, 5, 0.3f), wall_brown);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(4, 2, 12), sdl3d_vec3_make(4, 5, 0.3f), wall_brown);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 2, 22), sdl3d_vec3_make(12, 5, 0.3f), wall_brown);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 4.5f, 17), sdl3d_vec3_make(12.6f, 0.2f, 10.6f), dark_ceil);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(-6, 1.9f, 17), sdl3d_vec3_make(0.3f, 4.8f, 10), wall_brown);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(6, 1.9f, 13.5f), sdl3d_vec3_make(0.3f, 4.8f, 3), wall_brown);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(6, 1.9f, 20.5f), sdl3d_vec3_make(0.3f, 4.8f, 3), wall_brown);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(6, 3.9f, 17), sdl3d_vec3_make(0.3f, 1, 4), wall_brown);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(-4, 1.9f, 12), sdl3d_vec3_make(4, 4.8f, 0.3f), wall_brown);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(4, 1.9f, 12), sdl3d_vec3_make(4, 4.8f, 0.3f), wall_brown);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 1.9f, 22), sdl3d_vec3_make(12, 4.8f, 0.3f), wall_brown);
     sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, -0.3f, 17), (sdl3d_vec2){6, 4}, nukage);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(-4, 0.1f, 17), sdl3d_vec3_make(1.5f, 0.5f, 8), metal);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(4, 0.1f, 17), sdl3d_vec3_make(1.5f, 0.5f, 8), metal);
@@ -111,12 +113,12 @@ static void draw_doom_scene(sdl3d_render_context *ctx)
 
     /* ROOM 3: exit (x:14..22, z:22..28, enclosed) */
     sdl3d_draw_plane(ctx, sdl3d_vec3_make(18, 0, 25), (sdl3d_vec2){8, 6}, dark_floor);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(18, 3, 25), sdl3d_vec3_make(8, 0.2f, 6), dark_ceil);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(14, 1.5f, 25), sdl3d_vec3_make(0.3f, 3, 6), wall_grey);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(22, 1.5f, 25), sdl3d_vec3_make(0.3f, 3, 6), wall_grey);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(18, 1.5f, 28), sdl3d_vec3_make(8, 3, 0.3f), wall_grey);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(15, 1.5f, 22.2f), sdl3d_vec3_make(2, 3, 0.3f), wall_grey);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(21, 1.5f, 22.2f), sdl3d_vec3_make(2, 3, 0.3f), wall_grey);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(18, 3, 25), sdl3d_vec3_make(8.6f, 0.2f, 6.6f), dark_ceil);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(14, 1.45f, 25), sdl3d_vec3_make(0.3f, 2.9f, 6), wall_grey);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(22, 1.45f, 25), sdl3d_vec3_make(0.3f, 2.9f, 6), wall_grey);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(18, 1.45f, 28), sdl3d_vec3_make(8, 2.9f, 0.3f), wall_grey);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(15, 1.45f, 22.2f), sdl3d_vec3_make(2, 2.9f, 0.3f), wall_grey);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(21, 1.45f, 22.2f), sdl3d_vec3_make(2, 2.9f, 0.3f), wall_grey);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(18, 2.8f, 22.2f), sdl3d_vec3_make(4, 0.4f, 0.3f), wall_grey);
 }
 
