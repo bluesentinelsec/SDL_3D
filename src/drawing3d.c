@@ -1291,7 +1291,15 @@ static bool sdl3d_draw_model_node(sdl3d_render_context *context, const sdl3d_mod
     }
 
     /* Apply this node's local TRS transform. */
-    sdl3d_mat4 local = sdl3d_mat4_from_trs_node(node->translation, node->rotation, node->scale);
+    sdl3d_mat4 local;
+    if (node->has_matrix)
+    {
+        SDL_memcpy(local.m, node->local_matrix, sizeof(local.m));
+    }
+    else
+    {
+        local = sdl3d_mat4_from_trs_node(node->translation, node->rotation, node->scale);
+    }
     context->model_stack[context->model_stack_depth - 1] =
         sdl3d_mat4_multiply(context->model_stack[context->model_stack_depth - 1], local);
     sdl3d_update_current_model_matrices(context);

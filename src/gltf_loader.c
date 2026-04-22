@@ -677,26 +677,8 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
 
                     if (src->has_matrix)
                     {
-                        /* cgltf decomposes matrix into TRS fields for us
-                         * when has_matrix is set, but the has_translation/
-                         * rotation/scale flags may not be set. Read the
-                         * local transform via cgltf helper instead. */
-                        float local[16];
-                        cgltf_node_transform_local(src, local);
-                        /* Extract translation from column 3. */
-                        dst->translation[0] = local[12];
-                        dst->translation[1] = local[13];
-                        dst->translation[2] = local[14];
-                        /* For scale + rotation, approximate: extract scale
-                         * as column lengths, then we skip rotation for
-                         * matrix nodes (rare in practice). */
-                        float sx = SDL_sqrtf(local[0] * local[0] + local[1] * local[1] + local[2] * local[2]);
-                        float sy = SDL_sqrtf(local[4] * local[4] + local[5] * local[5] + local[6] * local[6]);
-                        float sz = SDL_sqrtf(local[8] * local[8] + local[9] * local[9] + local[10] * local[10]);
-                        dst->scale[0] = sx;
-                        dst->scale[1] = sy;
-                        dst->scale[2] = sz;
-                        /* TODO: extract rotation quaternion from the 3x3 */
+                        dst->has_matrix = true;
+                        cgltf_node_transform_local(src, dst->local_matrix);
                     }
                     if (src->has_translation)
                     {

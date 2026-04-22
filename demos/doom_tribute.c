@@ -244,7 +244,7 @@ int main(int argc, char *argv[])
     SDL_Window *win = NULL;
     SDL_Renderer *ren = NULL;
     sdl3d_render_context *ctx = NULL;
-    player_t player = {0, 1.5f, 5, 3.14159f, 0};
+    player_t player = {0, 1.5f, 5, 0, 0};
     sdl3d_fog fog;
     bool running = true;
     sdl3d_model level_model;

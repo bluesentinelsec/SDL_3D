@@ -89,6 +89,8 @@ extern "C"
         float translation[3];
         float rotation[4]; /* quaternion (x, y, z, w) */
         float scale[3];
+        float local_matrix[16]; /* column-major 4x4; used when has_matrix is true */
+        bool has_matrix;
         int mesh_index; /* -1 when no mesh attached */
         int *children;
         int child_count;
