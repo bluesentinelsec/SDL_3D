@@ -277,7 +277,7 @@ int main(int argc, char *argv[])
     setup_lighting(ctx);
 
     /* Load level geometry as a glTF model — watertight, no seams. */
-    if (sdl3d_load_model_from_file(SDL3D_MODELS_DIR "/simple_robot/simple_robot.glb", &level_model))
+    if (sdl3d_load_model_from_file(SDL3D_MEDIA_DIR "/simple_robot/simple_robot.glb", &level_model))
     {
         has_level = true;
         fprintf(stderr, "Loaded doom_level.gltf (%d meshes)\n", level_model.mesh_count);
