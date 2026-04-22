@@ -2078,7 +2078,11 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     e->roughness = params->roughness;
     SDL_memcpy(e->emissive, params->emissive, 3 * sizeof(float));
 
-    check_z_fighting(ctx, e);
+    /* Z-fighting detection: opt-in via SDL3D_CHECK_ZFIGHTING=1 env var. */
+    if (SDL_getenv("SDL3D_CHECK_ZFIGHTING") != NULL)
+    {
+        check_z_fighting(ctx, e);
+    }
 
     return true;
 }
