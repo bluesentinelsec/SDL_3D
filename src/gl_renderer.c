@@ -1041,10 +1041,16 @@ static GLuint tex_cache_upload(sdl3d_gl_context *ctx, const sdl3d_texture2d *tex
     gl->GenTextures(1, &id);
     gl->BindTexture(GL_TEXTURE_2D, id);
     gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex->width, tex->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex->pixels);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    gl->GenerateMipmap(GL_TEXTURE_2D);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, 0x2703 /* GL_LINEAR_MIPMAP_LINEAR */);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    /* Anisotropic filtering if available. */
+    {
+        float aniso = 16.0f;
+        gl->TexParameterfv(GL_TEXTURE_2D, 0x84FE /* GL_TEXTURE_MAX_ANISOTROPY_EXT */, &aniso);
+    }
 
     sdl3d_gl_tex_entry *entry = SDL_calloc(1, sizeof(*entry));
     entry->key = tex;

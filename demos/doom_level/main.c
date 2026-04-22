@@ -62,12 +62,16 @@ int main(int argc, char *argv[])
 
     /* ---- Material palette ---- */
     sdl3d_level_material mats[] = {
-        {{0.25f, 0.25f, 0.28f, 1.0f}, 0.0f, 0.9f}, /* 0: dark stone floor */
-        {{0.35f, 0.33f, 0.30f, 1.0f}, 0.0f, 0.8f}, /* 1: concrete ceiling */
-        {{0.40f, 0.30f, 0.25f, 1.0f}, 0.0f, 0.7f}, /* 2: brick walls */
-        {{0.15f, 0.30f, 0.15f, 1.0f}, 0.0f, 0.9f}, /* 3: nukage floor (green) */
-        {{0.50f, 0.45f, 0.40f, 1.0f}, 0.0f, 0.6f}, /* 4: light brown walls */
-        {{0.20f, 0.18f, 0.22f, 1.0f}, 0.0f, 0.9f}, /* 5: dark floor */
+        {{1.0f, 1.0f, 1.0f, 1.0f},
+         0.0f,
+         0.9f,
+         SDL3D_MEDIA_DIR "/textures/rock_floor.jpg",
+         4.0f},                                                /* 0: textured floor */
+        {{0.35f, 0.33f, 0.30f, 1.0f}, 0.0f, 0.8f, NULL, 4.0f}, /* 1: concrete ceiling */
+        {{0.40f, 0.30f, 0.25f, 1.0f}, 0.0f, 0.7f, NULL, 4.0f}, /* 2: brick walls */
+        {{0.15f, 0.30f, 0.15f, 1.0f}, 0.0f, 0.9f, NULL, 4.0f}, /* 3: nukage floor (green) */
+        {{0.50f, 0.45f, 0.40f, 1.0f}, 0.0f, 0.6f, NULL, 4.0f}, /* 4: light brown walls */
+        {{0.20f, 0.18f, 0.22f, 1.0f}, 0.0f, 0.9f, NULL, 4.0f}, /* 5: dark floor */
     };
 
     /* ---- Sector definitions (E1M1-inspired) ---- */
@@ -160,19 +164,22 @@ int main(int argc, char *argv[])
 
         float fx = sinf(yaw) * cosf(pitch);
         float fz = -cosf(yaw) * cosf(pitch);
+        /* Movement uses yaw only — speed doesn't change with pitch. */
+        float mx = sinf(yaw);
+        float mz = -cosf(yaw);
         float rx = cosf(yaw);
         float rz = sinf(yaw);
 
         const Uint8 *keys = (const Uint8 *)SDL_GetKeyboardState(NULL);
         if (keys[SDL_SCANCODE_W])
         {
-            px += fx * MOVE_SPEED * dt;
-            pz += fz * MOVE_SPEED * dt;
+            px += mx * MOVE_SPEED * dt;
+            pz += mz * MOVE_SPEED * dt;
         }
         if (keys[SDL_SCANCODE_S])
         {
-            px -= fx * MOVE_SPEED * dt;
-            pz -= fz * MOVE_SPEED * dt;
+            px -= mx * MOVE_SPEED * dt;
+            pz -= mz * MOVE_SPEED * dt;
         }
         if (keys[SDL_SCANCODE_A])
         {

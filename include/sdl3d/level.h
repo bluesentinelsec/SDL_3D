@@ -33,9 +33,11 @@ extern "C"
 
     typedef struct sdl3d_level_material
     {
-        float albedo[4];   /* RGBA; default {1,1,1,1} */
-        float metallic;    /* [0,1]; default 0 */
-        float roughness;   /* [0,1]; default 1 */
+        float albedo[4];       /* RGBA; default {1,1,1,1} */
+        float metallic;        /* [0,1]; default 0 */
+        float roughness;       /* [0,1]; default 1 */
+        const char *texture;   /* path to diffuse texture, or NULL */
+        float tex_scale;       /* UV scale (units per repeat); 0 = default (4) */
     } sdl3d_level_material;
 
     typedef struct sdl3d_sector

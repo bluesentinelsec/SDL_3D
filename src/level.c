@@ -55,6 +55,7 @@ typedef struct
     float *pos;
     float *nrm;
     float *col;
+    float *uvs;
     unsigned int *idx;
     int vc, vc_cap;
     int ic, ic_cap;
@@ -70,11 +71,13 @@ static bool macc_grow_v(macc *a, int n)
     float *p = SDL_realloc(a->pos, (size_t)c * 3 * sizeof(float));
     float *nr = SDL_realloc(a->nrm, (size_t)c * 3 * sizeof(float));
     float *co = SDL_realloc(a->col, (size_t)c * 4 * sizeof(float));
-    if (!p || !nr || !co)
+    float *uv = SDL_realloc(a->uvs, (size_t)c * 2 * sizeof(float));
+    if (!p || !nr || !co || !uv)
         return false;
     a->pos = p;
     a->nrm = nr;
     a->col = co;
+    a->uvs = uv;
     a->vc_cap = c;
     return true;
 }
@@ -94,7 +97,8 @@ static bool macc_grow_i(macc *a, int n)
     return true;
 }
 
-static int macc_vert(macc *a, float x, float y, float z, float nx, float ny, float nz, const float *rgba)
+static int macc_vert(macc *a, float x, float y, float z, float nx, float ny, float nz, const float *rgba, float u,
+                     float v)
 {
     if (!macc_grow_v(a, 1))
         return -1;
@@ -109,6 +113,8 @@ static int macc_vert(macc *a, float x, float y, float z, float nx, float ny, flo
     a->col[i * 4 + 1] = rgba[1];
     a->col[i * 4 + 2] = rgba[2];
     a->col[i * 4 + 3] = rgba[3];
+    a->uvs[i * 2] = u;
+    a->uvs[i * 2 + 1] = v;
     return i;
 }
 
@@ -127,6 +133,7 @@ static void macc_free(macc *a)
     SDL_free(a->pos);
     SDL_free(a->nrm);
     SDL_free(a->col);
+    SDL_free(a->uvs);
     SDL_free(a->idx);
 }
 
@@ -134,7 +141,8 @@ static void macc_free(macc *a)
 /* Geometry helpers                                                     */
 /* ------------------------------------------------------------------ */
 
-static bool add_wall(macc *a, float x0, float z0, float x1, float z1, float bot, float top, const float *rgba)
+static bool add_wall(macc *a, float x0, float z0, float x1, float z1, float bot, float top, const float *rgba,
+                     float tex_scale)
 {
     if (top - bot < 0.001f)
         return true;
@@ -143,24 +151,29 @@ static bool add_wall(macc *a, float x0, float z0, float x1, float z1, float bot,
     if (len < 0.0001f)
         return true;
     float nx = dz / len, nz = -dx / len;
-    int v0 = macc_vert(a, x0, bot, z0, nx, 0, nz, rgba);
-    int v1 = macc_vert(a, x1, bot, z1, nx, 0, nz, rgba);
-    int v2 = macc_vert(a, x1, top, z1, nx, 0, nz, rgba);
-    int v3 = macc_vert(a, x0, top, z0, nx, 0, nz, rgba);
-    if (v0 < 0)
+    float s = tex_scale > 0 ? tex_scale : 4.0f;
+    float u0 = 0.0f, u1 = len / s;
+    float v0 = bot / s, v1 = top / s;
+    int v_0 = macc_vert(a, x0, bot, z0, nx, 0, nz, rgba, u0, v0);
+    int v_1 = macc_vert(a, x1, bot, z1, nx, 0, nz, rgba, u1, v0);
+    int v_2 = macc_vert(a, x1, top, z1, nx, 0, nz, rgba, u1, v1);
+    int v_3 = macc_vert(a, x0, top, z0, nx, 0, nz, rgba, u0, v1);
+    if (v_0 < 0)
         return false;
-    return macc_tri(a, v0, v1, v2) && macc_tri(a, v0, v2, v3);
+    return macc_tri(a, v_0, v_1, v_2) && macc_tri(a, v_0, v_2, v_3);
 }
 
-static bool add_floor_ceil(macc *a, const sdl3d_sector *s, float y, float ny, const float *rgba)
+static bool add_floor_ceil(macc *a, const sdl3d_sector *s, float y, float ny, const float *rgba, float tex_scale)
 {
     int n = s->num_points;
     if (n < 3)
         return true;
     int base = a->vc;
+    float sc = tex_scale > 0 ? tex_scale : 4.0f;
     for (int i = 0; i < n; i++)
     {
-        if (macc_vert(a, s->points[i][0], y, s->points[i][1], 0, ny, 0, rgba) < 0)
+        if (macc_vert(a, s->points[i][0], y, s->points[i][1], 0, ny, 0, rgba, s->points[i][0] / sc,
+                      s->points[i][1] / sc) < 0)
             return false;
     }
     for (int i = 1; i < n - 1; i++)
@@ -226,8 +239,9 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
     acc.pos = SDL_malloc((size_t)acc.vc_cap * 3 * sizeof(float));
     acc.nrm = SDL_malloc((size_t)acc.vc_cap * 3 * sizeof(float));
     acc.col = SDL_malloc((size_t)acc.vc_cap * 4 * sizeof(float));
+    acc.uvs = SDL_malloc((size_t)acc.vc_cap * 2 * sizeof(float));
     acc.idx = SDL_malloc((size_t)acc.ic_cap * sizeof(unsigned int));
-    if (!acc.pos || !acc.nrm || !acc.col || !acc.idx)
+    if (!acc.pos || !acc.nrm || !acc.col || !acc.uvs || !acc.idx)
     {
         macc_free(&acc);
         SDL_free(edges);
@@ -241,8 +255,8 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
         int ci = sec->ceil_material < material_count ? sec->ceil_material : 0;
         int wi = sec->wall_material < material_count ? sec->wall_material : 0;
 
-        add_floor_ceil(&acc, sec, sec->floor_y, 1.0f, materials[fi].albedo);
-        add_floor_ceil(&acc, sec, sec->ceil_y, -1.0f, materials[ci].albedo);
+        add_floor_ceil(&acc, sec, sec->floor_y, 1.0f, materials[fi].albedo, materials[fi].tex_scale);
+        add_floor_ceil(&acc, sec, sec->ceil_y, -1.0f, materials[ci].albedo, materials[ci].tex_scale);
 
         /* Process each edge: find overlaps with other sectors. */
         for (int e = 0; e < total_edges; e++)
@@ -288,7 +302,8 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
             if (novl == 0)
             {
                 /* No overlap: full wall. */
-                add_wall(&acc, ax, az, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo);
+                add_wall(&acc, ax, az, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo,
+                         materials[wi].tex_scale);
             }
             else
             {
@@ -310,7 +325,8 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                     {
                         float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
                         float wx1 = ax + (bx - ax) * overlaps[oi].t0, wz1 = az + (bz - az) * overlaps[oi].t0;
-                        add_wall(&acc, wx0, wz0, wx1, wz1, sec->floor_y, sec->ceil_y, materials[wi].albedo);
+                        add_wall(&acc, wx0, wz0, wx1, wz1, sec->floor_y, sec->ceil_y, materials[wi].albedo,
+                                 materials[wi].tex_scale);
                     }
 
                     /* Step walls in overlap (height differences). */
@@ -318,10 +334,11 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                     float ox1 = ax + (bx - ax) * overlaps[oi].t1, oz1 = az + (bz - az) * overlaps[oi].t1;
 
                     if (sec->floor_y < overlaps[oi].other_floor - 0.001f)
-                        add_wall(&acc, ox0, oz0, ox1, oz1, sec->floor_y, overlaps[oi].other_floor,
-                                 materials[wi].albedo);
+                        add_wall(&acc, ox0, oz0, ox1, oz1, sec->floor_y, overlaps[oi].other_floor, materials[wi].albedo,
+                                 materials[wi].tex_scale);
                     if (sec->ceil_y > overlaps[oi].other_ceil + 0.001f)
-                        add_wall(&acc, ox0, oz0, ox1, oz1, overlaps[oi].other_ceil, sec->ceil_y, materials[wi].albedo);
+                        add_wall(&acc, ox0, oz0, ox1, oz1, overlaps[oi].other_ceil, sec->ceil_y, materials[wi].albedo,
+                                 materials[wi].tex_scale);
 
                     cursor = overlaps[oi].t1;
                 }
@@ -330,7 +347,8 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                 if (cursor < 1.0f - 0.001f)
                 {
                     float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
-                    add_wall(&acc, wx0, wz0, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo);
+                    add_wall(&acc, wx0, wz0, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo,
+                             materials[wi].tex_scale);
                 }
             }
         }
@@ -400,13 +418,25 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
         }
     }
 
-    /* Package into sdl3d_model. */
-    sdl3d_mesh *mesh = SDL_calloc(1, sizeof(sdl3d_mesh));
-    sdl3d_material *mat = SDL_calloc(1, sizeof(sdl3d_material));
-    if (!mesh || !mat)
+    /* Package into sdl3d_model — one mesh per material. */
+    sdl3d_material *out_mats = SDL_calloc((size_t)material_count, sizeof(sdl3d_material));
+    if (!out_mats)
     {
-        SDL_free(mesh);
-        SDL_free(mat);
+        macc_free(&acc);
+        return SDL_OutOfMemory();
+    }
+
+    /* Build per-material index lists by scanning vertex material assignments.
+     * Since we build geometry in order (floor/ceil/wall per sector), we track
+     * which material each triangle belongs to via a parallel array. */
+
+    /* For simplicity, output one mesh with all geometry and one material
+     * that has the first textured material's texture. Per-surface texturing
+     * requires splitting into multiple meshes (future improvement). */
+    sdl3d_mesh *mesh = SDL_calloc(1, sizeof(sdl3d_mesh));
+    if (!mesh)
+    {
+        SDL_free(out_mats);
         macc_free(&acc);
         return SDL_OutOfMemory();
     }
@@ -416,15 +446,27 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
     mesh->positions = acc.pos;
     mesh->normals = acc.nrm;
     mesh->colors = acc.col;
+    mesh->uvs = acc.uvs;
     mesh->indices = acc.idx;
     mesh->material_index = 0;
 
-    mat->albedo[0] = mat->albedo[1] = mat->albedo[2] = mat->albedo[3] = 1.0f;
-    mat->roughness = 0.8f;
+    out_mats[0].albedo[0] = out_mats[0].albedo[1] = out_mats[0].albedo[2] = out_mats[0].albedo[3] = 1.0f;
+    out_mats[0].roughness = 0.8f;
+
+    /* Find first textured material and use it. */
+    for (int i = 0; i < material_count; i++)
+    {
+        if (materials[i].texture)
+        {
+            out_mats[0].albedo_map = SDL_strdup(materials[i].texture);
+            out->model.source_path = SDL_strdup(materials[i].texture);
+            break;
+        }
+    }
 
     out->model.meshes = mesh;
     out->model.mesh_count = 1;
-    out->model.materials = mat;
+    out->model.materials = out_mats;
     out->model.material_count = 1;
 
     SDL_Log("SDL3D level: %d verts, %d tris from %d sectors", acc.vc, acc.ic / 3, sector_count);
