@@ -315,7 +315,7 @@ int main(int argc, char *argv[])
         const bool *keys;
         float fx, fz, rx, rz;
         sdl3d_camera3d cam;
-        sdl3d_color sky = {0, 0, 0, 255};
+        sdl3d_color sky = {255, 255, 0, 255};
 
         last_time = now;
         if (dt > 0.1f)
@@ -361,6 +361,14 @@ int main(int argc, char *argv[])
                 default:
                     break;
                 }
+            }
+            else if (ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN && ev.button.button == SDL_BUTTON_LEFT)
+            {
+                float look_x = sinf(player.yaw) * cosf(player.pitch);
+                float look_y = sinf(player.pitch);
+                float look_z = -cosf(player.yaw) * cosf(player.pitch);
+                fprintf(stderr, "CLICK pos=(%.2f, %.2f, %.2f) look=(%.2f, %.2f, %.2f) yaw=%.2f pitch=%.2f\n", player.x,
+                        player.y, player.z, look_x, look_y, look_z, player.yaw, player.pitch);
             }
             else if (ev.type == SDL_EVENT_MOUSE_MOTION)
             {
@@ -423,7 +431,7 @@ int main(int argc, char *argv[])
         sdl3d_set_backface_culling_enabled(ctx, true);
         sdl3d_begin_mode_3d(ctx, cam);
 
-        sdl3d_draw_skybox_gradient(ctx, (sdl3d_color){0, 0, 0, 255}, (sdl3d_color){0, 0, 0, 255});
+        sdl3d_draw_skybox_gradient(ctx, (sdl3d_color){255, 255, 0, 255}, (sdl3d_color){255, 255, 0, 255});
         draw_doom_scene(ctx);
 
         /* Nukage glow emissive */
@@ -436,6 +444,17 @@ int main(int argc, char *argv[])
         sdl3d_set_emissive(ctx, 3.0f + 2.0f * sinf(game_time * 4.0f), 0.0f, 0.0f);
         sdl3d_draw_sphere(ctx, sdl3d_vec3_make(18, 2.8f, 25), 0.15f, 6, 6, (sdl3d_color){255, 30, 20, 255});
         sdl3d_set_emissive(ctx, 0.0f, 0.0f, 0.0f);
+
+        /* Crosshair: small bright cube 0.5 units in front of camera */
+        {
+            float cx = player.x + sinf(player.yaw) * cosf(player.pitch) * 0.5f;
+            float cy = player.y + sinf(player.pitch) * 0.5f;
+            float cz = player.z - cosf(player.yaw) * cosf(player.pitch) * 0.5f;
+            sdl3d_set_emissive(ctx, 10.0f, 10.0f, 10.0f);
+            sdl3d_draw_cube(ctx, sdl3d_vec3_make(cx, cy, cz), sdl3d_vec3_make(0.005f, 0.005f, 0.005f),
+                            (sdl3d_color){255, 255, 255, 255});
+            sdl3d_set_emissive(ctx, 0.0f, 0.0f, 0.0f);
+        }
 
         sdl3d_end_mode_3d(ctx);
         sdl3d_present_render_context(ctx);
