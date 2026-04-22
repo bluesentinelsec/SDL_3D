@@ -133,6 +133,17 @@ bool sdl3d_set_point_shadows_enabled(sdl3d_render_context *context, bool enabled
     return true;
 }
 
+bool sdl3d_set_zfight_callback(sdl3d_render_context *context, sdl3d_zfight_callback callback, void *userdata)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    context->zfight_callback = callback;
+    context->zfight_userdata = userdata;
+    return true;
+}
+
 int sdl3d_get_light_count(const sdl3d_render_context *context)
 {
     if (context == NULL)

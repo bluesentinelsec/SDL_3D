@@ -178,6 +178,13 @@ static bool create_backend(SDL_Window **out_win, SDL_Renderer **out_ren, sdl3d_r
     return true;
 }
 
+static void on_zfight(const char *message, void *userdata)
+{
+    (void)userdata;
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL3D", message, NULL);
+    SDL_assert_always(0 && "SDL3D: Z-fighting detected.");
+}
+
 static void setup_lighting(sdl3d_render_context *ctx)
 {
     sdl3d_set_ambient_light(ctx, 0.03f, 0.03f, 0.04f);
@@ -280,6 +287,7 @@ int main(int argc, char *argv[])
     }
 
     setup_lighting(ctx);
+    sdl3d_set_zfight_callback(ctx, on_zfight, NULL);
     sdl3d_set_ssao_enabled(ctx, false);
     sdl3d_set_point_shadows_enabled(ctx, false);
 

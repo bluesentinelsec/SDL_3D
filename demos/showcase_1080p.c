@@ -67,6 +67,13 @@ static void draw_lamp(sdl3d_render_context *ctx, float x, float z)
     sdl3d_draw_sphere(ctx, sdl3d_vec3_make(x, 3.7f, z), 0.22f, 8, 8, glow);
 }
 
+static void on_zfight(const char *message, void *userdata)
+{
+    (void)userdata;
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL3D", message, NULL);
+    SDL_assert_always(0 && "SDL3D: Z-fighting detected.");
+}
+
 static void draw_scene(sdl3d_render_context *ctx)
 {
     sdl3d_color ground = {65, 115, 45, 255};
@@ -263,6 +270,7 @@ int main(int argc, char *argv[])
     }
 
     /* --- Lighting (nighttime) --- */
+    sdl3d_set_zfight_callback(ctx, on_zfight, NULL);
     sdl3d_set_ambient_light(ctx, 0.04f, 0.04f, 0.06f);
 
     SDL_zerop(&sun);
