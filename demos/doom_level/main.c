@@ -14,7 +14,7 @@
 
 #define WINDOW_W 1280
 #define WINDOW_H 720
-#define MOVE_SPEED 4.0f
+#define MOVE_SPEED 12.0f
 #define MOUSE_SENS 0.002f
 
 int main(int argc, char *argv[])
@@ -54,6 +54,7 @@ int main(int argc, char *argv[])
     }
 
     SDL_SetWindowRelativeMouseMode(win, true);
+    SDL_Log("doom_level MOVE_SPEED=%.2f", MOVE_SPEED);
 
     sdl3d_set_bloom_enabled(ctx, false);
     sdl3d_set_ssao_enabled(ctx, false);
@@ -162,34 +163,48 @@ int main(int argc, char *argv[])
         float dt = (float)(now - last) / (float)SDL_GetPerformanceFrequency();
         last = now;
 
+        /* Look direction (for camera target). */
         float fx = sinf(yaw) * cosf(pitch);
         float fz = -cosf(yaw) * cosf(pitch);
-        /* Movement uses yaw only — speed doesn't change with pitch. */
-        float mx = sinf(yaw);
-        float mz = -cosf(yaw);
-        float rx = cosf(yaw);
-        float rz = sinf(yaw);
+
+        /* Doom-style movement: accumulate wish direction on XZ plane,
+         * normalize so diagonal isn't faster, constant speed regardless of pitch. */
+        float fwd_x = sinf(yaw);
+        float fwd_z = -cosf(yaw);
+        float right_x = cosf(yaw);
+        float right_z = sinf(yaw);
+        float wish_x = 0, wish_z = 0;
 
         const Uint8 *keys = (const Uint8 *)SDL_GetKeyboardState(NULL);
         if (keys[SDL_SCANCODE_W])
         {
-            px += mx * MOVE_SPEED * dt;
-            pz += mz * MOVE_SPEED * dt;
+            wish_x += fwd_x;
+            wish_z += fwd_z;
         }
         if (keys[SDL_SCANCODE_S])
         {
-            px -= mx * MOVE_SPEED * dt;
-            pz -= mz * MOVE_SPEED * dt;
+            wish_x -= fwd_x;
+            wish_z -= fwd_z;
         }
         if (keys[SDL_SCANCODE_A])
         {
-            px -= rx * MOVE_SPEED * dt;
-            pz -= rz * MOVE_SPEED * dt;
+            wish_x -= right_x;
+            wish_z -= right_z;
         }
         if (keys[SDL_SCANCODE_D])
         {
-            px += rx * MOVE_SPEED * dt;
-            pz += rz * MOVE_SPEED * dt;
+            wish_x += right_x;
+            wish_z += right_z;
+        }
+
+        /* Normalize wish direction. */
+        float wish_len = sqrtf(wish_x * wish_x + wish_z * wish_z);
+        if (wish_len > 0.001f)
+        {
+            wish_x /= wish_len;
+            wish_z /= wish_len;
+            px += wish_x * MOVE_SPEED * dt;
+            pz += wish_z * MOVE_SPEED * dt;
         }
 
         sdl3d_camera3d cam;
