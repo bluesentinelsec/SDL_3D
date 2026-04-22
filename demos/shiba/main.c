@@ -153,9 +153,6 @@ int main(int argc, char *argv[])
             sdl3d_draw_model(ctx, &model, sdl3d_vec3_make(0, 0, 0), 1.0f, (sdl3d_color){255, 255, 255, 255});
         }
 
-        /* Ground plane */
-        sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, 0, 0), (sdl3d_vec2){10.0f, 10.0f}, (sdl3d_color){80, 100, 80, 255});
-
         sdl3d_end_mode_3d(ctx);
         sdl3d_present_render_context(ctx);
     }
