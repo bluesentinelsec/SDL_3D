@@ -77,12 +77,6 @@ int main(int argc, char *argv[])
     sdl3d_set_ssao_enabled(ctx, true);
     sdl3d_set_point_shadows_enabled(ctx, true);
 
-    /* Load HDRI environment map for IBL */
-    if (!sdl3d_load_environment_map(ctx, SDL3D_MEDIA_DIR "/environments/warm_bar_4k.hdr"))
-    {
-        SDL_Log("IBL not available: %s", SDL_GetError());
-    }
-
     /* Player state */
     float px = 2.0f, py = EYE_HEIGHT, pz = 1.0f;
     float yaw = 3.14159f, pitch = 0.0f;
