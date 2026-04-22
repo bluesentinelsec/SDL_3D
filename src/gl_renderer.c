@@ -971,20 +971,26 @@ static void check_z_fighting(sdl3d_gl_context *ctx, const sdl3d_draw_entry *new_
         if (max_z < o_min_z || min_z > o_max_z)
             continue;
 
-        /* AABBs overlap. Check if any face is coplanar (within epsilon). */
-        float eps = 0.01f;
-        bool coplanar = false;
-        if (SDL_fabsf(min_x - o_min_x) < eps || SDL_fabsf(max_x - o_max_x) < eps || SDL_fabsf(min_x - o_max_x) < eps ||
-            SDL_fabsf(max_x - o_min_x) < eps)
-            coplanar = true;
-        if (SDL_fabsf(min_y - o_min_y) < eps || SDL_fabsf(max_y - o_max_y) < eps || SDL_fabsf(min_y - o_max_y) < eps ||
-            SDL_fabsf(max_y - o_min_y) < eps)
-            coplanar = true;
-        if (SDL_fabsf(min_z - o_min_z) < eps || SDL_fabsf(max_z - o_max_z) < eps || SDL_fabsf(min_z - o_max_z) < eps ||
-            SDL_fabsf(max_z - o_min_z) < eps)
-            coplanar = true;
+        /* Z-fighting: two thin surfaces overlapping on the same thin axis.
+         * A "thin" axis is one where the extent is < 0.5 units (wall thickness).
+         * Both entries must be thin on the same axis AND overlap on that axis. */
+        float eps = 0.02f;
+        float thin = 0.5f;
+        bool zfight = false;
+        float ext_x = max_x - min_x, ext_y = max_y - min_y, ext_z = max_z - min_z;
+        float o_ext_x = o_max_x - o_min_x, o_ext_y = o_max_y - o_min_y, o_ext_z = o_max_z - o_min_z;
 
-        if (coplanar)
+        /* Both thin on X and overlapping on X */
+        if (ext_x < thin && o_ext_x < thin && SDL_fabsf((min_x + max_x) * 0.5f - (o_min_x + o_max_x) * 0.5f) < eps)
+            zfight = true;
+        /* Both thin on Y and overlapping on Y */
+        if (ext_y < thin && o_ext_y < thin && SDL_fabsf((min_y + max_y) * 0.5f - (o_min_y + o_max_y) * 0.5f) < eps)
+            zfight = true;
+        /* Both thin on Z and overlapping on Z */
+        if (ext_z < thin && o_ext_z < thin && SDL_fabsf((min_z + max_z) * 0.5f - (o_min_z + o_max_z) * 0.5f) < eps)
+            zfight = true;
+
+        if (zfight)
         {
             {
                 char msg[512];
@@ -2078,11 +2084,7 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     e->roughness = params->roughness;
     SDL_memcpy(e->emissive, params->emissive, 3 * sizeof(float));
 
-    /* Z-fighting detection: opt-in via SDL3D_CHECK_ZFIGHTING=1 env var. */
-    if (SDL_getenv("SDL3D_CHECK_ZFIGHTING") != NULL)
-    {
-        check_z_fighting(ctx, e);
-    }
+    check_z_fighting(ctx, e);
 
     return true;
 }
