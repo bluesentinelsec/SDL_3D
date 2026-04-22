@@ -86,11 +86,11 @@ static void draw_doom_scene(sdl3d_render_context *ctx)
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(-4, 0.1f, 17), sdl3d_vec3_make(1.5f, 0.5f, 8), metal);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(4, 0.1f, 17), sdl3d_vec3_make(1.5f, 0.5f, 8), metal);
 
-    /* CORRIDOR 2 east (x:6..12, z:15..19) */
-    sdl3d_draw_plane(ctx, sdl3d_vec3_make(9, 0, 17), (sdl3d_vec2){6, 4}, dark_floor);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(9, 3.5f, 17), sdl3d_vec3_make(6, 0.2f, 4), dark_ceil);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(9, 1.75f, 15), sdl3d_vec3_make(6, 3.5f, 0.3f), wall_dark);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(9, 1.75f, 19), sdl3d_vec3_make(6, 3.5f, 0.3f), wall_dark);
+    /* CORRIDOR 2 east (x:6.3..12, z:15..19) */
+    sdl3d_draw_plane(ctx, sdl3d_vec3_make(9.15f, 0, 17), (sdl3d_vec2){5.7f, 4}, dark_floor);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(9.15f, 3.5f, 17), sdl3d_vec3_make(5.7f, 0.2f, 4), dark_ceil);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(9.15f, 1.75f, 15), sdl3d_vec3_make(5.7f, 3.5f, 0.3f), wall_dark);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(9.15f, 1.75f, 19), sdl3d_vec3_make(5.7f, 3.5f, 0.3f), wall_dark);
 
     /* OUTDOOR (x:12..24, z:12..22, NO ceiling — sky visible) */
     sdl3d_draw_plane(ctx, sdl3d_vec3_make(18, 0, 17), (sdl3d_vec2){12, 10}, outdoor_floor);
