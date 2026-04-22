@@ -103,9 +103,9 @@ static void draw_doom_scene(sdl3d_render_context *ctx)
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(12, 2, 20.5f), sdl3d_vec3_make(0.3f, 4, 3), wall_dark);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(12, 3.5f, 17), sdl3d_vec3_make(0.3f, 1, 4), wall_dark);
     /* North wall with door to exit room (gap x:16..20) */
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(14.5f, 2, 22), sdl3d_vec3_make(3, 4, 0.3f), wall_dark);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(21.5f, 2, 22), sdl3d_vec3_make(3, 4, 0.3f), wall_dark);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(18, 3.5f, 22), sdl3d_vec3_make(4, 1, 0.3f), wall_dark);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(14.5f, 2, 21.8f), sdl3d_vec3_make(3, 4, 0.3f), wall_dark);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(21.5f, 2, 21.8f), sdl3d_vec3_make(3, 4, 0.3f), wall_dark);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(18, 3.5f, 21.8f), sdl3d_vec3_make(4, 1, 0.3f), wall_dark);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(16, 0.5f, 14), sdl3d_vec3_make(1, 1, 1), wall_brown);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(17, 0.5f, 15), sdl3d_vec3_make(1, 1, 1), wall_brown);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(16.5f, 1.5f, 14.5f), sdl3d_vec3_make(1, 1, 1), wall_brown);
@@ -118,9 +118,9 @@ static void draw_doom_scene(sdl3d_render_context *ctx)
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(14, 1.5f, 25), sdl3d_vec3_make(0.3f, 3, 6), wall_grey);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(22, 1.5f, 25), sdl3d_vec3_make(0.3f, 3, 6), wall_grey);
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(18, 1.5f, 28), sdl3d_vec3_make(8, 3, 0.3f), wall_grey);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(15, 1.5f, 22), sdl3d_vec3_make(2, 3, 0.3f), wall_grey);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(21, 1.5f, 22), sdl3d_vec3_make(2, 3, 0.3f), wall_grey);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(18, 2.8f, 22), sdl3d_vec3_make(4, 0.4f, 0.3f), wall_grey);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(15, 1.5f, 22.2f), sdl3d_vec3_make(2, 3, 0.3f), wall_grey);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(21, 1.5f, 22.2f), sdl3d_vec3_make(2, 3, 0.3f), wall_grey);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(18, 2.8f, 22.2f), sdl3d_vec3_make(4, 0.4f, 0.3f), wall_grey);
 }
 
 static bool create_backend(SDL_Window **out_win, SDL_Renderer **out_ren, sdl3d_render_context **out_ctx,
