@@ -11,3 +11,4 @@ with source URL, author, and license information.
 |-----------|-------------|---------|
 | `simple_robot/` | Multi-mesh robot with node hierarchy | CC-BY 4.0 |
 | `shiba/` | Textured Shiba dog (4.3k tris) | CC-BY 4.0 |
+| `black_dragon/` | Skinned dragon with idle animation (38k tris) | CC-BY-NC 4.0 |

@@ -90,8 +90,9 @@ int main(int argc, char *argv[])
     /* Orbit camera state */
     float orbit_angle = 0.0f;
     float orbit_radius = 4.0f;
-    float orbit_height = 1.5f;
+    float orbit_height = 0.5f;
     bool auto_orbit = true;
+    float pan_x = 0.0f, pan_y = 0.0f;
 
     bool running = true;
     Uint64 last = SDL_GetPerformanceCounter();
@@ -133,14 +134,34 @@ int main(int argc, char *argv[])
             orbit_height += 2.0f * dt;
         if (keys[SDL_SCANCODE_DOWN])
             orbit_height -= 2.0f * dt;
+        if (keys[SDL_SCANCODE_W])
+            pan_y += 2.0f * dt;
+        if (keys[SDL_SCANCODE_S])
+            pan_y -= 2.0f * dt;
+        if (keys[SDL_SCANCODE_A])
+            pan_x -= 2.0f * dt;
+        if (keys[SDL_SCANCODE_D])
+            pan_x += 2.0f * dt;
+        if (keys[SDL_SCANCODE_E])
+            orbit_radius -= 2.0f * dt;
+        if (keys[SDL_SCANCODE_Q])
+            orbit_radius += 2.0f * dt;
+        if (orbit_radius < 0.5f)
+            orbit_radius = 0.5f;
 
         if (auto_orbit)
             orbit_angle += 0.5f * dt;
 
         sdl3d_camera3d cam;
-        cam.position =
-            sdl3d_vec3_make(sinf(orbit_angle) * orbit_radius, orbit_height, cosf(orbit_angle) * orbit_radius);
-        cam.target = sdl3d_vec3_make(0, 0.8f, 0);
+        float cx = sinf(orbit_angle) * orbit_radius;
+        float cz = cosf(orbit_angle) * orbit_radius;
+        /* Pan in camera-local right direction */
+        float right_x = cosf(orbit_angle);
+        float right_z = -sinf(orbit_angle);
+        float ox = pan_x * right_x;
+        float oz = pan_x * right_z;
+        cam.position = sdl3d_vec3_make(cx + ox, orbit_height + pan_y, cz + oz);
+        cam.target = sdl3d_vec3_make(ox, pan_y, oz);
         cam.up = sdl3d_vec3_make(0, 1, 0);
         cam.fovy = 45.0f;
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
