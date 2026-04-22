@@ -244,7 +244,7 @@ int main(int argc, char *argv[])
     SDL_Window *win = NULL;
     SDL_Renderer *ren = NULL;
     sdl3d_render_context *ctx = NULL;
-    player_t player = {0, EYE_HEIGHT, -3, 3.14159f, 0};
+    player_t player = {1, 0.5f, 2, 3.14159f, 0};
     sdl3d_fog fog;
     bool running = true;
     sdl3d_model level_model;
@@ -436,37 +436,13 @@ int main(int argc, char *argv[])
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
 
         sdl3d_clear_render_context(ctx, sky);
-        sdl3d_set_backface_culling_enabled(ctx, true);
+        sdl3d_set_backface_culling_enabled(ctx, false);
         sdl3d_begin_mode_3d(ctx, cam);
 
-        /* Level geometry — disable culling to show all faces */
-        sdl3d_set_backface_culling_enabled(ctx, false);
+        /* Loaded model only */
         if (has_level)
         {
-            sdl3d_draw_model(ctx, &level_model, sdl3d_vec3_make(0, 0, 0), 1.0f, (sdl3d_color){255, 255, 255, 255});
-        }
-        sdl3d_set_backface_culling_enabled(ctx, true);
-
-        /* Nukage glow emissive */
-        sdl3d_set_emissive(ctx, 0.0f, 2.0f + sinf(game_time * 2.0f) * 0.5f, 0.0f);
-        sdl3d_draw_plane(ctx, sdl3d_vec3_make(0, -0.25f, 18), (sdl3d_vec2){5.5f, 3.5f},
-                         (sdl3d_color){20, 200, 20, 220});
-        sdl3d_set_emissive(ctx, 0.0f, 0.0f, 0.0f);
-
-        /* Red warning light pulse in exit room */
-        sdl3d_set_emissive(ctx, 3.0f + 2.0f * sinf(game_time * 4.0f), 0.0f, 0.0f);
-        sdl3d_draw_sphere(ctx, sdl3d_vec3_make(18, 2.8f, 25), 0.15f, 6, 6, (sdl3d_color){255, 30, 20, 255});
-        sdl3d_set_emissive(ctx, 0.0f, 0.0f, 0.0f);
-
-        /* Crosshair: small bright cube 0.5 units in front of camera */
-        {
-            float cx = player.x + sinf(player.yaw) * cosf(player.pitch) * 0.5f;
-            float cy = player.y + sinf(player.pitch) * 0.5f;
-            float cz = player.z - cosf(player.yaw) * cosf(player.pitch) * 0.5f;
-            sdl3d_set_emissive(ctx, 10.0f, 10.0f, 10.0f);
-            sdl3d_draw_cube(ctx, sdl3d_vec3_make(cx, cy, cz), sdl3d_vec3_make(0.005f, 0.005f, 0.005f),
-                            (sdl3d_color){255, 255, 255, 255});
-            sdl3d_set_emissive(ctx, 0.0f, 0.0f, 0.0f);
+            sdl3d_draw_model(ctx, &level_model, sdl3d_vec3_make(0, 0, 0), 0.1f, (sdl3d_color){255, 255, 255, 255});
         }
 
         sdl3d_end_mode_3d(ctx);
