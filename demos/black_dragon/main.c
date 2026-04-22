@@ -65,6 +65,16 @@ int main(int argc, char *argv[])
             SDL_Log("  Skeleton: %d joints", model.skeleton->joint_count);
             joint_matrices = (sdl3d_mat4 *)SDL_calloc((size_t)model.skeleton->joint_count, sizeof(sdl3d_mat4));
         }
+        /* Boost dark material albedo factors so the dragon is visible,
+         * but preserve relative color differences between materials. */
+        for (int i = 0; i < model.material_count; ++i)
+        {
+            for (int c = 0; c < 3; ++c)
+            {
+                model.materials[i].albedo[c] = fminf(model.materials[i].albedo[c] * 3.0f, 1.0f);
+            }
+            model.materials[i].albedo[3] = 1.0f;
+        }
         if (model.animation_count > 0)
         {
             SDL_Log("  Animation: '%s' (%.1fs, %d channels)", model.animations[0].name, model.animations[0].duration,
@@ -77,32 +87,43 @@ int main(int argc, char *argv[])
     }
 
     /* Lighting */
-    sdl3d_set_ambient_light(ctx, 0.1f, 0.1f, 0.12f);
+    sdl3d_set_ambient_light(ctx, 0.25f, 0.25f, 0.3f);
 
     sdl3d_light key = {0};
     key.type = SDL3D_LIGHT_POINT;
-    key.position = sdl3d_vec3_make(-4.0f, 6.0f, 5.0f);
+    key.position = sdl3d_vec3_make(-5.0f, 8.0f, 6.0f);
     key.color[0] = 1.0f;
-    key.color[1] = 0.9f;
-    key.color[2] = 0.8f;
-    key.intensity = 5.0f;
-    key.range = 25.0f;
+    key.color[1] = 0.95f;
+    key.color[2] = 0.9f;
+    key.intensity = 30.0f;
+    key.range = 40.0f;
     sdl3d_add_light(ctx, &key);
 
     sdl3d_light fill = {0};
     fill.type = SDL3D_LIGHT_POINT;
-    fill.position = sdl3d_vec3_make(4.0f, 3.0f, -3.0f);
-    fill.color[0] = 0.3f;
-    fill.color[1] = 0.4f;
-    fill.color[2] = 0.8f;
-    fill.intensity = 2.0f;
-    fill.range = 20.0f;
+    fill.position = sdl3d_vec3_make(5.0f, 4.0f, -4.0f);
+    fill.color[0] = 0.6f;
+    fill.color[1] = 0.7f;
+    fill.color[2] = 1.0f;
+    fill.intensity = 15.0f;
+    fill.range = 30.0f;
+    sdl3d_add_light(ctx, &fill);
+
+    sdl3d_light rim = {0};
+    rim.type = SDL3D_LIGHT_POINT;
+    rim.position = sdl3d_vec3_make(0.0f, 2.0f, -6.0f);
+    rim.color[0] = 1.0f;
+    rim.color[1] = 0.9f;
+    rim.color[2] = 0.8f;
+    rim.intensity = 12.0f;
+    rim.range = 30.0f;
+    sdl3d_add_light(ctx, &rim);
     sdl3d_add_light(ctx, &fill);
 
     /* Orbit camera */
     float orbit_angle = 0.0f;
-    float orbit_radius = 8.0f;
-    float orbit_height = 3.0f;
+    float orbit_radius = 20.0f;
+    float orbit_height = 5.0f;
     bool auto_orbit = true;
     float pan_x = 0.0f, pan_y = 0.0f;
     float anim_time = 0.0f;
@@ -190,7 +211,7 @@ int main(int argc, char *argv[])
         cam.fovy = 45.0f;
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
 
-        sdl3d_clear_render_context(ctx, (sdl3d_color){30, 30, 40, 255});
+        sdl3d_clear_render_context(ctx, (sdl3d_color){100, 110, 130, 255});
         sdl3d_begin_mode_3d(ctx, cam);
 
         if (has_model)
