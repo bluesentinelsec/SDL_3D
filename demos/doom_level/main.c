@@ -55,6 +55,10 @@ int main(int argc, char *argv[])
 
     SDL_SetWindowRelativeMouseMode(win, true);
 
+    sdl3d_set_bloom_enabled(ctx, false);
+    sdl3d_set_ssao_enabled(ctx, false);
+    sdl3d_set_point_shadows_enabled(ctx, false);
+
     /* ---- Material palette ---- */
     sdl3d_level_material mats[] = {
         {{0.25f, 0.25f, 0.28f, 1.0f}, 0.0f, 0.9f}, /* 0: dark stone floor */
