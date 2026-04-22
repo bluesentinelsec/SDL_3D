@@ -39,8 +39,15 @@ typedef struct
 /* Scene geometry                                                      */
 /* ------------------------------------------------------------------ */
 
+/* Wall flags for draw_room — skip walls where rooms connect. */
+#define WALL_WEST 1
+#define WALL_EAST 2
+#define WALL_SOUTH 4
+#define WALL_NORTH 8
+#define WALL_ALL (WALL_WEST | WALL_EAST | WALL_SOUTH | WALL_NORTH)
+
 static void draw_room(sdl3d_render_context *ctx, float x, float z, float w, float d, float floor_y, float ceil_y,
-                      sdl3d_color floor_col, sdl3d_color wall_col, sdl3d_color ceil_col, bool has_ceiling)
+                      sdl3d_color floor_col, sdl3d_color wall_col, sdl3d_color ceil_col, bool has_ceiling, int walls)
 {
     float hw = w * 0.5f, hd = d * 0.5f;
     float wall_h = ceil_y - floor_y;
@@ -49,10 +56,14 @@ static void draw_room(sdl3d_render_context *ctx, float x, float z, float w, floa
     sdl3d_draw_plane(ctx, sdl3d_vec3_make(x, floor_y - 0.01f, z), (sdl3d_vec2){w + t, d + t}, floor_col);
     if (has_ceiling)
         sdl3d_draw_cube(ctx, sdl3d_vec3_make(x, ceil_y, z), sdl3d_vec3_make(w + t, 0.2f, d + t), ceil_col);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(x - hw, wall_cy, z), sdl3d_vec3_make(t, wall_h, d), wall_col);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(x + hw, wall_cy, z), sdl3d_vec3_make(t, wall_h, d), wall_col);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(x, wall_cy, z - hd), sdl3d_vec3_make(w, wall_h, t), wall_col);
-    sdl3d_draw_cube(ctx, sdl3d_vec3_make(x, wall_cy, z + hd), sdl3d_vec3_make(w, wall_h, t), wall_col);
+    if (walls & WALL_WEST)
+        sdl3d_draw_cube(ctx, sdl3d_vec3_make(x - hw, wall_cy, z), sdl3d_vec3_make(t, wall_h, d), wall_col);
+    if (walls & WALL_EAST)
+        sdl3d_draw_cube(ctx, sdl3d_vec3_make(x + hw, wall_cy, z), sdl3d_vec3_make(t, wall_h, d), wall_col);
+    if (walls & WALL_SOUTH)
+        sdl3d_draw_cube(ctx, sdl3d_vec3_make(x, wall_cy, z - hd), sdl3d_vec3_make(w, wall_h, t), wall_col);
+    if (walls & WALL_NORTH)
+        sdl3d_draw_cube(ctx, sdl3d_vec3_make(x, wall_cy, z + hd), sdl3d_vec3_make(w, wall_h, t), wall_col);
 }
 
 static void draw_doom_scene(sdl3d_render_context *ctx)
@@ -70,12 +81,17 @@ static void draw_doom_scene(sdl3d_render_context *ctx)
      * between adjacent rooms — the thicker room wall hides the
      * thinner corridor wall, creating a natural opening. */
 
-    draw_room(ctx, 0, 0, 10, 8, 0, 4, dark_floor, wall_grey, dark_ceil, true);
-    draw_room(ctx, 0, 8, 4, 8, 0, 3.5f, dark_floor, wall_dark, dark_ceil, true);
-    draw_room(ctx, 0, 17, 12, 10, -0.5f, 4.5f, dark_floor, wall_brown, dark_ceil, true);
-    draw_room(ctx, 9, 17, 6, 4, 0, 3.5f, dark_floor, wall_dark, dark_ceil, true);
-    draw_room(ctx, 18, 17, 12, 10, 0, 4, outdoor_floor, wall_dark, dark_ceil, false);
-    draw_room(ctx, 18, 25, 8, 6, 0, 3, dark_floor, wall_grey, dark_ceil, true);
+    /* Room 1 → corridor 1: skip north wall of room 1, skip south wall of corridor */
+    draw_room(ctx, 0, 0, 10, 8, 0, 4, dark_floor, wall_grey, dark_ceil, true, WALL_WEST | WALL_EAST | WALL_SOUTH);
+    draw_room(ctx, 0, 8, 4, 8, 0, 3.5f, dark_floor, wall_dark, dark_ceil, true, WALL_WEST | WALL_EAST);
+    /* Room 2: skip south (corridor 1 connects), skip east (corridor 2 connects) */
+    draw_room(ctx, 0, 17, 12, 10, -0.5f, 4.5f, dark_floor, wall_brown, dark_ceil, true, WALL_WEST | WALL_NORTH);
+    /* Corridor 2: skip west (room 2 connects), skip east (outdoor connects) */
+    draw_room(ctx, 9, 17, 6, 4, 0, 3.5f, dark_floor, wall_dark, dark_ceil, true, WALL_SOUTH | WALL_NORTH);
+    /* Outdoor: skip west (corridor 2 connects), skip north (room 3 connects) */
+    draw_room(ctx, 18, 17, 12, 10, 0, 4, outdoor_floor, wall_dark, dark_ceil, false, WALL_EAST | WALL_SOUTH);
+    /* Room 3: skip south (outdoor connects) */
+    draw_room(ctx, 18, 25, 8, 6, 0, 3, dark_floor, wall_grey, dark_ceil, true, WALL_WEST | WALL_EAST | WALL_NORTH);
 
     /* Pillars */
     sdl3d_draw_cylinder(ctx, sdl3d_vec3_make(-3, 2, -2), 0.4f, 0.4f, 4, 8, wall_brown);
