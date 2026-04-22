@@ -414,6 +414,14 @@ int main(int argc, char *argv[])
             player.x += rx * MOVE_SPEED * dt;
             player.z += rz * MOVE_SPEED * dt;
         }
+        if (keys[SDL_SCANCODE_UP])
+        {
+            player.y += MOVE_SPEED * dt;
+        }
+        if (keys[SDL_SCANCODE_DOWN])
+        {
+            player.y -= MOVE_SPEED * dt;
+        }
 
         if (show_fog)
             sdl3d_set_fog(ctx, &fog);
