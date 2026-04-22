@@ -976,18 +976,22 @@ static void check_z_fighting(sdl3d_gl_context *ctx, const sdl3d_draw_entry *new_
          * Both entries must be thin on the same axis AND overlap on that axis. */
         float eps = 0.02f;
         float thin = 0.5f;
+        float min_thin = 0.05f; /* ignore zero-thickness geometry (skybox, planes) */
         bool zfight = false;
         float ext_x = max_x - min_x, ext_y = max_y - min_y, ext_z = max_z - min_z;
         float o_ext_x = o_max_x - o_min_x, o_ext_y = o_max_y - o_min_y, o_ext_z = o_max_z - o_min_z;
 
         /* Both thin on X and overlapping on X */
-        if (ext_x < thin && o_ext_x < thin && SDL_fabsf((min_x + max_x) * 0.5f - (o_min_x + o_max_x) * 0.5f) < eps)
+        if (ext_x > min_thin && ext_x < thin && o_ext_x > min_thin && o_ext_x < thin &&
+            SDL_fabsf((min_x + max_x) * 0.5f - (o_min_x + o_max_x) * 0.5f) < eps)
             zfight = true;
         /* Both thin on Y and overlapping on Y */
-        if (ext_y < thin && o_ext_y < thin && SDL_fabsf((min_y + max_y) * 0.5f - (o_min_y + o_max_y) * 0.5f) < eps)
+        if (ext_y > min_thin && ext_y < thin && o_ext_y > min_thin && o_ext_y < thin &&
+            SDL_fabsf((min_y + max_y) * 0.5f - (o_min_y + o_max_y) * 0.5f) < eps)
             zfight = true;
         /* Both thin on Z and overlapping on Z */
-        if (ext_z < thin && o_ext_z < thin && SDL_fabsf((min_z + max_z) * 0.5f - (o_min_z + o_max_z) * 0.5f) < eps)
+        if (ext_z > min_thin && ext_z < thin && o_ext_z > min_thin && o_ext_z < thin &&
+            SDL_fabsf((min_z + max_z) * 0.5f - (o_min_z + o_max_z) * 0.5f) < eps)
             zfight = true;
 
         if (zfight)
