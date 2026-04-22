@@ -70,9 +70,9 @@ int main(int argc, char *argv[])
      * Layout (top-down, Z increases downward):
      *
      *   [0] Start Room (10x8)
-     *        |
+     *        |  (doorway 3..7)
      *   [1] Corridor (4x8)
-     *        |
+     *        |  (doorway 3..7)
      *   [2] Nukage Room (12x10) ---[3] Side Passage (6x4)---[4] Outdoor Area (12x10)
      *                                                              |
      *                                                         [5] Exit Room (8x6)
@@ -86,7 +86,7 @@ int main(int argc, char *argv[])
         {{{-2, 16}, {10, 16}, {10, 26}, {-2, 26}}, 4, -0.5f, 4.5f, 3, 1, 2},
         /* 3: Side passage */
         {{{10, 18}, {16, 18}, {16, 22}, {10, 22}}, 4, 0.0f, 3.5f, 0, 1, 4},
-        /* 4: Outdoor area (no ceiling — tall) */
+        /* 4: Outdoor area */
         {{{16, 14}, {28, 14}, {28, 26}, {16, 26}}, 4, 0.0f, 8.0f, 0, 1, 2},
         /* 5: Exit room */
         {{{20, 26}, {28, 26}, {28, 32}, {20, 32}}, 4, 0.0f, 3.0f, 5, 1, 4},
@@ -100,55 +100,7 @@ int main(int argc, char *argv[])
     }
 
     /* ---- Lighting ---- */
-    sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG);
-    sdl3d_set_ambient_light(ctx, 0.03f, 0.03f, 0.04f);
-
-    /* Starting room */
-    sdl3d_light l = {0};
-    l.type = SDL3D_LIGHT_POINT;
-    l.position = sdl3d_vec3_make(5, 3.5f, 4);
-    l.color[0] = 1.0f;
-    l.color[1] = 0.85f;
-    l.color[2] = 0.6f;
-    l.intensity = 5.0f;
-    l.range = 12.0f;
-    sdl3d_add_light(ctx, &l);
-
-    /* Corridor */
-    l.position = sdl3d_vec3_make(5, 3.0f, 12);
-    l.color[0] = 1.0f;
-    l.color[1] = 0.7f;
-    l.color[2] = 0.3f;
-    l.intensity = 3.0f;
-    l.range = 8.0f;
-    sdl3d_add_light(ctx, &l);
-
-    /* Nukage room — green glow */
-    l.position = sdl3d_vec3_make(4, 1.0f, 21);
-    l.color[0] = 0.2f;
-    l.color[1] = 1.0f;
-    l.color[2] = 0.2f;
-    l.intensity = 4.0f;
-    l.range = 14.0f;
-    sdl3d_add_light(ctx, &l);
-
-    /* Outdoor — moonlight */
-    l.position = sdl3d_vec3_make(22, 7.0f, 20);
-    l.color[0] = 0.4f;
-    l.color[1] = 0.5f;
-    l.color[2] = 0.8f;
-    l.intensity = 6.0f;
-    l.range = 18.0f;
-    sdl3d_add_light(ctx, &l);
-
-    /* Exit room — red warning */
-    l.position = sdl3d_vec3_make(24, 2.5f, 29);
-    l.color[0] = 1.0f;
-    l.color[1] = 0.15f;
-    l.color[2] = 0.1f;
-    l.intensity = 4.0f;
-    l.range = 8.0f;
-    sdl3d_add_light(ctx, &l);
+    /* Start simple: unlit to verify geometry, then add lighting. */
 
     /* Player */
     float px = 5, py = 1.6f, pz = 4;
@@ -218,7 +170,7 @@ int main(int argc, char *argv[])
         cam.fovy = 75.0f;
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
 
-        sdl3d_clear_render_context(ctx, (sdl3d_color){5, 5, 8, 255});
+        sdl3d_clear_render_context(ctx, (sdl3d_color){100, 150, 200, 255});
         sdl3d_begin_mode_3d(ctx, cam);
 
         sdl3d_draw_model(ctx, &level.model, sdl3d_vec3_make(0, 0, 0), 1.0f, (sdl3d_color){255, 255, 255, 255});
