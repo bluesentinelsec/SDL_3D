@@ -12,6 +12,7 @@ extern "C"
 {
 #include "gl_renderer.h"
 #include "render_context_internal.h"
+#include "sdl3d/level.h"
 #include "sdl3d/sdl3d.h"
 }
 
@@ -200,6 +201,78 @@ TEST_F(GLRendererTest, BackfaceCullingShowsFrontFaces)
 
     /* With correct culling, we should see the front face (red), not black. */
     EXPECT_GT(px[0], 50);
+}
+
+TEST_F(GLRendererTest, BackfaceCullingHidesCubeInteriorAcrossFrames)
+{
+    sdl3d_set_ambient_light(ctx, 1.0f, 1.0f, 1.0f);
+    sdl3d_set_backface_culling_enabled(ctx, true);
+
+    sdl3d_camera3d cam;
+    cam.position = sdl3d_vec3_make(0, 0, 0);
+    cam.target = sdl3d_vec3_make(0, 0, -1);
+    cam.up = sdl3d_vec3_make(0, 1, 0);
+    cam.fovy = 60.0f;
+    cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    for (int frame = 0; frame < 2; ++frame)
+    {
+        sdl3d_clear_render_context(ctx, (sdl3d_color){0, 0, 0, 255});
+        sdl3d_begin_mode_3d(ctx, cam);
+        sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(4, 4, 4), (sdl3d_color){255, 0, 0, 255});
+        sdl3d_end_mode_3d(ctx);
+
+        unsigned char px[4];
+        readPixel(160, 120, px);
+        EXPECT_LT(px[0] + px[1] + px[2], 20) << "Interior cube faces should remain culled on frame " << frame;
+    }
+}
+
+TEST_F(GLRendererTest, LevelInteriorVisibleWithBackfaceCulling)
+{
+    const sdl3d_level_material materials[] = {{{1, 1, 1, 1}, 0.0f, 1.0f, nullptr, 4.0f},
+                                              {{1, 1, 1, 1}, 0.0f, 1.0f, nullptr, 4.0f},
+                                              {{1, 1, 1, 1}, 0.0f, 1.0f, nullptr, 4.0f}};
+    sdl3d_sector sector{};
+    sector.points[0][0] = 0.0f;
+    sector.points[0][1] = 0.0f;
+    sector.points[1][0] = 4.0f;
+    sector.points[1][1] = 0.0f;
+    sector.points[2][0] = 4.0f;
+    sector.points[2][1] = 4.0f;
+    sector.points[3][0] = 0.0f;
+    sector.points[3][1] = 4.0f;
+    sector.num_points = 4;
+    sector.floor_y = 0.0f;
+    sector.ceil_y = 3.0f;
+    sector.floor_material = 0;
+    sector.ceil_material = 1;
+    sector.wall_material = 2;
+
+    sdl3d_level level{};
+    ASSERT_TRUE(sdl3d_build_level(&sector, 1, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+
+    sdl3d_set_backface_culling_enabled(ctx, true);
+    sdl3d_set_ambient_light(ctx, 1.0f, 1.0f, 1.0f);
+
+    sdl3d_camera3d cam;
+    cam.position = sdl3d_vec3_make(2.0f, 1.5f, 2.0f);
+    cam.target = sdl3d_vec3_make(2.0f, 1.5f, 0.0f);
+    cam.up = sdl3d_vec3_make(0, 1, 0);
+    cam.fovy = 60.0f;
+    cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    sdl3d_clear_render_context(ctx, (sdl3d_color){0, 0, 0, 255});
+    sdl3d_begin_mode_3d(ctx, cam);
+    ASSERT_TRUE(sdl3d_draw_level(ctx, &level, nullptr, (sdl3d_color){255, 255, 255, 255})) << SDL_GetError();
+    sdl3d_end_mode_3d(ctx);
+
+    unsigned char px[4];
+    readPixel(160, 120, px);
+
+    sdl3d_free_level(&level);
+
+    EXPECT_GT(px[0] + px[1] + px[2], 30);
 }
 
 TEST_F(GLRendererTest, ToggleRecreateProducesCorrectOutput)

@@ -1704,6 +1704,23 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
     }
 }
 
+static void apply_geometry_cull_state(sdl3d_gl_context *ctx)
+{
+    sdl3d_gl_funcs *gl = &ctx->gl;
+    gl->Enable(GL_DEPTH_TEST);
+    gl->CullFace(GL_BACK);
+    gl->FrontFace(GL_CCW);
+
+    if (ctx->current_ctx && ctx->current_ctx->backface_culling_enabled)
+    {
+        gl->Enable(GL_CULL_FACE);
+    }
+    else
+    {
+        gl->Disable(GL_CULL_FACE);
+    }
+}
+
 /* ------------------------------------------------------------------ */
 /* FBO helpers                                                         */
 /* ------------------------------------------------------------------ */
@@ -2752,7 +2769,10 @@ static bool gl_present(sdl3d_render_context *context)
         gl->CullFace(GL_BACK);
     }
 
-    /* Geometry pass: replay all entries into main FBO. */
+    /* Geometry pass: replay all entries into main FBO using the caller's
+     * configured backface-culling state. Post-process passes disable culling,
+     * so this must be restored explicitly every frame. */
+    apply_geometry_cull_state(ctx);
     replay_draw_list_geometry(ctx);
 
     /* ---- Post-process pipeline ---- */
@@ -3029,6 +3049,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
             gl->Disable(GL_CULL_FACE);
             gl->CullFace(GL_BACK);
         }
+        apply_geometry_cull_state(ctx);
         replay_draw_list_geometry(ctx);
     }
     rgba[0] = rgba[1] = rgba[2] = rgba[3] = 0;

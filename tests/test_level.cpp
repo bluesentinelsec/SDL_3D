@@ -12,6 +12,13 @@ extern "C"
 
 namespace
 {
+struct TestVec3
+{
+    float x;
+    float y;
+    float z;
+};
+
 sdl3d_sector MakeSquareSector(float min_x, float min_z, float max_x, float max_z)
 {
     sdl3d_sector sector{};
@@ -43,6 +50,42 @@ sdl3d_level_material MakeLevelMaterial(const char *texture)
     material.texture = texture;
     material.tex_scale = 4.0f;
     return material;
+}
+
+TestVec3 LoadPosition(const sdl3d_mesh &mesh, int vertex_index)
+{
+    return {mesh.positions[vertex_index * 3], mesh.positions[vertex_index * 3 + 1],
+            mesh.positions[vertex_index * 3 + 2]};
+}
+
+TestVec3 LoadNormal(const sdl3d_mesh &mesh, int vertex_index)
+{
+    return {mesh.normals[vertex_index * 3], mesh.normals[vertex_index * 3 + 1], mesh.normals[vertex_index * 3 + 2]};
+}
+
+TestVec3 Subtract(TestVec3 a, TestVec3 b)
+{
+    return {a.x - b.x, a.y - b.y, a.z - b.z};
+}
+
+TestVec3 Cross(TestVec3 a, TestVec3 b)
+{
+    return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
+}
+
+float Dot(TestVec3 a, TestVec3 b)
+{
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+TestVec3 Normalize(TestVec3 v)
+{
+    const float len = SDL_sqrtf(Dot(v, v));
+    if (len <= 0.000001f)
+    {
+        return {0.0f, 0.0f, 0.0f};
+    }
+    return {v.x / len, v.y / len, v.z / len};
 }
 
 } // namespace
@@ -98,13 +141,57 @@ TEST(SDL3DLevelBuilder, MeshSectorIdsMatchSectorCount)
     sdl3d_free_level(&level);
 }
 
+TEST(SDL3DLevelBuilder, InteriorFacingTrianglesMatchStoredNormals)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                              MakeLevelMaterial("wall.png")};
+    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f)};
+    const TestVec3 room_center = {2.0f, 1.5f, 2.0f};
+    sdl3d_level level{};
+
+    ASSERT_TRUE(sdl3d_build_level(sectors, 1, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+
+    for (int mesh_index = 0; mesh_index < level.model.mesh_count; ++mesh_index)
+    {
+        const sdl3d_mesh &mesh = level.model.meshes[mesh_index];
+        ASSERT_NE(mesh.positions, nullptr);
+        ASSERT_NE(mesh.normals, nullptr);
+        ASSERT_NE(mesh.indices, nullptr);
+
+        for (int i = 0; i < mesh.index_count; i += 3)
+        {
+            const int i0 = static_cast<int>(mesh.indices[i]);
+            const int i1 = static_cast<int>(mesh.indices[i + 1]);
+            const int i2 = static_cast<int>(mesh.indices[i + 2]);
+
+            const TestVec3 p0 = LoadPosition(mesh, i0);
+            const TestVec3 p1 = LoadPosition(mesh, i1);
+            const TestVec3 p2 = LoadPosition(mesh, i2);
+            const TestVec3 tri_center = {(p0.x + p1.x + p2.x) / 3.0f, (p0.y + p1.y + p2.y) / 3.0f,
+                                         (p0.z + p1.z + p2.z) / 3.0f};
+            const TestVec3 face_normal = Normalize(Cross(Subtract(p1, p0), Subtract(p2, p0)));
+            const TestVec3 to_interior = Normalize(Subtract(room_center, tri_center));
+
+            const TestVec3 n0 = LoadNormal(mesh, i0);
+            const TestVec3 n1 = LoadNormal(mesh, i1);
+            const TestVec3 n2 = LoadNormal(mesh, i2);
+            const TestVec3 avg_normal =
+                Normalize({(n0.x + n1.x + n2.x) / 3.0f, (n0.y + n1.y + n2.y) / 3.0f, (n0.z + n1.z + n2.z) / 3.0f});
+
+            EXPECT_GT(Dot(face_normal, to_interior), 0.70f) << "Triangle should face the playable interior";
+            EXPECT_GT(Dot(face_normal, avg_normal), 0.95f) << "Stored normals should match front-face winding";
+        }
+    }
+
+    sdl3d_free_level(&level);
+}
+
 TEST(SDL3DLevelBuilder, DetectsPortalsBetweenAdjacentSectors)
 {
     const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
                                               MakeLevelMaterial("wall.png")};
     /* Two rooms sharing an edge at x=4, z=[1..3]. */
-    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f),
-                                    MakeSquareSector(4.0f, 1.0f, 8.0f, 3.0f)};
+    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f), MakeSquareSector(4.0f, 1.0f, 8.0f, 3.0f)};
     sdl3d_level level{};
 
     ASSERT_TRUE(sdl3d_build_level(sectors, 2, materials, 3, nullptr, 0, &level)) << SDL_GetError();
@@ -148,8 +235,7 @@ TEST(SDL3DLevelVisibility, FindSectorReturnsCorrectSector)
 {
     const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
                                               MakeLevelMaterial("wall.png")};
-    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f),
-                                    MakeSquareSector(4.0f, 0.0f, 8.0f, 4.0f)};
+    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f), MakeSquareSector(4.0f, 0.0f, 8.0f, 4.0f)};
     sdl3d_level level{};
 
     ASSERT_TRUE(sdl3d_build_level(sectors, 2, materials, 3, nullptr, 0, &level)) << SDL_GetError();
@@ -166,8 +252,7 @@ TEST(SDL3DLevelVisibility, VisibilityFromSectorZeroSeesNeighbor)
     const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
                                               MakeLevelMaterial("wall.png")};
     /* Three rooms in a line: [0]--[1]--[2] */
-    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f),
-                                    MakeSquareSector(4.0f, 0.0f, 8.0f, 4.0f),
+    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f), MakeSquareSector(4.0f, 0.0f, 8.0f, 4.0f),
                                     MakeSquareSector(8.0f, 0.0f, 12.0f, 4.0f)};
     sdl3d_level level{};
 

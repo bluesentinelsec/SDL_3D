@@ -129,7 +129,7 @@ int main(int argc, char *argv[])
     sdl3d_set_bloom_enabled(ctx, true);
     sdl3d_set_ssao_enabled(ctx, false);
     sdl3d_set_point_shadows_enabled(ctx, false);
-    sdl3d_set_backface_culling_enabled(ctx, false);
+    sdl3d_set_backface_culling_enabled(ctx, true);
     sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG);
 
     /* ---- Material palette ---- */
@@ -186,18 +186,18 @@ int main(int argc, char *argv[])
     };
 
     sdl3d_level_light lights[] = {
-        {{5, 3.5f, 4}, {1.0f, 0.82f, 0.58f}, 4.4f, 11.0f},    /* Start room — warm tungsten */
-        {{5, 3.0f, 12}, {1.0f, 0.68f, 0.28f}, 2.6f, 8.0f},    /* South corridor — amber */
-        {{4, 1.0f, 21}, {1.0f, 0.16f, 0.10f}, 4.0f, 14.0f},   /* Nukage basin — red */
-        {{-6, 1.8f, 21}, {0.25f, 0.95f, 0.35f}, 2.8f, 9.0f},  /* West alcove — toxic green */
-        {{14, 2.7f, 4}, {0.7f, 0.8f, 1.0f}, 2.4f, 8.0f},      /* Upper hall — cold white */
-        {{24, 3.2f, 4}, {0.15f, 0.85f, 1.0f}, 3.8f, 12.0f},   /* Computer core — cyan */
-        {{24, 2.6f, 11}, {1.0f, 0.9f, 0.45f}, 2.4f, 7.0f},    /* Security bend — sodium */
-        {{22, 7.0f, 20}, {0.36f, 0.46f, 0.78f}, 5.0f, 18.0f}, /* Courtyard — moonlight */
-        {{33, 3.0f, 18}, {0.9f, 0.35f, 1.0f}, 3.0f, 12.0f},   /* Storage — magenta */
-        {{24, 2.5f, 29}, {0.2f, 1.0f, 0.2f}, 3.8f, 8.0f},     /* Exit — green */
-        {{24, 3.8f, 38}, {0.45f, 0.35f, 1.0f}, 3.4f, 13.0f},  /* Reactor hall — violet */
-        {{36, 2.2f, 27}, {1.0f, 0.55f, 0.22f}, 2.5f, 8.0f},   /* Secret annex — orange */
+        {{5, 3.5f, 4}, {1.0f, 0.82f, 0.58f}, 3.0f, 9.5f},     /* Start room — warm tungsten */
+        {{5, 3.0f, 12}, {1.0f, 0.68f, 0.28f}, 1.8f, 7.0f},    /* South corridor — amber */
+        {{4, 1.0f, 21}, {1.0f, 0.16f, 0.10f}, 3.8f, 12.0f},   /* Nukage basin — red */
+        {{-6, 1.8f, 21}, {0.25f, 0.95f, 0.35f}, 2.9f, 8.5f},  /* West alcove — toxic green */
+        {{14, 2.7f, 4}, {0.7f, 0.8f, 1.0f}, 1.7f, 7.0f},      /* Upper hall — cold white */
+        {{24, 3.2f, 4}, {0.15f, 0.85f, 1.0f}, 3.0f, 10.5f},   /* Computer core — cyan */
+        {{24, 2.6f, 11}, {1.0f, 0.9f, 0.45f}, 1.8f, 6.0f},    /* Security bend — sodium */
+        {{22, 7.0f, 20}, {0.36f, 0.46f, 0.78f}, 3.2f, 14.0f}, /* Courtyard — moonlight */
+        {{33, 3.0f, 18}, {0.9f, 0.35f, 1.0f}, 2.4f, 10.0f},   /* Storage — magenta */
+        {{24, 2.5f, 29}, {0.2f, 1.0f, 0.2f}, 4.0f, 8.0f},     /* Exit — green */
+        {{24, 3.8f, 38}, {0.45f, 0.35f, 1.0f}, 2.8f, 11.0f},  /* Reactor hall — violet */
+        {{36, 2.2f, 27}, {1.0f, 0.55f, 0.22f}, 1.9f, 7.0f},   /* Secret annex — orange */
     };
     const int sector_count = (int)SDL_arraysize(sectors);
     const int light_count = (int)SDL_arraysize(lights);
