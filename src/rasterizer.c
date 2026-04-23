@@ -1912,6 +1912,7 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
     const sdl3d_screen_vertex_lit a = tri->a;
     const sdl3d_screen_vertex_lit b = tri->b;
     const sdl3d_screen_vertex_lit c = tri->c;
+    const bool baked_static_fast_path = lp->baked_light_mode && lp->light_count == 0 && lp->fog.mode == SDL3D_FOG_NONE;
 
     for (int py = min_px_y; py <= max_px_y; ++py)
     {
@@ -1992,23 +1993,32 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
                         continue;
                     }
 
-                    nx = (ba * a.nx_over_w + bb * b.nx_over_w + bc * c.nx_over_w) * pw;
-                    ny = (ba * a.ny_over_w + bb * b.ny_over_w + bc * c.ny_over_w) * pw;
-                    nz = (ba * a.nz_over_w + bb * b.nz_over_w + bc * c.nz_over_w) * pw;
-                    n_len = nx * nx + ny * ny + nz * nz;
-                    if (n_len > 1e-12f)
+                    if (baked_static_fast_path)
                     {
-                        float inv = 1.0f / SDL_sqrtf(n_len);
-                        nx *= inv;
-                        ny *= inv;
-                        nz *= inv;
+                        lit_r = albedo_r + lp->emissive[0];
+                        lit_g = albedo_g + lp->emissive[1];
+                        lit_b = albedo_b + lp->emissive[2];
                     }
-                    wpx = (ba * a.wx_over_w + bb * b.wx_over_w + bc * c.wx_over_w) * pw;
-                    wpy = (ba * a.wy_over_w + bb * b.wy_over_w + bc * c.wy_over_w) * pw;
-                    wpz = (ba * a.wz_over_w + bb * b.wz_over_w + bc * c.wz_over_w) * pw;
+                    else
+                    {
+                        nx = (ba * a.nx_over_w + bb * b.nx_over_w + bc * c.nx_over_w) * pw;
+                        ny = (ba * a.ny_over_w + bb * b.ny_over_w + bc * c.ny_over_w) * pw;
+                        nz = (ba * a.nz_over_w + bb * b.nz_over_w + bc * c.nz_over_w) * pw;
+                        n_len = nx * nx + ny * ny + nz * nz;
+                        if (n_len > 1e-12f)
+                        {
+                            float inv = 1.0f / SDL_sqrtf(n_len);
+                            nx *= inv;
+                            ny *= inv;
+                            nz *= inv;
+                        }
+                        wpx = (ba * a.wx_over_w + bb * b.wx_over_w + bc * c.wx_over_w) * pw;
+                        wpy = (ba * a.wy_over_w + bb * b.wy_over_w + bc * c.wy_over_w) * pw;
+                        wpz = (ba * a.wz_over_w + bb * b.wz_over_w + bc * c.wz_over_w) * pw;
 
-                    sdl3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, nx, ny, nz, wpx, wpy, wpz, &lit_r,
-                                             &lit_g, &lit_b);
+                        sdl3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, nx, ny, nz, wpx, wpy, wpz, &lit_r,
+                                                 &lit_g, &lit_b);
+                    }
 
                     if (lp->baked_light_mode)
                     {

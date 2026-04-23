@@ -12,6 +12,8 @@
 
 #define WINDOW_W 1280
 #define WINDOW_H 720
+#define SOFTWARE_W (WINDOW_W / 2)
+#define SOFTWARE_H (WINDOW_H / 2)
 #define MOVE_SPEED 12.0f
 #define MOUSE_SENS 0.002f
 #define PROJ_SPEED 20.0f
@@ -187,6 +189,8 @@ static void strip_level_lightmap(sdl3d_level *level)
 static bool create_backend(SDL_Window **out_win, SDL_Renderer **out_ren, sdl3d_render_context **out_ctx,
                            sdl3d_backend backend)
 {
+    const int logical_w = (backend == SDL3D_BACKEND_SOFTWARE) ? SOFTWARE_W : WINDOW_W;
+    const int logical_h = (backend == SDL3D_BACKEND_SOFTWARE) ? SOFTWARE_H : WINDOW_H;
     SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE;
     if (backend == SDL3D_BACKEND_SDLGPU)
     {
@@ -217,8 +221,8 @@ static bool create_backend(SDL_Window **out_win, SDL_Renderer **out_ren, sdl3d_r
     sdl3d_init_render_context_config(&cfg);
     cfg.backend = backend;
     cfg.allow_backend_fallback = false;
-    cfg.logical_width = WINDOW_W;
-    cfg.logical_height = WINDOW_H;
+    cfg.logical_width = logical_w;
+    cfg.logical_height = logical_h;
     cfg.logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
 
     sdl3d_render_context *c = NULL;
@@ -263,7 +267,8 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    SDL_Log("doom_level MOVE_SPEED=%.2f backend=%d", MOVE_SPEED, (int)current_backend);
+    SDL_Log("doom_level MOVE_SPEED=%.2f backend=%d render=%dx%d", MOVE_SPEED, (int)current_backend,
+            sdl3d_get_render_context_width(ctx), sdl3d_get_render_context_height(ctx));
 
     sdl3d_set_bloom_enabled(ctx, true);
     sdl3d_set_ssao_enabled(ctx, false);
@@ -468,7 +473,7 @@ int main(int argc, char *argv[])
     }
 
     /* Visibility state. */
-    bool sector_visible[13];
+    bool sector_visible[SDL_arraysize(sectors)];
     sdl3d_visibility_result vis;
     vis.sector_visible = sector_visible;
     vis.visible_count = 0;
@@ -537,7 +542,9 @@ int main(int argc, char *argv[])
                     sdl3d_set_point_shadows_enabled(ctx, false);
                     sdl3d_set_backface_culling_enabled(ctx, true);
                     sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG);
-                    SDL_Log("Switched to %s backend", current_backend == SDL3D_BACKEND_SDLGPU ? "GL" : "SOFTWARE");
+                    SDL_Log("Switched to %s backend render=%dx%d",
+                            current_backend == SDL3D_BACKEND_SDLGPU ? "GL" : "SOFTWARE",
+                            sdl3d_get_render_context_width(ctx), sdl3d_get_render_context_height(ctx));
                 }
                 else
                 {
