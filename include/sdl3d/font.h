@@ -1,0 +1,86 @@
+/*
+ * Backend-agnostic font system using stb_truetype.
+ *
+ * Loads TTF/OTF fonts, generates glyph atlases, measures text,
+ * and renders text as textured quads through the engine draw path.
+ *
+ * Usage:
+ *   sdl3d_font font;
+ *   sdl3d_load_font("media/fonts/Roboto.ttf", 24.0f, &font);
+ *   // in render loop, after begin_mode_3d or in 2D overlay:
+ *   sdl3d_draw_text(ctx, &font, "Hello World", 10, 10, white);
+ *   // cleanup:
+ *   sdl3d_free_font(&font);
+ */
+
+#ifndef SDL3D_FONT_H
+#define SDL3D_FONT_H
+
+#include "sdl3d/types.h"
+
+#include <stdbool.h>
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+#define SDL3D_FONT_FIRST_CHAR 32
+#define SDL3D_FONT_CHAR_COUNT 95 /* ASCII 32..126 */
+
+    typedef struct sdl3d_glyph
+    {
+        float x0, y0, x1, y1; /* atlas texel coords */
+        float u0, v0, u1, v1; /* normalized atlas UVs */
+        float xoff, yoff;     /* offset from cursor to top-left of glyph */
+        float xadvance;       /* horizontal advance after this glyph */
+    } sdl3d_glyph;
+
+    typedef struct sdl3d_font
+    {
+        sdl3d_glyph glyphs[SDL3D_FONT_CHAR_COUNT];
+        unsigned char *atlas_pixels; /* single-channel alpha, atlas_w × atlas_h */
+        int atlas_w, atlas_h;
+        float size;     /* font size in pixels */
+        float ascent;   /* distance from baseline to top */
+        float descent;  /* distance from baseline to bottom (negative) */
+        float line_gap; /* extra spacing between lines */
+    } sdl3d_font;
+
+    /*
+     * Load a TTF/OTF font from a file and generate a glyph atlas.
+     * `pixel_size` is the font height in pixels.
+     * Returns false with SDL_GetError on failure.
+     */
+    bool sdl3d_load_font(const char *path, float pixel_size, sdl3d_font *out);
+
+    /*
+     * Load a font from memory (e.g., embedded font data).
+     */
+    bool sdl3d_load_font_from_memory(const void *data, int data_size, float pixel_size, sdl3d_font *out);
+
+    /*
+     * Free font resources (atlas pixels).
+     */
+    void sdl3d_free_font(sdl3d_font *font);
+
+    /*
+     * Measure the pixel width and height of a string.
+     * Handles \n for line breaks.
+     */
+    void sdl3d_measure_text(const sdl3d_font *font, const char *text, float *out_width, float *out_height);
+
+    /*
+     * Draw text at screen position (x, y) in pixels.
+     * Must be called between sdl3d_clear_render_context and sdl3d_present.
+     * Uses the 2D overlay path — does not require begin_mode_3d.
+     */
+    struct sdl3d_render_context;
+    bool sdl3d_draw_text(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text, float x,
+                         float y, sdl3d_color color);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

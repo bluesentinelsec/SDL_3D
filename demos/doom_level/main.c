@@ -6,6 +6,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include "sdl3d/font.h"
 #include "sdl3d/level.h"
 #include "sdl3d/lighting.h"
 #include "sdl3d/sdl3d.h"
@@ -275,6 +276,14 @@ int main(int argc, char *argv[])
     sdl3d_set_point_shadows_enabled(ctx, false);
     sdl3d_set_backface_culling_enabled(ctx, true);
     sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG);
+
+    /* Load debug font. */
+    sdl3d_font debug_font;
+    bool has_font = sdl3d_load_font(SDL3D_MEDIA_DIR "/fonts/Roboto.ttf", 20.0f, &debug_font);
+    if (!has_font)
+    {
+        SDL_Log("Font load failed: %s", SDL_GetError());
+    }
 
     if (!sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/sprites/enemy.png", &enemy_tex) ||
         !sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/sprites/health-pack.png", &health_tex))
@@ -791,6 +800,15 @@ int main(int argc, char *argv[])
         }
 
         sdl3d_end_mode_3d(ctx);
+
+        /* Draw debug text overlay. */
+        if (has_font)
+        {
+            char fps_buf[64];
+            SDL_snprintf(fps_buf, sizeof(fps_buf), "FPS: %.0f", dt > 0 ? 1.0f / dt : 0.0f);
+            sdl3d_draw_text(ctx, &debug_font, fps_buf, 10, 10, (sdl3d_color){255, 255, 255, 255});
+        }
+
         sdl3d_present_render_context(ctx);
 
         /* Debug stats to log. */
@@ -813,6 +831,8 @@ int main(int argc, char *argv[])
     sdl3d_free_texture(&sky_ny);
     sdl3d_free_texture(&sky_pz);
     sdl3d_free_texture(&sky_nz);
+    if (has_font)
+        sdl3d_free_font(&debug_font);
     sdl3d_destroy_render_context(ctx);
     if (ren)
         SDL_DestroyRenderer(ren);

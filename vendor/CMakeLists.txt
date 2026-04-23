@@ -22,7 +22,7 @@ elseif(MSVC)
     target_compile_options(sdl3d_ufbx PRIVATE /w)
 endif()
 
-add_library(sdl3d_stb OBJECT stb/stb_impl.c)
+add_library(sdl3d_stb OBJECT stb/stb_impl.c stb/stb_truetype_impl.c)
 target_include_directories(sdl3d_stb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/stb)
 set_target_properties(sdl3d_stb PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
