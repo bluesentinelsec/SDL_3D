@@ -646,12 +646,7 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
 {
     const bool indexed = mesh->indices != NULL;
     const int triangle_count = indexed ? (mesh->index_count / 3) : (mesh->vertex_count / 3);
-    /* For baked meshes with no dynamic lights, skip the expensive PBR path —
-     * the vertex colors already contain all lighting. Only use the lit path
-     * when dynamic lights are present (e.g., projectile). */
-    const bool baked_no_dynamics = lighting != NULL && lighting->baked_light_mode && lighting->light_count == 0;
-    const bool lit = lighting != NULL && !baked_no_dynamics &&
-                     (context->shading_mode == SDL3D_SHADING_FLAT || mesh->normals != NULL);
+    const bool lit = lighting != NULL && (context->shading_mode == SDL3D_SHADING_FLAT || mesh->normals != NULL);
     const bool skinned = joint_matrices != NULL && mesh->joint_indices != NULL && mesh->joint_weights != NULL;
     sdl3d_framebuffer framebuffer;
     float *skinned_positions = NULL;
