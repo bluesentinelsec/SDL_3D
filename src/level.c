@@ -165,6 +165,92 @@ static void macc_free(macc *a)
 }
 
 /* ------------------------------------------------------------------ */
+/* Surface tracking for lightmap UV generation                         */
+/* ------------------------------------------------------------------ */
+
+typedef struct
+{
+    int acc_index;    /* which macc (sector × material) */
+    int first_vert;   /* first vertex index in that macc */
+    int vert_count;   /* number of vertices in this surface */
+    float nx, ny, nz; /* surface normal */
+    /* World-space bounds of the surface (for atlas sizing). */
+    float world_min[3], world_max[3];
+} lm_surface;
+
+typedef struct
+{
+    lm_surface *surfaces;
+    int count, cap;
+} lm_surface_list;
+
+static void lm_surface_list_init(lm_surface_list *l)
+{
+    l->surfaces = NULL;
+    l->count = 0;
+    l->cap = 0;
+}
+
+static lm_surface *lm_surface_list_add(lm_surface_list *l)
+{
+    if (l->count == l->cap)
+    {
+        int c = l->cap ? l->cap * 2 : 64;
+        lm_surface *s = SDL_realloc(l->surfaces, (size_t)c * sizeof(lm_surface));
+        if (!s)
+            return NULL;
+        l->surfaces = s;
+        l->cap = c;
+    }
+    lm_surface *s = &l->surfaces[l->count++];
+    SDL_memset(s, 0, sizeof(*s));
+    return s;
+}
+
+static void lm_surface_list_free(lm_surface_list *l)
+{
+    SDL_free(l->surfaces);
+    l->surfaces = NULL;
+    l->count = l->cap = 0;
+}
+
+/* Record a surface from vertices [first_vert, macc.vc) in accumulator acc_index. */
+static void lm_record_surface(lm_surface_list *sl, int acc_index, const macc *a, int first_vert, float snx, float sny,
+                              float snz)
+{
+    int nv = a->vc - first_vert;
+    if (nv < 3)
+        return;
+    lm_surface *s = lm_surface_list_add(sl);
+    if (!s)
+        return;
+    s->acc_index = acc_index;
+    s->first_vert = first_vert;
+    s->vert_count = nv;
+    s->nx = snx;
+    s->ny = sny;
+    s->nz = snz;
+    /* Compute world bounds. */
+    s->world_min[0] = s->world_min[1] = s->world_min[2] = 1e30f;
+    s->world_max[0] = s->world_max[1] = s->world_max[2] = -1e30f;
+    for (int i = first_vert; i < a->vc; i++)
+    {
+        for (int c = 0; c < 3; c++)
+        {
+            float v = a->pos[i * 3 + c];
+            if (v < s->world_min[c])
+                s->world_min[c] = v;
+            if (v > s->world_max[c])
+                s->world_max[c] = v;
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Suppress unused warnings until full lightmap baking is wired up. */
+SDL_COMPILE_TIME_ASSERT(lm_surface_size, sizeof(lm_surface) > 0);
+static const void *lm_unused_[] = {(void *)lm_record_surface, (void *)lm_surface_list_free, (void *)lm_unused_};
+
 /* Geometry helpers                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -282,6 +368,9 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
         return SDL_OutOfMemory();
     }
 
+    lm_surface_list surf_list;
+    lm_surface_list_init(&surf_list);
+
     for (int s = 0; s < sector_count; s++)
     {
         const sdl3d_sector *sec = &sectors[s];
@@ -292,13 +381,19 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
 
         if (fi >= 0)
         {
-            macc *floor_acc = &accs[s * material_count + fi];
+            int ai = s * material_count + fi;
+            macc *floor_acc = &accs[ai];
+            int vb = floor_acc->vc;
             add_floor_ceil(floor_acc, sec, sec->floor_y, 1.0f, materials[fi].albedo, materials[fi].tex_scale);
+            lm_record_surface(&surf_list, ai, floor_acc, vb, 0, 1, 0);
         }
         if (ci >= 0)
         {
-            macc *ceil_acc = &accs[s * material_count + ci];
+            int ai = s * material_count + ci;
+            macc *ceil_acc = &accs[ai];
+            int vb = ceil_acc->vc;
             add_floor_ceil(ceil_acc, sec, sec->ceil_y, -1.0f, materials[ci].albedo, materials[ci].tex_scale);
+            lm_record_surface(&surf_list, ai, ceil_acc, vb, 0, -1, 0);
         }
 
         for (int e = 0; e < total_edges; e++)
@@ -557,10 +652,14 @@ void sdl3d_free_level(sdl3d_level *level)
         sdl3d_free_model(&level->model);
         SDL_free(level->mesh_sector_ids);
         SDL_free(level->portals);
+        SDL_free(level->lightmap_pixels);
         level->mesh_sector_ids = NULL;
         level->portals = NULL;
+        level->lightmap_pixels = NULL;
         level->portal_count = 0;
         level->sector_count = 0;
+        level->lightmap_width = 0;
+        level->lightmap_height = 0;
     }
 }
 

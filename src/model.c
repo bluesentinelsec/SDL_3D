@@ -21,6 +21,7 @@ void sdl3d_free_model(sdl3d_model *model)
         SDL_free(mesh->positions);
         SDL_free(mesh->normals);
         SDL_free(mesh->uvs);
+        SDL_free(mesh->lightmap_uvs);
         SDL_free(mesh->colors);
         SDL_free(mesh->indices);
         SDL_free(mesh->joint_indices);

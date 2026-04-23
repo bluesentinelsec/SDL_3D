@@ -67,6 +67,11 @@ extern "C"
         /* Portal adjacency graph. */
         int portal_count;
         struct sdl3d_level_portal *portals;
+
+        /* Lightmap atlas (NULL when no lightmap baked). */
+        unsigned char *lightmap_pixels; /* RGB, lightmap_width × lightmap_height */
+        int lightmap_width;
+        int lightmap_height;
     } sdl3d_level;
 
     /* A portal connecting two adjacent sectors through a shared edge opening. */
