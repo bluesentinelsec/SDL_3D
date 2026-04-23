@@ -286,7 +286,7 @@ int main(int argc, char *argv[])
      *      |                               |
      *   [2] Nukage Basin -- [3] East Passage -- [4] Courtyard -- [10] Storage -- [12] Secret Annex
      *      |                                       |
-     *   [6] West Alcove                           [5] Exit Room -- [11] Reactor Hall
+     *   [6] West Alcove                           [5] Exit Room -- [11] Reactor Hall -- [13] Exterior Yard
      */
     sdl3d_sector sectors[] = {
         /* 0: Starting room */
@@ -315,6 +315,8 @@ int main(int argc, char *argv[])
         {{{18, 32}, {30, 32}, {30, 44}, {18, 44}}, 4, 0.0f, 5.5f, 5, 1, 4},
         /* 12: Secret annex behind storage */
         {{{32, 24}, {40, 24}, {40, 30}, {32, 30}}, 4, 0.0f, 3.0f, 0, 1, 2},
+        /* 13: Exterior yard (large open-air space for skybox side visibility) */
+        {{{-6, 44}, {54, 44}, {54, 104}, {-6, 104}}, 4, 0.0f, 12.0f, 5, -1, 2},
     };
 
     sdl3d_level_light lights[] = {
@@ -330,6 +332,7 @@ int main(int argc, char *argv[])
         {{24, 2.5f, 29}, {0.2f, 1.0f, 0.2f}, 4.0f, 8.0f},     /* Exit — green */
         {{24, 3.8f, 38}, {0.45f, 0.35f, 1.0f}, 2.8f, 11.0f},  /* Reactor hall — violet */
         {{36, 2.2f, 27}, {1.0f, 0.55f, 0.22f}, 1.9f, 7.0f},   /* Secret annex — orange */
+        {{24, 8.5f, 74}, {0.32f, 0.38f, 0.7f}, 3.6f, 32.0f},  /* Exterior yard — night sky fill */
     };
     const int sector_count = (int)SDL_arraysize(sectors);
     const int light_count = (int)SDL_arraysize(lights);
@@ -380,6 +383,8 @@ int main(int argc, char *argv[])
         {&health_tex, sdl3d_vec3_make(24.0f, 0.25f, 28.5f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.12f, 2.1f},
         {&enemy_tex, sdl3d_vec3_make(24.0f, 0.0f, 37.5f), (sdl3d_vec2){1.7f, 2.6f}, true, 0.09f, 5.8f},
         {&health_tex, sdl3d_vec3_make(35.5f, 0.25f, 27.0f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.1f, 1.7f},
+        {&enemy_tex, sdl3d_vec3_make(24.0f, 0.0f, 72.0f), (sdl3d_vec2){1.8f, 2.8f}, true, 0.11f, 5.5f},
+        {&health_tex, sdl3d_vec3_make(10.0f, 0.25f, 84.0f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.14f, 1.6f},
     };
     demo_actor_draw actor_draws[SDL_arraysize(actors)];
     float elapsed = 0.0f;

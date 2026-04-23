@@ -326,7 +326,7 @@ static bool sdl3d_draw_skybox_face(sdl3d_render_context *context, const sdl3d_te
                                    sdl3d_vec3 v1, sdl3d_vec3 v2, sdl3d_vec3 v3)
 {
     float positions[] = {v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, v2.x, v2.y, v2.z, v3.x, v3.y, v3.z};
-    float uvs[] = {0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f};
+    float uvs[] = {0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f};
     unsigned int indices[] = {0, 1, 2, 2, 1, 3};
     sdl3d_mesh mesh;
 
@@ -362,19 +362,19 @@ bool sdl3d_draw_skybox_textured(sdl3d_render_context *context, const sdl3d_skybo
     s = skybox->size > 1.0f ? skybox->size : 400.0f;
 
     /* Inward-facing cube centered on the camera. */
-    return sdl3d_draw_skybox_face(context, skybox->pos_z, sdl3d_vec3_make(c.x - s, c.y - s, c.z + s),
+    return sdl3d_draw_skybox_face(context, skybox->pos_x, sdl3d_vec3_make(c.x - s, c.y - s, c.z + s),
                                   sdl3d_vec3_make(c.x - s, c.y + s, c.z + s),
                                   sdl3d_vec3_make(c.x + s, c.y - s, c.z + s),
                                   sdl3d_vec3_make(c.x + s, c.y + s, c.z + s)) &&
-           sdl3d_draw_skybox_face(context, skybox->neg_z, sdl3d_vec3_make(c.x + s, c.y - s, c.z - s),
+           sdl3d_draw_skybox_face(context, skybox->neg_x, sdl3d_vec3_make(c.x + s, c.y - s, c.z - s),
                                   sdl3d_vec3_make(c.x + s, c.y + s, c.z - s),
                                   sdl3d_vec3_make(c.x - s, c.y - s, c.z - s),
                                   sdl3d_vec3_make(c.x - s, c.y + s, c.z - s)) &&
-           sdl3d_draw_skybox_face(context, skybox->pos_x, sdl3d_vec3_make(c.x + s, c.y - s, c.z + s),
+           sdl3d_draw_skybox_face(context, skybox->neg_z, sdl3d_vec3_make(c.x + s, c.y - s, c.z + s),
                                   sdl3d_vec3_make(c.x + s, c.y + s, c.z + s),
                                   sdl3d_vec3_make(c.x + s, c.y - s, c.z - s),
                                   sdl3d_vec3_make(c.x + s, c.y + s, c.z - s)) &&
-           sdl3d_draw_skybox_face(context, skybox->neg_x, sdl3d_vec3_make(c.x - s, c.y - s, c.z - s),
+           sdl3d_draw_skybox_face(context, skybox->pos_z, sdl3d_vec3_make(c.x - s, c.y - s, c.z - s),
                                   sdl3d_vec3_make(c.x - s, c.y + s, c.z - s),
                                   sdl3d_vec3_make(c.x - s, c.y - s, c.z + s),
                                   sdl3d_vec3_make(c.x - s, c.y + s, c.z + s)) &&

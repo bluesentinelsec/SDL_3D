@@ -457,6 +457,66 @@ TEST_F(GLRendererTest, TexturedSkyboxShowsTopFaceWithBackfaceCulling)
     EXPECT_LT(px_out[1], 80);
 }
 
+TEST_F(GLRendererTest, TexturedSkyboxMatchesSeamConsistentDirections)
+{
+    const Uint8 red[] = {255, 0, 0, 255};
+    const Uint8 green[] = {0, 255, 0, 255};
+    const Uint8 blue[] = {0, 0, 255, 255};
+    const Uint8 yellow[] = {255, 255, 0, 255};
+    const Uint8 magenta[] = {255, 0, 255, 255};
+    const Uint8 cyan[] = {0, 255, 255, 255};
+    sdl3d_texture2d px = MakeTextureFromPixels(red, 1, 1);
+    sdl3d_texture2d nx = MakeTextureFromPixels(green, 1, 1);
+    sdl3d_texture2d py = MakeTextureFromPixels(blue, 1, 1);
+    sdl3d_texture2d ny = MakeTextureFromPixels(yellow, 1, 1);
+    sdl3d_texture2d pz = MakeTextureFromPixels(magenta, 1, 1);
+    sdl3d_texture2d nz = MakeTextureFromPixels(cyan, 1, 1);
+    sdl3d_skybox_textured skybox = {&px, &nx, &py, &ny, &pz, &nz, 20.0f};
+    struct ViewCase
+    {
+        sdl3d_vec3 target;
+        Uint8 r;
+        Uint8 g;
+        Uint8 b;
+    } cases[] = {
+        {sdl3d_vec3_make(0.0f, 0.0f, 1.0f), 255, 0, 0},   /* front -> PX */
+        {sdl3d_vec3_make(1.0f, 0.0f, 0.0f), 0, 255, 255}, /* right -> NZ */
+        {sdl3d_vec3_make(0.0f, 0.0f, -1.0f), 0, 255, 0},  /* back -> NX */
+        {sdl3d_vec3_make(-1.0f, 0.0f, 0.0f), 255, 0, 255} /* left -> PZ */
+    };
+
+    ASSERT_TRUE(sdl3d_set_backface_culling_enabled(ctx, true));
+
+    for (const ViewCase &view_case : cases)
+    {
+        sdl3d_camera3d cam;
+        unsigned char px_out[4];
+
+        cam.position = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+        cam.target = view_case.target;
+        cam.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+        cam.fovy = 60.0f;
+        cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+        sdl3d_clear_render_context(ctx, (sdl3d_color){0, 0, 0, 255});
+        sdl3d_begin_mode_3d(ctx, cam);
+        ASSERT_TRUE(sdl3d_draw_skybox_textured(ctx, &skybox)) << SDL_GetError();
+        sdl3d_end_mode_3d(ctx);
+
+        readPixel(160, 120, px_out);
+        EXPECT_NEAR(px_out[0], view_case.r, 20);
+        EXPECT_NEAR(px_out[1], view_case.g, 20);
+        EXPECT_NEAR(px_out[2], view_case.b, 20);
+    }
+
+    sdl3d_free_texture(&px);
+    sdl3d_free_texture(&nx);
+    sdl3d_free_texture(&py);
+    sdl3d_free_texture(&ny);
+    sdl3d_free_texture(&pz);
+    sdl3d_free_texture(&nz);
+}
+
 TEST_F(GLRendererTest, ToggleRecreateProducesCorrectOutput)
 {
     /* Lesson #9: verify output is correct after context recreation. */
