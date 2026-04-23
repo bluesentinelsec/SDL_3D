@@ -48,8 +48,8 @@ extern "C"
         int num_points;
         float floor_y;
         float ceil_y;
-        int floor_material; /* index into material palette */
-        int ceil_material;
+        int floor_material; /* index into material palette, or -1 to omit floor geometry */
+        int ceil_material;  /* index into material palette, or -1 to omit ceiling geometry */
         int wall_material;
     } sdl3d_sector;
 

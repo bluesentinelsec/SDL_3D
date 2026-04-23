@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 #include "sdl3d/render_context.h"
+#include "sdl3d/texture.h"
 #include "sdl3d/types.h"
 
 #ifdef __cplusplus
@@ -60,6 +61,24 @@ extern "C"
      * top_color at the zenith and bottom_color at the nadir.
      */
     bool sdl3d_draw_skybox_gradient(sdl3d_render_context *context, sdl3d_color top_color, sdl3d_color bottom_color);
+
+    typedef struct sdl3d_skybox_textured
+    {
+        const sdl3d_texture2d *pos_x;
+        const sdl3d_texture2d *neg_x;
+        const sdl3d_texture2d *pos_y;
+        const sdl3d_texture2d *neg_y;
+        const sdl3d_texture2d *pos_z;
+        const sdl3d_texture2d *neg_z;
+        float size;
+    } sdl3d_skybox_textured;
+
+    /*
+     * Draw a textured skybox centered on the active camera.
+     * All six face textures are required and should correspond to the
+     * standard cubemap directions (+X, -X, +Y, -Y, +Z, -Z).
+     */
+    bool sdl3d_draw_skybox_textured(sdl3d_render_context *context, const sdl3d_skybox_textured *skybox);
 
     /* ============================================================== */
     /* Post-process effects                                           */

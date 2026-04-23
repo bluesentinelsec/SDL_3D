@@ -413,6 +413,50 @@ TEST_F(GLRendererTest, BillboardTransparentPixelsDiscard)
     EXPECT_GT(right_px[0], 100);
 }
 
+TEST_F(GLRendererTest, TexturedSkyboxShowsTopFaceWithBackfaceCulling)
+{
+    const Uint8 red[] = {255, 0, 0, 255};
+    const Uint8 green[] = {0, 255, 0, 255};
+    const Uint8 blue[] = {0, 0, 255, 255};
+    const Uint8 yellow[] = {255, 255, 0, 255};
+    const Uint8 magenta[] = {255, 0, 255, 255};
+    const Uint8 cyan[] = {0, 255, 255, 255};
+    sdl3d_texture2d px = MakeTextureFromPixels(red, 1, 1);
+    sdl3d_texture2d nx = MakeTextureFromPixels(green, 1, 1);
+    sdl3d_texture2d py = MakeTextureFromPixels(blue, 1, 1);
+    sdl3d_texture2d ny = MakeTextureFromPixels(yellow, 1, 1);
+    sdl3d_texture2d pz = MakeTextureFromPixels(magenta, 1, 1);
+    sdl3d_texture2d nz = MakeTextureFromPixels(cyan, 1, 1);
+    sdl3d_skybox_textured skybox = {&px, &nx, &py, &ny, &pz, &nz, 20.0f};
+
+    sdl3d_camera3d cam;
+    cam.position = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    cam.target = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.up = sdl3d_vec3_make(0.0f, 0.0f, -1.0f);
+    cam.fovy = 60.0f;
+    cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    ASSERT_TRUE(sdl3d_set_backface_culling_enabled(ctx, true));
+    sdl3d_clear_render_context(ctx, (sdl3d_color){0, 0, 0, 255});
+    sdl3d_begin_mode_3d(ctx, cam);
+    ASSERT_TRUE(sdl3d_draw_skybox_textured(ctx, &skybox)) << SDL_GetError();
+    sdl3d_end_mode_3d(ctx);
+
+    unsigned char px_out[4];
+    readPixel(160, 120, px_out);
+
+    sdl3d_free_texture(&px);
+    sdl3d_free_texture(&nx);
+    sdl3d_free_texture(&py);
+    sdl3d_free_texture(&ny);
+    sdl3d_free_texture(&pz);
+    sdl3d_free_texture(&nz);
+
+    EXPECT_GT(px_out[2], 150);
+    EXPECT_LT(px_out[0], 80);
+    EXPECT_LT(px_out[1], 80);
+}
+
 TEST_F(GLRendererTest, ToggleRecreateProducesCorrectOutput)
 {
     /* Lesson #9: verify output is correct after context recreation. */

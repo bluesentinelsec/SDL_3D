@@ -285,15 +285,21 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
     for (int s = 0; s < sector_count; s++)
     {
         const sdl3d_sector *sec = &sectors[s];
-        int fi = sec->floor_material < material_count ? sec->floor_material : 0;
-        int ci = sec->ceil_material < material_count ? sec->ceil_material : 0;
+        int fi = (sec->floor_material >= 0 && sec->floor_material < material_count) ? sec->floor_material : -1;
+        int ci = (sec->ceil_material >= 0 && sec->ceil_material < material_count) ? sec->ceil_material : -1;
         int wi = sec->wall_material < material_count ? sec->wall_material : 0;
-        macc *floor_acc = &accs[s * material_count + fi];
-        macc *ceil_acc = &accs[s * material_count + ci];
         macc *wall_acc = &accs[s * material_count + wi];
 
-        add_floor_ceil(floor_acc, sec, sec->floor_y, 1.0f, materials[fi].albedo, materials[fi].tex_scale);
-        add_floor_ceil(ceil_acc, sec, sec->ceil_y, -1.0f, materials[ci].albedo, materials[ci].tex_scale);
+        if (fi >= 0)
+        {
+            macc *floor_acc = &accs[s * material_count + fi];
+            add_floor_ceil(floor_acc, sec, sec->floor_y, 1.0f, materials[fi].albedo, materials[fi].tex_scale);
+        }
+        if (ci >= 0)
+        {
+            macc *ceil_acc = &accs[s * material_count + ci];
+            add_floor_ceil(ceil_acc, sec, sec->ceil_y, -1.0f, materials[ci].albedo, materials[ci].tex_scale);
+        }
 
         for (int e = 0; e < total_edges; e++)
         {
