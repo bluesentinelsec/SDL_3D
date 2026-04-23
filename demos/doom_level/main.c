@@ -169,6 +169,21 @@ static int compare_actor_draws(const void *lhs, const void *rhs)
     return 0;
 }
 
+static void strip_level_lightmap(sdl3d_level *level)
+{
+    SDL_free(level->lightmap_pixels);
+    level->lightmap_pixels = NULL;
+    level->lightmap_width = 0;
+    level->lightmap_height = 0;
+    sdl3d_free_texture(&level->lightmap_texture);
+
+    for (int i = 0; i < level->model.mesh_count; ++i)
+    {
+        SDL_free(level->model.meshes[i].lightmap_uvs);
+        level->model.meshes[i].lightmap_uvs = NULL;
+    }
+}
+
 int main(int argc, char *argv[])
 {
     SDL_Window *win = NULL;
@@ -337,9 +352,9 @@ int main(int argc, char *argv[])
     const int sector_count = (int)SDL_arraysize(sectors);
     const int light_count = (int)SDL_arraysize(lights);
 
-    /* Build two versions: baked lighting and raw materials. */
-    sdl3d_level level_lit, level_unlit;
-    if (!sdl3d_build_level(sectors, sector_count, mats, 6, lights, light_count, &level_lit))
+    /* Build three versions: lightmapped, vertex-baked fallback, and unlit. */
+    sdl3d_level level_lightmapped, level_vertex_baked, level_unlit;
+    if (!sdl3d_build_level(sectors, sector_count, mats, 6, lights, light_count, &level_lightmapped))
     {
         SDL_Log("Level build failed: %s", SDL_GetError());
         sdl3d_free_texture(&enemy_tex);
@@ -355,10 +370,29 @@ int main(int argc, char *argv[])
         SDL_Quit();
         return 1;
     }
+    if (!sdl3d_build_level(sectors, sector_count, mats, 6, lights, light_count, &level_vertex_baked))
+    {
+        SDL_Log("Level build failed: %s", SDL_GetError());
+        sdl3d_free_level(&level_lightmapped);
+        sdl3d_free_texture(&enemy_tex);
+        sdl3d_free_texture(&health_tex);
+        sdl3d_free_texture(&sky_px);
+        sdl3d_free_texture(&sky_nx);
+        sdl3d_free_texture(&sky_py);
+        sdl3d_free_texture(&sky_ny);
+        sdl3d_free_texture(&sky_pz);
+        sdl3d_free_texture(&sky_nz);
+        sdl3d_destroy_render_context(ctx);
+        SDL_DestroyWindow(win);
+        SDL_Quit();
+        return 1;
+    }
+    strip_level_lightmap(&level_vertex_baked);
     if (!sdl3d_build_level(sectors, sector_count, mats, 6, NULL, 0, &level_unlit))
     {
         SDL_Log("Level build failed: %s", SDL_GetError());
-        sdl3d_free_level(&level_lit);
+        sdl3d_free_level(&level_lightmapped);
+        sdl3d_free_level(&level_vertex_baked);
         sdl3d_free_texture(&enemy_tex);
         sdl3d_free_texture(&health_tex);
         sdl3d_free_texture(&sky_px);
@@ -372,7 +406,8 @@ int main(int argc, char *argv[])
         SDL_Quit();
         return 1;
     }
-    bool use_baked = true;
+    bool use_lit_world = true;
+    bool use_lightmaps = true;
 
     demo_sprite_actor actors[] = {
         {&enemy_tex, sdl3d_vec3_make(5.8f, 0.0f, 6.8f), (sdl3d_vec2){1.7f, 2.6f}, true, 0.10f, 7.0f},
@@ -390,10 +425,10 @@ int main(int argc, char *argv[])
     float elapsed = 0.0f;
     sdl3d_skybox_textured skybox = {&sky_px, &sky_nx, &sky_py, &sky_ny, &sky_pz, &sky_nz, 350.0f};
 
-    SDL_Log("Portals detected: %d", level_lit.portal_count);
-    for (int i = 0; i < level_lit.portal_count; i++)
+    SDL_Log("Portals detected: %d", level_lightmapped.portal_count);
+    for (int i = 0; i < level_lightmapped.portal_count; i++)
     {
-        const sdl3d_level_portal *p = &level_lit.portals[i];
+        const sdl3d_level_portal *p = &level_lightmapped.portals[i];
         SDL_Log("  portal %d: sector %d <-> %d  x[%.1f,%.1f] z[%.1f,%.1f] y[%.2f,%.2f]", i, p->sector_a, p->sector_b,
                 p->min_x, p->max_x, p->min_z, p->max_z, p->floor_y, p->ceil_y);
     }
@@ -430,7 +465,15 @@ int main(int argc, char *argv[])
             if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_ESCAPE)
                 running = false;
             if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_L)
-                use_baked = !use_baked;
+            {
+                use_lit_world = !use_lit_world;
+                SDL_Log("World lighting: %s", use_lit_world ? (use_lightmaps ? "LIGHTMAP" : "VERTEX-BAKED") : "UNLIT");
+            }
+            if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_M)
+            {
+                use_lightmaps = !use_lightmaps;
+                SDL_Log("Lightmap mode: %s", use_lightmaps ? "LIGHTMAP" : "VERTEX-BAKED");
+            }
             if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_F1)
             {
                 show_debug = !show_debug;
@@ -526,7 +569,8 @@ int main(int argc, char *argv[])
                            proj_dz, &proj_life);
 
         /* Compute portal visibility. */
-        sdl3d_level *active_level = use_baked ? &level_lit : &level_unlit;
+        sdl3d_level *active_level =
+            use_lit_world ? (use_lightmaps ? &level_lightmapped : &level_vertex_baked) : &level_unlit;
         int current_sector = sdl3d_level_find_sector(active_level, sectors, px, pz);
         sdl3d_vec3 cam_dir = sdl3d_vec3_make(fx, SDL_sinf(pitch), fz);
 
@@ -685,7 +729,8 @@ int main(int argc, char *argv[])
         }
     }
 
-    sdl3d_free_level(&level_lit);
+    sdl3d_free_level(&level_lightmapped);
+    sdl3d_free_level(&level_vertex_baked);
     sdl3d_free_level(&level_unlit);
     sdl3d_free_texture(&enemy_tex);
     sdl3d_free_texture(&health_tex);
