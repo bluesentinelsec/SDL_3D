@@ -1514,6 +1514,7 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_mod
             (context->light_count > 0 || mesh->colors_are_baked_light))
         {
             sdl3d_build_lighting_params(context, &lp_storage);
+            lp_storage.baked_light_mode = mesh->colors_are_baked_light;
             if (material != NULL)
             {
                 lp_storage.metallic = material->metallic;
