@@ -806,17 +806,87 @@ int main(int argc, char *argv[])
 
         sdl3d_end_mode_3d(ctx);
 
-        /* Draw debug text overlay. */
+        /* 2D text overlay pass. */
         if (has_font)
         {
-            char fps_buf[64];
-            float tw, th;
             int cw = sdl3d_get_render_context_width(ctx);
             int ch = sdl3d_get_render_context_height(ctx);
+            sdl3d_camera3d ortho_cam;
+            ortho_cam.position = sdl3d_vec3_make(0, 0, 1);
+            ortho_cam.target = sdl3d_vec3_make(0, 0, 0);
+            ortho_cam.up = sdl3d_vec3_make(0, 1, 0);
+            ortho_cam.fovy = (float)ch;
+            ortho_cam.projection = SDL3D_CAMERA_ORTHOGRAPHIC;
+            sdl3d_begin_mode_3d(ctx, ortho_cam);
+
+            char fps_buf[64];
+            float tw, th;
             SDL_snprintf(fps_buf, sizeof(fps_buf), "FPS: %.0f", dt > 0 ? 1.0f / dt : 0.0f);
             sdl3d_measure_text(&debug_font, fps_buf, &tw, &th);
-            sdl3d_draw_text(ctx, &debug_font, fps_buf, ((float)cw - tw) / 2.0f, ((float)ch - th) / 2.0f,
-                            (sdl3d_color){0, 255, 0, 255});
+
+            /* Draw text quads in pixel coordinates mapped to ortho space.
+             * Ortho camera: X = [-cw/2, cw/2], Y = [-ch/2, ch/2]. */
+            float tx = -tw / 2.0f;
+            float ty = th / 2.0f;
+
+            /* Draw each glyph as a colored quad. */
+            {
+                float cursor_x = tx;
+                float cursor_y = ty - debug_font.ascent;
+                unsigned char *rgba =
+                    (unsigned char *)SDL_malloc((size_t)(debug_font.atlas_w * debug_font.atlas_h * 4));
+                if (rgba)
+                {
+                    sdl3d_texture2d tex;
+                    for (int i = 0; i < debug_font.atlas_w * debug_font.atlas_h; i++)
+                    {
+                        rgba[i * 4 + 0] = 255;
+                        rgba[i * 4 + 1] = 255;
+                        rgba[i * 4 + 2] = 255;
+                        rgba[i * 4 + 3] = debug_font.atlas_pixels[i];
+                    }
+                    SDL_zerop(&tex);
+                    tex.width = debug_font.atlas_w;
+                    tex.height = debug_font.atlas_h;
+                    tex.pixels = rgba;
+                    tex.filter = SDL3D_TEXTURE_FILTER_BILINEAR;
+                    tex.wrap_u = SDL3D_TEXTURE_WRAP_CLAMP;
+                    tex.wrap_v = SDL3D_TEXTURE_WRAP_CLAMP;
+
+                    for (const char *fp = fps_buf; *fp; fp++)
+                    {
+                        int ci = (int)*fp - SDL3D_FONT_FIRST_CHAR;
+                        if (ci < 0 || ci >= SDL3D_FONT_CHAR_COUNT)
+                            continue;
+                        const sdl3d_glyph *g = &debug_font.glyphs[ci];
+                        float gw = g->x1 - g->x0;
+                        float gh = g->y1 - g->y0;
+                        if (gw <= 0 || gh <= 0)
+                        {
+                            cursor_x += g->xadvance;
+                            continue;
+                        }
+                        float qx0 = cursor_x + g->xoff;
+                        float qy0 = cursor_y - g->yoff;
+                        float qx1 = qx0 + gw;
+                        float qy1 = qy0 - gh;
+                        float positions[18] = {qx0, qy0, 0, qx1, qy0, 0, qx1, qy1, 0,
+                                               qx0, qy0, 0, qx1, qy1, 0, qx0, qy1, 0};
+                        float uvs[12] = {g->u0, g->v0, g->u1, g->v0, g->u1, g->v1,
+                                         g->u0, g->v0, g->u1, g->v1, g->u0, g->v1};
+                        sdl3d_mesh mesh;
+                        SDL_zerop(&mesh);
+                        mesh.positions = positions;
+                        mesh.uvs = uvs;
+                        mesh.vertex_count = 6;
+                        sdl3d_draw_mesh(ctx, &mesh, &tex, (sdl3d_color){0, 255, 0, 255});
+                        cursor_x += g->xadvance;
+                    }
+                    SDL_free(rgba);
+                }
+            }
+
+            sdl3d_end_mode_3d(ctx);
         }
 
         sdl3d_present_render_context(ctx);
