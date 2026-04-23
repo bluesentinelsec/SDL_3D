@@ -231,6 +231,21 @@ TEST(SDL3DLevelBuilder, NoPortalsBetweenDisjointSectors)
     sdl3d_free_level(&level);
 }
 
+TEST(SDL3DLevelBuilder, AllowsOpenCeilingBySkippingCeilingGeometry)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                              MakeLevelMaterial("wall.png")};
+    sdl3d_sector sector = MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f);
+    sdl3d_level level{};
+
+    sector.ceil_material = -1;
+
+    ASSERT_TRUE(sdl3d_build_level(&sector, 1, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+    EXPECT_EQ(level.model.mesh_count, 2);
+
+    sdl3d_free_level(&level);
+}
+
 TEST(SDL3DLevelVisibility, FindSectorReturnsCorrectSector)
 {
     const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),

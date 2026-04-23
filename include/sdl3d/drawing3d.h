@@ -69,6 +69,34 @@ extern "C"
     bool sdl3d_draw_line_3d(sdl3d_render_context *context, sdl3d_vec3 start, sdl3d_vec3 end, sdl3d_color color);
     bool sdl3d_draw_point_3d(sdl3d_render_context *context, sdl3d_vec3 position, sdl3d_color color);
 
+    typedef enum sdl3d_billboard_mode
+    {
+        /* Keep the sprite upright in world space while facing the camera. */
+        SDL3D_BILLBOARD_UPRIGHT = 0,
+        /* Fully face the camera using the camera's right/up vectors. */
+        SDL3D_BILLBOARD_SPHERICAL = 1
+    } sdl3d_billboard_mode;
+
+    /*
+     * Draw a textured camera-facing quad. `position` is the billboard pivot
+     * in world space, `size` is width/height in world units, and `anchor`
+     * selects which point inside the sprite sits at `position`:
+     * - x=0 left, 0.5 center, 1 right
+     * - y=0 bottom, 0.5 center, 1 top
+     *
+     * Billboards always use the unlit textured path so sprite art keeps its
+     * authored shading while still participating in depth/culling correctly.
+     */
+    bool sdl3d_draw_billboard_ex(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 position,
+                                 sdl3d_vec2 size, sdl3d_vec2 anchor, sdl3d_billboard_mode mode, sdl3d_color tint);
+
+    /*
+     * Convenience wrapper for FPS-style sprites: upright billboard with a
+     * bottom-center pivot.
+     */
+    bool sdl3d_draw_billboard(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 position,
+                              sdl3d_vec2 size, sdl3d_color tint);
+
     /*
      * Draw a single mesh using the current model matrix stack. If `texture`
      * is NULL, the mesh is rendered untextured and `tint` supplies the flat
