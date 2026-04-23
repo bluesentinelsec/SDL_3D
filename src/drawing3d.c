@@ -8,6 +8,7 @@
 #include "texture_internal.h"
 
 #include "lighting_internal.h"
+#include "sdl3d/level.h"
 
 static const int SDL3D_MODEL_STACK_INITIAL_CAPACITY = 8;
 
@@ -117,6 +118,39 @@ bool sdl3d_begin_mode_3d(sdl3d_render_context *context, sdl3d_camera3d camera)
     context->model_stack_depth = 1;
     context->model_stack[0] = sdl3d_mat4_identity();
     sdl3d_update_current_model_matrices(context);
+
+    /* Cache frustum planes once per frame so per-mesh culling is cheap. */
+    {
+        const float *m = context->view_projection.m;
+        float raw[6][4] = {
+            {m[3] + m[0], m[7] + m[4], m[11] + m[8], m[15] + m[12]},
+            {m[3] - m[0], m[7] - m[4], m[11] - m[8], m[15] - m[12]},
+            {m[3] + m[1], m[7] + m[5], m[11] + m[9], m[15] + m[13]},
+            {m[3] - m[1], m[7] - m[5], m[11] - m[9], m[15] - m[13]},
+            {m[3] + m[2], m[7] + m[6], m[11] + m[10], m[15] + m[14]},
+            {m[3] - m[2], m[7] - m[6], m[11] - m[10], m[15] - m[14]},
+        };
+        for (int i = 0; i < 6; ++i)
+        {
+            float len = SDL_sqrtf(raw[i][0] * raw[i][0] + raw[i][1] * raw[i][1] + raw[i][2] * raw[i][2]);
+            if (len > 0.000001f)
+            {
+                context->frustum_planes[i][0] = raw[i][0] / len;
+                context->frustum_planes[i][1] = raw[i][1] / len;
+                context->frustum_planes[i][2] = raw[i][2] / len;
+                context->frustum_planes[i][3] = raw[i][3] / len;
+            }
+            else
+            {
+                context->frustum_planes[i][0] = 0.0f;
+                context->frustum_planes[i][1] = 0.0f;
+                context->frustum_planes[i][2] = 0.0f;
+                context->frustum_planes[i][3] = raw[i][3];
+            }
+        }
+        context->frustum_planes_valid = true;
+    }
+
     context->in_mode_3d = true;
     return true;
 }
@@ -134,6 +168,7 @@ bool sdl3d_end_mode_3d(sdl3d_render_context *context)
     }
 
     context->in_mode_3d = false;
+    context->frustum_planes_valid = false;
     context->model_stack_depth = 0;
     context->model = sdl3d_mat4_identity();
     context->model_view_projection = context->view_projection;
@@ -371,6 +406,95 @@ static sdl3d_vec3 sdl3d_transform_position(sdl3d_mat4 m, sdl3d_vec3 p)
 {
     sdl3d_vec4 w = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(p, 1.0f));
     return sdl3d_vec3_make(w.x, w.y, w.z);
+}
+
+typedef struct
+{
+    float a;
+    float b;
+    float c;
+    float d;
+} sdl3d_frustum_plane;
+
+static sdl3d_bounding_box sdl3d_transform_bounding_box(sdl3d_mat4 transform, sdl3d_bounding_box local_bounds)
+{
+    const sdl3d_vec3 corners[8] = {
+        sdl3d_vec3_make(local_bounds.min.x, local_bounds.min.y, local_bounds.min.z),
+        sdl3d_vec3_make(local_bounds.min.x, local_bounds.min.y, local_bounds.max.z),
+        sdl3d_vec3_make(local_bounds.min.x, local_bounds.max.y, local_bounds.min.z),
+        sdl3d_vec3_make(local_bounds.min.x, local_bounds.max.y, local_bounds.max.z),
+        sdl3d_vec3_make(local_bounds.max.x, local_bounds.min.y, local_bounds.min.z),
+        sdl3d_vec3_make(local_bounds.max.x, local_bounds.min.y, local_bounds.max.z),
+        sdl3d_vec3_make(local_bounds.max.x, local_bounds.max.y, local_bounds.min.z),
+        sdl3d_vec3_make(local_bounds.max.x, local_bounds.max.y, local_bounds.max.z),
+    };
+    sdl3d_bounding_box world_bounds;
+    sdl3d_vec3 p = sdl3d_transform_position(transform, corners[0]);
+    world_bounds.min = p;
+    world_bounds.max = p;
+
+    for (int i = 1; i < 8; ++i)
+    {
+        p = sdl3d_transform_position(transform, corners[i]);
+        if (p.x < world_bounds.min.x)
+            world_bounds.min.x = p.x;
+        if (p.y < world_bounds.min.y)
+            world_bounds.min.y = p.y;
+        if (p.z < world_bounds.min.z)
+            world_bounds.min.z = p.z;
+        if (p.x > world_bounds.max.x)
+            world_bounds.max.x = p.x;
+        if (p.y > world_bounds.max.y)
+            world_bounds.max.y = p.y;
+        if (p.z > world_bounds.max.z)
+            world_bounds.max.z = p.z;
+    }
+
+    return world_bounds;
+}
+
+static bool sdl3d_box_intersects_frustum(sdl3d_bounding_box bounds, const sdl3d_frustum_plane planes[6])
+{
+    for (int i = 0; i < 6; ++i)
+    {
+        const sdl3d_frustum_plane plane = planes[i];
+        const float px = plane.a >= 0.0f ? bounds.max.x : bounds.min.x;
+        const float py = plane.b >= 0.0f ? bounds.max.y : bounds.min.y;
+        const float pz = plane.c >= 0.0f ? bounds.max.z : bounds.min.z;
+        const float distance = plane.a * px + plane.b * py + plane.c * pz + plane.d;
+        if (distance < 0.0f)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool sdl3d_mesh_is_visible(const sdl3d_render_context *context, const sdl3d_mesh *mesh)
+{
+    sdl3d_bounding_box world_bounds;
+
+    if (context == NULL || mesh == NULL || !mesh->has_local_bounds)
+    {
+        return true;
+    }
+
+    if (!context->frustum_planes_valid)
+    {
+        return true;
+    }
+
+    sdl3d_frustum_plane planes[6];
+    for (int i = 0; i < 6; ++i)
+    {
+        planes[i].a = context->frustum_planes[i][0];
+        planes[i].b = context->frustum_planes[i][1];
+        planes[i].c = context->frustum_planes[i][2];
+        planes[i].d = context->frustum_planes[i][3];
+    }
+
+    world_bounds = sdl3d_transform_bounding_box(context->model, mesh->local_bounds);
+    return sdl3d_box_intersects_frustum(world_bounds, planes);
 }
 
 /* Evaluate PBR shading at a single point and return the result as an sdl3d_color.
@@ -1176,6 +1300,11 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_mod
     sdl3d_vec4 mesh_modulate = tint_modulate;
     bool ok = true;
 
+    if (!sdl3d_mesh_is_visible(context, mesh))
+    {
+        return true;
+    }
+
     if (mesh->material_index < -1)
     {
         return SDL_SetError("Mesh material index %d is invalid.", mesh->material_index);
@@ -1498,4 +1627,38 @@ bool sdl3d_get_framebuffer_depth(const sdl3d_render_context *context, int x, int
 
     *out_depth = context->depth_buffer[(y * context->width) + x];
     return true;
+}
+
+/* ------------------------------------------------------------------ */
+/* Level drawing with portal visibility                                */
+/* ------------------------------------------------------------------ */
+
+bool sdl3d_draw_level(sdl3d_render_context *context, const sdl3d_level *level, const sdl3d_visibility_result *vis,
+                      sdl3d_color tint)
+{
+    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_level"))
+        return false;
+    if (!level)
+        return SDL_InvalidParamError("level");
+
+    const sdl3d_model *model = &level->model;
+    if (!model->meshes || model->mesh_count <= 0)
+        return SDL_SetError("Level has no meshes.");
+
+    const sdl3d_vec4 tint_modulate = sdl3d_color_to_modulate(tint);
+    bool ok = true;
+
+    for (int i = 0; ok && i < model->mesh_count; ++i)
+    {
+        /* Portal visibility: skip meshes in hidden sectors. */
+        if (vis && vis->sector_visible && level->mesh_sector_ids)
+        {
+            int sid = level->mesh_sector_ids[i];
+            if (sid >= 0 && sid < level->sector_count && !vis->sector_visible[sid])
+                continue;
+        }
+        ok = sdl3d_draw_model_mesh(context, model, i, tint_modulate, NULL);
+    }
+
+    return ok;
 }

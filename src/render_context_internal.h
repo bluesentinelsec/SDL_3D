@@ -87,6 +87,12 @@ struct sdl3d_render_context
 
     /* OpenGL backend (NULL when using software backend). */
     struct sdl3d_gl_context *gl;
+
+    /* Cached frustum planes extracted from view_projection. Updated once
+     * per sdl3d_begin_mode_3d so per-mesh visibility tests avoid redundant
+     * extraction. Order: left, right, bottom, top, near, far. */
+    float frustum_planes[6][4]; /* {a,b,c,d} per plane, normalized */
+    bool frustum_planes_valid;
 };
 
 static inline sdl3d_framebuffer sdl3d_framebuffer_from_context(sdl3d_render_context *context)
