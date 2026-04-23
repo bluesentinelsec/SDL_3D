@@ -2027,6 +2027,11 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
                         continue;
                     }
 
+                    /* Always compute world position — needed by fog in all paths. */
+                    wpx = (ba * a.wx_over_w + bb * b.wx_over_w + bc * c.wx_over_w) * pw;
+                    wpy = (ba * a.wy_over_w + bb * b.wy_over_w + bc * c.wy_over_w) * pw;
+                    wpz = (ba * a.wz_over_w + bb * b.wz_over_w + bc * c.wz_over_w) * pw;
+
                     if (baked_static_fast_path)
                     {
                         lit_r = albedo_r + lp->emissive[0];
@@ -2046,9 +2051,6 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
                             ny *= inv;
                             nz *= inv;
                         }
-                        wpx = (ba * a.wx_over_w + bb * b.wx_over_w + bc * c.wx_over_w) * pw;
-                        wpy = (ba * a.wy_over_w + bb * b.wy_over_w + bc * c.wy_over_w) * pw;
-                        wpz = (ba * a.wz_over_w + bb * b.wz_over_w + bc * c.wz_over_w) * pw;
 
                         sdl3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, nx, ny, nz, wpx, wpy, wpz, &lit_r,
                                                  &lit_g, &lit_b);
@@ -2060,12 +2062,9 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
                          * Just apply fog and clamp. */
                         if (lp->fog.mode != SDL3D_FOG_NONE)
                         {
-                            float fwpx = (ba * a.wx_over_w + bb * b.wx_over_w + bc * c.wx_over_w) * pw;
-                            float fwpy = (ba * a.wy_over_w + bb * b.wy_over_w + bc * c.wy_over_w) * pw;
-                            float fwpz = (ba * a.wz_over_w + bb * b.wz_over_w + bc * c.wz_over_w) * pw;
-                            float dx = fwpx - lp->camera_pos.x;
-                            float dy = fwpy - lp->camera_pos.y;
-                            float dz = fwpz - lp->camera_pos.z;
+                            float dx = wpx - lp->camera_pos.x;
+                            float dy = wpy - lp->camera_pos.y;
+                            float dz = wpz - lp->camera_pos.z;
                             float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
                             float fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
                             lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
