@@ -688,6 +688,7 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         }
         lp.shading_mode = (int)context->shading_mode;
         lp.uv_mode = (int)context->uv_mode;
+        lp.baked_light_mode = mesh->colors_are_baked_light;
         lp.vertex_snap = context->vertex_snap;
         lp.vertex_snap_precision = context->vertex_snap_precision;
         lp.texture_filter = (int)context->texture_filter;
@@ -1120,8 +1121,8 @@ bool sdl3d_draw_point_3d(sdl3d_render_context *context, sdl3d_vec3 position, sdl
 bool sdl3d_draw_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, const sdl3d_texture2d *texture,
                      sdl3d_color tint)
 {
-    if (context != NULL && context->shading_mode != SDL3D_SHADING_UNLIT && context->light_count > 0 && mesh != NULL &&
-        mesh->normals != NULL)
+    if (context != NULL && context->shading_mode != SDL3D_SHADING_UNLIT && mesh != NULL && mesh->normals != NULL &&
+        (context->light_count > 0 || mesh->colors_are_baked_light))
     {
         sdl3d_lighting_params lp;
         sdl3d_build_lighting_params(context, &lp);
@@ -1248,7 +1249,8 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_mod
         sdl3d_lighting_params lp_storage;
         const sdl3d_lighting_params *lp_ptr = NULL;
 
-        if (context->shading_mode != SDL3D_SHADING_UNLIT && context->light_count > 0)
+        if (context->shading_mode != SDL3D_SHADING_UNLIT && mesh->normals != NULL &&
+            (context->light_count > 0 || mesh->colors_are_baked_light))
         {
             sdl3d_build_lighting_params(context, &lp_storage);
             if (material != NULL)

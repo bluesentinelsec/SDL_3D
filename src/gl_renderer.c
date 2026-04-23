@@ -86,6 +86,7 @@ typedef struct sdl3d_draw_entry
     float emissive[3];
     const sdl3d_texture2d *texture;
     bool lit;
+    bool baked_light_mode;
     float mvp[16];
 } sdl3d_draw_entry;
 
@@ -118,6 +119,7 @@ struct sdl3d_gl_context
     GLint pbr_metallic_loc;
     GLint pbr_roughness_loc;
     GLint pbr_emissive_loc;
+    GLint pbr_baked_light_mode_loc;
 
     /* Unlit uniform locations */
     GLint unlit_mvp_loc;
@@ -353,6 +355,7 @@ static const char k_pbr_frag_decl[] = "#define MAX_LIGHTS 8\n"
                                       "uniform float uMetallic;\n"
                                       "uniform float uRoughness;\n"
                                       "uniform vec3 uEmissive;\n"
+                                      "uniform int uBakedLightMode;\n"
                                       "\n"
                                       "uniform sampler2DArray uShadowMap;\n"
                                       "uniform mat4 uShadowVP;\n"
@@ -399,7 +402,8 @@ static const char k_pbr_frag_main[] =
     "void main() {\n"
     "    vec2 uv = vTexCoord;\n"
     "    vec4 texel = (uHasTexture != 0) ? texture(uTexture, uv) : vec4(1.0);\n"
-    "    vec3 albedo = texel.rgb * vColor.rgb * uTint.rgb;\n"
+    "    vec3 albedo = texel.rgb * ((uBakedLightMode != 0) ? uTint.rgb : (vColor.rgb * uTint.rgb));\n"
+    "    vec3 bakedBaseColor = texel.rgb * vColor.rgb * uTint.rgb;\n"
     "    float alpha = texel.a * vColor.a * uTint.a;\n"
     "    if (alpha <= 0.0) discard;\n"
     "\n"
@@ -432,8 +436,12 @@ static const char k_pbr_frag_main[] =
     "        }\n"
     "\n"
     "        vec3 radiance = uLights[i].color * uLights[i].intensity * attenuation;\n"
-    "        float NdotL = max(dot(N, L), 0.0);\n"
+    "        float NdotL = (uBakedLightMode != 0) ? abs(dot(N, L)) : max(dot(N, L), 0.0);\n"
     "        if (NdotL <= 0.0) continue;\n"
+    "        if (uBakedLightMode != 0) {\n"
+    "            Lo += albedo * radiance * NdotL;\n"
+    "            continue;\n"
+    "        }\n"
     "\n"
     "        vec3 H = normalize(L + V);\n"
     "        float NdotH = max(dot(N, H), 0.0);\n"
@@ -452,67 +460,72 @@ static const char k_pbr_frag_main[] =
 
 static const char k_pbr_frag_post[] =
     "\n"
-    "    /* Shadow (CSM cascade selection with PCF 3x3). */\n"
-    "    if (uShadowEnabled != 0) {\n"
-    "        int layer = 0;\n"
-    "        if (uCSMEnabled != 0) {\n"
-    "            float fragDepth = abs((uViewMatrix * vec4(vWorldPos, 1.0)).z);\n"
-    "            layer = 3;\n"
-    "            for (int i = 0; i < 4; ++i) {\n"
-    "                if (fragDepth < uCSMSplits[i]) { layer = i; break; }\n"
-    "            }\n"
-    "        }\n"
-    "        mat4 shadowVP = (uCSMEnabled != 0) ? uCSMVP[layer] : uShadowVP;\n"
-    "        vec4 lpos = shadowVP * vec4(vWorldPos, 1.0);\n"
-    "        vec3 projCoords = lpos.xyz / lpos.w * 0.5 + 0.5;\n"
-    "        float currentDepth = projCoords.z;\n"
-    "        vec3 lightDir = normalize(-uLights[0].direction);\n"
-    "        float bias = max(0.05 * (1.0 - dot(N, lightDir)), 0.005);\n"
-    "        float shadow = 0.0;\n"
-    "        vec2 texelSize = 1.0 / vec2(2048.0);\n"
-    "        for (int x = -1; x <= 1; ++x) {\n"
-    "            for (int y = -1; y <= 1; ++y) {\n"
-    "                float pcfDepth = texture(uShadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize, "
-    "float(layer))).r;\n"
-    "                shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;\n"
-    "            }\n"
-    "        }\n"
-    "        shadow /= 9.0;\n"
-    "        if (projCoords.z > 1.0) shadow = 0.0;\n"
-    "        Lo *= (1.0 - shadow);\n"
-    "    }\n"
-    "\n"
-    "    /* Point light shadows. */\n"
-    "    for (int ps = 0; ps < uPointShadowCount && ps < 2; ps++) {\n"
-    "        vec3 fragToLight = vWorldPos - uPointShadowLightPos[ps];\n"
-    "        float closestDepth = texture(uPointShadowMap[ps], fragToLight).r * uPointShadowFar[ps];\n"
-    "        float currentDepth = length(fragToLight);\n"
-    "        float pbias = 0.15;\n"
-    "        if (currentDepth - pbias > closestDepth) {\n"
-    "            Lo *= 0.5;\n"
-    "        }\n"
-    "    }\n"
-    "\n"
-    "    /* Ambient: IBL when available, hemisphere fallback. */\n"
-    "    vec3 ambient;\n"
-    "    if (uIBLEnabled != 0) {\n"
-    "        vec3 F_ibl = FresnelSchlickRoughness(NdotV, F0, uRoughness);\n"
-    "        vec3 kS_ibl = F_ibl;\n"
-    "        vec3 kD_ibl = (1.0 - kS_ibl) * (1.0 - uMetallic);\n"
-    "        vec3 irradiance = texture(uIrradianceMap, N).rgb;\n"
-    "        vec3 diffuse_ibl = irradiance * albedo;\n"
-    "        vec3 R = reflect(-V, N);\n"
-    "        vec3 prefilteredColor = textureLod(uPrefilterMap, R, uRoughness * uMaxReflectionLod).rgb;\n"
-    "        vec2 brdf = texture(uBrdfLUT, vec2(NdotV, uRoughness)).rg;\n"
-    "        vec3 specular_ibl = prefilteredColor * (F_ibl * brdf.x + brdf.y);\n"
-    "        ambient = kD_ibl * diffuse_ibl + specular_ibl;\n"
+    "    vec3 color;\n"
+    "    if (uBakedLightMode != 0) {\n"
+    "        color = bakedBaseColor + Lo + uEmissive;\n"
     "    } else {\n"
-    "        vec3 skyColor = uAmbient * 1.2;\n"
-    "        vec3 groundColor = uAmbient * vec3(0.6, 0.5, 0.4);\n"
-    "        float hemi = dot(N, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5;\n"
-    "        ambient = mix(groundColor, skyColor, hemi) * albedo;\n"
+    "        /* Shadow (CSM cascade selection with PCF 3x3). */\n"
+    "        if (uShadowEnabled != 0) {\n"
+    "            int layer = 0;\n"
+    "            if (uCSMEnabled != 0) {\n"
+    "                float fragDepth = abs((uViewMatrix * vec4(vWorldPos, 1.0)).z);\n"
+    "                layer = 3;\n"
+    "                for (int i = 0; i < 4; ++i) {\n"
+    "                    if (fragDepth < uCSMSplits[i]) { layer = i; break; }\n"
+    "                }\n"
+    "            }\n"
+    "            mat4 shadowVP = (uCSMEnabled != 0) ? uCSMVP[layer] : uShadowVP;\n"
+    "            vec4 lpos = shadowVP * vec4(vWorldPos, 1.0);\n"
+    "            vec3 projCoords = lpos.xyz / lpos.w * 0.5 + 0.5;\n"
+    "            float currentDepth = projCoords.z;\n"
+    "            vec3 lightDir = normalize(-uLights[0].direction);\n"
+    "            float bias = max(0.05 * (1.0 - dot(N, lightDir)), 0.005);\n"
+    "            float shadow = 0.0;\n"
+    "            vec2 texelSize = 1.0 / vec2(2048.0);\n"
+    "            for (int x = -1; x <= 1; ++x) {\n"
+    "                for (int y = -1; y <= 1; ++y) {\n"
+    "                    float pcfDepth = texture(uShadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize, "
+    "float(layer))).r;\n"
+    "                    shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;\n"
+    "                }\n"
+    "            }\n"
+    "            shadow /= 9.0;\n"
+    "            if (projCoords.z > 1.0) shadow = 0.0;\n"
+    "            Lo *= (1.0 - shadow);\n"
+    "        }\n"
+    "\n"
+    "        /* Point light shadows. */\n"
+    "        for (int ps = 0; ps < uPointShadowCount && ps < 2; ps++) {\n"
+    "            vec3 fragToLight = vWorldPos - uPointShadowLightPos[ps];\n"
+    "            float closestDepth = texture(uPointShadowMap[ps], fragToLight).r * uPointShadowFar[ps];\n"
+    "            float currentDepth = length(fragToLight);\n"
+    "            float pbias = 0.15;\n"
+    "            if (currentDepth - pbias > closestDepth) {\n"
+    "                Lo *= 0.5;\n"
+    "            }\n"
+    "        }\n"
+    "\n"
+    "        /* Ambient: IBL when available, hemisphere fallback. */\n"
+    "        vec3 ambient;\n"
+    "        if (uIBLEnabled != 0) {\n"
+    "            vec3 F_ibl = FresnelSchlickRoughness(NdotV, F0, uRoughness);\n"
+    "            vec3 kS_ibl = F_ibl;\n"
+    "            vec3 kD_ibl = (1.0 - kS_ibl) * (1.0 - uMetallic);\n"
+    "            vec3 irradiance = texture(uIrradianceMap, N).rgb;\n"
+    "            vec3 diffuse_ibl = irradiance * albedo;\n"
+    "            vec3 R = reflect(-V, N);\n"
+    "            vec3 prefilteredColor = textureLod(uPrefilterMap, R, uRoughness * uMaxReflectionLod).rgb;\n"
+    "            vec2 brdf = texture(uBrdfLUT, vec2(NdotV, uRoughness)).rg;\n"
+    "            vec3 specular_ibl = prefilteredColor * (F_ibl * brdf.x + brdf.y);\n"
+    "            ambient = kD_ibl * diffuse_ibl + specular_ibl;\n"
+    "        } else {\n"
+    "            vec3 skyColor = uAmbient * 1.2;\n"
+    "            vec3 groundColor = uAmbient * vec3(0.6, 0.5, 0.4);\n"
+    "            float hemi = dot(N, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5;\n"
+    "            ambient = mix(groundColor, skyColor, hemi) * albedo;\n"
+    "        }\n"
+    "        color = ambient + Lo + uEmissive;\n"
     "    }\n"
-    "    vec3 color = ambient + Lo + uEmissive;\n"
     "\n"
     "    if (uFogMode > 0) {\n"
     "        float dist = length(uCameraPos - vWorldPos);\n"
@@ -523,13 +536,17 @@ static const char k_pbr_frag_post[] =
     "        color = mix(color, uFogColor, fogFactor);\n"
     "    }\n"
     "\n"
-    "    if (uTonemapMode == 1) color = color / (1.0 + color);\n"
-    "    else if (uTonemapMode == 2) {\n"
-    "        float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;\n"
-    "        color = clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);\n"
-    "    }\n"
+    "    if (uBakedLightMode == 0) {\n"
+    "        if (uTonemapMode == 1) color = color / (1.0 + color);\n"
+    "        else if (uTonemapMode == 2) {\n"
+    "            float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;\n"
+    "            color = clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);\n"
+    "        }\n"
     "\n"
-    "    color = pow(clamp(color, 0.0, 1.0), vec3(1.0 / 2.2));\n"
+    "        color = pow(clamp(color, 0.0, 1.0), vec3(1.0 / 2.2));\n"
+    "    } else {\n"
+    "        color = clamp(color, 0.0, 1.0);\n"
+    "    }\n"
     "\n"
     "    fragColor = vec4(color, alpha);\n"
     "}\n";
@@ -1543,6 +1560,7 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
             gl->Uniform1f(ctx->pbr_metallic_loc, e->metallic);
             gl->Uniform1f(ctx->pbr_roughness_loc, e->roughness);
             gl->Uniform3f(ctx->pbr_emissive_loc, e->emissive[0], e->emissive[1], e->emissive[2]);
+            gl->Uniform1i(ctx->pbr_baked_light_mode_loc, e->baked_light_mode ? 1 : 0);
 
             gl->ActiveTexture(GL_TEXTURE0);
             gl->BindTexture(GL_TEXTURE_2D, tex);
@@ -2107,6 +2125,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->pbr_metallic_loc = gl->GetUniformLocation(ctx->pbr_program, "uMetallic");
     ctx->pbr_roughness_loc = gl->GetUniformLocation(ctx->pbr_program, "uRoughness");
     ctx->pbr_emissive_loc = gl->GetUniformLocation(ctx->pbr_program, "uEmissive");
+    ctx->pbr_baked_light_mode_loc = gl->GetUniformLocation(ctx->pbr_program, "uBakedLightMode");
 
     /* IBL uniform locations. */
     ctx->pbr_irradiance_map_loc = gl->GetUniformLocation(ctx->pbr_program, "uIrradianceMap");
@@ -2608,6 +2627,7 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     e->metallic = params->metallic;
     e->roughness = params->roughness;
     SDL_memcpy(e->emissive, params->emissive, 3 * sizeof(float));
+    e->baked_light_mode = params->baked_light_mode;
 
     /* check_z_fighting(ctx, e); — disabled: triggers on authored model geometry */
     (void)check_z_fighting;

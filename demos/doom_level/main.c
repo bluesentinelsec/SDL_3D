@@ -16,6 +16,77 @@
 #define WINDOW_H 720
 #define MOVE_SPEED 12.0f
 #define MOUSE_SENS 0.002f
+#define PROJ_SPEED 20.0f
+#define PROJ_LIFETIME 3.0f
+#define ROCKET_LIGHT_R 1.0f
+#define ROCKET_LIGHT_G 0.6f
+#define ROCKET_LIGHT_B 0.2f
+#define ROCKET_LIGHT_INTENSITY 4.0f
+#define ROCKET_LIGHT_RANGE 4.0f
+
+static bool point_in_sector_xz(const sdl3d_sector *sector, float x, float z)
+{
+    bool inside = false;
+    for (int i = 0, j = sector->num_points - 1; i < sector->num_points; j = i++)
+    {
+        float xi = sector->points[i][0];
+        float zi = sector->points[i][1];
+        float xj = sector->points[j][0];
+        float zj = sector->points[j][1];
+        bool crosses = ((zi > z) != (zj > z));
+        if (!crosses)
+            continue;
+        float intersect_x = (xj - xi) * (z - zi) / (zj - zi) + xi;
+        if (x < intersect_x)
+            inside = !inside;
+    }
+    return inside;
+}
+
+static bool point_in_any_sector(const sdl3d_sector *sectors, int sector_count, float x, float y, float z)
+{
+    for (int i = 0; i < sector_count; i++)
+    {
+        const sdl3d_sector *sector = &sectors[i];
+        if (y < sector->floor_y || y > sector->ceil_y)
+            continue;
+        if (point_in_sector_xz(sector, x, z))
+            return true;
+    }
+    return false;
+}
+
+static void advance_projectile(const sdl3d_sector *sectors, int sector_count, float dt, bool *proj_active, float *proj_x,
+                               float *proj_y, float *proj_z, float proj_dx, float proj_dy, float proj_dz, float *proj_life)
+{
+    if (!*proj_active)
+        return;
+
+    float travel = PROJ_SPEED * dt;
+    int steps = (int)ceilf(travel / 0.25f);
+    if (steps < 1)
+        steps = 1;
+    float step_dist = travel / (float)steps;
+
+    for (int i = 0; i < steps; i++)
+    {
+        float next_x = *proj_x + proj_dx * step_dist;
+        float next_y = *proj_y + proj_dy * step_dist;
+        float next_z = *proj_z + proj_dz * step_dist;
+        if (!point_in_any_sector(sectors, sector_count, next_x, next_y, next_z))
+        {
+            *proj_active = false;
+            return;
+        }
+        *proj_x = next_x;
+        *proj_y = next_y;
+        *proj_z = next_z;
+    }
+
+    *proj_life -= dt;
+    if (*proj_life <= 0.0f)
+        *proj_active = false;
+}
 
 int main(int argc, char *argv[])
 {
@@ -56,10 +127,11 @@ int main(int argc, char *argv[])
     SDL_SetWindowRelativeMouseMode(win, true);
     SDL_Log("doom_level MOVE_SPEED=%.2f", MOVE_SPEED);
 
-    sdl3d_set_bloom_enabled(ctx, false);
+    sdl3d_set_bloom_enabled(ctx, true);
     sdl3d_set_ssao_enabled(ctx, false);
     sdl3d_set_point_shadows_enabled(ctx, false);
     sdl3d_set_backface_culling_enabled(ctx, false);
+    sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG);
 
     /* ---- Material palette ---- */
     sdl3d_level_material mats[] = {
@@ -101,7 +173,7 @@ int main(int argc, char *argv[])
     sdl3d_level_light lights[] = {
         {{5, 3.5f, 4}, {1.0f, 0.85f, 0.6f}, 5.0f, 12.0f},  /* Start room — warm */
         {{5, 3.0f, 12}, {1.0f, 0.7f, 0.3f}, 3.0f, 8.0f},   /* Corridor — amber */
-        {{4, 1.0f, 21}, {1.0f, 0.15f, 0.1f}, 4.0f, 14.0f},  /* Lava — red */
+        {{4, 1.0f, 21}, {1.0f, 0.15f, 0.1f}, 4.0f, 14.0f}, /* Lava — red */
         {{22, 7.0f, 20}, {0.4f, 0.5f, 0.8f}, 6.0f, 18.0f}, /* Outdoor — moonlight */
         {{24, 2.5f, 29}, {0.2f, 1.0f, 0.2f}, 4.0f, 8.0f},  /* Exit — green */
     };
@@ -128,6 +200,12 @@ int main(int argc, char *argv[])
     float yaw = 3.14159f, pitch = 0;
     bool mouse_init = false;
 
+    /* Projectile. */
+    bool proj_active = false;
+    float proj_x = 0, proj_y = 0, proj_z = 0;
+    float proj_dx = 0, proj_dy = 0, proj_dz = 0;
+    float proj_life = 0;
+
     bool running = true;
     Uint64 last = SDL_GetPerformanceCounter();
 
@@ -153,6 +231,17 @@ int main(int argc, char *argv[])
             }
             if (ev.type == SDL_EVENT_MOUSE_MOTION)
                 mouse_init = true;
+            if (ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN && ev.button.button == SDL_BUTTON_LEFT)
+            {
+                proj_active = true;
+                proj_x = px;
+                proj_y = py;
+                proj_z = pz;
+                proj_dx = sinf(yaw) * cosf(pitch);
+                proj_dy = sinf(pitch);
+                proj_dz = -cosf(yaw) * cosf(pitch);
+                proj_life = PROJ_LIFETIME;
+            }
         }
 
         Uint64 now = SDL_GetPerformanceCounter();
@@ -210,11 +299,52 @@ int main(int argc, char *argv[])
         cam.fovy = 75.0f;
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
 
-        sdl3d_clear_render_context(ctx, (sdl3d_color){100, 150, 200, 255});
+        /* Update projectile. */
+        advance_projectile(sectors, 6, dt, &proj_active, &proj_x, &proj_y, &proj_z, proj_dx, proj_dy, proj_dz,
+                           &proj_life);
+
+        sdl3d_clear_lights(ctx);
+        if (proj_active)
+        {
+            sdl3d_light rocket = {0};
+            rocket.type = SDL3D_LIGHT_POINT;
+            rocket.position = sdl3d_vec3_make(proj_x, proj_y, proj_z);
+            rocket.color[0] = ROCKET_LIGHT_R;
+            rocket.color[1] = ROCKET_LIGHT_G;
+            rocket.color[2] = ROCKET_LIGHT_B;
+            rocket.intensity = ROCKET_LIGHT_INTENSITY;
+            rocket.range = ROCKET_LIGHT_RANGE;
+            sdl3d_add_light(ctx, &rocket);
+        }
+
+        sdl3d_clear_render_context(ctx, (sdl3d_color){10, 10, 15, 255});
+
+        /* The level uses baked lighting as its static term, then runtime
+         * point lights are added per-pixel in the shader. */
         sdl3d_begin_mode_3d(ctx, cam);
 
         sdl3d_draw_model(ctx, use_baked ? &level_lit.model : &level_unlit.model, sdl3d_vec3_make(0, 0, 0), 1.0f,
                          (sdl3d_color){255, 255, 255, 255});
+
+        /* Projectile sphere. */
+        if (proj_active)
+        {
+            sdl3d_set_emissive(ctx, 5.0f, 3.0f, 1.0f);
+            sdl3d_draw_sphere(ctx, sdl3d_vec3_make(proj_x, proj_y, proj_z), 0.1f, 8, 8,
+                              (sdl3d_color){255, 200, 100, 255});
+            sdl3d_set_emissive(ctx, 0, 0, 0);
+        }
+
+        /* Crosshair. */
+        {
+            float chx = px + fx * 0.4f;
+            float chy = py + sinf(pitch) * 0.4f;
+            float chz = pz + fz * 0.4f;
+            sdl3d_set_emissive(ctx, 8, 8, 8);
+            sdl3d_draw_cube(ctx, sdl3d_vec3_make(chx, chy, chz), sdl3d_vec3_make(0.003f, 0.003f, 0.003f),
+                            (sdl3d_color){255, 255, 255, 255});
+            sdl3d_set_emissive(ctx, 0, 0, 0);
+        }
 
         sdl3d_end_mode_3d(ctx);
         sdl3d_present_render_context(ctx);

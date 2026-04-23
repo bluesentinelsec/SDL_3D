@@ -421,6 +421,7 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
         meshes[mi].positions = accs[m].pos;
         meshes[mi].normals = accs[m].nrm;
         meshes[mi].colors = accs[m].col;
+        meshes[mi].colors_are_baked_light = (lights != NULL && light_count > 0);
         meshes[mi].uvs = accs[m].uvs;
         meshes[mi].indices = accs[m].idx;
         meshes[mi].material_index = mi;
