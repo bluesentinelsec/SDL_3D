@@ -59,6 +59,8 @@ typedef struct
     unsigned int *idx;
     int vc, vc_cap;
     int ic, ic_cap;
+    bool has_bounds;
+    sdl3d_bounding_box bounds;
 } macc;
 
 static bool macc_grow_v(macc *a, int n)
@@ -115,6 +117,31 @@ static int macc_vert(macc *a, float x, float y, float z, float nx, float ny, flo
     a->col[i * 4 + 3] = rgba[3];
     a->uvs[i * 2] = u;
     a->uvs[i * 2 + 1] = v;
+    if (!a->has_bounds)
+    {
+        a->bounds.min.x = x;
+        a->bounds.min.y = y;
+        a->bounds.min.z = z;
+        a->bounds.max.x = x;
+        a->bounds.max.y = y;
+        a->bounds.max.z = z;
+        a->has_bounds = true;
+    }
+    else
+    {
+        if (x < a->bounds.min.x)
+            a->bounds.min.x = x;
+        if (y < a->bounds.min.y)
+            a->bounds.min.y = y;
+        if (z < a->bounds.min.z)
+            a->bounds.min.z = z;
+        if (x > a->bounds.max.x)
+            a->bounds.max.x = x;
+        if (y > a->bounds.max.y)
+            a->bounds.max.y = y;
+        if (z > a->bounds.max.z)
+            a->bounds.max.z = z;
+    }
     return i;
 }
 
@@ -231,22 +258,14 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
         }
     }
 
-    /* Per-material mesh accumulators. */
-    macc *accs = SDL_calloc((size_t)material_count, sizeof(macc));
+    /* Per-sector/per-material mesh accumulators so hidden rooms can be culled
+     * independently without changing the current baked-light look. */
+    const int acc_count = sector_count * material_count;
+    macc *accs = SDL_calloc((size_t)acc_count, sizeof(macc));
     if (!accs)
     {
         SDL_free(edges);
         return SDL_OutOfMemory();
-    }
-    for (int m = 0; m < material_count; m++)
-    {
-        accs[m].vc_cap = 64;
-        accs[m].ic_cap = 128;
-        accs[m].pos = SDL_malloc((size_t)accs[m].vc_cap * 3 * sizeof(float));
-        accs[m].nrm = SDL_malloc((size_t)accs[m].vc_cap * 3 * sizeof(float));
-        accs[m].col = SDL_malloc((size_t)accs[m].vc_cap * 4 * sizeof(float));
-        accs[m].uvs = SDL_malloc((size_t)accs[m].vc_cap * 2 * sizeof(float));
-        accs[m].idx = SDL_malloc((size_t)accs[m].ic_cap * sizeof(unsigned int));
     }
 
     for (int s = 0; s < sector_count; s++)
@@ -255,9 +274,12 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
         int fi = sec->floor_material < material_count ? sec->floor_material : 0;
         int ci = sec->ceil_material < material_count ? sec->ceil_material : 0;
         int wi = sec->wall_material < material_count ? sec->wall_material : 0;
+        macc *floor_acc = &accs[s * material_count + fi];
+        macc *ceil_acc = &accs[s * material_count + ci];
+        macc *wall_acc = &accs[s * material_count + wi];
 
-        add_floor_ceil(&accs[fi], sec, sec->floor_y, 1.0f, materials[fi].albedo, materials[fi].tex_scale);
-        add_floor_ceil(&accs[ci], sec, sec->ceil_y, -1.0f, materials[ci].albedo, materials[ci].tex_scale);
+        add_floor_ceil(floor_acc, sec, sec->floor_y, 1.0f, materials[fi].albedo, materials[fi].tex_scale);
+        add_floor_ceil(ceil_acc, sec, sec->ceil_y, -1.0f, materials[ci].albedo, materials[ci].tex_scale);
 
         for (int e = 0; e < total_edges; e++)
         {
@@ -300,7 +322,7 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
 
             if (novl == 0)
             {
-                add_wall(&accs[wi], ax, az, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo,
+                add_wall(wall_acc, ax, az, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo,
                          materials[wi].tex_scale);
             }
             else
@@ -321,23 +343,23 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                     {
                         float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
                         float wx1 = ax + (bx - ax) * overlaps[oi].t0, wz1 = az + (bz - az) * overlaps[oi].t0;
-                        add_wall(&accs[wi], wx0, wz0, wx1, wz1, sec->floor_y, sec->ceil_y, materials[wi].albedo,
+                        add_wall(wall_acc, wx0, wz0, wx1, wz1, sec->floor_y, sec->ceil_y, materials[wi].albedo,
                                  materials[wi].tex_scale);
                     }
                     float ox0 = ax + (bx - ax) * overlaps[oi].t0, oz0 = az + (bz - az) * overlaps[oi].t0;
                     float ox1 = ax + (bx - ax) * overlaps[oi].t1, oz1 = az + (bz - az) * overlaps[oi].t1;
                     if (sec->floor_y < overlaps[oi].other_floor - 0.001f)
-                        add_wall(&accs[wi], ox0, oz0, ox1, oz1, sec->floor_y, overlaps[oi].other_floor,
+                        add_wall(wall_acc, ox0, oz0, ox1, oz1, sec->floor_y, overlaps[oi].other_floor,
                                  materials[wi].albedo, materials[wi].tex_scale);
                     if (sec->ceil_y > overlaps[oi].other_ceil + 0.001f)
-                        add_wall(&accs[wi], ox0, oz0, ox1, oz1, overlaps[oi].other_ceil, sec->ceil_y,
+                        add_wall(wall_acc, ox0, oz0, ox1, oz1, overlaps[oi].other_ceil, sec->ceil_y,
                                  materials[wi].albedo, materials[wi].tex_scale);
                     cursor = overlaps[oi].t1;
                 }
                 if (cursor < 1.0f - 0.001f)
                 {
                     float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
-                    add_wall(&accs[wi], wx0, wz0, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo,
+                    add_wall(wall_acc, wx0, wz0, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo,
                              materials[wi].tex_scale);
                 }
             }
@@ -349,9 +371,9 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
     /* ---- Bake vertex lighting per material ---- */
     if (lights && light_count > 0)
     {
-        for (int m = 0; m < material_count; m++)
+        for (int ai = 0; ai < acc_count; ai++)
         {
-            macc *a = &accs[m];
+            macc *a = &accs[ai];
             for (int v = 0; v < a->vc; v++)
             {
                 float px = a->pos[v * 3], py = a->pos[v * 3 + 1], pz = a->pos[v * 3 + 2];
@@ -389,52 +411,61 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
         }
     }
 
-    /* ---- Package: one mesh + one material per level material ---- */
+    /* ---- Package: one mesh per sector/material chunk ---- */
     int num_meshes = 0;
-    for (int m = 0; m < material_count; m++)
-        if (accs[m].ic > 0)
+    for (int ai = 0; ai < acc_count; ai++)
+        if (accs[ai].ic > 0)
             num_meshes++;
 
     sdl3d_mesh *meshes = SDL_calloc((size_t)num_meshes, sizeof(sdl3d_mesh));
-    sdl3d_material *out_mats = SDL_calloc((size_t)num_meshes, sizeof(sdl3d_material));
+    sdl3d_material *out_mats = SDL_calloc((size_t)material_count, sizeof(sdl3d_material));
     if (!meshes || !out_mats)
     {
-        for (int m = 0; m < material_count; m++)
-            macc_free(&accs[m]);
+        for (int ai = 0; ai < acc_count; ai++)
+            macc_free(&accs[ai]);
         SDL_free(accs);
         SDL_free(meshes);
         SDL_free(out_mats);
         return SDL_OutOfMemory();
     }
 
-    int mi = 0;
-    int total_verts = 0, total_tris = 0;
     for (int m = 0; m < material_count; m++)
     {
-        if (accs[m].ic == 0)
-        {
-            macc_free(&accs[m]);
-            continue;
-        }
-        meshes[mi].vertex_count = accs[m].vc;
-        meshes[mi].index_count = accs[m].ic;
-        meshes[mi].positions = accs[m].pos;
-        meshes[mi].normals = accs[m].nrm;
-        meshes[mi].colors = accs[m].col;
-        meshes[mi].colors_are_baked_light = (lights != NULL && light_count > 0);
-        meshes[mi].uvs = accs[m].uvs;
-        meshes[mi].indices = accs[m].idx;
-        meshes[mi].material_index = mi;
-
-        out_mats[mi].albedo[0] = out_mats[mi].albedo[1] = out_mats[mi].albedo[2] = out_mats[mi].albedo[3] = 1.0f;
-        out_mats[mi].roughness = materials[m].roughness;
-        out_mats[mi].metallic = materials[m].metallic;
+        out_mats[m].albedo[0] = out_mats[m].albedo[1] = out_mats[m].albedo[2] = out_mats[m].albedo[3] = 1.0f;
+        out_mats[m].roughness = materials[m].roughness;
+        out_mats[m].metallic = materials[m].metallic;
         if (materials[m].texture)
-            out_mats[mi].albedo_map = SDL_strdup(materials[m].texture);
+            out_mats[m].albedo_map = SDL_strdup(materials[m].texture);
+    }
 
-        total_verts += accs[m].vc;
-        total_tris += accs[m].ic / 3;
-        mi++;
+    int mi = 0;
+    int total_verts = 0, total_tris = 0;
+    for (int s = 0; s < sector_count; s++)
+    {
+        for (int m = 0; m < material_count; m++)
+        {
+            macc *a = &accs[s * material_count + m];
+            if (a->ic == 0)
+            {
+                macc_free(a);
+                continue;
+            }
+            meshes[mi].vertex_count = a->vc;
+            meshes[mi].index_count = a->ic;
+            meshes[mi].positions = a->pos;
+            meshes[mi].normals = a->nrm;
+            meshes[mi].colors = a->col;
+            meshes[mi].colors_are_baked_light = (lights != NULL && light_count > 0);
+            meshes[mi].uvs = a->uvs;
+            meshes[mi].indices = a->idx;
+            meshes[mi].material_index = m;
+            meshes[mi].has_local_bounds = a->has_bounds;
+            meshes[mi].local_bounds = a->bounds;
+
+            total_verts += a->vc;
+            total_tris += a->ic / 3;
+            mi++;
+        }
     }
     SDL_free(accs);
 
@@ -451,7 +482,7 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
     out->model.meshes = meshes;
     out->model.mesh_count = num_meshes;
     out->model.materials = out_mats;
-    out->model.material_count = num_meshes;
+    out->model.material_count = material_count;
 
     SDL_Log("SDL3D level: %d verts, %d tris, %d meshes from %d sectors", total_verts, total_tris, num_meshes,
             sector_count);

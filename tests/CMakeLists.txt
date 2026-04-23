@@ -85,6 +85,7 @@ set(SDL3D_TEST_SOURCES
     test_collision.cpp
     test_animation.cpp
     test_effects.cpp
+    test_level.cpp
 )
 
 # Tests that read filesystem fixtures via SDL3D_TEST_ASSETS_DIR are desktop-only.
@@ -168,6 +169,8 @@ else()
     sdl3d_add_test(sdl3d_collision_test test_collision.cpp unit)
     sdl3d_add_test(sdl3d_animation_test test_animation.cpp unit)
     sdl3d_add_test(sdl3d_effects_test test_effects.cpp unit)
+    sdl3d_add_test(sdl3d_level_test test_level.cpp unit)
+    target_include_directories(sdl3d_level_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     sdl3d_add_test(sdl3d_parity_test test_parity.cpp render)
 
     if(NOT EMSCRIPTEN)

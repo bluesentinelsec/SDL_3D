@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_stdinc.h>
+#include <math.h>
 
 #include "rasterizer.h"
 #include "render_context_internal.h"
@@ -371,6 +372,113 @@ static sdl3d_vec3 sdl3d_transform_position(sdl3d_mat4 m, sdl3d_vec3 p)
 {
     sdl3d_vec4 w = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(p, 1.0f));
     return sdl3d_vec3_make(w.x, w.y, w.z);
+}
+
+typedef struct
+{
+    float a;
+    float b;
+    float c;
+    float d;
+} sdl3d_frustum_plane;
+
+static sdl3d_frustum_plane sdl3d_make_frustum_plane(float a, float b, float c, float d)
+{
+    const float len = sqrtf(a * a + b * b + c * c);
+    sdl3d_frustum_plane plane;
+    if (len <= 0.000001f)
+    {
+        plane.a = 0.0f;
+        plane.b = 0.0f;
+        plane.c = 0.0f;
+        plane.d = d;
+        return plane;
+    }
+    plane.a = a / len;
+    plane.b = b / len;
+    plane.c = c / len;
+    plane.d = d / len;
+    return plane;
+}
+
+static void sdl3d_extract_frustum_planes(sdl3d_frustum_plane planes[6], sdl3d_mat4 view_projection)
+{
+    const float *m = view_projection.m;
+    planes[0] = sdl3d_make_frustum_plane(m[3] + m[0], m[7] + m[4], m[11] + m[8], m[15] + m[12]);
+    planes[1] = sdl3d_make_frustum_plane(m[3] - m[0], m[7] - m[4], m[11] - m[8], m[15] - m[12]);
+    planes[2] = sdl3d_make_frustum_plane(m[3] + m[1], m[7] + m[5], m[11] + m[9], m[15] + m[13]);
+    planes[3] = sdl3d_make_frustum_plane(m[3] - m[1], m[7] - m[5], m[11] - m[9], m[15] - m[13]);
+    planes[4] = sdl3d_make_frustum_plane(m[3] + m[2], m[7] + m[6], m[11] + m[10], m[15] + m[14]);
+    planes[5] = sdl3d_make_frustum_plane(m[3] - m[2], m[7] - m[6], m[11] - m[10], m[15] - m[14]);
+}
+
+static sdl3d_bounding_box sdl3d_transform_bounding_box(sdl3d_mat4 transform, sdl3d_bounding_box local_bounds)
+{
+    const sdl3d_vec3 corners[8] = {
+        sdl3d_vec3_make(local_bounds.min.x, local_bounds.min.y, local_bounds.min.z),
+        sdl3d_vec3_make(local_bounds.min.x, local_bounds.min.y, local_bounds.max.z),
+        sdl3d_vec3_make(local_bounds.min.x, local_bounds.max.y, local_bounds.min.z),
+        sdl3d_vec3_make(local_bounds.min.x, local_bounds.max.y, local_bounds.max.z),
+        sdl3d_vec3_make(local_bounds.max.x, local_bounds.min.y, local_bounds.min.z),
+        sdl3d_vec3_make(local_bounds.max.x, local_bounds.min.y, local_bounds.max.z),
+        sdl3d_vec3_make(local_bounds.max.x, local_bounds.max.y, local_bounds.min.z),
+        sdl3d_vec3_make(local_bounds.max.x, local_bounds.max.y, local_bounds.max.z),
+    };
+    sdl3d_bounding_box world_bounds;
+    sdl3d_vec3 p = sdl3d_transform_position(transform, corners[0]);
+    world_bounds.min = p;
+    world_bounds.max = p;
+
+    for (int i = 1; i < 8; ++i)
+    {
+        p = sdl3d_transform_position(transform, corners[i]);
+        if (p.x < world_bounds.min.x)
+            world_bounds.min.x = p.x;
+        if (p.y < world_bounds.min.y)
+            world_bounds.min.y = p.y;
+        if (p.z < world_bounds.min.z)
+            world_bounds.min.z = p.z;
+        if (p.x > world_bounds.max.x)
+            world_bounds.max.x = p.x;
+        if (p.y > world_bounds.max.y)
+            world_bounds.max.y = p.y;
+        if (p.z > world_bounds.max.z)
+            world_bounds.max.z = p.z;
+    }
+
+    return world_bounds;
+}
+
+static bool sdl3d_box_intersects_frustum(sdl3d_bounding_box bounds, const sdl3d_frustum_plane planes[6])
+{
+    for (int i = 0; i < 6; ++i)
+    {
+        const sdl3d_frustum_plane plane = planes[i];
+        const float px = plane.a >= 0.0f ? bounds.max.x : bounds.min.x;
+        const float py = plane.b >= 0.0f ? bounds.max.y : bounds.min.y;
+        const float pz = plane.c >= 0.0f ? bounds.max.z : bounds.min.z;
+        const float distance = plane.a * px + plane.b * py + plane.c * pz + plane.d;
+        if (distance < 0.0f)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool sdl3d_mesh_is_visible(const sdl3d_render_context *context, const sdl3d_mesh *mesh)
+{
+    sdl3d_frustum_plane planes[6];
+    sdl3d_bounding_box world_bounds;
+
+    if (context == NULL || mesh == NULL || !mesh->has_local_bounds)
+    {
+        return true;
+    }
+
+    sdl3d_extract_frustum_planes(planes, context->view_projection);
+    world_bounds = sdl3d_transform_bounding_box(context->model, mesh->local_bounds);
+    return sdl3d_box_intersects_frustum(world_bounds, planes);
 }
 
 /* Evaluate PBR shading at a single point and return the result as an sdl3d_color.
@@ -1175,6 +1283,11 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_mod
     const sdl3d_material *material = NULL;
     sdl3d_vec4 mesh_modulate = tint_modulate;
     bool ok = true;
+
+    if (!sdl3d_mesh_is_visible(context, mesh))
+    {
+        return true;
+    }
 
     if (mesh->material_index < -1)
     {
