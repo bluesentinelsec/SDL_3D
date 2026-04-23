@@ -10,6 +10,7 @@
 #include "render_context_internal.h"
 
 #include "gl_renderer.h"
+#include "texture_internal.h"
 
 /* ------------------------------------------------------------------ */
 /* Particle system                                                     */
@@ -322,6 +323,185 @@ static sdl3d_vec3 sdl3d_effects_camera_position(const sdl3d_render_context *cont
                            -(v.m[8] * v.m[12] + v.m[9] * v.m[13] + v.m[10] * v.m[14]));
 }
 
+static sdl3d_vec3 sdl3d_effects_camera_right(const sdl3d_render_context *context)
+{
+    return sdl3d_vec3_normalize(sdl3d_vec3_make(context->view.m[0], context->view.m[4], context->view.m[8]));
+}
+
+static sdl3d_vec3 sdl3d_effects_camera_up(const sdl3d_render_context *context)
+{
+    return sdl3d_vec3_normalize(sdl3d_vec3_make(context->view.m[1], context->view.m[5], context->view.m[9]));
+}
+
+static sdl3d_vec3 sdl3d_effects_camera_forward(const sdl3d_render_context *context)
+{
+    return sdl3d_vec3_normalize(sdl3d_vec3_make(-context->view.m[2], -context->view.m[6], -context->view.m[10]));
+}
+
+static Uint8 sdl3d_effects_float_to_byte(float value)
+{
+    if (value <= 0.0f)
+    {
+        return 0;
+    }
+    if (value >= 1.0f)
+    {
+        return 255;
+    }
+    return (Uint8)(value * 255.0f + 0.5f);
+}
+
+static void sdl3d_effects_sample_textured_skybox(const sdl3d_skybox_textured *skybox, sdl3d_vec3 direction,
+                                                 float *out_r, float *out_g, float *out_b, float *out_a)
+{
+    const float abs_x = SDL_fabsf(direction.x);
+    const float abs_y = SDL_fabsf(direction.y);
+    const float abs_z = SDL_fabsf(direction.z);
+    const sdl3d_texture2d *face = NULL;
+    float major_axis = 1.0f;
+    float u = 0.5f;
+    float v = 0.5f;
+
+    if (abs_z >= abs_x && abs_z >= abs_y)
+    {
+        major_axis = abs_z;
+        if (direction.z >= 0.0f)
+        {
+            face = skybox->pos_x;
+            u = (direction.x / major_axis + 1.0f) * 0.5f;
+            v = (1.0f - direction.y / major_axis) * 0.5f;
+        }
+        else
+        {
+            face = skybox->neg_x;
+            u = (1.0f - direction.x / major_axis) * 0.5f;
+            v = (1.0f - direction.y / major_axis) * 0.5f;
+        }
+    }
+    else if (abs_x >= abs_y)
+    {
+        major_axis = abs_x;
+        if (direction.x >= 0.0f)
+        {
+            face = skybox->neg_z;
+            u = (1.0f - direction.z / major_axis) * 0.5f;
+            v = (1.0f - direction.y / major_axis) * 0.5f;
+        }
+        else
+        {
+            face = skybox->pos_z;
+            u = (direction.z / major_axis + 1.0f) * 0.5f;
+            v = (1.0f - direction.y / major_axis) * 0.5f;
+        }
+    }
+    else
+    {
+        major_axis = abs_y;
+        if (direction.y >= 0.0f)
+        {
+            face = skybox->pos_y;
+            u = (direction.z / major_axis + 1.0f) * 0.5f;
+            v = (1.0f - direction.x / major_axis) * 0.5f;
+        }
+        else
+        {
+            face = skybox->neg_y;
+            u = (1.0f - direction.z / major_axis) * 0.5f;
+            v = (1.0f - direction.x / major_axis) * 0.5f;
+        }
+    }
+
+    sdl3d_texture_sample_rgba(face, u, v, 0.0f, out_r, out_g, out_b, out_a);
+}
+
+static bool sdl3d_draw_skybox_textured_software(sdl3d_render_context *context, const sdl3d_skybox_textured *skybox)
+{
+    sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
+    const sdl3d_vec3 right = sdl3d_effects_camera_right(context);
+    const sdl3d_vec3 up = sdl3d_effects_camera_up(context);
+    const sdl3d_vec3 forward = sdl3d_effects_camera_forward(context);
+    const int min_x = framebuffer.scissor_enabled ? framebuffer.scissor_rect.x : 0;
+    const int min_y = framebuffer.scissor_enabled ? framebuffer.scissor_rect.y : 0;
+    const int max_x =
+        framebuffer.scissor_enabled ? (framebuffer.scissor_rect.x + framebuffer.scissor_rect.w) : framebuffer.width;
+    const int max_y =
+        framebuffer.scissor_enabled ? (framebuffer.scissor_rect.y + framebuffer.scissor_rect.h) : framebuffer.height;
+
+    if (framebuffer.color_pixels == NULL || framebuffer.width <= 0 || framebuffer.height <= 0)
+    {
+        return SDL_SetError("Software skybox requires a valid framebuffer.");
+    }
+
+    if (context->projection.m[15] == 1.0f)
+    {
+        float r, g, b, a;
+        sdl3d_effects_sample_textured_skybox(skybox, forward, &r, &g, &b, &a);
+        for (int y = min_y; y < max_y; ++y)
+        {
+            for (int x = min_x; x < max_x; ++x)
+            {
+                const int index = (y * framebuffer.width) + x;
+                Uint8 *pixel = &framebuffer.color_pixels[index * 4];
+                if (framebuffer.depth_pixels != NULL && framebuffer.depth_pixels[index] < 1.0f)
+                {
+                    continue;
+                }
+                pixel[0] = sdl3d_effects_float_to_byte(r);
+                pixel[1] = sdl3d_effects_float_to_byte(g);
+                pixel[2] = sdl3d_effects_float_to_byte(b);
+                pixel[3] = sdl3d_effects_float_to_byte(a);
+                if (framebuffer.depth_pixels != NULL)
+                {
+                    framebuffer.depth_pixels[index] = 1.0f;
+                }
+            }
+        }
+        return true;
+    }
+
+    {
+        const float inv_proj_x = 1.0f / context->projection.m[0];
+        const float inv_proj_y = 1.0f / context->projection.m[5];
+        const float ndc_x_start = ((2.0f * 0.5f) / (float)framebuffer.width) - 1.0f;
+        const float ndc_x_step = 2.0f / (float)framebuffer.width;
+        const sdl3d_vec3 x_step = sdl3d_vec3_scale(right, ndc_x_step * inv_proj_x);
+
+        for (int y = min_y; y < max_y; ++y)
+        {
+            const float ndc_y = 1.0f - ((2.0f * ((float)y + 0.5f)) / (float)framebuffer.height);
+            const sdl3d_vec3 row_base = sdl3d_vec3_add(forward, sdl3d_vec3_scale(up, ndc_y * inv_proj_y));
+            sdl3d_vec3 ray = sdl3d_vec3_add(row_base, sdl3d_vec3_scale(right, ndc_x_start * inv_proj_x));
+
+            for (int x = min_x; x < max_x; ++x)
+            {
+                const int index = (y * framebuffer.width) + x;
+                float r, g, b, a;
+                Uint8 *pixel = &framebuffer.color_pixels[index * 4];
+
+                if (framebuffer.depth_pixels != NULL && framebuffer.depth_pixels[index] < 1.0f)
+                {
+                    ray = sdl3d_vec3_add(ray, x_step);
+                    continue;
+                }
+
+                sdl3d_effects_sample_textured_skybox(skybox, sdl3d_vec3_normalize(ray), &r, &g, &b, &a);
+                pixel[0] = sdl3d_effects_float_to_byte(r);
+                pixel[1] = sdl3d_effects_float_to_byte(g);
+                pixel[2] = sdl3d_effects_float_to_byte(b);
+                pixel[3] = sdl3d_effects_float_to_byte(a);
+                if (framebuffer.depth_pixels != NULL)
+                {
+                    framebuffer.depth_pixels[index] = 1.0f;
+                }
+
+                ray = sdl3d_vec3_add(ray, x_step);
+            }
+        }
+    }
+
+    return true;
+}
+
 static bool sdl3d_draw_skybox_face(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 v0,
                                    sdl3d_vec3 v1, sdl3d_vec3 v2, sdl3d_vec3 v3)
 {
@@ -356,6 +536,11 @@ bool sdl3d_draw_skybox_textured(sdl3d_render_context *context, const sdl3d_skybo
         skybox->pos_z == NULL || skybox->neg_z == NULL)
     {
         return SDL_SetError("Textured skybox requires all six face textures.");
+    }
+
+    if (context->backend == SDL3D_BACKEND_SOFTWARE)
+    {
+        return sdl3d_draw_skybox_textured_software(context, skybox);
     }
 
     c = sdl3d_effects_camera_position(context);

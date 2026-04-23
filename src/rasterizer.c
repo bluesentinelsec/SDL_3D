@@ -70,6 +70,34 @@ static int sdl3d_min_int(int a, int b)
     return (a < b) ? a : b;
 }
 
+static bool sdl3d_parallel_triangle_job_is_worthwhile(const sdl3d_parallel_rasterizer *rasterizer, int tile_count,
+                                                      int min_px_x, int max_px_x, int min_px_y, int max_px_y)
+{
+    static const int SDL3D_PARALLEL_MIN_TILE_COUNT = 4;
+    static const int SDL3D_PARALLEL_MIN_PIXEL_AREA = 64 * 64;
+    const int worker_count = rasterizer != NULL ? rasterizer->worker_count : 0;
+    const int width = max_px_x - min_px_x + 1;
+    const int height = max_px_y - min_px_y + 1;
+    const int pixel_area = width * height;
+
+    if (worker_count <= 0 || tile_count < SDL3D_PARALLEL_MIN_TILE_COUNT)
+    {
+        return false;
+    }
+
+    if (pixel_area < SDL3D_PARALLEL_MIN_PIXEL_AREA)
+    {
+        return false;
+    }
+
+    if (tile_count < worker_count && pixel_area < (SDL3D_PARALLEL_MIN_PIXEL_AREA * 2))
+    {
+        return false;
+    }
+
+    return true;
+}
+
 static void sdl3d_parallel_run_job(sdl3d_parallel_job *job)
 {
     if (job == NULL || job->run_tile == NULL)
@@ -575,7 +603,9 @@ static bool sdl3d_try_rasterize_prepared_triangle_parallel(sdl3d_framebuffer *fr
     const int tiles_h = last_tile_y - first_tile_y + 1;
     const int tile_count = tiles_w * tiles_h;
 
-    if (tile_count <= 1)
+    if (!sdl3d_parallel_triangle_job_is_worthwhile(framebuffer->parallel_rasterizer, tile_count,
+                                                   triangle->bounds.min_px_x, triangle->bounds.max_px_x,
+                                                   triangle->bounds.min_px_y, triangle->bounds.max_px_y))
     {
         return false;
     }
@@ -984,7 +1014,9 @@ static bool sdl3d_try_rasterize_prepared_triangle_colored_parallel(sdl3d_framebu
     const int tiles_h = last_tile_y - first_tile_y + 1;
     const int tile_count = tiles_w * tiles_h;
 
-    if (tile_count <= 1)
+    if (!sdl3d_parallel_triangle_job_is_worthwhile(framebuffer->parallel_rasterizer, tile_count,
+                                                   triangle->bounds.min_px_x, triangle->bounds.max_px_x,
+                                                   triangle->bounds.min_px_y, triangle->bounds.max_px_y))
     {
         return false;
     }
@@ -1546,7 +1578,9 @@ static bool sdl3d_try_rasterize_prepared_triangle_textured_parallel(sdl3d_frameb
     const int tiles_h = last_tile_y - first_tile_y + 1;
     const int tile_count = tiles_w * tiles_h;
 
-    if (tile_count <= 1)
+    if (!sdl3d_parallel_triangle_job_is_worthwhile(framebuffer->parallel_rasterizer, tile_count,
+                                                   triangle->bounds.min_px_x, triangle->bounds.max_px_x,
+                                                   triangle->bounds.min_px_y, triangle->bounds.max_px_y))
     {
         return false;
     }
@@ -2264,7 +2298,9 @@ static bool sdl3d_try_rasterize_prepared_triangle_lit_parallel(sdl3d_framebuffer
     tiles_h = last_tile_y - first_tile_y + 1;
     tile_count = tiles_w * tiles_h;
 
-    if (tile_count <= 1)
+    if (!sdl3d_parallel_triangle_job_is_worthwhile(framebuffer->parallel_rasterizer, tile_count,
+                                                   triangle->bounds.min_px_x, triangle->bounds.max_px_x,
+                                                   triangle->bounds.min_px_y, triangle->bounds.max_px_y))
     {
         return false;
     }
