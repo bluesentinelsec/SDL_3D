@@ -112,6 +112,13 @@ extern "C"
     typedef void (*sdl3d_zfight_callback)(const char *message, void *userdata);
     bool sdl3d_set_zfight_callback(sdl3d_render_context *context, sdl3d_zfight_callback callback, void *userdata);
 
+    /*
+     * Load an HDRI environment map for Image-Based Lighting (IBL).
+     * Replaces the hemisphere ambient with physically correct diffuse
+     * irradiance and specular reflections. Accepts .hdr files.
+     */
+    bool sdl3d_load_environment_map(sdl3d_render_context *context, const char *hdr_path);
+
     int sdl3d_get_light_count(const sdl3d_render_context *context);
 
     /* ============================================================== */

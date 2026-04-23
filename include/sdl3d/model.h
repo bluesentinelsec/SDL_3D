@@ -46,6 +46,9 @@ extern "C"
      * `vertex_count` entries with the stride implied by its semantic
      * (3 floats for positions/normals, 2 for uvs, 4 for colors).
      * Colors, when present, are RGBA floats in [0, 1].
+     * `colors_are_baked_light` marks colors as precomputed lighting rather
+     * than surface albedo modulation; renderers may then multiply textures by
+     * the baked term and add dynamic lights on top.
      *
      * Indices are always 32-bit unsigned and index into this mesh's
      * vertex arrays. `material_index` is -1 when no material is bound.
@@ -58,6 +61,7 @@ extern "C"
         float *normals;
         float *uvs;
         float *colors;
+        bool colors_are_baked_light;
         int vertex_count;
 
         unsigned int *indices;

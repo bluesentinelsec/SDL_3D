@@ -86,6 +86,7 @@ typedef struct sdl3d_draw_entry
     float emissive[3];
     const sdl3d_texture2d *texture;
     bool lit;
+    bool baked_light_mode;
     float mvp[16];
 } sdl3d_draw_entry;
 
@@ -118,6 +119,7 @@ struct sdl3d_gl_context
     GLint pbr_metallic_loc;
     GLint pbr_roughness_loc;
     GLint pbr_emissive_loc;
+    GLint pbr_baked_light_mode_loc;
 
     /* Unlit uniform locations */
     GLint unlit_mvp_loc;
@@ -202,6 +204,8 @@ struct sdl3d_gl_context
     int draw_capacity;
 
     GLuint white_texture;
+    GLuint black_texture;
+    GLuint black_cubemap;
 
     sdl3d_gl_tex_entry *tex_cache;
 
@@ -238,6 +242,25 @@ struct sdl3d_gl_context
 
     /* Cached render context pointer for lazy UBO upload */
     sdl3d_render_context *current_ctx;
+
+    /* IBL (Image-Based Lighting) */
+    GLuint ibl_irradiance_map;  /* diffuse irradiance cubemap */
+    GLuint ibl_prefilter_map;   /* specular prefiltered cubemap */
+    GLuint ibl_brdf_lut;        /* 2D BRDF integration LUT */
+    GLint pbr_irradiance_map_loc;
+    GLint pbr_prefilter_map_loc;
+    GLint pbr_brdf_lut_loc;
+    GLint pbr_ibl_enabled_loc;
+    GLint pbr_max_reflection_lod_loc;
+    bool ibl_ready;
+
+    /* IBL processing shaders */
+    GLuint equirect_to_cube_program;
+    GLuint irradiance_program;
+    GLuint prefilter_program;
+    GLuint brdf_program;
+    GLuint capture_fbo;
+    GLuint capture_rbo;
 };
 
 /* ------------------------------------------------------------------ */
@@ -332,6 +355,7 @@ static const char k_pbr_frag_decl[] = "#define MAX_LIGHTS 8\n"
                                       "uniform float uMetallic;\n"
                                       "uniform float uRoughness;\n"
                                       "uniform vec3 uEmissive;\n"
+                                      "uniform int uBakedLightMode;\n"
                                       "\n"
                                       "uniform sampler2DArray uShadowMap;\n"
                                       "uniform mat4 uShadowVP;\n"
@@ -346,6 +370,12 @@ static const char k_pbr_frag_decl[] = "#define MAX_LIGHTS 8\n"
                                       "uniform vec3 uPointShadowLightPos[2];\n"
                                       "uniform float uPointShadowFar[2];\n"
                                       "uniform int uPointShadowCount;\n"
+                                      "\n"
+                                      "uniform samplerCube uIrradianceMap;\n"
+                                      "uniform samplerCube uPrefilterMap;\n"
+                                      "uniform sampler2D uBrdfLUT;\n"
+                                      "uniform int uIBLEnabled;\n"
+                                      "uniform float uMaxReflectionLod;\n"
                                       "\n"
                                       "out vec4 fragColor;\n"
                                       "\n"
@@ -363,13 +393,17 @@ static const char k_pbr_frag_decl[] = "#define MAX_LIGHTS 8\n"
                                       "\n"
                                       "vec3 FresnelSchlick(float cosTheta, vec3 F0) {\n"
                                       "    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);\n"
+                                      "}\n"
+                                      "vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {\n"
+                                      "    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);\n"
                                       "}\n";
 
 static const char k_pbr_frag_main[] =
     "void main() {\n"
     "    vec2 uv = vTexCoord;\n"
     "    vec4 texel = (uHasTexture != 0) ? texture(uTexture, uv) : vec4(1.0);\n"
-    "    vec3 albedo = texel.rgb * vColor.rgb * uTint.rgb;\n"
+    "    vec3 albedo = texel.rgb * ((uBakedLightMode != 0) ? uTint.rgb : (vColor.rgb * uTint.rgb));\n"
+    "    vec3 bakedBaseColor = texel.rgb * vColor.rgb * uTint.rgb;\n"
     "    float alpha = texel.a * vColor.a * uTint.a;\n"
     "    if (alpha <= 0.0) discard;\n"
     "\n"
@@ -402,8 +436,12 @@ static const char k_pbr_frag_main[] =
     "        }\n"
     "\n"
     "        vec3 radiance = uLights[i].color * uLights[i].intensity * attenuation;\n"
-    "        float NdotL = max(dot(N, L), 0.0);\n"
+    "        float NdotL = (uBakedLightMode != 0) ? abs(dot(N, L)) : max(dot(N, L), 0.0);\n"
     "        if (NdotL <= 0.0) continue;\n"
+    "        if (uBakedLightMode != 0) {\n"
+    "            Lo += albedo * radiance * NdotL;\n"
+    "            continue;\n"
+    "        }\n"
     "\n"
     "        vec3 H = normalize(L + V);\n"
     "        float NdotH = max(dot(N, H), 0.0);\n"
@@ -422,53 +460,72 @@ static const char k_pbr_frag_main[] =
 
 static const char k_pbr_frag_post[] =
     "\n"
-    "    /* Shadow (CSM cascade selection with PCF 3x3). */\n"
-    "    if (uShadowEnabled != 0) {\n"
-    "        int layer = 0;\n"
-    "        if (uCSMEnabled != 0) {\n"
-    "            float fragDepth = abs((uViewMatrix * vec4(vWorldPos, 1.0)).z);\n"
-    "            layer = 3;\n"
-    "            for (int i = 0; i < 4; ++i) {\n"
-    "                if (fragDepth < uCSMSplits[i]) { layer = i; break; }\n"
+    "    vec3 color;\n"
+    "    if (uBakedLightMode != 0) {\n"
+    "        color = bakedBaseColor + Lo + uEmissive;\n"
+    "    } else {\n"
+    "        /* Shadow (CSM cascade selection with PCF 3x3). */\n"
+    "        if (uShadowEnabled != 0) {\n"
+    "            int layer = 0;\n"
+    "            if (uCSMEnabled != 0) {\n"
+    "                float fragDepth = abs((uViewMatrix * vec4(vWorldPos, 1.0)).z);\n"
+    "                layer = 3;\n"
+    "                for (int i = 0; i < 4; ++i) {\n"
+    "                    if (fragDepth < uCSMSplits[i]) { layer = i; break; }\n"
+    "                }\n"
     "            }\n"
-    "        }\n"
-    "        mat4 shadowVP = (uCSMEnabled != 0) ? uCSMVP[layer] : uShadowVP;\n"
-    "        vec4 lpos = shadowVP * vec4(vWorldPos, 1.0);\n"
-    "        vec3 projCoords = lpos.xyz / lpos.w * 0.5 + 0.5;\n"
-    "        float currentDepth = projCoords.z;\n"
-    "        vec3 lightDir = normalize(-uLights[0].direction);\n"
-    "        float bias = max(0.05 * (1.0 - dot(N, lightDir)), 0.005);\n"
-    "        float shadow = 0.0;\n"
-    "        vec2 texelSize = 1.0 / vec2(2048.0);\n"
-    "        for (int x = -1; x <= 1; ++x) {\n"
-    "            for (int y = -1; y <= 1; ++y) {\n"
-    "                float pcfDepth = texture(uShadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize, "
+    "            mat4 shadowVP = (uCSMEnabled != 0) ? uCSMVP[layer] : uShadowVP;\n"
+    "            vec4 lpos = shadowVP * vec4(vWorldPos, 1.0);\n"
+    "            vec3 projCoords = lpos.xyz / lpos.w * 0.5 + 0.5;\n"
+    "            float currentDepth = projCoords.z;\n"
+    "            vec3 lightDir = normalize(-uLights[0].direction);\n"
+    "            float bias = max(0.05 * (1.0 - dot(N, lightDir)), 0.005);\n"
+    "            float shadow = 0.0;\n"
+    "            vec2 texelSize = 1.0 / vec2(2048.0);\n"
+    "            for (int x = -1; x <= 1; ++x) {\n"
+    "                for (int y = -1; y <= 1; ++y) {\n"
+    "                    float pcfDepth = texture(uShadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize, "
     "float(layer))).r;\n"
-    "                shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;\n"
+    "                    shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;\n"
+    "                }\n"
+    "            }\n"
+    "            shadow /= 9.0;\n"
+    "            if (projCoords.z > 1.0) shadow = 0.0;\n"
+    "            Lo *= (1.0 - shadow);\n"
+    "        }\n"
+    "\n"
+    "        /* Point light shadows. */\n"
+    "        for (int ps = 0; ps < uPointShadowCount && ps < 2; ps++) {\n"
+    "            vec3 fragToLight = vWorldPos - uPointShadowLightPos[ps];\n"
+    "            float closestDepth = texture(uPointShadowMap[ps], fragToLight).r * uPointShadowFar[ps];\n"
+    "            float currentDepth = length(fragToLight);\n"
+    "            float pbias = 0.15;\n"
+    "            if (currentDepth - pbias > closestDepth) {\n"
+    "                Lo *= 0.5;\n"
     "            }\n"
     "        }\n"
-    "        shadow /= 9.0;\n"
-    "        if (projCoords.z > 1.0) shadow = 0.0;\n"
-    "        Lo *= (1.0 - shadow);\n"
-    "    }\n"
     "\n"
-    "    /* Point light shadows. */\n"
-    "    for (int ps = 0; ps < uPointShadowCount && ps < 2; ps++) {\n"
-    "        vec3 fragToLight = vWorldPos - uPointShadowLightPos[ps];\n"
-    "        float closestDepth = texture(uPointShadowMap[ps], fragToLight).r * uPointShadowFar[ps];\n"
-    "        float currentDepth = length(fragToLight);\n"
-    "        float pbias = 0.15;\n"
-    "        if (currentDepth - pbias > closestDepth) {\n"
-    "            Lo *= 0.5;\n"
+    "        /* Ambient: IBL when available, hemisphere fallback. */\n"
+    "        vec3 ambient;\n"
+    "        if (uIBLEnabled != 0) {\n"
+    "            vec3 F_ibl = FresnelSchlickRoughness(NdotV, F0, uRoughness);\n"
+    "            vec3 kS_ibl = F_ibl;\n"
+    "            vec3 kD_ibl = (1.0 - kS_ibl) * (1.0 - uMetallic);\n"
+    "            vec3 irradiance = texture(uIrradianceMap, N).rgb;\n"
+    "            vec3 diffuse_ibl = irradiance * albedo;\n"
+    "            vec3 R = reflect(-V, N);\n"
+    "            vec3 prefilteredColor = textureLod(uPrefilterMap, R, uRoughness * uMaxReflectionLod).rgb;\n"
+    "            vec2 brdf = texture(uBrdfLUT, vec2(NdotV, uRoughness)).rg;\n"
+    "            vec3 specular_ibl = prefilteredColor * (F_ibl * brdf.x + brdf.y);\n"
+    "            ambient = kD_ibl * diffuse_ibl + specular_ibl;\n"
+    "        } else {\n"
+    "            vec3 skyColor = uAmbient * 1.2;\n"
+    "            vec3 groundColor = uAmbient * vec3(0.6, 0.5, 0.4);\n"
+    "            float hemi = dot(N, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5;\n"
+    "            ambient = mix(groundColor, skyColor, hemi) * albedo;\n"
     "        }\n"
+    "        color = ambient + Lo + uEmissive;\n"
     "    }\n"
-    "\n"
-    "    /* Hemisphere ambient: sky color from above, ground bounce from below. */\n"
-    "    vec3 skyColor = uAmbient * 1.2;\n"
-    "    vec3 groundColor = uAmbient * vec3(0.6, 0.5, 0.4);\n"
-    "    float hemi = dot(N, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5;\n"
-    "    vec3 ambient = mix(groundColor, skyColor, hemi) * albedo;\n"
-    "    vec3 color = ambient + Lo + uEmissive;\n"
     "\n"
     "    if (uFogMode > 0) {\n"
     "        float dist = length(uCameraPos - vWorldPos);\n"
@@ -479,13 +536,17 @@ static const char k_pbr_frag_post[] =
     "        color = mix(color, uFogColor, fogFactor);\n"
     "    }\n"
     "\n"
-    "    if (uTonemapMode == 1) color = color / (1.0 + color);\n"
-    "    else if (uTonemapMode == 2) {\n"
-    "        float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;\n"
-    "        color = clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);\n"
-    "    }\n"
+    "    if (uBakedLightMode == 0) {\n"
+    "        if (uTonemapMode == 1) color = color / (1.0 + color);\n"
+    "        else if (uTonemapMode == 2) {\n"
+    "            float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;\n"
+    "            color = clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);\n"
+    "        }\n"
     "\n"
-    "    color = pow(clamp(color, 0.0, 1.0), vec3(1.0 / 2.2));\n"
+    "        color = pow(clamp(color, 0.0, 1.0), vec3(1.0 / 2.2));\n"
+    "    } else {\n"
+    "        color = clamp(color, 0.0, 1.0);\n"
+    "    }\n"
     "\n"
     "    fragColor = vec4(color, alpha);\n"
     "}\n";
@@ -772,6 +833,193 @@ static GLuint link_program(sdl3d_gl_funcs *gl, GLuint vert, GLuint frag)
     return p;
 }
 
+/* ------------------------------------------------------------------ */
+/* IBL shader sources                                                  */
+/* ------------------------------------------------------------------ */
+
+static const char k_cube_vert[] =
+    "layout(location = 0) in vec3 aPosition;\n"
+    "out vec3 vLocalPos;\n"
+    "uniform mat4 uProjection;\n"
+    "uniform mat4 uView;\n"
+    "void main() {\n"
+    "    vLocalPos = aPosition;\n"
+    "    gl_Position = uProjection * uView * vec4(aPosition, 1.0);\n"
+    "}\n";
+
+static const char k_equirect_to_cube_frag[] =
+    "in vec3 vLocalPos;\n"
+    "out vec4 fragColor;\n"
+    "uniform sampler2D uEquirectMap;\n"
+    "const vec2 invAtan = vec2(0.1591, 0.3183);\n"
+    "void main() {\n"
+    "    vec3 d = normalize(vLocalPos);\n"
+    "    vec2 uv = vec2(atan(d.z, d.x), asin(d.y));\n"
+    "    uv *= invAtan;\n"
+    "    uv += 0.5;\n"
+    "    vec3 color = texture(uEquirectMap, uv).rgb;\n"
+    "    fragColor = vec4(color, 1.0);\n"
+    "}\n";
+
+static const char k_irradiance_frag[] =
+    "in vec3 vLocalPos;\n"
+    "out vec4 fragColor;\n"
+    "uniform samplerCube uEnvironmentMap;\n"
+    "const float PI = 3.14159265;\n"
+    "void main() {\n"
+    "    vec3 N = normalize(vLocalPos);\n"
+    "    vec3 irradiance = vec3(0.0);\n"
+    "    vec3 up = vec3(0.0, 1.0, 0.0);\n"
+    "    vec3 right = normalize(cross(up, N));\n"
+    "    up = normalize(cross(N, right));\n"
+    "    float sampleDelta = 0.025;\n"
+    "    float nrSamples = 0.0;\n"
+    "    for (float phi = 0.0; phi < 2.0 * PI; phi += sampleDelta) {\n"
+    "        for (float theta = 0.0; theta < 0.5 * PI; theta += sampleDelta) {\n"
+    "            vec3 tangentSample = vec3(sin(theta)*cos(phi), sin(theta)*sin(phi), cos(theta));\n"
+    "            vec3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * N;\n"
+    "            irradiance += texture(uEnvironmentMap, sampleVec).rgb * cos(theta) * sin(theta);\n"
+    "            nrSamples++;\n"
+    "        }\n"
+    "    }\n"
+    "    irradiance = PI * irradiance * (1.0 / nrSamples);\n"
+    "    fragColor = vec4(irradiance, 1.0);\n"
+    "}\n";
+
+static const char k_prefilter_frag[] =
+    "in vec3 vLocalPos;\n"
+    "out vec4 fragColor;\n"
+    "uniform samplerCube uEnvironmentMap;\n"
+    "uniform float uRoughness;\n"
+    "const float PI = 3.14159265;\n"
+    "float RadicalInverse_VdC(uint bits) {\n"
+    "    bits = (bits << 16u) | (bits >> 16u);\n"
+    "    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);\n"
+    "    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);\n"
+    "    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);\n"
+    "    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);\n"
+    "    return float(bits) * 2.3283064365386963e-10;\n"
+    "}\n"
+    "vec2 Hammersley(uint i, uint N) {\n"
+    "    return vec2(float(i)/float(N), RadicalInverse_VdC(i));\n"
+    "}\n"
+    "vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness) {\n"
+    "    float a = roughness * roughness;\n"
+    "    float phi = 2.0 * PI * Xi.x;\n"
+    "    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));\n"
+    "    float sinTheta = sqrt(1.0 - cosTheta*cosTheta);\n"
+    "    vec3 H = vec3(cos(phi)*sinTheta, sin(phi)*sinTheta, cosTheta);\n"
+    "    vec3 up = abs(N.z) < 0.999 ? vec3(0,0,1) : vec3(1,0,0);\n"
+    "    vec3 tangent = normalize(cross(up, N));\n"
+    "    vec3 bitangent = cross(N, tangent);\n"
+    "    return tangent * H.x + bitangent * H.y + N * H.z;\n"
+    "}\n"
+    "void main() {\n"
+    "    vec3 N = normalize(vLocalPos);\n"
+    "    vec3 R = N;\n"
+    "    vec3 V = R;\n"
+    "    const uint SAMPLE_COUNT = 1024u;\n"
+    "    float totalWeight = 0.0;\n"
+    "    vec3 prefilteredColor = vec3(0.0);\n"
+    "    for (uint i = 0u; i < SAMPLE_COUNT; ++i) {\n"
+    "        vec2 Xi = Hammersley(i, SAMPLE_COUNT);\n"
+    "        vec3 H = ImportanceSampleGGX(Xi, N, uRoughness);\n"
+    "        vec3 L = normalize(2.0 * dot(V, H) * H - V);\n"
+    "        float NdotL = max(dot(N, L), 0.0);\n"
+    "        if (NdotL > 0.0) {\n"
+    "            prefilteredColor += texture(uEnvironmentMap, L).rgb * NdotL;\n"
+    "            totalWeight += NdotL;\n"
+    "        }\n"
+    "    }\n"
+    "    prefilteredColor /= totalWeight;\n"
+    "    fragColor = vec4(prefilteredColor, 1.0);\n"
+    "}\n";
+
+static const char k_brdf_vert[] =
+    "layout(location = 0) in vec3 aPosition;\n"
+    "layout(location = 2) in vec2 aTexCoord;\n"
+    "out vec2 vTexCoord;\n"
+    "void main() {\n"
+    "    vTexCoord = aTexCoord;\n"
+    "    gl_Position = vec4(aPosition, 1.0);\n"
+    "}\n";
+
+static const char k_brdf_frag[] =
+    "in vec2 vTexCoord;\n"
+    "out vec4 fragColor;\n"
+    "const float PI = 3.14159265;\n"
+    "float RadicalInverse_VdC(uint bits) {\n"
+    "    bits = (bits << 16u) | (bits >> 16u);\n"
+    "    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);\n"
+    "    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);\n"
+    "    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);\n"
+    "    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);\n"
+    "    return float(bits) * 2.3283064365386963e-10;\n"
+    "}\n"
+    "vec2 Hammersley(uint i, uint N) {\n"
+    "    return vec2(float(i)/float(N), RadicalInverse_VdC(i));\n"
+    "}\n"
+    "vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness) {\n"
+    "    float a = roughness * roughness;\n"
+    "    float phi = 2.0 * PI * Xi.x;\n"
+    "    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));\n"
+    "    float sinTheta = sqrt(1.0 - cosTheta*cosTheta);\n"
+    "    vec3 H = vec3(cos(phi)*sinTheta, sin(phi)*sinTheta, cosTheta);\n"
+    "    vec3 up = abs(N.z) < 0.999 ? vec3(0,0,1) : vec3(1,0,0);\n"
+    "    vec3 tangent = normalize(cross(up, N));\n"
+    "    vec3 bitangent = cross(N, tangent);\n"
+    "    return tangent * H.x + bitangent * H.y + N * H.z;\n"
+    "}\n"
+    "float GeometrySchlickGGX(float NdotV, float roughness) {\n"
+    "    float a = roughness;\n"
+    "    float k = (a * a) / 2.0;\n"
+    "    return NdotV / (NdotV * (1.0 - k) + k);\n"
+    "}\n"
+    "float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {\n"
+    "    float NdotV = max(dot(N, V), 0.0);\n"
+    "    float NdotL = max(dot(N, L), 0.0);\n"
+    "    return GeometrySchlickGGX(NdotV, roughness) * GeometrySchlickGGX(NdotL, roughness);\n"
+    "}\n"
+    "vec2 IntegrateBRDF(float NdotV, float roughness) {\n"
+    "    vec3 V = vec3(sqrt(1.0 - NdotV*NdotV), 0.0, NdotV);\n"
+    "    float A = 0.0;\n"
+    "    float B = 0.0;\n"
+    "    vec3 N = vec3(0.0, 0.0, 1.0);\n"
+    "    const uint SAMPLE_COUNT = 1024u;\n"
+    "    for (uint i = 0u; i < SAMPLE_COUNT; ++i) {\n"
+    "        vec2 Xi = Hammersley(i, SAMPLE_COUNT);\n"
+    "        vec3 H = ImportanceSampleGGX(Xi, N, roughness);\n"
+    "        vec3 L = normalize(2.0 * dot(V, H) * H - V);\n"
+    "        float NdotL = max(L.z, 0.0);\n"
+    "        float NdotH = max(H.z, 0.0);\n"
+    "        float VdotH = max(dot(V, H), 0.0);\n"
+    "        if (NdotL > 0.0) {\n"
+    "            float G = GeometrySmith(N, V, L, roughness);\n"
+    "            float G_Vis = (G * VdotH) / (NdotH * NdotV);\n"
+    "            float Fc = pow(1.0 - VdotH, 5.0);\n"
+    "            A += (1.0 - Fc) * G_Vis;\n"
+    "            B += Fc * G_Vis;\n"
+    "        }\n"
+    "    }\n"
+    "    A /= float(SAMPLE_COUNT);\n"
+    "    B /= float(SAMPLE_COUNT);\n"
+    "    return vec2(A, B);\n"
+    "}\n"
+    "void main() {\n"
+    "    vec2 integratedBRDF = IntegrateBRDF(vTexCoord.x, vTexCoord.y);\n"
+    "    fragColor = vec4(integratedBRDF, 0.0, 1.0);\n"
+    "}\n";
+
+/* Unit cube vertices for cubemap rendering. */
+static const float k_cube_vertices[] = {
+    -1, -1, -1,  1, -1, -1,  1,  1, -1, -1,  1, -1,
+    -1, -1,  1,  1, -1,  1,  1,  1,  1, -1,  1,  1,
+};
+static const unsigned int k_cube_indices[] = {
+    0,1,2, 2,3,0, 1,5,6, 6,2,1, 5,4,7, 7,6,5,
+    4,0,3, 3,7,4, 3,2,6, 6,7,3, 4,5,1, 1,0,4,
+};
+
 static GLuint build_program(sdl3d_gl_funcs *gl, const char *version, const char *vert_body, const char *frag_body)
 {
     GLuint vs = compile_shader(gl, GL_VERTEX_SHADER, version, vert_body);
@@ -810,10 +1058,16 @@ static GLuint tex_cache_upload(sdl3d_gl_context *ctx, const sdl3d_texture2d *tex
     gl->GenTextures(1, &id);
     gl->BindTexture(GL_TEXTURE_2D, id);
     gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex->width, tex->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex->pixels);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    gl->GenerateMipmap(GL_TEXTURE_2D);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, 0x2703 /* GL_LINEAR_MIPMAP_LINEAR */);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    /* Anisotropic filtering if available. */
+    {
+        float aniso = 16.0f;
+        gl->TexParameterfv(GL_TEXTURE_2D, 0x84FE /* GL_TEXTURE_MAX_ANISOTROPY_EXT */, &aniso);
+    }
 
     sdl3d_gl_tex_entry *entry = SDL_calloc(1, sizeof(*entry));
     entry->key = tex;
@@ -1306,6 +1560,7 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
             gl->Uniform1f(ctx->pbr_metallic_loc, e->metallic);
             gl->Uniform1f(ctx->pbr_roughness_loc, e->roughness);
             gl->Uniform3f(ctx->pbr_emissive_loc, e->emissive[0], e->emissive[1], e->emissive[2]);
+            gl->Uniform1i(ctx->pbr_baked_light_mode_loc, e->baked_light_mode ? 1 : 0);
 
             gl->ActiveTexture(GL_TEXTURE0);
             gl->BindTexture(GL_TEXTURE_2D, tex);
@@ -1359,6 +1614,37 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
             }
             gl->Uniform1i(ctx->pbr_point_shadow_count_loc, ctx->point_shadow_count);
             gl->ActiveTexture(GL_TEXTURE0);
+
+            /* IBL textures. */
+            if (ctx->ibl_ready)
+            {
+                gl->ActiveTexture(GL_TEXTURE0 + 4);
+                gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_irradiance_map);
+                gl->Uniform1i(ctx->pbr_irradiance_map_loc, 4);
+                gl->ActiveTexture(GL_TEXTURE0 + 5);
+                gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_prefilter_map);
+                gl->Uniform1i(ctx->pbr_prefilter_map_loc, 5);
+                gl->ActiveTexture(GL_TEXTURE0 + 6);
+                gl->BindTexture(GL_TEXTURE_2D, ctx->ibl_brdf_lut);
+                gl->Uniform1i(ctx->pbr_brdf_lut_loc, 6);
+                gl->Uniform1i(ctx->pbr_ibl_enabled_loc, 1);
+                gl->Uniform1f(ctx->pbr_max_reflection_lod_loc, 4.0f);
+                gl->ActiveTexture(GL_TEXTURE0);
+            }
+            else
+            {
+                gl->ActiveTexture(GL_TEXTURE0 + 4);
+                gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->black_cubemap);
+                gl->Uniform1i(ctx->pbr_irradiance_map_loc, 4);
+                gl->ActiveTexture(GL_TEXTURE0 + 5);
+                gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->black_cubemap);
+                gl->Uniform1i(ctx->pbr_prefilter_map_loc, 5);
+                gl->ActiveTexture(GL_TEXTURE0 + 6);
+                gl->BindTexture(GL_TEXTURE_2D, ctx->black_texture);
+                gl->Uniform1i(ctx->pbr_brdf_lut_loc, 6);
+                gl->Uniform1i(ctx->pbr_ibl_enabled_loc, 0);
+                gl->ActiveTexture(GL_TEXTURE0);
+            }
 
             gl->BindVertexArray(ctx->lit_vao);
             gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_position_vbo);
@@ -1538,6 +1824,228 @@ static void flush_scene_ubo(sdl3d_gl_context *ctx)
 /* Create / Destroy                                                    */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* IBL: load HDRI and generate irradiance + prefilter + BRDF LUT       */
+/* ------------------------------------------------------------------ */
+
+static void ibl_render_cube(sdl3d_gl_funcs *gl, GLuint vao)
+{
+    gl->BindVertexArray(vao);
+    gl->DrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, NULL);
+}
+
+bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
+{
+    sdl3d_gl_funcs *gl = &ctx->gl;
+    int w, h, nc;
+
+    extern float *stbi_loadf(const char *, int *, int *, int *, int);
+    extern void stbi_image_free(void *);
+    float *data = stbi_loadf(hdr_path, &w, &h, &nc, 0);
+    if (!data)
+    {
+        return SDL_SetError("IBL: failed to load HDR '%s'", hdr_path);
+    }
+    SDL_Log("SDL3D IBL: loaded HDR %dx%d (%d ch)", w, h, nc);
+
+    /* Upload equirectangular HDR texture */
+    GLuint hdr_tex;
+    gl->GenTextures(1, &hdr_tex);
+    gl->BindTexture(GL_TEXTURE_2D, hdr_tex);
+    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, w, h, 0,
+                   nc == 4 ? GL_RGBA : GL_RGB, GL_FLOAT, data);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812F /* GL_CLAMP_TO_EDGE */);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    stbi_image_free(data);
+
+    /* Capture FBO */
+    GLuint cap_fbo, cap_rbo;
+    gl->GenFramebuffers(1, &cap_fbo);
+    gl->GenRenderbuffers(1, &cap_rbo);
+
+    /* Cube VAO */
+    GLuint cube_vao, cube_vbo, cube_ebo;
+    gl->GenVertexArrays(1, &cube_vao);
+    gl->GenBuffers(1, &cube_vbo);
+    gl->GenBuffers(1, &cube_ebo);
+    gl->BindVertexArray(cube_vao);
+    gl->BindBuffer(GL_ARRAY_BUFFER, cube_vbo);
+    gl->BufferData(GL_ARRAY_BUFFER, sizeof(k_cube_vertices), k_cube_vertices, GL_STATIC_DRAW);
+    gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, cube_ebo);
+    gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(k_cube_indices), k_cube_indices, GL_STATIC_DRAW);
+    gl->EnableVertexAttribArray(0);
+    gl->VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), NULL);
+
+    const char *ver = ctx->is_es ? "#version 300 es\nprecision highp float;\n" : "#version 330 core\n";
+
+    /* Capture projection + 6 view matrices */
+    float cap_proj[16];
+    {
+        sdl3d_mat4 pm;
+        sdl3d_mat4_perspective(3.14159265f * 0.5f, 1.0f, 0.1f, 10.0f, &pm);
+        SDL_memcpy(cap_proj, pm.m, sizeof(cap_proj));
+    }
+    sdl3d_vec3 o = {0, 0, 0};
+    sdl3d_vec3 tgts[6] = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
+    sdl3d_vec3 ups[6] = {{0,-1,0},{0,-1,0},{0,0,1},{0,0,-1},{0,-1,0},{0,-1,0}};
+    float cap_views[6][16];
+    for (int i = 0; i < 6; i++)
+    {
+        sdl3d_mat4 v;
+        sdl3d_mat4_look_at(o, tgts[i], ups[i], &v);
+        SDL_memcpy(cap_views[i], v.m, sizeof(cap_views[i]));
+    }
+
+    gl->Disable(GL_CULL_FACE);
+    gl->Enable(GL_DEPTH_TEST);
+
+    /* ---- Step 1: Equirect -> Cubemap (512) ---- */
+    GLuint eq_prog = build_program(gl, ver, k_cube_vert, k_equirect_to_cube_frag);
+    GLuint env_cubemap;
+    gl->GenTextures(1, &env_cubemap);
+    gl->BindTexture(GL_TEXTURE_CUBE_MAP, env_cubemap);
+    for (int i = 0; i < 6; i++)
+        gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_RGB16F, 512, 512, 0, GL_RGB, GL_FLOAT, NULL);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, 0x812F);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, 0x812F);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, 0x812F);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    gl->UseProgram(eq_prog);
+    gl->Uniform1i(gl->GetUniformLocation(eq_prog, "uEquirectMap"), 0);
+    gl->UniformMatrix4fv(gl->GetUniformLocation(eq_prog, "uProjection"), 1, GL_FALSE, cap_proj);
+    gl->ActiveTexture(GL_TEXTURE0);
+    gl->BindTexture(GL_TEXTURE_2D, hdr_tex);
+
+    gl->BindFramebuffer(GL_FRAMEBUFFER, cap_fbo);
+    gl->BindRenderbuffer(GL_RENDERBUFFER, cap_rbo);
+    gl->RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+    gl->FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, cap_rbo);
+    gl->Viewport(0, 0, 512, 512);
+    GLint eq_view_loc = gl->GetUniformLocation(eq_prog, "uView");
+    for (int i = 0; i < 6; i++)
+    {
+        gl->UniformMatrix4fv(eq_view_loc, 1, GL_FALSE, cap_views[i]);
+        gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                 GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, env_cubemap, 0);
+        gl->Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        ibl_render_cube(gl, cube_vao);
+    }
+    SDL_Log("SDL3D IBL: equirect -> cubemap done");
+
+    /* ---- Step 2: Irradiance convolution (32x32) ---- */
+    GLuint irr_prog = build_program(gl, ver, k_cube_vert, k_irradiance_frag);
+    gl->GenTextures(1, &ctx->ibl_irradiance_map);
+    gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_irradiance_map);
+    for (int i = 0; i < 6; i++)
+        gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_RGB16F, 32, 32, 0, GL_RGB, GL_FLOAT, NULL);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, 0x812F);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, 0x812F);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, 0x812F);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    gl->UseProgram(irr_prog);
+    gl->Uniform1i(gl->GetUniformLocation(irr_prog, "uEnvironmentMap"), 0);
+    gl->UniformMatrix4fv(gl->GetUniformLocation(irr_prog, "uProjection"), 1, GL_FALSE, cap_proj);
+    gl->ActiveTexture(GL_TEXTURE0);
+    gl->BindTexture(GL_TEXTURE_CUBE_MAP, env_cubemap);
+    gl->RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 32, 32);
+    gl->Viewport(0, 0, 32, 32);
+    GLint irr_view_loc = gl->GetUniformLocation(irr_prog, "uView");
+    for (int i = 0; i < 6; i++)
+    {
+        gl->UniformMatrix4fv(irr_view_loc, 1, GL_FALSE, cap_views[i]);
+        gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                 GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, ctx->ibl_irradiance_map, 0);
+        gl->Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        ibl_render_cube(gl, cube_vao);
+    }
+    SDL_Log("SDL3D IBL: irradiance done");
+
+    /* ---- Step 3: Prefilter (128, 5 mip levels) ---- */
+    GLuint pf_prog = build_program(gl, ver, k_cube_vert, k_prefilter_frag);
+    gl->GenTextures(1, &ctx->ibl_prefilter_map);
+    gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_prefilter_map);
+    for (int i = 0; i < 6; i++)
+        gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_RGB16F, 128, 128, 0, GL_RGB, GL_FLOAT, NULL);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, 0x812F);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, 0x812F);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, 0x812F);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, 0x2703 /* GL_LINEAR_MIPMAP_LINEAR */);
+    gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    gl->GenerateMipmap(GL_TEXTURE_CUBE_MAP);
+
+    gl->UseProgram(pf_prog);
+    gl->Uniform1i(gl->GetUniformLocation(pf_prog, "uEnvironmentMap"), 0);
+    gl->UniformMatrix4fv(gl->GetUniformLocation(pf_prog, "uProjection"), 1, GL_FALSE, cap_proj);
+    gl->ActiveTexture(GL_TEXTURE0);
+    gl->BindTexture(GL_TEXTURE_CUBE_MAP, env_cubemap);
+    GLint pf_view_loc = gl->GetUniformLocation(pf_prog, "uView");
+    GLint pf_rough_loc = gl->GetUniformLocation(pf_prog, "uRoughness");
+    for (int mip = 0; mip < 5; mip++)
+    {
+        int mw = (int)(128 * SDL_powf(0.5f, (float)mip));
+        gl->RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, mw, mw);
+        gl->Viewport(0, 0, mw, mw);
+        gl->Uniform1f(pf_rough_loc, (float)mip / 4.0f);
+        for (int i = 0; i < 6; i++)
+        {
+            gl->UniformMatrix4fv(pf_view_loc, 1, GL_FALSE, cap_views[i]);
+            gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                     GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, ctx->ibl_prefilter_map, mip);
+            gl->Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            ibl_render_cube(gl, cube_vao);
+        }
+    }
+    SDL_Log("SDL3D IBL: prefilter done");
+
+    /* ---- Step 4: BRDF LUT (512x512) ---- */
+    GLuint brdf_prog = build_program(gl, ver, k_brdf_vert, k_brdf_frag);
+    gl->GenTextures(1, &ctx->ibl_brdf_lut);
+    gl->BindTexture(GL_TEXTURE_2D, ctx->ibl_brdf_lut);
+    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RG16F, 512, 512, 0, GL_RG, GL_FLOAT, NULL);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812F);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    gl->RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+    gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ctx->ibl_brdf_lut, 0);
+    gl->Viewport(0, 0, 512, 512);
+    gl->Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    gl->UseProgram(brdf_prog);
+    gl->BindVertexArray(ctx->fullscreen_vao);
+    gl->DrawArrays(GL_TRIANGLES, 0, 3);
+    SDL_Log("SDL3D IBL: BRDF LUT done");
+
+    /* Cleanup */
+    gl->BindFramebuffer(GL_FRAMEBUFFER, 0);
+    gl->DeleteTextures(1, &hdr_tex);
+    gl->DeleteTextures(1, &env_cubemap);
+    gl->DeleteVertexArrays(1, &cube_vao);
+    gl->DeleteBuffers(1, &cube_vbo);
+    gl->DeleteBuffers(1, &cube_ebo);
+    gl->DeleteFramebuffers(1, &cap_fbo);
+    gl->DeleteRenderbuffers(1, &cap_rbo);
+    gl->DeleteProgram(eq_prog);
+    gl->DeleteProgram(irr_prog);
+    gl->DeleteProgram(pf_prog);
+    gl->DeleteProgram(brdf_prog);
+
+    /* Restore state */
+    gl->Enable(GL_CULL_FACE);
+    gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+
+    ctx->ibl_ready = true;
+    SDL_Log("SDL3D IBL: environment map ready");
+    return true;
+}
+
 sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
 {
     /* Request GL 3.3 Core. */
@@ -1617,6 +2125,14 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->pbr_metallic_loc = gl->GetUniformLocation(ctx->pbr_program, "uMetallic");
     ctx->pbr_roughness_loc = gl->GetUniformLocation(ctx->pbr_program, "uRoughness");
     ctx->pbr_emissive_loc = gl->GetUniformLocation(ctx->pbr_program, "uEmissive");
+    ctx->pbr_baked_light_mode_loc = gl->GetUniformLocation(ctx->pbr_program, "uBakedLightMode");
+
+    /* IBL uniform locations. */
+    ctx->pbr_irradiance_map_loc = gl->GetUniformLocation(ctx->pbr_program, "uIrradianceMap");
+    ctx->pbr_prefilter_map_loc = gl->GetUniformLocation(ctx->pbr_program, "uPrefilterMap");
+    ctx->pbr_brdf_lut_loc = gl->GetUniformLocation(ctx->pbr_program, "uBrdfLUT");
+    ctx->pbr_ibl_enabled_loc = gl->GetUniformLocation(ctx->pbr_program, "uIBLEnabled");
+    ctx->pbr_max_reflection_lod_loc = gl->GetUniformLocation(ctx->pbr_program, "uMaxReflectionLod");
 
     /* PBR shadow uniform locations. */
     ctx->pbr_shadow_map_loc = gl->GetUniformLocation(ctx->pbr_program, "uShadowMap");
@@ -1803,6 +2319,31 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
         gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     }
 
+    /* Fallback textures keep inactive IBL samplers on distinct, valid units.
+     * Without these bindings, some drivers treat the mixed sampler types as
+     * undefined even when uIBLEnabled is 0. */
+    {
+        Uint8 black[4] = {0, 0, 0, 255};
+        gl->GenTextures(1, &ctx->black_texture);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->black_texture);
+        gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, black);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        gl->GenTextures(1, &ctx->black_cubemap);
+        gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->black_cubemap);
+        for (int face = 0; face < 6; face++)
+        {
+            gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)face, 0, GL_RGBA, 1, 1, 0, GL_RGBA,
+                           GL_UNSIGNED_BYTE, black);
+        }
+        gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    }
+
     /* ---- Main FBO ---- */
     if (!create_fbo(ctx, width, height))
     {
@@ -1977,6 +2518,10 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
 
     if (ctx->white_texture)
         gl->DeleteTextures(1, &ctx->white_texture);
+    if (ctx->black_texture)
+        gl->DeleteTextures(1, &ctx->black_texture);
+    if (ctx->black_cubemap)
+        gl->DeleteTextures(1, &ctx->black_cubemap);
 
     if (ctx->fbo)
         gl->DeleteFramebuffers(1, &ctx->fbo);
@@ -2082,6 +2627,7 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     e->metallic = params->metallic;
     e->roughness = params->roughness;
     SDL_memcpy(e->emissive, params->emissive, 3 * sizeof(float));
+    e->baked_light_mode = params->baked_light_mode;
 
     /* check_z_fighting(ctx, e); — disabled: triggers on authored model geometry */
     (void)check_z_fighting;

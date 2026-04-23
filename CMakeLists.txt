@@ -91,6 +91,7 @@ target_sources(
         src/image.c
         src/lighting.c
         src/math.c
+        src/level.c
         src/model.c
         src/obj_loader.c
         src/rasterizer.c

@@ -78,6 +78,8 @@ TEST_F(GLRendererTest, ClearProducesExpectedColor)
 
 TEST_F(GLRendererTest, LitCubeProducesNonClearPixels)
 {
+    ASSERT_TRUE(sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG));
+
     /* Set up a light so the cube is visible. */
     sdl3d_light sun = {};
     sun.type = SDL3D_LIGHT_DIRECTIONAL;
@@ -110,6 +112,40 @@ TEST_F(GLRendererTest, LitCubeProducesNonClearPixels)
     /* The center pixel should NOT be the clear color (black). */
     int brightness = px[0] + px[1] + px[2];
     EXPECT_GT(brightness, 30);
+}
+
+TEST_F(GLRendererTest, PhongCubeVisibleWithoutIBL)
+{
+    ASSERT_TRUE(sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG));
+
+    sdl3d_light light = {};
+    light.type = SDL3D_LIGHT_POINT;
+    light.position = sdl3d_vec3_make(2.0f, 2.5f, 3.5f);
+    light.color[0] = 1.0f;
+    light.color[1] = 0.95f;
+    light.color[2] = 0.85f;
+    light.intensity = 8.0f;
+    light.range = 20.0f;
+    sdl3d_add_light(ctx, &light);
+    sdl3d_set_ambient_light(ctx, 0.15f, 0.15f, 0.18f);
+
+    sdl3d_camera3d cam;
+    cam.position = sdl3d_vec3_make(0, 0, 5);
+    cam.target = sdl3d_vec3_make(0, 0, 0);
+    cam.up = sdl3d_vec3_make(0, 1, 0);
+    cam.fovy = 60.0f;
+    cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    sdl3d_clear_render_context(ctx, (sdl3d_color){8, 32, 96, 255});
+    sdl3d_begin_mode_3d(ctx, cam);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(2, 2, 2), (sdl3d_color){255, 255, 255, 255});
+    sdl3d_end_mode_3d(ctx);
+
+    unsigned char px[4];
+    readPixel(160, 120, px);
+
+    EXPECT_GT(px[0] + px[1] + px[2], 60);
+    EXPECT_FALSE(px[0] == 8 && px[1] == 32 && px[2] == 96);
 }
 
 TEST_F(GLRendererTest, CubeVisibleOnFirstFrame)
