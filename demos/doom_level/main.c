@@ -176,6 +176,12 @@ int main(int argc, char *argv[])
     sdl3d_render_context_config cfg;
     sdl3d_texture2d enemy_tex = {0};
     sdl3d_texture2d health_tex = {0};
+    sdl3d_texture2d sky_px = {0};
+    sdl3d_texture2d sky_nx = {0};
+    sdl3d_texture2d sky_py = {0};
+    sdl3d_texture2d sky_ny = {0};
+    sdl3d_texture2d sky_pz = {0};
+    sdl3d_texture2d sky_nz = {0};
 
     (void)argc;
     (void)argv;
@@ -230,6 +236,34 @@ int main(int argc, char *argv[])
     sdl3d_set_texture_wrap(&enemy_tex, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP);
     sdl3d_set_texture_wrap(&health_tex, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP);
 
+    if (!sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/skyboxes/sky_17/px.png", &sky_px) ||
+        !sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/skyboxes/sky_17/nx.png", &sky_nx) ||
+        !sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/skyboxes/sky_17/py.png", &sky_py) ||
+        !sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/skyboxes/sky_17/ny.png", &sky_ny) ||
+        !sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/skyboxes/sky_17/pz.png", &sky_pz) ||
+        !sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/skyboxes/sky_17/nz.png", &sky_nz))
+    {
+        SDL_Log("Skybox load failed: %s", SDL_GetError());
+        sdl3d_free_texture(&enemy_tex);
+        sdl3d_free_texture(&health_tex);
+        sdl3d_free_texture(&sky_px);
+        sdl3d_free_texture(&sky_nx);
+        sdl3d_free_texture(&sky_py);
+        sdl3d_free_texture(&sky_ny);
+        sdl3d_free_texture(&sky_pz);
+        sdl3d_free_texture(&sky_nz);
+        sdl3d_destroy_render_context(ctx);
+        SDL_DestroyWindow(win);
+        SDL_Quit();
+        return 1;
+    }
+    sdl3d_set_texture_wrap(&sky_px, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP);
+    sdl3d_set_texture_wrap(&sky_nx, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP);
+    sdl3d_set_texture_wrap(&sky_py, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP);
+    sdl3d_set_texture_wrap(&sky_ny, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP);
+    sdl3d_set_texture_wrap(&sky_pz, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP);
+    sdl3d_set_texture_wrap(&sky_nz, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP);
+
     /* ---- Material palette ---- */
     sdl3d_level_material mats[] = {
         {{1, 1, 1, 1}, 0, 0.9f, SDL3D_MEDIA_DIR "/textures/rock_floor.jpg", 4},    /* 0: rock floor */
@@ -263,8 +297,8 @@ int main(int argc, char *argv[])
         {{{-2, 16}, {10, 16}, {10, 26}, {-2, 26}}, 4, -0.5f, 4.5f, 3, 1, 2},
         /* 3: East passage */
         {{{10, 18}, {16, 18}, {16, 22}, {10, 22}}, 4, 0.0f, 3.5f, 0, 1, 4},
-        /* 4: Courtyard */
-        {{{16, 14}, {28, 14}, {28, 26}, {16, 26}}, 4, 0.0f, 8.0f, 0, 1, 2},
+        /* 4: Courtyard (open roof) */
+        {{{16, 14}, {28, 14}, {28, 26}, {16, 26}}, 4, 0.0f, 8.0f, 0, -1, 2},
         /* 5: Exit room */
         {{{20, 26}, {28, 26}, {28, 32}, {20, 32}}, 4, 0.0f, 3.0f, 5, 1, 4},
         /* 6: West alcove off nukage */
@@ -307,6 +341,12 @@ int main(int argc, char *argv[])
         SDL_Log("Level build failed: %s", SDL_GetError());
         sdl3d_free_texture(&enemy_tex);
         sdl3d_free_texture(&health_tex);
+        sdl3d_free_texture(&sky_px);
+        sdl3d_free_texture(&sky_nx);
+        sdl3d_free_texture(&sky_py);
+        sdl3d_free_texture(&sky_ny);
+        sdl3d_free_texture(&sky_pz);
+        sdl3d_free_texture(&sky_nz);
         sdl3d_destroy_render_context(ctx);
         SDL_DestroyWindow(win);
         SDL_Quit();
@@ -318,6 +358,12 @@ int main(int argc, char *argv[])
         sdl3d_free_level(&level_lit);
         sdl3d_free_texture(&enemy_tex);
         sdl3d_free_texture(&health_tex);
+        sdl3d_free_texture(&sky_px);
+        sdl3d_free_texture(&sky_nx);
+        sdl3d_free_texture(&sky_py);
+        sdl3d_free_texture(&sky_ny);
+        sdl3d_free_texture(&sky_pz);
+        sdl3d_free_texture(&sky_nz);
         sdl3d_destroy_render_context(ctx);
         SDL_DestroyWindow(win);
         SDL_Quit();
@@ -326,17 +372,18 @@ int main(int argc, char *argv[])
     bool use_baked = true;
 
     demo_sprite_actor actors[] = {
-        {&enemy_tex, sdl3d_vec3_make(6.0f, 0.0f, 5.8f), (sdl3d_vec2){1.4f, 2.2f}, false, 0.0f, 0.0f},
+        {&enemy_tex, sdl3d_vec3_make(5.8f, 0.0f, 6.8f), (sdl3d_vec2){1.7f, 2.6f}, true, 0.10f, 7.0f},
         {&health_tex, sdl3d_vec3_make(5.0f, 0.25f, 10.8f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.12f, 1.8f},
-        {&enemy_tex, sdl3d_vec3_make(4.2f, -0.5f, 21.5f), (sdl3d_vec2){1.4f, 2.2f}, false, 0.0f, 0.0f},
+        {&enemy_tex, sdl3d_vec3_make(4.2f, -0.5f, 21.5f), (sdl3d_vec2){1.6f, 2.4f}, true, 0.08f, 6.0f},
         {&health_tex, sdl3d_vec3_make(24.0f, 0.25f, 4.5f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.15f, 1.5f},
-        {&enemy_tex, sdl3d_vec3_make(24.0f, 0.0f, 19.0f), (sdl3d_vec2){1.6f, 2.4f}, false, 0.0f, 0.0f},
+        {&enemy_tex, sdl3d_vec3_make(24.0f, 0.0f, 19.0f), (sdl3d_vec2){1.8f, 2.8f}, true, 0.09f, 6.5f},
         {&health_tex, sdl3d_vec3_make(24.0f, 0.25f, 28.5f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.12f, 2.1f},
-        {&enemy_tex, sdl3d_vec3_make(24.0f, 0.0f, 37.5f), (sdl3d_vec2){1.5f, 2.3f}, false, 0.0f, 0.0f},
+        {&enemy_tex, sdl3d_vec3_make(24.0f, 0.0f, 37.5f), (sdl3d_vec2){1.7f, 2.6f}, true, 0.09f, 5.8f},
         {&health_tex, sdl3d_vec3_make(35.5f, 0.25f, 27.0f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.1f, 1.7f},
     };
     demo_actor_draw actor_draws[SDL_arraysize(actors)];
     float elapsed = 0.0f;
+    sdl3d_skybox_textured skybox = {&sky_px, &sky_nx, &sky_py, &sky_ny, &sky_pz, &sky_nz, 350.0f};
 
     SDL_Log("Portals detected: %d", level_lit.portal_count);
     for (int i = 0; i < level_lit.portal_count; i++)
@@ -495,6 +542,7 @@ int main(int argc, char *argv[])
         sdl3d_clear_render_context(ctx, (sdl3d_color){10, 10, 15, 255});
 
         sdl3d_begin_mode_3d(ctx, cam);
+        sdl3d_draw_skybox_textured(ctx, &skybox);
 
         /* Compute visibility using cached frustum planes from begin_mode_3d.
          * We pass the frustum planes through to the visibility system. */
@@ -636,6 +684,12 @@ int main(int argc, char *argv[])
     sdl3d_free_level(&level_unlit);
     sdl3d_free_texture(&enemy_tex);
     sdl3d_free_texture(&health_tex);
+    sdl3d_free_texture(&sky_px);
+    sdl3d_free_texture(&sky_nx);
+    sdl3d_free_texture(&sky_py);
+    sdl3d_free_texture(&sky_ny);
+    sdl3d_free_texture(&sky_pz);
+    sdl3d_free_texture(&sky_nz);
     sdl3d_destroy_render_context(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
