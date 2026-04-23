@@ -33,11 +33,11 @@ extern "C"
 
     typedef struct sdl3d_level_material
     {
-        float albedo[4];       /* RGBA; default {1,1,1,1} */
-        float metallic;        /* [0,1]; default 0 */
-        float roughness;       /* [0,1]; default 1 */
-        const char *texture;   /* path to diffuse texture, or NULL */
-        float tex_scale;       /* UV scale (units per repeat); 0 = default (4) */
+        float albedo[4];     /* RGBA; default {1,1,1,1} */
+        float metallic;      /* [0,1]; default 0 */
+        float roughness;     /* [0,1]; default 1 */
+        const char *texture; /* path to diffuse texture, or NULL */
+        float tex_scale;     /* UV scale (units per repeat); 0 = default (4) */
     } sdl3d_level_material;
 
     typedef struct sdl3d_sector
@@ -72,10 +72,8 @@ extern "C"
      * Pass NULL/0 for lights to use raw material colors.
      * Returns false with SDL_GetError on failure.
      */
-    bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count,
-                           const sdl3d_level_material *materials, int material_count,
-                           const sdl3d_level_light *lights, int light_count,
-                           sdl3d_level *out);
+    bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3d_level_material *materials,
+                           int material_count, const sdl3d_level_light *lights, int light_count, sdl3d_level *out);
 
     void sdl3d_free_level(sdl3d_level *level);
 

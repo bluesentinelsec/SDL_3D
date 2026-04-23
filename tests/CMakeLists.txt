@@ -58,13 +58,20 @@ function(sdl3d_add_test target_name source_file test_label)
         )
     endif()
 
+    set(_sdl3d_test_timeout 15)
+    if(test_label STREQUAL "render")
+        # GPU/windowed tests are reliable locally but can stall briefly on
+        # hosted macOS runners when creating hidden GL contexts.
+        set(_sdl3d_test_timeout 30)
+    endif()
+
     gtest_discover_tests(
         ${target_name}
         DISCOVERY_TIMEOUT 10
         DISCOVERY_MODE PRE_TEST
         PROPERTIES
             LABELS ${test_label}
-            TIMEOUT 15
+            TIMEOUT ${_sdl3d_test_timeout}
     )
 endfunction()
 

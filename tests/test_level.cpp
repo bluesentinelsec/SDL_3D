@@ -51,7 +51,8 @@ TEST(SDL3DLevelBuilder, BuildsIndependentSectorMaterialChunks)
 {
     const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
                                               MakeLevelMaterial("wall.png")};
-    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f), MakeSquareSector(8.0f, 0.0f, 12.0f, 4.0f)};
+    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f),
+                                    MakeSquareSector(8.0f, 0.0f, 12.0f, 4.0f)};
     sdl3d_level level{};
 
     ASSERT_TRUE(sdl3d_build_level(sectors, 2, materials, 3, nullptr, 0, &level)) << SDL_GetError();
@@ -112,7 +113,8 @@ TEST(SDL3DDrawModelCulling, SkipsOffscreenChunkBeforeMaterialValidation)
     model.material_count = 0;
 
     SDL_ClearError();
-    EXPECT_TRUE(sdl3d_draw_model(ctx, &model, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), 1.0f, (sdl3d_color){255, 255, 255, 255}))
+    EXPECT_TRUE(
+        sdl3d_draw_model(ctx, &model, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), 1.0f, (sdl3d_color){255, 255, 255, 255}))
         << SDL_GetError();
     EXPECT_TRUE(sdl3d_end_mode_3d(ctx)) << SDL_GetError();
 

@@ -244,9 +244,9 @@ struct sdl3d_gl_context
     sdl3d_render_context *current_ctx;
 
     /* IBL (Image-Based Lighting) */
-    GLuint ibl_irradiance_map;  /* diffuse irradiance cubemap */
-    GLuint ibl_prefilter_map;   /* specular prefiltered cubemap */
-    GLuint ibl_brdf_lut;        /* 2D BRDF integration LUT */
+    GLuint ibl_irradiance_map; /* diffuse irradiance cubemap */
+    GLuint ibl_prefilter_map;  /* specular prefiltered cubemap */
+    GLuint ibl_brdf_lut;       /* 2D BRDF integration LUT */
     GLint pbr_irradiance_map_loc;
     GLint pbr_prefilter_map_loc;
     GLint pbr_brdf_lut_loc;
@@ -315,88 +315,89 @@ static const char k_pbr_vert[] = "layout(location = 0) in vec3 aPosition;\n"
                                  "    gl_Position = uViewProjection * worldPos;\n"
                                  "}\n";
 
-static const char k_pbr_frag_decl[] = "#define MAX_LIGHTS 8\n"
-                                      "#define PI 3.14159265\n"
-                                      "\n"
-                                      "struct Light {\n"
-                                      "    int type;\n"
-                                      "    vec3 position;\n"
-                                      "    vec3 direction;\n"
-                                      "    vec3 color;\n"
-                                      "    float intensity;\n"
-                                      "    float range;\n"
-                                      "    float innerCutoff;\n"
-                                      "    float outerCutoff;\n"
-                                      "};\n"
-                                      "\n"
-                                      "layout(std140) uniform SceneUBO {\n"
-                                      "    mat4 uViewProjection;\n"
-                                      "    vec3 uCameraPos;\n"
-                                      "    float _pad0;\n"
-                                      "    vec3 uAmbient;\n"
-                                      "    int uLightCount;\n"
-                                      "    Light uLights[MAX_LIGHTS];\n"
-                                      "    int uFogMode;\n"
-                                      "    float uFogStart;\n"
-                                      "    float uFogEnd;\n"
-                                      "    float uFogDensity;\n"
-                                      "    vec3 uFogColor;\n"
-                                      "    int uTonemapMode;\n"
-                                      "};\n"
-                                      "\n"
-                                      "in vec3 vWorldPos;\n"
-                                      "in vec3 vWorldNormal;\n"
-                                      "in vec2 vTexCoord;\n"
-                                      "in vec4 vColor;\n"
-                                      "\n"
-                                      "uniform sampler2D uTexture;\n"
-                                      "uniform int uHasTexture;\n"
-                                      "uniform vec4 uTint;\n"
-                                      "uniform float uMetallic;\n"
-                                      "uniform float uRoughness;\n"
-                                      "uniform vec3 uEmissive;\n"
-                                      "uniform int uBakedLightMode;\n"
-                                      "\n"
-                                      "uniform sampler2DArray uShadowMap;\n"
-                                      "uniform mat4 uShadowVP;\n"
-                                      "uniform int uShadowEnabled;\n"
-                                      "uniform float uShadowBias;\n"
-                                      "uniform mat4 uCSMVP[4];\n"
-                                      "uniform float uCSMSplits[4];\n"
-                                      "uniform mat4 uViewMatrix;\n"
-                                      "uniform int uCSMEnabled;\n"
-                                      "\n"
-                                      "uniform samplerCube uPointShadowMap[2];\n"
-                                      "uniform vec3 uPointShadowLightPos[2];\n"
-                                      "uniform float uPointShadowFar[2];\n"
-                                      "uniform int uPointShadowCount;\n"
-                                      "\n"
-                                      "uniform samplerCube uIrradianceMap;\n"
-                                      "uniform samplerCube uPrefilterMap;\n"
-                                      "uniform sampler2D uBrdfLUT;\n"
-                                      "uniform int uIBLEnabled;\n"
-                                      "uniform float uMaxReflectionLod;\n"
-                                      "\n"
-                                      "out vec4 fragColor;\n"
-                                      "\n"
-                                      "float DistributionGGX(float NdotH, float r) {\n"
-                                      "    float a = r * r;\n"
-                                      "    float a2 = a * a;\n"
-                                      "    float d = NdotH * NdotH * (a2 - 1.0) + 1.0;\n"
-                                      "    return a2 / (PI * d * d + 0.0001);\n"
-                                      "}\n"
-                                      "\n"
-                                      "float GeometrySchlickGGX(float NdotV, float r) {\n"
-                                      "    float k = (r + 1.0) * (r + 1.0) / 8.0;\n"
-                                      "    return NdotV / (NdotV * (1.0 - k) + k + 0.0001);\n"
-                                      "}\n"
-                                      "\n"
-                                      "vec3 FresnelSchlick(float cosTheta, vec3 F0) {\n"
-                                      "    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);\n"
-                                      "}\n"
-                                      "vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {\n"
-                                      "    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);\n"
-                                      "}\n";
+static const char k_pbr_frag_decl[] =
+    "#define MAX_LIGHTS 8\n"
+    "#define PI 3.14159265\n"
+    "\n"
+    "struct Light {\n"
+    "    int type;\n"
+    "    vec3 position;\n"
+    "    vec3 direction;\n"
+    "    vec3 color;\n"
+    "    float intensity;\n"
+    "    float range;\n"
+    "    float innerCutoff;\n"
+    "    float outerCutoff;\n"
+    "};\n"
+    "\n"
+    "layout(std140) uniform SceneUBO {\n"
+    "    mat4 uViewProjection;\n"
+    "    vec3 uCameraPos;\n"
+    "    float _pad0;\n"
+    "    vec3 uAmbient;\n"
+    "    int uLightCount;\n"
+    "    Light uLights[MAX_LIGHTS];\n"
+    "    int uFogMode;\n"
+    "    float uFogStart;\n"
+    "    float uFogEnd;\n"
+    "    float uFogDensity;\n"
+    "    vec3 uFogColor;\n"
+    "    int uTonemapMode;\n"
+    "};\n"
+    "\n"
+    "in vec3 vWorldPos;\n"
+    "in vec3 vWorldNormal;\n"
+    "in vec2 vTexCoord;\n"
+    "in vec4 vColor;\n"
+    "\n"
+    "uniform sampler2D uTexture;\n"
+    "uniform int uHasTexture;\n"
+    "uniform vec4 uTint;\n"
+    "uniform float uMetallic;\n"
+    "uniform float uRoughness;\n"
+    "uniform vec3 uEmissive;\n"
+    "uniform int uBakedLightMode;\n"
+    "\n"
+    "uniform sampler2DArray uShadowMap;\n"
+    "uniform mat4 uShadowVP;\n"
+    "uniform int uShadowEnabled;\n"
+    "uniform float uShadowBias;\n"
+    "uniform mat4 uCSMVP[4];\n"
+    "uniform float uCSMSplits[4];\n"
+    "uniform mat4 uViewMatrix;\n"
+    "uniform int uCSMEnabled;\n"
+    "\n"
+    "uniform samplerCube uPointShadowMap[2];\n"
+    "uniform vec3 uPointShadowLightPos[2];\n"
+    "uniform float uPointShadowFar[2];\n"
+    "uniform int uPointShadowCount;\n"
+    "\n"
+    "uniform samplerCube uIrradianceMap;\n"
+    "uniform samplerCube uPrefilterMap;\n"
+    "uniform sampler2D uBrdfLUT;\n"
+    "uniform int uIBLEnabled;\n"
+    "uniform float uMaxReflectionLod;\n"
+    "\n"
+    "out vec4 fragColor;\n"
+    "\n"
+    "float DistributionGGX(float NdotH, float r) {\n"
+    "    float a = r * r;\n"
+    "    float a2 = a * a;\n"
+    "    float d = NdotH * NdotH * (a2 - 1.0) + 1.0;\n"
+    "    return a2 / (PI * d * d + 0.0001);\n"
+    "}\n"
+    "\n"
+    "float GeometrySchlickGGX(float NdotV, float r) {\n"
+    "    float k = (r + 1.0) * (r + 1.0) / 8.0;\n"
+    "    return NdotV / (NdotV * (1.0 - k) + k + 0.0001);\n"
+    "}\n"
+    "\n"
+    "vec3 FresnelSchlick(float cosTheta, vec3 F0) {\n"
+    "    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);\n"
+    "}\n"
+    "vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {\n"
+    "    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);\n"
+    "}\n";
 
 static const char k_pbr_frag_main[] =
     "void main() {\n"
@@ -837,29 +838,27 @@ static GLuint link_program(sdl3d_gl_funcs *gl, GLuint vert, GLuint frag)
 /* IBL shader sources                                                  */
 /* ------------------------------------------------------------------ */
 
-static const char k_cube_vert[] =
-    "layout(location = 0) in vec3 aPosition;\n"
-    "out vec3 vLocalPos;\n"
-    "uniform mat4 uProjection;\n"
-    "uniform mat4 uView;\n"
-    "void main() {\n"
-    "    vLocalPos = aPosition;\n"
-    "    gl_Position = uProjection * uView * vec4(aPosition, 1.0);\n"
-    "}\n";
+static const char k_cube_vert[] = "layout(location = 0) in vec3 aPosition;\n"
+                                  "out vec3 vLocalPos;\n"
+                                  "uniform mat4 uProjection;\n"
+                                  "uniform mat4 uView;\n"
+                                  "void main() {\n"
+                                  "    vLocalPos = aPosition;\n"
+                                  "    gl_Position = uProjection * uView * vec4(aPosition, 1.0);\n"
+                                  "}\n";
 
-static const char k_equirect_to_cube_frag[] =
-    "in vec3 vLocalPos;\n"
-    "out vec4 fragColor;\n"
-    "uniform sampler2D uEquirectMap;\n"
-    "const vec2 invAtan = vec2(0.1591, 0.3183);\n"
-    "void main() {\n"
-    "    vec3 d = normalize(vLocalPos);\n"
-    "    vec2 uv = vec2(atan(d.z, d.x), asin(d.y));\n"
-    "    uv *= invAtan;\n"
-    "    uv += 0.5;\n"
-    "    vec3 color = texture(uEquirectMap, uv).rgb;\n"
-    "    fragColor = vec4(color, 1.0);\n"
-    "}\n";
+static const char k_equirect_to_cube_frag[] = "in vec3 vLocalPos;\n"
+                                              "out vec4 fragColor;\n"
+                                              "uniform sampler2D uEquirectMap;\n"
+                                              "const vec2 invAtan = vec2(0.1591, 0.3183);\n"
+                                              "void main() {\n"
+                                              "    vec3 d = normalize(vLocalPos);\n"
+                                              "    vec2 uv = vec2(atan(d.z, d.x), asin(d.y));\n"
+                                              "    uv *= invAtan;\n"
+                                              "    uv += 0.5;\n"
+                                              "    vec3 color = texture(uEquirectMap, uv).rgb;\n"
+                                              "    fragColor = vec4(color, 1.0);\n"
+                                              "}\n";
 
 static const char k_irradiance_frag[] =
     "in vec3 vLocalPos;\n"
@@ -886,63 +885,61 @@ static const char k_irradiance_frag[] =
     "    fragColor = vec4(irradiance, 1.0);\n"
     "}\n";
 
-static const char k_prefilter_frag[] =
-    "in vec3 vLocalPos;\n"
-    "out vec4 fragColor;\n"
-    "uniform samplerCube uEnvironmentMap;\n"
-    "uniform float uRoughness;\n"
-    "const float PI = 3.14159265;\n"
-    "float RadicalInverse_VdC(uint bits) {\n"
-    "    bits = (bits << 16u) | (bits >> 16u);\n"
-    "    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);\n"
-    "    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);\n"
-    "    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);\n"
-    "    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);\n"
-    "    return float(bits) * 2.3283064365386963e-10;\n"
-    "}\n"
-    "vec2 Hammersley(uint i, uint N) {\n"
-    "    return vec2(float(i)/float(N), RadicalInverse_VdC(i));\n"
-    "}\n"
-    "vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness) {\n"
-    "    float a = roughness * roughness;\n"
-    "    float phi = 2.0 * PI * Xi.x;\n"
-    "    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));\n"
-    "    float sinTheta = sqrt(1.0 - cosTheta*cosTheta);\n"
-    "    vec3 H = vec3(cos(phi)*sinTheta, sin(phi)*sinTheta, cosTheta);\n"
-    "    vec3 up = abs(N.z) < 0.999 ? vec3(0,0,1) : vec3(1,0,0);\n"
-    "    vec3 tangent = normalize(cross(up, N));\n"
-    "    vec3 bitangent = cross(N, tangent);\n"
-    "    return tangent * H.x + bitangent * H.y + N * H.z;\n"
-    "}\n"
-    "void main() {\n"
-    "    vec3 N = normalize(vLocalPos);\n"
-    "    vec3 R = N;\n"
-    "    vec3 V = R;\n"
-    "    const uint SAMPLE_COUNT = 1024u;\n"
-    "    float totalWeight = 0.0;\n"
-    "    vec3 prefilteredColor = vec3(0.0);\n"
-    "    for (uint i = 0u; i < SAMPLE_COUNT; ++i) {\n"
-    "        vec2 Xi = Hammersley(i, SAMPLE_COUNT);\n"
-    "        vec3 H = ImportanceSampleGGX(Xi, N, uRoughness);\n"
-    "        vec3 L = normalize(2.0 * dot(V, H) * H - V);\n"
-    "        float NdotL = max(dot(N, L), 0.0);\n"
-    "        if (NdotL > 0.0) {\n"
-    "            prefilteredColor += texture(uEnvironmentMap, L).rgb * NdotL;\n"
-    "            totalWeight += NdotL;\n"
-    "        }\n"
-    "    }\n"
-    "    prefilteredColor /= totalWeight;\n"
-    "    fragColor = vec4(prefilteredColor, 1.0);\n"
-    "}\n";
+static const char k_prefilter_frag[] = "in vec3 vLocalPos;\n"
+                                       "out vec4 fragColor;\n"
+                                       "uniform samplerCube uEnvironmentMap;\n"
+                                       "uniform float uRoughness;\n"
+                                       "const float PI = 3.14159265;\n"
+                                       "float RadicalInverse_VdC(uint bits) {\n"
+                                       "    bits = (bits << 16u) | (bits >> 16u);\n"
+                                       "    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);\n"
+                                       "    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);\n"
+                                       "    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);\n"
+                                       "    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);\n"
+                                       "    return float(bits) * 2.3283064365386963e-10;\n"
+                                       "}\n"
+                                       "vec2 Hammersley(uint i, uint N) {\n"
+                                       "    return vec2(float(i)/float(N), RadicalInverse_VdC(i));\n"
+                                       "}\n"
+                                       "vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness) {\n"
+                                       "    float a = roughness * roughness;\n"
+                                       "    float phi = 2.0 * PI * Xi.x;\n"
+                                       "    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));\n"
+                                       "    float sinTheta = sqrt(1.0 - cosTheta*cosTheta);\n"
+                                       "    vec3 H = vec3(cos(phi)*sinTheta, sin(phi)*sinTheta, cosTheta);\n"
+                                       "    vec3 up = abs(N.z) < 0.999 ? vec3(0,0,1) : vec3(1,0,0);\n"
+                                       "    vec3 tangent = normalize(cross(up, N));\n"
+                                       "    vec3 bitangent = cross(N, tangent);\n"
+                                       "    return tangent * H.x + bitangent * H.y + N * H.z;\n"
+                                       "}\n"
+                                       "void main() {\n"
+                                       "    vec3 N = normalize(vLocalPos);\n"
+                                       "    vec3 R = N;\n"
+                                       "    vec3 V = R;\n"
+                                       "    const uint SAMPLE_COUNT = 1024u;\n"
+                                       "    float totalWeight = 0.0;\n"
+                                       "    vec3 prefilteredColor = vec3(0.0);\n"
+                                       "    for (uint i = 0u; i < SAMPLE_COUNT; ++i) {\n"
+                                       "        vec2 Xi = Hammersley(i, SAMPLE_COUNT);\n"
+                                       "        vec3 H = ImportanceSampleGGX(Xi, N, uRoughness);\n"
+                                       "        vec3 L = normalize(2.0 * dot(V, H) * H - V);\n"
+                                       "        float NdotL = max(dot(N, L), 0.0);\n"
+                                       "        if (NdotL > 0.0) {\n"
+                                       "            prefilteredColor += texture(uEnvironmentMap, L).rgb * NdotL;\n"
+                                       "            totalWeight += NdotL;\n"
+                                       "        }\n"
+                                       "    }\n"
+                                       "    prefilteredColor /= totalWeight;\n"
+                                       "    fragColor = vec4(prefilteredColor, 1.0);\n"
+                                       "}\n";
 
-static const char k_brdf_vert[] =
-    "layout(location = 0) in vec3 aPosition;\n"
-    "layout(location = 2) in vec2 aTexCoord;\n"
-    "out vec2 vTexCoord;\n"
-    "void main() {\n"
-    "    vTexCoord = aTexCoord;\n"
-    "    gl_Position = vec4(aPosition, 1.0);\n"
-    "}\n";
+static const char k_brdf_vert[] = "layout(location = 0) in vec3 aPosition;\n"
+                                  "layout(location = 2) in vec2 aTexCoord;\n"
+                                  "out vec2 vTexCoord;\n"
+                                  "void main() {\n"
+                                  "    vTexCoord = aTexCoord;\n"
+                                  "    gl_Position = vec4(aPosition, 1.0);\n"
+                                  "}\n";
 
 static const char k_brdf_frag[] =
     "in vec2 vTexCoord;\n"
@@ -1012,12 +1009,10 @@ static const char k_brdf_frag[] =
 
 /* Unit cube vertices for cubemap rendering. */
 static const float k_cube_vertices[] = {
-    -1, -1, -1,  1, -1, -1,  1,  1, -1, -1,  1, -1,
-    -1, -1,  1,  1, -1,  1,  1,  1,  1, -1,  1,  1,
+    -1, -1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1, -1, -1, 1, 1, -1, 1, 1, 1, 1, -1, 1, 1,
 };
 static const unsigned int k_cube_indices[] = {
-    0,1,2, 2,3,0, 1,5,6, 6,2,1, 5,4,7, 7,6,5,
-    4,0,3, 3,7,4, 3,2,6, 6,7,3, 4,5,1, 1,0,4,
+    0, 1, 2, 2, 3, 0, 1, 5, 6, 6, 2, 1, 5, 4, 7, 7, 6, 5, 4, 0, 3, 3, 7, 4, 3, 2, 6, 6, 7, 3, 4, 5, 1, 1, 0, 4,
 };
 
 static GLuint build_program(sdl3d_gl_funcs *gl, const char *version, const char *vert_body, const char *frag_body)
@@ -1852,8 +1847,7 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
     GLuint hdr_tex;
     gl->GenTextures(1, &hdr_tex);
     gl->BindTexture(GL_TEXTURE_2D, hdr_tex);
-    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, w, h, 0,
-                   nc == 4 ? GL_RGBA : GL_RGB, GL_FLOAT, data);
+    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, w, h, 0, nc == 4 ? GL_RGBA : GL_RGB, GL_FLOAT, data);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812F /* GL_CLAMP_TO_EDGE */);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -1888,8 +1882,8 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
         SDL_memcpy(cap_proj, pm.m, sizeof(cap_proj));
     }
     sdl3d_vec3 o = {0, 0, 0};
-    sdl3d_vec3 tgts[6] = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
-    sdl3d_vec3 ups[6] = {{0,-1,0},{0,-1,0},{0,0,1},{0,0,-1},{0,-1,0},{0,-1,0}};
+    sdl3d_vec3 tgts[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    sdl3d_vec3 ups[6] = {{0, -1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}, {0, -1, 0}};
     float cap_views[6][16];
     for (int i = 0; i < 6; i++)
     {
@@ -1929,8 +1923,8 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
     for (int i = 0; i < 6; i++)
     {
         gl->UniformMatrix4fv(eq_view_loc, 1, GL_FALSE, cap_views[i]);
-        gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                 GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, env_cubemap, 0);
+        gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i,
+                                 env_cubemap, 0);
         gl->Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         ibl_render_cube(gl, cube_vao);
     }
@@ -1959,8 +1953,8 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
     for (int i = 0; i < 6; i++)
     {
         gl->UniformMatrix4fv(irr_view_loc, 1, GL_FALSE, cap_views[i]);
-        gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                 GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, ctx->ibl_irradiance_map, 0);
+        gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i,
+                                 ctx->ibl_irradiance_map, 0);
         gl->Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         ibl_render_cube(gl, cube_vao);
     }
@@ -1995,8 +1989,8 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
         for (int i = 0; i < 6; i++)
         {
             gl->UniformMatrix4fv(pf_view_loc, 1, GL_FALSE, cap_views[i]);
-            gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                     GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, ctx->ibl_prefilter_map, mip);
+            gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i,
+                                     ctx->ibl_prefilter_map, mip);
             gl->Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             ibl_render_cube(gl, cube_vao);
         }
