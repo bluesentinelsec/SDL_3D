@@ -8,6 +8,7 @@
 #include "texture_internal.h"
 
 #include "lighting_internal.h"
+#include "sdl3d/level.h"
 
 static const int SDL3D_MODEL_STACK_INITIAL_CAPACITY = 8;
 
@@ -117,6 +118,39 @@ bool sdl3d_begin_mode_3d(sdl3d_render_context *context, sdl3d_camera3d camera)
     context->model_stack_depth = 1;
     context->model_stack[0] = sdl3d_mat4_identity();
     sdl3d_update_current_model_matrices(context);
+
+    /* Cache frustum planes once per frame so per-mesh culling is cheap. */
+    {
+        const float *m = context->view_projection.m;
+        float raw[6][4] = {
+            {m[3] + m[0], m[7] + m[4], m[11] + m[8], m[15] + m[12]},
+            {m[3] - m[0], m[7] - m[4], m[11] - m[8], m[15] - m[12]},
+            {m[3] + m[1], m[7] + m[5], m[11] + m[9], m[15] + m[13]},
+            {m[3] - m[1], m[7] - m[5], m[11] - m[9], m[15] - m[13]},
+            {m[3] + m[2], m[7] + m[6], m[11] + m[10], m[15] + m[14]},
+            {m[3] - m[2], m[7] - m[6], m[11] - m[10], m[15] - m[14]},
+        };
+        for (int i = 0; i < 6; ++i)
+        {
+            float len = SDL_sqrtf(raw[i][0] * raw[i][0] + raw[i][1] * raw[i][1] + raw[i][2] * raw[i][2]);
+            if (len > 0.000001f)
+            {
+                context->frustum_planes[i][0] = raw[i][0] / len;
+                context->frustum_planes[i][1] = raw[i][1] / len;
+                context->frustum_planes[i][2] = raw[i][2] / len;
+                context->frustum_planes[i][3] = raw[i][3] / len;
+            }
+            else
+            {
+                context->frustum_planes[i][0] = 0.0f;
+                context->frustum_planes[i][1] = 0.0f;
+                context->frustum_planes[i][2] = 0.0f;
+                context->frustum_planes[i][3] = raw[i][3];
+            }
+        }
+        context->frustum_planes_valid = true;
+    }
+
     context->in_mode_3d = true;
     return true;
 }
@@ -134,6 +168,7 @@ bool sdl3d_end_mode_3d(sdl3d_render_context *context)
     }
 
     context->in_mode_3d = false;
+    context->frustum_planes_valid = false;
     context->model_stack_depth = 0;
     context->model = sdl3d_mat4_identity();
     context->model_view_projection = context->view_projection;
@@ -371,6 +406,95 @@ static sdl3d_vec3 sdl3d_transform_position(sdl3d_mat4 m, sdl3d_vec3 p)
 {
     sdl3d_vec4 w = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(p, 1.0f));
     return sdl3d_vec3_make(w.x, w.y, w.z);
+}
+
+typedef struct
+{
+    float a;
+    float b;
+    float c;
+    float d;
+} sdl3d_frustum_plane;
+
+static sdl3d_bounding_box sdl3d_transform_bounding_box(sdl3d_mat4 transform, sdl3d_bounding_box local_bounds)
+{
+    const sdl3d_vec3 corners[8] = {
+        sdl3d_vec3_make(local_bounds.min.x, local_bounds.min.y, local_bounds.min.z),
+        sdl3d_vec3_make(local_bounds.min.x, local_bounds.min.y, local_bounds.max.z),
+        sdl3d_vec3_make(local_bounds.min.x, local_bounds.max.y, local_bounds.min.z),
+        sdl3d_vec3_make(local_bounds.min.x, local_bounds.max.y, local_bounds.max.z),
+        sdl3d_vec3_make(local_bounds.max.x, local_bounds.min.y, local_bounds.min.z),
+        sdl3d_vec3_make(local_bounds.max.x, local_bounds.min.y, local_bounds.max.z),
+        sdl3d_vec3_make(local_bounds.max.x, local_bounds.max.y, local_bounds.min.z),
+        sdl3d_vec3_make(local_bounds.max.x, local_bounds.max.y, local_bounds.max.z),
+    };
+    sdl3d_bounding_box world_bounds;
+    sdl3d_vec3 p = sdl3d_transform_position(transform, corners[0]);
+    world_bounds.min = p;
+    world_bounds.max = p;
+
+    for (int i = 1; i < 8; ++i)
+    {
+        p = sdl3d_transform_position(transform, corners[i]);
+        if (p.x < world_bounds.min.x)
+            world_bounds.min.x = p.x;
+        if (p.y < world_bounds.min.y)
+            world_bounds.min.y = p.y;
+        if (p.z < world_bounds.min.z)
+            world_bounds.min.z = p.z;
+        if (p.x > world_bounds.max.x)
+            world_bounds.max.x = p.x;
+        if (p.y > world_bounds.max.y)
+            world_bounds.max.y = p.y;
+        if (p.z > world_bounds.max.z)
+            world_bounds.max.z = p.z;
+    }
+
+    return world_bounds;
+}
+
+static bool sdl3d_box_intersects_frustum(sdl3d_bounding_box bounds, const sdl3d_frustum_plane planes[6])
+{
+    for (int i = 0; i < 6; ++i)
+    {
+        const sdl3d_frustum_plane plane = planes[i];
+        const float px = plane.a >= 0.0f ? bounds.max.x : bounds.min.x;
+        const float py = plane.b >= 0.0f ? bounds.max.y : bounds.min.y;
+        const float pz = plane.c >= 0.0f ? bounds.max.z : bounds.min.z;
+        const float distance = plane.a * px + plane.b * py + plane.c * pz + plane.d;
+        if (distance < 0.0f)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool sdl3d_mesh_is_visible(const sdl3d_render_context *context, const sdl3d_mesh *mesh)
+{
+    sdl3d_bounding_box world_bounds;
+
+    if (context == NULL || mesh == NULL || !mesh->has_local_bounds)
+    {
+        return true;
+    }
+
+    if (!context->frustum_planes_valid)
+    {
+        return true;
+    }
+
+    sdl3d_frustum_plane planes[6];
+    for (int i = 0; i < 6; ++i)
+    {
+        planes[i].a = context->frustum_planes[i][0];
+        planes[i].b = context->frustum_planes[i][1];
+        planes[i].c = context->frustum_planes[i][2];
+        planes[i].d = context->frustum_planes[i][3];
+    }
+
+    world_bounds = sdl3d_transform_bounding_box(context->model, mesh->local_bounds);
+    return sdl3d_box_intersects_frustum(world_bounds, planes);
 }
 
 /* Evaluate PBR shading at a single point and return the result as an sdl3d_color.
@@ -1118,6 +1242,134 @@ bool sdl3d_draw_point_3d(sdl3d_render_context *context, sdl3d_vec3 position, sdl
     return true;
 }
 
+static sdl3d_vec3 sdl3d_view_camera_right(const sdl3d_render_context *context)
+{
+    return sdl3d_vec3_normalize(sdl3d_vec3_make(context->view.m[0], context->view.m[4], context->view.m[8]));
+}
+
+static sdl3d_vec3 sdl3d_view_camera_up(const sdl3d_render_context *context)
+{
+    return sdl3d_vec3_normalize(sdl3d_vec3_make(context->view.m[1], context->view.m[5], context->view.m[9]));
+}
+
+static sdl3d_vec3 sdl3d_view_camera_forward(const sdl3d_render_context *context)
+{
+    return sdl3d_vec3_normalize(sdl3d_vec3_make(-context->view.m[2], -context->view.m[6], -context->view.m[10]));
+}
+
+bool sdl3d_draw_billboard_ex(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 position,
+                             sdl3d_vec2 size, sdl3d_vec2 anchor, sdl3d_billboard_mode mode, sdl3d_color tint)
+{
+    sdl3d_vec3 right;
+    sdl3d_vec3 up;
+    sdl3d_vec3 normal;
+    const float left = -anchor.x * size.x;
+    const float bottom = -anchor.y * size.y;
+    const float sprite_right = left + size.x;
+    const float sprite_top = bottom + size.y;
+    sdl3d_mesh mesh;
+    float positions[12];
+    float normals[12];
+    float uvs[8];
+    unsigned int indices[12] = {0, 1, 2, 2, 1, 3, 2, 1, 0, 3, 1, 2};
+
+    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_billboard_ex"))
+    {
+        return false;
+    }
+    if (texture == NULL)
+    {
+        return SDL_InvalidParamError("texture");
+    }
+    if (size.x <= 0.0f)
+    {
+        return SDL_SetError("Billboard size.x must be positive.");
+    }
+    if (size.y <= 0.0f)
+    {
+        return SDL_SetError("Billboard size.y must be positive.");
+    }
+    if (anchor.x < 0.0f || anchor.x > 1.0f || anchor.y < 0.0f || anchor.y > 1.0f)
+    {
+        return SDL_SetError("Billboard anchor must be in [0, 1] for both axes.");
+    }
+
+    right = sdl3d_view_camera_right(context);
+    if (mode == SDL3D_BILLBOARD_SPHERICAL)
+    {
+        up = sdl3d_view_camera_up(context);
+    }
+    else
+    {
+        const sdl3d_vec3 world_up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+        sdl3d_vec3 forward = sdl3d_view_camera_forward(context);
+        forward.y = 0.0f;
+        if (sdl3d_vec3_length_squared(forward) <= 0.000001f)
+        {
+            forward = sdl3d_vec3_make(0.0f, 0.0f, -1.0f);
+        }
+        else
+        {
+            forward = sdl3d_vec3_normalize(forward);
+        }
+        right = sdl3d_vec3_normalize(sdl3d_vec3_cross(forward, world_up));
+        if (sdl3d_vec3_length_squared(right) <= 0.000001f)
+        {
+            right = sdl3d_vec3_make(1.0f, 0.0f, 0.0f);
+        }
+        up = world_up;
+    }
+    normal = sdl3d_vec3_normalize(sdl3d_vec3_cross(up, right));
+
+    {
+        const sdl3d_vec3 bl =
+            sdl3d_vec3_add(position, sdl3d_vec3_add(sdl3d_vec3_scale(right, left), sdl3d_vec3_scale(up, bottom)));
+        const sdl3d_vec3 tl =
+            sdl3d_vec3_add(position, sdl3d_vec3_add(sdl3d_vec3_scale(right, left), sdl3d_vec3_scale(up, sprite_top)));
+        const sdl3d_vec3 br = sdl3d_vec3_add(
+            position, sdl3d_vec3_add(sdl3d_vec3_scale(right, sprite_right), sdl3d_vec3_scale(up, bottom)));
+        const sdl3d_vec3 tr = sdl3d_vec3_add(
+            position, sdl3d_vec3_add(sdl3d_vec3_scale(right, sprite_right), sdl3d_vec3_scale(up, sprite_top)));
+        const sdl3d_vec3 verts[4] = {bl, tl, br, tr};
+
+        for (int i = 0; i < 4; ++i)
+        {
+            positions[i * 3 + 0] = verts[i].x;
+            positions[i * 3 + 1] = verts[i].y;
+            positions[i * 3 + 2] = verts[i].z;
+            normals[i * 3 + 0] = normal.x;
+            normals[i * 3 + 1] = normal.y;
+            normals[i * 3 + 2] = normal.z;
+        }
+    }
+
+    uvs[0] = 0.0f;
+    uvs[1] = 1.0f;
+    uvs[2] = 0.0f;
+    uvs[3] = 0.0f;
+    uvs[4] = 1.0f;
+    uvs[5] = 1.0f;
+    uvs[6] = 1.0f;
+    uvs[7] = 0.0f;
+
+    SDL_zero(mesh);
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.uvs = uvs;
+    mesh.vertex_count = 4;
+    mesh.indices = indices;
+    mesh.index_count = 12;
+
+    return sdl3d_draw_mesh_internal(context, &mesh, texture, sdl3d_color_to_modulate(tint), NULL, NULL);
+}
+
+bool sdl3d_draw_billboard(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 position,
+                          sdl3d_vec2 size, sdl3d_color tint)
+{
+    return sdl3d_draw_billboard_ex(context, texture, position, size, (sdl3d_vec2){0.5f, 0.0f}, SDL3D_BILLBOARD_UPRIGHT,
+                                   tint);
+}
+
 bool sdl3d_draw_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, const sdl3d_texture2d *texture,
                      sdl3d_color tint)
 {
@@ -1175,6 +1427,11 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_mod
     const sdl3d_material *material = NULL;
     sdl3d_vec4 mesh_modulate = tint_modulate;
     bool ok = true;
+
+    if (!sdl3d_mesh_is_visible(context, mesh))
+    {
+        return true;
+    }
 
     if (mesh->material_index < -1)
     {
@@ -1498,4 +1755,38 @@ bool sdl3d_get_framebuffer_depth(const sdl3d_render_context *context, int x, int
 
     *out_depth = context->depth_buffer[(y * context->width) + x];
     return true;
+}
+
+/* ------------------------------------------------------------------ */
+/* Level drawing with portal visibility                                */
+/* ------------------------------------------------------------------ */
+
+bool sdl3d_draw_level(sdl3d_render_context *context, const sdl3d_level *level, const sdl3d_visibility_result *vis,
+                      sdl3d_color tint)
+{
+    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_level"))
+        return false;
+    if (!level)
+        return SDL_InvalidParamError("level");
+
+    const sdl3d_model *model = &level->model;
+    if (!model->meshes || model->mesh_count <= 0)
+        return SDL_SetError("Level has no meshes.");
+
+    const sdl3d_vec4 tint_modulate = sdl3d_color_to_modulate(tint);
+    bool ok = true;
+
+    for (int i = 0; ok && i < model->mesh_count; ++i)
+    {
+        /* Portal visibility: skip meshes in hidden sectors. */
+        if (vis && vis->sector_visible && level->mesh_sector_ids)
+        {
+            int sid = level->mesh_sector_ids[i];
+            if (sid >= 0 && sid < level->sector_count && !vis->sector_visible[sid])
+                continue;
+        }
+        ok = sdl3d_draw_model_mesh(context, model, i, tint_modulate, NULL);
+    }
+
+    return ok;
 }

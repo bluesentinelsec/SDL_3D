@@ -314,6 +314,80 @@ bool sdl3d_draw_skybox_gradient(sdl3d_render_context *context, sdl3d_color top_c
     return true;
 }
 
+static sdl3d_vec3 sdl3d_effects_camera_position(const sdl3d_render_context *context)
+{
+    const sdl3d_mat4 v = context->view;
+    return sdl3d_vec3_make(-(v.m[0] * v.m[12] + v.m[1] * v.m[13] + v.m[2] * v.m[14]),
+                           -(v.m[4] * v.m[12] + v.m[5] * v.m[13] + v.m[6] * v.m[14]),
+                           -(v.m[8] * v.m[12] + v.m[9] * v.m[13] + v.m[10] * v.m[14]));
+}
+
+static bool sdl3d_draw_skybox_face(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 v0,
+                                   sdl3d_vec3 v1, sdl3d_vec3 v2, sdl3d_vec3 v3)
+{
+    float positions[] = {v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, v2.x, v2.y, v2.z, v3.x, v3.y, v3.z};
+    float uvs[] = {0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f};
+    unsigned int indices[] = {0, 1, 2, 2, 1, 3};
+    sdl3d_mesh mesh;
+
+    SDL_zero(mesh);
+    mesh.positions = positions;
+    mesh.uvs = uvs;
+    mesh.vertex_count = 4;
+    mesh.indices = indices;
+    mesh.index_count = 6;
+    return sdl3d_draw_mesh(context, &mesh, texture, (sdl3d_color){255, 255, 255, 255});
+}
+
+bool sdl3d_draw_skybox_textured(sdl3d_render_context *context, const sdl3d_skybox_textured *skybox)
+{
+    sdl3d_vec3 c;
+    float s;
+
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (skybox == NULL)
+    {
+        return SDL_InvalidParamError("skybox");
+    }
+    if (skybox->pos_x == NULL || skybox->neg_x == NULL || skybox->pos_y == NULL || skybox->neg_y == NULL ||
+        skybox->pos_z == NULL || skybox->neg_z == NULL)
+    {
+        return SDL_SetError("Textured skybox requires all six face textures.");
+    }
+
+    c = sdl3d_effects_camera_position(context);
+    s = skybox->size > 1.0f ? skybox->size : 400.0f;
+
+    /* Inward-facing cube centered on the camera. */
+    return sdl3d_draw_skybox_face(context, skybox->pos_x, sdl3d_vec3_make(c.x - s, c.y - s, c.z + s),
+                                  sdl3d_vec3_make(c.x - s, c.y + s, c.z + s),
+                                  sdl3d_vec3_make(c.x + s, c.y - s, c.z + s),
+                                  sdl3d_vec3_make(c.x + s, c.y + s, c.z + s)) &&
+           sdl3d_draw_skybox_face(context, skybox->neg_x, sdl3d_vec3_make(c.x + s, c.y - s, c.z - s),
+                                  sdl3d_vec3_make(c.x + s, c.y + s, c.z - s),
+                                  sdl3d_vec3_make(c.x - s, c.y - s, c.z - s),
+                                  sdl3d_vec3_make(c.x - s, c.y + s, c.z - s)) &&
+           sdl3d_draw_skybox_face(context, skybox->neg_z, sdl3d_vec3_make(c.x + s, c.y - s, c.z + s),
+                                  sdl3d_vec3_make(c.x + s, c.y + s, c.z + s),
+                                  sdl3d_vec3_make(c.x + s, c.y - s, c.z - s),
+                                  sdl3d_vec3_make(c.x + s, c.y + s, c.z - s)) &&
+           sdl3d_draw_skybox_face(context, skybox->pos_z, sdl3d_vec3_make(c.x - s, c.y - s, c.z - s),
+                                  sdl3d_vec3_make(c.x - s, c.y + s, c.z - s),
+                                  sdl3d_vec3_make(c.x - s, c.y - s, c.z + s),
+                                  sdl3d_vec3_make(c.x - s, c.y + s, c.z + s)) &&
+           sdl3d_draw_skybox_face(context, skybox->pos_y, sdl3d_vec3_make(c.x - s, c.y + s, c.z - s),
+                                  sdl3d_vec3_make(c.x + s, c.y + s, c.z - s),
+                                  sdl3d_vec3_make(c.x - s, c.y + s, c.z + s),
+                                  sdl3d_vec3_make(c.x + s, c.y + s, c.z + s)) &&
+           sdl3d_draw_skybox_face(context, skybox->neg_y, sdl3d_vec3_make(c.x - s, c.y - s, c.z + s),
+                                  sdl3d_vec3_make(c.x + s, c.y - s, c.z + s),
+                                  sdl3d_vec3_make(c.x - s, c.y - s, c.z - s),
+                                  sdl3d_vec3_make(c.x + s, c.y - s, c.z - s));
+}
+
 /* ------------------------------------------------------------------ */
 /* Post-process effects                                                */
 /* ------------------------------------------------------------------ */
