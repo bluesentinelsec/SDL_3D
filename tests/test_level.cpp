@@ -76,6 +76,149 @@ TEST(SDL3DLevelBuilder, BuildsIndependentSectorMaterialChunks)
     sdl3d_free_level(&level);
 }
 
+TEST(SDL3DLevelBuilder, MeshSectorIdsMatchSectorCount)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                              MakeLevelMaterial("wall.png")};
+    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f),
+                                    MakeSquareSector(8.0f, 0.0f, 12.0f, 4.0f)};
+    sdl3d_level level{};
+
+    ASSERT_TRUE(sdl3d_build_level(sectors, 2, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+
+    EXPECT_EQ(level.sector_count, 2);
+    ASSERT_NE(level.mesh_sector_ids, nullptr);
+
+    for (int i = 0; i < level.model.mesh_count; ++i)
+    {
+        EXPECT_GE(level.mesh_sector_ids[i], 0);
+        EXPECT_LT(level.mesh_sector_ids[i], level.sector_count);
+    }
+
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DLevelBuilder, DetectsPortalsBetweenAdjacentSectors)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                              MakeLevelMaterial("wall.png")};
+    /* Two rooms sharing an edge at x=4, z=[1..3]. */
+    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f),
+                                    MakeSquareSector(4.0f, 1.0f, 8.0f, 3.0f)};
+    sdl3d_level level{};
+
+    ASSERT_TRUE(sdl3d_build_level(sectors, 2, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+
+    EXPECT_GT(level.portal_count, 0);
+    ASSERT_NE(level.portals, nullptr);
+
+    /* Verify at least one portal connects sector 0 and 1. */
+    bool found = false;
+    for (int i = 0; i < level.portal_count; i++)
+    {
+        const sdl3d_level_portal &p = level.portals[i];
+        if ((p.sector_a == 0 && p.sector_b == 1) || (p.sector_a == 1 && p.sector_b == 0))
+        {
+            found = true;
+            EXPECT_LE(p.floor_y, p.ceil_y);
+        }
+    }
+    EXPECT_TRUE(found) << "Expected portal between sector 0 and 1";
+
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DLevelBuilder, NoPortalsBetweenDisjointSectors)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                              MakeLevelMaterial("wall.png")};
+    /* Two rooms with no shared edge. */
+    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f),
+                                    MakeSquareSector(10.0f, 0.0f, 14.0f, 4.0f)};
+    sdl3d_level level{};
+
+    ASSERT_TRUE(sdl3d_build_level(sectors, 2, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+
+    EXPECT_EQ(level.portal_count, 0);
+
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DLevelVisibility, FindSectorReturnsCorrectSector)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                              MakeLevelMaterial("wall.png")};
+    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f),
+                                    MakeSquareSector(4.0f, 0.0f, 8.0f, 4.0f)};
+    sdl3d_level level{};
+
+    ASSERT_TRUE(sdl3d_build_level(sectors, 2, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+
+    EXPECT_EQ(sdl3d_level_find_sector(&level, sectors, 2.0f, 2.0f), 0);
+    EXPECT_EQ(sdl3d_level_find_sector(&level, sectors, 6.0f, 2.0f), 1);
+    EXPECT_EQ(sdl3d_level_find_sector(&level, sectors, 20.0f, 20.0f), -1);
+
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DLevelVisibility, VisibilityFromSectorZeroSeesNeighbor)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                              MakeLevelMaterial("wall.png")};
+    /* Three rooms in a line: [0]--[1]--[2] */
+    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f),
+                                    MakeSquareSector(4.0f, 0.0f, 8.0f, 4.0f),
+                                    MakeSquareSector(8.0f, 0.0f, 12.0f, 4.0f)};
+    sdl3d_level level{};
+
+    ASSERT_TRUE(sdl3d_build_level(sectors, 3, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+
+    bool visible[3] = {};
+    sdl3d_visibility_result vis;
+    vis.sector_visible = visible;
+    vis.visible_count = 0;
+
+    /* Camera in sector 0, looking toward +X (toward sectors 1 and 2). */
+    sdl3d_vec3 cam_pos = sdl3d_vec3_make(2.0f, 1.5f, 2.0f);
+    sdl3d_vec3 cam_dir = sdl3d_vec3_make(1.0f, 0.0f, 0.0f);
+
+    /* No frustum planes — just test BFS reachability. */
+    sdl3d_level_compute_visibility(&level, 0, cam_pos, cam_dir, nullptr, &vis);
+
+    EXPECT_TRUE(visible[0]) << "Current sector should be visible";
+    EXPECT_TRUE(visible[1]) << "Adjacent sector should be visible";
+    /* Sector 2 should also be reachable through sector 1. */
+    EXPECT_TRUE(visible[2]) << "Sector 2 reachable through sector 1";
+    EXPECT_EQ(vis.visible_count, 3);
+
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DLevelVisibility, OutsideSectorsFallsBackToAllVisible)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                              MakeLevelMaterial("wall.png")};
+    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f)};
+    sdl3d_level level{};
+
+    ASSERT_TRUE(sdl3d_build_level(sectors, 1, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+
+    bool visible[1] = {};
+    sdl3d_visibility_result vis;
+    vis.sector_visible = visible;
+    vis.visible_count = 0;
+
+    sdl3d_vec3 cam_pos = sdl3d_vec3_make(100.0f, 1.5f, 100.0f);
+    sdl3d_vec3 cam_dir = sdl3d_vec3_make(1.0f, 0.0f, 0.0f);
+
+    sdl3d_level_compute_visibility(&level, -1, cam_pos, cam_dir, nullptr, &vis);
+
+    EXPECT_TRUE(visible[0]) << "Fallback should mark all sectors visible";
+    EXPECT_EQ(vis.visible_count, 1);
+
+    sdl3d_free_level(&level);
+}
+
 TEST(SDL3DDrawModelCulling, SkipsOffscreenChunkBeforeMaterialValidation)
 {
     ASSERT_TRUE(SDL_Init(SDL_INIT_VIDEO)) << SDL_GetError();

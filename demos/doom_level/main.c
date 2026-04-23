@@ -10,8 +10,6 @@
 #include "sdl3d/lighting.h"
 #include "sdl3d/sdl3d.h"
 
-#include <math.h>
-
 #define WINDOW_W 1280
 #define WINDOW_H 720
 #define MOVE_SPEED 12.0f
@@ -64,7 +62,7 @@ static void advance_projectile(const sdl3d_sector *sectors, int sector_count, fl
         return;
 
     float travel = PROJ_SPEED * dt;
-    int steps = (int)ceilf(travel / 0.25f);
+    int steps = (int)SDL_ceilf(travel / 0.25f);
     if (steps < 1)
         steps = 1;
     float step_dist = travel / (float)steps;
@@ -218,8 +216,21 @@ int main(int argc, char *argv[])
     }
     bool use_baked = true;
 
-    /* ---- Lighting ---- */
-    /* Start simple: unlit to verify geometry, then add lighting. */
+    SDL_Log("Portals detected: %d", level_lit.portal_count);
+    for (int i = 0; i < level_lit.portal_count; i++)
+    {
+        const sdl3d_level_portal *p = &level_lit.portals[i];
+        SDL_Log("  portal %d: sector %d <-> %d  x[%.1f,%.1f] z[%.1f,%.1f] y[%.2f,%.2f]", i, p->sector_a, p->sector_b,
+                p->min_x, p->max_x, p->min_z, p->max_z, p->floor_y, p->ceil_y);
+    }
+
+    /* Visibility state. */
+    bool sector_visible[13];
+    sdl3d_visibility_result vis;
+    vis.sector_visible = sector_visible;
+    vis.visible_count = 0;
+    bool show_debug = false;
+    bool portal_culling = true;
 
     /* Player */
     float px = 5, py = 1.6f, pz = 4;
@@ -246,6 +257,16 @@ int main(int argc, char *argv[])
                 running = false;
             if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_L)
                 use_baked = !use_baked;
+            if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_F1)
+            {
+                show_debug = !show_debug;
+                SDL_Log("Debug stats: %s", show_debug ? "ON" : "OFF");
+            }
+            if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_F2)
+            {
+                portal_culling = !portal_culling;
+                SDL_Log("Portal culling: %s", portal_culling ? "ON" : "OFF");
+            }
             if (ev.type == SDL_EVENT_MOUSE_MOTION && mouse_init)
             {
                 yaw += ev.motion.xrel * MOUSE_SENS;
@@ -263,9 +284,9 @@ int main(int argc, char *argv[])
                 proj_x = px;
                 proj_y = py;
                 proj_z = pz;
-                proj_dx = sinf(yaw) * cosf(pitch);
-                proj_dy = sinf(pitch);
-                proj_dz = -cosf(yaw) * cosf(pitch);
+                proj_dx = SDL_sinf(yaw) * SDL_cosf(pitch);
+                proj_dy = SDL_sinf(pitch);
+                proj_dz = -SDL_cosf(yaw) * SDL_cosf(pitch);
                 proj_life = PROJ_LIFETIME;
             }
         }
@@ -275,15 +296,15 @@ int main(int argc, char *argv[])
         last = now;
 
         /* Look direction (for camera target). */
-        float fx = sinf(yaw) * cosf(pitch);
-        float fz = -cosf(yaw) * cosf(pitch);
+        float fx = SDL_sinf(yaw) * SDL_cosf(pitch);
+        float fz = -SDL_cosf(yaw) * SDL_cosf(pitch);
 
         /* Doom-style movement: accumulate wish direction on XZ plane,
          * normalize so diagonal isn't faster, constant speed regardless of pitch. */
-        float fwd_x = sinf(yaw);
-        float fwd_z = -cosf(yaw);
-        float right_x = cosf(yaw);
-        float right_z = sinf(yaw);
+        float fwd_x = SDL_sinf(yaw);
+        float fwd_z = -SDL_cosf(yaw);
+        float right_x = SDL_cosf(yaw);
+        float right_z = SDL_sinf(yaw);
         float wish_x = 0, wish_z = 0;
 
         const Uint8 *keys = (const Uint8 *)SDL_GetKeyboardState(NULL);
@@ -309,7 +330,7 @@ int main(int argc, char *argv[])
         }
 
         /* Normalize wish direction. */
-        float wish_len = sqrtf(wish_x * wish_x + wish_z * wish_z);
+        float wish_len = SDL_sqrtf(wish_x * wish_x + wish_z * wish_z);
         if (wish_len > 0.001f)
         {
             wish_x /= wish_len;
@@ -320,7 +341,7 @@ int main(int argc, char *argv[])
 
         sdl3d_camera3d cam;
         cam.position = sdl3d_vec3_make(px, py, pz);
-        cam.target = sdl3d_vec3_make(px + fx, py + sinf(pitch), pz + fz);
+        cam.target = sdl3d_vec3_make(px + fx, py + SDL_sinf(pitch), pz + fz);
         cam.up = sdl3d_vec3_make(0, 1, 0);
         cam.fovy = 75.0f;
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
@@ -328,6 +349,11 @@ int main(int argc, char *argv[])
         /* Update projectile. */
         advance_projectile(sectors, sector_count, dt, &proj_active, &proj_x, &proj_y, &proj_z, proj_dx, proj_dy,
                            proj_dz, &proj_life);
+
+        /* Compute portal visibility. */
+        sdl3d_level *active_level = use_baked ? &level_lit : &level_unlit;
+        int current_sector = sdl3d_level_find_sector(active_level, sectors, px, pz);
+        sdl3d_vec3 cam_dir = sdl3d_vec3_make(fx, SDL_sinf(pitch), fz);
 
         sdl3d_clear_lights(ctx);
         if (proj_active)
@@ -345,12 +371,70 @@ int main(int argc, char *argv[])
 
         sdl3d_clear_render_context(ctx, (sdl3d_color){10, 10, 15, 255});
 
-        /* The level uses baked lighting as its static term, then runtime
-         * point lights are added per-pixel in the shader. */
         sdl3d_begin_mode_3d(ctx, cam);
 
-        sdl3d_draw_model(ctx, use_baked ? &level_lit.model : &level_unlit.model, sdl3d_vec3_make(0, 0, 0), 1.0f,
-                         (sdl3d_color){255, 255, 255, 255});
+        /* Compute visibility using cached frustum planes from begin_mode_3d.
+         * We pass the frustum planes through to the visibility system. */
+        if (portal_culling)
+        {
+            sdl3d_mat4 vview, vproj;
+            sdl3d_camera3d_compute_matrices(&cam, WINDOW_W, WINDOW_H, 0.01f, 1000.0f, &vview, &vproj);
+            sdl3d_mat4 vp = sdl3d_mat4_multiply(vproj, vview);
+            const float *m = vp.m;
+
+            /* Gribb/Hartmann frustum plane extraction: left, right, bottom, top, near, far. */
+            float fp[6][4];
+            float raw[6][4] = {
+                {m[3] + m[0], m[7] + m[4], m[11] + m[8], m[15] + m[12]},
+                {m[3] - m[0], m[7] - m[4], m[11] - m[8], m[15] - m[12]},
+                {m[3] + m[1], m[7] + m[5], m[11] + m[9], m[15] + m[13]},
+                {m[3] - m[1], m[7] - m[5], m[11] - m[9], m[15] - m[13]},
+                {m[3] + m[2], m[7] + m[6], m[11] + m[10], m[15] + m[14]},
+                {m[3] - m[2], m[7] - m[6], m[11] - m[10], m[15] - m[14]},
+            };
+            for (int i = 0; i < 6; i++)
+            {
+                float len = SDL_sqrtf(raw[i][0] * raw[i][0] + raw[i][1] * raw[i][1] + raw[i][2] * raw[i][2]);
+                if (len > 0.000001f)
+                {
+                    fp[i][0] = raw[i][0] / len;
+                    fp[i][1] = raw[i][1] / len;
+                    fp[i][2] = raw[i][2] / len;
+                    fp[i][3] = raw[i][3] / len;
+                }
+                else
+                {
+                    fp[i][0] = fp[i][1] = fp[i][2] = 0.0f;
+                    fp[i][3] = raw[i][3];
+                }
+            }
+
+            sdl3d_level_compute_visibility(active_level, current_sector, cam.position, cam_dir, fp, &vis);
+        }
+        else
+        {
+            for (int i = 0; i < sector_count; i++)
+                sector_visible[i] = true;
+            vis.visible_count = sector_count;
+        }
+
+        /* Count visible mesh chunks for debug stats. */
+        int visible_meshes = 0;
+        if (portal_culling)
+        {
+            for (int i = 0; i < active_level->model.mesh_count; i++)
+            {
+                int sid = active_level->mesh_sector_ids[i];
+                if (sid >= 0 && sid < sector_count && vis.sector_visible[sid])
+                    visible_meshes++;
+            }
+        }
+        else
+        {
+            visible_meshes = active_level->model.mesh_count;
+        }
+
+        sdl3d_draw_level(ctx, active_level, portal_culling ? &vis : NULL, (sdl3d_color){255, 255, 255, 255});
 
         /* Projectile sphere. */
         if (proj_active)
@@ -364,7 +448,7 @@ int main(int argc, char *argv[])
         /* Crosshair. */
         {
             float chx = px + fx * 0.4f;
-            float chy = py + sinf(pitch) * 0.4f;
+            float chy = py + SDL_sinf(pitch) * 0.4f;
             float chz = pz + fz * 0.4f;
             sdl3d_set_emissive(ctx, 8, 8, 8);
             sdl3d_draw_cube(ctx, sdl3d_vec3_make(chx, chy, chz), sdl3d_vec3_make(0.003f, 0.003f, 0.003f),
@@ -374,6 +458,14 @@ int main(int argc, char *argv[])
 
         sdl3d_end_mode_3d(ctx);
         sdl3d_present_render_context(ctx);
+
+        /* Debug stats to log. */
+        if (show_debug)
+        {
+            SDL_Log("[VIS] sector=%d  visible=%d/%d sectors  meshes=%d/%d  portals=%d  culling=%s", current_sector,
+                    vis.visible_count, sector_count, visible_meshes, active_level->model.mesh_count,
+                    active_level->portal_count, portal_culling ? "ON" : "OFF");
+        }
     }
 
     sdl3d_free_level(&level_lit);

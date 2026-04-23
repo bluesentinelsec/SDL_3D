@@ -11,7 +11,6 @@
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
-#include <math.h>
 
 /* ------------------------------------------------------------------ */
 /* Edge overlap detection                                              */
@@ -28,7 +27,7 @@ static bool edges_collinear(float ax, float az, float bx, float bz, float cx, fl
     float eps = 0.01f;
     float cross1 = (bx - ax) * (cz - az) - (bz - az) * (cx - ax);
     float cross2 = (bx - ax) * (dz - az) - (bz - az) * (dx - ax);
-    return fabsf(cross1) < eps && fabsf(cross2) < eps;
+    return SDL_fabsf(cross1) < eps && SDL_fabsf(cross2) < eps;
 }
 
 static float project_onto_edge(float px, float pz, float ax, float az, float bx, float bz)
@@ -44,6 +43,7 @@ typedef struct
 {
     float t0, t1;
     float other_floor, other_ceil;
+    int other_sector;
 } overlap_t;
 
 /* ------------------------------------------------------------------ */
@@ -174,7 +174,7 @@ static bool add_wall(macc *a, float x0, float z0, float x1, float z1, float bot,
     if (top - bot < 0.001f)
         return true;
     float dx = x1 - x0, dz = z1 - z0;
-    float len = sqrtf(dx * dx + dz * dz);
+    float len = SDL_sqrtf(dx * dx + dz * dz);
     if (len < 0.0001f)
         return true;
     float nx = dz / len, nz = -dx / len;
@@ -268,6 +268,18 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
         return SDL_OutOfMemory();
     }
 
+    /* Portal accumulator — collect adjacencies during edge overlap detection. */
+    int portal_cap = 32, portal_count = 0;
+    sdl3d_level_portal *portals = SDL_malloc((size_t)portal_cap * sizeof(sdl3d_level_portal));
+    if (!portals)
+    {
+        for (int ai = 0; ai < acc_count; ai++)
+            macc_free(&accs[ai]);
+        SDL_free(accs);
+        SDL_free(edges);
+        return SDL_OutOfMemory();
+    }
+
     for (int s = 0; s < sector_count; s++)
     {
         const sdl3d_sector *sec = &sectors[s];
@@ -316,7 +328,41 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                     overlaps[novl].t1 = t1;
                     overlaps[novl].other_floor = sectors[edges[j].sector].floor_y;
                     overlaps[novl].other_ceil = sectors[edges[j].sector].ceil_y;
+                    overlaps[novl].other_sector = edges[j].sector;
                     novl++;
+
+                    /* Record portal (only when s < neighbor to avoid duplicates). */
+                    if (s < edges[j].sector)
+                    {
+                        if (portal_count >= portal_cap)
+                        {
+                            portal_cap *= 2;
+                            sdl3d_level_portal *tmp =
+                                SDL_realloc(portals, (size_t)portal_cap * sizeof(sdl3d_level_portal));
+                            if (tmp)
+                                portals = tmp;
+                        }
+                        if (portal_count < portal_cap)
+                        {
+                            float px0 = ax + (bx - ax) * t0, pz0 = az + (bz - az) * t0;
+                            float px1 = ax + (bx - ax) * t1, pz1 = az + (bz - az) * t1;
+                            float p_floor = sec->floor_y > overlaps[novl - 1].other_floor
+                                                ? sec->floor_y
+                                                : overlaps[novl - 1].other_floor;
+                            float p_ceil = sec->ceil_y < overlaps[novl - 1].other_ceil
+                                               ? sec->ceil_y
+                                               : overlaps[novl - 1].other_ceil;
+                            sdl3d_level_portal *p = &portals[portal_count++];
+                            p->sector_a = s;
+                            p->sector_b = edges[j].sector;
+                            p->min_x = px0 < px1 ? px0 : px1;
+                            p->max_x = px0 > px1 ? px0 : px1;
+                            p->min_z = pz0 < pz1 ? pz0 : pz1;
+                            p->max_z = pz0 > pz1 ? pz0 : pz1;
+                            p->floor_y = p_floor;
+                            p->ceil_y = p_ceil;
+                        }
+                    }
                 }
             }
 
@@ -384,7 +430,7 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                 {
                     float lx = lights[li].position[0] - px, ly = lights[li].position[1] - py,
                           lz = lights[li].position[2] - pz;
-                    float dist = sqrtf(lx * lx + ly * ly + lz * lz);
+                    float dist = SDL_sqrtf(lx * lx + ly * ly + lz * lz);
                     if (dist < 0.0001f || dist > lights[li].range)
                         continue;
                     float inv = 1.0f / dist;
@@ -419,13 +465,16 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
 
     sdl3d_mesh *meshes = SDL_calloc((size_t)num_meshes, sizeof(sdl3d_mesh));
     sdl3d_material *out_mats = SDL_calloc((size_t)material_count, sizeof(sdl3d_material));
-    if (!meshes || !out_mats)
+    int *mesh_sector_ids = SDL_malloc((size_t)num_meshes * sizeof(int));
+    if (!meshes || !out_mats || !mesh_sector_ids)
     {
         for (int ai = 0; ai < acc_count; ai++)
             macc_free(&accs[ai]);
         SDL_free(accs);
         SDL_free(meshes);
         SDL_free(out_mats);
+        SDL_free(mesh_sector_ids);
+        SDL_free(portals);
         return SDL_OutOfMemory();
     }
 
@@ -464,6 +513,7 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
 
             total_verts += a->vc;
             total_tris += a->ic / 3;
+            mesh_sector_ids[mi] = s;
             mi++;
         }
     }
@@ -483,14 +533,170 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
     out->model.mesh_count = num_meshes;
     out->model.materials = out_mats;
     out->model.material_count = material_count;
+    out->sector_count = sector_count;
+    out->mesh_sector_ids = mesh_sector_ids;
+    out->portal_count = portal_count;
+    out->portals = portals;
 
-    SDL_Log("SDL3D level: %d verts, %d tris, %d meshes from %d sectors", total_verts, total_tris, num_meshes,
-            sector_count);
+    SDL_Log("SDL3D level: %d verts, %d tris, %d meshes, %d portals from %d sectors", total_verts, total_tris,
+            num_meshes, portal_count, sector_count);
     return true;
 }
 
 void sdl3d_free_level(sdl3d_level *level)
 {
     if (level)
+    {
         sdl3d_free_model(&level->model);
+        SDL_free(level->mesh_sector_ids);
+        SDL_free(level->portals);
+        level->mesh_sector_ids = NULL;
+        level->portals = NULL;
+        level->portal_count = 0;
+        level->sector_count = 0;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Sector lookup                                                       */
+/* ------------------------------------------------------------------ */
+
+static bool point_in_polygon_xz(const sdl3d_sector *sector, float x, float z)
+{
+    bool inside = false;
+    for (int i = 0, j = sector->num_points - 1; i < sector->num_points; j = i++)
+    {
+        float xi = sector->points[i][0], zi = sector->points[i][1];
+        float xj = sector->points[j][0], zj = sector->points[j][1];
+        if (((zi > z) != (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi) + xi))
+            inside = !inside;
+    }
+    return inside;
+}
+
+int sdl3d_level_find_sector(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float z)
+{
+    if (!level || !sectors)
+        return -1;
+    for (int i = 0; i < level->sector_count; i++)
+    {
+        if (point_in_polygon_xz(&sectors[i], x, z))
+            return i;
+    }
+    return -1;
+}
+
+/* ------------------------------------------------------------------ */
+/* Portal visibility traversal                                         */
+/* ------------------------------------------------------------------ */
+
+static bool portal_box_in_frustum(const sdl3d_level_portal *p, const float planes[6][4])
+{
+    for (int i = 0; i < 6; ++i)
+    {
+        float a = planes[i][0], b = planes[i][1], c = planes[i][2], d = planes[i][3];
+        float px = a >= 0.0f ? p->max_x : p->min_x;
+        float py = b >= 0.0f ? p->ceil_y : p->floor_y;
+        float pz = c >= 0.0f ? p->max_z : p->min_z;
+        if (a * px + b * py + c * pz + d < 0.0f)
+            return false;
+    }
+    return true;
+}
+
+static bool portal_behind_camera(const sdl3d_level_portal *p, sdl3d_vec3 cam_pos, sdl3d_vec3 cam_dir)
+{
+    /* Test portal center against camera forward half-space. */
+    float cx = (p->min_x + p->max_x) * 0.5f - cam_pos.x;
+    float cy = (p->floor_y + p->ceil_y) * 0.5f - cam_pos.y;
+    float cz = (p->min_z + p->max_z) * 0.5f - cam_pos.z;
+    float dot = cx * cam_dir.x + cy * cam_dir.y + cz * cam_dir.z;
+    if (dot >= 0.0f)
+        return false;
+
+    /* Also test all 8 corners — portal is only behind if ALL corners are. */
+    float xs[2] = {p->min_x, p->max_x};
+    float ys[2] = {p->floor_y, p->ceil_y};
+    float zs[2] = {p->min_z, p->max_z};
+    for (int i = 0; i < 2; i++)
+        for (int j = 0; j < 2; j++)
+            for (int k = 0; k < 2; k++)
+            {
+                float dx = xs[i] - cam_pos.x;
+                float dy = ys[j] - cam_pos.y;
+                float dz = zs[k] - cam_pos.z;
+                if (dx * cam_dir.x + dy * cam_dir.y + dz * cam_dir.z >= 0.0f)
+                    return false;
+            }
+    return true;
+}
+
+void sdl3d_level_compute_visibility(const sdl3d_level *level, int current_sector, sdl3d_vec3 camera_pos,
+                                    sdl3d_vec3 camera_dir, const float frustum_planes[6][4],
+                                    sdl3d_visibility_result *result)
+{
+    if (!level || !result || !result->sector_visible)
+        return;
+
+    for (int i = 0; i < level->sector_count; i++)
+        result->sector_visible[i] = false;
+    result->visible_count = 0;
+
+    if (current_sector < 0 || current_sector >= level->sector_count)
+    {
+        /* Outside all sectors — mark everything visible as fallback. */
+        for (int i = 0; i < level->sector_count; i++)
+            result->sector_visible[i] = true;
+        result->visible_count = level->sector_count;
+        return;
+    }
+
+    /* BFS from current sector through portals. */
+    int *queue = SDL_malloc((size_t)level->sector_count * sizeof(int));
+    if (!queue)
+    {
+        /* OOM fallback: show everything. */
+        for (int i = 0; i < level->sector_count; i++)
+            result->sector_visible[i] = true;
+        result->visible_count = level->sector_count;
+        return;
+    }
+
+    int head = 0, tail = 0;
+    result->sector_visible[current_sector] = true;
+    result->visible_count = 1;
+    queue[tail++] = current_sector;
+
+    while (head < tail)
+    {
+        int s = queue[head++];
+        for (int pi = 0; pi < level->portal_count; pi++)
+        {
+            const sdl3d_level_portal *p = &level->portals[pi];
+            int neighbor = -1;
+            if (p->sector_a == s)
+                neighbor = p->sector_b;
+            else if (p->sector_b == s)
+                neighbor = p->sector_a;
+            else
+                continue;
+
+            if (result->sector_visible[neighbor])
+                continue;
+
+            /* Reject portals fully behind camera. */
+            if (portal_behind_camera(p, camera_pos, camera_dir))
+                continue;
+
+            /* Reject portals outside frustum. */
+            if (frustum_planes && !portal_box_in_frustum(p, frustum_planes))
+                continue;
+
+            result->sector_visible[neighbor] = true;
+            result->visible_count++;
+            queue[tail++] = neighbor;
+        }
+    }
+
+    SDL_free(queue);
 }
