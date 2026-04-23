@@ -177,7 +177,9 @@ static bool add_wall(macc *a, float x0, float z0, float x1, float z1, float bot,
     float len = SDL_sqrtf(dx * dx + dz * dz);
     if (len < 0.0001f)
         return true;
-    float nx = dz / len, nz = -dx / len;
+    /* Sector polygons are CCW in XZ, so edge interior lies on the left side.
+     * Keep wall winding interior-facing and align the stored normal with it. */
+    float nx = -dz / len, nz = dx / len;
     float s = tex_scale > 0 ? tex_scale : 4.0f;
     float u0 = 0.0f, u1 = len / s;
     float v0 = bot / s, v1 = top / s;
@@ -207,12 +209,12 @@ static bool add_floor_ceil(macc *a, const sdl3d_sector *s, float y, float ny, co
     {
         if (ny > 0)
         {
-            if (!macc_tri(a, base, base + i, base + i + 1))
+            if (!macc_tri(a, base, base + i + 1, base + i))
                 return false;
         }
         else
         {
-            if (!macc_tri(a, base, base + i + 1, base + i))
+            if (!macc_tri(a, base, base + i, base + i + 1))
                 return false;
         }
     }
@@ -349,9 +351,8 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                             float p_floor = sec->floor_y > overlaps[novl - 1].other_floor
                                                 ? sec->floor_y
                                                 : overlaps[novl - 1].other_floor;
-                            float p_ceil = sec->ceil_y < overlaps[novl - 1].other_ceil
-                                               ? sec->ceil_y
-                                               : overlaps[novl - 1].other_ceil;
+                            float p_ceil = sec->ceil_y < overlaps[novl - 1].other_ceil ? sec->ceil_y
+                                                                                       : overlaps[novl - 1].other_ceil;
                             sdl3d_level_portal *p = &portals[portal_count++];
                             p->sector_a = s;
                             p->sector_b = edges[j].sector;

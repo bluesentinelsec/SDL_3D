@@ -129,7 +129,7 @@ int main(int argc, char *argv[])
     sdl3d_set_bloom_enabled(ctx, true);
     sdl3d_set_ssao_enabled(ctx, false);
     sdl3d_set_point_shadows_enabled(ctx, false);
-    sdl3d_set_backface_culling_enabled(ctx, false);
+    sdl3d_set_backface_culling_enabled(ctx, true);
     sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG);
 
     /* ---- Material palette ---- */
