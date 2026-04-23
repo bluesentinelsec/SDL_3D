@@ -437,10 +437,10 @@ TEST(SDL3DRasterizeTriangle, TexturedNearestMapsQuadrantsCorrectly)
                                       sdl3d_vec2{1.0f, 1.0f}, sdl3d_vec2{0.0f, 1.0f}, modulate, modulate, modulate,
                                       &texture, false, false);
 
-    EXPECT_TRUE(PixelNear(f.GetPixel(8, 8), kRed));
-    EXPECT_TRUE(PixelNear(f.GetPixel(24, 8), kGreen));
-    EXPECT_TRUE(PixelNear(f.GetPixel(8, 24), kBlue));
-    EXPECT_TRUE(PixelNear(f.GetPixel(24, 24), sdl3d_color{255, 255, 0, 255}));
+    EXPECT_TRUE(PixelNear(f.GetPixel(8, 8), kBlue));
+    EXPECT_TRUE(PixelNear(f.GetPixel(24, 8), sdl3d_color{255, 255, 0, 255}));
+    EXPECT_TRUE(PixelNear(f.GetPixel(8, 24), kRed));
+    EXPECT_TRUE(PixelNear(f.GetPixel(24, 24), kGreen));
 
     sdl3d_free_texture(&texture);
 }

@@ -349,7 +349,7 @@ static void sdl3d_texture_sample_bilinear_mip(const sdl3d_texture_mip_level *mip
     const float sample_u = sdl3d_texture_wrap_coord(u, wrap_u);
     const float sample_v = sdl3d_texture_wrap_coord(v, wrap_v);
     const float texel_x = (sample_u * (float)mip->width) - 0.5f;
-    const float texel_y = ((1.0f - sample_v) * (float)mip->height) - 0.5f;
+    const float texel_y = (sample_v * (float)mip->height) - 0.5f;
 
     const int x0 = (int)SDL_floorf(texel_x);
     const int y0 = (int)SDL_floorf(texel_y);
@@ -463,7 +463,7 @@ void sdl3d_texture_sample_rgba(const sdl3d_texture2d *texture, float u, float v,
      * the Y mapping flips here.
      */
     texel_x = (sample_u * (float)texture->width) - 0.5f;
-    texel_y = ((1.0f - sample_v) * (float)texture->height) - 0.5f;
+    texel_y = (sample_v * (float)texture->height) - 0.5f;
 
     if (texture->filter == SDL3D_TEXTURE_FILTER_NEAREST)
     {
