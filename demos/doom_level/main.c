@@ -1,6 +1,6 @@
 /*
  * Doom-style level demo — sector-based level builder.
- * 6 connected rooms built from 2D floor plans.
+ * Expanded E1M1-scale-ish layout with multiple wings and color accents.
  */
 #define SDL_MAIN_HANDLED
 #include <SDL3/SDL.h>
@@ -143,49 +143,74 @@ int main(int argc, char *argv[])
         {{1, 1, 1, 1}, 0, 0.9f, SDL3D_MEDIA_DIR "/textures/rock_floor.jpg", 4},    /* 5: rock floor alt */
     };
 
-    /* ---- Sector definitions (E1M1-inspired) ---- */
+    /* ---- Sector definitions (expanded E1M1-inspired layout) ---- */
     /*
      * Layout (top-down, Z increases downward):
      *
-     *   [0] Start Room (10x8)
-     *        |  (doorway 3..7)
-     *   [1] Corridor (4x8)
-     *        |  (doorway 3..7)
-     *   [2] Nukage Room (12x10) ---[3] Side Passage (6x4)---[4] Outdoor Area (12x10)
-     *                                                              |
-     *                                                         [5] Exit Room (8x6)
+     *   [7] Upper Hall -------- [8] Computer Core
+     *      |                          |
+     *   [0] Start Room                [9] Security Bend
+     *      |                               |
+     *   [1] South Corridor                 |
+     *      |                               |
+     *   [2] Nukage Basin -- [3] East Passage -- [4] Courtyard -- [10] Storage -- [12] Secret Annex
+     *      |                                       |
+     *   [6] West Alcove                           [5] Exit Room -- [11] Reactor Hall
      */
     sdl3d_sector sectors[] = {
         /* 0: Starting room */
         {{{0, 0}, {10, 0}, {10, 8}, {0, 8}}, 4, 0.0f, 4.0f, 0, 1, 2},
-        /* 1: Corridor */
+        /* 1: South corridor */
         {{{3, 8}, {7, 8}, {7, 16}, {3, 16}}, 4, 0.0f, 3.5f, 5, 1, 4},
-        /* 2: Nukage room (lower floor) */
+        /* 2: Nukage basin */
         {{{-2, 16}, {10, 16}, {10, 26}, {-2, 26}}, 4, -0.5f, 4.5f, 3, 1, 2},
-        /* 3: Side passage */
+        /* 3: East passage */
         {{{10, 18}, {16, 18}, {16, 22}, {10, 22}}, 4, 0.0f, 3.5f, 0, 1, 4},
-        /* 4: Outdoor area */
+        /* 4: Courtyard */
         {{{16, 14}, {28, 14}, {28, 26}, {16, 26}}, 4, 0.0f, 8.0f, 0, 1, 2},
         /* 5: Exit room */
         {{{20, 26}, {28, 26}, {28, 32}, {20, 32}}, 4, 0.0f, 3.0f, 5, 1, 4},
+        /* 6: West alcove off nukage */
+        {{{-10, 18}, {-2, 18}, {-2, 24}, {-10, 24}}, 4, -0.5f, 3.5f, 5, 1, 4},
+        /* 7: Upper hall off start */
+        {{{10, 2}, {18, 2}, {18, 6}, {10, 6}}, 4, 0.0f, 3.5f, 5, 1, 4},
+        /* 8: Computer core */
+        {{{18, 0}, {30, 0}, {30, 8}, {18, 8}}, 4, 0.0f, 4.0f, 0, 1, 2},
+        /* 9: Security bend linking core to courtyard */
+        {{{22, 8}, {26, 8}, {26, 14}, {22, 14}}, 4, 0.0f, 3.2f, 5, 1, 4},
+        /* 10: Storage annex */
+        {{{28, 12}, {38, 12}, {38, 24}, {28, 24}}, 4, 0.0f, 4.0f, 0, 1, 2},
+        /* 11: Reactor hall beyond exit */
+        {{{18, 32}, {30, 32}, {30, 44}, {18, 44}}, 4, 0.0f, 5.5f, 5, 1, 4},
+        /* 12: Secret annex behind storage */
+        {{{32, 24}, {40, 24}, {40, 30}, {32, 30}}, 4, 0.0f, 3.0f, 0, 1, 2},
     };
 
     sdl3d_level_light lights[] = {
-        {{5, 3.5f, 4}, {1.0f, 0.85f, 0.6f}, 5.0f, 12.0f},  /* Start room — warm */
-        {{5, 3.0f, 12}, {1.0f, 0.7f, 0.3f}, 3.0f, 8.0f},   /* Corridor — amber */
-        {{4, 1.0f, 21}, {1.0f, 0.15f, 0.1f}, 4.0f, 14.0f}, /* Lava — red */
-        {{22, 7.0f, 20}, {0.4f, 0.5f, 0.8f}, 6.0f, 18.0f}, /* Outdoor — moonlight */
-        {{24, 2.5f, 29}, {0.2f, 1.0f, 0.2f}, 4.0f, 8.0f},  /* Exit — green */
+        {{5, 3.5f, 4}, {1.0f, 0.82f, 0.58f}, 4.4f, 11.0f},   /* Start room — warm tungsten */
+        {{5, 3.0f, 12}, {1.0f, 0.68f, 0.28f}, 2.6f, 8.0f},   /* South corridor — amber */
+        {{4, 1.0f, 21}, {1.0f, 0.16f, 0.10f}, 4.0f, 14.0f},  /* Nukage basin — red */
+        {{-6, 1.8f, 21}, {0.25f, 0.95f, 0.35f}, 2.8f, 9.0f}, /* West alcove — toxic green */
+        {{14, 2.7f, 4}, {0.7f, 0.8f, 1.0f}, 2.4f, 8.0f},     /* Upper hall — cold white */
+        {{24, 3.2f, 4}, {0.15f, 0.85f, 1.0f}, 3.8f, 12.0f},  /* Computer core — cyan */
+        {{24, 2.6f, 11}, {1.0f, 0.9f, 0.45f}, 2.4f, 7.0f},   /* Security bend — sodium */
+        {{22, 7.0f, 20}, {0.36f, 0.46f, 0.78f}, 5.0f, 18.0f},/* Courtyard — moonlight */
+        {{33, 3.0f, 18}, {0.9f, 0.35f, 1.0f}, 3.0f, 12.0f},  /* Storage — magenta */
+        {{24, 2.5f, 29}, {0.2f, 1.0f, 0.2f}, 3.8f, 8.0f},    /* Exit — green */
+        {{24, 3.8f, 38}, {0.45f, 0.35f, 1.0f}, 3.4f, 13.0f}, /* Reactor hall — violet */
+        {{36, 2.2f, 27}, {1.0f, 0.55f, 0.22f}, 2.5f, 8.0f},  /* Secret annex — orange */
     };
+    const int sector_count = (int)SDL_arraysize(sectors);
+    const int light_count = (int)SDL_arraysize(lights);
 
     /* Build two versions: baked lighting and raw materials. */
     sdl3d_level level_lit, level_unlit;
-    if (!sdl3d_build_level(sectors, 6, mats, 6, lights, 5, &level_lit))
+    if (!sdl3d_build_level(sectors, sector_count, mats, 6, lights, light_count, &level_lit))
     {
         SDL_Log("Level build failed: %s", SDL_GetError());
         return 1;
     }
-    if (!sdl3d_build_level(sectors, 6, mats, 6, NULL, 0, &level_unlit))
+    if (!sdl3d_build_level(sectors, sector_count, mats, 6, NULL, 0, &level_unlit))
     {
         SDL_Log("Level build failed: %s", SDL_GetError());
         return 1;
@@ -300,7 +325,8 @@ int main(int argc, char *argv[])
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
 
         /* Update projectile. */
-        advance_projectile(sectors, 6, dt, &proj_active, &proj_x, &proj_y, &proj_z, proj_dx, proj_dy, proj_dz,
+        advance_projectile(sectors, sector_count, dt, &proj_active, &proj_x, &proj_y, &proj_z, proj_dx, proj_dy,
+                           proj_dz,
                            &proj_life);
 
         sdl3d_clear_lights(ctx);
