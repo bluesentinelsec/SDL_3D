@@ -1242,6 +1242,134 @@ bool sdl3d_draw_point_3d(sdl3d_render_context *context, sdl3d_vec3 position, sdl
     return true;
 }
 
+static sdl3d_vec3 sdl3d_view_camera_right(const sdl3d_render_context *context)
+{
+    return sdl3d_vec3_normalize(sdl3d_vec3_make(context->view.m[0], context->view.m[4], context->view.m[8]));
+}
+
+static sdl3d_vec3 sdl3d_view_camera_up(const sdl3d_render_context *context)
+{
+    return sdl3d_vec3_normalize(sdl3d_vec3_make(context->view.m[1], context->view.m[5], context->view.m[9]));
+}
+
+static sdl3d_vec3 sdl3d_view_camera_forward(const sdl3d_render_context *context)
+{
+    return sdl3d_vec3_normalize(sdl3d_vec3_make(-context->view.m[2], -context->view.m[6], -context->view.m[10]));
+}
+
+bool sdl3d_draw_billboard_ex(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 position,
+                             sdl3d_vec2 size, sdl3d_vec2 anchor, sdl3d_billboard_mode mode, sdl3d_color tint)
+{
+    sdl3d_vec3 right;
+    sdl3d_vec3 up;
+    sdl3d_vec3 normal;
+    const float left = -anchor.x * size.x;
+    const float bottom = -anchor.y * size.y;
+    const float sprite_right = left + size.x;
+    const float sprite_top = bottom + size.y;
+    sdl3d_mesh mesh;
+    float positions[12];
+    float normals[12];
+    float uvs[8];
+    unsigned int indices[6] = {0, 1, 2, 2, 1, 3};
+
+    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_billboard_ex"))
+    {
+        return false;
+    }
+    if (texture == NULL)
+    {
+        return SDL_InvalidParamError("texture");
+    }
+    if (size.x <= 0.0f)
+    {
+        return SDL_SetError("Billboard size.x must be positive.");
+    }
+    if (size.y <= 0.0f)
+    {
+        return SDL_SetError("Billboard size.y must be positive.");
+    }
+    if (anchor.x < 0.0f || anchor.x > 1.0f || anchor.y < 0.0f || anchor.y > 1.0f)
+    {
+        return SDL_SetError("Billboard anchor must be in [0, 1] for both axes.");
+    }
+
+    right = sdl3d_view_camera_right(context);
+    if (mode == SDL3D_BILLBOARD_SPHERICAL)
+    {
+        up = sdl3d_view_camera_up(context);
+    }
+    else
+    {
+        const sdl3d_vec3 world_up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+        sdl3d_vec3 forward = sdl3d_view_camera_forward(context);
+        forward.y = 0.0f;
+        if (sdl3d_vec3_length_squared(forward) <= 0.000001f)
+        {
+            forward = sdl3d_vec3_make(0.0f, 0.0f, -1.0f);
+        }
+        else
+        {
+            forward = sdl3d_vec3_normalize(forward);
+        }
+        right = sdl3d_vec3_normalize(sdl3d_vec3_cross(forward, world_up));
+        if (sdl3d_vec3_length_squared(right) <= 0.000001f)
+        {
+            right = sdl3d_vec3_make(1.0f, 0.0f, 0.0f);
+        }
+        up = world_up;
+    }
+    normal = sdl3d_vec3_normalize(sdl3d_vec3_cross(up, right));
+
+    {
+        const sdl3d_vec3 bl =
+            sdl3d_vec3_add(position, sdl3d_vec3_add(sdl3d_vec3_scale(right, left), sdl3d_vec3_scale(up, bottom)));
+        const sdl3d_vec3 tl =
+            sdl3d_vec3_add(position, sdl3d_vec3_add(sdl3d_vec3_scale(right, left), sdl3d_vec3_scale(up, sprite_top)));
+        const sdl3d_vec3 br = sdl3d_vec3_add(
+            position, sdl3d_vec3_add(sdl3d_vec3_scale(right, sprite_right), sdl3d_vec3_scale(up, bottom)));
+        const sdl3d_vec3 tr = sdl3d_vec3_add(
+            position, sdl3d_vec3_add(sdl3d_vec3_scale(right, sprite_right), sdl3d_vec3_scale(up, sprite_top)));
+        const sdl3d_vec3 verts[4] = {bl, tl, br, tr};
+
+        for (int i = 0; i < 4; ++i)
+        {
+            positions[i * 3 + 0] = verts[i].x;
+            positions[i * 3 + 1] = verts[i].y;
+            positions[i * 3 + 2] = verts[i].z;
+            normals[i * 3 + 0] = normal.x;
+            normals[i * 3 + 1] = normal.y;
+            normals[i * 3 + 2] = normal.z;
+        }
+    }
+
+    uvs[0] = 0.0f;
+    uvs[1] = 0.0f;
+    uvs[2] = 0.0f;
+    uvs[3] = 1.0f;
+    uvs[4] = 1.0f;
+    uvs[5] = 0.0f;
+    uvs[6] = 1.0f;
+    uvs[7] = 1.0f;
+
+    SDL_zero(mesh);
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.uvs = uvs;
+    mesh.vertex_count = 4;
+    mesh.indices = indices;
+    mesh.index_count = 6;
+
+    return sdl3d_draw_mesh_internal(context, &mesh, texture, sdl3d_color_to_modulate(tint), NULL, NULL);
+}
+
+bool sdl3d_draw_billboard(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 position,
+                          sdl3d_vec2 size, sdl3d_color tint)
+{
+    return sdl3d_draw_billboard_ex(context, texture, position, size, (sdl3d_vec2){0.5f, 0.0f}, SDL3D_BILLBOARD_UPRIGHT,
+                                   tint);
+}
+
 bool sdl3d_draw_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, const sdl3d_texture2d *texture,
                      sdl3d_color tint)
 {

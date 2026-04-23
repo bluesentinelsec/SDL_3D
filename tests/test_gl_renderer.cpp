@@ -16,6 +16,24 @@ extern "C"
 #include "sdl3d/sdl3d.h"
 }
 
+namespace
+{
+
+sdl3d_texture2d MakeTextureFromPixels(const Uint8 *pixels, int width, int height)
+{
+    sdl3d_image image{};
+    image.pixels = const_cast<Uint8 *>(pixels);
+    image.width = width;
+    image.height = height;
+
+    sdl3d_texture2d texture{};
+    EXPECT_TRUE(sdl3d_create_texture_from_image(&image, &texture));
+    EXPECT_TRUE(sdl3d_set_texture_filter(&texture, SDL3D_TEXTURE_FILTER_NEAREST));
+    return texture;
+}
+
+} // namespace
+
 class GLRendererTest : public ::testing::Test
 {
   protected:
@@ -273,6 +291,67 @@ TEST_F(GLRendererTest, LevelInteriorVisibleWithBackfaceCulling)
     sdl3d_free_level(&level);
 
     EXPECT_GT(px[0] + px[1] + px[2], 30);
+}
+
+TEST_F(GLRendererTest, BillboardVisibleWithTexture)
+{
+    const Uint8 pixels[] = {
+        255, 64, 64, 255, 255, 64, 64, 255, 255, 64, 64, 255, 255, 64, 64, 255,
+    };
+    sdl3d_texture2d texture = MakeTextureFromPixels(pixels, 2, 2);
+
+    sdl3d_camera3d cam;
+    cam.position = sdl3d_vec3_make(0.0f, 1.0f, 4.0f);
+    cam.target = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.fovy = 60.0f;
+    cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    sdl3d_clear_render_context(ctx, (sdl3d_color){0, 0, 0, 255});
+    sdl3d_begin_mode_3d(ctx, cam);
+    ASSERT_TRUE(sdl3d_draw_billboard(ctx, &texture, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), (sdl3d_vec2){2.0f, 2.0f},
+                                     (sdl3d_color){255, 255, 255, 255}))
+        << SDL_GetError();
+    sdl3d_end_mode_3d(ctx);
+
+    unsigned char px[4];
+    readPixel(160, 120, px);
+    sdl3d_free_texture(&texture);
+
+    EXPECT_GT(px[0], 100);
+    EXPECT_GT(px[1], 20);
+    EXPECT_GT(px[2], 20);
+}
+
+TEST_F(GLRendererTest, BillboardTransparentPixelsDiscard)
+{
+    const Uint8 pixels[] = {
+        0, 0, 0, 0, 255, 64, 64, 255, 0, 0, 0, 0, 255, 64, 64, 255,
+    };
+    sdl3d_texture2d texture = MakeTextureFromPixels(pixels, 2, 2);
+
+    sdl3d_camera3d cam;
+    cam.position = sdl3d_vec3_make(0.0f, 1.0f, 4.0f);
+    cam.target = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.fovy = 60.0f;
+    cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    sdl3d_clear_render_context(ctx, (sdl3d_color){0, 0, 0, 255});
+    sdl3d_begin_mode_3d(ctx, cam);
+    ASSERT_TRUE(sdl3d_draw_billboard(ctx, &texture, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), (sdl3d_vec2){2.0f, 2.0f},
+                                     (sdl3d_color){255, 255, 255, 255}))
+        << SDL_GetError();
+    sdl3d_end_mode_3d(ctx);
+
+    unsigned char left_px[4];
+    unsigned char right_px[4];
+    readPixel(130, 120, left_px);
+    readPixel(190, 120, right_px);
+    sdl3d_free_texture(&texture);
+
+    EXPECT_LT(left_px[0] + left_px[1] + left_px[2], 40);
+    EXPECT_GT(right_px[0], 100);
 }
 
 TEST_F(GLRendererTest, ToggleRecreateProducesCorrectOutput)
