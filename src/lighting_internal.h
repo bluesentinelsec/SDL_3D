@@ -42,6 +42,7 @@ typedef struct sdl3d_lighting_params
     int vertex_snap_precision;
     bool color_quantize;
     int color_depth;
+    bool baked_light_mode;
 } sdl3d_lighting_params;
 
 /*

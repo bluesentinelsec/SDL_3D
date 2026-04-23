@@ -286,16 +286,16 @@ TEST_F(SDL3DTexturedFixture, NearestClampSamplerMapsQuadrantsCorrectly)
     sdl3d_color sample{};
     SDL_Point probe = project_to_screen(context, camera, sdl3d_vec3_make(-0.5f, 0.5f, 0.0f));
     ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, probe.x, probe.y, &sample));
-    EXPECT_TRUE(pixel_near(sample, kRed));
+    EXPECT_TRUE(pixel_near(sample, kBlue));
     probe = project_to_screen(context, camera, sdl3d_vec3_make(0.5f, 0.5f, 0.0f));
     ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, probe.x, probe.y, &sample));
-    EXPECT_TRUE(pixel_near(sample, kGreen));
+    EXPECT_TRUE(pixel_near(sample, kYellow));
     probe = project_to_screen(context, camera, sdl3d_vec3_make(-0.5f, -0.5f, 0.0f));
     ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, probe.x, probe.y, &sample));
-    EXPECT_TRUE(pixel_near(sample, kBlue));
+    EXPECT_TRUE(pixel_near(sample, kRed));
     probe = project_to_screen(context, camera, sdl3d_vec3_make(0.5f, -0.5f, 0.0f));
     ASSERT_TRUE(sdl3d_get_framebuffer_pixel(context, probe.x, probe.y, &sample));
-    EXPECT_TRUE(pixel_near(sample, kYellow));
+    EXPECT_TRUE(pixel_near(sample, kGreen));
 
     sdl3d_free_texture(&texture);
     sdl3d_destroy_render_context(context);

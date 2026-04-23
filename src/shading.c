@@ -300,9 +300,21 @@ void sdl3d_shade_fragment_pbr(const sdl3d_lighting_params *params, float albedo_
     }
 
     /* Ambient + emissive. */
-    *out_r = params->ambient[0] * albedo_r + lo_r + params->emissive[0];
-    *out_g = params->ambient[1] * albedo_g + lo_g + params->emissive[1];
-    *out_b = params->ambient[2] * albedo_b + lo_b + params->emissive[2];
+    if (params->baked_light_mode)
+    {
+        /* Baked mode: albedo already contains pre-lit vertex colors × texture.
+         * Use it as the base, add only dynamic light contributions on top.
+         * Match GL shader: color = bakedBaseColor + Lo + emissive. */
+        *out_r = albedo_r + lo_r + params->emissive[0];
+        *out_g = albedo_g + lo_g + params->emissive[1];
+        *out_b = albedo_b + lo_b + params->emissive[2];
+    }
+    else
+    {
+        *out_r = params->ambient[0] * albedo_r + lo_r + params->emissive[0];
+        *out_g = params->ambient[1] * albedo_g + lo_g + params->emissive[1];
+        *out_b = params->ambient[2] * albedo_b + lo_b + params->emissive[2];
+    }
 }
 
 /* ------------------------------------------------------------------ */

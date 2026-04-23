@@ -157,6 +157,19 @@ float OrthoHalfWidth(const sdl3d_render_context *ctx, sdl3d_camera3d camera)
 constexpr sdl3d_color kBlack = {0, 0, 0, 255};
 constexpr sdl3d_color kRed = {255, 0, 0, 255};
 constexpr sdl3d_color kBlue = {0, 0, 255, 255};
+
+sdl3d_texture2d MakeSolidTexture(sdl3d_color color)
+{
+    Uint8 pixels[] = {color.r, color.g, color.b, color.a};
+    sdl3d_image image{};
+    image.pixels = pixels;
+    image.width = 1;
+    image.height = 1;
+
+    sdl3d_texture2d texture{};
+    EXPECT_TRUE(sdl3d_create_texture_from_image(&image, &texture)) << SDL_GetError();
+    return texture;
+}
 } // namespace
 
 /* --- Lifecycle ----------------------------------------------------------- */
@@ -686,5 +699,67 @@ TEST_F(SDL3DDrawingFixture, LogicalLetterboxRendersAtLogicalResolution)
     // Present through SDL's letterbox pipeline to prove interop.
     ASSERT_TRUE(sdl3d_present_render_context(ctx)) << SDL_GetError();
 
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, SoftwareSkyboxMatchesExpectedDirections)
+{
+    WindowRenderer wr(128, 128);
+    ASSERT_TRUE(wr.ok());
+
+    sdl3d_render_context_config config;
+    sdl3d_init_render_context_config(&config);
+    config.backend = SDL3D_BACKEND_SOFTWARE;
+
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), &config, &ctx)) << SDL_GetError();
+
+    sdl3d_texture2d px = MakeSolidTexture({255, 0, 0, 255});
+    sdl3d_texture2d nx = MakeSolidTexture({0, 255, 0, 255});
+    sdl3d_texture2d py = MakeSolidTexture({0, 0, 255, 255});
+    sdl3d_texture2d ny = MakeSolidTexture({255, 255, 0, 255});
+    sdl3d_texture2d pz = MakeSolidTexture({255, 0, 255, 255});
+    sdl3d_texture2d nz = MakeSolidTexture({0, 255, 255, 255});
+    sdl3d_skybox_textured skybox = {&px, &nx, &py, &ny, &pz, &nz, 20.0f};
+
+    struct ViewCase
+    {
+        sdl3d_vec3 target;
+        sdl3d_vec3 up;
+        sdl3d_color expected;
+    } cases[] = {
+        {sdl3d_vec3_make(0.0f, 0.0f, 1.0f), sdl3d_vec3_make(0.0f, 1.0f, 0.0f), {255, 0, 0, 255}},
+        {sdl3d_vec3_make(1.0f, 0.0f, 0.0f), sdl3d_vec3_make(0.0f, 1.0f, 0.0f), {0, 255, 255, 255}},
+        {sdl3d_vec3_make(0.0f, 0.0f, -1.0f), sdl3d_vec3_make(0.0f, 1.0f, 0.0f), {0, 255, 0, 255}},
+        {sdl3d_vec3_make(-1.0f, 0.0f, 0.0f), sdl3d_vec3_make(0.0f, 1.0f, 0.0f), {255, 0, 255, 255}},
+        {sdl3d_vec3_make(0.0f, 1.0f, 0.0f), sdl3d_vec3_make(0.0f, 0.0f, -1.0f), {0, 0, 255, 255}},
+    };
+
+    for (const ViewCase &view_case : cases)
+    {
+        sdl3d_camera3d cam{};
+        sdl3d_color sample{};
+
+        cam.position = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+        cam.target = view_case.target;
+        cam.up = view_case.up;
+        cam.fovy = 60.0f;
+        cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+        ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+        ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, cam));
+        ASSERT_TRUE(sdl3d_draw_skybox_textured(ctx, &skybox)) << SDL_GetError();
+        ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+        ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 64, 64, &sample));
+        EXPECT_TRUE(PixelEquals(sample, view_case.expected));
+    }
+
+    sdl3d_free_texture(&px);
+    sdl3d_free_texture(&nx);
+    sdl3d_free_texture(&py);
+    sdl3d_free_texture(&ny);
+    sdl3d_free_texture(&pz);
+    sdl3d_free_texture(&nz);
     sdl3d_destroy_render_context(ctx);
 }

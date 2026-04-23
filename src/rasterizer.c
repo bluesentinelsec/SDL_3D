@@ -70,6 +70,34 @@ static int sdl3d_min_int(int a, int b)
     return (a < b) ? a : b;
 }
 
+static bool sdl3d_parallel_triangle_job_is_worthwhile(const sdl3d_parallel_rasterizer *rasterizer, int tile_count,
+                                                      int min_px_x, int max_px_x, int min_px_y, int max_px_y)
+{
+    static const int SDL3D_PARALLEL_MIN_TILE_COUNT = 4;
+    static const int SDL3D_PARALLEL_MIN_PIXEL_AREA = 64 * 64;
+    const int worker_count = rasterizer != NULL ? rasterizer->worker_count : 0;
+    const int width = max_px_x - min_px_x + 1;
+    const int height = max_px_y - min_px_y + 1;
+    const int pixel_area = width * height;
+
+    if (worker_count <= 0 || tile_count < SDL3D_PARALLEL_MIN_TILE_COUNT)
+    {
+        return false;
+    }
+
+    if (pixel_area < SDL3D_PARALLEL_MIN_PIXEL_AREA)
+    {
+        return false;
+    }
+
+    if (tile_count < worker_count && pixel_area < (SDL3D_PARALLEL_MIN_PIXEL_AREA * 2))
+    {
+        return false;
+    }
+
+    return true;
+}
+
 static void sdl3d_parallel_run_job(sdl3d_parallel_job *job)
 {
     if (job == NULL || job->run_tile == NULL)
@@ -575,7 +603,9 @@ static bool sdl3d_try_rasterize_prepared_triangle_parallel(sdl3d_framebuffer *fr
     const int tiles_h = last_tile_y - first_tile_y + 1;
     const int tile_count = tiles_w * tiles_h;
 
-    if (tile_count <= 1)
+    if (!sdl3d_parallel_triangle_job_is_worthwhile(framebuffer->parallel_rasterizer, tile_count,
+                                                   triangle->bounds.min_px_x, triangle->bounds.max_px_x,
+                                                   triangle->bounds.min_px_y, triangle->bounds.max_px_y))
     {
         return false;
     }
@@ -984,7 +1014,9 @@ static bool sdl3d_try_rasterize_prepared_triangle_colored_parallel(sdl3d_framebu
     const int tiles_h = last_tile_y - first_tile_y + 1;
     const int tile_count = tiles_w * tiles_h;
 
-    if (tile_count <= 1)
+    if (!sdl3d_parallel_triangle_job_is_worthwhile(framebuffer->parallel_rasterizer, tile_count,
+                                                   triangle->bounds.min_px_x, triangle->bounds.max_px_x,
+                                                   triangle->bounds.min_px_y, triangle->bounds.max_px_y))
     {
         return false;
     }
@@ -1546,7 +1578,9 @@ static bool sdl3d_try_rasterize_prepared_triangle_textured_parallel(sdl3d_frameb
     const int tiles_h = last_tile_y - first_tile_y + 1;
     const int tile_count = tiles_w * tiles_h;
 
-    if (tile_count <= 1)
+    if (!sdl3d_parallel_triangle_job_is_worthwhile(framebuffer->parallel_rasterizer, tile_count,
+                                                   triangle->bounds.min_px_x, triangle->bounds.max_px_x,
+                                                   triangle->bounds.min_px_y, triangle->bounds.max_px_y))
     {
         return false;
     }
@@ -1912,6 +1946,7 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
     const sdl3d_screen_vertex_lit a = tri->a;
     const sdl3d_screen_vertex_lit b = tri->b;
     const sdl3d_screen_vertex_lit c = tri->c;
+    const bool baked_static_fast_path = lp->baked_light_mode && lp->light_count == 0 && lp->fog.mode == SDL3D_FOG_NONE;
 
     for (int py = min_px_y; py <= max_px_y; ++py)
     {
@@ -1992,91 +2027,125 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
                         continue;
                     }
 
-                    nx = (ba * a.nx_over_w + bb * b.nx_over_w + bc * c.nx_over_w) * pw;
-                    ny = (ba * a.ny_over_w + bb * b.ny_over_w + bc * c.ny_over_w) * pw;
-                    nz = (ba * a.nz_over_w + bb * b.nz_over_w + bc * c.nz_over_w) * pw;
-                    n_len = nx * nx + ny * ny + nz * nz;
-                    if (n_len > 1e-12f)
-                    {
-                        float inv = 1.0f / SDL_sqrtf(n_len);
-                        nx *= inv;
-                        ny *= inv;
-                        nz *= inv;
-                    }
+                    /* Always compute world position — needed by fog in all paths. */
                     wpx = (ba * a.wx_over_w + bb * b.wx_over_w + bc * c.wx_over_w) * pw;
                     wpy = (ba * a.wy_over_w + bb * b.wy_over_w + bc * c.wy_over_w) * pw;
                     wpz = (ba * a.wz_over_w + bb * b.wz_over_w + bc * c.wz_over_w) * pw;
 
-                    sdl3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, nx, ny, nz, wpx, wpy, wpz, &lit_r,
-                                             &lit_g, &lit_b);
-
-                    /* Fog + tonemapping.  When using a real tonemap operator
-                     * (ACES/Reinhard), fog blends in linear space before the
-                     * operator compresses the range.  With TONEMAP_NONE the fog
-                     * color is already sRGB (matches the sky), so we gamma-encode
-                     * the lit color first, then mix fog to avoid brightening it. */
-                    if (lp->tonemap_mode != SDL3D_TONEMAP_NONE)
+                    if (baked_static_fast_path)
                     {
-                        if (lp->fog.mode != SDL3D_FOG_NONE)
-                        {
-                            float fog_f;
-                            if (lp->fog_eval == SDL3D_FOG_EVAL_VERTEX)
-                            {
-                                fog_f = (ba * a.fog_over_w + bb * b.fog_over_w + bc * c.fog_over_w) * pw;
-                                if (fog_f < 0.0f)
-                                {
-                                    fog_f = 0.0f;
-                                }
-                                if (fog_f > 1.0f)
-                                {
-                                    fog_f = 1.0f;
-                                }
-                            }
-                            else
-                            {
-                                float dx = wpx - lp->camera_pos.x;
-                                float dy = wpy - lp->camera_pos.y;
-                                float dz = wpz - lp->camera_pos.z;
-                                float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
-                                fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
-                            }
-                            lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
-                            lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
-                            lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
-                        }
-                        sdl3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
+                        lit_r = albedo_r + lp->emissive[0];
+                        lit_g = albedo_g + lp->emissive[1];
+                        lit_b = albedo_b + lp->emissive[2];
                     }
                     else
                     {
-                        sdl3d_tonemap(SDL3D_TONEMAP_NONE, &lit_r, &lit_g, &lit_b);
+                        nx = (ba * a.nx_over_w + bb * b.nx_over_w + bc * c.nx_over_w) * pw;
+                        ny = (ba * a.ny_over_w + bb * b.ny_over_w + bc * c.ny_over_w) * pw;
+                        nz = (ba * a.nz_over_w + bb * b.nz_over_w + bc * c.nz_over_w) * pw;
+                        n_len = nx * nx + ny * ny + nz * nz;
+                        if (n_len > 1e-12f)
+                        {
+                            float inv = 1.0f / SDL_sqrtf(n_len);
+                            nx *= inv;
+                            ny *= inv;
+                            nz *= inv;
+                        }
+
+                        sdl3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, nx, ny, nz, wpx, wpy, wpz, &lit_r,
+                                                 &lit_g, &lit_b);
+                    }
+
+                    if (lp->baked_light_mode)
+                    {
+                        /* Baked mode: skip tonemapping and gamma to match GL.
+                         * Just apply fog and clamp. */
                         if (lp->fog.mode != SDL3D_FOG_NONE)
                         {
-                            float fog_f;
-                            if (lp->fog_eval == SDL3D_FOG_EVAL_VERTEX)
-                            {
-                                fog_f = (ba * a.fog_over_w + bb * b.fog_over_w + bc * c.fog_over_w) * pw;
-                                if (fog_f < 0.0f)
-                                {
-                                    fog_f = 0.0f;
-                                }
-                                if (fog_f > 1.0f)
-                                {
-                                    fog_f = 1.0f;
-                                }
-                            }
-                            else
-                            {
-                                float dx = wpx - lp->camera_pos.x;
-                                float dy = wpy - lp->camera_pos.y;
-                                float dz = wpz - lp->camera_pos.z;
-                                float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
-                                fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
-                            }
+                            float dx = wpx - lp->camera_pos.x;
+                            float dy = wpy - lp->camera_pos.y;
+                            float dz = wpz - lp->camera_pos.z;
+                            float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
+                            float fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
                             lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
                             lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
                             lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
                         }
+                        lit_r = lit_r < 0.0f ? 0.0f : (lit_r > 1.0f ? 1.0f : lit_r);
+                        lit_g = lit_g < 0.0f ? 0.0f : (lit_g > 1.0f ? 1.0f : lit_g);
+                        lit_b = lit_b < 0.0f ? 0.0f : (lit_b > 1.0f ? 1.0f : lit_b);
                     }
+                    else
+                    {
+
+                        /* Fog + tonemapping.  When using a real tonemap operator
+                         * (ACES/Reinhard), fog blends in linear space before the
+                         * operator compresses the range.  With TONEMAP_NONE the fog
+                         * color is already sRGB (matches the sky), so we gamma-encode
+                         * the lit color first, then mix fog to avoid brightening it. */
+                        if (lp->tonemap_mode != SDL3D_TONEMAP_NONE)
+                        {
+                            if (lp->fog.mode != SDL3D_FOG_NONE)
+                            {
+                                float fog_f;
+                                if (lp->fog_eval == SDL3D_FOG_EVAL_VERTEX)
+                                {
+                                    fog_f = (ba * a.fog_over_w + bb * b.fog_over_w + bc * c.fog_over_w) * pw;
+                                    if (fog_f < 0.0f)
+                                    {
+                                        fog_f = 0.0f;
+                                    }
+                                    if (fog_f > 1.0f)
+                                    {
+                                        fog_f = 1.0f;
+                                    }
+                                }
+                                else
+                                {
+                                    float dx = wpx - lp->camera_pos.x;
+                                    float dy = wpy - lp->camera_pos.y;
+                                    float dz = wpz - lp->camera_pos.z;
+                                    float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
+                                    fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
+                                }
+                                lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
+                                lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
+                                lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
+                            }
+                            sdl3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
+                        }
+                        else
+                        {
+                            sdl3d_tonemap(SDL3D_TONEMAP_NONE, &lit_r, &lit_g, &lit_b);
+                            if (lp->fog.mode != SDL3D_FOG_NONE)
+                            {
+                                float fog_f;
+                                if (lp->fog_eval == SDL3D_FOG_EVAL_VERTEX)
+                                {
+                                    fog_f = (ba * a.fog_over_w + bb * b.fog_over_w + bc * c.fog_over_w) * pw;
+                                    if (fog_f < 0.0f)
+                                    {
+                                        fog_f = 0.0f;
+                                    }
+                                    if (fog_f > 1.0f)
+                                    {
+                                        fog_f = 1.0f;
+                                    }
+                                }
+                                else
+                                {
+                                    float dx = wpx - lp->camera_pos.x;
+                                    float dy = wpy - lp->camera_pos.y;
+                                    float dz = wpz - lp->camera_pos.z;
+                                    float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
+                                    fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
+                                }
+                                lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
+                                lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
+                                lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
+                            }
+                        }
+                    } /* end else (non-baked tonemapping) */
 
                     /* Color quantization with optional Bayer dithering. */
                     if (lp->color_quantize && lp->color_depth > 0)
@@ -2231,7 +2300,9 @@ static bool sdl3d_try_rasterize_prepared_triangle_lit_parallel(sdl3d_framebuffer
     tiles_h = last_tile_y - first_tile_y + 1;
     tile_count = tiles_w * tiles_h;
 
-    if (tile_count <= 1)
+    if (!sdl3d_parallel_triangle_job_is_worthwhile(framebuffer->parallel_rasterizer, tile_count,
+                                                   triangle->bounds.min_px_x, triangle->bounds.max_px_x,
+                                                   triangle->bounds.min_px_y, triangle->bounds.max_px_y))
     {
         return false;
     }

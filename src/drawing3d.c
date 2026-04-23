@@ -644,10 +644,11 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
                                      sdl3d_vec4 base_modulate, const sdl3d_lighting_params *lighting,
                                      const sdl3d_mat4 *joint_matrices)
 {
-    const bool indexed = mesh->indices != NULL;
-    const int triangle_count = indexed ? (mesh->index_count / 3) : (mesh->vertex_count / 3);
-    const bool lit = lighting != NULL && (context->shading_mode == SDL3D_SHADING_FLAT || mesh->normals != NULL);
-    const bool skinned = joint_matrices != NULL && mesh->joint_indices != NULL && mesh->joint_weights != NULL;
+    bool indexed;
+    int triangle_count;
+    bool software_baked_static;
+    bool lit;
+    bool skinned;
     sdl3d_framebuffer framebuffer;
     float *skinned_positions = NULL;
     float *skinned_normals = NULL;
@@ -672,6 +673,16 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
     {
         return SDL_SetError("Mesh must provide positions and at least one vertex.");
     }
+
+    indexed = mesh->indices != NULL;
+    triangle_count = indexed ? (mesh->index_count / 3) : (mesh->vertex_count / 3);
+    software_baked_static = context->backend == SDL3D_BACKEND_SOFTWARE && lighting != NULL &&
+                            mesh->colors_are_baked_light && lighting->light_count == 0 &&
+                            lighting->fog.mode == SDL3D_FOG_NONE;
+    lit = lighting != NULL && !software_baked_static &&
+          (context->shading_mode == SDL3D_SHADING_FLAT || mesh->normals != NULL);
+    skinned = joint_matrices != NULL && mesh->joint_indices != NULL && mesh->joint_weights != NULL;
+
     if (!sdl3d_validate_texture_for_draw(texture))
     {
         return false;
@@ -1514,6 +1525,7 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_mod
             (context->light_count > 0 || mesh->colors_are_baked_light))
         {
             sdl3d_build_lighting_params(context, &lp_storage);
+            lp_storage.baked_light_mode = mesh->colors_are_baked_light;
             if (material != NULL)
             {
                 lp_storage.metallic = material->metallic;
