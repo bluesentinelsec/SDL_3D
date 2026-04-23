@@ -646,7 +646,11 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
 {
     const bool indexed = mesh->indices != NULL;
     const int triangle_count = indexed ? (mesh->index_count / 3) : (mesh->vertex_count / 3);
-    const bool lit = lighting != NULL && (context->shading_mode == SDL3D_SHADING_FLAT || mesh->normals != NULL);
+    const bool software_baked_static = context->backend == SDL3D_BACKEND_SOFTWARE && lighting != NULL &&
+                                       mesh->colors_are_baked_light && lighting->light_count == 0 &&
+                                       lighting->fog.mode == SDL3D_FOG_NONE;
+    const bool lit = lighting != NULL && !software_baked_static &&
+                     (context->shading_mode == SDL3D_SHADING_FLAT || mesh->normals != NULL);
     const bool skinned = joint_matrices != NULL && mesh->joint_indices != NULL && mesh->joint_weights != NULL;
     sdl3d_framebuffer framebuffer;
     float *skinned_positions = NULL;
