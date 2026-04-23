@@ -323,6 +323,65 @@ TEST_F(GLRendererTest, BillboardVisibleWithTexture)
     EXPECT_GT(px[2], 20);
 }
 
+TEST_F(GLRendererTest, BillboardVisibleFromOppositeViewDirection)
+{
+    const Uint8 pixels[] = {
+        255, 64, 64, 255, 255, 64, 64, 255, 255, 64, 64, 255, 255, 64, 64, 255,
+    };
+    sdl3d_texture2d texture = MakeTextureFromPixels(pixels, 2, 2);
+
+    sdl3d_camera3d cam;
+    cam.position = sdl3d_vec3_make(0.0f, 1.0f, -4.0f);
+    cam.target = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.fovy = 60.0f;
+    cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    sdl3d_clear_render_context(ctx, (sdl3d_color){0, 0, 0, 255});
+    sdl3d_begin_mode_3d(ctx, cam);
+    ASSERT_TRUE(sdl3d_draw_billboard(ctx, &texture, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), (sdl3d_vec2){2.0f, 2.0f},
+                                     (sdl3d_color){255, 255, 255, 255}))
+        << SDL_GetError();
+    sdl3d_end_mode_3d(ctx);
+
+    unsigned char px[4];
+    readPixel(160, 120, px);
+    sdl3d_free_texture(&texture);
+
+    EXPECT_GT(px[0], 100);
+}
+
+TEST_F(GLRendererTest, BillboardPreservesTopToBottomTextureOrientation)
+{
+    const Uint8 pixels[] = {
+        255, 32, 32, 255, 255, 32, 32, 255, 32, 32, 255, 255, 32, 32, 255, 255,
+    };
+    sdl3d_texture2d texture = MakeTextureFromPixels(pixels, 2, 2);
+
+    sdl3d_camera3d cam;
+    cam.position = sdl3d_vec3_make(0.0f, 1.0f, 4.0f);
+    cam.target = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.fovy = 60.0f;
+    cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    sdl3d_clear_render_context(ctx, (sdl3d_color){0, 0, 0, 255});
+    sdl3d_begin_mode_3d(ctx, cam);
+    ASSERT_TRUE(sdl3d_draw_billboard(ctx, &texture, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), (sdl3d_vec2){2.0f, 2.0f},
+                                     (sdl3d_color){255, 255, 255, 255}))
+        << SDL_GetError();
+    sdl3d_end_mode_3d(ctx);
+
+    unsigned char top_px[4];
+    unsigned char bottom_px[4];
+    readPixel(160, 150, top_px);
+    readPixel(160, 90, bottom_px);
+    sdl3d_free_texture(&texture);
+
+    EXPECT_GT(top_px[0], top_px[2]);
+    EXPECT_GT(bottom_px[2], bottom_px[0]);
+}
+
 TEST_F(GLRendererTest, BillboardTransparentPixelsDiscard)
 {
     const Uint8 pixels[] = {

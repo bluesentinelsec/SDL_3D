@@ -1271,7 +1271,7 @@ bool sdl3d_draw_billboard_ex(sdl3d_render_context *context, const sdl3d_texture2
     float positions[12];
     float normals[12];
     float uvs[8];
-    unsigned int indices[6] = {0, 1, 2, 2, 1, 3};
+    unsigned int indices[12] = {0, 1, 2, 2, 1, 3, 2, 1, 0, 3, 1, 2};
 
     if (!sdl3d_require_mode_3d(context, "sdl3d_draw_billboard_ex"))
     {
@@ -1344,13 +1344,13 @@ bool sdl3d_draw_billboard_ex(sdl3d_render_context *context, const sdl3d_texture2
     }
 
     uvs[0] = 0.0f;
-    uvs[1] = 0.0f;
+    uvs[1] = 1.0f;
     uvs[2] = 0.0f;
-    uvs[3] = 1.0f;
+    uvs[3] = 0.0f;
     uvs[4] = 1.0f;
-    uvs[5] = 0.0f;
+    uvs[5] = 1.0f;
     uvs[6] = 1.0f;
-    uvs[7] = 1.0f;
+    uvs[7] = 0.0f;
 
     SDL_zero(mesh);
     mesh.positions = positions;
@@ -1358,7 +1358,7 @@ bool sdl3d_draw_billboard_ex(sdl3d_render_context *context, const sdl3d_texture2
     mesh.uvs = uvs;
     mesh.vertex_count = 4;
     mesh.indices = indices;
-    mesh.index_count = 6;
+    mesh.index_count = 12;
 
     return sdl3d_draw_mesh_internal(context, &mesh, texture, sdl3d_color_to_modulate(tint), NULL, NULL);
 }
