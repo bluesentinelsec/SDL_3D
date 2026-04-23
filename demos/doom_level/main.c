@@ -279,10 +279,15 @@ int main(int argc, char *argv[])
 
     /* Load debug font. */
     sdl3d_font debug_font;
-    bool has_font = sdl3d_load_font(SDL3D_MEDIA_DIR "/fonts/Roboto.ttf", 20.0f, &debug_font);
+    bool has_font = sdl3d_load_font(SDL3D_MEDIA_DIR "/fonts/Roboto.ttf", 40.0f, &debug_font);
     if (!has_font)
     {
-        SDL_Log("Font load failed: %s", SDL_GetError());
+        SDL_Log("Font load FAILED: %s", SDL_GetError());
+    }
+    else
+    {
+        SDL_Log("Font loaded: size=%.0f atlas=%dx%d ascent=%.1f descent=%.1f", debug_font.size, debug_font.atlas_w,
+                debug_font.atlas_h, debug_font.ascent, debug_font.descent);
     }
 
     if (!sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/sprites/enemy.png", &enemy_tex) ||
@@ -805,8 +810,13 @@ int main(int argc, char *argv[])
         if (has_font)
         {
             char fps_buf[64];
+            float tw, th;
+            int cw = sdl3d_get_render_context_width(ctx);
+            int ch = sdl3d_get_render_context_height(ctx);
             SDL_snprintf(fps_buf, sizeof(fps_buf), "FPS: %.0f", dt > 0 ? 1.0f / dt : 0.0f);
-            sdl3d_draw_text(ctx, &debug_font, fps_buf, 10, 10, (sdl3d_color){255, 255, 255, 255});
+            sdl3d_measure_text(&debug_font, fps_buf, &tw, &th);
+            sdl3d_draw_text(ctx, &debug_font, fps_buf, ((float)cw - tw) / 2.0f, ((float)ch - th) / 2.0f,
+                            (sdl3d_color){0, 255, 0, 255});
         }
 
         sdl3d_present_render_context(ctx);
