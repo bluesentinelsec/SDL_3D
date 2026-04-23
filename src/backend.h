@@ -47,11 +47,13 @@ typedef struct sdl3d_draw_params_lit
     const float *positions;
     const float *normals;
     const float *uvs;
+    const float *lightmap_uvs;
     const float *colors;
     const unsigned int *indices;
     int vertex_count;
     int index_count;
     const sdl3d_texture2d *texture;
+    const sdl3d_texture2d *lightmap;
     const float *mvp;
     const float *model_matrix;
     float normal_matrix[9];

@@ -246,6 +246,36 @@ TEST(SDL3DLevelBuilder, AllowsOpenCeilingBySkippingCeilingGeometry)
     sdl3d_free_level(&level);
 }
 
+TEST(SDL3DLevelBuilder, BakesLightmapAtlasAndMeshUVs)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial(nullptr), MakeLevelMaterial(nullptr),
+                                              MakeLevelMaterial(nullptr)};
+    const sdl3d_sector sector = MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f);
+    const sdl3d_level_light light = {{2.0f, 2.0f, 2.0f}, {1.0f, 0.8f, 0.6f}, 3.0f, 8.0f};
+    sdl3d_level level{};
+
+    ASSERT_TRUE(sdl3d_build_level(&sector, 1, materials, 3, &light, 1, &level)) << SDL_GetError();
+    EXPECT_NE(level.lightmap_pixels, nullptr);
+    EXPECT_GT(level.lightmap_width, 0);
+    EXPECT_GT(level.lightmap_height, 0);
+    EXPECT_NE(level.lightmap_texture.pixels, nullptr);
+
+    for (int i = 0; i < level.model.mesh_count; ++i)
+    {
+        const sdl3d_mesh &mesh = level.model.meshes[i];
+        ASSERT_NE(mesh.lightmap_uvs, nullptr);
+        for (int v = 0; v < mesh.vertex_count; ++v)
+        {
+            EXPECT_GE(mesh.lightmap_uvs[v * 2 + 0], 0.0f);
+            EXPECT_LE(mesh.lightmap_uvs[v * 2 + 0], 1.0f);
+            EXPECT_GE(mesh.lightmap_uvs[v * 2 + 1], 0.0f);
+            EXPECT_LE(mesh.lightmap_uvs[v * 2 + 1], 1.0f);
+        }
+    }
+
+    sdl3d_free_level(&level);
+}
+
 TEST(SDL3DLevelVisibility, FindSectorReturnsCorrectSector)
 {
     const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
