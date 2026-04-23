@@ -60,6 +60,7 @@ extern "C"
         float *positions;
         float *normals;
         float *uvs;
+        float *lightmap_uvs; /* second UV channel for lightmap atlas, or NULL */
         float *colors;
         bool colors_are_baked_light;
         int vertex_count;

@@ -74,6 +74,7 @@ typedef struct sdl3d_draw_entry
     float *positions;
     float *normals;
     float *uvs;
+    float *lightmap_uvs;
     float *colors;
     unsigned int *indices;
     int vertex_count;
@@ -85,8 +86,10 @@ typedef struct sdl3d_draw_entry
     float roughness;
     float emissive[3];
     const sdl3d_texture2d *texture;
+    const sdl3d_texture2d *lightmap_texture;
     bool lit;
     bool baked_light_mode;
+    bool has_lightmap;
     float mvp[16];
 } sdl3d_draw_entry;
 
@@ -120,6 +123,8 @@ struct sdl3d_gl_context
     GLint pbr_roughness_loc;
     GLint pbr_emissive_loc;
     GLint pbr_baked_light_mode_loc;
+    GLint pbr_lightmap_loc;
+    GLint pbr_has_lightmap_loc;
 
     /* Unlit uniform locations */
     GLint unlit_mvp_loc;
@@ -138,6 +143,7 @@ struct sdl3d_gl_context
     GLuint lit_position_vbo;
     GLuint lit_normal_vbo;
     GLuint lit_uv_vbo;
+    GLuint lit_lightmap_uv_vbo;
     GLuint lit_color_vbo;
     GLuint lit_ebo;
 
@@ -271,6 +277,7 @@ static const char k_pbr_vert[] = "layout(location = 0) in vec3 aPosition;\n"
                                  "layout(location = 1) in vec3 aNormal;\n"
                                  "layout(location = 2) in vec2 aTexCoord;\n"
                                  "layout(location = 3) in vec4 aColor;\n"
+                                 "layout(location = 4) in vec2 aLightmapUV;\n"
                                  "\n"
                                  "#define MAX_LIGHTS 8\n"
                                  "struct Light {\n"
@@ -304,6 +311,7 @@ static const char k_pbr_vert[] = "layout(location = 0) in vec3 aPosition;\n"
                                  "out vec3 vWorldPos;\n"
                                  "out vec3 vWorldNormal;\n"
                                  "out vec2 vTexCoord;\n"
+                                 "out vec2 vLightmapUV;\n"
                                  "out vec4 vColor;\n"
                                  "\n"
                                  "void main() {\n"
@@ -311,6 +319,7 @@ static const char k_pbr_vert[] = "layout(location = 0) in vec3 aPosition;\n"
                                  "    vWorldPos = worldPos.xyz;\n"
                                  "    vWorldNormal = normalize(uNormalMatrix * aNormal);\n"
                                  "    vTexCoord = aTexCoord;\n"
+                                 "    vLightmapUV = aLightmapUV;\n"
                                  "    vColor = aColor;\n"
                                  "    gl_Position = uViewProjection * worldPos;\n"
                                  "}\n";
@@ -348,10 +357,13 @@ static const char k_pbr_frag_decl[] =
     "in vec3 vWorldPos;\n"
     "in vec3 vWorldNormal;\n"
     "in vec2 vTexCoord;\n"
+    "in vec2 vLightmapUV;\n"
     "in vec4 vColor;\n"
     "\n"
     "uniform sampler2D uTexture;\n"
     "uniform int uHasTexture;\n"
+    "uniform sampler2D uLightmap;\n"
+    "uniform int uHasLightmap;\n"
     "uniform vec4 uTint;\n"
     "uniform float uMetallic;\n"
     "uniform float uRoughness;\n"
@@ -404,7 +416,6 @@ static const char k_pbr_frag_main[] =
     "    vec2 uv = vTexCoord;\n"
     "    vec4 texel = (uHasTexture != 0) ? texture(uTexture, uv) : vec4(1.0);\n"
     "    vec3 albedo = texel.rgb * ((uBakedLightMode != 0) ? uTint.rgb : (vColor.rgb * uTint.rgb));\n"
-    "    vec3 bakedBaseColor = texel.rgb * vColor.rgb * uTint.rgb;\n"
     "    float alpha = texel.a * vColor.a * uTint.a;\n"
     "    if (alpha <= 0.0) discard;\n"
     "\n"
@@ -463,6 +474,8 @@ static const char k_pbr_frag_post[] =
     "\n"
     "    vec3 color;\n"
     "    if (uBakedLightMode != 0) {\n"
+    "        vec3 bakedLight = (uHasLightmap != 0) ? texture(uLightmap, vLightmapUV).rgb : vColor.rgb;\n"
+    "        vec3 bakedBaseColor = texel.rgb * bakedLight * uTint.rgb;\n"
     "        color = bakedBaseColor + Lo + uEmissive;\n"
     "    } else {\n"
     "        /* Shadow (CSM cascade selection with PCF 3x3). */\n"
@@ -1123,6 +1136,7 @@ static void free_draw_list(sdl3d_gl_context *ctx)
         SDL_free(e->positions);
         SDL_free(e->normals);
         SDL_free(e->uvs);
+        SDL_free(e->lightmap_uvs);
         SDL_free(e->colors);
         SDL_free(e->indices);
     }
@@ -1561,6 +1575,12 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
             gl->BindTexture(GL_TEXTURE_2D, tex);
             gl->Uniform1i(ctx->pbr_texture_loc, 0);
             gl->Uniform1i(ctx->pbr_has_texture_loc, e->texture ? 1 : 0);
+            gl->ActiveTexture(GL_TEXTURE0 + 7);
+            gl->BindTexture(GL_TEXTURE_2D,
+                            e->has_lightmap ? resolve_texture(ctx, e->lightmap_texture) : ctx->black_texture);
+            gl->Uniform1i(ctx->pbr_lightmap_loc, 7);
+            gl->Uniform1i(ctx->pbr_has_lightmap_loc, e->has_lightmap ? 1 : 0);
+            gl->ActiveTexture(GL_TEXTURE0);
 
             /* Shadow uniforms — always bind the texture array to prevent
              * undefined sampler behavior on some drivers. */
@@ -1651,6 +1671,9 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
             gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_uv_vbo);
             gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 2 * sizeof(float)), e->uvs,
                            GL_DYNAMIC_DRAW);
+            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_lightmap_uv_vbo);
+            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 2 * sizeof(float)),
+                           e->has_lightmap ? e->lightmap_uvs : e->uvs, GL_DYNAMIC_DRAW);
             gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_color_vbo);
             gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 4 * sizeof(float)), e->colors,
                            GL_DYNAMIC_DRAW);
@@ -2132,6 +2155,8 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->pbr_normal_matrix_loc = gl->GetUniformLocation(ctx->pbr_program, "uNormalMatrix");
     ctx->pbr_texture_loc = gl->GetUniformLocation(ctx->pbr_program, "uTexture");
     ctx->pbr_has_texture_loc = gl->GetUniformLocation(ctx->pbr_program, "uHasTexture");
+    ctx->pbr_lightmap_loc = gl->GetUniformLocation(ctx->pbr_program, "uLightmap");
+    ctx->pbr_has_lightmap_loc = gl->GetUniformLocation(ctx->pbr_program, "uHasLightmap");
     ctx->pbr_tint_loc = gl->GetUniformLocation(ctx->pbr_program, "uTint");
     ctx->pbr_metallic_loc = gl->GetUniformLocation(ctx->pbr_program, "uMetallic");
     ctx->pbr_roughness_loc = gl->GetUniformLocation(ctx->pbr_program, "uRoughness");
@@ -2219,6 +2244,11 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_uv_vbo);
     gl->EnableVertexAttribArray(2);
     gl->VertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+
+    gl->GenBuffers(1, &ctx->lit_lightmap_uv_vbo);
+    gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_lightmap_uv_vbo);
+    gl->EnableVertexAttribArray(4);
+    gl->VertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, 0, NULL);
 
     gl->GenBuffers(1, &ctx->lit_color_vbo);
     gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_color_vbo);
@@ -2473,8 +2503,9 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     if (ctx->scene_ubo)
         gl->DeleteBuffers(1, &ctx->scene_ubo);
 
-    GLuint lit_bufs[] = {ctx->lit_position_vbo, ctx->lit_normal_vbo, ctx->lit_uv_vbo, ctx->lit_color_vbo, ctx->lit_ebo};
-    gl->DeleteBuffers(5, lit_bufs);
+    GLuint lit_bufs[] = {ctx->lit_position_vbo,    ctx->lit_normal_vbo, ctx->lit_uv_vbo,
+                         ctx->lit_lightmap_uv_vbo, ctx->lit_color_vbo,  ctx->lit_ebo};
+    gl->DeleteBuffers(6, lit_bufs);
     if (ctx->lit_vao)
         gl->DeleteVertexArrays(1, &ctx->lit_vao);
 
@@ -2629,9 +2660,11 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     e->positions = copy_floats(params->positions, (size_t)params->vertex_count * 3);
     e->normals = copy_floats(params->normals, (size_t)params->vertex_count * 3);
     e->uvs = copy_floats(params->uvs, (size_t)params->vertex_count * 2);
+    e->lightmap_uvs = copy_floats(params->lightmap_uvs, (size_t)params->vertex_count * 2);
     e->colors = copy_floats(colors, (size_t)params->vertex_count * 4);
     e->indices = copy_indices(params->indices, (size_t)e->index_count);
     e->texture = params->texture;
+    e->lightmap_texture = params->lightmap;
     SDL_memcpy(e->model_matrix, params->model_matrix, 16 * sizeof(float));
     SDL_memcpy(e->normal_matrix, params->normal_matrix, 9 * sizeof(float));
     SDL_memcpy(e->tint, params->tint, 4 * sizeof(float));
@@ -2639,6 +2672,7 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     e->roughness = params->roughness;
     SDL_memcpy(e->emissive, params->emissive, 3 * sizeof(float));
     e->baked_light_mode = params->baked_light_mode;
+    e->has_lightmap = params->lightmap_uvs != NULL && params->lightmap != NULL;
 
     /* check_z_fighting(ctx, e); — disabled: triggers on authored model geometry */
     (void)check_z_fighting;

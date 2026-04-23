@@ -12,6 +12,11 @@
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
+#define LM_TEXELS_PER_UNIT 4
+#define LM_MIN_SURFACE_TEXELS 2
+#define LM_MIN_ATLAS_SIZE 256
+#define LM_MAX_ATLAS_SIZE 2048
+
 /* ------------------------------------------------------------------ */
 /* Edge overlap detection                                              */
 /* ------------------------------------------------------------------ */
@@ -56,12 +61,44 @@ typedef struct
     float *nrm;
     float *col;
     float *uvs;
+    float *lm_uvs;
     unsigned int *idx;
     int vc, vc_cap;
     int ic, ic_cap;
     bool has_bounds;
     sdl3d_bounding_box bounds;
 } macc;
+
+typedef enum
+{
+    LM_SURFACE_WALL = 0,
+    LM_SURFACE_FLOOR = 1,
+    LM_SURFACE_CEILING = 2
+} lm_surface_type;
+
+typedef struct
+{
+    int acc_index;
+    int first_vertex;
+    int vertex_count;
+    lm_surface_type type;
+    float nx, ny, nz;
+    float min_x, max_x;
+    float min_y, max_y;
+    float min_z, max_z;
+    float x0, z0, x1, z1;
+    float bot, top;
+    float surface_y;
+    int atlas_x, atlas_y;
+    int atlas_w, atlas_h;
+} lm_surface;
+
+typedef struct
+{
+    lm_surface *items;
+    int count;
+    int capacity;
+} lm_surface_list;
 
 static bool macc_grow_v(macc *a, int n)
 {
@@ -161,10 +198,380 @@ static void macc_free(macc *a)
     SDL_free(a->nrm);
     SDL_free(a->col);
     SDL_free(a->uvs);
+    SDL_free(a->lm_uvs);
     SDL_free(a->idx);
 }
 
-/* ------------------------------------------------------------------ */
+static bool lm_surface_list_append(lm_surface_list *list, const lm_surface *surface)
+{
+    if (list->count == list->capacity)
+    {
+        int new_capacity = list->capacity > 0 ? list->capacity * 2 : 64;
+        lm_surface *items = SDL_realloc(list->items, (size_t)new_capacity * sizeof(*items));
+        if (items == NULL)
+        {
+            return SDL_OutOfMemory();
+        }
+        list->items = items;
+        list->capacity = new_capacity;
+    }
+    list->items[list->count++] = *surface;
+    return true;
+}
+
+static int lm_surface_texels(float units)
+{
+    int texels = (int)SDL_ceilf(units * (float)LM_TEXELS_PER_UNIT);
+    return texels < LM_MIN_SURFACE_TEXELS ? LM_MIN_SURFACE_TEXELS : texels;
+}
+
+static void lm_sector_bounds_xz(const sdl3d_sector *sector, float *min_x, float *max_x, float *min_z, float *max_z)
+{
+    float sx0 = sector->points[0][0], sx1 = sector->points[0][0];
+    float sz0 = sector->points[0][1], sz1 = sector->points[0][1];
+
+    for (int i = 1; i < sector->num_points; ++i)
+    {
+        float x = sector->points[i][0];
+        float z = sector->points[i][1];
+        if (x < sx0)
+            sx0 = x;
+        if (x > sx1)
+            sx1 = x;
+        if (z < sz0)
+            sz0 = z;
+        if (z > sz1)
+            sz1 = z;
+    }
+
+    *min_x = sx0;
+    *max_x = sx1;
+    *min_z = sz0;
+    *max_z = sz1;
+}
+
+static bool lm_record_wall_surface(lm_surface_list *list, int acc_index, const macc *acc, int first_vertex, float x0,
+                                   float z0, float x1, float z1, float bot, float top)
+{
+    float dx = x1 - x0;
+    float dz = z1 - z0;
+    float len = SDL_sqrtf(dx * dx + dz * dz);
+    lm_surface surface;
+
+    if (acc->vc <= first_vertex || len < 0.0001f || top - bot < 0.001f)
+    {
+        return true;
+    }
+
+    SDL_zero(surface);
+    surface.acc_index = acc_index;
+    surface.first_vertex = first_vertex;
+    surface.vertex_count = acc->vc - first_vertex;
+    surface.type = LM_SURFACE_WALL;
+    surface.nx = -dz / len;
+    surface.ny = 0.0f;
+    surface.nz = dx / len;
+    surface.min_x = x0 < x1 ? x0 : x1;
+    surface.max_x = x0 > x1 ? x0 : x1;
+    surface.min_y = bot;
+    surface.max_y = top;
+    surface.min_z = z0 < z1 ? z0 : z1;
+    surface.max_z = z0 > z1 ? z0 : z1;
+    surface.x0 = x0;
+    surface.z0 = z0;
+    surface.x1 = x1;
+    surface.z1 = z1;
+    surface.bot = bot;
+    surface.top = top;
+    surface.atlas_w = lm_surface_texels(len);
+    surface.atlas_h = lm_surface_texels(top - bot);
+    return lm_surface_list_append(list, &surface);
+}
+
+static bool lm_record_floor_ceil_surface(lm_surface_list *list, int acc_index, const macc *acc, int first_vertex,
+                                         const sdl3d_sector *sector, float y, float ny)
+{
+    lm_surface surface;
+
+    if (acc->vc <= first_vertex)
+    {
+        return true;
+    }
+
+    SDL_zero(surface);
+    surface.acc_index = acc_index;
+    surface.first_vertex = first_vertex;
+    surface.vertex_count = acc->vc - first_vertex;
+    surface.type = ny > 0.0f ? LM_SURFACE_FLOOR : LM_SURFACE_CEILING;
+    surface.nx = 0.0f;
+    surface.ny = ny;
+    surface.nz = 0.0f;
+    lm_sector_bounds_xz(sector, &surface.min_x, &surface.max_x, &surface.min_z, &surface.max_z);
+    surface.min_y = y;
+    surface.max_y = y;
+    surface.surface_y = y;
+    surface.atlas_w = lm_surface_texels(surface.max_x - surface.min_x);
+    surface.atlas_h = lm_surface_texels(surface.max_z - surface.min_z);
+    return lm_surface_list_append(list, &surface);
+}
+
+static bool lm_pack_surfaces(lm_surface_list *list, int *atlas_w, int *atlas_h)
+{
+    for (int size = LM_MIN_ATLAS_SIZE; size <= LM_MAX_ATLAS_SIZE; size *= 2)
+    {
+        int cursor_x = 0;
+        int cursor_y = 0;
+        int row_h = 0;
+        bool fits = true;
+
+        for (int i = 0; i < list->count; ++i)
+        {
+            lm_surface *surface = &list->items[i];
+            if (surface->atlas_w > size || surface->atlas_h > size)
+            {
+                fits = false;
+                break;
+            }
+            if (cursor_x + surface->atlas_w > size)
+            {
+                cursor_x = 0;
+                cursor_y += row_h;
+                row_h = 0;
+            }
+            if (cursor_y + surface->atlas_h > size)
+            {
+                fits = false;
+                break;
+            }
+            surface->atlas_x = cursor_x;
+            surface->atlas_y = cursor_y;
+            cursor_x += surface->atlas_w;
+            if (surface->atlas_h > row_h)
+            {
+                row_h = surface->atlas_h;
+            }
+        }
+
+        if (fits)
+        {
+            *atlas_w = size;
+            *atlas_h = size;
+            return true;
+        }
+    }
+
+    return SDL_SetError("Lightmap atlas exceeds %dx%d.", LM_MAX_ATLAS_SIZE, LM_MAX_ATLAS_SIZE);
+}
+
+static bool lm_allocate_uvs(macc *accs, int acc_count)
+{
+    for (int i = 0; i < acc_count; ++i)
+    {
+        macc *acc = &accs[i];
+        if (acc->vc <= 0)
+        {
+            continue;
+        }
+        acc->lm_uvs = SDL_calloc((size_t)acc->vc * 2U, sizeof(float));
+        if (acc->lm_uvs == NULL)
+        {
+            return SDL_OutOfMemory();
+        }
+    }
+    return true;
+}
+
+static void lm_assign_surface_uvs(macc *acc, const lm_surface *surface, int atlas_w, int atlas_h)
+{
+    const float u0 = ((float)surface->atlas_x + 0.5f) / (float)atlas_w;
+    const float v0 = ((float)surface->atlas_y + 0.5f) / (float)atlas_h;
+    const float u1 = ((float)(surface->atlas_x + surface->atlas_w) - 0.5f) / (float)atlas_w;
+    const float v1 = ((float)(surface->atlas_y + surface->atlas_h) - 0.5f) / (float)atlas_h;
+
+    if (surface->type == LM_SURFACE_WALL && surface->vertex_count >= 4)
+    {
+        int base = surface->first_vertex;
+        acc->lm_uvs[base * 2 + 0] = u0;
+        acc->lm_uvs[base * 2 + 1] = v0;
+        acc->lm_uvs[(base + 1) * 2 + 0] = u1;
+        acc->lm_uvs[(base + 1) * 2 + 1] = v0;
+        acc->lm_uvs[(base + 2) * 2 + 0] = u1;
+        acc->lm_uvs[(base + 2) * 2 + 1] = v1;
+        acc->lm_uvs[(base + 3) * 2 + 0] = u0;
+        acc->lm_uvs[(base + 3) * 2 + 1] = v1;
+        return;
+    }
+
+    for (int i = 0; i < surface->vertex_count; ++i)
+    {
+        int vi = surface->first_vertex + i;
+        float x = acc->pos[vi * 3 + 0];
+        float z = acc->pos[vi * 3 + 2];
+        float sx = surface->max_x > surface->min_x ? (x - surface->min_x) / (surface->max_x - surface->min_x) : 0.0f;
+        float sz = surface->max_z > surface->min_z ? (z - surface->min_z) / (surface->max_z - surface->min_z) : 0.0f;
+        acc->lm_uvs[vi * 2 + 0] = u0 + sx * (u1 - u0);
+        acc->lm_uvs[vi * 2 + 1] = v0 + sz * (v1 - v0);
+    }
+}
+
+static Uint8 lm_channel_clamp(float value)
+{
+    if (value <= 0.0f)
+    {
+        return 0;
+    }
+    if (value >= 255.0f)
+    {
+        return 255;
+    }
+    return (Uint8)(value + 0.5f);
+}
+
+static bool lm_build_texture(sdl3d_level *out)
+{
+    sdl3d_image image;
+    size_t pixel_count = (size_t)out->lightmap_width * (size_t)out->lightmap_height;
+
+    if (out->lightmap_pixels == NULL || out->lightmap_width <= 0 || out->lightmap_height <= 0)
+    {
+        return true;
+    }
+
+    SDL_zero(image);
+    image.width = out->lightmap_width;
+    image.height = out->lightmap_height;
+    image.pixels = SDL_malloc(pixel_count * 4U);
+    if (image.pixels == NULL)
+    {
+        return SDL_OutOfMemory();
+    }
+
+    for (size_t i = 0; i < pixel_count; ++i)
+    {
+        image.pixels[i * 4 + 0] = out->lightmap_pixels[i * 3 + 0];
+        image.pixels[i * 4 + 1] = out->lightmap_pixels[i * 3 + 1];
+        image.pixels[i * 4 + 2] = out->lightmap_pixels[i * 3 + 2];
+        image.pixels[i * 4 + 3] = 255;
+    }
+
+    if (!sdl3d_create_texture_from_image(&image, &out->lightmap_texture))
+    {
+        SDL_free(image.pixels);
+        return false;
+    }
+    SDL_free(image.pixels);
+    if (!sdl3d_set_texture_filter(&out->lightmap_texture, SDL3D_TEXTURE_FILTER_BILINEAR) ||
+        !sdl3d_set_texture_wrap(&out->lightmap_texture, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP))
+    {
+        sdl3d_free_texture(&out->lightmap_texture);
+        return false;
+    }
+    return true;
+}
+
+static bool lm_bake_lightmap(const lm_surface_list *list, const sdl3d_level_light *lights, int light_count,
+                             sdl3d_level *out)
+{
+    const int atlas_w = out->lightmap_width;
+    const int atlas_h = out->lightmap_height;
+    unsigned char *pixels;
+
+    if (atlas_w <= 0 || atlas_h <= 0)
+    {
+        return true;
+    }
+
+    pixels = SDL_malloc((size_t)atlas_w * (size_t)atlas_h * 3U);
+    if (pixels == NULL)
+    {
+        return SDL_OutOfMemory();
+    }
+
+    for (int i = 0; i < atlas_w * atlas_h; ++i)
+    {
+        pixels[i * 3 + 0] = 51;
+        pixels[i * 3 + 1] = 51;
+        pixels[i * 3 + 2] = 51;
+    }
+
+    for (int si = 0; si < list->count; ++si)
+    {
+        const lm_surface *surface = &list->items[si];
+        for (int y = 0; y < surface->atlas_h; ++y)
+        {
+            for (int x = 0; x < surface->atlas_w; ++x)
+            {
+                float s = surface->atlas_w > 1 ? (float)x / (float)(surface->atlas_w - 1) : 0.0f;
+                float t = surface->atlas_h > 1 ? (float)y / (float)(surface->atlas_h - 1) : 0.0f;
+                float wx, wy, wz;
+                float lr = 51.0f;
+                float lg = 51.0f;
+                float lb = 51.0f;
+                int atlas_index;
+
+                if (surface->type == LM_SURFACE_WALL)
+                {
+                    wx = surface->x0 + (surface->x1 - surface->x0) * s;
+                    wy = surface->bot + (surface->top - surface->bot) * t;
+                    wz = surface->z0 + (surface->z1 - surface->z0) * s;
+                }
+                else
+                {
+                    wx = surface->min_x + (surface->max_x - surface->min_x) * s;
+                    wy = surface->surface_y;
+                    wz = surface->min_z + (surface->max_z - surface->min_z) * t;
+                }
+
+                for (int li = 0; li < light_count; ++li)
+                {
+                    float lx = lights[li].position[0] - wx;
+                    float ly = lights[li].position[1] - wy;
+                    float lz = lights[li].position[2] - wz;
+                    float dist = SDL_sqrtf(lx * lx + ly * ly + lz * lz);
+                    float inv;
+                    float ndotl;
+                    float r;
+                    float atten;
+                    float scale;
+
+                    if (dist < 0.0001f || dist > lights[li].range)
+                    {
+                        continue;
+                    }
+                    inv = 1.0f / dist;
+                    lx *= inv;
+                    ly *= inv;
+                    lz *= inv;
+                    ndotl = surface->nx * lx + surface->ny * ly + surface->nz * lz;
+                    if (ndotl <= 0.0f)
+                    {
+                        continue;
+                    }
+                    r = dist / lights[li].range;
+                    atten = 1.0f - r * r;
+                    if (atten < 0.0f)
+                    {
+                        atten = 0.0f;
+                    }
+                    atten *= atten;
+                    scale = lights[li].intensity * atten * ndotl * 255.0f;
+                    lr += lights[li].color[0] * scale;
+                    lg += lights[li].color[1] * scale;
+                    lb += lights[li].color[2] * scale;
+                }
+
+                atlas_index = ((surface->atlas_y + y) * atlas_w + (surface->atlas_x + x)) * 3;
+                pixels[atlas_index + 0] = lm_channel_clamp(lr);
+                pixels[atlas_index + 1] = lm_channel_clamp(lg);
+                pixels[atlas_index + 2] = lm_channel_clamp(lb);
+            }
+        }
+    }
+
+    out->lightmap_pixels = pixels;
+    return true;
+}
+
 /* Geometry helpers                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -228,12 +635,15 @@ static bool add_floor_ceil(macc *a, const sdl3d_sector *s, float y, float ny, co
 bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3d_level_material *materials,
                        int material_count, const sdl3d_level_light *lights, int light_count, sdl3d_level *out)
 {
+    lm_surface_list surf_list;
+
     if (!sectors || sector_count <= 0 || !out)
         return SDL_InvalidParamError("sectors");
     if (!materials || material_count <= 0)
         return SDL_InvalidParamError("materials");
 
     SDL_zerop(out);
+    SDL_zero(surf_list);
 
     /* Build edge list. */
     int total_edges = 0;
@@ -288,17 +698,30 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
         int fi = (sec->floor_material >= 0 && sec->floor_material < material_count) ? sec->floor_material : -1;
         int ci = (sec->ceil_material >= 0 && sec->ceil_material < material_count) ? sec->ceil_material : -1;
         int wi = sec->wall_material < material_count ? sec->wall_material : 0;
-        macc *wall_acc = &accs[s * material_count + wi];
+        int wall_acc_index = s * material_count + wi;
+        macc *wall_acc = &accs[wall_acc_index];
 
         if (fi >= 0)
         {
-            macc *floor_acc = &accs[s * material_count + fi];
-            add_floor_ceil(floor_acc, sec, sec->floor_y, 1.0f, materials[fi].albedo, materials[fi].tex_scale);
+            int floor_acc_index = s * material_count + fi;
+            macc *floor_acc = &accs[floor_acc_index];
+            int vb = floor_acc->vc;
+            if (!add_floor_ceil(floor_acc, sec, sec->floor_y, 1.0f, materials[fi].albedo, materials[fi].tex_scale) ||
+                !lm_record_floor_ceil_surface(&surf_list, floor_acc_index, floor_acc, vb, sec, sec->floor_y, 1.0f))
+            {
+                goto fail;
+            }
         }
         if (ci >= 0)
         {
-            macc *ceil_acc = &accs[s * material_count + ci];
-            add_floor_ceil(ceil_acc, sec, sec->ceil_y, -1.0f, materials[ci].albedo, materials[ci].tex_scale);
+            int ceil_acc_index = s * material_count + ci;
+            macc *ceil_acc = &accs[ceil_acc_index];
+            int vb = ceil_acc->vc;
+            if (!add_floor_ceil(ceil_acc, sec, sec->ceil_y, -1.0f, materials[ci].albedo, materials[ci].tex_scale) ||
+                !lm_record_floor_ceil_surface(&surf_list, ceil_acc_index, ceil_acc, vb, sec, sec->ceil_y, -1.0f))
+            {
+                goto fail;
+            }
         }
 
         for (int e = 0; e < total_edges; e++)
@@ -375,8 +798,14 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
 
             if (novl == 0)
             {
-                add_wall(wall_acc, ax, az, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo,
-                         materials[wi].tex_scale);
+                int vb = wall_acc->vc;
+                if (!add_wall(wall_acc, ax, az, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo,
+                              materials[wi].tex_scale) ||
+                    !lm_record_wall_surface(&surf_list, wall_acc_index, wall_acc, vb, ax, az, bx, bz, sec->floor_y,
+                                            sec->ceil_y))
+                {
+                    goto fail;
+                }
             }
             else
             {
@@ -396,30 +825,59 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                     {
                         float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
                         float wx1 = ax + (bx - ax) * overlaps[oi].t0, wz1 = az + (bz - az) * overlaps[oi].t0;
-                        add_wall(wall_acc, wx0, wz0, wx1, wz1, sec->floor_y, sec->ceil_y, materials[wi].albedo,
-                                 materials[wi].tex_scale);
+                        int vb = wall_acc->vc;
+                        if (!add_wall(wall_acc, wx0, wz0, wx1, wz1, sec->floor_y, sec->ceil_y, materials[wi].albedo,
+                                      materials[wi].tex_scale) ||
+                            !lm_record_wall_surface(&surf_list, wall_acc_index, wall_acc, vb, wx0, wz0, wx1, wz1,
+                                                    sec->floor_y, sec->ceil_y))
+                        {
+                            goto fail;
+                        }
                     }
                     float ox0 = ax + (bx - ax) * overlaps[oi].t0, oz0 = az + (bz - az) * overlaps[oi].t0;
                     float ox1 = ax + (bx - ax) * overlaps[oi].t1, oz1 = az + (bz - az) * overlaps[oi].t1;
                     if (sec->floor_y < overlaps[oi].other_floor - 0.001f)
-                        add_wall(wall_acc, ox0, oz0, ox1, oz1, sec->floor_y, overlaps[oi].other_floor,
-                                 materials[wi].albedo, materials[wi].tex_scale);
+                    {
+                        int vb = wall_acc->vc;
+                        if (!add_wall(wall_acc, ox0, oz0, ox1, oz1, sec->floor_y, overlaps[oi].other_floor,
+                                      materials[wi].albedo, materials[wi].tex_scale) ||
+                            !lm_record_wall_surface(&surf_list, wall_acc_index, wall_acc, vb, ox0, oz0, ox1, oz1,
+                                                    sec->floor_y, overlaps[oi].other_floor))
+                        {
+                            goto fail;
+                        }
+                    }
                     if (sec->ceil_y > overlaps[oi].other_ceil + 0.001f)
-                        add_wall(wall_acc, ox0, oz0, ox1, oz1, overlaps[oi].other_ceil, sec->ceil_y,
-                                 materials[wi].albedo, materials[wi].tex_scale);
+                    {
+                        int vb = wall_acc->vc;
+                        if (!add_wall(wall_acc, ox0, oz0, ox1, oz1, overlaps[oi].other_ceil, sec->ceil_y,
+                                      materials[wi].albedo, materials[wi].tex_scale) ||
+                            !lm_record_wall_surface(&surf_list, wall_acc_index, wall_acc, vb, ox0, oz0, ox1, oz1,
+                                                    overlaps[oi].other_ceil, sec->ceil_y))
+                        {
+                            goto fail;
+                        }
+                    }
                     cursor = overlaps[oi].t1;
                 }
                 if (cursor < 1.0f - 0.001f)
                 {
                     float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
-                    add_wall(wall_acc, wx0, wz0, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo,
-                             materials[wi].tex_scale);
+                    int vb = wall_acc->vc;
+                    if (!add_wall(wall_acc, wx0, wz0, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo,
+                                  materials[wi].tex_scale) ||
+                        !lm_record_wall_surface(&surf_list, wall_acc_index, wall_acc, vb, wx0, wz0, bx, bz,
+                                                sec->floor_y, sec->ceil_y))
+                    {
+                        goto fail;
+                    }
                 }
             }
         }
     }
 
     SDL_free(edges);
+    edges = NULL;
 
     /* ---- Bake vertex lighting per material ---- */
     if (lights && light_count > 0)
@@ -462,6 +920,31 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                 a->col[v * 4 + 2] = lb > 1.0f ? 1.0f : lb;
             }
         }
+
+        if (surf_list.count > 0)
+        {
+            int atlas_w = 0;
+            int atlas_h = 0;
+
+            if (!lm_allocate_uvs(accs, acc_count) || !lm_pack_surfaces(&surf_list, &atlas_w, &atlas_h))
+            {
+                goto fail;
+            }
+
+            out->lightmap_width = atlas_w;
+            out->lightmap_height = atlas_h;
+
+            for (int si = 0; si < surf_list.count; ++si)
+            {
+                const lm_surface *surface = &surf_list.items[si];
+                lm_assign_surface_uvs(&accs[surface->acc_index], surface, atlas_w, atlas_h);
+            }
+
+            if (!lm_bake_lightmap(&surf_list, lights, light_count, out) || !lm_build_texture(out))
+            {
+                goto fail;
+            }
+        }
     }
 
     /* ---- Package: one mesh per sector/material chunk ---- */
@@ -475,14 +958,11 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
     int *mesh_sector_ids = SDL_malloc((size_t)num_meshes * sizeof(int));
     if (!meshes || !out_mats || !mesh_sector_ids)
     {
-        for (int ai = 0; ai < acc_count; ai++)
-            macc_free(&accs[ai]);
-        SDL_free(accs);
         SDL_free(meshes);
         SDL_free(out_mats);
         SDL_free(mesh_sector_ids);
-        SDL_free(portals);
-        return SDL_OutOfMemory();
+        SDL_OutOfMemory();
+        goto fail;
     }
 
     for (int m = 0; m < material_count; m++)
@@ -513,6 +993,7 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
             meshes[mi].colors = a->col;
             meshes[mi].colors_are_baked_light = (lights != NULL && light_count > 0);
             meshes[mi].uvs = a->uvs;
+            meshes[mi].lightmap_uvs = a->lm_uvs;
             meshes[mi].indices = a->idx;
             meshes[mi].material_index = m;
             meshes[mi].has_local_bounds = a->has_bounds;
@@ -525,6 +1006,7 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
         }
     }
     SDL_free(accs);
+    SDL_free(surf_list.items);
 
     /* source_path for texture resolver — use first texture's directory. */
     for (int m = 0; m < material_count; m++)
@@ -548,6 +1030,22 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
     SDL_Log("SDL3D level: %d verts, %d tris, %d meshes, %d portals from %d sectors", total_verts, total_tris,
             num_meshes, portal_count, sector_count);
     return true;
+
+fail:
+    SDL_free(edges);
+    for (int ai = 0; ai < acc_count; ++ai)
+    {
+        macc_free(&accs[ai]);
+    }
+    SDL_free(accs);
+    SDL_free(surf_list.items);
+    SDL_free(portals);
+    SDL_free(out->lightmap_pixels);
+    out->lightmap_pixels = NULL;
+    out->lightmap_width = 0;
+    out->lightmap_height = 0;
+    sdl3d_free_texture(&out->lightmap_texture);
+    return false;
 }
 
 void sdl3d_free_level(sdl3d_level *level)
@@ -557,10 +1055,15 @@ void sdl3d_free_level(sdl3d_level *level)
         sdl3d_free_model(&level->model);
         SDL_free(level->mesh_sector_ids);
         SDL_free(level->portals);
+        SDL_free(level->lightmap_pixels);
+        sdl3d_free_texture(&level->lightmap_texture);
         level->mesh_sector_ids = NULL;
         level->portals = NULL;
+        level->lightmap_pixels = NULL;
         level->portal_count = 0;
         level->sector_count = 0;
+        level->lightmap_width = 0;
+        level->lightmap_height = 0;
     }
 }
 

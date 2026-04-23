@@ -20,6 +20,7 @@
 #define SDL3D_LEVEL_H
 
 #include "sdl3d/model.h"
+#include "sdl3d/texture.h"
 #include "sdl3d/types.h"
 
 #include <stdbool.h>
@@ -67,6 +68,12 @@ extern "C"
         /* Portal adjacency graph. */
         int portal_count;
         struct sdl3d_level_portal *portals;
+
+        /* Lightmap atlas (NULL when no lightmap baked). */
+        unsigned char *lightmap_pixels; /* RGB, lightmap_width × lightmap_height */
+        int lightmap_width;
+        int lightmap_height;
+        sdl3d_texture2d lightmap_texture; /* RGBA upload texture, zero-initialized when absent */
     } sdl3d_level;
 
     /* A portal connecting two adjacent sectors through a shared edge opening. */
@@ -99,8 +106,9 @@ extern "C"
      * Build a watertight mesh from sector definitions.
      * Shared edges between sectors become doorways (no wall generated).
      * If lights are provided, vertex lighting is baked into vertex colors
-     * (render in UNLIT mode — no real-time lighting needed).
-     * Pass NULL/0 for lights to use raw material colors.
+     * for fallback compatibility and a lightmap atlas is generated for
+     * per-pixel baked world lighting. Pass NULL/0 for lights to use raw
+     * material colors and skip lightmap generation.
      * Returns false with SDL_GetError on failure.
      */
     bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3d_level_material *materials,

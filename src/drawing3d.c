@@ -640,8 +640,9 @@ static sdl3d_vec4 sdl3d_shade_point_retro(const sdl3d_lighting_params *lp, sdl3d
 }
 
 static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_mesh *mesh,
-                                     const sdl3d_texture2d *texture, sdl3d_vec4 base_modulate,
-                                     const sdl3d_lighting_params *lighting, const sdl3d_mat4 *joint_matrices)
+                                     const sdl3d_texture2d *texture, const sdl3d_texture2d *lightmap_texture,
+                                     sdl3d_vec4 base_modulate, const sdl3d_lighting_params *lighting,
+                                     const sdl3d_mat4 *joint_matrices)
 {
     const bool indexed = mesh->indices != NULL;
     const int triangle_count = indexed ? (mesh->index_count / 3) : (mesh->vertex_count / 3);
@@ -736,11 +737,13 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         lp.positions = (skinned_positions != NULL) ? skinned_positions : mesh->positions;
         lp.normals = (skinned_normals != NULL) ? skinned_normals : mesh->normals;
         lp.uvs = mesh->uvs;
+        lp.lightmap_uvs = mesh->lightmap_uvs;
         lp.colors = mesh->colors;
         lp.indices = mesh->indices;
         lp.vertex_count = mesh->vertex_count;
         lp.index_count = mesh->index_count;
         lp.texture = texture;
+        lp.lightmap = lightmap_texture;
         lp.mvp = context->model_view_projection.m;
         lp.model_matrix = context->model.m;
         lp.normal_matrix[0] = context->model.m[0];
@@ -1360,7 +1363,7 @@ bool sdl3d_draw_billboard_ex(sdl3d_render_context *context, const sdl3d_texture2
     mesh.indices = indices;
     mesh.index_count = 12;
 
-    return sdl3d_draw_mesh_internal(context, &mesh, texture, sdl3d_color_to_modulate(tint), NULL, NULL);
+    return sdl3d_draw_mesh_internal(context, &mesh, texture, NULL, sdl3d_color_to_modulate(tint), NULL, NULL);
 }
 
 bool sdl3d_draw_billboard(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 position,
@@ -1379,9 +1382,9 @@ bool sdl3d_draw_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, cons
         sdl3d_lighting_params lp;
         sdl3d_build_lighting_params(context, &lp);
         lp.roughness = 1.0f;
-        return sdl3d_draw_mesh_internal(context, mesh, texture, sdl3d_color_to_modulate(tint), &lp, NULL);
+        return sdl3d_draw_mesh_internal(context, mesh, texture, NULL, sdl3d_color_to_modulate(tint), &lp, NULL);
     }
-    return sdl3d_draw_mesh_internal(context, mesh, texture, sdl3d_color_to_modulate(tint), NULL, NULL);
+    return sdl3d_draw_mesh_internal(context, mesh, texture, NULL, sdl3d_color_to_modulate(tint), NULL, NULL);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1420,7 +1423,8 @@ static sdl3d_mat4 sdl3d_mat4_from_trs_node(const float *t, const float *r, const
  * joint_matrices may be NULL for non-skinned draws.
  */
 static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_model *model, int mesh_index,
-                                  sdl3d_vec4 tint_modulate, const sdl3d_mat4 *joint_matrices)
+                                  const sdl3d_texture2d *lightmap_texture, sdl3d_vec4 tint_modulate,
+                                  const sdl3d_mat4 *joint_matrices)
 {
     const sdl3d_mesh *mesh = &model->meshes[mesh_index];
     const sdl3d_texture2d *texture = NULL;
@@ -1525,7 +1529,7 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_mod
             lp_ptr = &lp_storage;
         }
 
-        ok = sdl3d_draw_mesh_internal(context, mesh, texture, mesh_modulate, lp_ptr, joint_matrices);
+        ok = sdl3d_draw_mesh_internal(context, mesh, texture, lightmap_texture, mesh_modulate, lp_ptr, joint_matrices);
     }
     return ok;
 }
@@ -1568,7 +1572,7 @@ static bool sdl3d_draw_model_node(sdl3d_render_context *context, const sdl3d_mod
     /* Draw this node's mesh if it has one. */
     if (node->mesh_index >= 0 && node->mesh_index < model->mesh_count)
     {
-        ok = sdl3d_draw_model_mesh(context, model, node->mesh_index, tint_modulate, joint_matrices);
+        ok = sdl3d_draw_model_mesh(context, model, node->mesh_index, NULL, tint_modulate, joint_matrices);
     }
 
     /* Recurse into children. */
@@ -1637,7 +1641,7 @@ bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model
     {
         for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
         {
-            ok = sdl3d_draw_model_mesh(context, model, mesh_index, tint_modulate, NULL);
+            ok = sdl3d_draw_model_mesh(context, model, mesh_index, NULL, tint_modulate, NULL);
         }
     }
 
@@ -1700,7 +1704,7 @@ bool sdl3d_draw_model_skinned(sdl3d_render_context *context, const sdl3d_model *
     {
         for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
         {
-            ok = sdl3d_draw_model_mesh(context, model, mesh_index, tint_modulate, joint_matrices);
+            ok = sdl3d_draw_model_mesh(context, model, mesh_index, NULL, tint_modulate, joint_matrices);
         }
     }
 
@@ -1785,7 +1789,9 @@ bool sdl3d_draw_level(sdl3d_render_context *context, const sdl3d_level *level, c
             if (sid >= 0 && sid < level->sector_count && !vis->sector_visible[sid])
                 continue;
         }
-        ok = sdl3d_draw_model_mesh(context, model, i, tint_modulate, NULL);
+        ok = sdl3d_draw_model_mesh(context, model, i,
+                                   level->lightmap_texture.pixels != NULL ? &level->lightmap_texture : NULL,
+                                   tint_modulate, NULL);
     }
 
     return ok;
