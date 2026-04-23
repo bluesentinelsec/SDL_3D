@@ -668,6 +668,10 @@ bool sdl3d_texture_cache_get_or_load(sdl3d_texture_cache_entry **cache, const ch
         return false;
     }
 
+    /* Default to REPEAT wrapping to match the GL renderer's GL_REPEAT. */
+    entry->texture.wrap_u = SDL3D_TEXTURE_WRAP_REPEAT;
+    entry->texture.wrap_v = SDL3D_TEXTURE_WRAP_REPEAT;
+
     entry->path = resolved_path;
     entry->next = *cache;
     *cache = entry;
