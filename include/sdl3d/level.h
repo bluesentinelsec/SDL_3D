@@ -76,15 +76,15 @@ extern "C"
         int sector_b;
         float min_x, max_x; /* XZ span of the opening */
         float min_z, max_z;
-        float floor_y;      /* opening bottom */
-        float ceil_y;       /* opening top */
+        float floor_y; /* opening bottom */
+        float ceil_y;  /* opening top */
     } sdl3d_level_portal;
 
     /* Visibility query result. */
     typedef struct sdl3d_visibility_result
     {
-        bool *sector_visible;  /* caller-provided array[sector_count] */
-        int visible_count;     /* number of visible sectors */
+        bool *sector_visible; /* caller-provided array[sector_count] */
+        int visible_count;    /* number of visible sectors */
     } sdl3d_visibility_result;
 
     typedef struct sdl3d_level_light
