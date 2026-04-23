@@ -231,21 +231,22 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
         }
     }
 
-    /* Mesh accumulator. */
-    macc acc;
-    SDL_zerop(&acc);
-    acc.vc_cap = 256;
-    acc.ic_cap = 512;
-    acc.pos = SDL_malloc((size_t)acc.vc_cap * 3 * sizeof(float));
-    acc.nrm = SDL_malloc((size_t)acc.vc_cap * 3 * sizeof(float));
-    acc.col = SDL_malloc((size_t)acc.vc_cap * 4 * sizeof(float));
-    acc.uvs = SDL_malloc((size_t)acc.vc_cap * 2 * sizeof(float));
-    acc.idx = SDL_malloc((size_t)acc.ic_cap * sizeof(unsigned int));
-    if (!acc.pos || !acc.nrm || !acc.col || !acc.uvs || !acc.idx)
+    /* Per-material mesh accumulators. */
+    macc *accs = SDL_calloc((size_t)material_count, sizeof(macc));
+    if (!accs)
     {
-        macc_free(&acc);
         SDL_free(edges);
         return SDL_OutOfMemory();
+    }
+    for (int m = 0; m < material_count; m++)
+    {
+        accs[m].vc_cap = 64;
+        accs[m].ic_cap = 128;
+        accs[m].pos = SDL_malloc((size_t)accs[m].vc_cap * 3 * sizeof(float));
+        accs[m].nrm = SDL_malloc((size_t)accs[m].vc_cap * 3 * sizeof(float));
+        accs[m].col = SDL_malloc((size_t)accs[m].vc_cap * 4 * sizeof(float));
+        accs[m].uvs = SDL_malloc((size_t)accs[m].vc_cap * 2 * sizeof(float));
+        accs[m].idx = SDL_malloc((size_t)accs[m].ic_cap * sizeof(unsigned int));
     }
 
     for (int s = 0; s < sector_count; s++)
@@ -255,10 +256,9 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
         int ci = sec->ceil_material < material_count ? sec->ceil_material : 0;
         int wi = sec->wall_material < material_count ? sec->wall_material : 0;
 
-        add_floor_ceil(&acc, sec, sec->floor_y, 1.0f, materials[fi].albedo, materials[fi].tex_scale);
-        add_floor_ceil(&acc, sec, sec->ceil_y, -1.0f, materials[ci].albedo, materials[ci].tex_scale);
+        add_floor_ceil(&accs[fi], sec, sec->floor_y, 1.0f, materials[fi].albedo, materials[fi].tex_scale);
+        add_floor_ceil(&accs[ci], sec, sec->ceil_y, -1.0f, materials[ci].albedo, materials[ci].tex_scale);
 
-        /* Process each edge: find overlaps with other sectors. */
         for (int e = 0; e < total_edges; e++)
         {
             if (edges[e].sector != s)
@@ -276,7 +276,6 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                     continue;
                 if (!edges_collinear(ax, az, bx, bz, edges[j].ax, edges[j].az, edges[j].bx, edges[j].bz))
                     continue;
-
                 float t0 = project_onto_edge(edges[j].ax, edges[j].az, ax, az, bx, bz);
                 float t1 = project_onto_edge(edges[j].bx, edges[j].bz, ax, az, bx, bz);
                 if (t0 > t1)
@@ -301,13 +300,11 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
 
             if (novl == 0)
             {
-                /* No overlap: full wall. */
-                add_wall(&acc, ax, az, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo,
+                add_wall(&accs[wi], ax, az, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo,
                          materials[wi].tex_scale);
             }
             else
             {
-                /* Sort overlaps by t0. */
                 for (int i = 0; i < novl - 1; i++)
                     for (int j = i + 1; j < novl; j++)
                         if (overlaps[j].t0 < overlaps[i].t0)
@@ -320,34 +317,27 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                 float cursor = 0.0f;
                 for (int oi = 0; oi < novl; oi++)
                 {
-                    /* Wall segment before this overlap. */
                     if (overlaps[oi].t0 > cursor + 0.001f)
                     {
                         float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
                         float wx1 = ax + (bx - ax) * overlaps[oi].t0, wz1 = az + (bz - az) * overlaps[oi].t0;
-                        add_wall(&acc, wx0, wz0, wx1, wz1, sec->floor_y, sec->ceil_y, materials[wi].albedo,
+                        add_wall(&accs[wi], wx0, wz0, wx1, wz1, sec->floor_y, sec->ceil_y, materials[wi].albedo,
                                  materials[wi].tex_scale);
                     }
-
-                    /* Step walls in overlap (height differences). */
                     float ox0 = ax + (bx - ax) * overlaps[oi].t0, oz0 = az + (bz - az) * overlaps[oi].t0;
                     float ox1 = ax + (bx - ax) * overlaps[oi].t1, oz1 = az + (bz - az) * overlaps[oi].t1;
-
                     if (sec->floor_y < overlaps[oi].other_floor - 0.001f)
-                        add_wall(&acc, ox0, oz0, ox1, oz1, sec->floor_y, overlaps[oi].other_floor, materials[wi].albedo,
-                                 materials[wi].tex_scale);
+                        add_wall(&accs[wi], ox0, oz0, ox1, oz1, sec->floor_y, overlaps[oi].other_floor,
+                                 materials[wi].albedo, materials[wi].tex_scale);
                     if (sec->ceil_y > overlaps[oi].other_ceil + 0.001f)
-                        add_wall(&acc, ox0, oz0, ox1, oz1, overlaps[oi].other_ceil, sec->ceil_y, materials[wi].albedo,
-                                 materials[wi].tex_scale);
-
+                        add_wall(&accs[wi], ox0, oz0, ox1, oz1, overlaps[oi].other_ceil, sec->ceil_y,
+                                 materials[wi].albedo, materials[wi].tex_scale);
                     cursor = overlaps[oi].t1;
                 }
-
-                /* Wall segment after last overlap. */
                 if (cursor < 1.0f - 0.001f)
                 {
                     float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
-                    add_wall(&acc, wx0, wz0, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo,
+                    add_wall(&accs[wi], wx0, wz0, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo,
                              materials[wi].tex_scale);
                 }
             }
@@ -356,120 +346,114 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
 
     SDL_free(edges);
 
-    /* ---- Bake vertex lighting ---- */
+    /* ---- Bake vertex lighting per material ---- */
     if (lights && light_count > 0)
     {
-        for (int v = 0; v < acc.vc; v++)
+        for (int m = 0; m < material_count; m++)
         {
-            float px = acc.pos[v * 3];
-            float py = acc.pos[v * 3 + 1];
-            float pz = acc.pos[v * 3 + 2];
-            float nx = acc.nrm[v * 3];
-            float ny = acc.nrm[v * 3 + 1];
-            float nz = acc.nrm[v * 3 + 2];
-
-            /* Base color from material (already in vertex color). */
-            float base_r = acc.col[v * 4];
-            float base_g = acc.col[v * 4 + 1];
-            float base_b = acc.col[v * 4 + 2];
-
-            /* Accumulate light contribution. */
-            float lit_r = 0.2f * base_r; /* ambient */
-            float lit_g = 0.2f * base_g;
-            float lit_b = 0.2f * base_b;
-
-            for (int li = 0; li < light_count; li++)
+            macc *a = &accs[m];
+            for (int v = 0; v < a->vc; v++)
             {
-                float lx = lights[li].position[0] - px;
-                float ly = lights[li].position[1] - py;
-                float lz = lights[li].position[2] - pz;
-                float dist = sqrtf(lx * lx + ly * ly + lz * lz);
-                if (dist < 0.0001f || dist > lights[li].range)
-                    continue;
-
-                /* Normalize light direction. */
-                float inv = 1.0f / dist;
-                lx *= inv;
-                ly *= inv;
-                lz *= inv;
-
-                /* N dot L */
-                float ndotl = nx * lx + ny * ly + nz * lz;
-                if (ndotl <= 0.0f)
-                    continue;
-
-                /* Attenuation: smooth falloff. */
-                float r = dist / lights[li].range;
-                float atten = (1.0f - r * r);
-                if (atten < 0.0f)
-                    atten = 0.0f;
-                atten *= atten;
-
-                float scale = lights[li].intensity * atten * ndotl;
-                lit_r += base_r * lights[li].color[0] * scale;
-                lit_g += base_g * lights[li].color[1] * scale;
-                lit_b += base_b * lights[li].color[2] * scale;
+                float px = a->pos[v * 3], py = a->pos[v * 3 + 1], pz = a->pos[v * 3 + 2];
+                float nx = a->nrm[v * 3], ny = a->nrm[v * 3 + 1], nz = a->nrm[v * 3 + 2];
+                float br = a->col[v * 4], bg = a->col[v * 4 + 1], bb = a->col[v * 4 + 2];
+                float lr = 0.2f * br, lg = 0.2f * bg, lb = 0.2f * bb;
+                for (int li = 0; li < light_count; li++)
+                {
+                    float lx = lights[li].position[0] - px, ly = lights[li].position[1] - py,
+                          lz = lights[li].position[2] - pz;
+                    float dist = sqrtf(lx * lx + ly * ly + lz * lz);
+                    if (dist < 0.0001f || dist > lights[li].range)
+                        continue;
+                    float inv = 1.0f / dist;
+                    lx *= inv;
+                    ly *= inv;
+                    lz *= inv;
+                    float ndotl = nx * lx + ny * ly + nz * lz;
+                    if (ndotl <= 0.0f)
+                        continue;
+                    float r = dist / lights[li].range;
+                    float atten = (1.0f - r * r);
+                    if (atten < 0)
+                        atten = 0;
+                    atten *= atten;
+                    float scale = lights[li].intensity * atten * ndotl;
+                    lr += br * lights[li].color[0] * scale;
+                    lg += bg * lights[li].color[1] * scale;
+                    lb += bb * lights[li].color[2] * scale;
+                }
+                a->col[v * 4] = lr > 1.0f ? 1.0f : lr;
+                a->col[v * 4 + 1] = lg > 1.0f ? 1.0f : lg;
+                a->col[v * 4 + 2] = lb > 1.0f ? 1.0f : lb;
             }
-
-            /* Clamp and store. */
-            acc.col[v * 4] = lit_r > 1.0f ? 1.0f : lit_r;
-            acc.col[v * 4 + 1] = lit_g > 1.0f ? 1.0f : lit_g;
-            acc.col[v * 4 + 2] = lit_b > 1.0f ? 1.0f : lit_b;
         }
     }
 
-    /* Package into sdl3d_model — one mesh per material. */
-    sdl3d_material *out_mats = SDL_calloc((size_t)material_count, sizeof(sdl3d_material));
-    if (!out_mats)
-    {
-        macc_free(&acc);
-        return SDL_OutOfMemory();
-    }
+    /* ---- Package: one mesh + one material per level material ---- */
+    int num_meshes = 0;
+    for (int m = 0; m < material_count; m++)
+        if (accs[m].ic > 0)
+            num_meshes++;
 
-    /* Build per-material index lists by scanning vertex material assignments.
-     * Since we build geometry in order (floor/ceil/wall per sector), we track
-     * which material each triangle belongs to via a parallel array. */
-
-    /* For simplicity, output one mesh with all geometry and one material
-     * that has the first textured material's texture. Per-surface texturing
-     * requires splitting into multiple meshes (future improvement). */
-    sdl3d_mesh *mesh = SDL_calloc(1, sizeof(sdl3d_mesh));
-    if (!mesh)
+    sdl3d_mesh *meshes = SDL_calloc((size_t)num_meshes, sizeof(sdl3d_mesh));
+    sdl3d_material *out_mats = SDL_calloc((size_t)num_meshes, sizeof(sdl3d_material));
+    if (!meshes || !out_mats)
     {
+        for (int m = 0; m < material_count; m++)
+            macc_free(&accs[m]);
+        SDL_free(accs);
+        SDL_free(meshes);
         SDL_free(out_mats);
-        macc_free(&acc);
         return SDL_OutOfMemory();
     }
 
-    mesh->vertex_count = acc.vc;
-    mesh->index_count = acc.ic;
-    mesh->positions = acc.pos;
-    mesh->normals = acc.nrm;
-    mesh->colors = acc.col;
-    mesh->uvs = acc.uvs;
-    mesh->indices = acc.idx;
-    mesh->material_index = 0;
-
-    out_mats[0].albedo[0] = out_mats[0].albedo[1] = out_mats[0].albedo[2] = out_mats[0].albedo[3] = 1.0f;
-    out_mats[0].roughness = 0.8f;
-
-    /* Find first textured material and use it. */
-    for (int i = 0; i < material_count; i++)
+    int mi = 0;
+    int total_verts = 0, total_tris = 0;
+    for (int m = 0; m < material_count; m++)
     {
-        if (materials[i].texture)
+        if (accs[m].ic == 0)
         {
-            out_mats[0].albedo_map = SDL_strdup(materials[i].texture);
-            out->model.source_path = SDL_strdup(materials[i].texture);
+            macc_free(&accs[m]);
+            continue;
+        }
+        meshes[mi].vertex_count = accs[m].vc;
+        meshes[mi].index_count = accs[m].ic;
+        meshes[mi].positions = accs[m].pos;
+        meshes[mi].normals = accs[m].nrm;
+        meshes[mi].colors = accs[m].col;
+        meshes[mi].uvs = accs[m].uvs;
+        meshes[mi].indices = accs[m].idx;
+        meshes[mi].material_index = mi;
+
+        out_mats[mi].albedo[0] = out_mats[mi].albedo[1] = out_mats[mi].albedo[2] = out_mats[mi].albedo[3] = 1.0f;
+        out_mats[mi].roughness = materials[m].roughness;
+        out_mats[mi].metallic = materials[m].metallic;
+        if (materials[m].texture)
+            out_mats[mi].albedo_map = SDL_strdup(materials[m].texture);
+
+        total_verts += accs[m].vc;
+        total_tris += accs[m].ic / 3;
+        mi++;
+    }
+    SDL_free(accs);
+
+    /* source_path for texture resolver — use first texture's directory. */
+    for (int m = 0; m < material_count; m++)
+    {
+        if (materials[m].texture)
+        {
+            out->model.source_path = SDL_strdup(materials[m].texture);
             break;
         }
     }
 
-    out->model.meshes = mesh;
-    out->model.mesh_count = 1;
+    out->model.meshes = meshes;
+    out->model.mesh_count = num_meshes;
     out->model.materials = out_mats;
-    out->model.material_count = 1;
+    out->model.material_count = num_meshes;
 
-    SDL_Log("SDL3D level: %d verts, %d tris from %d sectors", acc.vc, acc.ic / 3, sector_count);
+    SDL_Log("SDL3D level: %d verts, %d tris, %d meshes from %d sectors", total_verts, total_tris, num_meshes,
+            sector_count);
     return true;
 }
 

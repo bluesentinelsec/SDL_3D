@@ -63,16 +63,12 @@ int main(int argc, char *argv[])
 
     /* ---- Material palette ---- */
     sdl3d_level_material mats[] = {
-        {{1.0f, 1.0f, 1.0f, 1.0f},
-         0.0f,
-         0.9f,
-         SDL3D_MEDIA_DIR "/textures/rock_floor.jpg",
-         4.0f},                                                /* 0: textured floor */
-        {{0.35f, 0.33f, 0.30f, 1.0f}, 0.0f, 0.8f, NULL, 4.0f}, /* 1: concrete ceiling */
-        {{0.40f, 0.30f, 0.25f, 1.0f}, 0.0f, 0.7f, NULL, 4.0f}, /* 2: brick walls */
-        {{0.15f, 0.30f, 0.15f, 1.0f}, 0.0f, 0.9f, NULL, 4.0f}, /* 3: nukage floor (green) */
-        {{0.50f, 0.45f, 0.40f, 1.0f}, 0.0f, 0.6f, NULL, 4.0f}, /* 4: light brown walls */
-        {{0.20f, 0.18f, 0.22f, 1.0f}, 0.0f, 0.9f, NULL, 4.0f}, /* 5: dark floor */
+        {{1, 1, 1, 1}, 0, 0.9f, SDL3D_MEDIA_DIR "/textures/rock_floor.jpg", 4},    /* 0: rock floor */
+        {{1, 1, 1, 1}, 0, 0.8f, SDL3D_MEDIA_DIR "/textures/ceiling_metal.jpg", 4}, /* 1: metal ceiling */
+        {{1, 1, 1, 1}, 0, 0.7f, SDL3D_MEDIA_DIR "/textures/wall_metal.jpg", 4},    /* 2: metal walls */
+        {{1, 1, 1, 1}, 0, 0.9f, SDL3D_MEDIA_DIR "/textures/lava.jpg", 4},          /* 3: lava */
+        {{1, 1, 1, 1}, 0, 0.6f, SDL3D_MEDIA_DIR "/textures/wall_metal.jpg", 4},    /* 4: metal walls alt */
+        {{1, 1, 1, 1}, 0, 0.9f, SDL3D_MEDIA_DIR "/textures/rock_floor.jpg", 4},    /* 5: rock floor alt */
     };
 
     /* ---- Sector definitions (E1M1-inspired) ---- */
@@ -105,9 +101,9 @@ int main(int argc, char *argv[])
     sdl3d_level_light lights[] = {
         {{5, 3.5f, 4}, {1.0f, 0.85f, 0.6f}, 5.0f, 12.0f},  /* Start room — warm */
         {{5, 3.0f, 12}, {1.0f, 0.7f, 0.3f}, 3.0f, 8.0f},   /* Corridor — amber */
-        {{4, 1.0f, 21}, {0.2f, 1.0f, 0.2f}, 4.0f, 14.0f},  /* Nukage — green */
+        {{4, 1.0f, 21}, {1.0f, 0.15f, 0.1f}, 4.0f, 14.0f},  /* Lava — red */
         {{22, 7.0f, 20}, {0.4f, 0.5f, 0.8f}, 6.0f, 18.0f}, /* Outdoor — moonlight */
-        {{24, 2.5f, 29}, {1.0f, 0.15f, 0.1f}, 4.0f, 8.0f}, /* Exit — red warning */
+        {{24, 2.5f, 29}, {0.2f, 1.0f, 0.2f}, 4.0f, 8.0f},  /* Exit — green */
     };
 
     /* Build two versions: baked lighting and raw materials. */
