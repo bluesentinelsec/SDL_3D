@@ -184,11 +184,63 @@ static void strip_level_lightmap(sdl3d_level *level)
     }
 }
 
+static bool create_backend(SDL_Window **out_win, SDL_Renderer **out_ren, sdl3d_render_context **out_ctx,
+                           sdl3d_backend backend)
+{
+    SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE;
+    if (backend == SDL3D_BACKEND_SDLGPU)
+    {
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+        flags |= SDL_WINDOW_OPENGL;
+    }
+
+    SDL_Window *w = SDL_CreateWindow("SDL3D \xe2\x80\x94 Doom Level", WINDOW_W, WINDOW_H, flags);
+    if (!w)
+        return false;
+
+    SDL_Renderer *r = NULL;
+    if (backend != SDL3D_BACKEND_SDLGPU)
+    {
+        r = SDL_CreateRenderer(w, NULL);
+        if (!r)
+        {
+            SDL_DestroyWindow(w);
+            return false;
+        }
+    }
+
+    sdl3d_render_context_config cfg;
+    sdl3d_init_render_context_config(&cfg);
+    cfg.backend = backend;
+    cfg.allow_backend_fallback = false;
+    cfg.logical_width = WINDOW_W;
+    cfg.logical_height = WINDOW_H;
+    cfg.logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
+
+    sdl3d_render_context *c = NULL;
+    if (!sdl3d_create_render_context(w, r, &cfg, &c))
+    {
+        SDL_DestroyRenderer(r);
+        SDL_DestroyWindow(w);
+        return false;
+    }
+
+    SDL_SetWindowRelativeMouseMode(w, true);
+    *out_win = w;
+    *out_ren = r;
+    *out_ctx = c;
+    return true;
+}
+
 int main(int argc, char *argv[])
 {
     SDL_Window *win = NULL;
+    SDL_Renderer *ren = NULL;
     sdl3d_render_context *ctx = NULL;
-    sdl3d_render_context_config cfg;
     sdl3d_texture2d enemy_tex = {0};
     sdl3d_texture2d health_tex = {0};
     sdl3d_texture2d sky_px = {0};
@@ -204,32 +256,14 @@ int main(int argc, char *argv[])
     if (!SDL_Init(SDL_INIT_VIDEO))
         return 1;
 
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-
-    win =
-        SDL_CreateWindow("SDL3D \xe2\x80\x94 Doom Level", WINDOW_W, WINDOW_H, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
-    if (!win)
-        return 1;
-
-    sdl3d_init_render_context_config(&cfg);
-    cfg.backend = SDL3D_BACKEND_SDLGPU;
-    cfg.allow_backend_fallback = false;
-    cfg.logical_width = WINDOW_W;
-    cfg.logical_height = WINDOW_H;
-    cfg.logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
-
-    if (!sdl3d_create_render_context(win, NULL, &cfg, &ctx))
+    sdl3d_backend current_backend = SDL3D_BACKEND_SDLGPU;
+    if (!create_backend(&win, &ren, &ctx, current_backend))
     {
-        SDL_Log("Render context failed: %s", SDL_GetError());
+        SDL_Log("Backend init failed: %s", SDL_GetError());
         return 1;
     }
 
-    SDL_SetWindowRelativeMouseMode(win, true);
-    SDL_Log("doom_level MOVE_SPEED=%.2f", MOVE_SPEED);
+    SDL_Log("doom_level MOVE_SPEED=%.2f backend=%d", MOVE_SPEED, (int)current_backend);
 
     sdl3d_set_bloom_enabled(ctx, true);
     sdl3d_set_ssao_enabled(ctx, false);
@@ -483,6 +517,38 @@ int main(int argc, char *argv[])
             {
                 portal_culling = !portal_culling;
                 SDL_Log("Portal culling: %s", portal_culling ? "ON" : "OFF");
+            }
+            if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_TAB)
+            {
+                sdl3d_backend next =
+                    (current_backend == SDL3D_BACKEND_SDLGPU) ? SDL3D_BACKEND_SOFTWARE : SDL3D_BACKEND_SDLGPU;
+                sdl3d_destroy_render_context(ctx);
+                if (ren)
+                    SDL_DestroyRenderer(ren);
+                SDL_DestroyWindow(win);
+                ctx = NULL;
+                ren = NULL;
+                win = NULL;
+                if (create_backend(&win, &ren, &ctx, next))
+                {
+                    current_backend = next;
+                    sdl3d_set_bloom_enabled(ctx, current_backend == SDL3D_BACKEND_SDLGPU);
+                    sdl3d_set_ssao_enabled(ctx, false);
+                    sdl3d_set_point_shadows_enabled(ctx, false);
+                    sdl3d_set_backface_culling_enabled(ctx, true);
+                    sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG);
+                    SDL_Log("Switched to %s backend", current_backend == SDL3D_BACKEND_SDLGPU ? "GL" : "SOFTWARE");
+                }
+                else
+                {
+                    SDL_Log("Backend switch failed: %s — reverting", SDL_GetError());
+                    create_backend(&win, &ren, &ctx, current_backend);
+                    sdl3d_set_bloom_enabled(ctx, current_backend == SDL3D_BACKEND_SDLGPU);
+                    sdl3d_set_ssao_enabled(ctx, false);
+                    sdl3d_set_point_shadows_enabled(ctx, false);
+                    sdl3d_set_backface_culling_enabled(ctx, true);
+                    sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG);
+                }
             }
             if (ev.type == SDL_EVENT_MOUSE_MOTION && mouse_init)
             {
@@ -741,6 +807,8 @@ int main(int argc, char *argv[])
     sdl3d_free_texture(&sky_pz);
     sdl3d_free_texture(&sky_nz);
     sdl3d_destroy_render_context(ctx);
+    if (ren)
+        SDL_DestroyRenderer(ren);
     SDL_DestroyWindow(win);
     SDL_Quit();
     return 0;
