@@ -2010,73 +2010,96 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
                     sdl3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, nx, ny, nz, wpx, wpy, wpz, &lit_r,
                                              &lit_g, &lit_b);
 
-                    /* Fog + tonemapping.  When using a real tonemap operator
-                     * (ACES/Reinhard), fog blends in linear space before the
-                     * operator compresses the range.  With TONEMAP_NONE the fog
-                     * color is already sRGB (matches the sky), so we gamma-encode
-                     * the lit color first, then mix fog to avoid brightening it. */
-                    if (lp->tonemap_mode != SDL3D_TONEMAP_NONE)
+                    if (lp->baked_light_mode)
                     {
+                        /* Baked mode: skip tonemapping and gamma to match GL.
+                         * Just apply fog and clamp. */
                         if (lp->fog.mode != SDL3D_FOG_NONE)
                         {
-                            float fog_f;
-                            if (lp->fog_eval == SDL3D_FOG_EVAL_VERTEX)
-                            {
-                                fog_f = (ba * a.fog_over_w + bb * b.fog_over_w + bc * c.fog_over_w) * pw;
-                                if (fog_f < 0.0f)
-                                {
-                                    fog_f = 0.0f;
-                                }
-                                if (fog_f > 1.0f)
-                                {
-                                    fog_f = 1.0f;
-                                }
-                            }
-                            else
-                            {
-                                float dx = wpx - lp->camera_pos.x;
-                                float dy = wpy - lp->camera_pos.y;
-                                float dz = wpz - lp->camera_pos.z;
-                                float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
-                                fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
-                            }
+                            float dx = wpx - lp->camera_pos.x;
+                            float dy = wpy - lp->camera_pos.y;
+                            float dz = wpz - lp->camera_pos.z;
+                            float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
+                            float fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
                             lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
                             lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
                             lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
                         }
-                        sdl3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
+                        lit_r = lit_r < 0.0f ? 0.0f : (lit_r > 1.0f ? 1.0f : lit_r);
+                        lit_g = lit_g < 0.0f ? 0.0f : (lit_g > 1.0f ? 1.0f : lit_g);
+                        lit_b = lit_b < 0.0f ? 0.0f : (lit_b > 1.0f ? 1.0f : lit_b);
                     }
                     else
                     {
-                        sdl3d_tonemap(SDL3D_TONEMAP_NONE, &lit_r, &lit_g, &lit_b);
-                        if (lp->fog.mode != SDL3D_FOG_NONE)
+
+                        /* Fog + tonemapping.  When using a real tonemap operator
+                         * (ACES/Reinhard), fog blends in linear space before the
+                         * operator compresses the range.  With TONEMAP_NONE the fog
+                         * color is already sRGB (matches the sky), so we gamma-encode
+                         * the lit color first, then mix fog to avoid brightening it. */
+                        if (lp->tonemap_mode != SDL3D_TONEMAP_NONE)
                         {
-                            float fog_f;
-                            if (lp->fog_eval == SDL3D_FOG_EVAL_VERTEX)
+                            if (lp->fog.mode != SDL3D_FOG_NONE)
                             {
-                                fog_f = (ba * a.fog_over_w + bb * b.fog_over_w + bc * c.fog_over_w) * pw;
-                                if (fog_f < 0.0f)
+                                float fog_f;
+                                if (lp->fog_eval == SDL3D_FOG_EVAL_VERTEX)
                                 {
-                                    fog_f = 0.0f;
+                                    fog_f = (ba * a.fog_over_w + bb * b.fog_over_w + bc * c.fog_over_w) * pw;
+                                    if (fog_f < 0.0f)
+                                    {
+                                        fog_f = 0.0f;
+                                    }
+                                    if (fog_f > 1.0f)
+                                    {
+                                        fog_f = 1.0f;
+                                    }
                                 }
-                                if (fog_f > 1.0f)
+                                else
                                 {
-                                    fog_f = 1.0f;
+                                    float dx = wpx - lp->camera_pos.x;
+                                    float dy = wpy - lp->camera_pos.y;
+                                    float dz = wpz - lp->camera_pos.z;
+                                    float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
+                                    fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
                                 }
+                                lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
+                                lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
+                                lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
                             }
-                            else
-                            {
-                                float dx = wpx - lp->camera_pos.x;
-                                float dy = wpy - lp->camera_pos.y;
-                                float dz = wpz - lp->camera_pos.z;
-                                float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
-                                fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
-                            }
-                            lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
-                            lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
-                            lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
+                            sdl3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
                         }
-                    }
+                        else
+                        {
+                            sdl3d_tonemap(SDL3D_TONEMAP_NONE, &lit_r, &lit_g, &lit_b);
+                            if (lp->fog.mode != SDL3D_FOG_NONE)
+                            {
+                                float fog_f;
+                                if (lp->fog_eval == SDL3D_FOG_EVAL_VERTEX)
+                                {
+                                    fog_f = (ba * a.fog_over_w + bb * b.fog_over_w + bc * c.fog_over_w) * pw;
+                                    if (fog_f < 0.0f)
+                                    {
+                                        fog_f = 0.0f;
+                                    }
+                                    if (fog_f > 1.0f)
+                                    {
+                                        fog_f = 1.0f;
+                                    }
+                                }
+                                else
+                                {
+                                    float dx = wpx - lp->camera_pos.x;
+                                    float dy = wpy - lp->camera_pos.y;
+                                    float dz = wpz - lp->camera_pos.z;
+                                    float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
+                                    fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
+                                }
+                                lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
+                                lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
+                                lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
+                            }
+                        }
+                    } /* end else (non-baked tonemapping) */
 
                     /* Color quantization with optional Bayer dithering. */
                     if (lp->color_quantize && lp->color_depth > 0)
