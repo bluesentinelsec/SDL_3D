@@ -22,6 +22,24 @@
 #define ROCKET_LIGHT_INTENSITY 4.0f
 #define ROCKET_LIGHT_RANGE 4.0f
 
+typedef struct demo_sprite_actor
+{
+    const sdl3d_texture2d *texture;
+    sdl3d_vec3 position;
+    sdl3d_vec2 size;
+    bool bob;
+    float bob_amplitude;
+    float bob_speed;
+} demo_sprite_actor;
+
+typedef struct demo_actor_draw
+{
+    const demo_sprite_actor *actor;
+    sdl3d_vec3 position;
+    sdl3d_color tint;
+    float distance_sq;
+} demo_actor_draw;
+
 static bool point_in_sector_xz(const sdl3d_sector *sector, float x, float z)
 {
     bool inside = false;
@@ -87,11 +105,77 @@ static void advance_projectile(const sdl3d_sector *sectors, int sector_count, fl
         *proj_active = false;
 }
 
+static sdl3d_color sample_actor_tint(const sdl3d_level_light *lights, int light_count, sdl3d_vec3 position,
+                                     bool proj_active, float proj_x, float proj_y, float proj_z)
+{
+    float r = 0.12f;
+    float g = 0.12f;
+    float b = 0.14f;
+
+    for (int i = 0; i < light_count; ++i)
+    {
+        float dx = lights[i].position[0] - position.x;
+        float dy = lights[i].position[1] - position.y;
+        float dz = lights[i].position[2] - position.z;
+        float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
+        if (dist >= lights[i].range || dist <= 0.0001f)
+        {
+            continue;
+        }
+
+        float t = 1.0f - (dist / lights[i].range);
+        float atten = t * t;
+        float scale = lights[i].intensity * atten * 0.28f;
+        r += lights[i].color[0] * scale;
+        g += lights[i].color[1] * scale;
+        b += lights[i].color[2] * scale;
+    }
+
+    if (proj_active)
+    {
+        float dx = proj_x - position.x;
+        float dy = proj_y - position.y;
+        float dz = proj_z - position.z;
+        float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
+        if (dist < ROCKET_LIGHT_RANGE && dist > 0.0001f)
+        {
+            float t = 1.0f - (dist / ROCKET_LIGHT_RANGE);
+            float atten = t * t;
+            float scale = ROCKET_LIGHT_INTENSITY * atten * 0.35f;
+            r += ROCKET_LIGHT_R * scale;
+            g += ROCKET_LIGHT_G * scale;
+            b += ROCKET_LIGHT_B * scale;
+        }
+    }
+
+    if (r > 1.0f)
+        r = 1.0f;
+    if (g > 1.0f)
+        g = 1.0f;
+    if (b > 1.0f)
+        b = 1.0f;
+
+    return (sdl3d_color){(Uint8)(r * 255.0f), (Uint8)(g * 255.0f), (Uint8)(b * 255.0f), 255};
+}
+
+static int compare_actor_draws(const void *lhs, const void *rhs)
+{
+    const demo_actor_draw *a = (const demo_actor_draw *)lhs;
+    const demo_actor_draw *b = (const demo_actor_draw *)rhs;
+    if (a->distance_sq < b->distance_sq)
+        return 1;
+    if (a->distance_sq > b->distance_sq)
+        return -1;
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     SDL_Window *win = NULL;
     sdl3d_render_context *ctx = NULL;
     sdl3d_render_context_config cfg;
+    sdl3d_texture2d enemy_tex = {0};
+    sdl3d_texture2d health_tex = {0};
 
     (void)argc;
     (void)argv;
@@ -131,6 +215,20 @@ int main(int argc, char *argv[])
     sdl3d_set_point_shadows_enabled(ctx, false);
     sdl3d_set_backface_culling_enabled(ctx, true);
     sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG);
+
+    if (!sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/sprites/enemy.png", &enemy_tex) ||
+        !sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/sprites/health-pack.png", &health_tex))
+    {
+        SDL_Log("Sprite load failed: %s", SDL_GetError());
+        sdl3d_destroy_render_context(ctx);
+        SDL_DestroyWindow(win);
+        SDL_Quit();
+        return 1;
+    }
+    sdl3d_set_texture_filter(&enemy_tex, SDL3D_TEXTURE_FILTER_NEAREST);
+    sdl3d_set_texture_filter(&health_tex, SDL3D_TEXTURE_FILTER_NEAREST);
+    sdl3d_set_texture_wrap(&enemy_tex, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP);
+    sdl3d_set_texture_wrap(&health_tex, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP);
 
     /* ---- Material palette ---- */
     sdl3d_level_material mats[] = {
@@ -207,14 +305,38 @@ int main(int argc, char *argv[])
     if (!sdl3d_build_level(sectors, sector_count, mats, 6, lights, light_count, &level_lit))
     {
         SDL_Log("Level build failed: %s", SDL_GetError());
+        sdl3d_free_texture(&enemy_tex);
+        sdl3d_free_texture(&health_tex);
+        sdl3d_destroy_render_context(ctx);
+        SDL_DestroyWindow(win);
+        SDL_Quit();
         return 1;
     }
     if (!sdl3d_build_level(sectors, sector_count, mats, 6, NULL, 0, &level_unlit))
     {
         SDL_Log("Level build failed: %s", SDL_GetError());
+        sdl3d_free_level(&level_lit);
+        sdl3d_free_texture(&enemy_tex);
+        sdl3d_free_texture(&health_tex);
+        sdl3d_destroy_render_context(ctx);
+        SDL_DestroyWindow(win);
+        SDL_Quit();
         return 1;
     }
     bool use_baked = true;
+
+    demo_sprite_actor actors[] = {
+        {&enemy_tex, sdl3d_vec3_make(6.0f, 0.0f, 5.8f), (sdl3d_vec2){1.4f, 2.2f}, false, 0.0f, 0.0f},
+        {&health_tex, sdl3d_vec3_make(5.0f, 0.25f, 10.8f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.12f, 1.8f},
+        {&enemy_tex, sdl3d_vec3_make(4.2f, -0.5f, 21.5f), (sdl3d_vec2){1.4f, 2.2f}, false, 0.0f, 0.0f},
+        {&health_tex, sdl3d_vec3_make(24.0f, 0.25f, 4.5f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.15f, 1.5f},
+        {&enemy_tex, sdl3d_vec3_make(24.0f, 0.0f, 19.0f), (sdl3d_vec2){1.6f, 2.4f}, false, 0.0f, 0.0f},
+        {&health_tex, sdl3d_vec3_make(24.0f, 0.25f, 28.5f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.12f, 2.1f},
+        {&enemy_tex, sdl3d_vec3_make(24.0f, 0.0f, 37.5f), (sdl3d_vec2){1.5f, 2.3f}, false, 0.0f, 0.0f},
+        {&health_tex, sdl3d_vec3_make(35.5f, 0.25f, 27.0f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.1f, 1.7f},
+    };
+    demo_actor_draw actor_draws[SDL_arraysize(actors)];
+    float elapsed = 0.0f;
 
     SDL_Log("Portals detected: %d", level_lit.portal_count);
     for (int i = 0; i < level_lit.portal_count; i++)
@@ -294,6 +416,7 @@ int main(int argc, char *argv[])
         Uint64 now = SDL_GetPerformanceCounter();
         float dt = (float)(now - last) / (float)SDL_GetPerformanceFrequency();
         last = now;
+        elapsed += dt;
 
         /* Look direction (for camera target). */
         float fx = SDL_sinf(yaw) * SDL_cosf(pitch);
@@ -436,6 +559,47 @@ int main(int argc, char *argv[])
 
         sdl3d_draw_level(ctx, active_level, portal_culling ? &vis : NULL, (sdl3d_color){255, 255, 255, 255});
 
+        {
+            int actor_draw_count = 0;
+            for (int i = 0; i < (int)SDL_arraysize(actors); ++i)
+            {
+                sdl3d_vec3 actor_pos = actors[i].position;
+                if (actors[i].bob)
+                {
+                    actor_pos.y += SDL_sinf(elapsed * actors[i].bob_speed + (float)i) * actors[i].bob_amplitude;
+                }
+
+                if (portal_culling)
+                {
+                    int actor_sector = sdl3d_level_find_sector(active_level, sectors, actor_pos.x, actor_pos.z);
+                    if (actor_sector >= 0 && actor_sector < sector_count && !vis.sector_visible[actor_sector])
+                    {
+                        continue;
+                    }
+                }
+
+                actor_draws[actor_draw_count].actor = &actors[i];
+                actor_draws[actor_draw_count].position = actor_pos;
+                actor_draws[actor_draw_count].tint =
+                    sample_actor_tint(lights, light_count, actor_pos, proj_active, proj_x, proj_y, proj_z);
+                {
+                    float dx = actor_pos.x - px;
+                    float dy = actor_pos.y - py;
+                    float dz = actor_pos.z - pz;
+                    actor_draws[actor_draw_count].distance_sq = dx * dx + dy * dy + dz * dz;
+                }
+                actor_draw_count++;
+            }
+
+            SDL_qsort(actor_draws, (size_t)actor_draw_count, sizeof(actor_draws[0]), compare_actor_draws);
+
+            for (int i = 0; i < actor_draw_count; ++i)
+            {
+                const demo_actor_draw *draw = &actor_draws[i];
+                sdl3d_draw_billboard(ctx, draw->actor->texture, draw->position, draw->actor->size, draw->tint);
+            }
+        }
+
         /* Projectile sphere. */
         if (proj_active)
         {
@@ -470,6 +634,8 @@ int main(int argc, char *argv[])
 
     sdl3d_free_level(&level_lit);
     sdl3d_free_level(&level_unlit);
+    sdl3d_free_texture(&enemy_tex);
+    sdl3d_free_texture(&health_tex);
     sdl3d_destroy_render_context(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
