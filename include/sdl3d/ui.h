@@ -79,6 +79,9 @@ extern "C"
         bool mouse_released[3]; /* edge-triggered: true only on the release frame */
         char text_input[32];    /* UTF-8 text from SDL_EVENT_TEXT_INPUT, accumulated per frame */
         int text_input_len;
+        bool key_backspace; /* edge-triggered: backspace pressed this frame */
+        bool key_enter;     /* edge-triggered: enter/return pressed this frame */
+        bool key_escape;    /* edge-triggered: escape pressed this frame */
     } sdl3d_ui_input_state;
 
     /* ------------------------------------------------------------------ */
@@ -291,6 +294,49 @@ extern "C"
     void sdl3d_ui_begin_scroll(sdl3d_ui_context *ui, float x, float y, float w, float h, float *scroll_offset,
                                float content_height);
     void sdl3d_ui_end_scroll(sdl3d_ui_context *ui);
+
+    /* ------------------------------------------------------------------ */
+    /* Text field                                                          */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * Single-line editable text field. Click to focus, type to edit,
+     * backspace to delete. Click elsewhere or press Enter/Escape to
+     * unfocus. Returns true on the frame the user commits (Enter or
+     * unfocus after editing).
+     *
+     * `buf` is a caller-owned buffer of `buf_size` bytes. The field
+     * edits it in place.
+     */
+    bool sdl3d_ui_text_field(sdl3d_ui_context *ui, float x, float y, float w, float h, char *buf, int buf_size);
+    bool sdl3d_ui_layout_text_field(sdl3d_ui_context *ui, char *buf, int buf_size);
+
+    /* ------------------------------------------------------------------ */
+    /* Dropdown                                                            */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * Dropdown selector. Displays the currently selected item as a
+     * button; click to open a selection list. Returns true on the
+     * frame the selection changes.
+     *
+     * `selected` is a caller-owned index into `items`.
+     */
+    bool sdl3d_ui_dropdown(sdl3d_ui_context *ui, float x, float y, float w, float h, const char *const *items,
+                           int item_count, int *selected);
+    bool sdl3d_ui_layout_dropdown(sdl3d_ui_context *ui, const char *const *items, int item_count, int *selected);
+
+    /* ------------------------------------------------------------------ */
+    /* Tab strip                                                           */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * Horizontal row of selectable tabs. Returns true on the frame
+     * the selection changes. `selected` is a caller-owned index.
+     */
+    bool sdl3d_ui_tab_strip(sdl3d_ui_context *ui, float x, float y, float w, float h, const char *const *tabs,
+                            int tab_count, int *selected);
+    bool sdl3d_ui_layout_tab_strip(sdl3d_ui_context *ui, const char *const *tabs, int tab_count, int *selected);
 
 #ifdef __cplusplus
 }

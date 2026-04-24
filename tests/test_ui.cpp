@@ -570,4 +570,98 @@ TEST(SDL3DUI, ScrollRegionIgnoresWheelOutside)
     sdl3d_ui_destroy(ui);
 }
 
+TEST(SDL3DUI, TextFieldTyping)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    char buf[64] = "";
+
+    // Frame 1: click to focus
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 50.0f, 15.0f);
+    sim_mouse_down(ui, 50.0f, 15.0f);
+    sdl3d_ui_text_field(ui, 0, 0, 200, 30, buf, sizeof(buf));
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 2: type "Hi"
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    {
+        SDL_Event ev{};
+        ev.type = SDL_EVENT_TEXT_INPUT;
+        ev.text.text = "Hi";
+        sdl3d_ui_process_event(ui, &ev);
+    }
+    sdl3d_ui_text_field(ui, 0, 0, 200, 30, buf, sizeof(buf));
+    EXPECT_STREQ(buf, "Hi");
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 3: backspace
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    {
+        SDL_Event ev{};
+        ev.type = SDL_EVENT_KEY_DOWN;
+        ev.key.scancode = SDL_SCANCODE_BACKSPACE;
+        sdl3d_ui_process_event(ui, &ev);
+    }
+    sdl3d_ui_text_field(ui, 0, 0, 200, 30, buf, sizeof(buf));
+    EXPECT_STREQ(buf, "H");
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 4: enter commits
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    {
+        SDL_Event ev{};
+        ev.type = SDL_EVENT_KEY_DOWN;
+        ev.key.scancode = SDL_SCANCODE_RETURN;
+        sdl3d_ui_process_event(ui, &ev);
+    }
+    EXPECT_TRUE(sdl3d_ui_text_field(ui, 0, 0, 200, 30, buf, sizeof(buf)));
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, DropdownSelection)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    const char *items[] = {"Apple", "Banana", "Cherry"};
+    int selected = 0;
+
+    // Frame 1: click to open
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 50.0f, 15.0f);
+    sim_mouse_down(ui, 50.0f, 15.0f);
+    sdl3d_ui_dropdown(ui, 0, 0, 200, 30, items, 3, &selected);
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 2: click on second item (list starts at y=30, item_h=30, so item 1 at y=60..90)
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 50.0f, 75.0f);
+    sim_mouse_down(ui, 50.0f, 75.0f);
+    EXPECT_TRUE(sdl3d_ui_dropdown(ui, 0, 0, 200, 30, items, 3, &selected));
+    EXPECT_EQ(selected, 1);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, TabStripSelection)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    const char *tabs[] = {"Entity", "Brush", "Face"};
+    int selected = 0;
+
+    // Click on second tab (x = 200/3 + some = ~80)
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 100.0f, 15.0f);
+    sim_mouse_down(ui, 100.0f, 15.0f);
+    EXPECT_TRUE(sdl3d_ui_tab_strip(ui, 0, 0, 200, 30, tabs, 3, &selected));
+    EXPECT_EQ(selected, 1);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
 } // namespace

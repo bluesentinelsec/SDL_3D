@@ -310,6 +310,9 @@ void sdl3d_ui_begin_frame(sdl3d_ui_context *ui, int screen_w, int screen_h)
     ui->input.text_input[0] = '\0';
     ui->input.text_input_len = 0;
     ui->input.scroll_y = 0.0f;
+    ui->input.key_backspace = false;
+    ui->input.key_enter = false;
+    ui->input.key_escape = false;
 }
 
 void sdl3d_ui_set_mouse_transform(sdl3d_ui_context *ui, float scale_x, float scale_y, float offset_x, float offset_y)
@@ -404,6 +407,14 @@ bool sdl3d_ui_process_event(sdl3d_ui_context *ui, const SDL_Event *event)
         ui->input.mouse_y = ui_map_mouse_y(ui, event->button.y);
         return sdl3d_ui_wants_mouse(ui);
     }
+    case SDL_EVENT_KEY_DOWN:
+        if (event->key.scancode == SDL_SCANCODE_BACKSPACE)
+            ui->input.key_backspace = true;
+        else if (event->key.scancode == SDL_SCANCODE_RETURN || event->key.scancode == SDL_SCANCODE_KP_ENTER)
+            ui->input.key_enter = true;
+        else if (event->key.scancode == SDL_SCANCODE_ESCAPE)
+            ui->input.key_escape = true;
+        return sdl3d_ui_wants_keyboard(ui);
     case SDL_EVENT_TEXT_INPUT: {
         const char *text = event->text.text;
         if (text)
@@ -1158,6 +1169,261 @@ bool sdl3d_ui_button(sdl3d_ui_context *ui, float x, float y, float w, float h, c
     sdl3d_ui_draw_text(ui, tx, ty, display, t->text);
 
     return pressed;
+}
+
+/* ------------------------------------------------------------------ */
+/* Text field                                                          */
+/* ------------------------------------------------------------------ */
+
+bool sdl3d_ui_text_field(sdl3d_ui_context *ui, float x, float y, float w, float h, char *buf, int buf_size)
+{
+    if (!ui || !ui->frame_open || !buf || buf_size <= 0)
+        return false;
+
+    char id_buf[32];
+    SDL_snprintf(id_buf, sizeof(id_buf), "##tf_%p", (const void *)buf);
+    sdl3d_ui_id id = sdl3d_ui_make_id(ui, id_buf);
+    const sdl3d_ui_theme *t = &ui->theme;
+    bool hovering = sdl3d_ui_is_hovering(ui, x, y, w, h);
+    bool focused = (ui->focused_id == id);
+    bool committed = false;
+
+    /* Click to focus / unfocus. */
+    if (hovering)
+        ui->hovered_id = id;
+    if (ui->input.mouse_pressed[0])
+    {
+        if (hovering)
+            ui->focused_id = id;
+        else if (focused)
+        {
+            ui->focused_id = 0;
+            committed = true;
+        }
+    }
+
+    /* Keyboard input when focused. */
+    if (ui->focused_id == id)
+    {
+        if (ui->input.key_enter || ui->input.key_escape)
+        {
+            ui->focused_id = 0;
+            committed = ui->input.key_enter;
+        }
+        else
+        {
+            if (ui->input.key_backspace)
+            {
+                int len = (int)SDL_strlen(buf);
+                if (len > 0)
+                    buf[len - 1] = '\0';
+            }
+            if (ui->input.text_input_len > 0)
+            {
+                int len = (int)SDL_strlen(buf);
+                int room = buf_size - 1 - len;
+                int add = ui->input.text_input_len;
+                if (add > room)
+                    add = room;
+                if (add > 0)
+                {
+                    SDL_memcpy(buf + len, ui->input.text_input, (size_t)add);
+                    buf[len + add] = '\0';
+                }
+            }
+        }
+    }
+
+    /* Draw. */
+    sdl3d_color bg = (ui->focused_id == id) ? t->widget_active : (hovering ? t->widget_hover : t->widget_bg);
+    sdl3d_ui_draw_rect(ui, x, y, w, h, bg);
+    sdl3d_ui_draw_rect_outline(ui, x, y, w, h, t->border_width, t->widget_border);
+    if (ui->focused_id == id)
+        sdl3d_ui_draw_rect_outline(ui, x - 1, y - 1, w + 2, h + 2, 1.0f, t->focus_ring);
+
+    /* Text + cursor. */
+    float tw = 0, th = 0;
+    sdl3d_ui_measure_text(ui, buf, &tw, &th);
+    float tx = x + t->padding;
+    float ty = y + (h - th) * 0.5f;
+    sdl3d_ui_push_clip(ui, x + 1, y, w - 2, h);
+    sdl3d_ui_draw_text(ui, tx, ty, buf, t->text);
+    if (ui->focused_id == id)
+        sdl3d_ui_draw_rect(ui, tx + tw, ty, 1.0f, th, t->text); /* cursor */
+    sdl3d_ui_pop_clip(ui);
+
+    return committed;
+}
+
+bool sdl3d_ui_layout_text_field(sdl3d_ui_context *ui, char *buf, int buf_size)
+{
+    if (!ui || !ui->frame_open || ui->layout_depth <= 0)
+        return false;
+    int d = ui->layout_depth - 1;
+    float w = ui->layout_stack[d].w;
+    float h = ui->theme.padding * 2.0f + 16.0f;
+    float x, y;
+    if (!ui_layout_alloc(ui, w, h, &x, &y))
+        return false;
+    return sdl3d_ui_text_field(ui, x, y, w, h, buf, buf_size);
+}
+
+/* ------------------------------------------------------------------ */
+/* Dropdown                                                            */
+/* ------------------------------------------------------------------ */
+
+bool sdl3d_ui_dropdown(sdl3d_ui_context *ui, float x, float y, float w, float h, const char *const *items,
+                       int item_count, int *selected)
+{
+    if (!ui || !ui->frame_open || !items || item_count <= 0 || !selected)
+        return false;
+
+    /* Use a stable ID from the pointer address of selected. */
+    char id_buf[32];
+    SDL_snprintf(id_buf, sizeof(id_buf), "##dd_%p", (const void *)selected);
+    sdl3d_ui_id id = sdl3d_ui_make_id(ui, id_buf);
+    const sdl3d_ui_theme *t = &ui->theme;
+    bool hovering = sdl3d_ui_is_hovering(ui, x, y, w, h);
+    bool open = (ui->focused_id == id);
+    bool changed = false;
+
+    /* Toggle open/close on click. */
+    if (hovering)
+        ui->hovered_id = id;
+    if (hovering && ui->input.mouse_pressed[0] && !open)
+    {
+        ui->focused_id = id;
+        ui->active_id = id;
+    }
+
+    /* Draw button showing current selection. */
+    sdl3d_color bg = hovering ? t->widget_hover : t->widget_bg;
+    sdl3d_ui_draw_rect(ui, x, y, w, h, bg);
+    sdl3d_ui_draw_rect_outline(ui, x, y, w, h, t->border_width, t->widget_border);
+
+    const char *label = (*selected >= 0 && *selected < item_count) ? items[*selected] : "";
+    float tw = 0, th = 0;
+    sdl3d_ui_measure_text(ui, label, &tw, &th);
+    sdl3d_ui_draw_text(ui, x + t->padding, y + (h - th) * 0.5f, label, t->text);
+    /* Down arrow indicator. */
+    sdl3d_ui_draw_text(ui, x + w - t->padding - 8, y + (h - th) * 0.5f, "v", t->text_muted);
+
+    /* Draw dropdown list when open. */
+    if (open)
+    {
+        float list_y = y + h;
+        float item_h = h;
+        float list_h = item_h * (float)item_count;
+
+        sdl3d_ui_draw_rect(ui, x, list_y, w, list_h, t->panel_bg);
+        sdl3d_ui_draw_rect_outline(ui, x, list_y, w, list_h, 1.0f, t->panel_border);
+
+        for (int i = 0; i < item_count; i++)
+        {
+            float iy = list_y + item_h * (float)i;
+            bool item_hover = sdl3d_ui_is_hovering(ui, x, iy, w, item_h);
+            if (item_hover)
+            {
+                sdl3d_ui_draw_rect(ui, x, iy, w, item_h, t->widget_hover);
+                if (ui->input.mouse_pressed[0])
+                {
+                    *selected = i;
+                    changed = true;
+                    ui->focused_id = 0;
+                    ui->active_id = 0;
+                }
+            }
+            if (i == *selected)
+                sdl3d_ui_draw_rect(ui, x, iy, w, item_h, t->widget_active);
+
+            float itw = 0, ith = 0;
+            sdl3d_ui_measure_text(ui, items[i], &itw, &ith);
+            sdl3d_ui_draw_text(ui, x + t->padding, iy + (item_h - ith) * 0.5f, items[i], t->text);
+        }
+
+        /* Close if clicked outside. */
+        if (ui->input.mouse_pressed[0] && !sdl3d_ui_is_hovering(ui, x, y, w, h + list_h))
+        {
+            ui->focused_id = 0;
+            ui->active_id = 0;
+        }
+    }
+
+    return changed;
+}
+
+bool sdl3d_ui_layout_dropdown(sdl3d_ui_context *ui, const char *const *items, int item_count, int *selected)
+{
+    if (!ui || !ui->frame_open || ui->layout_depth <= 0)
+        return false;
+    int d = ui->layout_depth - 1;
+    float w = ui->layout_stack[d].w;
+    float h = ui->theme.padding * 2.0f + 16.0f;
+    float x, y;
+    if (!ui_layout_alloc(ui, w, h, &x, &y))
+        return false;
+    return sdl3d_ui_dropdown(ui, x, y, w, h, items, item_count, selected);
+}
+
+/* ------------------------------------------------------------------ */
+/* Tab strip                                                           */
+/* ------------------------------------------------------------------ */
+
+bool sdl3d_ui_tab_strip(sdl3d_ui_context *ui, float x, float y, float w, float h, const char *const *tabs,
+                        int tab_count, int *selected)
+{
+    if (!ui || !ui->frame_open || !tabs || tab_count <= 0 || !selected)
+        return false;
+
+    const sdl3d_ui_theme *t = &ui->theme;
+    bool changed = false;
+    float tab_w = w / (float)tab_count;
+
+    /* Background. */
+    sdl3d_ui_draw_rect(ui, x, y, w, h, t->panel_bg);
+
+    for (int i = 0; i < tab_count; i++)
+    {
+        float tx = x + tab_w * (float)i;
+        bool hovering = sdl3d_ui_is_hovering(ui, tx, y, tab_w, h);
+        bool active = (i == *selected);
+
+        sdl3d_color bg;
+        if (active)
+            bg = t->widget_active;
+        else if (hovering)
+            bg = t->widget_hover;
+        else
+            bg = t->panel_bg;
+
+        sdl3d_ui_draw_rect(ui, tx, y, tab_w, h, bg);
+        sdl3d_ui_draw_rect_outline(ui, tx, y, tab_w, h, 1.0f, t->widget_border);
+
+        float tw = 0, th = 0;
+        sdl3d_ui_measure_text(ui, tabs[i], &tw, &th);
+        sdl3d_ui_draw_text(ui, tx + (tab_w - tw) * 0.5f, y + (h - th) * 0.5f, tabs[i], t->text);
+
+        if (hovering && ui->input.mouse_pressed[0] && !active)
+        {
+            *selected = i;
+            changed = true;
+        }
+    }
+
+    return changed;
+}
+
+bool sdl3d_ui_layout_tab_strip(sdl3d_ui_context *ui, const char *const *tabs, int tab_count, int *selected)
+{
+    if (!ui || !ui->frame_open || ui->layout_depth <= 0)
+        return false;
+    int d = ui->layout_depth - 1;
+    float w = ui->layout_stack[d].w;
+    float h = ui->theme.padding * 2.0f + 16.0f;
+    float x, y;
+    if (!ui_layout_alloc(ui, w, h, &x, &y))
+        return false;
+    return sdl3d_ui_tab_strip(ui, x, y, w, h, tabs, tab_count, selected);
 }
 
 /* ------------------------------------------------------------------ */

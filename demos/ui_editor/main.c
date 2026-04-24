@@ -80,11 +80,15 @@ static void draw_menu_bar(sdl3d_ui_context *ui, float w, int *click_count)
     sdl3d_ui_end_hbox(ui);
 }
 
+static float tool_scroll = 0.0f;
+
 static void draw_tool_panel(sdl3d_ui_context *ui, float y0, float h, const char **active_tool, int *click_count)
 {
     float pad = 8.0f;
+    float content_h = 400.0f;
     sdl3d_ui_begin_panel(ui, 0, y0, TOOL_W, h);
-    sdl3d_ui_begin_vbox(ui, pad, y0 + pad, TOOL_W - pad * 2, h - pad * 2);
+    sdl3d_ui_begin_scroll(ui, pad, y0 + pad, TOOL_W - pad * 2, h - pad * 2, &tool_scroll, content_h);
+    sdl3d_ui_begin_vbox(ui, pad, y0 + pad - tool_scroll, TOOL_W - pad * 2, content_h);
 
     sdl3d_ui_layout_label(ui, "Tools");
     sdl3d_ui_separator(ui);
@@ -102,6 +106,7 @@ static void draw_tool_panel(sdl3d_ui_context *ui, float y0, float h, const char 
     }
 
     sdl3d_ui_end_vbox(ui);
+    sdl3d_ui_end_scroll(ui);
     sdl3d_ui_end_panel(ui);
 }
 
@@ -115,44 +120,74 @@ typedef struct editor_state
     float *orbit_speed;
     float *grid_size;
     float *light_intensity;
+    char *classname;
+    int classname_size;
+    char *origin;
+    int origin_size;
+    int *entity_type;
+    int *inspector_tab;
 } editor_state;
 
 static float inspector_scroll = 0.0f;
+
+static const char *entity_types[] = {"worldspawn", "info_player_start", "light", "func_door", "trigger_once"};
+static const char *inspector_tabs[] = {"Entity", "Display", "Actions"};
 
 static void draw_inspector_panel(sdl3d_ui_context *ui, float x0, float y0, float h, const editor_state *st)
 {
     float pad = 8.0f;
     float inner_w = INSPECTOR_W - pad * 2;
-    float content_h = 500.0f; /* estimated total content height */
+    float content_h = 500.0f;
 
     sdl3d_ui_begin_panel(ui, x0, y0, INSPECTOR_W, h);
-    sdl3d_ui_begin_scroll(ui, x0 + pad, y0 + pad, inner_w, h - pad * 2, &inspector_scroll, content_h);
-    sdl3d_ui_begin_vbox(ui, x0 + pad, y0 + pad - inspector_scroll, inner_w, content_h);
 
-    sdl3d_ui_layout_label(ui, "Inspector");
-    sdl3d_ui_separator(ui);
+    /* Tab strip at the top of the panel (outside scroll). */
+    sdl3d_ui_tab_strip(ui, x0 + pad, y0 + pad, inner_w, 26.0f, inspector_tabs, 3, st->inspector_tab);
+    float tab_h = 26.0f + pad;
 
-    sdl3d_ui_layout_label(ui, "Display");
-    sdl3d_ui_layout_checkbox(ui, "Wireframe", st->wireframe);
-    sdl3d_ui_layout_checkbox(ui, "Show Grid", st->show_grid);
-    sdl3d_ui_layout_checkbox(ui, "Snap", st->snap_enabled);
-    sdl3d_ui_separator(ui);
+    sdl3d_ui_begin_scroll(ui, x0 + pad, y0 + pad + tab_h, inner_w, h - pad * 2 - tab_h, &inspector_scroll, content_h);
+    sdl3d_ui_begin_vbox(ui, x0 + pad, y0 + pad + tab_h - inspector_scroll, inner_w, content_h);
 
-    sdl3d_ui_layout_label(ui, "Properties");
-    sdl3d_ui_layout_slider(ui, "Orbit Speed", st->orbit_speed, 0.1f, 2.0f);
-    sdl3d_ui_layout_slider(ui, "Grid Size", st->grid_size, 1.0f, 64.0f);
-    sdl3d_ui_layout_slider(ui, "Light", st->light_intensity, 0.0f, 2.0f);
-    sdl3d_ui_separator(ui);
+    if (*st->inspector_tab == 0)
+    {
+        /* Entity tab */
+        sdl3d_ui_layout_label(ui, "Entity Type");
+        sdl3d_ui_layout_dropdown(ui, entity_types, 5, st->entity_type);
+        sdl3d_ui_separator(ui);
 
-    sdl3d_ui_layout_label(ui, "Tool State");
-    sdl3d_ui_layout_labelf(ui, "  Active: %s", st->active_tool);
-    sdl3d_ui_layout_labelf(ui, "  Clicks: %d", st->click_count);
-    sdl3d_ui_separator(ui);
+        sdl3d_ui_layout_label(ui, "Classname");
+        sdl3d_ui_layout_text_field(ui, st->classname, st->classname_size);
 
-    sdl3d_ui_layout_label(ui, "Actions");
-    sdl3d_ui_layout_button(ui, "Apply##insp1");
-    sdl3d_ui_layout_button(ui, "Reset##insp2");
-    sdl3d_ui_layout_button(ui, "Delete##insp3");
+        sdl3d_ui_layout_label(ui, "Origin");
+        sdl3d_ui_layout_text_field(ui, st->origin, st->origin_size);
+        sdl3d_ui_separator(ui);
+
+        sdl3d_ui_layout_label(ui, "Tool State");
+        sdl3d_ui_layout_labelf(ui, "  Active: %s", st->active_tool);
+        sdl3d_ui_layout_labelf(ui, "  Clicks: %d", st->click_count);
+    }
+    else if (*st->inspector_tab == 1)
+    {
+        /* Display tab */
+        sdl3d_ui_layout_label(ui, "Display Options");
+        sdl3d_ui_layout_checkbox(ui, "Wireframe", st->wireframe);
+        sdl3d_ui_layout_checkbox(ui, "Show Grid", st->show_grid);
+        sdl3d_ui_layout_checkbox(ui, "Snap", st->snap_enabled);
+        sdl3d_ui_separator(ui);
+
+        sdl3d_ui_layout_label(ui, "Properties");
+        sdl3d_ui_layout_slider(ui, "Orbit Speed", st->orbit_speed, 0.1f, 2.0f);
+        sdl3d_ui_layout_slider(ui, "Grid Size", st->grid_size, 1.0f, 64.0f);
+        sdl3d_ui_layout_slider(ui, "Light", st->light_intensity, 0.0f, 2.0f);
+    }
+    else
+    {
+        /* Actions tab */
+        sdl3d_ui_layout_label(ui, "Actions");
+        sdl3d_ui_layout_button(ui, "Apply##insp1");
+        sdl3d_ui_layout_button(ui, "Reset##insp2");
+        sdl3d_ui_layout_button(ui, "Delete##insp3");
+    }
 
     sdl3d_ui_end_vbox(ui);
     sdl3d_ui_end_scroll(ui);
@@ -232,6 +267,10 @@ int main(int argc, char *argv[])
     float orbit_speed = 0.4f;
     float grid_size = 16.0f;
     float light_intensity = 1.0f;
+    char classname[64] = "worldspawn";
+    char origin[64] = "0 0 0";
+    int entity_type = 0;
+    int inspector_tab = 0;
     float elapsed = 0.0f;
     Uint64 last = SDL_GetPerformanceCounter();
     bool running = true;
@@ -312,8 +351,9 @@ int main(int argc, char *argv[])
         sdl3d_end_mode_3d(ctx);
 
         /* UI overlay — all panels rendered via the overlay layer. */
-        editor_state st = {active_tool,   click_count,  &wireframe, &show_grid,
-                           &snap_enabled, &orbit_speed, &grid_size, &light_intensity};
+        editor_state st = {active_tool,  click_count,    &wireframe,       &show_grid,    &snap_enabled,
+                           &orbit_speed, &grid_size,     &light_intensity, classname,     sizeof(classname),
+                           origin,       sizeof(origin), &entity_type,     &inspector_tab};
 
         draw_menu_bar(ui, sw, &click_count);
         draw_tool_panel(ui, viewport_y, viewport_h, &active_tool, &click_count);
