@@ -126,6 +126,7 @@ bool sdl3d_load_font_from_memory(const void *data, int data_size, float pixel_si
     out->atlas_texture.filter = SDL3D_TEXTURE_FILTER_BILINEAR;
     out->atlas_texture.wrap_u = SDL3D_TEXTURE_WRAP_CLAMP;
     out->atlas_texture.wrap_v = SDL3D_TEXTURE_WRAP_CLAMP;
+    out->atlas_texture.generation = 1;
 
     SDL_Log("SDL3D font: %.0fpx, atlas %dx%d, %d glyphs", pixel_size, atlas_w, atlas_h, SDL3D_FONT_CHAR_COUNT);
     return true;

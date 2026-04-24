@@ -187,6 +187,7 @@ bool sdl3d_create_texture_from_image(const sdl3d_image *image, sdl3d_texture2d *
     SDL_memcpy(out->pixels, image->pixels, bytes);
     out->width = image->width;
     out->height = image->height;
+    out->generation++;
     return true;
 }
 
@@ -222,9 +223,11 @@ void sdl3d_free_texture(sdl3d_texture2d *texture)
         return;
     }
 
+    Uint32 next_gen = texture->generation + 1;
     sdl3d_texture_free_mips(texture);
     SDL_free(texture->pixels);
     SDL_zerop(texture);
+    texture->generation = next_gen;
 }
 
 bool sdl3d_set_texture_filter(sdl3d_texture2d *texture, sdl3d_texture_filter filter)
@@ -239,6 +242,7 @@ bool sdl3d_set_texture_filter(sdl3d_texture2d *texture, sdl3d_texture_filter fil
     }
 
     texture->filter = filter;
+    texture->generation++;
 
     if (filter == SDL3D_TEXTURE_FILTER_TRILINEAR && texture->mip_levels == NULL && texture->pixels != NULL)
     {
@@ -268,6 +272,7 @@ bool sdl3d_set_texture_wrap(sdl3d_texture2d *texture, sdl3d_texture_wrap wrap_u,
 
     texture->wrap_u = wrap_u;
     texture->wrap_v = wrap_v;
+    texture->generation++;
     return true;
 }
 

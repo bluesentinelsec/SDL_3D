@@ -56,6 +56,8 @@ extern "C"
         sdl3d_texture_wrap wrap_v;
         sdl3d_texture_mip_level *mip_levels;
         int mip_count;
+        Uint32 generation; /* incremented on every content/parameter change;
+                              backends use this to detect stale cached state */
     } sdl3d_texture2d;
 
     /*

@@ -27,8 +27,7 @@
 typedef struct sdl3d_gl_tex_entry
 {
     const sdl3d_texture2d *key;
-    const unsigned char *cached_pixels; /* pixel pointer at upload time */
-    int cached_w, cached_h;             /* dimensions at upload time */
+    Uint32 generation; /* generation at upload time */
     GLuint gl_tex;
     struct sdl3d_gl_tex_entry *next;
 } sdl3d_gl_tex_entry;
@@ -1058,9 +1057,7 @@ static GLuint tex_cache_lookup(sdl3d_gl_context *ctx, const sdl3d_texture2d *tex
     {
         if (e->key == tex)
         {
-            /* Detect stale entry: texture was freed and reallocated. */
-            if (e->cached_pixels != (const unsigned char *)tex->pixels || e->cached_w != tex->width ||
-                e->cached_h != tex->height)
+            if (e->generation != tex->generation)
             {
                 ctx->gl.DeleteTextures(1, &e->gl_tex);
                 *prev = e->next;
@@ -1093,9 +1090,7 @@ static GLuint tex_cache_upload(sdl3d_gl_context *ctx, const sdl3d_texture2d *tex
 
     sdl3d_gl_tex_entry *entry = SDL_calloc(1, sizeof(*entry));
     entry->key = tex;
-    entry->cached_pixels = (const unsigned char *)tex->pixels;
-    entry->cached_w = tex->width;
-    entry->cached_h = tex->height;
+    entry->generation = tex->generation;
     entry->gl_tex = id;
     entry->next = ctx->tex_cache;
     ctx->tex_cache = entry;
