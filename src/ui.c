@@ -140,6 +140,9 @@ struct sdl3d_ui_context
      * auto-position child widgets. */
     sdl3d_ui_layout_entry layout_stack[SDL3D_UI_MAX_LAYOUT_DEPTH];
     int layout_depth;
+
+    /* Tree view indent level (incremented by tree_push, decremented by tree_pop). */
+    int tree_indent;
 };
 
 /* ------------------------------------------------------------------ */
@@ -457,6 +460,7 @@ void sdl3d_ui_begin_frame(sdl3d_ui_context *ui, int screen_w, int screen_h)
     ui->clip_depth = 0;
     ui->scroll_depth = 0;
     ui->layout_depth = 0;
+    ui->tree_indent = 0;
     ui->frame_open = true;
     ui->hovered_id = 0;
     ui->popup_owner_id = 0;
@@ -1595,6 +1599,261 @@ bool sdl3d_ui_layout_tab_strip(sdl3d_ui_context *ui, const char *const *tabs, in
     if (!ui_layout_alloc(ui, w, h, &x, &y))
         return false;
     return sdl3d_ui_tab_strip(ui, x, y, w, h, tabs, tab_count, selected);
+}
+
+/* ------------------------------------------------------------------ */
+/* Inspector row                                                       */
+/* ------------------------------------------------------------------ */
+
+#define SDL3D_UI_ROW_HEIGHT 24.0f
+
+void sdl3d_ui_begin_row(sdl3d_ui_context *ui, const char *label, float label_fraction)
+{
+    if (!ui || !ui->frame_open || !label || ui->layout_depth <= 0)
+        return;
+
+    int d = ui->layout_depth - 1;
+    float row_w = ui->layout_stack[d].w;
+    float row_h = SDL3D_UI_ROW_HEIGHT;
+    float x, y;
+    if (!ui_layout_alloc(ui, row_w, row_h, &x, &y))
+        return;
+
+    /* Draw label on the left portion. */
+    float label_w = row_w * label_fraction;
+    float tw = 0, th = 0;
+    sdl3d_ui_measure_text(ui, label, &tw, &th);
+    sdl3d_ui_draw_text(ui, x, y + (row_h - th) * 0.5f, label, ui->theme.text_muted);
+
+    /* Push an hbox for the value widget on the right portion. */
+    sdl3d_ui_begin_hbox(ui, x + label_w, y, row_w - label_w, row_h);
+}
+
+void sdl3d_ui_end_row(sdl3d_ui_context *ui)
+{
+    if (!ui)
+        return;
+    sdl3d_ui_end_hbox(ui);
+}
+
+bool sdl3d_ui_row_text_field(sdl3d_ui_context *ui, const char *label, char *buf, int buf_size)
+{
+    sdl3d_ui_begin_row(ui, label, 0.35f);
+    bool r = sdl3d_ui_layout_text_field(ui, buf, buf_size);
+    sdl3d_ui_end_row(ui);
+    return r;
+}
+
+bool sdl3d_ui_row_slider(sdl3d_ui_context *ui, const char *label, float *value, float min, float max)
+{
+    sdl3d_ui_begin_row(ui, label, 0.35f);
+    /* Use a label-less slider ID so the row label serves as the label. */
+    if (!ui || !ui->frame_open || !value || ui->layout_depth <= 0 || max <= min)
+    {
+        sdl3d_ui_end_row(ui);
+        return false;
+    }
+    int d = ui->layout_depth - 1;
+    float w = ui->layout_stack[d].w;
+    float h = ui->layout_stack[d].h;
+    float x, y;
+    if (!ui_layout_alloc(ui, w, h, &x, &y))
+    {
+        sdl3d_ui_end_row(ui);
+        return false;
+    }
+    /* Inline slider without the centered label (the row label covers it). */
+    char id_buf[64];
+    SDL_snprintf(id_buf, sizeof(id_buf), "##rs_%s", label);
+    bool r = sdl3d_ui_slider(ui, x, y, w, id_buf, value, min, max);
+    sdl3d_ui_end_row(ui);
+    return r;
+}
+
+bool sdl3d_ui_row_checkbox(sdl3d_ui_context *ui, const char *label, bool *value)
+{
+    /* Checkbox already draws its own label, so use begin_row with a
+     * small fraction just for alignment, then draw a label-less checkbox. */
+    if (!ui || !ui->frame_open || !label || !value || ui->layout_depth <= 0)
+        return false;
+
+    int d = ui->layout_depth - 1;
+    float row_w = ui->layout_stack[d].w;
+    float row_h = SDL3D_UI_ROW_HEIGHT;
+    float x, y;
+    if (!ui_layout_alloc(ui, row_w, row_h, &x, &y))
+        return false;
+
+    /* Draw label on left. */
+    float tw = 0, th = 0;
+    sdl3d_ui_measure_text(ui, label, &tw, &th);
+    sdl3d_ui_draw_text(ui, x, y + (row_h - th) * 0.5f, label, ui->theme.text_muted);
+
+    /* Draw checkbox box on right (no label text on the checkbox itself). */
+    float box_x = x + row_w * 0.35f;
+    return sdl3d_ui_checkbox(ui, box_x, y, "", value);
+}
+
+void sdl3d_ui_row_label(sdl3d_ui_context *ui, const char *label, const char *value)
+{
+    if (!ui || !ui->frame_open || !label || !value || ui->layout_depth <= 0)
+        return;
+
+    int d = ui->layout_depth - 1;
+    float row_w = ui->layout_stack[d].w;
+    float row_h = SDL3D_UI_ROW_HEIGHT;
+    float x, y;
+    if (!ui_layout_alloc(ui, row_w, row_h, &x, &y))
+        return;
+
+    float tw = 0, th = 0;
+    sdl3d_ui_measure_text(ui, label, &tw, &th);
+    sdl3d_ui_draw_text(ui, x, y + (row_h - th) * 0.5f, label, ui->theme.text_muted);
+    sdl3d_ui_draw_text(ui, x + row_w * 0.35f, y + (row_h - th) * 0.5f, value, ui->theme.text);
+}
+
+/* ------------------------------------------------------------------ */
+/* List view                                                           */
+/* ------------------------------------------------------------------ */
+
+#define SDL3D_UI_LIST_ITEM_H 22.0f
+
+bool sdl3d_ui_list_view(sdl3d_ui_context *ui, float x, float y, float w, float h, const char *const *items,
+                        int item_count, int *selected, float *scroll_offset)
+{
+    if (!ui || !ui->frame_open || !items || item_count <= 0 || !selected || !scroll_offset)
+        return false;
+
+    const sdl3d_ui_theme *t = &ui->theme;
+    float content_h = SDL3D_UI_LIST_ITEM_H * (float)item_count;
+    bool changed = false;
+
+    /* Background. */
+    sdl3d_ui_draw_rect(ui, x, y, w, h, t->widget_bg);
+    sdl3d_ui_draw_rect_outline(ui, x, y, w, h, t->border_width, t->widget_border);
+
+    /* Scroll. */
+    sdl3d_ui_begin_scroll(ui, x, y, w, h, scroll_offset, content_h);
+
+    for (int i = 0; i < item_count; i++)
+    {
+        float iy = y - *scroll_offset + SDL3D_UI_LIST_ITEM_H * (float)i;
+
+        /* Skip items outside visible range. */
+        if (iy + SDL3D_UI_LIST_ITEM_H < y || iy > y + h)
+            continue;
+
+        bool is_selected = (i == *selected);
+        bool hovering = sdl3d_ui_is_hovering(ui, x, iy, w, SDL3D_UI_LIST_ITEM_H);
+
+        if (is_selected)
+            sdl3d_ui_draw_rect(ui, x + 1, iy, w - 2, SDL3D_UI_LIST_ITEM_H, t->widget_active);
+        else if (hovering)
+            sdl3d_ui_draw_rect(ui, x + 1, iy, w - 2, SDL3D_UI_LIST_ITEM_H, t->widget_hover);
+
+        if (hovering && ui->input.mouse_pressed[0] && !is_selected)
+        {
+            *selected = i;
+            changed = true;
+        }
+
+        float tw = 0, th = 0;
+        sdl3d_ui_measure_text(ui, items[i], &tw, &th);
+        sdl3d_ui_draw_text(ui, x + t->padding, iy + (SDL3D_UI_LIST_ITEM_H - th) * 0.5f, items[i], t->text);
+    }
+
+    sdl3d_ui_end_scroll(ui);
+    return changed;
+}
+
+bool sdl3d_ui_layout_list_view(sdl3d_ui_context *ui, float h, const char *const *items, int item_count, int *selected,
+                               float *scroll_offset)
+{
+    if (!ui || !ui->frame_open || ui->layout_depth <= 0)
+        return false;
+    int d = ui->layout_depth - 1;
+    float w = ui->layout_stack[d].w;
+    float x, y;
+    if (!ui_layout_alloc(ui, w, h, &x, &y))
+        return false;
+    return sdl3d_ui_list_view(ui, x, y, w, h, items, item_count, selected, scroll_offset);
+}
+
+/* ------------------------------------------------------------------ */
+/* Tree view                                                           */
+/* ------------------------------------------------------------------ */
+
+#define SDL3D_UI_TREE_INDENT 16.0f
+#define SDL3D_UI_TREE_ROW_H 22.0f
+#define SDL3D_UI_TREE_ARROW_W 14.0f
+
+bool sdl3d_ui_tree_node(sdl3d_ui_context *ui, const char *label, int node_id, bool *expanded, int *selected_id)
+{
+    if (!ui || !ui->frame_open || !label || !expanded || !selected_id || ui->layout_depth <= 0)
+        return false;
+
+    int d = ui->layout_depth - 1;
+    float row_w = ui->layout_stack[d].w;
+    float indent = SDL3D_UI_TREE_INDENT * (float)ui->tree_indent;
+    float x, y;
+    if (!ui_layout_alloc(ui, row_w, SDL3D_UI_TREE_ROW_H, &x, &y))
+        return false;
+
+    const sdl3d_ui_theme *t = &ui->theme;
+    float ix = x + indent;
+    float avail_w = row_w - indent;
+    bool is_selected = (*selected_id == node_id);
+    bool hovering = sdl3d_ui_is_hovering(ui, ix, y, avail_w, SDL3D_UI_TREE_ROW_H);
+    bool selection_changed = false;
+
+    /* Highlight. */
+    if (is_selected)
+        sdl3d_ui_draw_rect(ui, ix, y, avail_w, SDL3D_UI_TREE_ROW_H, t->widget_active);
+    else if (hovering)
+        sdl3d_ui_draw_rect(ui, ix, y, avail_w, SDL3D_UI_TREE_ROW_H, t->widget_hover);
+
+    /* Arrow toggle. */
+    float arrow_x = ix;
+    bool arrow_hover = sdl3d_ui_is_hovering(ui, arrow_x, y, SDL3D_UI_TREE_ARROW_W, SDL3D_UI_TREE_ROW_H);
+    const char *arrow = *expanded ? "v" : ">";
+    float aw = 0, ah = 0;
+    sdl3d_ui_measure_text(ui, arrow, &aw, &ah);
+    sdl3d_ui_draw_text(ui, arrow_x + (SDL3D_UI_TREE_ARROW_W - aw) * 0.5f, y + (SDL3D_UI_TREE_ROW_H - ah) * 0.5f, arrow,
+                       arrow_hover ? t->text : t->text_muted);
+
+    /* Label. */
+    float lx = ix + SDL3D_UI_TREE_ARROW_W;
+    float tw = 0, th = 0;
+    sdl3d_ui_measure_text(ui, label, &tw, &th);
+    sdl3d_ui_draw_text(ui, lx, y + (SDL3D_UI_TREE_ROW_H - th) * 0.5f, label, t->text);
+
+    /* Click handling. */
+    if (hovering && ui->input.mouse_pressed[0])
+    {
+        if (arrow_hover)
+        {
+            *expanded = !(*expanded);
+        }
+        else if (!is_selected)
+        {
+            *selected_id = node_id;
+            selection_changed = true;
+        }
+    }
+
+    return selection_changed;
+}
+
+void sdl3d_ui_tree_push(sdl3d_ui_context *ui)
+{
+    if (ui)
+        ui->tree_indent++;
+}
+
+void sdl3d_ui_tree_pop(sdl3d_ui_context *ui)
+{
+    if (ui && ui->tree_indent > 0)
+        ui->tree_indent--;
 }
 
 /* ------------------------------------------------------------------ */
