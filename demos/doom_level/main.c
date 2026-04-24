@@ -565,23 +565,24 @@ int main(int argc, char *argv[])
     /* Enemy sprites are anchored at bottom-center (feet = position.y),
      * but the AI-generated art has a chunk of transparent padding under
      * the robot's feet, so rendering at sector floor_y leaves them
-     * visually floating. Dropping each enemy's y by ~1.5 units plants the
-     * boots on the floor and keeps 2×-scale figures under the low 3–4m
-     * ceilings in the starting/south-corridor sectors without clipping. */
+     * visually floating. Dropping each enemy's y by ~1.05 units plants
+     * the boots on the floor and keeps 2×-scale figures under the low
+     * 3–4m ceilings in the start/south-corridor sectors without
+     * clipping. */
     demo_sprite_actor actors[] = {
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(5.8f, -1.5f, 6.8f),
+        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(5.8f, -1.05f, 6.8f),
          (sdl3d_vec2){3.4f, 5.2f}, true, 0.10f, 7.0f},
         {&health_tex, NULL, sdl3d_vec3_make(5.0f, 0.25f, 10.8f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.12f, 1.8f},
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(4.2f, -2.0f, 21.5f),
+        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(4.2f, -1.4f, 21.5f),
          (sdl3d_vec2){3.2f, 4.8f}, true, 0.08f, 6.0f},
         {&health_tex, NULL, sdl3d_vec3_make(24.0f, 0.25f, 4.5f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.15f, 1.5f},
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, -1.5f, 19.0f),
+        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, -1.05f, 19.0f),
          (sdl3d_vec2){3.6f, 5.6f}, true, 0.09f, 6.5f},
         {&health_tex, NULL, sdl3d_vec3_make(24.0f, 0.25f, 28.5f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.12f, 2.1f},
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, -1.5f, 37.5f),
+        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, -1.05f, 37.5f),
          (sdl3d_vec2){3.4f, 5.2f}, true, 0.09f, 5.8f},
         {&health_tex, NULL, sdl3d_vec3_make(35.5f, 0.25f, 27.0f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.1f, 1.7f},
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, -1.5f, 72.0f),
+        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, -1.05f, 72.0f),
          (sdl3d_vec2){3.6f, 5.6f}, true, 0.11f, 5.5f},
         {&health_tex, NULL, sdl3d_vec3_make(10.0f, 0.25f, 84.0f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.14f, 1.6f},
     };
