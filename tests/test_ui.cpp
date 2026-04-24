@@ -120,6 +120,29 @@ TEST(SDL3DUI, HoveringAfterMouseMove)
     sdl3d_ui_destroy(ui);
 }
 
+TEST(SDL3DUI, MouseTransformMapsWindowCoordinatesToLogicalSpace)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+
+    sdl3d_ui_begin_frame(ui, 1280, 720);
+    sdl3d_ui_set_mouse_transform(ui, 2.0f, 2.0f, 0.0f, 0.0f);
+
+    SDL_Event motion = {};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 64.0f;
+    motion.motion.y = 32.0f;
+    sdl3d_ui_process_event(ui, &motion);
+
+    const sdl3d_ui_input_state *in = sdl3d_ui_get_input(ui);
+    ASSERT_NE(in, nullptr);
+    EXPECT_FLOAT_EQ(in->mouse_x, 128.0f);
+    EXPECT_FLOAT_EQ(in->mouse_y, 64.0f);
+
+    sdl3d_ui_end_frame(ui);
+    sdl3d_ui_destroy(ui);
+}
+
 TEST(SDL3DUI, SubmitWidgetsWithoutRendering)
 {
     // Exercise the command-submission path without requiring a render
@@ -202,6 +225,30 @@ TEST(SDL3DUI, ButtonClickReturnsTrue)
     sim_mouse_move(ui, 50.0f, 50.0f);
     sim_mouse_up(ui, 50.0f, 50.0f);
     EXPECT_TRUE(sdl3d_ui_button(ui, 0, 0, 100, 100, "Test"));
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, ButtonClickHonorsMouseTransform)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+
+    /* Simulate a 640x360 window presenting into a 1280x720 logical UI.
+     * A click at window coords (25, 25) should map to logical (50, 50). */
+    sdl3d_ui_begin_frame(ui, 1280, 720);
+    sdl3d_ui_set_mouse_transform(ui, 2.0f, 2.0f, 0.0f, 0.0f);
+    sim_mouse_move(ui, 25.0f, 25.0f);
+    sim_mouse_down(ui, 25.0f, 25.0f);
+    EXPECT_FALSE(sdl3d_ui_button(ui, 0, 0, 100, 100, "ScaledButton"));
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_begin_frame(ui, 1280, 720);
+    sdl3d_ui_set_mouse_transform(ui, 2.0f, 2.0f, 0.0f, 0.0f);
+    sim_mouse_move(ui, 25.0f, 25.0f);
+    sim_mouse_up(ui, 25.0f, 25.0f);
+    EXPECT_TRUE(sdl3d_ui_button(ui, 0, 0, 100, 100, "ScaledButton"));
     sdl3d_ui_end_frame(ui);
 
     sdl3d_ui_destroy(ui);

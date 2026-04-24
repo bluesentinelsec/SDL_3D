@@ -39,6 +39,28 @@
 #define BTN_H 28.0f
 #define BTN_PAD 4.0f
 
+static void update_ui_mouse_transform(sdl3d_ui_context *ui, SDL_Window *win, float logical_w, float logical_h)
+{
+    int win_w = 0;
+    int win_h = 0;
+    SDL_GetWindowSize(win, &win_w, &win_h);
+    if (win_w <= 0 || win_h <= 0 || logical_w <= 0.0f || logical_h <= 0.0f)
+    {
+        sdl3d_ui_set_mouse_transform(ui, 1.0f, 1.0f, 0.0f, 0.0f);
+        return;
+    }
+
+    const float sx = (float)win_w / logical_w;
+    const float sy = (float)win_h / logical_h;
+    const float s = (sx < sy) ? sx : sy;
+    const float vp_w = logical_w * s;
+    const float vp_h = logical_h * s;
+    const float vp_x = ((float)win_w - vp_w) * 0.5f;
+    const float vp_y = ((float)win_h - vp_h) * 0.5f;
+
+    sdl3d_ui_set_mouse_transform(ui, logical_w / vp_w, logical_h / vp_h, vp_x, vp_y);
+}
+
 static void draw_menu_bar(sdl3d_ui_context *ui, float w, int *click_count)
 {
     sdl3d_ui_draw_rect(ui, 0, 0, w, MENU_H, (sdl3d_color){45, 45, 48, 255});
@@ -210,25 +232,16 @@ int main(int argc, char *argv[])
 
     while (running)
     {
-        /* Compute mouse transform BEFORE processing events so hit testing
-         * uses the correct window-to-logical coordinate mapping. */
         float sw = (float)sdl3d_get_render_context_width(ctx);
         float sh = (float)sdl3d_get_render_context_height(ctx);
-        {
-            int win_pw, win_ph;
-            SDL_GetWindowSizeInPixels(win, &win_pw, &win_ph);
-            float sx = (float)win_pw / sw;
-            float sy = (float)win_ph / sh;
-            float s = (sx < sy) ? sx : sy;
-            float vp_w = sw * s;
-            float vp_h = sh * s;
-            float vp_x = ((float)win_pw - vp_w) * 0.5f;
-            float vp_y = ((float)win_ph - vp_h) * 0.5f;
-            float pdpi = SDL_GetWindowPixelDensity(win);
-            if (pdpi < 1.0f)
-                pdpi = 1.0f;
-            sdl3d_ui_set_mouse_transform(ui, sw / (vp_w / pdpi), sh / (vp_h / pdpi), vp_x / pdpi, vp_y / pdpi);
-        }
+
+        /* Begin the UI frame before routing events so edge-triggered input,
+         * hover state, and window-to-logical mouse mapping are all computed
+         * against the current frame's logical dimensions. SDL mouse events
+         * are reported in window coordinates, not window pixels, so the
+         * transform must use SDL_GetWindowSize() rather than pixel density. */
+        sdl3d_ui_begin_frame(ui, (int)sw, (int)sh);
+        update_ui_mouse_transform(ui, win, sw, sh);
 
         SDL_Event ev;
         while (SDL_PollEvent(&ev))
@@ -295,7 +308,6 @@ int main(int argc, char *argv[])
         /* UI overlay — all panels rendered via the overlay layer. */
         editor_state st = {active_tool,   click_count,  &wireframe, &show_grid,
                            &snap_enabled, &orbit_speed, &grid_size, &light_intensity};
-        sdl3d_ui_begin_frame(ui, (int)sw, (int)sh);
 
         draw_menu_bar(ui, sw, &click_count);
         draw_tool_panel(ui, viewport_y, viewport_h, &active_tool, &click_count);
