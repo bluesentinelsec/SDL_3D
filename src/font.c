@@ -677,8 +677,7 @@ bool sdl3d_draw_text_overlay(struct sdl3d_render_context *context, const sdl3d_f
         cursor_x += g->xadvance;
     }
 
-    bool ok = sdl3d_gl_append_overlay(context->gl, positions, uvs, vi, mvp, tint, font->atlas_texture.pixels,
-                                      font->atlas_texture.width, font->atlas_texture.height);
+    bool ok = sdl3d_gl_append_overlay(context->gl, positions, uvs, vi, mvp, tint, &font->atlas_texture);
     SDL_free(positions);
     SDL_free(uvs);
     return ok;
