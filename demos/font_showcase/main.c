@@ -1,6 +1,6 @@
 /*
  * Font showcase — renders every built-in font so you can visually
- * compare them side-by-side.
+ * compare them side-by-side.  Up/Down arrows adjust font size.
  */
 #define SDL_MAIN_HANDLED
 #include <SDL3/SDL.h>
@@ -9,7 +9,22 @@
 #include "sdl3d/font.h"
 #include "sdl3d/render_context.h"
 
-#define FONT_SIZE 36.0f
+#define FONT_SIZE_DEFAULT 36.0f
+#define FONT_SIZE_STEP 4.0f
+#define FONT_SIZE_MIN 8.0f
+#define FONT_SIZE_MAX 120.0f
+
+static void reload_fonts(sdl3d_font fonts[], bool loaded[], float size)
+{
+    for (int i = 0; i < SDL3D_BUILTIN_FONT_COUNT; ++i)
+    {
+        if (loaded[i])
+            sdl3d_free_font(&fonts[i]);
+        loaded[i] = sdl3d_load_builtin_font(SDL3D_MEDIA_DIR, (sdl3d_builtin_font)i, size, &fonts[i]);
+        if (!loaded[i])
+            SDL_Log("Failed to load %s: %s", sdl3d_builtin_font_name(i), SDL_GetError());
+    }
+}
 
 int main(int argc, char *argv[])
 {
@@ -52,19 +67,15 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    /* Load every built-in font. */
+    float font_size = FONT_SIZE_DEFAULT;
     sdl3d_font fonts[SDL3D_BUILTIN_FONT_COUNT];
-    bool loaded[SDL3D_BUILTIN_FONT_COUNT];
-    for (int i = 0; i < SDL3D_BUILTIN_FONT_COUNT; ++i)
-    {
-        loaded[i] = sdl3d_load_builtin_font(SDL3D_MEDIA_DIR, (sdl3d_builtin_font)i, FONT_SIZE, &fonts[i]);
-        if (!loaded[i])
-            SDL_Log("Failed to load %s: %s", sdl3d_builtin_font_name(i), SDL_GetError());
-    }
+    bool loaded[SDL3D_BUILTIN_FONT_COUNT] = {false};
+    reload_fonts(fonts, loaded, font_size);
 
     sdl3d_color bg = {30, 30, 30, 255};
     sdl3d_color white = {255, 255, 255, 255};
     sdl3d_color label_color = {140, 180, 255, 255};
+    sdl3d_color hint_color = {100, 100, 100, 255};
     bool running = true;
 
     while (running)
@@ -74,8 +85,23 @@ int main(int argc, char *argv[])
         {
             if (ev.type == SDL_EVENT_QUIT)
                 running = false;
-            if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_ESCAPE)
-                running = false;
+            if (ev.type == SDL_EVENT_KEY_DOWN)
+            {
+                if (ev.key.scancode == SDL_SCANCODE_ESCAPE)
+                    running = false;
+                if (ev.key.scancode == SDL_SCANCODE_UP && font_size < FONT_SIZE_MAX)
+                {
+                    font_size += FONT_SIZE_STEP;
+                    reload_fonts(fonts, loaded, font_size);
+                    SDL_Log("Font size: %.0f", font_size);
+                }
+                if (ev.key.scancode == SDL_SCANCODE_DOWN && font_size > FONT_SIZE_MIN)
+                {
+                    font_size -= FONT_SIZE_STEP;
+                    reload_fonts(fonts, loaded, font_size);
+                    SDL_Log("Font size: %.0f", font_size);
+                }
+            }
         }
 
         sdl3d_clear_render_context(ctx, bg);
@@ -86,13 +112,16 @@ int main(int argc, char *argv[])
             if (!loaded[i])
                 continue;
             const char *name = sdl3d_builtin_font_name(i);
-            /* Label */
             sdl3d_draw_textf(ctx, &fonts[i], 20.0f, y, label_color, "%s:", name);
-            y += FONT_SIZE + 4.0f;
-            /* Sample text */
+            y += font_size + 4.0f;
             sdl3d_draw_text(ctx, &fonts[i], "The quick brown fox jumps over the lazy dog.", 40.0f, y, white);
-            y += FONT_SIZE + 16.0f;
+            y += font_size + 16.0f;
         }
+
+        /* Size hint at bottom-left. */
+        if (loaded[0])
+            sdl3d_draw_textf(ctx, &fonts[0], 20.0f, (float)win_h - font_size - 10.0f, hint_color,
+                             "%.0fpx  [Up/Down to resize]", font_size);
 
         sdl3d_present_render_context(ctx);
     }
