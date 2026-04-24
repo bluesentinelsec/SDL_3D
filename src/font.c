@@ -562,6 +562,9 @@ bool sdl3d_load_builtin_font(const char *media_dir, sdl3d_builtin_font id, float
 bool sdl3d_draw_text_overlay(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text, float x,
                              float y, sdl3d_color color)
 {
+    SDL_Rect scissor_rect = {0, 0, 0, 0};
+    bool scissor_enabled = false;
+
     if (!context || !font || !text)
         return SDL_InvalidParamError("context");
     if (!font->atlas_texture.pixels)
@@ -575,6 +578,10 @@ bool sdl3d_draw_text_overlay(struct sdl3d_render_context *context, const sdl3d_f
     int ctx_h = sdl3d_get_render_context_height(context);
     if (ctx_w <= 0 || ctx_h <= 0)
         return SDL_SetError("Invalid render context dimensions");
+
+    scissor_enabled = sdl3d_is_scissor_enabled(context);
+    if (scissor_enabled && !sdl3d_get_scissor_rect(context, &scissor_rect))
+        return false;
 
     /* Count glyphs to size the batch. */
     int glyph_count = 0;
@@ -686,7 +693,8 @@ bool sdl3d_draw_text_overlay(struct sdl3d_render_context *context, const sdl3d_f
         cursor_x += g->xadvance;
     }
 
-    bool ok = sdl3d_gl_append_overlay(context->gl, positions, uvs, vi, mvp, tint, &font->atlas_texture);
+    bool ok = sdl3d_gl_append_overlay(context->gl, positions, uvs, vi, mvp, tint, &font->atlas_texture, scissor_enabled,
+                                      scissor_enabled ? &scissor_rect : NULL);
     SDL_free(positions);
     SDL_free(uvs);
     return ok;

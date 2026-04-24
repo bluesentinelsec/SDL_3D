@@ -68,6 +68,7 @@ typedef unsigned int GLbitfield;
 #define GL_RENDERBUFFER 0x8D41
 #define GL_FRAMEBUFFER_COMPLETE 0x8CD5
 #define GL_BLEND 0x0BE2
+#define GL_SCISSOR_TEST 0x0C11
 #define GL_SRC_ALPHA 0x0302
 #define GL_ONE_MINUS_SRC_ALPHA 0x0303
 #define GL_RED 0x1903
@@ -101,6 +102,7 @@ typedef void (*PFNGLCULLFACEPROC)(GLenum);
 typedef void (*PFNGLFRONTFACEPROC)(GLenum);
 typedef void (*PFNGLVIEWPORTPROC)(GLint, GLint, GLsizei, GLsizei);
 typedef void (*PFNGLBLENDFUNCPROC)(GLenum, GLenum);
+typedef void (*PFNGLSCISSORPROC)(GLint, GLint, GLsizei, GLsizei);
 typedef GLenum (*PFNGLGETERRORPROC)(void);
 typedef void (*PFNGLFLUSHPROC)(void);
 typedef void (*PFNGLFINISHPROC)(void);
@@ -179,6 +181,7 @@ typedef struct sdl3d_gl_funcs
     PFNGLFRONTFACEPROC FrontFace;
     PFNGLVIEWPORTPROC Viewport;
     PFNGLBLENDFUNCPROC BlendFunc;
+    PFNGLSCISSORPROC Scissor;
     PFNGLGETERRORPROC GetError;
     PFNGLFLUSHPROC Flush;
     PFNGLFINISHPROC Finish;
@@ -267,6 +270,7 @@ static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
     LOAD(FrontFace);
     LOAD(Viewport);
     LOAD(BlendFunc);
+    LOAD(Scissor);
     LOAD(GetError);
     LOAD(Flush);
     LOAD(Finish);

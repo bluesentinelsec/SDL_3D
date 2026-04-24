@@ -136,6 +136,18 @@ extern "C"
                                   sdl3d_color tint, const sdl3d_mat4 *joint_matrices);
 
     /*
+     * Draw a solid screen-space rectangle on the UI overlay layer.
+     *
+     * The overlay is composited after the main scene and all post-processing,
+     * so this is the correct primitive for editor UI, debug panels, and
+     * other HUD-like elements that must remain crisp and stable.
+     *
+     * Coordinates are in logical render-context pixels with (0, 0) at the
+     * top-left. The current scissor rect, when enabled, is honored.
+     */
+    bool sdl3d_draw_rect_overlay(sdl3d_render_context *context, float x, float y, float w, float h, sdl3d_color color);
+
+    /*
      * Read a single pixel from the color backbuffer. Returns false if x or y
      * fall outside the backbuffer. Intended for tests, screenshots, and
      * pixel-pick queries.

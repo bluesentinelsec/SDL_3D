@@ -259,6 +259,7 @@ TEST(SDL3DDrawing3DNull, NullContextIsRejected)
     SDL_ClearError();
     EXPECT_FALSE(sdl3d_begin_mode_3d(nullptr, MakeCamera()));
     EXPECT_FALSE(sdl3d_end_mode_3d(nullptr));
+    EXPECT_FALSE(sdl3d_draw_rect_overlay(nullptr, 0.0f, 0.0f, 10.0f, 10.0f, kRed));
     EXPECT_FALSE(sdl3d_draw_point_3d(nullptr, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), kRed));
     EXPECT_FALSE(sdl3d_push_matrix(nullptr));
     EXPECT_FALSE(sdl3d_pop_matrix(nullptr));
@@ -271,6 +272,28 @@ TEST(SDL3DDrawing3DNull, NullContextIsRejected)
     EXPECT_FALSE(sdl3d_is_in_mode_3d(nullptr));
     EXPECT_FALSE(sdl3d_is_backface_culling_enabled(nullptr));
     EXPECT_FALSE(sdl3d_is_wireframe_enabled(nullptr));
+}
+
+TEST_F(SDL3DDrawingFixture, OverlayRectHonorsScissorOnSoftwareBackend)
+{
+    WindowRenderer wr(32, 32);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+
+    SDL_Rect scissor = {8, 8, 8, 8};
+    ASSERT_TRUE(sdl3d_set_scissor_rect(ctx, &scissor));
+    ASSERT_TRUE(sdl3d_draw_rect_overlay(ctx, 0.0f, 0.0f, 16.0f, 16.0f, kRed));
+
+    sdl3d_color px{};
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 4, 4, &px));
+    EXPECT_TRUE(PixelEquals(px, kBlack));
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 10, 10, &px));
+    EXPECT_TRUE(PixelEquals(px, kRed));
+
+    sdl3d_destroy_render_context(ctx);
 }
 
 TEST_F(SDL3DDrawingFixture, MatrixStackMutatorsRejectedOutsideMode)

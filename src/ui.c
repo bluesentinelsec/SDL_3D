@@ -5,11 +5,11 @@
  * screen-space draw primitives, and the label widget.
  *
  * Rendering model: widget calls append commands into a per-frame draw
- * list. sdl3d_ui_render walks the list in order, drawing rects through
- * an orthographic 3D pass via sdl3d_draw_mesh and text through
- * sdl3d_draw_text. Depth is disabled implicitly because every draw
- * primitive lives near the near plane of its own ortho pass, so later
- * commands overwrite earlier ones — which is what a UI wants.
+ * list. sdl3d_ui_render walks the list in order and submits everything
+ * through the dedicated overlay layer (rects via sdl3d_draw_rect_overlay,
+ * text via sdl3d_draw_text_overlay). This keeps UI rendering outside the
+ * main 3D pipeline and post-processing path, which is critical for crisp
+ * editor/UI output and for avoiding deferred-draw lifetime bugs.
  */
 
 #include "sdl3d/ui.h"
@@ -595,64 +595,6 @@ void sdl3d_ui_labelf(sdl3d_ui_context *ui, float x, float y, const char *fmt, ..
 /* Rendering                                                           */
 /* ------------------------------------------------------------------ */
 
-/*
- * Draw a solid colored rect in screen pixels by opening a short-lived
- * ortho 3D pass. Mirrors the approach used by the font system.
- */
-static bool ui_render_rect(sdl3d_render_context *context, float x, float y, float w, float h, sdl3d_color color)
-{
-    int cw = sdl3d_get_render_context_width(context);
-    int ch = sdl3d_get_render_context_height(context);
-    if (cw <= 0 || ch <= 0)
-    {
-        return false;
-    }
-
-    sdl3d_camera3d ortho;
-    ortho.position = sdl3d_vec3_make(0.0f, 0.0f, 1.0f);
-    ortho.target = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
-    ortho.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
-    ortho.fovy = (float)ch;
-    ortho.projection = SDL3D_CAMERA_ORTHOGRAPHIC;
-
-    sdl3d_shading_mode prev_shading = sdl3d_get_shading_mode(context);
-    bool prev_culling = sdl3d_is_backface_culling_enabled(context);
-    sdl3d_set_shading_mode(context, SDL3D_SHADING_UNLIT);
-    sdl3d_set_backface_culling_enabled(context, false);
-
-    if (!sdl3d_begin_mode_3d(context, ortho))
-    {
-        sdl3d_set_shading_mode(context, prev_shading);
-        sdl3d_set_backface_culling_enabled(context, prev_culling);
-        return false;
-    }
-
-    const float hx = (float)cw * 0.5f;
-    const float hy = (float)ch * 0.5f;
-    float wx0 = x - hx;
-    float wx1 = x + w - hx;
-    float wy0 = hy - y;
-    float wy1 = hy - (y + h);
-
-    /* CCW from the ortho camera (looking -Z), matches text quad winding. */
-    float positions[18] = {
-        wx0, wy0, 0.0f, wx0, wy1, 0.0f, wx1, wy1, 0.0f, wx0, wy0, 0.0f, wx1, wy1, 0.0f, wx1, wy0, 0.0f,
-    };
-
-    sdl3d_mesh mesh;
-    SDL_zero(mesh);
-    mesh.positions = positions;
-    mesh.vertex_count = 6;
-    mesh.material_index = -1;
-
-    bool ok = sdl3d_draw_mesh(context, &mesh, NULL, color);
-
-    sdl3d_end_mode_3d(context);
-    sdl3d_set_shading_mode(context, prev_shading);
-    sdl3d_set_backface_culling_enabled(context, prev_culling);
-    return ok;
-}
-
 bool sdl3d_ui_render(sdl3d_ui_context *ui, sdl3d_render_context *context)
 {
     if (!ui)
@@ -683,7 +625,7 @@ bool sdl3d_ui_render(sdl3d_ui_context *ui, sdl3d_render_context *context)
         switch (cmd->kind)
         {
         case SDL3D_UI_CMD_RECT:
-            ok = ui_render_rect(context, cmd->x, cmd->y, cmd->w, cmd->h, cmd->color);
+            ok = sdl3d_draw_rect_overlay(context, cmd->x, cmd->y, cmd->w, cmd->h, cmd->color);
             break;
         case SDL3D_UI_CMD_TEXT: {
             if (!ui->font)
@@ -691,7 +633,7 @@ bool sdl3d_ui_render(sdl3d_ui_context *ui, sdl3d_render_context *context)
                 break;
             }
             const char *text = (cmd->text_offset >= 0) ? ui->text_arena + cmd->text_offset : "";
-            ok = sdl3d_draw_text(context, ui->font, text, cmd->x, cmd->y, cmd->color);
+            ok = sdl3d_draw_text_overlay(context, ui->font, text, cmd->x, cmd->y, cmd->color);
             break;
         }
         case SDL3D_UI_CMD_CLIP_PUSH: {

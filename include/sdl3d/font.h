@@ -111,9 +111,9 @@ extern "C"
 
     /*
      * Draw text on a dedicated UI overlay layer that is composited after
-     * all 3D rendering and post-processing. Safe to call even when the
-     * font atlas will be freed/reloaded before present — the overlay
-     * captures a snapshot of the atlas at call time.
+     * all 3D rendering and post-processing. This is the correct path for
+     * HUD/editor/UI text. On GL, persistent overlay textures are refreshed
+     * when the font atlas texture generation changes.
      *
      * On the software backend this is equivalent to sdl3d_draw_text.
      */

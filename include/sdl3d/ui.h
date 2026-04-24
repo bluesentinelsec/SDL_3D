@@ -97,7 +97,9 @@ extern "C"
     /*
      * Flush the current frame's draw list onto `context`. Must be called
      * outside sdl3d_begin_mode_3d / sdl3d_end_mode_3d; typically the last
-     * thing before sdl3d_present_render_context.
+     * thing before sdl3d_present_render_context. The UI render path is
+     * intentionally overlay-based so widgets stay out of the main 3D
+     * pipeline and post-processing stack.
      */
     bool sdl3d_ui_render(sdl3d_ui_context *ui, sdl3d_render_context *context);
 
