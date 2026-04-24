@@ -25,6 +25,7 @@ bool sdl3d_load_font_from_memory(const void *data, int data_size, float pixel_si
 {
     stbtt_fontinfo info;
     int atlas_w = 512, atlas_h = 512;
+    Uint32 prev_generation = 0;
 
     /* Scale the atlas so all 95 ASCII glyphs fit at any pixel size.
      * With 2× oversampling each glyph cell is roughly (pixel_size*2)².
@@ -49,6 +50,7 @@ bool sdl3d_load_font_from_memory(const void *data, int data_size, float pixel_si
         return SDL_InvalidParamError("data");
     }
 
+    prev_generation = out->atlas_texture.generation;
     SDL_zerop(out);
 
     if (!stbtt_InitFont(&info, (const unsigned char *)data, 0))
@@ -126,7 +128,7 @@ bool sdl3d_load_font_from_memory(const void *data, int data_size, float pixel_si
     out->atlas_texture.filter = SDL3D_TEXTURE_FILTER_BILINEAR;
     out->atlas_texture.wrap_u = SDL3D_TEXTURE_WRAP_CLAMP;
     out->atlas_texture.wrap_v = SDL3D_TEXTURE_WRAP_CLAMP;
-    out->atlas_texture.generation = 1;
+    out->atlas_texture.generation = prev_generation ? prev_generation + 1U : 1U;
 
     SDL_Log("SDL3D font: %.0fpx, atlas %dx%d, %d glyphs", pixel_size, atlas_w, atlas_h, SDL3D_FONT_CHAR_COUNT);
     return true;
@@ -155,6 +157,13 @@ void sdl3d_free_font(sdl3d_font *font)
         SDL_free(font->atlas_pixels);
         font->atlas_pixels = NULL;
         sdl3d_free_texture(&font->atlas_texture);
+        SDL_zero(font->glyphs);
+        font->atlas_w = 0;
+        font->atlas_h = 0;
+        font->size = 0.0f;
+        font->ascent = 0.0f;
+        font->descent = 0.0f;
+        font->line_gap = 0.0f;
     }
 }
 

@@ -14,6 +14,7 @@
 #include "sdl3d/render_context.h"
 #include "sdl3d/shapes.h"
 
+#include <SDL3/SDL_stdinc.h>
 #include <math.h>
 
 #define FONT_SIZE_DEFAULT 36.0f
@@ -21,16 +22,35 @@
 #define FONT_SIZE_MIN 8.0f
 #define FONT_SIZE_MAX 120.0f
 
-static void reload_fonts(sdl3d_font fonts[], bool loaded[], float size)
+static bool reload_fonts(sdl3d_font fonts[], bool loaded[], float size, float *loaded_size)
 {
+    bool all_loaded = true;
+
+    if (loaded_size && SDL_fabsf(*loaded_size - size) <= 0.01f)
+    {
+        for (int i = 0; i < SDL3D_BUILTIN_FONT_COUNT; ++i)
+        {
+            if (!loaded[i])
+                return false;
+        }
+        return true;
+    }
+
     for (int i = 0; i < SDL3D_BUILTIN_FONT_COUNT; ++i)
     {
         if (loaded[i])
             sdl3d_free_font(&fonts[i]);
         loaded[i] = sdl3d_load_builtin_font(SDL3D_MEDIA_DIR, (sdl3d_builtin_font)i, size, &fonts[i]);
         if (!loaded[i])
+        {
             SDL_Log("Failed to load %s: %s", sdl3d_builtin_font_name(i), SDL_GetError());
+            all_loaded = false;
+        }
     }
+
+    if (loaded_size)
+        *loaded_size = size;
+    return all_loaded;
 }
 
 int main(int argc, char *argv[])
@@ -88,9 +108,10 @@ int main(int argc, char *argv[])
     sdl3d_set_ssao_enabled(ctx, false);
 
     float font_size = FONT_SIZE_DEFAULT;
+    float loaded_font_pixel_size = -1.0f;
     sdl3d_font fonts[SDL3D_BUILTIN_FONT_COUNT];
     bool loaded[SDL3D_BUILTIN_FONT_COUNT] = {false};
-    reload_fonts(fonts, loaded, font_size * dpi_scale);
+    reload_fonts(fonts, loaded, font_size * dpi_scale, &loaded_font_pixel_size);
 
     sdl3d_color bg = {30, 30, 40, 255};
     sdl3d_color white = {255, 255, 255, 255};
@@ -115,13 +136,13 @@ int main(int argc, char *argv[])
                 if (ev.key.scancode == SDL_SCANCODE_UP && font_size < FONT_SIZE_MAX)
                 {
                     font_size += FONT_SIZE_STEP;
-                    reload_fonts(fonts, loaded, font_size * dpi_scale);
+                    reload_fonts(fonts, loaded, font_size * dpi_scale, &loaded_font_pixel_size);
                     SDL_Log("Font size: %.0f", font_size);
                 }
                 if (ev.key.scancode == SDL_SCANCODE_DOWN && font_size > FONT_SIZE_MIN)
                 {
                     font_size -= FONT_SIZE_STEP;
-                    reload_fonts(fonts, loaded, font_size * dpi_scale);
+                    reload_fonts(fonts, loaded, font_size * dpi_scale, &loaded_font_pixel_size);
                     SDL_Log("Font size: %.0f", font_size);
                 }
             }
