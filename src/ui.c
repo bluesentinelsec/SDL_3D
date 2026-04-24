@@ -1,0 +1,718 @@
+/*
+ * SDL_3D immediate-mode UI core.
+ *
+ * Phase 1 implementation of issue #62: context, event routing, theme,
+ * screen-space draw primitives, and the label widget.
+ *
+ * Rendering model: widget calls append commands into a per-frame draw
+ * list. sdl3d_ui_render walks the list in order, drawing rects through
+ * an orthographic 3D pass via sdl3d_draw_mesh and text through
+ * sdl3d_draw_text. Depth is disabled implicitly because every draw
+ * primitive lives near the near plane of its own ortho pass, so later
+ * commands overwrite earlier ones — which is what a UI wants.
+ */
+
+#include "sdl3d/ui.h"
+
+#include <SDL3/SDL_error.h>
+#include <SDL3/SDL_log.h>
+#include <SDL3/SDL_stdinc.h>
+
+#include "sdl3d/camera.h"
+#include "sdl3d/drawing3d.h"
+#include "sdl3d/font.h"
+#include "sdl3d/lighting.h"
+#include "sdl3d/math.h"
+#include "sdl3d/render_context.h"
+#include "sdl3d/types.h"
+
+/* ------------------------------------------------------------------ */
+/* Draw command model                                                  */
+/* ------------------------------------------------------------------ */
+
+typedef enum sdl3d_ui_cmd_kind
+{
+    SDL3D_UI_CMD_RECT = 0,
+    SDL3D_UI_CMD_TEXT,
+    SDL3D_UI_CMD_CLIP_PUSH,
+    SDL3D_UI_CMD_CLIP_POP,
+} sdl3d_ui_cmd_kind;
+
+typedef struct sdl3d_ui_cmd
+{
+    sdl3d_ui_cmd_kind kind;
+    float x, y, w, h;
+    sdl3d_color color;
+    int text_offset; /* byte offset into ctx->text_arena (-1 if none) */
+} sdl3d_ui_cmd;
+
+/* ------------------------------------------------------------------ */
+/* Clip stack                                                          */
+/* ------------------------------------------------------------------ */
+
+#define SDL3D_UI_MAX_CLIP_DEPTH 16
+
+typedef struct sdl3d_ui_clip_rect
+{
+    float x, y, w, h;
+} sdl3d_ui_clip_rect;
+
+/* ------------------------------------------------------------------ */
+/* Context                                                             */
+/* ------------------------------------------------------------------ */
+
+struct sdl3d_ui_context
+{
+    const sdl3d_font *font;
+    sdl3d_ui_theme theme;
+
+    int screen_w, screen_h;
+    bool frame_open;
+
+    sdl3d_ui_input_state input;
+    sdl3d_ui_id hovered_id;
+    sdl3d_ui_id active_id;
+    sdl3d_ui_id focused_id;
+
+    /* Growable command buffer. */
+    sdl3d_ui_cmd *cmds;
+    int cmd_count;
+    int cmd_capacity;
+
+    /* Growable text arena — we copy user-supplied strings so the caller
+     * doesn't have to keep them alive until render time. */
+    char *text_arena;
+    int text_len;
+    int text_capacity;
+
+    /* Clip stack, tracked at command-submission time so later queries
+     * (e.g., hit testing) could also respect it in future phases. */
+    sdl3d_ui_clip_rect clip_stack[SDL3D_UI_MAX_CLIP_DEPTH];
+    int clip_depth;
+};
+
+/* ------------------------------------------------------------------ */
+/* Utility helpers                                                     */
+/* ------------------------------------------------------------------ */
+
+static bool ui_ensure_cmd_capacity(sdl3d_ui_context *ui, int needed)
+{
+    if (needed <= ui->cmd_capacity)
+    {
+        return true;
+    }
+    int new_cap = ui->cmd_capacity > 0 ? ui->cmd_capacity : 64;
+    while (new_cap < needed)
+    {
+        new_cap *= 2;
+    }
+    sdl3d_ui_cmd *new_cmds = (sdl3d_ui_cmd *)SDL_realloc(ui->cmds, (size_t)new_cap * sizeof(*new_cmds));
+    if (!new_cmds)
+    {
+        SDL_OutOfMemory();
+        return false;
+    }
+    ui->cmds = new_cmds;
+    ui->cmd_capacity = new_cap;
+    return true;
+}
+
+static int ui_push_text(sdl3d_ui_context *ui, const char *text)
+{
+    if (!text)
+    {
+        return -1;
+    }
+    int len = (int)SDL_strlen(text);
+    int offset = ui->text_len;
+    int needed = offset + len + 1;
+    if (needed > ui->text_capacity)
+    {
+        int new_cap = ui->text_capacity > 0 ? ui->text_capacity : 256;
+        while (new_cap < needed)
+        {
+            new_cap *= 2;
+        }
+        char *buf = (char *)SDL_realloc(ui->text_arena, (size_t)new_cap);
+        if (!buf)
+        {
+            SDL_OutOfMemory();
+            return -1;
+        }
+        ui->text_arena = buf;
+        ui->text_capacity = new_cap;
+    }
+    SDL_memcpy(ui->text_arena + offset, text, (size_t)len);
+    ui->text_arena[offset + len] = '\0';
+    ui->text_len = offset + len + 1;
+    return offset;
+}
+
+static sdl3d_ui_cmd *ui_push_cmd(sdl3d_ui_context *ui)
+{
+    if (!ui_ensure_cmd_capacity(ui, ui->cmd_count + 1))
+    {
+        return NULL;
+    }
+    sdl3d_ui_cmd *cmd = &ui->cmds[ui->cmd_count++];
+    SDL_zerop(cmd);
+    cmd->text_offset = -1;
+    return cmd;
+}
+
+/* ------------------------------------------------------------------ */
+/* Theme                                                               */
+/* ------------------------------------------------------------------ */
+
+sdl3d_ui_theme sdl3d_ui_default_theme(void)
+{
+    sdl3d_ui_theme t;
+    t.text = (sdl3d_color){230, 230, 235, 255};
+    t.text_muted = (sdl3d_color){150, 150, 160, 255};
+    t.panel_bg = (sdl3d_color){36, 40, 48, 235};
+    t.panel_border = (sdl3d_color){18, 20, 24, 255};
+    t.widget_bg = (sdl3d_color){60, 66, 78, 255};
+    t.widget_hover = (sdl3d_color){82, 92, 108, 255};
+    t.widget_active = (sdl3d_color){110, 130, 170, 255};
+    t.widget_border = (sdl3d_color){24, 26, 30, 255};
+    t.focus_ring = (sdl3d_color){120, 170, 255, 255};
+    t.padding = 6.0f;
+    t.spacing = 4.0f;
+    t.border_width = 1.0f;
+    return t;
+}
+
+const sdl3d_ui_theme *sdl3d_ui_get_theme(const sdl3d_ui_context *ui)
+{
+    return ui ? &ui->theme : NULL;
+}
+
+void sdl3d_ui_set_theme(sdl3d_ui_context *ui, const sdl3d_ui_theme *theme)
+{
+    if (ui && theme)
+    {
+        ui->theme = *theme;
+    }
+}
+
+const sdl3d_font *sdl3d_ui_get_font(const sdl3d_ui_context *ui)
+{
+    return ui ? ui->font : NULL;
+}
+
+void sdl3d_ui_set_font(sdl3d_ui_context *ui, const sdl3d_font *font)
+{
+    if (ui)
+    {
+        ui->font = font;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Lifecycle                                                           */
+/* ------------------------------------------------------------------ */
+
+bool sdl3d_ui_create(const sdl3d_font *font, sdl3d_ui_context **out_ui)
+{
+    if (!out_ui)
+    {
+        return SDL_InvalidParamError("out_ui");
+    }
+    sdl3d_ui_context *ui = (sdl3d_ui_context *)SDL_calloc(1, sizeof(*ui));
+    if (!ui)
+    {
+        return SDL_OutOfMemory();
+    }
+    ui->font = font;
+    ui->theme = sdl3d_ui_default_theme();
+    *out_ui = ui;
+    return true;
+}
+
+void sdl3d_ui_destroy(sdl3d_ui_context *ui)
+{
+    if (!ui)
+    {
+        return;
+    }
+    SDL_free(ui->cmds);
+    SDL_free(ui->text_arena);
+    SDL_free(ui);
+}
+
+void sdl3d_ui_begin_frame(sdl3d_ui_context *ui, int screen_w, int screen_h)
+{
+    if (!ui)
+    {
+        return;
+    }
+    ui->screen_w = screen_w;
+    ui->screen_h = screen_h;
+    ui->cmd_count = 0;
+    ui->text_len = 0;
+    ui->clip_depth = 0;
+    ui->frame_open = true;
+    ui->hovered_id = 0;
+
+    /* Edge-triggered flags are cleared at frame start; process_event
+     * raises them during the frame, and they're consumed by widgets in
+     * the current frame only. */
+    for (int i = 0; i < 3; i++)
+    {
+        ui->input.mouse_pressed[i] = false;
+        ui->input.mouse_released[i] = false;
+    }
+    ui->input.text_input[0] = '\0';
+    ui->input.text_input_len = 0;
+}
+
+void sdl3d_ui_end_frame(sdl3d_ui_context *ui)
+{
+    if (!ui)
+    {
+        return;
+    }
+    if (ui->clip_depth != 0)
+    {
+        SDL_Log("sdl3d_ui_end_frame: clip stack not fully popped (depth=%d)", ui->clip_depth);
+        ui->clip_depth = 0;
+    }
+    ui->frame_open = false;
+}
+
+/* ------------------------------------------------------------------ */
+/* Input                                                               */
+/* ------------------------------------------------------------------ */
+
+static int ui_button_index(Uint8 sdl_button)
+{
+    switch (sdl_button)
+    {
+    case SDL_BUTTON_LEFT:
+        return 0;
+    case SDL_BUTTON_MIDDLE:
+        return 1;
+    case SDL_BUTTON_RIGHT:
+        return 2;
+    default:
+        return -1;
+    }
+}
+
+bool sdl3d_ui_process_event(sdl3d_ui_context *ui, const SDL_Event *event)
+{
+    if (!ui || !event)
+    {
+        return false;
+    }
+    switch (event->type)
+    {
+    case SDL_EVENT_MOUSE_MOTION:
+        ui->input.mouse_x = event->motion.x;
+        ui->input.mouse_y = event->motion.y;
+        return sdl3d_ui_wants_mouse(ui);
+    case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+        int idx = ui_button_index(event->button.button);
+        if (idx >= 0)
+        {
+            ui->input.mouse_down[idx] = true;
+            ui->input.mouse_pressed[idx] = true;
+        }
+        ui->input.mouse_x = event->button.x;
+        ui->input.mouse_y = event->button.y;
+        return sdl3d_ui_wants_mouse(ui);
+    }
+    case SDL_EVENT_MOUSE_BUTTON_UP: {
+        int idx = ui_button_index(event->button.button);
+        if (idx >= 0)
+        {
+            ui->input.mouse_down[idx] = false;
+            ui->input.mouse_released[idx] = true;
+        }
+        ui->input.mouse_x = event->button.x;
+        ui->input.mouse_y = event->button.y;
+        return sdl3d_ui_wants_mouse(ui);
+    }
+    case SDL_EVENT_TEXT_INPUT: {
+        const char *text = event->text.text;
+        if (text)
+        {
+            int room = (int)sizeof(ui->input.text_input) - 1 - ui->input.text_input_len;
+            int tlen = (int)SDL_strlen(text);
+            if (tlen > room)
+            {
+                tlen = room;
+            }
+            if (tlen > 0)
+            {
+                SDL_memcpy(ui->input.text_input + ui->input.text_input_len, text, (size_t)tlen);
+                ui->input.text_input_len += tlen;
+                ui->input.text_input[ui->input.text_input_len] = '\0';
+            }
+        }
+        return sdl3d_ui_wants_keyboard(ui);
+    }
+    default:
+        return false;
+    }
+}
+
+bool sdl3d_ui_wants_mouse(const sdl3d_ui_context *ui)
+{
+    /* Until we have widgets that claim mouse interaction (buttons, drag
+     * handles, scroll areas), the UI never consumes mouse events. The
+     * hook is wired so callers can already gate input routing today. */
+    (void)ui;
+    return false;
+}
+
+bool sdl3d_ui_wants_keyboard(const sdl3d_ui_context *ui)
+{
+    /* Same as above — no focused text widgets yet, so keyboard passes
+     * through. Revisit when text fields land in Phase 3. */
+    return ui && ui->focused_id != 0;
+}
+
+const sdl3d_ui_input_state *sdl3d_ui_get_input(const sdl3d_ui_context *ui)
+{
+    return ui ? &ui->input : NULL;
+}
+
+/* ------------------------------------------------------------------ */
+/* IDs and hit testing                                                 */
+/* ------------------------------------------------------------------ */
+
+static sdl3d_ui_id ui_hash_string(const char *s)
+{
+    /* FNV-1a 32-bit. Good enough for widget IDs; collisions within a
+     * single frame are extremely unlikely at UI scale, and IDs are
+     * scoped per frame / per context. */
+    sdl3d_ui_id h = 2166136261u;
+    if (!s)
+    {
+        return h;
+    }
+    for (const unsigned char *p = (const unsigned char *)s; *p; p++)
+    {
+        h ^= (sdl3d_ui_id)(*p);
+        h *= 16777619u;
+    }
+    /* Reserve 0 as the "none" sentinel. */
+    return h ? h : 1u;
+}
+
+sdl3d_ui_id sdl3d_ui_make_id(sdl3d_ui_context *ui, const char *label)
+{
+    (void)ui;
+    return ui_hash_string(label);
+}
+
+bool sdl3d_ui_point_in_rect(float px, float py, float x, float y, float w, float h)
+{
+    return px >= x && px < x + w && py >= y && py < y + h;
+}
+
+bool sdl3d_ui_is_hovering(const sdl3d_ui_context *ui, float x, float y, float w, float h)
+{
+    if (!ui)
+    {
+        return false;
+    }
+    return sdl3d_ui_point_in_rect(ui->input.mouse_x, ui->input.mouse_y, x, y, w, h);
+}
+
+/* ------------------------------------------------------------------ */
+/* Draw primitives                                                     */
+/* ------------------------------------------------------------------ */
+
+void sdl3d_ui_draw_rect(sdl3d_ui_context *ui, float x, float y, float w, float h, sdl3d_color color)
+{
+    if (!ui || !ui->frame_open || w <= 0.0f || h <= 0.0f)
+    {
+        return;
+    }
+    sdl3d_ui_cmd *c = ui_push_cmd(ui);
+    if (!c)
+    {
+        return;
+    }
+    c->kind = SDL3D_UI_CMD_RECT;
+    c->x = x;
+    c->y = y;
+    c->w = w;
+    c->h = h;
+    c->color = color;
+}
+
+void sdl3d_ui_draw_rect_outline(sdl3d_ui_context *ui, float x, float y, float w, float h, float thickness,
+                                sdl3d_color color)
+{
+    if (!ui || w <= 0.0f || h <= 0.0f || thickness <= 0.0f)
+    {
+        return;
+    }
+    /* Four bordering rects. This is cheaper than submitting a stroked
+     * primitive and composes cleanly with the solid-rect path. */
+    sdl3d_ui_draw_rect(ui, x, y, w, thickness, color);                                                /* top */
+    sdl3d_ui_draw_rect(ui, x, y + h - thickness, w, thickness, color);                                /* bottom */
+    sdl3d_ui_draw_rect(ui, x, y + thickness, thickness, h - 2.0f * thickness, color);                 /* left */
+    sdl3d_ui_draw_rect(ui, x + w - thickness, y + thickness, thickness, h - 2.0f * thickness, color); /* right */
+}
+
+void sdl3d_ui_draw_text(sdl3d_ui_context *ui, float x, float y, const char *text, sdl3d_color color)
+{
+    if (!ui || !ui->frame_open || !text || !*text)
+    {
+        return;
+    }
+    sdl3d_ui_cmd *c = ui_push_cmd(ui);
+    if (!c)
+    {
+        return;
+    }
+    c->kind = SDL3D_UI_CMD_TEXT;
+    c->x = x;
+    c->y = y;
+    c->color = color;
+    c->text_offset = ui_push_text(ui, text);
+}
+
+void sdl3d_ui_push_clip(sdl3d_ui_context *ui, float x, float y, float w, float h)
+{
+    if (!ui || !ui->frame_open)
+    {
+        return;
+    }
+    if (ui->clip_depth >= SDL3D_UI_MAX_CLIP_DEPTH)
+    {
+        SDL_Log("sdl3d_ui_push_clip: clip stack full");
+        return;
+    }
+    /* Intersect with parent so nested pushes can only shrink the clip. */
+    float ix = x, iy = y, iw = w, ih = h;
+    if (ui->clip_depth > 0)
+    {
+        sdl3d_ui_clip_rect parent = ui->clip_stack[ui->clip_depth - 1];
+        float px1 = parent.x + parent.w;
+        float py1 = parent.y + parent.h;
+        float cx1 = x + w;
+        float cy1 = y + h;
+        if (x < parent.x)
+            ix = parent.x;
+        if (y < parent.y)
+            iy = parent.y;
+        float nx1 = cx1 < px1 ? cx1 : px1;
+        float ny1 = cy1 < py1 ? cy1 : py1;
+        iw = nx1 - ix;
+        ih = ny1 - iy;
+        if (iw < 0.0f)
+            iw = 0.0f;
+        if (ih < 0.0f)
+            ih = 0.0f;
+    }
+    ui->clip_stack[ui->clip_depth].x = ix;
+    ui->clip_stack[ui->clip_depth].y = iy;
+    ui->clip_stack[ui->clip_depth].w = iw;
+    ui->clip_stack[ui->clip_depth].h = ih;
+    ui->clip_depth++;
+
+    sdl3d_ui_cmd *c = ui_push_cmd(ui);
+    if (c)
+    {
+        c->kind = SDL3D_UI_CMD_CLIP_PUSH;
+        c->x = ix;
+        c->y = iy;
+        c->w = iw;
+        c->h = ih;
+    }
+}
+
+void sdl3d_ui_pop_clip(sdl3d_ui_context *ui)
+{
+    if (!ui || !ui->frame_open || ui->clip_depth <= 0)
+    {
+        return;
+    }
+    ui->clip_depth--;
+    sdl3d_ui_cmd *c = ui_push_cmd(ui);
+    if (c)
+    {
+        c->kind = SDL3D_UI_CMD_CLIP_POP;
+    }
+}
+
+void sdl3d_ui_measure_text(const sdl3d_ui_context *ui, const char *text, float *out_w, float *out_h)
+{
+    if (!ui || !ui->font)
+    {
+        if (out_w)
+            *out_w = 0;
+        if (out_h)
+            *out_h = 0;
+        return;
+    }
+    sdl3d_measure_text(ui->font, text, out_w, out_h);
+}
+
+/* ------------------------------------------------------------------ */
+/* Widgets                                                             */
+/* ------------------------------------------------------------------ */
+
+void sdl3d_ui_label(sdl3d_ui_context *ui, float x, float y, const char *text)
+{
+    if (!ui)
+    {
+        return;
+    }
+    sdl3d_ui_draw_text(ui, x, y, text, ui->theme.text);
+}
+
+void sdl3d_ui_label_colored(sdl3d_ui_context *ui, float x, float y, sdl3d_color color, const char *text)
+{
+    sdl3d_ui_draw_text(ui, x, y, text, color);
+}
+
+void sdl3d_ui_labelfv(sdl3d_ui_context *ui, float x, float y, const char *fmt, va_list args)
+{
+    if (!ui || !fmt)
+    {
+        return;
+    }
+    char buf[512];
+    SDL_vsnprintf(buf, sizeof(buf), fmt, args);
+    sdl3d_ui_label(ui, x, y, buf);
+}
+
+void sdl3d_ui_labelf(sdl3d_ui_context *ui, float x, float y, const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    sdl3d_ui_labelfv(ui, x, y, fmt, args);
+    va_end(args);
+}
+
+/* ------------------------------------------------------------------ */
+/* Rendering                                                           */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Draw a solid colored rect in screen pixels by opening a short-lived
+ * ortho 3D pass. Mirrors the approach used by the font system.
+ */
+static bool ui_render_rect(sdl3d_render_context *context, float x, float y, float w, float h, sdl3d_color color)
+{
+    int cw = sdl3d_get_render_context_width(context);
+    int ch = sdl3d_get_render_context_height(context);
+    if (cw <= 0 || ch <= 0)
+    {
+        return false;
+    }
+
+    sdl3d_camera3d ortho;
+    ortho.position = sdl3d_vec3_make(0.0f, 0.0f, 1.0f);
+    ortho.target = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    ortho.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    ortho.fovy = (float)ch;
+    ortho.projection = SDL3D_CAMERA_ORTHOGRAPHIC;
+
+    sdl3d_shading_mode prev_shading = sdl3d_get_shading_mode(context);
+    bool prev_culling = sdl3d_is_backface_culling_enabled(context);
+    sdl3d_set_shading_mode(context, SDL3D_SHADING_UNLIT);
+    sdl3d_set_backface_culling_enabled(context, false);
+
+    if (!sdl3d_begin_mode_3d(context, ortho))
+    {
+        sdl3d_set_shading_mode(context, prev_shading);
+        sdl3d_set_backface_culling_enabled(context, prev_culling);
+        return false;
+    }
+
+    const float hx = (float)cw * 0.5f;
+    const float hy = (float)ch * 0.5f;
+    float wx0 = x - hx;
+    float wx1 = x + w - hx;
+    float wy0 = hy - y;
+    float wy1 = hy - (y + h);
+
+    /* CCW from the ortho camera (looking -Z), matches text quad winding. */
+    float positions[18] = {
+        wx0, wy0, 0.0f, wx0, wy1, 0.0f, wx1, wy1, 0.0f, wx0, wy0, 0.0f, wx1, wy1, 0.0f, wx1, wy0, 0.0f,
+    };
+
+    sdl3d_mesh mesh;
+    SDL_zero(mesh);
+    mesh.positions = positions;
+    mesh.vertex_count = 6;
+    mesh.material_index = -1;
+
+    bool ok = sdl3d_draw_mesh(context, &mesh, NULL, color);
+
+    sdl3d_end_mode_3d(context);
+    sdl3d_set_shading_mode(context, prev_shading);
+    sdl3d_set_backface_culling_enabled(context, prev_culling);
+    return ok;
+}
+
+bool sdl3d_ui_render(sdl3d_ui_context *ui, sdl3d_render_context *context)
+{
+    if (!ui)
+    {
+        return SDL_InvalidParamError("ui");
+    }
+    if (!context)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (ui->frame_open)
+    {
+        return SDL_SetError("sdl3d_ui_render called before sdl3d_ui_end_frame");
+    }
+
+    /* Remember the caller's scissor state so we can leave it undisturbed. */
+    bool had_scissor = sdl3d_is_scissor_enabled(context);
+    SDL_Rect saved_scissor = {0, 0, 0, 0};
+    if (had_scissor)
+    {
+        sdl3d_get_scissor_rect(context, &saved_scissor);
+    }
+
+    bool ok = true;
+    for (int i = 0; i < ui->cmd_count && ok; i++)
+    {
+        const sdl3d_ui_cmd *cmd = &ui->cmds[i];
+        switch (cmd->kind)
+        {
+        case SDL3D_UI_CMD_RECT:
+            ok = ui_render_rect(context, cmd->x, cmd->y, cmd->w, cmd->h, cmd->color);
+            break;
+        case SDL3D_UI_CMD_TEXT: {
+            if (!ui->font)
+            {
+                break;
+            }
+            const char *text = (cmd->text_offset >= 0) ? ui->text_arena + cmd->text_offset : "";
+            ok = sdl3d_draw_text(context, ui->font, text, cmd->x, cmd->y, cmd->color);
+            break;
+        }
+        case SDL3D_UI_CMD_CLIP_PUSH: {
+            SDL_Rect r = {(int)cmd->x, (int)cmd->y, (int)cmd->w, (int)cmd->h};
+            sdl3d_set_scissor_rect(context, &r);
+            break;
+        }
+        case SDL3D_UI_CMD_CLIP_POP:
+            sdl3d_set_scissor_rect(context, NULL);
+            break;
+        }
+    }
+
+    if (had_scissor)
+    {
+        sdl3d_set_scissor_rect(context, &saved_scissor);
+    }
+    else
+    {
+        sdl3d_set_scissor_rect(context, NULL);
+    }
+
+    return ok;
+}

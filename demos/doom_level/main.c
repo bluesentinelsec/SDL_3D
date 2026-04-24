@@ -10,6 +10,7 @@
 #include "sdl3d/level.h"
 #include "sdl3d/lighting.h"
 #include "sdl3d/sdl3d.h"
+#include "sdl3d/ui.h"
 
 #define WINDOW_W 1280
 #define WINDOW_H 720
@@ -364,6 +365,11 @@ int main(int argc, char *argv[])
                 debug_font.atlas_h, debug_font.ascent, debug_font.descent);
     }
 
+    /* UI context — demoing the new immediate-mode UI path with a label
+     * widget overlaid on the 3D scene. */
+    sdl3d_ui_context *ui = NULL;
+    sdl3d_ui_create(has_font ? &debug_font : NULL, &ui);
+
     const char *enemy_rotation_paths[DEMO_SPRITE_ROTATION_COUNT] = {
         SDL3D_MEDIA_DIR "/sprites/skeletal_robot/south.png", SDL3D_MEDIA_DIR "/sprites/skeletal_robot/south-east.png",
         SDL3D_MEDIA_DIR "/sprites/skeletal_robot/east.png",  SDL3D_MEDIA_DIR "/sprites/skeletal_robot/north-east.png",
@@ -625,6 +631,7 @@ int main(int argc, char *argv[])
         SDL_Event ev;
         while (SDL_PollEvent(&ev))
         {
+            sdl3d_ui_process_event(ui, &ev);
             if (ev.type == SDL_EVENT_QUIT)
                 running = false;
             if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_ESCAPE)
@@ -925,6 +932,19 @@ int main(int argc, char *argv[])
             sdl3d_draw_fps(ctx, &debug_font, dt);
         }
 
+        /* UI pass: demo of the new immediate-mode widget system. Labels
+         * are composed each frame and rendered on top of the 3D scene. */
+        if (ui && has_font)
+        {
+            sdl3d_ui_begin_frame(ui, sdl3d_get_render_context_width(ctx), sdl3d_get_render_context_height(ctx));
+            sdl3d_ui_label(ui, 10.0f, 60.0f, "SDL3D UI - Phase 1");
+            sdl3d_ui_labelf(ui, 10.0f, 100.0f, "sector=%d  visible=%d/%d", current_sector, vis.visible_count,
+                            sector_count);
+            sdl3d_ui_labelf(ui, 10.0f, 140.0f, "pos %.1f, %.1f, %.1f", px, py, pz);
+            sdl3d_ui_end_frame(ui);
+            sdl3d_ui_render(ui, ctx);
+        }
+
         sdl3d_present_render_context(ctx);
 
         /* Debug stats to log. */
@@ -949,6 +969,7 @@ int main(int argc, char *argv[])
     sdl3d_free_texture(&sky_nz);
     if (has_font)
         sdl3d_free_font(&debug_font);
+    sdl3d_ui_destroy(ui);
     sdl3d_destroy_render_context(ctx);
     if (ren)
         SDL_DestroyRenderer(ren);
