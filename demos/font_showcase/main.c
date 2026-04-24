@@ -83,8 +83,7 @@ int main(int argc, char *argv[])
     SDL_Log("Render: %dx%d  Backend: %s", render_w, render_h,
             sdl3d_get_backend_name(sdl3d_get_render_context_backend(ctx)));
 
-    /* Disable post-processing so text renders cleanly without
-     * bloom, SSAO, vignette, or contrast/saturation grading. */
+    /* Disable post-processing so text renders cleanly. */
     sdl3d_set_bloom_enabled(ctx, false);
     sdl3d_set_ssao_enabled(ctx, false);
 
@@ -99,11 +98,20 @@ int main(int argc, char *argv[])
     sdl3d_color hint_color = {100, 100, 100, 255};
     sdl3d_color cube_color = {80, 160, 255, 255};
     bool running = true;
+    bool fonts_dirty = false;
     float elapsed = 0.0f;
     Uint64 last = SDL_GetPerformanceCounter();
 
     while (running)
     {
+        /* Reload fonts AFTER present so the previous frame's draw list
+         * (which references the old atlas textures) has been flushed. */
+        if (fonts_dirty)
+        {
+            reload_fonts(fonts, loaded, font_size * dpi_scale);
+            fonts_dirty = false;
+        }
+
         SDL_Event ev;
         while (SDL_PollEvent(&ev))
         {
@@ -116,13 +124,13 @@ int main(int argc, char *argv[])
                 if (ev.key.scancode == SDL_SCANCODE_UP && font_size < FONT_SIZE_MAX)
                 {
                     font_size += FONT_SIZE_STEP;
-                    reload_fonts(fonts, loaded, font_size * dpi_scale);
+                    fonts_dirty = true;
                     SDL_Log("Font size: %.0f", font_size);
                 }
                 if (ev.key.scancode == SDL_SCANCODE_DOWN && font_size > FONT_SIZE_MIN)
                 {
                     font_size -= FONT_SIZE_STEP;
-                    reload_fonts(fonts, loaded, font_size * dpi_scale);
+                    fonts_dirty = true;
                     SDL_Log("Font size: %.0f", font_size);
                 }
             }
