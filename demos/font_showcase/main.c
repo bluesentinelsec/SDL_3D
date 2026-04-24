@@ -9,8 +9,6 @@
 #include "sdl3d/font.h"
 #include "sdl3d/render_context.h"
 
-#define WINDOW_W 1280
-#define WINDOW_H 720
 #define FONT_SIZE 28.0f
 
 int main(int argc, char *argv[])
@@ -21,8 +19,15 @@ int main(int argc, char *argv[])
     if (!SDL_Init(SDL_INIT_VIDEO))
         return 1;
 
-    SDL_Window *win = SDL_CreateWindow("SDL3D \xe2\x80\x94 Font Showcase", WINDOW_W, WINDOW_H,
-                                       SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+    /* Match the primary display resolution. */
+    SDL_DisplayID display = SDL_GetPrimaryDisplay();
+    const SDL_DisplayMode *mode = SDL_GetCurrentDisplayMode(display);
+    int win_w = mode ? mode->w : 1280;
+    int win_h = mode ? mode->h : 720;
+    SDL_Log("Display: %dx%d", win_w, win_h);
+
+    SDL_Window *win =
+        SDL_CreateWindow("SDL3D \xe2\x80\x94 Font Showcase", win_w, win_h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     if (!win)
         return 1;
 
@@ -36,8 +41,8 @@ int main(int argc, char *argv[])
     sdl3d_render_context_config cfg;
     sdl3d_init_render_context_config(&cfg);
     cfg.backend = SDL3D_BACKEND_SOFTWARE;
-    cfg.logical_width = WINDOW_W;
-    cfg.logical_height = WINDOW_H;
+    cfg.logical_width = win_w;
+    cfg.logical_height = win_h;
 
     sdl3d_render_context *ctx = NULL;
     if (!sdl3d_create_render_context(win, ren, &cfg, &ctx))
