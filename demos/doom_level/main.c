@@ -88,11 +88,25 @@ static const sdl3d_texture2d *select_actor_texture(const demo_sprite_actor *acto
     }
 
     {
+        /* Frame names follow the "view from that direction" convention:
+         *   south.png  — what the camera sees when standing south of the actor (actor's front)
+         *   north.png  — camera north of the actor (actor's back)
+         *   east/west  — side profiles
+         *
+         * atan2(dx, dz) measures the camera's bearing from the actor,
+         * CW from +Z (north). Enum order is S, SE, E, NE, N, NW, W, SW
+         * — CCW from south. The (π - angle) shift aligns camera-south
+         * with index 0 so a viewer circling the actor sees the front,
+         * sides, and back in turn. */
         const float dx = cam_x - actor_pos.x;
         const float dz = cam_z - actor_pos.z;
         const float angle = SDL_atan2f(dx, dz);
-        const float octant = angle / (DEMO_PI * 0.25f);
-        const int index = ((int)SDL_floorf(octant + 0.5f) + DEMO_SPRITE_ROTATION_COUNT) % DEMO_SPRITE_ROTATION_COUNT;
+        const float octant = (DEMO_PI - angle) / (DEMO_PI * 0.25f);
+        int index = (int)SDL_floorf(octant + 0.5f) % DEMO_SPRITE_ROTATION_COUNT;
+        if (index < 0)
+        {
+            index += DEMO_SPRITE_ROTATION_COUNT;
+        }
         const sdl3d_texture2d *texture = actor->rotations->frames[index];
         return texture != NULL ? texture : actor->texture;
     }
@@ -166,9 +180,14 @@ static void advance_projectile(const sdl3d_sector *sectors, int sector_count, fl
 static sdl3d_color sample_actor_tint(const sdl3d_level_light *lights, int light_count, sdl3d_vec3 position,
                                      bool proj_active, float proj_x, float proj_y, float proj_z)
 {
-    float r = 0.12f;
-    float g = 0.12f;
-    float b = 0.14f;
+    /* Ambient floor: the sprite art is already dark (black skeletal robot
+     * on transparent background), so tinting further with ~12% ambient
+     * kills readability anywhere without a nearby light. Lifting the
+     * floor to ~70% keeps the art recognizable while still letting
+     * colored point lights push it toward their hue up close. */
+    float r = 0.7f;
+    float g = 0.7f;
+    float b = 0.72f;
 
     for (int i = 0; i < light_count; ++i)
     {
@@ -543,21 +562,27 @@ int main(int argc, char *argv[])
         &enemy_rot_tex[DEMO_SPRITE_SOUTH_WEST],
     }};
 
+    /* Enemy sprites are anchored at bottom-center (feet = position.y),
+     * but the AI-generated art has a chunk of transparent padding under
+     * the robot's feet, so rendering at sector floor_y leaves them
+     * visually floating. Dropping each enemy's y by ~1.5 units plants the
+     * boots on the floor and keeps 2×-scale figures under the low 3–4m
+     * ceilings in the starting/south-corridor sectors without clipping. */
     demo_sprite_actor actors[] = {
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(5.8f, 0.0f, 6.8f),
-         (sdl3d_vec2){1.7f, 2.6f}, true, 0.10f, 7.0f},
+        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(5.8f, -1.5f, 6.8f),
+         (sdl3d_vec2){3.4f, 5.2f}, true, 0.10f, 7.0f},
         {&health_tex, NULL, sdl3d_vec3_make(5.0f, 0.25f, 10.8f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.12f, 1.8f},
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(4.2f, -0.5f, 21.5f),
-         (sdl3d_vec2){1.6f, 2.4f}, true, 0.08f, 6.0f},
+        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(4.2f, -2.0f, 21.5f),
+         (sdl3d_vec2){3.2f, 4.8f}, true, 0.08f, 6.0f},
         {&health_tex, NULL, sdl3d_vec3_make(24.0f, 0.25f, 4.5f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.15f, 1.5f},
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, 0.0f, 19.0f),
-         (sdl3d_vec2){1.8f, 2.8f}, true, 0.09f, 6.5f},
+        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, -1.5f, 19.0f),
+         (sdl3d_vec2){3.6f, 5.6f}, true, 0.09f, 6.5f},
         {&health_tex, NULL, sdl3d_vec3_make(24.0f, 0.25f, 28.5f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.12f, 2.1f},
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, 0.0f, 37.5f),
-         (sdl3d_vec2){1.7f, 2.6f}, true, 0.09f, 5.8f},
+        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, -1.5f, 37.5f),
+         (sdl3d_vec2){3.4f, 5.2f}, true, 0.09f, 5.8f},
         {&health_tex, NULL, sdl3d_vec3_make(35.5f, 0.25f, 27.0f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.1f, 1.7f},
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, 0.0f, 72.0f),
-         (sdl3d_vec2){1.8f, 2.8f}, true, 0.11f, 5.5f},
+        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, -1.5f, 72.0f),
+         (sdl3d_vec2){3.6f, 5.6f}, true, 0.11f, 5.5f},
         {&health_tex, NULL, sdl3d_vec3_make(10.0f, 0.25f, 84.0f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.14f, 1.6f},
     };
     demo_actor_draw actor_draws[SDL_arraysize(actors)];
