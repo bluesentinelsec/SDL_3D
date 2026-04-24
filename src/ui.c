@@ -114,6 +114,16 @@ struct sdl3d_ui_context
     sdl3d_ui_clip_rect clip_stack[SDL3D_UI_MAX_CLIP_DEPTH];
     int clip_depth;
 
+    /* Active scroll region — set by begin_scroll, consumed by end_scroll. */
+#define SDL3D_UI_MAX_SCROLL_DEPTH 8
+    struct
+    {
+        float x, y, w, h;
+        float *offset;
+        float content_height;
+    } scroll_stack[SDL3D_UI_MAX_SCROLL_DEPTH];
+    int scroll_depth;
+
     /* Layout stack — panels and containers push layout entries that
      * auto-position child widgets. */
     sdl3d_ui_layout_entry layout_stack[SDL3D_UI_MAX_LAYOUT_DEPTH];
@@ -284,6 +294,7 @@ void sdl3d_ui_begin_frame(sdl3d_ui_context *ui, int screen_w, int screen_h)
     ui->cmd_count = 0;
     ui->text_len = 0;
     ui->clip_depth = 0;
+    ui->scroll_depth = 0;
     ui->layout_depth = 0;
     ui->frame_open = true;
     ui->hovered_id = 0;
@@ -298,6 +309,7 @@ void sdl3d_ui_begin_frame(sdl3d_ui_context *ui, int screen_w, int screen_h)
     }
     ui->input.text_input[0] = '\0';
     ui->input.text_input_len = 0;
+    ui->input.scroll_y = 0.0f;
 }
 
 void sdl3d_ui_set_mouse_transform(sdl3d_ui_context *ui, float scale_x, float scale_y, float offset_x, float offset_y)
@@ -410,6 +422,15 @@ bool sdl3d_ui_process_event(sdl3d_ui_context *ui, const SDL_Event *event)
             }
         }
         return sdl3d_ui_wants_keyboard(ui);
+    }
+    case SDL_EVENT_MOUSE_WHEEL: {
+        float dy = event->wheel.y;
+        if (event->wheel.direction == SDL_MOUSEWHEEL_FLIPPED)
+            dy = -dy;
+        ui->input.scroll_y += dy;
+        ui->input.mouse_x = ui_map_mouse_x(ui, event->wheel.mouse_x);
+        ui->input.mouse_y = ui_map_mouse_y(ui, event->wheel.mouse_y);
+        return sdl3d_ui_wants_mouse(ui);
     }
     default:
         return false;
@@ -781,6 +802,57 @@ void sdl3d_ui_separator(sdl3d_ui_context *ui)
         sdl3d_ui_draw_rect(ui, sx, ui->layout_stack[d].y, 1.0f, ui->layout_stack[d].h, sep_color);
         ui->layout_stack[d].cursor = sx + 1.0f;
     }
+}
+
+/* ------------------------------------------------------------------ */
+/* Scroll region                                                       */
+/* ------------------------------------------------------------------ */
+
+#define SDL3D_UI_SCROLL_SPEED 30.0f
+
+void sdl3d_ui_begin_scroll(sdl3d_ui_context *ui, float x, float y, float w, float h, float *scroll_offset,
+                           float content_height)
+{
+    if (!ui || !ui->frame_open || !scroll_offset)
+        return;
+
+    /* Apply mouse wheel if hovering this region. */
+    if (sdl3d_ui_is_hovering(ui, x, y, w, h) && ui->input.scroll_y != 0.0f)
+    {
+        *scroll_offset -= ui->input.scroll_y * SDL3D_UI_SCROLL_SPEED;
+    }
+
+    /* Clamp scroll offset. */
+    float max_scroll = content_height - h;
+    if (max_scroll < 0.0f)
+        max_scroll = 0.0f;
+    if (*scroll_offset < 0.0f)
+        *scroll_offset = 0.0f;
+    if (*scroll_offset > max_scroll)
+        *scroll_offset = max_scroll;
+
+    /* Push onto scroll stack. */
+    if (ui->scroll_depth < SDL3D_UI_MAX_SCROLL_DEPTH)
+    {
+        int d = ui->scroll_depth++;
+        ui->scroll_stack[d].x = x;
+        ui->scroll_stack[d].y = y;
+        ui->scroll_stack[d].w = w;
+        ui->scroll_stack[d].h = h;
+        ui->scroll_stack[d].offset = scroll_offset;
+        ui->scroll_stack[d].content_height = content_height;
+    }
+
+    sdl3d_ui_push_clip(ui, x, y, w, h);
+}
+
+void sdl3d_ui_end_scroll(sdl3d_ui_context *ui)
+{
+    if (!ui)
+        return;
+    sdl3d_ui_pop_clip(ui);
+    if (ui->scroll_depth > 0)
+        ui->scroll_depth--;
 }
 
 /* ------------------------------------------------------------------ */

@@ -117,12 +117,17 @@ typedef struct editor_state
     float *light_intensity;
 } editor_state;
 
+static float inspector_scroll = 0.0f;
+
 static void draw_inspector_panel(sdl3d_ui_context *ui, float x0, float y0, float h, const editor_state *st)
 {
     float pad = 8.0f;
     float inner_w = INSPECTOR_W - pad * 2;
+    float content_h = 500.0f; /* estimated total content height */
+
     sdl3d_ui_begin_panel(ui, x0, y0, INSPECTOR_W, h);
-    sdl3d_ui_begin_vbox(ui, x0 + pad, y0 + pad, inner_w, h - pad * 2);
+    sdl3d_ui_begin_scroll(ui, x0 + pad, y0 + pad, inner_w, h - pad * 2, &inspector_scroll, content_h);
+    sdl3d_ui_begin_vbox(ui, x0 + pad, y0 + pad - inspector_scroll, inner_w, content_h);
 
     sdl3d_ui_layout_label(ui, "Inspector");
     sdl3d_ui_separator(ui);
@@ -150,6 +155,7 @@ static void draw_inspector_panel(sdl3d_ui_context *ui, float x0, float y0, float
     sdl3d_ui_layout_button(ui, "Delete##insp3");
 
     sdl3d_ui_end_vbox(ui);
+    sdl3d_ui_end_scroll(ui);
     sdl3d_ui_end_panel(ui);
 }
 

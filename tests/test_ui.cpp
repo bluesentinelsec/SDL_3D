@@ -489,4 +489,85 @@ TEST(SDL3DUI, SliderClampsValue)
     sdl3d_ui_destroy(ui);
 }
 
+// Helper: simulate a mouse wheel scroll.
+static void sim_scroll(sdl3d_ui_context *ui, float x, float y, float dy)
+{
+    SDL_Event ev{};
+    ev.type = SDL_EVENT_MOUSE_WHEEL;
+    ev.wheel.y = dy;
+    ev.wheel.mouse_x = x;
+    ev.wheel.mouse_y = y;
+    ev.wheel.direction = SDL_MOUSEWHEEL_NORMAL;
+    sdl3d_ui_process_event(ui, &ev);
+}
+
+TEST(SDL3DUI, ScrollRegionClampsOffset)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    float scroll = 0.0f;
+
+    // Scroll up (negative offset) should clamp to 0.
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_scroll(ui, 50.0f, 50.0f, 5.0f); // scroll up
+    sdl3d_ui_begin_scroll(ui, 0, 0, 100, 100, &scroll, 200);
+    sdl3d_ui_end_scroll(ui);
+    EXPECT_FLOAT_EQ(scroll, 0.0f);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, ScrollRegionScrollsDown)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    float scroll = 0.0f;
+
+    // Scroll down while hovering the region.
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_scroll(ui, 50.0f, 50.0f, -2.0f); // scroll down
+    sdl3d_ui_begin_scroll(ui, 0, 0, 100, 100, &scroll, 300);
+    sdl3d_ui_end_scroll(ui);
+    EXPECT_GT(scroll, 0.0f);
+    // Should not exceed max (content_height - visible_height = 200).
+    EXPECT_LE(scroll, 200.0f);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, ScrollRegionClampsMax)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    float scroll = 999.0f; // way past max
+
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sdl3d_ui_begin_scroll(ui, 0, 0, 100, 100, &scroll, 150);
+    sdl3d_ui_end_scroll(ui);
+    // Max scroll = 150 - 100 = 50.
+    EXPECT_FLOAT_EQ(scroll, 50.0f);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, ScrollRegionIgnoresWheelOutside)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    float scroll = 0.0f;
+
+    // Scroll while mouse is outside the region.
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_scroll(ui, 500.0f, 500.0f, -5.0f); // outside (0,0,100,100)
+    sdl3d_ui_begin_scroll(ui, 0, 0, 100, 100, &scroll, 300);
+    sdl3d_ui_end_scroll(ui);
+    EXPECT_FLOAT_EQ(scroll, 0.0f);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
 } // namespace

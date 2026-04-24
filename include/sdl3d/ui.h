@@ -73,6 +73,7 @@ extern "C"
     typedef struct sdl3d_ui_input_state
     {
         float mouse_x, mouse_y;
+        float scroll_y;         /* accumulated mouse wheel delta this frame (positive = up) */
         bool mouse_down[3];     /* left / middle / right, current frame */
         bool mouse_pressed[3];  /* edge-triggered: true only on the frame the press arrived */
         bool mouse_released[3]; /* edge-triggered: true only on the release frame */
@@ -263,6 +264,33 @@ extern "C"
     bool sdl3d_ui_slider(sdl3d_ui_context *ui, float x, float y, float w, const char *label, float *value, float min,
                          float max);
     bool sdl3d_ui_layout_slider(sdl3d_ui_context *ui, const char *label, float *value, float min, float max);
+
+    /* ------------------------------------------------------------------ */
+    /* Scroll region                                                       */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * Scrollable region. Clips children to (x, y, w, h) and offsets
+     * them vertically by the current scroll amount. Mouse wheel events
+     * while hovering adjust the scroll offset.
+     *
+     * `scroll_offset` is caller-owned persistent state (initialize to 0).
+     * `content_height` is the total height of the content inside the
+     * region — pass the cursor position from your vbox after end_vbox,
+     * or estimate it. The scroll is clamped so the content doesn't
+     * scroll past its bounds.
+     *
+     * Typical usage:
+     *   static float scroll = 0;
+     *   sdl3d_ui_begin_scroll(ui, x, y, w, h, &scroll, content_h);
+     *     sdl3d_ui_begin_vbox(ui, x, y - scroll, w, content_h);
+     *       ... widgets ...
+     *     sdl3d_ui_end_vbox(ui);
+     *   sdl3d_ui_end_scroll(ui);
+     */
+    void sdl3d_ui_begin_scroll(sdl3d_ui_context *ui, float x, float y, float w, float h, float *scroll_offset,
+                               float content_height);
+    void sdl3d_ui_end_scroll(sdl3d_ui_context *ui);
 
 #ifdef __cplusplus
 }
