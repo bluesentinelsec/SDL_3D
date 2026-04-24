@@ -153,4 +153,108 @@ TEST(SDL3DUI, SetThemeRoundTrip)
     sdl3d_ui_destroy(ui);
 }
 
+// Helper: simulate a mouse move to (x, y).
+static void sim_mouse_move(sdl3d_ui_context *ui, float x, float y)
+{
+    SDL_Event ev{};
+    ev.type = SDL_EVENT_MOUSE_MOTION;
+    ev.motion.x = x;
+    ev.motion.y = y;
+    sdl3d_ui_process_event(ui, &ev);
+}
+
+// Helper: simulate a left mouse button press at (x, y).
+static void sim_mouse_down(sdl3d_ui_context *ui, float x, float y)
+{
+    SDL_Event ev{};
+    ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    ev.button.button = SDL_BUTTON_LEFT;
+    ev.button.x = x;
+    ev.button.y = y;
+    sdl3d_ui_process_event(ui, &ev);
+}
+
+// Helper: simulate a left mouse button release at (x, y).
+static void sim_mouse_up(sdl3d_ui_context *ui, float x, float y)
+{
+    SDL_Event ev{};
+    ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    ev.button.button = SDL_BUTTON_LEFT;
+    ev.button.x = x;
+    ev.button.y = y;
+    sdl3d_ui_process_event(ui, &ev);
+}
+
+TEST(SDL3DUI, ButtonClickReturnsTrue)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+
+    // Frame 1: hover + press
+    sdl3d_ui_begin_frame(ui, 1280, 720);
+    sim_mouse_move(ui, 50.0f, 50.0f);
+    sim_mouse_down(ui, 50.0f, 50.0f);
+    EXPECT_FALSE(sdl3d_ui_button(ui, 0, 0, 100, 100, "Test"));
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 2: release while hovering → click
+    sdl3d_ui_begin_frame(ui, 1280, 720);
+    sim_mouse_move(ui, 50.0f, 50.0f);
+    sim_mouse_up(ui, 50.0f, 50.0f);
+    EXPECT_TRUE(sdl3d_ui_button(ui, 0, 0, 100, 100, "Test"));
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, ButtonClickOutsideReturnsFalse)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+
+    // Frame 1: press on button
+    sdl3d_ui_begin_frame(ui, 1280, 720);
+    sim_mouse_move(ui, 50.0f, 50.0f);
+    sim_mouse_down(ui, 50.0f, 50.0f);
+    sdl3d_ui_button(ui, 0, 0, 100, 100, "Test");
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 2: drag outside, release → no click
+    sdl3d_ui_begin_frame(ui, 1280, 720);
+    sim_mouse_move(ui, 200.0f, 200.0f);
+    sim_mouse_up(ui, 200.0f, 200.0f);
+    EXPECT_FALSE(sdl3d_ui_button(ui, 0, 0, 100, 100, "Test"));
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, ButtonWantsMouse)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+
+    sdl3d_ui_begin_frame(ui, 1280, 720);
+    sim_mouse_move(ui, 50.0f, 50.0f);
+    EXPECT_FALSE(sdl3d_ui_wants_mouse(ui));
+    sdl3d_ui_button(ui, 0, 0, 100, 100, "Test");
+    EXPECT_TRUE(sdl3d_ui_wants_mouse(ui));
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, ButtonHashSeparator)
+{
+    // "Save##1" and "Save##2" should be distinct IDs but display the same text.
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+
+    sdl3d_ui_id a = sdl3d_ui_make_id(ui, "Save##1");
+    sdl3d_ui_id b = sdl3d_ui_make_id(ui, "Save##2");
+    EXPECT_NE(a, b);
+
+    sdl3d_ui_destroy(ui);
+}
+
 } // namespace

@@ -161,7 +161,7 @@ extern "C"
     void sdl3d_ui_measure_text(const sdl3d_ui_context *ui, const char *text, float *out_w, float *out_h);
 
     /* ------------------------------------------------------------------ */
-    /* Widgets — Phase 2 will expand this set                              */
+    /* Widgets                                                             */
     /* ------------------------------------------------------------------ */
 
     /*
@@ -176,6 +176,17 @@ extern "C"
         SDL_PRINTF_VARARG_FUNC(4);
 
     void sdl3d_ui_labelfv(sdl3d_ui_context *ui, float x, float y, const char *fmt, va_list args);
+
+    /*
+     * Immediate-mode button. Draws a themed rectangle with centered label
+     * text and returns true on the frame the user clicks it (mouse released
+     * while hovering after a press that started on the button).
+     *
+     * The label string is also used to generate the widget ID, so each
+     * button in a frame must have a unique label (or use "Label##id" to
+     * disambiguate visually identical buttons).
+     */
+    bool sdl3d_ui_button(sdl3d_ui_context *ui, float x, float y, float w, float h, const char *label);
 
 #ifdef __cplusplus
 }

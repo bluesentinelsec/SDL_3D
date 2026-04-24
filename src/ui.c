@@ -359,11 +359,9 @@ bool sdl3d_ui_process_event(sdl3d_ui_context *ui, const SDL_Event *event)
 
 bool sdl3d_ui_wants_mouse(const sdl3d_ui_context *ui)
 {
-    /* Until we have widgets that claim mouse interaction (buttons, drag
-     * handles, scroll areas), the UI never consumes mouse events. The
-     * hook is wired so callers can already gate input routing today. */
-    (void)ui;
-    return false;
+    if (!ui)
+        return false;
+    return ui->hovered_id != 0 || ui->active_id != 0;
 }
 
 bool sdl3d_ui_wants_keyboard(const sdl3d_ui_context *ui)
@@ -589,6 +587,72 @@ void sdl3d_ui_labelf(sdl3d_ui_context *ui, float x, float y, const char *fmt, ..
     va_start(args, fmt);
     sdl3d_ui_labelfv(ui, x, y, fmt, args);
     va_end(args);
+}
+
+/* ------------------------------------------------------------------ */
+/* Button                                                              */
+/* ------------------------------------------------------------------ */
+
+bool sdl3d_ui_button(sdl3d_ui_context *ui, float x, float y, float w, float h, const char *label)
+{
+    if (!ui || !ui->frame_open || !label)
+        return false;
+
+    sdl3d_ui_id id = sdl3d_ui_make_id(ui, label);
+    bool hovering = sdl3d_ui_is_hovering(ui, x, y, w, h);
+    bool pressed = false;
+
+    /* Update interaction state. */
+    if (hovering)
+    {
+        ui->hovered_id = id;
+        if (ui->input.mouse_pressed[0])
+            ui->active_id = id;
+    }
+
+    /* Click = mouse released while hovering, after a press on this widget. */
+    if (ui->active_id == id && ui->input.mouse_released[0])
+    {
+        if (hovering)
+            pressed = true;
+        ui->active_id = 0;
+    }
+
+    /* Choose visual state. */
+    const sdl3d_ui_theme *t = &ui->theme;
+    sdl3d_color bg;
+    if (ui->active_id == id && hovering)
+        bg = t->widget_active;
+    else if (hovering)
+        bg = t->widget_hover;
+    else
+        bg = t->widget_bg;
+
+    /* Draw background + border. */
+    sdl3d_ui_draw_rect(ui, x, y, w, h, bg);
+    sdl3d_ui_draw_rect_outline(ui, x, y, w, h, t->border_width, t->widget_border);
+
+    /* Center label text. Strip "##id" suffix for display. */
+    const char *display = label;
+    const char *sep = SDL_strstr(label, "##");
+    char buf[256];
+    if (sep)
+    {
+        int len = (int)(sep - label);
+        if (len >= (int)sizeof(buf))
+            len = (int)sizeof(buf) - 1;
+        SDL_memcpy(buf, label, (size_t)len);
+        buf[len] = '\0';
+        display = buf;
+    }
+
+    float tw = 0, th = 0;
+    sdl3d_ui_measure_text(ui, display, &tw, &th);
+    float tx = x + (w - tw) * 0.5f;
+    float ty = y + (h - th) * 0.5f;
+    sdl3d_ui_draw_text(ui, tx, ty, display, t->text);
+
+    return pressed;
 }
 
 /* ------------------------------------------------------------------ */
