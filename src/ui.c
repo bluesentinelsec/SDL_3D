@@ -74,7 +74,7 @@ typedef struct sdl3d_ui_layout_entry
     sdl3d_ui_layout_dir direction;
     float x, y, w, h; /* bounding region */
     float cursor;     /* current position along the layout axis */
-    float cross_max;  /* max extent on the cross axis */
+    float cross_max;  /* tallest child (vbox) or widest child (hbox); tracked for future use */
     float spacing;    /* gap between items */
     bool first_item;  /* suppress spacing before the first item */
 } sdl3d_ui_layout_entry;
@@ -146,6 +146,11 @@ struct sdl3d_ui_context
 /* Utility helpers                                                     */
 /* ------------------------------------------------------------------ */
 
+/*
+ * Grow a command buffer (main or popup) to hold at least `needed` entries.
+ * Doubles capacity each time. Operates via pointer indirection so the
+ * same function serves both ui->cmds and ui->popup_cmds.
+ */
 static bool ui_ensure_cmd_capacity(sdl3d_ui_cmd **cmds, int *capacity, int needed)
 {
     if (needed <= *capacity)
@@ -168,6 +173,11 @@ static bool ui_ensure_cmd_capacity(sdl3d_ui_cmd **cmds, int *capacity, int neede
     return true;
 }
 
+/*
+ * Copy `text` into the growable text arena. Returns the byte offset
+ * into ui->text_arena where the NUL-terminated copy starts, or -1 on
+ * failure. The arena is shared by both main and popup command buffers.
+ */
 static int ui_push_text(sdl3d_ui_context *ui, const char *text)
 {
     if (!text)
@@ -199,6 +209,7 @@ static int ui_push_text(sdl3d_ui_context *ui, const char *text)
     return offset;
 }
 
+/* Append a command to the main draw list (rendered first). */
 static sdl3d_ui_cmd *ui_push_cmd(sdl3d_ui_context *ui)
 {
     if (!ui_ensure_cmd_capacity(&ui->cmds, &ui->cmd_capacity, ui->cmd_count + 1))
@@ -211,6 +222,8 @@ static sdl3d_ui_cmd *ui_push_cmd(sdl3d_ui_context *ui)
     return cmd;
 }
 
+/* Append a command to the popup draw list (rendered after main, so
+ * dropdown menus and future popups appear above ordinary widgets). */
 static sdl3d_ui_cmd *ui_push_popup_cmd(sdl3d_ui_context *ui)
 {
     if (!ui_ensure_cmd_capacity(&ui->popup_cmds, &ui->popup_cmd_capacity, ui->popup_cmd_count + 1))
@@ -305,6 +318,12 @@ static void ui_popup_pop_clip(sdl3d_ui_context *ui)
     cmd->kind = SDL3D_UI_CMD_CLIP_POP;
 }
 
+/*
+ * Mark a screen region as owned by a popup (e.g., an open dropdown list).
+ * While active, ui_is_hovering_for_id blocks hover for any widget whose
+ * ID doesn't match `owner_id` when the mouse is inside this region.
+ * Cleared automatically at the start of each frame in begin_frame.
+ */
 static void ui_activate_popup_capture(sdl3d_ui_context *ui, sdl3d_ui_id owner_id, float x, float y, float w, float h)
 {
     if (!ui)
@@ -318,6 +337,12 @@ static void ui_activate_popup_capture(sdl3d_ui_context *ui, sdl3d_ui_id owner_id
     ui->popup_rect.h = h;
 }
 
+/*
+ * Popup-aware hit test. Returns true if the mouse is inside (x,y,w,h)
+ * AND the popup capture region (if any) doesn't block this widget.
+ * Pass id=0 for non-interactive queries (e.g., scroll hover checks).
+ * The popup owner's own ID always passes through.
+ */
 static bool ui_is_hovering_for_id(const sdl3d_ui_context *ui, sdl3d_ui_id id, float x, float y, float w, float h)
 {
     if (!ui)
@@ -486,6 +511,8 @@ void sdl3d_ui_end_frame(sdl3d_ui_context *ui)
 /* Input                                                               */
 /* ------------------------------------------------------------------ */
 
+/* Map SDL mouse button constant to our 3-element array index
+ * (0=left, 1=middle, 2=right). Returns -1 for untracked buttons. */
 static int ui_button_index(Uint8 sdl_button)
 {
     switch (sdl_button)
@@ -953,7 +980,7 @@ void sdl3d_ui_separator(sdl3d_ui_context *ui)
 /* Scroll region                                                       */
 /* ------------------------------------------------------------------ */
 
-#define SDL3D_UI_SCROLL_SPEED 30.0f
+#define SDL3D_UI_SCROLL_SPEED 30.0f /* logical pixels per mouse wheel tick */
 
 void sdl3d_ui_begin_scroll(sdl3d_ui_context *ui, float x, float y, float w, float h, float *scroll_offset,
                            float content_height)
@@ -1154,7 +1181,7 @@ bool sdl3d_ui_slider(sdl3d_ui_context *ui, float x, float y, float w, const char
     const sdl3d_ui_theme *t = &ui->theme;
     bool changed = false;
 
-    /* Layout: label on top, track below. */
+    /* Track with centered "Label: value" text overlay. */
     float track_y = y;
     float track_w = w;
     float track_h = SDL3D_UI_SLIDER_ROW_H;

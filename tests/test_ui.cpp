@@ -699,4 +699,225 @@ TEST(SDL3DUI, TabStripSelection)
     sdl3d_ui_destroy(ui);
 }
 
+TEST(SDL3DUI, TabStripReClickReturnsFalse)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    const char *tabs[] = {"A", "B"};
+    int selected = 0;
+
+    // Click on already-selected tab 0
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 25.0f, 15.0f);
+    sim_mouse_down(ui, 25.0f, 15.0f);
+    EXPECT_FALSE(sdl3d_ui_tab_strip(ui, 0, 0, 200, 30, tabs, 2, &selected));
+    EXPECT_EQ(selected, 0);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, TextFieldEscapeCancels)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    char buf[64] = "original";
+
+    // Frame 1: click to focus
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 50.0f, 15.0f);
+    sim_mouse_down(ui, 50.0f, 15.0f);
+    sdl3d_ui_text_field(ui, 0, 0, 200, 30, buf, sizeof(buf));
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 2: press Escape → should NOT commit (returns false)
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    {
+        SDL_Event ev{};
+        ev.type = SDL_EVENT_KEY_DOWN;
+        ev.key.scancode = SDL_SCANCODE_ESCAPE;
+        sdl3d_ui_process_event(ui, &ev);
+    }
+    EXPECT_FALSE(sdl3d_ui_text_field(ui, 0, 0, 200, 30, buf, sizeof(buf)));
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, TextFieldClickOutsideCommits)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    char buf[64] = "hello";
+
+    // Frame 1: click to focus
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 50.0f, 15.0f);
+    sim_mouse_down(ui, 50.0f, 15.0f);
+    sdl3d_ui_text_field(ui, 0, 0, 200, 30, buf, sizeof(buf));
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 2: click outside → should commit (returns true)
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 500.0f, 500.0f);
+    sim_mouse_down(ui, 500.0f, 500.0f);
+    EXPECT_TRUE(sdl3d_ui_text_field(ui, 0, 0, 200, 30, buf, sizeof(buf)));
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, TextFieldBufferOverflow)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    char buf[4] = "ab"; // 2 chars + NUL, room for 1 more
+
+    // Frame 1: click to focus
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 50.0f, 15.0f);
+    sim_mouse_down(ui, 50.0f, 15.0f);
+    sdl3d_ui_text_field(ui, 0, 0, 200, 30, buf, sizeof(buf));
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 2: type "xyz" — only 1 char should fit
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    {
+        SDL_Event ev{};
+        ev.type = SDL_EVENT_TEXT_INPUT;
+        ev.text.text = "xyz";
+        sdl3d_ui_process_event(ui, &ev);
+    }
+    sdl3d_ui_text_field(ui, 0, 0, 200, 30, buf, sizeof(buf));
+    EXPECT_STREQ(buf, "abx");
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, CheckboxReleaseOutsideDoesNotToggle)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    bool val = false;
+
+    // Frame 1: press on checkbox
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 15.0f, 15.0f);
+    sim_mouse_down(ui, 15.0f, 15.0f);
+    sdl3d_ui_checkbox(ui, 10, 10, "CB", &val);
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 2: move outside, release → should NOT toggle
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 500.0f, 500.0f);
+    sim_mouse_up(ui, 500.0f, 500.0f);
+    sdl3d_ui_checkbox(ui, 10, 10, "CB", &val);
+    EXPECT_FALSE(val);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, DropdownCloseOnClickOutside)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    const char *items[] = {"A", "B"};
+    int selected = 0;
+
+    // Frame 1: click to open
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 50.0f, 15.0f);
+    sim_mouse_down(ui, 50.0f, 15.0f);
+    sdl3d_ui_dropdown(ui, 0, 0, 200, 30, items, 2, &selected);
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 2: click far outside → should close, selection unchanged
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 500.0f, 500.0f);
+    sim_mouse_down(ui, 500.0f, 500.0f);
+    EXPECT_FALSE(sdl3d_ui_dropdown(ui, 0, 0, 200, 30, items, 2, &selected));
+    EXPECT_EQ(selected, 0);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, SliderRejectsInvalidRange)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    float val = 0.5f;
+
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    // max <= min should return false and not modify val
+    EXPECT_FALSE(sdl3d_ui_slider(ui, 10, 10, 200, "Bad", &val, 5.0f, 5.0f));
+    EXPECT_FLOAT_EQ(val, 0.5f);
+    EXPECT_FALSE(sdl3d_ui_slider(ui, 10, 10, 200, "Bad2", &val, 10.0f, 1.0f));
+    EXPECT_FLOAT_EQ(val, 0.5f);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, WantsKeyboardWhenFocused)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    char buf[32] = "";
+
+    EXPECT_FALSE(sdl3d_ui_wants_keyboard(ui));
+
+    // Click to focus a text field
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 50.0f, 15.0f);
+    sim_mouse_down(ui, 50.0f, 15.0f);
+    sdl3d_ui_text_field(ui, 0, 0, 200, 30, buf, sizeof(buf));
+    EXPECT_TRUE(sdl3d_ui_wants_keyboard(ui));
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, ScrollWheelFlippedDirection)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    float scroll = 0.0f;
+
+    // Flipped wheel: positive y means scroll down (toward user)
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    {
+        SDL_Event ev{};
+        ev.type = SDL_EVENT_MOUSE_WHEEL;
+        ev.wheel.y = 2.0f;
+        ev.wheel.mouse_x = 50.0f;
+        ev.wheel.mouse_y = 50.0f;
+        ev.wheel.direction = SDL_MOUSEWHEEL_FLIPPED;
+        sdl3d_ui_process_event(ui, &ev);
+    }
+    sdl3d_ui_begin_scroll(ui, 0, 0, 100, 100, &scroll, 300);
+    sdl3d_ui_end_scroll(ui);
+    // Flipped + positive y = scroll down = positive offset
+    EXPECT_GT(scroll, 0.0f);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, MeasureTextReturnsNonZero)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+
+    // With no font, measure should return 0.
+    float w = -1, h = -1;
+    sdl3d_ui_measure_text(ui, "Hello", &w, &h);
+    EXPECT_FLOAT_EQ(w, 0.0f);
+    EXPECT_FLOAT_EQ(h, 0.0f);
+
+    sdl3d_ui_destroy(ui);
+}
+
 } // namespace
