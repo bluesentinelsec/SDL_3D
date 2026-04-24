@@ -205,9 +205,14 @@ void sdl3d_measure_text(const sdl3d_font *font, const char *text, float *out_wid
  * at z = 0 with the camera at z = 1 and default near plane 0.01, which
  * puts them at NDC z ≈ -1 (almost at the near plane). Depth test is
  * LEQUAL in the GL backend, so the text always wins.
+ *
+ * `digit_cell_width` lets callers force monospaced digit layout: when > 0,
+ * every '0'..'9' glyph advances by that amount regardless of its own
+ * proportional xadvance, and is centered inside the cell. Non-digit
+ * characters use their native advance.
  */
-bool sdl3d_draw_text(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text, float x, float y,
-                     sdl3d_color color)
+static bool draw_text_internal(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text, float x,
+                               float y, sdl3d_color color, float digit_cell_width)
 {
     int ctx_w, ctx_h;
     sdl3d_camera3d ortho;
@@ -284,18 +289,25 @@ bool sdl3d_draw_text(struct sdl3d_render_context *context, const sdl3d_font *fon
         }
 
         const sdl3d_glyph *g = &font->glyphs[ci];
+        /* Treat digits and spaces as monospace cells when the caller opts
+         * in. Spaces need the same treatment so a right-aligned number
+         * like "  60" occupies the same width as "120". */
+        bool is_mono_cell = digit_cell_width > 0.0f && ((*p >= '0' && *p <= '9') || *p == ' ');
+        float advance = is_mono_cell ? digit_cell_width : g->xadvance;
+        float glyph_shift = is_mono_cell ? (digit_cell_width - g->xadvance) * 0.5f : 0.0f;
+
         float gw = g->xoff2 - g->xoff;
         float gh = g->yoff2 - g->yoff;
         if (gw <= 0 || gh <= 0)
         {
-            cursor_x += g->xadvance;
+            cursor_x += advance;
             continue;
         }
 
         /* Screen-space pixel rect for this glyph. */
-        float sx0 = cursor_x + g->xoff;
+        float sx0 = cursor_x + glyph_shift + g->xoff;
         float sy0 = cursor_y + g->yoff;
-        float sx1 = cursor_x + g->xoff2;
+        float sx1 = cursor_x + glyph_shift + g->xoff2;
         float sy1 = cursor_y + g->yoff2;
 
         /* Map screen pixels to ortho world space (Y flipped). */
@@ -311,12 +323,10 @@ bool sdl3d_draw_text(struct sdl3d_render_context *context, const sdl3d_font *fon
          * so we can't just toggle culling around this block — the quads
          * must be authored front-facing. */
         float positions[18] = {
-            wx0, wy0, 0.0f, wx0, wy1, 0.0f, wx1, wy1, 0.0f,
-            wx0, wy0, 0.0f, wx1, wy1, 0.0f, wx1, wy0, 0.0f,
+            wx0, wy0, 0.0f, wx0, wy1, 0.0f, wx1, wy1, 0.0f, wx0, wy0, 0.0f, wx1, wy1, 0.0f, wx1, wy0, 0.0f,
         };
         float uvs[12] = {
-            g->u0, g->v0, g->u0, g->v1, g->u1, g->v1,
-            g->u0, g->v0, g->u1, g->v1, g->u1, g->v0,
+            g->u0, g->v0, g->u0, g->v1, g->u1, g->v1, g->u0, g->v0, g->u1, g->v1, g->u1, g->v0,
         };
 
         sdl3d_mesh mesh;
@@ -332,7 +342,7 @@ bool sdl3d_draw_text(struct sdl3d_render_context *context, const sdl3d_font *fon
             break;
         }
 
-        cursor_x += g->xadvance;
+        cursor_x += advance;
     }
 
     sdl3d_end_mode_3d(context);
@@ -345,9 +355,28 @@ bool sdl3d_draw_text(struct sdl3d_render_context *context, const sdl3d_font *fon
     return ok;
 }
 
+bool sdl3d_draw_text(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text, float x, float y,
+                     sdl3d_color color)
+{
+    return draw_text_internal(context, font, text, x, y, color, 0.0f);
+}
+
 /* ------------------------------------------------------------------ */
 /* Convenience wrappers                                                */
 /* ------------------------------------------------------------------ */
+
+static float font_max_digit_advance(const sdl3d_font *font)
+{
+    float max_adv = 0.0f;
+    for (int c = '0'; c <= '9'; c++)
+    {
+        int ci = c - SDL3D_FONT_FIRST_CHAR;
+        float a = font->glyphs[ci].xadvance;
+        if (a > max_adv)
+            max_adv = a;
+    }
+    return max_adv;
+}
 
 bool sdl3d_draw_textfv(struct sdl3d_render_context *context, const sdl3d_font *font, float x, float y,
                        sdl3d_color color, const char *fmt, va_list args)
@@ -361,8 +390,8 @@ bool sdl3d_draw_textfv(struct sdl3d_render_context *context, const sdl3d_font *f
     return sdl3d_draw_text(context, font, buf, x, y, color);
 }
 
-bool sdl3d_draw_textf(struct sdl3d_render_context *context, const sdl3d_font *font, float x, float y,
-                      sdl3d_color color, const char *fmt, ...)
+bool sdl3d_draw_textf(struct sdl3d_render_context *context, const sdl3d_font *font, float x, float y, sdl3d_color color,
+                      const char *fmt, ...)
 {
     va_list args;
     bool ok;
@@ -398,8 +427,38 @@ bool sdl3d_draw_fps(struct sdl3d_render_context *context, const sdl3d_font *font
         }
     }
 
-    /* "FPS: 999" fits all three-digit counts. Values above 999 display as
-     * their literal value (no truncation), which is still readable even
-     * though the right edge shifts. */
-    return sdl3d_draw_textf(context, font, 10.0f, 10.0f, (sdl3d_color){0, 255, 0, 255}, "FPS: %3.0f", smoothed);
+    /* Render "FPS: " with the font's native proportional spacing, then the
+     * three-digit value in monospaced cells so the number's position and
+     * width stays identical whether the reading is 7, 60, or 999. Missing
+     * leading digits are emitted as spaces, which the internal path also
+     * treats as monospace cells. */
+    const sdl3d_color color = {0, 255, 0, 255};
+    const float origin_x = 10.0f;
+    const float origin_y = 10.0f;
+    const char *prefix = "FPS: ";
+    float prefix_w, prefix_h;
+    sdl3d_measure_text(font, prefix, &prefix_w, &prefix_h);
+
+    if (!draw_text_internal(context, font, prefix, origin_x, origin_y, color, 0.0f))
+    {
+        return false;
+    }
+
+    int ival = (int)(smoothed + 0.5f);
+    if (ival < 0)
+    {
+        ival = 0;
+    }
+    if (ival > 999)
+    {
+        ival = 999;
+    }
+    char digits[4];
+    digits[0] = (ival >= 100) ? (char)('0' + (ival / 100)) : ' ';
+    digits[1] = (ival >= 10) ? (char)('0' + ((ival / 10) % 10)) : ' ';
+    digits[2] = (char)('0' + (ival % 10));
+    digits[3] = '\0';
+
+    return draw_text_internal(context, font, digits, origin_x + prefix_w, origin_y, color,
+                              font_max_digit_advance(font));
 }

@@ -33,10 +33,10 @@ extern "C"
 
     typedef struct sdl3d_glyph
     {
-        float u0, v0, u1, v1;   /* normalized atlas UVs */
-        float xoff, yoff;       /* display-space offset from cursor to top-left */
-        float xoff2, yoff2;     /* display-space offset from cursor to bottom-right */
-        float xadvance;         /* horizontal advance after this glyph */
+        float u0, v0, u1, v1; /* normalized atlas UVs */
+        float xoff, yoff;     /* display-space offset from cursor to top-left */
+        float xoff2, yoff2;   /* display-space offset from cursor to bottom-right */
+        float xadvance;       /* horizontal advance after this glyph */
     } sdl3d_glyph;
 
     typedef struct sdl3d_font
@@ -44,10 +44,10 @@ extern "C"
         sdl3d_glyph glyphs[SDL3D_FONT_CHAR_COUNT];
         unsigned char *atlas_pixels; /* single-channel alpha, atlas_w × atlas_h */
         int atlas_w, atlas_h;
-        float size;     /* font size in pixels */
-        float ascent;   /* distance from baseline to top */
-        float descent;  /* distance from baseline to bottom (negative) */
-        float line_gap; /* extra spacing between lines */
+        float size;                    /* font size in pixels */
+        float ascent;                  /* distance from baseline to top */
+        float descent;                 /* distance from baseline to bottom (negative) */
+        float line_gap;                /* extra spacing between lines */
         sdl3d_texture2d atlas_texture; /* RGBA copy bound to the render backend */
     } sdl3d_font;
 
