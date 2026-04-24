@@ -338,6 +338,75 @@ extern "C"
                             int tab_count, int *selected);
     bool sdl3d_ui_layout_tab_strip(sdl3d_ui_context *ui, const char *const *tabs, int tab_count, int *selected);
 
+    /* ------------------------------------------------------------------ */
+    /* Inspector row                                                       */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * A "label: widget" row for property inspectors. Splits the current
+     * layout width into a label portion (left) and a widget portion
+     * (right). `label_fraction` is typically 0.35–0.4.
+     *
+     * begin_row pushes an hbox sized to the current layout width.
+     * The caller draws the label, then the value widget, then calls
+     * end_row. Convenience helpers below handle common patterns.
+     */
+    void sdl3d_ui_begin_row(sdl3d_ui_context *ui, const char *label, float label_fraction);
+    void sdl3d_ui_end_row(sdl3d_ui_context *ui);
+
+    /* Inspector row with a text field value. */
+    bool sdl3d_ui_row_text_field(sdl3d_ui_context *ui, const char *label, char *buf, int buf_size);
+
+    /* Inspector row with a slider value. */
+    bool sdl3d_ui_row_slider(sdl3d_ui_context *ui, const char *label, float *value, float min, float max);
+
+    /* Inspector row with a checkbox value. */
+    bool sdl3d_ui_row_checkbox(sdl3d_ui_context *ui, const char *label, bool *value);
+
+    /* Inspector row with a read-only label value. */
+    void sdl3d_ui_row_label(sdl3d_ui_context *ui, const char *label, const char *value);
+
+    /* ------------------------------------------------------------------ */
+    /* List view                                                           */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * Scrollable list of selectable text items. Returns true on the
+     * frame the selection changes. `selected` is a caller-owned index
+     * (-1 for no selection). The list is drawn at the given position
+     * with the given size; items that overflow are clipped and can be
+     * scrolled with the mouse wheel.
+     *
+     * `scroll_offset` is caller-owned persistent state (initialize to 0).
+     */
+    bool sdl3d_ui_list_view(sdl3d_ui_context *ui, float x, float y, float w, float h, const char *const *items,
+                            int item_count, int *selected, float *scroll_offset);
+    bool sdl3d_ui_layout_list_view(sdl3d_ui_context *ui, float h, const char *const *items, int item_count,
+                                   int *selected, float *scroll_offset);
+
+    /* ------------------------------------------------------------------ */
+    /* Tree view                                                           */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * Collapsible tree node. Returns true if the node is expanded
+     * (children should be drawn). `expanded` is caller-owned state.
+     * `selected_id` is a caller-owned pointer to the currently selected
+     * node ID; when the user clicks this node's label, `*selected_id`
+     * is set to `node_id` and the function returns true for the
+     * selection change.
+     *
+     * Typical usage (recursive):
+     *   if (sdl3d_ui_tree_node(ui, "Root", 1, &expanded_root, &sel)) { ... }
+     *     sdl3d_ui_tree_push(ui);
+     *     if (sdl3d_ui_tree_node(ui, "Child", 2, &expanded_child, &sel)) { ... }
+     *     sdl3d_ui_tree_pop(ui);
+     *   (tree_node draws its own row; push/pop indent children)
+     */
+    bool sdl3d_ui_tree_node(sdl3d_ui_context *ui, const char *label, int node_id, bool *expanded, int *selected_id);
+    void sdl3d_ui_tree_push(sdl3d_ui_context *ui);
+    void sdl3d_ui_tree_pop(sdl3d_ui_context *ui);
+
 #ifdef __cplusplus
 }
 #endif

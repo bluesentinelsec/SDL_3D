@@ -69,6 +69,17 @@ typedef struct editor_state
     /* Inspector */
     int inspector_tab;
     char log_msg[128]; /* status feedback from actions */
+
+    /* Scene hierarchy (tree view) */
+    bool tree_root_expanded;
+    bool tree_geometry_expanded;
+    bool tree_lights_expanded;
+    bool tree_triggers_expanded;
+    int tree_selected;
+
+    /* Texture list (list view) */
+    int texture_selected;
+    float texture_scroll;
 } editor_state;
 
 static void editor_reset(editor_state *st)
@@ -91,6 +102,13 @@ static void editor_reset(editor_state *st)
     st->light_intensity = 1.0f;
     st->inspector_tab = 0;
     st->log_msg[0] = '\0';
+    st->tree_root_expanded = true;
+    st->tree_geometry_expanded = true;
+    st->tree_lights_expanded = false;
+    st->tree_triggers_expanded = false;
+    st->tree_selected = 1;
+    st->texture_selected = 0;
+    st->texture_scroll = 0.0f;
 }
 
 static void parse_origin(editor_state *st)
@@ -213,16 +231,18 @@ static void draw_tool_panel(sdl3d_ui_context *ui, float y0, float h, editor_stat
 /* ------------------------------------------------------------------ */
 
 static float inspector_scroll = 0.0f;
-static const char *inspector_tabs[] = {"Entity", "Display", "Actions"};
+static const char *inspector_tabs[] = {"Entity", "Display", "Scene", "Textures"};
+static const char *texture_names[] = {"brick_wall", "concrete",    "metal_floor",   "wood_planks", "tile_mosaic",
+                                      "grass",      "stone_rough", "plaster_white", "rust_panel",  "glass_tint"};
 
 static void draw_inspector_panel(sdl3d_ui_context *ui, float x0, float y0, float h, editor_state *st)
 {
     float pad = 8.0f;
     float inner_w = INSPECTOR_W - pad * 2;
-    float content_h = 500.0f;
+    float content_h = 600.0f;
 
     sdl3d_ui_begin_panel(ui, x0, y0, INSPECTOR_W, h);
-    sdl3d_ui_tab_strip(ui, x0 + pad, y0 + pad, inner_w, 26.0f, inspector_tabs, 3, &st->inspector_tab);
+    sdl3d_ui_tab_strip(ui, x0 + pad, y0 + pad, inner_w, 26.0f, inspector_tabs, 4, &st->inspector_tab);
     float tab_h = 26.0f + pad;
 
     sdl3d_ui_begin_scroll(ui, x0 + pad, y0 + pad + tab_h, inner_w, h - pad * 2 - tab_h, &inspector_scroll, content_h);
@@ -230,7 +250,7 @@ static void draw_inspector_panel(sdl3d_ui_context *ui, float x0, float y0, float
 
     if (st->inspector_tab == 0)
     {
-        /* Entity tab */
+        /* Entity tab — uses inspector row layout */
         sdl3d_ui_layout_label(ui, "Entity Type");
         int prev_type = st->entity_type;
         sdl3d_ui_layout_dropdown(ui, entity_types, 5, &st->entity_type);
@@ -241,50 +261,33 @@ static void draw_inspector_panel(sdl3d_ui_context *ui, float x0, float y0, float
         }
         sdl3d_ui_separator(ui);
 
-        sdl3d_ui_layout_label(ui, "Classname");
-        sdl3d_ui_layout_text_field(ui, st->classname, sizeof(st->classname));
-
-        sdl3d_ui_layout_label(ui, "Origin (x y z)");
-        if (sdl3d_ui_layout_text_field(ui, st->origin, sizeof(st->origin)))
+        sdl3d_ui_layout_label(ui, "Properties");
+        sdl3d_ui_row_text_field(ui, "Classname:", st->classname, sizeof(st->classname));
+        if (sdl3d_ui_row_text_field(ui, "Origin:", st->origin, sizeof(st->origin)))
         {
             parse_origin(st);
             SDL_snprintf(st->log_msg, sizeof(st->log_msg), "Origin: %.1f %.1f %.1f", (double)st->cube_pos[0],
                          (double)st->cube_pos[1], (double)st->cube_pos[2]);
         }
-        sdl3d_ui_separator(ui);
-
-        sdl3d_ui_layout_checkbox(ui, "Visible", &st->entity_visible);
+        sdl3d_ui_row_checkbox(ui, "Visible:", &st->entity_visible);
         sdl3d_ui_separator(ui);
 
         sdl3d_ui_layout_label(ui, "Info");
-        sdl3d_ui_layout_labelf(ui, "  Tool: %s", st->active_tool);
-        sdl3d_ui_layout_labelf(ui, "  Clicks: %d", st->click_count);
-        sdl3d_ui_layout_labelf(ui, "  Pos: %.1f %.1f %.1f", (double)st->cube_pos[0], (double)st->cube_pos[1],
-                               (double)st->cube_pos[2]);
-    }
-    else if (st->inspector_tab == 1)
-    {
-        /* Display tab */
-        sdl3d_ui_layout_label(ui, "Rendering");
-        sdl3d_ui_layout_checkbox(ui, "Wireframe", &st->wireframe);
-        sdl3d_ui_layout_checkbox(ui, "Show Grid", &st->show_grid);
-        sdl3d_ui_layout_checkbox(ui, "Show Axes", &st->show_axes);
-        sdl3d_ui_layout_checkbox(ui, "Snap to Grid", &st->snap_enabled);
+        sdl3d_ui_row_label(ui, "Tool:", st->active_tool);
+        {
+            char buf[32];
+            SDL_snprintf(buf, sizeof(buf), "%d", st->click_count);
+            sdl3d_ui_row_label(ui, "Clicks:", buf);
+        }
+        {
+            char buf[64];
+            SDL_snprintf(buf, sizeof(buf), "%.1f %.1f %.1f", (double)st->cube_pos[0], (double)st->cube_pos[1],
+                         (double)st->cube_pos[2]);
+            sdl3d_ui_row_label(ui, "Position:", buf);
+        }
         sdl3d_ui_separator(ui);
 
-        sdl3d_ui_layout_label(ui, "Camera");
-        sdl3d_ui_layout_slider(ui, "Orbit Speed", &st->orbit_speed, 0.1f, 2.0f);
-        sdl3d_ui_separator(ui);
-
-        sdl3d_ui_layout_label(ui, "Scene");
-        sdl3d_ui_layout_slider(ui, "Grid Size", &st->grid_size, 2.0f, 64.0f);
-        sdl3d_ui_layout_slider(ui, "Cube Scale", &st->cube_scale, 0.5f, 5.0f);
-        sdl3d_ui_layout_slider(ui, "Light", &st->light_intensity, 0.0f, 2.0f);
-    }
-    else
-    {
-        /* Actions tab */
-        sdl3d_ui_layout_label(ui, "Entity Actions");
+        sdl3d_ui_layout_label(ui, "Actions");
         if (sdl3d_ui_layout_button(ui, "Apply##insp1"))
         {
             parse_origin(st);
@@ -303,21 +306,90 @@ static void draw_inspector_panel(sdl3d_ui_context *ui, float x0, float y0, float
             st->entity_visible = false;
             SDL_strlcpy(st->log_msg, "Entity deleted (hidden)", sizeof(st->log_msg));
         }
+    }
+    else if (st->inspector_tab == 1)
+    {
+        /* Display tab — uses inspector rows for sliders and checkboxes */
+        sdl3d_ui_layout_label(ui, "Rendering");
+        sdl3d_ui_row_checkbox(ui, "Wireframe:", &st->wireframe);
+        sdl3d_ui_row_checkbox(ui, "Show Grid:", &st->show_grid);
+        sdl3d_ui_row_checkbox(ui, "Show Axes:", &st->show_axes);
+        sdl3d_ui_row_checkbox(ui, "Snap:", &st->snap_enabled);
         sdl3d_ui_separator(ui);
 
-        sdl3d_ui_layout_label(ui, "View Actions");
-        if (sdl3d_ui_layout_button(ui, "Center##view1"))
+        sdl3d_ui_layout_label(ui, "Camera");
+        sdl3d_ui_row_slider(ui, "Orbit:", &st->orbit_speed, 0.1f, 2.0f);
+        sdl3d_ui_separator(ui);
+
+        sdl3d_ui_layout_label(ui, "Scene");
+        sdl3d_ui_row_slider(ui, "Grid:", &st->grid_size, 2.0f, 64.0f);
+        sdl3d_ui_row_slider(ui, "Scale:", &st->cube_scale, 0.5f, 5.0f);
+        sdl3d_ui_row_slider(ui, "Light:", &st->light_intensity, 0.0f, 2.0f);
+    }
+    else if (st->inspector_tab == 2)
+    {
+        /* Scene tab — tree view hierarchy */
+        sdl3d_ui_layout_label(ui, "Scene Hierarchy");
+        sdl3d_ui_separator(ui);
+
+        sdl3d_ui_tree_node(ui, "World", 1, &st->tree_root_expanded, &st->tree_selected);
+        if (st->tree_root_expanded)
         {
-            SDL_strlcpy(st->origin, "0 0 0", sizeof(st->origin));
-            parse_origin(st);
-            SDL_strlcpy(st->log_msg, "View centered", sizeof(st->log_msg));
+            sdl3d_ui_tree_push(ui);
+
+            sdl3d_ui_tree_node(ui, "Geometry", 10, &st->tree_geometry_expanded, &st->tree_selected);
+            if (st->tree_geometry_expanded)
+            {
+                sdl3d_ui_tree_push(ui);
+                bool leaf = false;
+                sdl3d_ui_tree_node(ui, "Floor", 101, &leaf, &st->tree_selected);
+                sdl3d_ui_tree_node(ui, "Walls", 102, &leaf, &st->tree_selected);
+                sdl3d_ui_tree_node(ui, "Ceiling", 103, &leaf, &st->tree_selected);
+                sdl3d_ui_tree_node(ui, "Cube", 104, &leaf, &st->tree_selected);
+                sdl3d_ui_tree_pop(ui);
+            }
+
+            sdl3d_ui_tree_node(ui, "Lights", 20, &st->tree_lights_expanded, &st->tree_selected);
+            if (st->tree_lights_expanded)
+            {
+                sdl3d_ui_tree_push(ui);
+                bool leaf = false;
+                sdl3d_ui_tree_node(ui, "Sun", 201, &leaf, &st->tree_selected);
+                sdl3d_ui_tree_node(ui, "Point Light 1", 202, &leaf, &st->tree_selected);
+                sdl3d_ui_tree_pop(ui);
+            }
+
+            sdl3d_ui_tree_node(ui, "Triggers", 30, &st->tree_triggers_expanded, &st->tree_selected);
+            if (st->tree_triggers_expanded)
+            {
+                sdl3d_ui_tree_push(ui);
+                bool leaf = false;
+                sdl3d_ui_tree_node(ui, "trigger_once_1", 301, &leaf, &st->tree_selected);
+                sdl3d_ui_tree_pop(ui);
+            }
+
+            sdl3d_ui_tree_pop(ui);
         }
-        if (sdl3d_ui_layout_button(ui, "Top Down##view2"))
+
+        sdl3d_ui_separator(ui);
         {
-            SDL_strlcpy(st->origin, "0 5 0", sizeof(st->origin));
-            parse_origin(st);
-            SDL_strlcpy(st->log_msg, "Top-down view", sizeof(st->log_msg));
+            char buf[64];
+            SDL_snprintf(buf, sizeof(buf), "Selected: %d", st->tree_selected);
+            sdl3d_ui_layout_label(ui, buf);
         }
+    }
+    else
+    {
+        /* Textures tab — list view */
+        sdl3d_ui_layout_label(ui, "Texture Browser");
+        sdl3d_ui_separator(ui);
+
+        if (sdl3d_ui_layout_list_view(ui, 200.0f, texture_names, 10, &st->texture_selected, &st->texture_scroll))
+        {
+            SDL_snprintf(st->log_msg, sizeof(st->log_msg), "Texture: %s", texture_names[st->texture_selected]);
+        }
+        sdl3d_ui_separator(ui);
+        sdl3d_ui_row_label(ui, "Selected:", texture_names[st->texture_selected]);
     }
 
     sdl3d_ui_end_vbox(ui);

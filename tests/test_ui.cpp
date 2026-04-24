@@ -920,4 +920,148 @@ TEST(SDL3DUI, MeasureTextReturnsNonZero)
     sdl3d_ui_destroy(ui);
 }
 
+TEST(SDL3DUI, InspectorRowLabel)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sdl3d_ui_begin_vbox(ui, 10, 10, 300, 400);
+    sdl3d_ui_row_label(ui, "Name:", "worldspawn");
+    sdl3d_ui_row_label(ui, "Origin:", "0 0 0");
+    sdl3d_ui_end_vbox(ui);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, InspectorRowCheckbox)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    bool val = false;
+
+    // Frame 1: press on the checkbox area (right side of row at x=10+300*0.35=115)
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 120.0f, 18.0f);
+    sim_mouse_down(ui, 120.0f, 18.0f);
+    sdl3d_ui_begin_vbox(ui, 10, 10, 300, 400);
+    sdl3d_ui_row_checkbox(ui, "Visible:", &val);
+    sdl3d_ui_end_vbox(ui);
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 2: release → toggle
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 120.0f, 18.0f);
+    sim_mouse_up(ui, 120.0f, 18.0f);
+    sdl3d_ui_begin_vbox(ui, 10, 10, 300, 400);
+    EXPECT_TRUE(sdl3d_ui_row_checkbox(ui, "Visible:", &val));
+    EXPECT_TRUE(val);
+    sdl3d_ui_end_vbox(ui);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, ListViewSelection)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    const char *items[] = {"Alpha", "Beta", "Gamma", "Delta"};
+    int selected = 0;
+    float scroll = 0.0f;
+
+    // Click on second item (y = 10 + 22*1 + 11 = ~43)
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 50.0f, 43.0f);
+    sim_mouse_down(ui, 50.0f, 43.0f);
+    EXPECT_TRUE(sdl3d_ui_list_view(ui, 10, 10, 200, 100, items, 4, &selected, &scroll));
+    EXPECT_EQ(selected, 1);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, ListViewReClickReturnsFalse)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    const char *items[] = {"A", "B"};
+    int selected = 0;
+    float scroll = 0.0f;
+
+    // Click on already-selected item 0
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 50.0f, 20.0f);
+    sim_mouse_down(ui, 50.0f, 20.0f);
+    EXPECT_FALSE(sdl3d_ui_list_view(ui, 10, 10, 200, 100, items, 2, &selected, &scroll));
+    EXPECT_EQ(selected, 0);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, TreeNodeExpandCollapse)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    bool expanded = false;
+    int sel = -1;
+
+    // Click on the arrow area (left side) to expand
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 17.0f, 21.0f); // arrow at x=10, y=10, w=14
+    sim_mouse_down(ui, 17.0f, 21.0f);
+    sdl3d_ui_begin_vbox(ui, 10, 10, 300, 400);
+    sdl3d_ui_tree_node(ui, "Root", 1, &expanded, &sel);
+    sdl3d_ui_end_vbox(ui);
+    EXPECT_TRUE(expanded);
+    EXPECT_EQ(sel, -1); // arrow click doesn't select
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, TreeNodeSelect)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    bool expanded = true;
+    int sel = -1;
+
+    // Click on the label area (right of arrow) to select
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 50.0f, 21.0f); // label area
+    sim_mouse_down(ui, 50.0f, 21.0f);
+    sdl3d_ui_begin_vbox(ui, 10, 10, 300, 400);
+    EXPECT_TRUE(sdl3d_ui_tree_node(ui, "Root", 1, &expanded, &sel));
+    EXPECT_EQ(sel, 1);
+    EXPECT_TRUE(expanded); // selection doesn't toggle expand
+    sdl3d_ui_end_vbox(ui);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, TreePushPopIndent)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    bool exp1 = true, exp2 = false;
+    int sel = -1;
+
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sdl3d_ui_begin_vbox(ui, 10, 10, 300, 400);
+    sdl3d_ui_tree_node(ui, "Parent", 1, &exp1, &sel);
+    sdl3d_ui_tree_push(ui);
+    sdl3d_ui_tree_node(ui, "Child", 2, &exp2, &sel);
+    sdl3d_ui_tree_pop(ui);
+    sdl3d_ui_tree_node(ui, "Sibling", 3, &exp1, &sel);
+    sdl3d_ui_end_vbox(ui);
+    sdl3d_ui_end_frame(ui);
+
+    // No crash, no leak — validates push/pop balance.
+    sdl3d_ui_destroy(ui);
+}
+
 } // namespace
