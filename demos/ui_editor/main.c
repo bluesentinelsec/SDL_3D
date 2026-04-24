@@ -161,7 +161,13 @@ static void draw_status_bar(sdl3d_ui_context *ui, float y0, float w, float dt, c
     if (dt > 0.0f)
         smoothed_fps += (1.0f / dt - smoothed_fps) * 0.05f;
     int fps = (int)(smoothed_fps + 0.5f);
-    sdl3d_ui_labelf(ui, 8, y0 + 6, "Tool: %-8s |  FPS: %4d  |  Grid: 16  |  Snap: On", active_tool, fps);
+
+    /* Use fixed x positions so variable-width text doesn't shift neighbors. */
+    float ty = y0 + 6;
+    sdl3d_ui_labelf(ui, 8, ty, "Tool: %s", active_tool);
+    sdl3d_ui_labelf(ui, 200, ty, "FPS: %d", fps);
+    sdl3d_ui_label(ui, 320, ty, "Grid: 16");
+    sdl3d_ui_label(ui, 440, ty, "Snap: On");
 }
 
 int main(int argc, char *argv[])
