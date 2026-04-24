@@ -262,19 +262,6 @@ bool sdl3d_draw_text(struct sdl3d_render_context *context, const sdl3d_font *fon
         return false;
     }
 
-    {
-        static bool logged = false;
-        if (!logged)
-        {
-            SDL_Log("SDL3D draw_text: first call ctx=%dx%d atlas=%dx%d first_char='%c' "
-                    "glyph0_xoff=%.1f xoff2=%.1f yoff=%.1f yoff2=%.1f xadvance=%.1f ascent=%.1f",
-                    ctx_w, ctx_h, font->atlas_w, font->atlas_h, text[0] ? text[0] : '?',
-                    font->glyphs[0].xoff, font->glyphs[0].xoff2, font->glyphs[0].yoff, font->glyphs[0].yoff2,
-                    font->glyphs[0].xadvance, font->ascent);
-            logged = true;
-        }
-    }
-
     float cursor_x = x;
     float cursor_y = y + font->ascent;
     float line_h = font->ascent - font->descent + font->line_gap;
@@ -356,4 +343,63 @@ bool sdl3d_draw_text(struct sdl3d_render_context *context, const sdl3d_font *fon
     sdl3d_set_shading_mode(context, prev_shading);
     sdl3d_set_backface_culling_enabled(context, prev_culling);
     return ok;
+}
+
+/* ------------------------------------------------------------------ */
+/* Convenience wrappers                                                */
+/* ------------------------------------------------------------------ */
+
+bool sdl3d_draw_textfv(struct sdl3d_render_context *context, const sdl3d_font *font, float x, float y,
+                       sdl3d_color color, const char *fmt, va_list args)
+{
+    char buf[512];
+    if (!fmt)
+    {
+        return SDL_InvalidParamError("fmt");
+    }
+    SDL_vsnprintf(buf, sizeof(buf), fmt, args);
+    return sdl3d_draw_text(context, font, buf, x, y, color);
+}
+
+bool sdl3d_draw_textf(struct sdl3d_render_context *context, const sdl3d_font *font, float x, float y,
+                      sdl3d_color color, const char *fmt, ...)
+{
+    va_list args;
+    bool ok;
+    va_start(args, fmt);
+    ok = sdl3d_draw_textfv(context, font, x, y, color, fmt, args);
+    va_end(args);
+    return ok;
+}
+
+bool sdl3d_draw_fps(struct sdl3d_render_context *context, const sdl3d_font *font, float dt)
+{
+    /* Exponential moving average on the instantaneous 1/dt, with the time
+     * constant tied to real elapsed time so the smoothing behaves the same
+     * whether the game runs at 60 or 600 FPS. tau = 0.5s. */
+    static float smoothed = 0.0f;
+    static bool primed = false;
+
+    if (dt > 0.0f)
+    {
+        float instant = 1.0f / dt;
+        if (!primed)
+        {
+            smoothed = instant;
+            primed = true;
+        }
+        else
+        {
+            const float tau = 0.5f;
+            float alpha = dt / (tau + dt);
+            if (alpha > 1.0f)
+                alpha = 1.0f;
+            smoothed = smoothed + alpha * (instant - smoothed);
+        }
+    }
+
+    /* "FPS: 999" fits all three-digit counts. Values above 999 display as
+     * their literal value (no truncation), which is still readable even
+     * though the right edge shifts. */
+    return sdl3d_draw_textf(context, font, 10.0f, 10.0f, (sdl3d_color){0, 255, 0, 255}, "FPS: %3.0f", smoothed);
 }

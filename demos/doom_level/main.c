@@ -809,14 +809,7 @@ int main(int argc, char *argv[])
         /* Draw debug text overlay. */
         if (has_font)
         {
-            char fps_buf[64];
-            float tw, th;
-            int cw = sdl3d_get_render_context_width(ctx);
-            int ch = sdl3d_get_render_context_height(ctx);
-            SDL_snprintf(fps_buf, sizeof(fps_buf), "FPS: %.0f", dt > 0 ? 1.0f / dt : 0.0f);
-            sdl3d_measure_text(&debug_font, fps_buf, &tw, &th);
-            sdl3d_draw_text(ctx, &debug_font, fps_buf, ((float)cw - tw) / 2.0f, ((float)ch - th) / 2.0f,
-                            (sdl3d_color){0, 255, 0, 255});
+            sdl3d_draw_fps(ctx, &debug_font, dt);
         }
 
         sdl3d_present_render_context(ctx);

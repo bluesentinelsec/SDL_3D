@@ -19,6 +19,8 @@
 #include "sdl3d/texture.h"
 #include "sdl3d/types.h"
 
+#include <SDL3/SDL_stdinc.h>
+#include <stdarg.h>
 #include <stdbool.h>
 
 #ifdef __cplusplus
@@ -80,6 +82,28 @@ extern "C"
     struct sdl3d_render_context;
     bool sdl3d_draw_text(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text, float x,
                          float y, sdl3d_color color);
+
+    /*
+     * printf-style convenience wrapper around sdl3d_draw_text. The formatted
+     * string is rendered into a fixed-size internal buffer (512 bytes); longer
+     * output is truncated.
+     */
+    bool sdl3d_draw_textf(struct sdl3d_render_context *context, const sdl3d_font *font, float x, float y,
+                          sdl3d_color color, SDL_PRINTF_FORMAT_STRING const char *fmt, ...) SDL_PRINTF_VARARG_FUNC(6);
+
+    bool sdl3d_draw_textfv(struct sdl3d_render_context *context, const sdl3d_font *font, float x, float y,
+                           sdl3d_color color, const char *fmt, va_list args);
+
+    /*
+     * Convenience: render a smoothed FPS counter in bright green at the top-
+     * left of the screen. Call once per frame, passing the current frame's
+     * delta time in seconds. Internally maintains a smoothed running estimate
+     * so the displayed value doesn't jitter frame-to-frame.
+     *
+     * Intended for quick diagnostics. For custom placement or styling, sample
+     * dt yourself and call sdl3d_draw_textf directly.
+     */
+    bool sdl3d_draw_fps(struct sdl3d_render_context *context, const sdl3d_font *font, float dt);
 
 #ifdef __cplusplus
 }
