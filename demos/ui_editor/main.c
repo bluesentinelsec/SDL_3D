@@ -210,6 +210,26 @@ int main(int argc, char *argv[])
 
     while (running)
     {
+        /* Compute mouse transform BEFORE processing events so hit testing
+         * uses the correct window-to-logical coordinate mapping. */
+        float sw = (float)sdl3d_get_render_context_width(ctx);
+        float sh = (float)sdl3d_get_render_context_height(ctx);
+        {
+            int win_pw, win_ph;
+            SDL_GetWindowSizeInPixels(win, &win_pw, &win_ph);
+            float sx = (float)win_pw / sw;
+            float sy = (float)win_ph / sh;
+            float s = (sx < sy) ? sx : sy;
+            float vp_w = sw * s;
+            float vp_h = sh * s;
+            float vp_x = ((float)win_pw - vp_w) * 0.5f;
+            float vp_y = ((float)win_ph - vp_h) * 0.5f;
+            float pdpi = SDL_GetWindowPixelDensity(win);
+            if (pdpi < 1.0f)
+                pdpi = 1.0f;
+            sdl3d_ui_set_mouse_transform(ui, sw / (vp_w / pdpi), sh / (vp_h / pdpi), vp_x / pdpi, vp_y / pdpi);
+        }
+
         SDL_Event ev;
         while (SDL_PollEvent(&ev))
         {
@@ -225,8 +245,6 @@ int main(int argc, char *argv[])
         last = now;
         elapsed += dt;
 
-        float sw = (float)sdl3d_get_render_context_width(ctx);
-        float sh = (float)sdl3d_get_render_context_height(ctx);
         float viewport_y = MENU_H;
         float viewport_h = sh - MENU_H - STATUS_H;
         float viewport_x = TOOL_W;
@@ -278,26 +296,6 @@ int main(int argc, char *argv[])
         editor_state st = {active_tool,   click_count,  &wireframe, &show_grid,
                            &snap_enabled, &orbit_speed, &grid_size, &light_intensity};
         sdl3d_ui_begin_frame(ui, (int)sw, (int)sh);
-
-        /* Compute window-to-logical mouse mapping for letterbox scaling.
-         * The GL renderer maps the logical FBO into a letterbox viewport;
-         * SDL reports mouse in window points, so we reverse that mapping. */
-        {
-            int win_pw, win_ph;
-            SDL_GetWindowSizeInPixels(win, &win_pw, &win_ph);
-            float sx = (float)win_pw / sw;
-            float sy = (float)win_ph / sh;
-            float s = (sx < sy) ? sx : sy;
-            float vp_w = sw * s;
-            float vp_h = sh * s;
-            float vp_x = ((float)win_pw - vp_w) * 0.5f;
-            float vp_y = ((float)win_ph - vp_h) * 0.5f;
-            /* SDL mouse coords are in window points (pixels / density). */
-            float pdpi = SDL_GetWindowPixelDensity(win);
-            if (pdpi < 1.0f)
-                pdpi = 1.0f;
-            sdl3d_ui_set_mouse_transform(ui, sw / (vp_w / pdpi), sh / (vp_h / pdpi), vp_x / pdpi, vp_y / pdpi);
-        }
 
         draw_menu_bar(ui, sw, &click_count);
         draw_tool_panel(ui, viewport_y, viewport_h, &active_tool, &click_count);
