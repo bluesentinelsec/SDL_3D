@@ -25,6 +25,20 @@ bool sdl3d_load_font_from_memory(const void *data, int data_size, float pixel_si
 {
     stbtt_fontinfo info;
     int atlas_w = 512, atlas_h = 512;
+
+    /* Scale the atlas so all 95 ASCII glyphs fit at any pixel size.
+     * With 2× oversampling each glyph cell is roughly (pixel_size*2)².
+     * 512×512 is fine up to ~32px; beyond that we step up. */
+    if (pixel_size > 64.0f)
+    {
+        atlas_w = 2048;
+        atlas_h = 2048;
+    }
+    else if (pixel_size > 32.0f)
+    {
+        atlas_w = 1024;
+        atlas_h = 1024;
+    }
     unsigned char *atlas = NULL;
     unsigned char *rgba = NULL;
     float scale;
