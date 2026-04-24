@@ -41,10 +41,18 @@ int main(int argc, char *argv[])
     int win_h = mode ? mode->h : 720;
     SDL_Log("Display: %dx%d", win_w, win_h);
 
-    SDL_Window *win =
-        SDL_CreateWindow("SDL3D \xe2\x80\x94 Font Showcase", win_w, win_h, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+    SDL_Window *win = SDL_CreateWindow("SDL3D \xe2\x80\x94 Font Showcase", win_w, win_h,
+                                       SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
     if (!win)
         return 1;
+
+    /* Query physical pixel density so we render at native resolution. */
+    float dpi_scale = SDL_GetWindowPixelDensity(win);
+    if (dpi_scale < 1.0f)
+        dpi_scale = 1.0f;
+    int phys_w = (int)((float)win_w * dpi_scale);
+    int phys_h = (int)((float)win_h * dpi_scale);
+    SDL_Log("Pixel density: %.1f  Physical: %dx%d", dpi_scale, phys_w, phys_h);
 
     SDL_Renderer *ren = SDL_CreateRenderer(win, NULL);
     if (!ren)
@@ -56,8 +64,8 @@ int main(int argc, char *argv[])
     sdl3d_render_context_config cfg;
     sdl3d_init_render_context_config(&cfg);
     cfg.backend = SDL3D_BACKEND_SOFTWARE;
-    cfg.logical_width = win_w;
-    cfg.logical_height = win_h;
+    cfg.logical_width = phys_w;
+    cfg.logical_height = phys_h;
 
     sdl3d_render_context *ctx = NULL;
     if (!sdl3d_create_render_context(win, ren, &cfg, &ctx))
@@ -70,7 +78,7 @@ int main(int argc, char *argv[])
     float font_size = FONT_SIZE_DEFAULT;
     sdl3d_font fonts[SDL3D_BUILTIN_FONT_COUNT];
     bool loaded[SDL3D_BUILTIN_FONT_COUNT] = {false};
-    reload_fonts(fonts, loaded, font_size);
+    reload_fonts(fonts, loaded, font_size * dpi_scale);
 
     sdl3d_color bg = {30, 30, 30, 255};
     sdl3d_color white = {255, 255, 255, 255};
@@ -92,13 +100,13 @@ int main(int argc, char *argv[])
                 if (ev.key.scancode == SDL_SCANCODE_UP && font_size < FONT_SIZE_MAX)
                 {
                     font_size += FONT_SIZE_STEP;
-                    reload_fonts(fonts, loaded, font_size);
+                    reload_fonts(fonts, loaded, font_size * dpi_scale);
                     SDL_Log("Font size: %.0f", font_size);
                 }
                 if (ev.key.scancode == SDL_SCANCODE_DOWN && font_size > FONT_SIZE_MIN)
                 {
                     font_size -= FONT_SIZE_STEP;
-                    reload_fonts(fonts, loaded, font_size);
+                    reload_fonts(fonts, loaded, font_size * dpi_scale);
                     SDL_Log("Font size: %.0f", font_size);
                 }
             }
@@ -106,22 +114,24 @@ int main(int argc, char *argv[])
 
         sdl3d_clear_render_context(ctx, bg);
 
-        float y = 20.0f;
+        float scaled_size = font_size * dpi_scale;
+        float y = 20.0f * dpi_scale;
         for (int i = 0; i < SDL3D_BUILTIN_FONT_COUNT; ++i)
         {
             if (!loaded[i])
                 continue;
             const char *name = sdl3d_builtin_font_name(i);
-            sdl3d_draw_textf(ctx, &fonts[i], 20.0f, y, label_color, "%s:", name);
-            y += font_size + 4.0f;
-            sdl3d_draw_text(ctx, &fonts[i], "The quick brown fox jumps over the lazy dog.", 40.0f, y, white);
-            y += font_size + 16.0f;
+            sdl3d_draw_textf(ctx, &fonts[i], 20.0f * dpi_scale, y, label_color, "%s:", name);
+            y += scaled_size + 4.0f * dpi_scale;
+            sdl3d_draw_text(ctx, &fonts[i], "The quick brown fox jumps over the lazy dog.", 40.0f * dpi_scale, y,
+                            white);
+            y += scaled_size + 16.0f * dpi_scale;
         }
 
         /* Size hint at bottom-left. */
         if (loaded[0])
-            sdl3d_draw_textf(ctx, &fonts[0], 20.0f, (float)win_h - font_size - 10.0f, hint_color,
-                             "%.0fpx  [Up/Down to resize]", font_size);
+            sdl3d_draw_textf(ctx, &fonts[0], 20.0f * dpi_scale, (float)phys_h - scaled_size - 10.0f * dpi_scale,
+                             hint_color, "%.0fpx  [Up/Down to resize]", font_size);
 
         sdl3d_present_render_context(ctx);
     }
