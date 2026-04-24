@@ -7,6 +7,7 @@
 #include "render_context_internal.h"
 #include "texture_internal.h"
 
+#include "gl_renderer.h"
 #include "lighting_internal.h"
 #include "sdl3d/level.h"
 
@@ -46,6 +47,49 @@ static sdl3d_vec4 sdl3d_color_to_modulate(sdl3d_color color)
     out.z = (float)color.b / 255.0f;
     out.w = (float)color.a / 255.0f;
     return out;
+}
+
+static bool sdl3d_overlay_capture_scissor(const sdl3d_render_context *context, bool *out_enabled, SDL_Rect *out_rect)
+{
+    if (!out_enabled || !out_rect)
+    {
+        return SDL_InvalidParamError("out_enabled");
+    }
+
+    *out_enabled = sdl3d_is_scissor_enabled(context);
+    if (*out_enabled)
+    {
+        return sdl3d_get_scissor_rect(context, out_rect);
+    }
+
+    *out_rect = (SDL_Rect){0, 0, 0, 0};
+    return true;
+}
+
+static SDL_Rect sdl3d_rect_overlay_intersect_scissor(SDL_Rect rect, bool scissor_enabled, const SDL_Rect *scissor_rect)
+{
+    if (!scissor_enabled || !scissor_rect)
+    {
+        return rect;
+    }
+
+    Sint64 x0 = rect.x > scissor_rect->x ? rect.x : scissor_rect->x;
+    Sint64 y0 = rect.y > scissor_rect->y ? rect.y : scissor_rect->y;
+    Sint64 x1 = ((Sint64)rect.x + rect.w) < ((Sint64)scissor_rect->x + scissor_rect->w)
+                    ? ((Sint64)rect.x + rect.w)
+                    : ((Sint64)scissor_rect->x + scissor_rect->w);
+    Sint64 y1 = ((Sint64)rect.y + rect.h) < ((Sint64)scissor_rect->y + scissor_rect->h)
+                    ? ((Sint64)rect.y + rect.h)
+                    : ((Sint64)scissor_rect->y + scissor_rect->h);
+    if (x1 < x0)
+        x1 = x0;
+    if (y1 < y0)
+        y1 = y0;
+    rect.x = (int)x0;
+    rect.y = (int)y0;
+    rect.w = (int)(x1 - x0);
+    rect.h = (int)(y1 - y0);
+    return rect;
 }
 
 static bool sdl3d_ensure_model_stack_capacity(sdl3d_render_context *context, int required_depth)
@@ -1726,6 +1770,70 @@ bool sdl3d_draw_model_skinned(sdl3d_render_context *context, const sdl3d_model *
     }
 
     return ok;
+}
+
+bool sdl3d_draw_rect_overlay(sdl3d_render_context *context, float x, float y, float w, float h, sdl3d_color color)
+{
+    SDL_Rect scissor_rect = {0, 0, 0, 0};
+    bool scissor_enabled = false;
+
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (w <= 0.0f || h <= 0.0f)
+    {
+        return true;
+    }
+    if (sdl3d_is_in_mode_3d(context))
+    {
+        return SDL_SetError("sdl3d_draw_rect_overlay must be called outside sdl3d_begin_mode_3d / sdl3d_end_mode_3d");
+    }
+    if (!sdl3d_overlay_capture_scissor(context, &scissor_enabled, &scissor_rect))
+    {
+        return false;
+    }
+
+    if (!context->gl)
+    {
+        SDL_Rect rect = {(int)x, (int)y, (int)w, (int)h};
+        rect = sdl3d_rect_overlay_intersect_scissor(rect, scissor_enabled, &scissor_rect);
+        if (rect.w <= 0 || rect.h <= 0)
+        {
+            return true;
+        }
+        return sdl3d_clear_render_context_rect(context, &rect, color);
+    }
+
+    const int ctx_w = sdl3d_get_render_context_width(context);
+    const int ctx_h = sdl3d_get_render_context_height(context);
+    if (ctx_w <= 0 || ctx_h <= 0)
+    {
+        return SDL_SetError("Invalid render context dimensions");
+    }
+
+    const float hx = (float)ctx_w * 0.5f;
+    const float hy = (float)ctx_h * 0.5f;
+    const float wx0 = x - hx;
+    const float wx1 = x + w - hx;
+    const float wy0 = hy - y;
+    const float wy1 = hy - (y + h);
+
+    float positions[18] = {
+        wx0, wy0, 0.0f, wx0, wy1, 0.0f, wx1, wy1, 0.0f, wx0, wy0, 0.0f, wx1, wy1, 0.0f, wx1, wy0, 0.0f,
+    };
+    float uvs[12] = {0};
+    float mvp[16] = {0};
+    float tint[4] = {(float)color.r / 255.0f, (float)color.g / 255.0f, (float)color.b / 255.0f,
+                     (float)color.a / 255.0f};
+
+    mvp[0] = 1.0f / hx;
+    mvp[5] = 1.0f / hy;
+    mvp[10] = -1.0f;
+    mvp[15] = 1.0f;
+
+    return sdl3d_gl_append_overlay(context->gl, positions, uvs, 6, mvp, tint, NULL, scissor_enabled,
+                                   scissor_enabled ? &scissor_rect : NULL);
 }
 
 bool sdl3d_get_framebuffer_pixel(const sdl3d_render_context *context, int x, int y, sdl3d_color *out_color)

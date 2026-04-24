@@ -73,11 +73,15 @@ extern "C"
     typedef struct sdl3d_ui_input_state
     {
         float mouse_x, mouse_y;
+        float scroll_y;         /* accumulated mouse wheel delta this frame (positive = up) */
         bool mouse_down[3];     /* left / middle / right, current frame */
         bool mouse_pressed[3];  /* edge-triggered: true only on the frame the press arrived */
         bool mouse_released[3]; /* edge-triggered: true only on the release frame */
         char text_input[32];    /* UTF-8 text from SDL_EVENT_TEXT_INPUT, accumulated per frame */
         int text_input_len;
+        bool key_backspace; /* edge-triggered: backspace pressed this frame */
+        bool key_enter;     /* edge-triggered: enter/return pressed this frame */
+        bool key_escape;    /* edge-triggered: escape pressed this frame */
     } sdl3d_ui_input_state;
 
     /* ------------------------------------------------------------------ */
@@ -95,9 +99,25 @@ extern "C"
     void sdl3d_ui_end_frame(sdl3d_ui_context *ui);
 
     /*
+     * Tell the UI how to map SDL window-space mouse coordinates to the
+     * logical coordinate system used by widgets. Call after begin_frame
+     * when the window size differs from the logical size (e.g., after a
+     * resize or on HiDPI displays).
+     *
+     *   logical_x = (window_x - offset_x) * scale_x
+     *   logical_y = (window_y - offset_y) * scale_y
+     *
+     * If never called, the mapping defaults to identity (1:1).
+     */
+    void sdl3d_ui_set_mouse_transform(sdl3d_ui_context *ui, float scale_x, float scale_y, float offset_x,
+                                      float offset_y);
+
+    /*
      * Flush the current frame's draw list onto `context`. Must be called
      * outside sdl3d_begin_mode_3d / sdl3d_end_mode_3d; typically the last
-     * thing before sdl3d_present_render_context.
+     * thing before sdl3d_present_render_context. The UI render path is
+     * intentionally overlay-based so widgets stay out of the main 3D
+     * pipeline and post-processing stack.
      */
     bool sdl3d_ui_render(sdl3d_ui_context *ui, sdl3d_render_context *context);
 
@@ -159,7 +179,7 @@ extern "C"
     void sdl3d_ui_measure_text(const sdl3d_ui_context *ui, const char *text, float *out_w, float *out_h);
 
     /* ------------------------------------------------------------------ */
-    /* Widgets — Phase 2 will expand this set                              */
+    /* Widgets                                                             */
     /* ------------------------------------------------------------------ */
 
     /*
@@ -174,6 +194,149 @@ extern "C"
         SDL_PRINTF_VARARG_FUNC(4);
 
     void sdl3d_ui_labelfv(sdl3d_ui_context *ui, float x, float y, const char *fmt, va_list args);
+
+    /*
+     * Immediate-mode button. Draws a themed rectangle with centered label
+     * text and returns true on the frame the user clicks it (mouse released
+     * while hovering after a press that started on the button).
+     *
+     * The label string is also used to generate the widget ID, so each
+     * button in a frame must have a unique label (or use "Label##id" to
+     * disambiguate visually identical buttons).
+     */
+    bool sdl3d_ui_button(sdl3d_ui_context *ui, float x, float y, float w, float h, const char *label);
+
+    /* ------------------------------------------------------------------ */
+    /* Layout containers                                                   */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * Panel: a filled, bordered rectangle that clips its children.
+     * Pushes a clip rect and optionally a layout. Children issued
+     * between begin/end are clipped to the panel bounds.
+     */
+    void sdl3d_ui_begin_panel(sdl3d_ui_context *ui, float x, float y, float w, float h);
+    void sdl3d_ui_end_panel(sdl3d_ui_context *ui);
+
+    /*
+     * Vertical box: children are stacked top-to-bottom with theme spacing.
+     * Must be inside a panel or another layout container.
+     */
+    void sdl3d_ui_begin_vbox(sdl3d_ui_context *ui, float x, float y, float w, float h);
+    void sdl3d_ui_end_vbox(sdl3d_ui_context *ui);
+
+    /*
+     * Horizontal box: children are placed left-to-right with theme spacing.
+     */
+    void sdl3d_ui_begin_hbox(sdl3d_ui_context *ui, float x, float y, float w, float h);
+    void sdl3d_ui_end_hbox(sdl3d_ui_context *ui);
+
+    /*
+     * Separator: a thin horizontal (in vbox) or vertical (in hbox) line
+     * that advances the layout cursor. Only meaningful inside a layout.
+     */
+    void sdl3d_ui_separator(sdl3d_ui_context *ui);
+
+    /* ------------------------------------------------------------------ */
+    /* Auto-layout widgets                                                 */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * These variants participate in the current layout — they consume
+     * space from the active vbox/hbox cursor and don't take x/y params.
+     * They are no-ops if no layout is active.
+     */
+    void sdl3d_ui_layout_label(sdl3d_ui_context *ui, const char *text);
+    void sdl3d_ui_layout_labelf(sdl3d_ui_context *ui, SDL_PRINTF_FORMAT_STRING const char *fmt, ...)
+        SDL_PRINTF_VARARG_FUNC(2);
+    bool sdl3d_ui_layout_button(sdl3d_ui_context *ui, const char *label);
+
+    /*
+     * Checkbox: toggles *value on click. Draws a small box (filled when
+     * checked) followed by the label text. Returns true on the frame the
+     * value changed.
+     */
+    bool sdl3d_ui_checkbox(sdl3d_ui_context *ui, float x, float y, const char *label, bool *value);
+    bool sdl3d_ui_layout_checkbox(sdl3d_ui_context *ui, const char *label, bool *value);
+
+    /*
+     * Slider: drags *value between min and max. Draws a labeled track
+     * with a draggable handle and the current value. Returns true on
+     * any frame the value changed (i.e., during drag).
+     */
+    bool sdl3d_ui_slider(sdl3d_ui_context *ui, float x, float y, float w, const char *label, float *value, float min,
+                         float max);
+    bool sdl3d_ui_layout_slider(sdl3d_ui_context *ui, const char *label, float *value, float min, float max);
+
+    /* ------------------------------------------------------------------ */
+    /* Scroll region                                                       */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * Scrollable region. Clips children to (x, y, w, h) and offsets
+     * them vertically by the current scroll amount. Mouse wheel events
+     * while hovering adjust the scroll offset.
+     *
+     * `scroll_offset` is caller-owned persistent state (initialize to 0).
+     * `content_height` is the total height of the content inside the
+     * region — pass the cursor position from your vbox after end_vbox,
+     * or estimate it. The scroll is clamped so the content doesn't
+     * scroll past its bounds.
+     *
+     * Typical usage:
+     *   static float scroll = 0;
+     *   sdl3d_ui_begin_scroll(ui, x, y, w, h, &scroll, content_h);
+     *     sdl3d_ui_begin_vbox(ui, x, y - scroll, w, content_h);
+     *       ... widgets ...
+     *     sdl3d_ui_end_vbox(ui);
+     *   sdl3d_ui_end_scroll(ui);
+     */
+    void sdl3d_ui_begin_scroll(sdl3d_ui_context *ui, float x, float y, float w, float h, float *scroll_offset,
+                               float content_height);
+    void sdl3d_ui_end_scroll(sdl3d_ui_context *ui);
+
+    /* ------------------------------------------------------------------ */
+    /* Text field                                                          */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * Single-line editable text field. Click to focus, type to edit,
+     * backspace to delete. Click elsewhere or press Enter/Escape to
+     * unfocus. Returns true on the frame the user commits (Enter or
+     * unfocus after editing).
+     *
+     * `buf` is a caller-owned buffer of `buf_size` bytes. The field
+     * edits it in place.
+     */
+    bool sdl3d_ui_text_field(sdl3d_ui_context *ui, float x, float y, float w, float h, char *buf, int buf_size);
+    bool sdl3d_ui_layout_text_field(sdl3d_ui_context *ui, char *buf, int buf_size);
+
+    /* ------------------------------------------------------------------ */
+    /* Dropdown                                                            */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * Dropdown selector. Displays the currently selected item as a
+     * button; click to open a selection list. Returns true on the
+     * frame the selection changes.
+     *
+     * `selected` is a caller-owned index into `items`.
+     */
+    bool sdl3d_ui_dropdown(sdl3d_ui_context *ui, float x, float y, float w, float h, const char *const *items,
+                           int item_count, int *selected);
+    bool sdl3d_ui_layout_dropdown(sdl3d_ui_context *ui, const char *const *items, int item_count, int *selected);
+
+    /* ------------------------------------------------------------------ */
+    /* Tab strip                                                           */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * Horizontal row of selectable tabs. Returns true on the frame
+     * the selection changes. `selected` is a caller-owned index.
+     */
+    bool sdl3d_ui_tab_strip(sdl3d_ui_context *ui, float x, float y, float w, float h, const char *const *tabs,
+                            int tab_count, int *selected);
+    bool sdl3d_ui_layout_tab_strip(sdl3d_ui_context *ui, const char *const *tabs, int tab_count, int *selected);
 
 #ifdef __cplusplus
 }

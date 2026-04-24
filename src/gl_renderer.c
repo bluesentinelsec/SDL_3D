@@ -92,6 +92,8 @@ typedef struct sdl3d_overlay_entry
     int vertex_count;
     float mvp[16];
     float tint[4];
+    bool scissor_enabled;
+    SDL_Rect scissor_rect;
     int atlas_index; /* index into overlay_atlases */
 } sdl3d_overlay_entry;
 
@@ -1239,52 +1241,56 @@ static sdl3d_overlay_entry *append_overlay_entry(sdl3d_gl_context *ctx)
 }
 
 bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, const float *uvs, int vertex_count,
-                             const float *mvp, const float *tint, const sdl3d_texture2d *texture)
+                             const float *mvp, const float *tint, const sdl3d_texture2d *texture, bool scissor_enabled,
+                             const SDL_Rect *scissor_rect)
 {
     sdl3d_gl_funcs *gl = &ctx->gl;
 
-    /* Find or create a persistent GL texture for this atlas. */
     int atlas_idx = -1;
-    for (int i = 0; i < ctx->overlay_atlas_count; i++)
+    if (texture != NULL)
     {
-        sdl3d_overlay_atlas *a = &ctx->overlay_atlases[i];
-        if (a->source == texture)
+        /* Find or create a persistent GL texture for this atlas. */
+        for (int i = 0; i < ctx->overlay_atlas_count; i++)
         {
-            /* Re-upload if the texture has changed. */
-            if (a->generation != texture->generation)
+            sdl3d_overlay_atlas *a = &ctx->overlay_atlases[i];
+            if (a->source == texture)
             {
-                gl->BindTexture(GL_TEXTURE_2D, a->gl_tex);
-                gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture->width, texture->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                               texture->pixels);
-                a->generation = texture->generation;
+                /* Re-upload if the texture has changed. */
+                if (a->generation != texture->generation)
+                {
+                    gl->BindTexture(GL_TEXTURE_2D, a->gl_tex);
+                    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture->width, texture->height, 0, GL_RGBA,
+                                   GL_UNSIGNED_BYTE, texture->pixels);
+                    a->generation = texture->generation;
+                }
+                atlas_idx = i;
+                break;
             }
-            atlas_idx = i;
-            break;
         }
-    }
-    if (atlas_idx < 0)
-    {
-        if (ctx->overlay_atlas_count == ctx->overlay_atlas_capacity)
+        if (atlas_idx < 0)
         {
-            int cap = ctx->overlay_atlas_capacity ? ctx->overlay_atlas_capacity * 2 : 16;
-            sdl3d_overlay_atlas *buf = SDL_realloc(ctx->overlay_atlases, (size_t)cap * sizeof(sdl3d_overlay_atlas));
-            if (!buf)
-                return SDL_OutOfMemory();
-            ctx->overlay_atlases = buf;
-            ctx->overlay_atlas_capacity = cap;
+            if (ctx->overlay_atlas_count == ctx->overlay_atlas_capacity)
+            {
+                int cap = ctx->overlay_atlas_capacity ? ctx->overlay_atlas_capacity * 2 : 16;
+                sdl3d_overlay_atlas *buf = SDL_realloc(ctx->overlay_atlases, (size_t)cap * sizeof(sdl3d_overlay_atlas));
+                if (!buf)
+                    return SDL_OutOfMemory();
+                ctx->overlay_atlases = buf;
+                ctx->overlay_atlas_capacity = cap;
+            }
+            atlas_idx = ctx->overlay_atlas_count++;
+            sdl3d_overlay_atlas *a = &ctx->overlay_atlases[atlas_idx];
+            a->source = texture;
+            a->generation = texture->generation;
+            gl->GenTextures(1, &a->gl_tex);
+            gl->BindTexture(GL_TEXTURE_2D, a->gl_tex);
+            gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture->width, texture->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                           texture->pixels);
+            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         }
-        atlas_idx = ctx->overlay_atlas_count++;
-        sdl3d_overlay_atlas *a = &ctx->overlay_atlases[atlas_idx];
-        a->source = texture;
-        a->generation = texture->generation;
-        gl->GenTextures(1, &a->gl_tex);
-        gl->BindTexture(GL_TEXTURE_2D, a->gl_tex);
-        gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture->width, texture->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                       texture->pixels);
-        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     }
 
     sdl3d_overlay_entry *e = append_overlay_entry(ctx);
@@ -1309,6 +1315,8 @@ bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, cons
     SDL_memcpy(e->mvp, mvp, 16 * sizeof(float));
     SDL_memcpy(e->tint, tint, 4 * sizeof(float));
     e->vertex_count = vertex_count;
+    e->scissor_enabled = scissor_enabled;
+    e->scissor_rect = scissor_rect ? *scissor_rect : (SDL_Rect){0, 0, 0, 0};
     e->atlas_index = atlas_idx;
     return true;
 }
@@ -2879,7 +2887,7 @@ void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx)
 /* alpha blending, no depth test, no post-processing.                  */
 /* ------------------------------------------------------------------ */
 
-static void replay_overlay_list(sdl3d_gl_context *ctx)
+static void replay_overlay_list(sdl3d_gl_context *ctx, int vp_x, int vp_y, int vp_w, int vp_h)
 {
     sdl3d_gl_funcs *gl = &ctx->gl;
     if (ctx->overlay_count == 0)
@@ -2894,13 +2902,38 @@ static void replay_overlay_list(sdl3d_gl_context *ctx)
     {
         sdl3d_overlay_entry *e = &ctx->overlay_list[i];
 
+        if (e->scissor_enabled)
+        {
+            /* Map logical scissor rect to the letterbox viewport in window pixels. */
+            float sx_scale = (float)vp_w / (float)ctx->logical_w;
+            float sy_scale = (float)vp_h / (float)ctx->logical_h;
+            int sc_x = vp_x + (int)((float)e->scissor_rect.x * sx_scale);
+            int sc_y = vp_y + (int)((float)(ctx->logical_h - e->scissor_rect.y - e->scissor_rect.h) * sy_scale);
+            int sc_w = (int)((float)e->scissor_rect.w * sx_scale);
+            int sc_h = (int)((float)e->scissor_rect.h * sy_scale);
+            gl->Enable(GL_SCISSOR_TEST);
+            gl->Scissor(sc_x, sc_y, sc_w, sc_h);
+        }
+        else
+        {
+            gl->Disable(GL_SCISSOR_TEST);
+        }
+
         gl->UseProgram(ctx->unlit_program);
         gl->UniformMatrix4fv(ctx->unlit_mvp_loc, 1, GL_FALSE, e->mvp);
         gl->Uniform4f(ctx->unlit_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
-        gl->ActiveTexture(GL_TEXTURE0);
-        gl->BindTexture(GL_TEXTURE_2D, ctx->overlay_atlases[e->atlas_index].gl_tex);
-        gl->Uniform1i(ctx->unlit_texture_loc, 0);
-        gl->Uniform1i(ctx->unlit_has_texture_loc, 1);
+        if (e->atlas_index >= 0)
+        {
+            gl->ActiveTexture(GL_TEXTURE0);
+            gl->BindTexture(GL_TEXTURE_2D, ctx->overlay_atlases[e->atlas_index].gl_tex);
+            gl->Uniform1i(ctx->unlit_texture_loc, 0);
+            gl->Uniform1i(ctx->unlit_has_texture_loc, 1);
+        }
+        else
+        {
+            gl->BindTexture(GL_TEXTURE_2D, 0);
+            gl->Uniform1i(ctx->unlit_has_texture_loc, 0);
+        }
 
         gl->BindVertexArray(ctx->unlit_vao);
         gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_position_vbo);
@@ -2918,6 +2951,7 @@ static void replay_overlay_list(sdl3d_gl_context *ctx)
         gl->DrawArrays(GL_TRIANGLES, 0, e->vertex_count);
     }
 
+    gl->Disable(GL_SCISSOR_TEST);
     gl->Disable(GL_BLEND);
     gl->Enable(GL_DEPTH_TEST);
 }
@@ -3174,7 +3208,7 @@ static bool gl_present(sdl3d_render_context *context)
 
     /* Overlay pass: UI text rendered directly to the default framebuffer,
      * after the FBO blit, bypassing all post-processing. */
-    replay_overlay_list(ctx);
+    replay_overlay_list(ctx, vp_x, vp_y, vp_w, vp_h);
     free_overlay_list(ctx);
 
     SDL_GL_SwapWindow(ctx->window);
