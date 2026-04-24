@@ -25,6 +25,21 @@ bool sdl3d_load_font_from_memory(const void *data, int data_size, float pixel_si
 {
     stbtt_fontinfo info;
     int atlas_w = 512, atlas_h = 512;
+    Uint32 prev_generation = 0;
+
+    /* Scale the atlas so all 95 ASCII glyphs fit at any pixel size.
+     * With 2× oversampling each glyph cell is roughly (pixel_size*2)².
+     * 512×512 is fine up to ~32px; beyond that we step up. */
+    if (pixel_size > 64.0f)
+    {
+        atlas_w = 2048;
+        atlas_h = 2048;
+    }
+    else if (pixel_size > 32.0f)
+    {
+        atlas_w = 1024;
+        atlas_h = 1024;
+    }
     unsigned char *atlas = NULL;
     unsigned char *rgba = NULL;
     float scale;
@@ -35,6 +50,7 @@ bool sdl3d_load_font_from_memory(const void *data, int data_size, float pixel_si
         return SDL_InvalidParamError("data");
     }
 
+    prev_generation = out->atlas_texture.generation;
     SDL_zerop(out);
 
     if (!stbtt_InitFont(&info, (const unsigned char *)data, 0))
@@ -112,6 +128,7 @@ bool sdl3d_load_font_from_memory(const void *data, int data_size, float pixel_si
     out->atlas_texture.filter = SDL3D_TEXTURE_FILTER_BILINEAR;
     out->atlas_texture.wrap_u = SDL3D_TEXTURE_WRAP_CLAMP;
     out->atlas_texture.wrap_v = SDL3D_TEXTURE_WRAP_CLAMP;
+    out->atlas_texture.generation = prev_generation ? prev_generation + 1U : 1U;
 
     SDL_Log("SDL3D font: %.0fpx, atlas %dx%d, %d glyphs", pixel_size, atlas_w, atlas_h, SDL3D_FONT_CHAR_COUNT);
     return true;
@@ -140,6 +157,13 @@ void sdl3d_free_font(sdl3d_font *font)
         SDL_free(font->atlas_pixels);
         font->atlas_pixels = NULL;
         sdl3d_free_texture(&font->atlas_texture);
+        SDL_zero(font->glyphs);
+        font->atlas_w = 0;
+        font->atlas_h = 0;
+        font->size = 0.0f;
+        font->ascent = 0.0f;
+        font->descent = 0.0f;
+        font->line_gap = 0.0f;
     }
 }
 
@@ -461,4 +485,232 @@ bool sdl3d_draw_fps(struct sdl3d_render_context *context, const sdl3d_font *font
 
     return draw_text_internal(context, font, digits, origin_x + prefix_w, origin_y, color,
                               font_max_digit_advance(font));
+}
+
+/* ------------------------------------------------------------------ */
+/* Built-in font catalog                                               */
+/* ------------------------------------------------------------------ */
+
+typedef struct sdl3d_builtin_font_entry
+{
+    const char *name;
+    const char *filename;
+} sdl3d_builtin_font_entry;
+
+static const sdl3d_builtin_font_entry sdl3d_builtin_fonts[SDL3D_BUILTIN_FONT_COUNT] = {
+    [SDL3D_BUILTIN_FONT_ROBOTO] = {"Roboto", "Roboto.ttf"},
+    [SDL3D_BUILTIN_FONT_INTER] = {"Inter", "Inter-Regular.ttf"},
+    [SDL3D_BUILTIN_FONT_IBM_PLEX_SANS] = {"IBM Plex Sans", "IBMPlexSans-Regular.ttf"},
+    [SDL3D_BUILTIN_FONT_NOTO_SANS] = {"Noto Sans", "NotoSans-Regular.ttf"},
+    [SDL3D_BUILTIN_FONT_DM_SANS] = {"DM Sans", "DMSans-Regular.ttf"},
+    [SDL3D_BUILTIN_FONT_SOURCE_SANS_3] = {"Source Sans 3", "SourceSans3-Regular.ttf"},
+    [SDL3D_BUILTIN_FONT_EB_GARAMOND] = {"EB Garamond", "EBGaramond-Regular.ttf"},
+    [SDL3D_BUILTIN_FONT_MERRIWEATHER] = {"Merriweather", "Merriweather-Regular.ttf"},
+    [SDL3D_BUILTIN_FONT_SOURCE_SERIF_4] = {"Source Serif 4", "SourceSerif4-Regular.ttf"},
+};
+
+static bool builtin_font_valid(sdl3d_builtin_font id)
+{
+    return id >= 0 && id < SDL3D_BUILTIN_FONT_COUNT;
+}
+
+const char *sdl3d_builtin_font_name(sdl3d_builtin_font id)
+{
+    return builtin_font_valid(id) ? sdl3d_builtin_fonts[id].name : NULL;
+}
+
+const char *sdl3d_builtin_font_filename(sdl3d_builtin_font id)
+{
+    return builtin_font_valid(id) ? sdl3d_builtin_fonts[id].filename : NULL;
+}
+
+bool sdl3d_load_builtin_font(const char *media_dir, sdl3d_builtin_font id, float pixel_size, sdl3d_font *out)
+{
+    if (!builtin_font_valid(id))
+    {
+        return SDL_SetError("sdl3d_load_builtin_font: invalid font id %d", (int)id);
+    }
+    if (!media_dir)
+    {
+        return SDL_InvalidParamError("media_dir");
+    }
+    if (!out)
+    {
+        return SDL_InvalidParamError("out");
+    }
+
+    /* Compose "<media_dir>/fonts/<filename>". The engine convention is
+     * that all bundled assets live under media_dir, with fonts in a
+     * "fonts" subdirectory — the path the bundled LICENSE.md documents. */
+    const char *filename = sdl3d_builtin_fonts[id].filename;
+    char path[1024];
+    int needed = SDL_snprintf(path, sizeof(path), "%s/fonts/%s", media_dir, filename);
+    if (needed < 0 || needed >= (int)sizeof(path))
+    {
+        return SDL_SetError("sdl3d_load_builtin_font: path too long for media_dir='%s' filename='%s'", media_dir,
+                            filename);
+    }
+    return sdl3d_load_font(path, pixel_size, out);
+}
+
+/* ------------------------------------------------------------------ */
+/* Overlay text (UI layer)                                             */
+/* ------------------------------------------------------------------ */
+
+#include "gl_renderer.h"
+
+bool sdl3d_draw_text_overlay(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text, float x,
+                             float y, sdl3d_color color)
+{
+    if (!context || !font || !text)
+        return SDL_InvalidParamError("context");
+    if (!font->atlas_texture.pixels)
+        return SDL_SetError("sdl3d_draw_text_overlay: font atlas not initialized");
+
+    /* Software backend: fall through to the normal path. */
+    if (!context->gl)
+        return sdl3d_draw_text(context, font, text, x, y, color);
+
+    int ctx_w = sdl3d_get_render_context_width(context);
+    int ctx_h = sdl3d_get_render_context_height(context);
+    if (ctx_w <= 0 || ctx_h <= 0)
+        return SDL_SetError("Invalid render context dimensions");
+
+    /* Count glyphs to size the batch. */
+    int glyph_count = 0;
+    for (const char *p = text; *p; p++)
+    {
+        int ci = (int)*p - SDL3D_FONT_FIRST_CHAR;
+        if (*p == '\n' || ci < 0 || ci >= SDL3D_FONT_CHAR_COUNT)
+            continue;
+        const sdl3d_glyph *g = &font->glyphs[ci];
+        if ((g->xoff2 - g->xoff) > 0 && (g->yoff2 - g->yoff) > 0)
+            glyph_count++;
+    }
+    if (glyph_count == 0)
+        return true;
+
+    int vert_count = glyph_count * 6;
+    float *positions = SDL_malloc((size_t)vert_count * 3 * sizeof(float));
+    float *uvs = SDL_malloc((size_t)vert_count * 2 * sizeof(float));
+    if (!positions || !uvs)
+    {
+        SDL_free(positions);
+        SDL_free(uvs);
+        return SDL_OutOfMemory();
+    }
+
+    /* Build an orthographic MVP: maps screen pixels to clip space. */
+    float hx = (float)ctx_w * 0.5f;
+    float hy = (float)ctx_h * 0.5f;
+    /* Simple ortho: x in [-hx, hx] → [-1, 1], y in [-hy, hy] → [-1, 1] */
+    float mvp[16] = {0};
+    mvp[0] = 1.0f / hx;
+    mvp[5] = 1.0f / hy;
+    mvp[10] = -1.0f;
+    mvp[15] = 1.0f;
+
+    float tint[4] = {(float)color.r / 255.0f, (float)color.g / 255.0f, (float)color.b / 255.0f,
+                     (float)color.a / 255.0f};
+
+    float cursor_x = x;
+    float cursor_y = y + font->ascent;
+    float line_h = font->ascent - font->descent + font->line_gap;
+    int vi = 0;
+
+    for (const char *p = text; *p; p++)
+    {
+        if (*p == '\n')
+        {
+            cursor_x = x;
+            cursor_y += line_h;
+            continue;
+        }
+        int ci = (int)*p - SDL3D_FONT_FIRST_CHAR;
+        if (ci < 0 || ci >= SDL3D_FONT_CHAR_COUNT)
+            continue;
+
+        const sdl3d_glyph *g = &font->glyphs[ci];
+        float gw = g->xoff2 - g->xoff;
+        float gh = g->yoff2 - g->yoff;
+        if (gw <= 0 || gh <= 0)
+        {
+            cursor_x += g->xadvance;
+            continue;
+        }
+
+        float sx0 = cursor_x + g->xoff;
+        float sy0 = cursor_y + g->yoff;
+        float sx1 = cursor_x + g->xoff2;
+        float sy1 = cursor_y + g->yoff2;
+
+        /* Map to ortho world space (Y flipped). */
+        float wx0 = sx0 - hx, wx1 = sx1 - hx;
+        float wy0 = hy - sy0, wy1 = hy - sy1;
+
+        /* Two triangles, CCW. */
+        int pi = vi * 3, ui = vi * 2;
+        positions[pi + 0] = wx0;
+        positions[pi + 1] = wy0;
+        positions[pi + 2] = 0.0f;
+        positions[pi + 3] = wx0;
+        positions[pi + 4] = wy1;
+        positions[pi + 5] = 0.0f;
+        positions[pi + 6] = wx1;
+        positions[pi + 7] = wy1;
+        positions[pi + 8] = 0.0f;
+        positions[pi + 9] = wx0;
+        positions[pi + 10] = wy0;
+        positions[pi + 11] = 0.0f;
+        positions[pi + 12] = wx1;
+        positions[pi + 13] = wy1;
+        positions[pi + 14] = 0.0f;
+        positions[pi + 15] = wx1;
+        positions[pi + 16] = wy0;
+        positions[pi + 17] = 0.0f;
+
+        uvs[ui + 0] = g->u0;
+        uvs[ui + 1] = g->v0;
+        uvs[ui + 2] = g->u0;
+        uvs[ui + 3] = g->v1;
+        uvs[ui + 4] = g->u1;
+        uvs[ui + 5] = g->v1;
+        uvs[ui + 6] = g->u0;
+        uvs[ui + 7] = g->v0;
+        uvs[ui + 8] = g->u1;
+        uvs[ui + 9] = g->v1;
+        uvs[ui + 10] = g->u1;
+        uvs[ui + 11] = g->v0;
+
+        vi += 6;
+        cursor_x += g->xadvance;
+    }
+
+    bool ok = sdl3d_gl_append_overlay(context->gl, positions, uvs, vi, mvp, tint, &font->atlas_texture);
+    SDL_free(positions);
+    SDL_free(uvs);
+    return ok;
+}
+
+bool sdl3d_draw_textf_overlay(struct sdl3d_render_context *context, const sdl3d_font *font, float x, float y,
+                              sdl3d_color color, const char *fmt, ...)
+{
+    char buf[512];
+    va_list args;
+    va_start(args, fmt);
+    SDL_vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    return sdl3d_draw_text_overlay(context, font, buf, x, y, color);
+}
+
+bool sdl3d_draw_fps_overlay(struct sdl3d_render_context *context, const sdl3d_font *font, float dt)
+{
+    static float smoothed = 0.0f;
+    if (dt > 0.0f)
+        smoothed += (1.0f / dt - smoothed) * 0.05f;
+    int ival = (int)(smoothed + 0.5f);
+    if (ival < 0)
+        ival = 0;
+    sdl3d_color green = {0, 255, 0, 255};
+    return sdl3d_draw_textf_overlay(context, font, 10.0f, 10.0f, green, "FPS: %d", ival);
 }

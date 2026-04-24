@@ -37,6 +37,7 @@ function(sdl3d_add_test target_name source_file test_label)
         ${target_name}
         PRIVATE
             SDL3D_TEST_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets"
+            SDL3D_MEDIA_DIR="${CMAKE_SOURCE_DIR}/media"
     )
 
     sdl3d_enable_sanitizers(${target_name})
@@ -183,6 +184,7 @@ else()
 
     if(NOT EMSCRIPTEN)
         sdl3d_add_test(sdl3d_image_test test_image.cpp unit)
+        sdl3d_add_test(sdl3d_font_test test_font.cpp unit)
         sdl3d_add_test(sdl3d_obj_loader_test test_obj_loader.cpp unit)
         sdl3d_add_test(sdl3d_m3_loaders_test test_m3_loaders.cpp unit)
         target_include_directories(sdl3d_m3_loaders_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
