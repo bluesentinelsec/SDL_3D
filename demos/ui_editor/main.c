@@ -230,6 +230,7 @@ int main(int argc, char *argv[])
                                        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     if (!win)
         return 1;
+    SDL_StartTextInput(win);
 
     sdl3d_render_context_config cfg;
     sdl3d_init_render_context_config(&cfg);
@@ -292,10 +293,14 @@ int main(int argc, char *argv[])
         while (SDL_PollEvent(&ev))
         {
             if (ev.type == SDL_EVENT_QUIT)
+            {
                 running = false;
-            if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_ESCAPE)
+                continue;
+            }
+
+            bool ui_consumed = sdl3d_ui_process_event(ui, &ev);
+            if (!ui_consumed && ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_ESCAPE)
                 running = false;
-            sdl3d_ui_process_event(ui, &ev);
         }
 
         Uint64 now = SDL_GetPerformanceCounter();
@@ -373,6 +378,7 @@ int main(int argc, char *argv[])
     sdl3d_ui_destroy(ui);
     sdl3d_free_font(&ui_font);
     sdl3d_destroy_render_context(ctx);
+    SDL_StopTextInput(win);
     SDL_DestroyWindow(win);
     SDL_Quit();
     return 0;

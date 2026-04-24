@@ -103,6 +103,12 @@ struct sdl3d_ui_context
     int cmd_count;
     int cmd_capacity;
 
+    /* Popup command buffer. Popups render after the main UI command list
+     * so dropdowns and future menus appear above ordinary widgets. */
+    sdl3d_ui_cmd *popup_cmds;
+    int popup_cmd_count;
+    int popup_cmd_capacity;
+
     /* Growable text arena — we copy user-supplied strings so the caller
      * doesn't have to keep them alive until render time. */
     char *text_arena;
@@ -113,6 +119,12 @@ struct sdl3d_ui_context
      * (e.g., hit testing) could also respect it in future phases. */
     sdl3d_ui_clip_rect clip_stack[SDL3D_UI_MAX_CLIP_DEPTH];
     int clip_depth;
+
+    /* Active popup capture region. While a popup is open, widgets other
+     * than its owner must not react to pointer input that lands within
+     * the popup's bounds. */
+    sdl3d_ui_id popup_owner_id;
+    sdl3d_ui_clip_rect popup_rect;
 
     /* Active scroll region — set by begin_scroll, consumed by end_scroll. */
 #define SDL3D_UI_MAX_SCROLL_DEPTH 8
@@ -134,25 +146,25 @@ struct sdl3d_ui_context
 /* Utility helpers                                                     */
 /* ------------------------------------------------------------------ */
 
-static bool ui_ensure_cmd_capacity(sdl3d_ui_context *ui, int needed)
+static bool ui_ensure_cmd_capacity(sdl3d_ui_cmd **cmds, int *capacity, int needed)
 {
-    if (needed <= ui->cmd_capacity)
+    if (needed <= *capacity)
     {
         return true;
     }
-    int new_cap = ui->cmd_capacity > 0 ? ui->cmd_capacity : 64;
+    int new_cap = *capacity > 0 ? *capacity : 64;
     while (new_cap < needed)
     {
         new_cap *= 2;
     }
-    sdl3d_ui_cmd *new_cmds = (sdl3d_ui_cmd *)SDL_realloc(ui->cmds, (size_t)new_cap * sizeof(*new_cmds));
+    sdl3d_ui_cmd *new_cmds = (sdl3d_ui_cmd *)SDL_realloc(*cmds, (size_t)new_cap * sizeof(*new_cmds));
     if (!new_cmds)
     {
         SDL_OutOfMemory();
         return false;
     }
-    ui->cmds = new_cmds;
-    ui->cmd_capacity = new_cap;
+    *cmds = new_cmds;
+    *capacity = new_cap;
     return true;
 }
 
@@ -189,7 +201,7 @@ static int ui_push_text(sdl3d_ui_context *ui, const char *text)
 
 static sdl3d_ui_cmd *ui_push_cmd(sdl3d_ui_context *ui)
 {
-    if (!ui_ensure_cmd_capacity(ui, ui->cmd_count + 1))
+    if (!ui_ensure_cmd_capacity(&ui->cmds, &ui->cmd_capacity, ui->cmd_count + 1))
     {
         return NULL;
     }
@@ -197,6 +209,128 @@ static sdl3d_ui_cmd *ui_push_cmd(sdl3d_ui_context *ui)
     SDL_zerop(cmd);
     cmd->text_offset = -1;
     return cmd;
+}
+
+static sdl3d_ui_cmd *ui_push_popup_cmd(sdl3d_ui_context *ui)
+{
+    if (!ui_ensure_cmd_capacity(&ui->popup_cmds, &ui->popup_cmd_capacity, ui->popup_cmd_count + 1))
+    {
+        return NULL;
+    }
+    sdl3d_ui_cmd *cmd = &ui->popup_cmds[ui->popup_cmd_count++];
+    SDL_zerop(cmd);
+    cmd->text_offset = -1;
+    return cmd;
+}
+
+static void ui_popup_draw_rect(sdl3d_ui_context *ui, float x, float y, float w, float h, sdl3d_color color)
+{
+    if (!ui || !ui->frame_open || w <= 0.0f || h <= 0.0f)
+    {
+        return;
+    }
+    sdl3d_ui_cmd *cmd = ui_push_popup_cmd(ui);
+    if (!cmd)
+    {
+        return;
+    }
+    cmd->kind = SDL3D_UI_CMD_RECT;
+    cmd->x = x;
+    cmd->y = y;
+    cmd->w = w;
+    cmd->h = h;
+    cmd->color = color;
+}
+
+static void ui_popup_draw_rect_outline(sdl3d_ui_context *ui, float x, float y, float w, float h, float thickness,
+                                       sdl3d_color color)
+{
+    if (!ui || w <= 0.0f || h <= 0.0f || thickness <= 0.0f)
+    {
+        return;
+    }
+    ui_popup_draw_rect(ui, x, y, w, thickness, color);
+    ui_popup_draw_rect(ui, x, y + h - thickness, w, thickness, color);
+    ui_popup_draw_rect(ui, x, y + thickness, thickness, h - 2.0f * thickness, color);
+    ui_popup_draw_rect(ui, x + w - thickness, y + thickness, thickness, h - 2.0f * thickness, color);
+}
+
+static void ui_popup_draw_text(sdl3d_ui_context *ui, float x, float y, const char *text, sdl3d_color color)
+{
+    if (!ui || !ui->frame_open || !text || !*text)
+    {
+        return;
+    }
+    sdl3d_ui_cmd *cmd = ui_push_popup_cmd(ui);
+    if (!cmd)
+    {
+        return;
+    }
+    cmd->kind = SDL3D_UI_CMD_TEXT;
+    cmd->x = x;
+    cmd->y = y;
+    cmd->color = color;
+    cmd->text_offset = ui_push_text(ui, text);
+}
+
+static void ui_popup_push_clip(sdl3d_ui_context *ui, float x, float y, float w, float h)
+{
+    if (!ui || !ui->frame_open)
+    {
+        return;
+    }
+    sdl3d_ui_cmd *cmd = ui_push_popup_cmd(ui);
+    if (!cmd)
+    {
+        return;
+    }
+    cmd->kind = SDL3D_UI_CMD_CLIP_PUSH;
+    cmd->x = x;
+    cmd->y = y;
+    cmd->w = w;
+    cmd->h = h;
+}
+
+static void ui_popup_pop_clip(sdl3d_ui_context *ui)
+{
+    if (!ui || !ui->frame_open)
+    {
+        return;
+    }
+    sdl3d_ui_cmd *cmd = ui_push_popup_cmd(ui);
+    if (!cmd)
+    {
+        return;
+    }
+    cmd->kind = SDL3D_UI_CMD_CLIP_POP;
+}
+
+static void ui_activate_popup_capture(sdl3d_ui_context *ui, sdl3d_ui_id owner_id, float x, float y, float w, float h)
+{
+    if (!ui)
+    {
+        return;
+    }
+    ui->popup_owner_id = owner_id;
+    ui->popup_rect.x = x;
+    ui->popup_rect.y = y;
+    ui->popup_rect.w = w;
+    ui->popup_rect.h = h;
+}
+
+static bool ui_is_hovering_for_id(const sdl3d_ui_context *ui, sdl3d_ui_id id, float x, float y, float w, float h)
+{
+    if (!ui)
+    {
+        return false;
+    }
+    if (ui->popup_owner_id != 0 && id != ui->popup_owner_id &&
+        sdl3d_ui_point_in_rect(ui->input.mouse_x, ui->input.mouse_y, ui->popup_rect.x, ui->popup_rect.y,
+                               ui->popup_rect.w, ui->popup_rect.h))
+    {
+        return false;
+    }
+    return sdl3d_ui_point_in_rect(ui->input.mouse_x, ui->input.mouse_y, x, y, w, h);
 }
 
 /* ------------------------------------------------------------------ */
@@ -275,6 +409,7 @@ void sdl3d_ui_destroy(sdl3d_ui_context *ui)
         return;
     }
     SDL_free(ui->cmds);
+    SDL_free(ui->popup_cmds);
     SDL_free(ui->text_arena);
     SDL_free(ui);
 }
@@ -292,12 +427,15 @@ void sdl3d_ui_begin_frame(sdl3d_ui_context *ui, int screen_w, int screen_h)
     ui->mouse_offset_x = 0.0f;
     ui->mouse_offset_y = 0.0f;
     ui->cmd_count = 0;
+    ui->popup_cmd_count = 0;
     ui->text_len = 0;
     ui->clip_depth = 0;
     ui->scroll_depth = 0;
     ui->layout_depth = 0;
     ui->frame_open = true;
     ui->hovered_id = 0;
+    ui->popup_owner_id = 0;
+    ui->popup_rect = (sdl3d_ui_clip_rect){0, 0, 0, 0};
 
     /* Edge-triggered flags are cleared at frame start; process_event
      * raises them during the frame, and they're consumed by widgets in
@@ -503,11 +641,7 @@ bool sdl3d_ui_point_in_rect(float px, float py, float x, float y, float w, float
 
 bool sdl3d_ui_is_hovering(const sdl3d_ui_context *ui, float x, float y, float w, float h)
 {
-    if (!ui)
-    {
-        return false;
-    }
-    return sdl3d_ui_point_in_rect(ui->input.mouse_x, ui->input.mouse_y, x, y, w, h);
+    return ui_is_hovering_for_id(ui, 0, x, y, w, h);
 }
 
 /* ------------------------------------------------------------------ */
@@ -828,7 +962,7 @@ void sdl3d_ui_begin_scroll(sdl3d_ui_context *ui, float x, float y, float w, floa
         return;
 
     /* Apply mouse wheel if hovering this region. */
-    if (sdl3d_ui_is_hovering(ui, x, y, w, h) && ui->input.scroll_y != 0.0f)
+    if (ui_is_hovering_for_id(ui, 0, x, y, w, h) && ui->input.scroll_y != 0.0f)
     {
         *scroll_offset -= ui->input.scroll_y * SDL3D_UI_SCROLL_SPEED;
     }
@@ -944,7 +1078,7 @@ bool sdl3d_ui_checkbox(sdl3d_ui_context *ui, float x, float y, const char *label
     float row_w = box_size + SDL3D_UI_CHECKBOX_GAP + tw;
     float row_h = (th > box_size) ? th : box_size;
 
-    bool hovering = sdl3d_ui_is_hovering(ui, x, y, row_w, row_h);
+    bool hovering = ui_is_hovering_for_id(ui, id, x, y, row_w, row_h);
     bool changed = false;
 
     if (hovering)
@@ -1025,7 +1159,7 @@ bool sdl3d_ui_slider(sdl3d_ui_context *ui, float x, float y, float w, const char
     float track_w = w;
     float track_h = SDL3D_UI_SLIDER_ROW_H;
 
-    bool hovering = sdl3d_ui_is_hovering(ui, x, y, track_w, track_h);
+    bool hovering = ui_is_hovering_for_id(ui, id, x, y, track_w, track_h);
 
     if (hovering)
     {
@@ -1115,7 +1249,7 @@ bool sdl3d_ui_button(sdl3d_ui_context *ui, float x, float y, float w, float h, c
         return false;
 
     sdl3d_ui_id id = sdl3d_ui_make_id(ui, label);
-    bool hovering = sdl3d_ui_is_hovering(ui, x, y, w, h);
+    bool hovering = ui_is_hovering_for_id(ui, id, x, y, w, h);
     bool pressed = false;
 
     /* Update interaction state. */
@@ -1184,7 +1318,7 @@ bool sdl3d_ui_text_field(sdl3d_ui_context *ui, float x, float y, float w, float 
     SDL_snprintf(id_buf, sizeof(id_buf), "##tf_%p", (const void *)buf);
     sdl3d_ui_id id = sdl3d_ui_make_id(ui, id_buf);
     const sdl3d_ui_theme *t = &ui->theme;
-    bool hovering = sdl3d_ui_is_hovering(ui, x, y, w, h);
+    bool hovering = ui_is_hovering_for_id(ui, id, x, y, w, h);
     bool focused = (ui->focused_id == id);
     bool committed = false;
 
@@ -1283,7 +1417,7 @@ bool sdl3d_ui_dropdown(sdl3d_ui_context *ui, float x, float y, float w, float h,
     SDL_snprintf(id_buf, sizeof(id_buf), "##dd_%p", (const void *)selected);
     sdl3d_ui_id id = sdl3d_ui_make_id(ui, id_buf);
     const sdl3d_ui_theme *t = &ui->theme;
-    bool hovering = sdl3d_ui_is_hovering(ui, x, y, w, h);
+    bool hovering = ui_is_hovering_for_id(ui, id, x, y, w, h);
     bool open = (ui->focused_id == id);
     bool changed = false;
 
@@ -1314,17 +1448,23 @@ bool sdl3d_ui_dropdown(sdl3d_ui_context *ui, float x, float y, float w, float h,
         float list_y = y + h;
         float item_h = h;
         float list_h = item_h * (float)item_count;
-
-        sdl3d_ui_draw_rect(ui, x, list_y, w, list_h, t->panel_bg);
-        sdl3d_ui_draw_rect_outline(ui, x, list_y, w, list_h, 1.0f, t->panel_border);
+        ui_activate_popup_capture(ui, id, x, y, w, h + list_h);
+        if (ui->clip_depth > 0)
+        {
+            const sdl3d_ui_clip_rect clip = ui->clip_stack[ui->clip_depth - 1];
+            ui_popup_push_clip(ui, clip.x, clip.y, clip.w, clip.h);
+        }
+        ui_popup_draw_rect(ui, x, list_y, w, list_h, t->panel_bg);
+        ui_popup_draw_rect_outline(ui, x, list_y, w, list_h, 1.0f, t->panel_border);
 
         for (int i = 0; i < item_count; i++)
         {
             float iy = list_y + item_h * (float)i;
-            bool item_hover = sdl3d_ui_is_hovering(ui, x, iy, w, item_h);
+            bool item_hover = ui_is_hovering_for_id(ui, id, x, iy, w, item_h);
             if (item_hover)
             {
-                sdl3d_ui_draw_rect(ui, x, iy, w, item_h, t->widget_hover);
+                ui->hovered_id = id;
+                ui_popup_draw_rect(ui, x, iy, w, item_h, t->widget_hover);
                 if (ui->input.mouse_pressed[0])
                 {
                     *selected = i;
@@ -1334,18 +1474,22 @@ bool sdl3d_ui_dropdown(sdl3d_ui_context *ui, float x, float y, float w, float h,
                 }
             }
             if (i == *selected)
-                sdl3d_ui_draw_rect(ui, x, iy, w, item_h, t->widget_active);
+                ui_popup_draw_rect(ui, x, iy, w, item_h, t->widget_active);
 
             float itw = 0, ith = 0;
             sdl3d_ui_measure_text(ui, items[i], &itw, &ith);
-            sdl3d_ui_draw_text(ui, x + t->padding, iy + (item_h - ith) * 0.5f, items[i], t->text);
+            ui_popup_draw_text(ui, x + t->padding, iy + (item_h - ith) * 0.5f, items[i], t->text);
         }
 
         /* Close if clicked outside. */
-        if (ui->input.mouse_pressed[0] && !sdl3d_ui_is_hovering(ui, x, y, w, h + list_h))
+        if (ui->input.mouse_pressed[0] && !ui_is_hovering_for_id(ui, id, x, y, w, h + list_h))
         {
             ui->focused_id = 0;
             ui->active_id = 0;
+        }
+        if (ui->clip_depth > 0)
+        {
+            ui_popup_pop_clip(ui);
         }
     }
 
@@ -1385,7 +1529,7 @@ bool sdl3d_ui_tab_strip(sdl3d_ui_context *ui, float x, float y, float w, float h
     for (int i = 0; i < tab_count; i++)
     {
         float tx = x + tab_w * (float)i;
-        bool hovering = sdl3d_ui_is_hovering(ui, tx, y, tab_w, h);
+        bool hovering = ui_is_hovering_for_id(ui, 0, tx, y, tab_w, h);
         bool active = (i == *selected);
 
         sdl3d_color bg;
@@ -1430,33 +1574,13 @@ bool sdl3d_ui_layout_tab_strip(sdl3d_ui_context *ui, const char *const *tabs, in
 /* Rendering                                                           */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_ui_render(sdl3d_ui_context *ui, sdl3d_render_context *context)
+static bool ui_render_cmd_buffer(const sdl3d_ui_context *ui, sdl3d_render_context *context, const sdl3d_ui_cmd *cmds,
+                                 int cmd_count)
 {
-    if (!ui)
-    {
-        return SDL_InvalidParamError("ui");
-    }
-    if (!context)
-    {
-        return SDL_InvalidParamError("context");
-    }
-    if (ui->frame_open)
-    {
-        return SDL_SetError("sdl3d_ui_render called before sdl3d_ui_end_frame");
-    }
-
-    /* Remember the caller's scissor state so we can leave it undisturbed. */
-    bool had_scissor = sdl3d_is_scissor_enabled(context);
-    SDL_Rect saved_scissor = {0, 0, 0, 0};
-    if (had_scissor)
-    {
-        sdl3d_get_scissor_rect(context, &saved_scissor);
-    }
-
     bool ok = true;
-    for (int i = 0; i < ui->cmd_count && ok; i++)
+    for (int i = 0; i < cmd_count && ok; i++)
     {
-        const sdl3d_ui_cmd *cmd = &ui->cmds[i];
+        const sdl3d_ui_cmd *cmd = &cmds[i];
         switch (cmd->kind)
         {
         case SDL3D_UI_CMD_RECT:
@@ -1480,6 +1604,37 @@ bool sdl3d_ui_render(sdl3d_ui_context *ui, sdl3d_render_context *context)
             sdl3d_set_scissor_rect(context, NULL);
             break;
         }
+    }
+    return ok;
+}
+
+bool sdl3d_ui_render(sdl3d_ui_context *ui, sdl3d_render_context *context)
+{
+    if (!ui)
+    {
+        return SDL_InvalidParamError("ui");
+    }
+    if (!context)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (ui->frame_open)
+    {
+        return SDL_SetError("sdl3d_ui_render called before sdl3d_ui_end_frame");
+    }
+
+    /* Remember the caller's scissor state so we can leave it undisturbed. */
+    bool had_scissor = sdl3d_is_scissor_enabled(context);
+    SDL_Rect saved_scissor = {0, 0, 0, 0};
+    if (had_scissor)
+    {
+        sdl3d_get_scissor_rect(context, &saved_scissor);
+    }
+
+    bool ok = ui_render_cmd_buffer(ui, context, ui->cmds, ui->cmd_count);
+    if (ok && ui->popup_cmd_count > 0)
+    {
+        ok = ui_render_cmd_buffer(ui, context, ui->popup_cmds, ui->popup_cmd_count);
     }
 
     if (had_scissor)

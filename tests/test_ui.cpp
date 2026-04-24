@@ -646,6 +646,41 @@ TEST(SDL3DUI, DropdownSelection)
     sdl3d_ui_destroy(ui);
 }
 
+TEST(SDL3DUI, DropdownPopupBlocksOverlappingWidgetInput)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    const char *items[] = {"Apple", "Banana", "Cherry"};
+    int selected = 0;
+
+    // Frame 1: click to open the dropdown.
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 50.0f, 15.0f);
+    sim_mouse_down(ui, 50.0f, 15.0f);
+    sdl3d_ui_dropdown(ui, 0, 0, 200, 30, items, 3, &selected);
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 2: click on the second dropdown item. An overlapping button
+    // occupies the same screen-space, but must not receive the press.
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 50.0f, 75.0f);
+    sim_mouse_down(ui, 50.0f, 75.0f);
+    EXPECT_TRUE(sdl3d_ui_dropdown(ui, 0, 0, 200, 30, items, 3, &selected));
+    EXPECT_EQ(selected, 1);
+    EXPECT_FALSE(sdl3d_ui_button(ui, 0, 60, 200, 30, "Overlap"));
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 3: release over the overlapping button. If the popup failed
+    // to block the earlier press, the button would falsely click here.
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 50.0f, 75.0f);
+    sim_mouse_up(ui, 50.0f, 75.0f);
+    EXPECT_FALSE(sdl3d_ui_button(ui, 0, 60, 200, 30, "Overlap"));
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
 TEST(SDL3DUI, TabStripSelection)
 {
     sdl3d_ui_context *ui = nullptr;
