@@ -118,6 +118,7 @@ typedef struct sdl3d_draw_entry
     bool lit;
     bool baked_light_mode;
     bool has_lightmap;
+    GLenum primitive_mode;
     float mvp[16];
 } sdl3d_draw_entry;
 
@@ -1240,6 +1241,8 @@ static sdl3d_overlay_entry *append_overlay_entry(sdl3d_gl_context *ctx)
     return e;
 }
 
+static float *copy_floats(const float *src, size_t count);
+
 bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, const float *uvs, int vertex_count,
                              const float *mvp, const float *tint, const sdl3d_texture2d *texture, bool scissor_enabled,
                              const SDL_Rect *scissor_rect)
@@ -1319,6 +1322,31 @@ bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, cons
     e->scissor_rect = scissor_rect ? *scissor_rect : (SDL_Rect){0, 0, 0, 0};
     e->atlas_index = atlas_idx;
     return true;
+}
+
+bool sdl3d_gl_append_line(sdl3d_gl_context *ctx, const float *positions, const float *colors, const float *mvp)
+{
+    static const float k_zero_uvs[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    static const float k_white_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+
+    if (!ctx || !positions || !colors || !mvp)
+    {
+        return false;
+    }
+
+    sdl3d_draw_entry *e = append_draw_entry(ctx);
+    if (!e)
+        return false;
+
+    e->lit = false;
+    e->primitive_mode = GL_LINES;
+    e->vertex_count = 2;
+    e->positions = copy_floats(positions, 6);
+    e->uvs = copy_floats(k_zero_uvs, 4);
+    e->colors = copy_floats(colors, 8);
+    SDL_memcpy(e->mvp, mvp, 16 * sizeof(float));
+    SDL_memcpy(e->tint, k_white_tint, sizeof(k_white_tint));
+    return e->positions != NULL && e->uvs != NULL && e->colors != NULL;
 }
 
 /* Check for potential z-fighting: warn if two lit draw entries have
@@ -1845,11 +1873,11 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
                 gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->lit_ebo);
                 gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
                                e->indices, GL_DYNAMIC_DRAW);
-                gl->DrawElements(GL_TRIANGLES, e->index_count, GL_UNSIGNED_INT, NULL);
+                gl->DrawElements(e->primitive_mode, e->index_count, GL_UNSIGNED_INT, NULL);
             }
             else
             {
-                gl->DrawArrays(GL_TRIANGLES, 0, e->vertex_count);
+                gl->DrawArrays(e->primitive_mode, 0, e->vertex_count);
             }
         }
         else
@@ -1879,11 +1907,11 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
                 gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->unlit_ebo);
                 gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
                                e->indices, GL_DYNAMIC_DRAW);
-                gl->DrawElements(GL_TRIANGLES, e->index_count, GL_UNSIGNED_INT, NULL);
+                gl->DrawElements(e->primitive_mode, e->index_count, GL_UNSIGNED_INT, NULL);
             }
             else
             {
-                gl->DrawArrays(GL_TRIANGLES, 0, e->vertex_count);
+                gl->DrawArrays(e->primitive_mode, 0, e->vertex_count);
             }
         }
     }
@@ -2806,6 +2834,7 @@ static bool gl_draw_mesh_unlit(sdl3d_render_context *context, const sdl3d_draw_p
     e->colors = copy_floats(colors, (size_t)params->vertex_count * 4);
     e->indices = copy_indices(params->indices, (size_t)e->index_count);
     e->texture = params->texture;
+    e->primitive_mode = GL_TRIANGLES;
     SDL_memcpy(e->mvp, params->mvp, 16 * sizeof(float));
     SDL_memcpy(e->tint, params->tint, 4 * sizeof(float));
 
@@ -2833,6 +2862,7 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     e->indices = copy_indices(params->indices, (size_t)e->index_count);
     e->texture = params->texture;
     e->lightmap_texture = params->lightmap;
+    e->primitive_mode = GL_TRIANGLES;
     SDL_memcpy(e->model_matrix, params->model_matrix, 16 * sizeof(float));
     SDL_memcpy(e->normal_matrix, params->normal_matrix, 9 * sizeof(float));
     SDL_memcpy(e->tint, params->tint, 4 * sizeof(float));

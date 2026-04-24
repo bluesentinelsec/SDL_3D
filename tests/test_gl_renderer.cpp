@@ -193,6 +193,39 @@ TEST_F(GLRendererTest, CubeVisibleOnFirstFrame)
     EXPECT_GT(px[1], 50);
 }
 
+TEST_F(GLRendererTest, Line3DVisibleOnGLBackend)
+{
+    sdl3d_camera3d cam;
+    cam.position = sdl3d_vec3_make(0, 0, 5);
+    cam.target = sdl3d_vec3_make(0, 0, 0);
+    cam.up = sdl3d_vec3_make(0, 1, 0);
+    cam.fovy = 60.0f;
+    cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    sdl3d_clear_render_context(ctx, (sdl3d_color){0, 0, 0, 255});
+    sdl3d_begin_mode_3d(ctx, cam);
+    sdl3d_draw_line_3d(ctx, sdl3d_vec3_make(-1.5f, 0.0f, 0.0f), sdl3d_vec3_make(1.5f, 0.0f, 0.0f),
+                       (sdl3d_color){255, 32, 32, 255});
+    sdl3d_end_mode_3d(ctx);
+
+    bool found_red = false;
+    for (int y = 0; y < 240 && !found_red; ++y)
+    {
+        for (int x = 0; x < 320; ++x)
+        {
+            unsigned char px[4];
+            readPixel(x, y, px);
+            if (px[0] > 100 && px[1] < 80 && px[2] < 80)
+            {
+                found_red = true;
+                break;
+            }
+        }
+    }
+
+    EXPECT_TRUE(found_red);
+}
+
 TEST_F(GLRendererTest, BackfaceCullingShowsFrontFaces)
 {
     /* A cube viewed from the front should show the front face, not the back. */

@@ -963,6 +963,36 @@ TEST(SDL3DUI, InspectorRowCheckbox)
     sdl3d_ui_destroy(ui);
 }
 
+TEST(SDL3DUI, InspectorRowCheckboxesUseIndependentHiddenIds)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    bool grid = false;
+    bool axes = false;
+
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 120.0f, 18.0f);
+    sim_mouse_down(ui, 120.0f, 18.0f);
+    sdl3d_ui_begin_vbox(ui, 10, 10, 300, 400);
+    sdl3d_ui_row_checkbox(ui, "Show Grid:", &grid);
+    sdl3d_ui_row_checkbox(ui, "Show Axes:", &axes);
+    sdl3d_ui_end_vbox(ui);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 120.0f, 18.0f);
+    sim_mouse_up(ui, 120.0f, 18.0f);
+    sdl3d_ui_begin_vbox(ui, 10, 10, 300, 400);
+    EXPECT_TRUE(sdl3d_ui_row_checkbox(ui, "Show Grid:", &grid));
+    EXPECT_FALSE(sdl3d_ui_row_checkbox(ui, "Show Axes:", &axes));
+    EXPECT_TRUE(grid);
+    EXPECT_FALSE(axes);
+    sdl3d_ui_end_vbox(ui);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
 TEST(SDL3DUI, ListViewSelection)
 {
     sdl3d_ui_context *ui = nullptr;

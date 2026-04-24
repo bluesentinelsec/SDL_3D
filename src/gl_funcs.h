@@ -22,6 +22,7 @@ typedef unsigned int GLbitfield;
 /* GL constants. */
 #define GL_FALSE 0
 #define GL_TRUE 1
+#define GL_LINES 0x0001
 #define GL_TRIANGLES 0x0004
 #define GL_UNSIGNED_INT 0x1405
 #define GL_FLOAT 0x1406

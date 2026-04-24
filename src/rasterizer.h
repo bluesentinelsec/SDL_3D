@@ -43,6 +43,7 @@ typedef struct sdl3d_framebuffer
     sdl3d_parallel_rasterizer *parallel_rasterizer;
     bool scissor_enabled;
     SDL_Rect scissor_rect;
+    bool blend_enabled; /* when true, alpha-composite instead of overwrite */
 } sdl3d_framebuffer;
 
 bool sdl3d_parallel_rasterizer_create(int worker_count, sdl3d_parallel_rasterizer **out_rasterizer);

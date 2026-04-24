@@ -1283,6 +1283,15 @@ bool sdl3d_draw_line_3d(sdl3d_render_context *context, sdl3d_vec3 start, sdl3d_v
         return false;
     }
 
+    if (context->gl != NULL)
+    {
+        const float positions[6] = {start.x, start.y, start.z, end.x, end.y, end.z};
+        const float c = 1.0f / 255.0f;
+        const float colors[8] = {color.r * c, color.g * c, color.b * c, color.a * c,
+                                 color.r * c, color.g * c, color.b * c, color.a * c};
+        return sdl3d_gl_append_line(context->gl, positions, colors, context->model_view_projection.m);
+    }
+
     sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
     sdl3d_rasterize_line(&framebuffer, context->model_view_projection, start, end, color);
     return true;
