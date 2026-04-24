@@ -106,6 +106,27 @@ extern "C"
     bool sdl3d_draw_fps(struct sdl3d_render_context *context, const sdl3d_font *font, float dt);
 
     /* ------------------------------------------------------------------ */
+    /* Overlay text (UI layer — bypasses 3D pipeline / post-processing)    */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * Draw text on a dedicated UI overlay layer that is composited after
+     * all 3D rendering and post-processing. Safe to call even when the
+     * font atlas will be freed/reloaded before present — the overlay
+     * captures a snapshot of the atlas at call time.
+     *
+     * On the software backend this is equivalent to sdl3d_draw_text.
+     */
+    bool sdl3d_draw_text_overlay(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text,
+                                 float x, float y, sdl3d_color color);
+
+    bool sdl3d_draw_textf_overlay(struct sdl3d_render_context *context, const sdl3d_font *font, float x, float y,
+                                  sdl3d_color color, SDL_PRINTF_FORMAT_STRING const char *fmt, ...)
+        SDL_PRINTF_VARARG_FUNC(6);
+
+    bool sdl3d_draw_fps_overlay(struct sdl3d_render_context *context, const sdl3d_font *font, float dt);
+
+    /* ------------------------------------------------------------------ */
     /* Built-in font catalog                                               */
     /* ------------------------------------------------------------------ */
 

@@ -70,6 +70,24 @@ typedef struct sdl3d_scene_ubo_data
 /* Draw list entry                                                     */
 /* ------------------------------------------------------------------ */
 
+/* Overlay entries are rendered directly to the default framebuffer
+ * after the FBO blit, bypassing all post-processing. Used for UI text
+ * and other screen-space elements that must not be affected by bloom,
+ * SSAO, vignette, etc. Each entry owns its vertex data (copied at
+ * submission time) so the caller can free/reload textures freely. */
+typedef struct sdl3d_overlay_entry
+{
+    float *positions; /* 3 floats per vertex, heap-allocated copy */
+    float *uvs;       /* 2 floats per vertex, heap-allocated copy */
+    int vertex_count;
+    float mvp[16];
+    float tint[4];
+    const sdl3d_texture2d *texture;
+    Uint32 texture_generation; /* snapshot so we can detect stale textures */
+    unsigned char *texture_pixels;
+    int texture_w, texture_h;
+} sdl3d_overlay_entry;
+
 typedef struct sdl3d_draw_entry
 {
     float *positions;
@@ -209,6 +227,11 @@ struct sdl3d_gl_context
     sdl3d_draw_entry *draw_list;
     int draw_count;
     int draw_capacity;
+
+    /* Overlay draw list — rendered after FBO blit, no post-processing */
+    sdl3d_overlay_entry *overlay_list;
+    int overlay_count;
+    int overlay_capacity;
 
     GLuint white_texture;
     GLuint black_texture;
@@ -1169,6 +1192,72 @@ static sdl3d_draw_entry *append_draw_entry(sdl3d_gl_context *ctx)
     sdl3d_draw_entry *e = &ctx->draw_list[ctx->draw_count++];
     SDL_memset(e, 0, sizeof(*e));
     return e;
+}
+
+/* ------------------------------------------------------------------ */
+/* Overlay draw list helpers                                           */
+/* ------------------------------------------------------------------ */
+
+static void free_overlay_list(sdl3d_gl_context *ctx)
+{
+    for (int i = 0; i < ctx->overlay_count; i++)
+    {
+        sdl3d_overlay_entry *e = &ctx->overlay_list[i];
+        SDL_free(e->positions);
+        SDL_free(e->uvs);
+        SDL_free(e->texture_pixels);
+    }
+    ctx->overlay_count = 0;
+}
+
+static sdl3d_overlay_entry *append_overlay_entry(sdl3d_gl_context *ctx)
+{
+    if (ctx->overlay_count == ctx->overlay_capacity)
+    {
+        int cap = ctx->overlay_capacity ? ctx->overlay_capacity * 2 : 64;
+        sdl3d_overlay_entry *buf = SDL_realloc(ctx->overlay_list, (size_t)cap * sizeof(sdl3d_overlay_entry));
+        if (!buf)
+            return NULL;
+        ctx->overlay_list = buf;
+        ctx->overlay_capacity = cap;
+    }
+    sdl3d_overlay_entry *e = &ctx->overlay_list[ctx->overlay_count++];
+    SDL_memset(e, 0, sizeof(*e));
+    return e;
+}
+
+bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, const float *uvs, int vertex_count,
+                             const float *mvp, const float *tint, const unsigned char *tex_pixels, int tex_w, int tex_h)
+{
+    sdl3d_overlay_entry *e = append_overlay_entry(ctx);
+    if (!e)
+        return SDL_OutOfMemory();
+
+    size_t pos_bytes = (size_t)vertex_count * 3 * sizeof(float);
+    size_t uv_bytes = (size_t)vertex_count * 2 * sizeof(float);
+    size_t tex_bytes = (size_t)tex_w * (size_t)tex_h * 4;
+
+    e->positions = SDL_malloc(pos_bytes);
+    e->uvs = SDL_malloc(uv_bytes);
+    e->texture_pixels = SDL_malloc(tex_bytes);
+    if (!e->positions || !e->uvs || !e->texture_pixels)
+    {
+        SDL_free(e->positions);
+        SDL_free(e->uvs);
+        SDL_free(e->texture_pixels);
+        ctx->overlay_count--;
+        return SDL_OutOfMemory();
+    }
+
+    SDL_memcpy(e->positions, positions, pos_bytes);
+    SDL_memcpy(e->uvs, uvs, uv_bytes);
+    SDL_memcpy(e->texture_pixels, tex_pixels, tex_bytes);
+    SDL_memcpy(e->mvp, mvp, 16 * sizeof(float));
+    SDL_memcpy(e->tint, tint, 4 * sizeof(float));
+    e->vertex_count = vertex_count;
+    e->texture_w = tex_w;
+    e->texture_h = tex_h;
+    return true;
 }
 
 /* Check for potential z-fighting: warn if two lit draw entries have
@@ -2502,6 +2591,9 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     free_draw_list(ctx);
     SDL_free(ctx->draw_list);
 
+    free_overlay_list(ctx);
+    SDL_free(ctx->overlay_list);
+
     tex_cache_free(ctx);
     SDL_free(ctx->white_colors);
 
@@ -2724,6 +2816,67 @@ void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx)
     gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
     gl->Disable(GL_CULL_FACE);
     gl->CullFace(GL_BACK);
+}
+
+/* ------------------------------------------------------------------ */
+/* Overlay replay — renders directly to the current framebuffer with  */
+/* alpha blending, no depth test, no post-processing.                  */
+/* ------------------------------------------------------------------ */
+
+static void replay_overlay_list(sdl3d_gl_context *ctx)
+{
+    sdl3d_gl_funcs *gl = &ctx->gl;
+    if (ctx->overlay_count == 0)
+        return;
+
+    gl->Disable(GL_DEPTH_TEST);
+    gl->Disable(GL_CULL_FACE);
+    gl->Enable(GL_BLEND);
+    gl->BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    for (int i = 0; i < ctx->overlay_count; i++)
+    {
+        sdl3d_overlay_entry *e = &ctx->overlay_list[i];
+
+        /* Upload texture snapshot directly — no cache, no stale pointers. */
+        GLuint tex_id;
+        gl->GenTextures(1, &tex_id);
+        gl->BindTexture(GL_TEXTURE_2D, tex_id);
+        gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, e->texture_w, e->texture_h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                       e->texture_pixels);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        gl->UseProgram(ctx->unlit_program);
+        gl->UniformMatrix4fv(ctx->unlit_mvp_loc, 1, GL_FALSE, e->mvp);
+        gl->Uniform4f(ctx->unlit_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
+        gl->ActiveTexture(GL_TEXTURE0);
+        gl->BindTexture(GL_TEXTURE_2D, tex_id);
+        gl->Uniform1i(ctx->unlit_texture_loc, 0);
+        gl->Uniform1i(ctx->unlit_has_texture_loc, 1);
+
+        gl->BindVertexArray(ctx->unlit_vao);
+        gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_position_vbo);
+        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->positions,
+                       GL_DYNAMIC_DRAW);
+        gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_uv_vbo);
+        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 2 * sizeof(float)), e->uvs,
+                       GL_DYNAMIC_DRAW);
+
+        /* No per-vertex color — supply white. */
+        const float *whites = ensure_white_colors(ctx, e->vertex_count * 4);
+        gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_color_vbo);
+        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 4 * sizeof(float)), whites,
+                       GL_DYNAMIC_DRAW);
+
+        gl->DrawArrays(GL_TRIANGLES, 0, e->vertex_count);
+        gl->DeleteTextures(1, &tex_id);
+    }
+
+    gl->Disable(GL_BLEND);
+    gl->Enable(GL_DEPTH_TEST);
 }
 
 static bool gl_present(sdl3d_render_context *context)
@@ -2975,6 +3128,11 @@ static bool gl_present(sdl3d_render_context *context)
     gl->DrawArrays(GL_TRIANGLES, 0, 3);
     gl->Disable(GL_CULL_FACE);
     gl->Enable(GL_DEPTH_TEST);
+
+    /* Overlay pass: UI text rendered directly to the default framebuffer,
+     * after the FBO blit, bypassing all post-processing. */
+    replay_overlay_list(ctx);
+    free_overlay_list(ctx);
 
     SDL_GL_SwapWindow(ctx->window);
     return true;

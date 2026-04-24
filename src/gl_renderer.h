@@ -28,4 +28,12 @@ void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx);
 /* IBL: load an HDRI environment map and generate irradiance/prefilter/BRDF LUT. */
 bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path);
 
+/* Append a textured quad to the overlay draw list. The overlay is rendered
+ * after the FBO blit, bypassing all post-processing. `positions` (3 floats
+ * per vertex) and `uvs` (2 floats per vertex) are copied. `tex_pixels` is
+ * also copied so the caller can free/reload the texture before present. */
+bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, const float *uvs, int vertex_count,
+                             const float *mvp, const float *tint, const unsigned char *tex_pixels, int tex_w,
+                             int tex_h);
+
 #endif

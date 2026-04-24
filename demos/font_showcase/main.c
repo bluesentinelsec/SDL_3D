@@ -98,20 +98,11 @@ int main(int argc, char *argv[])
     sdl3d_color hint_color = {100, 100, 100, 255};
     sdl3d_color cube_color = {80, 160, 255, 255};
     bool running = true;
-    bool fonts_dirty = false;
     float elapsed = 0.0f;
     Uint64 last = SDL_GetPerformanceCounter();
 
     while (running)
     {
-        /* Reload fonts AFTER present so the previous frame's draw list
-         * (which references the old atlas textures) has been flushed. */
-        if (fonts_dirty)
-        {
-            reload_fonts(fonts, loaded, font_size * dpi_scale);
-            fonts_dirty = false;
-        }
-
         SDL_Event ev;
         while (SDL_PollEvent(&ev))
         {
@@ -124,13 +115,13 @@ int main(int argc, char *argv[])
                 if (ev.key.scancode == SDL_SCANCODE_UP && font_size < FONT_SIZE_MAX)
                 {
                     font_size += FONT_SIZE_STEP;
-                    fonts_dirty = true;
+                    reload_fonts(fonts, loaded, font_size * dpi_scale);
                     SDL_Log("Font size: %.0f", font_size);
                 }
                 if (ev.key.scancode == SDL_SCANCODE_DOWN && font_size > FONT_SIZE_MIN)
                 {
                     font_size -= FONT_SIZE_STEP;
-                    fonts_dirty = true;
+                    reload_fonts(fonts, loaded, font_size * dpi_scale);
                     SDL_Log("Font size: %.0f", font_size);
                 }
             }
@@ -155,7 +146,8 @@ int main(int argc, char *argv[])
         sdl3d_draw_cube(ctx, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), sdl3d_vec3_make(1.5f, 1.5f, 1.5f), cube_color);
         sdl3d_end_mode_3d(ctx);
 
-        /* 2D overlay: font samples + FPS. */
+        /* 2D overlay: font samples + FPS — rendered on a dedicated UI layer
+         * that bypasses the 3D pipeline and all post-processing. */
         float s = dpi_scale;
         float scaled_size = font_size * s;
         float y = 20.0f * s;
@@ -164,17 +156,18 @@ int main(int argc, char *argv[])
             if (!loaded[i])
                 continue;
             const char *name = sdl3d_builtin_font_name(i);
-            sdl3d_draw_textf(ctx, &fonts[i], 20.0f * s, y, label_color, "%s:", name);
+            sdl3d_draw_textf_overlay(ctx, &fonts[i], 20.0f * s, y, label_color, "%s:", name);
             y += scaled_size + 4.0f * s;
-            sdl3d_draw_text(ctx, &fonts[i], "The quick brown fox jumps over the lazy dog.", 40.0f * s, y, white);
+            sdl3d_draw_text_overlay(ctx, &fonts[i], "The quick brown fox jumps over the lazy dog.", 40.0f * s, y,
+                                    white);
             y += scaled_size + 16.0f * s;
         }
 
         if (loaded[0])
         {
-            sdl3d_draw_fps(ctx, &fonts[0], dt);
-            sdl3d_draw_textf(ctx, &fonts[0], 20.0f * s, (float)render_h - scaled_size - 10.0f * s, hint_color,
-                             "%.0fpx  [Up/Down to resize]", font_size);
+            sdl3d_draw_fps_overlay(ctx, &fonts[0], dt);
+            sdl3d_draw_textf_overlay(ctx, &fonts[0], 20.0f * s, (float)render_h - scaled_size - 10.0f * s, hint_color,
+                                     "%.0fpx  [Up/Down to resize]", font_size);
         }
 
         sdl3d_present_render_context(ctx);
