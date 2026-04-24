@@ -67,6 +67,8 @@ struct sdl3d_ui_context
     sdl3d_ui_theme theme;
 
     int screen_w, screen_h;
+    float mouse_scale_x, mouse_scale_y; /* window-to-logical coordinate mapping */
+    float mouse_offset_x, mouse_offset_y;
     bool frame_open;
 
     sdl3d_ui_input_state input;
@@ -248,6 +250,10 @@ void sdl3d_ui_begin_frame(sdl3d_ui_context *ui, int screen_w, int screen_h)
     }
     ui->screen_w = screen_w;
     ui->screen_h = screen_h;
+    ui->mouse_scale_x = 1.0f;
+    ui->mouse_scale_y = 1.0f;
+    ui->mouse_offset_x = 0.0f;
+    ui->mouse_offset_y = 0.0f;
     ui->cmd_count = 0;
     ui->text_len = 0;
     ui->clip_depth = 0;
@@ -264,6 +270,16 @@ void sdl3d_ui_begin_frame(sdl3d_ui_context *ui, int screen_w, int screen_h)
     }
     ui->input.text_input[0] = '\0';
     ui->input.text_input_len = 0;
+}
+
+void sdl3d_ui_set_mouse_transform(sdl3d_ui_context *ui, float scale_x, float scale_y, float offset_x, float offset_y)
+{
+    if (!ui)
+        return;
+    ui->mouse_scale_x = scale_x;
+    ui->mouse_scale_y = scale_y;
+    ui->mouse_offset_x = offset_x;
+    ui->mouse_offset_y = offset_y;
 }
 
 void sdl3d_ui_end_frame(sdl3d_ui_context *ui)
@@ -299,6 +315,16 @@ static int ui_button_index(Uint8 sdl_button)
     }
 }
 
+static float ui_map_mouse_x(const sdl3d_ui_context *ui, float wx)
+{
+    return (wx - ui->mouse_offset_x) * ui->mouse_scale_x;
+}
+
+static float ui_map_mouse_y(const sdl3d_ui_context *ui, float wy)
+{
+    return (wy - ui->mouse_offset_y) * ui->mouse_scale_y;
+}
+
 bool sdl3d_ui_process_event(sdl3d_ui_context *ui, const SDL_Event *event)
 {
     if (!ui || !event)
@@ -308,8 +334,8 @@ bool sdl3d_ui_process_event(sdl3d_ui_context *ui, const SDL_Event *event)
     switch (event->type)
     {
     case SDL_EVENT_MOUSE_MOTION:
-        ui->input.mouse_x = event->motion.x;
-        ui->input.mouse_y = event->motion.y;
+        ui->input.mouse_x = ui_map_mouse_x(ui, event->motion.x);
+        ui->input.mouse_y = ui_map_mouse_y(ui, event->motion.y);
         return sdl3d_ui_wants_mouse(ui);
     case SDL_EVENT_MOUSE_BUTTON_DOWN: {
         int idx = ui_button_index(event->button.button);
@@ -318,8 +344,8 @@ bool sdl3d_ui_process_event(sdl3d_ui_context *ui, const SDL_Event *event)
             ui->input.mouse_down[idx] = true;
             ui->input.mouse_pressed[idx] = true;
         }
-        ui->input.mouse_x = event->button.x;
-        ui->input.mouse_y = event->button.y;
+        ui->input.mouse_x = ui_map_mouse_x(ui, event->button.x);
+        ui->input.mouse_y = ui_map_mouse_y(ui, event->button.y);
         return sdl3d_ui_wants_mouse(ui);
     }
     case SDL_EVENT_MOUSE_BUTTON_UP: {
@@ -329,8 +355,8 @@ bool sdl3d_ui_process_event(sdl3d_ui_context *ui, const SDL_Event *event)
             ui->input.mouse_down[idx] = false;
             ui->input.mouse_released[idx] = true;
         }
-        ui->input.mouse_x = event->button.x;
-        ui->input.mouse_y = event->button.y;
+        ui->input.mouse_x = ui_map_mouse_x(ui, event->button.x);
+        ui->input.mouse_y = ui_map_mouse_y(ui, event->button.y);
         return sdl3d_ui_wants_mouse(ui);
     }
     case SDL_EVENT_TEXT_INPUT: {

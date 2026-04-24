@@ -2887,7 +2887,7 @@ void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx)
 /* alpha blending, no depth test, no post-processing.                  */
 /* ------------------------------------------------------------------ */
 
-static void replay_overlay_list(sdl3d_gl_context *ctx)
+static void replay_overlay_list(sdl3d_gl_context *ctx, int vp_x, int vp_y, int vp_w, int vp_h)
 {
     sdl3d_gl_funcs *gl = &ctx->gl;
     if (ctx->overlay_count == 0)
@@ -2904,9 +2904,15 @@ static void replay_overlay_list(sdl3d_gl_context *ctx)
 
         if (e->scissor_enabled)
         {
+            /* Map logical scissor rect to the letterbox viewport in window pixels. */
+            float sx_scale = (float)vp_w / (float)ctx->logical_w;
+            float sy_scale = (float)vp_h / (float)ctx->logical_h;
+            int sc_x = vp_x + (int)((float)e->scissor_rect.x * sx_scale);
+            int sc_y = vp_y + (int)((float)(ctx->logical_h - e->scissor_rect.y - e->scissor_rect.h) * sy_scale);
+            int sc_w = (int)((float)e->scissor_rect.w * sx_scale);
+            int sc_h = (int)((float)e->scissor_rect.h * sy_scale);
             gl->Enable(GL_SCISSOR_TEST);
-            gl->Scissor(e->scissor_rect.x, ctx->logical_h - (e->scissor_rect.y + e->scissor_rect.h), e->scissor_rect.w,
-                        e->scissor_rect.h);
+            gl->Scissor(sc_x, sc_y, sc_w, sc_h);
         }
         else
         {
@@ -3202,7 +3208,7 @@ static bool gl_present(sdl3d_render_context *context)
 
     /* Overlay pass: UI text rendered directly to the default framebuffer,
      * after the FBO blit, bypassing all post-processing. */
-    replay_overlay_list(ctx);
+    replay_overlay_list(ctx, vp_x, vp_y, vp_w, vp_h);
     free_overlay_list(ctx);
 
     SDL_GL_SwapWindow(ctx->window);

@@ -95,6 +95,20 @@ extern "C"
     void sdl3d_ui_end_frame(sdl3d_ui_context *ui);
 
     /*
+     * Tell the UI how to map SDL window-space mouse coordinates to the
+     * logical coordinate system used by widgets. Call after begin_frame
+     * when the window size differs from the logical size (e.g., after a
+     * resize or on HiDPI displays).
+     *
+     *   logical_x = (window_x - offset_x) * scale_x
+     *   logical_y = (window_y - offset_y) * scale_y
+     *
+     * If never called, the mapping defaults to identity (1:1).
+     */
+    void sdl3d_ui_set_mouse_transform(sdl3d_ui_context *ui, float scale_x, float scale_y, float offset_x,
+                                      float offset_y);
+
+    /*
      * Flush the current frame's draw list onto `context`. Must be called
      * outside sdl3d_begin_mode_3d / sdl3d_end_mode_3d; typically the last
      * thing before sdl3d_present_render_context. The UI render path is

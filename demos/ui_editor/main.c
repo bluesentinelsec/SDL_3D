@@ -267,6 +267,26 @@ int main(int argc, char *argv[])
         /* UI overlay — all panels rendered via the overlay layer. */
         sdl3d_ui_begin_frame(ui, (int)sw, (int)sh);
 
+        /* Compute window-to-logical mouse mapping for letterbox scaling.
+         * The GL renderer maps the logical FBO into a letterbox viewport;
+         * SDL reports mouse in window points, so we reverse that mapping. */
+        {
+            int win_pw, win_ph;
+            SDL_GetWindowSizeInPixels(win, &win_pw, &win_ph);
+            float sx = (float)win_pw / sw;
+            float sy = (float)win_ph / sh;
+            float s = (sx < sy) ? sx : sy;
+            float vp_w = sw * s;
+            float vp_h = sh * s;
+            float vp_x = ((float)win_pw - vp_w) * 0.5f;
+            float vp_y = ((float)win_ph - vp_h) * 0.5f;
+            /* SDL mouse coords are in window points (pixels / density). */
+            float pdpi = SDL_GetWindowPixelDensity(win);
+            if (pdpi < 1.0f)
+                pdpi = 1.0f;
+            sdl3d_ui_set_mouse_transform(ui, sw / (vp_w / pdpi), sh / (vp_h / pdpi), vp_x / pdpi, vp_y / pdpi);
+        }
+
         draw_menu_bar(ui, sw, &click_count);
         draw_tool_panel(ui, viewport_y, viewport_h, &active_tool, &click_count);
         draw_inspector_panel(ui, sw - INSPECTOR_W, viewport_y, viewport_h, active_tool, click_count);
