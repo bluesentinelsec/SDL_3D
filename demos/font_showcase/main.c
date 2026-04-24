@@ -10,6 +10,7 @@
 #include "sdl3d/camera.h"
 #include "sdl3d/drawing3d.h"
 #include "sdl3d/font.h"
+#include "sdl3d/lighting.h"
 #include "sdl3d/render_context.h"
 #include "sdl3d/shapes.h"
 
@@ -81,6 +82,11 @@ int main(int argc, char *argv[])
     int render_h = sdl3d_get_render_context_height(ctx);
     SDL_Log("Render: %dx%d  Backend: %s", render_w, render_h,
             sdl3d_get_backend_name(sdl3d_get_render_context_backend(ctx)));
+
+    /* Disable post-processing so text renders cleanly without
+     * bloom, SSAO, vignette, or contrast/saturation grading. */
+    sdl3d_set_bloom_enabled(ctx, false);
+    sdl3d_set_ssao_enabled(ctx, false);
 
     float font_size = FONT_SIZE_DEFAULT;
     sdl3d_font fonts[SDL3D_BUILTIN_FONT_COUNT];
