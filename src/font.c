@@ -462,3 +462,69 @@ bool sdl3d_draw_fps(struct sdl3d_render_context *context, const sdl3d_font *font
     return draw_text_internal(context, font, digits, origin_x + prefix_w, origin_y, color,
                               font_max_digit_advance(font));
 }
+
+/* ------------------------------------------------------------------ */
+/* Built-in font catalog                                               */
+/* ------------------------------------------------------------------ */
+
+typedef struct sdl3d_builtin_font_entry
+{
+    const char *name;
+    const char *filename;
+} sdl3d_builtin_font_entry;
+
+static const sdl3d_builtin_font_entry sdl3d_builtin_fonts[SDL3D_BUILTIN_FONT_COUNT] = {
+    [SDL3D_BUILTIN_FONT_ROBOTO] = {"Roboto", "Roboto.ttf"},
+    [SDL3D_BUILTIN_FONT_INTER] = {"Inter", "Inter-Regular.ttf"},
+    [SDL3D_BUILTIN_FONT_IBM_PLEX_SANS] = {"IBM Plex Sans", "IBMPlexSans-Regular.ttf"},
+    [SDL3D_BUILTIN_FONT_NOTO_SANS] = {"Noto Sans", "NotoSans-Regular.ttf"},
+    [SDL3D_BUILTIN_FONT_DM_SANS] = {"DM Sans", "DMSans-Regular.ttf"},
+    [SDL3D_BUILTIN_FONT_SOURCE_SANS_3] = {"Source Sans 3", "SourceSans3-Regular.ttf"},
+    [SDL3D_BUILTIN_FONT_EB_GARAMOND] = {"EB Garamond", "EBGaramond-Regular.ttf"},
+    [SDL3D_BUILTIN_FONT_MERRIWEATHER] = {"Merriweather", "Merriweather-Regular.ttf"},
+    [SDL3D_BUILTIN_FONT_SOURCE_SERIF_4] = {"Source Serif 4", "SourceSerif4-Regular.ttf"},
+};
+
+static bool builtin_font_valid(sdl3d_builtin_font id)
+{
+    return id >= 0 && id < SDL3D_BUILTIN_FONT_COUNT;
+}
+
+const char *sdl3d_builtin_font_name(sdl3d_builtin_font id)
+{
+    return builtin_font_valid(id) ? sdl3d_builtin_fonts[id].name : NULL;
+}
+
+const char *sdl3d_builtin_font_filename(sdl3d_builtin_font id)
+{
+    return builtin_font_valid(id) ? sdl3d_builtin_fonts[id].filename : NULL;
+}
+
+bool sdl3d_load_builtin_font(const char *media_dir, sdl3d_builtin_font id, float pixel_size, sdl3d_font *out)
+{
+    if (!builtin_font_valid(id))
+    {
+        return SDL_SetError("sdl3d_load_builtin_font: invalid font id %d", (int)id);
+    }
+    if (!media_dir)
+    {
+        return SDL_InvalidParamError("media_dir");
+    }
+    if (!out)
+    {
+        return SDL_InvalidParamError("out");
+    }
+
+    /* Compose "<media_dir>/fonts/<filename>". The engine convention is
+     * that all bundled assets live under media_dir, with fonts in a
+     * "fonts" subdirectory — the path the bundled LICENSE.md documents. */
+    const char *filename = sdl3d_builtin_fonts[id].filename;
+    char path[1024];
+    int needed = SDL_snprintf(path, sizeof(path), "%s/fonts/%s", media_dir, filename);
+    if (needed < 0 || needed >= (int)sizeof(path))
+    {
+        return SDL_SetError("sdl3d_load_builtin_font: path too long for media_dir='%s' filename='%s'", media_dir,
+                            filename);
+    }
+    return sdl3d_load_font(path, pixel_size, out);
+}

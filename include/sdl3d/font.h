@@ -105,6 +105,59 @@ extern "C"
      */
     bool sdl3d_draw_fps(struct sdl3d_render_context *context, const sdl3d_font *font, float dt);
 
+    /* ------------------------------------------------------------------ */
+    /* Built-in font catalog                                               */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * SDL_3D ships with a curated set of open-licensed fonts under
+     * media/fonts/. The catalog below exposes them by stable ID so
+     * applications and the UI system can reference a "built-in" font
+     * without hard-coding filenames. Licensing details live alongside
+     * the files (media/fonts/LICENSE.md + media/fonts/licenses/).
+     *
+     * Today the loader resolves each ID to a TTF path on disk. The
+     * eventual plan is to embed the bytes directly in the library so
+     * games don't need to ship the media directory at all —
+     * sdl3d_load_builtin_font will then flip over transparently to
+     * sdl3d_load_font_from_memory without any API change.
+     */
+    typedef enum sdl3d_builtin_font
+    {
+        SDL3D_BUILTIN_FONT_ROBOTO = 0,
+        SDL3D_BUILTIN_FONT_INTER,
+        SDL3D_BUILTIN_FONT_IBM_PLEX_SANS,
+        SDL3D_BUILTIN_FONT_NOTO_SANS,
+        SDL3D_BUILTIN_FONT_DM_SANS,
+        SDL3D_BUILTIN_FONT_SOURCE_SANS_3,
+        SDL3D_BUILTIN_FONT_EB_GARAMOND,
+        SDL3D_BUILTIN_FONT_MERRIWEATHER,
+        SDL3D_BUILTIN_FONT_SOURCE_SERIF_4,
+        SDL3D_BUILTIN_FONT_COUNT
+    } sdl3d_builtin_font;
+
+    /*
+     * Human-readable family name, e.g. "IBM Plex Sans".
+     */
+    const char *sdl3d_builtin_font_name(sdl3d_builtin_font id);
+
+    /*
+     * TTF filename (no directory component) under media/fonts/,
+     * e.g. "IBMPlexSans-Regular.ttf".
+     */
+    const char *sdl3d_builtin_font_filename(sdl3d_builtin_font id);
+
+    /*
+     * Convenience loader that resolves a built-in ID to its TTF path
+     * under `media_dir` and loads it at `pixel_size`. `media_dir` is
+     * typically the project's SDL3D_MEDIA_DIR compile define, so a
+     * typical call looks like:
+     *
+     *   sdl3d_load_builtin_font(SDL3D_MEDIA_DIR, SDL3D_BUILTIN_FONT_INTER,
+     *                           24.0f, &font);
+     */
+    bool sdl3d_load_builtin_font(const char *media_dir, sdl3d_builtin_font id, float pixel_size, sdl3d_font *out);
+
 #ifdef __cplusplus
 }
 #endif
