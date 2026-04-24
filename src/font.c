@@ -10,7 +10,10 @@
 
 #include <stb_truetype.h>
 
+#include "render_context_internal.h"
+#include "sdl3d/camera.h"
 #include "sdl3d/drawing3d.h"
+#include "sdl3d/lighting.h"
 #include "sdl3d/render_context.h"
 #include "sdl3d/texture.h"
 
@@ -23,6 +26,7 @@ bool sdl3d_load_font_from_memory(const void *data, int data_size, float pixel_si
     stbtt_fontinfo info;
     int atlas_w = 512, atlas_h = 512;
     unsigned char *atlas = NULL;
+    unsigned char *rgba = NULL;
     float scale;
     int ascent, descent, line_gap;
 
@@ -45,14 +49,12 @@ bool sdl3d_load_font_from_memory(const void *data, int data_size, float pixel_si
     out->descent = (float)descent * scale;
     out->line_gap = (float)line_gap * scale;
 
-    /* Allocate atlas. */
     atlas = (unsigned char *)SDL_calloc(1, (size_t)(atlas_w * atlas_h));
     if (!atlas)
     {
         return SDL_OutOfMemory();
     }
 
-    /* Pack glyphs into atlas. */
     {
         stbtt_pack_context pc;
         stbtt_packedchar packed[SDL3D_FONT_CHAR_COUNT];
@@ -68,27 +70,48 @@ bool sdl3d_load_font_from_memory(const void *data, int data_size, float pixel_si
                             SDL3D_FONT_CHAR_COUNT, packed);
         stbtt_PackEnd(&pc);
 
-        /* Convert packed chars to our glyph format. */
         for (int i = 0; i < SDL3D_FONT_CHAR_COUNT; i++)
         {
             sdl3d_glyph *g = &out->glyphs[i];
-            g->x0 = (float)packed[i].x0;
-            g->y0 = (float)packed[i].y0;
-            g->x1 = (float)packed[i].x1;
-            g->y1 = (float)packed[i].y1;
-            g->u0 = g->x0 / (float)atlas_w;
-            g->v0 = g->y0 / (float)atlas_h;
-            g->u1 = g->x1 / (float)atlas_w;
-            g->v1 = g->y1 / (float)atlas_h;
+            g->u0 = (float)packed[i].x0 / (float)atlas_w;
+            g->v0 = (float)packed[i].y0 / (float)atlas_h;
+            g->u1 = (float)packed[i].x1 / (float)atlas_w;
+            g->v1 = (float)packed[i].y1 / (float)atlas_h;
             g->xoff = packed[i].xoff;
             g->yoff = packed[i].yoff;
+            g->xoff2 = packed[i].xoff2;
+            g->yoff2 = packed[i].yoff2;
             g->xadvance = packed[i].xadvance;
         }
+    }
+
+    /* Expand single-channel atlas to RGBA so it can flow through the
+     * texture path. RGB stays white, alpha carries glyph coverage. */
+    rgba = (unsigned char *)SDL_malloc((size_t)(atlas_w * atlas_h * 4));
+    if (!rgba)
+    {
+        SDL_free(atlas);
+        return SDL_OutOfMemory();
+    }
+    for (int i = 0; i < atlas_w * atlas_h; i++)
+    {
+        rgba[i * 4 + 0] = 255;
+        rgba[i * 4 + 1] = 255;
+        rgba[i * 4 + 2] = 255;
+        rgba[i * 4 + 3] = atlas[i];
     }
 
     out->atlas_pixels = atlas;
     out->atlas_w = atlas_w;
     out->atlas_h = atlas_h;
+
+    SDL_zero(out->atlas_texture);
+    out->atlas_texture.pixels = rgba;
+    out->atlas_texture.width = atlas_w;
+    out->atlas_texture.height = atlas_h;
+    out->atlas_texture.filter = SDL3D_TEXTURE_FILTER_BILINEAR;
+    out->atlas_texture.wrap_u = SDL3D_TEXTURE_WRAP_CLAMP;
+    out->atlas_texture.wrap_v = SDL3D_TEXTURE_WRAP_CLAMP;
 
     SDL_Log("SDL3D font: %.0fpx, atlas %dx%d, %d glyphs", pixel_size, atlas_w, atlas_h, SDL3D_FONT_CHAR_COUNT);
     return true;
@@ -116,6 +139,7 @@ void sdl3d_free_font(sdl3d_font *font)
     {
         SDL_free(font->atlas_pixels);
         font->atlas_pixels = NULL;
+        sdl3d_free_texture(&font->atlas_texture);
     }
 }
 
@@ -126,7 +150,6 @@ void sdl3d_free_font(sdl3d_font *font)
 void sdl3d_measure_text(const sdl3d_font *font, const char *text, float *out_width, float *out_height)
 {
     float x = 0, max_x = 0;
-    float line_h = font->ascent - font->descent + font->line_gap;
     int lines = 1;
 
     if (!font || !text)
@@ -137,6 +160,8 @@ void sdl3d_measure_text(const sdl3d_font *font, const char *text, float *out_wid
             *out_height = 0;
         return;
     }
+
+    float line_h = font->ascent - font->descent + font->line_gap;
 
     for (const char *p = text; *p; p++)
     {
@@ -167,19 +192,41 @@ void sdl3d_measure_text(const sdl3d_font *font, const char *text, float *out_wid
 /* Text rendering                                                      */
 /* ------------------------------------------------------------------ */
 
+/*
+ * Text is drawn as a second orthographic 3D pass layered on top of the
+ * scene. The caller must be OUTSIDE begin_mode_3d / end_mode_3d.
+ *
+ * Pixel coordinates (x, y) follow screen convention: (0, 0) is the
+ * top-left of the backbuffer, y grows downward. The ortho camera maps
+ * world X = [-cw/2, cw/2], world Y = [-ch/2, ch/2] to the full screen,
+ * and we feed glyph vertices in world-space = (sx - cw/2, ch/2 - sy).
+ *
+ * To guarantee text sits on top of the 3D scene, glyph quads are emitted
+ * at z = 0 with the camera at z = 1 and default near plane 0.01, which
+ * puts them at NDC z ≈ -1 (almost at the near plane). Depth test is
+ * LEQUAL in the GL backend, so the text always wins.
+ */
 bool sdl3d_draw_text(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text, float x, float y,
                      sdl3d_color color)
 {
-    float cursor_x = x;
-    float cursor_y = y + font->ascent;
-    float line_h = font->ascent - font->descent + font->line_gap;
     int ctx_w, ctx_h;
-    sdl3d_texture2d tex;
-    unsigned char *rgba = NULL;
+    sdl3d_camera3d ortho;
+    sdl3d_shading_mode prev_shading;
+    bool prev_culling;
+    sdl3d_mat4 saved_view, saved_projection, saved_view_projection;
+    bool ok = true;
 
-    if (!context || !font || !text || !font->atlas_pixels)
+    if (!context || !font || !text)
     {
         return SDL_InvalidParamError("context");
+    }
+    if (font->atlas_texture.pixels == NULL)
+    {
+        return SDL_SetError("sdl3d_draw_text: font atlas not initialized");
+    }
+    if (sdl3d_is_in_mode_3d(context))
+    {
+        return SDL_SetError("sdl3d_draw_text must be called outside sdl3d_begin_mode_3d / sdl3d_end_mode_3d");
     }
 
     ctx_w = sdl3d_get_render_context_width(context);
@@ -189,30 +236,52 @@ bool sdl3d_draw_text(struct sdl3d_render_context *context, const sdl3d_font *fon
         return SDL_SetError("Invalid render context dimensions");
     }
 
-    /* Convert single-channel atlas to RGBA for the texture system. */
-    rgba = (unsigned char *)SDL_malloc((size_t)(font->atlas_w * font->atlas_h * 4));
-    if (!rgba)
+    ortho.position = sdl3d_vec3_make(0.0f, 0.0f, 1.0f);
+    ortho.target = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    ortho.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    ortho.fovy = (float)ctx_h;
+    ortho.projection = SDL3D_CAMERA_ORTHOGRAPHIC;
+
+    prev_shading = sdl3d_get_shading_mode(context);
+    prev_culling = sdl3d_is_backface_culling_enabled(context);
+    /* Preserve the scene's view/projection so that deferred backends
+     * (e.g., GL replay) see the camera that rendered the scene, not the
+     * ortho overlay camera. Only per-draw MVPs need the ortho matrix,
+     * which the in-flight entries already captured. */
+    saved_view = context->view;
+    saved_projection = context->projection;
+    saved_view_projection = context->view_projection;
+
+    sdl3d_set_shading_mode(context, SDL3D_SHADING_UNLIT);
+    sdl3d_set_backface_culling_enabled(context, false);
+
+    if (!sdl3d_begin_mode_3d(context, ortho))
     {
-        return SDL_OutOfMemory();
-    }
-    for (int i = 0; i < font->atlas_w * font->atlas_h; i++)
-    {
-        rgba[i * 4 + 0] = 255;
-        rgba[i * 4 + 1] = 255;
-        rgba[i * 4 + 2] = 255;
-        rgba[i * 4 + 3] = font->atlas_pixels[i];
+        sdl3d_set_shading_mode(context, prev_shading);
+        sdl3d_set_backface_culling_enabled(context, prev_culling);
+        return false;
     }
 
-    SDL_zerop(&tex);
-    tex.width = font->atlas_w;
-    tex.height = font->atlas_h;
-    tex.pixels = rgba;
-    tex.filter = SDL3D_TEXTURE_FILTER_BILINEAR;
-    tex.wrap_u = SDL3D_TEXTURE_WRAP_CLAMP;
-    tex.wrap_v = SDL3D_TEXTURE_WRAP_CLAMP;
+    {
+        static bool logged = false;
+        if (!logged)
+        {
+            SDL_Log("SDL3D draw_text: first call ctx=%dx%d atlas=%dx%d first_char='%c' "
+                    "glyph0_xoff=%.1f xoff2=%.1f yoff=%.1f yoff2=%.1f xadvance=%.1f ascent=%.1f",
+                    ctx_w, ctx_h, font->atlas_w, font->atlas_h, text[0] ? text[0] : '?',
+                    font->glyphs[0].xoff, font->glyphs[0].xoff2, font->glyphs[0].yoff, font->glyphs[0].yoff2,
+                    font->glyphs[0].xadvance, font->ascent);
+            logged = true;
+        }
+    }
 
-    /* Draw each character as a textured quad in screen space. */
-    for (const char *p = text; *p; p++)
+    float cursor_x = x;
+    float cursor_y = y + font->ascent;
+    float line_h = font->ascent - font->descent + font->line_gap;
+    float hx = (float)ctx_w * 0.5f;
+    float hy = (float)ctx_h * 0.5f;
+
+    for (const char *p = text; *p && ok; p++)
     {
         if (*p == '\n')
         {
@@ -228,36 +297,63 @@ bool sdl3d_draw_text(struct sdl3d_render_context *context, const sdl3d_font *fon
         }
 
         const sdl3d_glyph *g = &font->glyphs[ci];
-        float gw = g->x1 - g->x0;
-        float gh = g->y1 - g->y0;
+        float gw = g->xoff2 - g->xoff;
+        float gh = g->yoff2 - g->yoff;
         if (gw <= 0 || gh <= 0)
         {
             cursor_x += g->xadvance;
             continue;
         }
 
-        /* Screen-space quad corners in NDC. */
-        float px0 = (cursor_x + g->xoff) / (float)ctx_w * 2.0f - 1.0f;
-        float py0 = 1.0f - (cursor_y + g->yoff) / (float)ctx_h * 2.0f;
-        float px1 = (cursor_x + g->xoff + gw) / (float)ctx_w * 2.0f - 1.0f;
-        float py1 = 1.0f - (cursor_y + g->yoff + gh) / (float)ctx_h * 2.0f;
+        /* Screen-space pixel rect for this glyph. */
+        float sx0 = cursor_x + g->xoff;
+        float sy0 = cursor_y + g->yoff;
+        float sx1 = cursor_x + g->xoff2;
+        float sy1 = cursor_y + g->yoff2;
 
-        /* Draw as two triangles via sdl3d_draw_triangle_3d or the mesh path.
-         * For simplicity, use the unlit textured mesh path with an identity MVP. */
+        /* Map screen pixels to ortho world space (Y flipped). */
+        float wx0 = sx0 - hx;
+        float wx1 = sx1 - hx;
+        float wy0 = hy - sy0; /* top of glyph (larger y in world) */
+        float wy1 = hy - sy1; /* bottom of glyph */
+
+        /* Wind CCW when viewed from +Z (the ortho camera looks down -Z),
+         * so the quad is front-facing under the scene's standard CCW
+         * front-face / cull-back policy. The GL backend applies culling
+         * once at present time based on whatever flag is current then,
+         * so we can't just toggle culling around this block — the quads
+         * must be authored front-facing. */
+        float positions[18] = {
+            wx0, wy0, 0.0f, wx0, wy1, 0.0f, wx1, wy1, 0.0f,
+            wx0, wy0, 0.0f, wx1, wy1, 0.0f, wx1, wy0, 0.0f,
+        };
+        float uvs[12] = {
+            g->u0, g->v0, g->u0, g->v1, g->u1, g->v1,
+            g->u0, g->v0, g->u1, g->v1, g->u1, g->v0,
+        };
+
+        sdl3d_mesh mesh;
+        SDL_zero(mesh);
+        mesh.positions = positions;
+        mesh.uvs = uvs;
+        mesh.vertex_count = 6;
+        mesh.material_index = -1;
+
+        if (!sdl3d_draw_mesh(context, &mesh, &font->atlas_texture, color))
         {
-            float positions[18] = {px0, py0, 0, px1, py0, 0, px1, py1, 0, px0, py0, 0, px1, py1, 0, px0, py1, 0};
-            float uvs[12] = {g->u0, g->v0, g->u1, g->v0, g->u1, g->v1, g->u0, g->v0, g->u1, g->v1, g->u0, g->v1};
-            sdl3d_mesh mesh;
-            SDL_zerop(&mesh);
-            mesh.positions = positions;
-            mesh.uvs = uvs;
-            mesh.vertex_count = 6;
-            sdl3d_draw_mesh(context, &mesh, &tex, color);
+            ok = false;
+            break;
         }
 
         cursor_x += g->xadvance;
     }
 
-    SDL_free(rgba);
-    return true;
+    sdl3d_end_mode_3d(context);
+    context->view = saved_view;
+    context->projection = saved_projection;
+    context->view_projection = saved_view_projection;
+    context->model_view_projection = saved_view_projection;
+    sdl3d_set_shading_mode(context, prev_shading);
+    sdl3d_set_backface_culling_enabled(context, prev_culling);
+    return ok;
 }

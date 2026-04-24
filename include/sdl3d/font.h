@@ -16,6 +16,7 @@
 #ifndef SDL3D_FONT_H
 #define SDL3D_FONT_H
 
+#include "sdl3d/texture.h"
 #include "sdl3d/types.h"
 
 #include <stdbool.h>
@@ -30,10 +31,10 @@ extern "C"
 
     typedef struct sdl3d_glyph
     {
-        float x0, y0, x1, y1; /* atlas texel coords */
-        float u0, v0, u1, v1; /* normalized atlas UVs */
-        float xoff, yoff;     /* offset from cursor to top-left of glyph */
-        float xadvance;       /* horizontal advance after this glyph */
+        float u0, v0, u1, v1;   /* normalized atlas UVs */
+        float xoff, yoff;       /* display-space offset from cursor to top-left */
+        float xoff2, yoff2;     /* display-space offset from cursor to bottom-right */
+        float xadvance;         /* horizontal advance after this glyph */
     } sdl3d_glyph;
 
     typedef struct sdl3d_font
@@ -45,6 +46,7 @@ extern "C"
         float ascent;   /* distance from baseline to top */
         float descent;  /* distance from baseline to bottom (negative) */
         float line_gap; /* extra spacing between lines */
+        sdl3d_texture2d atlas_texture; /* RGBA copy bound to the render backend */
     } sdl3d_font;
 
     /*
