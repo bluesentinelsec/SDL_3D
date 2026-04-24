@@ -9,7 +9,7 @@
 #include "sdl3d/font.h"
 #include "sdl3d/render_context.h"
 
-#define FONT_SIZE 28.0f
+#define FONT_SIZE 56.0f
 
 int main(int argc, char *argv[])
 {
