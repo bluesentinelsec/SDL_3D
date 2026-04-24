@@ -58,6 +58,28 @@ typedef struct sdl3d_ui_clip_rect
 } sdl3d_ui_clip_rect;
 
 /* ------------------------------------------------------------------ */
+/* Layout types                                                        */
+/* ------------------------------------------------------------------ */
+
+#define SDL3D_UI_MAX_LAYOUT_DEPTH 16
+
+typedef enum sdl3d_ui_layout_dir
+{
+    SDL3D_UI_LAYOUT_VBOX = 0,
+    SDL3D_UI_LAYOUT_HBOX = 1
+} sdl3d_ui_layout_dir;
+
+typedef struct sdl3d_ui_layout_entry
+{
+    sdl3d_ui_layout_dir direction;
+    float x, y, w, h; /* bounding region */
+    float cursor;     /* current position along the layout axis */
+    float cross_max;  /* max extent on the cross axis */
+    float spacing;    /* gap between items */
+    bool first_item;  /* suppress spacing before the first item */
+} sdl3d_ui_layout_entry;
+
+/* ------------------------------------------------------------------ */
 /* Context                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -91,6 +113,11 @@ struct sdl3d_ui_context
      * (e.g., hit testing) could also respect it in future phases. */
     sdl3d_ui_clip_rect clip_stack[SDL3D_UI_MAX_CLIP_DEPTH];
     int clip_depth;
+
+    /* Layout stack — panels and containers push layout entries that
+     * auto-position child widgets. */
+    sdl3d_ui_layout_entry layout_stack[SDL3D_UI_MAX_LAYOUT_DEPTH];
+    int layout_depth;
 };
 
 /* ------------------------------------------------------------------ */
@@ -257,6 +284,7 @@ void sdl3d_ui_begin_frame(sdl3d_ui_context *ui, int screen_w, int screen_h)
     ui->cmd_count = 0;
     ui->text_len = 0;
     ui->clip_depth = 0;
+    ui->layout_depth = 0;
     ui->frame_open = true;
     ui->hovered_id = 0;
 
@@ -292,6 +320,11 @@ void sdl3d_ui_end_frame(sdl3d_ui_context *ui)
     {
         SDL_Log("sdl3d_ui_end_frame: clip stack not fully popped (depth=%d)", ui->clip_depth);
         ui->clip_depth = 0;
+    }
+    if (ui->layout_depth != 0)
+    {
+        SDL_Log("sdl3d_ui_end_frame: layout stack not fully popped (depth=%d)", ui->layout_depth);
+        ui->layout_depth = 0;
     }
     ui->frame_open = false;
 }
@@ -613,6 +646,197 @@ void sdl3d_ui_labelf(sdl3d_ui_context *ui, float x, float y, const char *fmt, ..
     va_start(args, fmt);
     sdl3d_ui_labelfv(ui, x, y, fmt, args);
     va_end(args);
+}
+
+/* ------------------------------------------------------------------ */
+/* Layout containers                                                   */
+/* ------------------------------------------------------------------ */
+
+static void ui_push_layout(sdl3d_ui_context *ui, sdl3d_ui_layout_dir direction, float x, float y, float w, float h)
+{
+    if (ui->layout_depth >= SDL3D_UI_MAX_LAYOUT_DEPTH)
+    {
+        SDL_Log("sdl3d_ui: layout stack overflow (max %d)", SDL3D_UI_MAX_LAYOUT_DEPTH);
+        return;
+    }
+    int d = ui->layout_depth++;
+    ui->layout_stack[d].direction = direction;
+    ui->layout_stack[d].x = x;
+    ui->layout_stack[d].y = y;
+    ui->layout_stack[d].w = w;
+    ui->layout_stack[d].h = h;
+    ui->layout_stack[d].cursor = (direction == SDL3D_UI_LAYOUT_VBOX) ? y : x;
+    ui->layout_stack[d].cross_max = 0.0f;
+    ui->layout_stack[d].spacing = ui->theme.spacing;
+    ui->layout_stack[d].first_item = true;
+}
+
+/*
+ * Allocate a rect from the current layout. Returns false if no layout
+ * is active. On success, fills out_x/out_y with the widget position.
+ * `item_w` and `item_h` are the desired widget size.
+ */
+static bool ui_layout_alloc(sdl3d_ui_context *ui, float item_w, float item_h, float *out_x, float *out_y)
+{
+    if (ui->layout_depth <= 0)
+        return false;
+
+    int d = ui->layout_depth - 1;
+    float gap = ui->layout_stack[d].first_item ? 0.0f : ui->layout_stack[d].spacing;
+    ui->layout_stack[d].first_item = false;
+
+    if (ui->layout_stack[d].direction == SDL3D_UI_LAYOUT_VBOX)
+    {
+        *out_x = ui->layout_stack[d].x;
+        *out_y = ui->layout_stack[d].cursor + gap;
+        ui->layout_stack[d].cursor = *out_y + item_h;
+        if (item_w > ui->layout_stack[d].cross_max)
+            ui->layout_stack[d].cross_max = item_w;
+    }
+    else
+    {
+        *out_x = ui->layout_stack[d].cursor + gap;
+        *out_y = ui->layout_stack[d].y;
+        ui->layout_stack[d].cursor = *out_x + item_w;
+        if (item_h > ui->layout_stack[d].cross_max)
+            ui->layout_stack[d].cross_max = item_h;
+    }
+    return true;
+}
+
+void sdl3d_ui_begin_panel(sdl3d_ui_context *ui, float x, float y, float w, float h)
+{
+    if (!ui || !ui->frame_open)
+        return;
+    const sdl3d_ui_theme *t = &ui->theme;
+    sdl3d_ui_draw_rect(ui, x, y, w, h, t->panel_bg);
+    sdl3d_ui_draw_rect_outline(ui, x, y, w, h, t->border_width, t->panel_border);
+    sdl3d_ui_push_clip(ui, x, y, w, h);
+}
+
+void sdl3d_ui_end_panel(sdl3d_ui_context *ui)
+{
+    if (!ui)
+        return;
+    sdl3d_ui_pop_clip(ui);
+}
+
+void sdl3d_ui_begin_vbox(sdl3d_ui_context *ui, float x, float y, float w, float h)
+{
+    if (!ui || !ui->frame_open)
+        return;
+    ui_push_layout(ui, SDL3D_UI_LAYOUT_VBOX, x, y, w, h);
+}
+
+void sdl3d_ui_end_vbox(sdl3d_ui_context *ui)
+{
+    if (!ui || ui->layout_depth <= 0)
+        return;
+    if (ui->layout_stack[ui->layout_depth - 1].direction != SDL3D_UI_LAYOUT_VBOX)
+    {
+        SDL_Log("sdl3d_ui_end_vbox: top of layout stack is not a vbox");
+        return;
+    }
+    ui->layout_depth--;
+}
+
+void sdl3d_ui_begin_hbox(sdl3d_ui_context *ui, float x, float y, float w, float h)
+{
+    if (!ui || !ui->frame_open)
+        return;
+    ui_push_layout(ui, SDL3D_UI_LAYOUT_HBOX, x, y, w, h);
+}
+
+void sdl3d_ui_end_hbox(sdl3d_ui_context *ui)
+{
+    if (!ui || ui->layout_depth <= 0)
+        return;
+    if (ui->layout_stack[ui->layout_depth - 1].direction != SDL3D_UI_LAYOUT_HBOX)
+    {
+        SDL_Log("sdl3d_ui_end_hbox: top of layout stack is not an hbox");
+        return;
+    }
+    ui->layout_depth--;
+}
+
+void sdl3d_ui_separator(sdl3d_ui_context *ui)
+{
+    if (!ui || !ui->frame_open || ui->layout_depth <= 0)
+        return;
+
+    int d = ui->layout_depth - 1;
+    float gap = ui->layout_stack[d].first_item ? 0.0f : ui->layout_stack[d].spacing;
+    ui->layout_stack[d].first_item = false;
+
+    sdl3d_color sep_color = ui->theme.panel_border;
+    if (ui->layout_stack[d].direction == SDL3D_UI_LAYOUT_VBOX)
+    {
+        float sy = ui->layout_stack[d].cursor + gap;
+        sdl3d_ui_draw_rect(ui, ui->layout_stack[d].x, sy, ui->layout_stack[d].w, 1.0f, sep_color);
+        ui->layout_stack[d].cursor = sy + 1.0f;
+    }
+    else
+    {
+        float sx = ui->layout_stack[d].cursor + gap;
+        sdl3d_ui_draw_rect(ui, sx, ui->layout_stack[d].y, 1.0f, ui->layout_stack[d].h, sep_color);
+        ui->layout_stack[d].cursor = sx + 1.0f;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Auto-layout widgets                                                 */
+/* ------------------------------------------------------------------ */
+
+void sdl3d_ui_layout_label(sdl3d_ui_context *ui, const char *text)
+{
+    if (!ui || !ui->frame_open || !text)
+        return;
+    float tw = 0, th = 0;
+    sdl3d_ui_measure_text(ui, text, &tw, &th);
+    float x, y;
+    if (!ui_layout_alloc(ui, tw, th, &x, &y))
+        return;
+    sdl3d_ui_label(ui, x, y, text);
+}
+
+void sdl3d_ui_layout_labelf(sdl3d_ui_context *ui, const char *fmt, ...)
+{
+    if (!ui || !ui->frame_open || !fmt)
+        return;
+    char buf[512];
+    va_list args;
+    va_start(args, fmt);
+    SDL_vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    sdl3d_ui_layout_label(ui, buf);
+}
+
+bool sdl3d_ui_layout_button(sdl3d_ui_context *ui, const char *label)
+{
+    if (!ui || !ui->frame_open || !label || ui->layout_depth <= 0)
+        return false;
+
+    int d = ui->layout_depth - 1;
+    float bw, bh;
+    float tw = 0, th = 0;
+    sdl3d_ui_measure_text(ui, label, &tw, &th);
+    float pad = ui->theme.padding;
+
+    if (ui->layout_stack[d].direction == SDL3D_UI_LAYOUT_VBOX)
+    {
+        bw = ui->layout_stack[d].w;
+        bh = th + pad * 2.0f;
+    }
+    else
+    {
+        bw = tw + pad * 2.0f;
+        bh = ui->layout_stack[d].h;
+    }
+
+    float x, y;
+    if (!ui_layout_alloc(ui, bw, bh, &x, &y))
+        return false;
+    return sdl3d_ui_button(ui, x, y, bw, bh, label);
 }
 
 /* ------------------------------------------------------------------ */

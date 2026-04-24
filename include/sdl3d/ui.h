@@ -202,6 +202,51 @@ extern "C"
      */
     bool sdl3d_ui_button(sdl3d_ui_context *ui, float x, float y, float w, float h, const char *label);
 
+    /* ------------------------------------------------------------------ */
+    /* Layout containers                                                   */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * Panel: a filled, bordered rectangle that clips its children.
+     * Pushes a clip rect and optionally a layout. Children issued
+     * between begin/end are clipped to the panel bounds.
+     */
+    void sdl3d_ui_begin_panel(sdl3d_ui_context *ui, float x, float y, float w, float h);
+    void sdl3d_ui_end_panel(sdl3d_ui_context *ui);
+
+    /*
+     * Vertical box: children are stacked top-to-bottom with theme spacing.
+     * Must be inside a panel or another layout container.
+     */
+    void sdl3d_ui_begin_vbox(sdl3d_ui_context *ui, float x, float y, float w, float h);
+    void sdl3d_ui_end_vbox(sdl3d_ui_context *ui);
+
+    /*
+     * Horizontal box: children are placed left-to-right with theme spacing.
+     */
+    void sdl3d_ui_begin_hbox(sdl3d_ui_context *ui, float x, float y, float w, float h);
+    void sdl3d_ui_end_hbox(sdl3d_ui_context *ui);
+
+    /*
+     * Separator: a thin horizontal (in vbox) or vertical (in hbox) line
+     * that advances the layout cursor. Only meaningful inside a layout.
+     */
+    void sdl3d_ui_separator(sdl3d_ui_context *ui);
+
+    /* ------------------------------------------------------------------ */
+    /* Auto-layout widgets                                                 */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * These variants participate in the current layout — they consume
+     * space from the active vbox/hbox cursor and don't take x/y params.
+     * They are no-ops if no layout is active.
+     */
+    void sdl3d_ui_layout_label(sdl3d_ui_context *ui, const char *text);
+    void sdl3d_ui_layout_labelf(sdl3d_ui_context *ui, SDL_PRINTF_FORMAT_STRING const char *fmt, ...)
+        SDL_PRINTF_VARARG_FUNC(2);
+    bool sdl3d_ui_layout_button(sdl3d_ui_context *ui, const char *label);
+
 #ifdef __cplusplus
 }
 #endif

@@ -44,112 +44,74 @@ static void draw_menu_bar(sdl3d_ui_context *ui, float w, int *click_count)
     sdl3d_ui_draw_rect(ui, 0, 0, w, MENU_H, (sdl3d_color){45, 45, 48, 255});
     sdl3d_ui_draw_rect_outline(ui, 0, 0, w, MENU_H, 1.0f, (sdl3d_color){70, 70, 75, 255});
 
-    float bx = 4.0f;
-    float bw = 60.0f;
-    if (sdl3d_ui_button(ui, bx, 2, bw, BTN_H, "File"))
+    sdl3d_ui_begin_hbox(ui, 4, 2, w - 8, BTN_H);
+    if (sdl3d_ui_layout_button(ui, "File"))
         (*click_count)++;
-    bx += bw + BTN_PAD;
-    if (sdl3d_ui_button(ui, bx, 2, bw, BTN_H, "Edit"))
+    if (sdl3d_ui_layout_button(ui, "Edit"))
         (*click_count)++;
-    bx += bw + BTN_PAD;
-    if (sdl3d_ui_button(ui, bx, 2, bw, BTN_H, "View"))
+    if (sdl3d_ui_layout_button(ui, "View"))
         (*click_count)++;
-    bx += bw + BTN_PAD;
-    if (sdl3d_ui_button(ui, bx, 2, bw, BTN_H, "Map"))
+    if (sdl3d_ui_layout_button(ui, "Map"))
         (*click_count)++;
-    bx += bw + BTN_PAD;
-    if (sdl3d_ui_button(ui, bx, 2, bw, BTN_H, "Help"))
+    if (sdl3d_ui_layout_button(ui, "Help"))
         (*click_count)++;
+    sdl3d_ui_end_hbox(ui);
 }
 
 static void draw_tool_panel(sdl3d_ui_context *ui, float y0, float h, const char **active_tool, int *click_count)
 {
-    sdl3d_ui_draw_rect(ui, 0, y0, TOOL_W, h, (sdl3d_color){38, 38, 42, 255});
-    sdl3d_ui_draw_rect_outline(ui, 0, y0, TOOL_W, h, 1.0f, (sdl3d_color){70, 70, 75, 255});
+    float pad = 8.0f;
+    sdl3d_ui_begin_panel(ui, 0, y0, TOOL_W, h);
+    sdl3d_ui_begin_vbox(ui, pad, y0 + pad, TOOL_W - pad * 2, h - pad * 2);
 
-    sdl3d_ui_push_clip(ui, 0, y0, TOOL_W, h);
+    sdl3d_ui_layout_label(ui, "Tools");
+    sdl3d_ui_separator(ui);
 
-    sdl3d_ui_label(ui, 8, y0 + 8, "Tools");
-
-    float by = y0 + 30;
-    float bw = TOOL_W - 16;
     const char *tools[] = {"Select", "Move", "Rotate", "Scale", "Clip", "Vertex", "Entity"};
     int tool_count = (int)(sizeof(tools) / sizeof(tools[0]));
 
     for (int i = 0; i < tool_count; i++)
     {
-        if (sdl3d_ui_button(ui, 8, by, bw, BTN_H, tools[i]))
+        if (sdl3d_ui_layout_button(ui, tools[i]))
         {
             *active_tool = tools[i];
             (*click_count)++;
         }
-        /* Highlight active tool */
-        if (*active_tool == tools[i])
-        {
-            sdl3d_ui_draw_rect_outline(ui, 8, by, bw, BTN_H, 2.0f, (sdl3d_color){100, 180, 255, 255});
-        }
-        by += BTN_H + BTN_PAD;
     }
 
-    sdl3d_ui_pop_clip(ui);
+    sdl3d_ui_end_vbox(ui);
+    sdl3d_ui_end_panel(ui);
 }
 
 static void draw_inspector_panel(sdl3d_ui_context *ui, float x0, float y0, float h, const char *active_tool,
                                  int click_count)
 {
-    sdl3d_ui_draw_rect(ui, x0, y0, INSPECTOR_W, h, (sdl3d_color){38, 38, 42, 255});
-    sdl3d_ui_draw_rect_outline(ui, x0, y0, INSPECTOR_W, h, 1.0f, (sdl3d_color){70, 70, 75, 255});
+    float pad = 8.0f;
+    float inner_w = INSPECTOR_W - pad * 2;
+    sdl3d_ui_begin_panel(ui, x0, y0, INSPECTOR_W, h);
+    sdl3d_ui_begin_vbox(ui, x0 + pad, y0 + pad, inner_w, h - pad * 2);
 
-    sdl3d_ui_push_clip(ui, x0, y0, INSPECTOR_W, h);
+    sdl3d_ui_layout_label(ui, "Inspector");
+    sdl3d_ui_separator(ui);
 
-    sdl3d_ui_label(ui, x0 + 8, y0 + 8, "Inspector");
+    sdl3d_ui_layout_label(ui, "Entity Properties");
+    sdl3d_ui_layout_labelf(ui, "  Classname: worldspawn");
+    sdl3d_ui_layout_labelf(ui, "  Origin: 0 0 0");
+    sdl3d_ui_layout_labelf(ui, "  Angle: 0");
+    sdl3d_ui_separator(ui);
 
-    /* Property rows */
-    float ry = y0 + 34;
-    float rw = INSPECTOR_W - 16;
+    sdl3d_ui_layout_label(ui, "Tool State");
+    sdl3d_ui_layout_labelf(ui, "  Active: %s", active_tool);
+    sdl3d_ui_layout_labelf(ui, "  Clicks: %d", click_count);
+    sdl3d_ui_separator(ui);
 
-    /* Section: Entity */
-    sdl3d_ui_draw_rect(ui, x0 + 8, ry, rw, 1, (sdl3d_color){70, 70, 75, 255});
-    ry += 6;
-    sdl3d_ui_label_colored(ui, x0 + 8, ry, (sdl3d_color){140, 180, 255, 255}, "Entity Properties");
-    ry += 24;
+    sdl3d_ui_layout_label(ui, "Actions");
+    sdl3d_ui_layout_button(ui, "Apply##insp1");
+    sdl3d_ui_layout_button(ui, "Reset##insp2");
+    sdl3d_ui_layout_button(ui, "Delete##insp3");
 
-    sdl3d_ui_label(ui, x0 + 12, ry, "Classname:");
-    sdl3d_ui_label_colored(ui, x0 + 100, ry, (sdl3d_color){200, 200, 200, 255}, "worldspawn");
-    ry += 20;
-
-    sdl3d_ui_label(ui, x0 + 12, ry, "Origin:");
-    sdl3d_ui_label_colored(ui, x0 + 100, ry, (sdl3d_color){200, 200, 200, 255}, "0 0 0");
-    ry += 20;
-
-    sdl3d_ui_label(ui, x0 + 12, ry, "Angle:");
-    sdl3d_ui_label_colored(ui, x0 + 100, ry, (sdl3d_color){200, 200, 200, 255}, "0");
-    ry += 28;
-
-    /* Section: Active tool */
-    sdl3d_ui_draw_rect(ui, x0 + 8, ry, rw, 1, (sdl3d_color){70, 70, 75, 255});
-    ry += 6;
-    sdl3d_ui_label_colored(ui, x0 + 8, ry, (sdl3d_color){140, 180, 255, 255}, "Tool State");
-    ry += 24;
-
-    sdl3d_ui_labelf(ui, x0 + 12, ry, "Active: %s", active_tool);
-    ry += 20;
-    sdl3d_ui_labelf(ui, x0 + 12, ry, "Clicks: %d", click_count);
-    ry += 28;
-
-    /* Action buttons */
-    sdl3d_ui_draw_rect(ui, x0 + 8, ry, rw, 1, (sdl3d_color){70, 70, 75, 255});
-    ry += 6;
-    sdl3d_ui_label_colored(ui, x0 + 8, ry, (sdl3d_color){140, 180, 255, 255}, "Actions");
-    ry += 24;
-
-    sdl3d_ui_button(ui, x0 + 8, ry, rw, BTN_H, "Apply##insp1");
-    ry += BTN_H + BTN_PAD;
-    sdl3d_ui_button(ui, x0 + 8, ry, rw, BTN_H, "Reset##insp2");
-    ry += BTN_H + BTN_PAD;
-    sdl3d_ui_button(ui, x0 + 8, ry, rw, BTN_H, "Delete##insp3");
-
-    sdl3d_ui_pop_clip(ui);
+    sdl3d_ui_end_vbox(ui);
+    sdl3d_ui_end_panel(ui);
 }
 
 static void draw_status_bar(sdl3d_ui_context *ui, float y0, float w, float dt, const char *active_tool)

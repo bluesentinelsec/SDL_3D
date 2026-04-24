@@ -257,4 +257,102 @@ TEST(SDL3DUI, ButtonHashSeparator)
     sdl3d_ui_destroy(ui);
 }
 
+TEST(SDL3DUI, VboxLayoutAdvancesCursor)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sdl3d_ui_begin_vbox(ui, 10, 20, 200, 400);
+
+    // Layout labels and buttons without crashing; verify no layout leak.
+    sdl3d_ui_layout_label(ui, "Hello");
+    sdl3d_ui_layout_button(ui, "Click");
+    sdl3d_ui_separator(ui);
+    sdl3d_ui_layout_label(ui, "World");
+
+    sdl3d_ui_end_vbox(ui);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, HboxLayoutAdvancesCursor)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sdl3d_ui_begin_hbox(ui, 10, 20, 400, 40);
+
+    sdl3d_ui_layout_button(ui, "A");
+    sdl3d_ui_layout_button(ui, "B");
+    sdl3d_ui_separator(ui);
+    sdl3d_ui_layout_button(ui, "C");
+
+    sdl3d_ui_end_hbox(ui);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, PanelClipsChildren)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sdl3d_ui_begin_panel(ui, 50, 50, 200, 100);
+    sdl3d_ui_label(ui, 60, 60, "Inside panel");
+    sdl3d_ui_end_panel(ui);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, NestedPanelVbox)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sdl3d_ui_begin_panel(ui, 0, 0, 200, 400);
+    sdl3d_ui_begin_vbox(ui, 8, 8, 184, 384);
+    sdl3d_ui_layout_label(ui, "Title");
+    sdl3d_ui_layout_button(ui, "Action");
+    sdl3d_ui_separator(ui);
+    sdl3d_ui_layout_labelf(ui, "Count: %d", 42);
+    sdl3d_ui_end_vbox(ui);
+    sdl3d_ui_end_panel(ui);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, LayoutButtonClickWorks)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+
+    // Frame 1: hover + press on the first button in a vbox at (10, 20)
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 50.0f, 25.0f);
+    sim_mouse_down(ui, 50.0f, 25.0f);
+    sdl3d_ui_begin_vbox(ui, 10, 20, 200, 400);
+    EXPECT_FALSE(sdl3d_ui_layout_button(ui, "Btn"));
+    sdl3d_ui_end_vbox(ui);
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 2: release while hovering → click
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 50.0f, 25.0f);
+    sim_mouse_up(ui, 50.0f, 25.0f);
+    sdl3d_ui_begin_vbox(ui, 10, 20, 200, 400);
+    EXPECT_TRUE(sdl3d_ui_layout_button(ui, "Btn"));
+    sdl3d_ui_end_vbox(ui);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
 } // namespace
