@@ -1,0 +1,30 @@
+{
+  "character": {
+    "id": "6e6eeda2-d978-4311-aca6-5469ced4f419",
+    "name": "stylized skeletal robot resembling terminator with angry face",
+    "prompt": "stylized skeletal robot resembling terminator with angry face",
+    "size": {
+      "width": 92,
+      "height": 92
+    },
+    "template_id": "mannequin",
+    "directions": 8,
+    "view": "side",
+    "created_at": "2026-04-23T23:48:18.875323+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "south-east": "rotations/south-east.png",
+      "east": "rotations/east.png",
+      "north-east": "rotations/north-east.png",
+      "north": "rotations/north.png",
+      "north-west": "rotations/north-west.png",
+      "west": "rotations/west.png",
+      "south-west": "rotations/south-west.png"
+    },
+    "animations": {}
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-24T00:07:20.033133"
+}
