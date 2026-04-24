@@ -570,9 +570,14 @@ bool sdl3d_draw_text_overlay(struct sdl3d_render_context *context, const sdl3d_f
     if (!font->atlas_texture.pixels)
         return SDL_SetError("sdl3d_draw_text_overlay: font atlas not initialized");
 
-    /* Software backend: fall through to the normal path. */
+    /* Software backend: enable alpha blending for text overlay. */
     if (!context->gl)
-        return sdl3d_draw_text(context, font, text, x, y, color);
+    {
+        context->color_buffer_blend = true;
+        bool ok = sdl3d_draw_text(context, font, text, x, y, color);
+        context->color_buffer_blend = false;
+        return ok;
+    }
 
     int ctx_w = sdl3d_get_render_context_width(context);
     int ctx_h = sdl3d_get_render_context_height(context);

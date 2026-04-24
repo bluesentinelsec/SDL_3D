@@ -188,12 +188,45 @@ static void sdl3d_write_pixel(sdl3d_framebuffer *framebuffer, int x, int y, floa
         return;
     }
 
-    framebuffer->depth_pixels[index] = depth;
     Uint8 *pixel = &framebuffer->color_pixels[index * 4];
-    pixel[0] = color.r;
-    pixel[1] = color.g;
-    pixel[2] = color.b;
-    pixel[3] = color.a;
+
+    if (color.a == 0)
+    {
+        return;
+    }
+
+    framebuffer->depth_pixels[index] = depth;
+
+    if (color.a == 255 || !framebuffer->blend_enabled)
+    {
+        pixel[0] = color.r;
+        pixel[1] = color.g;
+        pixel[2] = color.b;
+        pixel[3] = color.a;
+        return;
+    }
+
+    const float src_a = (float)color.a / 255.0f;
+    const float dst_a = (float)pixel[3] / 255.0f;
+    const float out_a = src_a + dst_a * (1.0f - src_a);
+
+    float out_r = (float)color.r * src_a;
+    float out_g = (float)color.g * src_a;
+    float out_b = (float)color.b * src_a;
+    if (out_a > 0.0f)
+    {
+        out_r += (float)pixel[0] * dst_a * (1.0f - src_a);
+        out_g += (float)pixel[1] * dst_a * (1.0f - src_a);
+        out_b += (float)pixel[2] * dst_a * (1.0f - src_a);
+        out_r /= out_a;
+        out_g /= out_a;
+        out_b /= out_a;
+    }
+
+    pixel[0] = (Uint8)(out_r + 0.5f);
+    pixel[1] = (Uint8)(out_g + 0.5f);
+    pixel[2] = (Uint8)(out_b + 0.5f);
+    pixel[3] = (Uint8)(out_a * 255.0f + 0.5f);
 }
 
 /* --- Clip-space plane tests ---------------------------------------------- */

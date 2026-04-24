@@ -36,4 +36,6 @@ bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, cons
                              const float *mvp, const float *tint, const sdl3d_texture2d *texture, bool scissor_enabled,
                              const SDL_Rect *scissor_rect);
 
+bool sdl3d_gl_append_line(sdl3d_gl_context *ctx, const float *positions, const float *colors, const float *mvp);
+
 #endif

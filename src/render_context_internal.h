@@ -45,6 +45,7 @@ struct sdl3d_render_context
     bool wireframe_enabled;
     bool scissor_enabled;
     SDL_Rect scissor_rect;
+    bool color_buffer_blend; /* software overlay: enable alpha compositing */
     sdl3d_mat4 model;
     sdl3d_mat4 view;
     sdl3d_mat4 projection;
@@ -105,6 +106,7 @@ static inline sdl3d_framebuffer sdl3d_framebuffer_from_context(sdl3d_render_cont
     framebuffer.parallel_rasterizer = context->parallel_rasterizer;
     framebuffer.scissor_enabled = context->scissor_enabled;
     framebuffer.scissor_rect = context->scissor_rect;
+    framebuffer.blend_enabled = context->color_buffer_blend;
     return framebuffer;
 }
 

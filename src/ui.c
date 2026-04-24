@@ -1094,6 +1094,37 @@ bool sdl3d_ui_layout_button(sdl3d_ui_context *ui, const char *label)
 #define SDL3D_UI_CHECKBOX_SIZE 16.0f
 #define SDL3D_UI_CHECKBOX_GAP 6.0f
 
+static const char *ui_visible_label_text(const char *label, char *buffer, size_t buffer_size)
+{
+    if (!label)
+    {
+        return "";
+    }
+
+    const char *sep = SDL_strstr(label, "##");
+    if (!sep)
+    {
+        return label;
+    }
+    if (sep == label)
+    {
+        return "";
+    }
+    if (!buffer || buffer_size == 0)
+    {
+        return "";
+    }
+
+    size_t len = (size_t)(sep - label);
+    if (len >= buffer_size)
+    {
+        len = buffer_size - 1;
+    }
+    SDL_memcpy(buffer, label, len);
+    buffer[len] = '\0';
+    return buffer;
+}
+
 bool sdl3d_ui_checkbox(sdl3d_ui_context *ui, float x, float y, const char *label, bool *value)
 {
     if (!ui || !ui->frame_open || !label || !value)
@@ -1102,10 +1133,12 @@ bool sdl3d_ui_checkbox(sdl3d_ui_context *ui, float x, float y, const char *label
     sdl3d_ui_id id = sdl3d_ui_make_id(ui, label);
     const sdl3d_ui_theme *t = &ui->theme;
     float box_size = SDL3D_UI_CHECKBOX_SIZE;
+    char display_buf[256];
+    const char *display = ui_visible_label_text(label, display_buf, sizeof(display_buf));
 
     /* Hit test the full row (box + label). */
     float tw = 0, th = 0;
-    sdl3d_ui_measure_text(ui, label, &tw, &th);
+    sdl3d_ui_measure_text(ui, display, &tw, &th);
     float row_w = box_size + SDL3D_UI_CHECKBOX_GAP + tw;
     float row_h = (th > box_size) ? th : box_size;
 
@@ -1144,7 +1177,8 @@ bool sdl3d_ui_checkbox(sdl3d_ui_context *ui, float x, float y, const char *label
     /* Draw label. */
     float label_x = x + box_size + SDL3D_UI_CHECKBOX_GAP;
     float label_y = y + (row_h - th) * 0.5f;
-    sdl3d_ui_draw_text(ui, label_x, label_y, label, t->text);
+    if (display[0] != '\0')
+        sdl3d_ui_draw_text(ui, label_x, label_y, display, t->text);
 
     return changed;
 }
@@ -1184,6 +1218,8 @@ bool sdl3d_ui_slider(sdl3d_ui_context *ui, float x, float y, float w, const char
     sdl3d_ui_id id = sdl3d_ui_make_id(ui, label);
     const sdl3d_ui_theme *t = &ui->theme;
     bool changed = false;
+    char display_buf[256];
+    const char *display = ui_visible_label_text(label, display_buf, sizeof(display_buf));
 
     /* Track with centered "Label: value" text overlay. */
     float track_y = y;
@@ -1247,7 +1283,10 @@ bool sdl3d_ui_slider(sdl3d_ui_context *ui, float x, float y, float w, const char
 
     /* Draw label + value text. */
     char buf[128];
-    SDL_snprintf(buf, sizeof(buf), "%s: %.2f", label, (double)*value);
+    if (display[0] != '\0')
+        SDL_snprintf(buf, sizeof(buf), "%s: %.2f", display, (double)*value);
+    else
+        SDL_snprintf(buf, sizeof(buf), "%.2f", (double)*value);
     float tw = 0, th = 0;
     sdl3d_ui_measure_text(ui, buf, &tw, &th);
     sdl3d_ui_draw_text(ui, x + (track_w - tw) * 0.5f, track_y + (track_h - th) * 0.5f, buf, t->text);
@@ -1691,7 +1730,9 @@ bool sdl3d_ui_row_checkbox(sdl3d_ui_context *ui, const char *label, bool *value)
 
     /* Draw checkbox box on right (no label text on the checkbox itself). */
     float box_x = x + row_w * 0.35f;
-    return sdl3d_ui_checkbox(ui, box_x, y, "", value);
+    char id_buf[128];
+    SDL_snprintf(id_buf, sizeof(id_buf), "##rc_%s", label);
+    return sdl3d_ui_checkbox(ui, box_x, y, id_buf, value);
 }
 
 void sdl3d_ui_row_label(sdl3d_ui_context *ui, const char *label, const char *value)
