@@ -21,32 +21,33 @@ int main(int argc, char *argv[])
     if (!SDL_Init(SDL_INIT_VIDEO))
         return 1;
 
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-
     SDL_Window *win = SDL_CreateWindow("SDL3D \xe2\x80\x94 Font Showcase", WINDOW_W, WINDOW_H,
                                        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     if (!win)
         return 1;
 
-    sdl3d_render_context_config cfg;
-    sdl3d_init_render_context_config(&cfg);
-    cfg.backend = SDL3D_BACKEND_SDLGPU;
-    cfg.logical_width = WINDOW_W;
-    cfg.logical_height = WINDOW_H;
-
-    sdl3d_render_context *ctx = NULL;
-    if (!sdl3d_create_render_context(win, NULL, &cfg, &ctx))
+    SDL_Renderer *ren = SDL_CreateRenderer(win, NULL);
+    if (!ren)
     {
-        SDL_Log("Render context failed: %s", SDL_GetError());
         SDL_DestroyWindow(win);
         return 1;
     }
 
-    /* Load every built-in font at logical pixel size. */
+    sdl3d_render_context_config cfg;
+    sdl3d_init_render_context_config(&cfg);
+    cfg.backend = SDL3D_BACKEND_SOFTWARE;
+    cfg.logical_width = WINDOW_W;
+    cfg.logical_height = WINDOW_H;
+
+    sdl3d_render_context *ctx = NULL;
+    if (!sdl3d_create_render_context(win, ren, &cfg, &ctx))
+    {
+        SDL_DestroyRenderer(ren);
+        SDL_DestroyWindow(win);
+        return 1;
+    }
+
+    /* Load every built-in font. */
     sdl3d_font fonts[SDL3D_BUILTIN_FONT_COUNT];
     bool loaded[SDL3D_BUILTIN_FONT_COUNT];
     for (int i = 0; i < SDL3D_BUILTIN_FONT_COUNT; ++i)
@@ -80,8 +81,10 @@ int main(int argc, char *argv[])
             if (!loaded[i])
                 continue;
             const char *name = sdl3d_builtin_font_name(i);
+            /* Label */
             sdl3d_draw_textf(ctx, &fonts[i], 20.0f, y, label_color, "%s:", name);
             y += FONT_SIZE + 4.0f;
+            /* Sample text */
             sdl3d_draw_text(ctx, &fonts[i], "The quick brown fox jumps over the lazy dog.", 40.0f, y, white);
             y += FONT_SIZE + 16.0f;
         }
@@ -95,6 +98,7 @@ int main(int argc, char *argv[])
             sdl3d_free_font(&fonts[i]);
     }
     sdl3d_destroy_render_context(ctx);
+    SDL_DestroyRenderer(ren);
     SDL_DestroyWindow(win);
     SDL_Quit();
     return 0;
