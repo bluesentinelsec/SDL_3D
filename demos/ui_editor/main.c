@@ -83,8 +83,19 @@ static void draw_tool_panel(sdl3d_ui_context *ui, float y0, float h, const char 
     sdl3d_ui_end_panel(ui);
 }
 
-static void draw_inspector_panel(sdl3d_ui_context *ui, float x0, float y0, float h, const char *active_tool,
-                                 int click_count)
+typedef struct editor_state
+{
+    const char *active_tool;
+    int click_count;
+    bool *wireframe;
+    bool *show_grid;
+    bool *snap_enabled;
+    float *orbit_speed;
+    float *grid_size;
+    float *light_intensity;
+} editor_state;
+
+static void draw_inspector_panel(sdl3d_ui_context *ui, float x0, float y0, float h, const editor_state *st)
 {
     float pad = 8.0f;
     float inner_w = INSPECTOR_W - pad * 2;
@@ -94,15 +105,21 @@ static void draw_inspector_panel(sdl3d_ui_context *ui, float x0, float y0, float
     sdl3d_ui_layout_label(ui, "Inspector");
     sdl3d_ui_separator(ui);
 
-    sdl3d_ui_layout_label(ui, "Entity Properties");
-    sdl3d_ui_layout_labelf(ui, "  Classname: worldspawn");
-    sdl3d_ui_layout_labelf(ui, "  Origin: 0 0 0");
-    sdl3d_ui_layout_labelf(ui, "  Angle: 0");
+    sdl3d_ui_layout_label(ui, "Display");
+    sdl3d_ui_layout_checkbox(ui, "Wireframe", st->wireframe);
+    sdl3d_ui_layout_checkbox(ui, "Show Grid", st->show_grid);
+    sdl3d_ui_layout_checkbox(ui, "Snap", st->snap_enabled);
+    sdl3d_ui_separator(ui);
+
+    sdl3d_ui_layout_label(ui, "Properties");
+    sdl3d_ui_layout_slider(ui, "Orbit Speed", st->orbit_speed, 0.1f, 2.0f);
+    sdl3d_ui_layout_slider(ui, "Grid Size", st->grid_size, 1.0f, 64.0f);
+    sdl3d_ui_layout_slider(ui, "Light", st->light_intensity, 0.0f, 2.0f);
     sdl3d_ui_separator(ui);
 
     sdl3d_ui_layout_label(ui, "Tool State");
-    sdl3d_ui_layout_labelf(ui, "  Active: %s", active_tool);
-    sdl3d_ui_layout_labelf(ui, "  Clicks: %d", click_count);
+    sdl3d_ui_layout_labelf(ui, "  Active: %s", st->active_tool);
+    sdl3d_ui_layout_labelf(ui, "  Clicks: %d", st->click_count);
     sdl3d_ui_separator(ui);
 
     sdl3d_ui_layout_label(ui, "Actions");
@@ -114,7 +131,8 @@ static void draw_inspector_panel(sdl3d_ui_context *ui, float x0, float y0, float
     sdl3d_ui_end_panel(ui);
 }
 
-static void draw_status_bar(sdl3d_ui_context *ui, float y0, float w, float dt, const char *active_tool)
+static void draw_status_bar(sdl3d_ui_context *ui, float y0, float w, float dt, const char *active_tool, bool snap_on,
+                            float grid_sz)
 {
     static float smoothed_fps = 0.0f;
     sdl3d_ui_draw_rect(ui, 0, y0, w, STATUS_H, (sdl3d_color){35, 35, 38, 255});
@@ -124,12 +142,11 @@ static void draw_status_bar(sdl3d_ui_context *ui, float y0, float w, float dt, c
         smoothed_fps += (1.0f / dt - smoothed_fps) * 0.05f;
     int fps = (int)(smoothed_fps + 0.5f);
 
-    /* Use fixed x positions so variable-width text doesn't shift neighbors. */
     float ty = y0 + 6;
     sdl3d_ui_labelf(ui, 8, ty, "Tool: %s", active_tool);
     sdl3d_ui_labelf(ui, 200, ty, "FPS: %d", fps);
-    sdl3d_ui_label(ui, 320, ty, "Grid: 16");
-    sdl3d_ui_label(ui, 440, ty, "Snap: On");
+    sdl3d_ui_labelf(ui, 320, ty, "Grid: %.0f", (double)grid_sz);
+    sdl3d_ui_labelf(ui, 440, ty, "Snap: %s", snap_on ? "On" : "Off");
 }
 
 int main(int argc, char *argv[])
@@ -181,6 +198,12 @@ int main(int argc, char *argv[])
 
     const char *active_tool = "Select";
     int click_count = 0;
+    bool wireframe = false;
+    bool show_grid = true;
+    bool snap_enabled = true;
+    float orbit_speed = 0.4f;
+    float grid_size = 16.0f;
+    float light_intensity = 1.0f;
     float elapsed = 0.0f;
     Uint64 last = SDL_GetPerformanceCounter();
     bool running = true;
@@ -213,29 +236,47 @@ int main(int argc, char *argv[])
 
         /* 3D viewport: spinning cube in the center area. */
         sdl3d_camera3d cam;
-        cam.position = sdl3d_vec3_make(sinf(elapsed * 0.4f) * 5.0f, 3.0f, cosf(elapsed * 0.4f) * 5.0f);
+        cam.position = sdl3d_vec3_make(sinf(elapsed * orbit_speed) * 5.0f, 3.0f, cosf(elapsed * orbit_speed) * 5.0f);
         cam.target = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
         cam.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
         cam.fovy = 60.0f;
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
 
         sdl3d_begin_mode_3d(ctx, cam);
-        sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(1.5f, 1.5f, 1.5f),
-                        (sdl3d_color){80, 160, 255, 255});
-        sdl3d_draw_cube_wires(ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(1.55f, 1.55f, 1.55f),
-                              (sdl3d_color){200, 200, 200, 255});
-        /* Grid floor */
-        for (int i = -5; i <= 5; i++)
+        if (wireframe)
         {
-            sdl3d_color gc = {60, 60, 65, 255};
-            sdl3d_draw_line_3d(ctx, sdl3d_vec3_make((float)i, -1.0f, -5.0f), sdl3d_vec3_make((float)i, -1.0f, 5.0f),
-                               gc);
-            sdl3d_draw_line_3d(ctx, sdl3d_vec3_make(-5.0f, -1.0f, (float)i), sdl3d_vec3_make(5.0f, -1.0f, (float)i),
-                               gc);
+            sdl3d_draw_cube_wires(ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(1.5f, 1.5f, 1.5f),
+                                  (sdl3d_color){80, 160, 255, 255});
+        }
+        else
+        {
+            sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(1.5f, 1.5f, 1.5f),
+                            (sdl3d_color){80, 160, 255, 255});
+            sdl3d_draw_cube_wires(ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(1.55f, 1.55f, 1.55f),
+                                  (sdl3d_color){200, 200, 200, 255});
+        }
+        /* Grid floor */
+        if (show_grid)
+        {
+            int steps = (int)grid_size;
+            if (steps < 1)
+                steps = 1;
+            if (steps > 64)
+                steps = 64;
+            float half = (float)steps * 0.5f;
+            for (int i = 0; i <= steps; i++)
+            {
+                float pos = -half + (float)i;
+                sdl3d_color gc = {60, 60, 65, 255};
+                sdl3d_draw_line_3d(ctx, sdl3d_vec3_make(pos, -1.0f, -half), sdl3d_vec3_make(pos, -1.0f, half), gc);
+                sdl3d_draw_line_3d(ctx, sdl3d_vec3_make(-half, -1.0f, pos), sdl3d_vec3_make(half, -1.0f, pos), gc);
+            }
         }
         sdl3d_end_mode_3d(ctx);
 
         /* UI overlay — all panels rendered via the overlay layer. */
+        editor_state st = {active_tool,   click_count,  &wireframe, &show_grid,
+                           &snap_enabled, &orbit_speed, &grid_size, &light_intensity};
         sdl3d_ui_begin_frame(ui, (int)sw, (int)sh);
 
         /* Compute window-to-logical mouse mapping for letterbox scaling.
@@ -260,8 +301,8 @@ int main(int argc, char *argv[])
 
         draw_menu_bar(ui, sw, &click_count);
         draw_tool_panel(ui, viewport_y, viewport_h, &active_tool, &click_count);
-        draw_inspector_panel(ui, sw - INSPECTOR_W, viewport_y, viewport_h, active_tool, click_count);
-        draw_status_bar(ui, sh - STATUS_H, sw, dt, active_tool);
+        draw_inspector_panel(ui, sw - INSPECTOR_W, viewport_y, viewport_h, &st);
+        draw_status_bar(ui, sh - STATUS_H, sw, dt, active_tool, snap_enabled, grid_size);
 
         /* Viewport border */
         sdl3d_ui_draw_rect_outline(ui, viewport_x, viewport_y, viewport_w, viewport_h, 1.0f,

@@ -355,4 +355,91 @@ TEST(SDL3DUI, LayoutButtonClickWorks)
     sdl3d_ui_destroy(ui);
 }
 
+TEST(SDL3DUI, CheckboxToggle)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    bool val = false;
+
+    // Frame 1: press on checkbox at (10, 10)
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 15.0f, 15.0f);
+    sim_mouse_down(ui, 15.0f, 15.0f);
+    EXPECT_FALSE(sdl3d_ui_checkbox(ui, 10, 10, "Toggle", &val));
+    EXPECT_FALSE(val);
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 2: release → toggles to true
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 15.0f, 15.0f);
+    sim_mouse_up(ui, 15.0f, 15.0f);
+    EXPECT_TRUE(sdl3d_ui_checkbox(ui, 10, 10, "Toggle", &val));
+    EXPECT_TRUE(val);
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 3: press again
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 15.0f, 15.0f);
+    sim_mouse_down(ui, 15.0f, 15.0f);
+    sdl3d_ui_checkbox(ui, 10, 10, "Toggle", &val);
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 4: release → toggles back to false
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 15.0f, 15.0f);
+    sim_mouse_up(ui, 15.0f, 15.0f);
+    EXPECT_TRUE(sdl3d_ui_checkbox(ui, 10, 10, "Toggle", &val));
+    EXPECT_FALSE(val);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, SliderDrag)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    float val = 0.0f;
+
+    // Frame 1: press on slider at x=10, w=200 → mouse at x=110 = midpoint
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 110.0f, 15.0f);
+    sim_mouse_down(ui, 110.0f, 15.0f);
+    EXPECT_TRUE(sdl3d_ui_slider(ui, 10, 10, 200, "Val", &val, 0.0f, 1.0f));
+    EXPECT_NEAR(val, 0.5f, 0.01f);
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 2: drag to x=210 (end of slider) while held
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_move(ui, 210.0f, 15.0f);
+    EXPECT_TRUE(sdl3d_ui_slider(ui, 10, 10, 200, "Val", &val, 0.0f, 1.0f));
+    EXPECT_NEAR(val, 1.0f, 0.01f);
+    sdl3d_ui_end_frame(ui);
+
+    // Frame 3: release
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sim_mouse_up(ui, 210.0f, 15.0f);
+    sdl3d_ui_slider(ui, 10, 10, 200, "Val", &val, 0.0f, 1.0f);
+    sdl3d_ui_end_frame(ui);
+
+    // Value should remain at 1.0 after release
+    EXPECT_NEAR(val, 1.0f, 0.01f);
+
+    sdl3d_ui_destroy(ui);
+}
+
+TEST(SDL3DUI, SliderClampsValue)
+{
+    sdl3d_ui_context *ui = nullptr;
+    ASSERT_TRUE(sdl3d_ui_create(nullptr, &ui));
+    float val = 5.0f; // out of range
+
+    sdl3d_ui_begin_frame(ui, 800, 600);
+    sdl3d_ui_slider(ui, 10, 10, 200, "Clamped", &val, 0.0f, 1.0f);
+    EXPECT_FLOAT_EQ(val, 1.0f);
+    sdl3d_ui_end_frame(ui);
+
+    sdl3d_ui_destroy(ui);
+}
+
 } // namespace

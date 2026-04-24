@@ -247,6 +247,23 @@ extern "C"
         SDL_PRINTF_VARARG_FUNC(2);
     bool sdl3d_ui_layout_button(sdl3d_ui_context *ui, const char *label);
 
+    /*
+     * Checkbox: toggles *value on click. Draws a small box (filled when
+     * checked) followed by the label text. Returns true on the frame the
+     * value changed.
+     */
+    bool sdl3d_ui_checkbox(sdl3d_ui_context *ui, float x, float y, const char *label, bool *value);
+    bool sdl3d_ui_layout_checkbox(sdl3d_ui_context *ui, const char *label, bool *value);
+
+    /*
+     * Slider: drags *value between min and max. Draws a labeled track
+     * with a draggable handle and the current value. Returns true on
+     * any frame the value changed (i.e., during drag).
+     */
+    bool sdl3d_ui_slider(sdl3d_ui_context *ui, float x, float y, float w, const char *label, float *value, float min,
+                         float max);
+    bool sdl3d_ui_layout_slider(sdl3d_ui_context *ui, const char *label, float *value, float min, float max);
+
 #ifdef __cplusplus
 }
 #endif

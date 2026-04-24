@@ -840,6 +840,189 @@ bool sdl3d_ui_layout_button(sdl3d_ui_context *ui, const char *label)
 }
 
 /* ------------------------------------------------------------------ */
+/* Checkbox                                                            */
+/* ------------------------------------------------------------------ */
+
+#define SDL3D_UI_CHECKBOX_SIZE 16.0f
+#define SDL3D_UI_CHECKBOX_GAP 6.0f
+
+bool sdl3d_ui_checkbox(sdl3d_ui_context *ui, float x, float y, const char *label, bool *value)
+{
+    if (!ui || !ui->frame_open || !label || !value)
+        return false;
+
+    sdl3d_ui_id id = sdl3d_ui_make_id(ui, label);
+    const sdl3d_ui_theme *t = &ui->theme;
+    float box_size = SDL3D_UI_CHECKBOX_SIZE;
+
+    /* Hit test the full row (box + label). */
+    float tw = 0, th = 0;
+    sdl3d_ui_measure_text(ui, label, &tw, &th);
+    float row_w = box_size + SDL3D_UI_CHECKBOX_GAP + tw;
+    float row_h = (th > box_size) ? th : box_size;
+
+    bool hovering = sdl3d_ui_is_hovering(ui, x, y, row_w, row_h);
+    bool changed = false;
+
+    if (hovering)
+    {
+        ui->hovered_id = id;
+        if (ui->input.mouse_pressed[0])
+            ui->active_id = id;
+    }
+    if (ui->active_id == id && ui->input.mouse_released[0])
+    {
+        if (hovering)
+        {
+            *value = !(*value);
+            changed = true;
+        }
+        ui->active_id = 0;
+    }
+
+    /* Draw box. */
+    float box_y = y + (row_h - box_size) * 0.5f;
+    sdl3d_color bg = (hovering) ? t->widget_hover : t->widget_bg;
+    sdl3d_ui_draw_rect(ui, x, box_y, box_size, box_size, bg);
+    sdl3d_ui_draw_rect_outline(ui, x, box_y, box_size, box_size, t->border_width, t->widget_border);
+
+    /* Draw check mark (filled inner rect). */
+    if (*value)
+    {
+        float inset = 3.0f;
+        sdl3d_ui_draw_rect(ui, x + inset, box_y + inset, box_size - inset * 2, box_size - inset * 2, t->widget_active);
+    }
+
+    /* Draw label. */
+    float label_x = x + box_size + SDL3D_UI_CHECKBOX_GAP;
+    float label_y = y + (row_h - th) * 0.5f;
+    sdl3d_ui_draw_text(ui, label_x, label_y, label, t->text);
+
+    return changed;
+}
+
+bool sdl3d_ui_layout_checkbox(sdl3d_ui_context *ui, const char *label, bool *value)
+{
+    if (!ui || !ui->frame_open || !label || !value || ui->layout_depth <= 0)
+        return false;
+
+    float tw = 0, th = 0;
+    sdl3d_ui_measure_text(ui, label, &tw, &th);
+    float row_h = (th > SDL3D_UI_CHECKBOX_SIZE) ? th : SDL3D_UI_CHECKBOX_SIZE;
+    float row_w = (ui->layout_stack[ui->layout_depth - 1].direction == SDL3D_UI_LAYOUT_VBOX)
+                      ? ui->layout_stack[ui->layout_depth - 1].w
+                      : SDL3D_UI_CHECKBOX_SIZE + SDL3D_UI_CHECKBOX_GAP + tw;
+
+    float x, y;
+    if (!ui_layout_alloc(ui, row_w, row_h, &x, &y))
+        return false;
+    return sdl3d_ui_checkbox(ui, x, y, label, value);
+}
+
+/* ------------------------------------------------------------------ */
+/* Slider                                                              */
+/* ------------------------------------------------------------------ */
+
+#define SDL3D_UI_SLIDER_TRACK_H 6.0f
+#define SDL3D_UI_SLIDER_HANDLE_W 12.0f
+#define SDL3D_UI_SLIDER_ROW_H 20.0f
+
+bool sdl3d_ui_slider(sdl3d_ui_context *ui, float x, float y, float w, const char *label, float *value, float min,
+                     float max)
+{
+    if (!ui || !ui->frame_open || !label || !value || max <= min)
+        return false;
+
+    sdl3d_ui_id id = sdl3d_ui_make_id(ui, label);
+    const sdl3d_ui_theme *t = &ui->theme;
+    bool changed = false;
+
+    /* Layout: label on top, track below. */
+    float track_y = y;
+    float track_w = w;
+    float track_h = SDL3D_UI_SLIDER_ROW_H;
+
+    bool hovering = sdl3d_ui_is_hovering(ui, x, y, track_w, track_h);
+
+    if (hovering)
+    {
+        ui->hovered_id = id;
+        if (ui->input.mouse_pressed[0])
+            ui->active_id = id;
+    }
+
+    /* Drag: while active, update value from mouse x. */
+    if (ui->active_id == id)
+    {
+        if (ui->input.mouse_down[0])
+        {
+            float rel = (ui->input.mouse_x - x) / track_w;
+            if (rel < 0.0f)
+                rel = 0.0f;
+            if (rel > 1.0f)
+                rel = 1.0f;
+            float new_val = min + rel * (max - min);
+            if (new_val != *value)
+            {
+                *value = new_val;
+                changed = true;
+            }
+        }
+        else
+        {
+            ui->active_id = 0;
+        }
+    }
+
+    /* Clamp value. */
+    if (*value < min)
+        *value = min;
+    if (*value > max)
+        *value = max;
+
+    /* Draw track background. */
+    float ty = track_y + (track_h - SDL3D_UI_SLIDER_TRACK_H) * 0.5f;
+    sdl3d_ui_draw_rect(ui, x, ty, track_w, SDL3D_UI_SLIDER_TRACK_H, t->widget_bg);
+    sdl3d_ui_draw_rect_outline(ui, x, ty, track_w, SDL3D_UI_SLIDER_TRACK_H, 1.0f, t->widget_border);
+
+    /* Draw filled portion. */
+    float frac = (*value - min) / (max - min);
+    float fill_w = frac * track_w;
+    if (fill_w > 0.0f)
+        sdl3d_ui_draw_rect(ui, x, ty, fill_w, SDL3D_UI_SLIDER_TRACK_H, t->widget_active);
+
+    /* Draw handle. */
+    float hx = x + frac * (track_w - SDL3D_UI_SLIDER_HANDLE_W);
+    sdl3d_color handle_color = (ui->active_id == id) ? t->widget_active : (hovering ? t->widget_hover : t->text);
+    sdl3d_ui_draw_rect(ui, hx, track_y, SDL3D_UI_SLIDER_HANDLE_W, track_h, handle_color);
+    sdl3d_ui_draw_rect_outline(ui, hx, track_y, SDL3D_UI_SLIDER_HANDLE_W, track_h, 1.0f, t->widget_border);
+
+    /* Draw label + value text. */
+    char buf[128];
+    SDL_snprintf(buf, sizeof(buf), "%s: %.2f", label, (double)*value);
+    float tw = 0, th = 0;
+    sdl3d_ui_measure_text(ui, buf, &tw, &th);
+    sdl3d_ui_draw_text(ui, x + (track_w - tw) * 0.5f, track_y + (track_h - th) * 0.5f, buf, t->text);
+
+    return changed;
+}
+
+bool sdl3d_ui_layout_slider(sdl3d_ui_context *ui, const char *label, float *value, float min, float max)
+{
+    if (!ui || !ui->frame_open || !label || !value || ui->layout_depth <= 0)
+        return false;
+
+    int d = ui->layout_depth - 1;
+    float w = ui->layout_stack[d].w;
+    float h = SDL3D_UI_SLIDER_ROW_H;
+
+    float x, y;
+    if (!ui_layout_alloc(ui, w, h, &x, &y))
+        return false;
+    return sdl3d_ui_slider(ui, x, y, w, label, value, min, max);
+}
+
+/* ------------------------------------------------------------------ */
 /* Button                                                              */
 /* ------------------------------------------------------------------ */
 
