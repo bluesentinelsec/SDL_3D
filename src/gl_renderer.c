@@ -75,6 +75,17 @@ typedef struct sdl3d_scene_ubo_data
  * and other screen-space elements that must not be affected by bloom,
  * SSAO, vignette, etc. Each entry owns its vertex data (copied at
  * submission time) so the caller can free/reload textures freely. */
+
+/* Per-frame atlas snapshot — one copy shared by all overlay entries
+ * that reference the same font atlas. */
+typedef struct sdl3d_overlay_atlas
+{
+    const void *source_pixels; /* original pointer at snapshot time */
+    Uint32 generation;
+    unsigned char *pixels; /* heap-allocated RGBA copy */
+    int w, h;
+} sdl3d_overlay_atlas;
+
 typedef struct sdl3d_overlay_entry
 {
     float *positions; /* 3 floats per vertex, heap-allocated copy */
@@ -82,10 +93,7 @@ typedef struct sdl3d_overlay_entry
     int vertex_count;
     float mvp[16];
     float tint[4];
-    const sdl3d_texture2d *texture;
-    Uint32 texture_generation; /* snapshot so we can detect stale textures */
-    unsigned char *texture_pixels;
-    int texture_w, texture_h;
+    int atlas_index; /* index into overlay_atlases */
 } sdl3d_overlay_entry;
 
 typedef struct sdl3d_draw_entry
@@ -232,6 +240,11 @@ struct sdl3d_gl_context
     sdl3d_overlay_entry *overlay_list;
     int overlay_count;
     int overlay_capacity;
+
+    /* Per-frame atlas snapshots shared across overlay entries */
+    sdl3d_overlay_atlas *overlay_atlases;
+    int overlay_atlas_count;
+    int overlay_atlas_capacity;
 
     GLuint white_texture;
     GLuint black_texture;
@@ -1205,9 +1218,11 @@ static void free_overlay_list(sdl3d_gl_context *ctx)
         sdl3d_overlay_entry *e = &ctx->overlay_list[i];
         SDL_free(e->positions);
         SDL_free(e->uvs);
-        SDL_free(e->texture_pixels);
     }
     ctx->overlay_count = 0;
+    for (int i = 0; i < ctx->overlay_atlas_count; i++)
+        SDL_free(ctx->overlay_atlases[i].pixels);
+    ctx->overlay_atlas_count = 0;
 }
 
 static sdl3d_overlay_entry *append_overlay_entry(sdl3d_gl_context *ctx)
@@ -1229,34 +1244,66 @@ static sdl3d_overlay_entry *append_overlay_entry(sdl3d_gl_context *ctx)
 bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, const float *uvs, int vertex_count,
                              const float *mvp, const float *tint, const unsigned char *tex_pixels, int tex_w, int tex_h)
 {
+    /* Find or create a shared atlas snapshot for this texture. */
+    int atlas_idx = -1;
+    for (int i = 0; i < ctx->overlay_atlas_count; i++)
+    {
+        if (ctx->overlay_atlases[i].source_pixels == tex_pixels && ctx->overlay_atlases[i].w == tex_w &&
+            ctx->overlay_atlases[i].h == tex_h)
+        {
+            atlas_idx = i;
+            break;
+        }
+    }
+    if (atlas_idx < 0)
+    {
+        if (ctx->overlay_atlas_count == ctx->overlay_atlas_capacity)
+        {
+            int cap = ctx->overlay_atlas_capacity ? ctx->overlay_atlas_capacity * 2 : 16;
+            sdl3d_overlay_atlas *buf = SDL_realloc(ctx->overlay_atlases, (size_t)cap * sizeof(sdl3d_overlay_atlas));
+            if (!buf)
+                return SDL_OutOfMemory();
+            ctx->overlay_atlases = buf;
+            ctx->overlay_atlas_capacity = cap;
+        }
+        atlas_idx = ctx->overlay_atlas_count++;
+        sdl3d_overlay_atlas *a = &ctx->overlay_atlases[atlas_idx];
+        size_t tex_bytes = (size_t)tex_w * (size_t)tex_h * 4;
+        a->pixels = SDL_malloc(tex_bytes);
+        if (!a->pixels)
+        {
+            ctx->overlay_atlas_count--;
+            return SDL_OutOfMemory();
+        }
+        SDL_memcpy(a->pixels, tex_pixels, tex_bytes);
+        a->source_pixels = tex_pixels;
+        a->w = tex_w;
+        a->h = tex_h;
+    }
+
     sdl3d_overlay_entry *e = append_overlay_entry(ctx);
     if (!e)
         return SDL_OutOfMemory();
 
     size_t pos_bytes = (size_t)vertex_count * 3 * sizeof(float);
     size_t uv_bytes = (size_t)vertex_count * 2 * sizeof(float);
-    size_t tex_bytes = (size_t)tex_w * (size_t)tex_h * 4;
 
     e->positions = SDL_malloc(pos_bytes);
     e->uvs = SDL_malloc(uv_bytes);
-    e->texture_pixels = SDL_malloc(tex_bytes);
-    if (!e->positions || !e->uvs || !e->texture_pixels)
+    if (!e->positions || !e->uvs)
     {
         SDL_free(e->positions);
         SDL_free(e->uvs);
-        SDL_free(e->texture_pixels);
         ctx->overlay_count--;
         return SDL_OutOfMemory();
     }
 
     SDL_memcpy(e->positions, positions, pos_bytes);
     SDL_memcpy(e->uvs, uvs, uv_bytes);
-    SDL_memcpy(e->texture_pixels, tex_pixels, tex_bytes);
     SDL_memcpy(e->mvp, mvp, 16 * sizeof(float));
     SDL_memcpy(e->tint, tint, 4 * sizeof(float));
     e->vertex_count = vertex_count;
-    e->texture_w = tex_w;
-    e->texture_h = tex_h;
+    e->atlas_index = atlas_idx;
     return true;
 }
 
@@ -2593,6 +2640,7 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
 
     free_overlay_list(ctx);
     SDL_free(ctx->overlay_list);
+    SDL_free(ctx->overlay_atlases);
 
     tex_cache_free(ctx);
     SDL_free(ctx->white_colors);
@@ -2834,26 +2882,35 @@ static void replay_overlay_list(sdl3d_gl_context *ctx)
     gl->Enable(GL_BLEND);
     gl->BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    for (int i = 0; i < ctx->overlay_count; i++)
+    /* Upload each unique atlas once. */
+    GLuint *atlas_textures = SDL_calloc((size_t)ctx->overlay_atlas_count, sizeof(GLuint));
+    if (!atlas_textures)
     {
-        sdl3d_overlay_entry *e = &ctx->overlay_list[i];
-
-        /* Upload texture snapshot directly — no cache, no stale pointers. */
-        GLuint tex_id;
-        gl->GenTextures(1, &tex_id);
-        gl->BindTexture(GL_TEXTURE_2D, tex_id);
-        gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, e->texture_w, e->texture_h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                       e->texture_pixels);
+        gl->Disable(GL_BLEND);
+        gl->Enable(GL_DEPTH_TEST);
+        return;
+    }
+    for (int i = 0; i < ctx->overlay_atlas_count; i++)
+    {
+        sdl3d_overlay_atlas *a = &ctx->overlay_atlases[i];
+        gl->GenTextures(1, &atlas_textures[i]);
+        gl->BindTexture(GL_TEXTURE_2D, atlas_textures[i]);
+        gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, a->w, a->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, a->pixels);
         gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    }
+
+    for (int i = 0; i < ctx->overlay_count; i++)
+    {
+        sdl3d_overlay_entry *e = &ctx->overlay_list[i];
 
         gl->UseProgram(ctx->unlit_program);
         gl->UniformMatrix4fv(ctx->unlit_mvp_loc, 1, GL_FALSE, e->mvp);
         gl->Uniform4f(ctx->unlit_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
         gl->ActiveTexture(GL_TEXTURE0);
-        gl->BindTexture(GL_TEXTURE_2D, tex_id);
+        gl->BindTexture(GL_TEXTURE_2D, atlas_textures[e->atlas_index]);
         gl->Uniform1i(ctx->unlit_texture_loc, 0);
         gl->Uniform1i(ctx->unlit_has_texture_loc, 1);
 
@@ -2865,15 +2922,17 @@ static void replay_overlay_list(sdl3d_gl_context *ctx)
         gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 2 * sizeof(float)), e->uvs,
                        GL_DYNAMIC_DRAW);
 
-        /* No per-vertex color — supply white. */
         const float *whites = ensure_white_colors(ctx, e->vertex_count * 4);
         gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_color_vbo);
         gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 4 * sizeof(float)), whites,
                        GL_DYNAMIC_DRAW);
 
         gl->DrawArrays(GL_TRIANGLES, 0, e->vertex_count);
-        gl->DeleteTextures(1, &tex_id);
     }
+
+    for (int i = 0; i < ctx->overlay_atlas_count; i++)
+        gl->DeleteTextures(1, &atlas_textures[i]);
+    SDL_free(atlas_textures);
 
     gl->Disable(GL_BLEND);
     gl->Enable(GL_DEPTH_TEST);
