@@ -154,11 +154,14 @@ static void draw_inspector_panel(sdl3d_ui_context *ui, float x0, float y0, float
 
 static void draw_status_bar(sdl3d_ui_context *ui, float y0, float w, float dt, const char *active_tool)
 {
+    static float smoothed_fps = 0.0f;
     sdl3d_ui_draw_rect(ui, 0, y0, w, STATUS_H, (sdl3d_color){35, 35, 38, 255});
     sdl3d_ui_draw_rect_outline(ui, 0, y0, w, STATUS_H, 1.0f, (sdl3d_color){70, 70, 75, 255});
 
-    int fps = (dt > 0.0f) ? (int)(1.0f / dt + 0.5f) : 0;
-    sdl3d_ui_labelf(ui, 8, y0 + 6, "Tool: %s  |  FPS: %d  |  Grid: 16  |  Snap: On", active_tool, fps);
+    if (dt > 0.0f)
+        smoothed_fps += (1.0f / dt - smoothed_fps) * 0.05f;
+    int fps = (int)(smoothed_fps + 0.5f);
+    sdl3d_ui_labelf(ui, 8, y0 + 6, "Tool: %-8s |  FPS: %4d  |  Grid: 16  |  Snap: On", active_tool, fps);
 }
 
 int main(int argc, char *argv[])
