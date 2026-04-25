@@ -8,6 +8,8 @@
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include "sdl3d/timer_pool.h"
+
 /* ================================================================== */
 /* Property setters by value type                                     */
 /* ================================================================== */
@@ -61,8 +63,9 @@ void sdl3d_action_execute(const sdl3d_action *action, sdl3d_signal_bus *bus, sdl
         break;
 
     case SDL3D_ACTION_START_TIMER:
-        /* Phase 5 integration point. No-op until timer_pool exists. */
-        (void)timer_pool;
+        if (timer_pool != NULL)
+            sdl3d_timer_start(timer_pool, action->start_timer.delay, action->start_timer.signal_id,
+                              action->start_timer.repeating, action->start_timer.interval);
         break;
 
     case SDL3D_ACTION_LOG:

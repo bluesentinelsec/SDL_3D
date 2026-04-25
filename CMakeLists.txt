@@ -110,6 +110,7 @@ target_sources(
         src/sw_backend.c
         src/texture.c
         src/time.c
+        src/timer_pool.c
         src/ui.c
         $<TARGET_OBJECTS:sdl3d_cgltf>
         $<TARGET_OBJECTS:sdl3d_ufbx>
