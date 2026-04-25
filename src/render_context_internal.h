@@ -96,6 +96,11 @@ struct sdl3d_render_context
     bool frustum_planes_valid;
 };
 
+/* Recompute the cached frustum planes from the supplied view-projection.
+ * Defined in drawing3d.c; shared so the shadow pass can repurpose the
+ * actor/mesh culling against the light frustum. */
+void sdl3d_internal_extract_frustum_planes(sdl3d_render_context *context, sdl3d_mat4 view_projection);
+
 static inline sdl3d_framebuffer sdl3d_framebuffer_from_context(sdl3d_render_context *context)
 {
     sdl3d_framebuffer framebuffer;

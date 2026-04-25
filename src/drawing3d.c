@@ -121,6 +121,43 @@ static bool sdl3d_ensure_model_stack_capacity(sdl3d_render_context *context, int
     return true;
 }
 
+/* Derive the 6 frustum planes (a*x + b*y + c*z + d >= 0 for inside) from
+ * a row-major MVP. Caller writes them into context->frustum_planes and
+ * sets context->frustum_planes_valid. Used by both the camera frustum
+ * (begin_mode_3d) and the shadow-light frustum (begin_shadow_pass) so
+ * actor and mesh culling work in shadow passes too. */
+void sdl3d_internal_extract_frustum_planes(sdl3d_render_context *context, sdl3d_mat4 view_projection)
+{
+    const float *m = view_projection.m;
+    float raw[6][4] = {
+        {m[3] + m[0], m[7] + m[4], m[11] + m[8], m[15] + m[12]},
+        {m[3] - m[0], m[7] - m[4], m[11] - m[8], m[15] - m[12]},
+        {m[3] + m[1], m[7] + m[5], m[11] + m[9], m[15] + m[13]},
+        {m[3] - m[1], m[7] - m[5], m[11] - m[9], m[15] - m[13]},
+        {m[3] + m[2], m[7] + m[6], m[11] + m[10], m[15] + m[14]},
+        {m[3] - m[2], m[7] - m[6], m[11] - m[10], m[15] - m[14]},
+    };
+    for (int i = 0; i < 6; ++i)
+    {
+        float len = SDL_sqrtf(raw[i][0] * raw[i][0] + raw[i][1] * raw[i][1] + raw[i][2] * raw[i][2]);
+        if (len > 0.000001f)
+        {
+            context->frustum_planes[i][0] = raw[i][0] / len;
+            context->frustum_planes[i][1] = raw[i][1] / len;
+            context->frustum_planes[i][2] = raw[i][2] / len;
+            context->frustum_planes[i][3] = raw[i][3] / len;
+        }
+        else
+        {
+            context->frustum_planes[i][0] = 0.0f;
+            context->frustum_planes[i][1] = 0.0f;
+            context->frustum_planes[i][2] = 0.0f;
+            context->frustum_planes[i][3] = raw[i][3];
+        }
+    }
+    context->frustum_planes_valid = true;
+}
+
 static void sdl3d_update_current_model_matrices(sdl3d_render_context *context)
 {
     if (context->model_stack_depth <= 0)
@@ -164,36 +201,7 @@ bool sdl3d_begin_mode_3d(sdl3d_render_context *context, sdl3d_camera3d camera)
     sdl3d_update_current_model_matrices(context);
 
     /* Cache frustum planes once per frame so per-mesh culling is cheap. */
-    {
-        const float *m = context->view_projection.m;
-        float raw[6][4] = {
-            {m[3] + m[0], m[7] + m[4], m[11] + m[8], m[15] + m[12]},
-            {m[3] - m[0], m[7] - m[4], m[11] - m[8], m[15] - m[12]},
-            {m[3] + m[1], m[7] + m[5], m[11] + m[9], m[15] + m[13]},
-            {m[3] - m[1], m[7] - m[5], m[11] - m[9], m[15] - m[13]},
-            {m[3] + m[2], m[7] + m[6], m[11] + m[10], m[15] + m[14]},
-            {m[3] - m[2], m[7] - m[6], m[11] - m[10], m[15] - m[14]},
-        };
-        for (int i = 0; i < 6; ++i)
-        {
-            float len = SDL_sqrtf(raw[i][0] * raw[i][0] + raw[i][1] * raw[i][1] + raw[i][2] * raw[i][2]);
-            if (len > 0.000001f)
-            {
-                context->frustum_planes[i][0] = raw[i][0] / len;
-                context->frustum_planes[i][1] = raw[i][1] / len;
-                context->frustum_planes[i][2] = raw[i][2] / len;
-                context->frustum_planes[i][3] = raw[i][3] / len;
-            }
-            else
-            {
-                context->frustum_planes[i][0] = 0.0f;
-                context->frustum_planes[i][1] = 0.0f;
-                context->frustum_planes[i][2] = 0.0f;
-                context->frustum_planes[i][3] = raw[i][3];
-            }
-        }
-        context->frustum_planes_valid = true;
-    }
+    sdl3d_internal_extract_frustum_planes(context, context->view_projection);
 
     context->in_mode_3d = true;
     return true;
