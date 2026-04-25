@@ -14,6 +14,7 @@
 #include "sdl3d/model.h"
 #include "sdl3d/scene.h"
 #include "sdl3d/sdl3d.h"
+#include "sdl3d/sprite_actor.h"
 #include "sdl3d/ui.h"
 
 #define WINDOW_W 1280
@@ -38,46 +39,6 @@
 #define ROCKET_LIGHT_B 0.2f
 #define ROCKET_LIGHT_INTENSITY 4.0f
 #define ROCKET_LIGHT_RANGE 4.0f
-#define DEMO_SPRITE_ROTATION_COUNT 8
-
-static const float DEMO_PI = 3.14159265358979323846f;
-
-typedef enum demo_sprite_rotation
-{
-    DEMO_SPRITE_SOUTH = 0,
-    DEMO_SPRITE_SOUTH_EAST = 1,
-    DEMO_SPRITE_EAST = 2,
-    DEMO_SPRITE_NORTH_EAST = 3,
-    DEMO_SPRITE_NORTH = 4,
-    DEMO_SPRITE_NORTH_WEST = 5,
-    DEMO_SPRITE_WEST = 6,
-    DEMO_SPRITE_SOUTH_WEST = 7
-} demo_sprite_rotation;
-
-typedef struct demo_sprite_rotation_set
-{
-    const sdl3d_texture2d *frames[DEMO_SPRITE_ROTATION_COUNT];
-} demo_sprite_rotation_set;
-
-typedef struct demo_sprite_actor
-{
-    const sdl3d_texture2d *texture;
-    const demo_sprite_rotation_set *rotations;
-    sdl3d_vec3 position;
-    sdl3d_vec2 size;
-    bool bob;
-    float bob_amplitude;
-    float bob_speed;
-} demo_sprite_actor;
-
-typedef struct demo_actor_draw
-{
-    const demo_sprite_actor *actor;
-    const sdl3d_texture2d *texture;
-    sdl3d_vec3 position;
-    sdl3d_color tint;
-    float distance_sq;
-} demo_actor_draw;
 
 static void configure_sprite_texture(sdl3d_texture2d *texture)
 {
@@ -90,39 +51,6 @@ static void free_texture_array(sdl3d_texture2d *textures, int count)
     for (int i = 0; i < count; ++i)
     {
         sdl3d_free_texture(&textures[i]);
-    }
-}
-
-static const sdl3d_texture2d *select_actor_texture(const demo_sprite_actor *actor, sdl3d_vec3 actor_pos, float cam_x,
-                                                   float cam_z)
-{
-    if (actor->rotations == NULL)
-    {
-        return actor->texture;
-    }
-
-    {
-        /* Frame names follow the "view from that direction" convention:
-         *   south.png  — what the camera sees when standing south of the actor (actor's front)
-         *   north.png  — camera north of the actor (actor's back)
-         *   east/west  — side profiles
-         *
-         * atan2(dx, dz) measures the camera's bearing from the actor,
-         * CW from +Z (north). Enum order is S, SE, E, NE, N, NW, W, SW
-         * — CCW from south. The (π - angle) shift aligns camera-south
-         * with index 0 so a viewer circling the actor sees the front,
-         * sides, and back in turn. */
-        const float dx = cam_x - actor_pos.x;
-        const float dz = cam_z - actor_pos.z;
-        const float angle = SDL_atan2f(dx, dz);
-        const float octant = (DEMO_PI - angle) / (DEMO_PI * 0.25f);
-        int index = (int)SDL_floorf(octant + 0.5f) % DEMO_SPRITE_ROTATION_COUNT;
-        if (index < 0)
-        {
-            index += DEMO_SPRITE_ROTATION_COUNT;
-        }
-        const sdl3d_texture2d *texture = actor->rotations->frames[index];
-        return texture != NULL ? texture : actor->texture;
     }
 }
 
@@ -223,17 +151,6 @@ static sdl3d_color sample_actor_tint(const sdl3d_level_light *lights, int light_
     return (sdl3d_color){(Uint8)(r * 255.0f), (Uint8)(g * 255.0f), (Uint8)(b * 255.0f), 255};
 }
 
-static int compare_actor_draws(const void *lhs, const void *rhs)
-{
-    const demo_actor_draw *a = (const demo_actor_draw *)lhs;
-    const demo_actor_draw *b = (const demo_actor_draw *)rhs;
-    if (a->distance_sq < b->distance_sq)
-        return 1;
-    if (a->distance_sq > b->distance_sq)
-        return -1;
-    return 0;
-}
-
 static void strip_level_lightmap(sdl3d_level *level)
 {
     SDL_free(level->lightmap_pixels);
@@ -279,7 +196,7 @@ int main(int argc, char *argv[])
 {
     SDL_Window *win = NULL;
     sdl3d_render_context *ctx = NULL;
-    sdl3d_texture2d enemy_rot_tex[DEMO_SPRITE_ROTATION_COUNT] = {0};
+    sdl3d_texture2d enemy_rot_tex[SDL3D_SPRITE_ROTATION_COUNT] = {0};
     sdl3d_texture2d health_tex = {0};
     sdl3d_texture2d crate_tex = {0};
     sdl3d_texture2d sky_px = {0};
@@ -329,7 +246,7 @@ int main(int argc, char *argv[])
     sdl3d_ui_context *ui = NULL;
     sdl3d_ui_create(has_font ? &debug_font : NULL, &ui);
 
-    const char *enemy_rotation_paths[DEMO_SPRITE_ROTATION_COUNT] = {
+    const char *enemy_rotation_paths[SDL3D_SPRITE_ROTATION_COUNT] = {
         SDL3D_MEDIA_DIR "/sprites/skeletal_robot/south.png", SDL3D_MEDIA_DIR "/sprites/skeletal_robot/south-east.png",
         SDL3D_MEDIA_DIR "/sprites/skeletal_robot/east.png",  SDL3D_MEDIA_DIR "/sprites/skeletal_robot/north-east.png",
         SDL3D_MEDIA_DIR "/sprites/skeletal_robot/north.png", SDL3D_MEDIA_DIR "/sprites/skeletal_robot/north-west.png",
@@ -337,7 +254,7 @@ int main(int argc, char *argv[])
     };
     bool enemy_sprites_ok = true;
 
-    for (int i = 0; i < DEMO_SPRITE_ROTATION_COUNT; ++i)
+    for (int i = 0; i < SDL3D_SPRITE_ROTATION_COUNT; ++i)
     {
         if (!sdl3d_load_texture_from_file(enemy_rotation_paths[i], &enemy_rot_tex[i]))
         {
@@ -350,7 +267,7 @@ int main(int argc, char *argv[])
     if (!enemy_sprites_ok || !sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/sprites/health-pack.png", &health_tex))
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Sprite load failed: %s", SDL_GetError());
-        free_texture_array(enemy_rot_tex, DEMO_SPRITE_ROTATION_COUNT);
+        free_texture_array(enemy_rot_tex, SDL3D_SPRITE_ROTATION_COUNT);
         sdl3d_free_texture(&health_tex);
         sdl3d_destroy_render_context(ctx);
         SDL_DestroyWindow(win);
@@ -370,7 +287,7 @@ int main(int argc, char *argv[])
         !sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/skyboxes/sky_17/nz.png", &sky_nz))
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Skybox load failed: %s", SDL_GetError());
-        free_texture_array(enemy_rot_tex, DEMO_SPRITE_ROTATION_COUNT);
+        free_texture_array(enemy_rot_tex, SDL3D_SPRITE_ROTATION_COUNT);
         sdl3d_free_texture(&health_tex);
         sdl3d_free_texture(&sky_px);
         sdl3d_free_texture(&sky_nx);
@@ -489,7 +406,7 @@ int main(int argc, char *argv[])
     if (!sdl3d_build_level(sectors, sector_count, mats, 6, lights, light_count, &level_lightmapped))
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Level build failed: %s", SDL_GetError());
-        free_texture_array(enemy_rot_tex, DEMO_SPRITE_ROTATION_COUNT);
+        free_texture_array(enemy_rot_tex, SDL3D_SPRITE_ROTATION_COUNT);
         sdl3d_free_texture(&health_tex);
         sdl3d_free_texture(&sky_px);
         sdl3d_free_texture(&sky_nx);
@@ -506,7 +423,7 @@ int main(int argc, char *argv[])
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Level build failed: %s", SDL_GetError());
         sdl3d_free_level(&level_lightmapped);
-        free_texture_array(enemy_rot_tex, DEMO_SPRITE_ROTATION_COUNT);
+        free_texture_array(enemy_rot_tex, SDL3D_SPRITE_ROTATION_COUNT);
         sdl3d_free_texture(&health_tex);
         sdl3d_free_texture(&sky_px);
         sdl3d_free_texture(&sky_nx);
@@ -525,7 +442,7 @@ int main(int argc, char *argv[])
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Level build failed: %s", SDL_GetError());
         sdl3d_free_level(&level_lightmapped);
         sdl3d_free_level(&level_vertex_baked);
-        free_texture_array(enemy_rot_tex, DEMO_SPRITE_ROTATION_COUNT);
+        free_texture_array(enemy_rot_tex, SDL3D_SPRITE_ROTATION_COUNT);
         sdl3d_free_texture(&health_tex);
         sdl3d_free_texture(&sky_px);
         sdl3d_free_texture(&sky_nx);
@@ -540,16 +457,20 @@ int main(int argc, char *argv[])
     }
     bool use_lit_world = true;
     bool use_lightmaps = true;
-    demo_sprite_rotation_set enemy_rotations = {{
-        &enemy_rot_tex[DEMO_SPRITE_SOUTH],
-        &enemy_rot_tex[DEMO_SPRITE_SOUTH_EAST],
-        &enemy_rot_tex[DEMO_SPRITE_EAST],
-        &enemy_rot_tex[DEMO_SPRITE_NORTH_EAST],
-        &enemy_rot_tex[DEMO_SPRITE_NORTH],
-        &enemy_rot_tex[DEMO_SPRITE_NORTH_WEST],
-        &enemy_rot_tex[DEMO_SPRITE_WEST],
-        &enemy_rot_tex[DEMO_SPRITE_SOUTH_WEST],
+    sdl3d_sprite_rotation_set enemy_rotations = {{
+        &enemy_rot_tex[0],
+        &enemy_rot_tex[1],
+        &enemy_rot_tex[2],
+        &enemy_rot_tex[3],
+        &enemy_rot_tex[4],
+        &enemy_rot_tex[5],
+        &enemy_rot_tex[6],
+        &enemy_rot_tex[7],
     }};
+
+    /* Sprite scene — replaces the old demo_sprite_actor array. */
+    sdl3d_sprite_scene sprites;
+    sdl3d_sprite_scene_init(&sprites);
 
     /* Enemy sprites are anchored at bottom-center (feet = position.y),
      * but the AI-generated art has a chunk of transparent padding under
@@ -558,25 +479,37 @@ int main(int argc, char *argv[])
      * the boots on the floor and keeps 2×-scale figures under the low
      * 3–4m ceilings in the start/south-corridor sectors without
      * clipping. */
-    demo_sprite_actor actors[] = {
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(5.8f, -1.05f, 6.8f),
-         (sdl3d_vec2){3.4f, 5.2f}, true, 0.10f, 7.0f},
-        {&health_tex, NULL, sdl3d_vec3_make(5.0f, 0.25f, 10.8f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.12f, 1.8f},
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(4.2f, -1.4f, 21.5f),
-         (sdl3d_vec2){3.2f, 4.8f}, true, 0.08f, 6.0f},
-        {&health_tex, NULL, sdl3d_vec3_make(24.0f, 0.25f, 4.5f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.15f, 1.5f},
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, -1.05f, 19.0f),
-         (sdl3d_vec2){3.6f, 5.6f}, true, 0.09f, 6.5f},
-        {&health_tex, NULL, sdl3d_vec3_make(24.0f, 0.25f, 28.5f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.12f, 2.1f},
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, -1.05f, 37.5f),
-         (sdl3d_vec2){3.4f, 5.2f}, true, 0.09f, 5.8f},
-        {&health_tex, NULL, sdl3d_vec3_make(35.5f, 0.25f, 27.0f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.1f, 1.7f},
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, -1.05f, 72.0f),
-         (sdl3d_vec2){3.6f, 5.6f}, true, 0.11f, 5.5f},
-        {&health_tex, NULL, sdl3d_vec3_make(10.0f, 0.25f, 84.0f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.14f, 1.6f},
-    };
-    demo_actor_draw actor_draws[SDL_arraysize(actors)];
-    float elapsed = 0.0f;
+    {
+        struct
+        {
+            const sdl3d_texture2d *tex;
+            const sdl3d_sprite_rotation_set *rot;
+            float x, y, z, w, h, amp, spd;
+        } sprite_defs[] = {
+            {NULL, &enemy_rotations, 5.8f, -1.05f, 6.8f, 3.4f, 5.2f, 0.10f, 7.0f},
+            {&health_tex, NULL, 5.0f, 0.25f, 10.8f, 1.0f, 1.0f, 0.12f, 1.8f},
+            {NULL, &enemy_rotations, 4.2f, -1.4f, 21.5f, 3.2f, 4.8f, 0.08f, 6.0f},
+            {&health_tex, NULL, 24.0f, 0.25f, 4.5f, 1.0f, 1.0f, 0.15f, 1.5f},
+            {NULL, &enemy_rotations, 24.0f, -1.05f, 19.0f, 3.6f, 5.6f, 0.09f, 6.5f},
+            {&health_tex, NULL, 24.0f, 0.25f, 28.5f, 1.0f, 1.0f, 0.12f, 2.1f},
+            {NULL, &enemy_rotations, 24.0f, -1.05f, 37.5f, 3.4f, 5.2f, 0.09f, 5.8f},
+            {&health_tex, NULL, 35.5f, 0.25f, 27.0f, 1.0f, 1.0f, 0.1f, 1.7f},
+            {NULL, &enemy_rotations, 24.0f, -1.05f, 72.0f, 3.6f, 5.6f, 0.11f, 5.5f},
+            {&health_tex, NULL, 10.0f, 0.25f, 84.0f, 1.0f, 1.0f, 0.14f, 1.6f},
+        };
+        for (int i = 0; i < (int)SDL_arraysize(sprite_defs); ++i)
+        {
+            sdl3d_sprite_actor *a = sdl3d_sprite_scene_add(&sprites);
+            a->position = sdl3d_vec3_make(sprite_defs[i].x, sprite_defs[i].y, sprite_defs[i].z);
+            a->size = (sdl3d_vec2){sprite_defs[i].w, sprite_defs[i].h};
+            a->texture = sprite_defs[i].tex ? sprite_defs[i].tex : enemy_rotations.frames[0];
+            a->rotations = sprite_defs[i].rot;
+            a->bob_amplitude = sprite_defs[i].amp;
+            a->bob_speed = sprite_defs[i].spd;
+            a->bob_phase = (float)i; /* stagger phase like the old demo */
+        }
+    }
+
     sdl3d_skybox_textured skybox = {&sky_px, &sky_nx, &sky_py, &sky_ny, &sky_pz, &sky_nz, 350.0f};
 
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Portals detected: %d", level_lightmapped.portal_count);
@@ -777,7 +710,8 @@ int main(int argc, char *argv[])
         Uint64 now = SDL_GetPerformanceCounter();
         float dt = (float)(now - last) / (float)SDL_GetPerformanceFrequency();
         last = now;
-        elapsed += dt;
+
+        sdl3d_sprite_scene_update(&sprites, dt);
 
         /* Advance all actor animations. */
         if (scene)
@@ -946,46 +880,18 @@ int main(int argc, char *argv[])
             }
         }
 
+        /* Update sprite tints and sector IDs, then draw via the library. */
         {
-            int actor_draw_count = 0;
-            for (int i = 0; i < (int)SDL_arraysize(actors); ++i)
+            for (int i = 0; i < sprites.count; ++i)
             {
-                sdl3d_vec3 actor_pos = actors[i].position;
-                if (actors[i].bob)
-                {
-                    actor_pos.y += SDL_sinf(elapsed * actors[i].bob_speed + (float)i) * actors[i].bob_amplitude;
-                }
-
+                sdl3d_sprite_actor *sa = &sprites.actors[i];
+                sa->tint = sample_actor_tint(lights, light_count, sa->position, proj_active, proj_x, proj_y, proj_z);
                 if (portal_culling)
-                {
-                    int actor_sector = sdl3d_level_find_sector(active_level, sectors, actor_pos.x, actor_pos.z);
-                    if (actor_sector >= 0 && actor_sector < sector_count && !vis.sector_visible[actor_sector])
-                    {
-                        continue;
-                    }
-                }
-
-                actor_draws[actor_draw_count].actor = &actors[i];
-                actor_draws[actor_draw_count].texture = select_actor_texture(&actors[i], actor_pos, px, pz);
-                actor_draws[actor_draw_count].position = actor_pos;
-                actor_draws[actor_draw_count].tint =
-                    sample_actor_tint(lights, light_count, actor_pos, proj_active, proj_x, proj_y, proj_z);
-                {
-                    float dx = actor_pos.x - px;
-                    float dy = actor_pos.y - py;
-                    float dz = actor_pos.z - pz;
-                    actor_draws[actor_draw_count].distance_sq = dx * dx + dy * dy + dz * dz;
-                }
-                actor_draw_count++;
+                    sa->sector_id = sdl3d_level_find_sector(active_level, sectors, sa->position.x, sa->position.z);
+                else
+                    sa->sector_id = -1;
             }
-
-            SDL_qsort(actor_draws, (size_t)actor_draw_count, sizeof(actor_draws[0]), compare_actor_draws);
-
-            for (int i = 0; i < actor_draw_count; ++i)
-            {
-                const demo_actor_draw *draw = &actor_draws[i];
-                sdl3d_draw_billboard(ctx, draw->texture, draw->position, draw->actor->size, draw->tint);
-            }
+            sdl3d_sprite_scene_draw(&sprites, ctx, cam.position, portal_culling ? &vis : NULL);
         }
 
         /* Projectile sphere. */
@@ -1044,7 +950,7 @@ int main(int argc, char *argv[])
     sdl3d_free_level(&level_lightmapped);
     sdl3d_free_level(&level_vertex_baked);
     sdl3d_free_level(&level_unlit);
-    free_texture_array(enemy_rot_tex, DEMO_SPRITE_ROTATION_COUNT);
+    free_texture_array(enemy_rot_tex, SDL3D_SPRITE_ROTATION_COUNT);
     sdl3d_free_texture(&health_tex);
     sdl3d_free_texture(&crate_tex);
     sdl3d_free_texture(&sky_px);
@@ -1056,6 +962,7 @@ int main(int argc, char *argv[])
     if (has_font)
         sdl3d_free_font(&debug_font);
     sdl3d_ui_destroy(ui);
+    sdl3d_sprite_scene_free(&sprites);
     sdl3d_destroy_scene(scene);
     if (has_robot)
         sdl3d_free_model(&robot_model);
