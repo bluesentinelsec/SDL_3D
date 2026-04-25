@@ -337,8 +337,9 @@ static bool sdl3d_mtl_load(sdl3d_obj_state *s, const char *mtl_path)
     if (text == NULL)
     {
         /* Warn but keep going — geometry still loads. */
-        SDL_Log("sdl3d: could not open mtl file '%s' (%s); materials from this library will not be applied.", mtl_path,
-                SDL_GetError());
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "sdl3d: could not open mtl file '%s' (%s); materials from this library will not be applied.",
+                    mtl_path, SDL_GetError());
         return true;
     }
 

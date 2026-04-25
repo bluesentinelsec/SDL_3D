@@ -525,12 +525,14 @@ void sdl3d_ui_end_frame(sdl3d_ui_context *ui)
     }
     if (ui->clip_depth != 0)
     {
-        SDL_Log("sdl3d_ui_end_frame: clip stack not fully popped (depth=%d)", ui->clip_depth);
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "sdl3d_ui_end_frame: clip stack not fully popped (depth=%d)",
+                    ui->clip_depth);
         ui->clip_depth = 0;
     }
     if (ui->layout_depth != 0)
     {
-        SDL_Log("sdl3d_ui_end_frame: layout stack not fully popped (depth=%d)", ui->layout_depth);
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "sdl3d_ui_end_frame: layout stack not fully popped (depth=%d)",
+                    ui->layout_depth);
         ui->layout_depth = 0;
     }
     ui->frame_open = false;
@@ -764,7 +766,7 @@ void sdl3d_ui_push_clip(sdl3d_ui_context *ui, float x, float y, float w, float h
     }
     if (ui->clip_depth >= SDL3D_UI_MAX_CLIP_DEPTH)
     {
-        SDL_Log("sdl3d_ui_push_clip: clip stack full");
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "sdl3d_ui_push_clip: clip stack full");
         return;
     }
     /* Intersect with parent so nested pushes can only shrink the clip. */
@@ -878,7 +880,8 @@ static void ui_push_layout(sdl3d_ui_context *ui, sdl3d_ui_layout_dir direction, 
 {
     if (ui->layout_depth >= SDL3D_UI_MAX_LAYOUT_DEPTH)
     {
-        SDL_Log("sdl3d_ui: layout stack overflow (max %d)", SDL3D_UI_MAX_LAYOUT_DEPTH);
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "sdl3d_ui: layout stack overflow (max %d)",
+                    SDL3D_UI_MAX_LAYOUT_DEPTH);
         return;
     }
     int d = ui->layout_depth++;
@@ -956,7 +959,7 @@ void sdl3d_ui_end_vbox(sdl3d_ui_context *ui)
         return;
     if (ui->layout_stack[ui->layout_depth - 1].direction != SDL3D_UI_LAYOUT_VBOX)
     {
-        SDL_Log("sdl3d_ui_end_vbox: top of layout stack is not a vbox");
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "sdl3d_ui_end_vbox: top of layout stack is not a vbox");
         return;
     }
     ui->layout_depth--;
@@ -975,7 +978,7 @@ void sdl3d_ui_end_hbox(sdl3d_ui_context *ui)
         return;
     if (ui->layout_stack[ui->layout_depth - 1].direction != SDL3D_UI_LAYOUT_HBOX)
     {
-        SDL_Log("sdl3d_ui_end_hbox: top of layout stack is not an hbox");
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "sdl3d_ui_end_hbox: top of layout stack is not an hbox");
         return;
     }
     ui->layout_depth--;

@@ -495,7 +495,7 @@ int main(int argc, char *argv[])
     sdl3d_render_context *ctx = NULL;
     if (!sdl3d_create_window(&wcfg, &win, &ctx))
     {
-        SDL_Log("Window creation failed: %s", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Window creation failed: %s", SDL_GetError());
         return 1;
     }
     SDL_StartTextInput(win);
@@ -505,7 +505,7 @@ int main(int argc, char *argv[])
     sdl3d_font ui_font;
     if (!sdl3d_load_builtin_font(SDL3D_MEDIA_DIR, SDL3D_BUILTIN_FONT_INTER, 16.0f, &ui_font))
     {
-        SDL_Log("Font load failed: %s", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Font load failed: %s", SDL_GetError());
         return 1;
     }
 
@@ -554,7 +554,7 @@ int main(int argc, char *argv[])
                     }
                     else
                     {
-                        SDL_Log("Backend switch failed: %s", SDL_GetError());
+                        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Backend switch failed: %s", SDL_GetError());
                         running = false;
                     }
                 }

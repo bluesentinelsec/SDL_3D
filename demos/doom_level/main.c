@@ -301,12 +301,12 @@ int main(int argc, char *argv[])
     sdl3d_backend current_backend = SDL3D_BACKEND_SDLGPU;
     if (!create_backend(&win, &ctx, current_backend))
     {
-        SDL_Log("Backend init failed: %s", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Backend init failed: %s", SDL_GetError());
         return 1;
     }
 
-    SDL_Log("doom_level MOVE_SPEED=%.2f backend=%d render=%dx%d", MOVE_SPEED, (int)current_backend,
-            sdl3d_get_render_context_width(ctx), sdl3d_get_render_context_height(ctx));
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "doom_level MOVE_SPEED=%.2f backend=%d render=%dx%d", MOVE_SPEED,
+                (int)current_backend, sdl3d_get_render_context_width(ctx), sdl3d_get_render_context_height(ctx));
 
     sdl3d_set_bloom_enabled(ctx, true);
     sdl3d_set_ssao_enabled(ctx, false);
@@ -319,12 +319,12 @@ int main(int argc, char *argv[])
     bool has_font = sdl3d_load_font(SDL3D_MEDIA_DIR "/fonts/Roboto.ttf", 40.0f, &debug_font);
     if (!has_font)
     {
-        SDL_Log("Font load FAILED: %s", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Font load FAILED: %s", SDL_GetError());
     }
     else
     {
-        SDL_Log("Font loaded: size=%.0f atlas=%dx%d ascent=%.1f descent=%.1f", debug_font.size, debug_font.atlas_w,
-                debug_font.atlas_h, debug_font.ascent, debug_font.descent);
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Font loaded: size=%.0f atlas=%dx%d ascent=%.1f descent=%.1f",
+                     debug_font.size, debug_font.atlas_w, debug_font.atlas_h, debug_font.ascent, debug_font.descent);
     }
 
     /* UI context — demoing the new immediate-mode UI path with a label
@@ -352,7 +352,7 @@ int main(int argc, char *argv[])
 
     if (!enemy_sprites_ok || !sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/sprites/health-pack.png", &health_tex))
     {
-        SDL_Log("Sprite load failed: %s", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Sprite load failed: %s", SDL_GetError());
         free_texture_array(enemy_rot_tex, DEMO_SPRITE_ROTATION_COUNT);
         sdl3d_free_texture(&health_tex);
         sdl3d_destroy_render_context(ctx);
@@ -369,7 +369,7 @@ int main(int argc, char *argv[])
         !sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/skyboxes/sky_17/pz.png", &sky_pz) ||
         !sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/skyboxes/sky_17/nz.png", &sky_nz))
     {
-        SDL_Log("Skybox load failed: %s", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Skybox load failed: %s", SDL_GetError());
         free_texture_array(enemy_rot_tex, DEMO_SPRITE_ROTATION_COUNT);
         sdl3d_free_texture(&health_tex);
         sdl3d_free_texture(&sky_px);
@@ -467,7 +467,7 @@ int main(int argc, char *argv[])
     sdl3d_level level_lightmapped, level_vertex_baked, level_unlit;
     if (!sdl3d_build_level(sectors, sector_count, mats, 6, lights, light_count, &level_lightmapped))
     {
-        SDL_Log("Level build failed: %s", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Level build failed: %s", SDL_GetError());
         free_texture_array(enemy_rot_tex, DEMO_SPRITE_ROTATION_COUNT);
         sdl3d_free_texture(&health_tex);
         sdl3d_free_texture(&sky_px);
@@ -483,7 +483,7 @@ int main(int argc, char *argv[])
     }
     if (!sdl3d_build_level(sectors, sector_count, mats, 6, lights, light_count, &level_vertex_baked))
     {
-        SDL_Log("Level build failed: %s", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Level build failed: %s", SDL_GetError());
         sdl3d_free_level(&level_lightmapped);
         free_texture_array(enemy_rot_tex, DEMO_SPRITE_ROTATION_COUNT);
         sdl3d_free_texture(&health_tex);
@@ -501,7 +501,7 @@ int main(int argc, char *argv[])
     strip_level_lightmap(&level_vertex_baked);
     if (!sdl3d_build_level(sectors, sector_count, mats, 6, NULL, 0, &level_unlit))
     {
-        SDL_Log("Level build failed: %s", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Level build failed: %s", SDL_GetError());
         sdl3d_free_level(&level_lightmapped);
         sdl3d_free_level(&level_vertex_baked);
         free_texture_array(enemy_rot_tex, DEMO_SPRITE_ROTATION_COUNT);
@@ -558,12 +558,13 @@ int main(int argc, char *argv[])
     float elapsed = 0.0f;
     sdl3d_skybox_textured skybox = {&sky_px, &sky_nx, &sky_py, &sky_ny, &sky_pz, &sky_nz, 350.0f};
 
-    SDL_Log("Portals detected: %d", level_lightmapped.portal_count);
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Portals detected: %d", level_lightmapped.portal_count);
     for (int i = 0; i < level_lightmapped.portal_count; i++)
     {
         const sdl3d_level_portal *p = &level_lightmapped.portals[i];
-        SDL_Log("  portal %d: sector %d <-> %d  x[%.1f,%.1f] z[%.1f,%.1f] y[%.2f,%.2f]", i, p->sector_a, p->sector_b,
-                p->min_x, p->max_x, p->min_z, p->max_z, p->floor_y, p->ceil_y);
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                     "  portal %d: sector %d <-> %d  x[%.1f,%.1f] z[%.1f,%.1f] y[%.2f,%.2f]", i, p->sector_a,
+                     p->sector_b, p->min_x, p->max_x, p->min_z, p->max_z, p->floor_y, p->ceil_y);
     }
 
     /* Visibility state. */
@@ -601,22 +602,24 @@ int main(int argc, char *argv[])
             if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_L)
             {
                 use_lit_world = !use_lit_world;
-                SDL_Log("World lighting: %s", use_lit_world ? (use_lightmaps ? "LIGHTMAP" : "VERTEX-BAKED") : "UNLIT");
+                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "World lighting: %s",
+                             use_lit_world ? (use_lightmaps ? "LIGHTMAP" : "VERTEX-BAKED") : "UNLIT");
             }
             if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_M)
             {
                 use_lightmaps = !use_lightmaps;
-                SDL_Log("Lightmap mode: %s", use_lightmaps ? "LIGHTMAP" : "VERTEX-BAKED");
+                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Lightmap mode: %s",
+                             use_lightmaps ? "LIGHTMAP" : "VERTEX-BAKED");
             }
             if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_F1)
             {
                 show_debug = !show_debug;
-                SDL_Log("Debug stats: %s", show_debug ? "ON" : "OFF");
+                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Debug stats: %s", show_debug ? "ON" : "OFF");
             }
             if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_F2)
             {
                 portal_culling = !portal_culling;
-                SDL_Log("Portal culling: %s", portal_culling ? "ON" : "OFF");
+                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Portal culling: %s", portal_culling ? "ON" : "OFF");
             }
             if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_TAB)
             {
@@ -634,12 +637,13 @@ int main(int argc, char *argv[])
                     sdl3d_set_point_shadows_enabled(ctx, false);
                     sdl3d_set_backface_culling_enabled(ctx, true);
                     sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG);
-                    SDL_Log("Switched to %s backend render=%dx%d", sdl3d_get_backend_name(current_backend),
-                            sdl3d_get_render_context_width(ctx), sdl3d_get_render_context_height(ctx));
+                    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Switched to %s backend render=%dx%d",
+                                sdl3d_get_backend_name(current_backend), sdl3d_get_render_context_width(ctx),
+                                sdl3d_get_render_context_height(ctx));
                 }
                 else
                 {
-                    SDL_Log("Backend switch failed: %s — reverting", SDL_GetError());
+                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Backend switch failed: %s — reverting", SDL_GetError());
                     create_backend(&win, &ctx, current_backend);
                     sdl3d_set_bloom_enabled(ctx, sdl3d_is_feature_available(ctx, SDL3D_FEATURE_BLOOM));
                     sdl3d_set_ssao_enabled(ctx, false);
@@ -908,9 +912,10 @@ int main(int argc, char *argv[])
         /* Debug stats to log. */
         if (show_debug)
         {
-            SDL_Log("[VIS] sector=%d  visible=%d/%d sectors  meshes=%d/%d  portals=%d  culling=%s", current_sector,
-                    vis.visible_count, sector_count, visible_meshes, active_level->model.mesh_count,
-                    active_level->portal_count, portal_culling ? "ON" : "OFF");
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                         "[VIS] sector=%d  visible=%d/%d sectors  meshes=%d/%d  portals=%d  culling=%s", current_sector,
+                         vis.visible_count, sector_count, visible_meshes, active_level->model.mesh_count,
+                         active_level->portal_count, portal_culling ? "ON" : "OFF");
         }
     }
 

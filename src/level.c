@@ -1027,8 +1027,8 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
     out->portal_count = portal_count;
     out->portals = portals;
 
-    SDL_Log("SDL3D level: %d verts, %d tris, %d meshes, %d portals from %d sectors", total_verts, total_tris,
-            num_meshes, portal_count, sector_count);
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D level: %d verts, %d tris, %d meshes, %d portals from %d sectors",
+                 total_verts, total_tris, num_meshes, portal_count, sector_count);
     return true;
 
 fail:
