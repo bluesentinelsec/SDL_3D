@@ -1,0 +1,229 @@
+/* Per-frame rendering: visibility, level, entities, HUD. */
+#include "renderer.h"
+
+#include <SDL3/SDL_log.h>
+#include <SDL3/SDL_stdinc.h>
+
+#include "sdl3d/drawing3d.h"
+#include "sdl3d/fps_mover.h"
+#include "sdl3d/lighting.h"
+#include "sdl3d/sdl3d.h"
+
+#define ROCKET_LIGHT_R 1.0f
+#define ROCKET_LIGHT_G 0.6f
+#define ROCKET_LIGHT_B 0.2f
+#define ROCKET_LIGHT_INTENSITY 4.0f
+#define ROCKET_LIGHT_RANGE 4.0f
+
+static sdl3d_color sample_actor_tint(const sdl3d_level_light *lights, int light_count, sdl3d_vec3 position,
+                                     const player_state *player)
+{
+    float r = 0.7f, g = 0.7f, b = 0.72f;
+
+    for (int i = 0; i < light_count; ++i)
+    {
+        float dx = lights[i].position[0] - position.x;
+        float dy = lights[i].position[1] - position.y;
+        float dz = lights[i].position[2] - position.z;
+        float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
+        if (dist >= lights[i].range || dist <= 0.0001f)
+            continue;
+        float t = 1.0f - (dist / lights[i].range);
+        float atten = t * t;
+        float scale = lights[i].intensity * atten * 0.28f;
+        r += lights[i].color[0] * scale;
+        g += lights[i].color[1] * scale;
+        b += lights[i].color[2] * scale;
+    }
+
+    if (player->proj_active)
+    {
+        float dx = player->proj_x - position.x;
+        float dy = player->proj_y - position.y;
+        float dz = player->proj_z - position.z;
+        float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
+        if (dist < ROCKET_LIGHT_RANGE && dist > 0.0001f)
+        {
+            float t = 1.0f - (dist / ROCKET_LIGHT_RANGE);
+            float atten = t * t;
+            float scale = ROCKET_LIGHT_INTENSITY * atten * 0.35f;
+            r += ROCKET_LIGHT_R * scale;
+            g += ROCKET_LIGHT_G * scale;
+            b += ROCKET_LIGHT_B * scale;
+        }
+    }
+
+    if (r > 1.0f)
+        r = 1.0f;
+    if (g > 1.0f)
+        g = 1.0f;
+    if (b > 1.0f)
+        b = 1.0f;
+    return (sdl3d_color){(Uint8)(r * 255.0f), (Uint8)(g * 255.0f), (Uint8)(b * 255.0f), 255};
+}
+
+void render_state_init(render_state *rs)
+{
+    SDL_zerop(rs);
+    rs->portal_culling = true;
+    rs->vis.sector_visible = rs->sector_visible;
+}
+
+void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_font *font, sdl3d_ui_context *ui,
+                       level_data *ld, entities *ent, const player_state *player, int backbuffer_w, int backbuffer_h,
+                       float dt)
+{
+    const sdl3d_fps_mover *mover = &player->mover;
+    sdl3d_level *active = level_data_active(ld);
+    sdl3d_camera3d cam = sdl3d_fps_mover_camera(mover, 75.0f);
+
+    float px = mover->position.x, py = mover->position.y;
+    float pz = mover->position.z;
+    float yaw = mover->yaw, pitch = mover->pitch;
+    float fx = SDL_sinf(yaw) * SDL_cosf(pitch);
+    float fz = -SDL_cosf(yaw) * SDL_cosf(pitch);
+
+    int current_sector = sdl3d_level_find_sector_at(&ld->unlit, g_sectors, px, pz, py - PLAYER_HEIGHT);
+    if (current_sector < 0)
+        current_sector = sdl3d_level_find_walkable_sector(&ld->unlit, g_sectors, px, pz, py - PLAYER_HEIGHT,
+                                                          PLAYER_STEP_HEIGHT, PLAYER_MIN_HEADROOM);
+
+    /* Dynamic lights. */
+    sdl3d_clear_lights(ctx);
+    if (player->proj_active)
+    {
+        sdl3d_light rocket = {0};
+        rocket.type = SDL3D_LIGHT_POINT;
+        rocket.position = sdl3d_vec3_make(player->proj_x, player->proj_y, player->proj_z);
+        rocket.color[0] = ROCKET_LIGHT_R;
+        rocket.color[1] = ROCKET_LIGHT_G;
+        rocket.color[2] = ROCKET_LIGHT_B;
+        rocket.intensity = ROCKET_LIGHT_INTENSITY;
+        rocket.range = ROCKET_LIGHT_RANGE;
+        sdl3d_add_light(ctx, &rocket);
+    }
+
+    sdl3d_clear_render_context(ctx, (sdl3d_color){10, 10, 15, 255});
+    sdl3d_begin_mode_3d(ctx, cam);
+
+    /* Skybox */
+    sdl3d_skybox_textured skybox = {&ent->sky[0], &ent->sky[1], &ent->sky[2], &ent->sky[3],
+                                    &ent->sky[4], &ent->sky[5], 350.0f};
+    sdl3d_draw_skybox_textured(ctx, &skybox);
+
+    /* Visibility */
+    if (rs->portal_culling)
+    {
+        sdl3d_level_compute_visibility_from_camera(active, g_sectors, &cam, backbuffer_w, backbuffer_h, 0.01f, 1000.0f,
+                                                   &rs->vis);
+    }
+    else
+    {
+        for (int i = 0; i < g_sector_count; i++)
+            rs->sector_visible[i] = true;
+        rs->vis.visible_count = g_sector_count;
+    }
+
+    /* Level geometry */
+    sdl3d_draw_level(ctx, active, rs->portal_culling ? &rs->vis : NULL, (sdl3d_color){255, 255, 255, 255});
+
+    /* 3D scene actors */
+    if (ent->scene)
+    {
+        int ac = sdl3d_scene_get_actor_count(ent->scene);
+        for (int i = 0; i < ac; ++i)
+        {
+            sdl3d_actor *a = sdl3d_scene_get_actor_at(ent->scene, i);
+            if (!a)
+                continue;
+            sdl3d_vec3 ap = sdl3d_actor_get_position(a);
+            sdl3d_actor_set_sector(a, sdl3d_level_find_sector(active, g_sectors, ap.x, ap.z));
+        }
+        sdl3d_draw_scene_with_visibility(ctx, ent->scene, rs->portal_culling ? &rs->vis : NULL);
+    }
+
+    /* Crate props */
+    {
+        static const sdl3d_vec3 crate_positions[] = {
+            {3.0f, 0.5f, 5.0f},   {7.0f, 0.5f, 5.0f},   {3.0f, 0.5f, 10.0f},  {7.0f, 0.5f, 10.0f},
+            {14.0f, 0.5f, 20.0f}, {14.0f, 1.5f, 20.0f}, {22.0f, 0.5f, 16.0f},
+        };
+        const sdl3d_texture2d *tex = ent->crate_tex.pixels ? &ent->crate_tex : NULL;
+        for (int i = 0; i < (int)SDL_arraysize(crate_positions); i++)
+            sdl3d_draw_cube_textured(ctx, crate_positions[i], sdl3d_vec3_make(1.0f, 1.0f, 1.0f),
+                                     sdl3d_vec3_make(0, 1, 0), 0.0f, tex, (sdl3d_color){255, 255, 255, 255});
+    }
+
+    /* Sprites */
+    {
+        for (int i = 0; i < ent->sprites.count; ++i)
+        {
+            sdl3d_sprite_actor *sa = &ent->sprites.actors[i];
+            sa->tint = sample_actor_tint(g_lights, g_light_count, sa->position, player);
+            sa->sector_id =
+                rs->portal_culling ? sdl3d_level_find_sector(active, g_sectors, sa->position.x, sa->position.z) : -1;
+        }
+        sdl3d_sprite_scene_draw(&ent->sprites, ctx, cam.position, rs->portal_culling ? &rs->vis : NULL);
+    }
+
+    /* Projectile */
+    if (player->proj_active)
+    {
+        sdl3d_set_emissive(ctx, 5.0f, 3.0f, 1.0f);
+        sdl3d_draw_sphere(ctx, sdl3d_vec3_make(player->proj_x, player->proj_y, player->proj_z), 0.1f, 8, 8,
+                          (sdl3d_color){255, 200, 100, 255});
+        sdl3d_set_emissive(ctx, 0, 0, 0);
+    }
+
+    /* Crosshair */
+    {
+        float chx = cam.position.x + fx * 0.4f;
+        float chy = cam.position.y + SDL_sinf(pitch) * 0.4f;
+        float chz = cam.position.z + fz * 0.4f;
+        sdl3d_set_emissive(ctx, 8, 8, 8);
+        sdl3d_draw_cube(ctx, sdl3d_vec3_make(chx, chy, chz), sdl3d_vec3_make(0.003f, 0.003f, 0.003f),
+                        (sdl3d_color){255, 255, 255, 255});
+        sdl3d_set_emissive(ctx, 0, 0, 0);
+    }
+
+    sdl3d_end_mode_3d(ctx);
+
+    /* HUD */
+    if (font)
+        sdl3d_draw_fps(ctx, font, dt);
+
+    if (ui && font)
+    {
+        sdl3d_ui_begin_frame(ui, sdl3d_get_render_context_width(ctx), sdl3d_get_render_context_height(ctx));
+        sdl3d_ui_label(ui, 10.0f, 60.0f, "SDL3D UI - Phase 1");
+        sdl3d_ui_labelf(ui, 10.0f, 100.0f, "sector=%d  visible=%d/%d", current_sector, rs->vis.visible_count,
+                        g_sector_count);
+        sdl3d_ui_labelf(ui, 10.0f, 140.0f, "pos %.1f, %.1f, %.1f", px, py, pz);
+        sdl3d_ui_end_frame(ui);
+        sdl3d_ui_render(ui, ctx);
+    }
+
+    sdl3d_present_render_context(ctx);
+
+    if (rs->show_debug)
+    {
+        int visible_meshes = 0;
+        if (rs->portal_culling)
+        {
+            for (int i = 0; i < active->model.mesh_count; i++)
+            {
+                int sid = active->mesh_sector_ids[i];
+                if (sid >= 0 && sid < g_sector_count && rs->sector_visible[sid])
+                    visible_meshes++;
+            }
+        }
+        else
+        {
+            visible_meshes = active->model.mesh_count;
+        }
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                     "[VIS] sector=%d  visible=%d/%d sectors  meshes=%d/%d  portals=%d  culling=%s", current_sector,
+                     rs->vis.visible_count, g_sector_count, visible_meshes, active->model.mesh_count,
+                     active->portal_count, rs->portal_culling ? "ON" : "OFF");
+    }
+}
