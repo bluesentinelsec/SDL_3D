@@ -24,6 +24,8 @@
 #define JUMP_VELOCITY 6.0f
 #define GRAVITY 14.0f
 #define PLAYER_HEIGHT 1.6f
+#define PLAYER_STEP_HEIGHT 0.8f
+#define PLAYER_CEILING_CLEARANCE 0.1f
 #define PROJ_SPEED 20.0f
 #define PROJ_LIFETIME 3.0f
 #define ROCKET_LIGHT_R 1.0f
@@ -149,6 +151,77 @@ static bool point_in_any_sector(const sdl3d_sector *sectors, int sector_count, f
             return true;
     }
     return false;
+}
+
+static int find_sector_at(const sdl3d_sector *sectors, int sector_count, float x, float z, float feet_y)
+{
+    int best = -1;
+    float best_floor = -1000000.0f;
+
+    for (int i = 0; i < sector_count; ++i)
+    {
+        const sdl3d_sector *sector = &sectors[i];
+        if (!point_in_sector_xz(sector, x, z))
+            continue;
+        if (sector->floor_y > feet_y || feet_y >= sector->ceil_y)
+            continue;
+        if (sector->floor_y > best_floor)
+        {
+            best = i;
+            best_floor = sector->floor_y;
+        }
+    }
+
+    return best;
+}
+
+static int find_walkable_sector_at(const sdl3d_sector *sectors, int sector_count, float x, float z, float feet_y,
+                                   float max_step_up)
+{
+    int best = -1;
+    float best_floor = -1000000.0f;
+
+    for (int i = 0; i < sector_count; ++i)
+    {
+        const sdl3d_sector *sector = &sectors[i];
+        if (!point_in_sector_xz(sector, x, z))
+            continue;
+        if (sector->floor_y > feet_y + max_step_up)
+            continue;
+        if (sector->ceil_y - sector->floor_y < PLAYER_HEIGHT + PLAYER_CEILING_CLEARANCE)
+            continue;
+        if (sector->floor_y > best_floor)
+        {
+            best = i;
+            best_floor = sector->floor_y;
+        }
+    }
+
+    return best;
+}
+
+static int find_support_sector_at(const sdl3d_sector *sectors, int sector_count, float x, float z, float feet_y)
+{
+    int best = -1;
+    float best_floor = -1000000.0f;
+
+    for (int i = 0; i < sector_count; ++i)
+    {
+        const sdl3d_sector *sector = &sectors[i];
+        if (!point_in_sector_xz(sector, x, z))
+            continue;
+        if (sector->floor_y > feet_y)
+            continue;
+        if (sector->ceil_y - sector->floor_y < PLAYER_HEIGHT + PLAYER_CEILING_CLEARANCE)
+            continue;
+        if (sector->floor_y > best_floor)
+        {
+            best = i;
+            best_floor = sector->floor_y;
+        }
+    }
+
+    return best;
 }
 
 static void advance_projectile(const sdl3d_sector *sectors, int sector_count, float dt, bool *proj_active,
@@ -416,9 +489,11 @@ int main(int argc, char *argv[])
      *      |                               |
      *   [1] South Corridor                 |
      *      |                               |
-     *   [2] Nukage Basin -- [3] East Passage -- [4] Courtyard -- [10] Storage -- [12] Secret Annex
-     *      |                                       |
-     *   [6] West Alcove                           [5] Exit Room -- [11] Reactor Hall -- [13] Exterior Yard
+     *   [2] Nukage Basin -- [3] East Passage -- [4/14/15/16] Courtyard Ring -- [10] Storage -- [12] Secret Annex
+     *      |                                             |
+     *   [6] West Alcove                        [17-23] Tower + Stairs + Upper Room
+     *                                                 |
+     *                                     [5] Exit Room -- [11] Reactor Hall -- [13] Exterior Yard
      */
     sdl3d_sector sectors[] = {
         /* 0: Starting room */
@@ -429,8 +504,8 @@ int main(int argc, char *argv[])
         {{{-2, 16}, {10, 16}, {10, 26}, {-2, 26}}, 4, -0.5f, 4.5f, 3, 1, 2},
         /* 3: East passage */
         {{{10, 18}, {16, 18}, {16, 22}, {10, 22}}, 4, 0.0f, 3.5f, 0, 1, 4},
-        /* 4: Courtyard (open roof) */
-        {{{16, 14}, {28, 14}, {28, 26}, {16, 26}}, 4, 0.0f, 8.0f, 0, -1, 2},
+        /* 4: Courtyard west strip (open roof) */
+        {{{16, 14}, {18, 14}, {18, 26}, {16, 26}}, 4, 0.0f, 8.0f, 0, -1, 2},
         /* 5: Exit room */
         {{{20, 26}, {28, 26}, {28, 32}, {20, 32}}, 4, 0.0f, 3.0f, 5, 1, 4},
         /* 6: West alcove off nukage */
@@ -449,22 +524,41 @@ int main(int argc, char *argv[])
         {{{32, 24}, {40, 24}, {40, 30}, {32, 30}}, 4, 0.0f, 3.0f, 0, 1, 2},
         /* 13: Exterior yard (large open-air space for skybox side visibility) */
         {{{-6, 44}, {54, 44}, {54, 104}, {-6, 104}}, 4, 0.0f, 12.0f, 5, -1, 2},
+        /* 14: Courtyard north strip (open roof) */
+        {{{18, 14}, {26, 14}, {26, 18}, {18, 18}}, 4, 0.0f, 8.0f, 0, -1, 2},
+        /* 15: Courtyard east strip (open roof) */
+        {{{26, 14}, {28, 14}, {28, 26}, {26, 26}}, 4, 0.0f, 8.0f, 0, -1, 2},
+        /* 16: Courtyard south strip (open roof) */
+        {{{18, 22}, {26, 22}, {26, 26}, {18, 26}}, 4, 0.0f, 8.0f, 0, -1, 2},
+        /* 17: Tower base room */
+        {{{18, 18}, {24, 18}, {24, 22}, {18, 22}}, 4, 0.0f, 3.5f, 5, 1, 2},
+        /* 18-22: Stairwell sectors rising along the east wall */
+        {{{24.0f, 18.0f}, {26.0f, 18.0f}, {26.0f, 18.8f}, {24.0f, 18.8f}}, 4, 0.0f, 3.5f, 5, 1, 4},
+        {{{24.0f, 18.8f}, {26.0f, 18.8f}, {26.0f, 19.6f}, {24.0f, 19.6f}}, 4, 0.7f, 3.5f, 5, 1, 4},
+        {{{24.0f, 19.6f}, {26.0f, 19.6f}, {26.0f, 20.4f}, {24.0f, 20.4f}}, 4, 1.4f, 3.5f, 5, 1, 4},
+        {{{24.0f, 20.4f}, {26.0f, 20.4f}, {26.0f, 21.2f}, {24.0f, 21.2f}}, 4, 2.1f, 3.5f, 5, 1, 4},
+        {{{24.0f, 21.2f}, {26.0f, 21.2f}, {26.0f, 22.0f}, {24.0f, 22.0f}}, 4, 3.5f, 7.0f, 5, 1, 4},
+        /* 23: Upper room above the tower base */
+        {{{18, 18}, {24, 18}, {24, 22}, {18, 22}}, 4, 3.5f, 7.0f, 5, 1, 4},
     };
 
     sdl3d_level_light lights[] = {
-        {{5, 3.5f, 4}, {1.0f, 0.82f, 0.58f}, 2.4f, 9.5f},     /* Start room — warm tungsten */
-        {{5, 3.0f, 12}, {1.0f, 0.68f, 0.28f}, 1.4f, 7.0f},    /* South corridor — amber */
-        {{4, 1.0f, 21}, {1.0f, 0.16f, 0.10f}, 3.1f, 12.0f},   /* Nukage basin — red */
-        {{-6, 1.8f, 21}, {0.25f, 0.95f, 0.35f}, 2.4f, 8.5f},  /* West alcove — toxic green */
-        {{14, 2.7f, 4}, {0.7f, 0.8f, 1.0f}, 1.3f, 7.0f},      /* Upper hall — cold white */
-        {{24, 3.2f, 4}, {0.15f, 0.85f, 1.0f}, 2.4f, 10.5f},   /* Computer core — cyan */
-        {{24, 2.6f, 11}, {1.0f, 0.9f, 0.45f}, 1.4f, 6.0f},    /* Security bend — sodium */
-        {{22, 7.0f, 20}, {0.36f, 0.46f, 0.78f}, 2.3f, 14.0f}, /* Courtyard — moonlight */
-        {{33, 3.0f, 18}, {0.9f, 0.35f, 1.0f}, 1.9f, 10.0f},   /* Storage — magenta */
-        {{24, 2.5f, 29}, {0.2f, 1.0f, 0.2f}, 3.2f, 8.0f},     /* Exit — green */
-        {{24, 3.8f, 38}, {0.45f, 0.35f, 1.0f}, 2.2f, 11.0f},  /* Reactor hall — violet */
-        {{36, 2.2f, 27}, {1.0f, 0.55f, 0.22f}, 1.5f, 7.0f},   /* Secret annex — orange */
-        {{24, 8.5f, 74}, {0.32f, 0.38f, 0.7f}, 2.4f, 32.0f},  /* Exterior yard — night sky fill */
+        {{5, 3.5f, 4}, {1.0f, 0.82f, 0.58f}, 2.4f, 9.5f},      /* Start room — warm tungsten */
+        {{5, 3.0f, 12}, {1.0f, 0.68f, 0.28f}, 1.4f, 7.0f},     /* South corridor — amber */
+        {{4, 1.0f, 21}, {1.0f, 0.16f, 0.10f}, 3.1f, 12.0f},    /* Nukage basin — red */
+        {{-6, 1.8f, 21}, {0.25f, 0.95f, 0.35f}, 2.4f, 8.5f},   /* West alcove — toxic green */
+        {{14, 2.7f, 4}, {0.7f, 0.8f, 1.0f}, 1.3f, 7.0f},       /* Upper hall — cold white */
+        {{24, 3.2f, 4}, {0.15f, 0.85f, 1.0f}, 2.4f, 10.5f},    /* Computer core — cyan */
+        {{24, 2.6f, 11}, {1.0f, 0.9f, 0.45f}, 1.4f, 6.0f},     /* Security bend — sodium */
+        {{22, 7.0f, 20}, {0.36f, 0.46f, 0.78f}, 2.3f, 14.0f},  /* Courtyard — moonlight */
+        {{33, 3.0f, 18}, {0.9f, 0.35f, 1.0f}, 1.9f, 10.0f},    /* Storage — magenta */
+        {{24, 2.5f, 29}, {0.2f, 1.0f, 0.2f}, 3.2f, 8.0f},      /* Exit — green */
+        {{24, 3.8f, 38}, {0.45f, 0.35f, 1.0f}, 2.2f, 11.0f},   /* Reactor hall — violet */
+        {{36, 2.2f, 27}, {1.0f, 0.55f, 0.22f}, 1.5f, 7.0f},    /* Secret annex — orange */
+        {{24, 8.5f, 74}, {0.32f, 0.38f, 0.7f}, 2.4f, 32.0f},   /* Exterior yard — night sky fill */
+        {{20, 2.6f, 20}, {1.0f, 0.72f, 0.40f}, 1.5f, 6.5f},    /* Tower base — warm */
+        {{25, 4.6f, 21.6f}, {0.35f, 0.65f, 1.0f}, 1.4f, 6.0f}, /* Tower landing — cool blue */
+        {{21, 5.8f, 20}, {0.80f, 0.78f, 1.0f}, 1.8f, 8.0f},    /* Upper room — pale violet */
     };
     const int sector_count = (int)SDL_arraysize(sectors);
     const int light_count = (int)SDL_arraysize(lights);
@@ -550,7 +644,7 @@ int main(int argc, char *argv[])
         {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(4.2f, -1.4f, 21.5f),
          (sdl3d_vec2){3.2f, 4.8f}, true, 0.08f, 6.0f},
         {&health_tex, NULL, sdl3d_vec3_make(24.0f, 0.25f, 4.5f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.15f, 1.5f},
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, -1.05f, 19.0f),
+        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(27.0f, -1.05f, 20.0f),
          (sdl3d_vec2){3.6f, 5.6f}, true, 0.09f, 6.5f},
         {&health_tex, NULL, sdl3d_vec3_make(24.0f, 0.25f, 28.5f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.12f, 2.1f},
         {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, -1.05f, 37.5f),
@@ -625,7 +719,7 @@ int main(int argc, char *argv[])
         sdl3d_actor_set_scale(r1, sdl3d_vec3_make(0.8f, 0.8f, 0.8f));
 
         sdl3d_actor *r2 = sdl3d_scene_add_actor(scene, &robot_model);
-        sdl3d_actor_set_position(r2, sdl3d_vec3_make(24.0f, 0.0f, 20.0f));
+        sdl3d_actor_set_position(r2, sdl3d_vec3_make(21.0f, 3.5f, 20.0f));
         sdl3d_actor_set_scale(r2, sdl3d_vec3_make(0.8f, 0.8f, 0.8f));
         sdl3d_actor_set_tint(r2, (sdl3d_color){255, 180, 180, 255});
     }
@@ -786,26 +880,142 @@ int main(int argc, char *argv[])
             wish_z += right_z;
         }
 
-        /* Normalize wish direction. */
-        float wish_len = SDL_sqrtf(wish_x * wish_x + wish_z * wish_z);
-        if (wish_len > 0.001f)
+        /* Normalize wish direction, then apply Doom-style sliding collision
+         * against sector boundaries. */
         {
-            wish_x /= wish_len;
-            wish_z /= wish_len;
-            px += wish_x * MOVE_SPEED * dt;
-            pz += wish_z * MOVE_SPEED * dt;
+            float feet_y = py - PLAYER_HEIGHT;
+            int current_sector = find_sector_at(sectors, sector_count, px, pz, feet_y);
+            float current_floor = feet_y;
+
+            if (current_sector < 0)
+            {
+                current_sector = find_walkable_sector_at(sectors, sector_count, px, pz, feet_y, PLAYER_STEP_HEIGHT);
+            }
+            if (current_sector >= 0)
+            {
+                current_floor = sectors[current_sector].floor_y;
+            }
+
+            {
+                float wish_len = SDL_sqrtf(wish_x * wish_x + wish_z * wish_z);
+                if (wish_len > 0.001f)
+                {
+                    float move_x;
+                    float move_z;
+                    int candidate_sector = -1;
+
+                    wish_x /= wish_len;
+                    wish_z /= wish_len;
+                    move_x = wish_x * MOVE_SPEED * dt;
+                    move_z = wish_z * MOVE_SPEED * dt;
+
+                    candidate_sector = find_walkable_sector_at(sectors, sector_count, px + move_x, pz + move_z, feet_y,
+                                                               PLAYER_STEP_HEIGHT);
+                    if (candidate_sector >= 0)
+                    {
+                        px += move_x;
+                        pz += move_z;
+                        current_sector = candidate_sector;
+                    }
+                    else
+                    {
+                        candidate_sector =
+                            find_walkable_sector_at(sectors, sector_count, px + move_x, pz, feet_y, PLAYER_STEP_HEIGHT);
+                        if (candidate_sector >= 0)
+                        {
+                            px += move_x;
+                            current_sector = candidate_sector;
+                        }
+                        else
+                        {
+                            candidate_sector = find_walkable_sector_at(sectors, sector_count, px, pz + move_z, feet_y,
+                                                                       PLAYER_STEP_HEIGHT);
+                            if (candidate_sector >= 0)
+                            {
+                                pz += move_z;
+                                current_sector = candidate_sector;
+                            }
+                        }
+                    }
+                }
+            }
+
+            feet_y = py - PLAYER_HEIGHT;
+            current_sector = find_sector_at(sectors, sector_count, px, pz, feet_y);
+            if (current_sector < 0)
+            {
+                current_sector = find_walkable_sector_at(sectors, sector_count, px, pz, feet_y, PLAYER_STEP_HEIGHT);
+            }
+
+            if (on_ground)
+            {
+                if (current_sector >= 0)
+                {
+                    const float target_floor = sectors[current_sector].floor_y;
+                    if (target_floor < current_floor - PLAYER_STEP_HEIGHT)
+                    {
+                        on_ground = false;
+                    }
+                    else
+                    {
+                        py = target_floor + PLAYER_HEIGHT;
+                    }
+                }
+                else
+                {
+                    on_ground = false;
+                }
+            }
         }
 
         /* Jump / gravity. */
         if (!on_ground)
         {
+            float feet_y;
+            int containing_sector;
+            int support_sector;
+
             vy -= GRAVITY * dt;
             py += vy * dt;
-            if (py <= PLAYER_HEIGHT)
+            feet_y = py - PLAYER_HEIGHT;
+            containing_sector = find_sector_at(sectors, sector_count, px, pz, feet_y);
+            support_sector = find_support_sector_at(sectors, sector_count, px, pz, feet_y);
+
+            if (containing_sector >= 0)
             {
-                py = PLAYER_HEIGHT;
-                vy = 0;
-                on_ground = true;
+                float ceiling_y = sectors[containing_sector].ceil_y - PLAYER_CEILING_CLEARANCE;
+                if (py > ceiling_y)
+                {
+                    py = ceiling_y;
+                    if (vy > 0.0f)
+                        vy = 0.0f;
+                }
+            }
+
+            if (support_sector >= 0)
+            {
+                float floor_y = sectors[support_sector].floor_y;
+                if (py <= floor_y + PLAYER_HEIGHT)
+                {
+                    py = floor_y + PLAYER_HEIGHT;
+                    vy = 0.0f;
+                    on_ground = true;
+                }
+            }
+        }
+
+        {
+            float feet_y = py - PLAYER_HEIGHT;
+            int containing_sector = find_sector_at(sectors, sector_count, px, pz, feet_y);
+            if (containing_sector >= 0)
+            {
+                float ceiling_y = sectors[containing_sector].ceil_y - PLAYER_CEILING_CLEARANCE;
+                if (py > ceiling_y)
+                {
+                    py = ceiling_y;
+                    if (vy > 0.0f)
+                        vy = 0.0f;
+                }
             }
         }
 
@@ -823,7 +1033,12 @@ int main(int argc, char *argv[])
         /* Compute portal visibility. */
         sdl3d_level *active_level =
             use_lit_world ? (use_lightmaps ? &level_lightmapped : &level_vertex_baked) : &level_unlit;
-        int current_sector = sdl3d_level_find_sector(active_level, sectors, px, pz);
+        int current_sector = find_sector_at(sectors, sector_count, px, pz, py - PLAYER_HEIGHT);
+        if (current_sector < 0)
+        {
+            current_sector =
+                find_walkable_sector_at(sectors, sector_count, px, pz, py - PLAYER_HEIGHT, PLAYER_STEP_HEIGHT);
+        }
         sdl3d_vec3 cam_dir = sdl3d_vec3_make(fx, SDL_sinf(pitch), fz);
 
         sdl3d_clear_lights(ctx);
