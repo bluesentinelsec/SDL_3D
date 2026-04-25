@@ -479,7 +479,7 @@ int main(int argc, char *argv[])
     sdl3d_font debug_font;
     bool has_font = sdl3d_load_font(SDL3D_MEDIA_DIR "/fonts/Roboto.ttf", 40.0f, &debug_font);
     sdl3d_font small_font;
-    bool has_small_font = sdl3d_load_font(SDL3D_MEDIA_DIR "/fonts/Roboto.ttf", 12.5f, &small_font);
+    bool has_small_font = sdl3d_load_font(SDL3D_MEDIA_DIR "/fonts/Roboto.ttf", 24.0f, &small_font);
     if (!has_font)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Font load FAILED: %s", SDL_GetError());
@@ -1344,6 +1344,7 @@ int main(int argc, char *argv[])
         }
         else if (has_small_font && current_backend == SDL3D_BACKEND_SOFTWARE)
         {
+            /* Use larger font to stay readable at 320x180. */
             sdl3d_draw_fps(ctx, &small_font, dt);
         }
 
