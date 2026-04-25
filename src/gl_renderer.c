@@ -2957,7 +2957,7 @@ static void replay_overlay_list(sdl3d_gl_context *ctx, int vp_x, int vp_y, int v
         }
         else
         {
-            gl->BindTexture(GL_TEXTURE_2D, 0);
+            gl->BindTexture(GL_TEXTURE_2D, ctx->white_texture);
             gl->Uniform1i(ctx->unlit_has_texture_loc, 0);
         }
 
