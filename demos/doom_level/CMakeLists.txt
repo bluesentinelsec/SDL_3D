@@ -1,4 +1,10 @@
-add_executable(doom_level main.c)
+add_executable(doom_level
+    main.c
+    backend.c
+    entities.c
+    level_data.c
+    player.c
+    renderer.c)
 target_link_libraries(doom_level PRIVATE SDL3D::sdl3d)
 target_compile_features(doom_level PRIVATE c_std_17)
 target_compile_definitions(doom_level PRIVATE
