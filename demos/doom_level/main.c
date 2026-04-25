@@ -377,16 +377,46 @@ static void strip_level_lightmap(sdl3d_level *level)
 
 static bool create_backend(SDL_Window **out_win, sdl3d_render_context **out_ctx, sdl3d_backend backend)
 {
-    sdl3d_window_config wcfg;
-    sdl3d_init_window_config(&wcfg);
-    wcfg.width = (backend == SDL3D_BACKEND_SOFTWARE) ? SOFTWARE_W : WINDOW_W;
-    wcfg.height = (backend == SDL3D_BACKEND_SOFTWARE) ? SOFTWARE_H : WINDOW_H;
-    wcfg.title = "SDL3D \xe2\x80\x94 Doom Level";
-    wcfg.backend = backend;
-    wcfg.allow_backend_fallback = false;
-
-    if (!sdl3d_create_window(&wcfg, out_win, out_ctx))
-        return false;
+    if (backend == SDL3D_BACKEND_SOFTWARE)
+    {
+        /* Full-size window with lower internal resolution for performance.
+         * SDL's logical presentation upscales the smaller framebuffer. */
+        SDL_Window *w = SDL_CreateWindow("SDL3D \xe2\x80\x94 Doom Level", WINDOW_W, WINDOW_H, SDL_WINDOW_RESIZABLE);
+        if (!w)
+            return false;
+        SDL_Renderer *r = SDL_CreateRenderer(w, NULL);
+        if (!r)
+        {
+            SDL_DestroyWindow(w);
+            return false;
+        }
+        sdl3d_render_context_config rcfg;
+        sdl3d_init_render_context_config(&rcfg);
+        rcfg.backend = SDL3D_BACKEND_SOFTWARE;
+        rcfg.allow_backend_fallback = false;
+        rcfg.logical_width = SOFTWARE_W;
+        rcfg.logical_height = SOFTWARE_H;
+        rcfg.logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
+        if (!sdl3d_create_render_context(w, r, &rcfg, out_ctx))
+        {
+            SDL_DestroyRenderer(r);
+            SDL_DestroyWindow(w);
+            return false;
+        }
+        *out_win = w;
+    }
+    else
+    {
+        sdl3d_window_config wcfg;
+        sdl3d_init_window_config(&wcfg);
+        wcfg.width = WINDOW_W;
+        wcfg.height = WINDOW_H;
+        wcfg.title = "SDL3D \xe2\x80\x94 Doom Level";
+        wcfg.backend = backend;
+        wcfg.allow_backend_fallback = false;
+        if (!sdl3d_create_window(&wcfg, out_win, out_ctx))
+            return false;
+    }
 
     SDL_SetWindowRelativeMouseMode(*out_win, true);
     return true;
@@ -950,6 +980,11 @@ int main(int argc, char *argv[])
                 view_smooth = 0.0f;
         }
 
+        /* Save position for fall-through safety net. */
+        float safe_px = px, safe_py = py, safe_pz = pz;
+        float safe_vy = vy;
+        bool safe_on_ground = on_ground;
+
         float py_before_collision = py;
 
         /* Normalize wish direction, then apply Doom-style sliding collision
@@ -1098,11 +1133,32 @@ int main(int argc, char *argv[])
             }
         }
 
+        /* Safety net: if the player ended up outside all sectors, revert
+         * to the last known good position. Prevents falling through the
+         * world on stairs and edge cases. Same approach as Doom/Quake. */
+        {
+            float feet_y_check = py - PLAYER_HEIGHT;
+            int check_sector = find_sector_at(sectors, sector_count, px, pz, feet_y_check);
+            if (check_sector < 0)
+            {
+                px = safe_px;
+                py = safe_py;
+                pz = safe_pz;
+                vy = safe_vy;
+                on_ground = safe_on_ground;
+            }
+        }
+
         /* Accumulate view smooth offset from floor snaps (not jumps). */
         {
             float py_delta = py - py_before_collision;
             if (on_ground && SDL_fabsf(py_delta) > 0.01f)
                 view_smooth -= py_delta;
+            /* Clamp to prevent extreme offsets from rapid stair traversal. */
+            if (view_smooth > 1.5f)
+                view_smooth = 1.5f;
+            if (view_smooth < -1.5f)
+                view_smooth = -1.5f;
         }
 
         sdl3d_camera3d cam;
