@@ -27,6 +27,7 @@ typedef struct doom_state
     render_state render;
     sdl3d_font debug_font;
     sdl3d_ui_context *ui;
+    sdl3d_demo_player *demo_player;
     sdl3d_backend current_backend;
     bool has_font;
     bool level_ready;
@@ -47,11 +48,28 @@ static void doom_state_cleanup(doom_state *state)
     }
     sdl3d_ui_destroy(state->ui);
     state->ui = NULL;
+    sdl3d_demo_playback_free(state->demo_player);
+    state->demo_player = NULL;
     if (state->has_font)
     {
         sdl3d_free_font(&state->debug_font);
         state->has_font = false;
     }
+}
+
+static void stop_demo_playback(sdl3d_game_context *ctx, doom_state *state)
+{
+    if (state->demo_player == NULL)
+    {
+        return;
+    }
+
+    if (ctx != NULL && ctx->input != NULL)
+    {
+        sdl3d_demo_playback_stop(ctx->input);
+    }
+    sdl3d_demo_playback_free(state->demo_player);
+    state->demo_player = NULL;
 }
 
 static void apply_window_defaults(sdl3d_game_context *ctx)
@@ -65,6 +83,7 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     doom_state *state = (doom_state *)userdata;
 
     state->current_backend = sdl3d_get_render_context_backend(ctx->renderer);
+    sdl3d_input_bind_fps_defaults(ctx->input);
     apply_window_defaults(ctx);
 
     state->has_font = sdl3d_load_font(SDL3D_MEDIA_DIR "/fonts/Roboto.ttf", 40.0f, &state->debug_font);
@@ -89,8 +108,14 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     }
     state->entities_ready = true;
 
-    player_init(&state->player);
+    player_init(&state->player, ctx->input);
     render_state_init(&state->render);
+
+    state->demo_player = sdl3d_demo_playback_load("attract.dem");
+    if (state->demo_player != NULL)
+    {
+        sdl3d_demo_playback_start(ctx->input, state->demo_player);
+    }
     return true;
 }
 
@@ -123,11 +148,6 @@ static bool game_event(sdl3d_game_context *ctx, void *userdata, const SDL_Event 
 
     sdl3d_ui_process_event(state->ui, event);
 
-    if (!player_handle_event(&state->player, event))
-    {
-        return false;
-    }
-
     if (event->type == SDL_EVENT_KEY_DOWN && event->key.scancode == SDL_SCANCODE_L)
     {
         state->level.use_lit = !state->level.use_lit;
@@ -156,11 +176,18 @@ static bool game_event(sdl3d_game_context *ctx, void *userdata, const SDL_Event 
 
 static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 {
-    (void)ctx;
     doom_state *state = (doom_state *)userdata;
 
+    if (state->demo_player != NULL && sdl3d_demo_playback_finished(state->demo_player))
+    {
+        stop_demo_playback(ctx, state);
+    }
+
     entities_update(&state->ent, dt, state->player.mover.position);
-    player_update(&state->player, &state->level.unlit, g_sectors, dt);
+    if (!player_update(&state->player, ctx->input, &state->level.unlit, g_sectors, dt))
+    {
+        ctx->quit_requested = true;
+    }
 }
 
 static void game_render(sdl3d_game_context *ctx, void *userdata, float alpha)
@@ -175,9 +202,9 @@ static void game_render(sdl3d_game_context *ctx, void *userdata, float alpha)
 
 static void game_shutdown(sdl3d_game_context *ctx, void *userdata)
 {
-    (void)ctx;
     doom_state *state = (doom_state *)userdata;
 
+    stop_demo_playback(ctx, state);
     doom_state_cleanup(state);
 }
 
