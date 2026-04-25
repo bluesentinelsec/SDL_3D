@@ -553,3 +553,118 @@ TEST(SDL3DDrawModelCulling, SkipsOffscreenChunkBeforeMaterialValidation)
     SDL_DestroyWindow(window);
     SDL_Quit();
 }
+
+/* ================================================================== */
+/* Visibility from camera convenience                                 */
+/* ================================================================== */
+
+TEST(SDL3DLevelVisibility, ComputeVisibilityFromCameraBasic)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                              MakeLevelMaterial("wall.png")};
+    /* Two adjacent sectors sharing an edge at x=4. */
+    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f), MakeSquareSector(4.0f, 0.0f, 8.0f, 4.0f)};
+    sdl3d_level level{};
+    ASSERT_TRUE(sdl3d_build_level(sectors, 2, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+
+    bool visible[2] = {};
+    sdl3d_visibility_result vis;
+    vis.sector_visible = visible;
+    vis.visible_count = 0;
+
+    sdl3d_camera3d cam{};
+    cam.position = sdl3d_vec3_make(2.0f, 1.5f, 2.0f);
+    cam.target = sdl3d_vec3_make(6.0f, 1.5f, 2.0f); /* looking toward sector 1 */
+    cam.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.fovy = 75.0f;
+    cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    sdl3d_level_compute_visibility_from_camera(&level, sectors, &cam, 1280, 720, 0.01f, 1000.0f, &vis);
+
+    EXPECT_TRUE(visible[0]);
+    EXPECT_TRUE(visible[1]);
+    EXPECT_EQ(vis.visible_count, 2);
+
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DLevelVisibility, ComputeVisibilityFromCameraNullSafe)
+{
+    sdl3d_visibility_result vis{};
+    sdl3d_camera3d cam{};
+    /* Should not crash. */
+    sdl3d_level_compute_visibility_from_camera(nullptr, nullptr, &cam, 1280, 720, 0.01f, 1000.0f, &vis);
+    sdl3d_level_compute_visibility_from_camera(nullptr, nullptr, nullptr, 1280, 720, 0.01f, 1000.0f, &vis);
+}
+
+/* ================================================================== */
+/* Point trace                                                        */
+/* ================================================================== */
+
+TEST(SDL3DLevelTrace, TraceInsideSectorReachesEnd)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                              MakeLevelMaterial("wall.png")};
+    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 20.0f, 20.0f)};
+    sdl3d_level level{};
+    ASSERT_TRUE(sdl3d_build_level(sectors, 1, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+
+    sdl3d_vec3 origin = sdl3d_vec3_make(10.0f, 1.5f, 10.0f);
+    sdl3d_vec3 dir = sdl3d_vec3_make(1.0f, 0.0f, 0.0f);
+    sdl3d_level_trace_result r = sdl3d_level_trace_point(&level, sectors, origin, dir, 2.0f);
+
+    EXPECT_FALSE(r.hit);
+    EXPECT_NEAR(r.end_point.x, 12.0f, 0.3f);
+    EXPECT_FLOAT_EQ(r.fraction, 1.0f);
+
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DLevelTrace, TraceExitsSectorHits)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                              MakeLevelMaterial("wall.png")};
+    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f)};
+    sdl3d_level level{};
+    ASSERT_TRUE(sdl3d_build_level(sectors, 1, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+
+    sdl3d_vec3 origin = sdl3d_vec3_make(2.0f, 1.5f, 2.0f);
+    sdl3d_vec3 dir = sdl3d_vec3_make(1.0f, 0.0f, 0.0f);
+    sdl3d_level_trace_result r = sdl3d_level_trace_point(&level, sectors, origin, dir, 20.0f);
+
+    EXPECT_TRUE(r.hit);
+    /* Should stop near x=4 (the sector boundary). */
+    EXPECT_GT(r.end_point.x, 3.5f);
+    EXPECT_LT(r.end_point.x, 4.5f);
+    EXPECT_GT(r.fraction, 0.0f);
+    EXPECT_LT(r.fraction, 1.0f);
+
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DLevelTrace, TraceNullSafe)
+{
+    sdl3d_vec3 o = sdl3d_vec3_make(0, 0, 0);
+    sdl3d_vec3 d = sdl3d_vec3_make(1, 0, 0);
+    sdl3d_level_trace_result r = sdl3d_level_trace_point(nullptr, nullptr, o, d, 10.0f);
+    EXPECT_FALSE(r.hit);
+    EXPECT_FLOAT_EQ(r.fraction, 0.0f);
+}
+
+TEST(SDL3DLevelTrace, TraceZeroDistanceReturnsOrigin)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                              MakeLevelMaterial("wall.png")};
+    const sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f)};
+    sdl3d_level level{};
+    ASSERT_TRUE(sdl3d_build_level(sectors, 1, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+
+    sdl3d_vec3 origin = sdl3d_vec3_make(2.0f, 1.5f, 2.0f);
+    sdl3d_vec3 dir = sdl3d_vec3_make(1.0f, 0.0f, 0.0f);
+    sdl3d_level_trace_result r = sdl3d_level_trace_point(&level, sectors, origin, dir, 0.0f);
+
+    EXPECT_FALSE(r.hit);
+    EXPECT_FLOAT_EQ(r.fraction, 0.0f);
+
+    sdl3d_free_level(&level);
+}

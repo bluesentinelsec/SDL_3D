@@ -1374,3 +1374,86 @@ void sdl3d_level_compute_visibility(const sdl3d_level *level, int current_sector
 
     SDL_free(queue);
 }
+
+void sdl3d_level_compute_visibility_from_camera(const sdl3d_level *level, const sdl3d_sector *sectors,
+                                                const sdl3d_camera3d *camera, int backbuffer_width,
+                                                int backbuffer_height, float near_plane, float far_plane,
+                                                sdl3d_visibility_result *result)
+{
+    if (!level || !sectors || !camera || !result || !result->sector_visible)
+        return;
+
+    /* Mark everything visible as fallback. */
+    for (int i = 0; i < level->sector_count; ++i)
+        result->sector_visible[i] = true;
+    result->visible_count = level->sector_count;
+
+    sdl3d_mat4 view, proj;
+    if (!sdl3d_camera3d_compute_matrices(camera, backbuffer_width, backbuffer_height, near_plane, far_plane, &view,
+                                         &proj))
+        return;
+
+    sdl3d_mat4 vp = sdl3d_mat4_multiply(proj, view);
+    float fp[6][4];
+    sdl3d_extract_frustum_planes(vp, fp);
+
+    sdl3d_vec3 dir = sdl3d_vec3_make(camera->target.x - camera->position.x, camera->target.y - camera->position.y,
+                                     camera->target.z - camera->position.z);
+
+    int current =
+        sdl3d_level_find_sector_at(level, sectors, camera->position.x, camera->position.z, camera->position.y);
+
+    sdl3d_level_compute_visibility(level, current, camera->position, dir, fp, result);
+}
+
+sdl3d_level_trace_result sdl3d_level_trace_point(const sdl3d_level *level, const sdl3d_sector *sectors,
+                                                 sdl3d_vec3 origin, sdl3d_vec3 direction, float max_distance)
+{
+    sdl3d_level_trace_result r;
+    r.hit = false;
+    r.end_point = origin;
+    r.end_sector = -1;
+    r.fraction = 0.0f;
+
+    if (!level || !sectors || max_distance <= 0.0f)
+        return r;
+
+    float len = SDL_sqrtf(direction.x * direction.x + direction.y * direction.y + direction.z * direction.z);
+    if (len < 1e-6f)
+        return r;
+    float inv_len = 1.0f / len;
+    float dx = direction.x * inv_len;
+    float dy = direction.y * inv_len;
+    float dz = direction.z * inv_len;
+
+    const float step_size = 0.25f;
+    int steps = (int)SDL_ceilf(max_distance / step_size);
+    if (steps < 1)
+        steps = 1;
+    float step_dist = max_distance / (float)steps;
+
+    float px = origin.x, py = origin.y, pz = origin.z;
+    for (int i = 0; i < steps; ++i)
+    {
+        float nx = px + dx * step_dist;
+        float ny = py + dy * step_dist;
+        float nz = pz + dz * step_dist;
+        if (!sdl3d_level_point_inside(level, sectors, nx, ny, nz))
+        {
+            r.hit = true;
+            r.end_point = sdl3d_vec3_make(px, py, pz);
+            r.fraction = (float)(i) / (float)steps;
+            r.end_sector = sdl3d_level_find_sector_at(level, sectors, px, pz, py);
+            return r;
+        }
+        px = nx;
+        py = ny;
+        pz = nz;
+    }
+
+    r.hit = false;
+    r.end_point = sdl3d_vec3_make(px, py, pz);
+    r.fraction = 1.0f;
+    r.end_sector = sdl3d_level_find_sector_at(level, sectors, px, pz, py);
+    return r;
+}

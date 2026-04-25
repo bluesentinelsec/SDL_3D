@@ -60,39 +60,6 @@ static void free_texture_array(sdl3d_texture2d *textures, int count)
  * by the visibility-side sector lookup below. */
 #define PLAYER_MIN_HEADROOM (PLAYER_HEIGHT + PLAYER_CEILING_CLEARANCE)
 
-static void advance_projectile(const sdl3d_level *level, const sdl3d_sector *sectors, float dt, bool *proj_active,
-                               float *proj_x, float *proj_y, float *proj_z, float proj_dx, float proj_dy, float proj_dz,
-                               float *proj_life)
-{
-    if (!*proj_active)
-        return;
-
-    float travel = PROJ_SPEED * dt;
-    int steps = (int)SDL_ceilf(travel / 0.25f);
-    if (steps < 1)
-        steps = 1;
-    float step_dist = travel / (float)steps;
-
-    for (int i = 0; i < steps; i++)
-    {
-        float next_x = *proj_x + proj_dx * step_dist;
-        float next_y = *proj_y + proj_dy * step_dist;
-        float next_z = *proj_z + proj_dz * step_dist;
-        if (!sdl3d_level_point_inside(level, sectors, next_x, next_y, next_z))
-        {
-            *proj_active = false;
-            return;
-        }
-        *proj_x = next_x;
-        *proj_y = next_y;
-        *proj_z = next_z;
-    }
-
-    *proj_life -= dt;
-    if (*proj_life <= 0.0f)
-        *proj_active = false;
-}
-
 static sdl3d_color sample_actor_tint(const sdl3d_level_light *lights, int light_count, sdl3d_vec3 position,
                                      bool proj_active, float proj_x, float proj_y, float proj_z)
 {
@@ -774,9 +741,22 @@ int main(int argc, char *argv[])
 
         sdl3d_camera3d cam = sdl3d_fps_mover_camera(&mover, 75.0f);
 
-        /* Update projectile. */
-        advance_projectile(&level_unlit, sectors, dt, &proj_active, &proj_x, &proj_y, &proj_z, proj_dx, proj_dy,
-                           proj_dz, &proj_life);
+        /* Update projectile via library trace. */
+        if (proj_active)
+        {
+            float travel = PROJ_SPEED * dt;
+            sdl3d_vec3 proj_dir = sdl3d_vec3_make(proj_dx, proj_dy, proj_dz);
+            sdl3d_level_trace_result tr = sdl3d_level_trace_point(
+                &level_unlit, sectors, sdl3d_vec3_make(proj_x, proj_y, proj_z), proj_dir, travel);
+            proj_x = tr.end_point.x;
+            proj_y = tr.end_point.y;
+            proj_z = tr.end_point.z;
+            if (tr.hit)
+                proj_active = false;
+            proj_life -= dt;
+            if (proj_life <= 0.0f)
+                proj_active = false;
+        }
 
         /* Compute portal visibility. */
         sdl3d_level *active_level =
@@ -787,8 +767,6 @@ int main(int argc, char *argv[])
             current_sector = sdl3d_level_find_walkable_sector(&level_unlit, sectors, px, pz, py - PLAYER_HEIGHT,
                                                               PLAYER_STEP_HEIGHT, PLAYER_MIN_HEADROOM);
         }
-        sdl3d_vec3 cam_dir = sdl3d_vec3_make(fx, SDL_sinf(pitch), fz);
-
         sdl3d_clear_lights(ctx);
         if (proj_active)
         {
@@ -808,18 +786,11 @@ int main(int argc, char *argv[])
         sdl3d_begin_mode_3d(ctx, cam);
         sdl3d_draw_skybox_textured(ctx, &skybox);
 
-        /* Compute visibility using cached frustum planes from begin_mode_3d.
-         * We pass the frustum planes through to the visibility system. */
+        /* Compute visibility using the camera convenience wrapper. */
         if (portal_culling)
         {
-            sdl3d_mat4 vview, vproj;
-            sdl3d_camera3d_compute_matrices(&cam, WINDOW_W, WINDOW_H, 0.01f, 1000.0f, &vview, &vproj);
-            sdl3d_mat4 vp = sdl3d_mat4_multiply(vproj, vview);
-
-            float fp[6][4];
-            sdl3d_extract_frustum_planes(vp, fp);
-
-            sdl3d_level_compute_visibility(active_level, current_sector, cam.position, cam_dir, fp, &vis);
+            sdl3d_level_compute_visibility_from_camera(active_level, sectors, &cam, WINDOW_W, WINDOW_H, 0.01f, 1000.0f,
+                                                       &vis);
         }
         else
         {
