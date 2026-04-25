@@ -24,6 +24,7 @@
 #define JUMP_VELOCITY 6.0f
 #define GRAVITY 14.0f
 #define PLAYER_HEIGHT 1.6f
+#define PLAYER_RADIUS 0.35f
 #define PLAYER_STEP_HEIGHT 0.8f
 #define PLAYER_CEILING_CLEARANCE 0.1f
 #define PLAYER_SPAWN_X 5.0f
@@ -225,6 +226,36 @@ static int find_support_sector_at(const sdl3d_sector *sectors, int sector_count,
     }
 
     return best;
+}
+
+static bool position_is_walkable(const sdl3d_sector *sectors, int sector_count, float x, float z, float feet_y,
+                                 float max_step_up, int *out_sector)
+{
+    static const float sample_dirs[8][2] = {
+        {1.0f, 0.0f},       {-1.0f, 0.0f},       {0.0f, 1.0f},        {0.0f, -1.0f},
+        {0.7071f, 0.7071f}, {0.7071f, -0.7071f}, {-0.7071f, 0.7071f}, {-0.7071f, -0.7071f},
+    };
+    int center_sector = find_walkable_sector_at(sectors, sector_count, x, z, feet_y, max_step_up);
+    float target_floor;
+
+    if (center_sector < 0)
+        return false;
+
+    target_floor = sectors[center_sector].floor_y;
+    for (int i = 0; i < 8; ++i)
+    {
+        float sx = x + sample_dirs[i][0] * PLAYER_RADIUS;
+        float sz = z + sample_dirs[i][1] * PLAYER_RADIUS;
+        int sample_sector = find_walkable_sector_at(sectors, sector_count, sx, sz, feet_y, max_step_up);
+        if (sample_sector < 0)
+            return false;
+        if (SDL_fabsf(sectors[sample_sector].floor_y - target_floor) > max_step_up)
+            return false;
+    }
+
+    if (out_sector != NULL)
+        *out_sector = center_sector;
+    return true;
 }
 
 static void advance_projectile(const sdl3d_sector *sectors, int sector_count, float dt, bool *proj_active,
@@ -508,9 +539,7 @@ int main(int argc, char *argv[])
      *      |                               |
      *   [2] Nukage Basin -- [3] East Passage -- [4] Courtyard -- [10] Storage -- [12] Secret Annex
      *      |                                       |
-     *   [6] West Alcove                           [5] Exit Room -- [11] Reactor Hall -- [14-20] Stair + Upper Route
-     *                                                                                |
-     *                                                                            [13] Exterior Yard
+     *   [6] West Alcove                           [5] Exit Room -- [11] Reactor Hall -- [13] Exterior Yard
      */
     sdl3d_sector sectors[] = {
         /* 0: Starting room */
@@ -541,16 +570,6 @@ int main(int argc, char *argv[])
         {{{32, 24}, {40, 24}, {40, 30}, {32, 30}}, 4, 0.0f, 3.0f, 0, 1, 2},
         /* 13: Exterior yard (large open-air space for skybox side visibility) */
         {{{-6, 44}, {54, 44}, {54, 104}, {-6, 104}}, 4, 0.0f, 12.0f, 5, -1, 2},
-        /* 14-18: Reactor stair climb along the east wall */
-        {{{28.0f, 32.0f}, {30.0f, 32.0f}, {30.0f, 34.0f}, {28.0f, 34.0f}}, 4, 0.0f, 5.5f, 5, 1, 4},
-        {{{28.0f, 34.0f}, {30.0f, 34.0f}, {30.0f, 36.0f}, {28.0f, 36.0f}}, 4, 0.7f, 5.5f, 5, 1, 4},
-        {{{28.0f, 36.0f}, {30.0f, 36.0f}, {30.0f, 38.0f}, {28.0f, 38.0f}}, 4, 1.4f, 5.5f, 5, 1, 4},
-        {{{28.0f, 38.0f}, {30.0f, 38.0f}, {30.0f, 40.0f}, {28.0f, 40.0f}}, 4, 2.1f, 5.5f, 5, 1, 4},
-        {{{28.0f, 40.0f}, {30.0f, 40.0f}, {30.0f, 42.0f}, {28.0f, 42.0f}}, 4, 2.8f, 5.5f, 5, 1, 4},
-        /* 19: Upper landing above the north end of the reactor hall */
-        {{{26.0f, 42.0f}, {30.0f, 42.0f}, {30.0f, 44.0f}, {26.0f, 44.0f}}, 4, 3.5f, 7.0f, 5, 1, 4},
-        /* 20: Upper gallery/new area above reactor hall, opening toward the yard */
-        {{{18.0f, 38.0f}, {28.0f, 38.0f}, {28.0f, 52.0f}, {18.0f, 52.0f}}, 4, 3.5f, 7.5f, 5, -1, 4},
     };
 
     sdl3d_level_light lights[] = {
@@ -567,9 +586,6 @@ int main(int argc, char *argv[])
         {{24, 3.8f, 38}, {0.45f, 0.35f, 1.0f}, 2.2f, 11.0f},  /* Reactor hall — violet */
         {{36, 2.2f, 27}, {1.0f, 0.55f, 0.22f}, 1.5f, 7.0f},   /* Secret annex — orange */
         {{24, 8.5f, 74}, {0.32f, 0.38f, 0.7f}, 2.4f, 32.0f},  /* Exterior yard — night sky fill */
-        {{29, 2.8f, 35}, {1.0f, 0.70f, 0.38f}, 1.3f, 7.0f},   /* Stair base — warm */
-        {{29, 4.8f, 41}, {0.35f, 0.65f, 1.0f}, 1.3f, 7.0f},   /* Upper landing — cool blue */
-        {{23, 5.6f, 46}, {0.80f, 0.78f, 1.0f}, 1.7f, 10.0f},  /* Upper gallery — pale violet */
     };
     const int sector_count = (int)SDL_arraysize(sectors);
     const int light_count = (int)SDL_arraysize(lights);
@@ -730,7 +746,7 @@ int main(int argc, char *argv[])
         sdl3d_actor_set_scale(r1, sdl3d_vec3_make(0.8f, 0.8f, 0.8f));
 
         sdl3d_actor *r2 = sdl3d_scene_add_actor(scene, &robot_model);
-        sdl3d_actor_set_position(r2, sdl3d_vec3_make(23.0f, 3.5f, 46.0f));
+        sdl3d_actor_set_position(r2, sdl3d_vec3_make(24.0f, 0.0f, 20.0f));
         sdl3d_actor_set_scale(r2, sdl3d_vec3_make(0.8f, 0.8f, 0.8f));
         sdl3d_actor_set_tint(r2, (sdl3d_color){255, 180, 180, 255});
     }
@@ -925,9 +941,8 @@ int main(int argc, char *argv[])
                     move_x = wish_x * MOVE_SPEED * dt;
                     move_z = wish_z * MOVE_SPEED * dt;
 
-                    candidate_sector = find_walkable_sector_at(sectors, sector_count, px + move_x, pz + move_z, feet_y,
-                                                               PLAYER_STEP_HEIGHT);
-                    if (candidate_sector >= 0)
+                    if (position_is_walkable(sectors, sector_count, px + move_x, pz + move_z, feet_y,
+                                             PLAYER_STEP_HEIGHT, &candidate_sector))
                     {
                         px += move_x;
                         pz += move_z;
@@ -935,18 +950,16 @@ int main(int argc, char *argv[])
                     }
                     else
                     {
-                        candidate_sector =
-                            find_walkable_sector_at(sectors, sector_count, px + move_x, pz, feet_y, PLAYER_STEP_HEIGHT);
-                        if (candidate_sector >= 0)
+                        if (position_is_walkable(sectors, sector_count, px + move_x, pz, feet_y, PLAYER_STEP_HEIGHT,
+                                                 &candidate_sector))
                         {
                             px += move_x;
                             current_sector = candidate_sector;
                         }
                         else
                         {
-                            candidate_sector = find_walkable_sector_at(sectors, sector_count, px, pz + move_z, feet_y,
-                                                                       PLAYER_STEP_HEIGHT);
-                            if (candidate_sector >= 0)
+                            if (position_is_walkable(sectors, sector_count, px, pz + move_z, feet_y, PLAYER_STEP_HEIGHT,
+                                                     &candidate_sector))
                             {
                                 pz += move_z;
                                 current_sector = candidate_sector;
