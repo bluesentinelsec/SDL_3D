@@ -1264,7 +1264,7 @@ sdl3d_color sdl3d_level_sample_light(const sdl3d_level_light *lights, int light_
 /* Portal visibility traversal                                         */
 /* ------------------------------------------------------------------ */
 
-static bool portal_box_in_frustum(const sdl3d_level_portal *p, const float planes[6][4])
+static bool portal_box_in_frustum(const sdl3d_level_portal *p, float planes[6][4])
 {
     for (int i = 0; i < 6; ++i)
     {
@@ -1306,8 +1306,7 @@ static bool portal_behind_camera(const sdl3d_level_portal *p, sdl3d_vec3 cam_pos
 }
 
 void sdl3d_level_compute_visibility(const sdl3d_level *level, int current_sector, sdl3d_vec3 camera_pos,
-                                    sdl3d_vec3 camera_dir, const float frustum_planes[6][4],
-                                    sdl3d_visibility_result *result)
+                                    sdl3d_vec3 camera_dir, float frustum_planes[6][4], sdl3d_visibility_result *result)
 {
     if (!level || !result || !result->sector_visible)
         return;

@@ -187,7 +187,7 @@ extern "C"
      * Returns the number of visible sectors via result->visible_count.
      */
     void sdl3d_level_compute_visibility(const sdl3d_level *level, int current_sector, sdl3d_vec3 camera_pos,
-                                        sdl3d_vec3 camera_dir, const float frustum_planes[6][4],
+                                        sdl3d_vec3 camera_dir, float frustum_planes[6][4],
                                         sdl3d_visibility_result *result);
 
     /*
