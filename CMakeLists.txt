@@ -88,6 +88,7 @@ target_sources(
         src/drawing3d.c
         src/effects.c
         src/fbx_loader.c
+        src/game.c
         src/gltf_loader.c
         src/gl_renderer.c
         src/image.c

@@ -11,6 +11,7 @@
 #include "sdl3d/collision.h"
 #include "sdl3d/drawing3d.h"
 #include "sdl3d/effects.h"
+#include "sdl3d/game.h"
 #include "sdl3d/image.h"
 #include "sdl3d/lighting.h"
 #include "sdl3d/math.h"
