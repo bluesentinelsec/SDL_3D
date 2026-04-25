@@ -1278,7 +1278,7 @@ int main(int argc, char *argv[])
         /* Crosshair. */
         {
             float chx = px + fx * 0.4f;
-            float chy = py + SDL_sinf(pitch) * 0.4f;
+            float chy = eye_y + SDL_sinf(pitch) * 0.4f;
             float chz = pz + fz * 0.4f;
             sdl3d_set_emissive(ctx, 8, 8, 8);
             sdl3d_draw_cube(ctx, sdl3d_vec3_make(chx, chy, chz), sdl3d_vec3_make(0.003f, 0.003f, 0.003f),
