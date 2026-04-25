@@ -47,8 +47,12 @@ extern "C"
      * Test a sphere against 6 normalized frustum planes (a,b,c,d) where
      * the inside half-space satisfies a*x + b*y + c*z + d >= 0. Returns
      * true when the sphere is at least partially inside the frustum.
+     *
+     * The plane array is read-only despite the lack of `const`; pre-C23
+     * pedantic mode rejects the deep-const conversion that would
+     * otherwise require callers to cast their non-const local arrays.
      */
-    bool sdl3d_sphere_intersects_frustum(sdl3d_sphere sphere, const float planes[6][4]);
+    bool sdl3d_sphere_intersects_frustum(sdl3d_sphere sphere, float planes[6][4]);
 
     /* ============================================================== */
     /* Ray tests                                                      */

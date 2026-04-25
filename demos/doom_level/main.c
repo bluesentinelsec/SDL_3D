@@ -1210,9 +1210,23 @@ int main(int argc, char *argv[])
 
         sdl3d_draw_level(ctx, active_level, portal_culling ? &vis : NULL, (sdl3d_color){255, 255, 255, 255});
 
-        /* Draw 3D scene actors (robot models). */
+        /* Draw 3D scene actors (robot models). Refresh each actor's sector
+         * from its current world XZ so sdl3d_draw_scene_with_visibility can
+         * skip actors in unreachable rooms before any frustum work runs. */
         if (scene)
-            sdl3d_draw_scene(ctx, scene);
+        {
+            int actor_count = sdl3d_scene_get_actor_count(scene);
+            for (int i = 0; i < actor_count; ++i)
+            {
+                sdl3d_actor *a = sdl3d_scene_get_actor_at(scene, i);
+                if (!a)
+                    continue;
+                sdl3d_vec3 ap = sdl3d_actor_get_position(a);
+                int sid = sdl3d_level_find_sector(active_level, sectors, ap.x, ap.z);
+                sdl3d_actor_set_sector(a, sid);
+            }
+            sdl3d_draw_scene_with_visibility(ctx, scene, portal_culling ? &vis : NULL);
+        }
 
         /* Crate props — simple textured cubes placed around the level. */
         {

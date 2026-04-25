@@ -34,7 +34,7 @@ bool sdl3d_check_sphere_sphere(sdl3d_sphere a, sdl3d_sphere b)
     return dist_sq <= r_sum * r_sum;
 }
 
-bool sdl3d_sphere_intersects_frustum(sdl3d_sphere sphere, const float planes[6][4])
+bool sdl3d_sphere_intersects_frustum(sdl3d_sphere sphere, float planes[6][4])
 {
     if (planes == NULL)
     {
