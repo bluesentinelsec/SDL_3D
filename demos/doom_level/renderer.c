@@ -203,8 +203,6 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
         sdl3d_ui_render(ui, ctx);
     }
 
-    sdl3d_present_render_context(ctx);
-
     if (rs->show_debug)
     {
         int visible_meshes = 0;

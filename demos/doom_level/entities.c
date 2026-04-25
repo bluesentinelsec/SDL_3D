@@ -13,9 +13,11 @@ static void configure_sprite_texture(sdl3d_texture2d *texture)
     sdl3d_set_texture_wrap(texture, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP);
 }
 
-bool entities_init(entities *e)
+bool entities_init(entities *e, sdl3d_actor_registry *registry, sdl3d_signal_bus *bus)
 {
     SDL_zerop(e);
+    e->registry = registry;
+    e->bus = bus;
 
     /* Load enemy rotation sprites. */
     const char *rot_paths[SDL3D_SPRITE_ROTATION_COUNT] = {
@@ -135,9 +137,7 @@ bool entities_init(entities *e)
             sdl3d_actor_play_animation(dragon, 0, true);
     }
 
-    /* Actor registry — register all game objects for unified state. */
-    e->bus = sdl3d_signal_bus_create();
-    e->registry = sdl3d_actor_registry_create();
+    /* Register game objects in the managed-loop actor registry. */
     if (e->registry)
     {
         sdl3d_registered_actor *ra;
@@ -172,8 +172,6 @@ bool entities_init(entities *e)
 
 void entities_free(entities *e)
 {
-    sdl3d_actor_registry_destroy(e->registry);
-    sdl3d_signal_bus_destroy(e->bus);
     sdl3d_sprite_scene_free(&e->sprites);
     sdl3d_destroy_scene(e->scene);
     if (e->has_robot)
@@ -186,6 +184,8 @@ void entities_free(entities *e)
     sdl3d_free_texture(&e->crate_tex);
     for (int i = 0; i < 6; ++i)
         sdl3d_free_texture(&e->sky[i]);
+    e->registry = NULL;
+    e->bus = NULL;
 }
 
 void entities_update(entities *e, float dt, sdl3d_vec3 player_position)
