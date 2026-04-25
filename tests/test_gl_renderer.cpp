@@ -211,6 +211,7 @@ TEST_F(GLRendererTest, AmbientOnlyPhongModelUsesLitPath)
     mesh.vertex_count = 4;
     mesh.indices = indices;
     mesh.index_count = 6;
+    mesh.material_index = -1;
 
     sdl3d_model model = {};
     model.meshes = &mesh;
