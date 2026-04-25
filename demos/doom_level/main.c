@@ -17,8 +17,8 @@
 
 #define WINDOW_W 1280
 #define WINDOW_H 720
-#define SOFTWARE_W (WINDOW_W / 2)
-#define SOFTWARE_H (WINDOW_H / 2)
+#define SOFTWARE_W WINDOW_W
+#define SOFTWARE_H WINDOW_H
 #define MOVE_SPEED 12.0f
 #define MOUSE_SENS 0.002f
 #define JUMP_VELOCITY 6.0f
@@ -778,13 +778,14 @@ int main(int argc, char *argv[])
     }
 
     /* Place animated dragon in the exterior yard. */
+    sdl3d_actor *dragon_actor = NULL;
     if (has_dragon && scene)
     {
-        sdl3d_actor *dragon = sdl3d_scene_add_actor(scene, &dragon_model);
-        sdl3d_actor_set_position(dragon, sdl3d_vec3_make(24.0f, 0.0f, 74.0f));
-        sdl3d_actor_set_scale(dragon, sdl3d_vec3_make(2.0f, 2.0f, 2.0f));
+        dragon_actor = sdl3d_scene_add_actor(scene, &dragon_model);
+        sdl3d_actor_set_position(dragon_actor, sdl3d_vec3_make(24.0f, 0.0f, 74.0f));
+        sdl3d_actor_set_scale(dragon_actor, sdl3d_vec3_make(2.0f, 2.0f, 2.0f));
         if (dragon_model.animation_count > 0)
-            sdl3d_actor_play_animation(dragon, 0, true);
+            sdl3d_actor_play_animation(dragon_actor, 0, true);
     }
 
     bool running = true;
@@ -848,7 +849,11 @@ int main(int argc, char *argv[])
                     sdl3d_set_ssao_enabled(ctx, false);
                     sdl3d_set_point_shadows_enabled(ctx, false);
                     sdl3d_set_backface_culling_enabled(ctx, true);
-                    sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG);
+                    sdl3d_set_shading_mode(ctx, (current_backend == SDL3D_BACKEND_SOFTWARE) ? SDL3D_SHADING_FLAT
+                                                                                            : SDL3D_SHADING_PHONG);
+                    /* Hide expensive dragon model on software for performance. */
+                    if (dragon_actor)
+                        sdl3d_actor_set_visible(dragon_actor, current_backend != SDL3D_BACKEND_SOFTWARE);
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Switched to %s backend render=%dx%d",
                                 sdl3d_get_backend_name(current_backend), sdl3d_get_render_context_width(ctx),
                                 sdl3d_get_render_context_height(ctx));
@@ -861,7 +866,8 @@ int main(int argc, char *argv[])
                     sdl3d_set_ssao_enabled(ctx, false);
                     sdl3d_set_point_shadows_enabled(ctx, false);
                     sdl3d_set_backface_culling_enabled(ctx, true);
-                    sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG);
+                    sdl3d_set_shading_mode(ctx, (current_backend == SDL3D_BACKEND_SOFTWARE) ? SDL3D_SHADING_FLAT
+                                                                                            : SDL3D_SHADING_PHONG);
                 }
             }
             if (ev.type == SDL_EVENT_MOUSE_MOTION && mouse_init)
@@ -900,7 +906,7 @@ int main(int argc, char *argv[])
             for (int i = 0; i < ac; i++)
             {
                 sdl3d_actor *a = sdl3d_scene_get_actor_at(scene, i);
-                if (a)
+                if (a && sdl3d_actor_is_visible(a))
                     sdl3d_actor_advance_animation(a, dt);
             }
         }
