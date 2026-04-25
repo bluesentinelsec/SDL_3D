@@ -562,14 +562,32 @@ int main(int argc, char *argv[])
         {{{18, 0}, {30, 0}, {30, 8}, {18, 8}}, 4, 0.0f, 4.0f, 0, 1, 2},
         /* 9: Security bend linking core to courtyard */
         {{{22, 8}, {26, 8}, {26, 14}, {22, 14}}, 4, 0.0f, 3.2f, 5, 1, 4},
-        /* 10: Storage annex */
-        {{{28, 12}, {38, 12}, {38, 24}, {28, 24}}, 4, 0.0f, 4.0f, 0, 1, 2},
+        /* 10: Storage annex (narrowed to make room for stairwell) */
+        {{{28, 12}, {34, 12}, {34, 24}, {28, 24}}, 4, 0.0f, 4.0f, 0, 1, 2},
         /* 11: Reactor hall beyond exit */
         {{{18, 32}, {30, 32}, {30, 44}, {18, 44}}, 4, 0.0f, 5.5f, 5, 1, 4},
         /* 12: Secret annex behind storage */
         {{{32, 24}, {40, 24}, {40, 30}, {32, 30}}, 4, 0.0f, 3.0f, 0, 1, 2},
         /* 13: Exterior yard (large open-air space for skybox side visibility) */
         {{{-6, 44}, {54, 44}, {54, 104}, {-6, 104}}, 4, 0.0f, 12.0f, 5, -1, 2},
+
+        /* ---- Stairwell (sectors 14-20): wide stairs east of storage ---- */
+        /* Stairs run north (z=24) to south (z=12), rising as you go south.
+         * Upper room sits above storage with inset walls to avoid false portals. */
+        /* 14: Stair entry (ground floor, connects to storage at x=34, z=20-24) */
+        {{{34, 20}, {40, 20}, {40, 24}, {34, 24}}, 4, 0.0f, 10.0f, 0, -1, 4},
+        /* 15: Stair step 1 */
+        {{{34, 18}, {40, 18}, {40, 20}, {34, 20}}, 4, 1.0f, 10.0f, 0, -1, 4},
+        /* 16: Stair step 2 */
+        {{{34, 16}, {40, 16}, {40, 18}, {34, 18}}, 4, 2.0f, 10.0f, 0, -1, 4},
+        /* 17: Stair step 3 */
+        {{{34, 14}, {40, 14}, {40, 16}, {34, 16}}, 4, 3.0f, 10.0f, 0, -1, 4},
+        /* 18: Stair step 4 */
+        {{{34, 12}, {40, 12}, {40, 14}, {34, 14}}, 4, 4.0f, 10.0f, 0, -1, 4},
+        /* 19: Stair top landing */
+        {{{34, 10}, {40, 10}, {40, 12}, {34, 12}}, 4, 5.0f, 10.0f, 0, -1, 4},
+        /* 20: Upper room (3rd floor, connects to top landing at z=12, x=34-40) */
+        {{{29, 4}, {40, 4}, {40, 10}, {29, 10}}, 4, 6.0f, 10.0f, 3, 1, 5},
     };
 
     sdl3d_level_light lights[] = {
@@ -586,6 +604,9 @@ int main(int argc, char *argv[])
         {{24, 3.8f, 38}, {0.45f, 0.35f, 1.0f}, 2.2f, 11.0f},  /* Reactor hall — violet */
         {{36, 2.2f, 27}, {1.0f, 0.55f, 0.22f}, 1.5f, 7.0f},   /* Secret annex — orange */
         {{24, 8.5f, 74}, {0.32f, 0.38f, 0.7f}, 2.4f, 32.0f},  /* Exterior yard — night sky fill */
+        {{37, 2.5f, 22}, {1.0f, 0.8f, 0.5f}, 1.5f, 8.0f},     /* Stair entry — warm */
+        {{37, 5.0f, 15}, {0.8f, 0.6f, 1.0f}, 1.8f, 10.0f},    /* Mid-stairs — purple */
+        {{34, 8.5f, 7}, {1.0f, 0.95f, 0.8f}, 3.0f, 16.0f},    /* Upper room — bright warm */
     };
     const int sector_count = (int)SDL_arraysize(sectors);
     const int light_count = (int)SDL_arraysize(lights);
