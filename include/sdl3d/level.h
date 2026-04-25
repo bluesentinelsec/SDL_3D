@@ -19,6 +19,7 @@
 #ifndef SDL3D_LEVEL_H
 #define SDL3D_LEVEL_H
 
+#include "sdl3d/camera.h"
 #include "sdl3d/model.h"
 #include "sdl3d/texture.h"
 #include "sdl3d/types.h"
@@ -123,6 +124,56 @@ extern "C"
     int sdl3d_level_find_sector(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float z);
 
     /*
+     * Find the sector containing (x, z) where feet_y is inside the sector's
+     * vertical span (floor_y <= feet_y < ceil_y). Returns the sector with
+     * the highest floor when multiple stacked sectors qualify (the sector
+     * the player is "standing on"). Returns -1 if no sector qualifies.
+     */
+    int sdl3d_level_find_sector_at(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float z,
+                                   float feet_y);
+
+    /*
+     * Find the highest sector at (x, z) whose floor is at most step_height
+     * above feet_y and that has at least player_height of headroom. Used
+     * for stair climbing and walkable-position queries. The player_height
+     * argument should include any ceiling clearance the caller wants
+     * enforced. Returns -1 if no walkable sector exists.
+     */
+    int sdl3d_level_find_walkable_sector(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float z,
+                                         float feet_y, float step_height, float player_height);
+
+    /*
+     * Find the highest sector at (x, z) whose floor is at or below feet_y
+     * and that has at least player_height of headroom. Used for falling /
+     * floor-snap queries: returns the floor the player will land on.
+     * Returns -1 if no support sector exists.
+     */
+    int sdl3d_level_find_support_sector(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float z,
+                                        float feet_y, float player_height);
+
+    /*
+     * Test whether the world-space point (x, y, z) is inside any sector
+     * volume (XZ polygon plus floor_y <= y <= ceil_y). Useful for
+     * projectile lifetime and trigger volume checks.
+     */
+    bool sdl3d_level_point_inside(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float y, float z);
+
+    /*
+     * Extract 6 normalized frustum planes from a row-major view-projection
+     * matrix. The output planes use the convention a*x + b*y + c*z + d >= 0
+     * for the inside half-space. Order: left, right, bottom, top, near, far.
+     */
+    void sdl3d_extract_frustum_planes(sdl3d_mat4 view_projection, float out_planes[6][4]);
+
+    /*
+     * Sample the accumulated point-light contribution at a world-space
+     * position. Each light uses quadratic distance falloff scaled by its
+     * intensity. The result is clamped to sdl3d_color range and contains
+     * no ambient term — callers add their own ambient floor.
+     */
+    sdl3d_color sdl3d_level_sample_light(const sdl3d_level_light *lights, int light_count, sdl3d_vec3 position);
+
+    /*
      * Compute which sectors are visible from the camera's current sector
      * by traversing the portal graph. Portals behind the camera or outside
      * the frustum are rejected. The caller must provide sector_visible as
@@ -136,8 +187,38 @@ extern "C"
      * Returns the number of visible sectors via result->visible_count.
      */
     void sdl3d_level_compute_visibility(const sdl3d_level *level, int current_sector, sdl3d_vec3 camera_pos,
-                                        sdl3d_vec3 camera_dir, const float frustum_planes[6][4],
+                                        sdl3d_vec3 camera_dir, float frustum_planes[6][4],
                                         sdl3d_visibility_result *result);
+
+    /*
+     * Convenience wrapper: compute portal visibility directly from a camera.
+     * Internally derives the view-projection matrix, extracts frustum planes,
+     * finds the camera's current sector, and calls sdl3d_level_compute_visibility.
+     * The caller must provide result->sector_visible as a bool array of at
+     * least level->sector_count elements.
+     */
+    void sdl3d_level_compute_visibility_from_camera(const sdl3d_level *level, const sdl3d_sector *sectors,
+                                                    const sdl3d_camera3d *camera, int backbuffer_width,
+                                                    int backbuffer_height, float near_plane, float far_plane,
+                                                    sdl3d_visibility_result *result);
+
+    /* Result of a point trace through sector volumes. */
+    typedef struct sdl3d_level_trace_result
+    {
+        bool hit;             /* true if the trace left all sectors          */
+        sdl3d_vec3 end_point; /* final position (exit point or end of range) */
+        int end_sector;       /* sector at end_point, or -1 if outside      */
+        float fraction;       /* 0-1, how far along the trace               */
+    } sdl3d_level_trace_result;
+
+    /*
+     * Trace a point through sector volumes from origin along direction for
+     * up to max_distance. Stops when the point exits all sectors. Internally
+     * substepped (0.25 unit steps) so thin sectors are not skipped.
+     * Useful for projectiles, hitscan, and line-of-sight checks.
+     */
+    sdl3d_level_trace_result sdl3d_level_trace_point(const sdl3d_level *level, const sdl3d_sector *sectors,
+                                                     sdl3d_vec3 origin, sdl3d_vec3 direction, float max_distance);
 
     /*
      * Draw a built level, skipping meshes whose sector is not marked visible.

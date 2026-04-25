@@ -92,12 +92,14 @@ target_sources(
         src/lighting.c
         src/math.c
         src/font.c
+        src/fps_mover.c
         src/level.c
         src/model.c
         src/obj_loader.c
         src/rasterizer.c
         src/render_context.c
         src/scene.c
+        src/sprite_actor.c
         src/sdl3d.c
         src/shading.c
         src/shapes.c
