@@ -6,7 +6,6 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_stdinc.h>
 
-#include "render_context_internal.h"
 #include "sdl3d/time.h"
 
 #define SDL3D_GAME_DEFAULT_WIDTH 1280
@@ -23,23 +22,6 @@ static int sdl3d_game_max_ticks_per_frame(const sdl3d_game_config *config)
 {
     return (config != NULL && config->max_ticks_per_frame > 0) ? config->max_ticks_per_frame
                                                                : SDL3D_GAME_DEFAULT_MAX_TICKS;
-}
-
-static void sdl3d_game_destroy_window_and_renderer(SDL_Window *window, sdl3d_render_context *renderer)
-{
-    SDL_Renderer *sdl_renderer = renderer != NULL ? renderer->renderer : NULL;
-
-    sdl3d_destroy_render_context(renderer);
-
-    if (sdl_renderer != NULL)
-    {
-        SDL_DestroyRenderer(sdl_renderer);
-    }
-
-    if (window != NULL)
-    {
-        SDL_DestroyWindow(window);
-    }
 }
 
 static bool sdl3d_game_create_context(const sdl3d_game_config *config, sdl3d_game_context *ctx)
@@ -75,7 +57,7 @@ static void sdl3d_game_cleanup_context(sdl3d_game_context *ctx)
     sdl3d_timer_pool_destroy(ctx->timers);
     sdl3d_signal_bus_destroy(ctx->bus);
     sdl3d_actor_registry_destroy(ctx->registry);
-    sdl3d_game_destroy_window_and_renderer(ctx->window, ctx->renderer);
+    sdl3d_destroy_window(ctx->window, ctx->renderer);
     SDL_zero(*ctx);
 }
 
@@ -184,7 +166,12 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
 
         if (callbacks != NULL && callbacks->render != NULL)
         {
-            callbacks->render(&ctx, userdata, accumulator / fixed_dt);
+            float alpha = accumulator / fixed_dt;
+            if (alpha > 1.0f)
+            {
+                alpha = 1.0f;
+            }
+            callbacks->render(&ctx, userdata, alpha);
         }
 
         if (!sdl3d_present_render_context(ctx.renderer))

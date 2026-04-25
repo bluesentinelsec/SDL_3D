@@ -652,6 +652,23 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
     return true;
 }
 
+void sdl3d_destroy_window(SDL_Window *window, sdl3d_render_context *context)
+{
+    SDL_Renderer *renderer = context != NULL ? context->renderer : NULL;
+
+    sdl3d_destroy_render_context(context);
+
+    if (renderer != NULL)
+    {
+        SDL_DestroyRenderer(renderer);
+    }
+
+    if (window != NULL)
+    {
+        SDL_DestroyWindow(window);
+    }
+}
+
 bool sdl3d_switch_backend(SDL_Window **window, sdl3d_render_context **context, sdl3d_backend new_backend)
 {
     int w, h;
@@ -676,21 +693,9 @@ bool sdl3d_switch_backend(SDL_Window **window, sdl3d_render_context **context, s
     }
 
     /* Tear down old context and window. */
-    if (*context != NULL)
-    {
-        /* Save renderer pointer before destroying context (context doesn't
-         * own the renderer, but sdl3d_create_window created it). */
-        SDL_Renderer *old_ren = (*context)->renderer;
-        sdl3d_destroy_render_context(*context);
-        *context = NULL;
-        if (old_ren != NULL)
-            SDL_DestroyRenderer(old_ren);
-    }
-    if (*window != NULL)
-    {
-        SDL_DestroyWindow(*window);
-        *window = NULL;
-    }
+    sdl3d_destroy_window(*window, *context);
+    *window = NULL;
+    *context = NULL;
 
     /* Create fresh window + context with the new backend. */
     sdl3d_init_window_config(&wcfg);

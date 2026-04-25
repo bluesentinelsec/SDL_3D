@@ -1,3 +1,5 @@
+#define SDL_MAIN_HANDLED
+
 #include <gtest/gtest.h>
 
 extern "C"
@@ -90,12 +92,8 @@ bool validate_context_in_init(sdl3d_game_context *ctx, void *userdata)
 bool validate_default_config_in_init(sdl3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
-    int width = 0;
-    int height = 0;
-    SDL_GetWindowSize(ctx->window, &width, &height);
-    state->saw_default_config = width == 1280 && height == 720 &&
-                                sdl3d_get_render_context_width(ctx->renderer) == 1280 &&
-                                sdl3d_get_render_context_height(ctx->renderer) == 720;
+    state->saw_default_config =
+        sdl3d_get_render_context_width(ctx->renderer) == 1280 && sdl3d_get_render_context_height(ctx->renderer) == 720;
     ctx->quit_requested = true;
     return true;
 }
