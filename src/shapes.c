@@ -160,6 +160,94 @@ bool sdl3d_draw_cube(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec
     return result;
 }
 
+bool sdl3d_draw_cube_textured(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size,
+                              sdl3d_vec3 rotation_axis, float rotation_angle, const sdl3d_texture2d *texture,
+                              sdl3d_color tint)
+{
+    if (!sdl3d_shape_require_nonnegative(size.x, "size.x", "sdl3d_draw_cube_textured") ||
+        !sdl3d_shape_require_nonnegative(size.y, "size.y", "sdl3d_draw_cube_textured") ||
+        !sdl3d_shape_require_nonnegative(size.z, "size.z", "sdl3d_draw_cube_textured"))
+    {
+        return false;
+    }
+
+    const float hx = size.x * 0.5f;
+    const float hy = size.y * 0.5f;
+    const float hz = size.z * 0.5f;
+
+    /* 8 corner positions (local space, centered at origin). */
+    const sdl3d_vec3 c[8] = {
+        {-hx, -hy, -hz}, {+hx, -hy, -hz}, {-hx, +hy, -hz}, {+hx, +hy, -hz},
+        {-hx, -hy, +hz}, {+hx, -hy, +hz}, {-hx, +hy, +hz}, {+hx, +hy, +hz},
+    };
+
+    static const int faces[6][4] = {
+        {4, 5, 7, 6}, {1, 0, 2, 3}, {5, 1, 3, 7}, {0, 4, 6, 2}, {6, 7, 3, 2}, {0, 1, 5, 4},
+    };
+    static const float fn[6][3] = {
+        {0, 0, 1}, {0, 0, -1}, {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0},
+    };
+    static const float face_uvs[4][2] = {{0, 1}, {1, 1}, {1, 0}, {0, 0}};
+
+    /* Build rotation + translation matrix. */
+    sdl3d_mat4 xform = sdl3d_mat4_translate(center);
+    float axis_len = SDL_sqrtf(rotation_axis.x * rotation_axis.x + rotation_axis.y * rotation_axis.y +
+                               rotation_axis.z * rotation_axis.z);
+    if (axis_len > 0.0001f && SDL_fabsf(rotation_angle) > 0.0001f)
+    {
+        sdl3d_mat4 rot = sdl3d_mat4_rotate(rotation_axis, rotation_angle);
+        xform = sdl3d_mat4_multiply(xform, rot);
+    }
+
+    float positions[72], normals[72], uvs[48];
+    unsigned int indices[36];
+
+    for (int f = 0; f < 6; f++)
+    {
+        int b = f * 4;
+        for (int v = 0; v < 4; v++)
+        {
+            int vi = b + v;
+
+            /* Transform position. */
+            sdl3d_vec4 lp = {c[faces[f][v]].x, c[faces[f][v]].y, c[faces[f][v]].z, 1.0f};
+            sdl3d_vec4 wp = sdl3d_mat4_transform_vec4(xform, lp);
+            positions[vi * 3 + 0] = wp.x;
+            positions[vi * 3 + 1] = wp.y;
+            positions[vi * 3 + 2] = wp.z;
+
+            /* Transform normal (rotation only, no translation). */
+            sdl3d_vec4 ln = {fn[f][0], fn[f][1], fn[f][2], 0.0f};
+            sdl3d_vec4 wn = sdl3d_mat4_transform_vec4(xform, ln);
+            normals[vi * 3 + 0] = wn.x;
+            normals[vi * 3 + 1] = wn.y;
+            normals[vi * 3 + 2] = wn.z;
+
+            uvs[vi * 2 + 0] = face_uvs[v][0];
+            uvs[vi * 2 + 1] = face_uvs[v][1];
+        }
+        int ii = f * 6;
+        unsigned int bu = (unsigned int)b;
+        indices[ii + 0] = bu;
+        indices[ii + 1] = bu + 1;
+        indices[ii + 2] = bu + 2;
+        indices[ii + 3] = bu;
+        indices[ii + 4] = bu + 2;
+        indices[ii + 5] = bu + 3;
+    }
+
+    sdl3d_mesh mesh;
+    SDL_zerop(&mesh);
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.uvs = uvs;
+    mesh.indices = indices;
+    mesh.vertex_count = 24;
+    mesh.index_count = 36;
+    mesh.material_index = -1;
+    return sdl3d_draw_mesh(context, &mesh, texture, tint);
+}
+
 bool sdl3d_draw_cube_wires(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, sdl3d_color color)
 {
     if (!sdl3d_shape_require_nonnegative(size.x, "size.x", "sdl3d_draw_cube_wires") ||

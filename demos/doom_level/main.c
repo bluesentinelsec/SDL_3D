@@ -392,63 +392,6 @@ static bool create_backend(SDL_Window **out_win, sdl3d_render_context **out_ctx,
     return true;
 }
 
-static bool draw_textured_cube(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 center,
-                               sdl3d_vec3 size, sdl3d_color tint)
-{
-    const float hx = size.x * 0.5f, hy = size.y * 0.5f, hz = size.z * 0.5f;
-    const sdl3d_vec3 c[8] = {
-        {center.x - hx, center.y - hy, center.z - hz}, {center.x + hx, center.y - hy, center.z - hz},
-        {center.x - hx, center.y + hy, center.z - hz}, {center.x + hx, center.y + hy, center.z - hz},
-        {center.x - hx, center.y - hy, center.z + hz}, {center.x + hx, center.y - hy, center.z + hz},
-        {center.x - hx, center.y + hy, center.z + hz}, {center.x + hx, center.y + hy, center.z + hz},
-    };
-    static const int faces[6][4] = {
-        {4, 5, 7, 6}, {1, 0, 2, 3}, {5, 1, 3, 7}, {0, 4, 6, 2}, {6, 7, 3, 2}, {0, 1, 5, 4},
-    };
-    static const float fn[6][3] = {
-        {0, 0, 1}, {0, 0, -1}, {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0},
-    };
-    static const float face_uvs[4][2] = {{0, 1}, {1, 1}, {1, 0}, {0, 0}};
-
-    float positions[72], normals[72], uvs[48];
-    unsigned int indices[36];
-    for (int f = 0; f < 6; f++)
-    {
-        int b = f * 4;
-        for (int v = 0; v < 4; v++)
-        {
-            int vi = b + v;
-            positions[vi * 3 + 0] = c[faces[f][v]].x;
-            positions[vi * 3 + 1] = c[faces[f][v]].y;
-            positions[vi * 3 + 2] = c[faces[f][v]].z;
-            normals[vi * 3 + 0] = fn[f][0];
-            normals[vi * 3 + 1] = fn[f][1];
-            normals[vi * 3 + 2] = fn[f][2];
-            uvs[vi * 2 + 0] = face_uvs[v][0];
-            uvs[vi * 2 + 1] = face_uvs[v][1];
-        }
-        int ii = f * 6;
-        unsigned int bu = (unsigned int)b;
-        indices[ii + 0] = bu;
-        indices[ii + 1] = bu + 1;
-        indices[ii + 2] = bu + 2;
-        indices[ii + 3] = bu;
-        indices[ii + 4] = bu + 2;
-        indices[ii + 5] = bu + 3;
-    }
-
-    sdl3d_mesh mesh;
-    SDL_zerop(&mesh);
-    mesh.positions = positions;
-    mesh.normals = normals;
-    mesh.uvs = uvs;
-    mesh.indices = indices;
-    mesh.vertex_count = 24;
-    mesh.index_count = 36;
-    mesh.material_index = -1;
-    return sdl3d_draw_mesh(context, &mesh, texture, tint);
-}
-
 static void reset_demo_state(float *px, float *py, float *pz, float *yaw, float *pitch, float *vy, bool *on_ground,
                              bool *proj_active, float *proj_life)
 {
@@ -1282,7 +1225,8 @@ int main(int argc, char *argv[])
             const sdl3d_texture2d *tex = crate_tex.pixels ? &crate_tex : NULL;
             for (int i = 0; i < (int)SDL_arraysize(crate_positions); i++)
             {
-                draw_textured_cube(ctx, tex, crate_positions[i], sdl3d_vec3_make(1.0f, 1.0f, 1.0f), crate_tint);
+                sdl3d_draw_cube_textured(ctx, crate_positions[i], sdl3d_vec3_make(1.0f, 1.0f, 1.0f),
+                                         sdl3d_vec3_make(0, 1, 0), 0.0f, tex, crate_tint);
             }
         }
 
