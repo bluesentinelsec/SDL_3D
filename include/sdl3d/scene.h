@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 
+#include "sdl3d/level.h"
 #include "sdl3d/model.h"
 #include "sdl3d/render_context.h"
 #include "sdl3d/types.h"
@@ -61,6 +62,18 @@ extern "C"
 
     void sdl3d_actor_set_tint(sdl3d_actor *actor, sdl3d_color tint);
 
+    /*
+     * Optional sector ownership for portal-based visibility culling.
+     * Defaults to -1 (no sector). When set and a sdl3d_visibility_result
+     * is supplied to sdl3d_draw_scene_with_visibility, actors whose
+     * sector is not visible are skipped before any frustum work.
+     *
+     * Callers typically derive the id with sdl3d_level_find_sector
+     * after positioning the actor.
+     */
+    void sdl3d_actor_set_sector(sdl3d_actor *actor, int sector_id);
+    int sdl3d_actor_get_sector(const sdl3d_actor *actor);
+
     const sdl3d_model *sdl3d_actor_get_model(const sdl3d_actor *actor);
 
     /* ============================================================== */
@@ -74,6 +87,16 @@ extern "C"
      * iterates actors and calls sdl3d_draw_model_ex for each.
      */
     bool sdl3d_draw_scene(sdl3d_render_context *context, const sdl3d_scene *scene);
+
+    /*
+     * Same as sdl3d_draw_scene, but additionally rejects actors whose
+     * assigned sector (see sdl3d_actor_set_sector) is not present in the
+     * supplied visibility result. Pass vis = NULL for behavior identical
+     * to sdl3d_draw_scene. Actors with sector_id < 0 are unaffected by
+     * the visibility test and fall through to the frustum check.
+     */
+    bool sdl3d_draw_scene_with_visibility(sdl3d_render_context *context, const sdl3d_scene *scene,
+                                          const sdl3d_visibility_result *vis);
 
 #ifdef __cplusplus
 }

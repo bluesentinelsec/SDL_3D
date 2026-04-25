@@ -34,6 +34,9 @@ struct sdl3d_actor
     sdl3d_vec3 local_bounds_center;
     float local_bounds_radius;
     bool local_bounds_valid;
+
+    /* Optional sector for portal-based visibility culling; -1 = none. */
+    int sector_id;
 };
 
 static void sdl3d_actor_compute_local_bounds(sdl3d_actor *actor)
@@ -216,6 +219,7 @@ sdl3d_actor *sdl3d_scene_add_actor(sdl3d_scene *scene, const sdl3d_model *model)
     actor->anim_time = 0.0f;
     actor->anim_playing = false;
     actor->anim_looping = false;
+    actor->sector_id = -1;
 
     sdl3d_actor_compute_local_bounds(actor);
 
@@ -341,6 +345,23 @@ bool sdl3d_actor_is_visible(const sdl3d_actor *actor)
     return actor->visible;
 }
 
+void sdl3d_actor_set_sector(sdl3d_actor *actor, int sector_id)
+{
+    if (actor != NULL)
+    {
+        actor->sector_id = sector_id;
+    }
+}
+
+int sdl3d_actor_get_sector(const sdl3d_actor *actor)
+{
+    if (actor == NULL)
+    {
+        return -1;
+    }
+    return actor->sector_id;
+}
+
 void sdl3d_actor_set_tint(sdl3d_actor *actor, sdl3d_color tint)
 {
     if (actor != NULL)
@@ -358,7 +379,8 @@ const sdl3d_model *sdl3d_actor_get_model(const sdl3d_actor *actor)
     return actor->model;
 }
 
-bool sdl3d_draw_scene(sdl3d_render_context *context, const sdl3d_scene *scene)
+static bool sdl3d_draw_scene_impl(sdl3d_render_context *context, const sdl3d_scene *scene,
+                                  const sdl3d_visibility_result *vis)
 {
     const sdl3d_actor *actor;
 
@@ -376,6 +398,17 @@ bool sdl3d_draw_scene(sdl3d_render_context *context, const sdl3d_scene *scene)
         if (!actor->visible || actor->model == NULL)
         {
             continue;
+        }
+
+        /* Portal cull: actors with a known sector are skipped when that
+         * sector is not in the visibility set. Actors with sector_id < 0
+         * (the default) bypass this check and rely on frustum culling. */
+        if (vis != NULL && vis->sector_visible != NULL && actor->sector_id >= 0)
+        {
+            if (!vis->sector_visible[actor->sector_id])
+            {
+                continue;
+            }
         }
 
         /* Per-actor frustum cull: reject the whole actor before any
@@ -418,6 +451,17 @@ bool sdl3d_draw_scene(sdl3d_render_context *context, const sdl3d_scene *scene)
     }
 
     return true;
+}
+
+bool sdl3d_draw_scene(sdl3d_render_context *context, const sdl3d_scene *scene)
+{
+    return sdl3d_draw_scene_impl(context, scene, NULL);
+}
+
+bool sdl3d_draw_scene_with_visibility(sdl3d_render_context *context, const sdl3d_scene *scene,
+                                      const sdl3d_visibility_result *vis)
+{
+    return sdl3d_draw_scene_impl(context, scene, vis);
 }
 
 /* ------------------------------------------------------------------ */
