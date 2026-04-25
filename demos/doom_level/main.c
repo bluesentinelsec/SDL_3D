@@ -726,7 +726,8 @@ int main(int argc, char *argv[])
     /* Player */
     float px = PLAYER_SPAWN_X, py = PLAYER_HEIGHT, pz = PLAYER_SPAWN_Z;
     float yaw = PLAYER_SPAWN_YAW, pitch = 0;
-    float vy = 0; /* vertical velocity for jump */
+    float vy = 0;          /* vertical velocity for jump */
+    float view_smooth = 0; /* Quake-style view smoothing for stairs */
     bool on_ground = true;
     bool mouse_init = false;
 
@@ -826,6 +827,7 @@ int main(int argc, char *argv[])
                 (ev.key.scancode == SDL_SCANCODE_BACKSPACE || ev.key.scancode == SDL_SCANCODE_DELETE))
             {
                 reset_demo_state(&px, &py, &pz, &yaw, &pitch, &vy, &on_ground, &proj_active, &proj_life);
+                view_smooth = 0;
             }
             if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_TAB)
             {
@@ -932,6 +934,19 @@ int main(int argc, char *argv[])
             wish_x += right_x;
             wish_z += right_z;
         }
+
+        /* Quake-style view smoothing: decay the offset each frame. */
+        {
+            float smooth_speed = 12.0f; /* higher = snappier */
+            if (view_smooth > 0.01f)
+                view_smooth -= view_smooth * smooth_speed * dt;
+            else if (view_smooth < -0.01f)
+                view_smooth -= view_smooth * smooth_speed * dt;
+            else
+                view_smooth = 0.0f;
+        }
+
+        float py_before_collision = py;
 
         /* Normalize wish direction, then apply Doom-style sliding collision
          * against sector boundaries. */
@@ -1060,6 +1075,7 @@ int main(int argc, char *argv[])
             if (!on_ground && py < -20.0f)
             {
                 reset_demo_state(&px, &py, &pz, &yaw, &pitch, &vy, &on_ground, &proj_active, &proj_life);
+                view_smooth = 0;
             }
         }
 
@@ -1078,9 +1094,17 @@ int main(int argc, char *argv[])
             }
         }
 
+        /* Accumulate view smooth offset from floor snaps (not jumps). */
+        {
+            float py_delta = py - py_before_collision;
+            if (on_ground && SDL_fabsf(py_delta) > 0.01f)
+                view_smooth -= py_delta;
+        }
+
         sdl3d_camera3d cam;
-        cam.position = sdl3d_vec3_make(px, py, pz);
-        cam.target = sdl3d_vec3_make(px + fx, py + SDL_sinf(pitch), pz + fz);
+        float eye_y = py + view_smooth;
+        cam.position = sdl3d_vec3_make(px, eye_y, pz);
+        cam.target = sdl3d_vec3_make(px + fx, eye_y + SDL_sinf(pitch), pz + fz);
         cam.up = sdl3d_vec3_make(0, 1, 0);
         cam.fovy = 75.0f;
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
