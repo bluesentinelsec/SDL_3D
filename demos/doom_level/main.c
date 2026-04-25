@@ -1184,7 +1184,11 @@ int main(int argc, char *argv[])
         sdl3d_clear_render_context(ctx, (sdl3d_color){10, 10, 15, 255});
 
         sdl3d_begin_mode_3d(ctx, cam);
-        sdl3d_draw_skybox_textured(ctx, &skybox);
+
+        /* Skip skybox on software — it fills every pixel with a texture
+         * sample, which is the single biggest cost on the CPU rasterizer. */
+        if (current_backend != SDL3D_BACKEND_SOFTWARE)
+            sdl3d_draw_skybox_textured(ctx, &skybox);
 
         /* Compute visibility using cached frustum planes from begin_mode_3d.
          * We pass the frustum planes through to the visibility system. */
@@ -1261,7 +1265,10 @@ int main(int argc, char *argv[])
                 {22.0f, 0.5f, 16.0f},
             };
             sdl3d_color crate_tint = {255, 255, 255, 255};
-            const sdl3d_texture2d *tex = crate_tex.pixels ? &crate_tex : NULL;
+            const sdl3d_texture2d *tex =
+                (crate_tex.pixels && current_backend != SDL3D_BACKEND_SOFTWARE) ? &crate_tex : NULL;
+            if (!tex)
+                crate_tint = (sdl3d_color){160, 120, 80, 255};
             for (int i = 0; i < (int)SDL_arraysize(crate_positions); i++)
             {
                 sdl3d_draw_cube_textured(ctx, crate_positions[i], sdl3d_vec3_make(1.0f, 1.0f, 1.0f),
