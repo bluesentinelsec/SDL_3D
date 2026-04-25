@@ -122,6 +122,75 @@ INSTANTIATE_TEST_SUITE_P(
                       AABBSphereCase{"corner miss", bb(0, 0, 0, 1, 1, 1), sp(2, 2, 2, 1.7f), false}));
 
 /* ================================================================== */
+/* Sphere-Frustum                                                     */
+/* ================================================================== */
+
+namespace
+{
+/* Build a unit-cube frustum: 6 planes bounding the box [-1,1]^3, each
+ * plane oriented so the inside half-space is a*x + b*y + c*z + d >= 0. */
+void make_unit_frustum(float planes[6][4])
+{
+    /* +x <= 1  ->  -x + 1 >= 0 */
+    planes[0][0] = -1;
+    planes[0][1] = 0;
+    planes[0][2] = 0;
+    planes[0][3] = 1;
+    /* -x <= 1  ->   x + 1 >= 0 */
+    planes[1][0] = 1;
+    planes[1][1] = 0;
+    planes[1][2] = 0;
+    planes[1][3] = 1;
+    planes[2][0] = 0;
+    planes[2][1] = -1;
+    planes[2][2] = 0;
+    planes[2][3] = 1;
+    planes[3][0] = 0;
+    planes[3][1] = 1;
+    planes[3][2] = 0;
+    planes[3][3] = 1;
+    planes[4][0] = 0;
+    planes[4][1] = 0;
+    planes[4][2] = -1;
+    planes[4][3] = 1;
+    planes[5][0] = 0;
+    planes[5][1] = 0;
+    planes[5][2] = 1;
+    planes[5][3] = 1;
+}
+} // namespace
+
+TEST(SphereFrustum, CenterInsideIsVisible)
+{
+    float planes[6][4];
+    make_unit_frustum(planes);
+    EXPECT_TRUE(sdl3d_sphere_intersects_frustum(sp(0, 0, 0, 0.1f), planes));
+}
+
+TEST(SphereFrustum, FarOutsideIsCulled)
+{
+    float planes[6][4];
+    make_unit_frustum(planes);
+    EXPECT_FALSE(sdl3d_sphere_intersects_frustum(sp(10, 0, 0, 1), planes));
+    EXPECT_FALSE(sdl3d_sphere_intersects_frustum(sp(0, -10, 0, 1), planes));
+}
+
+TEST(SphereFrustum, StraddlingPlaneIsVisible)
+{
+    float planes[6][4];
+    make_unit_frustum(planes);
+    /* Center is just outside +x plane but radius reaches inside. */
+    EXPECT_TRUE(sdl3d_sphere_intersects_frustum(sp(1.5f, 0, 0, 0.6f), planes));
+}
+
+TEST(SphereFrustum, JustOutsidePlaneIsCulled)
+{
+    float planes[6][4];
+    make_unit_frustum(planes);
+    EXPECT_FALSE(sdl3d_sphere_intersects_frustum(sp(2.0f, 0, 0, 0.9f), planes));
+}
+
+/* ================================================================== */
 /* Ray-AABB                                                           */
 /* ================================================================== */
 

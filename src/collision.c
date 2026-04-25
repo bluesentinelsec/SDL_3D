@@ -34,6 +34,24 @@ bool sdl3d_check_sphere_sphere(sdl3d_sphere a, sdl3d_sphere b)
     return dist_sq <= r_sum * r_sum;
 }
 
+bool sdl3d_sphere_intersects_frustum(sdl3d_sphere sphere, float planes[6][4])
+{
+    if (planes == NULL)
+    {
+        return true;
+    }
+    for (int i = 0; i < 6; ++i)
+    {
+        float distance = planes[i][0] * sphere.center.x + planes[i][1] * sphere.center.y +
+                         planes[i][2] * sphere.center.z + planes[i][3];
+        if (distance < -sphere.radius)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool sdl3d_check_aabb_sphere(sdl3d_bounding_box box, sdl3d_sphere sphere)
 {
     /* Find the closest point on the AABB to the sphere center. */

@@ -525,6 +525,11 @@ bool sdl3d_begin_shadow_pass(sdl3d_render_context *context)
     context->model_view_projection = context->shadow_vp[0];
     context->in_mode_3d = true;
 
+    /* Reuse Phase 1's per-actor frustum culling for the shadow pass by
+     * pointing the cached planes at the light's view-projection. Skips
+     * actors and meshes that cannot cast shadows into the depth buffer. */
+    sdl3d_internal_extract_frustum_planes(context, context->shadow_vp[0]);
+
     if (context->gl)
     {
         sdl3d_gl_begin_shadow_pass(context->gl, context->shadow_vp[0].m,

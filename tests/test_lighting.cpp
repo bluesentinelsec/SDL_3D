@@ -15,6 +15,7 @@
 extern "C"
 {
 #include "lighting_internal.h"
+#include "render_context_internal.h"
 #include "sdl3d/lighting.h"
 #include "sdl3d/sdl3d.h"
 }
@@ -585,6 +586,28 @@ TEST(SDL3DShadowAPI, NullContextRejected)
     EXPECT_FALSE(sdl3d_enable_shadow(nullptr, 0, sdl3d_vec3_make(0, 0, 0), 10.0f));
     EXPECT_FALSE(sdl3d_disable_shadow(nullptr, 0));
     EXPECT_FALSE(sdl3d_render_shadow_map(nullptr, nullptr, 0, nullptr));
+}
+
+TEST_F(SDL3DLightingFixture, BeginShadowPassPopulatesFrustumPlanes)
+{
+    sdl3d_light dl{};
+    dl.type = SDL3D_LIGHT_DIRECTIONAL;
+    dl.direction = {0.0f, -1.0f, 0.0f};
+    dl.color[0] = dl.color[1] = dl.color[2] = 1.0f;
+    dl.intensity = 1.0f;
+    ASSERT_TRUE(sdl3d_add_light(ctx, &dl));
+    ASSERT_TRUE(sdl3d_enable_shadow(ctx, 0, sdl3d_vec3_make(0, 0, 0), 10.0f));
+
+    /* No frustum planes are valid before any 3D mode begins. */
+    EXPECT_FALSE(ctx->frustum_planes_valid);
+
+    /* Shadow pass should set up the light frustum so per-actor culling
+     * (Phase 1) works against the light's view-projection. */
+    ASSERT_TRUE(sdl3d_begin_shadow_pass(ctx));
+    EXPECT_TRUE(ctx->frustum_planes_valid);
+    ASSERT_TRUE(sdl3d_end_shadow_pass(ctx));
+
+    sdl3d_disable_shadow(ctx, 0);
 }
 
 TEST_F(SDL3DLightingFixture, RenderShadowMapWithNoMeshes)

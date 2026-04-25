@@ -144,6 +144,20 @@ TEST(SDL3DScene, DrawSceneNullSceneFails)
     EXPECT_FALSE(sdl3d_draw_scene(nullptr, nullptr));
 }
 
+TEST(SDL3DScene, DrawSceneWithVisibilityRejectsNullArgs)
+{
+    sdl3d_visibility_result vis{};
+    bool sectors[1] = {true};
+    vis.sector_visible = sectors;
+    vis.visible_count = 1;
+
+    EXPECT_FALSE(sdl3d_draw_scene_with_visibility(nullptr, nullptr, &vis));
+
+    sdl3d_scene *scene = sdl3d_create_scene();
+    EXPECT_FALSE(sdl3d_draw_scene_with_visibility(nullptr, scene, &vis));
+    sdl3d_destroy_scene(scene);
+}
+
 /* ================================================================== */
 /* Actor properties — defaults                                        */
 /* ================================================================== */
@@ -166,6 +180,26 @@ TEST(SDL3DActor, DefaultProperties)
 
     EXPECT_TRUE(sdl3d_actor_is_visible(actor));
     EXPECT_EQ(sdl3d_actor_get_model(actor), &model);
+    EXPECT_EQ(sdl3d_actor_get_sector(actor), -1);
+
+    sdl3d_destroy_scene(scene);
+}
+
+TEST(SDL3DActor, SectorSetAndGet)
+{
+    sdl3d_model model{};
+    sdl3d_scene *scene = sdl3d_create_scene();
+    sdl3d_actor *actor = sdl3d_scene_add_actor(scene, &model);
+
+    sdl3d_actor_set_sector(actor, 7);
+    EXPECT_EQ(sdl3d_actor_get_sector(actor), 7);
+
+    sdl3d_actor_set_sector(actor, -1);
+    EXPECT_EQ(sdl3d_actor_get_sector(actor), -1);
+
+    /* NULL-safe accessors. */
+    sdl3d_actor_set_sector(nullptr, 3);
+    EXPECT_EQ(sdl3d_actor_get_sector(nullptr), -1);
 
     sdl3d_destroy_scene(scene);
 }
