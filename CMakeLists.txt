@@ -100,6 +100,7 @@ target_sources(
         src/rasterizer.c
         src/render_context.c
         src/scene.c
+        src/signal_bus.c
         src/sprite_actor.c
         src/sdl3d.c
         src/shading.c
