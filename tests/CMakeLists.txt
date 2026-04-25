@@ -91,6 +91,7 @@ set(SDL3D_TEST_SOURCES
     test_lighting.cpp
     test_scene.cpp
     test_collision.cpp
+    test_action.cpp
     test_animation.cpp
     test_effects.cpp
     test_level.cpp
@@ -180,6 +181,7 @@ else()
     target_include_directories(sdl3d_lighting_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     sdl3d_add_test(sdl3d_scene_test test_scene.cpp unit)
     sdl3d_add_test(sdl3d_collision_test test_collision.cpp unit)
+    sdl3d_add_test(sdl3d_action_test test_action.cpp unit)
     sdl3d_add_test(sdl3d_animation_test test_animation.cpp unit)
     sdl3d_add_test(sdl3d_effects_test test_effects.cpp unit)
     sdl3d_add_test(sdl3d_level_test test_level.cpp unit)
