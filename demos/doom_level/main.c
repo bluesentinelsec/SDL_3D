@@ -478,6 +478,8 @@ int main(int argc, char *argv[])
     /* Load debug font. */
     sdl3d_font debug_font;
     bool has_font = sdl3d_load_font(SDL3D_MEDIA_DIR "/fonts/Roboto.ttf", 40.0f, &debug_font);
+    sdl3d_font small_font;
+    bool has_small_font = sdl3d_load_font(SDL3D_MEDIA_DIR "/fonts/Roboto.ttf", 10.0f, &small_font);
     if (!has_font)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Font load FAILED: %s", SDL_GetError());
@@ -1336,14 +1338,17 @@ int main(int argc, char *argv[])
         sdl3d_end_mode_3d(ctx);
 
         /* Draw debug text overlay. */
-        if (has_font)
+        if (has_font && current_backend != SDL3D_BACKEND_SOFTWARE)
         {
             sdl3d_draw_fps(ctx, &debug_font, dt);
         }
+        else if (has_small_font && current_backend == SDL3D_BACKEND_SOFTWARE)
+        {
+            sdl3d_draw_fps(ctx, &small_font, dt);
+        }
 
-        /* UI pass: demo of the new immediate-mode widget system. Labels
-         * are composed each frame and rendered on top of the 3D scene. */
-        if (ui && has_font)
+        /* UI pass — skip diagnostics on software for performance. */
+        if (ui && has_font && current_backend != SDL3D_BACKEND_SOFTWARE)
         {
             sdl3d_ui_begin_frame(ui, sdl3d_get_render_context_width(ctx), sdl3d_get_render_context_height(ctx));
             sdl3d_ui_label(ui, 10.0f, 60.0f, "SDL3D UI - Phase 1");
@@ -1380,6 +1385,8 @@ int main(int argc, char *argv[])
     sdl3d_free_texture(&sky_nz);
     if (has_font)
         sdl3d_free_font(&debug_font);
+    if (has_small_font)
+        sdl3d_free_font(&small_font);
     sdl3d_ui_destroy(ui);
     sdl3d_destroy_scene(scene);
     if (has_robot)
