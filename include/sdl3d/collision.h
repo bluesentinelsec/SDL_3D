@@ -43,6 +43,13 @@ extern "C"
     bool sdl3d_check_sphere_sphere(sdl3d_sphere a, sdl3d_sphere b);
     bool sdl3d_check_aabb_sphere(sdl3d_bounding_box box, sdl3d_sphere sphere);
 
+    /*
+     * Test a sphere against 6 normalized frustum planes (a,b,c,d) where
+     * the inside half-space satisfies a*x + b*y + c*z + d >= 0. Returns
+     * true when the sphere is at least partially inside the frustum.
+     */
+    bool sdl3d_sphere_intersects_frustum(sdl3d_sphere sphere, const float planes[6][4]);
+
     /* ============================================================== */
     /* Ray tests                                                      */
     /* ============================================================== */

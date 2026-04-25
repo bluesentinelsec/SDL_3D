@@ -4,7 +4,11 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "sdl3d/animation.h"
+#include "sdl3d/collision.h"
 #include "sdl3d/drawing3d.h"
+#include "sdl3d/math.h"
+
+#include "render_context_internal.h"
 
 struct sdl3d_actor
 {
@@ -23,7 +27,125 @@ struct sdl3d_actor
     float anim_time;
     bool anim_playing;
     bool anim_looping;
+
+    /* Cached local-space bounding sphere derived from the model's mesh
+     * AABBs at attach time. World bounds are produced per-frame by
+     * applying the actor's position and scale. */
+    sdl3d_vec3 local_bounds_center;
+    float local_bounds_radius;
+    bool local_bounds_valid;
 };
+
+static void sdl3d_actor_compute_local_bounds(sdl3d_actor *actor)
+{
+    const sdl3d_model *model;
+    sdl3d_bounding_box combined;
+    bool have_box = false;
+    sdl3d_vec3 center;
+    float max_r_sq = 0.0f;
+
+    actor->local_bounds_valid = false;
+    actor->local_bounds_center = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    actor->local_bounds_radius = 0.0f;
+
+    model = actor->model;
+    if (model == NULL || model->meshes == NULL || model->mesh_count <= 0)
+    {
+        return;
+    }
+
+    SDL_zero(combined);
+    for (int i = 0; i < model->mesh_count; ++i)
+    {
+        const sdl3d_mesh *mesh = &model->meshes[i];
+        if (!mesh->has_local_bounds)
+        {
+            continue;
+        }
+        if (!have_box)
+        {
+            combined = mesh->local_bounds;
+            have_box = true;
+        }
+        else
+        {
+            if (mesh->local_bounds.min.x < combined.min.x)
+                combined.min.x = mesh->local_bounds.min.x;
+            if (mesh->local_bounds.min.y < combined.min.y)
+                combined.min.y = mesh->local_bounds.min.y;
+            if (mesh->local_bounds.min.z < combined.min.z)
+                combined.min.z = mesh->local_bounds.min.z;
+            if (mesh->local_bounds.max.x > combined.max.x)
+                combined.max.x = mesh->local_bounds.max.x;
+            if (mesh->local_bounds.max.y > combined.max.y)
+                combined.max.y = mesh->local_bounds.max.y;
+            if (mesh->local_bounds.max.z > combined.max.z)
+                combined.max.z = mesh->local_bounds.max.z;
+        }
+    }
+
+    if (!have_box)
+    {
+        return;
+    }
+
+    center = sdl3d_vec3_make((combined.min.x + combined.max.x) * 0.5f, (combined.min.y + combined.max.y) * 0.5f,
+                             (combined.min.z + combined.max.z) * 0.5f);
+
+    /* Radius = max distance from center to any AABB corner. */
+    for (int i = 0; i < 8; ++i)
+    {
+        float cx = (i & 1) ? combined.max.x : combined.min.x;
+        float cy = (i & 2) ? combined.max.y : combined.min.y;
+        float cz = (i & 4) ? combined.max.z : combined.min.z;
+        float dx = cx - center.x;
+        float dy = cy - center.y;
+        float dz = cz - center.z;
+        float r_sq = dx * dx + dy * dy + dz * dz;
+        if (r_sq > max_r_sq)
+        {
+            max_r_sq = r_sq;
+        }
+    }
+
+    actor->local_bounds_center = center;
+    actor->local_bounds_radius = SDL_sqrtf(max_r_sq);
+    actor->local_bounds_valid = true;
+}
+
+static bool sdl3d_actor_world_bounds(const sdl3d_actor *actor, sdl3d_sphere *out)
+{
+    float sx, sy, sz, max_scale;
+
+    if (!actor->local_bounds_valid)
+    {
+        return false;
+    }
+
+    sx = actor->scale.x < 0.0f ? -actor->scale.x : actor->scale.x;
+    sy = actor->scale.y < 0.0f ? -actor->scale.y : actor->scale.y;
+    sz = actor->scale.z < 0.0f ? -actor->scale.z : actor->scale.z;
+    max_scale = sx;
+    if (sy > max_scale)
+        max_scale = sy;
+    if (sz > max_scale)
+        max_scale = sz;
+
+    /* The local center can be anywhere relative to the actor's pivot;
+     * rotation about the pivot would sweep it around a sphere of radius
+     * |local_center| * max_scale. Place the world sphere at the actor's
+     * position and inflate the radius by that swept distance to stay
+     * correct under arbitrary rotation. */
+    {
+        float lcx = actor->local_bounds_center.x;
+        float lcy = actor->local_bounds_center.y;
+        float lcz = actor->local_bounds_center.z;
+        float center_dist = SDL_sqrtf(lcx * lcx + lcy * lcy + lcz * lcz);
+        out->center = actor->position;
+        out->radius = (center_dist + actor->local_bounds_radius) * max_scale;
+    }
+    return true;
+}
 
 struct sdl3d_scene
 {
@@ -94,6 +216,8 @@ sdl3d_actor *sdl3d_scene_add_actor(sdl3d_scene *scene, const sdl3d_model *model)
     actor->anim_time = 0.0f;
     actor->anim_playing = false;
     actor->anim_looping = false;
+
+    sdl3d_actor_compute_local_bounds(actor);
 
     /* Prepend to linked list. */
     actor->next = scene->first;
@@ -252,6 +376,18 @@ bool sdl3d_draw_scene(sdl3d_render_context *context, const sdl3d_scene *scene)
         if (!actor->visible || actor->model == NULL)
         {
             continue;
+        }
+
+        /* Per-actor frustum cull: reject the whole actor before any
+         * matrix push or per-mesh iteration. */
+        if (context->frustum_planes_valid && actor->local_bounds_valid)
+        {
+            sdl3d_sphere world_bounds;
+            if (sdl3d_actor_world_bounds(actor, &world_bounds) &&
+                !sdl3d_sphere_intersects_frustum(world_bounds, context->frustum_planes))
+            {
+                continue;
+            }
         }
 
         /* Animated actors: evaluate skeleton and draw skinned. */
