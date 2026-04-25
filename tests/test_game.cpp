@@ -187,7 +187,7 @@ void stop_after_many_null_frames(sdl3d_game_context *ctx, void *userdata, float 
     auto *state = static_cast<GameTestState *>(userdata);
     state->render_count++;
     state->last_alpha = alpha;
-    if (state->render_count >= 2)
+    if (state->render_count >= 256)
     {
         ctx->quit_requested = true;
     }
