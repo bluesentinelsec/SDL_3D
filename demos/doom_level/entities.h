@@ -2,8 +2,10 @@
 #ifndef DOOM_ENTITIES_H
 #define DOOM_ENTITIES_H
 
+#include "sdl3d/actor_registry.h"
 #include "sdl3d/model.h"
 #include "sdl3d/scene.h"
+#include "sdl3d/signal_bus.h"
 #include "sdl3d/sprite_actor.h"
 #include "sdl3d/texture.h"
 
@@ -29,12 +31,16 @@ typedef struct entities
     bool has_robot;
     bool has_dragon;
     sdl3d_scene *scene;
+
+    /* Actor registry — unified game object table. */
+    sdl3d_actor_registry *registry;
+    sdl3d_signal_bus *bus;
 } entities;
 
 bool entities_init(entities *e);
 void entities_free(entities *e);
 
-/* Advance sprite bobbing and model animations. */
-void entities_update(entities *e, float dt);
+/* Advance sprite bobbing, model animations, and registry triggers. */
+void entities_update(entities *e, float dt, sdl3d_vec3 player_position);
 
 #endif

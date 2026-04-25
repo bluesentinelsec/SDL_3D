@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
         float dt = (float)(now - last) / (float)SDL_GetPerformanceFrequency();
         last = now;
 
-        entities_update(&ent, dt);
+        entities_update(&ent, dt, player.mover.position);
         player_update(&player, &ld.unlit, g_sectors, dt);
 
         render_draw_frame(&rs, ctx, has_font ? &debug_font : NULL, ui, &ld, &ent, &player, WINDOW_W, WINDOW_H, dt);
