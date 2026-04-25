@@ -1440,8 +1440,7 @@ bool sdl3d_draw_billboard(sdl3d_render_context *context, const sdl3d_texture2d *
 bool sdl3d_draw_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, const sdl3d_texture2d *texture,
                      sdl3d_color tint)
 {
-    if (context != NULL && context->shading_mode != SDL3D_SHADING_UNLIT && mesh != NULL && mesh->normals != NULL &&
-        (context->light_count > 0 || mesh->colors_are_baked_light))
+    if (context != NULL && context->shading_mode != SDL3D_SHADING_UNLIT && mesh != NULL && mesh->normals != NULL)
     {
         sdl3d_lighting_params lp;
         sdl3d_build_lighting_params(context, &lp);
@@ -1574,8 +1573,7 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_mod
         sdl3d_lighting_params lp_storage;
         const sdl3d_lighting_params *lp_ptr = NULL;
 
-        if (context->shading_mode != SDL3D_SHADING_UNLIT && mesh->normals != NULL &&
-            (context->light_count > 0 || mesh->colors_are_baked_light))
+        if (context->shading_mode != SDL3D_SHADING_UNLIT && mesh->normals != NULL)
         {
             sdl3d_build_lighting_params(context, &lp_storage);
             lp_storage.baked_light_mode = mesh->colors_are_baked_light;

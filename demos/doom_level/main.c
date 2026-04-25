@@ -6,9 +6,12 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include "sdl3d/animation.h"
 #include "sdl3d/font.h"
 #include "sdl3d/level.h"
 #include "sdl3d/lighting.h"
+#include "sdl3d/model.h"
+#include "sdl3d/scene.h"
 #include "sdl3d/sdl3d.h"
 #include "sdl3d/ui.h"
 
@@ -18,6 +21,15 @@
 #define SOFTWARE_H (WINDOW_H / 2)
 #define MOVE_SPEED 12.0f
 #define MOUSE_SENS 0.002f
+#define JUMP_VELOCITY 6.0f
+#define GRAVITY 14.0f
+#define PLAYER_HEIGHT 1.6f
+#define PLAYER_RADIUS 0.35f
+#define PLAYER_STEP_HEIGHT 1.1f
+#define PLAYER_CEILING_CLEARANCE 0.1f
+#define PLAYER_SPAWN_X 5.0f
+#define PLAYER_SPAWN_Z 4.0f
+#define PLAYER_SPAWN_YAW 3.14159f
 #define PROJ_SPEED 20.0f
 #define PROJ_LIFETIME 3.0f
 #define ROCKET_LIGHT_R 1.0f
@@ -143,6 +155,107 @@ static bool point_in_any_sector(const sdl3d_sector *sectors, int sector_count, f
             return true;
     }
     return false;
+}
+
+static int find_sector_at(const sdl3d_sector *sectors, int sector_count, float x, float z, float feet_y)
+{
+    int best = -1;
+    float best_floor = -1000000.0f;
+
+    for (int i = 0; i < sector_count; ++i)
+    {
+        const sdl3d_sector *sector = &sectors[i];
+        if (!point_in_sector_xz(sector, x, z))
+            continue;
+        if (sector->floor_y > feet_y || feet_y >= sector->ceil_y)
+            continue;
+        if (sector->floor_y > best_floor)
+        {
+            best = i;
+            best_floor = sector->floor_y;
+        }
+    }
+
+    return best;
+}
+
+static int find_walkable_sector_at(const sdl3d_sector *sectors, int sector_count, float x, float z, float feet_y,
+                                   float max_step_up)
+{
+    int best = -1;
+    float best_floor = -1000000.0f;
+
+    for (int i = 0; i < sector_count; ++i)
+    {
+        const sdl3d_sector *sector = &sectors[i];
+        if (!point_in_sector_xz(sector, x, z))
+            continue;
+        if (sector->floor_y > feet_y + max_step_up)
+            continue;
+        if (sector->ceil_y - sector->floor_y < PLAYER_HEIGHT + PLAYER_CEILING_CLEARANCE)
+            continue;
+        if (sector->floor_y > best_floor)
+        {
+            best = i;
+            best_floor = sector->floor_y;
+        }
+    }
+
+    return best;
+}
+
+static int find_support_sector_at(const sdl3d_sector *sectors, int sector_count, float x, float z, float feet_y)
+{
+    int best = -1;
+    float best_floor = -1000000.0f;
+
+    for (int i = 0; i < sector_count; ++i)
+    {
+        const sdl3d_sector *sector = &sectors[i];
+        if (!point_in_sector_xz(sector, x, z))
+            continue;
+        if (sector->floor_y > feet_y)
+            continue;
+        if (sector->ceil_y - sector->floor_y < PLAYER_HEIGHT + PLAYER_CEILING_CLEARANCE)
+            continue;
+        if (sector->floor_y > best_floor)
+        {
+            best = i;
+            best_floor = sector->floor_y;
+        }
+    }
+
+    return best;
+}
+
+static bool position_is_walkable(const sdl3d_sector *sectors, int sector_count, float x, float z, float feet_y,
+                                 float max_step_up, int *out_sector)
+{
+    static const float sample_dirs[8][2] = {
+        {1.0f, 0.0f},       {-1.0f, 0.0f},       {0.0f, 1.0f},        {0.0f, -1.0f},
+        {0.7071f, 0.7071f}, {0.7071f, -0.7071f}, {-0.7071f, 0.7071f}, {-0.7071f, -0.7071f},
+    };
+    int center_sector = find_walkable_sector_at(sectors, sector_count, x, z, feet_y, max_step_up);
+    float target_floor;
+
+    if (center_sector < 0)
+        return false;
+
+    target_floor = sectors[center_sector].floor_y;
+    for (int i = 0; i < 8; ++i)
+    {
+        float sx = x + sample_dirs[i][0] * PLAYER_RADIUS;
+        float sz = z + sample_dirs[i][1] * PLAYER_RADIUS;
+        int sample_sector = find_walkable_sector_at(sectors, sector_count, sx, sz, feet_y, max_step_up);
+        if (sample_sector < 0)
+            return false;
+        if (SDL_fabsf(sectors[sample_sector].floor_y - target_floor) > max_step_up)
+            return false;
+    }
+
+    if (out_sector != NULL)
+        *out_sector = center_sector;
+    return true;
 }
 
 static void advance_projectile(const sdl3d_sector *sectors, int sector_count, float dt, bool *proj_active,
@@ -277,6 +390,20 @@ static bool create_backend(SDL_Window **out_win, sdl3d_render_context **out_ctx,
 
     SDL_SetWindowRelativeMouseMode(*out_win, true);
     return true;
+}
+
+static void reset_demo_state(float *px, float *py, float *pz, float *yaw, float *pitch, float *vy, bool *on_ground,
+                             bool *proj_active, float *proj_life)
+{
+    *px = PLAYER_SPAWN_X;
+    *py = PLAYER_HEIGHT;
+    *pz = PLAYER_SPAWN_Z;
+    *yaw = PLAYER_SPAWN_YAW;
+    *pitch = 0.0f;
+    *vy = 0.0f;
+    *on_ground = true;
+    *proj_active = false;
+    *proj_life = 0.0f;
 }
 
 int main(int argc, char *argv[])
@@ -435,14 +562,32 @@ int main(int argc, char *argv[])
         {{{18, 0}, {30, 0}, {30, 8}, {18, 8}}, 4, 0.0f, 4.0f, 0, 1, 2},
         /* 9: Security bend linking core to courtyard */
         {{{22, 8}, {26, 8}, {26, 14}, {22, 14}}, 4, 0.0f, 3.2f, 5, 1, 4},
-        /* 10: Storage annex */
-        {{{28, 12}, {38, 12}, {38, 24}, {28, 24}}, 4, 0.0f, 4.0f, 0, 1, 2},
+        /* 10: Storage annex (narrowed to make room for stairwell) */
+        {{{28, 12}, {34, 12}, {34, 24}, {28, 24}}, 4, 0.0f, 4.0f, 0, 1, 2},
         /* 11: Reactor hall beyond exit */
         {{{18, 32}, {30, 32}, {30, 44}, {18, 44}}, 4, 0.0f, 5.5f, 5, 1, 4},
         /* 12: Secret annex behind storage */
         {{{32, 24}, {40, 24}, {40, 30}, {32, 30}}, 4, 0.0f, 3.0f, 0, 1, 2},
         /* 13: Exterior yard (large open-air space for skybox side visibility) */
         {{{-6, 44}, {54, 44}, {54, 104}, {-6, 104}}, 4, 0.0f, 12.0f, 5, -1, 2},
+
+        /* ---- Stairwell (sectors 14-20): wide stairs east of storage ---- */
+        /* Stairs run north (z=24) to south (z=12), rising as you go south.
+         * Upper room sits above storage with inset walls to avoid false portals. */
+        /* 14: Stair entry (ground floor, connects to storage at x=34, z=20-24) */
+        {{{34, 20}, {40, 20}, {40, 24}, {34, 24}}, 4, 0.0f, 10.0f, 0, -1, 4},
+        /* 15: Stair step 1 */
+        {{{34, 18}, {40, 18}, {40, 20}, {34, 20}}, 4, 1.0f, 10.0f, 0, -1, 4},
+        /* 16: Stair step 2 */
+        {{{34, 16}, {40, 16}, {40, 18}, {34, 18}}, 4, 2.0f, 10.0f, 0, -1, 4},
+        /* 17: Stair step 3 */
+        {{{34, 14}, {40, 14}, {40, 16}, {34, 16}}, 4, 3.0f, 10.0f, 0, -1, 4},
+        /* 18: Stair step 4 */
+        {{{34, 12}, {40, 12}, {40, 14}, {34, 14}}, 4, 4.0f, 10.0f, 0, -1, 4},
+        /* 19: Stair top landing */
+        {{{34, 10}, {40, 10}, {40, 12}, {34, 12}}, 4, 5.0f, 10.0f, 0, -1, 4},
+        /* 20: Upper room (3rd floor, connects to top landing at z=12, x=34-40) */
+        {{{29, 4}, {40, 4}, {40, 10}, {29, 10}}, 4, 6.0f, 10.0f, 3, 1, 5},
     };
 
     sdl3d_level_light lights[] = {
@@ -459,6 +604,9 @@ int main(int argc, char *argv[])
         {{24, 3.8f, 38}, {0.45f, 0.35f, 1.0f}, 2.2f, 11.0f},  /* Reactor hall — violet */
         {{36, 2.2f, 27}, {1.0f, 0.55f, 0.22f}, 1.5f, 7.0f},   /* Secret annex — orange */
         {{24, 8.5f, 74}, {0.32f, 0.38f, 0.7f}, 2.4f, 32.0f},  /* Exterior yard — night sky fill */
+        {{37, 2.5f, 22}, {1.0f, 0.8f, 0.5f}, 1.5f, 8.0f},     /* Stair entry — warm */
+        {{37, 5.0f, 15}, {0.8f, 0.6f, 1.0f}, 1.8f, 10.0f},    /* Mid-stairs — purple */
+        {{34, 8.5f, 7}, {1.0f, 0.95f, 0.8f}, 3.0f, 16.0f},    /* Upper room — bright warm */
     };
     const int sector_count = (int)SDL_arraysize(sectors);
     const int light_count = (int)SDL_arraysize(lights);
@@ -576,8 +724,11 @@ int main(int argc, char *argv[])
     bool portal_culling = true;
 
     /* Player */
-    float px = 5, py = 1.6f, pz = 4;
-    float yaw = 3.14159f, pitch = 0;
+    float px = PLAYER_SPAWN_X, py = PLAYER_HEIGHT, pz = PLAYER_SPAWN_Z;
+    float yaw = PLAYER_SPAWN_YAW, pitch = 0;
+    float vy = 0;          /* vertical velocity for jump */
+    float view_smooth = 0; /* Quake-style view smoothing for stairs */
+    bool on_ground = true;
     bool mouse_init = false;
 
     /* Projectile. */
@@ -585,6 +736,52 @@ int main(int argc, char *argv[])
     float proj_x = 0, proj_y = 0, proj_z = 0;
     float proj_dx = 0, proj_dy = 0, proj_dz = 0;
     float proj_life = 0;
+
+    /* Load 3D models and create scene actors. */
+    sdl3d_model robot_model = {0};
+    bool has_robot = sdl3d_load_model_from_file(SDL3D_MEDIA_DIR "/simple_robot/simple_robot.glb", &robot_model);
+    if (!has_robot)
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Robot model load failed: %s", SDL_GetError());
+
+    sdl3d_model dragon_model = {0};
+    bool has_dragon = sdl3d_load_model_from_file(SDL3D_MEDIA_DIR "/black_dragon/scene.gltf", &dragon_model);
+    if (!has_dragon)
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Dragon model load failed: %s", SDL_GetError());
+    else
+    {
+        /* Boost dark material albedo so the dragon is visible under level lighting. */
+        for (int i = 0; i < dragon_model.material_count; ++i)
+        {
+            for (int c = 0; c < 3; ++c)
+                dragon_model.materials[i].albedo[c] = SDL_min(dragon_model.materials[i].albedo[c] * 3.0f, 1.0f);
+            dragon_model.materials[i].albedo[3] = 1.0f;
+        }
+    }
+
+    sdl3d_scene *scene = sdl3d_create_scene();
+
+    /* Place robot actors in the level. */
+    if (has_robot && scene)
+    {
+        sdl3d_actor *r1 = sdl3d_scene_add_actor(scene, &robot_model);
+        sdl3d_actor_set_position(r1, sdl3d_vec3_make(5.0f, 0.0f, 12.0f));
+        sdl3d_actor_set_scale(r1, sdl3d_vec3_make(0.8f, 0.8f, 0.8f));
+
+        sdl3d_actor *r2 = sdl3d_scene_add_actor(scene, &robot_model);
+        sdl3d_actor_set_position(r2, sdl3d_vec3_make(24.0f, 0.0f, 20.0f));
+        sdl3d_actor_set_scale(r2, sdl3d_vec3_make(0.8f, 0.8f, 0.8f));
+        sdl3d_actor_set_tint(r2, (sdl3d_color){255, 180, 180, 255});
+    }
+
+    /* Place animated dragon in the exterior yard. */
+    if (has_dragon && scene)
+    {
+        sdl3d_actor *dragon = sdl3d_scene_add_actor(scene, &dragon_model);
+        sdl3d_actor_set_position(dragon, sdl3d_vec3_make(24.0f, 0.0f, 74.0f));
+        sdl3d_actor_set_scale(dragon, sdl3d_vec3_make(2.0f, 2.0f, 2.0f));
+        if (dragon_model.animation_count > 0)
+            sdl3d_actor_play_animation(dragon, 0, true);
+    }
 
     bool running = true;
     Uint64 last = SDL_GetPerformanceCounter();
@@ -620,6 +817,17 @@ int main(int argc, char *argv[])
             {
                 portal_culling = !portal_culling;
                 SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Portal culling: %s", portal_culling ? "ON" : "OFF");
+            }
+            if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_SPACE && on_ground)
+            {
+                vy = JUMP_VELOCITY;
+                on_ground = false;
+            }
+            if (ev.type == SDL_EVENT_KEY_DOWN &&
+                (ev.key.scancode == SDL_SCANCODE_BACKSPACE || ev.key.scancode == SDL_SCANCODE_DELETE))
+            {
+                reset_demo_state(&px, &py, &pz, &yaw, &pitch, &vy, &on_ground, &proj_active, &proj_life);
+                view_smooth = 0;
             }
             if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_TAB)
             {
@@ -681,6 +889,18 @@ int main(int argc, char *argv[])
         last = now;
         elapsed += dt;
 
+        /* Advance all actor animations. */
+        if (scene)
+        {
+            int ac = sdl3d_scene_get_actor_count(scene);
+            for (int i = 0; i < ac; i++)
+            {
+                sdl3d_actor *a = sdl3d_scene_get_actor_at(scene, i);
+                if (a)
+                    sdl3d_actor_advance_animation(a, dt);
+            }
+        }
+
         /* Look direction (for camera target). */
         float fx = SDL_sinf(yaw) * SDL_cosf(pitch);
         float fz = -SDL_cosf(yaw) * SDL_cosf(pitch);
@@ -715,19 +935,176 @@ int main(int argc, char *argv[])
             wish_z += right_z;
         }
 
-        /* Normalize wish direction. */
-        float wish_len = SDL_sqrtf(wish_x * wish_x + wish_z * wish_z);
-        if (wish_len > 0.001f)
+        /* Quake-style view smoothing: decay the offset each frame. */
         {
-            wish_x /= wish_len;
-            wish_z /= wish_len;
-            px += wish_x * MOVE_SPEED * dt;
-            pz += wish_z * MOVE_SPEED * dt;
+            float smooth_speed = 12.0f; /* higher = snappier */
+            if (view_smooth > 0.01f)
+                view_smooth -= view_smooth * smooth_speed * dt;
+            else if (view_smooth < -0.01f)
+                view_smooth -= view_smooth * smooth_speed * dt;
+            else
+                view_smooth = 0.0f;
+        }
+
+        float py_before_collision = py;
+
+        /* Normalize wish direction, then apply Doom-style sliding collision
+         * against sector boundaries. */
+        {
+            float feet_y = py - PLAYER_HEIGHT;
+            int current_sector = find_sector_at(sectors, sector_count, px, pz, feet_y);
+            float current_floor = feet_y;
+
+            if (current_sector < 0)
+            {
+                current_sector = find_walkable_sector_at(sectors, sector_count, px, pz, feet_y, PLAYER_STEP_HEIGHT);
+            }
+            if (current_sector >= 0)
+            {
+                current_floor = sectors[current_sector].floor_y;
+            }
+
+            {
+                float wish_len = SDL_sqrtf(wish_x * wish_x + wish_z * wish_z);
+                if (wish_len > 0.001f)
+                {
+                    float move_x;
+                    float move_z;
+                    int candidate_sector = -1;
+
+                    wish_x /= wish_len;
+                    wish_z /= wish_len;
+                    move_x = wish_x * MOVE_SPEED * dt;
+                    move_z = wish_z * MOVE_SPEED * dt;
+
+                    if (position_is_walkable(sectors, sector_count, px + move_x, pz + move_z, feet_y,
+                                             PLAYER_STEP_HEIGHT, &candidate_sector))
+                    {
+                        px += move_x;
+                        pz += move_z;
+                        current_sector = candidate_sector;
+                    }
+                    else
+                    {
+                        if (position_is_walkable(sectors, sector_count, px + move_x, pz, feet_y, PLAYER_STEP_HEIGHT,
+                                                 &candidate_sector))
+                        {
+                            px += move_x;
+                            current_sector = candidate_sector;
+                        }
+                        else
+                        {
+                            if (position_is_walkable(sectors, sector_count, px, pz + move_z, feet_y, PLAYER_STEP_HEIGHT,
+                                                     &candidate_sector))
+                            {
+                                pz += move_z;
+                                current_sector = candidate_sector;
+                            }
+                        }
+                    }
+                }
+            }
+
+            feet_y = py - PLAYER_HEIGHT;
+            current_sector = find_sector_at(sectors, sector_count, px, pz, feet_y);
+            if (current_sector < 0)
+            {
+                current_sector = find_walkable_sector_at(sectors, sector_count, px, pz, feet_y, PLAYER_STEP_HEIGHT);
+            }
+
+            if (on_ground)
+            {
+                if (current_sector >= 0)
+                {
+                    const float target_floor = sectors[current_sector].floor_y;
+                    if (target_floor < current_floor - PLAYER_STEP_HEIGHT)
+                    {
+                        on_ground = false;
+                    }
+                    else
+                    {
+                        py = target_floor + PLAYER_HEIGHT;
+                    }
+                }
+                else
+                {
+                    on_ground = false;
+                }
+            }
+        }
+
+        /* Jump / gravity. */
+        if (!on_ground)
+        {
+            float prev_head_y = py;
+            float prev_feet_y = py - PLAYER_HEIGHT;
+            float feet_y;
+            int containing_sector;
+            int support_sector;
+
+            vy -= GRAVITY * dt;
+            py += vy * dt;
+            feet_y = py - PLAYER_HEIGHT;
+            containing_sector = find_sector_at(sectors, sector_count, px, pz, SDL_max(prev_feet_y, feet_y));
+            support_sector = find_support_sector_at(sectors, sector_count, px, pz,
+                                                    SDL_max(prev_feet_y, feet_y) + PLAYER_STEP_HEIGHT);
+
+            if (containing_sector >= 0)
+            {
+                float ceiling_y = sectors[containing_sector].ceil_y - PLAYER_CEILING_CLEARANCE;
+                if (prev_head_y <= ceiling_y && py > ceiling_y)
+                {
+                    py = ceiling_y;
+                    feet_y = py - PLAYER_HEIGHT;
+                    if (vy > 0.0f)
+                        vy = 0.0f;
+                }
+            }
+
+            if (support_sector >= 0 && vy <= 0.0f)
+            {
+                float floor_y = sectors[support_sector].floor_y;
+                if (prev_feet_y >= floor_y && feet_y <= floor_y)
+                {
+                    py = floor_y + PLAYER_HEIGHT;
+                    vy = 0.0f;
+                    on_ground = true;
+                }
+            }
+
+            if (!on_ground && py < -20.0f)
+            {
+                reset_demo_state(&px, &py, &pz, &yaw, &pitch, &vy, &on_ground, &proj_active, &proj_life);
+                view_smooth = 0;
+            }
+        }
+
+        {
+            float feet_y = py - PLAYER_HEIGHT;
+            int containing_sector = find_sector_at(sectors, sector_count, px, pz, feet_y);
+            if (containing_sector >= 0)
+            {
+                float ceiling_y = sectors[containing_sector].ceil_y - PLAYER_CEILING_CLEARANCE;
+                if (py > ceiling_y)
+                {
+                    py = ceiling_y;
+                    if (vy > 0.0f)
+                        vy = 0.0f;
+                }
+            }
+        }
+
+        /* Accumulate view smooth offset from floor snaps (not jumps). */
+        {
+            float py_delta = py - py_before_collision;
+            if (on_ground && SDL_fabsf(py_delta) > 0.01f)
+                view_smooth -= py_delta;
         }
 
         sdl3d_camera3d cam;
-        cam.position = sdl3d_vec3_make(px, py, pz);
-        cam.target = sdl3d_vec3_make(px + fx, py + SDL_sinf(pitch), pz + fz);
+        float eye_y = py + view_smooth;
+        cam.position = sdl3d_vec3_make(px, eye_y, pz);
+        cam.target = sdl3d_vec3_make(px + fx, eye_y + SDL_sinf(pitch), pz + fz);
         cam.up = sdl3d_vec3_make(0, 1, 0);
         cam.fovy = 75.0f;
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
@@ -739,7 +1116,12 @@ int main(int argc, char *argv[])
         /* Compute portal visibility. */
         sdl3d_level *active_level =
             use_lit_world ? (use_lightmaps ? &level_lightmapped : &level_vertex_baked) : &level_unlit;
-        int current_sector = sdl3d_level_find_sector(active_level, sectors, px, pz);
+        int current_sector = find_sector_at(sectors, sector_count, px, pz, py - PLAYER_HEIGHT);
+        if (current_sector < 0)
+        {
+            current_sector =
+                find_walkable_sector_at(sectors, sector_count, px, pz, py - PLAYER_HEIGHT, PLAYER_STEP_HEIGHT);
+        }
         sdl3d_vec3 cam_dir = sdl3d_vec3_make(fx, SDL_sinf(pitch), fz);
 
         sdl3d_clear_lights(ctx);
@@ -824,6 +1206,24 @@ int main(int argc, char *argv[])
 
         sdl3d_draw_level(ctx, active_level, portal_culling ? &vis : NULL, (sdl3d_color){255, 255, 255, 255});
 
+        /* Draw 3D scene actors (robot models). */
+        if (scene)
+            sdl3d_draw_scene(ctx, scene);
+
+        /* Crate props — simple textured cubes placed around the level. */
+        {
+            static const sdl3d_vec3 crate_positions[] = {
+                {3.0f, 0.5f, 5.0f},   {7.0f, 0.5f, 5.0f},   {3.0f, 0.5f, 10.0f},
+                {7.0f, 0.5f, 10.0f},  {14.0f, 0.5f, 20.0f}, {14.0f, 1.5f, 20.0f}, /* stacked */
+                {22.0f, 0.5f, 16.0f},
+            };
+            sdl3d_color crate_color = {160, 120, 80, 255};
+            for (int i = 0; i < (int)SDL_arraysize(crate_positions); i++)
+            {
+                sdl3d_draw_cube(ctx, crate_positions[i], sdl3d_vec3_make(1.0f, 1.0f, 1.0f), crate_color);
+            }
+        }
+
         {
             int actor_draw_count = 0;
             for (int i = 0; i < (int)SDL_arraysize(actors); ++i)
@@ -878,7 +1278,7 @@ int main(int argc, char *argv[])
         /* Crosshair. */
         {
             float chx = px + fx * 0.4f;
-            float chy = py + SDL_sinf(pitch) * 0.4f;
+            float chy = eye_y + SDL_sinf(pitch) * 0.4f;
             float chz = pz + fz * 0.4f;
             sdl3d_set_emissive(ctx, 8, 8, 8);
             sdl3d_draw_cube(ctx, sdl3d_vec3_make(chx, chy, chz), sdl3d_vec3_make(0.003f, 0.003f, 0.003f),
@@ -933,6 +1333,11 @@ int main(int argc, char *argv[])
     if (has_font)
         sdl3d_free_font(&debug_font);
     sdl3d_ui_destroy(ui);
+    sdl3d_destroy_scene(scene);
+    if (has_robot)
+        sdl3d_free_model(&robot_model);
+    if (has_dragon)
+        sdl3d_free_model(&dragon_model);
     sdl3d_destroy_render_context(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();

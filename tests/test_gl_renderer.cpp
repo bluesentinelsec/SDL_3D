@@ -167,6 +167,77 @@ TEST_F(GLRendererTest, PhongCubeVisibleWithoutIBL)
     EXPECT_FALSE(px[0] == 8 && px[1] == 32 && px[2] == 96);
 }
 
+TEST_F(GLRendererTest, AmbientOnlyPhongCubeUsesLitPath)
+{
+    ASSERT_TRUE(sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG));
+    ASSERT_TRUE(sdl3d_set_ambient_light(ctx, 0.12f, 0.12f, 0.14f));
+
+    sdl3d_camera3d cam;
+    cam.position = sdl3d_vec3_make(0, 0, 5);
+    cam.target = sdl3d_vec3_make(0, 0, 0);
+    cam.up = sdl3d_vec3_make(0, 1, 0);
+    cam.fovy = 60.0f;
+    cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    sdl3d_clear_render_context(ctx, (sdl3d_color){0, 0, 0, 255});
+    sdl3d_begin_mode_3d(ctx, cam);
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(2, 2, 2), (sdl3d_color){255, 255, 255, 255});
+    sdl3d_end_mode_3d(ctx);
+
+    unsigned char px[4];
+    readPixel(160, 120, px);
+
+    EXPECT_GT(px[0] + px[1] + px[2], 20);
+    EXPECT_LT(px[0], 220);
+    EXPECT_LT(px[1], 220);
+    EXPECT_LT(px[2], 220);
+}
+
+TEST_F(GLRendererTest, AmbientOnlyPhongModelUsesLitPath)
+{
+    ASSERT_TRUE(sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG));
+    ASSERT_TRUE(sdl3d_set_ambient_light(ctx, 0.10f, 0.12f, 0.14f));
+
+    float positions[] = {
+        -1.0f, -1.0f, 0.0f, 1.0f, -1.0f, 0.0f, 1.0f, 1.0f, 0.0f, -1.0f, 1.0f, 0.0f,
+    };
+    float normals[] = {
+        0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+    };
+    unsigned int indices[] = {0, 1, 2, 0, 2, 3};
+    sdl3d_mesh mesh = {};
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.vertex_count = 4;
+    mesh.indices = indices;
+    mesh.index_count = 6;
+    mesh.material_index = -1;
+
+    sdl3d_model model = {};
+    model.meshes = &mesh;
+    model.mesh_count = 1;
+
+    sdl3d_camera3d cam;
+    cam.position = sdl3d_vec3_make(0, 0, 5);
+    cam.target = sdl3d_vec3_make(0, 0, 0);
+    cam.up = sdl3d_vec3_make(0, 1, 0);
+    cam.fovy = 60.0f;
+    cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    sdl3d_clear_render_context(ctx, (sdl3d_color){0, 0, 0, 255});
+    sdl3d_begin_mode_3d(ctx, cam);
+    ASSERT_TRUE(sdl3d_draw_model(ctx, &model, sdl3d_vec3_make(0, 0, 0), 1.0f, (sdl3d_color){255, 255, 255, 255}));
+    sdl3d_end_mode_3d(ctx);
+
+    unsigned char px[4];
+    readPixel(160, 120, px);
+
+    EXPECT_GT(px[0] + px[1] + px[2], 20);
+    EXPECT_LT(px[0], 220);
+    EXPECT_LT(px[1], 220);
+    EXPECT_LT(px[2], 220);
+}
+
 TEST_F(GLRendererTest, CubeVisibleOnFirstFrame)
 {
     /* This specifically tests lesson #1 and #9: first frame must be correct. */
