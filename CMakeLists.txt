@@ -96,6 +96,7 @@ target_sources(
         src/level.c
         src/model.c
         src/obj_loader.c
+        src/properties.c
         src/rasterizer.c
         src/render_context.c
         src/scene.c
