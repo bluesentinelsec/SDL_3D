@@ -1265,10 +1265,7 @@ int main(int argc, char *argv[])
                 {22.0f, 0.5f, 16.0f},
             };
             sdl3d_color crate_tint = {255, 255, 255, 255};
-            const sdl3d_texture2d *tex =
-                (crate_tex.pixels && current_backend != SDL3D_BACKEND_SOFTWARE) ? &crate_tex : NULL;
-            if (!tex)
-                crate_tint = (sdl3d_color){160, 120, 80, 255};
+            const sdl3d_texture2d *tex = crate_tex.pixels ? &crate_tex : NULL;
             for (int i = 0; i < (int)SDL_arraysize(crate_positions); i++)
             {
                 sdl3d_draw_cube_textured(ctx, crate_positions[i], sdl3d_vec3_make(1.0f, 1.0f, 1.0f),
