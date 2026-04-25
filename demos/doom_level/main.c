@@ -735,6 +735,13 @@ int main(int argc, char *argv[])
     bool on_ground = true;
     bool mouse_init = false;
 
+    /* Last-known-good position. Captured each frame the player is on solid
+     * ground inside a valid sector, used as a safety net if vertical
+     * collision puts the player in the void (Quake's PM_Trace fallback). */
+    float last_good_x = px;
+    float last_good_y = py;
+    float last_good_z = pz;
+
     /* Projectile. */
     bool proj_active = false;
     float proj_x = 0, proj_y = 0, proj_z = 0;
@@ -1037,48 +1044,99 @@ int main(int argc, char *argv[])
             }
         }
 
-        /* Jump / gravity. */
+        /* Jump / gravity. Quake-style substepped vertical integration: a
+         * single large dy can skip past a thin stair sector entirely
+         * (issue #76). Split the motion so each substep moves at most
+         * half a stair step and re-runs the floor-cross test. */
         if (!on_ground)
         {
-            float prev_head_y = py;
-            float prev_feet_y = py - PLAYER_HEIGHT;
-            float feet_y;
-            int containing_sector;
-            int support_sector;
-
             vy -= GRAVITY * dt;
-            py += vy * dt;
-            feet_y = py - PLAYER_HEIGHT;
-            containing_sector = find_sector_at(sectors, sector_count, px, pz, SDL_max(prev_feet_y, feet_y));
-            support_sector = find_support_sector_at(sectors, sector_count, px, pz,
-                                                    SDL_max(prev_feet_y, feet_y) + PLAYER_STEP_HEIGHT);
+            float dy = vy * dt;
 
-            if (containing_sector >= 0)
+            const float max_substep = PLAYER_STEP_HEIGHT * 0.5f;
+            int substeps = 1;
+            float abs_dy = SDL_fabsf(dy);
+            if (abs_dy > max_substep)
             {
-                float ceiling_y = sectors[containing_sector].ceil_y - PLAYER_CEILING_CLEARANCE;
-                if (prev_head_y <= ceiling_y && py > ceiling_y)
+                substeps = (int)SDL_ceilf(abs_dy / max_substep);
+            }
+            float sub_dy = dy / (float)substeps;
+
+            for (int s = 0; s < substeps; ++s)
+            {
+                float prev_py = py;
+                float prev_feet_y = py - PLAYER_HEIGHT;
+                py += sub_dy;
+                float feet_y = py - PLAYER_HEIGHT;
+
+                /* Ceiling check: head crossed downward-facing ceiling plane. */
+                int containing_sector = find_sector_at(sectors, sector_count, px, pz, SDL_max(prev_feet_y, feet_y));
+                if (containing_sector >= 0)
                 {
-                    py = ceiling_y;
-                    feet_y = py - PLAYER_HEIGHT;
-                    if (vy > 0.0f)
-                        vy = 0.0f;
+                    float ceiling_y = sectors[containing_sector].ceil_y - PLAYER_CEILING_CLEARANCE;
+                    if (prev_py <= ceiling_y && py > ceiling_y)
+                    {
+                        py = ceiling_y;
+                        if (vy > 0.0f)
+                            vy = 0.0f;
+                        break;
+                    }
+                }
+
+                /* Floor snap: feet crossed any support floor going down. */
+                if (vy <= 0.0f)
+                {
+                    int support_sector = find_support_sector_at(sectors, sector_count, px, pz,
+                                                                SDL_max(prev_feet_y, feet_y) + PLAYER_STEP_HEIGHT);
+                    if (support_sector >= 0)
+                    {
+                        float floor_y = sectors[support_sector].floor_y;
+                        if (prev_feet_y >= floor_y && feet_y <= floor_y)
+                        {
+                            py = floor_y + PLAYER_HEIGHT;
+                            vy = 0.0f;
+                            on_ground = true;
+                            break;
+                        }
+                    }
                 }
             }
 
-            if (support_sector >= 0 && vy <= 0.0f)
+            /* Ground-trace rescue: if the player ended up outside any
+             * sector but a support floor exists nearby above their feet
+             * (within step height), snap to it. Catches the case where
+             * a stair edge briefly leaves the player in the void.
+             * Quake 3's PM_GroundTrace pattern. */
+            if (!on_ground && vy <= 0.0f)
             {
-                float floor_y = sectors[support_sector].floor_y;
-                if (prev_feet_y >= floor_y && feet_y <= floor_y)
+                float feet_y = py - PLAYER_HEIGHT;
+                int containing_now = find_sector_at(sectors, sector_count, px, pz, feet_y);
+                if (containing_now < 0)
                 {
-                    py = floor_y + PLAYER_HEIGHT;
-                    vy = 0.0f;
-                    on_ground = true;
+                    int rescue = find_support_sector_at(sectors, sector_count, px, pz, feet_y + PLAYER_STEP_HEIGHT);
+                    if (rescue >= 0)
+                    {
+                        float floor_y = sectors[rescue].floor_y;
+                        if (floor_y >= feet_y && (floor_y - feet_y) <= PLAYER_STEP_HEIGHT)
+                        {
+                            py = floor_y + PLAYER_HEIGHT;
+                            vy = 0.0f;
+                            on_ground = true;
+                        }
+                    }
                 }
             }
 
+            /* Last-known-good fallback: if all of the above failed and
+             * the player is dropping through the world, restore the
+             * cached safe position rather than teleporting to spawn. */
             if (!on_ground && py < -20.0f)
             {
-                reset_demo_state(&px, &py, &pz, &yaw, &pitch, &vy, &on_ground, &proj_active, &proj_life);
+                px = last_good_x;
+                py = last_good_y;
+                pz = last_good_z;
+                vy = 0.0f;
+                on_ground = true;
                 view_smooth = 0;
             }
         }
@@ -1103,6 +1161,18 @@ int main(int argc, char *argv[])
             float py_delta = py - py_before_collision;
             if (on_ground && SDL_fabsf(py_delta) > 0.01f)
                 view_smooth -= py_delta;
+        }
+
+        /* Capture last-known-good while standing in a valid sector. */
+        if (on_ground)
+        {
+            int validate = find_sector_at(sectors, sector_count, px, pz, py - PLAYER_HEIGHT);
+            if (validate >= 0)
+            {
+                last_good_x = px;
+                last_good_y = py;
+                last_good_z = pz;
+            }
         }
 
         sdl3d_camera3d cam;
