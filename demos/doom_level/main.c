@@ -17,8 +17,8 @@
 
 #define WINDOW_W 1280
 #define WINDOW_H 720
-#define SOFTWARE_W (WINDOW_W / 2)
-#define SOFTWARE_H (WINDOW_H / 2)
+#define SOFTWARE_W (WINDOW_W / 4)
+#define SOFTWARE_H (WINDOW_H / 4)
 #define MOVE_SPEED 12.0f
 #define MOUSE_SENS 0.002f
 #define JUMP_VELOCITY 6.0f
@@ -882,11 +882,9 @@ int main(int argc, char *argv[])
                     sdl3d_set_ssao_enabled(ctx, false);
                     sdl3d_set_point_shadows_enabled(ctx, false);
                     sdl3d_set_backface_culling_enabled(ctx, true);
-                    sdl3d_set_shading_mode(ctx, (current_backend == SDL3D_BACKEND_SOFTWARE) ? SDL3D_SHADING_UNLIT
+                    sdl3d_set_shading_mode(ctx, (current_backend == SDL3D_BACKEND_SOFTWARE) ? SDL3D_SHADING_FLAT
                                                                                             : SDL3D_SHADING_PHONG);
-                    /* Hide expensive dragon model on software for performance. */
-                    if (dragon_actor)
-                        sdl3d_actor_set_visible(dragon_actor, current_backend != SDL3D_BACKEND_SOFTWARE);
+                    /* Restore dragon on GL, keep on software too. */
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Switched to %s backend render=%dx%d",
                                 sdl3d_get_backend_name(current_backend), sdl3d_get_render_context_width(ctx),
                                 sdl3d_get_render_context_height(ctx));
@@ -899,7 +897,7 @@ int main(int argc, char *argv[])
                     sdl3d_set_ssao_enabled(ctx, false);
                     sdl3d_set_point_shadows_enabled(ctx, false);
                     sdl3d_set_backface_culling_enabled(ctx, true);
-                    sdl3d_set_shading_mode(ctx, (current_backend == SDL3D_BACKEND_SOFTWARE) ? SDL3D_SHADING_UNLIT
+                    sdl3d_set_shading_mode(ctx, (current_backend == SDL3D_BACKEND_SOFTWARE) ? SDL3D_SHADING_FLAT
                                                                                             : SDL3D_SHADING_PHONG);
                 }
             }
