@@ -346,3 +346,28 @@ TEST(SDL3DBackendInterface, SoftwareDrawMeshLitReturnsFalseForFallthrough)
     sdl3d_draw_params_lit params{};
     EXPECT_FALSE(iface.draw_mesh_lit(nullptr, &params));
 }
+
+/* ------------------------------------------------------------------ */
+/* High-level API tests                                                */
+/* ------------------------------------------------------------------ */
+
+TEST(SDL3DWindowConfig, DefaultsAreReasonable)
+{
+    sdl3d_window_config cfg;
+    sdl3d_init_window_config(&cfg);
+    EXPECT_EQ(cfg.width, 1280);
+    EXPECT_EQ(cfg.height, 720);
+    EXPECT_NE(cfg.title, nullptr);
+    EXPECT_EQ(cfg.backend, SDL3D_BACKEND_AUTO);
+    EXPECT_TRUE(cfg.allow_backend_fallback);
+    EXPECT_TRUE(cfg.resizable);
+}
+
+TEST(SDL3DFeatureQuery, SoftwareHasNoPostProcessing)
+{
+    /* We can't create a real context in unit tests without a display,
+     * but we can test the function with a NULL context. */
+    EXPECT_FALSE(sdl3d_is_feature_available(nullptr, SDL3D_FEATURE_BLOOM));
+    EXPECT_FALSE(sdl3d_is_feature_available(nullptr, SDL3D_FEATURE_SSAO));
+    EXPECT_FALSE(sdl3d_is_feature_available(nullptr, SDL3D_FEATURE_SHADOWS));
+}

@@ -492,6 +492,31 @@ void sdl3d_ui_set_mouse_transform(sdl3d_ui_context *ui, float scale_x, float sca
     ui->mouse_offset_y = offset_y;
 }
 
+void sdl3d_ui_begin_frame_ex(sdl3d_ui_context *ui, sdl3d_render_context *context, SDL_Window *window)
+{
+    if (!ui || !context || !window)
+        return;
+
+    int lw = sdl3d_get_render_context_width(context);
+    int lh = sdl3d_get_render_context_height(context);
+    sdl3d_ui_begin_frame(ui, lw, lh);
+
+    /* Compute letterbox mouse mapping from window points to logical coords. */
+    int win_w = 0, win_h = 0;
+    SDL_GetWindowSize(window, &win_w, &win_h);
+    if (win_w > 0 && win_h > 0 && lw > 0 && lh > 0)
+    {
+        float sx = (float)win_w / (float)lw;
+        float sy = (float)win_h / (float)lh;
+        float s = (sx < sy) ? sx : sy;
+        float vp_w = (float)lw * s;
+        float vp_h = (float)lh * s;
+        float vp_x = ((float)win_w - vp_w) * 0.5f;
+        float vp_y = ((float)win_h - vp_h) * 0.5f;
+        sdl3d_ui_set_mouse_transform(ui, (float)lw / vp_w, (float)lh / vp_h, vp_x, vp_y);
+    }
+}
+
 void sdl3d_ui_end_frame(sdl3d_ui_context *ui)
 {
     if (!ui)

@@ -136,29 +136,6 @@ static const sdl3d_color entity_colors[] = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Mouse transform                                                     */
-/* ------------------------------------------------------------------ */
-
-static void update_ui_mouse_transform(sdl3d_ui_context *ui, SDL_Window *win, float logical_w, float logical_h)
-{
-    int win_w = 0, win_h = 0;
-    SDL_GetWindowSize(win, &win_w, &win_h);
-    if (win_w <= 0 || win_h <= 0 || logical_w <= 0.0f || logical_h <= 0.0f)
-    {
-        sdl3d_ui_set_mouse_transform(ui, 1.0f, 1.0f, 0.0f, 0.0f);
-        return;
-    }
-    const float sx = (float)win_w / logical_w;
-    const float sy = (float)win_h / logical_h;
-    const float s = (sx < sy) ? sx : sy;
-    const float vp_w = logical_w * s;
-    const float vp_h = logical_h * s;
-    const float vp_x = ((float)win_w - vp_w) * 0.5f;
-    const float vp_y = ((float)win_h - vp_h) * 0.5f;
-    sdl3d_ui_set_mouse_transform(ui, logical_w / vp_w, logical_h / vp_h, vp_x, vp_y);
-}
-
-/* ------------------------------------------------------------------ */
 /* Menu bar                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -508,54 +485,22 @@ int main(int argc, char *argv[])
     if (!SDL_Init(SDL_INIT_VIDEO))
         return 1;
 
-    /* Backend creation helper — recreates window + renderer + context. */
+    sdl3d_window_config wcfg;
+    sdl3d_init_window_config(&wcfg);
+    wcfg.width = WINDOW_W;
+    wcfg.height = WINDOW_H;
+    wcfg.title = "SDL3D \xe2\x80\x94 UI Editor Demo";
+
     SDL_Window *win = NULL;
-    SDL_Renderer *ren = NULL;
     sdl3d_render_context *ctx = NULL;
-    sdl3d_backend current_backend = SDL3D_BACKEND_SDLGPU;
-
-    /* clang-format off */
-    #define CREATE_BACKEND(backend_type) do { \
-        if (ctx) sdl3d_destroy_render_context(ctx); \
-        if (ren) SDL_DestroyRenderer(ren); \
-        if (win) { SDL_StopTextInput(win); SDL_DestroyWindow(win); } \
-        ctx = NULL; ren = NULL; win = NULL; \
-        SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE; \
-        if ((backend_type) == SDL3D_BACKEND_SDLGPU) { \
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE); \
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3); \
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3); \
-            SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24); \
-            SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1); \
-            flags |= SDL_WINDOW_OPENGL; \
-        } \
-        win = SDL_CreateWindow("SDL3D \xe2\x80\x94 UI Editor Demo", WINDOW_W, WINDOW_H, flags); \
-        if (!win) break; \
-        SDL_StartTextInput(win); \
-        if ((backend_type) != SDL3D_BACKEND_SDLGPU) { \
-            ren = SDL_CreateRenderer(win, NULL); \
-            if (!ren) { SDL_DestroyWindow(win); win = NULL; break; } \
-        } \
-        sdl3d_render_context_config cfg_; \
-        sdl3d_init_render_context_config(&cfg_); \
-        cfg_.backend = (backend_type); \
-        cfg_.allow_backend_fallback = false; \
-        cfg_.logical_width = WINDOW_W; \
-        cfg_.logical_height = WINDOW_H; \
-        if (!sdl3d_create_render_context(win, ren, &cfg_, &ctx)) { \
-            if (ren) SDL_DestroyRenderer(ren); ren = NULL; \
-            SDL_DestroyWindow(win); win = NULL; break; \
-        } \
-        sdl3d_set_bloom_enabled(ctx, false); \
-        sdl3d_set_ssao_enabled(ctx, false); \
-        current_backend = (backend_type); \
-        SDL_Log("Backend: %s", sdl3d_get_backend_name(current_backend)); \
-    } while (0)
-    /* clang-format on */
-
-    CREATE_BACKEND(SDL3D_BACKEND_SDLGPU);
-    if (!win)
+    if (!sdl3d_create_window(&wcfg, &win, &ctx))
+    {
+        SDL_Log("Window creation failed: %s", SDL_GetError());
         return 1;
+    }
+    SDL_StartTextInput(win);
+    sdl3d_set_bloom_enabled(ctx, false);
+    sdl3d_set_ssao_enabled(ctx, false);
 
     sdl3d_font ui_font;
     if (!sdl3d_load_builtin_font(SDL3D_MEDIA_DIR, SDL3D_BUILTIN_FONT_INTER, 16.0f, &ui_font))
@@ -569,7 +514,7 @@ int main(int argc, char *argv[])
 
     editor_state st;
     editor_reset(&st);
-    st.backend_name = sdl3d_get_backend_name(current_backend);
+    st.backend_name = sdl3d_get_backend_name(sdl3d_get_render_context_backend(ctx));
 
     float elapsed = 0.0f;
     Uint64 last = SDL_GetPerformanceCounter();
@@ -580,8 +525,7 @@ int main(int argc, char *argv[])
         float sw = (float)sdl3d_get_render_context_width(ctx);
         float sh = (float)sdl3d_get_render_context_height(ctx);
 
-        sdl3d_ui_begin_frame(ui, (int)sw, (int)sh);
-        update_ui_mouse_transform(ui, win, sw, sh);
+        sdl3d_ui_begin_frame_ex(ui, ctx, win);
 
         SDL_Event ev;
         while (SDL_PollEvent(&ev))
@@ -598,17 +542,21 @@ int main(int argc, char *argv[])
                     running = false;
                 if (ev.key.scancode == SDL_SCANCODE_GRAVE)
                 {
-                    sdl3d_backend next =
-                        (current_backend == SDL3D_BACKEND_SDLGPU) ? SDL3D_BACKEND_SOFTWARE : SDL3D_BACKEND_SDLGPU;
-                    CREATE_BACKEND(next);
-                    if (!win)
+                    sdl3d_backend cur = sdl3d_get_render_context_backend(ctx);
+                    sdl3d_backend next = (cur == SDL3D_BACKEND_SDLGPU) ? SDL3D_BACKEND_SOFTWARE : SDL3D_BACKEND_SDLGPU;
+                    if (sdl3d_switch_backend(&win, &ctx, next))
                     {
-                        SDL_Log("Backend switch failed, reverting");
-                        CREATE_BACKEND(current_backend);
+                        SDL_StartTextInput(win);
+                        sdl3d_set_bloom_enabled(ctx, false);
+                        sdl3d_set_ssao_enabled(ctx, false);
+                        st.backend_name = sdl3d_get_backend_name(sdl3d_get_render_context_backend(ctx));
+                        SDL_snprintf(st.log_msg, sizeof(st.log_msg), "Switched to %s", st.backend_name);
                     }
-                    st.backend_name = sdl3d_get_backend_name(current_backend);
-                    SDL_snprintf(st.log_msg, sizeof(st.log_msg), "Switched to %s",
-                                 sdl3d_get_backend_name(current_backend));
+                    else
+                    {
+                        SDL_Log("Backend switch failed: %s", SDL_GetError());
+                        running = false;
+                    }
                 }
             }
         }
@@ -643,8 +591,6 @@ int main(int argc, char *argv[])
     sdl3d_ui_destroy(ui);
     sdl3d_free_font(&ui_font);
     sdl3d_destroy_render_context(ctx);
-    if (ren)
-        SDL_DestroyRenderer(ren);
     SDL_StopTextInput(win);
     SDL_DestroyWindow(win);
     SDL_Quit();
