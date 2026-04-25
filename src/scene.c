@@ -3,6 +3,7 @@
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include "sdl3d/animation.h"
 #include "sdl3d/drawing3d.h"
 
 struct sdl3d_actor
@@ -253,10 +254,30 @@ bool sdl3d_draw_scene(sdl3d_render_context *context, const sdl3d_scene *scene)
             continue;
         }
 
-        if (!sdl3d_draw_model_ex(context, actor->model, actor->position, actor->rotation_axis, actor->rotation_angle,
-                                 actor->scale, actor->tint))
+        /* Animated actors: evaluate skeleton and draw skinned. */
+        if (actor->anim_playing && actor->model->skeleton != NULL && actor->model->animation_count > 0)
         {
-            return false;
+            int clip_idx = actor->anim_clip;
+            if (clip_idx < 0 || clip_idx >= actor->model->animation_count)
+                clip_idx = 0;
+            const sdl3d_animation_clip *clip = &actor->model->animations[clip_idx];
+            int jc = actor->model->skeleton->joint_count;
+            sdl3d_mat4 *jm = (sdl3d_mat4 *)SDL_calloc((size_t)jc, sizeof(sdl3d_mat4));
+            if (jm != NULL)
+            {
+                sdl3d_evaluate_animation(actor->model->skeleton, clip, actor->anim_time, jm);
+                sdl3d_draw_model_skinned(context, actor->model, actor->position, actor->rotation_axis,
+                                         actor->rotation_angle, actor->scale, actor->tint, jm);
+                SDL_free(jm);
+            }
+        }
+        else
+        {
+            if (!sdl3d_draw_model_ex(context, actor->model, actor->position, actor->rotation_axis,
+                                     actor->rotation_angle, actor->scale, actor->tint))
+            {
+                return false;
+            }
         }
     }
 

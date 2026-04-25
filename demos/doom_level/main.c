@@ -6,6 +6,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include "sdl3d/animation.h"
 #include "sdl3d/font.h"
 #include "sdl3d/level.h"
 #include "sdl3d/lighting.h"
@@ -599,6 +600,21 @@ int main(int argc, char *argv[])
     if (!has_robot)
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Robot model load failed: %s", SDL_GetError());
 
+    sdl3d_model dragon_model = {0};
+    bool has_dragon = sdl3d_load_model_from_file(SDL3D_MEDIA_DIR "/black_dragon/scene.gltf", &dragon_model);
+    if (!has_dragon)
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Dragon model load failed: %s", SDL_GetError());
+    else
+    {
+        /* Boost dark material albedo so the dragon is visible under level lighting. */
+        for (int i = 0; i < dragon_model.material_count; ++i)
+        {
+            for (int c = 0; c < 3; ++c)
+                dragon_model.materials[i].albedo[c] = SDL_min(dragon_model.materials[i].albedo[c] * 3.0f, 1.0f);
+            dragon_model.materials[i].albedo[3] = 1.0f;
+        }
+    }
+
     sdl3d_scene *scene = sdl3d_create_scene();
 
     /* Place robot actors in the level. */
@@ -612,6 +628,16 @@ int main(int argc, char *argv[])
         sdl3d_actor_set_position(r2, sdl3d_vec3_make(24.0f, 0.0f, 20.0f));
         sdl3d_actor_set_scale(r2, sdl3d_vec3_make(0.8f, 0.8f, 0.8f));
         sdl3d_actor_set_tint(r2, (sdl3d_color){255, 180, 180, 255});
+    }
+
+    /* Place animated dragon in the exterior yard. */
+    if (has_dragon && scene)
+    {
+        sdl3d_actor *dragon = sdl3d_scene_add_actor(scene, &dragon_model);
+        sdl3d_actor_set_position(dragon, sdl3d_vec3_make(24.0f, 0.0f, 74.0f));
+        sdl3d_actor_set_scale(dragon, sdl3d_vec3_make(2.0f, 2.0f, 2.0f));
+        if (dragon_model.animation_count > 0)
+            sdl3d_actor_play_animation(dragon, 0, true);
     }
 
     bool running = true;
@@ -713,6 +739,18 @@ int main(int argc, char *argv[])
         float dt = (float)(now - last) / (float)SDL_GetPerformanceFrequency();
         last = now;
         elapsed += dt;
+
+        /* Advance all actor animations. */
+        if (scene)
+        {
+            int ac = sdl3d_scene_get_actor_count(scene);
+            for (int i = 0; i < ac; i++)
+            {
+                sdl3d_actor *a = sdl3d_scene_get_actor_at(scene, i);
+                if (a)
+                    sdl3d_actor_advance_animation(a, dt);
+            }
+        }
 
         /* Look direction (for camera target). */
         float fx = SDL_sinf(yaw) * SDL_cosf(pitch);
@@ -1000,6 +1038,8 @@ int main(int argc, char *argv[])
     sdl3d_destroy_scene(scene);
     if (has_robot)
         sdl3d_free_model(&robot_model);
+    if (has_dragon)
+        sdl3d_free_model(&dragon_model);
     sdl3d_destroy_render_context(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
