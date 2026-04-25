@@ -917,6 +917,23 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
 
     framebuffer = sdl3d_framebuffer_from_context(context);
 
+    /* Distance-based texture LOD: skip texture sampling for triangles
+     * far from the camera on the software path. Saves memory bandwidth. */
+    const float sw_tex_dist_sq = 400.0f; /* 20 units — beyond this, use flat color */
+    sdl3d_vec3 cam_pos = {0};
+    bool sw_distance_lod = (context->gl == NULL && texture != NULL);
+    if (sw_distance_lod)
+    {
+        /* Extract camera position from the inverse view matrix.
+         * For a simple approximation, use the view matrix translation. */
+        cam_pos.x = -(context->view.m[0] * context->view.m[12] + context->view.m[1] * context->view.m[13] +
+                      context->view.m[2] * context->view.m[14]);
+        cam_pos.y = -(context->view.m[4] * context->view.m[12] + context->view.m[5] * context->view.m[13] +
+                      context->view.m[6] * context->view.m[14]);
+        cam_pos.z = -(context->view.m[8] * context->view.m[12] + context->view.m[9] * context->view.m[13] +
+                      context->view.m[10] * context->view.m[14]);
+    }
+
     for (int triangle = 0; triangle < triangle_count; ++triangle)
     {
         const unsigned int i0 = indexed ? mesh->indices[triangle * 3 + 0] : (unsigned int)(triangle * 3 + 0);
@@ -938,6 +955,22 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
             uv2 = sdl3d_mesh_uv(mesh, i2);
         }
 
+        /* Skip texture for distant triangles on software renderer. */
+        const sdl3d_texture2d *tri_texture = texture;
+        if (sw_distance_lod)
+        {
+            sdl3d_vec3 p0 = SKIN_POS(i0);
+            sdl3d_vec3 p1 = SKIN_POS(i1);
+            sdl3d_vec3 p2 = SKIN_POS(i2);
+            sdl3d_vec3 centroid = {(p0.x + p1.x + p2.x) / 3.0f, (p0.y + p1.y + p2.y) / 3.0f,
+                                   (p0.z + p1.z + p2.z) / 3.0f};
+            float dx = centroid.x - cam_pos.x;
+            float dy = centroid.y - cam_pos.y;
+            float dz = centroid.z - cam_pos.z;
+            if (dx * dx + dy * dy + dz * dz > sw_tex_dist_sq)
+                tri_texture = NULL;
+        }
+
         if (lit && context->shading_mode == SDL3D_SHADING_FLAT)
         {
             /* FLAT: use lit rasterizer with face normal for all three vertices.
@@ -955,7 +988,7 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
             sdl3d_rasterize_triangle_lit(&framebuffer, context->model_view_projection, p0, p1, p2, uv0, uv1, uv2, wn,
                                          wn, wn, wp0, wp1, wp2, sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate),
                                          sdl3d_mesh_vertex_modulate(mesh, i1, base_modulate),
-                                         sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate), texture, lighting,
+                                         sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate), tri_texture, lighting,
                                          context->backface_culling_enabled, context->wireframe_enabled);
         }
         else if (lit && context->shading_mode == SDL3D_SHADING_GOURAUD)
@@ -986,8 +1019,8 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
             sdl3d_rasterize_triangle_textured_profiled(
                 &framebuffer, context->model_view_projection, p0, p1, p2, uv0, uv1, uv2,
                 sdl3d_shade_point_retro(lighting, m0, wn0, wp0), sdl3d_shade_point_retro(lighting, m1, wn1, wp1),
-                sdl3d_shade_point_retro(lighting, m2, wn2, wp2), texture, lighting, context->backface_culling_enabled,
-                context->wireframe_enabled);
+                sdl3d_shade_point_retro(lighting, m2, wn2, wp2), tri_texture, lighting,
+                context->backface_culling_enabled, context->wireframe_enabled);
         }
         else if (lit)
         {
@@ -1006,7 +1039,7 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
             sdl3d_rasterize_triangle_lit(&framebuffer, context->model_view_projection, p0, p1, p2, uv0, uv1, uv2, rn0,
                                          rn1, rn2, wp0, wp1, wp2, sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate),
                                          sdl3d_mesh_vertex_modulate(mesh, i1, base_modulate),
-                                         sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate), texture, lighting,
+                                         sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate), tri_texture, lighting,
                                          context->backface_culling_enabled, context->wireframe_enabled);
         }
         else
@@ -1015,7 +1048,7 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
                                               SKIN_POS(i2), uv0, uv1, uv2,
                                               sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate),
                                               sdl3d_mesh_vertex_modulate(mesh, i1, base_modulate),
-                                              sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate), texture,
+                                              sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate), tri_texture,
                                               context->backface_culling_enabled, context->wireframe_enabled);
         }
     }

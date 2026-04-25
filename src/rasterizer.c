@@ -73,8 +73,8 @@ static int sdl3d_min_int(int a, int b)
 static bool sdl3d_parallel_triangle_job_is_worthwhile(const sdl3d_parallel_rasterizer *rasterizer, int tile_count,
                                                       int min_px_x, int max_px_x, int min_px_y, int max_px_y)
 {
-    static const int SDL3D_PARALLEL_MIN_TILE_COUNT = 4;
-    static const int SDL3D_PARALLEL_MIN_PIXEL_AREA = 64 * 64;
+    static const int SDL3D_PARALLEL_MIN_TILE_COUNT = 2;
+    static const int SDL3D_PARALLEL_MIN_PIXEL_AREA = 16 * 16;
     const int worker_count = rasterizer != NULL ? rasterizer->worker_count : 0;
     const int width = max_px_x - min_px_x + 1;
     const int height = max_px_y - min_px_y + 1;
