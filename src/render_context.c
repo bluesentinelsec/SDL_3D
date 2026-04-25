@@ -543,3 +543,189 @@ bool sdl3d_present_render_context(sdl3d_render_context *context)
 
     return context->backend_iface.present(context);
 }
+
+/* ------------------------------------------------------------------ */
+/* High-level window/context API                                       */
+/* ------------------------------------------------------------------ */
+
+void sdl3d_init_window_config(sdl3d_window_config *config)
+{
+    if (config == NULL)
+    {
+        return;
+    }
+    SDL_zerop(config);
+    config->width = 1280;
+    config->height = 720;
+    config->title = "SDL3D";
+    config->backend = SDL3D_BACKEND_AUTO;
+    config->allow_backend_fallback = true;
+    config->resizable = true;
+}
+
+bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_window, sdl3d_render_context **out_context)
+{
+    sdl3d_window_config local;
+    SDL_Window *window = NULL;
+    SDL_Renderer *renderer = NULL;
+    sdl3d_render_context *context = NULL;
+    sdl3d_render_context_config rcfg;
+    sdl3d_backend resolved;
+
+    if (out_window == NULL || out_context == NULL)
+    {
+        return SDL_InvalidParamError("out_window/out_context");
+    }
+    *out_window = NULL;
+    *out_context = NULL;
+
+    if (config != NULL)
+    {
+        local = *config;
+    }
+    else
+    {
+        sdl3d_init_window_config(&local);
+    }
+
+    if (local.width <= 0)
+        local.width = 1280;
+    if (local.height <= 0)
+        local.height = 720;
+    if (local.title == NULL)
+        local.title = "SDL3D";
+
+    /* Resolve which backend we'll actually use. */
+    if (!sdl3d_resolve_backend(local.backend, local.allow_backend_fallback, &resolved))
+    {
+        return false;
+    }
+
+    /* Set up window flags and GL attributes based on resolved backend. */
+    SDL_WindowFlags flags = 0;
+    if (local.resizable)
+        flags |= SDL_WINDOW_RESIZABLE;
+
+    if (resolved == SDL3D_BACKEND_SDLGPU)
+    {
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+        flags |= SDL_WINDOW_OPENGL;
+    }
+
+    window = SDL_CreateWindow(local.title, local.width, local.height, flags);
+    if (window == NULL)
+    {
+        return false;
+    }
+
+    /* Software backend needs an SDL_Renderer; GL does not. */
+    if (resolved != SDL3D_BACKEND_SDLGPU)
+    {
+        renderer = SDL_CreateRenderer(window, NULL);
+        if (renderer == NULL)
+        {
+            SDL_DestroyWindow(window);
+            return false;
+        }
+    }
+
+    sdl3d_init_render_context_config(&rcfg);
+    rcfg.backend = resolved;
+    rcfg.allow_backend_fallback = false; /* already resolved */
+    rcfg.logical_width = local.width;
+    rcfg.logical_height = local.height;
+
+    if (!sdl3d_create_render_context(window, renderer, &rcfg, &context))
+    {
+        if (renderer != NULL)
+            SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        return false;
+    }
+
+    *out_window = window;
+    *out_context = context;
+    return true;
+}
+
+bool sdl3d_switch_backend(SDL_Window **window, sdl3d_render_context **context, sdl3d_backend new_backend)
+{
+    int w, h;
+    char title_buf[256];
+    sdl3d_window_config wcfg;
+
+    if (window == NULL || context == NULL)
+    {
+        return SDL_InvalidParamError("window/context");
+    }
+
+    /* Capture current window properties before destroying. */
+    w = 1280;
+    h = 720;
+    title_buf[0] = '\0';
+    if (*window != NULL)
+    {
+        SDL_GetWindowSize(*window, &w, &h);
+        const char *t = SDL_GetWindowTitle(*window);
+        if (t != NULL)
+            SDL_strlcpy(title_buf, t, sizeof(title_buf));
+    }
+
+    /* Tear down old context and window. */
+    if (*context != NULL)
+    {
+        /* Save renderer pointer before destroying context (context doesn't
+         * own the renderer, but sdl3d_create_window created it). */
+        SDL_Renderer *old_ren = (*context)->renderer;
+        sdl3d_destroy_render_context(*context);
+        *context = NULL;
+        if (old_ren != NULL)
+            SDL_DestroyRenderer(old_ren);
+    }
+    if (*window != NULL)
+    {
+        SDL_DestroyWindow(*window);
+        *window = NULL;
+    }
+
+    /* Create fresh window + context with the new backend. */
+    sdl3d_init_window_config(&wcfg);
+    wcfg.width = w;
+    wcfg.height = h;
+    wcfg.title = title_buf[0] ? title_buf : "SDL3D";
+    wcfg.backend = new_backend;
+    wcfg.allow_backend_fallback = false;
+    wcfg.resizable = true;
+
+    return sdl3d_create_window(&wcfg, window, context);
+}
+
+/* ------------------------------------------------------------------ */
+/* Feature queries                                                     */
+/* ------------------------------------------------------------------ */
+
+bool sdl3d_is_feature_available(const sdl3d_render_context *context, sdl3d_feature feature)
+{
+    if (context == NULL)
+    {
+        return false;
+    }
+
+    bool is_gl = (context->backend == SDL3D_BACKEND_SDLGPU);
+
+    switch (feature)
+    {
+    case SDL3D_FEATURE_BLOOM:
+    case SDL3D_FEATURE_SSAO:
+    case SDL3D_FEATURE_SHADOWS:
+    case SDL3D_FEATURE_IBL:
+    case SDL3D_FEATURE_POST_PROCESSING:
+        return is_gl;
+    default:
+        return false;
+    }
+}

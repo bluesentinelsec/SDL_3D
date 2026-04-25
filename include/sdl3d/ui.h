@@ -99,6 +99,14 @@ extern "C"
     void sdl3d_ui_end_frame(sdl3d_ui_context *ui);
 
     /*
+     * Convenience: begin a UI frame and auto-compute the mouse transform
+     * from the render context's logical dimensions and the window's
+     * current size. Equivalent to calling sdl3d_ui_begin_frame +
+     * sdl3d_ui_set_mouse_transform with the correct letterbox mapping.
+     */
+    void sdl3d_ui_begin_frame_ex(sdl3d_ui_context *ui, sdl3d_render_context *context, SDL_Window *window);
+
+    /*
      * Tell the UI how to map SDL window-space mouse coordinates to the
      * logical coordinate system used by widgets. Call after begin_frame
      * when the window size differs from the logical size (e.g., after a

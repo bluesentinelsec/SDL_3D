@@ -6,7 +6,6 @@
 #define SDL3D_APP_MAX_KEYS 512
 
 static SDL_Window *s_window = NULL;
-static SDL_Renderer *s_renderer = NULL;
 static sdl3d_render_context *s_ctx = NULL;
 static bool s_should_close = false;
 static int s_target_fps = 60;
@@ -26,33 +25,14 @@ bool sdl3d_init(int width, int height, const char *title)
         return false;
     }
 
-    s_window = SDL_CreateWindow(title ? title : "SDL3D", width, height, SDL_WINDOW_RESIZABLE);
-    if (!s_window)
-    {
-        SDL_Quit();
-        return false;
-    }
+    sdl3d_window_config wcfg;
+    sdl3d_init_window_config(&wcfg);
+    wcfg.width = width;
+    wcfg.height = height;
+    wcfg.title = title ? title : "SDL3D";
 
-    s_renderer = SDL_CreateRenderer(s_window, NULL);
-    if (!s_renderer)
+    if (!sdl3d_create_window(&wcfg, &s_window, &s_ctx))
     {
-        SDL_DestroyWindow(s_window);
-        s_window = NULL;
-        SDL_Quit();
-        return false;
-    }
-
-    sdl3d_render_context_config cfg;
-    sdl3d_init_render_context_config(&cfg);
-    cfg.backend = SDL3D_BACKEND_SDLGPU;
-    cfg.allow_backend_fallback = true;
-
-    if (!sdl3d_create_render_context(s_window, s_renderer, &cfg, &s_ctx))
-    {
-        SDL_DestroyRenderer(s_renderer);
-        s_renderer = NULL;
-        SDL_DestroyWindow(s_window);
-        s_window = NULL;
         SDL_Quit();
         return false;
     }
@@ -78,11 +58,6 @@ void sdl3d_close(void)
     {
         sdl3d_destroy_render_context(s_ctx);
         s_ctx = NULL;
-    }
-    if (s_renderer)
-    {
-        SDL_DestroyRenderer(s_renderer);
-        s_renderer = NULL;
     }
     if (s_window)
     {

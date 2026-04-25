@@ -840,7 +840,7 @@ static GLuint compile_shader(sdl3d_gl_funcs *gl, GLenum type, const char *versio
     {
         char buf[1024];
         gl->GetShaderInfoLog(s, sizeof(buf), NULL, buf);
-        SDL_Log("SDL3D GL shader compile error: %s", buf);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL shader compile error: %s", buf);
         gl->DeleteShader(s);
         return 0;
     }
@@ -859,7 +859,7 @@ static GLuint compile_shader_multi(sdl3d_gl_funcs *gl, GLenum type, int count, c
     {
         char buf[1024];
         gl->GetShaderInfoLog(s, sizeof(buf), NULL, buf);
-        SDL_Log("SDL3D GL shader compile error: %s", buf);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL shader compile error: %s", buf);
         gl->DeleteShader(s);
         return 0;
     }
@@ -879,7 +879,7 @@ static GLuint link_program(sdl3d_gl_funcs *gl, GLuint vert, GLuint frag)
     {
         char buf[1024];
         gl->GetProgramInfoLog(p, sizeof(buf), NULL, buf);
-        SDL_Log("SDL3D GL program link error: %s", buf);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL program link error: %s", buf);
         gl->DeleteProgram(p);
         return 0;
     }
@@ -1964,7 +1964,7 @@ static bool create_fbo(sdl3d_gl_context *ctx, int w, int h)
     GLenum status = gl->CheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE)
     {
-        SDL_Log("SDL3D GL FBO incomplete: 0x%x", status);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL FBO incomplete: 0x%x", status);
         return false;
     }
 
@@ -2037,12 +2037,7 @@ static void flush_scene_ubo(sdl3d_gl_context *ctx)
     gl->BufferData(GL_UNIFORM_BUFFER, (GLsizeiptr)sizeof(ubo), &ubo, GL_DYNAMIC_DRAW);
     gl->BindBufferBase(GL_UNIFORM_BUFFER, 0, ctx->scene_ubo);
 
-    if (ctx->frame_index <= 2)
-    {
-        SDL_Log("SDL3D GL UBO flush frame=%llu lights=%d vp[0]=%.3f vp[5]=%.3f cam=(%.1f,%.1f,%.1f)",
-                (unsigned long long)ctx->frame_index, ubo.light_count, ubo.view_projection[0], ubo.view_projection[5],
-                ubo.camera_pos[0], ubo.camera_pos[1], ubo.camera_pos[2]);
-    }
+    (void)ctx; /* UBO flush logging removed — enable SDL_LOG_PRIORITY_DEBUG to see GL internals */
 }
 
 /* ------------------------------------------------------------------ */
@@ -2071,7 +2066,7 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
     {
         return SDL_SetError("IBL: failed to load HDR '%s'", hdr_path);
     }
-    SDL_Log("SDL3D IBL: loaded HDR %dx%d (%d ch)", w, h, nc);
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D IBL: loaded HDR %dx%d (%d ch)", w, h, nc);
 
     /* Upload equirectangular HDR texture */
     GLuint hdr_tex;
@@ -2158,7 +2153,7 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
         gl->Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         ibl_render_cube(gl, cube_vao);
     }
-    SDL_Log("SDL3D IBL: equirect -> cubemap done");
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D IBL: equirect -> cubemap done");
 
     /* ---- Step 2: Irradiance convolution (32x32) ---- */
     GLuint irr_prog = build_program(gl, ver, k_cube_vert, k_irradiance_frag);
@@ -2188,7 +2183,7 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
         gl->Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         ibl_render_cube(gl, cube_vao);
     }
-    SDL_Log("SDL3D IBL: irradiance done");
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D IBL: irradiance done");
 
     /* ---- Step 3: Prefilter (128, 5 mip levels) ---- */
     GLuint pf_prog = build_program(gl, ver, k_cube_vert, k_prefilter_frag);
@@ -2225,7 +2220,7 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
             ibl_render_cube(gl, cube_vao);
         }
     }
-    SDL_Log("SDL3D IBL: prefilter done");
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D IBL: prefilter done");
 
     /* ---- Step 4: BRDF LUT (512x512) ---- */
     GLuint brdf_prog = build_program(gl, ver, k_brdf_vert, k_brdf_frag);
@@ -2244,7 +2239,7 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
     gl->UseProgram(brdf_prog);
     gl->BindVertexArray(ctx->fullscreen_vao);
     gl->DrawArrays(GL_TRIANGLES, 0, 3);
-    SDL_Log("SDL3D IBL: BRDF LUT done");
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D IBL: BRDF LUT done");
 
     /* Cleanup */
     gl->BindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -2266,7 +2261,7 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
 
     ctx->ibl_ready = true;
-    SDL_Log("SDL3D IBL: environment map ready");
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D IBL: environment map ready");
     return true;
 }
 
@@ -2280,7 +2275,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     SDL_GLContext glctx = SDL_GL_CreateContext(window);
     if (!glctx)
     {
-        SDL_Log("SDL3D GL: failed to create context: %s", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: failed to create context: %s", SDL_GetError());
         return NULL;
     }
     SDL_GL_MakeCurrent(window, glctx);
@@ -2305,7 +2300,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
 
     if (!sdl3d_gl_load_funcs(&ctx->gl))
     {
-        SDL_Log("SDL3D GL: failed to load GL functions");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: failed to load GL functions");
         SDL_GL_DestroyContext(glctx);
         SDL_free(ctx);
         return NULL;
@@ -2335,7 +2330,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
 
     if (!ctx->pbr_program || !ctx->unlit_program || !ctx->copy_program)
     {
-        SDL_Log("SDL3D GL: shader compilation failed");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: shader compilation failed");
         sdl3d_gl_destroy(ctx);
         return NULL;
     }
@@ -2578,7 +2573,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     /* ---- Main FBO ---- */
     if (!create_fbo(ctx, width, height))
     {
-        SDL_Log("SDL3D GL: FBO creation failed");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: FBO creation failed");
         sdl3d_gl_destroy(ctx);
         return NULL;
     }
@@ -2603,7 +2598,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
             GLenum status = gl->CheckFramebufferStatus(GL_FRAMEBUFFER);
             if (status != GL_FRAMEBUFFER_COMPLETE)
             {
-                SDL_Log("SDL3D GL: post-process FBO %d incomplete: 0x%x", i, status);
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: post-process FBO %d incomplete: 0x%x", i, status);
                 sdl3d_gl_destroy(ctx);
                 return NULL;
             }
@@ -2617,7 +2612,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->composite_program = build_program(gl, version_prefix, k_fullscreen_vert, k_composite_frag);
     if (!ctx->bloom_program || !ctx->bloom_blur_program || !ctx->composite_program)
     {
-        SDL_Log("SDL3D GL: post-process shader compilation failed");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: post-process shader compilation failed");
         sdl3d_gl_destroy(ctx);
         return NULL;
     }
@@ -2635,7 +2630,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->retro_program = build_program(gl, version_prefix, k_fullscreen_vert, k_retro_frag);
     if (!ctx->retro_program)
     {
-        SDL_Log("SDL3D GL: retro shader compilation failed");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: retro shader compilation failed");
         sdl3d_gl_destroy(ctx);
         return NULL;
     }
@@ -2647,7 +2642,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->ssao_program = build_program(gl, version_prefix, k_fullscreen_vert, k_ssao_frag);
     if (!ctx->ssao_program)
     {
-        SDL_Log("SDL3D GL: SSAO shader compilation failed");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: SSAO shader compilation failed");
         sdl3d_gl_destroy(ctx);
         return NULL;
     }
@@ -2664,9 +2659,10 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     gl->CullFace(GL_BACK);
     gl->FrontFace(GL_CCW);
 
-    SDL_Log("SDL3D GL create: ctx=%p logical=%dx%d fbo=%u", (void *)ctx, width, height, ctx->fbo);
-    SDL_Log("SDL3D GL renderer created: %dx%d pbr=%u unlit=%u copy=%u fbo=%u ubo=%u", width, height, ctx->pbr_program,
-            ctx->unlit_program, ctx->copy_program, ctx->fbo, ctx->scene_ubo);
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL create: ctx=%p logical=%dx%d fbo=%u", (void *)ctx, width,
+                 height, ctx->fbo);
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL renderer created: %dx%d pbr=%u unlit=%u copy=%u fbo=%u ubo=%u",
+                 width, height, ctx->pbr_program, ctx->unlit_program, ctx->copy_program, ctx->fbo, ctx->scene_ubo);
 
     return ctx;
 }
@@ -2961,7 +2957,7 @@ static void replay_overlay_list(sdl3d_gl_context *ctx, int vp_x, int vp_y, int v
         }
         else
         {
-            gl->BindTexture(GL_TEXTURE_2D, 0);
+            gl->BindTexture(GL_TEXTURE_2D, ctx->white_texture);
             gl->Uniform1i(ctx->unlit_has_texture_loc, 0);
         }
 
