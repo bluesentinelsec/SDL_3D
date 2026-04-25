@@ -135,11 +135,45 @@ bool entities_init(entities *e)
             sdl3d_actor_play_animation(dragon, 0, true);
     }
 
+    /* Actor registry — register all game objects for unified state. */
+    e->bus = sdl3d_signal_bus_create();
+    e->registry = sdl3d_actor_registry_create();
+    if (e->registry)
+    {
+        sdl3d_registered_actor *ra;
+
+        ra = sdl3d_actor_registry_add(e->registry, "robot_1");
+        if (ra)
+        {
+            ra->position = sdl3d_vec3_make(5.0f, 0.0f, 12.0f);
+            sdl3d_properties_set_string(ra->props, "classname", "npc_robot");
+            sdl3d_properties_set_int(ra->props, "health", 100);
+        }
+
+        ra = sdl3d_actor_registry_add(e->registry, "robot_2");
+        if (ra)
+        {
+            ra->position = sdl3d_vec3_make(24.0f, 0.0f, 20.0f);
+            sdl3d_properties_set_string(ra->props, "classname", "npc_robot");
+            sdl3d_properties_set_int(ra->props, "health", 100);
+        }
+
+        ra = sdl3d_actor_registry_add(e->registry, "dragon");
+        if (ra)
+        {
+            ra->position = sdl3d_vec3_make(24.0f, 0.0f, 74.0f);
+            sdl3d_properties_set_string(ra->props, "classname", "npc_dragon");
+            sdl3d_properties_set_int(ra->props, "health", 500);
+        }
+    }
+
     return true;
 }
 
 void entities_free(entities *e)
 {
+    sdl3d_actor_registry_destroy(e->registry);
+    sdl3d_signal_bus_destroy(e->bus);
     sdl3d_sprite_scene_free(&e->sprites);
     sdl3d_destroy_scene(e->scene);
     if (e->has_robot)
@@ -154,7 +188,7 @@ void entities_free(entities *e)
         sdl3d_free_texture(&e->sky[i]);
 }
 
-void entities_update(entities *e, float dt)
+void entities_update(entities *e, float dt, sdl3d_vec3 player_position)
 {
     sdl3d_sprite_scene_update(&e->sprites, dt);
     if (e->scene)
@@ -167,4 +201,5 @@ void entities_update(entities *e, float dt)
                 sdl3d_actor_advance_animation(a, dt);
         }
     }
+    sdl3d_actor_registry_update(e->registry, e->bus, player_position);
 }
