@@ -412,6 +412,7 @@ int main(int argc, char *argv[])
     sdl3d_render_context *ctx = NULL;
     sdl3d_texture2d enemy_rot_tex[DEMO_SPRITE_ROTATION_COUNT] = {0};
     sdl3d_texture2d health_tex = {0};
+    sdl3d_texture2d crate_tex = {0};
     sdl3d_texture2d sky_px = {0};
     sdl3d_texture2d sky_nx = {0};
     sdl3d_texture2d sky_py = {0};
@@ -488,6 +489,9 @@ int main(int argc, char *argv[])
         return 1;
     }
     configure_sprite_texture(&health_tex);
+
+    if (!sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/textures/radioactive-crate.png", &crate_tex))
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Crate texture load failed: %s", SDL_GetError());
 
     if (!sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/skyboxes/sky_17/px.png", &sky_px) ||
         !sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/skyboxes/sky_17/nx.png", &sky_nx) ||
@@ -1217,10 +1221,12 @@ int main(int argc, char *argv[])
                 {7.0f, 0.5f, 10.0f},  {14.0f, 0.5f, 20.0f}, {14.0f, 1.5f, 20.0f}, /* stacked */
                 {22.0f, 0.5f, 16.0f},
             };
-            sdl3d_color crate_color = {160, 120, 80, 255};
+            sdl3d_color crate_tint = {255, 255, 255, 255};
+            const sdl3d_texture2d *tex = crate_tex.pixels ? &crate_tex : NULL;
             for (int i = 0; i < (int)SDL_arraysize(crate_positions); i++)
             {
-                sdl3d_draw_cube(ctx, crate_positions[i], sdl3d_vec3_make(1.0f, 1.0f, 1.0f), crate_color);
+                sdl3d_draw_cube_textured(ctx, crate_positions[i], sdl3d_vec3_make(1.0f, 1.0f, 1.0f),
+                                         sdl3d_vec3_make(0, 1, 0), 0.0f, tex, crate_tint);
             }
         }
 
@@ -1324,6 +1330,7 @@ int main(int argc, char *argv[])
     sdl3d_free_level(&level_unlit);
     free_texture_array(enemy_rot_tex, DEMO_SPRITE_ROTATION_COUNT);
     sdl3d_free_texture(&health_tex);
+    sdl3d_free_texture(&crate_tex);
     sdl3d_free_texture(&sky_px);
     sdl3d_free_texture(&sky_nx);
     sdl3d_free_texture(&sky_py);

@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 #include "sdl3d/render_context.h"
+#include "sdl3d/texture.h"
 #include "sdl3d/types.h"
 
 #ifdef __cplusplus
@@ -33,6 +34,25 @@ extern "C"
      */
     bool sdl3d_draw_cube(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, sdl3d_color color);
     bool sdl3d_draw_cube_wires(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, sdl3d_color color);
+
+    /**
+     * @brief Draw a textured cube with optional rotation.
+     *
+     * Each face is UV-mapped to the full [0,1] range of the texture.
+     * Pass a zero rotation_axis or zero angle for an axis-aligned cube.
+     * The tint color modulates the texture (white = no change).
+     *
+     * @param context       Render context.
+     * @param center        World-space center of the cube.
+     * @param size          Per-axis extents (width, height, depth).
+     * @param rotation_axis Axis to rotate around (e.g., {0,1,0} for Y).
+     * @param rotation_angle Rotation angle in radians.
+     * @param texture       Texture to apply (NULL for untextured).
+     * @param tint          Color multiplier ({255,255,255,255} = no tint).
+     */
+    bool sdl3d_draw_cube_textured(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size,
+                                  sdl3d_vec3 rotation_axis, float rotation_angle, const sdl3d_texture2d *texture,
+                                  sdl3d_color tint);
 
     /*
      * Planar quad in the local XZ plane, centered at `center`, with
