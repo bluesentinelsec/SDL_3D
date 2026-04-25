@@ -54,16 +54,9 @@ bool sdl3d_init(int width, int height, const char *title)
 
 void sdl3d_close(void)
 {
-    if (s_ctx)
-    {
-        sdl3d_destroy_render_context(s_ctx);
-        s_ctx = NULL;
-    }
-    if (s_window)
-    {
-        SDL_DestroyWindow(s_window);
-        s_window = NULL;
-    }
+    sdl3d_destroy_window(s_window, s_ctx);
+    s_ctx = NULL;
+    s_window = NULL;
     SDL_Quit();
 }
 

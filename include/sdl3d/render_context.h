@@ -86,6 +86,18 @@ extern "C"
     bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_window,
                              sdl3d_render_context **out_context);
 
+    /**
+     * @brief Destroy a window and render context created by sdl3d_create_window.
+     *
+     * This releases the SDL3D render context, the SDL_Renderer owned by the
+     * software backend path, and the SDL_Window. Safe to call with NULL
+     * arguments.
+     *
+     * @param window  SDL window returned by sdl3d_create_window.
+     * @param context Render context returned by sdl3d_create_window.
+     */
+    void sdl3d_destroy_window(SDL_Window *window, sdl3d_render_context *context);
+
     /*
      * Switch to a different backend at runtime. Destroys the current
      * window and context, creates new ones with the same dimensions

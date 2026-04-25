@@ -32,12 +32,12 @@ typedef struct entities
     bool has_dragon;
     sdl3d_scene *scene;
 
-    /* Actor registry — unified game object table. */
+    /* Actor registry and signal bus are provided by the managed game loop. */
     sdl3d_actor_registry *registry;
     sdl3d_signal_bus *bus;
 } entities;
 
-bool entities_init(entities *e);
+bool entities_init(entities *e, sdl3d_actor_registry *registry, sdl3d_signal_bus *bus);
 void entities_free(entities *e);
 
 /* Advance sprite bobbing, model animations, and registry triggers. */
