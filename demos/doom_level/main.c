@@ -980,11 +980,6 @@ int main(int argc, char *argv[])
                 view_smooth = 0.0f;
         }
 
-        /* Save position for fall-through safety net. */
-        float safe_px = px, safe_py = py, safe_pz = pz;
-        float safe_vy = vy;
-        bool safe_on_ground = on_ground;
-
         float py_before_collision = py;
 
         /* Normalize wish direction, then apply Doom-style sliding collision
@@ -1129,44 +1124,6 @@ int main(int argc, char *argv[])
                     py = ceiling_y;
                     if (vy > 0.0f)
                         vy = 0.0f;
-                }
-            }
-        }
-
-        /* Quake-style ground trace: after all movement, search downward
-         * for a valid floor. If the player is between sectors (e.g., on
-         * a stair boundary), find the nearest sector below and snap to it.
-         * Only revert to the safe position if no floor exists below. */
-        {
-            float feet_y_check = py - PLAYER_HEIGHT;
-            int check_sector = find_sector_at(sectors, sector_count, px, pz, feet_y_check);
-
-            if (check_sector < 0)
-            {
-                /* Not in any sector at current height — search downward.
-                 * Try progressively lower feet positions to find a floor. */
-                for (float probe = feet_y_check - 0.5f; probe >= feet_y_check - PLAYER_STEP_HEIGHT * 2.0f;
-                     probe -= 0.5f)
-                {
-                    check_sector = find_sector_at(sectors, sector_count, px, pz, probe);
-                    if (check_sector >= 0)
-                    {
-                        /* Found a floor below — snap to it. */
-                        py = sectors[check_sector].floor_y + PLAYER_HEIGHT;
-                        vy = 0.0f;
-                        on_ground = true;
-                        break;
-                    }
-                }
-
-                /* If still no floor found, revert to safe position. */
-                if (check_sector < 0)
-                {
-                    px = safe_px;
-                    py = safe_py;
-                    pz = safe_pz;
-                    vy = safe_vy;
-                    on_ground = safe_on_ground;
                 }
             }
         }
