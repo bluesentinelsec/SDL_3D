@@ -31,6 +31,7 @@ release:
 	@cmake -B $(BUILD_DIR)/release \
 		-DCMAKE_BUILD_TYPE=Release \
 		-DSDL3D_BUILD_TESTS=ON \
+		-DSDL3D_BUILD_DEMOS=ON \
 		$(CMAKE_FLAGS)
 	@cmake --build $(BUILD_DIR)/release
 
