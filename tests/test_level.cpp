@@ -292,6 +292,163 @@ TEST(SDL3DLevelVisibility, FindSectorReturnsCorrectSector)
     sdl3d_free_level(&level);
 }
 
+/* ================================================================== */
+/* Sector queries (find_sector_at, walkable, support, point_inside)   */
+/* ================================================================== */
+
+namespace
+{
+sdl3d_sector MakeStackedSector(float min_x, float min_z, float max_x, float max_z, float floor_y, float ceil_y)
+{
+    sdl3d_sector s = MakeSquareSector(min_x, min_z, max_x, max_z);
+    s.floor_y = floor_y;
+    s.ceil_y = ceil_y;
+    return s;
+}
+} // namespace
+
+TEST(SDL3DSectorQueries, FindSectorAtPicksHighestFloorContaining)
+{
+    /* Two sectors at the same XZ but stacked: lower (floor=0,ceil=1) and
+     * upper (floor=2,ceil=4). feet_y=0.5 sits in the lower; feet_y=2.5 in
+     * the upper; feet_y between them returns -1. */
+    const sdl3d_level_material mats[] = {MakeLevelMaterial("a.png"), MakeLevelMaterial("b.png"),
+                                         MakeLevelMaterial("c.png")};
+    const sdl3d_sector sectors[] = {MakeStackedSector(0, 0, 4, 4, 0, 1), MakeStackedSector(0, 0, 4, 4, 2, 4)};
+    sdl3d_level level{};
+    ASSERT_TRUE(sdl3d_build_level(sectors, 2, mats, 3, nullptr, 0, &level));
+
+    EXPECT_EQ(sdl3d_level_find_sector_at(&level, sectors, 2, 2, 0.5f), 0);
+    EXPECT_EQ(sdl3d_level_find_sector_at(&level, sectors, 2, 2, 2.5f), 1);
+    EXPECT_EQ(sdl3d_level_find_sector_at(&level, sectors, 2, 2, 1.5f), -1);
+    EXPECT_EQ(sdl3d_level_find_sector_at(&level, sectors, 20, 20, 0.5f), -1);
+
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DSectorQueries, FindWalkableAcceptsStepUpButRejectsTooHigh)
+{
+    /* Stair: low (floor=0) adjacent to mid (floor=1.0). With step=1.1
+     * the mid is reachable from the low. With step=0.5 it is not. */
+    const sdl3d_level_material mats[] = {MakeLevelMaterial("a.png"), MakeLevelMaterial("b.png"),
+                                         MakeLevelMaterial("c.png")};
+    const sdl3d_sector sectors[] = {MakeStackedSector(0, 0, 4, 4, 0, 4), MakeStackedSector(4, 0, 8, 4, 1, 5)};
+    sdl3d_level level{};
+    ASSERT_TRUE(sdl3d_build_level(sectors, 2, mats, 3, nullptr, 0, &level));
+
+    /* From the low sector (feet at floor 0), the mid sector is one step up. */
+    EXPECT_EQ(sdl3d_level_find_walkable_sector(&level, sectors, 6, 2, 0.0f, 1.1f, 1.6f), 1);
+    EXPECT_EQ(sdl3d_level_find_walkable_sector(&level, sectors, 6, 2, 0.0f, 0.5f, 1.6f), -1);
+
+    /* Headroom rejection: a 1.0-tall sector should be rejected for a 1.6 player. */
+    const sdl3d_sector tight[] = {MakeStackedSector(0, 0, 4, 4, 0, 1.0f)};
+    sdl3d_level tight_level{};
+    ASSERT_TRUE(sdl3d_build_level(tight, 1, mats, 3, nullptr, 0, &tight_level));
+    EXPECT_EQ(sdl3d_level_find_walkable_sector(&tight_level, tight, 2, 2, 0.0f, 1.0f, 1.6f), -1);
+    sdl3d_free_level(&tight_level);
+
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DSectorQueries, FindSupportPicksHighestFloorAtOrBelow)
+{
+    /* Stacked: floors at 0 and 2. From feet_y=3 the support is the
+     * upper floor (2); from feet_y=1.5 the support is the lower (0);
+     * from feet_y=-1 there is no support. */
+    const sdl3d_level_material mats[] = {MakeLevelMaterial("a.png"), MakeLevelMaterial("b.png"),
+                                         MakeLevelMaterial("c.png")};
+    const sdl3d_sector sectors[] = {MakeStackedSector(0, 0, 4, 4, 0, 1.7f), MakeStackedSector(0, 0, 4, 4, 2, 4)};
+    sdl3d_level level{};
+    ASSERT_TRUE(sdl3d_build_level(sectors, 2, mats, 3, nullptr, 0, &level));
+
+    EXPECT_EQ(sdl3d_level_find_support_sector(&level, sectors, 2, 2, 3.0f, 1.6f), 1);
+    EXPECT_EQ(sdl3d_level_find_support_sector(&level, sectors, 2, 2, 1.5f, 1.6f), 0);
+    EXPECT_EQ(sdl3d_level_find_support_sector(&level, sectors, 2, 2, -1.0f, 1.6f), -1);
+
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DSectorQueries, PointInsideRespectsXZAndY)
+{
+    const sdl3d_level_material mats[] = {MakeLevelMaterial("a.png"), MakeLevelMaterial("b.png"),
+                                         MakeLevelMaterial("c.png")};
+    const sdl3d_sector sectors[] = {MakeStackedSector(0, 0, 4, 4, 0, 3)};
+    sdl3d_level level{};
+    ASSERT_TRUE(sdl3d_build_level(sectors, 1, mats, 3, nullptr, 0, &level));
+
+    EXPECT_TRUE(sdl3d_level_point_inside(&level, sectors, 2, 1.5f, 2));
+    EXPECT_FALSE(sdl3d_level_point_inside(&level, sectors, 2, 5.0f, 2));  /* above ceil */
+    EXPECT_FALSE(sdl3d_level_point_inside(&level, sectors, 2, -1.0f, 2)); /* below floor */
+    EXPECT_FALSE(sdl3d_level_point_inside(&level, sectors, 20, 1.5f, 2)); /* outside xz */
+
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DSectorQueries, NullArgsReturnSafeDefaults)
+{
+    EXPECT_EQ(sdl3d_level_find_sector_at(nullptr, nullptr, 0, 0, 0), -1);
+    EXPECT_EQ(sdl3d_level_find_walkable_sector(nullptr, nullptr, 0, 0, 0, 1, 1), -1);
+    EXPECT_EQ(sdl3d_level_find_support_sector(nullptr, nullptr, 0, 0, 0, 1), -1);
+    EXPECT_FALSE(sdl3d_level_point_inside(nullptr, nullptr, 0, 0, 0));
+}
+
+/* ================================================================== */
+/* Frustum extraction                                                 */
+/* ================================================================== */
+
+TEST(SDL3DExtractFrustumPlanes, IdentityVPYieldsUnitCubeBoundary)
+{
+    /* For VP = identity, the frustum is the clip-space cube [-1,1]^3. */
+    sdl3d_mat4 vp = sdl3d_mat4_identity();
+    float planes[6][4];
+    sdl3d_extract_frustum_planes(vp, planes);
+
+    /* Plane d should be 1 for each face of the unit cube. */
+    for (int i = 0; i < 6; ++i)
+    {
+        EXPECT_NEAR(planes[i][3], 1.0f, 1e-4f) << "plane " << i;
+    }
+}
+
+/* ================================================================== */
+/* Light sampling                                                     */
+/* ================================================================== */
+
+TEST(SDL3DLevelSampleLight, AccumulatesAndAttenuates)
+{
+    sdl3d_level_light l{};
+    l.position[0] = 0;
+    l.position[1] = 0;
+    l.position[2] = 0;
+    l.color[0] = 1.0f;
+    l.color[1] = 0.0f;
+    l.color[2] = 0.0f;
+    l.intensity = 1.0f;
+    l.range = 4.0f;
+
+    /* At the center, fully lit (clamped to 255). */
+    sdl3d_color at_center = sdl3d_level_sample_light(&l, 1, sdl3d_vec3_make(0.001f, 0, 0));
+    EXPECT_GT(at_center.r, 200);
+    EXPECT_EQ(at_center.g, 0);
+
+    /* Outside range, no light. */
+    sdl3d_color far_away = sdl3d_level_sample_light(&l, 1, sdl3d_vec3_make(10, 0, 0));
+    EXPECT_EQ(far_away.r, 0);
+
+    /* Halfway, attenuated. */
+    sdl3d_color mid = sdl3d_level_sample_light(&l, 1, sdl3d_vec3_make(2, 0, 0));
+    EXPECT_GT(mid.r, 0);
+    EXPECT_LT(mid.r, at_center.r);
+}
+
+TEST(SDL3DLevelSampleLight, NullOrEmptyReturnsBlack)
+{
+    sdl3d_color c = sdl3d_level_sample_light(nullptr, 0, sdl3d_vec3_make(0, 0, 0));
+    EXPECT_EQ(c.r, 0);
+    EXPECT_EQ(c.g, 0);
+    EXPECT_EQ(c.b, 0);
+}
+
 TEST(SDL3DLevelVisibility, VisibilityFromSectorZeroSeesNeighbor)
 {
     const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),

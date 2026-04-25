@@ -123,6 +123,56 @@ extern "C"
     int sdl3d_level_find_sector(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float z);
 
     /*
+     * Find the sector containing (x, z) where feet_y is inside the sector's
+     * vertical span (floor_y <= feet_y < ceil_y). Returns the sector with
+     * the highest floor when multiple stacked sectors qualify (the sector
+     * the player is "standing on"). Returns -1 if no sector qualifies.
+     */
+    int sdl3d_level_find_sector_at(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float z,
+                                   float feet_y);
+
+    /*
+     * Find the highest sector at (x, z) whose floor is at most step_height
+     * above feet_y and that has at least player_height of headroom. Used
+     * for stair climbing and walkable-position queries. The player_height
+     * argument should include any ceiling clearance the caller wants
+     * enforced. Returns -1 if no walkable sector exists.
+     */
+    int sdl3d_level_find_walkable_sector(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float z,
+                                         float feet_y, float step_height, float player_height);
+
+    /*
+     * Find the highest sector at (x, z) whose floor is at or below feet_y
+     * and that has at least player_height of headroom. Used for falling /
+     * floor-snap queries: returns the floor the player will land on.
+     * Returns -1 if no support sector exists.
+     */
+    int sdl3d_level_find_support_sector(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float z,
+                                        float feet_y, float player_height);
+
+    /*
+     * Test whether the world-space point (x, y, z) is inside any sector
+     * volume (XZ polygon plus floor_y <= y <= ceil_y). Useful for
+     * projectile lifetime and trigger volume checks.
+     */
+    bool sdl3d_level_point_inside(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float y, float z);
+
+    /*
+     * Extract 6 normalized frustum planes from a row-major view-projection
+     * matrix. The output planes use the convention a*x + b*y + c*z + d >= 0
+     * for the inside half-space. Order: left, right, bottom, top, near, far.
+     */
+    void sdl3d_extract_frustum_planes(sdl3d_mat4 view_projection, float out_planes[6][4]);
+
+    /*
+     * Sample the accumulated point-light contribution at a world-space
+     * position. Each light uses quadratic distance falloff scaled by its
+     * intensity. The result is clamped to sdl3d_color range and contains
+     * no ambient term — callers add their own ambient floor.
+     */
+    sdl3d_color sdl3d_level_sample_light(const sdl3d_level_light *lights, int light_count, sdl3d_vec3 position);
+
+    /*
      * Compute which sectors are visible from the camera's current sector
      * by traversing the portal graph. Portals behind the camera or outside
      * the frustum are rejected. The caller must provide sector_visible as

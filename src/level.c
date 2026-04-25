@@ -1096,6 +1096,170 @@ int sdl3d_level_find_sector(const sdl3d_level *level, const sdl3d_sector *sector
     return -1;
 }
 
+int sdl3d_level_find_sector_at(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float z, float feet_y)
+{
+    int best = -1;
+    float best_floor = -1e30f;
+
+    if (!level || !sectors)
+        return -1;
+
+    for (int i = 0; i < level->sector_count; ++i)
+    {
+        const sdl3d_sector *sector = &sectors[i];
+        if (!point_in_polygon_xz(sector, x, z))
+            continue;
+        if (sector->floor_y > feet_y || feet_y >= sector->ceil_y)
+            continue;
+        if (sector->floor_y > best_floor)
+        {
+            best = i;
+            best_floor = sector->floor_y;
+        }
+    }
+    return best;
+}
+
+int sdl3d_level_find_walkable_sector(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float z,
+                                     float feet_y, float step_height, float player_height)
+{
+    int best = -1;
+    float best_floor = -1e30f;
+
+    if (!level || !sectors)
+        return -1;
+
+    for (int i = 0; i < level->sector_count; ++i)
+    {
+        const sdl3d_sector *sector = &sectors[i];
+        if (!point_in_polygon_xz(sector, x, z))
+            continue;
+        if (sector->floor_y > feet_y + step_height)
+            continue;
+        if (sector->ceil_y - sector->floor_y < player_height)
+            continue;
+        if (sector->floor_y > best_floor)
+        {
+            best = i;
+            best_floor = sector->floor_y;
+        }
+    }
+    return best;
+}
+
+int sdl3d_level_find_support_sector(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float z,
+                                    float feet_y, float player_height)
+{
+    int best = -1;
+    float best_floor = -1e30f;
+
+    if (!level || !sectors)
+        return -1;
+
+    for (int i = 0; i < level->sector_count; ++i)
+    {
+        const sdl3d_sector *sector = &sectors[i];
+        if (!point_in_polygon_xz(sector, x, z))
+            continue;
+        if (sector->floor_y > feet_y)
+            continue;
+        if (sector->ceil_y - sector->floor_y < player_height)
+            continue;
+        if (sector->floor_y > best_floor)
+        {
+            best = i;
+            best_floor = sector->floor_y;
+        }
+    }
+    return best;
+}
+
+bool sdl3d_level_point_inside(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float y, float z)
+{
+    if (!level || !sectors)
+        return false;
+    for (int i = 0; i < level->sector_count; ++i)
+    {
+        const sdl3d_sector *sector = &sectors[i];
+        if (y < sector->floor_y || y > sector->ceil_y)
+            continue;
+        if (point_in_polygon_xz(sector, x, z))
+            return true;
+    }
+    return false;
+}
+
+void sdl3d_extract_frustum_planes(sdl3d_mat4 view_projection, float out_planes[6][4])
+{
+    const float *m = view_projection.m;
+    float raw[6][4] = {
+        {m[3] + m[0], m[7] + m[4], m[11] + m[8], m[15] + m[12]},
+        {m[3] - m[0], m[7] - m[4], m[11] - m[8], m[15] - m[12]},
+        {m[3] + m[1], m[7] + m[5], m[11] + m[9], m[15] + m[13]},
+        {m[3] - m[1], m[7] - m[5], m[11] - m[9], m[15] - m[13]},
+        {m[3] + m[2], m[7] + m[6], m[11] + m[10], m[15] + m[14]},
+        {m[3] - m[2], m[7] - m[6], m[11] - m[10], m[15] - m[14]},
+    };
+    for (int i = 0; i < 6; ++i)
+    {
+        float len = SDL_sqrtf(raw[i][0] * raw[i][0] + raw[i][1] * raw[i][1] + raw[i][2] * raw[i][2]);
+        if (len > 1e-6f)
+        {
+            out_planes[i][0] = raw[i][0] / len;
+            out_planes[i][1] = raw[i][1] / len;
+            out_planes[i][2] = raw[i][2] / len;
+            out_planes[i][3] = raw[i][3] / len;
+        }
+        else
+        {
+            out_planes[i][0] = 0.0f;
+            out_planes[i][1] = 0.0f;
+            out_planes[i][2] = 0.0f;
+            out_planes[i][3] = raw[i][3];
+        }
+    }
+}
+
+sdl3d_color sdl3d_level_sample_light(const sdl3d_level_light *lights, int light_count, sdl3d_vec3 position)
+{
+    float r = 0.0f, g = 0.0f, b = 0.0f;
+
+    if (lights == NULL || light_count <= 0)
+    {
+        return (sdl3d_color){0, 0, 0, 255};
+    }
+
+    for (int i = 0; i < light_count; ++i)
+    {
+        float dx = lights[i].position[0] - position.x;
+        float dy = lights[i].position[1] - position.y;
+        float dz = lights[i].position[2] - position.z;
+        float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
+        if (lights[i].range <= 0.0f || dist >= lights[i].range || dist <= 1e-4f)
+            continue;
+        float t = 1.0f - dist / lights[i].range;
+        float scale = lights[i].intensity * t * t;
+        r += lights[i].color[0] * scale;
+        g += lights[i].color[1] * scale;
+        b += lights[i].color[2] * scale;
+    }
+
+    if (r > 1.0f)
+        r = 1.0f;
+    if (g > 1.0f)
+        g = 1.0f;
+    if (b > 1.0f)
+        b = 1.0f;
+    if (r < 0.0f)
+        r = 0.0f;
+    if (g < 0.0f)
+        g = 0.0f;
+    if (b < 0.0f)
+        b = 0.0f;
+
+    return (sdl3d_color){(Uint8)(r * 255.0f), (Uint8)(g * 255.0f), (Uint8)(b * 255.0f), 255};
+}
+
 /* ------------------------------------------------------------------ */
 /* Portal visibility traversal                                         */
 /* ------------------------------------------------------------------ */
