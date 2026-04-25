@@ -17,8 +17,8 @@
 
 #define WINDOW_W 1280
 #define WINDOW_H 720
-#define SOFTWARE_W WINDOW_W
-#define SOFTWARE_H WINDOW_H
+#define SOFTWARE_W (WINDOW_W / 2)
+#define SOFTWARE_H (WINDOW_H / 2)
 #define MOVE_SPEED 12.0f
 #define MOUSE_SENS 0.002f
 #define JUMP_VELOCITY 6.0f
@@ -377,16 +377,49 @@ static void strip_level_lightmap(sdl3d_level *level)
 
 static bool create_backend(SDL_Window **out_win, sdl3d_render_context **out_ctx, sdl3d_backend backend)
 {
+    /* Always create a full-size window. Software uses a smaller logical
+     * resolution that SDL upscales to the window automatically. */
     sdl3d_window_config wcfg;
     sdl3d_init_window_config(&wcfg);
-    wcfg.width = (backend == SDL3D_BACKEND_SOFTWARE) ? SOFTWARE_W : WINDOW_W;
-    wcfg.height = (backend == SDL3D_BACKEND_SOFTWARE) ? SOFTWARE_H : WINDOW_H;
+    wcfg.width = WINDOW_W;
+    wcfg.height = WINDOW_H;
     wcfg.title = "SDL3D \xe2\x80\x94 Doom Level";
     wcfg.backend = backend;
     wcfg.allow_backend_fallback = false;
 
-    if (!sdl3d_create_window(&wcfg, out_win, out_ctx))
-        return false;
+    if (backend == SDL3D_BACKEND_SOFTWARE)
+    {
+        /* Use low-level API so we can set a smaller logical resolution
+         * while keeping the window at full size. */
+        SDL_Window *w = SDL_CreateWindow(wcfg.title, WINDOW_W, WINDOW_H, SDL_WINDOW_RESIZABLE);
+        if (!w)
+            return false;
+        SDL_Renderer *r = SDL_CreateRenderer(w, NULL);
+        if (!r)
+        {
+            SDL_DestroyWindow(w);
+            return false;
+        }
+        sdl3d_render_context_config rcfg;
+        sdl3d_init_render_context_config(&rcfg);
+        rcfg.backend = SDL3D_BACKEND_SOFTWARE;
+        rcfg.allow_backend_fallback = false;
+        rcfg.logical_width = SOFTWARE_W;
+        rcfg.logical_height = SOFTWARE_H;
+        rcfg.logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
+        if (!sdl3d_create_render_context(w, r, &rcfg, out_ctx))
+        {
+            SDL_DestroyRenderer(r);
+            SDL_DestroyWindow(w);
+            return false;
+        }
+        *out_win = w;
+    }
+    else
+    {
+        if (!sdl3d_create_window(&wcfg, out_win, out_ctx))
+            return false;
+    }
 
     SDL_SetWindowRelativeMouseMode(*out_win, true);
     return true;
@@ -849,7 +882,7 @@ int main(int argc, char *argv[])
                     sdl3d_set_ssao_enabled(ctx, false);
                     sdl3d_set_point_shadows_enabled(ctx, false);
                     sdl3d_set_backface_culling_enabled(ctx, true);
-                    sdl3d_set_shading_mode(ctx, (current_backend == SDL3D_BACKEND_SOFTWARE) ? SDL3D_SHADING_FLAT
+                    sdl3d_set_shading_mode(ctx, (current_backend == SDL3D_BACKEND_SOFTWARE) ? SDL3D_SHADING_UNLIT
                                                                                             : SDL3D_SHADING_PHONG);
                     /* Hide expensive dragon model on software for performance. */
                     if (dragon_actor)
@@ -866,7 +899,7 @@ int main(int argc, char *argv[])
                     sdl3d_set_ssao_enabled(ctx, false);
                     sdl3d_set_point_shadows_enabled(ctx, false);
                     sdl3d_set_backface_culling_enabled(ctx, true);
-                    sdl3d_set_shading_mode(ctx, (current_backend == SDL3D_BACKEND_SOFTWARE) ? SDL3D_SHADING_FLAT
+                    sdl3d_set_shading_mode(ctx, (current_backend == SDL3D_BACKEND_SOFTWARE) ? SDL3D_SHADING_UNLIT
                                                                                             : SDL3D_SHADING_PHONG);
                 }
             }
