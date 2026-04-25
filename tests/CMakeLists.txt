@@ -98,6 +98,7 @@ set(SDL3D_TEST_SOURCES
     test_properties.cpp
     test_signal_bus.cpp
     test_trigger.cpp
+    test_timer_pool.cpp
     test_fps_mover.cpp
     test_sprite_actor.cpp
 )
@@ -189,6 +190,7 @@ else()
     sdl3d_add_test(sdl3d_properties_test test_properties.cpp unit)
     sdl3d_add_test(sdl3d_signal_bus_test test_signal_bus.cpp unit)
     sdl3d_add_test(sdl3d_trigger_test test_trigger.cpp unit)
+    sdl3d_add_test(sdl3d_timer_pool_test test_timer_pool.cpp unit)
     sdl3d_add_test(sdl3d_fps_mover_test test_fps_mover.cpp unit)
     sdl3d_add_test(sdl3d_sprite_actor_test test_sprite_actor.cpp unit)
     sdl3d_add_test(sdl3d_ui_test test_ui.cpp unit)
