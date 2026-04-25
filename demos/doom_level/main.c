@@ -9,6 +9,8 @@
 #include "sdl3d/font.h"
 #include "sdl3d/level.h"
 #include "sdl3d/lighting.h"
+#include "sdl3d/model.h"
+#include "sdl3d/scene.h"
 #include "sdl3d/sdl3d.h"
 #include "sdl3d/ui.h"
 
@@ -18,6 +20,9 @@
 #define SOFTWARE_H (WINDOW_H / 2)
 #define MOVE_SPEED 12.0f
 #define MOUSE_SENS 0.002f
+#define JUMP_VELOCITY 6.0f
+#define GRAVITY 14.0f
+#define PLAYER_HEIGHT 1.6f
 #define PROJ_SPEED 20.0f
 #define PROJ_LIFETIME 3.0f
 #define ROCKET_LIGHT_R 1.0f
@@ -576,8 +581,10 @@ int main(int argc, char *argv[])
     bool portal_culling = true;
 
     /* Player */
-    float px = 5, py = 1.6f, pz = 4;
+    float px = 5, py = PLAYER_HEIGHT, pz = 4;
     float yaw = 3.14159f, pitch = 0;
+    float vy = 0; /* vertical velocity for jump */
+    bool on_ground = true;
     bool mouse_init = false;
 
     /* Projectile. */
@@ -585,6 +592,27 @@ int main(int argc, char *argv[])
     float proj_x = 0, proj_y = 0, proj_z = 0;
     float proj_dx = 0, proj_dy = 0, proj_dz = 0;
     float proj_life = 0;
+
+    /* Load 3D models and create scene actors. */
+    sdl3d_model robot_model = {0};
+    bool has_robot = sdl3d_load_model_from_file(SDL3D_MEDIA_DIR "/simple_robot/simple_robot.glb", &robot_model);
+    if (!has_robot)
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Robot model load failed: %s", SDL_GetError());
+
+    sdl3d_scene *scene = sdl3d_create_scene();
+
+    /* Place robot actors in the level. */
+    if (has_robot && scene)
+    {
+        sdl3d_actor *r1 = sdl3d_scene_add_actor(scene, &robot_model);
+        sdl3d_actor_set_position(r1, sdl3d_vec3_make(5.0f, 0.0f, 12.0f));
+        sdl3d_actor_set_scale(r1, sdl3d_vec3_make(0.8f, 0.8f, 0.8f));
+
+        sdl3d_actor *r2 = sdl3d_scene_add_actor(scene, &robot_model);
+        sdl3d_actor_set_position(r2, sdl3d_vec3_make(24.0f, 0.0f, 20.0f));
+        sdl3d_actor_set_scale(r2, sdl3d_vec3_make(0.8f, 0.8f, 0.8f));
+        sdl3d_actor_set_tint(r2, (sdl3d_color){255, 180, 180, 255});
+    }
 
     bool running = true;
     Uint64 last = SDL_GetPerformanceCounter();
@@ -620,6 +648,11 @@ int main(int argc, char *argv[])
             {
                 portal_culling = !portal_culling;
                 SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Portal culling: %s", portal_culling ? "ON" : "OFF");
+            }
+            if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_SPACE && on_ground)
+            {
+                vy = JUMP_VELOCITY;
+                on_ground = false;
             }
             if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_TAB)
             {
@@ -725,6 +758,19 @@ int main(int argc, char *argv[])
             pz += wish_z * MOVE_SPEED * dt;
         }
 
+        /* Jump / gravity. */
+        if (!on_ground)
+        {
+            vy -= GRAVITY * dt;
+            py += vy * dt;
+            if (py <= PLAYER_HEIGHT)
+            {
+                py = PLAYER_HEIGHT;
+                vy = 0;
+                on_ground = true;
+            }
+        }
+
         sdl3d_camera3d cam;
         cam.position = sdl3d_vec3_make(px, py, pz);
         cam.target = sdl3d_vec3_make(px + fx, py + SDL_sinf(pitch), pz + fz);
@@ -823,6 +869,24 @@ int main(int argc, char *argv[])
         }
 
         sdl3d_draw_level(ctx, active_level, portal_culling ? &vis : NULL, (sdl3d_color){255, 255, 255, 255});
+
+        /* Draw 3D scene actors (robot models). */
+        if (scene)
+            sdl3d_draw_scene(ctx, scene);
+
+        /* Crate props — simple textured cubes placed around the level. */
+        {
+            static const sdl3d_vec3 crate_positions[] = {
+                {3.0f, 0.5f, 5.0f},   {7.0f, 0.5f, 5.0f},   {3.0f, 0.5f, 10.0f},
+                {7.0f, 0.5f, 10.0f},  {14.0f, 0.5f, 20.0f}, {14.0f, 1.5f, 20.0f}, /* stacked */
+                {22.0f, 0.5f, 16.0f},
+            };
+            sdl3d_color crate_color = {160, 120, 80, 255};
+            for (int i = 0; i < (int)SDL_arraysize(crate_positions); i++)
+            {
+                sdl3d_draw_cube(ctx, crate_positions[i], sdl3d_vec3_make(1.0f, 1.0f, 1.0f), crate_color);
+            }
+        }
 
         {
             int actor_draw_count = 0;
@@ -933,6 +997,9 @@ int main(int argc, char *argv[])
     if (has_font)
         sdl3d_free_font(&debug_font);
     sdl3d_ui_destroy(ui);
+    sdl3d_destroy_scene(scene);
+    if (has_robot)
+        sdl3d_free_model(&robot_model);
     sdl3d_destroy_render_context(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
