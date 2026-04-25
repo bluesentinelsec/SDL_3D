@@ -8,6 +8,7 @@
 
 #include "sdl3d/animation.h"
 #include "sdl3d/font.h"
+#include "sdl3d/fps_mover.h"
 #include "sdl3d/level.h"
 #include "sdl3d/lighting.h"
 #include "sdl3d/model.h"
@@ -125,140 +126,13 @@ static const sdl3d_texture2d *select_actor_texture(const demo_sprite_actor *acto
     }
 }
 
-static bool point_in_sector_xz(const sdl3d_sector *sector, float x, float z)
-{
-    bool inside = false;
-    for (int i = 0, j = sector->num_points - 1; i < sector->num_points; j = i++)
-    {
-        float xi = sector->points[i][0];
-        float zi = sector->points[i][1];
-        float xj = sector->points[j][0];
-        float zj = sector->points[j][1];
-        bool crosses = ((zi > z) != (zj > z));
-        if (!crosses)
-            continue;
-        float intersect_x = (xj - xi) * (z - zi) / (zj - zi) + xi;
-        if (x < intersect_x)
-            inside = !inside;
-    }
-    return inside;
-}
+/* Sector queries and player physics are provided by the public API:
+ * sdl3d_level_* helpers (see sdl3d/level.h) plus sdl3d_fps_mover (see
+ * sdl3d/fps_mover.h). PLAYER_MIN_HEADROOM is the headroom argument used
+ * by the visibility-side sector lookup below. */
+#define PLAYER_MIN_HEADROOM (PLAYER_HEIGHT + PLAYER_CEILING_CLEARANCE)
 
-static bool point_in_any_sector(const sdl3d_sector *sectors, int sector_count, float x, float y, float z)
-{
-    for (int i = 0; i < sector_count; i++)
-    {
-        const sdl3d_sector *sector = &sectors[i];
-        if (y < sector->floor_y || y > sector->ceil_y)
-            continue;
-        if (point_in_sector_xz(sector, x, z))
-            return true;
-    }
-    return false;
-}
-
-static int find_sector_at(const sdl3d_sector *sectors, int sector_count, float x, float z, float feet_y)
-{
-    int best = -1;
-    float best_floor = -1000000.0f;
-
-    for (int i = 0; i < sector_count; ++i)
-    {
-        const sdl3d_sector *sector = &sectors[i];
-        if (!point_in_sector_xz(sector, x, z))
-            continue;
-        if (sector->floor_y > feet_y || feet_y >= sector->ceil_y)
-            continue;
-        if (sector->floor_y > best_floor)
-        {
-            best = i;
-            best_floor = sector->floor_y;
-        }
-    }
-
-    return best;
-}
-
-static int find_walkable_sector_at(const sdl3d_sector *sectors, int sector_count, float x, float z, float feet_y,
-                                   float max_step_up)
-{
-    int best = -1;
-    float best_floor = -1000000.0f;
-
-    for (int i = 0; i < sector_count; ++i)
-    {
-        const sdl3d_sector *sector = &sectors[i];
-        if (!point_in_sector_xz(sector, x, z))
-            continue;
-        if (sector->floor_y > feet_y + max_step_up)
-            continue;
-        if (sector->ceil_y - sector->floor_y < PLAYER_HEIGHT + PLAYER_CEILING_CLEARANCE)
-            continue;
-        if (sector->floor_y > best_floor)
-        {
-            best = i;
-            best_floor = sector->floor_y;
-        }
-    }
-
-    return best;
-}
-
-static int find_support_sector_at(const sdl3d_sector *sectors, int sector_count, float x, float z, float feet_y)
-{
-    int best = -1;
-    float best_floor = -1000000.0f;
-
-    for (int i = 0; i < sector_count; ++i)
-    {
-        const sdl3d_sector *sector = &sectors[i];
-        if (!point_in_sector_xz(sector, x, z))
-            continue;
-        if (sector->floor_y > feet_y)
-            continue;
-        if (sector->ceil_y - sector->floor_y < PLAYER_HEIGHT + PLAYER_CEILING_CLEARANCE)
-            continue;
-        if (sector->floor_y > best_floor)
-        {
-            best = i;
-            best_floor = sector->floor_y;
-        }
-    }
-
-    return best;
-}
-
-static bool position_is_walkable(const sdl3d_sector *sectors, int sector_count, float x, float z, float feet_y,
-                                 float max_step_up, int *out_sector)
-{
-    static const float sample_dirs[8][2] = {
-        {1.0f, 0.0f},       {-1.0f, 0.0f},       {0.0f, 1.0f},        {0.0f, -1.0f},
-        {0.7071f, 0.7071f}, {0.7071f, -0.7071f}, {-0.7071f, 0.7071f}, {-0.7071f, -0.7071f},
-    };
-    int center_sector = find_walkable_sector_at(sectors, sector_count, x, z, feet_y, max_step_up);
-    float target_floor;
-
-    if (center_sector < 0)
-        return false;
-
-    target_floor = sectors[center_sector].floor_y;
-    for (int i = 0; i < 8; ++i)
-    {
-        float sx = x + sample_dirs[i][0] * PLAYER_RADIUS;
-        float sz = z + sample_dirs[i][1] * PLAYER_RADIUS;
-        int sample_sector = find_walkable_sector_at(sectors, sector_count, sx, sz, feet_y, max_step_up);
-        if (sample_sector < 0)
-            return false;
-        if (SDL_fabsf(sectors[sample_sector].floor_y - target_floor) > max_step_up)
-            return false;
-    }
-
-    if (out_sector != NULL)
-        *out_sector = center_sector;
-    return true;
-}
-
-static void advance_projectile(const sdl3d_sector *sectors, int sector_count, float dt, bool *proj_active,
+static void advance_projectile(const sdl3d_level *level, const sdl3d_sector *sectors, float dt, bool *proj_active,
                                float *proj_x, float *proj_y, float *proj_z, float proj_dx, float proj_dy, float proj_dz,
                                float *proj_life)
 {
@@ -276,7 +150,7 @@ static void advance_projectile(const sdl3d_sector *sectors, int sector_count, fl
         float next_x = *proj_x + proj_dx * step_dist;
         float next_y = *proj_y + proj_dy * step_dist;
         float next_z = *proj_z + proj_dz * step_dist;
-        if (!point_in_any_sector(sectors, sector_count, next_x, next_y, next_z))
+        if (!sdl3d_level_point_inside(level, sectors, next_x, next_y, next_z))
         {
             *proj_active = false;
             return;
@@ -392,16 +266,11 @@ static bool create_backend(SDL_Window **out_win, sdl3d_render_context **out_ctx,
     return true;
 }
 
-static void reset_demo_state(float *px, float *py, float *pz, float *yaw, float *pitch, float *vy, bool *on_ground,
-                             bool *proj_active, float *proj_life)
+static void reset_demo_state(sdl3d_fps_mover *mover, const sdl3d_fps_mover_config *config, bool *proj_active,
+                             float *proj_life)
 {
-    *px = PLAYER_SPAWN_X;
-    *py = PLAYER_HEIGHT;
-    *pz = PLAYER_SPAWN_Z;
-    *yaw = PLAYER_SPAWN_YAW;
-    *pitch = 0.0f;
-    *vy = 0.0f;
-    *on_ground = true;
+    sdl3d_fps_mover_init(mover, config, sdl3d_vec3_make(PLAYER_SPAWN_X, PLAYER_HEIGHT, PLAYER_SPAWN_Z),
+                         PLAYER_SPAWN_YAW);
     *proj_active = false;
     *proj_life = 0.0f;
 }
@@ -727,20 +596,31 @@ int main(int argc, char *argv[])
     bool show_debug = false;
     bool portal_culling = true;
 
-    /* Player */
-    float px = PLAYER_SPAWN_X, py = PLAYER_HEIGHT, pz = PLAYER_SPAWN_Z;
-    float yaw = PLAYER_SPAWN_YAW, pitch = 0;
-    float vy = 0;          /* vertical velocity for jump */
-    float view_smooth = 0; /* Quake-style view smoothing for stairs */
-    bool on_ground = true;
+    /* Player physics: the FPS mover encapsulates gravity, jumping, stair
+     * stepping, sliding collision, view smoothing, ground rescue, and the
+     * last-known-good fallback. We keep px/py/pz/yaw/pitch as locals
+     * synced from the mover so the rest of the demo (projectile fire,
+     * sprite rotation pick, debug labels) reads them naturally. */
+    sdl3d_fps_mover_config fps_cfg = {
+        .move_speed = MOVE_SPEED,
+        .jump_velocity = JUMP_VELOCITY,
+        .gravity = GRAVITY,
+        .player_height = PLAYER_HEIGHT,
+        .player_radius = PLAYER_RADIUS,
+        .step_height = PLAYER_STEP_HEIGHT,
+        .ceiling_clearance = PLAYER_CEILING_CLEARANCE,
+    };
+    sdl3d_fps_mover mover;
+    sdl3d_fps_mover_init(&mover, &fps_cfg, sdl3d_vec3_make(PLAYER_SPAWN_X, PLAYER_HEIGHT, PLAYER_SPAWN_Z),
+                         PLAYER_SPAWN_YAW);
+    float px = mover.position.x, py = mover.position.y, pz = mover.position.z;
+    float yaw = mover.yaw, pitch = mover.pitch;
     bool mouse_init = false;
 
-    /* Last-known-good position. Captured each frame the player is on solid
-     * ground inside a valid sector, used as a safety net if vertical
-     * collision puts the player in the void (Quake's PM_Trace fallback). */
-    float last_good_x = px;
-    float last_good_y = py;
-    float last_good_z = pz;
+    /* Mouse deltas accumulated during event poll, consumed by the mover
+     * each frame and reset to zero. */
+    float frame_mdx = 0.0f;
+    float frame_mdy = 0.0f;
 
     /* Projectile. */
     bool proj_active = false;
@@ -829,16 +709,19 @@ int main(int argc, char *argv[])
                 portal_culling = !portal_culling;
                 SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Portal culling: %s", portal_culling ? "ON" : "OFF");
             }
-            if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_SPACE && on_ground)
+            if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_SPACE)
             {
-                vy = JUMP_VELOCITY;
-                on_ground = false;
+                sdl3d_fps_mover_jump(&mover);
             }
             if (ev.type == SDL_EVENT_KEY_DOWN &&
                 (ev.key.scancode == SDL_SCANCODE_BACKSPACE || ev.key.scancode == SDL_SCANCODE_DELETE))
             {
-                reset_demo_state(&px, &py, &pz, &yaw, &pitch, &vy, &on_ground, &proj_active, &proj_life);
-                view_smooth = 0;
+                reset_demo_state(&mover, &fps_cfg, &proj_active, &proj_life);
+                px = mover.position.x;
+                py = mover.position.y;
+                pz = mover.position.z;
+                yaw = mover.yaw;
+                pitch = mover.pitch;
             }
             if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_TAB)
             {
@@ -873,12 +756,8 @@ int main(int argc, char *argv[])
             }
             if (ev.type == SDL_EVENT_MOUSE_MOTION && mouse_init)
             {
-                yaw += ev.motion.xrel * MOUSE_SENS;
-                pitch -= ev.motion.yrel * MOUSE_SENS;
-                if (pitch > 1.4f)
-                    pitch = 1.4f;
-                if (pitch < -1.4f)
-                    pitch = -1.4f;
+                frame_mdx += ev.motion.xrel;
+                frame_mdy += ev.motion.yrel;
             }
             if (ev.type == SDL_EVENT_MOUSE_MOTION)
                 mouse_init = true;
@@ -912,289 +791,67 @@ int main(int argc, char *argv[])
             }
         }
 
-        /* Look direction (for camera target). */
-        float fx = SDL_sinf(yaw) * SDL_cosf(pitch);
-        float fz = -SDL_cosf(yaw) * SDL_cosf(pitch);
-
-        /* Doom-style movement: accumulate wish direction on XZ plane,
-         * normalize so diagonal isn't faster, constant speed regardless of pitch. */
-        float fwd_x = SDL_sinf(yaw);
-        float fwd_z = -SDL_cosf(yaw);
-        float right_x = SDL_cosf(yaw);
-        float right_z = SDL_sinf(yaw);
-        float wish_x = 0, wish_z = 0;
+        /* Compute wish direction in world XZ space from current keys and
+         * the mover's facing. The mover normalizes any vector with
+         * magnitude > 1 internally; we just need a direction. */
+        float fwd_x = SDL_sinf(mover.yaw);
+        float fwd_z = -SDL_cosf(mover.yaw);
+        float right_x = SDL_cosf(mover.yaw);
+        float right_z = SDL_sinf(mover.yaw);
+        sdl3d_vec2 wish = {0.0f, 0.0f};
 
         const Uint8 *keys = (const Uint8 *)SDL_GetKeyboardState(NULL);
         if (keys[SDL_SCANCODE_W])
         {
-            wish_x += fwd_x;
-            wish_z += fwd_z;
+            wish.x += fwd_x;
+            wish.y += fwd_z;
         }
         if (keys[SDL_SCANCODE_S])
         {
-            wish_x -= fwd_x;
-            wish_z -= fwd_z;
+            wish.x -= fwd_x;
+            wish.y -= fwd_z;
         }
         if (keys[SDL_SCANCODE_A])
         {
-            wish_x -= right_x;
-            wish_z -= right_z;
+            wish.x -= right_x;
+            wish.y -= right_z;
         }
         if (keys[SDL_SCANCODE_D])
         {
-            wish_x += right_x;
-            wish_z += right_z;
+            wish.x += right_x;
+            wish.y += right_z;
         }
 
-        /* Quake-style view smoothing: decay the offset each frame. */
-        {
-            float smooth_speed = 12.0f; /* higher = snappier */
-            if (view_smooth > 0.01f)
-                view_smooth -= view_smooth * smooth_speed * dt;
-            else if (view_smooth < -0.01f)
-                view_smooth -= view_smooth * smooth_speed * dt;
-            else
-                view_smooth = 0.0f;
-        }
+        sdl3d_fps_mover_update(&mover, &level_unlit, sectors, wish, frame_mdx, frame_mdy, MOUSE_SENS, dt);
+        frame_mdx = 0.0f;
+        frame_mdy = 0.0f;
 
-        float py_before_collision = py;
+        /* Sync legacy locals for the rest of the frame (projectile fire,
+         * sprite rotation pick, debug overlays). */
+        px = mover.position.x;
+        py = mover.position.y;
+        pz = mover.position.z;
+        yaw = mover.yaw;
+        pitch = mover.pitch;
 
-        /* Normalize wish direction, then apply Doom-style sliding collision
-         * against sector boundaries. */
-        {
-            float feet_y = py - PLAYER_HEIGHT;
-            int current_sector = find_sector_at(sectors, sector_count, px, pz, feet_y);
-            float current_floor = feet_y;
+        /* Look direction reused below for visibility computation. */
+        float fx = SDL_sinf(yaw) * SDL_cosf(pitch);
+        float fz = -SDL_cosf(yaw) * SDL_cosf(pitch);
 
-            if (current_sector < 0)
-            {
-                current_sector = find_walkable_sector_at(sectors, sector_count, px, pz, feet_y, PLAYER_STEP_HEIGHT);
-            }
-            if (current_sector >= 0)
-            {
-                current_floor = sectors[current_sector].floor_y;
-            }
-
-            {
-                float wish_len = SDL_sqrtf(wish_x * wish_x + wish_z * wish_z);
-                if (wish_len > 0.001f)
-                {
-                    float move_x;
-                    float move_z;
-                    int candidate_sector = -1;
-
-                    wish_x /= wish_len;
-                    wish_z /= wish_len;
-                    move_x = wish_x * MOVE_SPEED * dt;
-                    move_z = wish_z * MOVE_SPEED * dt;
-
-                    if (position_is_walkable(sectors, sector_count, px + move_x, pz + move_z, feet_y,
-                                             PLAYER_STEP_HEIGHT, &candidate_sector))
-                    {
-                        px += move_x;
-                        pz += move_z;
-                        current_sector = candidate_sector;
-                    }
-                    else
-                    {
-                        if (position_is_walkable(sectors, sector_count, px + move_x, pz, feet_y, PLAYER_STEP_HEIGHT,
-                                                 &candidate_sector))
-                        {
-                            px += move_x;
-                            current_sector = candidate_sector;
-                        }
-                        else
-                        {
-                            if (position_is_walkable(sectors, sector_count, px, pz + move_z, feet_y, PLAYER_STEP_HEIGHT,
-                                                     &candidate_sector))
-                            {
-                                pz += move_z;
-                                current_sector = candidate_sector;
-                            }
-                        }
-                    }
-                }
-            }
-
-            feet_y = py - PLAYER_HEIGHT;
-            current_sector = find_sector_at(sectors, sector_count, px, pz, feet_y);
-            if (current_sector < 0)
-            {
-                current_sector = find_walkable_sector_at(sectors, sector_count, px, pz, feet_y, PLAYER_STEP_HEIGHT);
-            }
-
-            if (on_ground)
-            {
-                if (current_sector >= 0)
-                {
-                    const float target_floor = sectors[current_sector].floor_y;
-                    if (target_floor < current_floor - PLAYER_STEP_HEIGHT)
-                    {
-                        on_ground = false;
-                    }
-                    else
-                    {
-                        py = target_floor + PLAYER_HEIGHT;
-                    }
-                }
-                else
-                {
-                    on_ground = false;
-                }
-            }
-        }
-
-        /* Jump / gravity. Quake-style substepped vertical integration: a
-         * single large dy can skip past a thin stair sector entirely
-         * (issue #76). Split the motion so each substep moves at most
-         * half a stair step and re-runs the floor-cross test. */
-        if (!on_ground)
-        {
-            vy -= GRAVITY * dt;
-            float dy = vy * dt;
-
-            const float max_substep = PLAYER_STEP_HEIGHT * 0.5f;
-            int substeps = 1;
-            float abs_dy = SDL_fabsf(dy);
-            if (abs_dy > max_substep)
-            {
-                substeps = (int)SDL_ceilf(abs_dy / max_substep);
-            }
-            float sub_dy = dy / (float)substeps;
-
-            for (int s = 0; s < substeps; ++s)
-            {
-                float prev_py = py;
-                float prev_feet_y = py - PLAYER_HEIGHT;
-                py += sub_dy;
-                float feet_y = py - PLAYER_HEIGHT;
-
-                /* Ceiling check: head crossed downward-facing ceiling plane. */
-                int containing_sector = find_sector_at(sectors, sector_count, px, pz, SDL_max(prev_feet_y, feet_y));
-                if (containing_sector >= 0)
-                {
-                    float ceiling_y = sectors[containing_sector].ceil_y - PLAYER_CEILING_CLEARANCE;
-                    if (prev_py <= ceiling_y && py > ceiling_y)
-                    {
-                        py = ceiling_y;
-                        if (vy > 0.0f)
-                            vy = 0.0f;
-                        break;
-                    }
-                }
-
-                /* Floor snap: feet crossed any support floor going down. */
-                if (vy <= 0.0f)
-                {
-                    int support_sector = find_support_sector_at(sectors, sector_count, px, pz,
-                                                                SDL_max(prev_feet_y, feet_y) + PLAYER_STEP_HEIGHT);
-                    if (support_sector >= 0)
-                    {
-                        float floor_y = sectors[support_sector].floor_y;
-                        if (prev_feet_y >= floor_y && feet_y <= floor_y)
-                        {
-                            py = floor_y + PLAYER_HEIGHT;
-                            vy = 0.0f;
-                            on_ground = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            /* Ground-trace rescue: if the player ended up outside any
-             * sector but a support floor exists nearby above their feet
-             * (within step height), snap to it. Catches the case where
-             * a stair edge briefly leaves the player in the void.
-             * Quake 3's PM_GroundTrace pattern. */
-            if (!on_ground && vy <= 0.0f)
-            {
-                float feet_y = py - PLAYER_HEIGHT;
-                int containing_now = find_sector_at(sectors, sector_count, px, pz, feet_y);
-                if (containing_now < 0)
-                {
-                    int rescue = find_support_sector_at(sectors, sector_count, px, pz, feet_y + PLAYER_STEP_HEIGHT);
-                    if (rescue >= 0)
-                    {
-                        float floor_y = sectors[rescue].floor_y;
-                        if (floor_y >= feet_y && (floor_y - feet_y) <= PLAYER_STEP_HEIGHT)
-                        {
-                            py = floor_y + PLAYER_HEIGHT;
-                            vy = 0.0f;
-                            on_ground = true;
-                        }
-                    }
-                }
-            }
-
-            /* Last-known-good fallback: if all of the above failed and
-             * the player is dropping through the world, restore the
-             * cached safe position rather than teleporting to spawn. */
-            if (!on_ground && py < -20.0f)
-            {
-                px = last_good_x;
-                py = last_good_y;
-                pz = last_good_z;
-                vy = 0.0f;
-                on_ground = true;
-                view_smooth = 0;
-            }
-        }
-
-        {
-            float feet_y = py - PLAYER_HEIGHT;
-            int containing_sector = find_sector_at(sectors, sector_count, px, pz, feet_y);
-            if (containing_sector >= 0)
-            {
-                float ceiling_y = sectors[containing_sector].ceil_y - PLAYER_CEILING_CLEARANCE;
-                if (py > ceiling_y)
-                {
-                    py = ceiling_y;
-                    if (vy > 0.0f)
-                        vy = 0.0f;
-                }
-            }
-        }
-
-        /* Accumulate view smooth offset from floor snaps (not jumps). */
-        {
-            float py_delta = py - py_before_collision;
-            if (on_ground && SDL_fabsf(py_delta) > 0.01f)
-                view_smooth -= py_delta;
-        }
-
-        /* Capture last-known-good while standing in a valid sector. */
-        if (on_ground)
-        {
-            int validate = find_sector_at(sectors, sector_count, px, pz, py - PLAYER_HEIGHT);
-            if (validate >= 0)
-            {
-                last_good_x = px;
-                last_good_y = py;
-                last_good_z = pz;
-            }
-        }
-
-        sdl3d_camera3d cam;
-        float eye_y = py + view_smooth;
-        cam.position = sdl3d_vec3_make(px, eye_y, pz);
-        cam.target = sdl3d_vec3_make(px + fx, eye_y + SDL_sinf(pitch), pz + fz);
-        cam.up = sdl3d_vec3_make(0, 1, 0);
-        cam.fovy = 75.0f;
-        cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+        sdl3d_camera3d cam = sdl3d_fps_mover_camera(&mover, 75.0f);
 
         /* Update projectile. */
-        advance_projectile(sectors, sector_count, dt, &proj_active, &proj_x, &proj_y, &proj_z, proj_dx, proj_dy,
+        advance_projectile(&level_unlit, sectors, dt, &proj_active, &proj_x, &proj_y, &proj_z, proj_dx, proj_dy,
                            proj_dz, &proj_life);
 
         /* Compute portal visibility. */
         sdl3d_level *active_level =
             use_lit_world ? (use_lightmaps ? &level_lightmapped : &level_vertex_baked) : &level_unlit;
-        int current_sector = find_sector_at(sectors, sector_count, px, pz, py - PLAYER_HEIGHT);
+        int current_sector = sdl3d_level_find_sector_at(&level_unlit, sectors, px, pz, py - PLAYER_HEIGHT);
         if (current_sector < 0)
         {
-            current_sector =
-                find_walkable_sector_at(sectors, sector_count, px, pz, py - PLAYER_HEIGHT, PLAYER_STEP_HEIGHT);
+            current_sector = sdl3d_level_find_walkable_sector(&level_unlit, sectors, px, pz, py - PLAYER_HEIGHT,
+                                                              PLAYER_STEP_HEIGHT, PLAYER_MIN_HEADROOM);
         }
         sdl3d_vec3 cam_dir = sdl3d_vec3_make(fx, SDL_sinf(pitch), fz);
 
@@ -1224,34 +881,9 @@ int main(int argc, char *argv[])
             sdl3d_mat4 vview, vproj;
             sdl3d_camera3d_compute_matrices(&cam, WINDOW_W, WINDOW_H, 0.01f, 1000.0f, &vview, &vproj);
             sdl3d_mat4 vp = sdl3d_mat4_multiply(vproj, vview);
-            const float *m = vp.m;
 
-            /* Gribb/Hartmann frustum plane extraction: left, right, bottom, top, near, far. */
             float fp[6][4];
-            float raw[6][4] = {
-                {m[3] + m[0], m[7] + m[4], m[11] + m[8], m[15] + m[12]},
-                {m[3] - m[0], m[7] - m[4], m[11] - m[8], m[15] - m[12]},
-                {m[3] + m[1], m[7] + m[5], m[11] + m[9], m[15] + m[13]},
-                {m[3] - m[1], m[7] - m[5], m[11] - m[9], m[15] - m[13]},
-                {m[3] + m[2], m[7] + m[6], m[11] + m[10], m[15] + m[14]},
-                {m[3] - m[2], m[7] - m[6], m[11] - m[10], m[15] - m[14]},
-            };
-            for (int i = 0; i < 6; i++)
-            {
-                float len = SDL_sqrtf(raw[i][0] * raw[i][0] + raw[i][1] * raw[i][1] + raw[i][2] * raw[i][2]);
-                if (len > 0.000001f)
-                {
-                    fp[i][0] = raw[i][0] / len;
-                    fp[i][1] = raw[i][1] / len;
-                    fp[i][2] = raw[i][2] / len;
-                    fp[i][3] = raw[i][3] / len;
-                }
-                else
-                {
-                    fp[i][0] = fp[i][1] = fp[i][2] = 0.0f;
-                    fp[i][3] = raw[i][3];
-                }
-            }
+            sdl3d_extract_frustum_planes(vp, fp);
 
             sdl3d_level_compute_visibility(active_level, current_sector, cam.position, cam_dir, fp, &vis);
         }
@@ -1367,9 +999,9 @@ int main(int argc, char *argv[])
 
         /* Crosshair. */
         {
-            float chx = px + fx * 0.4f;
-            float chy = eye_y + SDL_sinf(pitch) * 0.4f;
-            float chz = pz + fz * 0.4f;
+            float chx = cam.position.x + fx * 0.4f;
+            float chy = cam.position.y + SDL_sinf(pitch) * 0.4f;
+            float chz = cam.position.z + fz * 0.4f;
             sdl3d_set_emissive(ctx, 8, 8, 8);
             sdl3d_draw_cube(ctx, sdl3d_vec3_make(chx, chy, chz), sdl3d_vec3_make(0.003f, 0.003f, 0.003f),
                             (sdl3d_color){255, 255, 255, 255});

@@ -92,6 +92,7 @@ target_sources(
         src/lighting.c
         src/math.c
         src/font.c
+        src/fps_mover.c
         src/level.c
         src/model.c
         src/obj_loader.c
