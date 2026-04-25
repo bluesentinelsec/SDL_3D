@@ -26,6 +26,9 @@
 #define PLAYER_HEIGHT 1.6f
 #define PLAYER_STEP_HEIGHT 0.8f
 #define PLAYER_CEILING_CLEARANCE 0.1f
+#define PLAYER_SPAWN_X 5.0f
+#define PLAYER_SPAWN_Z 4.0f
+#define PLAYER_SPAWN_YAW 3.14159f
 #define PROJ_SPEED 20.0f
 #define PROJ_LIFETIME 3.0f
 #define ROCKET_LIGHT_R 1.0f
@@ -358,6 +361,20 @@ static bool create_backend(SDL_Window **out_win, sdl3d_render_context **out_ctx,
     return true;
 }
 
+static void reset_demo_state(float *px, float *py, float *pz, float *yaw, float *pitch, float *vy, bool *on_ground,
+                             bool *proj_active, float *proj_life)
+{
+    *px = PLAYER_SPAWN_X;
+    *py = PLAYER_HEIGHT;
+    *pz = PLAYER_SPAWN_Z;
+    *yaw = PLAYER_SPAWN_YAW;
+    *pitch = 0.0f;
+    *vy = 0.0f;
+    *on_ground = true;
+    *proj_active = false;
+    *proj_life = 0.0f;
+}
+
 int main(int argc, char *argv[])
 {
     SDL_Window *win = NULL;
@@ -489,11 +506,11 @@ int main(int argc, char *argv[])
      *      |                               |
      *   [1] South Corridor                 |
      *      |                               |
-     *   [2] Nukage Basin -- [3] East Passage -- [4/14/15/16] Courtyard Ring -- [10] Storage -- [12] Secret Annex
-     *      |                                             |
-     *   [6] West Alcove                        [17-23] Tower + Stairs + Upper Room
-     *                                                 |
-     *                                     [5] Exit Room -- [11] Reactor Hall -- [13] Exterior Yard
+     *   [2] Nukage Basin -- [3] East Passage -- [4] Courtyard -- [10] Storage -- [12] Secret Annex
+     *      |                                       |
+     *   [6] West Alcove                           [5] Exit Room -- [11] Reactor Hall -- [14-20] Stair + Upper Route
+     *                                                                                |
+     *                                                                            [13] Exterior Yard
      */
     sdl3d_sector sectors[] = {
         /* 0: Starting room */
@@ -504,8 +521,8 @@ int main(int argc, char *argv[])
         {{{-2, 16}, {10, 16}, {10, 26}, {-2, 26}}, 4, -0.5f, 4.5f, 3, 1, 2},
         /* 3: East passage */
         {{{10, 18}, {16, 18}, {16, 22}, {10, 22}}, 4, 0.0f, 3.5f, 0, 1, 4},
-        /* 4: Courtyard west strip (open roof) */
-        {{{16, 14}, {18, 14}, {18, 26}, {16, 26}}, 4, 0.0f, 8.0f, 0, -1, 2},
+        /* 4: Courtyard (open roof) */
+        {{{16, 14}, {28, 14}, {28, 26}, {16, 26}}, 4, 0.0f, 8.0f, 0, -1, 2},
         /* 5: Exit room */
         {{{20, 26}, {28, 26}, {28, 32}, {20, 32}}, 4, 0.0f, 3.0f, 5, 1, 4},
         /* 6: West alcove off nukage */
@@ -524,41 +541,35 @@ int main(int argc, char *argv[])
         {{{32, 24}, {40, 24}, {40, 30}, {32, 30}}, 4, 0.0f, 3.0f, 0, 1, 2},
         /* 13: Exterior yard (large open-air space for skybox side visibility) */
         {{{-6, 44}, {54, 44}, {54, 104}, {-6, 104}}, 4, 0.0f, 12.0f, 5, -1, 2},
-        /* 14: Courtyard north strip (open roof) */
-        {{{18, 14}, {26, 14}, {26, 18}, {18, 18}}, 4, 0.0f, 8.0f, 0, -1, 2},
-        /* 15: Courtyard east strip (open roof) */
-        {{{26, 14}, {28, 14}, {28, 26}, {26, 26}}, 4, 0.0f, 8.0f, 0, -1, 2},
-        /* 16: Courtyard south strip (open roof) */
-        {{{18, 22}, {26, 22}, {26, 26}, {18, 26}}, 4, 0.0f, 8.0f, 0, -1, 2},
-        /* 17: Tower base room */
-        {{{18, 18}, {24, 18}, {24, 22}, {18, 22}}, 4, 0.0f, 3.5f, 5, 1, 2},
-        /* 18-22: Stairwell sectors rising along the east wall */
-        {{{24.0f, 18.0f}, {26.0f, 18.0f}, {26.0f, 18.8f}, {24.0f, 18.8f}}, 4, 0.0f, 3.5f, 5, 1, 4},
-        {{{24.0f, 18.8f}, {26.0f, 18.8f}, {26.0f, 19.6f}, {24.0f, 19.6f}}, 4, 0.7f, 3.5f, 5, 1, 4},
-        {{{24.0f, 19.6f}, {26.0f, 19.6f}, {26.0f, 20.4f}, {24.0f, 20.4f}}, 4, 1.4f, 3.5f, 5, 1, 4},
-        {{{24.0f, 20.4f}, {26.0f, 20.4f}, {26.0f, 21.2f}, {24.0f, 21.2f}}, 4, 2.1f, 3.5f, 5, 1, 4},
-        {{{24.0f, 21.2f}, {26.0f, 21.2f}, {26.0f, 22.0f}, {24.0f, 22.0f}}, 4, 3.5f, 7.0f, 5, 1, 4},
-        /* 23: Upper room above the tower base */
-        {{{18, 18}, {24, 18}, {24, 22}, {18, 22}}, 4, 3.5f, 7.0f, 5, 1, 4},
+        /* 14-18: Reactor stair climb along the east wall */
+        {{{28.0f, 32.0f}, {30.0f, 32.0f}, {30.0f, 34.0f}, {28.0f, 34.0f}}, 4, 0.0f, 5.5f, 5, 1, 4},
+        {{{28.0f, 34.0f}, {30.0f, 34.0f}, {30.0f, 36.0f}, {28.0f, 36.0f}}, 4, 0.7f, 5.5f, 5, 1, 4},
+        {{{28.0f, 36.0f}, {30.0f, 36.0f}, {30.0f, 38.0f}, {28.0f, 38.0f}}, 4, 1.4f, 5.5f, 5, 1, 4},
+        {{{28.0f, 38.0f}, {30.0f, 38.0f}, {30.0f, 40.0f}, {28.0f, 40.0f}}, 4, 2.1f, 5.5f, 5, 1, 4},
+        {{{28.0f, 40.0f}, {30.0f, 40.0f}, {30.0f, 42.0f}, {28.0f, 42.0f}}, 4, 2.8f, 5.5f, 5, 1, 4},
+        /* 19: Upper landing above the north end of the reactor hall */
+        {{{26.0f, 42.0f}, {30.0f, 42.0f}, {30.0f, 44.0f}, {26.0f, 44.0f}}, 4, 3.5f, 7.0f, 5, 1, 4},
+        /* 20: Upper gallery/new area above reactor hall, opening toward the yard */
+        {{{18.0f, 38.0f}, {28.0f, 38.0f}, {28.0f, 52.0f}, {18.0f, 52.0f}}, 4, 3.5f, 7.5f, 5, -1, 4},
     };
 
     sdl3d_level_light lights[] = {
-        {{5, 3.5f, 4}, {1.0f, 0.82f, 0.58f}, 2.4f, 9.5f},      /* Start room — warm tungsten */
-        {{5, 3.0f, 12}, {1.0f, 0.68f, 0.28f}, 1.4f, 7.0f},     /* South corridor — amber */
-        {{4, 1.0f, 21}, {1.0f, 0.16f, 0.10f}, 3.1f, 12.0f},    /* Nukage basin — red */
-        {{-6, 1.8f, 21}, {0.25f, 0.95f, 0.35f}, 2.4f, 8.5f},   /* West alcove — toxic green */
-        {{14, 2.7f, 4}, {0.7f, 0.8f, 1.0f}, 1.3f, 7.0f},       /* Upper hall — cold white */
-        {{24, 3.2f, 4}, {0.15f, 0.85f, 1.0f}, 2.4f, 10.5f},    /* Computer core — cyan */
-        {{24, 2.6f, 11}, {1.0f, 0.9f, 0.45f}, 1.4f, 6.0f},     /* Security bend — sodium */
-        {{22, 7.0f, 20}, {0.36f, 0.46f, 0.78f}, 2.3f, 14.0f},  /* Courtyard — moonlight */
-        {{33, 3.0f, 18}, {0.9f, 0.35f, 1.0f}, 1.9f, 10.0f},    /* Storage — magenta */
-        {{24, 2.5f, 29}, {0.2f, 1.0f, 0.2f}, 3.2f, 8.0f},      /* Exit — green */
-        {{24, 3.8f, 38}, {0.45f, 0.35f, 1.0f}, 2.2f, 11.0f},   /* Reactor hall — violet */
-        {{36, 2.2f, 27}, {1.0f, 0.55f, 0.22f}, 1.5f, 7.0f},    /* Secret annex — orange */
-        {{24, 8.5f, 74}, {0.32f, 0.38f, 0.7f}, 2.4f, 32.0f},   /* Exterior yard — night sky fill */
-        {{20, 2.6f, 20}, {1.0f, 0.72f, 0.40f}, 1.5f, 6.5f},    /* Tower base — warm */
-        {{25, 4.6f, 21.6f}, {0.35f, 0.65f, 1.0f}, 1.4f, 6.0f}, /* Tower landing — cool blue */
-        {{21, 5.8f, 20}, {0.80f, 0.78f, 1.0f}, 1.8f, 8.0f},    /* Upper room — pale violet */
+        {{5, 3.5f, 4}, {1.0f, 0.82f, 0.58f}, 2.4f, 9.5f},     /* Start room — warm tungsten */
+        {{5, 3.0f, 12}, {1.0f, 0.68f, 0.28f}, 1.4f, 7.0f},    /* South corridor — amber */
+        {{4, 1.0f, 21}, {1.0f, 0.16f, 0.10f}, 3.1f, 12.0f},   /* Nukage basin — red */
+        {{-6, 1.8f, 21}, {0.25f, 0.95f, 0.35f}, 2.4f, 8.5f},  /* West alcove — toxic green */
+        {{14, 2.7f, 4}, {0.7f, 0.8f, 1.0f}, 1.3f, 7.0f},      /* Upper hall — cold white */
+        {{24, 3.2f, 4}, {0.15f, 0.85f, 1.0f}, 2.4f, 10.5f},   /* Computer core — cyan */
+        {{24, 2.6f, 11}, {1.0f, 0.9f, 0.45f}, 1.4f, 6.0f},    /* Security bend — sodium */
+        {{22, 7.0f, 20}, {0.36f, 0.46f, 0.78f}, 2.3f, 14.0f}, /* Courtyard — moonlight */
+        {{33, 3.0f, 18}, {0.9f, 0.35f, 1.0f}, 1.9f, 10.0f},   /* Storage — magenta */
+        {{24, 2.5f, 29}, {0.2f, 1.0f, 0.2f}, 3.2f, 8.0f},     /* Exit — green */
+        {{24, 3.8f, 38}, {0.45f, 0.35f, 1.0f}, 2.2f, 11.0f},  /* Reactor hall — violet */
+        {{36, 2.2f, 27}, {1.0f, 0.55f, 0.22f}, 1.5f, 7.0f},   /* Secret annex — orange */
+        {{24, 8.5f, 74}, {0.32f, 0.38f, 0.7f}, 2.4f, 32.0f},  /* Exterior yard — night sky fill */
+        {{29, 2.8f, 35}, {1.0f, 0.70f, 0.38f}, 1.3f, 7.0f},   /* Stair base — warm */
+        {{29, 4.8f, 41}, {0.35f, 0.65f, 1.0f}, 1.3f, 7.0f},   /* Upper landing — cool blue */
+        {{23, 5.6f, 46}, {0.80f, 0.78f, 1.0f}, 1.7f, 10.0f},  /* Upper gallery — pale violet */
     };
     const int sector_count = (int)SDL_arraysize(sectors);
     const int light_count = (int)SDL_arraysize(lights);
@@ -644,7 +655,7 @@ int main(int argc, char *argv[])
         {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(4.2f, -1.4f, 21.5f),
          (sdl3d_vec2){3.2f, 4.8f}, true, 0.08f, 6.0f},
         {&health_tex, NULL, sdl3d_vec3_make(24.0f, 0.25f, 4.5f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.15f, 1.5f},
-        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(27.0f, -1.05f, 20.0f),
+        {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, -1.05f, 19.0f),
          (sdl3d_vec2){3.6f, 5.6f}, true, 0.09f, 6.5f},
         {&health_tex, NULL, sdl3d_vec3_make(24.0f, 0.25f, 28.5f), (sdl3d_vec2){1.0f, 1.0f}, true, 0.12f, 2.1f},
         {enemy_rotations.frames[DEMO_SPRITE_SOUTH], &enemy_rotations, sdl3d_vec3_make(24.0f, -1.05f, 37.5f),
@@ -676,8 +687,8 @@ int main(int argc, char *argv[])
     bool portal_culling = true;
 
     /* Player */
-    float px = 5, py = PLAYER_HEIGHT, pz = 4;
-    float yaw = 3.14159f, pitch = 0;
+    float px = PLAYER_SPAWN_X, py = PLAYER_HEIGHT, pz = PLAYER_SPAWN_Z;
+    float yaw = PLAYER_SPAWN_YAW, pitch = 0;
     float vy = 0; /* vertical velocity for jump */
     bool on_ground = true;
     bool mouse_init = false;
@@ -719,7 +730,7 @@ int main(int argc, char *argv[])
         sdl3d_actor_set_scale(r1, sdl3d_vec3_make(0.8f, 0.8f, 0.8f));
 
         sdl3d_actor *r2 = sdl3d_scene_add_actor(scene, &robot_model);
-        sdl3d_actor_set_position(r2, sdl3d_vec3_make(21.0f, 3.5f, 20.0f));
+        sdl3d_actor_set_position(r2, sdl3d_vec3_make(23.0f, 3.5f, 46.0f));
         sdl3d_actor_set_scale(r2, sdl3d_vec3_make(0.8f, 0.8f, 0.8f));
         sdl3d_actor_set_tint(r2, (sdl3d_color){255, 180, 180, 255});
     }
@@ -773,6 +784,11 @@ int main(int argc, char *argv[])
             {
                 vy = JUMP_VELOCITY;
                 on_ground = false;
+            }
+            if (ev.type == SDL_EVENT_KEY_DOWN &&
+                (ev.key.scancode == SDL_SCANCODE_BACKSPACE || ev.key.scancode == SDL_SCANCODE_DELETE))
+            {
+                reset_demo_state(&px, &py, &pz, &yaw, &pitch, &vy, &on_ground, &proj_active, &proj_life);
             }
             if (ev.type == SDL_EVENT_KEY_DOWN && ev.key.scancode == SDL_SCANCODE_TAB)
             {
@@ -971,6 +987,8 @@ int main(int argc, char *argv[])
         /* Jump / gravity. */
         if (!on_ground)
         {
+            float prev_head_y = py;
+            float prev_feet_y = py - PLAYER_HEIGHT;
             float feet_y;
             int containing_sector;
             int support_sector;
@@ -978,29 +996,36 @@ int main(int argc, char *argv[])
             vy -= GRAVITY * dt;
             py += vy * dt;
             feet_y = py - PLAYER_HEIGHT;
-            containing_sector = find_sector_at(sectors, sector_count, px, pz, feet_y);
-            support_sector = find_support_sector_at(sectors, sector_count, px, pz, feet_y);
+            containing_sector = find_sector_at(sectors, sector_count, px, pz, SDL_max(prev_feet_y, feet_y));
+            support_sector = find_support_sector_at(sectors, sector_count, px, pz,
+                                                    SDL_max(prev_feet_y, feet_y) + PLAYER_STEP_HEIGHT);
 
             if (containing_sector >= 0)
             {
                 float ceiling_y = sectors[containing_sector].ceil_y - PLAYER_CEILING_CLEARANCE;
-                if (py > ceiling_y)
+                if (prev_head_y <= ceiling_y && py > ceiling_y)
                 {
                     py = ceiling_y;
+                    feet_y = py - PLAYER_HEIGHT;
                     if (vy > 0.0f)
                         vy = 0.0f;
                 }
             }
 
-            if (support_sector >= 0)
+            if (support_sector >= 0 && vy <= 0.0f)
             {
                 float floor_y = sectors[support_sector].floor_y;
-                if (py <= floor_y + PLAYER_HEIGHT)
+                if (prev_feet_y >= floor_y && feet_y <= floor_y)
                 {
                     py = floor_y + PLAYER_HEIGHT;
                     vy = 0.0f;
                     on_ground = true;
                 }
+            }
+
+            if (!on_ground && py < -20.0f)
+            {
+                reset_demo_state(&px, &py, &pz, &yaw, &pitch, &vy, &on_ground, &proj_active, &proj_life);
             }
         }
 
