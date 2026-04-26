@@ -117,6 +117,52 @@ int CountColor(sdl3d_render_context *ctx, sdl3d_color c)
     return n;
 }
 
+struct ColorRegionStats
+{
+    int max_r = 0;
+    int max_g = 0;
+    int max_b = 0;
+    int sum_r = 0;
+    int sum_g = 0;
+    int sum_b = 0;
+    int non_black_pixels = 0;
+};
+
+ColorRegionStats SampleColorRegion(sdl3d_render_context *ctx, SDL_Point center, int radius)
+{
+    const int w = sdl3d_get_render_context_width(ctx);
+    const int h = sdl3d_get_render_context_height(ctx);
+    const int x0 = SDL_max(0, center.x - radius);
+    const int x1 = SDL_min(w - 1, center.x + radius);
+    const int y0 = SDL_max(0, center.y - radius);
+    const int y1 = SDL_min(h - 1, center.y + radius);
+
+    ColorRegionStats stats{};
+    for (int y = y0; y <= y1; ++y)
+    {
+        for (int x = x0; x <= x1; ++x)
+        {
+            sdl3d_color px{};
+            if (!sdl3d_get_framebuffer_pixel(ctx, x, y, &px))
+            {
+                continue;
+            }
+
+            stats.max_r = SDL_max(stats.max_r, (int)px.r);
+            stats.max_g = SDL_max(stats.max_g, (int)px.g);
+            stats.max_b = SDL_max(stats.max_b, (int)px.b);
+            stats.sum_r += (int)px.r;
+            stats.sum_g += (int)px.g;
+            stats.sum_b += (int)px.b;
+            if (px.r != 0 || px.g != 0 || px.b != 0)
+            {
+                ++stats.non_black_pixels;
+            }
+        }
+    }
+    return stats;
+}
+
 SDL_Point ProjectPointToFramebuffer(const sdl3d_render_context *ctx, sdl3d_camera3d camera, sdl3d_vec3 point)
 {
     sdl3d_mat4 view{};
@@ -617,6 +663,62 @@ TEST_F(SDL3DDrawingFixture, ClearResetsDepthBuffer)
     ASSERT_TRUE(sdl3d_get_framebuffer_depth(ctx, 0, 0, &d));
     EXPECT_FLOAT_EQ(d, 1.0f);
 
+    sdl3d_destroy_render_context(ctx);
+}
+
+TEST_F(SDL3DDrawingFixture, BillboardRespondsToPointLight)
+{
+    WindowRenderer wr(96, 96);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    sdl3d_texture2d texture = MakeSolidTexture({80, 80, 80, 255});
+    sdl3d_camera3d cam{};
+    cam.position = sdl3d_vec3_make(0.0f, 1.0f, 4.0f);
+    cam.target = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.fovy = 60.0f;
+    cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, cam));
+    ASSERT_TRUE(sdl3d_draw_billboard(ctx, &texture, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), (sdl3d_vec2){2.0f, 2.0f},
+                                     (sdl3d_color){255, 255, 255, 255}));
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+    const SDL_Point billboard_center = ProjectPointToFramebuffer(ctx, cam, sdl3d_vec3_make(0.0f, 1.0f, 0.0f));
+    const int sample_radius =
+        SDL_max(4, SDL_min(sdl3d_get_render_context_width(ctx), sdl3d_get_render_context_height(ctx)) / 32);
+    const ColorRegionStats unlit = SampleColorRegion(ctx, billboard_center, sample_radius);
+    ASSERT_GT(unlit.non_black_pixels, 0);
+
+    sdl3d_light light{};
+    light.type = SDL3D_LIGHT_POINT;
+    light.position = sdl3d_vec3_make(0.0f, 1.0f, 3.0f);
+    light.color[0] = 1.0f;
+    light.color[1] = 0.25f;
+    light.color[2] = 0.1f;
+    light.intensity = 12.0f;
+    light.range = 8.0f;
+    ASSERT_TRUE(sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG));
+    ASSERT_TRUE(sdl3d_set_ambient_light(ctx, 0.0f, 0.0f, 0.0f));
+    ASSERT_TRUE(sdl3d_clear_lights(ctx));
+    ASSERT_TRUE(sdl3d_add_light(ctx, &light));
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, cam));
+    ASSERT_TRUE(sdl3d_draw_billboard(ctx, &texture, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), (sdl3d_vec2){2.0f, 2.0f},
+                                     (sdl3d_color){255, 255, 255, 255}));
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+    const ColorRegionStats lit = SampleColorRegion(ctx, billboard_center, sample_radius);
+    ASSERT_GT(lit.non_black_pixels, 0);
+
+    EXPECT_GT(lit.max_r, unlit.max_r);
+    EXPECT_GT(lit.sum_r, lit.sum_g);
+
+    sdl3d_free_texture(&texture);
     sdl3d_destroy_render_context(ctx);
 }
 

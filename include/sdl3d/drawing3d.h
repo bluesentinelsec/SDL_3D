@@ -84,8 +84,10 @@ extern "C"
      * - x=0 left, 0.5 center, 1 right
      * - y=0 bottom, 0.5 center, 1 top
      *
-     * Billboards always use the unlit textured path so sprite art keeps its
-     * authored shading while still participating in depth/culling correctly.
+     * Billboards use the lit textured path when scene lighting is enabled and
+     * active, and otherwise fall back to the unlit textured path. This keeps
+     * authored sprite shading intact in unlit scenes while allowing point
+     * lights, such as projectiles, to affect billboard sprites.
      */
     bool sdl3d_draw_billboard_ex(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 position,
                                  sdl3d_vec2 size, sdl3d_vec2 anchor, sdl3d_billboard_mode mode, sdl3d_color tint);
