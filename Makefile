@@ -33,7 +33,7 @@ release:
 		-DSDL3D_BUILD_TESTS=ON \
 		-DSDL3D_BUILD_DEMOS=ON \
 		$(CMAKE_FLAGS)
-	@cmake --build $(BUILD_DIR)/release
+	@cmake --build $(BUILD_DIR)/release --parallel
 
 sanitize:
 	@CC=clang cmake -B $(BUILD_DIR)/sanitize \
