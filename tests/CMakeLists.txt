@@ -106,6 +106,7 @@ set(SDL3D_TEST_SOURCES
     test_timer_pool.cpp
     test_fps_mover.cpp
     test_sprite_actor.cpp
+    test_teleporter.cpp
 )
 
 # Tests that read filesystem fixtures via SDL3D_TEST_ASSETS_DIR are desktop-only.
@@ -206,6 +207,7 @@ else()
     target_sources(doom_backend_test PRIVATE ${CMAKE_SOURCE_DIR}/demos/doom_level/backend.c)
     target_include_directories(doom_backend_test PRIVATE ${CMAKE_SOURCE_DIR}/demos/doom_level)
     sdl3d_add_test(sdl3d_sprite_actor_test test_sprite_actor.cpp unit)
+    sdl3d_add_test(sdl3d_teleporter_test test_teleporter.cpp unit)
     sdl3d_add_test(sdl3d_ui_test test_ui.cpp unit)
     sdl3d_add_test(sdl3d_parity_test test_parity.cpp render)
 

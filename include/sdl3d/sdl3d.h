@@ -21,6 +21,7 @@
 #include "sdl3d/render_context.h"
 #include "sdl3d/scene.h"
 #include "sdl3d/shapes.h"
+#include "sdl3d/teleporter.h"
 #include "sdl3d/texture.h"
 #include "sdl3d/time.h"
 #include "sdl3d/transition.h"

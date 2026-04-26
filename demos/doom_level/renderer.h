@@ -27,6 +27,7 @@ void render_state_free(render_state *rs);
 /* Draw one complete frame. Presentation is owned by the managed game loop. */
 void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_font *font, sdl3d_ui_context *ui,
                        level_data *ld, entities *ent, const player_state *player, int backbuffer_w, int backbuffer_h,
-                       float dt, const char *render_profile_name, bool ambient_feedback_active);
+                       float dt, const char *render_profile_name, bool ambient_feedback_active,
+                       bool teleport_feedback_active);
 
 #endif

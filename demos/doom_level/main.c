@@ -27,6 +27,8 @@
 #define LIFT_REBUILD_MIN_DELTA 0.02f
 #define AMBIENT_FADE_SECONDS 1.0f
 #define AMBIENT_FEEDBACK_SECONDS 5.0f
+#define TELEPORT_FEEDBACK_SECONDS 2.0f
+#define DRAGON_TELEPORTER_ID 1
 
 typedef struct doom_state
 {
@@ -40,9 +42,11 @@ typedef struct doom_state
     sdl3d_demo_player *demo_player;
     sdl3d_audio_engine *audio;
     sdl3d_sector_watcher sector_watcher;
+    sdl3d_teleporter dragon_teleporter;
     sdl3d_backend current_backend;
     doom_render_profile render_profile;
     float ambient_feedback_timer;
+    float teleport_feedback_timer;
     float lift_timer;
     float lift_last_floor_y;
     int action_pause;
@@ -141,6 +145,43 @@ static void on_entered_sector(void *userdata, int signal_id, const sdl3d_propert
     }
 }
 
+static void on_teleport(void *userdata, int signal_id, const sdl3d_properties *payload)
+{
+    (void)signal_id;
+    doom_state *state = (doom_state *)userdata;
+    sdl3d_teleport_destination destination;
+
+    if (state == NULL || !sdl3d_teleport_destination_from_payload(payload, &destination))
+    {
+        return;
+    }
+
+    sdl3d_fps_mover_teleport(&state->player.mover, destination.position, destination.use_yaw, destination.yaw,
+                             destination.use_pitch, destination.pitch);
+    state->player.proj_active = false;
+    state->teleport_feedback_timer = TELEPORT_FEEDBACK_SECONDS;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Teleporter %d moved player to %.1f %.1f %.1f",
+                sdl3d_properties_get_int(payload, "teleporter_id", -1), destination.position.x, destination.position.y,
+                destination.position.z);
+}
+
+static void init_dragon_teleporter(doom_state *state)
+{
+    sdl3d_bounding_box source = {
+        sdl3d_vec3_make(22.5f, 0.0f, 86.5f),
+        sdl3d_vec3_make(25.5f, 2.4f, 89.5f),
+    };
+    sdl3d_teleport_destination destination;
+    SDL_zero(destination);
+    destination.position = sdl3d_vec3_make(72.0f, 2.5f + PLAYER_HEIGHT, 63.0f);
+    destination.yaw = -SDL_PI_F * 0.5f;
+    destination.pitch = 0.0f;
+    destination.use_yaw = true;
+    destination.use_pitch = true;
+
+    sdl3d_teleporter_init(&state->dragon_teleporter, DRAGON_TELEPORTER_ID, source, destination);
+}
+
 static void start_quit_fade(sdl3d_game_context *ctx, doom_state *state)
 {
     if (state->quit_pending)
@@ -211,6 +252,10 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     {
         return false;
     }
+    if (sdl3d_signal_connect(ctx->bus, SDL3D_SIGNAL_TELEPORT, on_teleport, state) == 0)
+    {
+        return false;
+    }
 
     state->has_font = sdl3d_load_font(SDL3D_MEDIA_DIR "/fonts/Roboto.ttf", 40.0f, &state->debug_font);
     if (!sdl3d_ui_create(state->has_font ? &state->debug_font : NULL, &state->ui))
@@ -237,6 +282,7 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     state->entities_ready = true;
 
     player_init(&state->player, ctx->input);
+    init_dragon_teleporter(state);
     render_state_init(&state->render);
     sdl3d_transition_start(&state->transition, SDL3D_TRANSITION_FADE, SDL3D_TRANSITION_IN, (sdl3d_color){0, 0, 0, 255},
                            1.0f, -1);
@@ -400,6 +446,20 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
             state->ambient_feedback_timer = 0.0f;
         }
     }
+    if (state->teleport_feedback_timer > 0.0f)
+    {
+        state->teleport_feedback_timer -= dt;
+        if (state->teleport_feedback_timer < 0.0f)
+        {
+            state->teleport_feedback_timer = 0.0f;
+        }
+    }
+
+    sdl3d_teleporter_update(&state->dragon_teleporter,
+                            sdl3d_vec3_make(state->player.mover.position.x,
+                                            state->player.mover.position.y - PLAYER_HEIGHT,
+                                            state->player.mover.position.z),
+                            dt, ctx->bus);
 
     sdl3d_sector_watcher_update(&state->sector_watcher, &state->level.unlit, g_sectors,
                                 sdl3d_vec3_make(state->player.mover.position.x,
@@ -470,7 +530,8 @@ static void game_render(sdl3d_game_context *ctx, void *userdata, float alpha)
 
     render_draw_frame(&state->render, ctx->renderer, state->has_font ? &state->debug_font : NULL, state->ui,
                       &state->level, &state->ent, &state->player, WINDOW_W, WINDOW_H, frame_dt,
-                      backend_profile_name(state->render_profile), state->ambient_feedback_timer > 0.0f);
+                      backend_profile_name(state->render_profile), state->ambient_feedback_timer > 0.0f,
+                      state->teleport_feedback_timer > 0.0f);
     sdl3d_transition_draw(&state->transition, ctx->renderer);
     if (ctx->paused && !state->quit_pending)
     {

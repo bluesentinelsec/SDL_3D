@@ -114,6 +114,7 @@ target_sources(
         src/shapes.c
         src/sw_backend.c
         src/texture.c
+        src/teleporter.c
         src/time.c
         src/timer_pool.c
         src/transition.c
