@@ -25,17 +25,14 @@ static bool sector_floor_is_walkable(const sdl3d_sector *sector)
     return sdl3d_sector_floor_normal(sector).y >= SDL3D_FPS_WALKABLE_NORMAL_Y;
 }
 
+static bool position_has_air_space(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
+                                   float x, float z, float feet_y, int *out_sector);
+
 static bool position_is_walkable(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
                                  float x, float z, float feet_y, int *out_sector)
 {
-    static const float sample_dirs[8][2] = {
-        {1.0f, 0.0f},       {-1.0f, 0.0f},       {0.0f, 1.0f},        {0.0f, -1.0f},
-        {0.7071f, 0.7071f}, {0.7071f, -0.7071f}, {-0.7071f, 0.7071f}, {-0.7071f, -0.7071f},
-    };
-
     const float headroom = fps_min_headroom(mover);
     const float step = mover->config.step_height;
-    const float radius = mover->config.player_radius;
 
     int center = sdl3d_level_find_walkable_sector(level, sectors, x, z, feet_y, step, headroom);
     if (center < 0)
@@ -47,24 +44,16 @@ static bool position_is_walkable(const sdl3d_fps_mover *mover, const sdl3d_level
         return false;
     }
 
-    float target_floor = sdl3d_sector_floor_at(&sectors[center], x, z);
-    for (int i = 0; i < 8; ++i)
+    /* Ground movement follows Build/Quake-style separation of concerns:
+     * support and step height are decided at the mover's center, while the
+     * player radius is used only to test whether the body has room. This
+     * permits normal ledge overhang on raised slopes/ramparts without
+     * weakening steep-slope or wall collision. */
+    const float target_floor = sdl3d_sector_floor_at(&sectors[center], x, z);
+    const float collision_feet_y = SDL_max(feet_y, target_floor);
+    if (!position_has_air_space(mover, level, sectors, x, z, collision_feet_y, NULL))
     {
-        float sx = x + sample_dirs[i][0] * radius;
-        float sz = z + sample_dirs[i][1] * radius;
-        int sample = sdl3d_level_find_walkable_sector(level, sectors, sx, sz, feet_y, step, headroom);
-        if (sample < 0)
-        {
-            return false;
-        }
-        if (!sector_floor_is_walkable(&sectors[sample]))
-        {
-            return false;
-        }
-        if (SDL_fabsf(sdl3d_sector_floor_at(&sectors[sample], sx, sz) - target_floor) > step)
-        {
-            return false;
-        }
+        return false;
     }
 
     if (out_sector)
@@ -95,7 +84,7 @@ static bool position_has_air_space(const sdl3d_fps_mover *mover, const sdl3d_lev
     {
         float sx = x + sample_dirs[i][0] * radius;
         float sz = z + sample_dirs[i][1] * radius;
-        if (sdl3d_level_find_sector_at(level, sectors, sx, sz, feet_y) < 0)
+        if (sdl3d_level_find_sector(level, sectors, sx, sz) < 0)
         {
             return false;
         }

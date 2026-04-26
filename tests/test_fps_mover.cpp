@@ -317,6 +317,25 @@ TEST_F(FpsMoverFixture, AirborneMoverCanLeaveRaisedPlatform)
     EXPECT_FALSE(m.on_ground);
 }
 
+TEST_F(FpsMoverFixture, GroundedMoverCanWalkAlongRaisedPlatformEdge)
+{
+    BuildRaisedPlatform();
+    sdl3d_fps_mover_config cfg = DefaultConfig();
+    sdl3d_fps_mover m;
+    sdl3d_fps_mover_init(&m, &cfg, sdl3d_vec3_make(0.2f, 2.5f + cfg.player_height, -4.0f), 0);
+
+    sdl3d_vec2 along_edge{0.0f, 1.0f};
+    for (int i = 0; i < 30; ++i)
+    {
+        sdl3d_fps_mover_update(&m, &level, sectors.data(), along_edge, 0, 0, 0.002f, 1.0f / 60.0f);
+    }
+
+    EXPECT_NEAR(m.position.x, 0.2f, 0.05f);
+    EXPECT_GT(m.position.z, 0.5f);
+    EXPECT_TRUE(m.on_ground);
+    EXPECT_NEAR(m.position.y, 2.5f + cfg.player_height, 0.01f);
+}
+
 TEST_F(FpsMoverFixture, FallingBelowWorldRestoresLastGood)
 {
     BuildFlat();
