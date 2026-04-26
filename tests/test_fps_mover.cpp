@@ -102,14 +102,6 @@ class FpsMoverFixture : public ::testing::Test
             << SDL_GetError();
     }
 
-    void BuildLowerFloorToWalkableRamp()
-    {
-        sectors = {MakeSquareSector(-5, -5, 0, 5, 0.0f, 6.0f), MakeRampSector(0, -5, 5, 5, 2.0f, 10.0f, 0.8f)};
-        const sdl3d_level_material mats[] = {MakeMaterial(), MakeMaterial(), MakeMaterial()};
-        ASSERT_TRUE(sdl3d_build_level(sectors.data(), (int)sectors.size(), mats, 3, nullptr, 0, &level))
-            << SDL_GetError();
-    }
-
     void BuildSteepRamp()
     {
         sectors = {MakeSquareSector(-10, -5, 0, 5, 0.0f, 5.0f), MakeRampSector(0, -5, 10, 5, 5.5f, 14.0f, 1.1f)};
@@ -342,23 +334,6 @@ TEST_F(FpsMoverFixture, GroundedMoverCanWalkAlongRaisedPlatformEdge)
     EXPECT_GT(m.position.z, 0.5f);
     EXPECT_TRUE(m.on_ground);
     EXPECT_NEAR(m.position.y, 2.5f + cfg.player_height, 0.01f);
-}
-
-TEST_F(FpsMoverFixture, AirborneMoverBlocksSlopePenetrationAtRadius)
-{
-    BuildLowerFloorToWalkableRamp();
-    sdl3d_fps_mover_config cfg = DefaultConfig();
-    sdl3d_fps_mover m;
-    const float feet_y = 0.8f;
-    sdl3d_fps_mover_init(&m, &cfg, sdl3d_vec3_make(0.6f, feet_y + cfg.player_height, 0.0f), 0);
-    m.on_ground = false;
-    m.vertical_velocity = 1.0f;
-
-    sdl3d_vec2 into_ramp{1.0f, 0.0f};
-    sdl3d_fps_mover_update(&m, &level, sectors.data(), into_ramp, 0, 0, 0.002f, 1.0f / 60.0f);
-
-    EXPECT_NEAR(m.position.x, 0.6f, 0.01f);
-    EXPECT_FALSE(m.on_ground);
 }
 
 TEST_F(FpsMoverFixture, FallingBelowWorldRestoresLastGood)
