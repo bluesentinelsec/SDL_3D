@@ -51,6 +51,8 @@ struct GameTestState
     bool saw_default_config = false;
     bool saw_time_update = false;
     bool saw_quit_event_in_callback = false;
+    bool saw_input_action_in_tick = false;
+    int input_action = -1;
     int tick_count = 0;
     int render_count = 0;
     float tick_dt = 0.0f;
@@ -84,7 +86,7 @@ bool validate_context_in_init(sdl3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
     state->saw_valid_context = ctx->window != nullptr && ctx->renderer != nullptr && ctx->registry != nullptr &&
-                               ctx->bus != nullptr && ctx->timers != nullptr;
+                               ctx->bus != nullptr && ctx->timers != nullptr && ctx->input != nullptr;
     ctx->quit_requested = true;
     return true;
 }
@@ -180,6 +182,29 @@ void quit_when_timer_fires(sdl3d_game_context *ctx, void *userdata, float dt)
     {
         ctx->quit_requested = true;
     }
+}
+
+bool bind_and_push_input_in_init(sdl3d_game_context *ctx, void *userdata)
+{
+    auto *state = static_cast<GameTestState *>(userdata);
+    state->input_action = sdl3d_input_register_action(ctx->input, "jump");
+    sdl3d_input_bind_key(ctx->input, state->input_action, SDL_SCANCODE_SPACE);
+
+    SDL_Event event{};
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.scancode = SDL_SCANCODE_SPACE;
+    SDL_PushEvent(&event);
+    return true;
+}
+
+void quit_after_input_tick(sdl3d_game_context *ctx, void *userdata, float dt)
+{
+    (void)dt;
+    auto *state = static_cast<GameTestState *>(userdata);
+    state->tick_count++;
+    state->saw_input_action_in_tick =
+        sdl3d_input_is_pressed(ctx->input, state->input_action) && sdl3d_input_is_held(ctx->input, state->input_action);
+    ctx->quit_requested = true;
 }
 
 void stop_after_many_null_frames(sdl3d_game_context *ctx, void *userdata, float alpha)
@@ -297,6 +322,19 @@ TEST(ManagedGameLoop, TimerPoolIsTickedAutomatically)
 
     EXPECT_EQ(0, run_test_game(&callbacks, &state));
     EXPECT_TRUE(state.timer_fired);
+}
+
+TEST(ManagedGameLoop, InputManagerProcessesEventsBeforeTick)
+{
+    GameTestState state;
+    sdl3d_game_callbacks callbacks{};
+    callbacks.init = bind_and_push_input_in_init;
+    callbacks.tick = quit_after_input_tick;
+    callbacks.render = stop_after_many_null_frames;
+
+    EXPECT_EQ(0, run_test_game(&callbacks, &state));
+    EXPECT_GE(state.tick_count, 1);
+    EXPECT_TRUE(state.saw_input_action_in_tick);
 }
 
 TEST(ManagedGameLoop, QuitRequestedFromTickExitsAndRunsShutdown)

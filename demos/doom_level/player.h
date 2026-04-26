@@ -3,10 +3,9 @@
 #define DOOM_PLAYER_H
 
 #include "sdl3d/fps_mover.h"
+#include "sdl3d/input.h"
 #include "sdl3d/level.h"
 #include "sdl3d/types.h"
-
-#include <SDL3/SDL_events.h>
 
 #include <stdbool.h>
 
@@ -25,10 +24,14 @@ typedef struct player_state
     sdl3d_fps_mover mover;
     sdl3d_fps_mover_config config;
 
-    /* Accumulated mouse delta, consumed each frame. */
-    float frame_mdx;
-    float frame_mdy;
-    bool mouse_init;
+    int action_move_forward;
+    int action_move_back;
+    int action_move_left;
+    int action_move_right;
+    int action_jump;
+    int action_fire;
+    int action_menu;
+    int action_reset;
 
     /* Projectile */
     bool proj_active;
@@ -37,12 +40,10 @@ typedef struct player_state
     float proj_life;
 } player_state;
 
-void player_init(player_state *p);
+void player_init(player_state *p, sdl3d_input_manager *input);
 
-/* Process a single SDL event. Returns false if the event signals quit. */
-bool player_handle_event(player_state *p, const SDL_Event *ev);
-
-/* Advance physics: WASD, mouse look, gravity, projectile trace. */
-void player_update(player_state *p, const sdl3d_level *level, const sdl3d_sector *sectors, float dt);
+/* Advance physics from action input. Returns false when the menu action requests quit. */
+bool player_update(player_state *p, const sdl3d_input_manager *input, const sdl3d_level *level,
+                   const sdl3d_sector *sectors, float dt);
 
 #endif

@@ -17,6 +17,7 @@
 #include <SDL3/SDL_video.h>
 
 #include "sdl3d/actor_registry.h"
+#include "sdl3d/input.h"
 #include "sdl3d/render_context.h"
 #include "sdl3d/signal_bus.h"
 #include "sdl3d/timer_pool.h"
@@ -31,7 +32,8 @@ extern "C"
      *
      * The game may read these fields and may set quit_requested to request
      * shutdown. The loop creates the window, render context, registry, signal
-     * bus, and timer pool before init, then destroys them after shutdown.
+     * bus, timer pool, and input manager before init, then destroys them after
+     * shutdown.
      */
     typedef struct sdl3d_game_context
     {
@@ -40,6 +42,7 @@ extern "C"
         sdl3d_actor_registry *registry; /**< Actor registry owned by the managed loop. */
         sdl3d_signal_bus *bus;          /**< Signal bus owned by the managed loop. */
         sdl3d_timer_pool *timers;       /**< Timer pool owned by the managed loop. */
+        sdl3d_input_manager *input;     /**< Action input manager owned by the managed loop. */
         float time;                     /**< Simulated game time advanced by fixed ticks. */
         float real_time;                /**< Wall-clock time accumulated by rendered frames. */
         int tick_count;                 /**< Total fixed ticks executed since startup. */
@@ -83,9 +86,10 @@ extern "C"
          * @brief Called at the fixed simulation timestep.
          *
          * The dt value is always config.tick_rate seconds, or 1/60 by default.
-         * The managed loop updates ctx->timers before this callback. It does not
-         * call sdl3d_actor_registry_update automatically because trigger tests
-         * need a game-defined point such as the player position.
+         * The managed loop updates ctx->input and ctx->timers before this
+         * callback. It does not call sdl3d_actor_registry_update automatically
+         * because trigger tests need a game-defined point such as the player
+         * position.
          *
          * @param ctx      Managed-loop context.
          * @param userdata Caller-owned pointer passed to sdl3d_run_game.
@@ -138,8 +142,9 @@ extern "C"
      * @brief Run a managed SDL3D game loop.
      *
      * Initializes SDL video, creates the window, render context, actor registry,
-     * signal bus, and timer pool, then runs a fixed-timestep simulation loop
-     * until quit is requested. The loop updates the timer pool before each tick,
+     * signal bus, timer pool, and input manager, then runs a fixed-timestep
+     * simulation loop until quit is requested. The loop processes SDL events
+     * through the input manager, updates input and timers before each tick,
      * calls sdl3d_time_update once per rendered frame, and presents the render
      * context after each render callback.
      *

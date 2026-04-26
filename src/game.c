@@ -42,8 +42,9 @@ static bool sdl3d_game_create_context(const sdl3d_game_config *config, sdl3d_gam
     ctx->registry = sdl3d_actor_registry_create();
     ctx->bus = sdl3d_signal_bus_create();
     ctx->timers = sdl3d_timer_pool_create();
+    ctx->input = sdl3d_input_create();
 
-    if (ctx->registry == NULL || ctx->bus == NULL || ctx->timers == NULL)
+    if (ctx->registry == NULL || ctx->bus == NULL || ctx->timers == NULL || ctx->input == NULL)
     {
         SDL_OutOfMemory();
         return false;
@@ -57,6 +58,7 @@ static void sdl3d_game_cleanup_context(sdl3d_game_context *ctx)
     sdl3d_timer_pool_destroy(ctx->timers);
     sdl3d_signal_bus_destroy(ctx->bus);
     sdl3d_actor_registry_destroy(ctx->registry);
+    sdl3d_input_destroy(ctx->input);
     sdl3d_destroy_window(ctx->window, ctx->renderer);
     SDL_zero(*ctx);
 }
@@ -84,7 +86,7 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
     SDL_zero(ctx);
     SDL_SetMainReady();
 
-    if (!SDL_Init(SDL_INIT_VIDEO))
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
     {
         return 1;
     }
@@ -112,6 +114,8 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
+            sdl3d_input_process_event(ctx.input, &event);
+
             if (event.type == SDL_EVENT_QUIT)
             {
                 ctx.quit_requested = true;
@@ -141,6 +145,7 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
 
         while (!ctx.quit_requested && accumulator >= fixed_dt && ticks_this_frame < max_ticks_per_frame)
         {
+            sdl3d_input_update(ctx.input, ctx.tick_count);
             sdl3d_timer_pool_update(ctx.timers, ctx.bus, fixed_dt);
 
             if (callbacks != NULL && callbacks->tick != NULL)

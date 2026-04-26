@@ -92,6 +92,7 @@ target_sources(
         src/gltf_loader.c
         src/gl_renderer.c
         src/image.c
+        src/input.c
         src/lighting.c
         src/math.c
         src/font.c

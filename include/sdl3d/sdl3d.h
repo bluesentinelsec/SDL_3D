@@ -13,6 +13,7 @@
 #include "sdl3d/effects.h"
 #include "sdl3d/game.h"
 #include "sdl3d/image.h"
+#include "sdl3d/input.h"
 #include "sdl3d/lighting.h"
 #include "sdl3d/math.h"
 #include "sdl3d/model.h"
