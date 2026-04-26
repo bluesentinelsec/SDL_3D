@@ -27,6 +27,8 @@ static bool sector_floor_is_walkable(const sdl3d_sector *sector)
 
 static bool position_has_air_space(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
                                    float x, float z, float feet_y, int *out_sector);
+static bool position_has_ground_body_space(const sdl3d_fps_mover *mover, const sdl3d_level *level,
+                                           const sdl3d_sector *sectors, float x, float z, float feet_y);
 
 static bool position_is_walkable(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
                                  float x, float z, float feet_y, int *out_sector)
@@ -51,7 +53,7 @@ static bool position_is_walkable(const sdl3d_fps_mover *mover, const sdl3d_level
      * weakening steep-slope or wall collision. */
     const float target_floor = sdl3d_sector_floor_at(&sectors[center], x, z);
     const float collision_feet_y = SDL_max(feet_y, target_floor);
-    if (!position_has_air_space(mover, level, sectors, x, z, collision_feet_y, NULL))
+    if (!position_has_ground_body_space(mover, level, sectors, x, z, collision_feet_y))
     {
         return false;
     }
@@ -63,8 +65,8 @@ static bool position_is_walkable(const sdl3d_fps_mover *mover, const sdl3d_level
     return true;
 }
 
-static bool position_has_air_space(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
-                                   float x, float z, float feet_y, int *out_sector)
+static bool position_has_body_space(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
+                                    float x, float z, float feet_y, bool allow_floor_overhang, int *out_sector)
 {
     static const float sample_dirs[9][2] = {
         {0.0f, 0.0f},       {1.0f, 0.0f},        {-1.0f, 0.0f},       {0.0f, 1.0f},         {0.0f, -1.0f},
@@ -84,10 +86,19 @@ static bool position_has_air_space(const sdl3d_fps_mover *mover, const sdl3d_lev
     {
         float sx = x + sample_dirs[i][0] * radius;
         float sz = z + sample_dirs[i][1] * radius;
-        if (sdl3d_level_find_sector(level, sectors, sx, sz) < 0)
+
+        if (allow_floor_overhang)
+        {
+            if (sdl3d_level_find_sector(level, sectors, sx, sz) < 0)
+            {
+                return false;
+            }
+        }
+        else if (sdl3d_level_find_sector_at(level, sectors, sx, sz, feet_y) < 0)
         {
             return false;
         }
+
         if (!sdl3d_level_point_inside(level, sectors, sx, head_y, sz))
         {
             return false;
@@ -99,6 +110,18 @@ static bool position_has_air_space(const sdl3d_fps_mover *mover, const sdl3d_lev
         *out_sector = center;
     }
     return true;
+}
+
+static bool position_has_air_space(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
+                                   float x, float z, float feet_y, int *out_sector)
+{
+    return position_has_body_space(mover, level, sectors, x, z, feet_y, false, out_sector);
+}
+
+static bool position_has_ground_body_space(const sdl3d_fps_mover *mover, const sdl3d_level *level,
+                                           const sdl3d_sector *sectors, float x, float z, float feet_y)
+{
+    return position_has_body_space(mover, level, sectors, x, z, feet_y, true, NULL);
 }
 
 static sdl3d_vec2 project_wish_to_walkable_floor(sdl3d_vec2 wish_dir, const sdl3d_sector *sector)
