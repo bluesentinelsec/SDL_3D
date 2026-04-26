@@ -114,6 +114,8 @@ target_sources(
         src/texture.c
         src/time.c
         src/timer_pool.c
+        src/transition.c
+        src/transition_gl.c
         src/ui.c
         $<TARGET_OBJECTS:sdl3d_cgltf>
         $<TARGET_OBJECTS:sdl3d_ufbx>

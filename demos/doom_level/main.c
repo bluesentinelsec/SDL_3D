@@ -19,12 +19,15 @@
 #include "player.h"
 #include "renderer.h"
 
+#define SIG_FADE_OUT_DONE 2001
+
 typedef struct doom_state
 {
     level_data level;
     entities ent;
     player_state player;
     render_state render;
+    sdl3d_transition transition;
     sdl3d_font debug_font;
     sdl3d_ui_context *ui;
     sdl3d_demo_player *demo_player;
@@ -32,6 +35,7 @@ typedef struct doom_state
     bool has_font;
     bool level_ready;
     bool entities_ready;
+    bool quit_pending;
 } doom_state;
 
 static void doom_state_cleanup(doom_state *state)
@@ -78,6 +82,14 @@ static void apply_window_defaults(sdl3d_game_context *ctx)
     SDL_SetWindowRelativeMouseMode(ctx->window, true);
 }
 
+static void on_fade_out_done(void *userdata, int signal_id, const sdl3d_properties *payload)
+{
+    (void)signal_id;
+    (void)payload;
+    sdl3d_game_context *ctx = (sdl3d_game_context *)userdata;
+    ctx->quit_requested = true;
+}
+
 static bool game_init(sdl3d_game_context *ctx, void *userdata)
 {
     doom_state *state = (doom_state *)userdata;
@@ -85,6 +97,11 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     state->current_backend = sdl3d_get_render_context_backend(ctx->renderer);
     sdl3d_input_bind_fps_defaults(ctx->input);
     apply_window_defaults(ctx);
+
+    if (sdl3d_signal_connect(ctx->bus, SIG_FADE_OUT_DONE, on_fade_out_done, ctx) == 0)
+    {
+        return false;
+    }
 
     state->has_font = sdl3d_load_font(SDL3D_MEDIA_DIR "/fonts/Roboto.ttf", 40.0f, &state->debug_font);
     if (!sdl3d_ui_create(state->has_font ? &state->debug_font : NULL, &state->ui))
@@ -110,6 +127,8 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
 
     player_init(&state->player, ctx->input);
     render_state_init(&state->render);
+    sdl3d_transition_start(&state->transition, SDL3D_TRANSITION_FADE, SDL3D_TRANSITION_IN, (sdl3d_color){0, 0, 0, 255},
+                           1.0f, -1);
 
     state->demo_player = sdl3d_demo_playback_load("attract.dem");
     if (state->demo_player != NULL)
@@ -183,10 +202,16 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
         stop_demo_playback(ctx, state);
     }
 
+    sdl3d_transition_update(&state->transition, ctx->bus, dt);
     entities_update(&state->ent, dt, state->player.mover.position);
     if (!player_update(&state->player, ctx->input, &state->level.unlit, g_sectors, dt))
     {
-        ctx->quit_requested = true;
+        if (!state->quit_pending)
+        {
+            state->quit_pending = true;
+            sdl3d_transition_start(&state->transition, SDL3D_TRANSITION_FADE, SDL3D_TRANSITION_OUT,
+                                   (sdl3d_color){0, 0, 0, 255}, 0.5f, SIG_FADE_OUT_DONE);
+        }
     }
 }
 
@@ -198,6 +223,7 @@ static void game_render(sdl3d_game_context *ctx, void *userdata, float alpha)
 
     render_draw_frame(&state->render, ctx->renderer, state->has_font ? &state->debug_font : NULL, state->ui,
                       &state->level, &state->ent, &state->player, WINDOW_W, WINDOW_H, frame_dt);
+    sdl3d_transition_draw(&state->transition, ctx->renderer);
 }
 
 static void game_shutdown(sdl3d_game_context *ctx, void *userdata)

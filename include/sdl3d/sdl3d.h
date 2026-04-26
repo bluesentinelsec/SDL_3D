@@ -22,6 +22,7 @@
 #include "sdl3d/shapes.h"
 #include "sdl3d/texture.h"
 #include "sdl3d/time.h"
+#include "sdl3d/transition.h"
 #include "sdl3d/types.h"
 
 #ifdef __cplusplus
