@@ -30,6 +30,8 @@ static void player_reset(player_state *p)
                          PLAYER_SPAWN_YAW);
     p->proj_active = false;
     p->proj_life = 0.0f;
+    p->damage_taken = 0.0f;
+    p->last_damage_per_second = 0.0f;
 }
 
 void player_init(player_state *p, sdl3d_input_manager *input)
@@ -114,4 +116,25 @@ bool player_update(player_state *p, const sdl3d_input_manager *input, const sdl3
     }
 
     return true;
+}
+
+float player_apply_sector_damage(player_state *p, const sdl3d_sector *sectors, int sector_count, float dt)
+{
+    if (p == NULL || sectors == NULL || sector_count <= 0)
+    {
+        return 0.0f;
+    }
+
+    const int sector_id = p->mover.current_sector;
+    if (sector_id < 0 || sector_id >= sector_count)
+    {
+        p->last_damage_per_second = 0.0f;
+        return 0.0f;
+    }
+
+    const sdl3d_sector *sector = &sectors[sector_id];
+    const float damage = sdl3d_sector_damage_for_delta(sector, dt);
+    p->last_damage_per_second = sdl3d_sector_damage_per_second(sector);
+    p->damage_taken += damage;
+    return damage;
 }

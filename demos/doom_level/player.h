@@ -38,6 +38,10 @@ typedef struct player_state
     float proj_x, proj_y, proj_z;
     float proj_dx, proj_dy, proj_dz;
     float proj_life;
+
+    /* Demonstration damage bookkeeping; death rules are intentionally omitted. */
+    float damage_taken;
+    float last_damage_per_second;
 } player_state;
 
 void player_init(player_state *p, sdl3d_input_manager *input);
@@ -45,5 +49,8 @@ void player_init(player_state *p, sdl3d_input_manager *input);
 /* Advance physics from action input. Returns false when the menu action requests quit. */
 bool player_update(player_state *p, const sdl3d_input_manager *input, const sdl3d_level *level,
                    const sdl3d_sector *sectors, float dt);
+
+/* Apply current-sector floor damage and return damage dealt this tick. */
+float player_apply_sector_damage(player_state *p, const sdl3d_sector *sectors, int sector_count, float dt);
 
 #endif

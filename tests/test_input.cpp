@@ -520,3 +520,32 @@ TEST(InputDemo, PlaybackStopResumesLiveInput)
     sdl3d_input_update(input.input, 1);
     EXPECT_TRUE(sdl3d_input_is_held(input.input, jump));
 }
+
+TEST(InputDemo, PlaybackStopPreservesPendingLiveInput)
+{
+    InputPtr input;
+    int jump = sdl3d_input_register_action(input.input, "jump");
+    sdl3d_input_bind_key(input.input, jump, SDL_SCANCODE_SPACE);
+
+    sdl3d_demo_recorder *recorder = sdl3d_demo_record_start(input.input);
+    ASSERT_NE(recorder, nullptr);
+    ASSERT_NE(sdl3d_input_update(input.input, 0), nullptr);
+    sdl3d_demo_record_stop(recorder);
+
+    std::string path = demo_path();
+    ASSERT_TRUE(sdl3d_demo_save(recorder, path.c_str(), 1.0f / 60.0f)) << SDL_GetError();
+    sdl3d_demo_record_free(recorder);
+
+    sdl3d_demo_player *player = sdl3d_demo_playback_load(path.c_str());
+    ASSERT_NE(player, nullptr) << SDL_GetError();
+    sdl3d_demo_playback_start(input.input, player);
+
+    push_key(input.input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+    sdl3d_demo_playback_stop(input.input);
+
+    sdl3d_input_update(input.input, 1);
+    EXPECT_TRUE(sdl3d_input_is_pressed(input.input, jump));
+    EXPECT_TRUE(sdl3d_input_is_held(input.input, jump));
+
+    sdl3d_demo_playback_free(player);
+}

@@ -16,6 +16,7 @@ typedef struct level_data
 } level_data;
 
 #define DOOM_DYNAMIC_LIFT_SECTOR 32
+#define DOOM_NUKAGE_BASIN_SECTOR 2
 #define DOOM_AMBIENT_DEMO_SECTOR 33
 #define DOOM_AMBIENT_DEMO_SOUND_ID 1
 #define DOOM_CONVEYOR_SECTOR 35
