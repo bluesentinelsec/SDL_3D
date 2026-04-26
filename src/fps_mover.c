@@ -10,6 +10,8 @@
 #define SDL3D_FPS_PITCH_LIMIT 1.4f
 #define SDL3D_FPS_VIEW_SMOOTH_SPEED 12.0f
 #define SDL3D_FPS_WALKABLE_NORMAL_Y 0.7f
+#define SDL3D_FPS_COLLISION_EPSILON 0.001f
+#define SDL3D_FPS_EDGE_SAMPLE_EPSILON 0.02f
 
 /* Stop polling smoothing once the residual is below this threshold; keeps
  * the eye from oscillating around 0 when dt is small. */
@@ -25,11 +27,23 @@ static bool sector_floor_is_walkable(const sdl3d_sector *sector)
     return sdl3d_sector_floor_normal(sector).y >= SDL3D_FPS_WALKABLE_NORMAL_Y;
 }
 
+static float clampf(float value, float min_value, float max_value)
+{
+    if (value < min_value)
+        return min_value;
+    if (value > max_value)
+        return max_value;
+    return value;
+}
+
 static bool position_has_air_space(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
                                    float x, float z, float feet_y, int *out_sector);
+static bool find_blocking_edge(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
+                               float x, float z, float feet_y, bool grounded, sdl3d_vec2 *out_normal);
 
-static bool position_is_walkable(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
-                                 float x, float z, float feet_y, int *out_sector)
+static bool position_has_ground_support(const sdl3d_fps_mover *mover, const sdl3d_level *level,
+                                        const sdl3d_sector *sectors, float x, float z, float feet_y, int *out_sector,
+                                        float *out_collision_feet_y)
 {
     const float headroom = fps_min_headroom(mover);
     const float step = mover->config.step_height;
@@ -51,27 +65,145 @@ static bool position_is_walkable(const sdl3d_fps_mover *mover, const sdl3d_level
      * weakening steep-slope or wall collision. */
     const float target_floor = sdl3d_sector_floor_at(&sectors[center], x, z);
     const float collision_feet_y = SDL_max(feet_y, target_floor);
-    if (!position_has_air_space(mover, level, sectors, x, z, collision_feet_y, NULL))
-    {
-        return false;
-    }
 
     if (out_sector)
     {
         *out_sector = center;
     }
+    if (out_collision_feet_y)
+    {
+        *out_collision_feet_y = collision_feet_y;
+    }
     return true;
+}
+
+static bool position_is_walkable(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
+                                 float x, float z, float feet_y, int *out_sector)
+{
+    float collision_feet_y = feet_y;
+    if (!position_has_ground_support(mover, level, sectors, x, z, feet_y, out_sector, &collision_feet_y))
+    {
+        return false;
+    }
+
+    if (find_blocking_edge(mover, level, sectors, x, z, collision_feet_y, true, NULL))
+    {
+        return false;
+    }
+
+    return true;
+}
+
+static bool edge_has_passable_neighbor(const sdl3d_fps_mover *mover, const sdl3d_level *level,
+                                       const sdl3d_sector *sectors, float edge_x, float edge_z, float outward_x,
+                                       float outward_z, float feet_y, bool grounded)
+{
+    const float sample_x = edge_x + outward_x * SDL3D_FPS_EDGE_SAMPLE_EPSILON;
+    const float sample_z = edge_z + outward_z * SDL3D_FPS_EDGE_SAMPLE_EPSILON;
+    const float head_y = feet_y + fps_min_headroom(mover);
+    int sector = -1;
+
+    if (grounded)
+    {
+        sector = sdl3d_level_find_walkable_sector(level, sectors, sample_x, sample_z, feet_y, mover->config.step_height,
+                                                  fps_min_headroom(mover));
+        if (sector < 0 || !sector_floor_is_walkable(&sectors[sector]))
+        {
+            return false;
+        }
+    }
+    else
+    {
+        sector = sdl3d_level_find_sector_at(level, sectors, sample_x, sample_z, feet_y);
+        if (sector < 0)
+        {
+            return false;
+        }
+    }
+
+    return sdl3d_level_point_inside(level, sectors, sample_x, head_y, sample_z);
+}
+
+static bool find_blocking_edge(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
+                               float x, float z, float feet_y, bool grounded, sdl3d_vec2 *out_normal)
+{
+    bool blocked = false;
+    float deepest_penetration = 0.0f;
+    sdl3d_vec2 best_normal = {0.0f, 0.0f};
+
+    if (level == NULL || sectors == NULL)
+    {
+        return false;
+    }
+
+    for (int s = 0; s < level->sector_count; ++s)
+    {
+        const sdl3d_sector *sector = &sectors[s];
+        for (int e = 0; e < sector->num_points; ++e)
+        {
+            const int next = (e + 1) % sector->num_points;
+            const float ax = sector->points[e][0];
+            const float az = sector->points[e][1];
+            const float bx = sector->points[next][0];
+            const float bz = sector->points[next][1];
+            const float edge_x = bx - ax;
+            const float edge_z = bz - az;
+            const float edge_len_sq = edge_x * edge_x + edge_z * edge_z;
+            if (edge_len_sq <= SDL3D_FPS_COLLISION_EPSILON)
+            {
+                continue;
+            }
+
+            const float edge_len = SDL_sqrtf(edge_len_sq);
+            const float inv_edge_len = 1.0f / edge_len;
+            const float left_normal_x = -edge_z * inv_edge_len;
+            const float left_normal_z = edge_x * inv_edge_len;
+            const float signed_dist = ((x - ax) * left_normal_x) + ((z - az) * left_normal_z);
+            if (signed_dist >= mover->config.player_radius - SDL3D_FPS_COLLISION_EPSILON)
+            {
+                continue;
+            }
+
+            const float t = clampf(((x - ax) * edge_x + (z - az) * edge_z) / edge_len_sq, 0.0f, 1.0f);
+            const float closest_x = ax + edge_x * t;
+            const float closest_z = az + edge_z * t;
+            const float dx = x - closest_x;
+            const float dz = z - closest_z;
+            const float closest_dist_sq = dx * dx + dz * dz;
+            if (closest_dist_sq > mover->config.player_radius * mover->config.player_radius)
+            {
+                continue;
+            }
+
+            const float outward_x = edge_z * inv_edge_len;
+            const float outward_z = -edge_x * inv_edge_len;
+            if (edge_has_passable_neighbor(mover, level, sectors, closest_x, closest_z, outward_x, outward_z, feet_y,
+                                           grounded))
+            {
+                continue;
+            }
+
+            const float penetration = mover->config.player_radius - signed_dist;
+            if (!blocked || penetration > deepest_penetration)
+            {
+                blocked = true;
+                deepest_penetration = penetration;
+                best_normal.x = left_normal_x;
+                best_normal.y = left_normal_z;
+            }
+        }
+    }
+
+    if (blocked && out_normal != NULL)
+    {
+        *out_normal = best_normal;
+    }
+    return blocked;
 }
 
 static bool position_has_air_space(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
                                    float x, float z, float feet_y, int *out_sector)
 {
-    static const float sample_dirs[9][2] = {
-        {0.0f, 0.0f},       {1.0f, 0.0f},        {-1.0f, 0.0f},       {0.0f, 1.0f},         {0.0f, -1.0f},
-        {0.7071f, 0.7071f}, {0.7071f, -0.7071f}, {-0.7071f, 0.7071f}, {-0.7071f, -0.7071f},
-    };
-
-    const float radius = mover->config.player_radius;
     const float head_y = feet_y + fps_min_headroom(mover);
     int center = sdl3d_level_find_sector_at(level, sectors, x, z, feet_y);
 
@@ -80,23 +212,42 @@ static bool position_has_air_space(const sdl3d_fps_mover *mover, const sdl3d_lev
         return false;
     }
 
-    for (int i = 1; i < 9; ++i)
+    if (find_blocking_edge(mover, level, sectors, x, z, feet_y, false, NULL))
     {
-        float sx = x + sample_dirs[i][0] * radius;
-        float sz = z + sample_dirs[i][1] * radius;
-        if (sdl3d_level_find_sector(level, sectors, sx, sz) < 0)
-        {
-            return false;
-        }
-        if (!sdl3d_level_point_inside(level, sectors, sx, head_y, sz))
-        {
-            return false;
-        }
+        return false;
     }
 
     if (out_sector)
     {
         *out_sector = center;
+    }
+
+    return true;
+}
+
+static bool position_has_center_support(const sdl3d_fps_mover *mover, const sdl3d_level *level,
+                                        const sdl3d_sector *sectors, float x, float z, float feet_y, bool grounded,
+                                        int *out_sector, float *out_collision_feet_y)
+{
+    if (grounded)
+    {
+        return position_has_ground_support(mover, level, sectors, x, z, feet_y, out_sector, out_collision_feet_y);
+    }
+
+    const float head_y = feet_y + fps_min_headroom(mover);
+    int center = sdl3d_level_find_sector_at(level, sectors, x, z, feet_y);
+    if (center < 0 || !sdl3d_level_point_inside(level, sectors, x, head_y, z))
+    {
+        return false;
+    }
+
+    if (out_sector)
+    {
+        *out_sector = center;
+    }
+    if (out_collision_feet_y)
+    {
+        *out_collision_feet_y = feet_y;
     }
     return true;
 }
@@ -110,6 +261,66 @@ static sdl3d_vec2 project_wish_to_walkable_floor(sdl3d_vec2 wish_dir, const sdl3
         wish_dir.y - normal.z * dot,
     };
     return projected;
+}
+
+static bool try_horizontal_move(sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
+                                float feet_y, bool grounded, float move_x, float move_z, int *out_sector)
+{
+    bool (*position_is_valid)(const sdl3d_fps_mover *, const sdl3d_level *, const sdl3d_sector *, float, float, float,
+                              int *) = grounded ? position_is_walkable : position_has_air_space;
+    float clipped_x = move_x;
+    float clipped_z = move_z;
+
+    for (int i = 0; i < 3; ++i)
+    {
+        int candidate = -1;
+        const float next_x = mover->position.x + clipped_x;
+        const float next_z = mover->position.z + clipped_z;
+        if (position_is_valid(mover, level, sectors, next_x, next_z, feet_y, &candidate))
+        {
+            mover->position.x = next_x;
+            mover->position.z = next_z;
+            if (out_sector != NULL)
+            {
+                *out_sector = candidate;
+            }
+            return true;
+        }
+
+        float collision_feet_y = feet_y;
+        if (!position_has_center_support(mover, level, sectors, next_x, next_z, feet_y, grounded, &candidate,
+                                         &collision_feet_y))
+        {
+            return false;
+        }
+
+        sdl3d_vec2 wall_normal = {0.0f, 0.0f};
+        if (!find_blocking_edge(mover, level, sectors, next_x, next_z, collision_feet_y, grounded, &wall_normal))
+        {
+            return false;
+        }
+
+        const float into_wall = clipped_x * wall_normal.x + clipped_z * wall_normal.y;
+        if (into_wall >= -SDL3D_FPS_COLLISION_EPSILON)
+        {
+            mover->position.x = next_x;
+            mover->position.z = next_z;
+            if (out_sector != NULL)
+            {
+                *out_sector = candidate;
+            }
+            return true;
+        }
+
+        clipped_x -= wall_normal.x * into_wall;
+        clipped_z -= wall_normal.y * into_wall;
+        if (clipped_x * clipped_x + clipped_z * clipped_z <= SDL3D_FPS_COLLISION_EPSILON)
+        {
+            return false;
+        }
+    }
+
+    return false;
 }
 
 void sdl3d_fps_mover_init(sdl3d_fps_mover *mover, const sdl3d_fps_mover_config *config, sdl3d_vec3 spawn_position,
@@ -233,26 +444,8 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
             float move_z = wish_dir.y * mover->config.move_speed * dt;
             int candidate = -1;
 
-            bool (*position_is_valid)(const sdl3d_fps_mover *, const sdl3d_level *, const sdl3d_sector *, float, float,
-                                      float, int *) = mover->on_ground ? position_is_walkable : position_has_air_space;
-
-            if (position_is_valid(mover, level, sectors, mover->position.x + move_x, mover->position.z + move_z, feet_y,
-                                  &candidate))
+            if (try_horizontal_move(mover, level, sectors, feet_y, mover->on_ground, move_x, move_z, &candidate))
             {
-                mover->position.x += move_x;
-                mover->position.z += move_z;
-                current_sector = candidate;
-            }
-            else if (position_is_valid(mover, level, sectors, mover->position.x + move_x, mover->position.z, feet_y,
-                                       &candidate))
-            {
-                mover->position.x += move_x;
-                current_sector = candidate;
-            }
-            else if (position_is_valid(mover, level, sectors, mover->position.x, mover->position.z + move_z, feet_y,
-                                       &candidate))
-            {
-                mover->position.z += move_z;
                 current_sector = candidate;
             }
         }
