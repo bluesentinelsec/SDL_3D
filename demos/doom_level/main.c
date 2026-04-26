@@ -498,6 +498,7 @@ int main(int argc, char *argv[])
     config.height = WINDOW_H;
     config.backend = SDL3D_BACKEND_SDLGPU;
     config.tick_rate = 1.0f / 60.0f;
+    config.enable_audio = true;
 
     sdl3d_game_callbacks callbacks = {0};
     callbacks.init = game_init;

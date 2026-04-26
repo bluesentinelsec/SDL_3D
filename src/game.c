@@ -43,7 +43,7 @@ static bool sdl3d_game_create_context(const sdl3d_game_config *config, sdl3d_gam
     ctx->bus = sdl3d_signal_bus_create();
     ctx->timers = sdl3d_timer_pool_create();
     ctx->input = sdl3d_input_create();
-    if (!sdl3d_audio_create(&ctx->audio))
+    if (config != NULL && config->enable_audio && !sdl3d_audio_create(&ctx->audio))
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio disabled: %s", SDL_GetError());
         SDL_ClearError();
