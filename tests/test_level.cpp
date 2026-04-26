@@ -63,6 +63,18 @@ TestVec3 LoadNormal(const sdl3d_mesh &mesh, int vertex_index)
     return {mesh.normals[vertex_index * 3], mesh.normals[vertex_index * 3 + 1], mesh.normals[vertex_index * 3 + 2]};
 }
 
+const sdl3d_mesh *FindSectorMaterialMesh(const sdl3d_level &level, int sector_id, int material_index)
+{
+    for (int i = 0; i < level.model.mesh_count; ++i)
+    {
+        if (level.mesh_sector_ids[i] == sector_id && level.model.meshes[i].material_index == material_index)
+        {
+            return &level.model.meshes[i];
+        }
+    }
+    return nullptr;
+}
+
 TestVec3 Subtract(TestVec3 a, TestVec3 b)
 {
     return {a.x - b.x, a.y - b.y, a.z - b.z};
@@ -272,6 +284,119 @@ TEST(SDL3DLevelBuilder, BakesLightmapAtlasAndMeshUVs)
             EXPECT_LE(mesh.lightmap_uvs[v * 2 + 1], 1.0f);
         }
     }
+
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DLevelRuntimeGeometry, SetSectorGeometryUpdatesSectorAndMeshes)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                              MakeLevelMaterial("wall.png")};
+    sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f), MakeSquareSector(4.0f, 0.0f, 8.0f, 4.0f)};
+    sdl3d_level level{};
+
+    ASSERT_TRUE(sdl3d_build_level(sectors, 2, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+    const sdl3d_mesh *old_floor_mesh = FindSectorMaterialMesh(level, 1, sectors[1].floor_material);
+    ASSERT_NE(old_floor_mesh, nullptr);
+    EXPECT_NEAR(old_floor_mesh->local_bounds.min.y, 0.0f, 1e-4f);
+
+    sdl3d_sector_geometry geometry{};
+    geometry.floor_y = 1.25f;
+    geometry.ceil_y = 5.0f;
+    geometry.floor_normal[1] = 1.0f;
+    geometry.ceil_normal[1] = -1.0f;
+
+    ASSERT_TRUE(sdl3d_level_set_sector_geometry(&level, sectors, 2, 1, &geometry, materials, 3, nullptr, 0))
+        << SDL_GetError();
+
+    EXPECT_FLOAT_EQ(sectors[1].floor_y, 1.25f);
+    EXPECT_FLOAT_EQ(sectors[1].ceil_y, 5.0f);
+    EXPECT_EQ(level.sector_count, 2);
+    EXPECT_GT(level.portal_count, 0);
+
+    const sdl3d_mesh *new_floor_mesh = FindSectorMaterialMesh(level, 1, sectors[1].floor_material);
+    ASSERT_NE(new_floor_mesh, nullptr);
+    EXPECT_NEAR(new_floor_mesh->local_bounds.min.y, 1.25f, 1e-4f);
+    EXPECT_NEAR(new_floor_mesh->local_bounds.max.y, 1.25f, 1e-4f);
+
+    bool portal_updated = false;
+    for (int i = 0; i < level.portal_count; ++i)
+    {
+        const sdl3d_level_portal &portal = level.portals[i];
+        if ((portal.sector_a == 0 && portal.sector_b == 1) || (portal.sector_a == 1 && portal.sector_b == 0))
+        {
+            portal_updated = true;
+            EXPECT_NEAR(portal.floor_y, 1.25f, 1e-4f);
+            EXPECT_NEAR(portal.ceil_y, 3.0f, 1e-4f);
+        }
+    }
+    EXPECT_TRUE(portal_updated);
+
+    EXPECT_EQ(sdl3d_level_find_walkable_sector(&level, sectors, 6.0f, 2.0f, 1.0f, 0.5f, 1.6f), 1);
+
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DLevelRuntimeGeometry, SetSectorGeometrySupportsSlopedFloors)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                              MakeLevelMaterial("wall.png")};
+    sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 10.0f, 4.0f)};
+    sdl3d_level level{};
+
+    ASSERT_TRUE(sdl3d_build_level(sectors, 1, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+
+    sdl3d_sector_geometry geometry{};
+    geometry.floor_y = 1.0f;
+    geometry.ceil_y = 6.0f;
+    geometry.floor_normal[0] = -0.19611613f;
+    geometry.floor_normal[1] = 0.98058069f;
+    geometry.ceil_normal[1] = -1.0f;
+
+    ASSERT_TRUE(sdl3d_level_set_sector_geometry(&level, sectors, 1, 0, &geometry, materials, 3, nullptr, 0))
+        << SDL_GetError();
+
+    EXPECT_NEAR(sdl3d_sector_floor_at(&sectors[0], 0.0f, 2.0f), 0.0f, 1e-4f);
+    EXPECT_NEAR(sdl3d_sector_floor_at(&sectors[0], 10.0f, 2.0f), 2.0f, 1e-4f);
+
+    const sdl3d_mesh *floor_mesh = FindSectorMaterialMesh(level, 0, sectors[0].floor_material);
+    ASSERT_NE(floor_mesh, nullptr);
+    for (int i = 0; i < floor_mesh->vertex_count; ++i)
+    {
+        float x = floor_mesh->positions[i * 3 + 0];
+        float y = floor_mesh->positions[i * 3 + 1];
+        float z = floor_mesh->positions[i * 3 + 2];
+        EXPECT_NEAR(y, sdl3d_sector_floor_at(&sectors[0], x, z), 1e-4f);
+    }
+
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DLevelRuntimeGeometry, SetSectorGeometryLeavesStateUnchangedOnInvalidUpdate)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                              MakeLevelMaterial("wall.png")};
+    sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f)};
+    sdl3d_level level{};
+
+    ASSERT_TRUE(sdl3d_build_level(sectors, 1, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+    const sdl3d_mesh *floor_mesh = FindSectorMaterialMesh(level, 0, sectors[0].floor_material);
+    ASSERT_NE(floor_mesh, nullptr);
+    const float old_floor_bound = floor_mesh->local_bounds.min.y;
+
+    sdl3d_sector_geometry invalid_geometry{};
+    invalid_geometry.floor_y = 3.0f;
+    invalid_geometry.ceil_y = 3.0f;
+    invalid_geometry.floor_normal[1] = 1.0f;
+    invalid_geometry.ceil_normal[1] = -1.0f;
+
+    EXPECT_FALSE(sdl3d_level_set_sector_geometry(&level, sectors, 1, 0, &invalid_geometry, materials, 3, nullptr, 0));
+    EXPECT_FLOAT_EQ(sectors[0].floor_y, 0.0f);
+    EXPECT_FLOAT_EQ(sectors[0].ceil_y, 3.0f);
+
+    floor_mesh = FindSectorMaterialMesh(level, 0, sectors[0].floor_material);
+    ASSERT_NE(floor_mesh, nullptr);
+    EXPECT_NEAR(floor_mesh->local_bounds.min.y, old_floor_bound, 1e-4f);
 
     sdl3d_free_level(&level);
 }

@@ -27,8 +27,10 @@ static const sdl3d_level_material g_mats[] = {
  *   [2] Nukage Basin -- [3] East Passage -- [4] Courtyard -- [10] Storage -- [12] Secret Annex
  *      |                                       |
  *   [6] West Alcove                           [5] Exit Room -- [11] Reactor Hall -- [13] Exterior Yard
+ *                                                                                 |
+ *                                                 [31] Lift Bay -- [32] Lift -- [33] Upper Deck
  */
-const sdl3d_sector g_sectors[] = {
+static const sdl3d_sector g_base_sectors[] = {
     {{{0, 0}, {10, 0}, {10, 8}, {0, 8}}, 4, 0.0f, 4.0f, 0, 1, 2},
     {{{3, 8}, {7, 8}, {7, 16}, {3, 16}}, 4, 0.0f, 3.5f, 5, 1, 4},
     {{{-2, 16}, {10, 16}, {10, 26}, {-2, 26}}, 4, -0.5f, 4.5f, 3, 1, 2},
@@ -62,8 +64,13 @@ const sdl3d_sector g_sectors[] = {
     {{{-6, 64}, {-2, 64}, {-2, 72}, {-6, 72}}, 4, 2.5f, 12.0f, 5, -1, 2},
     {{{-6, 72}, {-2, 72}, {-2, 80}, {-6, 80}}, 4, 1.25f, 12.0f, 5, -1, 2, {0.0f, 0.95448f, 0.298275f}, {0, 0, 0}},
     {{{-6, 80}, {-2, 80}, {-2, 104}, {-6, 104}}, 4, 0.0f, 12.0f, 5, -1, 2},
+    /* Runtime sector modification showcase: an outdoor lift bay. */
+    {{{54, 57}, {60, 57}, {60, 69}, {54, 69}}, 4, 2.5f, 12.0f, 5, -1, 2},
+    {{{60, 57}, {68, 57}, {68, 69}, {60, 69}}, 4, 0.0f, 12.0f, 0, -1, 4},
+    {{{68, 57}, {78, 57}, {78, 69}, {68, 69}}, 4, 2.5f, 12.0f, 5, -1, 2},
 };
-const int g_sector_count = (int)SDL_arraysize(g_sectors);
+sdl3d_sector g_sectors[SDL_arraysize(g_base_sectors)];
+const int g_sector_count = (int)SDL_arraysize(g_base_sectors);
 
 const sdl3d_level_light g_lights[] = {
     {{5, 3.5f, 4}, {1.0f, 0.82f, 0.58f}, 2.4f, 9.5f},    {{5, 3.0f, 12}, {1.0f, 0.68f, 0.28f}, 1.4f, 7.0f},
@@ -74,6 +81,7 @@ const sdl3d_level_light g_lights[] = {
     {{24, 3.8f, 38}, {0.45f, 0.35f, 1.0f}, 2.2f, 11.0f}, {{36, 2.2f, 27}, {1.0f, 0.55f, 0.22f}, 1.5f, 7.0f},
     {{24, 8.5f, 74}, {0.32f, 0.38f, 0.7f}, 2.4f, 32.0f}, {{37, 2.5f, 22}, {1.0f, 0.8f, 0.5f}, 1.5f, 8.0f},
     {{37, 5.0f, 15}, {0.8f, 0.6f, 1.0f}, 1.8f, 10.0f},   {{34, 8.5f, 7}, {1.0f, 0.95f, 0.8f}, 3.0f, 16.0f},
+    {{66, 6.0f, 63}, {0.25f, 0.7f, 1.0f}, 2.1f, 14.0f},
 };
 const int g_light_count = (int)SDL_arraysize(g_lights);
 
@@ -91,11 +99,21 @@ static void strip_lightmap(sdl3d_level *level)
     }
 }
 
+static void apply_sector_geometry(sdl3d_sector *sector, const sdl3d_sector_geometry *geometry)
+{
+    sector->floor_y = geometry->floor_y;
+    sector->ceil_y = geometry->ceil_y;
+    SDL_memcpy(sector->floor_normal, geometry->floor_normal, sizeof(sector->floor_normal));
+    SDL_memcpy(sector->ceil_normal, geometry->ceil_normal, sizeof(sector->ceil_normal));
+}
+
 bool level_data_init(level_data *ld)
 {
     int mc = (int)SDL_arraysize(g_mats);
     ld->use_lit = true;
     ld->use_lightmaps = true;
+
+    SDL_memcpy(g_sectors, g_base_sectors, sizeof(g_base_sectors));
 
     if (!sdl3d_build_level(g_sectors, g_sector_count, g_mats, mc, g_lights, g_light_count, &ld->lightmapped))
     {
@@ -124,6 +142,67 @@ void level_data_free(level_data *ld)
     sdl3d_free_level(&ld->lightmapped);
     sdl3d_free_level(&ld->vertex_baked);
     sdl3d_free_level(&ld->unlit);
+}
+
+bool level_data_set_sector_geometry(level_data *ld, int sector_index, const sdl3d_sector_geometry *geometry)
+{
+    const int mc = (int)SDL_arraysize(g_mats);
+    sdl3d_sector *candidate_sectors = NULL;
+    sdl3d_level lightmapped;
+    sdl3d_level vertex_baked;
+    sdl3d_level unlit;
+
+    if (ld == NULL || geometry == NULL)
+    {
+        return SDL_InvalidParamError("level_data");
+    }
+    if (sector_index < 0 || sector_index >= g_sector_count)
+    {
+        return SDL_SetError("sector_index is out of range.");
+    }
+    if (geometry->ceil_y <= geometry->floor_y + 0.000001f)
+    {
+        return SDL_SetError("sector ceiling must be above sector floor.");
+    }
+
+    candidate_sectors = SDL_malloc(sizeof(g_sectors));
+    if (candidate_sectors == NULL)
+    {
+        return SDL_OutOfMemory();
+    }
+    SDL_memcpy(candidate_sectors, g_sectors, sizeof(g_sectors));
+    apply_sector_geometry(&candidate_sectors[sector_index], geometry);
+
+    SDL_zero(lightmapped);
+    SDL_zero(vertex_baked);
+    SDL_zero(unlit);
+    if (!sdl3d_build_level(candidate_sectors, g_sector_count, g_mats, mc, g_lights, g_light_count, &lightmapped))
+    {
+        SDL_free(candidate_sectors);
+        return false;
+    }
+    if (!sdl3d_build_level(candidate_sectors, g_sector_count, g_mats, mc, g_lights, g_light_count, &vertex_baked))
+    {
+        sdl3d_free_level(&lightmapped);
+        SDL_free(candidate_sectors);
+        return false;
+    }
+    if (!sdl3d_build_level(candidate_sectors, g_sector_count, g_mats, mc, NULL, 0, &unlit))
+    {
+        sdl3d_free_level(&lightmapped);
+        sdl3d_free_level(&vertex_baked);
+        SDL_free(candidate_sectors);
+        return false;
+    }
+
+    strip_lightmap(&vertex_baked);
+    SDL_memcpy(g_sectors, candidate_sectors, sizeof(g_sectors));
+    SDL_free(candidate_sectors);
+    level_data_free(ld);
+    ld->lightmapped = lightmapped;
+    ld->vertex_baked = vertex_baked;
+    ld->unlit = unlit;
+    return true;
 }
 
 sdl3d_level *level_data_active(level_data *ld)

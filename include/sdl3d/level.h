@@ -57,6 +57,22 @@ extern "C"
         float ceil_normal[3];  /* Ceiling plane normal. Zero defaults to (0, -1, 0). */
     } sdl3d_sector;
 
+    /**
+     * @brief Runtime-editable vertical sector geometry.
+     *
+     * This describes the part of a sector that can move during gameplay:
+     * the floor and ceiling plane heights at the sector centroid, plus the
+     * floor and ceiling normals. The sector polygon, materials, and winding
+     * remain owned by the existing sdl3d_sector definition.
+     */
+    typedef struct sdl3d_sector_geometry
+    {
+        float floor_y;         /**< Floor height at the sector centroid. */
+        float ceil_y;          /**< Ceiling height at the sector centroid. */
+        float floor_normal[3]; /**< Floor plane normal, or zero for flat up. */
+        float ceil_normal[3];  /**< Ceiling plane normal, or zero for flat down. */
+    } sdl3d_sector_geometry;
+
     typedef struct sdl3d_level
     {
         sdl3d_model model;
@@ -116,6 +132,36 @@ extern "C"
      */
     bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3d_level_material *materials,
                            int material_count, const sdl3d_level_light *lights, int light_count, sdl3d_level *out);
+
+    /**
+     * @brief Change one sector's runtime geometry and rebuild level data.
+     *
+     * The update is transactional for a single level: the function copies
+     * `sectors`, applies `geometry` to `sector_index`, rebuilds a temporary
+     * level, and swaps it into `level` only after the rebuild succeeds. On
+     * success, `sectors[sector_index]` is updated to match the committed
+     * geometry. On failure, the live level and caller-owned sector array are
+     * left unchanged and SDL_GetError() describes the problem.
+     *
+     * Rebuilding the level refreshes generated floor, ceiling, wall, portal,
+     * visibility, vertex lighting, and lightmap data so adjacent step walls
+     * remain consistent when a floor or ceiling moves.
+     *
+     * @param level Built level to replace on success.
+     * @param sectors Mutable sector definitions used by gameplay queries.
+     * @param sector_count Number of entries in `sectors`; must match
+     *        `level->sector_count`.
+     * @param sector_index Sector to edit.
+     * @param geometry New vertical geometry for the sector.
+     * @param materials Material palette used to rebuild the level.
+     * @param material_count Number of entries in `materials`.
+     * @param lights Optional baked lights, or NULL with `light_count` 0.
+     * @param light_count Number of entries in `lights`.
+     * @return true when the new geometry was committed, false on error.
+     */
+    bool sdl3d_level_set_sector_geometry(sdl3d_level *level, sdl3d_sector *sectors, int sector_count, int sector_index,
+                                         const sdl3d_sector_geometry *geometry, const sdl3d_level_material *materials,
+                                         int material_count, const sdl3d_level_light *lights, int light_count);
 
     void sdl3d_free_level(sdl3d_level *level);
 
