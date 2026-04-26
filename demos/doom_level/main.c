@@ -19,6 +19,7 @@
 #include "level_data.h"
 #include "player.h"
 #include "renderer.h"
+#include "surveillance.h"
 
 #define SIG_FADE_OUT_DONE 2001
 #define LIFT_FLOOR_MIN_Y 0.0f
@@ -35,6 +36,8 @@
 #define DAMAGE_FEEDBACK_ATTACK_RATE 10.0f
 #define DAMAGE_FEEDBACK_DECAY_RATE 4.0f
 #define DAMAGE_FEEDBACK_PULSE_HZ 2.8f
+#define SURVEILLANCE_BUTTON_X 43.0f
+#define SURVEILLANCE_BUTTON_Z 89.0f
 
 typedef struct doom_state
 {
@@ -50,6 +53,7 @@ typedef struct doom_state
     sdl3d_audio_engine *audio;
     sdl3d_sector_watcher sector_watcher;
     sdl3d_teleporter dragon_teleporter;
+    doom_surveillance_camera surveillance;
     sdl3d_backend current_backend;
     doom_render_profile render_profile;
     float ambient_feedback_timer;
@@ -192,6 +196,23 @@ static void init_dragon_teleporter(doom_state *state)
     sdl3d_teleporter_init(&state->dragon_teleporter, DRAGON_TELEPORTER_ID, source, destination);
 }
 
+static void init_surveillance_camera(doom_state *state)
+{
+    sdl3d_bounding_box button_bounds = {
+        sdl3d_vec3_make(SURVEILLANCE_BUTTON_X - 1.2f, -0.1f, SURVEILLANCE_BUTTON_Z - 1.2f),
+        sdl3d_vec3_make(SURVEILLANCE_BUTTON_X + 1.2f, 2.0f, SURVEILLANCE_BUTTON_Z + 1.2f),
+    };
+    sdl3d_camera3d camera;
+    SDL_zero(camera);
+    camera.position = sdl3d_vec3_make(4.0f, 3.25f, 25.2f);
+    camera.target = sdl3d_vec3_make(4.0f, 0.15f, 18.4f);
+    camera.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    camera.fovy = 70.0f;
+    camera.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    doom_surveillance_init(&state->surveillance, button_bounds, camera);
+}
+
 static void start_quit_fade(sdl3d_game_context *ctx, doom_state *state)
 {
     if (state->quit_pending)
@@ -299,6 +320,7 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
 
     player_init(&state->player, ctx->input);
     init_dragon_teleporter(state);
+    init_surveillance_camera(state);
     render_state_init(&state->render);
     sdl3d_transition_start(&state->transition, SDL3D_TRANSITION_FADE, SDL3D_TRANSITION_IN, (sdl3d_color){0, 0, 0, 255},
                            1.0f, -1);
@@ -542,6 +564,10 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
                                             state->player.mover.position.z),
                             dt, ctx->bus);
 
+    doom_surveillance_update(&state->surveillance, sdl3d_vec3_make(state->player.mover.position.x,
+                                                                   state->player.mover.position.y - PLAYER_HEIGHT,
+                                                                   state->player.mover.position.z));
+
     sdl3d_sector_watcher_update(&state->sector_watcher, &state->level.unlit, g_sectors,
                                 sdl3d_vec3_make(state->player.mover.position.x,
                                                 state->player.mover.position.y - PLAYER_HEIGHT,
@@ -647,9 +673,9 @@ static void game_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     const float frame_dt = sdl3d_time_get_unscaled_delta_time();
 
     render_draw_frame(&state->render, ctx->renderer, state->has_font ? &state->debug_font : NULL, state->ui,
-                      &state->level, &state->ent, &state->hazards, &state->player, WINDOW_W, WINDOW_H, frame_dt,
-                      backend_profile_name(state->render_profile), state->ambient_feedback_timer > 0.0f,
-                      state->teleport_feedback_timer > 0.0f);
+                      &state->level, &state->ent, &state->hazards, &state->surveillance, &state->player, WINDOW_W,
+                      WINDOW_H, frame_dt, backend_profile_name(state->render_profile),
+                      state->ambient_feedback_timer > 0.0f, state->teleport_feedback_timer > 0.0f);
     sdl3d_transition_draw(&state->transition, ctx->renderer);
     draw_damage_overlay(ctx, state);
     if (ctx->paused && !state->quit_pending)

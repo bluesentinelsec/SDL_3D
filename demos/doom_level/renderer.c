@@ -44,6 +44,27 @@ static sdl3d_color sample_actor_tint(const sdl3d_level_light *lights, int light_
     return (sdl3d_color){(Uint8)(r * 255.0f), (Uint8)(g * 255.0f), (Uint8)(b * 255.0f), 255};
 }
 
+static sdl3d_vec3 camera_forward(const sdl3d_camera3d *camera)
+{
+    if (camera == NULL)
+    {
+        return sdl3d_vec3_make(0.0f, 0.0f, -1.0f);
+    }
+
+    sdl3d_vec3 forward = sdl3d_vec3_sub(camera->target, camera->position);
+    if (sdl3d_vec3_length_squared(forward) <= 0.000001f)
+    {
+        return sdl3d_vec3_make(0.0f, 0.0f, -1.0f);
+    }
+    return sdl3d_vec3_normalize(forward);
+}
+
+static sdl3d_vec3 bounds_center(sdl3d_bounding_box bounds)
+{
+    return sdl3d_vec3_make((bounds.min.x + bounds.max.x) * 0.5f, (bounds.min.y + bounds.max.y) * 0.5f,
+                           (bounds.min.z + bounds.max.z) * 0.5f);
+}
+
 void render_state_init(render_state *rs)
 {
     SDL_zerop(rs);
@@ -84,20 +105,21 @@ static bool render_state_ensure_sector_capacity(render_state *rs, int sector_cou
 }
 
 void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_font *font, sdl3d_ui_context *ui,
-                       level_data *ld, entities *ent, const doom_hazard_particles *hazards, const player_state *player,
-                       int backbuffer_w, int backbuffer_h, float dt, const char *render_profile_name,
-                       bool ambient_feedback_active, bool teleport_feedback_active)
+                       level_data *ld, entities *ent, const doom_hazard_particles *hazards,
+                       const doom_surveillance_camera *surveillance, const player_state *player, int backbuffer_w,
+                       int backbuffer_h, float dt, const char *render_profile_name, bool ambient_feedback_active,
+                       bool teleport_feedback_active)
 {
     const sdl3d_fps_mover *mover = &player->mover;
     sdl3d_level *active = level_data_active(ld);
-    sdl3d_camera3d cam = sdl3d_fps_mover_camera(mover, 75.0f);
+    const sdl3d_camera3d player_cam = sdl3d_fps_mover_camera(mover, 75.0f);
+    const sdl3d_camera3d *surveillance_cam = doom_surveillance_active_camera(surveillance);
+    sdl3d_camera3d cam = surveillance_cam != NULL ? *surveillance_cam : player_cam;
     const int sector_count = active->sector_count;
 
     float px = mover->position.x, py = mover->position.y;
     float pz = mover->position.z;
-    float yaw = mover->yaw, pitch = mover->pitch;
-    float fx = SDL_sinf(yaw) * SDL_cosf(pitch);
-    float fz = -SDL_cosf(yaw) * SDL_cosf(pitch);
+    const sdl3d_vec3 forward = camera_forward(&cam);
 
     int current_sector = sdl3d_level_find_sector_at(&ld->unlit, g_sectors, px, pz, py - PLAYER_HEIGHT);
     if (current_sector < 0)
@@ -196,6 +218,21 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(26.0f, 0.13f, 52.6f), sdl3d_vec3_make(3.0f, 0.1f, 0.8f),
                     (sdl3d_color){70, 210, 230, 255});
 
+    /* Surveillance camera button in the dragon room. */
+    if (surveillance != NULL)
+    {
+        const sdl3d_vec3 c = bounds_center(surveillance->button_bounds);
+        const bool active_button = doom_surveillance_is_active(surveillance);
+        sdl3d_draw_cube(ctx, sdl3d_vec3_make(c.x, 0.18f, c.z), sdl3d_vec3_make(1.4f, 0.25f, 1.4f),
+                        (sdl3d_color){45, 48, 55, 255});
+        sdl3d_draw_cube(ctx, sdl3d_vec3_make(c.x, 0.42f, c.z), sdl3d_vec3_make(0.9f, 0.25f, 0.9f),
+                        active_button ? (sdl3d_color){45, 235, 90, 255} : (sdl3d_color){235, 45, 45, 255});
+        sdl3d_draw_cube(ctx, sdl3d_vec3_make(c.x, 1.35f, c.z), sdl3d_vec3_make(0.18f, 1.6f, 0.18f),
+                        (sdl3d_color){50, 60, 75, 255});
+        sdl3d_draw_cube(ctx, sdl3d_vec3_make(c.x, 2.2f, c.z), sdl3d_vec3_make(0.8f, 0.45f, 0.45f),
+                        active_button ? (sdl3d_color){40, 180, 90, 255} : (sdl3d_color){70, 90, 120, 255});
+    }
+
     /* Sprites */
     {
         for (int i = 0; i < ent->sprites.count; ++i)
@@ -228,9 +265,9 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
 
     /* Crosshair */
     {
-        float chx = cam.position.x + fx * 0.4f;
-        float chy = cam.position.y + SDL_sinf(pitch) * 0.4f;
-        float chz = cam.position.z + fz * 0.4f;
+        float chx = cam.position.x + forward.x * 0.4f;
+        float chy = cam.position.y + forward.y * 0.4f;
+        float chz = cam.position.z + forward.z * 0.4f;
         sdl3d_set_emissive(ctx, 8, 8, 8);
         sdl3d_draw_cube(ctx, sdl3d_vec3_make(chx, chy, chz), sdl3d_vec3_make(0.003f, 0.003f, 0.003f),
                         (sdl3d_color){255, 255, 255, 255});
@@ -251,6 +288,8 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
                         sector_count);
         sdl3d_ui_labelf(ui, 10.0f, 140.0f, "pos %.1f, %.1f, %.1f", px, py, pz);
         sdl3d_ui_labelf(ui, 10.0f, 180.0f, "profile=%s", render_profile_name ? render_profile_name : "Modern");
+        if (doom_surveillance_is_active(surveillance))
+            sdl3d_ui_label(ui, 10.0f, 220.0f, "SURVEILLANCE VIEW");
         sdl3d_ui_end_frame(ui);
         sdl3d_ui_render(ui, ctx);
     }
