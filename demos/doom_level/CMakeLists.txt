@@ -5,7 +5,8 @@ add_executable(doom_level
     hazard_effects.c
     level_data.c
     player.c
-    renderer.c)
+    renderer.c
+    surveillance.c)
 target_link_libraries(doom_level PRIVATE SDL3D::sdl3d)
 target_compile_features(doom_level PRIVATE c_std_17)
 target_compile_definitions(doom_level PRIVATE
