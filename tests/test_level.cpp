@@ -104,6 +104,24 @@ TestVec3 Normalize(TestVec3 v)
 
 } // namespace
 
+TEST(SDL3DSectorMetadata, PushVelocityReturnsAuthoredVectorAndNullZero)
+{
+    sdl3d_sector sector = MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f);
+    sector.push_velocity[0] = 1.25f;
+    sector.push_velocity[1] = -0.5f;
+    sector.push_velocity[2] = 3.0f;
+
+    sdl3d_vec3 velocity = sdl3d_sector_push_velocity(&sector);
+    EXPECT_FLOAT_EQ(velocity.x, 1.25f);
+    EXPECT_FLOAT_EQ(velocity.y, -0.5f);
+    EXPECT_FLOAT_EQ(velocity.z, 3.0f);
+
+    sdl3d_vec3 zero = sdl3d_sector_push_velocity(nullptr);
+    EXPECT_FLOAT_EQ(zero.x, 0.0f);
+    EXPECT_FLOAT_EQ(zero.y, 0.0f);
+    EXPECT_FLOAT_EQ(zero.z, 0.0f);
+}
+
 TEST(SDL3DLevelBuilder, BuildsIndependentSectorMaterialChunks)
 {
     const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),

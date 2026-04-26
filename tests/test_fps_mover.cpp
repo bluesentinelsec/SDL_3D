@@ -118,6 +118,16 @@ class FpsMoverFixture : public ::testing::Test
             << SDL_GetError();
     }
 
+    void BuildConveyor(float push_x, float push_z)
+    {
+        sectors = {MakeSquareSector(-50, -10, 50, 10, 0.0f, 5.0f)};
+        sectors[0].push_velocity[0] = push_x;
+        sectors[0].push_velocity[2] = push_z;
+        const sdl3d_level_material mats[] = {MakeMaterial(), MakeMaterial(), MakeMaterial()};
+        ASSERT_TRUE(sdl3d_build_level(sectors.data(), (int)sectors.size(), mats, 3, nullptr, 0, &level))
+            << SDL_GetError();
+    }
+
     void TearDown() override
     {
         sdl3d_free_level(&level);
@@ -214,6 +224,51 @@ TEST_F(FpsMoverFixture, WishDirectionAdvancesPosition)
     EXPECT_GT(m.position.x, 5.0f);
     EXPECT_LT(m.position.x, 13.0f);
     EXPECT_NEAR(m.position.z, 0.0f, 0.01f);
+}
+
+TEST_F(FpsMoverFixture, SectorPushVelocityMovesPlayerWithoutInput)
+{
+    BuildConveyor(8.0f, 0.0f);
+    sdl3d_fps_mover_config cfg = DefaultConfig();
+    sdl3d_fps_mover m;
+    sdl3d_fps_mover_init(&m, &cfg, sdl3d_vec3_make(0.0f, cfg.player_height, 0.0f), 0);
+
+    sdl3d_vec2 zero{0.0f, 0.0f};
+    for (int i = 0; i < 60; ++i)
+    {
+        sdl3d_fps_mover_update(&m, &level, sectors.data(), zero, 0, 0, 0.002f, 1.0f / 60.0f);
+    }
+
+    EXPECT_GT(m.position.x, 7.5f);
+    EXPECT_LT(m.position.x, 8.5f);
+    EXPECT_NEAR(m.position.z, 0.0f, 0.01f);
+    EXPECT_TRUE(m.on_ground);
+}
+
+TEST_F(FpsMoverFixture, SectorPushVelocityCombinesWithInput)
+{
+    BuildConveyor(8.0f, 0.0f);
+    sdl3d_fps_mover_config cfg = DefaultConfig();
+    sdl3d_vec2 with_conveyor{1.0f, 0.0f};
+    sdl3d_vec2 against_conveyor{-1.0f, 0.0f};
+
+    sdl3d_fps_mover with;
+    sdl3d_fps_mover_init(&with, &cfg, sdl3d_vec3_make(0.0f, cfg.player_height, 0.0f), 0);
+    for (int i = 0; i < 60; ++i)
+    {
+        sdl3d_fps_mover_update(&with, &level, sectors.data(), with_conveyor, 0, 0, 0.002f, 1.0f / 60.0f);
+    }
+
+    sdl3d_fps_mover against;
+    sdl3d_fps_mover_init(&against, &cfg, sdl3d_vec3_make(0.0f, cfg.player_height, 0.0f), 0);
+    for (int i = 0; i < 60; ++i)
+    {
+        sdl3d_fps_mover_update(&against, &level, sectors.data(), against_conveyor, 0, 0, 0.002f, 1.0f / 60.0f);
+    }
+
+    EXPECT_GT(with.position.x, 19.0f);
+    EXPECT_LT(against.position.x, -3.0f);
+    EXPECT_LT(SDL_fabsf(against.position.x), with.position.x * 0.5f);
 }
 
 TEST_F(FpsMoverFixture, SolidWallMaintainsPlayerRadius)

@@ -88,6 +88,15 @@ sdl3d_vec3 sdl3d_sector_ceil_normal(const sdl3d_sector *sector)
                           : sdl3d_vec3_make(0.0f, -1.0f, 0.0f);
 }
 
+sdl3d_vec3 sdl3d_sector_push_velocity(const sdl3d_sector *sector)
+{
+    if (sector == NULL)
+    {
+        return sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    }
+    return sdl3d_vec3_make(sector->push_velocity[0], sector->push_velocity[1], sector->push_velocity[2]);
+}
+
 static void sector_centroid_xz(const sdl3d_sector *sector, float *out_x, float *out_z)
 {
     float x = 0.0f;

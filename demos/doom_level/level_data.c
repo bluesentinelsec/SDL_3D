@@ -26,8 +26,8 @@ static const sdl3d_level_material g_mats[] = {
  *      |                               |
  *   [2] Nukage Basin -- [3] East Passage -- [4] Courtyard -- [10] Storage -- [12] Secret Annex
  *      |                                       |
- *   [6] West Alcove                           [5] Exit Room -- [11] Reactor Hall -- [13] Exterior Yard
- *                                                                                 |
+ *   [6] West Alcove                           [5] Exit Room -- [11] Reactor Hall -- [35] Conveyor -- [13] Exterior Yard
+ *                                                                                                  |
  *                                                 [31] Lift Bay -- [32] Lift -- [33] Upper Deck
  */
 static const sdl3d_sector g_base_sectors[] = {
@@ -44,7 +44,7 @@ static const sdl3d_sector g_base_sectors[] = {
     {{{28, 12}, {34, 12}, {34, 24}, {28, 24}}, 4, 0.0f, 4.0f, 0, 1, 2},
     {{{18, 32}, {30, 32}, {30, 44}, {18, 44}}, 4, 0.0f, 5.5f, 5, 1, 4},
     {{{32, 24}, {40, 24}, {40, 30}, {32, 30}}, 4, 0.0f, 3.0f, 0, 1, 2},
-    {{{-2, 44}, {50, 44}, {50, 104}, {-2, 104}}, 4, 0.0f, 12.0f, 5, -1, 2},
+    {{{-2, 58}, {50, 58}, {50, 104}, {-2, 104}}, 4, 0.0f, 12.0f, 5, -1, 2},
     /* Stairwell */
     {{{34, 20}, {40, 20}, {40, 24}, {34, 24}}, 4, 0.0f, 10.0f, 0, -1, 4},
     {{{34, 18}, {40, 18}, {40, 20}, {34, 20}}, 4, 1.0f, 10.0f, 0, -1, 4},
@@ -68,6 +68,20 @@ static const sdl3d_sector g_base_sectors[] = {
     {{{54, 57}, {60, 57}, {60, 69}, {54, 69}}, 4, 2.5f, 12.0f, 5, -1, 2},
     {{{60, 57}, {68, 57}, {68, 69}, {60, 69}}, 4, 0.0f, 12.0f, 0, -1, 4},
     {{{68, 57}, {78, 57}, {78, 69}, {68, 69}}, 4, 2.5f, 12.0f, 5, -1, 2},
+    /* Dragon-room conveyor belt: +X sector push demonstrates reusable currents. */
+    {{{-2, 44}, {8, 44}, {8, 58}, {-2, 58}}, 4, 0.0f, 12.0f, 5, -1, 2},
+    {{{8, 44}, {30, 44}, {30, 58}, {8, 58}},
+     4,
+     0.0f,
+     12.0f,
+     4,
+     -1,
+     2,
+     {0.0f, 0.0f, 0.0f},
+     {0.0f, 0.0f, 0.0f},
+     0,
+     {8.0f, 0.0f, 0.0f}},
+    {{{30, 44}, {50, 44}, {50, 58}, {30, 58}}, 4, 0.0f, 12.0f, 5, -1, 2},
 };
 sdl3d_sector g_sectors[SDL_arraysize(g_base_sectors)];
 const int g_sector_count = (int)SDL_arraysize(g_base_sectors);
