@@ -15,6 +15,7 @@
 
 #include "backend.h"
 #include "entities.h"
+#include "hazard_effects.h"
 #include "level_data.h"
 #include "player.h"
 #include "renderer.h"
@@ -39,6 +40,7 @@ typedef struct doom_state
 {
     level_data level;
     entities ent;
+    doom_hazard_particles hazards;
     player_state player;
     render_state render;
     sdl3d_transition transition;
@@ -74,6 +76,7 @@ typedef struct doom_state
 static void doom_state_cleanup(doom_state *state)
 {
     render_state_free(&state->render);
+    doom_hazard_particles_free(&state->hazards);
     if (state->entities_ready)
     {
         entities_free(&state->ent);
@@ -288,6 +291,12 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     }
     state->entities_ready = true;
 
+    if (!doom_hazard_particles_init(&state->hazards, &state->level.unlit, g_sectors))
+    {
+        doom_state_cleanup(state);
+        return false;
+    }
+
     player_init(&state->player, ctx->input);
     init_dragon_teleporter(state);
     render_state_init(&state->render);
@@ -498,6 +507,7 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 
     sdl3d_transition_update(&state->transition, ctx->bus, dt);
     update_dynamic_lift(state, dt);
+    doom_hazard_particles_update(&state->hazards, dt);
     entities_update(&state->ent, &state->level.unlit, dt, state->player.mover.position);
     if (!player_update(&state->player, ctx->input, &state->level.unlit, g_sectors, dt))
     {
@@ -637,7 +647,7 @@ static void game_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     const float frame_dt = sdl3d_time_get_unscaled_delta_time();
 
     render_draw_frame(&state->render, ctx->renderer, state->has_font ? &state->debug_font : NULL, state->ui,
-                      &state->level, &state->ent, &state->player, WINDOW_W, WINDOW_H, frame_dt,
+                      &state->level, &state->ent, &state->hazards, &state->player, WINDOW_W, WINDOW_H, frame_dt,
                       backend_profile_name(state->render_profile), state->ambient_feedback_timer > 0.0f,
                       state->teleport_feedback_timer > 0.0f);
     sdl3d_transition_draw(&state->transition, ctx->renderer);

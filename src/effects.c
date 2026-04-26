@@ -4,8 +4,8 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "sdl3d/drawing3d.h"
+#include "sdl3d/lighting.h"
 #include "sdl3d/math.h"
-#include "sdl3d/shapes.h"
 
 #include "render_context_internal.h"
 
@@ -31,22 +31,164 @@ struct sdl3d_particle_emitter
     sdl3d_particle *particles;
     int count;
     float emit_accumulator;
+    Uint32 rng_state;
+    bool deterministic_rng;
 };
+
+static sdl3d_vec3 sdl3d_effects_camera_right(const sdl3d_render_context *context);
+static sdl3d_vec3 sdl3d_effects_camera_up(const sdl3d_render_context *context);
+static sdl3d_vec3 sdl3d_effects_camera_forward(const sdl3d_render_context *context);
+
+static float sdl3d_effects_absf(float value)
+{
+    return value < 0.0f ? -value : value;
+}
+
+static float sdl3d_effects_maxf(float a, float b)
+{
+    return a > b ? a : b;
+}
+
+static float sdl3d_effects_clampf(float value, float lo, float hi)
+{
+    if (value < lo)
+    {
+        return lo;
+    }
+    if (value > hi)
+    {
+        return hi;
+    }
+    return value;
+}
 
 static float sdl3d_randf(void)
 {
     return (float)SDL_rand(1000000) / 1000000.0f;
 }
 
-static float sdl3d_randf_range(float lo, float hi)
+static Uint32 sdl3d_particle_next_random_u32(sdl3d_particle_emitter *emitter)
 {
-    return lo + sdl3d_randf() * (hi - lo);
+    if (emitter == NULL || !emitter->deterministic_rng)
+    {
+        return (Uint32)SDL_rand_bits();
+    }
+
+    emitter->rng_state = emitter->rng_state * 1664525u + 1013904223u;
+    return emitter->rng_state;
+}
+
+static float sdl3d_particle_randf(sdl3d_particle_emitter *emitter)
+{
+    if (emitter == NULL || !emitter->deterministic_rng)
+    {
+        return sdl3d_randf();
+    }
+
+    return (float)(sdl3d_particle_next_random_u32(emitter) >> 8) * (1.0f / 16777216.0f);
+}
+
+static float sdl3d_randf_range(sdl3d_particle_emitter *emitter, float lo, float hi)
+{
+    return lo + sdl3d_particle_randf(emitter) * (hi - lo);
+}
+
+static sdl3d_particle_config sdl3d_particle_config_normalized(const sdl3d_particle_config *config)
+{
+    sdl3d_particle_config normalized = *config;
+
+    if (normalized.max_particles <= 0)
+    {
+        normalized.max_particles = 128;
+    }
+    if (normalized.speed_min > normalized.speed_max)
+    {
+        const float tmp = normalized.speed_min;
+        normalized.speed_min = normalized.speed_max;
+        normalized.speed_max = tmp;
+    }
+    if (normalized.lifetime_min > normalized.lifetime_max)
+    {
+        const float tmp = normalized.lifetime_min;
+        normalized.lifetime_min = normalized.lifetime_max;
+        normalized.lifetime_max = tmp;
+    }
+    normalized.lifetime_min = sdl3d_effects_maxf(normalized.lifetime_min, 0.001f);
+    normalized.lifetime_max = sdl3d_effects_maxf(normalized.lifetime_max, normalized.lifetime_min);
+    normalized.size_start = sdl3d_effects_maxf(normalized.size_start, 0.0f);
+    normalized.size_end = sdl3d_effects_maxf(normalized.size_end, 0.0f);
+    normalized.emit_rate = sdl3d_effects_maxf(normalized.emit_rate, 0.0f);
+    normalized.spread = sdl3d_effects_clampf(normalized.spread, 0.0f, SDL_PI_F);
+    normalized.extents.x = sdl3d_effects_absf(normalized.extents.x);
+    normalized.extents.y = sdl3d_effects_absf(normalized.extents.y);
+    normalized.extents.z = sdl3d_effects_absf(normalized.extents.z);
+    normalized.radius = sdl3d_effects_absf(normalized.radius);
+    normalized.emissive_intensity = sdl3d_effects_maxf(normalized.emissive_intensity, 0.0f);
+    if (normalized.shape < SDL3D_PARTICLE_EMITTER_POINT || normalized.shape > SDL3D_PARTICLE_EMITTER_CIRCLE)
+    {
+        normalized.shape = SDL3D_PARTICLE_EMITTER_POINT;
+    }
+    return normalized;
+}
+
+static bool sdl3d_particle_emitter_apply_config(sdl3d_particle_emitter *emitter, const sdl3d_particle_config *config,
+                                                bool preserve_particles)
+{
+    sdl3d_particle_config normalized;
+    sdl3d_particle *particles = NULL;
+
+    if (emitter == NULL)
+    {
+        return SDL_InvalidParamError("emitter");
+    }
+    if (config == NULL)
+    {
+        return SDL_InvalidParamError("config");
+    }
+
+    normalized = sdl3d_particle_config_normalized(config);
+    if (normalized.max_particles != emitter->config.max_particles)
+    {
+        particles = (sdl3d_particle *)SDL_calloc((size_t)normalized.max_particles, sizeof(*particles));
+        if (particles == NULL)
+        {
+            return SDL_OutOfMemory();
+        }
+
+        if (preserve_particles && emitter->particles != NULL)
+        {
+            const int copy_count =
+                emitter->count < normalized.max_particles ? emitter->count : normalized.max_particles;
+            SDL_memcpy(particles, emitter->particles, (size_t)copy_count * sizeof(*particles));
+            emitter->count = copy_count;
+        }
+        else
+        {
+            emitter->count = 0;
+        }
+
+        SDL_free(emitter->particles);
+        emitter->particles = particles;
+    }
+    else if (!preserve_particles)
+    {
+        SDL_memset(emitter->particles, 0, (size_t)normalized.max_particles * sizeof(*emitter->particles));
+        emitter->count = 0;
+    }
+
+    emitter->config = normalized;
+    emitter->deterministic_rng = normalized.random_seed != 0;
+    emitter->rng_state = normalized.random_seed != 0 ? normalized.random_seed : 0;
+    if (!preserve_particles)
+    {
+        emitter->emit_accumulator = 0.0f;
+    }
+    return true;
 }
 
 sdl3d_particle_emitter *sdl3d_create_particle_emitter(const sdl3d_particle_config *config)
 {
     sdl3d_particle_emitter *em;
-    int max;
 
     if (config == NULL)
     {
@@ -61,17 +203,12 @@ sdl3d_particle_emitter *sdl3d_create_particle_emitter(const sdl3d_particle_confi
         return NULL;
     }
 
-    em->config = *config;
-    max = config->max_particles > 0 ? config->max_particles : 128;
-    em->particles = (sdl3d_particle *)SDL_calloc((size_t)max, sizeof(sdl3d_particle));
-    if (em->particles == NULL)
+    if (!sdl3d_particle_emitter_apply_config(em, config, false))
     {
         SDL_free(em);
-        SDL_OutOfMemory();
         return NULL;
     }
 
-    em->config.max_particles = max;
     return em;
 }
 
@@ -93,6 +230,54 @@ void sdl3d_particle_emitter_set_position(sdl3d_particle_emitter *emitter, sdl3d_
     }
 }
 
+bool sdl3d_particle_emitter_set_config(sdl3d_particle_emitter *emitter, const sdl3d_particle_config *config)
+{
+    return sdl3d_particle_emitter_apply_config(emitter, config, true);
+}
+
+const sdl3d_particle_config *sdl3d_particle_emitter_get_config(const sdl3d_particle_emitter *emitter)
+{
+    return emitter != NULL ? &emitter->config : NULL;
+}
+
+void sdl3d_particle_emitter_clear(sdl3d_particle_emitter *emitter)
+{
+    if (emitter == NULL)
+    {
+        return;
+    }
+
+    SDL_memset(emitter->particles, 0, (size_t)emitter->config.max_particles * sizeof(*emitter->particles));
+    emitter->count = 0;
+    emitter->emit_accumulator = 0.0f;
+}
+
+static sdl3d_vec3 sdl3d_particle_spawn_position(sdl3d_particle_emitter *em)
+{
+    sdl3d_vec3 position = em->config.position;
+
+    switch (em->config.shape)
+    {
+    case SDL3D_PARTICLE_EMITTER_BOX:
+        position.x += sdl3d_randf_range(em, -em->config.extents.x, em->config.extents.x);
+        position.y += sdl3d_randf_range(em, -em->config.extents.y, em->config.extents.y);
+        position.z += sdl3d_randf_range(em, -em->config.extents.z, em->config.extents.z);
+        break;
+    case SDL3D_PARTICLE_EMITTER_CIRCLE: {
+        const float angle = sdl3d_particle_randf(em) * SDL_PI_F * 2.0f;
+        const float radius = SDL_sqrtf(sdl3d_particle_randf(em)) * em->config.radius;
+        position.x += SDL_cosf(angle) * radius;
+        position.z += SDL_sinf(angle) * radius;
+        break;
+    }
+    case SDL3D_PARTICLE_EMITTER_POINT:
+    default:
+        break;
+    }
+
+    return position;
+}
+
 static void sdl3d_emit_one(sdl3d_particle_emitter *em)
 {
     int i;
@@ -110,12 +295,16 @@ static void sdl3d_emit_one(sdl3d_particle_emitter *em)
 
     {
         sdl3d_particle *p = &em->particles[i];
-        float speed = sdl3d_randf_range(em->config.speed_min, em->config.speed_max);
-        float theta = sdl3d_randf() * 6.28318f;
-        float phi = sdl3d_randf() * em->config.spread;
+        float speed = sdl3d_randf_range(em, em->config.speed_min, em->config.speed_max);
+        float theta = sdl3d_particle_randf(em) * SDL_PI_F * 2.0f;
+        float phi = sdl3d_particle_randf(em) * em->config.spread;
         float sp = SDL_sinf(phi);
 
         sdl3d_vec3 dir = sdl3d_vec3_normalize(em->config.direction);
+        if (sdl3d_vec3_length_squared(dir) <= 0.000001f)
+        {
+            dir = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+        }
         /* Build a random direction within the cone. */
         sdl3d_vec3 up = (SDL_fabsf(dir.y) < 0.99f) ? sdl3d_vec3_make(0, 1, 0) : sdl3d_vec3_make(1, 0, 0);
         sdl3d_vec3 right = sdl3d_vec3_normalize(sdl3d_vec3_cross(up, dir));
@@ -126,10 +315,10 @@ static void sdl3d_emit_one(sdl3d_particle_emitter *em)
         offset.y = dir.y * SDL_cosf(phi) + right.y * sp * SDL_cosf(theta) + fwd.y * sp * SDL_sinf(theta);
         offset.z = dir.z * SDL_cosf(phi) + right.z * sp * SDL_cosf(theta) + fwd.z * sp * SDL_sinf(theta);
 
-        p->position = em->config.position;
+        p->position = sdl3d_particle_spawn_position(em);
         p->velocity = sdl3d_vec3_scale(offset, speed);
         p->lifetime = 0.0f;
-        p->max_lifetime = sdl3d_randf_range(em->config.lifetime_min, em->config.lifetime_max);
+        p->max_lifetime = sdl3d_randf_range(em, em->config.lifetime_min, em->config.lifetime_max);
         if (p->max_lifetime < 0.001f)
         {
             p->max_lifetime = 0.001f;
@@ -210,6 +399,127 @@ int sdl3d_particle_emitter_get_count(const sdl3d_particle_emitter *emitter)
     return live;
 }
 
+int sdl3d_particle_emitter_snapshot(const sdl3d_particle_emitter *emitter, sdl3d_particle_snapshot *out_particles,
+                                    int max_particles)
+{
+    int live = 0;
+    int copied = 0;
+
+    if (emitter == NULL)
+    {
+        return 0;
+    }
+
+    for (int i = 0; i < emitter->count; ++i)
+    {
+        const sdl3d_particle *p = &emitter->particles[i];
+        if (!p->alive)
+        {
+            continue;
+        }
+
+        if (out_particles != NULL && copied < max_particles)
+        {
+            out_particles[copied].position = p->position;
+            out_particles[copied].velocity = p->velocity;
+            out_particles[copied].lifetime = p->lifetime;
+            out_particles[copied].max_lifetime = p->max_lifetime;
+            out_particles[copied].alive = p->alive;
+            ++copied;
+        }
+        ++live;
+    }
+
+    return live;
+}
+
+static Uint8 sdl3d_particle_lerp_u8(Uint8 a, Uint8 b, float t)
+{
+    return (Uint8)((float)a + ((float)b - (float)a) * t + 0.5f);
+}
+
+static bool sdl3d_draw_particle_quad(sdl3d_render_context *context, const sdl3d_particle_config *config,
+                                     const sdl3d_particle *particle, float size, sdl3d_color color)
+{
+    sdl3d_vec3 right = sdl3d_effects_camera_right(context);
+    sdl3d_vec3 up;
+    sdl3d_vec3 normal;
+    const float half = size * 0.5f;
+    float positions[12];
+    float normals[12];
+    float uvs[8] = {0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f};
+    float colors[16];
+    unsigned int indices[12] = {0, 1, 2, 2, 1, 3, 2, 1, 0, 3, 1, 2};
+    sdl3d_mesh mesh;
+
+    if (size <= 0.0f || color.a == 0)
+    {
+        return true;
+    }
+
+    if (config->camera_facing)
+    {
+        up = sdl3d_effects_camera_up(context);
+    }
+    else
+    {
+        const sdl3d_vec3 world_up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+        sdl3d_vec3 forward = sdl3d_effects_camera_forward(context);
+        forward.y = 0.0f;
+        if (sdl3d_vec3_length_squared(forward) <= 0.000001f)
+        {
+            forward = sdl3d_vec3_make(0.0f, 0.0f, -1.0f);
+        }
+        else
+        {
+            forward = sdl3d_vec3_normalize(forward);
+        }
+        right = sdl3d_vec3_normalize(sdl3d_vec3_cross(forward, world_up));
+        if (sdl3d_vec3_length_squared(right) <= 0.000001f)
+        {
+            right = sdl3d_vec3_make(1.0f, 0.0f, 0.0f);
+        }
+        up = world_up;
+    }
+    normal = sdl3d_vec3_normalize(sdl3d_vec3_cross(right, up));
+
+    {
+        const sdl3d_vec3 scaled_right = sdl3d_vec3_scale(right, half);
+        const sdl3d_vec3 scaled_up = sdl3d_vec3_scale(up, half);
+        const sdl3d_vec3 verts[4] = {
+            sdl3d_vec3_sub(sdl3d_vec3_sub(particle->position, scaled_right), scaled_up),
+            sdl3d_vec3_add(sdl3d_vec3_sub(particle->position, scaled_right), scaled_up),
+            sdl3d_vec3_sub(sdl3d_vec3_add(particle->position, scaled_right), scaled_up),
+            sdl3d_vec3_add(sdl3d_vec3_add(particle->position, scaled_right), scaled_up),
+        };
+
+        for (int i = 0; i < 4; ++i)
+        {
+            positions[i * 3 + 0] = verts[i].x;
+            positions[i * 3 + 1] = verts[i].y;
+            positions[i * 3 + 2] = verts[i].z;
+            normals[i * 3 + 0] = normal.x;
+            normals[i * 3 + 1] = normal.y;
+            normals[i * 3 + 2] = normal.z;
+            colors[i * 4 + 0] = (float)color.r / 255.0f;
+            colors[i * 4 + 1] = (float)color.g / 255.0f;
+            colors[i * 4 + 2] = (float)color.b / 255.0f;
+            colors[i * 4 + 3] = (float)color.a / 255.0f;
+        }
+    }
+
+    SDL_zero(mesh);
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.uvs = uvs;
+    mesh.colors = colors;
+    mesh.vertex_count = 4;
+    mesh.indices = indices;
+    mesh.index_count = 12;
+
+    return sdl3d_draw_mesh(context, &mesh, config->texture, (sdl3d_color){255, 255, 255, 255});
+}
+
 bool sdl3d_draw_particles(sdl3d_render_context *context, const sdl3d_particle_emitter *emitter)
 {
     if (context == NULL)
@@ -221,6 +531,14 @@ bool sdl3d_draw_particles(sdl3d_render_context *context, const sdl3d_particle_em
         return true;
     }
 
+    const float previous_emissive[3] = {context->emissive[0], context->emissive[1], context->emissive[2]};
+    if (emitter->config.emissive_intensity > 0.0f)
+    {
+        sdl3d_set_emissive(context, emitter->config.emissive_intensity, emitter->config.emissive_intensity,
+                           emitter->config.emissive_intensity);
+    }
+
+    bool ok = true;
     for (int i = 0; i < emitter->count; ++i)
     {
         const sdl3d_particle *p = &emitter->particles[i];
@@ -233,22 +551,23 @@ bool sdl3d_draw_particles(sdl3d_render_context *context, const sdl3d_particle_em
         }
 
         t = p->lifetime / p->max_lifetime;
+        t = sdl3d_effects_clampf(t, 0.0f, 1.0f);
         size = emitter->config.size_start + (emitter->config.size_end - emitter->config.size_start) * t;
 
-        color.r = (Uint8)((float)emitter->config.color_start.r +
-                          (float)(emitter->config.color_end.r - emitter->config.color_start.r) * t);
-        color.g = (Uint8)((float)emitter->config.color_start.g +
-                          (float)(emitter->config.color_end.g - emitter->config.color_start.g) * t);
-        color.b = (Uint8)((float)emitter->config.color_start.b +
-                          (float)(emitter->config.color_end.b - emitter->config.color_start.b) * t);
-        color.a = (Uint8)((float)emitter->config.color_start.a +
-                          (float)(emitter->config.color_end.a - emitter->config.color_start.a) * t);
+        color.r = sdl3d_particle_lerp_u8(emitter->config.color_start.r, emitter->config.color_end.r, t);
+        color.g = sdl3d_particle_lerp_u8(emitter->config.color_start.g, emitter->config.color_end.g, t);
+        color.b = sdl3d_particle_lerp_u8(emitter->config.color_start.b, emitter->config.color_end.b, t);
+        color.a = sdl3d_particle_lerp_u8(emitter->config.color_start.a, emitter->config.color_end.a, t);
 
-        /* Draw as a small cube billboard (cheap, visible from all angles). */
-        sdl3d_draw_cube(context, p->position, sdl3d_vec3_make(size, size, size), color);
+        ok = sdl3d_draw_particle_quad(context, &emitter->config, p, size, color) && ok;
     }
 
-    return true;
+    if (emitter->config.emissive_intensity > 0.0f)
+    {
+        sdl3d_set_emissive(context, previous_emissive[0], previous_emissive[1], previous_emissive[2]);
+    }
+
+    return ok;
 }
 
 /* ------------------------------------------------------------------ */
