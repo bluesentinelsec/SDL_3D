@@ -207,12 +207,13 @@ extern "C"
     void sdl3d_input_process_event(sdl3d_input_manager *input, const SDL_Event *event);
 
     /**
-     * @brief Build the current tick's action snapshot.
+     * @brief Build the current action snapshot.
      *
      * If demo playback is active, this returns the next recorded snapshot.
      * Otherwise it evaluates live bindings, records the snapshot if a recorder
      * is active, resets transient accumulators, and returns a pointer valid
-     * until the next update.
+     * until the next update. The tick argument is copied into the snapshot for
+     * synchronization with the caller's simulation timeline.
      */
     const sdl3d_input_snapshot *sdl3d_input_update(sdl3d_input_manager *input, int tick);
 
@@ -253,7 +254,14 @@ extern "C"
     /* Default bindings                                                    */
     /* ================================================================== */
 
-    /** @brief Register and bind the standard first-person action set. */
+    /**
+     * @brief Register and bind the standard first-person action set.
+     *
+     * Registers movement, look, jump, fire, interaction, menu, and pause
+     * actions. The pause action is bound to Return, keypad Return, P, and the
+     * gamepad Start button so games can provide a conventional pause toggle on
+     * keyboard and controller.
+     */
     void sdl3d_input_bind_fps_defaults(sdl3d_input_manager *input);
 
     /** @brief Register and bind the standard UI navigation action set. */

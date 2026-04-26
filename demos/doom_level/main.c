@@ -32,6 +32,9 @@ typedef struct doom_state
     sdl3d_ui_context *ui;
     sdl3d_demo_player *demo_player;
     sdl3d_backend current_backend;
+    int action_pause;
+    int action_menu;
+    float pause_flash_timer;
     bool has_font;
     bool level_ready;
     bool entities_ready;
@@ -90,12 +93,37 @@ static void on_fade_out_done(void *userdata, int signal_id, const sdl3d_properti
     ctx->quit_requested = true;
 }
 
+static void start_quit_fade(sdl3d_game_context *ctx, doom_state *state)
+{
+    if (state->quit_pending)
+    {
+        return;
+    }
+
+    state->quit_pending = true;
+    sdl3d_transition_start(&state->transition, SDL3D_TRANSITION_FADE, SDL3D_TRANSITION_OUT, (sdl3d_color){0, 0, 0, 255},
+                           0.5f, SIG_FADE_OUT_DONE);
+}
+
+static void toggle_pause(sdl3d_game_context *ctx, doom_state *state)
+{
+    if (state->quit_pending)
+    {
+        return;
+    }
+
+    ctx->paused = !ctx->paused;
+    state->pause_flash_timer = 0.0f;
+}
+
 static bool game_init(sdl3d_game_context *ctx, void *userdata)
 {
     doom_state *state = (doom_state *)userdata;
 
     state->current_backend = sdl3d_get_render_context_backend(ctx->renderer);
     sdl3d_input_bind_fps_defaults(ctx->input);
+    state->action_pause = sdl3d_input_find_action(ctx->input, "pause");
+    state->action_menu = sdl3d_input_find_action(ctx->input, "menu");
     apply_window_defaults(ctx);
 
     if (sdl3d_signal_connect(ctx->bus, SIG_FADE_OUT_DONE, on_fade_out_done, ctx) == 0)
@@ -167,6 +195,11 @@ static bool game_event(sdl3d_game_context *ctx, void *userdata, const SDL_Event 
 
     sdl3d_ui_process_event(state->ui, event);
 
+    if (ctx->paused)
+    {
+        return true;
+    }
+
     if (event->type == SDL_EVENT_KEY_DOWN && event->key.scancode == SDL_SCANCODE_L)
     {
         state->level.use_lit = !state->level.use_lit;
@@ -197,6 +230,12 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 {
     doom_state *state = (doom_state *)userdata;
 
+    if (sdl3d_input_is_pressed(ctx->input, state->action_pause))
+    {
+        toggle_pause(ctx, state);
+        return;
+    }
+
     if (state->demo_player != NULL && sdl3d_demo_playback_finished(state->demo_player))
     {
         stop_demo_playback(ctx, state);
@@ -206,13 +245,60 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     entities_update(&state->ent, dt, state->player.mover.position);
     if (!player_update(&state->player, ctx->input, &state->level.unlit, g_sectors, dt))
     {
-        if (!state->quit_pending)
-        {
-            state->quit_pending = true;
-            sdl3d_transition_start(&state->transition, SDL3D_TRANSITION_FADE, SDL3D_TRANSITION_OUT,
-                                   (sdl3d_color){0, 0, 0, 255}, 0.5f, SIG_FADE_OUT_DONE);
-        }
+        start_quit_fade(ctx, state);
     }
+}
+
+static void game_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_dt)
+{
+    doom_state *state = (doom_state *)userdata;
+
+    if (sdl3d_input_is_pressed(ctx->input, state->action_pause))
+    {
+        toggle_pause(ctx, state);
+        return;
+    }
+    if (sdl3d_input_is_pressed(ctx->input, state->action_menu))
+    {
+        start_quit_fade(ctx, state);
+    }
+
+    state->pause_flash_timer += real_dt * 2.0f;
+    while (state->pause_flash_timer >= 1.0f)
+    {
+        state->pause_flash_timer -= 1.0f;
+    }
+
+    if (state->quit_pending)
+    {
+        sdl3d_transition_update(&state->transition, ctx->bus, real_dt);
+    }
+}
+
+static void draw_pause_overlay(sdl3d_game_context *ctx, doom_state *state)
+{
+    const int width = sdl3d_get_render_context_width(ctx->renderer);
+    const int height = sdl3d_get_render_context_height(ctx->renderer);
+
+    if (width <= 0 || height <= 0)
+    {
+        return;
+    }
+
+    sdl3d_draw_rect_overlay(ctx->renderer, 0.0f, 0.0f, (float)width, (float)height, (sdl3d_color){0, 0, 0, 128});
+
+    if (state->pause_flash_timer >= 0.5f || !state->has_font)
+    {
+        return;
+    }
+
+    float text_width = 0.0f;
+    float text_height = 0.0f;
+    sdl3d_measure_text(&state->debug_font, "PAUSED", &text_width, &text_height);
+    const float text_x = ((float)width - text_width) * 0.5f;
+    const float text_y = ((float)height - text_height) * 0.5f;
+    sdl3d_draw_text_overlay(ctx->renderer, &state->debug_font, "PAUSED", text_x, text_y,
+                            (sdl3d_color){255, 255, 255, 255});
 }
 
 static void game_render(sdl3d_game_context *ctx, void *userdata, float alpha)
@@ -224,6 +310,10 @@ static void game_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     render_draw_frame(&state->render, ctx->renderer, state->has_font ? &state->debug_font : NULL, state->ui,
                       &state->level, &state->ent, &state->player, WINDOW_W, WINDOW_H, frame_dt);
     sdl3d_transition_draw(&state->transition, ctx->renderer);
+    if (ctx->paused && !state->quit_pending)
+    {
+        draw_pause_overlay(ctx, state);
+    }
 }
 
 static void game_shutdown(sdl3d_game_context *ctx, void *userdata)
@@ -251,6 +341,7 @@ int main(int argc, char *argv[])
     callbacks.init = game_init;
     callbacks.event = game_event;
     callbacks.tick = game_tick;
+    callbacks.pause_tick = game_pause_tick;
     callbacks.render = game_render;
     callbacks.shutdown = game_shutdown;
 

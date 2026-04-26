@@ -40,6 +40,11 @@ int run_test_game(const sdl3d_game_callbacks *callbacks, void *userdata)
     return sdl3d_run_game(&config, callbacks, userdata);
 }
 
+int run_test_game_with_config(const sdl3d_game_config *config, const sdl3d_game_callbacks *callbacks, void *userdata)
+{
+    return sdl3d_run_game(config, callbacks, userdata);
+}
+
 struct GameTestState
 {
     bool init_called = false;
@@ -52,11 +57,17 @@ struct GameTestState
     bool saw_time_update = false;
     bool saw_quit_event_in_callback = false;
     bool saw_input_action_in_tick = false;
+    bool saw_input_action_while_paused = false;
     int input_action = -1;
     int tick_count = 0;
+    int context_tick_count = 0;
+    int input_pressed_tick_count = 0;
+    int pause_tick_count = 0;
     int render_count = 0;
     float tick_dt = 0.0f;
+    float pause_dt = 0.0f;
     float last_alpha = -1.0f;
+    float first_unpaused_alpha = -1.0f;
 };
 
 bool quit_in_init(sdl3d_game_context *ctx, void *userdata)
@@ -197,6 +208,49 @@ bool bind_and_push_input_in_init(sdl3d_game_context *ctx, void *userdata)
     return true;
 }
 
+bool bind_input_in_init(sdl3d_game_context *ctx, void *userdata)
+{
+    auto *state = static_cast<GameTestState *>(userdata);
+    state->input_action = sdl3d_input_register_action(ctx->input, "jump");
+    sdl3d_input_bind_key(ctx->input, state->input_action, SDL_SCANCODE_SPACE);
+    return true;
+}
+
+bool pause_in_init(sdl3d_game_context *ctx, void *userdata)
+{
+    auto *state = static_cast<GameTestState *>(userdata);
+    state->init_called = true;
+    ctx->paused = true;
+    return true;
+}
+
+bool pause_and_start_timer_in_init(sdl3d_game_context *ctx, void *userdata)
+{
+    auto *state = static_cast<GameTestState *>(userdata);
+    state->init_called = true;
+    ctx->paused = true;
+    sdl3d_signal_connect(ctx->bus, kTimerSignal, timer_handler, state);
+    sdl3d_timer_start(ctx->timers, kFastFixedDt, kTimerSignal, false, 0.0f);
+    return true;
+}
+
+bool pause_and_push_input_in_init(sdl3d_game_context *ctx, void *userdata)
+{
+    bind_and_push_input_in_init(ctx, userdata);
+    ctx->paused = true;
+    return true;
+}
+
+bool pause_and_bind_pause_input_in_init(sdl3d_game_context *ctx, void *userdata)
+{
+    auto *state = static_cast<GameTestState *>(userdata);
+    state->init_called = true;
+    state->input_action = sdl3d_input_register_action(ctx->input, "pause");
+    sdl3d_input_bind_key(ctx->input, state->input_action, SDL_SCANCODE_RETURN);
+    ctx->paused = true;
+    return true;
+}
+
 void quit_after_input_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 {
     (void)dt;
@@ -205,6 +259,31 @@ void quit_after_input_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     state->saw_input_action_in_tick =
         sdl3d_input_is_pressed(ctx->input, state->input_action) && sdl3d_input_is_held(ctx->input, state->input_action);
     ctx->quit_requested = true;
+}
+
+void quit_after_post_render_input_tick(sdl3d_game_context *ctx, void *userdata, float dt)
+{
+    auto *state = static_cast<GameTestState *>(userdata);
+    if (state->render_count == 0)
+    {
+        return;
+    }
+    quit_after_input_tick(ctx, userdata, dt);
+}
+
+void count_input_pressed_ticks(sdl3d_game_context *ctx, void *userdata, float dt)
+{
+    (void)dt;
+    auto *state = static_cast<GameTestState *>(userdata);
+    state->tick_count++;
+    if (sdl3d_input_is_pressed(ctx->input, state->input_action))
+    {
+        state->input_pressed_tick_count++;
+    }
+    if (state->tick_count >= 3)
+    {
+        ctx->quit_requested = true;
+    }
 }
 
 void stop_after_many_null_frames(sdl3d_game_context *ctx, void *userdata, float alpha)
@@ -216,6 +295,136 @@ void stop_after_many_null_frames(sdl3d_game_context *ctx, void *userdata, float 
     {
         ctx->quit_requested = true;
     }
+}
+
+void push_input_on_first_render(sdl3d_game_context *ctx, void *userdata, float alpha)
+{
+    (void)alpha;
+    auto *state = static_cast<GameTestState *>(userdata);
+    state->render_count++;
+
+    if (state->render_count == 1)
+    {
+        SDL_Event event{};
+        event.type = SDL_EVENT_KEY_DOWN;
+        event.key.scancode = SDL_SCANCODE_SPACE;
+        SDL_PushEvent(&event);
+    }
+    if (state->render_count >= 4096)
+    {
+        ctx->quit_requested = true;
+    }
+}
+
+void count_tick_without_quit(sdl3d_game_context *ctx, void *userdata, float dt)
+{
+    (void)ctx;
+    auto *state = static_cast<GameTestState *>(userdata);
+    state->tick_count++;
+    state->tick_dt = dt;
+}
+
+void count_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_dt)
+{
+    (void)ctx;
+    auto *state = static_cast<GameTestState *>(userdata);
+    state->pause_tick_count++;
+    state->pause_dt = real_dt;
+}
+
+void unpause_after_one_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_dt)
+{
+    count_pause_tick(ctx, userdata, real_dt);
+    ctx->paused = false;
+}
+
+void push_pause_input_then_unpause_from_snapshot(sdl3d_game_context *ctx, void *userdata, float real_dt)
+{
+    count_pause_tick(ctx, userdata, real_dt);
+    auto *state = static_cast<GameTestState *>(userdata);
+
+    if (state->pause_tick_count == 1)
+    {
+        SDL_Event event{};
+        event.type = SDL_EVENT_KEY_DOWN;
+        event.key.scancode = SDL_SCANCODE_RETURN;
+        SDL_PushEvent(&event);
+        return;
+    }
+
+    if (sdl3d_input_is_pressed(ctx->input, state->input_action))
+    {
+        state->saw_input_action_in_tick = true;
+        ctx->paused = false;
+    }
+}
+
+void delay_then_unpause(sdl3d_game_context *ctx, void *userdata, float real_dt)
+{
+    count_pause_tick(ctx, userdata, real_dt);
+    if (static_cast<GameTestState *>(userdata)->pause_tick_count >= 4)
+    {
+        ctx->paused = false;
+        return;
+    }
+
+    SDL_Delay(20);
+}
+
+void quit_after_three_paused_renders(sdl3d_game_context *ctx, void *userdata, float alpha)
+{
+    auto *state = static_cast<GameTestState *>(userdata);
+    state->render_called = true;
+    state->render_count++;
+    state->last_alpha = alpha;
+    state->context_tick_count = ctx->tick_count;
+    if (state->render_count >= 3)
+    {
+        ctx->quit_requested = true;
+    }
+}
+
+void quit_after_first_unpaused_tick_render(sdl3d_game_context *ctx, void *userdata, float alpha)
+{
+    auto *state = static_cast<GameTestState *>(userdata);
+    state->render_called = true;
+    state->render_count++;
+    state->last_alpha = alpha;
+    state->context_tick_count = ctx->tick_count;
+    if (!ctx->paused && ctx->tick_count > 0)
+    {
+        ctx->quit_requested = true;
+    }
+    if (state->render_count >= 128)
+    {
+        ctx->quit_requested = true;
+    }
+}
+
+void quit_after_first_unpaused_render(sdl3d_game_context *ctx, void *userdata, float alpha)
+{
+    auto *state = static_cast<GameTestState *>(userdata);
+    state->render_called = true;
+    state->render_count++;
+    state->last_alpha = alpha;
+    state->context_tick_count = ctx->tick_count;
+    if (!ctx->paused)
+    {
+        state->first_unpaused_alpha = alpha;
+        ctx->quit_requested = true;
+    }
+    if (state->render_count >= 128)
+    {
+        ctx->quit_requested = true;
+    }
+}
+
+void record_paused_input_snapshot(sdl3d_game_context *ctx, void *userdata, float alpha)
+{
+    quit_after_three_paused_renders(ctx, userdata, alpha);
+    auto *state = static_cast<GameTestState *>(userdata);
+    state->saw_input_action_while_paused =
+        sdl3d_input_is_pressed(ctx->input, state->input_action) || sdl3d_input_is_held(ctx->input, state->input_action);
 }
 } // namespace
 
@@ -337,6 +546,40 @@ TEST(ManagedGameLoop, InputManagerProcessesEventsBeforeTick)
     EXPECT_TRUE(state.saw_input_action_in_tick);
 }
 
+TEST(ManagedGameLoop, InputPressedEdgeIsNotRepeatedAcrossCatchUpTicks)
+{
+    GameTestState state;
+    sdl3d_game_config config = test_config();
+    config.max_ticks_per_frame = 4;
+
+    sdl3d_game_callbacks callbacks{};
+    callbacks.init = bind_and_push_input_in_init;
+    callbacks.tick = count_input_pressed_ticks;
+    callbacks.render = stop_after_many_null_frames;
+
+    EXPECT_EQ(0, run_test_game_with_config(&config, &callbacks, &state));
+    EXPECT_GE(state.tick_count, 3);
+    EXPECT_EQ(state.input_pressed_tick_count, 1);
+}
+
+TEST(ManagedGameLoop, InputPressedEdgeWaitsForNextFixedTick)
+{
+    GameTestState state;
+    sdl3d_game_config config = test_config();
+    config.tick_rate = 0.05f;
+    config.max_ticks_per_frame = 1;
+
+    sdl3d_game_callbacks callbacks{};
+    callbacks.init = bind_input_in_init;
+    callbacks.tick = quit_after_post_render_input_tick;
+    callbacks.render = push_input_on_first_render;
+
+    EXPECT_EQ(0, run_test_game_with_config(&config, &callbacks, &state));
+    EXPECT_GE(state.render_count, 1);
+    EXPECT_EQ(state.tick_count, 1);
+    EXPECT_TRUE(state.saw_input_action_in_tick);
+}
+
 TEST(ManagedGameLoop, QuitRequestedFromTickExitsAndRunsShutdown)
 {
     GameTestState state;
@@ -371,4 +614,118 @@ TEST(ManagedGameLoop, DefaultConfigValues)
 
     EXPECT_EQ(0, sdl3d_run_game(&config, &callbacks, &state));
     EXPECT_TRUE(state.saw_default_config);
+}
+
+TEST(ManagedGameLoop, PauseStopsTickingButStillRenders)
+{
+    GameTestState state;
+    sdl3d_game_callbacks callbacks{};
+    callbacks.init = pause_in_init;
+    callbacks.tick = count_tick_without_quit;
+    callbacks.render = quit_after_three_paused_renders;
+
+    EXPECT_EQ(0, run_test_game(&callbacks, &state));
+    EXPECT_TRUE(state.init_called);
+    EXPECT_TRUE(state.render_called);
+    EXPECT_GE(state.render_count, 3);
+    EXPECT_EQ(0, state.tick_count);
+    EXPECT_EQ(0, state.context_tick_count);
+    EXPECT_FLOAT_EQ(0.0f, state.last_alpha);
+}
+
+TEST(ManagedGameLoop, PauseTickRunsWithWallClockDelta)
+{
+    GameTestState state;
+    sdl3d_game_callbacks callbacks{};
+    callbacks.init = pause_in_init;
+    callbacks.pause_tick = count_pause_tick;
+    callbacks.render = quit_after_three_paused_renders;
+
+    EXPECT_EQ(0, run_test_game(&callbacks, &state));
+    EXPECT_GE(state.pause_tick_count, 1);
+    EXPECT_GE(state.pause_dt, 0.0f);
+}
+
+TEST(ManagedGameLoop, UnpauseResumesFixedTicks)
+{
+    GameTestState state;
+    sdl3d_game_callbacks callbacks{};
+    callbacks.init = pause_in_init;
+    callbacks.pause_tick = unpause_after_one_pause_tick;
+    callbacks.tick = count_tick_without_quit;
+    callbacks.render = quit_after_first_unpaused_tick_render;
+
+    EXPECT_EQ(0, run_test_game(&callbacks, &state));
+    EXPECT_GE(state.pause_tick_count, 1);
+    EXPECT_GE(state.tick_count, 1);
+    EXPECT_GE(state.context_tick_count, 1);
+}
+
+TEST(ManagedGameLoop, AccumulatorDoesNotCatchUpAfterPause)
+{
+    GameTestState state;
+    sdl3d_game_config config = test_config();
+    config.tick_rate = kFastFixedDt;
+    config.max_ticks_per_frame = 8;
+
+    sdl3d_game_callbacks callbacks{};
+    callbacks.init = pause_in_init;
+    callbacks.pause_tick = delay_then_unpause;
+    callbacks.tick = count_tick_without_quit;
+    callbacks.render = quit_after_first_unpaused_render;
+
+    EXPECT_EQ(0, run_test_game_with_config(&config, &callbacks, &state));
+    EXPECT_GE(state.pause_tick_count, 4);
+    EXPECT_TRUE(state.render_called);
+    EXPECT_EQ(state.tick_count, 0);
+    EXPECT_EQ(state.context_tick_count, 0);
+    EXPECT_FLOAT_EQ(state.first_unpaused_alpha, 0.0f);
+}
+
+TEST(ManagedGameLoop, TimersDoNotAdvanceWhilePaused)
+{
+    GameTestState state;
+    sdl3d_game_callbacks callbacks{};
+    callbacks.init = pause_and_start_timer_in_init;
+    callbacks.render = quit_after_three_paused_renders;
+
+    EXPECT_EQ(0, run_test_game(&callbacks, &state));
+    EXPECT_FALSE(state.timer_fired);
+}
+
+TEST(ManagedGameLoop, InputSnapshotsUpdateWhilePaused)
+{
+    GameTestState state;
+    sdl3d_game_callbacks callbacks{};
+    callbacks.init = pause_and_push_input_in_init;
+    callbacks.render = record_paused_input_snapshot;
+
+    EXPECT_EQ(0, run_test_game(&callbacks, &state));
+    EXPECT_TRUE(state.saw_input_action_while_paused);
+}
+
+TEST(ManagedGameLoop, PauseTickCanUnpauseFromActionSnapshot)
+{
+    GameTestState state;
+    sdl3d_game_callbacks callbacks{};
+    callbacks.init = pause_and_bind_pause_input_in_init;
+    callbacks.pause_tick = push_pause_input_then_unpause_from_snapshot;
+    callbacks.render = quit_after_first_unpaused_render;
+
+    EXPECT_EQ(0, run_test_game(&callbacks, &state));
+    EXPECT_GE(state.pause_tick_count, 2);
+    EXPECT_TRUE(state.saw_input_action_in_tick);
+    EXPECT_GE(state.last_alpha, 0.0f);
+}
+
+TEST(ManagedGameLoop, NullPauseTickIsSafe)
+{
+    GameTestState state;
+    sdl3d_game_callbacks callbacks{};
+    callbacks.init = pause_in_init;
+    callbacks.render = quit_after_three_paused_renders;
+
+    EXPECT_EQ(0, run_test_game(&callbacks, &state));
+    EXPECT_GE(state.render_count, 3);
+    EXPECT_EQ(0, state.pause_tick_count);
 }

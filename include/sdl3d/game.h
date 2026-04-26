@@ -46,6 +46,7 @@ extern "C"
         float time;                     /**< Simulated game time advanced by fixed ticks. */
         float real_time;                /**< Wall-clock time accumulated by rendered frames. */
         int tick_count;                 /**< Total fixed ticks executed since startup. */
+        bool paused;                    /**< When true, fixed ticks and timer pools are frozen. */
         bool quit_requested;            /**< Set true from any callback to leave the loop. */
     } sdl3d_game_context;
 
@@ -86,8 +87,10 @@ extern "C"
          * @brief Called at the fixed simulation timestep.
          *
          * The dt value is always config.tick_rate seconds, or 1/60 by default.
-         * The managed loop updates ctx->input and ctx->timers before this
-         * callback. It does not call sdl3d_actor_registry_update automatically
+         * The managed loop updates ctx->input before each fixed tick so
+         * pressed/released edges stay buffered until gameplay consumes them. It
+         * updates ctx->timers before each tick. It does not call
+         * sdl3d_actor_registry_update automatically
          * because trigger tests need a game-defined point such as the player
          * position.
          *
@@ -96,6 +99,25 @@ extern "C"
          * @param dt       Fixed timestep in seconds.
          */
         void (*tick)(sdl3d_game_context *ctx, void *userdata, float dt);
+
+        /**
+         * @brief Called once per rendered frame while paused.
+         *
+         * Use this for pause-screen animation, menu transitions, and other
+         * visual-only work that should continue while simulation is frozen.
+         * The real_dt value is wall-clock time in seconds and is not affected
+         * by the fixed simulation timestep.
+         *
+         * While paused, the managed loop does not call tick and does not
+         * advance timer pools. SDL events are still processed and ctx->input is
+         * updated before this callback so games can drive pause menus and
+         * unpause through action bindings.
+         *
+         * @param ctx      Managed-loop context.
+         * @param userdata Caller-owned pointer passed to sdl3d_run_game.
+         * @param real_dt  Wall-clock delta time for the rendered frame.
+         */
+        void (*pause_tick)(sdl3d_game_context *ctx, void *userdata, float real_dt);
 
         /**
          * @brief Called once per rendered frame after fixed ticks.
@@ -144,8 +166,9 @@ extern "C"
      * Initializes SDL video, creates the window, render context, actor registry,
      * signal bus, timer pool, and input manager, then runs a fixed-timestep
      * simulation loop until quit is requested. The loop processes SDL events
-     * through the input manager, updates input and timers before each tick,
-     * calls sdl3d_time_update once per rendered frame, and presents the render
+     * through the input manager, updates input before pause callbacks and
+     * before each fixed tick, updates timers before each fixed tick, calls
+     * sdl3d_time_update once per rendered frame, and presents the render
      * context after each render callback.
      *
      * @param config    Optional configuration. NULL selects all defaults.

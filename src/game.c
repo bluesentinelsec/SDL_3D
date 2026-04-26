@@ -140,28 +140,41 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
         last_counter = now;
 
         ctx.real_time += frame_dt;
-        accumulator += frame_dt;
         sdl3d_time_update();
 
-        while (!ctx.quit_requested && accumulator >= fixed_dt && ticks_this_frame < max_ticks_per_frame)
+        if (ctx.paused)
         {
             sdl3d_input_update(ctx.input, ctx.tick_count);
-            sdl3d_timer_pool_update(ctx.timers, ctx.bus, fixed_dt);
-
-            if (callbacks != NULL && callbacks->tick != NULL)
+            if (callbacks != NULL && callbacks->pause_tick != NULL)
             {
-                callbacks->tick(&ctx, userdata, fixed_dt);
+                callbacks->pause_tick(&ctx, userdata, frame_dt);
+            }
+        }
+        else
+        {
+            accumulator += frame_dt;
+
+            while (!ctx.quit_requested && !ctx.paused && accumulator >= fixed_dt &&
+                   ticks_this_frame < max_ticks_per_frame)
+            {
+                sdl3d_input_update(ctx.input, ctx.tick_count);
+                sdl3d_timer_pool_update(ctx.timers, ctx.bus, fixed_dt);
+
+                if (callbacks != NULL && callbacks->tick != NULL)
+                {
+                    callbacks->tick(&ctx, userdata, fixed_dt);
+                }
+
+                ctx.time += fixed_dt;
+                ctx.tick_count++;
+                accumulator -= fixed_dt;
+                ticks_this_frame++;
             }
 
-            ctx.time += fixed_dt;
-            ctx.tick_count++;
-            accumulator -= fixed_dt;
-            ticks_this_frame++;
-        }
-
-        if (ticks_this_frame == max_ticks_per_frame && accumulator >= fixed_dt)
-        {
-            accumulator = SDL_fmodf(accumulator, fixed_dt);
+            if (ticks_this_frame == max_ticks_per_frame && accumulator >= fixed_dt)
+            {
+                accumulator = SDL_fmodf(accumulator, fixed_dt);
+            }
         }
 
         if (ctx.quit_requested)
@@ -171,7 +184,7 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
 
         if (callbacks != NULL && callbacks->render != NULL)
         {
-            float alpha = accumulator / fixed_dt;
+            float alpha = ctx.paused ? 0.0f : accumulator / fixed_dt;
             if (alpha > 1.0f)
             {
                 alpha = 1.0f;

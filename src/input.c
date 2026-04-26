@@ -61,6 +61,9 @@ struct sdl3d_input_manager
     bool mouse_down[SDL3D_INPUT_MAX_MOUSE_BUTTONS];
     bool mouse_pressed_this_frame[SDL3D_INPUT_MAX_MOUSE_BUTTONS];
     bool mouse_released_this_frame[SDL3D_INPUT_MAX_MOUSE_BUTTONS];
+    bool gamepad_button_down[SDL_GAMEPAD_BUTTON_COUNT];
+    bool gamepad_button_pressed_this_frame[SDL_GAMEPAD_BUTTON_COUNT];
+    bool gamepad_button_released_this_frame[SDL_GAMEPAD_BUTTON_COUNT];
 
     sdl3d_input_snapshot snapshot;
     bool prev_held[SDL3D_INPUT_MAX_ACTIONS];
@@ -155,6 +158,9 @@ static void sdl3d_input_close_gamepad(sdl3d_input_manager *input)
         SDL_CloseGamepad(input->gamepad);
         input->gamepad = NULL;
         input->gamepad_id = 0;
+        SDL_memset(input->gamepad_button_down, 0, sizeof(input->gamepad_button_down));
+        SDL_memset(input->gamepad_button_pressed_this_frame, 0, sizeof(input->gamepad_button_pressed_this_frame));
+        SDL_memset(input->gamepad_button_released_this_frame, 0, sizeof(input->gamepad_button_released_this_frame));
     }
 }
 
@@ -218,6 +224,11 @@ static float sdl3d_input_gamepad_axis_value(const sdl3d_input_manager *input, SD
 static bool sdl3d_input_mouse_button_valid(Uint8 button)
 {
     return button < SDL3D_INPUT_MAX_MOUSE_BUTTONS;
+}
+
+static bool sdl3d_input_gamepad_button_valid(SDL_GamepadButton button)
+{
+    return button >= 0 && button < SDL_GAMEPAD_BUTTON_COUNT;
 }
 
 static float sdl3d_input_mouse_axis_value(const sdl3d_input_manager *input, sdl3d_mouse_axis axis)
@@ -313,11 +324,14 @@ static float sdl3d_input_binding_value(const sdl3d_input_manager *input, const s
     case SDL3D_INPUT_MOUSE_AXIS:
         return sdl3d_input_axis_binding_value(input, binding, sdl3d_input_mouse_axis_value(input, binding->mouse_axis));
     case SDL3D_INPUT_GAMEPAD_BUTTON:
-        if (input->gamepad == NULL)
+        if (!sdl3d_input_gamepad_button_valid(binding->gamepad_button))
         {
             return 0.0f;
         }
-        return SDL_GetGamepadButton(input->gamepad, binding->gamepad_button) ? binding->scale : 0.0f;
+        return (input->gamepad_button_down[binding->gamepad_button] ||
+                (input->gamepad != NULL && SDL_GetGamepadButton(input->gamepad, binding->gamepad_button)))
+                   ? binding->scale
+                   : 0.0f;
     case SDL3D_INPUT_GAMEPAD_AXIS:
         return sdl3d_input_axis_binding_value(input, binding,
                                               sdl3d_input_gamepad_axis_value(input, binding->gamepad_axis));
@@ -346,6 +360,9 @@ static bool sdl3d_input_binding_pressed(const sdl3d_input_manager *input, const 
     case SDL3D_INPUT_MOUSE_BUTTON:
         return sdl3d_input_mouse_button_valid(binding->mouse_button) &&
                input->mouse_pressed_this_frame[binding->mouse_button];
+    case SDL3D_INPUT_GAMEPAD_BUTTON:
+        return sdl3d_input_gamepad_button_valid(binding->gamepad_button) &&
+               input->gamepad_button_pressed_this_frame[binding->gamepad_button];
     default:
         return false;
     }
@@ -368,6 +385,9 @@ static bool sdl3d_input_binding_released(const sdl3d_input_manager *input, const
     case SDL3D_INPUT_MOUSE_BUTTON:
         return sdl3d_input_mouse_button_valid(binding->mouse_button) &&
                input->mouse_released_this_frame[binding->mouse_button];
+    case SDL3D_INPUT_GAMEPAD_BUTTON:
+        return sdl3d_input_gamepad_button_valid(binding->gamepad_button) &&
+               input->gamepad_button_released_this_frame[binding->gamepad_button];
     default:
         return false;
     }
@@ -390,6 +410,8 @@ static void sdl3d_input_reset_transients(sdl3d_input_manager *input)
     SDL_memset(input->key_released_modifiers_this_frame, 0, sizeof(input->key_released_modifiers_this_frame));
     SDL_memset(input->mouse_pressed_this_frame, 0, sizeof(input->mouse_pressed_this_frame));
     SDL_memset(input->mouse_released_this_frame, 0, sizeof(input->mouse_released_this_frame));
+    SDL_memset(input->gamepad_button_pressed_this_frame, 0, sizeof(input->gamepad_button_pressed_this_frame));
+    SDL_memset(input->gamepad_button_released_this_frame, 0, sizeof(input->gamepad_button_released_this_frame));
 }
 
 static bool sdl3d_demo_recorder_append(sdl3d_demo_recorder *recorder, const sdl3d_input_snapshot *snapshot)
@@ -830,6 +852,20 @@ void sdl3d_input_process_event(sdl3d_input_manager *input, const SDL_Event *even
             sdl3d_input_try_open_first_gamepad(input);
         }
         break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        if (sdl3d_input_gamepad_button_valid(event->gbutton.button))
+        {
+            input->gamepad_button_down[event->gbutton.button] = true;
+            input->gamepad_button_pressed_this_frame[event->gbutton.button] = true;
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_UP:
+        if (sdl3d_input_gamepad_button_valid(event->gbutton.button))
+        {
+            input->gamepad_button_down[event->gbutton.button] = false;
+            input->gamepad_button_released_this_frame[event->gbutton.button] = true;
+        }
+        break;
     default:
         break;
     }
@@ -971,6 +1007,7 @@ void sdl3d_input_bind_fps_defaults(sdl3d_input_manager *input)
     int crouch = sdl3d_input_ensure_action(input, "crouch");
     int sprint = sdl3d_input_ensure_action(input, "sprint");
     int menu = sdl3d_input_ensure_action(input, "menu");
+    int pause = sdl3d_input_ensure_action(input, "pause");
 
     sdl3d_input_bind_key(input, move_forward, SDL_SCANCODE_W);
     sdl3d_input_bind_gamepad_axis(input, move_forward, SDL_GAMEPAD_AXIS_LEFTY, -1.0f);
@@ -1005,7 +1042,11 @@ void sdl3d_input_bind_fps_defaults(sdl3d_input_manager *input)
     sdl3d_input_bind_key(input, sprint, SDL_SCANCODE_LSHIFT);
     sdl3d_input_bind_gamepad_button(input, sprint, SDL_GAMEPAD_BUTTON_LEFT_STICK);
     sdl3d_input_bind_key(input, menu, SDL_SCANCODE_ESCAPE);
-    sdl3d_input_bind_gamepad_button(input, menu, SDL_GAMEPAD_BUTTON_START);
+    sdl3d_input_bind_gamepad_button(input, menu, SDL_GAMEPAD_BUTTON_BACK);
+    sdl3d_input_bind_key(input, pause, SDL_SCANCODE_RETURN);
+    sdl3d_input_bind_key(input, pause, SDL_SCANCODE_RETURN2);
+    sdl3d_input_bind_key(input, pause, SDL_SCANCODE_P);
+    sdl3d_input_bind_gamepad_button(input, pause, SDL_GAMEPAD_BUTTON_START);
 }
 
 void sdl3d_input_bind_ui_defaults(sdl3d_input_manager *input)

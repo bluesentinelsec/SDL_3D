@@ -81,6 +81,14 @@ void push_mouse_button(sdl3d_input_manager *input, SDL_EventType type, Uint8 but
     sdl3d_input_process_event(input, &event);
 }
 
+void push_gamepad_button(sdl3d_input_manager *input, SDL_EventType type, SDL_GamepadButton button)
+{
+    SDL_Event event{};
+    event.type = type;
+    event.gbutton.button = button;
+    sdl3d_input_process_event(input, &event);
+}
+
 void push_mouse_motion(sdl3d_input_manager *input, float dx, float dy)
 {
     SDL_Event event{};
@@ -240,6 +248,23 @@ TEST(Input, MouseButtonPressAndRelease)
     EXPECT_FALSE(sdl3d_input_is_held(input.input, fire));
 }
 
+TEST(Input, GamepadButtonPressAndRelease)
+{
+    InputPtr input;
+    int pause = sdl3d_input_register_action(input.input, "pause");
+    sdl3d_input_bind_gamepad_button(input.input, pause, SDL_GAMEPAD_BUTTON_START);
+
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_DOWN, SDL_GAMEPAD_BUTTON_START);
+    sdl3d_input_update(input.input, 1);
+    EXPECT_TRUE(sdl3d_input_is_held(input.input, pause));
+    EXPECT_TRUE(sdl3d_input_is_pressed(input.input, pause));
+
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_UP, SDL_GAMEPAD_BUTTON_START);
+    sdl3d_input_update(input.input, 2);
+    EXPECT_FALSE(sdl3d_input_is_held(input.input, pause));
+    EXPECT_TRUE(sdl3d_input_is_released(input.input, pause));
+}
+
 TEST(Input, MultipleBindingsSameAction)
 {
     InputPtr input;
@@ -292,7 +317,7 @@ TEST(Input, FpsDefaultsRegisterAllActions)
 
     const char *names[] = {"move_forward", "move_back",  "move_left", "move_right", "look_up",  "look_down",
                            "look_left",    "look_right", "jump",      "fire",       "alt_fire", "reload",
-                           "interact",     "crouch",     "sprint",    "menu"};
+                           "interact",     "crouch",     "sprint",    "menu",       "pause"};
     for (const char *name : names)
     {
         EXPECT_GE(sdl3d_input_find_action(input.input, name), 0) << name;
