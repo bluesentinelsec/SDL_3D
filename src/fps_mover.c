@@ -263,6 +263,12 @@ static sdl3d_vec2 project_wish_to_walkable_floor(sdl3d_vec2 wish_dir, const sdl3
     return projected;
 }
 
+static sdl3d_vec2 sector_push_velocity_xz(const sdl3d_sector *sector)
+{
+    sdl3d_vec3 push = sdl3d_sector_push_velocity(sector);
+    return (sdl3d_vec2){push.x, push.z};
+}
+
 static bool try_horizontal_move(sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
                                 float feet_y, bool grounded, float move_x, float move_z, int *out_sector)
 {
@@ -452,27 +458,39 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
             current_floor = sdl3d_sector_floor_at(&sectors[current_sector], mover->position.x, mover->position.z);
         }
 
+        sdl3d_vec2 sector_push = {0.0f, 0.0f};
+        if (current_sector >= 0)
+        {
+            sector_push = sector_push_velocity_xz(&sectors[current_sector]);
+        }
+
         float wish_len = SDL_sqrtf(wish_dir.x * wish_dir.x + wish_dir.y * wish_dir.y);
         if (wish_len > 1.0f)
         {
             wish_dir.x /= wish_len;
             wish_dir.y /= wish_len;
+            wish_len = 1.0f;
         }
 
+        float input_velocity_x = 0.0f;
+        float input_velocity_z = 0.0f;
         if (wish_len > 0.001f)
         {
             if (mover->on_ground && current_sector >= 0 && sector_floor_is_walkable(&sectors[current_sector]))
             {
                 wish_dir = project_wish_to_walkable_floor(wish_dir, &sectors[current_sector]);
             }
-            float move_x = wish_dir.x * mover->config.move_speed * dt;
-            float move_z = wish_dir.y * mover->config.move_speed * dt;
-            int candidate = -1;
+            input_velocity_x = wish_dir.x * mover->config.move_speed;
+            input_velocity_z = wish_dir.y * mover->config.move_speed;
+        }
 
+        float move_x = (input_velocity_x + sector_push.x) * dt;
+        float move_z = (input_velocity_z + sector_push.y) * dt;
+        if (move_x * move_x + move_z * move_z > SDL3D_FPS_COLLISION_EPSILON)
+        {
+            int candidate = -1;
             if (try_horizontal_move(mover, level, sectors, feet_y, mover->on_ground, move_x, move_z, &candidate))
-            {
                 current_sector = candidate;
-            }
         }
 
         /* Step-up onto a higher floor when on solid ground. */

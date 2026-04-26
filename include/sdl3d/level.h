@@ -57,9 +57,10 @@ extern "C"
         int floor_material; /* index into material palette, or -1 to omit floor geometry */
         int ceil_material;  /* index into material palette, or -1 to omit ceiling geometry */
         int wall_material;
-        float floor_normal[3]; /**< Floor plane normal. Zero defaults to (0, 1, 0). */
-        float ceil_normal[3];  /**< Ceiling plane normal. Zero defaults to (0, -1, 0). */
-        int ambient_sound_id;  /**< Ambient zone id. Zero means no ambient zone. */
+        float floor_normal[3];  /**< Floor plane normal. Zero defaults to (0, 1, 0). */
+        float ceil_normal[3];   /**< Ceiling plane normal. Zero defaults to (0, -1, 0). */
+        int ambient_sound_id;   /**< Ambient zone id. Zero means no ambient zone. */
+        float push_velocity[3]; /**< World-space sector velocity in units per second. */
     } sdl3d_sector;
 
     /**
@@ -201,6 +202,16 @@ extern "C"
      * with normal (0, -1, 0). Safe with NULL.
      */
     sdl3d_vec3 sdl3d_sector_ceil_normal(const sdl3d_sector *sector);
+
+    /**
+     * @brief Return the sector's world-space push/current velocity.
+     *
+     * This velocity is authored in world units per second. Movement systems
+     * can add it to their own velocity before collision resolution to create
+     * conveyor belts, water currents, wind tunnels, or similar sector-local
+     * forces. Safe with NULL, which returns (0, 0, 0).
+     */
+    sdl3d_vec3 sdl3d_sector_push_velocity(const sdl3d_sector *sector);
 
     /**
      * @brief Evaluate the sector floor plane height at a world XZ point.

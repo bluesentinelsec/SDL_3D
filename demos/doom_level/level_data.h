@@ -18,6 +18,7 @@ typedef struct level_data
 #define DOOM_DYNAMIC_LIFT_SECTOR 32
 #define DOOM_AMBIENT_DEMO_SECTOR 33
 #define DOOM_AMBIENT_DEMO_SOUND_ID 1
+#define DOOM_CONVEYOR_SECTOR 35
 
 /* Sector and light arrays are exposed so the player/renderer can query them. */
 extern sdl3d_sector g_sectors[];

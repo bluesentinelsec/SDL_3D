@@ -186,6 +186,16 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(72.0f, 2.85f, 63.0f), sdl3d_vec3_make(0.8f, 0.7f, 0.8f),
                     teleport_feedback_active ? (sdl3d_color){255, 210, 60, 255} : (sdl3d_color){80, 120, 255, 255});
 
+    /* Conveyor direction marker in the dragon room. */
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(19.0f, 0.04f, 51.0f), sdl3d_vec3_make(21.0f, 0.08f, 12.0f),
+                    (sdl3d_color){30, 35, 40, 255});
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(19.0f, 0.12f, 51.0f), sdl3d_vec3_make(13.0f, 0.08f, 0.8f),
+                    (sdl3d_color){70, 210, 230, 255});
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(26.0f, 0.13f, 49.4f), sdl3d_vec3_make(3.0f, 0.1f, 0.8f),
+                    (sdl3d_color){70, 210, 230, 255});
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(26.0f, 0.13f, 52.6f), sdl3d_vec3_make(3.0f, 0.1f, 0.8f),
+                    (sdl3d_color){70, 210, 230, 255});
+
     /* Sprites */
     {
         for (int i = 0; i < ent->sprites.count; ++i)
