@@ -71,7 +71,7 @@ void render_state_init(render_state *rs)
 
 void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_font *font, sdl3d_ui_context *ui,
                        level_data *ld, entities *ent, const player_state *player, int backbuffer_w, int backbuffer_h,
-                       float dt)
+                       float dt, const char *render_profile_name)
 {
     const sdl3d_fps_mover *mover = &player->mover;
     sdl3d_level *active = level_data_active(ld);
@@ -199,6 +199,7 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
         sdl3d_ui_labelf(ui, 10.0f, 100.0f, "sector=%d  visible=%d/%d", current_sector, rs->vis.visible_count,
                         g_sector_count);
         sdl3d_ui_labelf(ui, 10.0f, 140.0f, "pos %.1f, %.1f, %.1f", px, py, pz);
+        sdl3d_ui_labelf(ui, 10.0f, 180.0f, "profile=%s", render_profile_name ? render_profile_name : "Modern");
         sdl3d_ui_end_frame(ui);
         sdl3d_ui_render(ui, ctx);
     }
