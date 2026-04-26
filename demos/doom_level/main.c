@@ -34,6 +34,11 @@ typedef struct doom_state
     sdl3d_backend current_backend;
     int action_pause;
     int action_menu;
+    int action_toggle_lighting;
+    int action_toggle_lightmaps;
+    int action_toggle_debug_stats;
+    int action_toggle_portal_culling;
+    int action_switch_backend;
     float pause_flash_timer;
     bool has_font;
     bool level_ready;
@@ -116,14 +121,31 @@ static void toggle_pause(sdl3d_game_context *ctx, doom_state *state)
     state->pause_flash_timer = 0.0f;
 }
 
+static int bind_doom_key_action(sdl3d_input_manager *input, const char *name, SDL_Scancode key)
+{
+    int action = sdl3d_input_register_action(input, name);
+    sdl3d_input_bind_key(input, action, key);
+    return action;
+}
+
+static void bind_doom_actions(sdl3d_input_manager *input, doom_state *state)
+{
+    sdl3d_input_bind_fps_defaults(input);
+    state->action_pause = sdl3d_input_find_action(input, "pause");
+    state->action_menu = sdl3d_input_find_action(input, "menu");
+    state->action_toggle_lighting = bind_doom_key_action(input, "toggle_lighting", SDL_SCANCODE_L);
+    state->action_toggle_lightmaps = bind_doom_key_action(input, "toggle_lightmaps", SDL_SCANCODE_M);
+    state->action_toggle_debug_stats = bind_doom_key_action(input, "toggle_debug_stats", SDL_SCANCODE_F1);
+    state->action_toggle_portal_culling = bind_doom_key_action(input, "toggle_portal_culling", SDL_SCANCODE_F2);
+    state->action_switch_backend = bind_doom_key_action(input, "switch_backend", SDL_SCANCODE_TAB);
+}
+
 static bool game_init(sdl3d_game_context *ctx, void *userdata)
 {
     doom_state *state = (doom_state *)userdata;
 
     state->current_backend = sdl3d_get_render_context_backend(ctx->renderer);
-    sdl3d_input_bind_fps_defaults(ctx->input);
-    state->action_pause = sdl3d_input_find_action(ctx->input, "pause");
-    state->action_menu = sdl3d_input_find_action(ctx->input, "menu");
+    bind_doom_actions(ctx->input, state);
     apply_window_defaults(ctx);
 
     if (sdl3d_signal_connect(ctx->bus, SIG_FADE_OUT_DONE, on_fade_out_done, ctx) == 0)
@@ -191,39 +213,35 @@ static bool switch_demo_backend(sdl3d_game_context *ctx, doom_state *state)
 
 static bool game_event(sdl3d_game_context *ctx, void *userdata, const SDL_Event *event)
 {
+    (void)ctx;
     doom_state *state = (doom_state *)userdata;
 
     sdl3d_ui_process_event(state->ui, event);
+    return true;
+}
 
-    if (ctx->paused)
-    {
-        return true;
-    }
-
-    if (event->type == SDL_EVENT_KEY_DOWN && event->key.scancode == SDL_SCANCODE_L)
+static void apply_doom_debug_actions(sdl3d_game_context *ctx, doom_state *state)
+{
+    if (sdl3d_input_is_pressed(ctx->input, state->action_toggle_lighting))
     {
         state->level.use_lit = !state->level.use_lit;
     }
-    if (event->type == SDL_EVENT_KEY_DOWN && event->key.scancode == SDL_SCANCODE_M)
+    if (sdl3d_input_is_pressed(ctx->input, state->action_toggle_lightmaps))
     {
         state->level.use_lightmaps = !state->level.use_lightmaps;
     }
-
-    if (event->type == SDL_EVENT_KEY_DOWN && event->key.scancode == SDL_SCANCODE_F1)
+    if (sdl3d_input_is_pressed(ctx->input, state->action_toggle_debug_stats))
     {
         state->render.show_debug = !state->render.show_debug;
     }
-    if (event->type == SDL_EVENT_KEY_DOWN && event->key.scancode == SDL_SCANCODE_F2)
+    if (sdl3d_input_is_pressed(ctx->input, state->action_toggle_portal_culling))
     {
         state->render.portal_culling = !state->render.portal_culling;
     }
-
-    if (event->type == SDL_EVENT_KEY_DOWN && event->key.scancode == SDL_SCANCODE_TAB)
+    if (sdl3d_input_is_pressed(ctx->input, state->action_switch_backend) && !switch_demo_backend(ctx, state))
     {
-        return switch_demo_backend(ctx, state);
+        ctx->quit_requested = true;
     }
-
-    return true;
 }
 
 static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
@@ -235,6 +253,8 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
         toggle_pause(ctx, state);
         return;
     }
+
+    apply_doom_debug_actions(ctx, state);
 
     if (state->demo_player != NULL && sdl3d_demo_playback_finished(state->demo_player))
     {

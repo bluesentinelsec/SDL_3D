@@ -278,6 +278,30 @@ TEST(Input, MultipleBindingsSameAction)
     EXPECT_TRUE(sdl3d_input_is_held(input.input, action));
 }
 
+TEST(Input, MultipleKeyboardActionsShareOneSnapshot)
+{
+    InputPtr input;
+    int toggle_lighting = sdl3d_input_register_action(input.input, "toggle_lighting");
+    int toggle_debug = sdl3d_input_register_action(input.input, "toggle_debug");
+    sdl3d_input_bind_key(input.input, toggle_lighting, SDL_SCANCODE_L);
+    sdl3d_input_bind_key(input.input, toggle_debug, SDL_SCANCODE_F1);
+
+    push_key(input.input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_L);
+    push_key(input.input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F1);
+    sdl3d_input_update(input.input, 1);
+
+    EXPECT_TRUE(sdl3d_input_is_pressed(input.input, toggle_lighting));
+    EXPECT_TRUE(sdl3d_input_is_pressed(input.input, toggle_debug));
+    EXPECT_TRUE(sdl3d_input_is_held(input.input, toggle_lighting));
+    EXPECT_TRUE(sdl3d_input_is_held(input.input, toggle_debug));
+
+    sdl3d_input_update(input.input, 2);
+    EXPECT_FALSE(sdl3d_input_is_pressed(input.input, toggle_lighting));
+    EXPECT_FALSE(sdl3d_input_is_pressed(input.input, toggle_debug));
+    EXPECT_TRUE(sdl3d_input_is_held(input.input, toggle_lighting));
+    EXPECT_TRUE(sdl3d_input_is_held(input.input, toggle_debug));
+}
+
 TEST(Input, AxisPairComposesFourActions)
 {
     InputPtr input;
@@ -457,6 +481,29 @@ TEST(InputDemo, RecordAndPlayback)
 
     sdl3d_demo_playback_stop(playback_input.input);
     sdl3d_demo_playback_free(player);
+}
+
+TEST(InputDemo, RecordsKeyboardActions)
+{
+    InputPtr input;
+    int toggle_lighting = sdl3d_input_register_action(input.input, "toggle_lighting");
+    sdl3d_input_bind_key(input.input, toggle_lighting, SDL_SCANCODE_L);
+
+    sdl3d_demo_recorder *recorder = sdl3d_demo_record_start(input.input);
+    ASSERT_NE(recorder, nullptr);
+
+    push_key(input.input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_L);
+    ASSERT_NE(sdl3d_input_update(input.input, 7), nullptr);
+    sdl3d_demo_record_stop(recorder);
+
+    ASSERT_EQ(1U, sdl3d_demo_record_count(recorder));
+    const sdl3d_input_snapshot *recorded = sdl3d_demo_record_snapshot(recorder, 0);
+    ASSERT_NE(recorded, nullptr);
+    EXPECT_EQ(7, recorded->tick);
+    EXPECT_TRUE(recorded->actions[toggle_lighting].pressed);
+    EXPECT_TRUE(recorded->actions[toggle_lighting].held);
+
+    sdl3d_demo_record_free(recorder);
 }
 
 TEST(InputDemo, PlaybackStopResumesLiveInput)
