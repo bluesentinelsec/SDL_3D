@@ -31,6 +31,11 @@ elseif(MSVC)
     target_compile_options(sdl3d_stb PRIVATE /w)
 endif()
 
+if(APPLE)
+    enable_language(OBJC)
+    set_source_files_properties(miniaudio/miniaudio.c PROPERTIES LANGUAGE OBJC)
+endif()
+
 add_library(sdl3d_miniaudio OBJECT miniaudio/miniaudio.c)
 target_include_directories(sdl3d_miniaudio PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/miniaudio)
 set_target_properties(sdl3d_miniaudio PROPERTIES POSITION_INDEPENDENT_CODE ON)

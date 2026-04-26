@@ -168,6 +168,14 @@ endif()
 if(CMAKE_DL_LIBS)
     set_property(TARGET sdl3d APPEND PROPERTY INTERFACE_LINK_LIBRARIES ${CMAKE_DL_LIBS})
 endif()
+if(APPLE)
+    set_property(
+        TARGET sdl3d
+        APPEND
+        PROPERTY INTERFACE_LINK_LIBRARIES "-framework AudioToolbox" "-framework AVFoundation" "-framework CoreAudio"
+                 "-framework CoreFoundation"
+    )
+endif()
 
 target_include_directories(
     sdl3d
