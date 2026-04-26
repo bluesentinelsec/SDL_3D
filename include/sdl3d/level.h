@@ -57,10 +57,11 @@ extern "C"
         int floor_material; /* index into material palette, or -1 to omit floor geometry */
         int ceil_material;  /* index into material palette, or -1 to omit ceiling geometry */
         int wall_material;
-        float floor_normal[3];  /**< Floor plane normal. Zero defaults to (0, 1, 0). */
-        float ceil_normal[3];   /**< Ceiling plane normal. Zero defaults to (0, -1, 0). */
-        int ambient_sound_id;   /**< Ambient zone id. Zero means no ambient zone. */
-        float push_velocity[3]; /**< World-space sector velocity in units per second. */
+        float floor_normal[3];   /**< Floor plane normal. Zero defaults to (0, 1, 0). */
+        float ceil_normal[3];    /**< Ceiling plane normal. Zero defaults to (0, -1, 0). */
+        int ambient_sound_id;    /**< Ambient zone id. Zero means no ambient zone. */
+        float push_velocity[3];  /**< World-space sector velocity in units per second. */
+        float damage_per_second; /**< Sector floor damage rate in game health units per second. */
     } sdl3d_sector;
 
     /**
@@ -212,6 +213,26 @@ extern "C"
      * forces. Safe with NULL, which returns (0, 0, 0).
      */
     sdl3d_vec3 sdl3d_sector_push_velocity(const sdl3d_sector *sector);
+
+    /**
+     * @brief Return the effective non-negative sector damage rate.
+     *
+     * Damage floors such as lava, nukage, acid, or other hazardous terrain
+     * can set this value in sector data. Gameplay code can sample it for any
+     * actor occupying the sector and decide how to apply health, armor,
+     * invulnerability, feedback, or death rules. Safe with NULL, which
+     * returns 0.
+     */
+    float sdl3d_sector_damage_per_second(const sdl3d_sector *sector);
+
+    /**
+     * @brief Compute damage dealt by a sector over a timestep.
+     *
+     * This is a convenience wrapper around
+     * sdl3d_sector_damage_per_second(sector) * dt. Negative sector rates and
+     * non-positive timesteps produce zero damage.
+     */
+    float sdl3d_sector_damage_for_delta(const sdl3d_sector *sector, float dt);
 
     /**
      * @brief Evaluate the sector floor plane height at a world XZ point.

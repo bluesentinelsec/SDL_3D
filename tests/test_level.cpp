@@ -122,6 +122,23 @@ TEST(SDL3DSectorMetadata, PushVelocityReturnsAuthoredVectorAndNullZero)
     EXPECT_FLOAT_EQ(zero.z, 0.0f);
 }
 
+TEST(SDL3DSectorMetadata, DamageRateIsClampedAndScalesByDelta)
+{
+    sdl3d_sector sector = MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f);
+    sector.damage_per_second = 12.5f;
+
+    EXPECT_FLOAT_EQ(sdl3d_sector_damage_per_second(&sector), 12.5f);
+    EXPECT_FLOAT_EQ(sdl3d_sector_damage_for_delta(&sector, 0.25f), 3.125f);
+    EXPECT_FLOAT_EQ(sdl3d_sector_damage_for_delta(&sector, 0.0f), 0.0f);
+    EXPECT_FLOAT_EQ(sdl3d_sector_damage_for_delta(&sector, -1.0f), 0.0f);
+
+    sector.damage_per_second = -5.0f;
+    EXPECT_FLOAT_EQ(sdl3d_sector_damage_per_second(&sector), 0.0f);
+    EXPECT_FLOAT_EQ(sdl3d_sector_damage_for_delta(&sector, 1.0f), 0.0f);
+    EXPECT_FLOAT_EQ(sdl3d_sector_damage_per_second(nullptr), 0.0f);
+    EXPECT_FLOAT_EQ(sdl3d_sector_damage_for_delta(nullptr, 1.0f), 0.0f);
+}
+
 TEST(SDL3DLevelBuilder, BuildsIndependentSectorMaterialChunks)
 {
     const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),

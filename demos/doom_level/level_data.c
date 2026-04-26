@@ -129,6 +129,7 @@ bool level_data_init(level_data *ld)
 
     SDL_memcpy(g_sectors, g_base_sectors, sizeof(g_base_sectors));
     g_sectors[DOOM_AMBIENT_DEMO_SECTOR].ambient_sound_id = DOOM_AMBIENT_DEMO_SOUND_ID;
+    g_sectors[DOOM_NUKAGE_BASIN_SECTOR].damage_per_second = 18.0f;
 
     if (!sdl3d_build_level(g_sectors, g_sector_count, g_mats, mc, g_lights, g_light_count, &ld->lightmapped))
     {

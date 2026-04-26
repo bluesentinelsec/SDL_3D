@@ -97,6 +97,24 @@ sdl3d_vec3 sdl3d_sector_push_velocity(const sdl3d_sector *sector)
     return sdl3d_vec3_make(sector->push_velocity[0], sector->push_velocity[1], sector->push_velocity[2]);
 }
 
+float sdl3d_sector_damage_per_second(const sdl3d_sector *sector)
+{
+    if (sector == NULL || sector->damage_per_second <= 0.0f)
+    {
+        return 0.0f;
+    }
+    return sector->damage_per_second;
+}
+
+float sdl3d_sector_damage_for_delta(const sdl3d_sector *sector, float dt)
+{
+    if (dt <= 0.0f)
+    {
+        return 0.0f;
+    }
+    return sdl3d_sector_damage_per_second(sector) * dt;
+}
+
 static void sector_centroid_xz(const sdl3d_sector *sector, float *out_x, float *out_z)
 {
     float x = 0.0f;
