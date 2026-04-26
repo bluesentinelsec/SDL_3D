@@ -305,7 +305,78 @@ sdl3d_sector MakeStackedSector(float min_x, float min_z, float max_x, float max_
     s.ceil_y = ceil_y;
     return s;
 }
+
+sdl3d_sector MakeRampSector(float min_x, float min_z, float max_x, float max_z)
+{
+    sdl3d_sector s = MakeSquareSector(min_x, min_z, max_x, max_z);
+    s.floor_y = 1.0f;
+    s.ceil_y = 5.0f;
+    s.floor_normal[0] = -0.19611613f;
+    s.floor_normal[1] = 0.98058069f;
+    s.floor_normal[2] = 0.0f;
+    return s;
+}
 } // namespace
+
+TEST(SDL3DSectorQueries, SectorPlaneHelpersDefaultFlatNormals)
+{
+    sdl3d_sector sector = MakeStackedSector(0, 0, 10, 10, 2, 7);
+
+    sdl3d_vec3 floor_normal = sdl3d_sector_floor_normal(&sector);
+    sdl3d_vec3 ceil_normal = sdl3d_sector_ceil_normal(&sector);
+
+    EXPECT_FLOAT_EQ(floor_normal.x, 0.0f);
+    EXPECT_FLOAT_EQ(floor_normal.y, 1.0f);
+    EXPECT_FLOAT_EQ(floor_normal.z, 0.0f);
+    EXPECT_FLOAT_EQ(ceil_normal.x, 0.0f);
+    EXPECT_FLOAT_EQ(ceil_normal.y, -1.0f);
+    EXPECT_FLOAT_EQ(ceil_normal.z, 0.0f);
+    EXPECT_FLOAT_EQ(sdl3d_sector_floor_at(&sector, 0.0f, 0.0f), 2.0f);
+    EXPECT_FLOAT_EQ(sdl3d_sector_ceil_at(&sector, 10.0f, 10.0f), 7.0f);
+}
+
+TEST(SDL3DSectorQueries, SectorFloorAtEvaluatesSlopePlane)
+{
+    sdl3d_sector ramp = MakeRampSector(0, 0, 10, 4);
+
+    EXPECT_NEAR(sdl3d_sector_floor_at(&ramp, 0.0f, 2.0f), 0.0f, 1e-4f);
+    EXPECT_NEAR(sdl3d_sector_floor_at(&ramp, 5.0f, 2.0f), 1.0f, 1e-4f);
+    EXPECT_NEAR(sdl3d_sector_floor_at(&ramp, 10.0f, 2.0f), 2.0f, 1e-4f);
+}
+
+TEST(SDL3DLevelBuilder, SlopedFloorMeshUsesPlaneHeightsAndNormals)
+{
+    const sdl3d_level_material mats[] = {MakeLevelMaterial("a.png"), MakeLevelMaterial("b.png"),
+                                         MakeLevelMaterial("c.png")};
+    const sdl3d_sector ramp = MakeRampSector(0, 0, 10, 4);
+    sdl3d_level level{};
+    ASSERT_TRUE(sdl3d_build_level(&ramp, 1, mats, 3, nullptr, 0, &level)) << SDL_GetError();
+
+    const sdl3d_mesh *floor_mesh = nullptr;
+    for (int i = 0; i < level.model.mesh_count; ++i)
+    {
+        if (level.model.meshes[i].material_index == ramp.floor_material)
+        {
+            floor_mesh = &level.model.meshes[i];
+            break;
+        }
+    }
+
+    ASSERT_NE(floor_mesh, nullptr);
+    ASSERT_GE(floor_mesh->vertex_count, 4);
+    for (int i = 0; i < floor_mesh->vertex_count; ++i)
+    {
+        float x = floor_mesh->positions[i * 3 + 0];
+        float y = floor_mesh->positions[i * 3 + 1];
+        float z = floor_mesh->positions[i * 3 + 2];
+        EXPECT_NEAR(y, sdl3d_sector_floor_at(&ramp, x, z), 1e-4f);
+        EXPECT_NEAR(floor_mesh->normals[i * 3 + 0], sdl3d_sector_floor_normal(&ramp).x, 1e-4f);
+        EXPECT_NEAR(floor_mesh->normals[i * 3 + 1], sdl3d_sector_floor_normal(&ramp).y, 1e-4f);
+        EXPECT_NEAR(floor_mesh->normals[i * 3 + 2], sdl3d_sector_floor_normal(&ramp).z, 1e-4f);
+    }
+
+    sdl3d_free_level(&level);
+}
 
 TEST(SDL3DSectorQueries, FindSectorAtPicksHighestFloorContaining)
 {
@@ -322,6 +393,24 @@ TEST(SDL3DSectorQueries, FindSectorAtPicksHighestFloorContaining)
     EXPECT_EQ(sdl3d_level_find_sector_at(&level, sectors, 2, 2, 2.5f), 1);
     EXPECT_EQ(sdl3d_level_find_sector_at(&level, sectors, 2, 2, 1.5f), -1);
     EXPECT_EQ(sdl3d_level_find_sector_at(&level, sectors, 20, 20, 0.5f), -1);
+
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DSectorQueries, QueriesUseSlopedFloorHeightAtPoint)
+{
+    const sdl3d_level_material mats[] = {MakeLevelMaterial("a.png"), MakeLevelMaterial("b.png"),
+                                         MakeLevelMaterial("c.png")};
+    const sdl3d_sector sectors[] = {MakeRampSector(0, 0, 10, 4)};
+    sdl3d_level level{};
+    ASSERT_TRUE(sdl3d_build_level(sectors, 1, mats, 3, nullptr, 0, &level));
+
+    EXPECT_EQ(sdl3d_level_find_sector_at(&level, sectors, 1.0f, 2.0f, 0.25f), 0);
+    EXPECT_EQ(sdl3d_level_find_sector_at(&level, sectors, 9.0f, 2.0f, 0.25f), -1);
+    EXPECT_EQ(sdl3d_level_find_walkable_sector(&level, sectors, 9.0f, 2.0f, 1.6f, 0.4f, 1.6f), 0);
+    EXPECT_EQ(sdl3d_level_find_walkable_sector(&level, sectors, 9.0f, 2.0f, 0.0f, 0.4f, 1.6f), -1);
+    EXPECT_TRUE(sdl3d_level_point_inside(&level, sectors, 9.0f, 2.0f, 2.0f));
+    EXPECT_FALSE(sdl3d_level_point_inside(&level, sectors, 9.0f, 1.0f, 2.0f));
 
     sdl3d_free_level(&level);
 }
