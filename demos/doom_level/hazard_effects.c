@@ -11,8 +11,9 @@
 #include "level_data.h"
 
 #define SOFT_PARTICLE_SIZE 32
-#define NUKAGE_VAPOR_MAX_PARTICLES 900
-#define NUKAGE_MOTE_MAX_PARTICLES 220
+#define NUKAGE_VAPOR_MAX_PARTICLES 560
+#define NUKAGE_MOTE_MAX_PARTICLES 120
+#define NUKAGE_PULSE_HZ 1.4f
 
 static float clamp01(float value)
 {
@@ -50,9 +51,9 @@ static bool create_soft_particle_texture(sdl3d_texture2d *out_texture)
             const float core = falloff * falloff;
             Uint8 *pixel = &image.pixels[((y * image.width) + x) * 4];
 
-            pixel[0] = (Uint8)(190.0f + core * 65.0f);
+            pixel[0] = (Uint8)(70.0f + core * 80.0f);
             pixel[1] = 255;
-            pixel[2] = (Uint8)(35.0f + core * 95.0f);
+            pixel[2] = (Uint8)(35.0f + core * 65.0f);
             pixel[3] = dist <= 1.0f ? (Uint8)(core * 255.0f + 0.5f) : 0;
         }
     }
@@ -136,23 +137,22 @@ bool doom_hazard_particles_init(doom_hazard_particles *particles, const sdl3d_le
 
     sdl3d_particle_config vapor;
     SDL_zero(vapor);
-    vapor.position = sdl3d_vec3_make(center_x, floor_y + 0.18f, center_z);
-    vapor.direction = sdl3d_vec3_make(0.08f, 1.0f, -0.04f);
-    vapor.spread = 1.25f;
-    vapor.speed_min = 0.18f;
-    vapor.speed_max = 0.75f;
-    vapor.lifetime_min = 1.4f;
-    vapor.lifetime_max = 3.0f;
-    vapor.size_start = 0.10f;
-    vapor.size_end = 0.32f;
-    vapor.color_start = (sdl3d_color){120, 255, 40, 210};
-    vapor.color_end = (sdl3d_color){25, 210, 70, 0};
-    vapor.gravity = -0.08f;
+    vapor.position = sdl3d_vec3_make(center_x, floor_y + 0.14f, center_z);
+    vapor.direction = sdl3d_vec3_make(0.04f, 1.0f, -0.03f);
+    vapor.spread = 1.15f;
+    vapor.speed_min = 0.35f;
+    vapor.speed_max = 1.05f;
+    vapor.lifetime_min = 2.4f;
+    vapor.lifetime_max = 4.6f;
+    vapor.size_start = 0.045f;
+    vapor.size_end = 0.16f;
+    vapor.color_start = (sdl3d_color){35, 245, 45, 155};
+    vapor.color_end = (sdl3d_color){0, 185, 55, 0};
+    vapor.gravity = -0.16f;
     vapor.max_particles = NUKAGE_VAPOR_MAX_PARTICLES;
-    vapor.emit_rate = 260.0f;
+    vapor.emit_rate = 150.0f;
     vapor.shape = SDL3D_PARTICLE_EMITTER_BOX;
     vapor.extents = sdl3d_vec3_make(half_x * 0.88f, 0.05f, half_z * 0.88f);
-    vapor.emissive_intensity = 1.1f;
     vapor.camera_facing = true;
     vapor.depth_test = true;
     vapor.additive_blend = true;
@@ -167,23 +167,22 @@ bool doom_hazard_particles_init(doom_hazard_particles *particles, const sdl3d_le
 
     sdl3d_particle_config motes;
     SDL_zero(motes);
-    motes.position = sdl3d_vec3_make(center_x, floor_y + 0.28f, center_z);
-    motes.direction = sdl3d_vec3_make(-0.05f, 1.0f, 0.1f);
-    motes.spread = 1.8f;
-    motes.speed_min = 0.45f;
-    motes.speed_max = 1.8f;
-    motes.lifetime_min = 0.45f;
-    motes.lifetime_max = 1.2f;
-    motes.size_start = 0.055f;
-    motes.size_end = 0.015f;
-    motes.color_start = (sdl3d_color){245, 255, 80, 255};
-    motes.color_end = (sdl3d_color){80, 255, 50, 0};
-    motes.gravity = 0.04f;
+    motes.position = sdl3d_vec3_make(center_x, floor_y + 0.22f, center_z);
+    motes.direction = sdl3d_vec3_make(-0.04f, 1.0f, 0.08f);
+    motes.spread = 1.65f;
+    motes.speed_min = 0.8f;
+    motes.speed_max = 2.2f;
+    motes.lifetime_min = 0.9f;
+    motes.lifetime_max = 1.8f;
+    motes.size_start = 0.026f;
+    motes.size_end = 0.008f;
+    motes.color_start = (sdl3d_color){95, 255, 55, 230};
+    motes.color_end = (sdl3d_color){10, 230, 45, 0};
+    motes.gravity = -0.08f;
     motes.max_particles = NUKAGE_MOTE_MAX_PARTICLES;
-    motes.emit_rate = 80.0f;
+    motes.emit_rate = 38.0f;
     motes.shape = SDL3D_PARTICLE_EMITTER_BOX;
     motes.extents = sdl3d_vec3_make(half_x * 0.82f, 0.05f, half_z * 0.82f);
-    motes.emissive_intensity = 2.2f;
     motes.camera_facing = true;
     motes.depth_test = true;
     motes.additive_blend = true;
@@ -197,6 +196,35 @@ bool doom_hazard_particles_init(doom_hazard_particles *particles, const sdl3d_le
     }
 
     return true;
+}
+
+static void pulse_nukage_emitter(sdl3d_particle_emitter *emitter, float pulse, bool mote)
+{
+    const sdl3d_particle_config *current = sdl3d_particle_emitter_get_config(emitter);
+    if (current == NULL)
+    {
+        return;
+    }
+
+    sdl3d_particle_config next = *current;
+    if (mote)
+    {
+        next.color_start = (sdl3d_color){(Uint8)(55.0f + pulse * 55.0f), 255, (Uint8)(45.0f + pulse * 45.0f),
+                                         (Uint8)(175.0f + pulse * 65.0f)};
+        next.color_end = (sdl3d_color){0, (Uint8)(180.0f + pulse * 55.0f), 45, 0};
+    }
+    else
+    {
+        next.color_start = (sdl3d_color){(Uint8)(15.0f + pulse * 40.0f), (Uint8)(215.0f + pulse * 40.0f),
+                                         (Uint8)(35.0f + pulse * 45.0f), (Uint8)(110.0f + pulse * 65.0f)};
+        next.color_end = (sdl3d_color){0, (Uint8)(150.0f + pulse * 55.0f), 45, 0};
+    }
+
+    if (!sdl3d_particle_emitter_set_config(emitter, &next))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Nukage particle pulse update failed: %s", SDL_GetError());
+        SDL_ClearError();
+    }
 }
 
 void doom_hazard_particles_free(doom_hazard_particles *particles)
@@ -218,6 +246,16 @@ void doom_hazard_particles_update(doom_hazard_particles *particles, float dt)
     {
         return;
     }
+
+    particles->pulse_timer += dt * NUKAGE_PULSE_HZ;
+    while (particles->pulse_timer >= 1.0f)
+    {
+        particles->pulse_timer -= 1.0f;
+    }
+
+    const float pulse = 0.5f + 0.5f * SDL_sinf(particles->pulse_timer * SDL_PI_F * 2.0f);
+    pulse_nukage_emitter(particles->nukage_vapor, pulse, false);
+    pulse_nukage_emitter(particles->nukage_motes, pulse, true);
 
     sdl3d_particle_emitter_update(particles->nukage_vapor, dt);
     sdl3d_particle_emitter_update(particles->nukage_motes, dt);

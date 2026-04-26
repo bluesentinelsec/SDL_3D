@@ -14,6 +14,7 @@ typedef struct doom_hazard_particles
     sdl3d_particle_emitter *nukage_vapor;
     sdl3d_particle_emitter *nukage_motes;
     sdl3d_texture2d soft_particle_tex;
+    float pulse_timer;
     bool has_soft_particle_tex;
 } doom_hazard_particles;
 

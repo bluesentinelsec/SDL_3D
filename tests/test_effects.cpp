@@ -105,6 +105,25 @@ int CountNonBlackPixels(sdl3d_render_context *ctx)
     return count;
 }
 
+int CountGreenDominantPixels(sdl3d_render_context *ctx)
+{
+    const int w = sdl3d_get_render_context_width(ctx);
+    const int h = sdl3d_get_render_context_height(ctx);
+    int count = 0;
+    for (int y = 0; y < h; ++y)
+    {
+        for (int x = 0; x < w; ++x)
+        {
+            sdl3d_color px{};
+            if (sdl3d_get_framebuffer_pixel(ctx, x, y, &px) && px.g > px.r + 30 && px.g > px.b + 30)
+            {
+                ++count;
+            }
+        }
+    }
+    return count;
+}
+
 } // namespace
 
 /* ================================================================== */
@@ -373,6 +392,32 @@ TEST(SDL3DParticles, SeededEmitterIsDeterministic)
     sdl3d_destroy_particle_emitter(b);
 }
 
+TEST(SDL3DParticles, SetConfigWithSameSeedDoesNotRestartRandomSequence)
+{
+    sdl3d_particle_config c = default_config();
+    c.shape = SDL3D_PARTICLE_EMITTER_BOX;
+    c.extents = sdl3d_vec3_make(1.0f, 1.0f, 1.0f);
+    c.random_seed = 123;
+    c.max_particles = 2;
+    c.emit_rate = 0.0f;
+
+    sdl3d_particle_emitter *em = sdl3d_create_particle_emitter(&c);
+    ASSERT_NE(em, nullptr);
+    sdl3d_particle_emitter_emit(em, 1);
+
+    sdl3d_particle_snapshot first{};
+    ASSERT_EQ(sdl3d_particle_emitter_snapshot(em, &first, 1), 1);
+    c.color_start = {10, 255, 10, 255};
+    ASSERT_TRUE(sdl3d_particle_emitter_set_config(em, &c));
+    sdl3d_particle_emitter_emit(em, 1);
+
+    sdl3d_particle_snapshot snapshots[2]{};
+    ASSERT_EQ(sdl3d_particle_emitter_snapshot(em, snapshots, 2), 2);
+    EXPECT_FLOAT_EQ(snapshots[0].position.x, first.position.x);
+    EXPECT_NE(snapshots[1].position.x, first.position.x);
+    sdl3d_destroy_particle_emitter(em);
+}
+
 TEST(SDL3DParticles, DrawNullContextFails)
 {
     EXPECT_FALSE(sdl3d_draw_particles(nullptr, nullptr));
@@ -401,8 +446,8 @@ TEST_F(SDLEffectsFixture, ParticleQuadDrawsInSoftwareRenderer)
     c.lifetime_max = 5.0f;
     c.size_start = 1.0f;
     c.size_end = 1.0f;
-    c.color_start = {255, 40, 20, 255};
-    c.color_end = {255, 40, 20, 255};
+    c.color_start = {20, 255, 20, 255};
+    c.color_end = {20, 255, 20, 255};
     c.random_seed = 99;
     sdl3d_particle_emitter *em = sdl3d_create_particle_emitter(&c);
     ASSERT_NE(em, nullptr);
@@ -414,6 +459,7 @@ TEST_F(SDLEffectsFixture, ParticleQuadDrawsInSoftwareRenderer)
     EXPECT_TRUE(sdl3d_draw_particles(ctx, em)) << SDL_GetError();
     ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
     EXPECT_GT(CountNonBlackPixels(ctx), 0);
+    EXPECT_GT(CountGreenDominantPixels(ctx), 0);
 
     sdl3d_destroy_particle_emitter(em);
     sdl3d_destroy_render_context(ctx);

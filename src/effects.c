@@ -4,7 +4,6 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "sdl3d/drawing3d.h"
-#include "sdl3d/lighting.h"
 #include "sdl3d/math.h"
 
 #include "render_context_internal.h"
@@ -176,9 +175,15 @@ static bool sdl3d_particle_emitter_apply_config(sdl3d_particle_emitter *emitter,
         emitter->count = 0;
     }
 
-    emitter->config = normalized;
-    emitter->deterministic_rng = normalized.random_seed != 0;
-    emitter->rng_state = normalized.random_seed != 0 ? normalized.random_seed : 0;
+    {
+        const bool keep_rng_state = preserve_particles && normalized.random_seed == emitter->config.random_seed;
+        emitter->config = normalized;
+        if (!keep_rng_state)
+        {
+            emitter->deterministic_rng = normalized.random_seed != 0;
+            emitter->rng_state = normalized.random_seed != 0 ? normalized.random_seed : 0;
+        }
+    }
     if (!preserve_particles)
     {
         emitter->emit_accumulator = 0.0f;
@@ -438,15 +443,27 @@ static Uint8 sdl3d_particle_lerp_u8(Uint8 a, Uint8 b, float t)
     return (Uint8)((float)a + ((float)b - (float)a) * t + 0.5f);
 }
 
+static Uint8 sdl3d_particle_scale_u8(Uint8 value, float scale)
+{
+    const float scaled = (float)value * scale;
+    if (scaled <= 0.0f)
+    {
+        return 0;
+    }
+    if (scaled >= 255.0f)
+    {
+        return 255;
+    }
+    return (Uint8)(scaled + 0.5f);
+}
+
 static bool sdl3d_draw_particle_quad(sdl3d_render_context *context, const sdl3d_particle_config *config,
                                      const sdl3d_particle *particle, float size, sdl3d_color color)
 {
     sdl3d_vec3 right = sdl3d_effects_camera_right(context);
     sdl3d_vec3 up;
-    sdl3d_vec3 normal;
     const float half = size * 0.5f;
     float positions[12];
-    float normals[12];
     float uvs[8] = {0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f};
     float colors[16];
     unsigned int indices[12] = {0, 1, 2, 2, 1, 3, 2, 1, 0, 3, 1, 2};
@@ -481,7 +498,6 @@ static bool sdl3d_draw_particle_quad(sdl3d_render_context *context, const sdl3d_
         }
         up = world_up;
     }
-    normal = sdl3d_vec3_normalize(sdl3d_vec3_cross(right, up));
 
     {
         const sdl3d_vec3 scaled_right = sdl3d_vec3_scale(right, half);
@@ -498,9 +514,6 @@ static bool sdl3d_draw_particle_quad(sdl3d_render_context *context, const sdl3d_
             positions[i * 3 + 0] = verts[i].x;
             positions[i * 3 + 1] = verts[i].y;
             positions[i * 3 + 2] = verts[i].z;
-            normals[i * 3 + 0] = normal.x;
-            normals[i * 3 + 1] = normal.y;
-            normals[i * 3 + 2] = normal.z;
             colors[i * 4 + 0] = (float)color.r / 255.0f;
             colors[i * 4 + 1] = (float)color.g / 255.0f;
             colors[i * 4 + 2] = (float)color.b / 255.0f;
@@ -510,7 +523,6 @@ static bool sdl3d_draw_particle_quad(sdl3d_render_context *context, const sdl3d_
 
     SDL_zero(mesh);
     mesh.positions = positions;
-    mesh.normals = normals;
     mesh.uvs = uvs;
     mesh.colors = colors;
     mesh.vertex_count = 4;
@@ -529,13 +541,6 @@ bool sdl3d_draw_particles(sdl3d_render_context *context, const sdl3d_particle_em
     if (emitter == NULL)
     {
         return true;
-    }
-
-    const float previous_emissive[3] = {context->emissive[0], context->emissive[1], context->emissive[2]};
-    if (emitter->config.emissive_intensity > 0.0f)
-    {
-        sdl3d_set_emissive(context, emitter->config.emissive_intensity, emitter->config.emissive_intensity,
-                           emitter->config.emissive_intensity);
     }
 
     bool ok = true;
@@ -558,13 +563,15 @@ bool sdl3d_draw_particles(sdl3d_render_context *context, const sdl3d_particle_em
         color.g = sdl3d_particle_lerp_u8(emitter->config.color_start.g, emitter->config.color_end.g, t);
         color.b = sdl3d_particle_lerp_u8(emitter->config.color_start.b, emitter->config.color_end.b, t);
         color.a = sdl3d_particle_lerp_u8(emitter->config.color_start.a, emitter->config.color_end.a, t);
+        if (emitter->config.emissive_intensity > 0.0f)
+        {
+            const float scale = 1.0f + emitter->config.emissive_intensity;
+            color.r = sdl3d_particle_scale_u8(color.r, scale);
+            color.g = sdl3d_particle_scale_u8(color.g, scale);
+            color.b = sdl3d_particle_scale_u8(color.b, scale);
+        }
 
         ok = sdl3d_draw_particle_quad(context, &emitter->config, p, size, color) && ok;
-    }
-
-    if (emitter->config.emissive_intensity > 0.0f)
-    {
-        sdl3d_set_emissive(context, previous_emissive[0], previous_emissive[1], previous_emissive[2]);
     }
 
     return ok;

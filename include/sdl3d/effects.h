@@ -59,7 +59,7 @@ extern "C"
         sdl3d_particle_emitter_shape shape; /**< Spawn volume shape. */
         sdl3d_vec3 extents;                 /**< Half-size for SDL3D_PARTICLE_EMITTER_BOX. */
         float radius;                       /**< XZ radius for SDL3D_PARTICLE_EMITTER_CIRCLE. */
-        float emissive_intensity;           /**< Temporary emissive scale while drawing particles. */
+        float emissive_intensity;           /**< Extra unlit brightness scale while drawing particles. */
         bool camera_facing;                 /**< True for spherical billboards, false for upright billboards. */
         bool depth_test;                    /**< Reserved for future renderer support; currently depth-tested. */
         bool additive_blend;            /**< Reserved for future renderer support; currently normal geometry path. */
