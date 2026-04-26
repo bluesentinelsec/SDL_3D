@@ -4,25 +4,23 @@
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include <stdint.h>
+
 #define SDL3D_INPUT_DEFAULT_DEADZONE 0.15f
 #define SDL3D_INPUT_MAX_MOUSE_BUTTONS 16
 #define SDL3D_INPUT_DEMO_MAGIC "SDL3DEMO"
 #define SDL3D_INPUT_DEMO_MAGIC_SIZE 8
-#define SDL3D_INPUT_DEMO_VERSION 1U
+#define SDL3D_INPUT_DEMO_VERSION 2U
+#define SDL3D_INPUT_DEMO_ACTION_COUNT SDL3D_INPUT_MAX_ACTIONS
+#define SDL3D_INPUT_DEMO_FLAG_PRESSED 0x01U
+#define SDL3D_INPUT_DEMO_FLAG_RELEASED 0x02U
+#define SDL3D_INPUT_DEMO_FLAG_HELD 0x04U
 
 typedef struct sdl3d_input_action_entry
 {
     char name[SDL3D_INPUT_ACTION_NAME_MAX];
     bool registered;
 } sdl3d_input_action_entry;
-
-typedef struct sdl3d_input_demo_header
-{
-    char magic[SDL3D_INPUT_DEMO_MAGIC_SIZE];
-    Uint32 version;
-    float tick_rate;
-    Uint32 tick_count;
-} sdl3d_input_demo_header;
 
 struct sdl3d_demo_recorder
 {
@@ -430,6 +428,178 @@ static bool sdl3d_input_write_all(SDL_IOStream *stream, const void *data, size_t
 static bool sdl3d_input_read_all(SDL_IOStream *stream, void *data, size_t size)
 {
     return stream != NULL && data != NULL && SDL_ReadIO(stream, data, size) == size;
+}
+
+static bool sdl3d_input_write_u8(SDL_IOStream *stream, Uint8 value)
+{
+    return sdl3d_input_write_all(stream, &value, sizeof(value));
+}
+
+static bool sdl3d_input_read_u8(SDL_IOStream *stream, Uint8 *out_value)
+{
+    return sdl3d_input_read_all(stream, out_value, sizeof(*out_value));
+}
+
+static bool sdl3d_input_write_u32_le(SDL_IOStream *stream, Uint32 value)
+{
+    Uint8 bytes[4];
+    bytes[0] = (Uint8)(value & 0xffU);
+    bytes[1] = (Uint8)((value >> 8U) & 0xffU);
+    bytes[2] = (Uint8)((value >> 16U) & 0xffU);
+    bytes[3] = (Uint8)((value >> 24U) & 0xffU);
+    return sdl3d_input_write_all(stream, bytes, sizeof(bytes));
+}
+
+static bool sdl3d_input_read_u32_le(SDL_IOStream *stream, Uint32 *out_value)
+{
+    Uint8 bytes[4];
+    if (out_value == NULL || !sdl3d_input_read_all(stream, bytes, sizeof(bytes)))
+    {
+        return false;
+    }
+
+    *out_value = (Uint32)bytes[0] | ((Uint32)bytes[1] << 8U) | ((Uint32)bytes[2] << 16U) | ((Uint32)bytes[3] << 24U);
+    return true;
+}
+
+static bool sdl3d_input_write_i32_le(SDL_IOStream *stream, int value)
+{
+    return sdl3d_input_write_u32_le(stream, (Uint32)(Sint32)value);
+}
+
+static bool sdl3d_input_read_i32_le(SDL_IOStream *stream, int *out_value)
+{
+    Uint32 bits;
+    if (out_value == NULL || !sdl3d_input_read_u32_le(stream, &bits))
+    {
+        return false;
+    }
+
+    *out_value = (int)(Sint32)bits;
+    return true;
+}
+
+static bool sdl3d_input_write_f32_le(SDL_IOStream *stream, float value)
+{
+    Uint32 bits;
+    SDL_memcpy(&bits, &value, sizeof(bits));
+    return sdl3d_input_write_u32_le(stream, bits);
+}
+
+static bool sdl3d_input_read_f32_le(SDL_IOStream *stream, float *out_value)
+{
+    Uint32 bits;
+    if (out_value == NULL || !sdl3d_input_read_u32_le(stream, &bits))
+    {
+        return false;
+    }
+
+    SDL_memcpy(out_value, &bits, sizeof(bits));
+    return true;
+}
+
+static Uint8 sdl3d_input_demo_flags_from_action(const sdl3d_action_state *action)
+{
+    Uint8 flags = 0U;
+    if (action->pressed)
+    {
+        flags |= SDL3D_INPUT_DEMO_FLAG_PRESSED;
+    }
+    if (action->released)
+    {
+        flags |= SDL3D_INPUT_DEMO_FLAG_RELEASED;
+    }
+    if (action->held)
+    {
+        flags |= SDL3D_INPUT_DEMO_FLAG_HELD;
+    }
+    return flags;
+}
+
+static void sdl3d_input_demo_flags_to_action(Uint8 flags, sdl3d_action_state *action)
+{
+    action->pressed = (flags & SDL3D_INPUT_DEMO_FLAG_PRESSED) != 0;
+    action->released = (flags & SDL3D_INPUT_DEMO_FLAG_RELEASED) != 0;
+    action->held = (flags & SDL3D_INPUT_DEMO_FLAG_HELD) != 0;
+}
+
+static bool sdl3d_demo_write_header(SDL_IOStream *stream, float tick_rate, Uint32 tick_count)
+{
+    return sdl3d_input_write_all(stream, SDL3D_INPUT_DEMO_MAGIC, SDL3D_INPUT_DEMO_MAGIC_SIZE) &&
+           sdl3d_input_write_u32_le(stream, SDL3D_INPUT_DEMO_VERSION) && sdl3d_input_write_f32_le(stream, tick_rate) &&
+           sdl3d_input_write_u32_le(stream, tick_count) &&
+           sdl3d_input_write_u32_le(stream, SDL3D_INPUT_DEMO_ACTION_COUNT);
+}
+
+static bool sdl3d_demo_read_header(SDL_IOStream *stream, float *out_tick_rate, Uint32 *out_tick_count,
+                                   Uint32 *out_action_count)
+{
+    char magic[SDL3D_INPUT_DEMO_MAGIC_SIZE];
+    Uint32 version;
+
+    if (!sdl3d_input_read_all(stream, magic, sizeof(magic)) ||
+        SDL_memcmp(magic, SDL3D_INPUT_DEMO_MAGIC, SDL3D_INPUT_DEMO_MAGIC_SIZE) != 0 ||
+        !sdl3d_input_read_u32_le(stream, &version) || version != SDL3D_INPUT_DEMO_VERSION ||
+        !sdl3d_input_read_f32_le(stream, out_tick_rate) || !sdl3d_input_read_u32_le(stream, out_tick_count) ||
+        !sdl3d_input_read_u32_le(stream, out_action_count) || *out_action_count != SDL3D_INPUT_DEMO_ACTION_COUNT)
+    {
+        SDL_SetError("Invalid SDL3D demo file.");
+        return false;
+    }
+
+    return true;
+}
+
+static bool sdl3d_demo_write_snapshot(SDL_IOStream *stream, const sdl3d_input_snapshot *snapshot)
+{
+    if (stream == NULL || snapshot == NULL)
+    {
+        return false;
+    }
+
+    if (!sdl3d_input_write_i32_le(stream, snapshot->tick) || !sdl3d_input_write_f32_le(stream, snapshot->mouse_dx) ||
+        !sdl3d_input_write_f32_le(stream, snapshot->mouse_dy))
+    {
+        return false;
+    }
+
+    for (int i = 0; i < SDL3D_INPUT_DEMO_ACTION_COUNT; ++i)
+    {
+        if (!sdl3d_input_write_u8(stream, sdl3d_input_demo_flags_from_action(&snapshot->actions[i])) ||
+            !sdl3d_input_write_f32_le(stream, snapshot->actions[i].value))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool sdl3d_demo_read_snapshot(SDL_IOStream *stream, sdl3d_input_snapshot *snapshot)
+{
+    if (stream == NULL || snapshot == NULL)
+    {
+        return false;
+    }
+
+    SDL_zero(*snapshot);
+    if (!sdl3d_input_read_i32_le(stream, &snapshot->tick) || !sdl3d_input_read_f32_le(stream, &snapshot->mouse_dx) ||
+        !sdl3d_input_read_f32_le(stream, &snapshot->mouse_dy))
+    {
+        return false;
+    }
+
+    for (int i = 0; i < SDL3D_INPUT_DEMO_ACTION_COUNT; ++i)
+    {
+        Uint8 flags;
+        if (!sdl3d_input_read_u8(stream, &flags) || !sdl3d_input_read_f32_le(stream, &snapshot->actions[i].value))
+        {
+            return false;
+        }
+        sdl3d_input_demo_flags_to_action(flags, &snapshot->actions[i]);
+    }
+
+    return true;
 }
 
 sdl3d_input_manager *sdl3d_input_create(void)
@@ -931,7 +1101,6 @@ void sdl3d_demo_record_stop(sdl3d_demo_recorder *recorder)
 bool sdl3d_demo_save(const sdl3d_demo_recorder *recorder, const char *path, float tick_rate)
 {
     SDL_IOStream *stream;
-    sdl3d_input_demo_header header;
     bool ok;
 
     if (recorder == NULL || path == NULL)
@@ -945,16 +1114,10 @@ bool sdl3d_demo_save(const sdl3d_demo_recorder *recorder, const char *path, floa
         return false;
     }
 
-    SDL_zero(header);
-    SDL_memcpy(header.magic, SDL3D_INPUT_DEMO_MAGIC, SDL3D_INPUT_DEMO_MAGIC_SIZE);
-    header.version = SDL3D_INPUT_DEMO_VERSION;
-    header.tick_rate = tick_rate;
-    header.tick_count = recorder->count;
-
-    ok = sdl3d_input_write_all(stream, &header, sizeof(header));
-    if (ok && recorder->count > 0)
+    ok = sdl3d_demo_write_header(stream, tick_rate, recorder->count);
+    for (Uint32 i = 0; ok && i < recorder->count; ++i)
     {
-        ok = sdl3d_input_write_all(stream, recorder->snapshots, (size_t)recorder->count * sizeof(*recorder->snapshots));
+        ok = sdl3d_demo_write_snapshot(stream, &recorder->snapshots[i]);
     }
 
     return SDL_CloseIO(stream) && ok;
@@ -985,9 +1148,11 @@ void sdl3d_demo_record_free(sdl3d_demo_recorder *recorder)
 sdl3d_demo_player *sdl3d_demo_playback_load(const char *path)
 {
     SDL_IOStream *stream;
-    sdl3d_input_demo_header header;
     sdl3d_demo_player *player;
+    Uint32 tick_count;
+    Uint32 action_count;
     size_t snapshot_bytes;
+    float tick_rate;
 
     if (path == NULL)
     {
@@ -1001,12 +1166,9 @@ sdl3d_demo_player *sdl3d_demo_playback_load(const char *path)
         return NULL;
     }
 
-    if (!sdl3d_input_read_all(stream, &header, sizeof(header)) ||
-        SDL_memcmp(header.magic, SDL3D_INPUT_DEMO_MAGIC, SDL3D_INPUT_DEMO_MAGIC_SIZE) != 0 ||
-        header.version != SDL3D_INPUT_DEMO_VERSION)
+    if (!sdl3d_demo_read_header(stream, &tick_rate, &tick_count, &action_count))
     {
         SDL_CloseIO(stream);
-        SDL_SetError("Invalid SDL3D demo file.");
         return NULL;
     }
 
@@ -1018,12 +1180,20 @@ sdl3d_demo_player *sdl3d_demo_playback_load(const char *path)
         return NULL;
     }
 
-    player->tick_rate = header.tick_rate;
-    player->count = header.tick_count;
+    player->tick_rate = tick_rate;
+    player->count = tick_count;
 
-    if (header.tick_count > 0)
+    if (tick_count > 0)
     {
-        snapshot_bytes = (size_t)header.tick_count * sizeof(*player->snapshots);
+        if (tick_count > (Uint32)(SIZE_MAX / sizeof(*player->snapshots)))
+        {
+            sdl3d_demo_playback_free(player);
+            SDL_CloseIO(stream);
+            SDL_SetError("SDL3D demo file is too large.");
+            return NULL;
+        }
+
+        snapshot_bytes = (size_t)tick_count * sizeof(*player->snapshots);
         player->snapshots = (sdl3d_input_snapshot *)SDL_malloc(snapshot_bytes);
         if (player->snapshots == NULL)
         {
@@ -1032,12 +1202,16 @@ sdl3d_demo_player *sdl3d_demo_playback_load(const char *path)
             SDL_OutOfMemory();
             return NULL;
         }
-        if (!sdl3d_input_read_all(stream, player->snapshots, snapshot_bytes))
+
+        for (Uint32 i = 0; i < tick_count; ++i)
         {
-            sdl3d_demo_playback_free(player);
-            SDL_CloseIO(stream);
-            SDL_SetError("Truncated SDL3D demo file.");
-            return NULL;
+            if (!sdl3d_demo_read_snapshot(stream, &player->snapshots[i]))
+            {
+                sdl3d_demo_playback_free(player);
+                SDL_CloseIO(stream);
+                SDL_SetError("Truncated SDL3D demo file.");
+                return NULL;
+            }
         }
     }
 

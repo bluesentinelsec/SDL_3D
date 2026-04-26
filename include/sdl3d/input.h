@@ -285,7 +285,14 @@ extern "C"
     /** @brief Stop recording. The recorder remains valid for saving/freeing. */
     void sdl3d_demo_record_stop(sdl3d_demo_recorder *recorder);
 
-    /** @brief Save a recorded demo to disk. */
+    /**
+     * @brief Save a recorded demo to disk.
+     *
+     * Demo files use an explicit little-endian binary format with fixed-size
+     * integer fields, IEEE-754 float32 values, and per-action flag bytes. The
+     * file format does not depend on host struct padding, bool size, or native
+     * endianness.
+     */
     bool sdl3d_demo_save(const sdl3d_demo_recorder *recorder, const char *path, float tick_rate);
 
     /** @brief Return the number of snapshots in a recorder. */
@@ -297,7 +304,7 @@ extern "C"
     /** @brief Free a recorder and its snapshot buffer. */
     void sdl3d_demo_record_free(sdl3d_demo_recorder *recorder);
 
-    /** @brief Load a demo file for playback. */
+    /** @brief Load a portable SDL3D demo file for playback. */
     sdl3d_demo_player *sdl3d_demo_playback_load(const char *path);
 
     /** @brief Start feeding recorded snapshots into an input manager. */

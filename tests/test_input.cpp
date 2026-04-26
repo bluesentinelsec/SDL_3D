@@ -13,7 +13,10 @@ extern "C"
 #include <SDL3/SDL_scancode.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include <fstream>
+#include <iterator>
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -39,6 +42,18 @@ std::string demo_path()
     SDL_free(pref_path);
     path += "sdl3d_input_test.dem";
     return path;
+}
+
+std::vector<unsigned char> read_binary_file(const std::string &path)
+{
+    std::ifstream file(path, std::ios::binary);
+    return std::vector<unsigned char>(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+}
+
+Uint32 read_u32_le(const std::vector<unsigned char> &bytes, size_t offset)
+{
+    return static_cast<Uint32>(bytes[offset]) | (static_cast<Uint32>(bytes[offset + 1]) << 8U) |
+           (static_cast<Uint32>(bytes[offset + 2]) << 16U) | (static_cast<Uint32>(bytes[offset + 3]) << 24U);
 }
 
 void push_key(sdl3d_input_manager *input, SDL_EventType type, SDL_Scancode scancode)
@@ -379,6 +394,23 @@ TEST(InputDemo, RecordAndPlayback)
 
     std::string path = demo_path();
     ASSERT_TRUE(sdl3d_demo_save(recorder, path.c_str(), 1.0f / 60.0f)) << SDL_GetError();
+
+    std::vector<unsigned char> bytes = read_binary_file(path);
+    constexpr size_t kDemoHeaderSize = 24U;
+    constexpr size_t kDemoSnapshotSize = 12U + SDL3D_INPUT_MAX_ACTIONS * 5U;
+    ASSERT_EQ(kDemoHeaderSize + 2U * kDemoSnapshotSize, bytes.size());
+    EXPECT_EQ('S', bytes[0]);
+    EXPECT_EQ('D', bytes[1]);
+    EXPECT_EQ('L', bytes[2]);
+    EXPECT_EQ('3', bytes[3]);
+    EXPECT_EQ('D', bytes[4]);
+    EXPECT_EQ('E', bytes[5]);
+    EXPECT_EQ('M', bytes[6]);
+    EXPECT_EQ('O', bytes[7]);
+    EXPECT_EQ(2U, read_u32_le(bytes, 8));
+    EXPECT_EQ(2U, read_u32_le(bytes, 16));
+    EXPECT_EQ(SDL3D_INPUT_MAX_ACTIONS, read_u32_le(bytes, 20));
+
     sdl3d_demo_record_free(recorder);
 
     sdl3d_demo_player *player = sdl3d_demo_playback_load(path.c_str());
