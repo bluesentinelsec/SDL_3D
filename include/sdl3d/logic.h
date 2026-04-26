@@ -104,6 +104,78 @@ extern "C"
     } sdl3d_logic_resolved_target;
 
     /**
+     * @brief Target-aware action type for designer-authored gameplay logic.
+     *
+     * These actions extend the lower-level sdl3d_action vocabulary with effects
+     * that need logic-world target resolution. Existing sdl3d_action values are
+     * still supported through SDL3D_LOGIC_ACTION_CORE.
+     */
+    typedef enum sdl3d_logic_action_type
+    {
+        SDL3D_LOGIC_ACTION_NONE = 0,                /**< Invalid/no action. */
+        SDL3D_LOGIC_ACTION_CORE = 1,                /**< Execute an embedded sdl3d_action. */
+        SDL3D_LOGIC_ACTION_SET_ACTOR_ACTIVE = 2,    /**< Set a resolved actor's active flag. */
+        SDL3D_LOGIC_ACTION_TOGGLE_ACTOR_ACTIVE = 3, /**< Toggle a resolved actor's active flag. */
+        SDL3D_LOGIC_ACTION_SET_ACTOR_PROPERTY = 4,  /**< Set a property on a resolved actor. */
+        SDL3D_LOGIC_ACTION_SET_SECTOR_PUSH = 5,     /**< Set a sector push/current velocity. */
+        SDL3D_LOGIC_ACTION_SET_SECTOR_DAMAGE = 6,   /**< Set non-negative sector damage per second. */
+        SDL3D_LOGIC_ACTION_SET_SECTOR_AMBIENT = 7,  /**< Set a non-negative ambient sound id. */
+    } sdl3d_logic_action_type;
+
+    /**
+     * @brief Target-aware action executed by a logic world.
+     *
+     * Like sdl3d_action, this is a plain value type. It owns no pointers:
+     * target names, property keys, and string property values must remain valid
+     * until execution. Property bags copy string values when the action runs.
+     */
+    typedef struct sdl3d_logic_action
+    {
+        sdl3d_logic_action_type type;
+
+        union {
+            /** @brief Embedded low-level action. */
+            sdl3d_action core;
+
+            /** @brief Set or toggle actor active state. */
+            struct
+            {
+                sdl3d_logic_target_ref target;
+                bool active;
+            } actor_active;
+
+            /** @brief Set a property on a resolved actor's property bag. */
+            struct
+            {
+                sdl3d_logic_target_ref target;
+                const char *key;
+                sdl3d_value value;
+            } actor_property;
+
+            /** @brief Set world-space sector push/current velocity. */
+            struct
+            {
+                sdl3d_logic_target_ref target;
+                sdl3d_vec3 velocity;
+            } sector_push;
+
+            /** @brief Set sector damage per second. Negative values clamp to zero. */
+            struct
+            {
+                sdl3d_logic_target_ref target;
+                float damage_per_second;
+            } sector_damage;
+
+            /** @brief Set sector ambient sound id. Negative values clamp to zero. */
+            struct
+            {
+                sdl3d_logic_target_ref target;
+                int ambient_sound_id;
+            } sector_ambient;
+        };
+    } sdl3d_logic_action;
+
+    /**
      * @brief Create a logic world that listens to a signal bus.
      *
      * The logic world references @p bus and @p timers but does not own either
@@ -198,6 +270,58 @@ extern "C"
     bool sdl3d_logic_world_resolve_target(const sdl3d_logic_world *world, const sdl3d_logic_target_ref *ref,
                                           sdl3d_logic_resolved_target *out_target);
 
+    /* ================================================================== */
+    /* Target-aware actions                                               */
+    /* ================================================================== */
+
+    /** @brief Wrap an existing low-level sdl3d_action as a logic action. */
+    sdl3d_logic_action sdl3d_logic_action_make_core(sdl3d_action action);
+
+    /** @brief Create an action that sets a resolved actor's active flag. */
+    sdl3d_logic_action sdl3d_logic_action_make_set_actor_active(sdl3d_logic_target_ref target, bool active);
+
+    /** @brief Create an action that toggles a resolved actor's active flag. */
+    sdl3d_logic_action sdl3d_logic_action_make_toggle_actor_active(sdl3d_logic_target_ref target);
+
+    /**
+     * @brief Create an action that sets a property on a resolved actor.
+     *
+     * The key pointer and any string value pointer are not copied into the
+     * action; they must remain valid until execution.
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_set_actor_property(sdl3d_logic_target_ref target, const char *key,
+                                                                  sdl3d_value value);
+
+    /** @brief Create an action that sets a sector's push/current velocity. */
+    sdl3d_logic_action sdl3d_logic_action_make_set_sector_push(sdl3d_logic_target_ref target, sdl3d_vec3 velocity);
+
+    /**
+     * @brief Create an action that sets sector damage per second.
+     *
+     * Negative values are clamped to zero during execution.
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_set_sector_damage(sdl3d_logic_target_ref target,
+                                                                 float damage_per_second);
+
+    /**
+     * @brief Create an action that sets a sector ambient sound id.
+     *
+     * Negative values are clamped to zero during execution.
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_set_sector_ambient(sdl3d_logic_target_ref target, int ambient_sound_id);
+
+    /**
+     * @brief Execute a target-aware action immediately.
+     *
+     * Core actions execute through sdl3d_action_execute using the world's signal
+     * bus and timer pool. Target-aware actions resolve their target against the
+     * world's current target context.
+     *
+     * @return true when the action was valid and applied, false when the action
+     *         or target was invalid.
+     */
+    bool sdl3d_logic_world_execute_action(sdl3d_logic_world *world, const sdl3d_logic_action *action);
+
     /**
      * @brief Bind one action to a signal.
      *
@@ -215,6 +339,16 @@ extern "C"
      * @return A binding id greater than zero, or zero on failure.
      */
     int sdl3d_logic_world_bind_action(sdl3d_logic_world *world, int signal_id, const sdl3d_action *action);
+
+    /**
+     * @brief Bind one target-aware logic action to a signal.
+     *
+     * The action is copied by value. Pointers stored inside the action are not
+     * copied and must remain valid while the binding can execute.
+     *
+     * @return A binding id greater than zero, or zero on failure.
+     */
+    int sdl3d_logic_world_bind_logic_action(sdl3d_logic_world *world, int signal_id, const sdl3d_logic_action *action);
 
     /**
      * @brief Remove a binding by id.

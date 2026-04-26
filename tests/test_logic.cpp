@@ -10,6 +10,7 @@ extern "C"
 #include "sdl3d/actor_registry.h"
 #include "sdl3d/level.h"
 #include "sdl3d/logic.h"
+#include "sdl3d/math.h"
 #include "sdl3d/properties.h"
 }
 
@@ -476,6 +477,225 @@ TEST(LogicWorldTargets, InvalidTargetOperationsAreSafe)
     EXPECT_FALSE(sdl3d_logic_world_resolve_target(nullptr, &ref, &resolved));
     EXPECT_FALSE(sdl3d_logic_world_resolve_target(world, nullptr, &resolved));
     EXPECT_FALSE(sdl3d_logic_world_resolve_target(world, &ref, nullptr));
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, ExecuteCoreActionUsesExistingActionSystem)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    sdl3d_properties *props = sdl3d_properties_create();
+
+    sdl3d_action core = sdl3d_action_make_set_bool(props, "opened", true);
+    sdl3d_logic_action action = sdl3d_logic_action_make_core(core);
+
+    EXPECT_TRUE(sdl3d_logic_world_execute_action(world, &action));
+    EXPECT_TRUE(sdl3d_properties_get_bool(props, "opened", false));
+
+    sdl3d_properties_destroy(props);
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, BindLogicActionSetsActorActive)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    sdl3d_actor_registry *registry = sdl3d_actor_registry_create();
+    sdl3d_registered_actor *actor = sdl3d_actor_registry_add(registry, "robot_1");
+    ASSERT_NE(actor, nullptr);
+    actor->active = false;
+
+    sdl3d_logic_target_context context{};
+    context.registry = registry;
+    sdl3d_logic_world_set_target_context(world, &context);
+
+    sdl3d_logic_action action =
+        sdl3d_logic_action_make_set_actor_active(sdl3d_logic_target_actor_name("robot_1"), true);
+    ASSERT_GT(sdl3d_logic_world_bind_logic_action(world, 77, &action), 0);
+
+    sdl3d_signal_emit(bus, 77, nullptr);
+    EXPECT_TRUE(actor->active);
+
+    sdl3d_actor_registry_destroy(registry);
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, ToggleActorActive)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    sdl3d_actor_registry *registry = sdl3d_actor_registry_create();
+    sdl3d_registered_actor *actor = sdl3d_actor_registry_add(registry, "door");
+    ASSERT_NE(actor, nullptr);
+    actor->active = true;
+
+    sdl3d_logic_target_context context{};
+    context.registry = registry;
+    sdl3d_logic_world_set_target_context(world, &context);
+
+    sdl3d_logic_action action = sdl3d_logic_action_make_toggle_actor_active(sdl3d_logic_target_actor_id(actor->id));
+
+    EXPECT_TRUE(sdl3d_logic_world_execute_action(world, &action));
+    EXPECT_FALSE(actor->active);
+    EXPECT_TRUE(sdl3d_logic_world_execute_action(world, &action));
+    EXPECT_TRUE(actor->active);
+
+    sdl3d_actor_registry_destroy(registry);
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, SetActorProperty)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    sdl3d_actor_registry *registry = sdl3d_actor_registry_create();
+    sdl3d_registered_actor *actor = sdl3d_actor_registry_add(registry, "alert_light");
+    ASSERT_NE(actor, nullptr);
+
+    sdl3d_logic_target_context context{};
+    context.registry = registry;
+    sdl3d_logic_world_set_target_context(world, &context);
+
+    sdl3d_value color{};
+    color.type = SDL3D_VALUE_STRING;
+    color.as_string = (char *)"red";
+    sdl3d_logic_action action =
+        sdl3d_logic_action_make_set_actor_property(sdl3d_logic_target_actor_name("alert_light"), "state", color);
+
+    EXPECT_TRUE(sdl3d_logic_world_execute_action(world, &action));
+    EXPECT_STREQ(sdl3d_properties_get_string(actor->props, "state", ""), "red");
+
+    sdl3d_actor_registry_destroy(registry);
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, SetSectorPushByName)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    sdl3d_level level{};
+    sdl3d_sector sectors[2]{};
+    level.sector_count = 2;
+
+    sdl3d_logic_target_context context{};
+    context.level = &level;
+    context.sectors = sectors;
+    context.sector_count = 2;
+    sdl3d_logic_world_set_target_context(world, &context);
+    ASSERT_TRUE(sdl3d_logic_world_set_sector_name(world, 1, "conveyor"));
+
+    sdl3d_logic_action action = sdl3d_logic_action_make_set_sector_push(sdl3d_logic_target_sector_name("conveyor"),
+                                                                        sdl3d_vec3_make(3.0f, 0.0f, -1.5f));
+
+    EXPECT_TRUE(sdl3d_logic_world_execute_action(world, &action));
+    EXPECT_FLOAT_EQ(sectors[1].push_velocity[0], 3.0f);
+    EXPECT_FLOAT_EQ(sectors[1].push_velocity[1], 0.0f);
+    EXPECT_FLOAT_EQ(sectors[1].push_velocity[2], -1.5f);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, SetSectorDamageClampsNegativeToZero)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    sdl3d_level level{};
+    sdl3d_sector sectors[1]{};
+    level.sector_count = 1;
+    sectors[0].damage_per_second = 9.0f;
+
+    sdl3d_logic_target_context context{};
+    context.level = &level;
+    context.sectors = sectors;
+    context.sector_count = 1;
+    sdl3d_logic_world_set_target_context(world, &context);
+
+    sdl3d_logic_action action = sdl3d_logic_action_make_set_sector_damage(sdl3d_logic_target_sector_index(0), -5.0f);
+
+    EXPECT_TRUE(sdl3d_logic_world_execute_action(world, &action));
+    EXPECT_FLOAT_EQ(sectors[0].damage_per_second, 0.0f);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, SetSectorAmbientClampsNegativeToZero)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    sdl3d_level level{};
+    sdl3d_sector sectors[1]{};
+    level.sector_count = 1;
+    sectors[0].ambient_sound_id = 4;
+
+    sdl3d_logic_target_context context{};
+    context.level = &level;
+    context.sectors = sectors;
+    context.sector_count = 1;
+    sdl3d_logic_world_set_target_context(world, &context);
+
+    sdl3d_logic_action action = sdl3d_logic_action_make_set_sector_ambient(sdl3d_logic_target_sector_index(0), -1);
+
+    EXPECT_TRUE(sdl3d_logic_world_execute_action(world, &action));
+    EXPECT_EQ(sectors[0].ambient_sound_id, 0);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, WrongTargetKindFailsWithoutMutation)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    sdl3d_actor_registry *registry = sdl3d_actor_registry_create();
+    sdl3d_registered_actor *actor = sdl3d_actor_registry_add(registry, "actor");
+    ASSERT_NE(actor, nullptr);
+    sdl3d_level level{};
+    sdl3d_sector sectors[1]{};
+    level.sector_count = 1;
+    sectors[0].damage_per_second = 7.0f;
+
+    sdl3d_logic_target_context context{};
+    context.registry = registry;
+    context.level = &level;
+    context.sectors = sectors;
+    context.sector_count = 1;
+    sdl3d_logic_world_set_target_context(world, &context);
+
+    sdl3d_logic_action actor_action =
+        sdl3d_logic_action_make_set_actor_active(sdl3d_logic_target_sector_index(0), false);
+    sdl3d_logic_action sector_action =
+        sdl3d_logic_action_make_set_sector_damage(sdl3d_logic_target_actor_id(actor->id), 12.0f);
+
+    EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &actor_action));
+    EXPECT_TRUE(actor->active);
+    EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &sector_action));
+    EXPECT_FLOAT_EQ(sectors[0].damage_per_second, 7.0f);
+
+    sdl3d_actor_registry_destroy(registry);
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, InvalidLogicActionsAreRejected)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    sdl3d_logic_action none{};
+
+    EXPECT_FALSE(sdl3d_logic_world_execute_action(nullptr, &none));
+    EXPECT_FALSE(sdl3d_logic_world_execute_action(world, nullptr));
+    EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &none));
+    EXPECT_EQ(sdl3d_logic_world_bind_logic_action(nullptr, 1, &none), 0);
+    EXPECT_EQ(sdl3d_logic_world_bind_logic_action(world, 1, nullptr), 0);
+    EXPECT_EQ(sdl3d_logic_world_bind_logic_action(world, 1, &none), 0);
 
     sdl3d_logic_world_destroy(world);
     sdl3d_signal_bus_destroy(bus);

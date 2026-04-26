@@ -13,7 +13,7 @@ typedef struct logic_binding
     int id;
     int signal_id;
     int connection_id;
-    sdl3d_action action;
+    sdl3d_logic_action action;
     bool enabled;
     struct logic_binding *next;
 } logic_binding;
@@ -102,6 +102,58 @@ static bool sector_index_is_valid(const sdl3d_logic_target_context *context, int
            sector_index < context->sector_count && sector_index < context->level->sector_count;
 }
 
+static bool resolved_target_is_actor(const sdl3d_logic_resolved_target *target)
+{
+    return target != NULL &&
+           (target->kind == SDL3D_LOGIC_TARGET_ACTOR_ID || target->kind == SDL3D_LOGIC_TARGET_ACTOR_NAME) &&
+           target->actor != NULL;
+}
+
+static bool resolved_target_is_sector(const sdl3d_logic_resolved_target *target)
+{
+    return target != NULL &&
+           (target->kind == SDL3D_LOGIC_TARGET_SECTOR_INDEX || target->kind == SDL3D_LOGIC_TARGET_SECTOR_NAME) &&
+           target->sector.sector != NULL;
+}
+
+static float clamp_non_negative_float(float value)
+{
+    return value > 0.0f ? value : 0.0f;
+}
+
+static int clamp_non_negative_int(int value)
+{
+    return value > 0 ? value : 0;
+}
+
+static void set_property_value(sdl3d_properties *target, const char *key, const sdl3d_value *value)
+{
+    if (target == NULL || key == NULL || value == NULL)
+        return;
+
+    switch (value->type)
+    {
+    case SDL3D_VALUE_INT:
+        sdl3d_properties_set_int(target, key, value->as_int);
+        break;
+    case SDL3D_VALUE_FLOAT:
+        sdl3d_properties_set_float(target, key, value->as_float);
+        break;
+    case SDL3D_VALUE_BOOL:
+        sdl3d_properties_set_bool(target, key, value->as_bool);
+        break;
+    case SDL3D_VALUE_VEC3:
+        sdl3d_properties_set_vec3(target, key, value->as_vec3);
+        break;
+    case SDL3D_VALUE_STRING:
+        sdl3d_properties_set_string(target, key, value->as_string);
+        break;
+    case SDL3D_VALUE_COLOR:
+        sdl3d_properties_set_color(target, key, value->as_color);
+        break;
+    }
+}
+
 static void execute_binding(void *userdata, int signal_id, const sdl3d_properties *payload)
 {
     (void)payload;
@@ -110,12 +162,8 @@ static void execute_binding(void *userdata, int signal_id, const sdl3d_propertie
     if (binding == NULL || !binding->enabled || binding->signal_id != signal_id)
         return;
 
-    /*
-     * Current action types do not consume signal payloads. Payload-aware actions
-     * can be added without changing the binding dispatch model.
-     */
     sdl3d_logic_world *world = binding->owner;
-    sdl3d_action_execute(&binding->action, world != NULL ? world->bus : NULL, world != NULL ? world->timers : NULL);
+    sdl3d_logic_world_execute_action(world, &binding->action);
 }
 
 sdl3d_logic_world *sdl3d_logic_world_create(sdl3d_signal_bus *bus, sdl3d_timer_pool *timers)
@@ -318,9 +366,164 @@ bool sdl3d_logic_world_resolve_target(const sdl3d_logic_world *world, const sdl3
     return false;
 }
 
+sdl3d_logic_action sdl3d_logic_action_make_core(sdl3d_action action)
+{
+    sdl3d_logic_action logic_action;
+    SDL_zero(logic_action);
+    logic_action.type = SDL3D_LOGIC_ACTION_CORE;
+    logic_action.core = action;
+    return logic_action;
+}
+
+sdl3d_logic_action sdl3d_logic_action_make_set_actor_active(sdl3d_logic_target_ref target, bool active)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_SET_ACTOR_ACTIVE;
+    action.actor_active.target = target;
+    action.actor_active.active = active;
+    return action;
+}
+
+sdl3d_logic_action sdl3d_logic_action_make_toggle_actor_active(sdl3d_logic_target_ref target)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_TOGGLE_ACTOR_ACTIVE;
+    action.actor_active.target = target;
+    return action;
+}
+
+sdl3d_logic_action sdl3d_logic_action_make_set_actor_property(sdl3d_logic_target_ref target, const char *key,
+                                                              sdl3d_value value)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_SET_ACTOR_PROPERTY;
+    action.actor_property.target = target;
+    action.actor_property.key = key;
+    action.actor_property.value = value;
+    return action;
+}
+
+sdl3d_logic_action sdl3d_logic_action_make_set_sector_push(sdl3d_logic_target_ref target, sdl3d_vec3 velocity)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_SET_SECTOR_PUSH;
+    action.sector_push.target = target;
+    action.sector_push.velocity = velocity;
+    return action;
+}
+
+sdl3d_logic_action sdl3d_logic_action_make_set_sector_damage(sdl3d_logic_target_ref target, float damage_per_second)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_SET_SECTOR_DAMAGE;
+    action.sector_damage.target = target;
+    action.sector_damage.damage_per_second = damage_per_second;
+    return action;
+}
+
+sdl3d_logic_action sdl3d_logic_action_make_set_sector_ambient(sdl3d_logic_target_ref target, int ambient_sound_id)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_SET_SECTOR_AMBIENT;
+    action.sector_ambient.target = target;
+    action.sector_ambient.ambient_sound_id = ambient_sound_id;
+    return action;
+}
+
+bool sdl3d_logic_world_execute_action(sdl3d_logic_world *world, const sdl3d_logic_action *action)
+{
+    if (world == NULL || action == NULL)
+        return false;
+
+    sdl3d_logic_resolved_target target;
+    switch (action->type)
+    {
+    case SDL3D_LOGIC_ACTION_CORE:
+        sdl3d_action_execute(&action->core, world->bus, world->timers);
+        return true;
+
+    case SDL3D_LOGIC_ACTION_SET_ACTOR_ACTIVE:
+        if (!sdl3d_logic_world_resolve_target(world, &action->actor_active.target, &target) ||
+            !resolved_target_is_actor(&target))
+        {
+            return false;
+        }
+        target.actor->active = action->actor_active.active;
+        return true;
+
+    case SDL3D_LOGIC_ACTION_TOGGLE_ACTOR_ACTIVE:
+        if (!sdl3d_logic_world_resolve_target(world, &action->actor_active.target, &target) ||
+            !resolved_target_is_actor(&target))
+        {
+            return false;
+        }
+        target.actor->active = !target.actor->active;
+        return true;
+
+    case SDL3D_LOGIC_ACTION_SET_ACTOR_PROPERTY:
+        if (action->actor_property.key == NULL ||
+            !sdl3d_logic_world_resolve_target(world, &action->actor_property.target, &target) ||
+            !resolved_target_is_actor(&target))
+        {
+            return false;
+        }
+        set_property_value(target.actor->props, action->actor_property.key, &action->actor_property.value);
+        return true;
+
+    case SDL3D_LOGIC_ACTION_SET_SECTOR_PUSH:
+        if (!sdl3d_logic_world_resolve_target(world, &action->sector_push.target, &target) ||
+            !resolved_target_is_sector(&target))
+        {
+            return false;
+        }
+        target.sector.sector->push_velocity[0] = action->sector_push.velocity.x;
+        target.sector.sector->push_velocity[1] = action->sector_push.velocity.y;
+        target.sector.sector->push_velocity[2] = action->sector_push.velocity.z;
+        return true;
+
+    case SDL3D_LOGIC_ACTION_SET_SECTOR_DAMAGE:
+        if (!sdl3d_logic_world_resolve_target(world, &action->sector_damage.target, &target) ||
+            !resolved_target_is_sector(&target))
+        {
+            return false;
+        }
+        target.sector.sector->damage_per_second = clamp_non_negative_float(action->sector_damage.damage_per_second);
+        return true;
+
+    case SDL3D_LOGIC_ACTION_SET_SECTOR_AMBIENT:
+        if (!sdl3d_logic_world_resolve_target(world, &action->sector_ambient.target, &target) ||
+            !resolved_target_is_sector(&target))
+        {
+            return false;
+        }
+        target.sector.sector->ambient_sound_id = clamp_non_negative_int(action->sector_ambient.ambient_sound_id);
+        return true;
+
+    case SDL3D_LOGIC_ACTION_NONE:
+        break;
+    }
+
+    return false;
+}
+
 int sdl3d_logic_world_bind_action(sdl3d_logic_world *world, int signal_id, const sdl3d_action *action)
 {
-    if (world == NULL || world->bus == NULL || action == NULL)
+    if (action == NULL)
+        return 0;
+
+    sdl3d_logic_action logic_action = sdl3d_logic_action_make_core(*action);
+    return sdl3d_logic_world_bind_logic_action(world, signal_id, &logic_action);
+}
+
+int sdl3d_logic_world_bind_logic_action(sdl3d_logic_world *world, int signal_id, const sdl3d_logic_action *action)
+{
+    if (world == NULL || world->bus == NULL || action == NULL || action->type == SDL3D_LOGIC_ACTION_NONE)
         return 0;
 
     logic_binding *binding = (logic_binding *)SDL_calloc(1, sizeof(logic_binding));
