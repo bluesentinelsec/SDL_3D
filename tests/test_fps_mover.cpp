@@ -110,6 +110,14 @@ class FpsMoverFixture : public ::testing::Test
             << SDL_GetError();
     }
 
+    void BuildRaisedPlatform()
+    {
+        sectors = {MakeSquareSector(-10, -10, 0, 10, 0.0f, 8.0f), MakeSquareSector(0, -5, 4, 5, 2.5f, 10.0f)};
+        const sdl3d_level_material mats[] = {MakeMaterial(), MakeMaterial(), MakeMaterial()};
+        ASSERT_TRUE(sdl3d_build_level(sectors.data(), (int)sectors.size(), mats, 3, nullptr, 0, &level))
+            << SDL_GetError();
+    }
+
     void TearDown() override
     {
         sdl3d_free_level(&level);
@@ -268,6 +276,45 @@ TEST_F(FpsMoverFixture, RejectsSteepSlopeAsWalkableGround)
     EXPECT_LT(m.position.x, 0.0f);
     EXPECT_TRUE(m.on_ground);
     EXPECT_EQ(m.current_sector, 0);
+}
+
+TEST_F(FpsMoverFixture, JumpWorksFromRaisedPlatform)
+{
+    BuildRaisedPlatform();
+    sdl3d_fps_mover_config cfg = DefaultConfig();
+    sdl3d_fps_mover m;
+    sdl3d_fps_mover_init(&m, &cfg, sdl3d_vec3_make(2.0f, 2.5f + cfg.player_height, 0.0f), 0);
+
+    sdl3d_fps_mover_jump(&m);
+    EXPECT_FALSE(m.on_ground);
+    EXPECT_FLOAT_EQ(m.vertical_velocity, cfg.jump_velocity);
+
+    const float start_y = m.position.y;
+    sdl3d_vec2 zero{0, 0};
+    sdl3d_fps_mover_update(&m, &level, sectors.data(), zero, 0, 0, 0.002f, 1.0f / 60.0f);
+
+    EXPECT_GT(m.position.y, start_y);
+    EXPECT_FALSE(m.on_ground);
+}
+
+TEST_F(FpsMoverFixture, AirborneMoverCanLeaveRaisedPlatform)
+{
+    BuildRaisedPlatform();
+    sdl3d_fps_mover_config cfg = DefaultConfig();
+    sdl3d_fps_mover m;
+    sdl3d_fps_mover_init(&m, &cfg, sdl3d_vec3_make(2.0f, 2.5f + cfg.player_height, 0.0f), 0);
+
+    sdl3d_fps_mover_jump(&m);
+
+    sdl3d_vec2 toward_lower_floor{-1.0f, 0.0f};
+    for (int i = 0; i < 30; ++i)
+    {
+        sdl3d_fps_mover_update(&m, &level, sectors.data(), toward_lower_floor, 0, 0, 0.002f, 1.0f / 60.0f);
+    }
+
+    EXPECT_LT(m.position.x, -1.0f);
+    EXPECT_GT(m.position.y - cfg.player_height, 0.0f);
+    EXPECT_FALSE(m.on_ground);
 }
 
 TEST_F(FpsMoverFixture, FallingBelowWorldRestoresLastGood)

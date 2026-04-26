@@ -74,6 +74,44 @@ static bool position_is_walkable(const sdl3d_fps_mover *mover, const sdl3d_level
     return true;
 }
 
+static bool position_has_air_space(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
+                                   float x, float z, float feet_y, int *out_sector)
+{
+    static const float sample_dirs[9][2] = {
+        {0.0f, 0.0f},       {1.0f, 0.0f},        {-1.0f, 0.0f},       {0.0f, 1.0f},         {0.0f, -1.0f},
+        {0.7071f, 0.7071f}, {0.7071f, -0.7071f}, {-0.7071f, 0.7071f}, {-0.7071f, -0.7071f},
+    };
+
+    const float radius = mover->config.player_radius;
+    const float head_y = feet_y + fps_min_headroom(mover);
+    int center = sdl3d_level_find_sector_at(level, sectors, x, z, feet_y);
+
+    if (center < 0 || !sdl3d_level_point_inside(level, sectors, x, head_y, z))
+    {
+        return false;
+    }
+
+    for (int i = 1; i < 9; ++i)
+    {
+        float sx = x + sample_dirs[i][0] * radius;
+        float sz = z + sample_dirs[i][1] * radius;
+        if (sdl3d_level_find_sector_at(level, sectors, sx, sz, feet_y) < 0)
+        {
+            return false;
+        }
+        if (!sdl3d_level_point_inside(level, sectors, sx, head_y, sz))
+        {
+            return false;
+        }
+    }
+
+    if (out_sector)
+    {
+        *out_sector = center;
+    }
+    return true;
+}
+
 static sdl3d_vec2 project_wish_to_walkable_floor(sdl3d_vec2 wish_dir, const sdl3d_sector *sector)
 {
     sdl3d_vec3 normal = sdl3d_sector_floor_normal(sector);
@@ -198,7 +236,7 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
 
         if (wish_len > 0.001f)
         {
-            if (current_sector >= 0 && sector_floor_is_walkable(&sectors[current_sector]))
+            if (mover->on_ground && current_sector >= 0 && sector_floor_is_walkable(&sectors[current_sector]))
             {
                 wish_dir = project_wish_to_walkable_floor(wish_dir, &sectors[current_sector]);
             }
@@ -206,21 +244,24 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
             float move_z = wish_dir.y * mover->config.move_speed * dt;
             int candidate = -1;
 
-            if (position_is_walkable(mover, level, sectors, mover->position.x + move_x, mover->position.z + move_z,
-                                     feet_y, &candidate))
+            bool (*position_is_valid)(const sdl3d_fps_mover *, const sdl3d_level *, const sdl3d_sector *, float, float,
+                                      float, int *) = mover->on_ground ? position_is_walkable : position_has_air_space;
+
+            if (position_is_valid(mover, level, sectors, mover->position.x + move_x, mover->position.z + move_z, feet_y,
+                                  &candidate))
             {
                 mover->position.x += move_x;
                 mover->position.z += move_z;
                 current_sector = candidate;
             }
-            else if (position_is_walkable(mover, level, sectors, mover->position.x + move_x, mover->position.z, feet_y,
-                                          &candidate))
+            else if (position_is_valid(mover, level, sectors, mover->position.x + move_x, mover->position.z, feet_y,
+                                       &candidate))
             {
                 mover->position.x += move_x;
                 current_sector = candidate;
             }
-            else if (position_is_walkable(mover, level, sectors, mover->position.x, mover->position.z + move_z, feet_y,
-                                          &candidate))
+            else if (position_is_valid(mover, level, sectors, mover->position.x, mover->position.z + move_z, feet_y,
+                                       &candidate))
             {
                 mover->position.z += move_z;
                 current_sector = candidate;
