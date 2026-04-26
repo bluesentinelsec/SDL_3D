@@ -327,8 +327,24 @@ static bool switch_demo_backend(sdl3d_game_context *ctx, doom_state *state)
 
 static bool game_event(sdl3d_game_context *ctx, void *userdata, const SDL_Event *event)
 {
-    (void)ctx;
     doom_state *state = (doom_state *)userdata;
+
+    if (state->demo_player != NULL)
+    {
+        switch (event->type)
+        {
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_MOUSE_MOTION:
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_WHEEL:
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+            stop_demo_playback(ctx, state);
+            break;
+        default:
+            break;
+        }
+    }
 
     sdl3d_ui_process_event(state->ui, event);
     return true;
