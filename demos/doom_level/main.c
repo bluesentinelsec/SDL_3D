@@ -25,6 +25,8 @@
 #define LIFT_CEIL_Y 12.0f
 #define LIFT_CYCLE_SECONDS 6.0f
 #define LIFT_REBUILD_MIN_DELTA 0.02f
+#define AMBIENT_FADE_SECONDS 1.0f
+#define AMBIENT_FEEDBACK_SECONDS 5.0f
 
 typedef struct doom_state
 {
@@ -36,8 +38,11 @@ typedef struct doom_state
     sdl3d_font debug_font;
     sdl3d_ui_context *ui;
     sdl3d_demo_player *demo_player;
+    sdl3d_audio_engine *audio;
+    sdl3d_sector_watcher sector_watcher;
     sdl3d_backend current_backend;
     doom_render_profile render_profile;
+    float ambient_feedback_timer;
     float lift_timer;
     float lift_last_floor_y;
     int action_pause;
@@ -108,6 +113,34 @@ static void on_fade_out_done(void *userdata, int signal_id, const sdl3d_properti
     ctx->quit_requested = true;
 }
 
+static void on_entered_sector(void *userdata, int signal_id, const sdl3d_properties *payload)
+{
+    (void)signal_id;
+    doom_state *state = (doom_state *)userdata;
+    static const sdl3d_audio_ambient ambient_zones[] = {
+        {0, NULL, 0.0f, false},
+        {DOOM_AMBIENT_DEMO_SOUND_ID, SDL3D_MEDIA_DIR "/audio/ambient_zone.wav", 0.45f, true},
+    };
+    const int ambient_id = sdl3d_properties_get_int(payload, "ambient_sound_id", 0);
+
+    if (state == NULL)
+    {
+        return;
+    }
+
+    if (state->audio != NULL && !sdl3d_audio_set_ambient(state->audio, ambient_zones, (int)SDL_arraysize(ambient_zones),
+                                                         ambient_id, AMBIENT_FADE_SECONDS))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Ambient transition failed: %s", SDL_GetError());
+        SDL_ClearError();
+    }
+
+    if (ambient_id == DOOM_AMBIENT_DEMO_SOUND_ID)
+    {
+        state->ambient_feedback_timer = AMBIENT_FEEDBACK_SECONDS;
+    }
+}
+
 static void start_quit_fade(sdl3d_game_context *ctx, doom_state *state)
 {
     if (state->quit_pending)
@@ -165,10 +198,16 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
 
     state->current_backend = sdl3d_get_render_context_backend(ctx->renderer);
     state->render_profile = DOOM_RENDER_PROFILE_MODERN;
+    state->audio = ctx->audio;
+    sdl3d_sector_watcher_init(&state->sector_watcher);
     bind_doom_actions(ctx->input, state);
     apply_window_defaults(ctx, state);
 
     if (sdl3d_signal_connect(ctx->bus, SIG_FADE_OUT_DONE, on_fade_out_done, ctx) == 0)
+    {
+        return false;
+    }
+    if (sdl3d_signal_connect(ctx->bus, SDL3D_SIGNAL_ENTERED_SECTOR, on_entered_sector, state) == 0)
     {
         return false;
     }
@@ -352,6 +391,21 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     {
         start_quit_fade(ctx, state);
     }
+
+    if (state->ambient_feedback_timer > 0.0f)
+    {
+        state->ambient_feedback_timer -= dt;
+        if (state->ambient_feedback_timer < 0.0f)
+        {
+            state->ambient_feedback_timer = 0.0f;
+        }
+    }
+
+    sdl3d_sector_watcher_update(&state->sector_watcher, &state->level.unlit, g_sectors,
+                                sdl3d_vec3_make(state->player.mover.position.x,
+                                                state->player.mover.position.y - PLAYER_HEIGHT,
+                                                state->player.mover.position.z),
+                                ctx->bus);
 }
 
 static void game_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_dt)
@@ -416,7 +470,7 @@ static void game_render(sdl3d_game_context *ctx, void *userdata, float alpha)
 
     render_draw_frame(&state->render, ctx->renderer, state->has_font ? &state->debug_font : NULL, state->ui,
                       &state->level, &state->ent, &state->player, WINDOW_W, WINDOW_H, frame_dt,
-                      backend_profile_name(state->render_profile));
+                      backend_profile_name(state->render_profile), state->ambient_feedback_timer > 0.0f);
     sdl3d_transition_draw(&state->transition, ctx->renderer);
     if (ctx->paused && !state->quit_pending)
     {
@@ -444,6 +498,7 @@ int main(int argc, char *argv[])
     config.height = WINDOW_H;
     config.backend = SDL3D_BACKEND_SDLGPU;
     config.tick_rate = 1.0f / 60.0f;
+    config.enable_audio = true;
 
     sdl3d_game_callbacks callbacks = {0};
     callbacks.init = game_init;

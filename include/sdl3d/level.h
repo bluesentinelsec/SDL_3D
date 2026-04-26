@@ -33,7 +33,11 @@ extern "C"
 
 #define SDL3D_SECTOR_MAX_POINTS 32
 
+    /** @brief Signal emitted by sdl3d_sector_watcher_update() when the sampled point changes sectors. */
+#define SDL3D_SIGNAL_ENTERED_SECTOR 0x53454354
+
     struct sdl3d_render_context;
+    typedef struct sdl3d_signal_bus sdl3d_signal_bus;
 
     typedef struct sdl3d_level_material
     {
@@ -53,8 +57,9 @@ extern "C"
         int floor_material; /* index into material palette, or -1 to omit floor geometry */
         int ceil_material;  /* index into material palette, or -1 to omit ceiling geometry */
         int wall_material;
-        float floor_normal[3]; /* Floor plane normal. Zero defaults to (0, 1, 0). */
-        float ceil_normal[3];  /* Ceiling plane normal. Zero defaults to (0, -1, 0). */
+        float floor_normal[3]; /**< Floor plane normal. Zero defaults to (0, 1, 0). */
+        float ceil_normal[3];  /**< Ceiling plane normal. Zero defaults to (0, -1, 0). */
+        int ambient_sound_id;  /**< Ambient zone id. Zero means no ambient zone. */
     } sdl3d_sector;
 
     /**
@@ -112,6 +117,22 @@ extern "C"
         bool *sector_visible; /* caller-provided array[sector_count] */
         int visible_count;    /* number of visible sectors */
     } sdl3d_visibility_result;
+
+    /**
+     * @brief Tracks sector transitions for a moving point.
+     *
+     * Initialize with sdl3d_sector_watcher_init(), then call
+     * sdl3d_sector_watcher_update() after movement. When the sampled point
+     * enters a different sector, the watcher can emit an entered-sector
+     * signal carrying sector_id, previous_sector_id, ambient_sound_id, and
+     * previous_ambient_sound_id payload values.
+     */
+    typedef struct sdl3d_sector_watcher
+    {
+        int current_sector;     /**< Last sector containing the point, or -1. */
+        int current_ambient_id; /**< Ambient id for current_sector, or -1. */
+        int entered_signal_id;  /**< Signal emitted on entry; defaults to SDL3D_SIGNAL_ENTERED_SECTOR. */
+    } sdl3d_sector_watcher;
 
     typedef struct sdl3d_level_light
     {
@@ -237,6 +258,31 @@ extern "C"
      * projectile lifetime and trigger volume checks.
      */
     bool sdl3d_level_point_inside(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float y, float z);
+
+    /**
+     * @brief Initialize a sector watcher.
+     *
+     * The watcher starts outside all sectors so the first update from inside
+     * the level emits an entered-sector signal.
+     */
+    void sdl3d_sector_watcher_init(sdl3d_sector_watcher *watcher);
+
+    /**
+     * @brief Update sector-entry state for a world-space sample point.
+     *
+     * @param watcher Watcher state initialized with sdl3d_sector_watcher_init().
+     * @param level Built level used for sector queries.
+     * @param sectors Sector definitions matching @p level.
+     * @param sample_position Point to classify. For a player, pass feet
+     *        position when sectors should be based on the floor being occupied.
+     * @param bus Optional signal bus. When non-NULL and the sector changes,
+     *        watcher->entered_signal_id is emitted with a temporary property
+     *        payload.
+     * @return true if the sampled point entered a different sector, false if
+     *         it stayed in the same sector or arguments were invalid.
+     */
+    bool sdl3d_sector_watcher_update(sdl3d_sector_watcher *watcher, const sdl3d_level *level,
+                                     const sdl3d_sector *sectors, sdl3d_vec3 sample_position, sdl3d_signal_bus *bus);
 
     /*
      * Extract 6 normalized frustum planes from a row-major view-projection

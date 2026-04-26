@@ -43,6 +43,12 @@ static bool sdl3d_game_create_context(const sdl3d_game_config *config, sdl3d_gam
     ctx->bus = sdl3d_signal_bus_create();
     ctx->timers = sdl3d_timer_pool_create();
     ctx->input = sdl3d_input_create();
+    if (config != NULL && config->enable_audio && !sdl3d_audio_create(&ctx->audio))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio disabled: %s", SDL_GetError());
+        SDL_ClearError();
+        ctx->audio = NULL;
+    }
 
     if (ctx->registry == NULL || ctx->bus == NULL || ctx->timers == NULL || ctx->input == NULL)
     {
@@ -59,6 +65,7 @@ static void sdl3d_game_cleanup_context(sdl3d_game_context *ctx)
     sdl3d_signal_bus_destroy(ctx->bus);
     sdl3d_actor_registry_destroy(ctx->registry);
     sdl3d_input_destroy(ctx->input);
+    sdl3d_audio_destroy(ctx->audio);
     sdl3d_destroy_window(ctx->window, ctx->renderer);
     SDL_zero(*ctx);
 }
@@ -141,6 +148,7 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
 
         ctx.real_time += frame_dt;
         sdl3d_time_update();
+        sdl3d_audio_update(ctx.audio, frame_dt);
 
         if (ctx.paused)
         {

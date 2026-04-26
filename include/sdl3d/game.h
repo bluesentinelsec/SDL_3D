@@ -17,6 +17,7 @@
 #include <SDL3/SDL_video.h>
 
 #include "sdl3d/actor_registry.h"
+#include "sdl3d/audio.h"
 #include "sdl3d/input.h"
 #include "sdl3d/render_context.h"
 #include "sdl3d/signal_bus.h"
@@ -43,6 +44,7 @@ extern "C"
         sdl3d_signal_bus *bus;          /**< Signal bus owned by the managed loop. */
         sdl3d_timer_pool *timers;       /**< Timer pool owned by the managed loop. */
         sdl3d_input_manager *input;     /**< Action input manager owned by the managed loop. */
+        sdl3d_audio_engine *audio;      /**< Audio engine owned by the managed loop, or NULL if unavailable. */
         float time;                     /**< Simulated game time advanced by fixed ticks. */
         float real_time;                /**< Wall-clock time accumulated by rendered frames. */
         int tick_count;                 /**< Total fixed ticks executed since startup. */
@@ -148,7 +150,9 @@ extern "C"
     /**
      * @brief Configuration for sdl3d_run_game.
      *
-     * Zero-initialization selects sensible defaults.
+     * Zero-initialization selects sensible defaults. Audio is opt-in because
+     * many automated tests, tools, and dedicated simulation loops run without a
+     * stable platform audio device.
      */
     typedef struct sdl3d_game_config
     {
@@ -158,18 +162,21 @@ extern "C"
         sdl3d_backend backend;   /**< Requested backend, or SDL3D_BACKEND_AUTO when zero. */
         float tick_rate;         /**< Fixed timestep in seconds, or 1/60 when <= 0. */
         int max_ticks_per_frame; /**< Catch-up tick cap per rendered frame, or 8 when <= 0. */
+        bool enable_audio;       /**< When true, create ctx->audio before init. */
     } sdl3d_game_config;
 
     /**
      * @brief Run a managed SDL3D game loop.
      *
      * Initializes SDL video, creates the window, render context, actor registry,
-     * signal bus, timer pool, and input manager, then runs a fixed-timestep
+     * signal bus, timer pool, and input manager, and creates the audio engine
+     * when config.enable_audio is true. It then runs a fixed-timestep
      * simulation loop until quit is requested. The loop processes SDL events
-     * through the input manager, updates input before pause callbacks and
-     * before each fixed tick, updates timers before each fixed tick, calls
-     * sdl3d_time_update once per rendered frame, and presents the render
-     * context after each render callback.
+     * through the input manager, updates input before pause callbacks and before
+     * each fixed tick, updates timers before each fixed tick, calls
+     * sdl3d_time_update once per rendered frame, updates audio once per rendered
+     * frame when present, and presents the render context after each render
+     * callback.
      *
      * @param config    Optional configuration. NULL selects all defaults.
      * @param callbacks Optional callback table. NULL treats all callbacks as no-ops.

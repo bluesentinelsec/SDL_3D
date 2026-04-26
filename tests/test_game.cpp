@@ -54,6 +54,7 @@ struct GameTestState
     bool timer_fired = false;
     bool saw_valid_context = false;
     bool saw_default_config = false;
+    bool saw_audio_disabled = false;
     bool saw_time_update = false;
     bool saw_quit_event_in_callback = false;
     bool saw_input_action_in_tick = false;
@@ -98,6 +99,14 @@ bool validate_context_in_init(sdl3d_game_context *ctx, void *userdata)
     auto *state = static_cast<GameTestState *>(userdata);
     state->saw_valid_context = ctx->window != nullptr && ctx->renderer != nullptr && ctx->registry != nullptr &&
                                ctx->bus != nullptr && ctx->timers != nullptr && ctx->input != nullptr;
+    ctx->quit_requested = true;
+    return true;
+}
+
+bool validate_audio_disabled_in_init(sdl3d_game_context *ctx, void *userdata)
+{
+    auto *state = static_cast<GameTestState *>(userdata);
+    state->saw_audio_disabled = ctx->audio == nullptr;
     ctx->quit_requested = true;
     return true;
 }
@@ -469,6 +478,16 @@ TEST(ManagedGameLoop, ContextHasValidSubsystems)
 
     EXPECT_EQ(0, run_test_game(&callbacks, &state));
     EXPECT_TRUE(state.saw_valid_context);
+}
+
+TEST(ManagedGameLoop, AudioIsDisabledByDefault)
+{
+    GameTestState state;
+    sdl3d_game_callbacks callbacks{};
+    callbacks.init = validate_audio_disabled_in_init;
+
+    EXPECT_EQ(0, run_test_game(&callbacks, &state));
+    EXPECT_TRUE(state.saw_audio_disabled);
 }
 
 TEST(ManagedGameLoop, EventCallbackReceivesUserEvents)

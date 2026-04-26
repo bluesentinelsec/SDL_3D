@@ -85,7 +85,7 @@ static bool render_state_ensure_sector_capacity(render_state *rs, int sector_cou
 
 void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_font *font, sdl3d_ui_context *ui,
                        level_data *ld, entities *ent, const player_state *player, int backbuffer_w, int backbuffer_h,
-                       float dt, const char *render_profile_name)
+                       float dt, const char *render_profile_name, bool ambient_feedback_active)
 {
     const sdl3d_fps_mover *mover = &player->mover;
     sdl3d_level *active = level_data_active(ld);
@@ -174,6 +174,10 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
             sdl3d_draw_cube_textured(ctx, crate_positions[i], sdl3d_vec3_make(1.0f, 1.0f, 1.0f),
                                      sdl3d_vec3_make(0, 1, 0), 0.0f, tex, (sdl3d_color){255, 255, 255, 255});
     }
+
+    /* Ambient-zone feedback beacon. */
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(73.0f, 3.0f, 63.0f), sdl3d_vec3_make(0.7f, 0.7f, 0.7f),
+                    ambient_feedback_active ? (sdl3d_color){220, 40, 30, 255} : (sdl3d_color){40, 210, 70, 255});
 
     /* Sprites */
     {
