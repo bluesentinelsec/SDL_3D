@@ -6,6 +6,7 @@
 #include "sdl3d/math.h"
 
 static const float SPRITE_PI = 3.14159265358979323846f;
+static const float SPRITE_TWO_PI = 6.28318530717958647692f;
 
 /* Internal draw entry for depth sorting. */
 typedef struct sprite_draw_entry
@@ -86,25 +87,183 @@ void sdl3d_sprite_scene_update(sdl3d_sprite_scene *scene, float dt)
     if (scene == NULL || dt <= 0.0f)
         return;
     for (int i = 0; i < scene->count; ++i)
-        scene->actors[i].bob_phase += dt;
+    {
+        sdl3d_sprite_actor *actor = &scene->actors[i];
+        actor->bob_phase += dt;
+        if (actor->animation_frames != NULL && actor->animation_frame_count > 0 && actor->animation_fps > 0.0f)
+        {
+            actor->animation_time += dt;
+            if (actor->animation_loop)
+            {
+                float duration = (float)actor->animation_frame_count / actor->animation_fps;
+                if (duration > 0.0f && actor->animation_time >= duration)
+                    actor->animation_time = SDL_fmodf(actor->animation_time, duration);
+            }
+            else
+            {
+                float last_frame_time = (float)(actor->animation_frame_count - 1) / actor->animation_fps;
+                if (actor->animation_time > last_frame_time)
+                    actor->animation_time = last_frame_time;
+            }
+        }
+    }
+}
+
+void sdl3d_sprite_actor_play_animation(sdl3d_sprite_actor *actor, const sdl3d_sprite_rotation_set *frames,
+                                       int frame_count, float fps, bool loop)
+{
+    if (actor == NULL)
+        return;
+
+    if (frames == NULL || frame_count <= 0 || fps <= 0.0f)
+    {
+        sdl3d_sprite_actor_stop_animation(actor);
+        return;
+    }
+
+    actor->animation_frames = frames;
+    actor->animation_frame_count = frame_count;
+    actor->animation_fps = fps;
+    actor->animation_loop = loop;
+    actor->animation_time = 0.0f;
+}
+
+void sdl3d_sprite_actor_stop_animation(sdl3d_sprite_actor *actor)
+{
+    if (actor == NULL)
+        return;
+    actor->animation_frames = NULL;
+    actor->animation_frame_count = 0;
+    actor->animation_fps = 0.0f;
+    actor->animation_loop = false;
+    actor->animation_time = 0.0f;
+}
+
+int sdl3d_sprite_actor_current_animation_frame(const sdl3d_sprite_actor *actor)
+{
+    if (actor == NULL || actor->animation_frames == NULL || actor->animation_frame_count <= 0 ||
+        actor->animation_fps <= 0.0f)
+    {
+        return 0;
+    }
+
+    int frame = (int)SDL_floorf(actor->animation_time * actor->animation_fps);
+    if (actor->animation_loop)
+    {
+        frame %= actor->animation_frame_count;
+        if (frame < 0)
+            frame += actor->animation_frame_count;
+        return frame;
+    }
+
+    if (frame < 0)
+        return 0;
+    if (frame >= actor->animation_frame_count)
+        return actor->animation_frame_count - 1;
+    return frame;
+}
+
+static const sdl3d_sprite_rotation_set *sdl3d_sprite_active_rotations(const sdl3d_sprite_actor *actor)
+{
+    if (actor == NULL)
+        return NULL;
+    if (actor->animation_frames != NULL && actor->animation_frame_count > 0 && actor->animation_fps > 0.0f)
+        return &actor->animation_frames[sdl3d_sprite_actor_current_animation_frame(actor)];
+    return actor->rotations;
+}
+
+static float sdl3d_sprite_wrap_angle(float radians)
+{
+    radians = SDL_fmodf(radians, SPRITE_TWO_PI);
+    if (radians <= -SPRITE_PI)
+        radians += SPRITE_TWO_PI;
+    else if (radians > SPRITE_PI)
+        radians -= SPRITE_TWO_PI;
+    return radians;
+}
+
+sdl3d_vec3 sdl3d_sprite_actor_draw_position(const sdl3d_sprite_actor *actor)
+{
+    if (actor == NULL)
+        return sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+
+    sdl3d_vec3 pos = actor->position;
+    pos.y -= actor->visual_ground_offset;
+    if (actor->bob_amplitude > 0.0f)
+        pos.y += SDL_sinf(actor->bob_phase * actor->bob_speed) * actor->bob_amplitude;
+    return pos;
+}
+
+void sdl3d_sprite_actor_set_facing_yaw(sdl3d_sprite_actor *actor, float yaw_radians)
+{
+    if (actor == NULL)
+        return;
+    actor->facing_yaw = sdl3d_sprite_wrap_angle(yaw_radians);
+}
+
+void sdl3d_sprite_actor_set_facing_direction(sdl3d_sprite_actor *actor, float direction_x, float direction_z)
+{
+    if (actor == NULL)
+        return;
+
+    float length_sq = direction_x * direction_x + direction_z * direction_z;
+    if (length_sq <= 0.000001f)
+        return;
+
+    sdl3d_sprite_actor_set_facing_yaw(actor, SDL_atan2f(direction_x, -direction_z));
+}
+
+bool sdl3d_sprite_actor_can_stand_at(const sdl3d_sprite_actor *actor, const sdl3d_level *level,
+                                     const sdl3d_sector *sectors, float target_x, float target_z, float step_height,
+                                     float actor_height, float *out_floor_y)
+{
+    if (actor == NULL || level == NULL || sectors == NULL || step_height < 0.0f || actor_height <= 0.0f)
+        return false;
+
+    int sector = sdl3d_level_find_walkable_sector(level, sectors, target_x, target_z, actor->position.y, step_height,
+                                                  actor_height);
+    if (sector < 0)
+        return false;
+
+    if (out_floor_y != NULL)
+        *out_floor_y = sdl3d_sector_floor_at(&sectors[sector], target_x, target_z);
+    return true;
+}
+
+bool sdl3d_sprite_actor_snap_to_ground(sdl3d_sprite_actor *actor, const sdl3d_level *level, const sdl3d_sector *sectors,
+                                       float step_height, float actor_height)
+{
+    if (actor == NULL || level == NULL || sectors == NULL || step_height < 0.0f || actor_height <= 0.0f)
+        return false;
+
+    float probe_y = actor->position.y + step_height;
+    int sector =
+        sdl3d_level_find_support_sector(level, sectors, actor->position.x, actor->position.z, probe_y, actor_height);
+    if (sector < 0)
+        return false;
+
+    actor->position.y = sdl3d_sector_floor_at(&sectors[sector], actor->position.x, actor->position.z);
+    return true;
 }
 
 const sdl3d_texture2d *sdl3d_sprite_select_texture(const sdl3d_sprite_actor *actor, float cam_x, float cam_z)
 {
     if (actor == NULL)
         return NULL;
-    if (actor->rotations == NULL)
+    const sdl3d_sprite_rotation_set *rotations = sdl3d_sprite_active_rotations(actor);
+    if (rotations == NULL)
         return actor->texture;
 
     float dx = cam_x - actor->position.x;
     float dz = cam_z - actor->position.z;
-    float angle = SDL_atan2f(dx, dz);
-    float octant = (SPRITE_PI - angle) / (SPRITE_PI * 0.25f);
+    float yaw_to_camera = SDL_atan2f(dx, -dz);
+    float relative_yaw = sdl3d_sprite_wrap_angle(yaw_to_camera - actor->facing_yaw);
+    float octant = relative_yaw / (SPRITE_PI * 0.25f);
     int index = (int)SDL_floorf(octant + 0.5f) % SDL3D_SPRITE_ROTATION_COUNT;
     if (index < 0)
         index += SDL3D_SPRITE_ROTATION_COUNT;
 
-    const sdl3d_texture2d *tex = actor->rotations->frames[index];
+    const sdl3d_texture2d *tex = rotations->frames[index];
     return tex != NULL ? tex : actor->texture;
 }
 
@@ -127,9 +286,7 @@ void sdl3d_sprite_scene_draw(sdl3d_sprite_scene *scene, sdl3d_render_context *co
         if (!actor->visible)
             continue;
 
-        sdl3d_vec3 pos = actor->position;
-        if (actor->bob_amplitude > 0.0f)
-            pos.y += SDL_sinf(actor->bob_phase * actor->bob_speed) * actor->bob_amplitude;
+        sdl3d_vec3 pos = sdl3d_sprite_actor_draw_position(actor);
 
         /* Portal cull. */
         if (vis != NULL && vis->sector_visible != NULL && actor->sector_id >= 0)

@@ -179,7 +179,7 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     }
     state->level_ready = true;
 
-    if (!entities_init(&state->ent, ctx->registry, ctx->bus))
+    if (!entities_init(&state->ent, &state->level.unlit, ctx->registry, ctx->bus))
     {
         entities_free(&state->ent);
         doom_state_cleanup(state);
@@ -298,7 +298,7 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     }
 
     sdl3d_transition_update(&state->transition, ctx->bus, dt);
-    entities_update(&state->ent, dt, state->player.mover.position);
+    entities_update(&state->ent, &state->level.unlit, dt, state->player.mover.position);
     if (!player_update(&state->player, ctx->input, &state->level.unlit, g_sectors, dt))
     {
         start_quit_fade(ctx, state);
