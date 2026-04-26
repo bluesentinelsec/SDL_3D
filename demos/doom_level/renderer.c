@@ -48,7 +48,39 @@ void render_state_init(render_state *rs)
 {
     SDL_zerop(rs);
     rs->portal_culling = true;
+}
+
+void render_state_free(render_state *rs)
+{
+    if (rs == NULL)
+    {
+        return;
+    }
+
+    SDL_free(rs->sector_visible);
+    SDL_zerop(rs);
+}
+
+static bool render_state_ensure_sector_capacity(render_state *rs, int sector_count)
+{
+    if (rs == NULL || sector_count <= 0)
+    {
+        return false;
+    }
+
+    if (rs->sector_visible_capacity < sector_count)
+    {
+        bool *sector_visible = SDL_realloc(rs->sector_visible, (size_t)sector_count * sizeof(*sector_visible));
+        if (sector_visible == NULL)
+        {
+            return SDL_OutOfMemory();
+        }
+        rs->sector_visible = sector_visible;
+        rs->sector_visible_capacity = sector_count;
+    }
+
     rs->vis.sector_visible = rs->sector_visible;
+    return true;
 }
 
 void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_font *font, sdl3d_ui_context *ui,
@@ -58,6 +90,7 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
     const sdl3d_fps_mover *mover = &player->mover;
     sdl3d_level *active = level_data_active(ld);
     sdl3d_camera3d cam = sdl3d_fps_mover_camera(mover, 75.0f);
+    const int sector_count = active->sector_count;
 
     float px = mover->position.x, py = mover->position.y;
     float pz = mover->position.z;
@@ -94,6 +127,12 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
     sdl3d_draw_skybox_textured(ctx, &skybox);
 
     /* Visibility */
+    if (rs->portal_culling && !render_state_ensure_sector_capacity(rs, sector_count))
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Portal visibility allocation failed: %s", SDL_GetError());
+        rs->portal_culling = false;
+    }
+
     if (rs->portal_culling)
     {
         sdl3d_level_compute_visibility_from_camera(active, g_sectors, &cam, backbuffer_w, backbuffer_h, 0.01f, 1000.0f,
@@ -101,9 +140,9 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
     }
     else
     {
-        for (int i = 0; i < g_sector_count; i++)
+        for (int i = 0; i < sector_count && rs->sector_visible != NULL; i++)
             rs->sector_visible[i] = true;
-        rs->vis.visible_count = g_sector_count;
+        rs->vis.visible_count = sector_count;
     }
 
     /* Level geometry */
@@ -181,7 +220,7 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
         sdl3d_ui_begin_frame(ui, sdl3d_get_render_context_width(ctx), sdl3d_get_render_context_height(ctx));
         sdl3d_ui_label(ui, 10.0f, 60.0f, "SDL3D UI - Phase 1");
         sdl3d_ui_labelf(ui, 10.0f, 100.0f, "sector=%d  visible=%d/%d", current_sector, rs->vis.visible_count,
-                        g_sector_count);
+                        sector_count);
         sdl3d_ui_labelf(ui, 10.0f, 140.0f, "pos %.1f, %.1f, %.1f", px, py, pz);
         sdl3d_ui_labelf(ui, 10.0f, 180.0f, "profile=%s", render_profile_name ? render_profile_name : "Modern");
         sdl3d_ui_end_frame(ui);
@@ -196,7 +235,7 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
             for (int i = 0; i < active->model.mesh_count; i++)
             {
                 int sid = active->mesh_sector_ids[i];
-                if (sid >= 0 && sid < g_sector_count && rs->sector_visible[sid])
+                if (sid >= 0 && sid < sector_count && rs->sector_visible != NULL && rs->sector_visible[sid])
                     visible_meshes++;
             }
         }
@@ -206,7 +245,7 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
         }
         SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
                      "[VIS] sector=%d  visible=%d/%d sectors  meshes=%d/%d  portals=%d  culling=%s", current_sector,
-                     rs->vis.visible_count, g_sector_count, visible_meshes, active->model.mesh_count,
+                     rs->vis.visible_count, sector_count, visible_meshes, active->model.mesh_count,
                      active->portal_count, rs->portal_culling ? "ON" : "OFF");
     }
 }

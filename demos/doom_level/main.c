@@ -20,6 +20,11 @@
 #include "renderer.h"
 
 #define SIG_FADE_OUT_DONE 2001
+#define LIFT_FLOOR_MIN_Y 0.0f
+#define LIFT_FLOOR_MAX_Y 2.5f
+#define LIFT_CEIL_Y 12.0f
+#define LIFT_CYCLE_SECONDS 6.0f
+#define LIFT_REBUILD_MIN_DELTA 0.02f
 
 typedef struct doom_state
 {
@@ -33,6 +38,8 @@ typedef struct doom_state
     sdl3d_demo_player *demo_player;
     sdl3d_backend current_backend;
     doom_render_profile render_profile;
+    float lift_timer;
+    float lift_last_floor_y;
     int action_pause;
     int action_menu;
     int action_toggle_lighting;
@@ -50,6 +57,7 @@ typedef struct doom_state
 
 static void doom_state_cleanup(doom_state *state)
 {
+    render_state_free(&state->render);
     if (state->entities_ready)
     {
         entities_free(&state->ent);
@@ -178,6 +186,8 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
         return false;
     }
     state->level_ready = true;
+    state->lift_timer = 0.0f;
+    state->lift_last_floor_y = g_sectors[DOOM_DYNAMIC_LIFT_SECTOR].floor_y;
 
     if (!entities_init(&state->ent, &state->level.unlit, ctx->registry, ctx->bus))
     {
@@ -278,6 +288,44 @@ static void apply_doom_profile_actions(sdl3d_game_context *ctx, doom_state *stat
     }
 }
 
+static void update_dynamic_lift(doom_state *state, float dt)
+{
+    if (state == NULL || !state->level_ready)
+    {
+        return;
+    }
+
+    state->lift_timer += dt;
+    while (state->lift_timer >= LIFT_CYCLE_SECONDS)
+    {
+        state->lift_timer -= LIFT_CYCLE_SECONDS;
+    }
+
+    const float phase = state->lift_timer / LIFT_CYCLE_SECONDS;
+    const float wave = (SDL_sinf(phase * SDL_PI_F * 2.0f - SDL_PI_F * 0.5f) + 1.0f) * 0.5f;
+    const float floor_y = LIFT_FLOOR_MIN_Y + (LIFT_FLOOR_MAX_Y - LIFT_FLOOR_MIN_Y) * wave;
+    if (SDL_fabsf(floor_y - state->lift_last_floor_y) < LIFT_REBUILD_MIN_DELTA)
+    {
+        return;
+    }
+
+    sdl3d_sector_geometry geometry;
+    SDL_zero(geometry);
+    geometry.floor_y = floor_y;
+    geometry.ceil_y = LIFT_CEIL_Y;
+    geometry.floor_normal[1] = 1.0f;
+    geometry.ceil_normal[1] = -1.0f;
+
+    if (level_data_set_sector_geometry(&state->level, DOOM_DYNAMIC_LIFT_SECTOR, &geometry))
+    {
+        state->lift_last_floor_y = floor_y;
+    }
+    else
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Dynamic lift update failed: %s", SDL_GetError());
+    }
+}
+
 static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 {
     doom_state *state = (doom_state *)userdata;
@@ -298,6 +346,7 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     }
 
     sdl3d_transition_update(&state->transition, ctx->bus, dt);
+    update_dynamic_lift(state, dt);
     entities_update(&state->ent, &state->level.unlit, dt, state->player.mover.position);
     if (!player_update(&state->player, ctx->input, &state->level.unlit, g_sectors, dt))
     {

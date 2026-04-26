@@ -16,11 +16,13 @@ typedef struct render_state
 {
     bool portal_culling;
     bool show_debug;
-    bool sector_visible[32]; /* must be >= g_sector_count */
+    bool *sector_visible;
+    int sector_visible_capacity;
     sdl3d_visibility_result vis;
 } render_state;
 
 void render_state_init(render_state *rs);
+void render_state_free(render_state *rs);
 
 /* Draw one complete frame. Presentation is owned by the managed game loop. */
 void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_font *font, sdl3d_ui_context *ui,

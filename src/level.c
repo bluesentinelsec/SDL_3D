@@ -770,6 +770,14 @@ static bool add_wall_and_lightmap(macc *wall_acc, lm_surface_list *surf_list, in
 /* Public API                                                          */
 /* ------------------------------------------------------------------ */
 
+static void sector_apply_runtime_geometry(sdl3d_sector *sector, const sdl3d_sector_geometry *geometry)
+{
+    sector->floor_y = geometry->floor_y;
+    sector->ceil_y = geometry->ceil_y;
+    SDL_memcpy(sector->floor_normal, geometry->floor_normal, sizeof(sector->floor_normal));
+    SDL_memcpy(sector->ceil_normal, geometry->ceil_normal, sizeof(sector->ceil_normal));
+}
+
 bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3d_level_material *materials,
                        int material_count, const sdl3d_level_light *lights, int light_count, sdl3d_level *out)
 {
@@ -1191,6 +1199,65 @@ fail:
     out->lightmap_height = 0;
     sdl3d_free_texture(&out->lightmap_texture);
     return false;
+}
+
+bool sdl3d_level_set_sector_geometry(sdl3d_level *level, sdl3d_sector *sectors, int sector_count, int sector_index,
+                                     const sdl3d_sector_geometry *geometry, const sdl3d_level_material *materials,
+                                     int material_count, const sdl3d_level_light *lights, int light_count)
+{
+    sdl3d_sector *candidate_sectors;
+    sdl3d_level rebuilt;
+
+    if (level == NULL)
+    {
+        return SDL_InvalidParamError("level");
+    }
+    if (sectors == NULL || sector_count <= 0)
+    {
+        return SDL_InvalidParamError("sectors");
+    }
+    if (geometry == NULL)
+    {
+        return SDL_InvalidParamError("geometry");
+    }
+    if (materials == NULL || material_count <= 0)
+    {
+        return SDL_InvalidParamError("materials");
+    }
+    if (level->sector_count != sector_count)
+    {
+        return SDL_SetError("sector_count must match the built level.");
+    }
+    if (sector_index < 0 || sector_index >= sector_count)
+    {
+        return SDL_SetError("sector_index is out of range.");
+    }
+    if (geometry->ceil_y <= geometry->floor_y + SDL3D_LEVEL_PLANE_EPSILON)
+    {
+        return SDL_SetError("sector ceiling must be above sector floor.");
+    }
+
+    candidate_sectors = SDL_malloc((size_t)sector_count * sizeof(*candidate_sectors));
+    if (candidate_sectors == NULL)
+    {
+        return SDL_OutOfMemory();
+    }
+
+    SDL_memcpy(candidate_sectors, sectors, (size_t)sector_count * sizeof(*candidate_sectors));
+    sector_apply_runtime_geometry(&candidate_sectors[sector_index], geometry);
+
+    SDL_zero(rebuilt);
+    if (!sdl3d_build_level(candidate_sectors, sector_count, materials, material_count, lights, light_count, &rebuilt))
+    {
+        SDL_free(candidate_sectors);
+        return false;
+    }
+
+    sector_apply_runtime_geometry(&sectors[sector_index], geometry);
+    SDL_free(candidate_sectors);
+    sdl3d_free_level(level);
+    *level = rebuilt;
+    return true;
 }
 
 void sdl3d_free_level(sdl3d_level *level)
