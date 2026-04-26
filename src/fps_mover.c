@@ -353,6 +353,31 @@ void sdl3d_fps_mover_jump(sdl3d_fps_mover *mover)
     mover->on_ground = false;
 }
 
+void sdl3d_fps_mover_teleport(sdl3d_fps_mover *mover, sdl3d_vec3 eye_position, bool set_yaw, float yaw, bool set_pitch,
+                              float pitch)
+{
+    if (mover == NULL)
+    {
+        return;
+    }
+
+    mover->position = eye_position;
+    if (set_yaw)
+    {
+        mover->yaw = yaw;
+    }
+    if (set_pitch)
+    {
+        mover->pitch = pitch;
+    }
+    mover->vertical_velocity = 0.0f;
+    mover->view_smooth = 0.0f;
+    mover->on_ground = false;
+    mover->current_sector = -1;
+    mover->last_good_position = eye_position;
+    mover->has_last_good = true;
+}
+
 sdl3d_camera3d sdl3d_fps_mover_camera(const sdl3d_fps_mover *mover, float fovy)
 {
     sdl3d_camera3d cam;

@@ -88,6 +88,17 @@ extern "C"
      */
     void sdl3d_fps_mover_jump(sdl3d_fps_mover *mover);
 
+    /**
+     * @brief Instantly move a first-person mover to a new eye position.
+     *
+     * Teleporting resets vertical velocity, stair smoothing, sector cache, and
+     * last-known-good state so later collision recovery cannot snap the player
+     * back to the pre-teleport location. Pass false for set_yaw or set_pitch to
+     * preserve the current facing on that axis.
+     */
+    void sdl3d_fps_mover_teleport(sdl3d_fps_mover *mover, sdl3d_vec3 eye_position, bool set_yaw, float yaw,
+                                  bool set_pitch, float pitch);
+
     /*
      * Build a camera looking along the mover's facing. The camera position
      * includes the view-smooth offset so stair transitions appear smooth.

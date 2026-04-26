@@ -85,7 +85,8 @@ static bool render_state_ensure_sector_capacity(render_state *rs, int sector_cou
 
 void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_font *font, sdl3d_ui_context *ui,
                        level_data *ld, entities *ent, const player_state *player, int backbuffer_w, int backbuffer_h,
-                       float dt, const char *render_profile_name, bool ambient_feedback_active)
+                       float dt, const char *render_profile_name, bool ambient_feedback_active,
+                       bool teleport_feedback_active)
 {
     const sdl3d_fps_mover *mover = &player->mover;
     sdl3d_level *active = level_data_active(ld);
@@ -178,6 +179,12 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
     /* Ambient-zone feedback beacon. */
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(73.0f, 3.0f, 63.0f), sdl3d_vec3_make(0.7f, 0.7f, 0.7f),
                     ambient_feedback_active ? (sdl3d_color){220, 40, 30, 255} : (sdl3d_color){40, 210, 70, 255});
+
+    /* Dragon-room teleporter source pad and destination beacon. */
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(24.0f, 0.05f, 88.0f), sdl3d_vec3_make(3.0f, 0.1f, 3.0f),
+                    teleport_feedback_active ? (sdl3d_color){255, 210, 60, 255} : (sdl3d_color){40, 190, 230, 255});
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(72.0f, 2.85f, 63.0f), sdl3d_vec3_make(0.8f, 0.7f, 0.8f),
+                    teleport_feedback_active ? (sdl3d_color){255, 210, 60, 255} : (sdl3d_color){80, 120, 255, 255});
 
     /* Sprites */
     {
