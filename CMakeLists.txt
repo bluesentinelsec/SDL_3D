@@ -96,6 +96,7 @@ target_sources(
         src/image.c
         src/input.c
         src/lighting.c
+        src/logic.c
         src/math.c
         src/font.c
         src/fps_mover.c
