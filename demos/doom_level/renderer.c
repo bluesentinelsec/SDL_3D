@@ -15,8 +15,7 @@
 #define ROCKET_LIGHT_INTENSITY 4.0f
 #define ROCKET_LIGHT_RANGE 4.0f
 
-static sdl3d_color sample_actor_tint(const sdl3d_level_light *lights, int light_count, sdl3d_vec3 position,
-                                     const player_state *player)
+static sdl3d_color sample_actor_tint(const sdl3d_level_light *lights, int light_count, sdl3d_vec3 position)
 {
     float r = 0.7f, g = 0.7f, b = 0.72f;
 
@@ -34,23 +33,6 @@ static sdl3d_color sample_actor_tint(const sdl3d_level_light *lights, int light_
         r += lights[i].color[0] * scale;
         g += lights[i].color[1] * scale;
         b += lights[i].color[2] * scale;
-    }
-
-    if (player->proj_active)
-    {
-        float dx = player->proj_x - position.x;
-        float dy = player->proj_y - position.y;
-        float dz = player->proj_z - position.z;
-        float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
-        if (dist < ROCKET_LIGHT_RANGE && dist > 0.0001f)
-        {
-            float t = 1.0f - (dist / ROCKET_LIGHT_RANGE);
-            float atten = t * t;
-            float scale = ROCKET_LIGHT_INTENSITY * atten * 0.35f;
-            r += ROCKET_LIGHT_R * scale;
-            g += ROCKET_LIGHT_G * scale;
-            b += ROCKET_LIGHT_B * scale;
-        }
     }
 
     if (r > 1.0f)
@@ -159,7 +141,9 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
         for (int i = 0; i < ent->sprites.count; ++i)
         {
             sdl3d_sprite_actor *sa = &ent->sprites.actors[i];
-            sa->tint = sample_actor_tint(g_lights, g_light_count, sa->position, player);
+            sdl3d_vec3 light_sample_position = sa->position;
+            light_sample_position.y += sa->size.y * 0.5f;
+            sa->tint = sample_actor_tint(g_lights, g_light_count, light_sample_position);
             sa->sector_id =
                 rs->portal_culling ? sdl3d_level_find_sector(active, g_sectors, sa->position.x, sa->position.z) : -1;
         }

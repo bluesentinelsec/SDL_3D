@@ -620,6 +620,59 @@ TEST_F(SDL3DDrawingFixture, ClearResetsDepthBuffer)
     sdl3d_destroy_render_context(ctx);
 }
 
+TEST_F(SDL3DDrawingFixture, BillboardRespondsToPointLight)
+{
+    WindowRenderer wr(96, 96);
+    ASSERT_TRUE(wr.ok());
+    sdl3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx));
+
+    sdl3d_texture2d texture = MakeSolidTexture({80, 80, 80, 255});
+    sdl3d_camera3d cam{};
+    cam.position = sdl3d_vec3_make(0.0f, 1.0f, 4.0f);
+    cam.target = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.fovy = 60.0f;
+    cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, cam));
+    ASSERT_TRUE(sdl3d_draw_billboard(ctx, &texture, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), (sdl3d_vec2){2.0f, 2.0f},
+                                     (sdl3d_color){255, 255, 255, 255}));
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+    sdl3d_color unlit{};
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 48, 48, &unlit));
+
+    sdl3d_light light{};
+    light.type = SDL3D_LIGHT_POINT;
+    light.position = sdl3d_vec3_make(0.0f, 1.0f, 3.0f);
+    light.color[0] = 1.0f;
+    light.color[1] = 0.25f;
+    light.color[2] = 0.1f;
+    light.intensity = 12.0f;
+    light.range = 8.0f;
+    ASSERT_TRUE(sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG));
+    ASSERT_TRUE(sdl3d_set_ambient_light(ctx, 0.0f, 0.0f, 0.0f));
+    ASSERT_TRUE(sdl3d_clear_lights(ctx));
+    ASSERT_TRUE(sdl3d_add_light(ctx, &light));
+
+    ASSERT_TRUE(sdl3d_clear_render_context(ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(ctx, cam));
+    ASSERT_TRUE(sdl3d_draw_billboard(ctx, &texture, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), (sdl3d_vec2){2.0f, 2.0f},
+                                     (sdl3d_color){255, 255, 255, 255}));
+    ASSERT_TRUE(sdl3d_end_mode_3d(ctx));
+
+    sdl3d_color lit{};
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(ctx, 48, 48, &lit));
+
+    EXPECT_GT(lit.r, unlit.r);
+    EXPECT_GT(lit.r, lit.g);
+
+    sdl3d_free_texture(&texture);
+    sdl3d_destroy_render_context(ctx);
+}
+
 TEST_F(SDL3DDrawingFixture, ScissorRestrictsDrawingToClippedRegion)
 {
     WindowRenderer wr(64, 64);
