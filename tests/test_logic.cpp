@@ -5,6 +5,8 @@
 
 #include <gtest/gtest.h>
 
+#include <SDL3/SDL_stdinc.h>
+
 extern "C"
 {
 #include "sdl3d/actor_registry.h"
@@ -20,6 +22,53 @@ static sdl3d_logic_world *make_logic_world(sdl3d_signal_bus **out_bus)
     if (out_bus != nullptr)
         *out_bus = bus;
     return sdl3d_logic_world_create(bus, nullptr);
+}
+
+struct logic_signal_capture
+{
+    int count = 0;
+    int signal_id = 0;
+    int sensor_id = -1;
+    int event = 0;
+    int sector_index = -1;
+    int actor_id = -1;
+    bool inside = false;
+    float distance = -1.0f;
+    sdl3d_vec3 sample_position = {};
+    char actor_name[64] = {};
+};
+
+static void capture_logic_signal(void *userdata, int signal_id, const sdl3d_properties *payload)
+{
+    logic_signal_capture *capture = (logic_signal_capture *)userdata;
+    capture->count++;
+    capture->signal_id = signal_id;
+    capture->sensor_id = sdl3d_properties_get_int(payload, "sensor_id", -1);
+    capture->event = sdl3d_properties_get_int(payload, "event", 0);
+    capture->inside = sdl3d_properties_get_bool(payload, "inside", false);
+    capture->sector_index = sdl3d_properties_get_int(payload, "sector_index", -1);
+    capture->actor_id = sdl3d_properties_get_int(payload, "actor_id", -1);
+    capture->distance = sdl3d_properties_get_float(payload, "distance", -1.0f);
+    capture->sample_position = sdl3d_properties_get_vec3(payload, "sample_position", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const char *actor_name = sdl3d_properties_get_string(payload, "actor_name", "");
+    SDL_snprintf(capture->actor_name, sizeof(capture->actor_name), "%s", actor_name);
+}
+
+static sdl3d_sector make_square_sector(float min_x, float min_z, float max_x, float max_z)
+{
+    sdl3d_sector sector{};
+    sector.points[0][0] = min_x;
+    sector.points[0][1] = min_z;
+    sector.points[1][0] = max_x;
+    sector.points[1][1] = min_z;
+    sector.points[2][0] = max_x;
+    sector.points[2][1] = max_z;
+    sector.points[3][0] = min_x;
+    sector.points[3][1] = max_z;
+    sector.num_points = 4;
+    sector.floor_y = 0.0f;
+    sector.ceil_y = 3.0f;
+    return sector;
 }
 
 TEST(LogicWorld, CreateAndDestroy)
@@ -696,6 +745,301 @@ TEST(LogicWorldActions, InvalidLogicActionsAreRejected)
     EXPECT_EQ(sdl3d_logic_world_bind_logic_action(nullptr, 1, &none), 0);
     EXPECT_EQ(sdl3d_logic_world_bind_logic_action(world, 1, nullptr), 0);
     EXPECT_EQ(sdl3d_logic_world_bind_logic_action(world, 1, &none), 0);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldSensors, ContactSensorEnterEmitsPayload)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 200, capture_logic_signal, &capture), 0);
+
+    sdl3d_logic_contact_sensor sensor{};
+    sdl3d_logic_contact_sensor_init(
+        &sensor, 7, sdl3d_bounding_box{sdl3d_vec3_make(0.0f, 0.0f, 0.0f), sdl3d_vec3_make(2.0f, 2.0f, 2.0f)}, 200,
+        SDL3D_TRIGGER_EDGE_ENTER);
+
+    sdl3d_logic_sensor_result outside =
+        sdl3d_logic_contact_sensor_update(&sensor, world, sdl3d_vec3_make(-1.0f, 1.0f, 1.0f));
+    EXPECT_FALSE(outside.active);
+    EXPECT_FALSE(outside.emitted);
+    EXPECT_EQ(capture.count, 0);
+
+    sdl3d_logic_sensor_result inside =
+        sdl3d_logic_contact_sensor_update(&sensor, world, sdl3d_vec3_make(1.0f, 1.0f, 1.0f));
+    EXPECT_TRUE(inside.active);
+    EXPECT_TRUE(inside.emitted);
+    EXPECT_EQ(inside.event, SDL3D_LOGIC_SENSOR_EVENT_ENTER);
+    ASSERT_EQ(capture.count, 1);
+    EXPECT_EQ(capture.signal_id, 200);
+    EXPECT_EQ(capture.sensor_id, 7);
+    EXPECT_EQ(capture.event, SDL3D_LOGIC_SENSOR_EVENT_ENTER);
+    EXPECT_TRUE(capture.inside);
+    EXPECT_FLOAT_EQ(capture.sample_position.x, 1.0f);
+    EXPECT_FLOAT_EQ(capture.sample_position.y, 1.0f);
+    EXPECT_FLOAT_EQ(capture.sample_position.z, 1.0f);
+
+    sdl3d_logic_sensor_result still_inside =
+        sdl3d_logic_contact_sensor_update(&sensor, world, sdl3d_vec3_make(1.5f, 1.0f, 1.0f));
+    EXPECT_TRUE(still_inside.active);
+    EXPECT_FALSE(still_inside.emitted);
+    EXPECT_EQ(capture.count, 1);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldSensors, ContactSensorBothEmitsExit)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 201, capture_logic_signal, &capture), 0);
+
+    sdl3d_logic_contact_sensor sensor{};
+    sdl3d_logic_contact_sensor_init(
+        &sensor, 8, sdl3d_bounding_box{sdl3d_vec3_make(0.0f, 0.0f, 0.0f), sdl3d_vec3_make(2.0f, 2.0f, 2.0f)}, 201,
+        SDL3D_TRIGGER_EDGE_BOTH);
+
+    EXPECT_TRUE(sdl3d_logic_contact_sensor_update(&sensor, world, sdl3d_vec3_make(1.0f, 1.0f, 1.0f)).emitted);
+    sdl3d_logic_sensor_result exit =
+        sdl3d_logic_contact_sensor_update(&sensor, world, sdl3d_vec3_make(3.0f, 1.0f, 1.0f));
+
+    EXPECT_FALSE(exit.active);
+    EXPECT_TRUE(exit.emitted);
+    EXPECT_EQ(exit.event, SDL3D_LOGIC_SENSOR_EVENT_EXIT);
+    ASSERT_EQ(capture.count, 2);
+    EXPECT_EQ(capture.sensor_id, 8);
+    EXPECT_EQ(capture.event, SDL3D_LOGIC_SENSOR_EVENT_EXIT);
+    EXPECT_FALSE(capture.inside);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldSensors, ContactSensorLevelEmitsEveryInsideUpdate)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 202, capture_logic_signal, &capture), 0);
+
+    sdl3d_logic_contact_sensor sensor{};
+    sdl3d_logic_contact_sensor_init(
+        &sensor, 9, sdl3d_bounding_box{sdl3d_vec3_make(0.0f, 0.0f, 0.0f), sdl3d_vec3_make(2.0f, 2.0f, 2.0f)}, 202,
+        SDL3D_TRIGGER_LEVEL);
+
+    sdl3d_logic_sensor_result first =
+        sdl3d_logic_contact_sensor_update(&sensor, world, sdl3d_vec3_make(1.0f, 1.0f, 1.0f));
+    sdl3d_logic_sensor_result second =
+        sdl3d_logic_contact_sensor_update(&sensor, world, sdl3d_vec3_make(1.5f, 1.0f, 1.0f));
+
+    EXPECT_TRUE(first.emitted);
+    EXPECT_TRUE(second.emitted);
+    EXPECT_EQ(first.event, SDL3D_LOGIC_SENSOR_EVENT_LEVEL);
+    EXPECT_EQ(second.event, SDL3D_LOGIC_SENSOR_EVENT_LEVEL);
+    EXPECT_EQ(capture.count, 2);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldSensors, ContactSensorResetAllowsEnterAgain)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 203, capture_logic_signal, &capture), 0);
+
+    sdl3d_logic_contact_sensor sensor{};
+    sdl3d_logic_contact_sensor_init(
+        &sensor, 10, sdl3d_bounding_box{sdl3d_vec3_make(0.0f, 0.0f, 0.0f), sdl3d_vec3_make(2.0f, 2.0f, 2.0f)}, 203,
+        SDL3D_TRIGGER_EDGE_ENTER);
+
+    EXPECT_TRUE(sdl3d_logic_contact_sensor_update(&sensor, world, sdl3d_vec3_make(1.0f, 1.0f, 1.0f)).emitted);
+    EXPECT_FALSE(sdl3d_logic_contact_sensor_update(&sensor, world, sdl3d_vec3_make(1.0f, 1.0f, 1.0f)).emitted);
+
+    sdl3d_logic_contact_sensor_reset(&sensor);
+    EXPECT_TRUE(sdl3d_logic_contact_sensor_update(&sensor, world, sdl3d_vec3_make(1.0f, 1.0f, 1.0f)).emitted);
+    EXPECT_EQ(capture.count, 2);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldSensors, ContactSensorCanEvaluateWithoutWorld)
+{
+    sdl3d_logic_contact_sensor sensor{};
+    sdl3d_logic_contact_sensor_init(
+        &sensor, 17, sdl3d_bounding_box{sdl3d_vec3_make(0.0f, 0.0f, 0.0f), sdl3d_vec3_make(2.0f, 2.0f, 2.0f)}, 204,
+        SDL3D_TRIGGER_EDGE_ENTER);
+
+    sdl3d_logic_sensor_result result =
+        sdl3d_logic_contact_sensor_update(&sensor, nullptr, sdl3d_vec3_make(1.0f, 1.0f, 1.0f));
+
+    EXPECT_TRUE(result.active);
+    EXPECT_FALSE(result.emitted);
+    EXPECT_EQ(result.event, SDL3D_LOGIC_SENSOR_EVENT_NONE);
+    EXPECT_TRUE(sensor.was_inside);
+}
+
+TEST(LogicWorldSensors, SectorSensorEnterByName)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 210, capture_logic_signal, &capture), 0);
+
+    sdl3d_level level{};
+    sdl3d_sector sectors[2]{};
+    level.sector_count = 2;
+    sectors[0] = make_square_sector(0.0f, 0.0f, 10.0f, 10.0f);
+    sectors[1] = make_square_sector(10.0f, 0.0f, 20.0f, 10.0f);
+
+    sdl3d_logic_target_context context{};
+    context.level = &level;
+    context.sectors = sectors;
+    context.sector_count = 2;
+    sdl3d_logic_world_set_target_context(world, &context);
+    ASSERT_TRUE(sdl3d_logic_world_set_sector_name(world, 1, "target_room"));
+
+    sdl3d_logic_sector_sensor sensor{};
+    sdl3d_logic_sector_sensor_init(&sensor, 11, sdl3d_logic_target_sector_name("target_room"), 210,
+                                   SDL3D_TRIGGER_EDGE_ENTER);
+
+    sdl3d_logic_sensor_result result =
+        sdl3d_logic_sector_sensor_update(&sensor, world, sdl3d_vec3_make(15.0f, 1.0f, 5.0f));
+
+    EXPECT_TRUE(result.active);
+    EXPECT_TRUE(result.emitted);
+    EXPECT_EQ(result.event, SDL3D_LOGIC_SENSOR_EVENT_ENTER);
+    ASSERT_EQ(capture.count, 1);
+    EXPECT_EQ(capture.sensor_id, 11);
+    EXPECT_EQ(capture.sector_index, 1);
+    EXPECT_TRUE(capture.inside);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldSensors, SectorSensorExitReportsTargetSector)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 211, capture_logic_signal, &capture), 0);
+
+    sdl3d_level level{};
+    sdl3d_sector sectors[2]{};
+    level.sector_count = 2;
+    sectors[0] = make_square_sector(0.0f, 0.0f, 10.0f, 10.0f);
+    sectors[1] = make_square_sector(10.0f, 0.0f, 20.0f, 10.0f);
+
+    sdl3d_logic_target_context context{};
+    context.level = &level;
+    context.sectors = sectors;
+    context.sector_count = 2;
+    sdl3d_logic_world_set_target_context(world, &context);
+
+    sdl3d_logic_sector_sensor sensor{};
+    sdl3d_logic_sector_sensor_init(&sensor, 12, sdl3d_logic_target_sector_index(1), 211, SDL3D_TRIGGER_EDGE_BOTH);
+
+    EXPECT_TRUE(sdl3d_logic_sector_sensor_update(&sensor, world, sdl3d_vec3_make(15.0f, 1.0f, 5.0f)).emitted);
+    sdl3d_logic_sensor_result exit =
+        sdl3d_logic_sector_sensor_update(&sensor, world, sdl3d_vec3_make(5.0f, 1.0f, 5.0f));
+
+    EXPECT_FALSE(exit.active);
+    EXPECT_TRUE(exit.emitted);
+    EXPECT_EQ(exit.event, SDL3D_LOGIC_SENSOR_EVENT_EXIT);
+    ASSERT_EQ(capture.count, 2);
+    EXPECT_EQ(capture.sensor_id, 12);
+    EXPECT_EQ(capture.sector_index, 1);
+    EXPECT_FALSE(capture.inside);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldSensors, ProximitySensorEnterExitWithActorPayload)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 220, capture_logic_signal, &capture), 0);
+
+    sdl3d_actor_registry *registry = sdl3d_actor_registry_create();
+    sdl3d_registered_actor *actor = sdl3d_actor_registry_add(registry, "robot");
+    ASSERT_NE(actor, nullptr);
+    actor->position = sdl3d_vec3_make(10.0f, 0.0f, 0.0f);
+
+    sdl3d_logic_target_context context{};
+    context.registry = registry;
+    sdl3d_logic_world_set_target_context(world, &context);
+
+    sdl3d_logic_proximity_sensor sensor{};
+    sdl3d_logic_proximity_sensor_init(&sensor, 13, sdl3d_logic_target_actor_name("robot"), 3.0f, 220,
+                                      SDL3D_TRIGGER_EDGE_BOTH);
+
+    EXPECT_FALSE(sdl3d_logic_proximity_sensor_update(&sensor, world, sdl3d_vec3_make(20.0f, 0.0f, 0.0f)).emitted);
+    sdl3d_logic_sensor_result enter =
+        sdl3d_logic_proximity_sensor_update(&sensor, world, sdl3d_vec3_make(12.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(enter.active);
+    EXPECT_TRUE(enter.emitted);
+    EXPECT_EQ(enter.event, SDL3D_LOGIC_SENSOR_EVENT_ENTER);
+    ASSERT_EQ(capture.count, 1);
+    EXPECT_EQ(capture.actor_id, actor->id);
+    EXPECT_STREQ(capture.actor_name, "robot");
+    EXPECT_FLOAT_EQ(capture.distance, 2.0f);
+
+    sdl3d_logic_sensor_result exit =
+        sdl3d_logic_proximity_sensor_update(&sensor, world, sdl3d_vec3_make(20.0f, 0.0f, 0.0f));
+    EXPECT_FALSE(exit.active);
+    EXPECT_TRUE(exit.emitted);
+    EXPECT_EQ(exit.event, SDL3D_LOGIC_SENSOR_EVENT_EXIT);
+    ASSERT_EQ(capture.count, 2);
+    EXPECT_FALSE(capture.inside);
+    EXPECT_EQ(capture.actor_id, actor->id);
+
+    sdl3d_actor_registry_destroy(registry);
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldSensors, InvalidSensorsAreSafe)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+
+    sdl3d_logic_contact_sensor contact{};
+    sdl3d_logic_contact_sensor_init(
+        &contact, 14, sdl3d_bounding_box{sdl3d_vec3_make(0.0f, 0.0f, 0.0f), sdl3d_vec3_make(1.0f, 1.0f, 1.0f)}, 230,
+        SDL3D_TRIGGER_EDGE_ENTER);
+
+    EXPECT_FALSE(sdl3d_logic_contact_sensor_update(&contact, nullptr, sdl3d_vec3_make(0.5f, 0.5f, 0.5f)).emitted);
+    EXPECT_TRUE(contact.was_inside);
+    EXPECT_FALSE(sdl3d_logic_contact_sensor_update(nullptr, world, sdl3d_vec3_make(0.5f, 0.5f, 0.5f)).emitted);
+    sdl3d_logic_contact_sensor_reset(nullptr);
+
+    contact.enabled = false;
+    sdl3d_logic_sensor_result disabled =
+        sdl3d_logic_contact_sensor_update(&contact, world, sdl3d_vec3_make(0.5f, 0.5f, 0.5f));
+    EXPECT_FALSE(disabled.active);
+    EXPECT_FALSE(disabled.emitted);
+
+    sdl3d_logic_sector_sensor sector{};
+    sdl3d_logic_sector_sensor_init(&sector, 15, sdl3d_logic_target_sector_name("missing"), 231,
+                                   SDL3D_TRIGGER_EDGE_ENTER);
+    EXPECT_FALSE(sdl3d_logic_sector_sensor_update(&sector, world, sdl3d_vec3_make(0.0f, 0.0f, 0.0f)).emitted);
+    sdl3d_logic_sector_sensor_reset(nullptr);
+
+    sdl3d_logic_proximity_sensor proximity{};
+    sdl3d_logic_proximity_sensor_init(&proximity, 16, sdl3d_logic_target_actor_name("missing"), 1.0f, 232,
+                                      SDL3D_TRIGGER_EDGE_ENTER);
+    EXPECT_FALSE(sdl3d_logic_proximity_sensor_update(&proximity, world, sdl3d_vec3_make(0.0f, 0.0f, 0.0f)).emitted);
+    sdl3d_logic_proximity_sensor_reset(nullptr);
 
     sdl3d_logic_world_destroy(world);
     sdl3d_signal_bus_destroy(bus);

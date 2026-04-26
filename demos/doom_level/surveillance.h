@@ -5,11 +5,13 @@
 #include <stdbool.h>
 
 #include "sdl3d/camera.h"
+#include "sdl3d/logic.h"
 #include "sdl3d/types.h"
 
 typedef struct doom_surveillance_camera
 {
     sdl3d_bounding_box button_bounds;
+    sdl3d_logic_contact_sensor button_sensor;
     sdl3d_camera3d camera;
     bool enabled;
     bool active;

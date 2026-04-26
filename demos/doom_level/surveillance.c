@@ -3,12 +3,6 @@
 
 #include <SDL3/SDL_stdinc.h>
 
-static bool point_inside_bounds(sdl3d_bounding_box bounds, sdl3d_vec3 point)
-{
-    return point.x >= bounds.min.x && point.x <= bounds.max.x && point.y >= bounds.min.y && point.y <= bounds.max.y &&
-           point.z >= bounds.min.z && point.z <= bounds.max.z;
-}
-
 void doom_surveillance_init(doom_surveillance_camera *surveillance, sdl3d_bounding_box button_bounds,
                             sdl3d_camera3d camera)
 {
@@ -19,6 +13,7 @@ void doom_surveillance_init(doom_surveillance_camera *surveillance, sdl3d_boundi
 
     SDL_zerop(surveillance);
     surveillance->button_bounds = button_bounds;
+    sdl3d_logic_contact_sensor_init(&surveillance->button_sensor, 0, button_bounds, 0, SDL3D_TRIGGER_LEVEL);
     surveillance->camera = camera;
     surveillance->enabled = true;
 }
@@ -30,7 +25,9 @@ bool doom_surveillance_update(doom_surveillance_camera *surveillance, sdl3d_vec3
         return false;
     }
 
-    surveillance->active = surveillance->enabled && point_inside_bounds(surveillance->button_bounds, sample_position);
+    surveillance->button_sensor.enabled = surveillance->enabled;
+    surveillance->active =
+        sdl3d_logic_contact_sensor_update(&surveillance->button_sensor, NULL, sample_position).active;
     return surveillance->active;
 }
 

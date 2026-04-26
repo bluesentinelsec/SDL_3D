@@ -126,6 +126,72 @@ static int clamp_non_negative_int(int value)
     return value > 0 ? value : 0;
 }
 
+static sdl3d_logic_sensor_result sensor_result(bool active, sdl3d_logic_sensor_event event)
+{
+    sdl3d_logic_sensor_result result;
+    SDL_zero(result);
+    result.active = active;
+    result.event = event;
+    result.emitted = event != SDL3D_LOGIC_SENSOR_EVENT_NONE;
+    return result;
+}
+
+static sdl3d_logic_sensor_event sensor_event_for_state(sdl3d_trigger_edge edge, bool was_active, bool active)
+{
+    switch (edge)
+    {
+    case SDL3D_TRIGGER_EDGE_ENTER:
+        return active && !was_active ? SDL3D_LOGIC_SENSOR_EVENT_ENTER : SDL3D_LOGIC_SENSOR_EVENT_NONE;
+    case SDL3D_TRIGGER_EDGE_EXIT:
+        return !active && was_active ? SDL3D_LOGIC_SENSOR_EVENT_EXIT : SDL3D_LOGIC_SENSOR_EVENT_NONE;
+    case SDL3D_TRIGGER_EDGE_BOTH:
+        if (active && !was_active)
+            return SDL3D_LOGIC_SENSOR_EVENT_ENTER;
+        if (!active && was_active)
+            return SDL3D_LOGIC_SENSOR_EVENT_EXIT;
+        return SDL3D_LOGIC_SENSOR_EVENT_NONE;
+    case SDL3D_TRIGGER_LEVEL:
+        return active ? SDL3D_LOGIC_SENSOR_EVENT_LEVEL : SDL3D_LOGIC_SENSOR_EVENT_NONE;
+    }
+    return SDL3D_LOGIC_SENSOR_EVENT_NONE;
+}
+
+static bool point_inside_bounds(sdl3d_bounding_box bounds, sdl3d_vec3 point)
+{
+    return point.x >= bounds.min.x && point.x <= bounds.max.x && point.y >= bounds.min.y && point.y <= bounds.max.y &&
+           point.z >= bounds.min.z && point.z <= bounds.max.z;
+}
+
+static bool emit_sensor_payload(sdl3d_logic_world *world, int signal_id, int sensor_id, sdl3d_logic_sensor_event event,
+                                bool active, sdl3d_vec3 sample_position, int sector_index,
+                                const sdl3d_registered_actor *actor, float distance)
+{
+    if (world == NULL || world->bus == NULL || event == SDL3D_LOGIC_SENSOR_EVENT_NONE)
+        return false;
+
+    sdl3d_properties *payload = sdl3d_properties_create();
+    if (payload == NULL)
+        return false;
+
+    sdl3d_properties_set_int(payload, "sensor_id", sensor_id);
+    sdl3d_properties_set_int(payload, "event", (int)event);
+    sdl3d_properties_set_bool(payload, "inside", active);
+    sdl3d_properties_set_vec3(payload, "sample_position", sample_position);
+    if (sector_index >= 0)
+        sdl3d_properties_set_int(payload, "sector_index", sector_index);
+    if (actor != NULL)
+    {
+        sdl3d_properties_set_int(payload, "actor_id", actor->id);
+        if (actor->name != NULL)
+            sdl3d_properties_set_string(payload, "actor_name", actor->name);
+        sdl3d_properties_set_float(payload, "distance", distance);
+    }
+
+    sdl3d_signal_emit(world->bus, signal_id, payload);
+    sdl3d_properties_destroy(payload);
+    return true;
+}
+
 static void set_property_value(sdl3d_properties *target, const char *key, const sdl3d_value *value)
 {
     if (target == NULL || key == NULL || value == NULL)
@@ -510,6 +576,138 @@ bool sdl3d_logic_world_execute_action(sdl3d_logic_world *world, const sdl3d_logi
     }
 
     return false;
+}
+
+void sdl3d_logic_contact_sensor_init(sdl3d_logic_contact_sensor *sensor, int sensor_id, sdl3d_bounding_box bounds,
+                                     int signal_id, sdl3d_trigger_edge edge)
+{
+    if (sensor == NULL)
+        return;
+
+    SDL_zerop(sensor);
+    sensor->sensor_id = sensor_id;
+    sensor->bounds = bounds;
+    sensor->signal_id = signal_id;
+    sensor->edge = edge;
+    sensor->enabled = true;
+}
+
+sdl3d_logic_sensor_result sdl3d_logic_contact_sensor_update(sdl3d_logic_contact_sensor *sensor,
+                                                            sdl3d_logic_world *world, sdl3d_vec3 sample_position)
+{
+    if (sensor == NULL || !sensor->enabled)
+        return sensor_result(false, SDL3D_LOGIC_SENSOR_EVENT_NONE);
+
+    const bool active = point_inside_bounds(sensor->bounds, sample_position);
+    const sdl3d_logic_sensor_event event = sensor_event_for_state(sensor->edge, sensor->was_inside, active);
+    sensor->was_inside = active;
+
+    if (emit_sensor_payload(world, sensor->signal_id, sensor->sensor_id, event, active, sample_position, -1, NULL,
+                            0.0f))
+    {
+        return sensor_result(active, event);
+    }
+    return sensor_result(active, SDL3D_LOGIC_SENSOR_EVENT_NONE);
+}
+
+void sdl3d_logic_contact_sensor_reset(sdl3d_logic_contact_sensor *sensor)
+{
+    if (sensor != NULL)
+        sensor->was_inside = false;
+}
+
+void sdl3d_logic_sector_sensor_init(sdl3d_logic_sector_sensor *sensor, int sensor_id, sdl3d_logic_target_ref sector,
+                                    int signal_id, sdl3d_trigger_edge edge)
+{
+    if (sensor == NULL)
+        return;
+
+    SDL_zerop(sensor);
+    sensor->sensor_id = sensor_id;
+    sensor->sector = sector;
+    sensor->signal_id = signal_id;
+    sensor->edge = edge;
+    sensor->enabled = true;
+}
+
+sdl3d_logic_sensor_result sdl3d_logic_sector_sensor_update(sdl3d_logic_sector_sensor *sensor, sdl3d_logic_world *world,
+                                                           sdl3d_vec3 sample_position)
+{
+    if (sensor == NULL || world == NULL || !sensor->enabled)
+        return sensor_result(false, SDL3D_LOGIC_SENSOR_EVENT_NONE);
+
+    sdl3d_logic_resolved_target target;
+    if (!sdl3d_logic_world_resolve_target(world, &sensor->sector, &target) || !resolved_target_is_sector(&target))
+        return sensor_result(false, SDL3D_LOGIC_SENSOR_EVENT_NONE);
+
+    const sdl3d_logic_target_context *context = sdl3d_logic_world_get_target_context(world);
+    const int current_sector = sdl3d_level_find_sector_at(context->level, context->sectors, sample_position.x,
+                                                          sample_position.z, sample_position.y);
+    const bool active = current_sector == target.sector.sector_index;
+    const sdl3d_logic_sensor_event event = sensor_event_for_state(sensor->edge, sensor->was_inside, active);
+    sensor->was_inside = active;
+
+    if (emit_sensor_payload(world, sensor->signal_id, sensor->sensor_id, event, active, sample_position,
+                            target.sector.sector_index, NULL, 0.0f))
+    {
+        return sensor_result(active, event);
+    }
+    return sensor_result(active, SDL3D_LOGIC_SENSOR_EVENT_NONE);
+}
+
+void sdl3d_logic_sector_sensor_reset(sdl3d_logic_sector_sensor *sensor)
+{
+    if (sensor != NULL)
+        sensor->was_inside = false;
+}
+
+void sdl3d_logic_proximity_sensor_init(sdl3d_logic_proximity_sensor *sensor, int sensor_id,
+                                       sdl3d_logic_target_ref actor, float radius, int signal_id,
+                                       sdl3d_trigger_edge edge)
+{
+    if (sensor == NULL)
+        return;
+
+    SDL_zerop(sensor);
+    sensor->sensor_id = sensor_id;
+    sensor->actor = actor;
+    sensor->radius = clamp_non_negative_float(radius);
+    sensor->signal_id = signal_id;
+    sensor->edge = edge;
+    sensor->enabled = true;
+}
+
+sdl3d_logic_sensor_result sdl3d_logic_proximity_sensor_update(sdl3d_logic_proximity_sensor *sensor,
+                                                              sdl3d_logic_world *world, sdl3d_vec3 sample_position)
+{
+    if (sensor == NULL || world == NULL || !sensor->enabled)
+        return sensor_result(false, SDL3D_LOGIC_SENSOR_EVENT_NONE);
+
+    sdl3d_logic_resolved_target target;
+    if (!sdl3d_logic_world_resolve_target(world, &sensor->actor, &target) || !resolved_target_is_actor(&target))
+        return sensor_result(false, SDL3D_LOGIC_SENSOR_EVENT_NONE);
+
+    const float dx = sample_position.x - target.actor->position.x;
+    const float dy = sample_position.y - target.actor->position.y;
+    const float dz = sample_position.z - target.actor->position.z;
+    const float distance_sq = dx * dx + dy * dy + dz * dz;
+    const float radius = clamp_non_negative_float(sensor->radius);
+    const bool active = distance_sq <= radius * radius;
+    const sdl3d_logic_sensor_event event = sensor_event_for_state(sensor->edge, sensor->was_inside, active);
+    sensor->was_inside = active;
+
+    if (emit_sensor_payload(world, sensor->signal_id, sensor->sensor_id, event, active, sample_position, -1,
+                            target.actor, SDL_sqrtf(distance_sq)))
+    {
+        return sensor_result(active, event);
+    }
+    return sensor_result(active, SDL3D_LOGIC_SENSOR_EVENT_NONE);
+}
+
+void sdl3d_logic_proximity_sensor_reset(sdl3d_logic_proximity_sensor *sensor)
+{
+    if (sensor != NULL)
+        sensor->was_inside = false;
 }
 
 int sdl3d_logic_world_bind_action(sdl3d_logic_world *world, int signal_id, const sdl3d_action *action)
