@@ -15,6 +15,7 @@ include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 include(CTest)
 include(FetchContent)
+find_package(Threads REQUIRED)
 
 if(PROJECT_IS_TOP_LEVEL)
     option(SDL3D_BUILD_TESTS "Build SDL3D tests" ${BUILD_TESTING})
@@ -83,6 +84,7 @@ target_sources(
         src/actor_registry.c
         src/app.c
         src/animation.c
+        src/audio.c
         src/camera.c
         src/collision.c
         src/drawing3d.c
@@ -120,6 +122,7 @@ target_sources(
         $<TARGET_OBJECTS:sdl3d_cgltf>
         $<TARGET_OBJECTS:sdl3d_ufbx>
         $<TARGET_OBJECTS:sdl3d_stb>
+        $<TARGET_OBJECTS:sdl3d_miniaudio>
 )
 
 target_compile_features(sdl3d PUBLIC c_std_17)
@@ -143,6 +146,7 @@ target_include_directories(
         $<TARGET_PROPERTY:sdl3d_cgltf,INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:sdl3d_ufbx,INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:sdl3d_stb,INCLUDE_DIRECTORIES>
+        $<TARGET_PROPERTY:sdl3d_miniaudio,INCLUDE_DIRECTORIES>
 )
 
 target_compile_definitions(
@@ -158,6 +162,12 @@ target_compile_options(
 )
 
 set_property(TARGET sdl3d APPEND PROPERTY INTERFACE_LINK_LIBRARIES ${SDL3D_SDL_TARGET})
+if(TARGET Threads::Threads)
+    set_property(TARGET sdl3d APPEND PROPERTY INTERFACE_LINK_LIBRARIES Threads::Threads)
+endif()
+if(CMAKE_DL_LIBS)
+    set_property(TARGET sdl3d APPEND PROPERTY INTERFACE_LINK_LIBRARIES ${CMAKE_DL_LIBS})
+endif()
 
 target_include_directories(
     sdl3d

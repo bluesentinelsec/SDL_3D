@@ -8,6 +8,8 @@ extern "C"
 #include "sdl3d/drawing3d.h"
 #include "sdl3d/level.h"
 #include "sdl3d/math.h"
+#include "sdl3d/properties.h"
+#include "sdl3d/signal_bus.h"
 }
 
 namespace
@@ -604,6 +606,83 @@ TEST(SDL3DSectorQueries, NullArgsReturnSafeDefaults)
     EXPECT_EQ(sdl3d_level_find_walkable_sector(nullptr, nullptr, 0, 0, 0, 1, 1), -1);
     EXPECT_EQ(sdl3d_level_find_support_sector(nullptr, nullptr, 0, 0, 0, 1), -1);
     EXPECT_FALSE(sdl3d_level_point_inside(nullptr, nullptr, 0, 0, 0));
+}
+
+namespace
+{
+struct SectorSignalCapture
+{
+    int count = 0;
+    int sector_id = -99;
+    int previous_sector_id = -99;
+    int ambient_id = -99;
+    int previous_ambient_id = -99;
+};
+
+void CaptureEnteredSector(void *userdata, int signal_id, const sdl3d_properties *payload)
+{
+    auto *capture = static_cast<SectorSignalCapture *>(userdata);
+    EXPECT_EQ(signal_id, SDL3D_SIGNAL_ENTERED_SECTOR);
+    ASSERT_NE(capture, nullptr);
+    ASSERT_NE(payload, nullptr);
+
+    capture->count++;
+    capture->sector_id = sdl3d_properties_get_int(payload, "sector_id", -99);
+    capture->previous_sector_id = sdl3d_properties_get_int(payload, "previous_sector_id", -99);
+    capture->ambient_id = sdl3d_properties_get_int(payload, "ambient_sound_id", -99);
+    capture->previous_ambient_id = sdl3d_properties_get_int(payload, "previous_ambient_sound_id", -99);
+}
+} // namespace
+
+TEST(SDL3DSectorWatcher, EmitsEnteredSectorWithAmbientPayload)
+{
+    const sdl3d_level_material mats[] = {MakeLevelMaterial("a.png"), MakeLevelMaterial("b.png"),
+                                         MakeLevelMaterial("c.png")};
+    sdl3d_sector sectors[] = {MakeStackedSector(0, 0, 4, 4, 0, 4), MakeStackedSector(4, 0, 8, 4, 0, 4)};
+    sectors[0].ambient_sound_id = 7;
+    sectors[1].ambient_sound_id = 11;
+    sdl3d_level level{};
+    ASSERT_TRUE(sdl3d_build_level(sectors, 2, mats, 3, nullptr, 0, &level));
+
+    sdl3d_signal_bus *bus = sdl3d_signal_bus_create();
+    ASSERT_NE(bus, nullptr);
+    SectorSignalCapture capture;
+    ASSERT_NE(sdl3d_signal_connect(bus, SDL3D_SIGNAL_ENTERED_SECTOR, CaptureEnteredSector, &capture), 0);
+
+    sdl3d_sector_watcher watcher{};
+    sdl3d_sector_watcher_init(&watcher);
+
+    EXPECT_TRUE(sdl3d_sector_watcher_update(&watcher, &level, sectors, sdl3d_vec3_make(2, 0, 2), bus));
+    EXPECT_EQ(capture.count, 1);
+    EXPECT_EQ(capture.sector_id, 0);
+    EXPECT_EQ(capture.previous_sector_id, -1);
+    EXPECT_EQ(capture.ambient_id, 7);
+    EXPECT_EQ(capture.previous_ambient_id, -1);
+
+    EXPECT_FALSE(sdl3d_sector_watcher_update(&watcher, &level, sectors, sdl3d_vec3_make(2.5f, 0, 2), bus));
+    EXPECT_EQ(capture.count, 1);
+
+    EXPECT_TRUE(sdl3d_sector_watcher_update(&watcher, &level, sectors, sdl3d_vec3_make(6, 0, 2), bus));
+    EXPECT_EQ(capture.count, 2);
+    EXPECT_EQ(capture.sector_id, 1);
+    EXPECT_EQ(capture.previous_sector_id, 0);
+    EXPECT_EQ(capture.ambient_id, 11);
+    EXPECT_EQ(capture.previous_ambient_id, 7);
+
+    sdl3d_signal_bus_destroy(bus);
+    sdl3d_free_level(&level);
+}
+
+TEST(SDL3DSectorWatcher, NullArgsAreSafe)
+{
+    sdl3d_sector_watcher watcher{};
+    sdl3d_sector_watcher_init(&watcher);
+
+    EXPECT_FALSE(sdl3d_sector_watcher_update(nullptr, nullptr, nullptr, sdl3d_vec3_make(0, 0, 0), nullptr));
+    EXPECT_FALSE(sdl3d_sector_watcher_update(&watcher, nullptr, nullptr, sdl3d_vec3_make(0, 0, 0), nullptr));
+    EXPECT_EQ(watcher.current_sector, -1);
+    EXPECT_EQ(watcher.current_ambient_id, -1);
+    EXPECT_EQ(watcher.entered_signal_id, SDL3D_SIGNAL_ENTERED_SECTOR);
 }
 
 /* ================================================================== */

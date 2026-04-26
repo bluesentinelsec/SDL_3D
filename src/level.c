@@ -13,6 +13,8 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "sdl3d/math.h"
+#include "sdl3d/properties.h"
+#include "sdl3d/signal_bus.h"
 
 #define LM_TEXELS_PER_UNIT 4
 #define LM_MIN_SURFACE_TEXELS 2
@@ -1415,6 +1417,62 @@ bool sdl3d_level_point_inside(const sdl3d_level *level, const sdl3d_sector *sect
         }
     }
     return false;
+}
+
+void sdl3d_sector_watcher_init(sdl3d_sector_watcher *watcher)
+{
+    if (watcher == NULL)
+    {
+        return;
+    }
+
+    watcher->current_sector = -1;
+    watcher->current_ambient_id = -1;
+    watcher->entered_signal_id = SDL3D_SIGNAL_ENTERED_SECTOR;
+}
+
+bool sdl3d_sector_watcher_update(sdl3d_sector_watcher *watcher, const sdl3d_level *level, const sdl3d_sector *sectors,
+                                 sdl3d_vec3 sample_position, sdl3d_signal_bus *bus)
+{
+    int next_sector;
+    int next_ambient_id;
+    int previous_sector;
+    int previous_ambient_id;
+
+    if (watcher == NULL || level == NULL || sectors == NULL)
+    {
+        return false;
+    }
+
+    next_sector = sdl3d_level_find_sector_at(level, sectors, sample_position.x, sample_position.z, sample_position.y);
+    next_ambient_id =
+        (next_sector >= 0 && next_sector < level->sector_count) ? sectors[next_sector].ambient_sound_id : -1;
+
+    if (next_sector == watcher->current_sector)
+    {
+        return false;
+    }
+
+    previous_sector = watcher->current_sector;
+    previous_ambient_id = watcher->current_ambient_id;
+    watcher->current_sector = next_sector;
+    watcher->current_ambient_id = next_ambient_id;
+
+    if (bus != NULL)
+    {
+        sdl3d_properties *payload = sdl3d_properties_create();
+        if (payload != NULL)
+        {
+            sdl3d_properties_set_int(payload, "sector_id", next_sector);
+            sdl3d_properties_set_int(payload, "previous_sector_id", previous_sector);
+            sdl3d_properties_set_int(payload, "ambient_sound_id", next_ambient_id);
+            sdl3d_properties_set_int(payload, "previous_ambient_sound_id", previous_ambient_id);
+            sdl3d_signal_emit(bus, watcher->entered_signal_id, payload);
+            sdl3d_properties_destroy(payload);
+        }
+    }
+
+    return true;
 }
 
 void sdl3d_extract_frustum_planes(sdl3d_mat4 view_projection, float out_planes[6][4])

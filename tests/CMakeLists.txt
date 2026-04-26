@@ -94,6 +94,7 @@ set(SDL3D_TEST_SOURCES
     test_action.cpp
     test_actor_registry.cpp
     test_animation.cpp
+    test_audio.cpp
     test_effects.cpp
     test_game.cpp
     test_input.cpp
@@ -189,6 +190,7 @@ else()
     sdl3d_add_test(sdl3d_action_test test_action.cpp unit)
     sdl3d_add_test(sdl3d_actor_registry_test test_actor_registry.cpp unit)
     sdl3d_add_test(sdl3d_animation_test test_animation.cpp unit)
+    sdl3d_add_test(sdl3d_audio_test test_audio.cpp unit)
     sdl3d_add_test(sdl3d_effects_test test_effects.cpp unit)
     sdl3d_add_test(sdl3d_game_test test_game.cpp render)
     sdl3d_add_test(sdl3d_input_test test_input.cpp unit)

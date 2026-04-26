@@ -17,6 +17,7 @@
 #include <SDL3/SDL_video.h>
 
 #include "sdl3d/actor_registry.h"
+#include "sdl3d/audio.h"
 #include "sdl3d/input.h"
 #include "sdl3d/render_context.h"
 #include "sdl3d/signal_bus.h"
@@ -43,6 +44,7 @@ extern "C"
         sdl3d_signal_bus *bus;          /**< Signal bus owned by the managed loop. */
         sdl3d_timer_pool *timers;       /**< Timer pool owned by the managed loop. */
         sdl3d_input_manager *input;     /**< Action input manager owned by the managed loop. */
+        sdl3d_audio_engine *audio;      /**< Audio engine owned by the managed loop, or NULL if unavailable. */
         float time;                     /**< Simulated game time advanced by fixed ticks. */
         float real_time;                /**< Wall-clock time accumulated by rendered frames. */
         int tick_count;                 /**< Total fixed ticks executed since startup. */
