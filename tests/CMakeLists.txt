@@ -97,6 +97,7 @@ set(SDL3D_TEST_SOURCES
     test_effects.cpp
     test_game.cpp
     test_input.cpp
+    test_transition.cpp
     test_level.cpp
     test_properties.cpp
     test_signal_bus.cpp
@@ -191,6 +192,7 @@ else()
     sdl3d_add_test(sdl3d_effects_test test_effects.cpp unit)
     sdl3d_add_test(sdl3d_game_test test_game.cpp render)
     sdl3d_add_test(sdl3d_input_test test_input.cpp unit)
+    sdl3d_add_test(sdl3d_transition_test test_transition.cpp render)
     sdl3d_add_test(sdl3d_level_test test_level.cpp unit)
     target_include_directories(sdl3d_level_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     sdl3d_add_test(sdl3d_properties_test test_properties.cpp unit)

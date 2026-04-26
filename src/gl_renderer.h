@@ -8,6 +8,7 @@
 #include <SDL3/SDL.h>
 
 #include "backend.h"
+#include "sdl3d/transition.h"
 
 typedef struct sdl3d_gl_context sdl3d_gl_context;
 
@@ -37,5 +38,9 @@ bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, cons
                              const SDL_Rect *scissor_rect);
 
 bool sdl3d_gl_append_line(sdl3d_gl_context *ctx, const float *positions, const float *colors, const float *mvp);
+
+/* Queue a transition to be applied during the next GL present after
+ * post-processing and before the final window blit. */
+bool sdl3d_gl_queue_transition(sdl3d_gl_context *ctx, const sdl3d_transition *transition);
 
 #endif

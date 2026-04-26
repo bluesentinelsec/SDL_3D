@@ -164,6 +164,19 @@ struct sdl3d_gl_context
     /* Copy uniform locations */
     GLint copy_texture_loc;
 
+    /* Transition pass */
+    GLuint transition_program;
+    GLint transition_scene_loc;
+    GLint transition_type_loc;
+    GLint transition_direction_loc;
+    GLint transition_progress_loc;
+    GLint transition_color_loc;
+    GLint transition_resolution_loc;
+    GLint transition_melt_offsets_loc;
+    GLuint transition_melt_offsets_tex;
+    bool transition_pending;
+    sdl3d_transition pending_transition;
+
     /* Scene UBO */
     GLuint scene_ubo;
 
@@ -651,6 +664,51 @@ static const char k_copy_frag[] = "in vec2 vTexCoord;\n"
                                   "void main() {\n"
                                   "    fragColor = texture(uScene, vTexCoord);\n"
                                   "}\n";
+
+static const char k_transition_frag[] =
+    "in vec2 vTexCoord;\n"
+    "uniform sampler2D uScene;\n"
+    "uniform int uType;\n"
+    "uniform int uDirection;\n"
+    "uniform float uProgress;\n"
+    "uniform vec4 uColor;\n"
+    "uniform vec2 uResolution;\n"
+    "uniform sampler2D uMeltOffsets;\n"
+    "out vec4 fragColor;\n"
+    "\n"
+    "void main() {\n"
+    "    vec4 scene = texture(uScene, vTexCoord);\n"
+    "    float cover = (uDirection == 0) ? (1.0 - uProgress) : uProgress;\n"
+    "    cover = clamp(cover, 0.0, 1.0);\n"
+    "\n"
+    "    if (uType == 0) {\n"
+    "        fragColor = mix(scene, uColor, cover * uColor.a);\n"
+    "    } else if (uType == 1) {\n"
+    "        float aspect = uResolution.x / max(uResolution.y, 1.0);\n"
+    "        vec2 centered = vTexCoord - vec2(0.5);\n"
+    "        centered.x *= aspect;\n"
+    "        float maxRadius = length(vec2(0.5 * aspect, 0.5));\n"
+    "        float radius = maxRadius * (1.0 - cover);\n"
+    "        vec4 covered = mix(scene, uColor, uColor.a);\n"
+    "        fragColor = (length(centered) <= radius) ? scene : covered;\n"
+    "    } else if (uType == 2) {\n"
+    "        float offset = texture(uMeltOffsets, vec2(vTexCoord.x, 0.5)).r;\n"
+    "        float columnProgress = clamp((cover - offset * 0.3) / 0.7, 0.0, 1.0);\n"
+    "        float yShift = columnProgress * 1.5;\n"
+    "        vec2 sampleUV = vec2(vTexCoord.x, vTexCoord.y - yShift);\n"
+    "        vec4 covered = mix(scene, uColor, uColor.a);\n"
+    "        fragColor = (sampleUV.y < 0.0) ? covered : texture(uScene, sampleUV);\n"
+    "    } else if (uType == 3) {\n"
+    "        float blockSize = mix(1.0, 64.0, cover);\n"
+    "        vec2 safeResolution = max(uResolution, vec2(1.0));\n"
+    "        vec2 pixelUV = floor(vTexCoord * safeResolution / blockSize) * blockSize / safeResolution;\n"
+    "        vec4 pixelated = texture(uScene, pixelUV);\n"
+    "        float colorBlend = smoothstep(0.7, 1.0, cover) * uColor.a;\n"
+    "        fragColor = mix(pixelated, uColor, colorBlend);\n"
+    "    } else {\n"
+    "        fragColor = scene;\n"
+    "    }\n"
+    "}\n";
 
 static const char k_shadow_vert[] = "layout(location = 0) in vec3 aPosition;\n"
                                     "uniform mat4 uLightVP;\n"
@@ -2327,8 +2385,9 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     }
     ctx->unlit_program = build_program(gl, version_prefix, k_unlit_vert, k_unlit_frag);
     ctx->copy_program = build_program(gl, version_prefix, k_fullscreen_vert, k_copy_frag);
+    ctx->transition_program = build_program(gl, version_prefix, k_fullscreen_vert, k_transition_frag);
 
-    if (!ctx->pbr_program || !ctx->unlit_program || !ctx->copy_program)
+    if (!ctx->pbr_program || !ctx->unlit_program || !ctx->copy_program || !ctx->transition_program)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: shader compilation failed");
         sdl3d_gl_destroy(ctx);
@@ -2397,6 +2456,24 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
 
     /* Copy uniform locations. */
     ctx->copy_texture_loc = gl->GetUniformLocation(ctx->copy_program, "uScene");
+
+    /* Transition uniform locations and lookup texture. */
+    ctx->transition_scene_loc = gl->GetUniformLocation(ctx->transition_program, "uScene");
+    ctx->transition_type_loc = gl->GetUniformLocation(ctx->transition_program, "uType");
+    ctx->transition_direction_loc = gl->GetUniformLocation(ctx->transition_program, "uDirection");
+    ctx->transition_progress_loc = gl->GetUniformLocation(ctx->transition_program, "uProgress");
+    ctx->transition_color_loc = gl->GetUniformLocation(ctx->transition_program, "uColor");
+    ctx->transition_resolution_loc = gl->GetUniformLocation(ctx->transition_program, "uResolution");
+    ctx->transition_melt_offsets_loc = gl->GetUniformLocation(ctx->transition_program, "uMeltOffsets");
+    {
+        gl->GenTextures(1, &ctx->transition_melt_offsets_tex);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->transition_melt_offsets_tex);
+        gl->TexImage2D(GL_TEXTURE_2D, 0, GL_R32F, SDL3D_TRANSITION_MELT_COLUMNS, 1, 0, GL_RED, GL_FLOAT, NULL);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    }
 
     /* Scene UBO — create, allocate, bind to point 0. */
     gl->GenBuffers(1, &ctx->scene_ubo);
@@ -2691,6 +2768,10 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
         gl->DeleteProgram(ctx->unlit_program);
     if (ctx->copy_program)
         gl->DeleteProgram(ctx->copy_program);
+    if (ctx->transition_program)
+        gl->DeleteProgram(ctx->transition_program);
+    if (ctx->transition_melt_offsets_tex)
+        gl->DeleteTextures(1, &ctx->transition_melt_offsets_tex);
 
     if (ctx->scene_ubo)
         gl->DeleteBuffers(1, &ctx->scene_ubo);
@@ -2982,6 +3063,75 @@ static void replay_overlay_list(sdl3d_gl_context *ctx, int vp_x, int vp_y, int v
     gl->Enable(GL_DEPTH_TEST);
 }
 
+bool sdl3d_gl_queue_transition(sdl3d_gl_context *ctx, const sdl3d_transition *transition)
+{
+    if (ctx == NULL)
+    {
+        return SDL_InvalidParamError("ctx");
+    }
+    if (transition == NULL)
+    {
+        return SDL_InvalidParamError("transition");
+    }
+    if (!transition->active)
+    {
+        return true;
+    }
+
+    ctx->pending_transition = *transition;
+    ctx->transition_pending = true;
+    return true;
+}
+
+static void apply_transition_pass(sdl3d_gl_context *ctx)
+{
+    if (ctx == NULL || !ctx->transition_pending || ctx->transition_program == 0)
+    {
+        return;
+    }
+
+    sdl3d_gl_funcs *gl = &ctx->gl;
+    const sdl3d_transition *transition = &ctx->pending_transition;
+
+    if (transition->type == SDL3D_TRANSITION_MELT && ctx->transition_melt_offsets_tex != 0)
+    {
+        gl->ActiveTexture(GL_TEXTURE0 + 1);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->transition_melt_offsets_tex);
+        gl->TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SDL3D_TRANSITION_MELT_COLUMNS, 1, GL_RED, GL_FLOAT,
+                          transition->melt_offsets);
+    }
+
+    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->pp_fbo_a);
+    gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+    gl->Clear(GL_COLOR_BUFFER_BIT);
+    gl->UseProgram(ctx->transition_program);
+    gl->ActiveTexture(GL_TEXTURE0);
+    gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
+    gl->Uniform1i(ctx->transition_scene_loc, 0);
+    gl->ActiveTexture(GL_TEXTURE0 + 1);
+    gl->BindTexture(GL_TEXTURE_2D, ctx->transition_melt_offsets_tex);
+    gl->Uniform1i(ctx->transition_melt_offsets_loc, 1);
+    gl->Uniform1i(ctx->transition_type_loc, (int)transition->type);
+    gl->Uniform1i(ctx->transition_direction_loc, (int)transition->direction);
+    gl->Uniform1f(ctx->transition_progress_loc, sdl3d_transition_progress(transition));
+    gl->Uniform4f(ctx->transition_color_loc, (float)transition->color.r / 255.0f, (float)transition->color.g / 255.0f,
+                  (float)transition->color.b / 255.0f, (float)transition->color.a / 255.0f);
+    gl->Uniform2f(ctx->transition_resolution_loc, (float)ctx->logical_w, (float)ctx->logical_h);
+    gl->BindVertexArray(ctx->fullscreen_vao);
+    gl->DrawArrays(GL_TRIANGLES, 0, 3);
+
+    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+    gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+    gl->UseProgram(ctx->copy_program);
+    gl->ActiveTexture(GL_TEXTURE0);
+    gl->BindTexture(GL_TEXTURE_2D, ctx->pp_tex_a);
+    gl->Uniform1i(ctx->copy_texture_loc, 0);
+    gl->DrawArrays(GL_TRIANGLES, 0, 3);
+    gl->ActiveTexture(GL_TEXTURE0);
+
+    ctx->transition_pending = false;
+}
+
 static bool gl_present(sdl3d_render_context *context)
 {
     sdl3d_gl_context *ctx = context->gl;
@@ -3197,6 +3347,8 @@ static bool gl_present(sdl3d_render_context *context)
         gl->DrawArrays(GL_TRIANGLES, 0, 3);
         gl->ActiveTexture(GL_TEXTURE0);
     } /* bloom_enabled */
+
+    apply_transition_pass(ctx);
 
     gl->Disable(GL_CULL_FACE);
     gl->Enable(GL_DEPTH_TEST);
