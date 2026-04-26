@@ -89,6 +89,7 @@ set(SDL3D_TEST_SOURCES
     test_texture.cpp
     test_textured_rendering.cpp
     test_lighting.cpp
+    test_logic.cpp
     test_scene.cpp
     test_collision.cpp
     test_action.cpp
@@ -186,6 +187,7 @@ else()
     sdl3d_add_test(sdl3d_textured_rendering_test test_textured_rendering.cpp render)
     sdl3d_add_test(sdl3d_lighting_test test_lighting.cpp render)
     target_include_directories(sdl3d_lighting_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    sdl3d_add_test(sdl3d_logic_test test_logic.cpp unit)
     sdl3d_add_test(sdl3d_scene_test test_scene.cpp unit)
     sdl3d_add_test(sdl3d_collision_test test_collision.cpp unit)
     sdl3d_add_test(sdl3d_action_test test_action.cpp unit)
