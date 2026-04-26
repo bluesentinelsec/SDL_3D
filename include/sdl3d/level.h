@@ -48,11 +48,13 @@ extern "C"
     {
         float points[SDL3D_SECTOR_MAX_POINTS][2]; /* XZ polygon vertices, CCW */
         int num_points;
-        float floor_y;
-        float ceil_y;
+        float floor_y;      /* Floor height at the sector centroid. */
+        float ceil_y;       /* Ceiling height at the sector centroid. */
         int floor_material; /* index into material palette, or -1 to omit floor geometry */
         int ceil_material;  /* index into material palette, or -1 to omit ceiling geometry */
         int wall_material;
+        float floor_normal[3]; /* Floor plane normal. Zero defaults to (0, 1, 0). */
+        float ceil_normal[3];  /* Ceiling plane normal. Zero defaults to (0, -1, 0). */
     } sdl3d_sector;
 
     typedef struct sdl3d_level
@@ -116,6 +118,38 @@ extern "C"
                            int material_count, const sdl3d_level_light *lights, int light_count, sdl3d_level *out);
 
     void sdl3d_free_level(sdl3d_level *level);
+
+    /**
+     * @brief Return the effective normalized floor normal for a sector.
+     *
+     * A sector with floor_normal set to {0, 0, 0} is treated as a flat floor
+     * with normal (0, 1, 0). Safe with NULL.
+     */
+    sdl3d_vec3 sdl3d_sector_floor_normal(const sdl3d_sector *sector);
+
+    /**
+     * @brief Return the effective normalized ceiling normal for a sector.
+     *
+     * A sector with ceil_normal set to {0, 0, 0} is treated as a flat ceiling
+     * with normal (0, -1, 0). Safe with NULL.
+     */
+    sdl3d_vec3 sdl3d_sector_ceil_normal(const sdl3d_sector *sector);
+
+    /**
+     * @brief Evaluate the sector floor plane height at a world XZ point.
+     *
+     * The plane passes through floor_y at the sector centroid. Flat sectors
+     * therefore return floor_y for every point.
+     */
+    float sdl3d_sector_floor_at(const sdl3d_sector *sector, float x, float z);
+
+    /**
+     * @brief Evaluate the sector ceiling plane height at a world XZ point.
+     *
+     * The plane passes through ceil_y at the sector centroid. Flat sectors
+     * therefore return ceil_y for every point.
+     */
+    float sdl3d_sector_ceil_at(const sdl3d_sector *sector, float x, float z);
 
     /*
      * Find which sector contains the given XZ point, or -1 if outside all

@@ -12,10 +12,13 @@
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include "sdl3d/math.h"
+
 #define LM_TEXELS_PER_UNIT 4
 #define LM_MIN_SURFACE_TEXELS 2
 #define LM_MIN_ATLAS_SIZE 256
 #define LM_MAX_ATLAS_SIZE 2048
+#define SDL3D_LEVEL_PLANE_EPSILON 0.000001f
 
 /* ------------------------------------------------------------------ */
 /* Edge overlap detection                                              */
@@ -47,9 +50,96 @@ static float project_onto_edge(float px, float pz, float ax, float az, float bx,
 typedef struct
 {
     float t0, t1;
-    float other_floor, other_ceil;
     int other_sector;
 } overlap_t;
+
+/* ------------------------------------------------------------------ */
+/* Sector planes                                                       */
+/* ------------------------------------------------------------------ */
+
+static sdl3d_vec3 normalized_or_default(const float normal[3], sdl3d_vec3 fallback)
+{
+    if (normal == NULL)
+    {
+        return fallback;
+    }
+
+    const float len = SDL_sqrtf(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
+    if (len <= SDL3D_LEVEL_PLANE_EPSILON)
+    {
+        return fallback;
+    }
+
+    const float inv_len = 1.0f / len;
+    return sdl3d_vec3_make(normal[0] * inv_len, normal[1] * inv_len, normal[2] * inv_len);
+}
+
+sdl3d_vec3 sdl3d_sector_floor_normal(const sdl3d_sector *sector)
+{
+    return sector != NULL ? normalized_or_default(sector->floor_normal, sdl3d_vec3_make(0.0f, 1.0f, 0.0f))
+                          : sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+}
+
+sdl3d_vec3 sdl3d_sector_ceil_normal(const sdl3d_sector *sector)
+{
+    return sector != NULL ? normalized_or_default(sector->ceil_normal, sdl3d_vec3_make(0.0f, -1.0f, 0.0f))
+                          : sdl3d_vec3_make(0.0f, -1.0f, 0.0f);
+}
+
+static void sector_centroid_xz(const sdl3d_sector *sector, float *out_x, float *out_z)
+{
+    float x = 0.0f;
+    float z = 0.0f;
+
+    if (sector == NULL || sector->num_points <= 0)
+    {
+        *out_x = 0.0f;
+        *out_z = 0.0f;
+        return;
+    }
+
+    for (int i = 0; i < sector->num_points; ++i)
+    {
+        x += sector->points[i][0];
+        z += sector->points[i][1];
+    }
+
+    const float inv_count = 1.0f / (float)sector->num_points;
+    *out_x = x * inv_count;
+    *out_z = z * inv_count;
+}
+
+static float sector_plane_y_at(const sdl3d_sector *sector, sdl3d_vec3 normal, float base_y, float x, float z)
+{
+    float cx;
+    float cz;
+
+    if (sector == NULL || SDL_fabsf(normal.y) <= SDL3D_LEVEL_PLANE_EPSILON)
+    {
+        return base_y;
+    }
+
+    sector_centroid_xz(sector, &cx, &cz);
+    return base_y - (normal.x * (x - cx) + normal.z * (z - cz)) / normal.y;
+}
+
+float sdl3d_sector_floor_at(const sdl3d_sector *sector, float x, float z)
+{
+    if (sector == NULL)
+    {
+        return 0.0f;
+    }
+    return sector_plane_y_at(sector, sdl3d_sector_floor_normal(sector), sector->floor_y, x, z);
+}
+
+float sdl3d_sector_ceil_at(const sdl3d_sector *sector, float x, float z)
+{
+    if (sector == NULL)
+    {
+        return 0.0f;
+    }
+    return sector_plane_y_at(sector, sdl3d_sector_ceil_normal(sector), sector->ceil_y, x, z);
+}
 
 /* ------------------------------------------------------------------ */
 /* Mesh accumulator                                                    */
@@ -87,8 +177,10 @@ typedef struct
     float min_y, max_y;
     float min_z, max_z;
     float x0, z0, x1, z1;
-    float bot, top;
-    float surface_y;
+    float bot0, top0;
+    float bot1, top1;
+    float plane_cx, plane_cz;
+    float plane_y;
     int atlas_x, atlas_y;
     int atlas_w, atlas_h;
 } lm_surface;
@@ -250,15 +342,31 @@ static void lm_sector_bounds_xz(const sdl3d_sector *sector, float *min_x, float 
     *max_z = sz1;
 }
 
+static float min4(float a, float b, float c, float d)
+{
+    float value = a < b ? a : b;
+    value = value < c ? value : c;
+    return value < d ? value : d;
+}
+
+static float max4(float a, float b, float c, float d)
+{
+    float value = a > b ? a : b;
+    value = value > c ? value : c;
+    return value > d ? value : d;
+}
+
 static bool lm_record_wall_surface(lm_surface_list *list, int acc_index, const macc *acc, int first_vertex, float x0,
-                                   float z0, float x1, float z1, float bot, float top)
+                                   float z0, float x1, float z1, float bot0, float top0, float bot1, float top1)
 {
     float dx = x1 - x0;
     float dz = z1 - z0;
     float len = SDL_sqrtf(dx * dx + dz * dz);
+    float height0 = top0 - bot0;
+    float height1 = top1 - bot1;
     lm_surface surface;
 
-    if (acc->vc <= first_vertex || len < 0.0001f || top - bot < 0.001f)
+    if (acc->vc <= first_vertex || len < 0.0001f || (height0 < 0.001f && height1 < 0.001f))
     {
         return true;
     }
@@ -273,25 +381,30 @@ static bool lm_record_wall_surface(lm_surface_list *list, int acc_index, const m
     surface.nz = dx / len;
     surface.min_x = x0 < x1 ? x0 : x1;
     surface.max_x = x0 > x1 ? x0 : x1;
-    surface.min_y = bot;
-    surface.max_y = top;
+    surface.min_y = min4(bot0, top0, bot1, top1);
+    surface.max_y = max4(bot0, top0, bot1, top1);
     surface.min_z = z0 < z1 ? z0 : z1;
     surface.max_z = z0 > z1 ? z0 : z1;
     surface.x0 = x0;
     surface.z0 = z0;
     surface.x1 = x1;
     surface.z1 = z1;
-    surface.bot = bot;
-    surface.top = top;
+    surface.bot0 = bot0;
+    surface.top0 = top0;
+    surface.bot1 = bot1;
+    surface.top1 = top1;
     surface.atlas_w = lm_surface_texels(len);
-    surface.atlas_h = lm_surface_texels(top - bot);
+    surface.atlas_h = lm_surface_texels(surface.max_y - surface.min_y);
     return lm_surface_list_append(list, &surface);
 }
 
 static bool lm_record_floor_ceil_surface(lm_surface_list *list, int acc_index, const macc *acc, int first_vertex,
-                                         const sdl3d_sector *sector, float y, float ny)
+                                         const sdl3d_sector *sector, bool floor_surface)
 {
     lm_surface surface;
+    sdl3d_vec3 normal = floor_surface ? sdl3d_sector_floor_normal(sector) : sdl3d_sector_ceil_normal(sector);
+    float min_y = 1e30f;
+    float max_y = -1e30f;
 
     if (acc->vc <= first_vertex)
     {
@@ -302,14 +415,24 @@ static bool lm_record_floor_ceil_surface(lm_surface_list *list, int acc_index, c
     surface.acc_index = acc_index;
     surface.first_vertex = first_vertex;
     surface.vertex_count = acc->vc - first_vertex;
-    surface.type = ny > 0.0f ? LM_SURFACE_FLOOR : LM_SURFACE_CEILING;
-    surface.nx = 0.0f;
-    surface.ny = ny;
-    surface.nz = 0.0f;
+    surface.type = floor_surface ? LM_SURFACE_FLOOR : LM_SURFACE_CEILING;
+    surface.nx = normal.x;
+    surface.ny = normal.y;
+    surface.nz = normal.z;
     lm_sector_bounds_xz(sector, &surface.min_x, &surface.max_x, &surface.min_z, &surface.max_z);
-    surface.min_y = y;
-    surface.max_y = y;
-    surface.surface_y = y;
+    for (int i = 0; i < sector->num_points; ++i)
+    {
+        float y = floor_surface ? sdl3d_sector_floor_at(sector, sector->points[i][0], sector->points[i][1])
+                                : sdl3d_sector_ceil_at(sector, sector->points[i][0], sector->points[i][1]);
+        if (y < min_y)
+            min_y = y;
+        if (y > max_y)
+            max_y = y;
+    }
+    sector_centroid_xz(sector, &surface.plane_cx, &surface.plane_cz);
+    surface.min_y = min_y;
+    surface.max_y = max_y;
+    surface.plane_y = floor_surface ? sector->floor_y : sector->ceil_y;
     surface.atlas_w = lm_surface_texels(surface.max_x - surface.min_x);
     surface.atlas_h = lm_surface_texels(surface.max_z - surface.min_z);
     return lm_surface_list_append(list, &surface);
@@ -511,15 +634,19 @@ static bool lm_bake_lightmap(const lm_surface_list *list, const sdl3d_level_ligh
 
                 if (surface->type == LM_SURFACE_WALL)
                 {
+                    float bottom = surface->bot0 + (surface->bot1 - surface->bot0) * s;
+                    float top = surface->top0 + (surface->top1 - surface->top0) * s;
                     wx = surface->x0 + (surface->x1 - surface->x0) * s;
-                    wy = surface->bot + (surface->top - surface->bot) * t;
+                    wy = bottom + (top - bottom) * t;
                     wz = surface->z0 + (surface->z1 - surface->z0) * s;
                 }
                 else
                 {
                     wx = surface->min_x + (surface->max_x - surface->min_x) * s;
-                    wy = surface->surface_y;
                     wz = surface->min_z + (surface->max_z - surface->min_z) * t;
+                    wy =
+                        surface->plane_y -
+                        (surface->nx * (wx - surface->plane_cx) + surface->nz * (wz - surface->plane_cz)) / surface->ny;
                 }
 
                 for (int li = 0; li < light_count; ++li)
@@ -575,10 +702,10 @@ static bool lm_bake_lightmap(const lm_surface_list *list, const sdl3d_level_ligh
 /* Geometry helpers                                                     */
 /* ------------------------------------------------------------------ */
 
-static bool add_wall(macc *a, float x0, float z0, float x1, float z1, float bot, float top, const float *rgba,
-                     float tex_scale)
+static bool add_wall(macc *a, float x0, float z0, float x1, float z1, float bot0, float top0, float bot1, float top1,
+                     const float *rgba, float tex_scale)
 {
-    if (top - bot < 0.001f)
+    if (top0 - bot0 < 0.001f && top1 - bot1 < 0.001f)
         return true;
     float dx = x1 - x0, dz = z1 - z0;
     float len = SDL_sqrtf(dx * dx + dz * dz);
@@ -589,32 +716,34 @@ static bool add_wall(macc *a, float x0, float z0, float x1, float z1, float bot,
     float nx = -dz / len, nz = dx / len;
     float s = tex_scale > 0 ? tex_scale : 4.0f;
     float u0 = 0.0f, u1 = len / s;
-    float v0 = bot / s, v1 = top / s;
-    int v_0 = macc_vert(a, x0, bot, z0, nx, 0, nz, rgba, u0, v0);
-    int v_1 = macc_vert(a, x1, bot, z1, nx, 0, nz, rgba, u1, v0);
-    int v_2 = macc_vert(a, x1, top, z1, nx, 0, nz, rgba, u1, v1);
-    int v_3 = macc_vert(a, x0, top, z0, nx, 0, nz, rgba, u0, v1);
+    int v_0 = macc_vert(a, x0, bot0, z0, nx, 0, nz, rgba, u0, bot0 / s);
+    int v_1 = macc_vert(a, x1, bot1, z1, nx, 0, nz, rgba, u1, bot1 / s);
+    int v_2 = macc_vert(a, x1, top1, z1, nx, 0, nz, rgba, u1, top1 / s);
+    int v_3 = macc_vert(a, x0, top0, z0, nx, 0, nz, rgba, u0, top0 / s);
     if (v_0 < 0)
         return false;
     return macc_tri(a, v_0, v_1, v_2) && macc_tri(a, v_0, v_2, v_3);
 }
 
-static bool add_floor_ceil(macc *a, const sdl3d_sector *s, float y, float ny, const float *rgba, float tex_scale)
+static bool add_floor_ceil(macc *a, const sdl3d_sector *s, bool floor_surface, const float *rgba, float tex_scale)
 {
     int n = s->num_points;
+    sdl3d_vec3 normal = floor_surface ? sdl3d_sector_floor_normal(s) : sdl3d_sector_ceil_normal(s);
     if (n < 3)
         return true;
     int base = a->vc;
     float sc = tex_scale > 0 ? tex_scale : 4.0f;
     for (int i = 0; i < n; i++)
     {
-        if (macc_vert(a, s->points[i][0], y, s->points[i][1], 0, ny, 0, rgba, s->points[i][0] / sc,
-                      s->points[i][1] / sc) < 0)
+        float x = s->points[i][0];
+        float z = s->points[i][1];
+        float y = floor_surface ? sdl3d_sector_floor_at(s, x, z) : sdl3d_sector_ceil_at(s, x, z);
+        if (macc_vert(a, x, y, z, normal.x, normal.y, normal.z, rgba, x / sc, z / sc) < 0)
             return false;
     }
     for (int i = 1; i < n - 1; i++)
     {
-        if (ny > 0)
+        if (floor_surface)
         {
             if (!macc_tri(a, base, base + i + 1, base + i))
                 return false;
@@ -626,6 +755,15 @@ static bool add_floor_ceil(macc *a, const sdl3d_sector *s, float y, float ny, co
         }
     }
     return true;
+}
+
+static bool add_wall_and_lightmap(macc *wall_acc, lm_surface_list *surf_list, int wall_acc_index, float x0, float z0,
+                                  float x1, float z1, float bot0, float top0, float bot1, float top1,
+                                  const sdl3d_level_material *material)
+{
+    int vb = wall_acc->vc;
+    return add_wall(wall_acc, x0, z0, x1, z1, bot0, top0, bot1, top1, material->albedo, material->tex_scale) &&
+           lm_record_wall_surface(surf_list, wall_acc_index, wall_acc, vb, x0, z0, x1, z1, bot0, top0, bot1, top1);
 }
 
 /* ------------------------------------------------------------------ */
@@ -706,8 +844,8 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
             int floor_acc_index = s * material_count + fi;
             macc *floor_acc = &accs[floor_acc_index];
             int vb = floor_acc->vc;
-            if (!add_floor_ceil(floor_acc, sec, sec->floor_y, 1.0f, materials[fi].albedo, materials[fi].tex_scale) ||
-                !lm_record_floor_ceil_surface(&surf_list, floor_acc_index, floor_acc, vb, sec, sec->floor_y, 1.0f))
+            if (!add_floor_ceil(floor_acc, sec, true, materials[fi].albedo, materials[fi].tex_scale) ||
+                !lm_record_floor_ceil_surface(&surf_list, floor_acc_index, floor_acc, vb, sec, true))
             {
                 goto fail;
             }
@@ -717,8 +855,8 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
             int ceil_acc_index = s * material_count + ci;
             macc *ceil_acc = &accs[ceil_acc_index];
             int vb = ceil_acc->vc;
-            if (!add_floor_ceil(ceil_acc, sec, sec->ceil_y, -1.0f, materials[ci].albedo, materials[ci].tex_scale) ||
-                !lm_record_floor_ceil_surface(&surf_list, ceil_acc_index, ceil_acc, vb, sec, sec->ceil_y, -1.0f))
+            if (!add_floor_ceil(ceil_acc, sec, false, materials[ci].albedo, materials[ci].tex_scale) ||
+                !lm_record_floor_ceil_surface(&surf_list, ceil_acc_index, ceil_acc, vb, sec, false))
             {
                 goto fail;
             }
@@ -757,8 +895,6 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                 {
                     overlaps[novl].t0 = t0;
                     overlaps[novl].t1 = t1;
-                    overlaps[novl].other_floor = sectors[edges[j].sector].floor_y;
-                    overlaps[novl].other_ceil = sectors[edges[j].sector].ceil_y;
                     overlaps[novl].other_sector = edges[j].sector;
                     novl++;
 
@@ -777,11 +913,19 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                         {
                             float px0 = ax + (bx - ax) * t0, pz0 = az + (bz - az) * t0;
                             float px1 = ax + (bx - ax) * t1, pz1 = az + (bz - az) * t1;
-                            float p_floor = sec->floor_y > overlaps[novl - 1].other_floor
-                                                ? sec->floor_y
-                                                : overlaps[novl - 1].other_floor;
-                            float p_ceil = sec->ceil_y < overlaps[novl - 1].other_ceil ? sec->ceil_y
-                                                                                       : overlaps[novl - 1].other_ceil;
+                            const sdl3d_sector *other = &sectors[edges[j].sector];
+                            float sec_floor0 = sdl3d_sector_floor_at(sec, px0, pz0);
+                            float sec_floor1 = sdl3d_sector_floor_at(sec, px1, pz1);
+                            float other_floor0 = sdl3d_sector_floor_at(other, px0, pz0);
+                            float other_floor1 = sdl3d_sector_floor_at(other, px1, pz1);
+                            float sec_ceil0 = sdl3d_sector_ceil_at(sec, px0, pz0);
+                            float sec_ceil1 = sdl3d_sector_ceil_at(sec, px1, pz1);
+                            float other_ceil0 = sdl3d_sector_ceil_at(other, px0, pz0);
+                            float other_ceil1 = sdl3d_sector_ceil_at(other, px1, pz1);
+                            float p_floor0 = sec_floor0 > other_floor0 ? sec_floor0 : other_floor0;
+                            float p_floor1 = sec_floor1 > other_floor1 ? sec_floor1 : other_floor1;
+                            float p_ceil0 = sec_ceil0 < other_ceil0 ? sec_ceil0 : other_ceil0;
+                            float p_ceil1 = sec_ceil1 < other_ceil1 ? sec_ceil1 : other_ceil1;
                             sdl3d_level_portal *p = &portals[portal_count++];
                             p->sector_a = s;
                             p->sector_b = edges[j].sector;
@@ -789,8 +933,8 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                             p->max_x = px0 > px1 ? px0 : px1;
                             p->min_z = pz0 < pz1 ? pz0 : pz1;
                             p->max_z = pz0 > pz1 ? pz0 : pz1;
-                            p->floor_y = p_floor;
-                            p->ceil_y = p_ceil;
+                            p->floor_y = p_floor0 < p_floor1 ? p_floor0 : p_floor1;
+                            p->ceil_y = p_ceil0 > p_ceil1 ? p_ceil0 : p_ceil1;
                         }
                     }
                 }
@@ -798,11 +942,10 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
 
             if (novl == 0)
             {
-                int vb = wall_acc->vc;
-                if (!add_wall(wall_acc, ax, az, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo,
-                              materials[wi].tex_scale) ||
-                    !lm_record_wall_surface(&surf_list, wall_acc_index, wall_acc, vb, ax, az, bx, bz, sec->floor_y,
-                                            sec->ceil_y))
+                if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, ax, az, bx, bz,
+                                           sdl3d_sector_floor_at(sec, ax, az), sdl3d_sector_ceil_at(sec, ax, az),
+                                           sdl3d_sector_floor_at(sec, bx, bz), sdl3d_sector_ceil_at(sec, bx, bz),
+                                           &materials[wi]))
                 {
                     goto fail;
                 }
@@ -825,35 +968,38 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                     {
                         float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
                         float wx1 = ax + (bx - ax) * overlaps[oi].t0, wz1 = az + (bz - az) * overlaps[oi].t0;
-                        int vb = wall_acc->vc;
-                        if (!add_wall(wall_acc, wx0, wz0, wx1, wz1, sec->floor_y, sec->ceil_y, materials[wi].albedo,
-                                      materials[wi].tex_scale) ||
-                            !lm_record_wall_surface(&surf_list, wall_acc_index, wall_acc, vb, wx0, wz0, wx1, wz1,
-                                                    sec->floor_y, sec->ceil_y))
+                        if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, wx0, wz0, wx1, wz1,
+                                                   sdl3d_sector_floor_at(sec, wx0, wz0),
+                                                   sdl3d_sector_ceil_at(sec, wx0, wz0),
+                                                   sdl3d_sector_floor_at(sec, wx1, wz1),
+                                                   sdl3d_sector_ceil_at(sec, wx1, wz1), &materials[wi]))
                         {
                             goto fail;
                         }
                     }
                     float ox0 = ax + (bx - ax) * overlaps[oi].t0, oz0 = az + (bz - az) * overlaps[oi].t0;
                     float ox1 = ax + (bx - ax) * overlaps[oi].t1, oz1 = az + (bz - az) * overlaps[oi].t1;
-                    if (sec->floor_y < overlaps[oi].other_floor - 0.001f)
+                    const sdl3d_sector *other = &sectors[overlaps[oi].other_sector];
+                    float sec_floor0 = sdl3d_sector_floor_at(sec, ox0, oz0);
+                    float sec_floor1 = sdl3d_sector_floor_at(sec, ox1, oz1);
+                    float other_floor0 = sdl3d_sector_floor_at(other, ox0, oz0);
+                    float other_floor1 = sdl3d_sector_floor_at(other, ox1, oz1);
+                    float sec_ceil0 = sdl3d_sector_ceil_at(sec, ox0, oz0);
+                    float sec_ceil1 = sdl3d_sector_ceil_at(sec, ox1, oz1);
+                    float other_ceil0 = sdl3d_sector_ceil_at(other, ox0, oz0);
+                    float other_ceil1 = sdl3d_sector_ceil_at(other, ox1, oz1);
+                    if (sec_floor0 < other_floor0 - 0.001f || sec_floor1 < other_floor1 - 0.001f)
                     {
-                        int vb = wall_acc->vc;
-                        if (!add_wall(wall_acc, ox0, oz0, ox1, oz1, sec->floor_y, overlaps[oi].other_floor,
-                                      materials[wi].albedo, materials[wi].tex_scale) ||
-                            !lm_record_wall_surface(&surf_list, wall_acc_index, wall_acc, vb, ox0, oz0, ox1, oz1,
-                                                    sec->floor_y, overlaps[oi].other_floor))
+                        if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, ox0, oz0, ox1, oz1, sec_floor0,
+                                                   other_floor0, sec_floor1, other_floor1, &materials[wi]))
                         {
                             goto fail;
                         }
                     }
-                    if (sec->ceil_y > overlaps[oi].other_ceil + 0.001f)
+                    if (sec_ceil0 > other_ceil0 + 0.001f || sec_ceil1 > other_ceil1 + 0.001f)
                     {
-                        int vb = wall_acc->vc;
-                        if (!add_wall(wall_acc, ox0, oz0, ox1, oz1, overlaps[oi].other_ceil, sec->ceil_y,
-                                      materials[wi].albedo, materials[wi].tex_scale) ||
-                            !lm_record_wall_surface(&surf_list, wall_acc_index, wall_acc, vb, ox0, oz0, ox1, oz1,
-                                                    overlaps[oi].other_ceil, sec->ceil_y))
+                        if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, ox0, oz0, ox1, oz1,
+                                                   other_ceil0, sec_ceil0, other_ceil1, sec_ceil1, &materials[wi]))
                         {
                             goto fail;
                         }
@@ -863,11 +1009,10 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                 if (cursor < 1.0f - 0.001f)
                 {
                     float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
-                    int vb = wall_acc->vc;
-                    if (!add_wall(wall_acc, wx0, wz0, bx, bz, sec->floor_y, sec->ceil_y, materials[wi].albedo,
-                                  materials[wi].tex_scale) ||
-                        !lm_record_wall_surface(&surf_list, wall_acc_index, wall_acc, vb, wx0, wz0, bx, bz,
-                                                sec->floor_y, sec->ceil_y))
+                    if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, wx0, wz0, bx, bz,
+                                               sdl3d_sector_floor_at(sec, wx0, wz0),
+                                               sdl3d_sector_ceil_at(sec, wx0, wz0), sdl3d_sector_floor_at(sec, bx, bz),
+                                               sdl3d_sector_ceil_at(sec, bx, bz), &materials[wi]))
                     {
                         goto fail;
                     }
@@ -1107,14 +1252,18 @@ int sdl3d_level_find_sector_at(const sdl3d_level *level, const sdl3d_sector *sec
     for (int i = 0; i < level->sector_count; ++i)
     {
         const sdl3d_sector *sector = &sectors[i];
+        float floor_y;
+        float ceil_y;
         if (!point_in_polygon_xz(sector, x, z))
             continue;
-        if (sector->floor_y > feet_y || feet_y >= sector->ceil_y)
+        floor_y = sdl3d_sector_floor_at(sector, x, z);
+        ceil_y = sdl3d_sector_ceil_at(sector, x, z);
+        if (floor_y > feet_y || feet_y >= ceil_y)
             continue;
-        if (sector->floor_y > best_floor)
+        if (floor_y > best_floor)
         {
             best = i;
-            best_floor = sector->floor_y;
+            best_floor = floor_y;
         }
     }
     return best;
@@ -1132,16 +1281,20 @@ int sdl3d_level_find_walkable_sector(const sdl3d_level *level, const sdl3d_secto
     for (int i = 0; i < level->sector_count; ++i)
     {
         const sdl3d_sector *sector = &sectors[i];
+        float floor_y;
+        float ceil_y;
         if (!point_in_polygon_xz(sector, x, z))
             continue;
-        if (sector->floor_y > feet_y + step_height)
+        floor_y = sdl3d_sector_floor_at(sector, x, z);
+        ceil_y = sdl3d_sector_ceil_at(sector, x, z);
+        if (floor_y > feet_y + step_height)
             continue;
-        if (sector->ceil_y - sector->floor_y < player_height)
+        if (ceil_y - floor_y < player_height)
             continue;
-        if (sector->floor_y > best_floor)
+        if (floor_y > best_floor)
         {
             best = i;
-            best_floor = sector->floor_y;
+            best_floor = floor_y;
         }
     }
     return best;
@@ -1159,16 +1312,20 @@ int sdl3d_level_find_support_sector(const sdl3d_level *level, const sdl3d_sector
     for (int i = 0; i < level->sector_count; ++i)
     {
         const sdl3d_sector *sector = &sectors[i];
+        float floor_y;
+        float ceil_y;
         if (!point_in_polygon_xz(sector, x, z))
             continue;
-        if (sector->floor_y > feet_y)
+        floor_y = sdl3d_sector_floor_at(sector, x, z);
+        ceil_y = sdl3d_sector_ceil_at(sector, x, z);
+        if (floor_y > feet_y)
             continue;
-        if (sector->ceil_y - sector->floor_y < player_height)
+        if (ceil_y - floor_y < player_height)
             continue;
-        if (sector->floor_y > best_floor)
+        if (floor_y > best_floor)
         {
             best = i;
-            best_floor = sector->floor_y;
+            best_floor = floor_y;
         }
     }
     return best;
@@ -1181,10 +1338,14 @@ bool sdl3d_level_point_inside(const sdl3d_level *level, const sdl3d_sector *sect
     for (int i = 0; i < level->sector_count; ++i)
     {
         const sdl3d_sector *sector = &sectors[i];
-        if (y < sector->floor_y || y > sector->ceil_y)
-            continue;
         if (point_in_polygon_xz(sector, x, z))
+        {
+            float floor_y = sdl3d_sector_floor_at(sector, x, z);
+            float ceil_y = sdl3d_sector_ceil_at(sector, x, z);
+            if (y < floor_y || y > ceil_y)
+                continue;
             return true;
+        }
     }
     return false;
 }

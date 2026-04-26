@@ -9,6 +9,7 @@
  * doom_level demo's tuning (higher = snappier). */
 #define SDL3D_FPS_PITCH_LIMIT 1.4f
 #define SDL3D_FPS_VIEW_SMOOTH_SPEED 12.0f
+#define SDL3D_FPS_WALKABLE_NORMAL_Y 0.7f
 
 /* Stop polling smoothing once the residual is below this threshold; keeps
  * the eye from oscillating around 0 when dt is small. */
@@ -19,35 +20,75 @@ static float fps_min_headroom(const sdl3d_fps_mover *mover)
     return mover->config.player_height + mover->config.ceiling_clearance;
 }
 
+static bool sector_floor_is_walkable(const sdl3d_sector *sector)
+{
+    return sdl3d_sector_floor_normal(sector).y >= SDL3D_FPS_WALKABLE_NORMAL_Y;
+}
+
+static bool position_has_air_space(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
+                                   float x, float z, float feet_y, int *out_sector);
+
 static bool position_is_walkable(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
                                  float x, float z, float feet_y, int *out_sector)
 {
-    static const float sample_dirs[8][2] = {
-        {1.0f, 0.0f},       {-1.0f, 0.0f},       {0.0f, 1.0f},        {0.0f, -1.0f},
-        {0.7071f, 0.7071f}, {0.7071f, -0.7071f}, {-0.7071f, 0.7071f}, {-0.7071f, -0.7071f},
-    };
-
     const float headroom = fps_min_headroom(mover);
     const float step = mover->config.step_height;
-    const float radius = mover->config.player_radius;
 
     int center = sdl3d_level_find_walkable_sector(level, sectors, x, z, feet_y, step, headroom);
     if (center < 0)
     {
         return false;
     }
+    if (!sector_floor_is_walkable(&sectors[center]))
+    {
+        return false;
+    }
 
-    float target_floor = sectors[center].floor_y;
-    for (int i = 0; i < 8; ++i)
+    /* Ground movement follows Build/Quake-style separation of concerns:
+     * support and step height are decided at the mover's center, while the
+     * player radius is used only to test whether the body has room. This
+     * permits normal ledge overhang on raised slopes/ramparts without
+     * weakening steep-slope or wall collision. */
+    const float target_floor = sdl3d_sector_floor_at(&sectors[center], x, z);
+    const float collision_feet_y = SDL_max(feet_y, target_floor);
+    if (!position_has_air_space(mover, level, sectors, x, z, collision_feet_y, NULL))
+    {
+        return false;
+    }
+
+    if (out_sector)
+    {
+        *out_sector = center;
+    }
+    return true;
+}
+
+static bool position_has_air_space(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
+                                   float x, float z, float feet_y, int *out_sector)
+{
+    static const float sample_dirs[9][2] = {
+        {0.0f, 0.0f},       {1.0f, 0.0f},        {-1.0f, 0.0f},       {0.0f, 1.0f},         {0.0f, -1.0f},
+        {0.7071f, 0.7071f}, {0.7071f, -0.7071f}, {-0.7071f, 0.7071f}, {-0.7071f, -0.7071f},
+    };
+
+    const float radius = mover->config.player_radius;
+    const float head_y = feet_y + fps_min_headroom(mover);
+    int center = sdl3d_level_find_sector_at(level, sectors, x, z, feet_y);
+
+    if (center < 0 || !sdl3d_level_point_inside(level, sectors, x, head_y, z))
+    {
+        return false;
+    }
+
+    for (int i = 1; i < 9; ++i)
     {
         float sx = x + sample_dirs[i][0] * radius;
         float sz = z + sample_dirs[i][1] * radius;
-        int sample = sdl3d_level_find_walkable_sector(level, sectors, sx, sz, feet_y, step, headroom);
-        if (sample < 0)
+        if (sdl3d_level_find_sector(level, sectors, sx, sz) < 0)
         {
             return false;
         }
-        if (SDL_fabsf(sectors[sample].floor_y - target_floor) > step)
+        if (!sdl3d_level_point_inside(level, sectors, sx, head_y, sz))
         {
             return false;
         }
@@ -58,6 +99,17 @@ static bool position_is_walkable(const sdl3d_fps_mover *mover, const sdl3d_level
         *out_sector = center;
     }
     return true;
+}
+
+static sdl3d_vec2 project_wish_to_walkable_floor(sdl3d_vec2 wish_dir, const sdl3d_sector *sector)
+{
+    sdl3d_vec3 normal = sdl3d_sector_floor_normal(sector);
+    float dot = wish_dir.x * normal.x + wish_dir.y * normal.z;
+    sdl3d_vec2 projected = {
+        wish_dir.x - normal.x * dot,
+        wish_dir.y - normal.z * dot,
+    };
+    return projected;
 }
 
 void sdl3d_fps_mover_init(sdl3d_fps_mover *mover, const sdl3d_fps_mover_config *config, sdl3d_vec3 spawn_position,
@@ -161,7 +213,7 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
         }
         if (current_sector >= 0)
         {
-            current_floor = sectors[current_sector].floor_y;
+            current_floor = sdl3d_sector_floor_at(&sectors[current_sector], mover->position.x, mover->position.z);
         }
 
         float wish_len = SDL_sqrtf(wish_dir.x * wish_dir.x + wish_dir.y * wish_dir.y);
@@ -173,25 +225,32 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
 
         if (wish_len > 0.001f)
         {
+            if (mover->on_ground && current_sector >= 0 && sector_floor_is_walkable(&sectors[current_sector]))
+            {
+                wish_dir = project_wish_to_walkable_floor(wish_dir, &sectors[current_sector]);
+            }
             float move_x = wish_dir.x * mover->config.move_speed * dt;
             float move_z = wish_dir.y * mover->config.move_speed * dt;
             int candidate = -1;
 
-            if (position_is_walkable(mover, level, sectors, mover->position.x + move_x, mover->position.z + move_z,
-                                     feet_y, &candidate))
+            bool (*position_is_valid)(const sdl3d_fps_mover *, const sdl3d_level *, const sdl3d_sector *, float, float,
+                                      float, int *) = mover->on_ground ? position_is_walkable : position_has_air_space;
+
+            if (position_is_valid(mover, level, sectors, mover->position.x + move_x, mover->position.z + move_z, feet_y,
+                                  &candidate))
             {
                 mover->position.x += move_x;
                 mover->position.z += move_z;
                 current_sector = candidate;
             }
-            else if (position_is_walkable(mover, level, sectors, mover->position.x + move_x, mover->position.z, feet_y,
-                                          &candidate))
+            else if (position_is_valid(mover, level, sectors, mover->position.x + move_x, mover->position.z, feet_y,
+                                       &candidate))
             {
                 mover->position.x += move_x;
                 current_sector = candidate;
             }
-            else if (position_is_walkable(mover, level, sectors, mover->position.x, mover->position.z + move_z, feet_y,
-                                          &candidate))
+            else if (position_is_valid(mover, level, sectors, mover->position.x, mover->position.z + move_z, feet_y,
+                                       &candidate))
             {
                 mover->position.z += move_z;
                 current_sector = candidate;
@@ -210,8 +269,13 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
         {
             if (current_sector >= 0)
             {
-                float target_floor = sectors[current_sector].floor_y;
+                float target_floor =
+                    sdl3d_sector_floor_at(&sectors[current_sector], mover->position.x, mover->position.z);
                 if (target_floor < current_floor - step_height)
+                {
+                    mover->on_ground = false;
+                }
+                else if (!sector_floor_is_walkable(&sectors[current_sector]))
                 {
                     mover->on_ground = false;
                 }
@@ -254,7 +318,8 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
                                                         SDL_max(prev_feet_y, feet_y));
             if (containing >= 0)
             {
-                float ceiling_y = sectors[containing].ceil_y - ceiling_clearance;
+                float ceiling_y = sdl3d_sector_ceil_at(&sectors[containing], mover->position.x, mover->position.z) -
+                                  ceiling_clearance;
                 if (prev_py <= ceiling_y && mover->position.y > ceiling_y)
                 {
                     mover->position.y = ceiling_y;
@@ -271,8 +336,8 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
                                                               SDL_max(prev_feet_y, feet_y) + step_height, headroom);
                 if (support >= 0)
                 {
-                    float floor_y = sectors[support].floor_y;
-                    if (prev_feet_y >= floor_y && feet_y <= floor_y)
+                    float floor_y = sdl3d_sector_floor_at(&sectors[support], mover->position.x, mover->position.z);
+                    if (sector_floor_is_walkable(&sectors[support]) && prev_feet_y >= floor_y && feet_y <= floor_y)
                     {
                         mover->position.y = floor_y + player_height;
                         mover->vertical_velocity = 0.0f;
@@ -296,8 +361,9 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
                                                              feet_y + step_height, headroom);
                 if (rescue >= 0)
                 {
-                    float floor_y = sectors[rescue].floor_y;
-                    if (floor_y >= feet_y && (floor_y - feet_y) <= step_height)
+                    float floor_y = sdl3d_sector_floor_at(&sectors[rescue], mover->position.x, mover->position.z);
+                    if (sector_floor_is_walkable(&sectors[rescue]) && floor_y >= feet_y &&
+                        (floor_y - feet_y) <= step_height)
                     {
                         mover->position.y = floor_y + player_height;
                         mover->vertical_velocity = 0.0f;
@@ -324,7 +390,8 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
         int containing = sdl3d_level_find_sector_at(level, sectors, mover->position.x, mover->position.z, feet_y);
         if (containing >= 0)
         {
-            float ceiling_y = sectors[containing].ceil_y - ceiling_clearance;
+            float ceiling_y =
+                sdl3d_sector_ceil_at(&sectors[containing], mover->position.x, mover->position.z) - ceiling_clearance;
             if (mover->position.y > ceiling_y)
             {
                 mover->position.y = ceiling_y;

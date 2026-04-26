@@ -38,6 +38,17 @@ sdl3d_sector MakeSquareSector(float min_x, float min_z, float max_x, float max_z
     return s;
 }
 
+sdl3d_sector MakeRampSector(float min_x, float min_z, float max_x, float max_z, float center_floor_y, float ceil_y,
+                            float slope_x)
+{
+    sdl3d_sector s = MakeSquareSector(min_x, min_z, max_x, max_z, center_floor_y, ceil_y);
+    const float len = SDL_sqrtf(slope_x * slope_x + 1.0f);
+    s.floor_normal[0] = -slope_x / len;
+    s.floor_normal[1] = 1.0f / len;
+    s.floor_normal[2] = 0.0f;
+    return s;
+}
+
 sdl3d_level_material MakeMaterial()
 {
     sdl3d_level_material m{};
@@ -78,6 +89,30 @@ class FpsMoverFixture : public ::testing::Test
     {
         /* Two sectors side by side, the second one a step up. */
         sectors = {MakeSquareSector(-10, -10, 0, 10, 0.0f, 5.0f), MakeSquareSector(0, -10, 10, 10, 1.0f, 6.0f)};
+        const sdl3d_level_material mats[] = {MakeMaterial(), MakeMaterial(), MakeMaterial()};
+        ASSERT_TRUE(sdl3d_build_level(sectors.data(), (int)sectors.size(), mats, 3, nullptr, 0, &level))
+            << SDL_GetError();
+    }
+
+    void BuildWalkableRamp()
+    {
+        sectors = {MakeRampSector(-5, -5, 5, 5, 1.0f, 6.0f, 0.2f)};
+        const sdl3d_level_material mats[] = {MakeMaterial(), MakeMaterial(), MakeMaterial()};
+        ASSERT_TRUE(sdl3d_build_level(sectors.data(), (int)sectors.size(), mats, 3, nullptr, 0, &level))
+            << SDL_GetError();
+    }
+
+    void BuildSteepRamp()
+    {
+        sectors = {MakeSquareSector(-10, -5, 0, 5, 0.0f, 5.0f), MakeRampSector(0, -5, 10, 5, 5.5f, 14.0f, 1.1f)};
+        const sdl3d_level_material mats[] = {MakeMaterial(), MakeMaterial(), MakeMaterial()};
+        ASSERT_TRUE(sdl3d_build_level(sectors.data(), (int)sectors.size(), mats, 3, nullptr, 0, &level))
+            << SDL_GetError();
+    }
+
+    void BuildRaisedPlatform()
+    {
+        sectors = {MakeSquareSector(-10, -10, 0, 10, 0.0f, 8.0f), MakeSquareSector(0, -5, 4, 5, 2.5f, 10.0f)};
         const sdl3d_level_material mats[] = {MakeMaterial(), MakeMaterial(), MakeMaterial()};
         ASSERT_TRUE(sdl3d_build_level(sectors.data(), (int)sectors.size(), mats, 3, nullptr, 0, &level))
             << SDL_GetError();
@@ -200,6 +235,105 @@ TEST_F(FpsMoverFixture, StepUpOntoHigherSectorWhenWalking)
     /* Player should now be standing on floor=1.0 → eye at 2.6. */
     EXPECT_NEAR(m.position.y, 2.6f, 0.05f);
     EXPECT_TRUE(m.on_ground);
+}
+
+TEST_F(FpsMoverFixture, WalksSmoothlyUpWalkableSlope)
+{
+    BuildWalkableRamp();
+    sdl3d_fps_mover_config cfg = DefaultConfig();
+    sdl3d_fps_mover m;
+    const float start_x = -4.0f;
+    const float start_z = 0.0f;
+    const float start_floor = sdl3d_sector_floor_at(&sectors[0], start_x, start_z);
+    sdl3d_fps_mover_init(&m, &cfg, sdl3d_vec3_make(start_x, start_floor + cfg.player_height, start_z), 0);
+
+    sdl3d_vec2 uphill{1.0f, 0.0f};
+    for (int i = 0; i < 30; ++i)
+    {
+        sdl3d_fps_mover_update(&m, &level, sectors.data(), uphill, 0, 0, 0.002f, 1.0f / 120.0f);
+    }
+
+    EXPECT_GT(m.position.x, start_x);
+    EXPECT_TRUE(m.on_ground);
+    EXPECT_NEAR(m.position.y, sdl3d_sector_floor_at(&sectors[0], m.position.x, m.position.z) + cfg.player_height,
+                0.02f);
+    EXPECT_GT(m.position.y, start_floor + cfg.player_height);
+}
+
+TEST_F(FpsMoverFixture, RejectsSteepSlopeAsWalkableGround)
+{
+    BuildSteepRamp();
+    sdl3d_fps_mover_config cfg = DefaultConfig();
+    sdl3d_fps_mover m;
+    sdl3d_fps_mover_init(&m, &cfg, sdl3d_vec3_make(-1.0f, cfg.player_height, 0), 0);
+
+    sdl3d_vec2 toward_steep_slope{1.0f, 0.0f};
+    for (int i = 0; i < 60; ++i)
+    {
+        sdl3d_fps_mover_update(&m, &level, sectors.data(), toward_steep_slope, 0, 0, 0.002f, 1.0f / 60.0f);
+    }
+
+    EXPECT_LT(m.position.x, 0.0f);
+    EXPECT_TRUE(m.on_ground);
+    EXPECT_EQ(m.current_sector, 0);
+}
+
+TEST_F(FpsMoverFixture, JumpWorksFromRaisedPlatform)
+{
+    BuildRaisedPlatform();
+    sdl3d_fps_mover_config cfg = DefaultConfig();
+    sdl3d_fps_mover m;
+    sdl3d_fps_mover_init(&m, &cfg, sdl3d_vec3_make(2.0f, 2.5f + cfg.player_height, 0.0f), 0);
+
+    sdl3d_fps_mover_jump(&m);
+    EXPECT_FALSE(m.on_ground);
+    EXPECT_FLOAT_EQ(m.vertical_velocity, cfg.jump_velocity);
+
+    const float start_y = m.position.y;
+    sdl3d_vec2 zero{0, 0};
+    sdl3d_fps_mover_update(&m, &level, sectors.data(), zero, 0, 0, 0.002f, 1.0f / 60.0f);
+
+    EXPECT_GT(m.position.y, start_y);
+    EXPECT_FALSE(m.on_ground);
+}
+
+TEST_F(FpsMoverFixture, AirborneMoverCanLeaveRaisedPlatform)
+{
+    BuildRaisedPlatform();
+    sdl3d_fps_mover_config cfg = DefaultConfig();
+    sdl3d_fps_mover m;
+    sdl3d_fps_mover_init(&m, &cfg, sdl3d_vec3_make(2.0f, 2.5f + cfg.player_height, 0.0f), 0);
+
+    sdl3d_fps_mover_jump(&m);
+
+    sdl3d_vec2 toward_lower_floor{-1.0f, 0.0f};
+    for (int i = 0; i < 30; ++i)
+    {
+        sdl3d_fps_mover_update(&m, &level, sectors.data(), toward_lower_floor, 0, 0, 0.002f, 1.0f / 60.0f);
+    }
+
+    EXPECT_LT(m.position.x, -1.0f);
+    EXPECT_GT(m.position.y - cfg.player_height, 0.0f);
+    EXPECT_FALSE(m.on_ground);
+}
+
+TEST_F(FpsMoverFixture, GroundedMoverCanWalkAlongRaisedPlatformEdge)
+{
+    BuildRaisedPlatform();
+    sdl3d_fps_mover_config cfg = DefaultConfig();
+    sdl3d_fps_mover m;
+    sdl3d_fps_mover_init(&m, &cfg, sdl3d_vec3_make(0.2f, 2.5f + cfg.player_height, -4.0f), 0);
+
+    sdl3d_vec2 along_edge{0.0f, 1.0f};
+    for (int i = 0; i < 30; ++i)
+    {
+        sdl3d_fps_mover_update(&m, &level, sectors.data(), along_edge, 0, 0, 0.002f, 1.0f / 60.0f);
+    }
+
+    EXPECT_NEAR(m.position.x, 0.2f, 0.05f);
+    EXPECT_GT(m.position.z, 0.5f);
+    EXPECT_TRUE(m.on_ground);
+    EXPECT_NEAR(m.position.y, 2.5f + cfg.player_height, 0.01f);
 }
 
 TEST_F(FpsMoverFixture, FallingBelowWorldRestoresLastGood)
