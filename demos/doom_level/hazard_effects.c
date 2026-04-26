@@ -206,17 +206,19 @@ static void pulse_nukage_emitter(sdl3d_particle_emitter *emitter, float pulse, b
         return;
     }
 
+    const float opacity = pulse * pulse;
     sdl3d_particle_config next = *current;
     if (mote)
     {
-        next.color_start = (sdl3d_color){(Uint8)(55.0f + pulse * 55.0f), 255, (Uint8)(45.0f + pulse * 45.0f),
-                                         (Uint8)(175.0f + pulse * 65.0f)};
+        const Uint8 alpha = (Uint8)(70.0f + opacity * 170.0f);
+        next.color_start = (sdl3d_color){(Uint8)(55.0f + pulse * 55.0f), 255, (Uint8)(45.0f + pulse * 45.0f), alpha};
         next.color_end = (sdl3d_color){0, (Uint8)(180.0f + pulse * 55.0f), 45, 0};
     }
     else
     {
+        const Uint8 alpha = (Uint8)(42.0f + opacity * 145.0f);
         next.color_start = (sdl3d_color){(Uint8)(15.0f + pulse * 40.0f), (Uint8)(215.0f + pulse * 40.0f),
-                                         (Uint8)(35.0f + pulse * 45.0f), (Uint8)(110.0f + pulse * 65.0f)};
+                                         (Uint8)(35.0f + pulse * 45.0f), alpha};
         next.color_end = (sdl3d_color){0, (Uint8)(150.0f + pulse * 55.0f), 45, 0};
     }
 
