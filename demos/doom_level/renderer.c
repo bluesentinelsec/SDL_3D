@@ -84,9 +84,9 @@ static bool render_state_ensure_sector_capacity(render_state *rs, int sector_cou
 }
 
 void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_font *font, sdl3d_ui_context *ui,
-                       level_data *ld, entities *ent, const player_state *player, int backbuffer_w, int backbuffer_h,
-                       float dt, const char *render_profile_name, bool ambient_feedback_active,
-                       bool teleport_feedback_active)
+                       level_data *ld, entities *ent, const doom_hazard_particles *hazards, const player_state *player,
+                       int backbuffer_w, int backbuffer_h, float dt, const char *render_profile_name,
+                       bool ambient_feedback_active, bool teleport_feedback_active)
 {
     const sdl3d_fps_mover *mover = &player->mover;
     sdl3d_level *active = level_data_active(ld);
@@ -208,6 +208,13 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
                 rs->portal_culling ? sdl3d_level_find_sector(active, g_sectors, sa->position.x, sa->position.z) : -1;
         }
         sdl3d_sprite_scene_draw(&ent->sprites, ctx, cam.position, rs->portal_culling ? &rs->vis : NULL);
+    }
+
+    /* Sector hazard particles */
+    if (!doom_hazard_particles_draw(hazards, ctx))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Hazard particle draw failed: %s", SDL_GetError());
+        SDL_ClearError();
     }
 
     /* Projectile */

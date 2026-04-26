@@ -2,6 +2,7 @@ add_executable(doom_level
     main.c
     backend.c
     entities.c
+    hazard_effects.c
     level_data.c
     player.c
     renderer.c)
