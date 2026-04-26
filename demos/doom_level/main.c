@@ -32,6 +32,7 @@ typedef struct doom_state
     sdl3d_ui_context *ui;
     sdl3d_demo_player *demo_player;
     sdl3d_backend current_backend;
+    doom_render_profile render_profile;
     int action_pause;
     int action_menu;
     int action_toggle_lighting;
@@ -39,6 +40,7 @@ typedef struct doom_state
     int action_toggle_debug_stats;
     int action_toggle_portal_culling;
     int action_switch_backend;
+    int action_render_profile[DOOM_RENDER_PROFILE_COUNT];
     float pause_flash_timer;
     bool has_font;
     bool level_ready;
@@ -84,9 +86,9 @@ static void stop_demo_playback(sdl3d_game_context *ctx, doom_state *state)
     state->demo_player = NULL;
 }
 
-static void apply_window_defaults(sdl3d_game_context *ctx)
+static void apply_window_defaults(sdl3d_game_context *ctx, doom_state *state)
 {
-    backend_apply_defaults(ctx->renderer);
+    backend_apply_defaults(ctx->renderer, state->render_profile);
     SDL_SetWindowRelativeMouseMode(ctx->window, true);
 }
 
@@ -130,6 +132,9 @@ static int bind_doom_key_action(sdl3d_input_manager *input, const char *name, SD
 
 static void bind_doom_actions(sdl3d_input_manager *input, doom_state *state)
 {
+    static const SDL_Scancode profile_keys[DOOM_RENDER_PROFILE_COUNT] = {
+        SDL_SCANCODE_1, SDL_SCANCODE_2, SDL_SCANCODE_3, SDL_SCANCODE_4, SDL_SCANCODE_5,
+    };
     sdl3d_input_bind_fps_defaults(input);
     state->action_pause = sdl3d_input_find_action(input, "pause");
     state->action_menu = sdl3d_input_find_action(input, "menu");
@@ -138,6 +143,12 @@ static void bind_doom_actions(sdl3d_input_manager *input, doom_state *state)
     state->action_toggle_debug_stats = bind_doom_key_action(input, "toggle_debug_stats", SDL_SCANCODE_F1);
     state->action_toggle_portal_culling = bind_doom_key_action(input, "toggle_portal_culling", SDL_SCANCODE_F2);
     state->action_switch_backend = bind_doom_key_action(input, "switch_backend", SDL_SCANCODE_TAB);
+    for (int i = 0; i < DOOM_RENDER_PROFILE_COUNT; ++i)
+    {
+        char action_name[SDL3D_INPUT_ACTION_NAME_MAX];
+        SDL_snprintf(action_name, sizeof(action_name), "render_profile_%d", i + 1);
+        state->action_render_profile[i] = bind_doom_key_action(input, action_name, profile_keys[i]);
+    }
 }
 
 static bool game_init(sdl3d_game_context *ctx, void *userdata)
@@ -145,8 +156,9 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     doom_state *state = (doom_state *)userdata;
 
     state->current_backend = sdl3d_get_render_context_backend(ctx->renderer);
+    state->render_profile = DOOM_RENDER_PROFILE_MODERN;
     bind_doom_actions(ctx->input, state);
-    apply_window_defaults(ctx);
+    apply_window_defaults(ctx, state);
 
     if (sdl3d_signal_connect(ctx->bus, SIG_FADE_OUT_DONE, on_fade_out_done, ctx) == 0)
     {
@@ -196,7 +208,7 @@ static bool switch_demo_backend(sdl3d_game_context *ctx, doom_state *state)
     if (sdl3d_switch_backend(&ctx->window, &ctx->renderer, next))
     {
         state->current_backend = next;
-        apply_window_defaults(ctx);
+        apply_window_defaults(ctx, state);
         return true;
     }
 
@@ -207,7 +219,7 @@ static bool switch_demo_backend(sdl3d_game_context *ctx, doom_state *state)
         return false;
     }
 
-    apply_window_defaults(ctx);
+    apply_window_defaults(ctx, state);
     return true;
 }
 
@@ -244,9 +256,33 @@ static void apply_doom_debug_actions(sdl3d_game_context *ctx, doom_state *state)
     }
 }
 
+static void apply_doom_profile_actions(sdl3d_game_context *ctx, doom_state *state)
+{
+    for (int i = 0; i < DOOM_RENDER_PROFILE_COUNT; ++i)
+    {
+        if (!sdl3d_input_is_pressed(ctx->input, state->action_render_profile[i]))
+        {
+            continue;
+        }
+
+        doom_render_profile next = (doom_render_profile)i;
+        if (backend_apply_profile(ctx->renderer, next))
+        {
+            state->render_profile = next;
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Render profile: %s", backend_profile_name(next));
+        }
+        else
+        {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Render profile switch failed: %s", SDL_GetError());
+        }
+    }
+}
+
 static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 {
     doom_state *state = (doom_state *)userdata;
+
+    apply_doom_profile_actions(ctx, state);
 
     if (sdl3d_input_is_pressed(ctx->input, state->action_pause))
     {
@@ -272,6 +308,8 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 static void game_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_dt)
 {
     doom_state *state = (doom_state *)userdata;
+
+    apply_doom_profile_actions(ctx, state);
 
     if (sdl3d_input_is_pressed(ctx->input, state->action_pause))
     {
@@ -328,7 +366,8 @@ static void game_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     const float frame_dt = sdl3d_time_get_unscaled_delta_time();
 
     render_draw_frame(&state->render, ctx->renderer, state->has_font ? &state->debug_font : NULL, state->ui,
-                      &state->level, &state->ent, &state->player, WINDOW_W, WINDOW_H, frame_dt);
+                      &state->level, &state->ent, &state->player, WINDOW_W, WINDOW_H, frame_dt,
+                      backend_profile_name(state->render_profile));
     sdl3d_transition_draw(&state->transition, ctx->renderer);
     if (ctx->paused && !state->quit_pending)
     {
