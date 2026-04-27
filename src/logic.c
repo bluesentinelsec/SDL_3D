@@ -347,7 +347,7 @@ static void execute_entity_binding(void *userdata, int signal_id, const sdl3d_pr
         sdl3d_logic_counter_activate(world, (sdl3d_logic_counter *)binding->entity);
         break;
     case LOGIC_ENTITY_BINDING_BRANCH:
-        sdl3d_logic_branch_activate(world, (sdl3d_logic_branch *)binding->entity);
+        sdl3d_logic_branch_activate_with_payload(world, (sdl3d_logic_branch *)binding->entity, payload);
         break;
     case LOGIC_ENTITY_BINDING_RANDOM:
         sdl3d_logic_random_activate(world, (sdl3d_logic_random *)binding->entity);
@@ -703,6 +703,38 @@ sdl3d_logic_action sdl3d_logic_action_make_restore_camera(void)
     return action;
 }
 
+sdl3d_logic_action sdl3d_logic_action_make_set_ambient(int ambient_id, float fade_seconds)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_SET_AMBIENT;
+    action.ambient.ambient_id = ambient_id;
+    action.ambient.fade_seconds = fade_seconds;
+    action.ambient.use_signal_payload = false;
+    return action;
+}
+
+sdl3d_logic_action sdl3d_logic_action_make_set_ambient_from_payload(const char *payload_key, float fade_seconds)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_SET_AMBIENT;
+    action.ambient.payload_key = payload_key;
+    action.ambient.fade_seconds = fade_seconds;
+    action.ambient.use_signal_payload = true;
+    return action;
+}
+
+sdl3d_logic_action sdl3d_logic_action_make_trigger_feedback(const char *feedback_name, float duration_seconds)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_TRIGGER_FEEDBACK;
+    action.feedback.feedback_name = feedback_name;
+    action.feedback.duration_seconds = duration_seconds;
+    return action;
+}
+
 bool sdl3d_logic_world_execute_action(sdl3d_logic_world *world, const sdl3d_logic_action *action)
 {
     return sdl3d_logic_world_execute_action_with_payload(world, action, NULL);
@@ -809,6 +841,40 @@ bool sdl3d_logic_world_execute_action_with_payload(sdl3d_logic_world *world, con
             return false;
         }
         return adapters->restore_camera(adapters->userdata, payload);
+
+    case SDL3D_LOGIC_ACTION_SET_AMBIENT: {
+        if (adapters == NULL || adapters->set_ambient == NULL)
+        {
+            return false;
+        }
+
+        int ambient_id = action->ambient.ambient_id;
+        if (action->ambient.use_signal_payload)
+        {
+            if (payload == NULL || action->ambient.payload_key == NULL)
+            {
+                return false;
+            }
+
+            const sdl3d_value *value = sdl3d_properties_get_value(payload, action->ambient.payload_key);
+            if (value == NULL || value->type != SDL3D_VALUE_INT)
+            {
+                return false;
+            }
+            ambient_id = value->as_int;
+        }
+
+        return adapters->set_ambient(adapters->userdata, ambient_id,
+                                     clamp_non_negative_float(action->ambient.fade_seconds), payload);
+    }
+
+    case SDL3D_LOGIC_ACTION_TRIGGER_FEEDBACK:
+        if (adapters == NULL || adapters->trigger_feedback == NULL || action->feedback.feedback_name == NULL)
+        {
+            return false;
+        }
+        return adapters->trigger_feedback(adapters->userdata, action->feedback.feedback_name,
+                                          clamp_non_negative_float(action->feedback.duration_seconds), payload);
 
     case SDL3D_LOGIC_ACTION_NONE:
         break;
@@ -1103,21 +1169,38 @@ void sdl3d_logic_branch_init(sdl3d_logic_branch *branch, int entity_id, const sd
     branch->enabled = true;
 }
 
+void sdl3d_logic_branch_init_payload(sdl3d_logic_branch *branch, int entity_id, const char *key, sdl3d_value expected,
+                                     int true_signal, int false_signal)
+{
+    if (branch == NULL)
+        return;
+
+    sdl3d_logic_branch_init(branch, entity_id, NULL, key, expected, true_signal, false_signal);
+    branch->use_activation_payload = true;
+}
+
 sdl3d_logic_entity_result sdl3d_logic_branch_activate(sdl3d_logic_world *world, sdl3d_logic_branch *branch)
+{
+    return sdl3d_logic_branch_activate_with_payload(world, branch, NULL);
+}
+
+sdl3d_logic_entity_result sdl3d_logic_branch_activate_with_payload(sdl3d_logic_world *world, sdl3d_logic_branch *branch,
+                                                                   const sdl3d_properties *payload)
 {
     if (branch == NULL || !branch->enabled)
         return entity_result(false, 0, -1);
 
-    const sdl3d_value *actual = sdl3d_properties_get_value(branch->props, branch->key);
+    const sdl3d_properties *source = branch->use_activation_payload ? payload : branch->props;
+    const sdl3d_value *actual = sdl3d_properties_get_value(source, branch->key);
     const bool matched = value_equals(actual, &branch->expected);
     const int signal_id = matched ? branch->true_signal : branch->false_signal;
-    sdl3d_properties *payload = create_entity_payload(branch->entity_id, "branch");
-    if (payload == NULL)
+    sdl3d_properties *branch_payload = create_entity_payload(branch->entity_id, "branch");
+    if (branch_payload == NULL)
         return entity_result(false, 0, -1);
 
-    sdl3d_properties_set_bool(payload, "matched", matched);
-    const bool emitted = sdl3d_logic_world_emit_signal(world, signal_id, payload);
-    sdl3d_properties_destroy(payload);
+    sdl3d_properties_set_bool(branch_payload, "matched", matched);
+    const bool emitted = sdl3d_logic_world_emit_signal(world, signal_id, branch_payload);
+    sdl3d_properties_destroy(branch_payload);
     return entity_result(emitted, signal_id, matched ? 0 : 1);
 }
 

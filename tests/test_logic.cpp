@@ -74,8 +74,14 @@ struct logic_adapter_capture
     int teleport_count = 0;
     int set_camera_count = 0;
     int restore_camera_count = 0;
+    int set_ambient_count = 0;
+    int trigger_feedback_count = 0;
     int last_teleporter_id = -1;
+    int last_ambient_id = -1;
+    float last_ambient_fade = -1.0f;
+    float last_feedback_duration = -1.0f;
     char last_camera_name[64] = {};
+    char last_feedback_name[64] = {};
     sdl3d_teleport_destination last_destination = {};
     sdl3d_camera3d last_camera = {};
 };
@@ -122,6 +128,37 @@ static bool capture_restore_camera(void *userdata, const sdl3d_properties *paylo
     }
 
     capture->restore_camera_count++;
+    return true;
+}
+
+static bool capture_set_ambient(void *userdata, int ambient_id, float fade_seconds, const sdl3d_properties *payload)
+{
+    (void)payload;
+    logic_adapter_capture *capture = (logic_adapter_capture *)userdata;
+    if (capture == nullptr)
+    {
+        return false;
+    }
+
+    capture->set_ambient_count++;
+    capture->last_ambient_id = ambient_id;
+    capture->last_ambient_fade = fade_seconds;
+    return true;
+}
+
+static bool capture_trigger_feedback(void *userdata, const char *feedback_name, float duration_seconds,
+                                     const sdl3d_properties *payload)
+{
+    (void)payload;
+    logic_adapter_capture *capture = (logic_adapter_capture *)userdata;
+    if (capture == nullptr || feedback_name == nullptr)
+    {
+        return false;
+    }
+
+    capture->trigger_feedback_count++;
+    capture->last_feedback_duration = duration_seconds;
+    SDL_snprintf(capture->last_feedback_name, sizeof(capture->last_feedback_name), "%s", feedback_name);
     return true;
 }
 
@@ -957,6 +994,87 @@ TEST(LogicWorldActions, CameraActionsRejectMissingAdapters)
     sdl3d_signal_bus_destroy(bus);
 }
 
+TEST(LogicWorldActions, SetAmbientFromPayloadUsesGameAdapter)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_adapter_capture capture{};
+    sdl3d_logic_game_adapters adapters{};
+    adapters.userdata = &capture;
+    adapters.set_ambient = capture_set_ambient;
+    sdl3d_logic_world_set_game_adapters(world, &adapters);
+
+    sdl3d_logic_action action = sdl3d_logic_action_make_set_ambient_from_payload("ambient_sound_id", 1.25f);
+    ASSERT_GT(sdl3d_logic_world_bind_logic_action(world, 92, &action), 0);
+
+    sdl3d_properties *payload = sdl3d_properties_create();
+    sdl3d_properties_set_int(payload, "ambient_sound_id", 7);
+    sdl3d_signal_emit(bus, 92, payload);
+
+    EXPECT_EQ(capture.set_ambient_count, 1);
+    EXPECT_EQ(capture.last_ambient_id, 7);
+    EXPECT_FLOAT_EQ(capture.last_ambient_fade, 1.25f);
+
+    sdl3d_properties_destroy(payload);
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, StaticAmbientAndFeedbackActionsUseGameAdapters)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_adapter_capture capture{};
+    sdl3d_logic_game_adapters adapters{};
+    adapters.userdata = &capture;
+    adapters.set_ambient = capture_set_ambient;
+    adapters.trigger_feedback = capture_trigger_feedback;
+    sdl3d_logic_world_set_game_adapters(world, &adapters);
+
+    sdl3d_logic_action ambient = sdl3d_logic_action_make_set_ambient(3, -1.0f);
+    sdl3d_logic_action feedback = sdl3d_logic_action_make_trigger_feedback("ambient_zone", -2.0f);
+
+    EXPECT_TRUE(sdl3d_logic_world_execute_action(world, &ambient));
+    EXPECT_TRUE(sdl3d_logic_world_execute_action(world, &feedback));
+    EXPECT_EQ(capture.set_ambient_count, 1);
+    EXPECT_EQ(capture.last_ambient_id, 3);
+    EXPECT_FLOAT_EQ(capture.last_ambient_fade, 0.0f);
+    EXPECT_EQ(capture.trigger_feedback_count, 1);
+    EXPECT_STREQ(capture.last_feedback_name, "ambient_zone");
+    EXPECT_FLOAT_EQ(capture.last_feedback_duration, 0.0f);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, AmbientAndFeedbackRejectMissingInputs)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    sdl3d_logic_action ambient = sdl3d_logic_action_make_set_ambient_from_payload("ambient_sound_id", 1.0f);
+    sdl3d_logic_action feedback = sdl3d_logic_action_make_trigger_feedback(nullptr, 1.0f);
+
+    EXPECT_FALSE(sdl3d_logic_world_execute_action_with_payload(world, &ambient, nullptr));
+    EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &feedback));
+
+    logic_adapter_capture capture{};
+    sdl3d_logic_game_adapters adapters{};
+    adapters.userdata = &capture;
+    adapters.set_ambient = capture_set_ambient;
+    adapters.trigger_feedback = capture_trigger_feedback;
+    sdl3d_logic_world_set_game_adapters(world, &adapters);
+
+    sdl3d_properties *payload = sdl3d_properties_create();
+    EXPECT_FALSE(sdl3d_logic_world_execute_action_with_payload(world, &ambient, payload));
+    EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &feedback));
+    EXPECT_EQ(capture.set_ambient_count, 0);
+    EXPECT_EQ(capture.trigger_feedback_count, 0);
+
+    sdl3d_properties_destroy(payload);
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
 TEST(LogicWorldActions, WrongTargetKindFailsWithoutMutation)
 {
     sdl3d_signal_bus *bus = nullptr;
@@ -1453,6 +1571,42 @@ TEST(LogicWorldEntities, BranchComparesPropertyValues)
     EXPECT_FALSE(capture.matched);
 
     sdl3d_properties_destroy(props);
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, PayloadBranchComparesActivationPayload)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 332, capture_logic_signal, &capture), 0);
+    ASSERT_GT(sdl3d_signal_connect(bus, 333, capture_logic_signal, &capture), 0);
+
+    sdl3d_value expected{};
+    expected.type = SDL3D_VALUE_INT;
+    expected.as_int = 11;
+    sdl3d_logic_branch branch{};
+    sdl3d_logic_branch_init_payload(&branch, 26, "ambient_sound_id", expected, 332, 333);
+
+    sdl3d_properties *payload = sdl3d_properties_create();
+    sdl3d_properties_set_int(payload, "ambient_sound_id", 11);
+    EXPECT_TRUE(sdl3d_logic_branch_activate_with_payload(world, &branch, payload).emitted);
+    EXPECT_EQ(capture.signal_id, 332);
+    EXPECT_TRUE(capture.matched);
+
+    sdl3d_properties_set_int(payload, "ambient_sound_id", 0);
+    EXPECT_TRUE(sdl3d_logic_branch_activate_with_payload(world, &branch, payload).emitted);
+    EXPECT_EQ(capture.signal_id, 333);
+    EXPECT_FALSE(capture.matched);
+
+    ASSERT_GT(sdl3d_logic_world_bind_branch(world, 334, &branch), 0);
+    sdl3d_properties_set_int(payload, "ambient_sound_id", 11);
+    sdl3d_signal_emit(bus, 334, payload);
+    EXPECT_EQ(capture.signal_id, 332);
+    EXPECT_TRUE(capture.matched);
+
+    sdl3d_properties_destroy(payload);
     sdl3d_logic_world_destroy(world);
     sdl3d_signal_bus_destroy(bus);
 }

@@ -24,6 +24,8 @@
 #define SIG_FADE_OUT_DONE 2001
 #define SIG_SURVEILLANCE_ENTER 2002
 #define SIG_SURVEILLANCE_EXIT 2003
+#define SIG_AMBIENT_FEEDBACK 2004
+#define SIG_AMBIENT_FEEDBACK_SKIP 2005
 #define LIFT_FLOOR_MIN_Y 0.0f
 #define LIFT_FLOOR_MAX_Y 2.5f
 #define LIFT_CEIL_Y 12.0f
@@ -40,6 +42,7 @@
 #define DAMAGE_FEEDBACK_PULSE_HZ 2.8f
 #define SURVEILLANCE_BUTTON_X 43.0f
 #define SURVEILLANCE_BUTTON_Z 89.0f
+#define FEEDBACK_AMBIENT_ZONE "ambient_zone"
 
 typedef struct doom_state
 {
@@ -54,6 +57,7 @@ typedef struct doom_state
     sdl3d_demo_player *demo_player;
     sdl3d_audio_engine *audio;
     sdl3d_logic_world *logic;
+    sdl3d_logic_branch ambient_feedback_branch;
     sdl3d_sector_watcher sector_watcher;
     sdl3d_teleporter dragon_teleporter;
     doom_surveillance_camera surveillance;
@@ -136,32 +140,53 @@ static void on_fade_out_done(void *userdata, int signal_id, const sdl3d_properti
     ctx->quit_requested = true;
 }
 
-static void on_entered_sector(void *userdata, int signal_id, const sdl3d_properties *payload)
+static bool doom_logic_set_ambient(void *userdata, int ambient_id, float fade_seconds, const sdl3d_properties *payload)
 {
-    (void)signal_id;
+    (void)payload;
     doom_state *state = (doom_state *)userdata;
     static const sdl3d_audio_ambient ambient_zones[] = {
         {0, NULL, 0.0f, false},
         {DOOM_AMBIENT_DEMO_SOUND_ID, SDL3D_MEDIA_DIR "/audio/ambient_zone.wav", 0.45f, true},
     };
-    const int ambient_id = sdl3d_properties_get_int(payload, "ambient_sound_id", 0);
 
     if (state == NULL)
     {
-        return;
+        return false;
     }
 
-    if (state->audio != NULL && !sdl3d_audio_set_ambient(state->audio, ambient_zones, (int)SDL_arraysize(ambient_zones),
-                                                         ambient_id, AMBIENT_FADE_SECONDS))
+    if (state->audio == NULL)
+    {
+        return true;
+    }
+
+    if (!sdl3d_audio_set_ambient(state->audio, ambient_zones, (int)SDL_arraysize(ambient_zones), ambient_id,
+                                 fade_seconds))
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Ambient transition failed: %s", SDL_GetError());
         SDL_ClearError();
+        return false;
     }
 
-    if (ambient_id == DOOM_AMBIENT_DEMO_SOUND_ID)
+    return true;
+}
+
+static bool doom_logic_trigger_feedback(void *userdata, const char *feedback_name, float duration_seconds,
+                                        const sdl3d_properties *payload)
+{
+    (void)payload;
+    doom_state *state = (doom_state *)userdata;
+    if (state == NULL || feedback_name == NULL)
     {
-        state->ambient_feedback_timer = AMBIENT_FEEDBACK_SECONDS;
+        return false;
     }
+
+    if (SDL_strcmp(feedback_name, FEEDBACK_AMBIENT_ZONE) == 0)
+    {
+        state->ambient_feedback_timer = duration_seconds;
+        return true;
+    }
+
+    return false;
 }
 
 static bool doom_logic_teleport_player(void *userdata, const sdl3d_teleport_destination *destination,
@@ -262,7 +287,34 @@ static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
     adapters.teleport_player = doom_logic_teleport_player;
     adapters.set_active_camera = doom_logic_set_active_camera;
     adapters.restore_camera = doom_logic_restore_camera;
+    adapters.set_ambient = doom_logic_set_ambient;
+    adapters.trigger_feedback = doom_logic_trigger_feedback;
     sdl3d_logic_world_set_game_adapters(state->logic, &adapters);
+
+    sdl3d_logic_action ambient_action =
+        sdl3d_logic_action_make_set_ambient_from_payload("ambient_sound_id", AMBIENT_FADE_SECONDS);
+    if (sdl3d_logic_world_bind_logic_action(state->logic, SDL3D_SIGNAL_ENTERED_SECTOR, &ambient_action) == 0)
+    {
+        return false;
+    }
+
+    sdl3d_value ambient_expected;
+    SDL_zero(ambient_expected);
+    ambient_expected.type = SDL3D_VALUE_INT;
+    ambient_expected.as_int = DOOM_AMBIENT_DEMO_SOUND_ID;
+    sdl3d_logic_branch_init_payload(&state->ambient_feedback_branch, 1, "ambient_sound_id", ambient_expected,
+                                    SIG_AMBIENT_FEEDBACK, SIG_AMBIENT_FEEDBACK_SKIP);
+    if (sdl3d_logic_world_bind_branch(state->logic, SDL3D_SIGNAL_ENTERED_SECTOR, &state->ambient_feedback_branch) == 0)
+    {
+        return false;
+    }
+
+    sdl3d_logic_action ambient_feedback_action =
+        sdl3d_logic_action_make_trigger_feedback(FEEDBACK_AMBIENT_ZONE, AMBIENT_FEEDBACK_SECONDS);
+    if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_AMBIENT_FEEDBACK, &ambient_feedback_action) == 0)
+    {
+        return false;
+    }
 
     sdl3d_logic_action teleport_action = sdl3d_logic_action_make_teleport_player_from_payload();
     if (sdl3d_logic_world_bind_logic_action(state->logic, SDL3D_SIGNAL_TELEPORT, &teleport_action) == 0)
@@ -349,10 +401,6 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     apply_window_defaults(ctx, state);
 
     if (sdl3d_signal_connect(ctx->bus, SIG_FADE_OUT_DONE, on_fade_out_done, ctx) == 0)
-    {
-        return false;
-    }
-    if (sdl3d_signal_connect(ctx->bus, SDL3D_SIGNAL_ENTERED_SECTOR, on_entered_sector, state) == 0)
     {
         return false;
     }
