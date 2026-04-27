@@ -1,0 +1,431 @@
+{
+  "schema": "sdl3d.game.v0",
+  "metadata": {
+    "name": "Pong",
+    "id": "demo.pong",
+    "version": "0.1.0",
+    "description": "Fixed-screen arcade proof that SDL3D gameplay rules can be authored through generic entities, sensors, signals, timers, and actions."
+  },
+  "profiles": [
+    {
+      "name": "profile.fixed_screen_arcade",
+      "required_modules": [
+        "actor_registry",
+        "input",
+        "logic",
+        "timers",
+        "collision_2d",
+        "render_primitives",
+        "cameras"
+      ],
+      "optional_modules": [
+        "particles",
+        "audio",
+        "post_processing"
+      ]
+    }
+  ],
+  "assets": {
+    "fonts": [
+      {
+        "id": "font.hud",
+        "builtin": "Inter",
+        "size": 34
+      }
+    ]
+  },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.gameplay",
+        "actions": [
+          {
+            "name": "action.paddle.up",
+            "bindings": [
+              { "device": "keyboard", "key": "W" },
+              { "device": "keyboard", "key": "UP" },
+              { "device": "gamepad", "axis": "left_y", "scale": -1.0 }
+            ]
+          },
+          {
+            "name": "action.paddle.down",
+            "bindings": [
+              { "device": "keyboard", "key": "S" },
+              { "device": "keyboard", "key": "DOWN" },
+              { "device": "gamepad", "axis": "left_y", "scale": 1.0 }
+            ]
+          },
+          {
+            "name": "action.pause",
+            "bindings": [
+              { "device": "keyboard", "key": "RETURN" },
+              { "device": "keyboard", "key": "P" },
+              { "device": "gamepad", "button": "START" }
+            ]
+          },
+          {
+            "name": "action.exit",
+            "bindings": [
+              { "device": "keyboard", "key": "ESCAPE" },
+              { "device": "gamepad", "button": "BACK" }
+            ]
+          },
+          {
+            "name": "action.restart",
+            "bindings": [
+              { "device": "keyboard", "key": "RETURN" },
+              { "device": "gamepad", "button": "SOUTH" }
+            ]
+          },
+          {
+            "name": "action.camera.ball.toggle",
+            "bindings": [
+              { "device": "keyboard", "key": "B" }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "world": {
+    "name": "world.pong",
+    "kind": "fixed_screen",
+    "units": "world_units",
+    "axes": {
+      "horizontal": "x",
+      "vertical": "y",
+      "depth": "z"
+    },
+    "bounds": {
+      "min": [-9.0, -5.0, -1.0],
+      "max": [9.0, 5.0, 2.0]
+    },
+    "cameras": [
+      {
+        "name": "camera.overhead",
+        "type": "orthographic",
+        "position": [0.0, 0.0, 16.0],
+        "target": [0.0, 0.0, 0.0],
+        "up": [0.0, 1.0, 0.0],
+        "size": 11.4,
+        "active": true
+      },
+      {
+        "name": "camera.ball_chase",
+        "type": "adapter",
+        "adapter": "adapter.pong.ball_chase_camera",
+        "target_entity": "entity.ball",
+        "active": false
+      }
+    ],
+    "lights": [
+      {
+        "name": "light.red",
+        "type": "point",
+        "position": [-7.0, 4.4, 3.2],
+        "color": [1.0, 0.1, 0.08],
+        "intensity": 2.8,
+        "range": 12.0
+      },
+      {
+        "name": "light.green",
+        "type": "point",
+        "position": [7.0, 4.4, 3.2],
+        "color": [0.08, 1.0, 0.18],
+        "intensity": 2.7,
+        "range": 12.0
+      },
+      {
+        "name": "light.blue",
+        "type": "point",
+        "position": [0.0, -4.2, 3.5],
+        "color": [0.14, 0.34, 1.0],
+        "intensity": 2.9,
+        "range": 12.0
+      }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.paddle.player",
+      "active": true,
+      "tags": ["paddle", "player"],
+      "transform": { "position": [-8.0, 0.0, 0.0] },
+      "properties": {
+        "half_width": { "type": "float", "value": 0.18 },
+        "half_height": { "type": "float", "value": 0.95 },
+        "speed": { "type": "float", "value": 7.5 }
+      },
+      "components": [
+        { "type": "render.cube", "size": [0.36, 1.9, 0.28], "color": [205, 230, 255, 255] },
+        { "type": "collision.aabb", "half_extents": [0.18, 0.95, 0.14] },
+        { "type": "control.axis_1d", "axis": "y", "negative": "action.paddle.down", "positive": "action.paddle.up" }
+      ]
+    },
+    {
+      "name": "entity.paddle.cpu",
+      "active": true,
+      "tags": ["paddle", "cpu"],
+      "transform": { "position": [8.0, 0.0, 0.0] },
+      "properties": {
+        "half_width": { "type": "float", "value": 0.18 },
+        "half_height": { "type": "float", "value": 0.95 },
+        "speed": { "type": "float", "value": 5.5 }
+      },
+      "components": [
+        { "type": "render.cube", "size": [0.36, 1.9, 0.28], "color": [195, 255, 212, 255] },
+        { "type": "collision.aabb", "half_extents": [0.18, 0.95, 0.14] },
+        { "type": "adapter.controller", "adapter": "adapter.pong.cpu_track_ball", "target": "entity.ball" }
+      ]
+    },
+    {
+      "name": "entity.ball",
+      "active": true,
+      "tags": ["ball", "dynamic"],
+      "transform": { "position": [0.0, 0.0, 0.12] },
+      "properties": {
+        "radius": { "type": "float", "value": 0.22 },
+        "velocity": { "type": "vec2", "value": [0.0, 0.0] },
+        "base_speed": { "type": "float", "value": 5.6 },
+        "max_speed": { "type": "float", "value": 10.0 },
+        "active_motion": { "type": "bool", "value": false }
+      },
+      "components": [
+        { "type": "render.sphere", "radius": 0.22, "rings": 12, "slices": 18, "emissive": true },
+        { "type": "collision.circle", "radius": 0.22 },
+        { "type": "motion.velocity_2d", "property": "velocity" }
+      ]
+    },
+    {
+      "name": "entity.score.player",
+      "active": true,
+      "tags": ["score", "player"],
+      "properties": {
+        "value": { "type": "int", "value": 0 }
+      }
+    },
+    {
+      "name": "entity.score.cpu",
+      "active": true,
+      "tags": ["score", "cpu"],
+      "properties": {
+        "value": { "type": "int", "value": 0 }
+      }
+    },
+    {
+      "name": "entity.effect.ambient_particles",
+      "active": true,
+      "tags": ["effect", "particles"],
+      "transform": { "position": [0.0, 0.0, 0.35] },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [8.8, 4.8, 0.18],
+          "max_particles": 360,
+          "emit_rate": 95.0,
+          "color_start": [220, 235, 255, 105],
+          "color_end": [255, 255, 255, 0]
+        }
+      ]
+    }
+  ],
+  "signals": [
+    "signal.game.start",
+    "signal.ball.serve",
+    "signal.ball.hit_wall",
+    "signal.ball.hit_paddle",
+    "signal.goal.player",
+    "signal.goal.cpu",
+    "signal.score.player",
+    "signal.score.cpu",
+    "signal.round.reset",
+    "signal.match.player_won",
+    "signal.match.cpu_won",
+    "signal.camera.ball.toggle",
+    "signal.presentation.flash_border"
+  ],
+  "logic": {
+    "sensors": [
+      {
+        "name": "logic.goal.cpu",
+        "type": "sensor.bounds_exit",
+        "entity": "entity.ball",
+        "axis": "x",
+        "side": "min",
+        "threshold": -9.22,
+        "on_enter": "signal.goal.cpu"
+      },
+      {
+        "name": "logic.goal.player",
+        "type": "sensor.bounds_exit",
+        "entity": "entity.ball",
+        "axis": "x",
+        "side": "max",
+        "threshold": 9.22,
+        "on_enter": "signal.goal.player"
+      },
+      {
+        "name": "logic.wall.top_bottom",
+        "type": "sensor.bounds_reflect",
+        "entity": "entity.ball",
+        "axis": "y",
+        "min": -4.78,
+        "max": 4.78,
+        "on_reflect": "signal.ball.hit_wall"
+      },
+      {
+        "name": "logic.paddle.player_contact",
+        "type": "sensor.contact_2d",
+        "a": "entity.ball",
+        "b": "entity.paddle.player",
+        "on_enter": "signal.ball.hit_paddle"
+      },
+      {
+        "name": "logic.paddle.cpu_contact",
+        "type": "sensor.contact_2d",
+        "a": "entity.ball",
+        "b": "entity.paddle.cpu",
+        "on_enter": "signal.ball.hit_paddle"
+      },
+      {
+        "name": "logic.camera.ball_toggle_input",
+        "type": "sensor.input_pressed",
+        "action": "action.camera.ball.toggle",
+        "on_pressed": "signal.camera.ball.toggle"
+      }
+    ],
+    "timers": [
+      {
+        "name": "timer.round.serve",
+        "delay": 1.0,
+        "signal": "signal.ball.serve",
+        "repeating": false
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.game.start",
+        "actions": [
+          { "type": "timer.start", "timer": "timer.round.serve" }
+        ]
+      },
+      {
+        "signal": "signal.ball.serve",
+        "actions": [
+          { "type": "adapter.invoke", "adapter": "adapter.pong.serve_random", "target": "entity.ball" },
+          { "type": "property.set", "target": "entity.ball", "key": "active_motion", "value": true }
+        ]
+      },
+      {
+        "signal": "signal.ball.hit_paddle",
+        "actions": [
+          { "type": "adapter.invoke", "adapter": "adapter.pong.reflect_from_paddle", "target": "entity.ball" },
+          { "type": "signal.emit", "signal": "signal.presentation.flash_border" }
+        ]
+      },
+      {
+        "signal": "signal.ball.hit_wall",
+        "actions": [
+          { "type": "signal.emit", "signal": "signal.presentation.flash_border" }
+        ]
+      },
+      {
+        "signal": "signal.goal.player",
+        "actions": [
+          { "type": "signal.emit", "signal": "signal.score.player" }
+        ]
+      },
+      {
+        "signal": "signal.goal.cpu",
+        "actions": [
+          { "type": "signal.emit", "signal": "signal.score.cpu" }
+        ]
+      },
+      {
+        "signal": "signal.score.player",
+        "actions": [
+          { "type": "property.add", "target": "entity.score.player", "key": "value", "value": 1 },
+          { "type": "signal.emit", "signal": "signal.round.reset" },
+          {
+            "type": "branch",
+            "if": {
+              "type": "property.compare",
+              "target": "entity.score.player",
+              "key": "value",
+              "op": ">=",
+              "value": 10
+            },
+            "then": [
+              { "type": "signal.emit", "signal": "signal.match.player_won" }
+            ],
+            "else": [
+              { "type": "timer.start", "timer": "timer.round.serve" }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.score.cpu",
+        "actions": [
+          { "type": "property.add", "target": "entity.score.cpu", "key": "value", "value": 1 },
+          { "type": "signal.emit", "signal": "signal.round.reset" },
+          {
+            "type": "branch",
+            "if": {
+              "type": "property.compare",
+              "target": "entity.score.cpu",
+              "key": "value",
+              "op": ">=",
+              "value": 10
+            },
+            "then": [
+              { "type": "signal.emit", "signal": "signal.match.cpu_won" }
+            ],
+            "else": [
+              { "type": "timer.start", "timer": "timer.round.serve" }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.round.reset",
+        "actions": [
+          { "type": "property.set", "target": "entity.ball", "key": "active_motion", "value": false },
+          { "type": "property.set", "target": "entity.ball", "key": "velocity", "value": [0.0, 0.0] },
+          { "type": "transform.set_position", "target": "entity.ball", "position": [0.0, 0.0, 0.12] },
+          { "type": "transform.set_position", "target": "entity.paddle.player", "position": [-8.0, 0.0, 0.0] },
+          { "type": "transform.set_position", "target": "entity.paddle.cpu", "position": [8.0, 0.0, 0.0] }
+        ]
+      },
+      {
+        "signal": "signal.camera.ball.toggle",
+        "actions": [
+          { "type": "camera.toggle", "camera": "camera.ball_chase", "fallback": "camera.overhead" }
+        ]
+      }
+    ]
+  },
+  "adapters": [
+    {
+      "name": "adapter.pong.serve_random",
+      "kind": "action",
+      "description": "Choose a non-extreme random serve vector for the ball."
+    },
+    {
+      "name": "adapter.pong.reflect_from_paddle",
+      "kind": "action",
+      "description": "Reflect ball velocity using Pong-specific hit-offset deflection."
+    },
+    {
+      "name": "adapter.pong.cpu_track_ball",
+      "kind": "controller",
+      "description": "Move the CPU paddle toward the current ball position."
+    },
+    {
+      "name": "adapter.pong.ball_chase_camera",
+      "kind": "camera",
+      "description": "Build a third-person camera from the ball position and velocity."
+    }
+  ]
+}

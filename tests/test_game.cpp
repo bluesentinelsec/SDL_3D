@@ -71,6 +71,36 @@ struct GameTestState
     float first_unpaused_alpha = -1.0f;
 };
 
+sdl3d_actor_registry *ctx_registry(sdl3d_game_context *ctx)
+{
+    return sdl3d_game_session_get_registry(ctx != nullptr ? ctx->session : nullptr);
+}
+
+sdl3d_signal_bus *ctx_bus(sdl3d_game_context *ctx)
+{
+    return sdl3d_game_session_get_signal_bus(ctx != nullptr ? ctx->session : nullptr);
+}
+
+sdl3d_timer_pool *ctx_timers(sdl3d_game_context *ctx)
+{
+    return sdl3d_game_session_get_timer_pool(ctx != nullptr ? ctx->session : nullptr);
+}
+
+sdl3d_input_manager *ctx_input(sdl3d_game_context *ctx)
+{
+    return sdl3d_game_session_get_input(ctx != nullptr ? ctx->session : nullptr);
+}
+
+sdl3d_audio_engine *ctx_audio(sdl3d_game_context *ctx)
+{
+    return sdl3d_game_session_get_audio(ctx != nullptr ? ctx->session : nullptr);
+}
+
+int ctx_tick_count(sdl3d_game_context *ctx)
+{
+    return sdl3d_game_session_get_tick_count(ctx != nullptr ? ctx->session : nullptr);
+}
+
 bool quit_in_init(sdl3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
@@ -97,8 +127,8 @@ void record_shutdown(sdl3d_game_context *ctx, void *userdata)
 bool validate_context_in_init(sdl3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
-    state->saw_valid_context = ctx->window != nullptr && ctx->renderer != nullptr && ctx->registry != nullptr &&
-                               ctx->bus != nullptr && ctx->timers != nullptr && ctx->input != nullptr;
+    state->saw_valid_context = ctx->window != nullptr && ctx->renderer != nullptr && ctx_registry(ctx) != nullptr &&
+                               ctx_bus(ctx) != nullptr && ctx_timers(ctx) != nullptr && ctx_input(ctx) != nullptr;
     ctx->quit_requested = true;
     return true;
 }
@@ -106,7 +136,7 @@ bool validate_context_in_init(sdl3d_game_context *ctx, void *userdata)
 bool validate_audio_disabled_in_init(sdl3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
-    state->saw_audio_disabled = ctx->audio == nullptr;
+    state->saw_audio_disabled = ctx_audio(ctx) == nullptr;
     ctx->quit_requested = true;
     return true;
 }
@@ -188,8 +218,8 @@ void timer_handler(void *userdata, int signal_id, const sdl3d_properties *payloa
 bool start_timer_in_init(sdl3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
-    sdl3d_signal_connect(ctx->bus, kTimerSignal, timer_handler, state);
-    sdl3d_timer_start(ctx->timers, kFastFixedDt, kTimerSignal, false, 0.0f);
+    sdl3d_signal_connect(ctx_bus(ctx), kTimerSignal, timer_handler, state);
+    sdl3d_timer_start(ctx_timers(ctx), kFastFixedDt, kTimerSignal, false, 0.0f);
     return true;
 }
 
@@ -207,8 +237,8 @@ void quit_when_timer_fires(sdl3d_game_context *ctx, void *userdata, float dt)
 bool bind_and_push_input_in_init(sdl3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
-    state->input_action = sdl3d_input_register_action(ctx->input, "jump");
-    sdl3d_input_bind_key(ctx->input, state->input_action, SDL_SCANCODE_SPACE);
+    state->input_action = sdl3d_input_register_action(ctx_input(ctx), "jump");
+    sdl3d_input_bind_key(ctx_input(ctx), state->input_action, SDL_SCANCODE_SPACE);
 
     SDL_Event event{};
     event.type = SDL_EVENT_KEY_DOWN;
@@ -220,8 +250,8 @@ bool bind_and_push_input_in_init(sdl3d_game_context *ctx, void *userdata)
 bool bind_input_in_init(sdl3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
-    state->input_action = sdl3d_input_register_action(ctx->input, "jump");
-    sdl3d_input_bind_key(ctx->input, state->input_action, SDL_SCANCODE_SPACE);
+    state->input_action = sdl3d_input_register_action(ctx_input(ctx), "jump");
+    sdl3d_input_bind_key(ctx_input(ctx), state->input_action, SDL_SCANCODE_SPACE);
     return true;
 }
 
@@ -238,8 +268,8 @@ bool pause_and_start_timer_in_init(sdl3d_game_context *ctx, void *userdata)
     auto *state = static_cast<GameTestState *>(userdata);
     state->init_called = true;
     ctx->paused = true;
-    sdl3d_signal_connect(ctx->bus, kTimerSignal, timer_handler, state);
-    sdl3d_timer_start(ctx->timers, kFastFixedDt, kTimerSignal, false, 0.0f);
+    sdl3d_signal_connect(ctx_bus(ctx), kTimerSignal, timer_handler, state);
+    sdl3d_timer_start(ctx_timers(ctx), kFastFixedDt, kTimerSignal, false, 0.0f);
     return true;
 }
 
@@ -254,8 +284,8 @@ bool pause_and_bind_pause_input_in_init(sdl3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
     state->init_called = true;
-    state->input_action = sdl3d_input_register_action(ctx->input, "pause");
-    sdl3d_input_bind_key(ctx->input, state->input_action, SDL_SCANCODE_RETURN);
+    state->input_action = sdl3d_input_register_action(ctx_input(ctx), "pause");
+    sdl3d_input_bind_key(ctx_input(ctx), state->input_action, SDL_SCANCODE_RETURN);
     ctx->paused = true;
     return true;
 }
@@ -265,8 +295,8 @@ void quit_after_input_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     (void)dt;
     auto *state = static_cast<GameTestState *>(userdata);
     state->tick_count++;
-    state->saw_input_action_in_tick =
-        sdl3d_input_is_pressed(ctx->input, state->input_action) && sdl3d_input_is_held(ctx->input, state->input_action);
+    state->saw_input_action_in_tick = sdl3d_input_is_pressed(ctx_input(ctx), state->input_action) &&
+                                      sdl3d_input_is_held(ctx_input(ctx), state->input_action);
     ctx->quit_requested = true;
 }
 
@@ -285,7 +315,7 @@ void count_input_pressed_ticks(sdl3d_game_context *ctx, void *userdata, float dt
     (void)dt;
     auto *state = static_cast<GameTestState *>(userdata);
     state->tick_count++;
-    if (sdl3d_input_is_pressed(ctx->input, state->input_action))
+    if (sdl3d_input_is_pressed(ctx_input(ctx), state->input_action))
     {
         state->input_pressed_tick_count++;
     }
@@ -361,7 +391,7 @@ void push_pause_input_then_unpause_from_snapshot(sdl3d_game_context *ctx, void *
         return;
     }
 
-    if (sdl3d_input_is_pressed(ctx->input, state->input_action))
+    if (sdl3d_input_is_pressed(ctx_input(ctx), state->input_action))
     {
         state->saw_input_action_in_tick = true;
         ctx->paused = false;
@@ -386,7 +416,7 @@ void quit_after_three_paused_renders(sdl3d_game_context *ctx, void *userdata, fl
     state->render_called = true;
     state->render_count++;
     state->last_alpha = alpha;
-    state->context_tick_count = ctx->tick_count;
+    state->context_tick_count = ctx_tick_count(ctx);
     if (state->render_count >= 3)
     {
         ctx->quit_requested = true;
@@ -399,8 +429,8 @@ void quit_after_first_unpaused_tick_render(sdl3d_game_context *ctx, void *userda
     state->render_called = true;
     state->render_count++;
     state->last_alpha = alpha;
-    state->context_tick_count = ctx->tick_count;
-    if (!ctx->paused && ctx->tick_count > 0)
+    state->context_tick_count = ctx_tick_count(ctx);
+    if (!ctx->paused && ctx_tick_count(ctx) > 0)
     {
         ctx->quit_requested = true;
     }
@@ -416,7 +446,7 @@ void quit_after_first_unpaused_render(sdl3d_game_context *ctx, void *userdata, f
     state->render_called = true;
     state->render_count++;
     state->last_alpha = alpha;
-    state->context_tick_count = ctx->tick_count;
+    state->context_tick_count = ctx_tick_count(ctx);
     if (!ctx->paused)
     {
         state->first_unpaused_alpha = alpha;
@@ -432,8 +462,8 @@ void record_paused_input_snapshot(sdl3d_game_context *ctx, void *userdata, float
 {
     quit_after_three_paused_renders(ctx, userdata, alpha);
     auto *state = static_cast<GameTestState *>(userdata);
-    state->saw_input_action_while_paused =
-        sdl3d_input_is_pressed(ctx->input, state->input_action) || sdl3d_input_is_held(ctx->input, state->input_action);
+    state->saw_input_action_while_paused = sdl3d_input_is_pressed(ctx_input(ctx), state->input_action) ||
+                                           sdl3d_input_is_held(ctx_input(ctx), state->input_action);
 }
 } // namespace
 

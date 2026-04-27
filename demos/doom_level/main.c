@@ -106,9 +106,33 @@ typedef struct doom_state
 
 static float clamp01(float value);
 
+static sdl3d_actor_registry *ctx_registry(const sdl3d_game_context *ctx)
+{
+    return sdl3d_game_session_get_registry(ctx != NULL ? ctx->session : NULL);
+}
+
+static sdl3d_signal_bus *ctx_bus(const sdl3d_game_context *ctx)
+{
+    return sdl3d_game_session_get_signal_bus(ctx != NULL ? ctx->session : NULL);
+}
+
+static sdl3d_input_manager *ctx_input(const sdl3d_game_context *ctx)
+{
+    return sdl3d_game_session_get_input(ctx != NULL ? ctx->session : NULL);
+}
+
+static sdl3d_audio_engine *ctx_audio(const sdl3d_game_context *ctx)
+{
+    return sdl3d_game_session_get_audio(ctx != NULL ? ctx->session : NULL);
+}
+
+static sdl3d_logic_world *ctx_logic(const sdl3d_game_context *ctx)
+{
+    return sdl3d_game_session_get_logic_world(ctx != NULL ? ctx->session : NULL);
+}
+
 static void doom_state_cleanup(doom_state *state)
 {
-    sdl3d_logic_world_destroy(state->logic);
     state->logic = NULL;
     if (state->doors_ready)
     {
@@ -145,9 +169,9 @@ static void stop_demo_playback(sdl3d_game_context *ctx, doom_state *state)
         return;
     }
 
-    if (ctx != NULL && ctx->input != NULL)
+    if (ctx != NULL && ctx_input(ctx) != NULL)
     {
-        sdl3d_demo_playback_stop(ctx->input);
+        sdl3d_demo_playback_stop(ctx_input(ctx));
     }
     sdl3d_demo_playback_free(state->demo_player);
     state->demo_player = NULL;
@@ -414,7 +438,7 @@ static void init_damage_sensor(doom_state *state)
 
 static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
 {
-    state->logic = sdl3d_logic_world_create(ctx->bus, ctx->timers);
+    state->logic = ctx_logic(ctx);
     if (state->logic == NULL)
     {
         return false;
@@ -597,12 +621,12 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
 
     state->current_backend = sdl3d_get_render_context_backend(ctx->renderer);
     state->render_profile = DOOM_RENDER_PROFILE_MODERN;
-    state->audio = ctx->audio;
+    state->audio = ctx_audio(ctx);
     sdl3d_sector_watcher_init(&state->sector_watcher);
-    bind_doom_actions(ctx->input, state);
+    bind_doom_actions(ctx_input(ctx), state);
     apply_window_defaults(ctx, state);
 
-    if (sdl3d_signal_connect(ctx->bus, SIG_FADE_OUT_DONE, on_fade_out_done, ctx) == 0)
+    if (sdl3d_signal_connect(ctx_bus(ctx), SIG_FADE_OUT_DONE, on_fade_out_done, ctx) == 0)
     {
         return false;
     }
@@ -621,7 +645,7 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     state->level_ready = true;
     init_dynamic_lift(state);
 
-    if (!entities_init(&state->ent, &state->level.unlit, ctx->registry, ctx->bus))
+    if (!entities_init(&state->ent, &state->level.unlit, ctx_registry(ctx), ctx_bus(ctx)))
     {
         entities_free(&state->ent);
         doom_state_cleanup(state);
@@ -643,7 +667,7 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     }
     state->doors_ready = true;
 
-    player_init(&state->player, ctx->input);
+    player_init(&state->player, ctx_input(ctx));
     init_dragon_teleport_sensor(state);
     init_surveillance_camera(state);
     init_launcher_sensor(state);
@@ -665,7 +689,7 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     state->demo_player = sdl3d_demo_playback_load("attract.dem");
     if (state->demo_player != NULL)
     {
-        sdl3d_demo_playback_start(ctx->input, state->demo_player);
+        sdl3d_demo_playback_start(ctx_input(ctx), state->demo_player);
     }
     return true;
 }
@@ -720,23 +744,23 @@ static bool game_event(sdl3d_game_context *ctx, void *userdata, const SDL_Event 
 
 static void apply_doom_debug_actions(sdl3d_game_context *ctx, doom_state *state)
 {
-    if (sdl3d_input_is_pressed(ctx->input, state->action_toggle_lighting))
+    if (sdl3d_input_is_pressed(ctx_input(ctx), state->action_toggle_lighting))
     {
         state->level.use_lit = !state->level.use_lit;
     }
-    if (sdl3d_input_is_pressed(ctx->input, state->action_toggle_lightmaps))
+    if (sdl3d_input_is_pressed(ctx_input(ctx), state->action_toggle_lightmaps))
     {
         state->level.use_lightmaps = !state->level.use_lightmaps;
     }
-    if (sdl3d_input_is_pressed(ctx->input, state->action_toggle_debug_stats))
+    if (sdl3d_input_is_pressed(ctx_input(ctx), state->action_toggle_debug_stats))
     {
         state->render.show_debug = !state->render.show_debug;
     }
-    if (sdl3d_input_is_pressed(ctx->input, state->action_toggle_portal_culling))
+    if (sdl3d_input_is_pressed(ctx_input(ctx), state->action_toggle_portal_culling))
     {
         state->render.portal_culling = !state->render.portal_culling;
     }
-    if (sdl3d_input_is_pressed(ctx->input, state->action_switch_backend) && !switch_demo_backend(ctx, state))
+    if (sdl3d_input_is_pressed(ctx_input(ctx), state->action_switch_backend) && !switch_demo_backend(ctx, state))
     {
         ctx->quit_requested = true;
     }
@@ -746,7 +770,7 @@ static void apply_doom_profile_actions(sdl3d_game_context *ctx, doom_state *stat
 {
     for (int i = 0; i < DOOM_RENDER_PROFILE_COUNT; ++i)
     {
-        if (!sdl3d_input_is_pressed(ctx->input, state->action_render_profile[i]))
+        if (!sdl3d_input_is_pressed(ctx_input(ctx), state->action_render_profile[i]))
         {
             continue;
         }
@@ -823,14 +847,14 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 
     apply_doom_profile_actions(ctx, state);
 
-    if (sdl3d_input_is_pressed(ctx->input, state->action_pause))
+    if (sdl3d_input_is_pressed(ctx_input(ctx), state->action_pause))
     {
         toggle_pause(ctx, state);
         return;
     }
 
     apply_doom_debug_actions(ctx, state);
-    if (sdl3d_input_is_pressed(ctx->input, state->action_interact))
+    if (sdl3d_input_is_pressed(ctx_input(ctx), state->action_interact))
     {
         doom_doors_emit_interact(&state->doors, state->logic, SIG_DOOR_INTERACT, state->player.mover.position,
                                  state->player.mover.yaw);
@@ -841,12 +865,12 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
         stop_demo_playback(ctx, state);
     }
 
-    sdl3d_transition_update(&state->transition, ctx->bus, dt);
+    sdl3d_transition_update(&state->transition, ctx_bus(ctx), dt);
     update_dynamic_lift(state, dt);
     doom_doors_update(&state->doors, dt);
     doom_hazard_particles_update(&state->hazards, dt);
     entities_update(&state->ent, &state->level.unlit, dt, state->player.mover.position);
-    if (!player_update(&state->player, ctx->input, &state->level.unlit, g_sectors, dt))
+    if (!player_update(&state->player, ctx_input(ctx), &state->level.unlit, g_sectors, dt))
     {
         start_quit_fade(ctx, state);
     }
@@ -905,7 +929,7 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
                                 sdl3d_vec3_make(state->player.mover.position.x,
                                                 state->player.mover.position.y - PLAYER_HEIGHT,
                                                 state->player.mover.position.z),
-                                ctx->bus);
+                                ctx_bus(ctx));
 }
 
 static void game_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_dt)
@@ -914,12 +938,12 @@ static void game_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_
 
     apply_doom_profile_actions(ctx, state);
 
-    if (sdl3d_input_is_pressed(ctx->input, state->action_pause))
+    if (sdl3d_input_is_pressed(ctx_input(ctx), state->action_pause))
     {
         toggle_pause(ctx, state);
         return;
     }
-    if (sdl3d_input_is_pressed(ctx->input, state->action_menu))
+    if (sdl3d_input_is_pressed(ctx_input(ctx), state->action_menu))
     {
         start_quit_fade(ctx, state);
     }
@@ -932,7 +956,7 @@ static void game_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_
 
     if (state->quit_pending)
     {
-        sdl3d_transition_update(&state->transition, ctx->bus, real_dt);
+        sdl3d_transition_update(&state->transition, ctx_bus(ctx), real_dt);
     }
 }
 
