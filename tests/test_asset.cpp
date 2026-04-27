@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -70,11 +72,23 @@ std::string buffer_string(const sdl3d_asset_buffer &buffer)
 
 std::filesystem::path unique_test_dir(const char *name)
 {
-    const std::filesystem::path dir =
-        std::filesystem::temp_directory_path() / ("sdl3d_asset_test_" + std::string(name));
-    std::filesystem::remove_all(dir);
-    std::filesystem::create_directories(dir);
-    return dir;
+    const std::filesystem::path root = std::filesystem::temp_directory_path();
+    const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+    for (int attempt = 0; attempt < 100; ++attempt)
+    {
+        const std::filesystem::path dir = root / ("sdl3d_asset_test_" + std::string(name) + "_" + std::to_string(now) +
+                                                  "_" + std::to_string(attempt));
+        std::error_code error;
+        if (std::filesystem::create_directories(dir, error))
+            return dir;
+    }
+    throw std::runtime_error("failed to create unique asset test directory");
+}
+
+void remove_test_dir(const std::filesystem::path &dir)
+{
+    std::error_code error;
+    std::filesystem::remove_all(dir, error);
 }
 
 void write_text(const std::filesystem::path &path, const char *text)
@@ -82,6 +96,12 @@ void write_text(const std::filesystem::path &path, const char *text)
     std::filesystem::create_directories(path.parent_path());
     std::ofstream out(path, std::ios::binary);
     out << text;
+}
+
+std::string read_binary_file(const std::filesystem::path &path)
+{
+    std::ifstream in(path, std::ios::binary);
+    return std::string{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
 }
 
 } // namespace
@@ -189,10 +209,10 @@ TEST(AssetPackWriter, WritesDeterministicPackReadableByResolver)
     ASSERT_TRUE(sdl3d_asset_pack_write_file(pack_a.string().c_str(), sources, 2, error, sizeof(error))) << error;
     ASSERT_TRUE(sdl3d_asset_pack_write_file(pack_b.string().c_str(), sources, 2, error, sizeof(error))) << error;
 
-    std::ifstream a(pack_a, std::ios::binary);
-    std::ifstream b(pack_b, std::ios::binary);
-    const std::string bytes_a{std::istreambuf_iterator<char>(a), std::istreambuf_iterator<char>()};
-    const std::string bytes_b{std::istreambuf_iterator<char>(b), std::istreambuf_iterator<char>()};
+    const std::string bytes_a = read_binary_file(pack_a);
+    const std::string bytes_b = read_binary_file(pack_b);
+    ASSERT_FALSE(bytes_a.empty());
+    ASSERT_FALSE(bytes_b.empty());
     EXPECT_EQ(bytes_a, bytes_b);
 
     sdl3d_asset_resolver *resolver = sdl3d_asset_resolver_create();
@@ -205,7 +225,7 @@ TEST(AssetPackWriter, WritesDeterministicPackReadableByResolver)
     sdl3d_asset_buffer_free(&buffer);
 
     sdl3d_asset_resolver_destroy(resolver);
-    std::filesystem::remove_all(dir);
+    remove_test_dir(dir);
 }
 
 TEST(AssetPackWriter, RejectsDuplicateNormalizedPaths)
@@ -225,7 +245,7 @@ TEST(AssetPackWriter, RejectsDuplicateNormalizedPaths)
     EXPECT_FALSE(
         sdl3d_asset_pack_write_file((dir / "bad.sdl3dpak").string().c_str(), sources, 2, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("duplicate"), std::string::npos);
-    std::filesystem::remove_all(dir);
+    remove_test_dir(dir);
 }
 
 TEST(AssetPackWriter, RejectsUnsafeAssetPaths)
@@ -242,5 +262,5 @@ TEST(AssetPackWriter, RejectsUnsafeAssetPaths)
     EXPECT_FALSE(
         sdl3d_asset_pack_write_file((dir / "bad.sdl3dpak").string().c_str(), sources, 1, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("invalid"), std::string::npos);
-    std::filesystem::remove_all(dir);
+    remove_test_dir(dir);
 }
