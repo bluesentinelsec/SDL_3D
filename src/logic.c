@@ -793,6 +793,16 @@ sdl3d_logic_action sdl3d_logic_action_make_launch_player(sdl3d_vec3 velocity)
     return action;
 }
 
+sdl3d_logic_action sdl3d_logic_action_make_set_effect_active(const char *effect_name, bool active)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_SET_EFFECT_ACTIVE;
+    action.effect.effect_name = effect_name;
+    action.effect.active = active;
+    return action;
+}
+
 bool sdl3d_logic_world_execute_action(sdl3d_logic_world *world, const sdl3d_logic_action *action)
 {
     return sdl3d_logic_world_execute_action_with_payload(world, action, NULL);
@@ -977,6 +987,14 @@ bool sdl3d_logic_world_execute_action_with_payload(sdl3d_logic_world *world, con
         }
         return adapters->launch_player(adapters->userdata, action->launch_player.velocity, payload);
 
+    case SDL3D_LOGIC_ACTION_SET_EFFECT_ACTIVE:
+        if (adapters == NULL || adapters->set_effect_active == NULL || action->effect.effect_name == NULL)
+        {
+            return false;
+        }
+        return adapters->set_effect_active(adapters->userdata, action->effect.effect_name, action->effect.active,
+                                           payload);
+
     case SDL3D_LOGIC_ACTION_NONE:
         break;
     }
@@ -1114,6 +1132,59 @@ void sdl3d_logic_proximity_sensor_reset(sdl3d_logic_proximity_sensor *sensor)
 {
     if (sensor != NULL)
         sensor->was_inside = false;
+}
+
+void sdl3d_logic_sector_damage_sensor_init(sdl3d_logic_sector_damage_sensor *sensor, int sensor_id, int signal_id,
+                                           float minimum_damage_per_second)
+{
+    if (sensor == NULL)
+        return;
+
+    SDL_zerop(sensor);
+    sensor->sensor_id = sensor_id;
+    sensor->signal_id = signal_id;
+    sensor->minimum_damage_per_second = clamp_non_negative_float(minimum_damage_per_second);
+    sensor->enabled = true;
+}
+
+sdl3d_logic_sensor_result sdl3d_logic_sector_damage_sensor_update(sdl3d_logic_sector_damage_sensor *sensor,
+                                                                  sdl3d_logic_world *world, sdl3d_vec3 sample_position,
+                                                                  float dt)
+{
+    if (sensor == NULL || world == NULL || !sensor->enabled || dt <= 0.0f)
+        return sensor_result(false, SDL3D_LOGIC_SENSOR_EVENT_NONE);
+
+    const sdl3d_logic_target_context *context = sdl3d_logic_world_get_target_context(world);
+    if (context == NULL || context->level == NULL || context->sectors == NULL)
+        return sensor_result(false, SDL3D_LOGIC_SENSOR_EVENT_NONE);
+
+    const int sector_index = sdl3d_level_find_sector_at(context->level, context->sectors, sample_position.x,
+                                                        sample_position.z, sample_position.y);
+    if (sector_index < 0 || sector_index >= context->sector_count)
+        return sensor_result(false, SDL3D_LOGIC_SENSOR_EVENT_NONE);
+
+    const float damage_per_second = sdl3d_sector_damage_per_second(&context->sectors[sector_index]);
+    const bool active = damage_per_second > 0.0f && damage_per_second >= sensor->minimum_damage_per_second;
+    if (!active || world->bus == NULL)
+        return sensor_result(active, SDL3D_LOGIC_SENSOR_EVENT_NONE);
+
+    sdl3d_properties *payload = sdl3d_properties_create();
+    if (payload == NULL)
+        return sensor_result(active, SDL3D_LOGIC_SENSOR_EVENT_NONE);
+
+    sdl3d_properties_set_int(payload, "sensor_id", sensor->sensor_id);
+    sdl3d_properties_set_int(payload, "event", (int)SDL3D_LOGIC_SENSOR_EVENT_LEVEL);
+    sdl3d_properties_set_bool(payload, "inside", true);
+    sdl3d_properties_set_vec3(payload, "sample_position", sample_position);
+    sdl3d_properties_set_int(payload, "sector_index", sector_index);
+    sdl3d_properties_set_float(payload, "damage_per_second", damage_per_second);
+    sdl3d_properties_set_float(payload, "damage_amount",
+                               sdl3d_sector_damage_for_delta(&context->sectors[sector_index], dt));
+    sdl3d_properties_set_float(payload, "dt", dt);
+
+    sdl3d_signal_emit(world->bus, sensor->signal_id, payload);
+    sdl3d_properties_destroy(payload);
+    return sensor_result(true, SDL3D_LOGIC_SENSOR_EVENT_LEVEL);
 }
 
 bool sdl3d_logic_world_emit_signal(sdl3d_logic_world *world, int signal_id, const sdl3d_properties *payload)

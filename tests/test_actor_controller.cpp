@@ -78,7 +78,46 @@ TEST(ActorPatrolController, MovesRegisteredActorTowardWaypoint)
     EXPECT_STREQ(sdl3d_properties_get_string(actor->props, "state", ""), "walk");
     EXPECT_EQ(sdl3d_properties_get_int(actor->props, "target_waypoint", -1), 1);
     EXPECT_TRUE(sdl3d_properties_get_bool(actor->props, "enabled", false));
+    EXPECT_TRUE(sdl3d_properties_get_bool(actor->props, "patrol_enabled", false));
     EXPECT_FALSE(sdl3d_properties_get_bool(actor->props, "alerted", true));
+
+    sdl3d_actor_registry_destroy(registry);
+}
+
+TEST(ActorPatrolController, ActorPropertiesCanDrivePatrolRuntimeConfig)
+{
+    sdl3d_actor_registry *registry = sdl3d_actor_registry_create();
+    ASSERT_NE(registry, nullptr);
+    sdl3d_registered_actor *actor = add_actor(registry);
+    ASSERT_NE(actor, nullptr);
+
+    sdl3d_actor_patrol_config config = sdl3d_actor_patrol_default_config();
+    config.start_idle = false;
+    config.speed = 1.0f;
+
+    sdl3d_actor_patrol_controller controller{};
+    sdl3d_actor_patrol_controller_init(&controller, 14, actor->id, &config);
+    sdl3d_actor_patrol_controller_add_waypoint(&controller, sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    sdl3d_actor_patrol_controller_add_waypoint(&controller, sdl3d_vec3_make(10.0f, 0.0f, 0.0f));
+
+    sdl3d_properties_set_bool(actor->props, "patrol_enabled", false);
+    sdl3d_actor_patrol_result disabled =
+        sdl3d_actor_patrol_controller_update(&controller, registry, nullptr, 1.0f, nullptr, nullptr);
+    EXPECT_TRUE(disabled.updated);
+    EXPECT_FALSE(disabled.moved);
+    EXPECT_FALSE(controller.enabled);
+    EXPECT_FLOAT_EQ(actor->position.x, 0.0f);
+
+    sdl3d_properties_set_bool(actor->props, "patrol_enabled", true);
+    sdl3d_properties_set_float(actor->props, "patrol_speed", 4.0f);
+    sdl3d_properties_set_float(actor->props, "patrol_wait_time", 0.75f);
+    sdl3d_actor_patrol_result moved =
+        sdl3d_actor_patrol_controller_update(&controller, registry, nullptr, 0.5f, nullptr, nullptr);
+    EXPECT_TRUE(moved.moved);
+    EXPECT_TRUE(controller.enabled);
+    EXPECT_FLOAT_EQ(controller.speed, 4.0f);
+    EXPECT_FLOAT_EQ(controller.wait_time, 0.75f);
+    EXPECT_FLOAT_EQ(actor->position.x, 2.0f);
 
     sdl3d_actor_registry_destroy(registry);
 }

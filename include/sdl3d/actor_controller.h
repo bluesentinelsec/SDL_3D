@@ -169,12 +169,27 @@ extern "C"
     /**
      * @brief Update actor properties that expose patrol state.
      *
-     * Exposed keys are: state, target_waypoint, enabled, alerted, patrol_mode,
-     * patrol_speed, and patrol_wait_remaining. alerted is initialized to false
-     * only if the actor does not already define it.
+     * Exposed keys are: state, target_waypoint, patrol_enabled, enabled,
+     * alerted, patrol_mode, patrol_speed, patrol_wait_time, and
+     * patrol_wait_remaining. alerted is initialized to false only if the actor
+     * does not already define it.
      */
     void sdl3d_actor_patrol_controller_sync_properties(const sdl3d_actor_patrol_controller *controller,
                                                        sdl3d_registered_actor *actor);
+
+    /**
+     * @brief Apply actor-authored patrol properties to a controller.
+     *
+     * This lets logic actions drive patrol behavior by setting properties on
+     * the controlled actor. Recognized properties are:
+     * - patrol_enabled: bool
+     * - patrol_speed: positive float
+     * - patrol_wait_time: non-negative float
+     *
+     * Missing properties leave the current controller values unchanged.
+     */
+    void sdl3d_actor_patrol_controller_apply_actor_properties(sdl3d_actor_patrol_controller *controller,
+                                                              const sdl3d_registered_actor *actor);
 
     /**
      * @brief Advance a patrol controller and update its registered actor.

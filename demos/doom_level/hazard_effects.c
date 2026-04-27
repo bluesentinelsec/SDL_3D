@@ -109,6 +109,7 @@ bool doom_hazard_particles_init(doom_hazard_particles *particles, const sdl3d_le
     }
 
     SDL_zerop(particles);
+    particles->enabled = true;
     if (DOOM_NUKAGE_BASIN_SECTOR < 0 || DOOM_NUKAGE_BASIN_SECTOR >= level->sector_count)
     {
         return SDL_SetError("Nukage basin sector is out of range.");
@@ -242,9 +243,22 @@ void doom_hazard_particles_free(doom_hazard_particles *particles)
     SDL_zerop(particles);
 }
 
+void doom_hazard_particles_set_enabled(doom_hazard_particles *particles, bool enabled)
+{
+    if (particles != NULL)
+    {
+        particles->enabled = enabled;
+    }
+}
+
+bool doom_hazard_particles_enabled(const doom_hazard_particles *particles)
+{
+    return particles != NULL && particles->enabled;
+}
+
 void doom_hazard_particles_update(doom_hazard_particles *particles, float dt)
 {
-    if (particles == NULL)
+    if (particles == NULL || !particles->enabled)
     {
         return;
     }
@@ -265,7 +279,7 @@ void doom_hazard_particles_update(doom_hazard_particles *particles, float dt)
 
 bool doom_hazard_particles_draw(const doom_hazard_particles *particles, sdl3d_render_context *context)
 {
-    if (particles == NULL)
+    if (particles == NULL || !particles->enabled)
     {
         return true;
     }

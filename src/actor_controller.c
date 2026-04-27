@@ -205,13 +205,40 @@ void sdl3d_actor_patrol_controller_sync_properties(const sdl3d_actor_patrol_cont
 
     sdl3d_properties_set_string(actor->props, "state", sdl3d_actor_patrol_state_name(controller->state));
     sdl3d_properties_set_int(actor->props, "target_waypoint", controller->target_waypoint);
+    sdl3d_properties_set_bool(actor->props, "patrol_enabled", controller->enabled);
     sdl3d_properties_set_bool(actor->props, "enabled", controller->enabled);
     if (!sdl3d_properties_has(actor->props, "alerted"))
         sdl3d_properties_set_bool(actor->props, "alerted", false);
     sdl3d_properties_set_string(actor->props, "patrol_mode",
                                 controller->mode == SDL3D_ACTOR_PATROL_PING_PONG ? "ping_pong" : "loop");
     sdl3d_properties_set_float(actor->props, "patrol_speed", controller->speed);
+    sdl3d_properties_set_float(actor->props, "patrol_wait_time", controller->wait_time);
     sdl3d_properties_set_float(actor->props, "patrol_wait_remaining", controller->wait_remaining);
+}
+
+void sdl3d_actor_patrol_controller_apply_actor_properties(sdl3d_actor_patrol_controller *controller,
+                                                          const sdl3d_registered_actor *actor)
+{
+    if (controller == NULL || actor == NULL || actor->props == NULL)
+        return;
+
+    if (sdl3d_properties_has(actor->props, "patrol_enabled"))
+        controller->enabled = sdl3d_properties_get_bool(actor->props, "patrol_enabled", controller->enabled);
+
+    if (sdl3d_properties_has(actor->props, "patrol_speed"))
+    {
+        const float speed = sdl3d_properties_get_float(actor->props, "patrol_speed", controller->speed);
+        if (speed > 0.0f)
+            controller->speed = speed;
+    }
+
+    if (sdl3d_properties_has(actor->props, "patrol_wait_time"))
+    {
+        const float wait_time = sdl3d_properties_get_float(actor->props, "patrol_wait_time", controller->wait_time);
+        controller->wait_time = wait_time > 0.0f ? wait_time : 0.0f;
+        if (controller->state == SDL3D_ACTOR_PATROL_IDLE && controller->wait_remaining > controller->wait_time)
+            controller->wait_remaining = controller->wait_time;
+    }
 }
 
 sdl3d_actor_patrol_result sdl3d_actor_patrol_controller_update(sdl3d_actor_patrol_controller *controller,
@@ -226,6 +253,7 @@ sdl3d_actor_patrol_result sdl3d_actor_patrol_controller_update(sdl3d_actor_patro
         return result;
 
     result.updated = true;
+    sdl3d_actor_patrol_controller_apply_actor_properties(controller, actor);
     sdl3d_actor_patrol_controller_sync_properties(controller, actor);
     if (!controller->enabled || !actor->active || controller->waypoint_count < 2 || controller->speed <= 0.0f)
         return result;

@@ -16,11 +16,14 @@ typedef struct doom_hazard_particles
     sdl3d_texture2d soft_particle_tex;
     float pulse_timer;
     bool has_soft_particle_tex;
+    bool enabled;
 } doom_hazard_particles;
 
 bool doom_hazard_particles_init(doom_hazard_particles *particles, const sdl3d_level *level,
                                 const sdl3d_sector *sectors);
 void doom_hazard_particles_free(doom_hazard_particles *particles);
+void doom_hazard_particles_set_enabled(doom_hazard_particles *particles, bool enabled);
+bool doom_hazard_particles_enabled(const doom_hazard_particles *particles);
 void doom_hazard_particles_update(doom_hazard_particles *particles, float dt);
 bool doom_hazard_particles_draw(const doom_hazard_particles *particles, sdl3d_render_context *context);
 

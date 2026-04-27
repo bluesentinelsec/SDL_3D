@@ -40,6 +40,9 @@ struct logic_signal_capture
     bool state = false;
     bool matched = false;
     float distance = -1.0f;
+    float damage_per_second = 0.0f;
+    float damage_amount = 0.0f;
+    float dt = 0.0f;
     sdl3d_vec3 sample_position = {};
     char actor_name[64] = {};
     char entity_type[32] = {};
@@ -60,6 +63,9 @@ static void capture_logic_signal(void *userdata, int signal_id, const sdl3d_prop
     capture->count_value = sdl3d_properties_get_int(payload, "count", -1);
     capture->threshold = sdl3d_properties_get_int(payload, "threshold", -1);
     capture->distance = sdl3d_properties_get_float(payload, "distance", -1.0f);
+    capture->damage_per_second = sdl3d_properties_get_float(payload, "damage_per_second", 0.0f);
+    capture->damage_amount = sdl3d_properties_get_float(payload, "damage_amount", 0.0f);
+    capture->dt = sdl3d_properties_get_float(payload, "dt", 0.0f);
     capture->state = sdl3d_properties_get_bool(payload, "state", false);
     capture->matched = sdl3d_properties_get_bool(payload, "matched", false);
     capture->sample_position = sdl3d_properties_get_vec3(payload, "sample_position", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
@@ -79,6 +85,7 @@ struct logic_adapter_capture
     int door_command_count = 0;
     int set_sector_geometry_count = 0;
     int launch_player_count = 0;
+    int set_effect_active_count = 0;
     int last_teleporter_id = -1;
     int last_ambient_id = -1;
     int last_door_id = -1;
@@ -94,6 +101,8 @@ struct logic_adapter_capture
     sdl3d_camera3d last_camera = {};
     sdl3d_sector_geometry last_geometry = {};
     sdl3d_vec3 last_launch_velocity = {};
+    bool last_effect_active = false;
+    char last_effect_name[64] = {};
 };
 
 static bool capture_teleport_player(void *userdata, const sdl3d_teleport_destination *destination,
@@ -217,6 +226,22 @@ static bool capture_launch_player(void *userdata, sdl3d_vec3 velocity, const sdl
 
     capture->launch_player_count++;
     capture->last_launch_velocity = velocity;
+    return true;
+}
+
+static bool capture_set_effect_active(void *userdata, const char *effect_name, bool active,
+                                      const sdl3d_properties *payload)
+{
+    (void)payload;
+    logic_adapter_capture *capture = (logic_adapter_capture *)userdata;
+    if (capture == nullptr || effect_name == nullptr)
+    {
+        return false;
+    }
+
+    capture->set_effect_active_count++;
+    capture->last_effect_active = active;
+    SDL_snprintf(capture->last_effect_name, sizeof(capture->last_effect_name), "%s", effect_name);
     return true;
 }
 
@@ -1254,7 +1279,33 @@ TEST(LogicWorldActions, LaunchPlayerUsesGameAdapter)
     sdl3d_signal_bus_destroy(bus);
 }
 
-TEST(LogicWorldActions, DoorSectorGeometryAndLaunchRejectMissingInputs)
+TEST(LogicWorldActions, SetEffectActiveUsesGameAdapter)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_adapter_capture capture{};
+    sdl3d_logic_game_adapters adapters{};
+    adapters.userdata = &capture;
+    adapters.set_effect_active = capture_set_effect_active;
+    sdl3d_logic_world_set_game_adapters(world, &adapters);
+
+    sdl3d_logic_action enable = sdl3d_logic_action_make_set_effect_active("nukage_particles", true);
+    sdl3d_logic_action disable = sdl3d_logic_action_make_set_effect_active("nukage_particles", false);
+
+    EXPECT_TRUE(sdl3d_logic_world_execute_action(world, &enable));
+    EXPECT_EQ(capture.set_effect_active_count, 1);
+    EXPECT_STREQ(capture.last_effect_name, "nukage_particles");
+    EXPECT_TRUE(capture.last_effect_active);
+
+    EXPECT_TRUE(sdl3d_logic_world_execute_action(world, &disable));
+    EXPECT_EQ(capture.set_effect_active_count, 2);
+    EXPECT_FALSE(capture.last_effect_active);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, DoorSectorGeometryLaunchAndEffectRejectMissingInputs)
 {
     sdl3d_signal_bus *bus = nullptr;
     sdl3d_logic_world *world = make_logic_world(&bus);
@@ -1262,25 +1313,31 @@ TEST(LogicWorldActions, DoorSectorGeometryAndLaunchRejectMissingInputs)
     sdl3d_logic_action lift =
         sdl3d_logic_action_make_set_sector_geometry(sdl3d_logic_target_sector_index(0), sdl3d_sector_geometry{});
     sdl3d_logic_action launch = sdl3d_logic_action_make_launch_player(sdl3d_vec3_make(0.0f, 12.0f, 0.0f));
+    sdl3d_logic_action effect = sdl3d_logic_action_make_set_effect_active("nukage_particles", true);
+    sdl3d_logic_action unnamed_effect = sdl3d_logic_action_make_set_effect_active(nullptr, true);
 
     EXPECT_FALSE(sdl3d_logic_world_execute_action_with_payload(world, &door, nullptr));
     EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &lift));
     EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &launch));
+    EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &effect));
 
     logic_adapter_capture capture{};
     sdl3d_logic_game_adapters adapters{};
     adapters.userdata = &capture;
     adapters.door_command = capture_door_command;
     adapters.set_sector_geometry = capture_set_sector_geometry;
+    adapters.set_effect_active = capture_set_effect_active;
     sdl3d_logic_world_set_game_adapters(world, &adapters);
 
     sdl3d_properties *payload = sdl3d_properties_create();
     EXPECT_FALSE(sdl3d_logic_world_execute_action_with_payload(world, &door, payload));
     EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &lift));
     EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &launch));
+    EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &unnamed_effect));
     EXPECT_EQ(capture.door_command_count, 0);
     EXPECT_EQ(capture.set_sector_geometry_count, 0);
     EXPECT_EQ(capture.launch_player_count, 0);
+    EXPECT_EQ(capture.set_effect_active_count, 0);
 
     sdl3d_properties_destroy(payload);
     sdl3d_logic_world_destroy(world);
@@ -1596,6 +1653,49 @@ TEST(LogicWorldSensors, ProximitySensorEnterExitWithActorPayload)
     sdl3d_signal_bus_destroy(bus);
 }
 
+TEST(LogicWorldSensors, SectorDamageSensorEmitsDamagePayload)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 230, capture_logic_signal, &capture), 0);
+
+    sdl3d_level level{};
+    sdl3d_sector sectors[2]{};
+    level.sector_count = 2;
+    sectors[0] = make_square_sector(0.0f, 0.0f, 10.0f, 10.0f);
+    sectors[1] = make_square_sector(10.0f, 0.0f, 20.0f, 10.0f);
+    sectors[1].damage_per_second = 12.0f;
+
+    sdl3d_logic_target_context context{};
+    context.level = &level;
+    context.sectors = sectors;
+    context.sector_count = 2;
+    sdl3d_logic_world_set_target_context(world, &context);
+
+    sdl3d_logic_sector_damage_sensor sensor{};
+    sdl3d_logic_sector_damage_sensor_init(&sensor, 31, 230, 1.0f);
+
+    EXPECT_FALSE(
+        sdl3d_logic_sector_damage_sensor_update(&sensor, world, sdl3d_vec3_make(5.0f, 1.0f, 5.0f), 0.25f).emitted);
+    sdl3d_logic_sensor_result damaged =
+        sdl3d_logic_sector_damage_sensor_update(&sensor, world, sdl3d_vec3_make(15.0f, 1.0f, 5.0f), 0.25f);
+
+    EXPECT_TRUE(damaged.active);
+    EXPECT_TRUE(damaged.emitted);
+    EXPECT_EQ(damaged.event, SDL3D_LOGIC_SENSOR_EVENT_LEVEL);
+    ASSERT_EQ(capture.count, 1);
+    EXPECT_EQ(capture.sensor_id, 31);
+    EXPECT_EQ(capture.sector_index, 1);
+    EXPECT_TRUE(capture.inside);
+    EXPECT_FLOAT_EQ(capture.damage_per_second, 12.0f);
+    EXPECT_FLOAT_EQ(capture.damage_amount, 3.0f);
+    EXPECT_FLOAT_EQ(capture.dt, 0.25f);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
 TEST(LogicWorldSensors, InvalidSensorsAreSafe)
 {
     sdl3d_signal_bus *bus = nullptr;
@@ -1628,6 +1728,15 @@ TEST(LogicWorldSensors, InvalidSensorsAreSafe)
                                       SDL3D_TRIGGER_EDGE_ENTER);
     EXPECT_FALSE(sdl3d_logic_proximity_sensor_update(&proximity, world, sdl3d_vec3_make(0.0f, 0.0f, 0.0f)).emitted);
     sdl3d_logic_proximity_sensor_reset(nullptr);
+
+    sdl3d_logic_sector_damage_sensor damage{};
+    sdl3d_logic_sector_damage_sensor_init(&damage, 17, 233, -1.0f);
+    EXPECT_FALSE(
+        sdl3d_logic_sector_damage_sensor_update(nullptr, world, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), 0.1f).emitted);
+    EXPECT_FALSE(
+        sdl3d_logic_sector_damage_sensor_update(&damage, nullptr, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), 0.1f).emitted);
+    EXPECT_FALSE(
+        sdl3d_logic_sector_damage_sensor_update(&damage, world, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), 0.0f).emitted);
 
     sdl3d_logic_world_destroy(world);
     sdl3d_signal_bus_destroy(bus);
