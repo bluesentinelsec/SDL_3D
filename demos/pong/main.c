@@ -172,8 +172,8 @@ static void start_quit_fade(sdl3d_game_context *ctx, pong_state *state)
     }
 
     state->quit_pending = true;
-    sdl3d_transition_start(&state->transition, SDL3D_TRANSITION_FADE, SDL3D_TRANSITION_OUT,
-                           (sdl3d_color){0, 0, 0, 255}, 0.45f, SIG_PONG_FADE_OUT_DONE);
+    sdl3d_transition_start(&state->transition, SDL3D_TRANSITION_FADE, SDL3D_TRANSITION_OUT, (sdl3d_color){0, 0, 0, 255},
+                           0.45f, SIG_PONG_FADE_OUT_DONE);
     (void)ctx;
 }
 
@@ -352,8 +352,8 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
     sdl3d_set_ssao_enabled(ctx->renderer, true);
     sdl3d_set_tonemap_mode(ctx->renderer, SDL3D_TONEMAP_ACES);
 
-    sdl3d_transition_start(&state->transition, SDL3D_TRANSITION_FADE, SDL3D_TRANSITION_IN,
-                           (sdl3d_color){0, 0, 0, 255}, 0.7f, -1);
+    sdl3d_transition_start(&state->transition, SDL3D_TRANSITION_FADE, SDL3D_TRANSITION_IN, (sdl3d_color){0, 0, 0, 255},
+                           0.7f, -1);
     schedule_serve(ctx, state);
     return true;
 }
@@ -502,8 +502,7 @@ static void draw_playfield(sdl3d_render_context *renderer, const pong_state *sta
 
     sdl3d_set_emissive(renderer, 0.0f, 0.0f, 0.0f);
     sdl3d_draw_cube(renderer, sdl3d_vec3_make(0.0f, 0.0f, PONG_FIELD_DEPTH),
-                    sdl3d_vec3_make(config->half_width * 2.0f + 0.8f, config->half_height * 2.0f + 0.8f, 0.10f),
-                    base);
+                    sdl3d_vec3_make(config->half_width * 2.0f + 0.8f, config->half_height * 2.0f + 0.8f, 0.10f), base);
     sdl3d_set_emissive(renderer, flash * 0.55f, flash * 0.7f, flash);
     sdl3d_draw_cube(renderer, sdl3d_vec3_make(0.0f, config->half_height + border_size, 0.0f),
                     sdl3d_vec3_make(config->half_width * 2.0f + 0.35f, border_size, 0.18f), border);
@@ -536,14 +535,14 @@ static void draw_game_objects(sdl3d_render_context *renderer, const pong_state *
         color_lerp((sdl3d_color){255, 184, 82, 255}, (sdl3d_color){255, 245, 156, 255}, ball_pulse);
 
     sdl3d_set_emissive(renderer, paddle_flash * 0.35f, paddle_flash * 0.42f, paddle_flash * 0.50f);
-    sdl3d_draw_cube(renderer, sdl3d_vec3_make(-config->paddle_x, state->rules.player_y, 0.0f),
-                    sdl3d_vec3_make(config->paddle_half_width * 2.0f, config->paddle_half_height * 2.0f,
-                                    PONG_PADDLE_DEPTH),
-                    player_color);
-    sdl3d_draw_cube(renderer, sdl3d_vec3_make(config->paddle_x, state->rules.cpu_y, 0.0f),
-                    sdl3d_vec3_make(config->paddle_half_width * 2.0f, config->paddle_half_height * 2.0f,
-                                    PONG_PADDLE_DEPTH),
-                    cpu_color);
+    sdl3d_draw_cube(
+        renderer, sdl3d_vec3_make(-config->paddle_x, state->rules.player_y, 0.0f),
+        sdl3d_vec3_make(config->paddle_half_width * 2.0f, config->paddle_half_height * 2.0f, PONG_PADDLE_DEPTH),
+        player_color);
+    sdl3d_draw_cube(
+        renderer, sdl3d_vec3_make(config->paddle_x, state->rules.cpu_y, 0.0f),
+        sdl3d_vec3_make(config->paddle_half_width * 2.0f, config->paddle_half_height * 2.0f, PONG_PADDLE_DEPTH),
+        cpu_color);
 
     sdl3d_set_emissive(renderer, 0.75f + ball_pulse * 0.65f, 0.48f + ball_pulse * 0.30f, 0.08f);
     sdl3d_draw_sphere(renderer,
@@ -629,8 +628,7 @@ static sdl3d_camera3d make_ball_camera(const pong_state *state)
     SDL_zero(camera);
     camera.position = sdl3d_vec3_make(ball.x - forward.x * chase_distance, ball.y - forward.y * chase_distance,
                                       ball.z + camera_height);
-    camera.target =
-        sdl3d_vec3_make(ball.x + forward.x * lookahead, ball.y + forward.y * lookahead, ball.z - 0.05f);
+    camera.target = sdl3d_vec3_make(ball.x + forward.x * lookahead, ball.y + forward.y * lookahead, ball.z - 0.05f);
     camera.up = sdl3d_vec3_make(0.0f, 0.0f, 1.0f);
     camera.fovy = 68.0f;
     camera.projection = SDL3D_CAMERA_PERSPECTIVE;

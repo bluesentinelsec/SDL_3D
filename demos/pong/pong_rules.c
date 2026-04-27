@@ -200,9 +200,8 @@ void pong_rules_serve_random(pong_rules_state *state, int direction)
     const float hint = pong_random_01(state) * 2.0f - 1.0f;
     const float angle = hint * PONG_MAX_SERVE_ANGLE;
     state->ball_position = pong_vec2_make(0.0f, 0.0f);
-    state->ball_velocity =
-        pong_vec2_make(SDL_cosf(angle) * (float)dir * state->config.ball_speed,
-                       SDL_sinf(angle) * state->config.ball_speed);
+    state->ball_velocity = pong_vec2_make(SDL_cosf(angle) * (float)dir * state->config.ball_speed,
+                                          SDL_sinf(angle) * state->config.ball_speed);
     state->ball_active = true;
 }
 

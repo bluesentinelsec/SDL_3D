@@ -221,7 +221,21 @@ else()
     target_sources(pong_rules_test PRIVATE ${CMAKE_SOURCE_DIR}/demos/pong/pong_rules.c)
     target_include_directories(pong_rules_test PRIVATE ${CMAKE_SOURCE_DIR}/demos/pong)
     sdl3d_add_test(game_data_json_test test_game_data_json.cpp unit)
-    target_compile_definitions(game_data_json_test PRIVATE SDL3D_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+    if(EMSCRIPTEN)
+        target_compile_definitions(game_data_json_test PRIVATE SDL3D_PONG_DATA_PATH="/pong.game.json")
+        target_link_options(
+            game_data_json_test
+            PRIVATE
+                "--preload-file"
+                "${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json@/pong.game.json"
+        )
+    else()
+        target_compile_definitions(
+            game_data_json_test
+            PRIVATE
+                SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
+        )
+    endif()
     target_include_directories(game_data_json_test PRIVATE ${CMAKE_SOURCE_DIR}/vendor)
     sdl3d_add_test(sdl3d_sprite_actor_test test_sprite_actor.cpp unit)
     sdl3d_add_test(sdl3d_teleporter_test test_teleporter.cpp unit)

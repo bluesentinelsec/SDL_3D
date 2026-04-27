@@ -3,15 +3,18 @@
 #include <set>
 #include <string>
 
-extern "C" {
+extern "C"
+{
 #include "yyjson/yyjson.h"
 }
 
-namespace {
+namespace
+{
 
-const char *kPongDataPath = SDL3D_SOURCE_DIR "/demos/pong/data/pong.game.json";
+const char *kPongDataPath = SDL3D_PONG_DATA_PATH;
 
-class JsonDoc {
+class JsonDoc
+{
   public:
     explicit JsonDoc(const char *path)
     {
@@ -19,8 +22,8 @@ class JsonDoc {
         doc_ = yyjson_read_file(path, YYJSON_READ_NOFLAG, nullptr, &err);
         if (doc_ == nullptr)
         {
-            error_ = std::string("yyjson error ") + std::to_string(err.code) + " at byte " +
-                     std::to_string(err.pos) + ": " + (err.msg != nullptr ? err.msg : "");
+            error_ = std::string("yyjson error ") + std::to_string(err.code) + " at byte " + std::to_string(err.pos) +
+                     ": " + (err.msg != nullptr ? err.msg : "");
         }
     }
 
@@ -108,9 +111,9 @@ void expect_ref(const std::set<std::string> &names, yyjson_val *object, const ch
     EXPECT_NE(names.find(name), names.end()) << "Missing referenced name: " << name;
 }
 
-void validate_action_refs(yyjson_val *action, const std::set<std::string> &entities, const std::set<std::string> &signals,
-                          const std::set<std::string> &timers, const std::set<std::string> &cameras,
-                          const std::set<std::string> &adapters);
+void validate_action_refs(yyjson_val *action, const std::set<std::string> &entities,
+                          const std::set<std::string> &signals, const std::set<std::string> &timers,
+                          const std::set<std::string> &cameras, const std::set<std::string> &adapters);
 
 void validate_action_array(yyjson_val *actions, const std::set<std::string> &entities,
                            const std::set<std::string> &signals, const std::set<std::string> &timers,
@@ -126,9 +129,9 @@ void validate_action_array(yyjson_val *actions, const std::set<std::string> &ent
     }
 }
 
-void validate_branch_refs(yyjson_val *action, const std::set<std::string> &entities, const std::set<std::string> &signals,
-                          const std::set<std::string> &timers, const std::set<std::string> &cameras,
-                          const std::set<std::string> &adapters)
+void validate_branch_refs(yyjson_val *action, const std::set<std::string> &entities,
+                          const std::set<std::string> &signals, const std::set<std::string> &timers,
+                          const std::set<std::string> &cameras, const std::set<std::string> &adapters)
 {
     yyjson_val *condition = yyjson_obj_get(action, "if");
     if (condition != nullptr)
@@ -150,9 +153,9 @@ void validate_branch_refs(yyjson_val *action, const std::set<std::string> &entit
     }
 }
 
-void validate_action_refs(yyjson_val *action, const std::set<std::string> &entities, const std::set<std::string> &signals,
-                          const std::set<std::string> &timers, const std::set<std::string> &cameras,
-                          const std::set<std::string> &adapters)
+void validate_action_refs(yyjson_val *action, const std::set<std::string> &entities,
+                          const std::set<std::string> &signals, const std::set<std::string> &timers,
+                          const std::set<std::string> &cameras, const std::set<std::string> &adapters)
 {
     const std::string type = required_string(action, "type");
     EXPECT_FALSE(type.empty());

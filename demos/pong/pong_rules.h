@@ -32,12 +32,12 @@ extern "C"
     /** @brief Events emitted by one rules step. */
     typedef enum pong_event
     {
-        PONG_EVENT_NONE = 0,                    /**< No notable event occurred. */
-        PONG_EVENT_WALL_BOUNCE = 1 << 0,        /**< Ball reflected off the upper/lower playfield bound. */
-        PONG_EVENT_PADDLE_BOUNCE = 1 << 1,      /**< Ball reflected off a paddle. */
-        PONG_EVENT_PLAYER_SCORED = 1 << 2,      /**< Human player scored this step. */
-        PONG_EVENT_CPU_SCORED = 1 << 3,         /**< CPU scored this step. */
-        PONG_EVENT_MATCH_FINISHED = 1 << 4      /**< A score event ended the match. */
+        PONG_EVENT_NONE = 0,               /**< No notable event occurred. */
+        PONG_EVENT_WALL_BOUNCE = 1 << 0,   /**< Ball reflected off the upper/lower playfield bound. */
+        PONG_EVENT_PADDLE_BOUNCE = 1 << 1, /**< Ball reflected off a paddle. */
+        PONG_EVENT_PLAYER_SCORED = 1 << 2, /**< Human player scored this step. */
+        PONG_EVENT_CPU_SCORED = 1 << 3,    /**< CPU scored this step. */
+        PONG_EVENT_MATCH_FINISHED = 1 << 4 /**< A score event ended the match. */
     } pong_event;
 
     /** @brief Runtime-tunable constants for Pong simulation. */
@@ -82,10 +82,10 @@ extern "C"
     /** @brief Result produced by one Pong simulation step. */
     typedef struct pong_rules_step_result
     {
-        int events;          /**< Bitmask of pong_event values. */
-        pong_winner winner;  /**< Winner after this step, or PONG_WINNER_NONE. */
-        int player_score;    /**< Human score after this step. */
-        int cpu_score;       /**< CPU score after this step. */
+        int events;         /**< Bitmask of pong_event values. */
+        pong_winner winner; /**< Winner after this step, or PONG_WINNER_NONE. */
+        int player_score;   /**< Human score after this step. */
+        int cpu_score;      /**< CPU score after this step. */
     } pong_rules_step_result;
 
     /** @brief Return conservative default simulation constants for the demo. */
