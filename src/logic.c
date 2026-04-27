@@ -735,6 +735,64 @@ sdl3d_logic_action sdl3d_logic_action_make_trigger_feedback(const char *feedback
     return action;
 }
 
+sdl3d_logic_action sdl3d_logic_action_make_door_command_ex(const char *door_name, int door_id,
+                                                           sdl3d_logic_door_command command, float auto_close_seconds)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_DOOR_COMMAND;
+    action.door.door_name = door_name;
+    action.door.door_id = door_id;
+    action.door.command = command;
+    action.door.auto_close_seconds = auto_close_seconds;
+    action.door.use_signal_payload = false;
+    return action;
+}
+
+sdl3d_logic_action sdl3d_logic_action_make_door_command(const char *door_name, int door_id,
+                                                        sdl3d_logic_door_command command)
+{
+    return sdl3d_logic_action_make_door_command_ex(door_name, door_id, command, -1.0f);
+}
+
+sdl3d_logic_action sdl3d_logic_action_make_door_command_from_payload_ex(sdl3d_logic_door_command command,
+                                                                        float auto_close_seconds)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_DOOR_COMMAND;
+    action.door.door_id = -1;
+    action.door.command = command;
+    action.door.auto_close_seconds = auto_close_seconds;
+    action.door.use_signal_payload = true;
+    return action;
+}
+
+sdl3d_logic_action sdl3d_logic_action_make_door_command_from_payload(sdl3d_logic_door_command command)
+{
+    return sdl3d_logic_action_make_door_command_from_payload_ex(command, -1.0f);
+}
+
+sdl3d_logic_action sdl3d_logic_action_make_set_sector_geometry(sdl3d_logic_target_ref target,
+                                                               sdl3d_sector_geometry geometry)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_SET_SECTOR_GEOMETRY;
+    action.sector_geometry.target = target;
+    action.sector_geometry.geometry = geometry;
+    return action;
+}
+
+sdl3d_logic_action sdl3d_logic_action_make_launch_player(sdl3d_vec3 velocity)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_LAUNCH_PLAYER;
+    action.launch_player.velocity = velocity;
+    return action;
+}
+
 bool sdl3d_logic_world_execute_action(sdl3d_logic_world *world, const sdl3d_logic_action *action)
 {
     return sdl3d_logic_world_execute_action_with_payload(world, action, NULL);
@@ -875,6 +933,49 @@ bool sdl3d_logic_world_execute_action_with_payload(sdl3d_logic_world *world, con
         }
         return adapters->trigger_feedback(adapters->userdata, action->feedback.feedback_name,
                                           clamp_non_negative_float(action->feedback.duration_seconds), payload);
+
+    case SDL3D_LOGIC_ACTION_DOOR_COMMAND: {
+        if (adapters == NULL || adapters->door_command == NULL)
+        {
+            return false;
+        }
+
+        const char *door_name = action->door.door_name;
+        int door_id = action->door.door_id;
+        if (action->door.use_signal_payload)
+        {
+            if (payload == NULL)
+            {
+                return false;
+            }
+            door_id = sdl3d_properties_get_int(payload, "door_id", -1);
+            door_name = sdl3d_properties_get_string(payload, "door_name", NULL);
+        }
+
+        if (door_id < 0 && door_name == NULL)
+        {
+            return false;
+        }
+        return adapters->door_command(adapters->userdata, door_name, door_id, action->door.command,
+                                      action->door.auto_close_seconds, payload);
+    }
+
+    case SDL3D_LOGIC_ACTION_SET_SECTOR_GEOMETRY:
+        if (adapters == NULL || adapters->set_sector_geometry == NULL ||
+            !sdl3d_logic_world_resolve_target(world, &action->sector_geometry.target, &target) ||
+            !resolved_target_is_sector(&target))
+        {
+            return false;
+        }
+        return adapters->set_sector_geometry(adapters->userdata, target.sector.sector_index,
+                                             &action->sector_geometry.geometry, payload);
+
+    case SDL3D_LOGIC_ACTION_LAUNCH_PLAYER:
+        if (adapters == NULL || adapters->launch_player == NULL)
+        {
+            return false;
+        }
+        return adapters->launch_player(adapters->userdata, action->launch_player.velocity, payload);
 
     case SDL3D_LOGIC_ACTION_NONE:
         break;
@@ -1410,6 +1511,65 @@ void sdl3d_logic_timer_stop(sdl3d_logic_timer *timer)
 bool sdl3d_logic_timer_active(const sdl3d_logic_timer *timer)
 {
     return timer != NULL && timer->active;
+}
+
+void sdl3d_logic_sector_platform_init(sdl3d_logic_sector_platform *platform, int entity_id,
+                                      sdl3d_logic_target_ref sector, float min_floor_y, float max_floor_y, float ceil_y,
+                                      float cycle_seconds, float rebuild_min_delta)
+{
+    if (platform == NULL)
+        return;
+
+    SDL_zerop(platform);
+    platform->entity_id = entity_id;
+    platform->sector = sector;
+    platform->min_floor_y = min_floor_y < max_floor_y ? min_floor_y : max_floor_y;
+    platform->max_floor_y = min_floor_y < max_floor_y ? max_floor_y : min_floor_y;
+    platform->ceil_y = ceil_y;
+    platform->cycle_seconds = cycle_seconds;
+    platform->rebuild_min_delta = clamp_non_negative_float(rebuild_min_delta);
+    platform->last_floor_y = platform->min_floor_y;
+    platform->has_last_floor_y = true;
+    platform->enabled = true;
+}
+
+sdl3d_logic_sector_platform_result sdl3d_logic_sector_platform_update(sdl3d_logic_world *world,
+                                                                      sdl3d_logic_sector_platform *platform, float dt)
+{
+    sdl3d_logic_sector_platform_result result;
+    SDL_zero(result);
+
+    if (world == NULL || platform == NULL || !platform->enabled || dt < 0.0f || platform->cycle_seconds <= 0.0f)
+        return result;
+
+    platform->time += dt;
+    while (platform->time >= platform->cycle_seconds)
+        platform->time -= platform->cycle_seconds;
+
+    const float phase = platform->time / platform->cycle_seconds;
+    const float wave = (SDL_sinf(phase * SDL_PI_F * 2.0f - SDL_PI_F * 0.5f) + 1.0f) * 0.5f;
+    const float floor_y = platform->min_floor_y + (platform->max_floor_y - platform->min_floor_y) * wave;
+    result.floor_y = floor_y;
+
+    if (platform->has_last_floor_y && SDL_fabsf(floor_y - platform->last_floor_y) < platform->rebuild_min_delta)
+        return result;
+
+    sdl3d_sector_geometry geometry;
+    SDL_zero(geometry);
+    geometry.floor_y = floor_y;
+    geometry.ceil_y = platform->ceil_y;
+    geometry.floor_normal[1] = 1.0f;
+    geometry.ceil_normal[1] = -1.0f;
+
+    sdl3d_logic_action action = sdl3d_logic_action_make_set_sector_geometry(platform->sector, geometry);
+    result.attempted = true;
+    result.applied = sdl3d_logic_world_execute_action(world, &action);
+    if (result.applied)
+    {
+        platform->last_floor_y = floor_y;
+        platform->has_last_floor_y = true;
+    }
+    return result;
 }
 
 static int bind_entity(sdl3d_logic_world *world, int signal_id, logic_entity_binding_kind kind, void *entity)

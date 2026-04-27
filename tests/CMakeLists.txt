@@ -84,6 +84,7 @@ set(SDL3D_TEST_SOURCES
     test_render_context_unit.cpp
     test_render_context.cpp
     test_drawing3d.cpp
+    test_door.cpp
     test_render_loop.cpp
     test_shapes.cpp
     test_vertex_color.cpp
@@ -181,6 +182,7 @@ else()
     target_include_directories(sdl3d_render_context_unit_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     sdl3d_add_test(sdl3d_render_context_test test_render_context.cpp render)
     sdl3d_add_test(sdl3d_drawing3d_test test_drawing3d.cpp render)
+    sdl3d_add_test(sdl3d_door_test test_door.cpp unit)
     sdl3d_add_test(sdl3d_render_loop_test test_render_loop.cpp render)
     sdl3d_add_test(sdl3d_shapes_test test_shapes.cpp render)
     sdl3d_add_test(sdl3d_vertex_color_test test_vertex_color.cpp render)

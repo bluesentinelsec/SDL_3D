@@ -76,14 +76,24 @@ struct logic_adapter_capture
     int restore_camera_count = 0;
     int set_ambient_count = 0;
     int trigger_feedback_count = 0;
+    int door_command_count = 0;
+    int set_sector_geometry_count = 0;
+    int launch_player_count = 0;
     int last_teleporter_id = -1;
     int last_ambient_id = -1;
+    int last_door_id = -1;
+    int last_sector_index = -1;
     float last_ambient_fade = -1.0f;
     float last_feedback_duration = -1.0f;
+    float last_auto_close_seconds = -2.0f;
     char last_camera_name[64] = {};
     char last_feedback_name[64] = {};
+    char last_door_name[64] = {};
+    sdl3d_logic_door_command last_door_command = SDL3D_LOGIC_DOOR_OPEN;
     sdl3d_teleport_destination last_destination = {};
     sdl3d_camera3d last_camera = {};
+    sdl3d_sector_geometry last_geometry = {};
+    sdl3d_vec3 last_launch_velocity = {};
 };
 
 static bool capture_teleport_player(void *userdata, const sdl3d_teleport_destination *destination,
@@ -159,6 +169,54 @@ static bool capture_trigger_feedback(void *userdata, const char *feedback_name, 
     capture->trigger_feedback_count++;
     capture->last_feedback_duration = duration_seconds;
     SDL_snprintf(capture->last_feedback_name, sizeof(capture->last_feedback_name), "%s", feedback_name);
+    return true;
+}
+
+static bool capture_door_command(void *userdata, const char *door_name, int door_id, sdl3d_logic_door_command command,
+                                 float auto_close_seconds, const sdl3d_properties *payload)
+{
+    (void)payload;
+    logic_adapter_capture *capture = (logic_adapter_capture *)userdata;
+    if (capture == nullptr)
+    {
+        return false;
+    }
+
+    capture->door_command_count++;
+    capture->last_door_id = door_id;
+    capture->last_door_command = command;
+    capture->last_auto_close_seconds = auto_close_seconds;
+    SDL_snprintf(capture->last_door_name, sizeof(capture->last_door_name), "%s", door_name != nullptr ? door_name : "");
+    return true;
+}
+
+static bool capture_set_sector_geometry(void *userdata, int sector_index, const sdl3d_sector_geometry *geometry,
+                                        const sdl3d_properties *payload)
+{
+    (void)payload;
+    logic_adapter_capture *capture = (logic_adapter_capture *)userdata;
+    if (capture == nullptr || geometry == nullptr)
+    {
+        return false;
+    }
+
+    capture->set_sector_geometry_count++;
+    capture->last_sector_index = sector_index;
+    capture->last_geometry = *geometry;
+    return true;
+}
+
+static bool capture_launch_player(void *userdata, sdl3d_vec3 velocity, const sdl3d_properties *payload)
+{
+    (void)payload;
+    logic_adapter_capture *capture = (logic_adapter_capture *)userdata;
+    if (capture == nullptr)
+    {
+        return false;
+    }
+
+    capture->launch_player_count++;
+    capture->last_launch_velocity = velocity;
     return true;
 }
 
@@ -1075,6 +1133,160 @@ TEST(LogicWorldActions, AmbientAndFeedbackRejectMissingInputs)
     sdl3d_signal_bus_destroy(bus);
 }
 
+TEST(LogicWorldActions, DoorCommandFromPayloadUsesGameAdapter)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_adapter_capture capture{};
+    sdl3d_logic_game_adapters adapters{};
+    adapters.userdata = &capture;
+    adapters.door_command = capture_door_command;
+    sdl3d_logic_world_set_game_adapters(world, &adapters);
+
+    sdl3d_logic_action action = sdl3d_logic_action_make_door_command_from_payload(SDL3D_LOGIC_DOOR_OPEN);
+    ASSERT_GT(sdl3d_logic_world_bind_logic_action(world, 93, &action), 0);
+
+    sdl3d_properties *payload = sdl3d_properties_create();
+    sdl3d_properties_set_int(payload, "door_id", 12);
+    sdl3d_properties_set_string(payload, "door_name", "nukage_east");
+    sdl3d_signal_emit(bus, 93, payload);
+
+    EXPECT_EQ(capture.door_command_count, 1);
+    EXPECT_EQ(capture.last_door_id, 12);
+    EXPECT_EQ(capture.last_door_command, SDL3D_LOGIC_DOOR_OPEN);
+    EXPECT_FLOAT_EQ(capture.last_auto_close_seconds, -1.0f);
+    EXPECT_STREQ(capture.last_door_name, "nukage_east");
+
+    sdl3d_properties_destroy(payload);
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, DoorCommandFromPayloadCanSetAutoCloseDelay)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_adapter_capture capture{};
+    sdl3d_logic_game_adapters adapters{};
+    adapters.userdata = &capture;
+    adapters.door_command = capture_door_command;
+    sdl3d_logic_world_set_game_adapters(world, &adapters);
+
+    sdl3d_logic_action action = sdl3d_logic_action_make_door_command_from_payload_ex(SDL3D_LOGIC_DOOR_OPEN, 5.0f);
+    sdl3d_properties *payload = sdl3d_properties_create();
+    sdl3d_properties_set_int(payload, "door_id", 12);
+
+    EXPECT_TRUE(sdl3d_logic_world_execute_action_with_payload(world, &action, payload));
+    EXPECT_EQ(capture.door_command_count, 1);
+    EXPECT_EQ(capture.last_door_id, 12);
+    EXPECT_EQ(capture.last_door_command, SDL3D_LOGIC_DOOR_OPEN);
+    EXPECT_FLOAT_EQ(capture.last_auto_close_seconds, 5.0f);
+
+    sdl3d_properties_destroy(payload);
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, StaticDoorCommandAndSectorGeometryUseGameAdapters)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    sdl3d_level level{};
+    level.sector_count = 1;
+    sdl3d_sector sector = make_square_sector(0.0f, 0.0f, 2.0f, 2.0f);
+    sdl3d_logic_target_context context{};
+    context.level = &level;
+    context.sectors = &sector;
+    context.sector_count = 1;
+    sdl3d_logic_world_set_target_context(world, &context);
+
+    logic_adapter_capture capture{};
+    sdl3d_logic_game_adapters adapters{};
+    adapters.userdata = &capture;
+    adapters.door_command = capture_door_command;
+    adapters.set_sector_geometry = capture_set_sector_geometry;
+    sdl3d_logic_world_set_game_adapters(world, &adapters);
+
+    sdl3d_sector_geometry geometry{};
+    geometry.floor_y = 2.5f;
+    geometry.ceil_y = 9.0f;
+    geometry.floor_normal[1] = 1.0f;
+    geometry.ceil_normal[1] = -1.0f;
+
+    sdl3d_logic_action door = sdl3d_logic_action_make_door_command_ex("nukage_north", 3, SDL3D_LOGIC_DOOR_TOGGLE, 5.0f);
+    sdl3d_logic_action lift = sdl3d_logic_action_make_set_sector_geometry(sdl3d_logic_target_sector_index(0), geometry);
+
+    EXPECT_TRUE(sdl3d_logic_world_execute_action(world, &door));
+    EXPECT_TRUE(sdl3d_logic_world_execute_action(world, &lift));
+    EXPECT_EQ(capture.door_command_count, 1);
+    EXPECT_EQ(capture.last_door_id, 3);
+    EXPECT_EQ(capture.last_door_command, SDL3D_LOGIC_DOOR_TOGGLE);
+    EXPECT_FLOAT_EQ(capture.last_auto_close_seconds, 5.0f);
+    EXPECT_STREQ(capture.last_door_name, "nukage_north");
+    EXPECT_EQ(capture.set_sector_geometry_count, 1);
+    EXPECT_EQ(capture.last_sector_index, 0);
+    EXPECT_FLOAT_EQ(capture.last_geometry.floor_y, 2.5f);
+    EXPECT_FLOAT_EQ(capture.last_geometry.ceil_y, 9.0f);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, LaunchPlayerUsesGameAdapter)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_adapter_capture capture{};
+    sdl3d_logic_game_adapters adapters{};
+    adapters.userdata = &capture;
+    adapters.launch_player = capture_launch_player;
+    sdl3d_logic_world_set_game_adapters(world, &adapters);
+
+    sdl3d_logic_action launch = sdl3d_logic_action_make_launch_player(sdl3d_vec3_make(0.0f, 14.0f, 0.0f));
+
+    EXPECT_TRUE(sdl3d_logic_world_execute_action(world, &launch));
+    EXPECT_EQ(capture.launch_player_count, 1);
+    EXPECT_FLOAT_EQ(capture.last_launch_velocity.x, 0.0f);
+    EXPECT_FLOAT_EQ(capture.last_launch_velocity.y, 14.0f);
+    EXPECT_FLOAT_EQ(capture.last_launch_velocity.z, 0.0f);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, DoorSectorGeometryAndLaunchRejectMissingInputs)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    sdl3d_logic_action door = sdl3d_logic_action_make_door_command_from_payload(SDL3D_LOGIC_DOOR_OPEN);
+    sdl3d_logic_action lift =
+        sdl3d_logic_action_make_set_sector_geometry(sdl3d_logic_target_sector_index(0), sdl3d_sector_geometry{});
+    sdl3d_logic_action launch = sdl3d_logic_action_make_launch_player(sdl3d_vec3_make(0.0f, 12.0f, 0.0f));
+
+    EXPECT_FALSE(sdl3d_logic_world_execute_action_with_payload(world, &door, nullptr));
+    EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &lift));
+    EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &launch));
+
+    logic_adapter_capture capture{};
+    sdl3d_logic_game_adapters adapters{};
+    adapters.userdata = &capture;
+    adapters.door_command = capture_door_command;
+    adapters.set_sector_geometry = capture_set_sector_geometry;
+    sdl3d_logic_world_set_game_adapters(world, &adapters);
+
+    sdl3d_properties *payload = sdl3d_properties_create();
+    EXPECT_FALSE(sdl3d_logic_world_execute_action_with_payload(world, &door, payload));
+    EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &lift));
+    EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &launch));
+    EXPECT_EQ(capture.door_command_count, 0);
+    EXPECT_EQ(capture.set_sector_geometry_count, 0);
+    EXPECT_EQ(capture.launch_player_count, 0);
+
+    sdl3d_properties_destroy(payload);
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
 TEST(LogicWorldActions, WrongTargetKindFailsWithoutMutation)
 {
     sdl3d_signal_bus *bus = nullptr;
@@ -1766,6 +1978,60 @@ TEST(LogicWorldEntities, RepeatingTimerEmitsAtMostOncePerUpdateAndStaysActive)
 
     EXPECT_TRUE(sdl3d_logic_timer_update(world, &timer, 0.25f).emitted);
     EXPECT_EQ(capture.count, 2);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, SectorPlatformDrivesSectorGeometryThroughAdapter)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    sdl3d_level level{};
+    level.sector_count = 1;
+    sdl3d_sector sector = make_square_sector(0.0f, 0.0f, 2.0f, 2.0f);
+    sdl3d_logic_target_context context{};
+    context.level = &level;
+    context.sectors = &sector;
+    context.sector_count = 1;
+    sdl3d_logic_world_set_target_context(world, &context);
+
+    logic_adapter_capture capture{};
+    sdl3d_logic_game_adapters adapters{};
+    adapters.userdata = &capture;
+    adapters.set_sector_geometry = capture_set_sector_geometry;
+    sdl3d_logic_world_set_game_adapters(world, &adapters);
+
+    sdl3d_logic_sector_platform platform{};
+    sdl3d_logic_sector_platform_init(&platform, 40, sdl3d_logic_target_sector_index(0), 0.0f, 2.0f, 6.0f, 4.0f, 0.01f);
+
+    sdl3d_logic_sector_platform_result result = sdl3d_logic_sector_platform_update(world, &platform, 1.0f);
+    EXPECT_TRUE(result.attempted);
+    EXPECT_TRUE(result.applied);
+    EXPECT_EQ(capture.set_sector_geometry_count, 1);
+    EXPECT_EQ(capture.last_sector_index, 0);
+    EXPECT_FLOAT_EQ(capture.last_geometry.floor_y, 1.0f);
+    EXPECT_FLOAT_EQ(capture.last_geometry.ceil_y, 6.0f);
+
+    result = sdl3d_logic_sector_platform_update(world, &platform, 0.001f);
+    EXPECT_FALSE(result.attempted);
+    EXPECT_EQ(capture.set_sector_geometry_count, 1);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, SectorPlatformReportsFailedGeometryAdapter)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    sdl3d_logic_sector_platform platform{};
+    sdl3d_logic_sector_platform_init(&platform, 41, sdl3d_logic_target_sector_index(0), 0.0f, 2.0f, 6.0f, 4.0f, 0.01f);
+
+    sdl3d_logic_sector_platform_result result = sdl3d_logic_sector_platform_update(world, &platform, 1.0f);
+    EXPECT_TRUE(result.attempted);
+    EXPECT_FALSE(result.applied);
+    EXPECT_FLOAT_EQ(platform.last_floor_y, 0.0f);
 
     sdl3d_logic_world_destroy(world);
     sdl3d_signal_bus_destroy(bus);

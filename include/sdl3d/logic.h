@@ -117,20 +117,33 @@ extern "C"
      */
     typedef enum sdl3d_logic_action_type
     {
-        SDL3D_LOGIC_ACTION_NONE = 0,                /**< Invalid/no action. */
-        SDL3D_LOGIC_ACTION_CORE = 1,                /**< Execute an embedded sdl3d_action. */
-        SDL3D_LOGIC_ACTION_SET_ACTOR_ACTIVE = 2,    /**< Set a resolved actor's active flag. */
-        SDL3D_LOGIC_ACTION_TOGGLE_ACTOR_ACTIVE = 3, /**< Toggle a resolved actor's active flag. */
-        SDL3D_LOGIC_ACTION_SET_ACTOR_PROPERTY = 4,  /**< Set a property on a resolved actor. */
-        SDL3D_LOGIC_ACTION_SET_SECTOR_PUSH = 5,     /**< Set a sector push/current velocity. */
-        SDL3D_LOGIC_ACTION_SET_SECTOR_DAMAGE = 6,   /**< Set non-negative sector damage per second. */
-        SDL3D_LOGIC_ACTION_SET_SECTOR_AMBIENT = 7,  /**< Set a non-negative ambient sound id. */
-        SDL3D_LOGIC_ACTION_TELEPORT_PLAYER = 8,     /**< Request a game-owned player teleport. */
-        SDL3D_LOGIC_ACTION_SET_ACTIVE_CAMERA = 9,   /**< Request a game-owned active camera override. */
-        SDL3D_LOGIC_ACTION_RESTORE_CAMERA = 10,     /**< Request restoration of the game-owned camera. */
-        SDL3D_LOGIC_ACTION_SET_AMBIENT = 11,        /**< Request a game-owned ambient audio transition. */
-        SDL3D_LOGIC_ACTION_TRIGGER_FEEDBACK = 12,   /**< Request a named game-owned feedback cue. */
+        SDL3D_LOGIC_ACTION_NONE = 0,                 /**< Invalid/no action. */
+        SDL3D_LOGIC_ACTION_CORE = 1,                 /**< Execute an embedded sdl3d_action. */
+        SDL3D_LOGIC_ACTION_SET_ACTOR_ACTIVE = 2,     /**< Set a resolved actor's active flag. */
+        SDL3D_LOGIC_ACTION_TOGGLE_ACTOR_ACTIVE = 3,  /**< Toggle a resolved actor's active flag. */
+        SDL3D_LOGIC_ACTION_SET_ACTOR_PROPERTY = 4,   /**< Set a property on a resolved actor. */
+        SDL3D_LOGIC_ACTION_SET_SECTOR_PUSH = 5,      /**< Set a sector push/current velocity. */
+        SDL3D_LOGIC_ACTION_SET_SECTOR_DAMAGE = 6,    /**< Set non-negative sector damage per second. */
+        SDL3D_LOGIC_ACTION_SET_SECTOR_AMBIENT = 7,   /**< Set a non-negative ambient sound id. */
+        SDL3D_LOGIC_ACTION_TELEPORT_PLAYER = 8,      /**< Request a game-owned player teleport. */
+        SDL3D_LOGIC_ACTION_SET_ACTIVE_CAMERA = 9,    /**< Request a game-owned active camera override. */
+        SDL3D_LOGIC_ACTION_RESTORE_CAMERA = 10,      /**< Request restoration of the game-owned camera. */
+        SDL3D_LOGIC_ACTION_SET_AMBIENT = 11,         /**< Request a game-owned ambient audio transition. */
+        SDL3D_LOGIC_ACTION_TRIGGER_FEEDBACK = 12,    /**< Request a named game-owned feedback cue. */
+        SDL3D_LOGIC_ACTION_DOOR_COMMAND = 13,        /**< Request a game-owned door command. */
+        SDL3D_LOGIC_ACTION_SET_SECTOR_GEOMETRY = 14, /**< Request a game-owned sector geometry change. */
+        SDL3D_LOGIC_ACTION_LAUNCH_PLAYER = 15        /**< Request a game-owned player launch impulse. */
     } sdl3d_logic_action_type;
+
+    /**
+     * @brief Command issued to a game-owned door.
+     */
+    typedef enum sdl3d_logic_door_command
+    {
+        SDL3D_LOGIC_DOOR_OPEN = 0,   /**< Open the target door. */
+        SDL3D_LOGIC_DOOR_CLOSE = 1,  /**< Close the target door. */
+        SDL3D_LOGIC_DOOR_TOGGLE = 2, /**< Toggle the target door. */
+    } sdl3d_logic_door_command;
 
     /**
      * @brief Callback used by logic actions that request a player teleport.
@@ -186,6 +199,46 @@ extern "C"
                                                     const sdl3d_properties *payload);
 
     /**
+     * @brief Callback used by logic actions that request a door command.
+     *
+     * Door storage, collision, rendering, and sound are game-owned. Logic
+     * actions identify doors by id and/or name and request one command. An
+     * @p auto_close_seconds value below zero means "preserve the door's
+     * current authored policy", zero means "stay open", and positive values
+     * request an automatic close after that many seconds.
+     *
+     * @return true when the game accepted the door command.
+     */
+    typedef bool (*sdl3d_logic_door_command_fn)(void *userdata, const char *door_name, int door_id,
+                                                sdl3d_logic_door_command command, float auto_close_seconds,
+                                                const sdl3d_properties *payload);
+
+    /**
+     * @brief Callback used by logic actions that request runtime sector geometry.
+     *
+     * The logic world can resolve a target sector, but games own the concrete
+     * level variants, material palettes, lighting data, and transactional mesh
+     * rebuild policy. This adapter lets authored logic drive lifts, crushers,
+     * bridges, and similar moving sector primitives.
+     *
+     * @return true when the game accepted and committed the geometry change.
+     */
+    typedef bool (*sdl3d_logic_set_sector_geometry_fn)(void *userdata, int sector_index,
+                                                       const sdl3d_sector_geometry *geometry,
+                                                       const sdl3d_properties *payload);
+
+    /**
+     * @brief Callback used by logic actions that launch the player.
+     *
+     * The velocity is authored in world units per second. Games decide how to
+     * map it onto their movement model; an FPS controller may apply only the Y
+     * component, while another game may use the full vector.
+     *
+     * @return true when the game accepted the launch request.
+     */
+    typedef bool (*sdl3d_logic_launch_player_fn)(void *userdata, sdl3d_vec3 velocity, const sdl3d_properties *payload);
+
+    /**
      * @brief Game-owned operations exposed to generic logic actions.
      *
      * These callbacks keep the logic world open for game-specific effects
@@ -195,12 +248,15 @@ extern "C"
      */
     typedef struct sdl3d_logic_game_adapters
     {
-        void *userdata;                                     /**< Caller-owned data passed to every callback. */
-        sdl3d_logic_teleport_player_fn teleport_player;     /**< Optional player teleport adapter. */
-        sdl3d_logic_set_active_camera_fn set_active_camera; /**< Optional camera override adapter. */
-        sdl3d_logic_restore_camera_fn restore_camera;       /**< Optional camera restore adapter. */
-        sdl3d_logic_set_ambient_fn set_ambient;             /**< Optional ambient audio adapter. */
-        sdl3d_logic_trigger_feedback_fn trigger_feedback;   /**< Optional named feedback adapter. */
+        void *userdata;                                         /**< Caller-owned data passed to every callback. */
+        sdl3d_logic_teleport_player_fn teleport_player;         /**< Optional player teleport adapter. */
+        sdl3d_logic_set_active_camera_fn set_active_camera;     /**< Optional camera override adapter. */
+        sdl3d_logic_restore_camera_fn restore_camera;           /**< Optional camera restore adapter. */
+        sdl3d_logic_set_ambient_fn set_ambient;                 /**< Optional ambient audio adapter. */
+        sdl3d_logic_trigger_feedback_fn trigger_feedback;       /**< Optional named feedback adapter. */
+        sdl3d_logic_door_command_fn door_command;               /**< Optional door command adapter. */
+        sdl3d_logic_set_sector_geometry_fn set_sector_geometry; /**< Optional sector geometry adapter. */
+        sdl3d_logic_launch_player_fn launch_player;             /**< Optional player launch adapter. */
     } sdl3d_logic_game_adapters;
 
     /**
@@ -283,6 +339,29 @@ extern "C"
                 const char *feedback_name;
                 float duration_seconds;
             } feedback;
+
+            /** @brief Request a game-owned door command. */
+            struct
+            {
+                const char *door_name;
+                int door_id;
+                sdl3d_logic_door_command command;
+                float auto_close_seconds;
+                bool use_signal_payload;
+            } door;
+
+            /** @brief Request a game-owned sector geometry update. */
+            struct
+            {
+                sdl3d_logic_target_ref target;
+                sdl3d_sector_geometry geometry;
+            } sector_geometry;
+
+            /** @brief Request a game-owned player launch impulse. */
+            struct
+            {
+                sdl3d_vec3 velocity;
+            } launch_player;
         };
     } sdl3d_logic_action;
 
@@ -486,6 +565,39 @@ extern "C"
     } sdl3d_logic_timer;
 
     /**
+     * @brief Oscillating sector platform that drives runtime sector geometry.
+     *
+     * This entity owns the timing for moving floors, simple lifts, bobbing
+     * platforms, and similar sector-based mechanics. It produces
+     * SDL3D_LOGIC_ACTION_SET_SECTOR_GEOMETRY actions when the floor has moved
+     * far enough to merit a mesh rebuild.
+     */
+    typedef struct sdl3d_logic_sector_platform
+    {
+        int entity_id;                 /**< Stable editor/game id. */
+        sdl3d_logic_target_ref sector; /**< Sector moved by this platform. */
+        float min_floor_y;             /**< Lowest floor height. */
+        float max_floor_y;             /**< Highest floor height. */
+        float ceil_y;                  /**< Ceiling height to preserve while moving. */
+        float cycle_seconds;           /**< Full oscillation period; must be > 0. */
+        float rebuild_min_delta;       /**< Minimum floor delta before issuing an update. */
+        float time;                    /**< Current phase time in seconds. */
+        float last_floor_y;            /**< Last floor height successfully requested. */
+        bool has_last_floor_y;         /**< Whether last_floor_y is initialized. */
+        bool enabled;                  /**< Disabled platforms do not update. */
+    } sdl3d_logic_sector_platform;
+
+    /**
+     * @brief Result returned by a sector platform update.
+     */
+    typedef struct sdl3d_logic_sector_platform_result
+    {
+        bool attempted; /**< Whether the platform attempted a sector geometry action. */
+        bool applied;   /**< Whether the action was accepted by the logic world. */
+        float floor_y;  /**< Floor height computed for this update. */
+    } sdl3d_logic_sector_platform_result;
+
+    /**
      * @brief Create a logic world that listens to a signal bus.
      *
      * The logic world references @p bus and @p timers but does not own either
@@ -685,6 +797,64 @@ extern "C"
      * execution.
      */
     sdl3d_logic_action sdl3d_logic_action_make_trigger_feedback(const char *feedback_name, float duration_seconds);
+
+    /**
+     * @brief Create an action that requests a command on a fixed door target.
+     *
+     * Execution requires a door_command game adapter. The door_name pointer is
+     * borrowed and may be NULL when door_id is sufficient for the game.
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_door_command(const char *door_name, int door_id,
+                                                            sdl3d_logic_door_command command);
+
+    /**
+     * @brief Create a door command with explicit auto-close behavior.
+     *
+     * Set @p auto_close_seconds below zero to preserve the target door's
+     * authored setting, to zero for stay-open behavior, or above zero to close
+     * automatically after that delay once the door is fully open.
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_door_command_ex(const char *door_name, int door_id,
+                                                               sdl3d_logic_door_command command,
+                                                               float auto_close_seconds);
+
+    /**
+     * @brief Create an action that requests a door command from the signal payload.
+     *
+     * The action reads optional payload keys "door_id" and "door_name" and
+     * passes them to the door_command game adapter. At least one identifier
+     * should be present for game-owned lookup to succeed.
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_door_command_from_payload(sdl3d_logic_door_command command);
+
+    /**
+     * @brief Create a payload-driven door command with explicit auto-close behavior.
+     *
+     * Payload keys "door_id" and "door_name" select the door. The
+     * auto-close delay follows the same semantics as
+     * sdl3d_logic_action_make_door_command_ex().
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_door_command_from_payload_ex(sdl3d_logic_door_command command,
+                                                                            float auto_close_seconds);
+
+    /**
+     * @brief Create an action that requests runtime geometry for a target sector.
+     *
+     * Execution resolves @p target as a sector and then calls the
+     * set_sector_geometry game adapter. This keeps mesh rebuild ownership in
+     * the game while making moving floors, ceilings, lifts, bridges, and
+     * crushers designer-authorable through logic.
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_set_sector_geometry(sdl3d_logic_target_ref target,
+                                                                   sdl3d_sector_geometry geometry);
+
+    /**
+     * @brief Create an action that requests a player launch velocity.
+     *
+     * Execution requires a launch_player game adapter. The meaning of X/Z
+     * components is game-defined; FPS games may choose to honor only Y.
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_launch_player(sdl3d_vec3 velocity);
 
     /**
      * @brief Execute a target-aware action immediately.
@@ -904,6 +1074,29 @@ extern "C"
 
     /** @brief Return whether the timer entity is currently counting down. */
     bool sdl3d_logic_timer_active(const sdl3d_logic_timer *timer);
+
+    /**
+     * @brief Initialize an oscillating sector platform.
+     *
+     * The platform uses a smooth sine cycle: it starts at @p min_floor_y,
+     * reaches @p max_floor_y halfway through the cycle, then returns. Callers
+     * can seed time or last_floor_y after initialization when restoring saved
+     * state or matching an existing sector.
+     */
+    void sdl3d_logic_sector_platform_init(sdl3d_logic_sector_platform *platform, int entity_id,
+                                          sdl3d_logic_target_ref sector, float min_floor_y, float max_floor_y,
+                                          float ceil_y, float cycle_seconds, float rebuild_min_delta);
+
+    /**
+     * @brief Update an oscillating sector platform.
+     *
+     * When enough floor motion has accumulated, this executes a sector geometry
+     * action through @p world. The return value distinguishes no-op frames from
+     * attempted updates and failed adapter calls.
+     */
+    sdl3d_logic_sector_platform_result sdl3d_logic_sector_platform_update(sdl3d_logic_world *world,
+                                                                          sdl3d_logic_sector_platform *platform,
+                                                                          float dt);
 
     /**
      * @brief Bind a relay entity to activate when a signal is emitted.
