@@ -210,8 +210,29 @@ TEST(GameDataRuntime, LoadsLuaScriptDependenciesBeforeDependentAdapters)
     sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, "entity.target");
     ASSERT_NE(target, nullptr);
     const sdl3d_vec3 velocity = sdl3d_properties_get_vec3(target->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const float speed_length = sdl3d_properties_get_float(target->props, "speed_length", 0.0f);
+    const float random_value = sdl3d_properties_get_float(target->props, "random_value", -1.0f);
+    EXPECT_FLOAT_EQ(target->position.x, 1.0f);
+    EXPECT_FLOAT_EQ(target->position.y, 2.0f);
+    EXPECT_FLOAT_EQ(target->position.z, 3.0f);
     EXPECT_FLOAT_EQ(velocity.x, 7.0f);
     EXPECT_FLOAT_EQ(velocity.y, 2.0f);
+    EXPECT_NEAR(speed_length, SDL_sqrtf(53.0f), 0.0001f);
+    EXPECT_TRUE(sdl3d_properties_get_bool(target->props, "ctx_ok", false));
+    EXPECT_GE(random_value, 0.0f);
+    EXPECT_LT(random_value, 1.0f);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(path.c_str(), session, &runtime, error, sizeof(error))) << error;
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), sdl3d_game_data_find_signal(runtime, "signal.run"),
+                      nullptr);
+    target = sdl3d_game_data_find_actor(runtime, "entity.target");
+    ASSERT_NE(target, nullptr);
+    EXPECT_FLOAT_EQ(sdl3d_properties_get_float(target->props, "random_value", -1.0f), random_value);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
