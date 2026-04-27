@@ -25,6 +25,7 @@
 #include "sdl3d/level.h"
 #include "sdl3d/signal_bus.h"
 #include "sdl3d/timer_pool.h"
+#include "sdl3d/trigger.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -176,6 +177,78 @@ extern "C"
     } sdl3d_logic_action;
 
     /**
+     * @brief Sensor event emitted by logic sensors.
+     */
+    typedef enum sdl3d_logic_sensor_event
+    {
+        SDL3D_LOGIC_SENSOR_EVENT_NONE = 0,  /**< No signal was emitted. */
+        SDL3D_LOGIC_SENSOR_EVENT_ENTER = 1, /**< Sensor condition became true. */
+        SDL3D_LOGIC_SENSOR_EVENT_EXIT = 2,  /**< Sensor condition became false. */
+        SDL3D_LOGIC_SENSOR_EVENT_LEVEL = 3, /**< Sensor condition is true for this update. */
+    } sdl3d_logic_sensor_event;
+
+    /**
+     * @brief Result returned by a sensor update.
+     */
+    typedef struct sdl3d_logic_sensor_result
+    {
+        bool emitted;                   /**< Whether a signal was emitted. */
+        bool active;                    /**< Sensor condition after the update. */
+        sdl3d_logic_sensor_event event; /**< Event kind emitted, or NONE. */
+    } sdl3d_logic_sensor_result;
+
+    /**
+     * @brief AABB contact sensor for point-in-volume mechanics.
+     *
+     * This is a reusable building block for pressure plates, surveillance
+     * buttons, proximity boxes, item pickup zones, and trigger volumes.
+     */
+    typedef struct sdl3d_logic_contact_sensor
+    {
+        int sensor_id;             /**< Stable editor/game id included in payloads. */
+        sdl3d_bounding_box bounds; /**< World-space sensor volume. */
+        int signal_id;             /**< Signal emitted when edge rules match. */
+        sdl3d_trigger_edge edge;   /**< Enter/exit/both/level emission mode. */
+        bool enabled;              /**< Disabled sensors never emit. */
+        bool was_inside;           /**< Previous contact state, managed by update/reset. */
+    } sdl3d_logic_contact_sensor;
+
+    /**
+     * @brief Sector occupancy sensor for sector-specific enter/exit/level logic.
+     *
+     * The sector target can be a sector index or a sector name registered on the
+     * logic world. The sample point is treated as a world-space point; pass an
+     * actor's feet position when floor occupancy matters.
+     */
+    typedef struct sdl3d_logic_sector_sensor
+    {
+        int sensor_id;                 /**< Stable editor/game id included in payloads. */
+        sdl3d_logic_target_ref sector; /**< Sector index/name target. */
+        int signal_id;                 /**< Signal emitted when edge rules match. */
+        sdl3d_trigger_edge edge;       /**< Enter/exit/both/level emission mode. */
+        bool enabled;                  /**< Disabled sensors never emit. */
+        bool was_inside;               /**< Previous occupancy state, managed by update/reset. */
+    } sdl3d_logic_sector_sensor;
+
+    /**
+     * @brief Actor proximity sensor for distance-based mechanics.
+     *
+     * The actor target resolves through the logic world's actor registry. The
+     * sensor is active when the sample point is within @p radius of the actor's
+     * registered world position.
+     */
+    typedef struct sdl3d_logic_proximity_sensor
+    {
+        int sensor_id;                /**< Stable editor/game id included in payloads. */
+        sdl3d_logic_target_ref actor; /**< Actor id/name target. */
+        float radius;                 /**< Non-negative trigger radius in world units. */
+        int signal_id;                /**< Signal emitted when edge rules match. */
+        sdl3d_trigger_edge edge;      /**< Enter/exit/both/level emission mode. */
+        bool enabled;                 /**< Disabled sensors never emit. */
+        bool was_inside;              /**< Previous proximity state, managed by update/reset. */
+    } sdl3d_logic_proximity_sensor;
+
+    /**
      * @brief Create a logic world that listens to a signal bus.
      *
      * The logic world references @p bus and @p timers but does not own either
@@ -321,6 +394,72 @@ extern "C"
      *         or target was invalid.
      */
     bool sdl3d_logic_world_execute_action(sdl3d_logic_world *world, const sdl3d_logic_action *action);
+
+    /* ================================================================== */
+    /* Sensors                                                            */
+    /* ================================================================== */
+
+    /**
+     * @brief Initialize an AABB contact sensor.
+     */
+    void sdl3d_logic_contact_sensor_init(sdl3d_logic_contact_sensor *sensor, int sensor_id, sdl3d_bounding_box bounds,
+                                         int signal_id, sdl3d_trigger_edge edge);
+
+    /**
+     * @brief Update a contact sensor and emit through @p world when needed.
+     *
+     * @p world may be NULL when the caller only needs the returned active
+     * state and does not need signal emission.
+     *
+     * Payload keys: sensor_id, event, inside, sample_position.
+     */
+    sdl3d_logic_sensor_result sdl3d_logic_contact_sensor_update(sdl3d_logic_contact_sensor *sensor,
+                                                                sdl3d_logic_world *world, sdl3d_vec3 sample_position);
+
+    /**
+     * @brief Reset a contact sensor's edge state.
+     */
+    void sdl3d_logic_contact_sensor_reset(sdl3d_logic_contact_sensor *sensor);
+
+    /**
+     * @brief Initialize a sector occupancy sensor.
+     */
+    void sdl3d_logic_sector_sensor_init(sdl3d_logic_sector_sensor *sensor, int sensor_id, sdl3d_logic_target_ref sector,
+                                        int signal_id, sdl3d_trigger_edge edge);
+
+    /**
+     * @brief Update a sector sensor and emit through @p world when needed.
+     *
+     * Payload keys: sensor_id, event, inside, sample_position, sector_index.
+     */
+    sdl3d_logic_sensor_result sdl3d_logic_sector_sensor_update(sdl3d_logic_sector_sensor *sensor,
+                                                               sdl3d_logic_world *world, sdl3d_vec3 sample_position);
+
+    /**
+     * @brief Reset a sector sensor's edge state.
+     */
+    void sdl3d_logic_sector_sensor_reset(sdl3d_logic_sector_sensor *sensor);
+
+    /**
+     * @brief Initialize an actor proximity sensor.
+     */
+    void sdl3d_logic_proximity_sensor_init(sdl3d_logic_proximity_sensor *sensor, int sensor_id,
+                                           sdl3d_logic_target_ref actor, float radius, int signal_id,
+                                           sdl3d_trigger_edge edge);
+
+    /**
+     * @brief Update a proximity sensor and emit through @p world when needed.
+     *
+     * Payload keys: sensor_id, event, inside, sample_position, actor_id,
+     * actor_name, distance.
+     */
+    sdl3d_logic_sensor_result sdl3d_logic_proximity_sensor_update(sdl3d_logic_proximity_sensor *sensor,
+                                                                  sdl3d_logic_world *world, sdl3d_vec3 sample_position);
+
+    /**
+     * @brief Reset a proximity sensor's edge state.
+     */
+    void sdl3d_logic_proximity_sensor_reset(sdl3d_logic_proximity_sensor *sensor);
 
     /**
      * @brief Bind one action to a signal.
