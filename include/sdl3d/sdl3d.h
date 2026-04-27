@@ -11,6 +11,7 @@
 #include "sdl3d/audio.h"
 #include "sdl3d/camera.h"
 #include "sdl3d/collision.h"
+#include "sdl3d/door.h"
 #include "sdl3d/drawing3d.h"
 #include "sdl3d/effects.h"
 #include "sdl3d/game.h"

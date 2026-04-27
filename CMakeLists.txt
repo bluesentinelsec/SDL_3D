@@ -88,6 +88,7 @@ target_sources(
         src/audio.c
         src/camera.c
         src/collision.c
+        src/door.c
         src/drawing3d.c
         src/effects.c
         src/fbx_loader.c

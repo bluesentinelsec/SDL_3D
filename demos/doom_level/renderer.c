@@ -14,6 +14,8 @@
 #define ROCKET_LIGHT_B 0.2f
 #define ROCKET_LIGHT_INTENSITY 4.0f
 #define ROCKET_LIGHT_RANGE 4.0f
+#define LAUNCHER_PAD_X 38.0f
+#define LAUNCHER_PAD_Z 68.0f
 
 static sdl3d_color sample_actor_tint(const sdl3d_level_light *lights, int light_count, sdl3d_vec3 position)
 {
@@ -105,10 +107,10 @@ static bool render_state_ensure_sector_capacity(render_state *rs, int sector_cou
 }
 
 void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_font *font, sdl3d_ui_context *ui,
-                       level_data *ld, entities *ent, const doom_hazard_particles *hazards,
+                       level_data *ld, entities *ent, const doom_hazard_particles *hazards, const doom_doors *doors,
                        const doom_surveillance_camera *surveillance, const player_state *player, int backbuffer_w,
                        int backbuffer_h, float dt, const char *render_profile_name, bool ambient_feedback_active,
-                       bool teleport_feedback_active)
+                       bool teleport_feedback_active, bool launcher_feedback_active)
 {
     const sdl3d_fps_mover *mover = &player->mover;
     sdl3d_level *active = level_data_active(ld);
@@ -171,6 +173,9 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
     /* Level geometry */
     sdl3d_draw_level(ctx, active, rs->portal_culling ? &rs->vis : NULL, (sdl3d_color){255, 255, 255, 255});
 
+    /* Runtime doors are dynamic gameplay geometry, drawn after the static level mesh. */
+    doom_doors_draw(doors, ctx);
+
     /* 3D scene actors */
     if (ent->scene)
     {
@@ -207,6 +212,14 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
                     teleport_feedback_active ? (sdl3d_color){255, 210, 60, 255} : (sdl3d_color){40, 190, 230, 255});
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(72.0f, 2.85f, 63.0f), sdl3d_vec3_make(0.8f, 0.7f, 0.8f),
                     teleport_feedback_active ? (sdl3d_color){255, 210, 60, 255} : (sdl3d_color){80, 120, 255, 255});
+
+    /* Player launcher pad in the dragon room. */
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(LAUNCHER_PAD_X, 0.05f, LAUNCHER_PAD_Z), sdl3d_vec3_make(3.2f, 0.1f, 3.2f),
+                    (sdl3d_color){35, 38, 46, 255});
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(LAUNCHER_PAD_X, 0.18f, LAUNCHER_PAD_Z), sdl3d_vec3_make(2.2f, 0.16f, 2.2f),
+                    launcher_feedback_active ? (sdl3d_color){255, 245, 90, 255} : (sdl3d_color){70, 175, 255, 255});
+    sdl3d_draw_cube(ctx, sdl3d_vec3_make(LAUNCHER_PAD_X, 0.55f, LAUNCHER_PAD_Z), sdl3d_vec3_make(0.35f, 0.7f, 0.35f),
+                    launcher_feedback_active ? (sdl3d_color){255, 255, 160, 255} : (sdl3d_color){90, 215, 255, 255});
 
     /* Conveyor direction marker in the dragon room. */
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(19.0f, 0.04f, 51.0f), sdl3d_vec3_make(21.0f, 0.08f, 12.0f),

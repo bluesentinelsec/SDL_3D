@@ -487,6 +487,26 @@ TEST_F(FpsMoverFixture, FallingBelowWorldRestoresLastGood)
     EXPECT_NEAR(m.position.z, expected_good.z, 0.01f);
 }
 
+TEST_F(FpsMoverFixture, LaunchAppliesUpwardVelocityEvenWhenAirborne)
+{
+    BuildFlat();
+    sdl3d_fps_mover_config cfg = DefaultConfig();
+    sdl3d_fps_mover m;
+    sdl3d_fps_mover_init(&m, &cfg, sdl3d_vec3_make(0, cfg.player_height, 0), 0);
+
+    sdl3d_fps_mover_launch(&m, 14.0f);
+
+    EXPECT_FALSE(m.on_ground);
+    EXPECT_FLOAT_EQ(m.vertical_velocity, 14.0f);
+    sdl3d_fps_mover_update(&m, &level, sectors.data(), sdl3d_vec2{0, 0}, 0, 0, 0.002f, 1.0f / 60.0f);
+    EXPECT_GT(m.position.y, cfg.player_height);
+
+    sdl3d_fps_mover_launch(&m, 10.0f);
+    EXPECT_FLOAT_EQ(m.vertical_velocity, 10.0f);
+    sdl3d_fps_mover_launch(&m, 0.0f);
+    EXPECT_FLOAT_EQ(m.vertical_velocity, 10.0f);
+}
+
 TEST_F(FpsMoverFixture, NullArgsAreSafeNoOps)
 {
     BuildFlat();
@@ -500,6 +520,7 @@ TEST_F(FpsMoverFixture, NullArgsAreSafeNoOps)
     sdl3d_fps_mover_update(&m, nullptr, sectors.data(), zero, 0, 0, 0, 1.0f / 60.0f);
     sdl3d_fps_mover_update(&m, &level, nullptr, zero, 0, 0, 0, 1.0f / 60.0f);
     sdl3d_fps_mover_jump(nullptr);
+    sdl3d_fps_mover_launch(nullptr, 12.0f);
     sdl3d_fps_mover_init(nullptr, &cfg, sdl3d_vec3_make(0, 0, 0), 0);
     sdl3d_fps_mover_init(&m, nullptr, sdl3d_vec3_make(0, 0, 0), 0);
 }

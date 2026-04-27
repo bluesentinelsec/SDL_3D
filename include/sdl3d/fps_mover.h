@@ -89,6 +89,16 @@ extern "C"
     void sdl3d_fps_mover_jump(sdl3d_fps_mover *mover);
 
     /**
+     * @brief Apply an upward launch velocity to a first-person mover.
+     *
+     * This is useful for jump pads, wind vents, bounce pads, or scripted
+     * launchers. Values less than or equal to zero are ignored. Unlike
+     * sdl3d_fps_mover_jump(), launching does not require the mover to be on
+     * the ground.
+     */
+    void sdl3d_fps_mover_launch(sdl3d_fps_mover *mover, float vertical_velocity);
+
+    /**
      * @brief Instantly move a first-person mover to a new eye position.
      *
      * Teleporting resets vertical velocity, stair smoothing, sector cache, and

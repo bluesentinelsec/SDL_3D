@@ -359,6 +359,17 @@ void sdl3d_fps_mover_jump(sdl3d_fps_mover *mover)
     mover->on_ground = false;
 }
 
+void sdl3d_fps_mover_launch(sdl3d_fps_mover *mover, float vertical_velocity)
+{
+    if (mover == NULL || vertical_velocity <= 0.0f)
+    {
+        return;
+    }
+
+    mover->vertical_velocity = vertical_velocity;
+    mover->on_ground = false;
+}
+
 void sdl3d_fps_mover_teleport(sdl3d_fps_mover *mover, sdl3d_vec3 eye_position, bool set_yaw, float yaw, bool set_pitch,
                               float pitch)
 {

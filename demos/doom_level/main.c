@@ -14,6 +14,7 @@
 #include "sdl3d/ui.h"
 
 #include "backend.h"
+#include "doom_doors.h"
 #include "entities.h"
 #include "hazard_effects.h"
 #include "level_data.h"
@@ -26,14 +27,20 @@
 #define SIG_SURVEILLANCE_EXIT 2003
 #define SIG_AMBIENT_FEEDBACK 2004
 #define SIG_AMBIENT_FEEDBACK_SKIP 2005
+#define SIG_DOOR_INTERACT 2006
+#define SIG_LAUNCHER_ENTER 2007
 #define LIFT_FLOOR_MIN_Y 0.0f
 #define LIFT_FLOOR_MAX_Y 2.5f
 #define LIFT_CEIL_Y 12.0f
 #define LIFT_CYCLE_SECONDS 6.0f
 #define LIFT_REBUILD_MIN_DELTA 0.02f
+#define LIFT_ENTITY_ID 1
 #define AMBIENT_FADE_SECONDS 1.0f
 #define AMBIENT_FEEDBACK_SECONDS 5.0f
 #define TELEPORT_FEEDBACK_SECONDS 2.0f
+#define LAUNCHER_FEEDBACK_SECONDS 1.25f
+#define LAUNCHER_VERTICAL_VELOCITY 15.0f
+#define DOOR_AUTO_CLOSE_SECONDS 5.0f
 #define DRAGON_TELEPORTER_ID 1
 #define DAMAGE_FEEDBACK_REFERENCE_DPS 30.0f
 #define DAMAGE_FEEDBACK_MIN_STRENGTH 0.35f
@@ -42,6 +49,8 @@
 #define DAMAGE_FEEDBACK_PULSE_HZ 2.8f
 #define SURVEILLANCE_BUTTON_X 43.0f
 #define SURVEILLANCE_BUTTON_Z 89.0f
+#define LAUNCHER_PAD_X 38.0f
+#define LAUNCHER_PAD_Z 68.0f
 #define FEEDBACK_AMBIENT_ZONE "ambient_zone"
 
 typedef struct doom_state
@@ -49,6 +58,7 @@ typedef struct doom_state
     level_data level;
     entities ent;
     doom_hazard_particles hazards;
+    doom_doors doors;
     player_state player;
     render_state render;
     sdl3d_transition transition;
@@ -58,6 +68,8 @@ typedef struct doom_state
     sdl3d_audio_engine *audio;
     sdl3d_logic_world *logic;
     sdl3d_logic_branch ambient_feedback_branch;
+    sdl3d_logic_sector_platform dynamic_lift;
+    sdl3d_logic_contact_sensor launcher_sensor;
     sdl3d_sector_watcher sector_watcher;
     sdl3d_teleporter dragon_teleporter;
     doom_surveillance_camera surveillance;
@@ -65,12 +77,12 @@ typedef struct doom_state
     doom_render_profile render_profile;
     float ambient_feedback_timer;
     float teleport_feedback_timer;
+    float launcher_feedback_timer;
     float damage_feedback_strength;
     float damage_pulse_timer;
-    float lift_timer;
-    float lift_last_floor_y;
     int action_pause;
     int action_menu;
+    int action_interact;
     int action_toggle_lighting;
     int action_toggle_lightmaps;
     int action_toggle_debug_stats;
@@ -81,6 +93,7 @@ typedef struct doom_state
     bool has_font;
     bool level_ready;
     bool entities_ready;
+    bool doors_ready;
     bool quit_pending;
 } doom_state;
 
@@ -88,6 +101,11 @@ static void doom_state_cleanup(doom_state *state)
 {
     sdl3d_logic_world_destroy(state->logic);
     state->logic = NULL;
+    if (state->doors_ready)
+    {
+        doom_doors_free(&state->doors);
+        state->doors_ready = false;
+    }
     render_state_free(&state->render);
     doom_hazard_particles_free(&state->hazards);
     if (state->entities_ready)
@@ -189,6 +207,53 @@ static bool doom_logic_trigger_feedback(void *userdata, const char *feedback_nam
     return false;
 }
 
+static bool doom_logic_door_command(void *userdata, const char *door_name, int door_id,
+                                    sdl3d_logic_door_command command, float auto_close_seconds,
+                                    const sdl3d_properties *payload)
+{
+    (void)payload;
+    doom_state *state = (doom_state *)userdata;
+    if (state == NULL)
+    {
+        return false;
+    }
+
+    return doom_doors_apply_command(&state->doors, door_name, door_id, command, auto_close_seconds);
+}
+
+static bool doom_logic_set_sector_geometry(void *userdata, int sector_index, const sdl3d_sector_geometry *geometry,
+                                           const sdl3d_properties *payload)
+{
+    (void)payload;
+    doom_state *state = (doom_state *)userdata;
+    if (state == NULL || geometry == NULL)
+    {
+        return false;
+    }
+
+    if (!level_data_set_sector_geometry(&state->level, sector_index, geometry))
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Dynamic sector geometry update failed: %s", SDL_GetError());
+        return false;
+    }
+    return true;
+}
+
+static bool doom_logic_launch_player(void *userdata, sdl3d_vec3 velocity, const sdl3d_properties *payload)
+{
+    (void)payload;
+    doom_state *state = (doom_state *)userdata;
+    if (state == NULL || velocity.y <= 0.0f)
+    {
+        return false;
+    }
+
+    sdl3d_fps_mover_launch(&state->player.mover, velocity.y);
+    state->launcher_feedback_timer = LAUNCHER_FEEDBACK_SECONDS;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Launcher applied vertical velocity %.1f", velocity.y);
+    return true;
+}
+
 static bool doom_logic_teleport_player(void *userdata, const sdl3d_teleport_destination *destination,
                                        const sdl3d_properties *payload)
 {
@@ -273,6 +338,24 @@ static void init_surveillance_camera(doom_state *state)
     doom_surveillance_init(&state->surveillance, button_bounds, camera, SIG_SURVEILLANCE_ENTER, SIG_SURVEILLANCE_EXIT);
 }
 
+static void init_dynamic_lift(doom_state *state)
+{
+    sdl3d_logic_sector_platform_init(&state->dynamic_lift, LIFT_ENTITY_ID,
+                                     sdl3d_logic_target_sector_index(DOOM_DYNAMIC_LIFT_SECTOR), LIFT_FLOOR_MIN_Y,
+                                     LIFT_FLOOR_MAX_Y, LIFT_CEIL_Y, LIFT_CYCLE_SECONDS, LIFT_REBUILD_MIN_DELTA);
+    state->dynamic_lift.last_floor_y = g_sectors[DOOM_DYNAMIC_LIFT_SECTOR].floor_y;
+    state->dynamic_lift.has_last_floor_y = true;
+}
+
+static void init_launcher_sensor(doom_state *state)
+{
+    const sdl3d_bounding_box bounds = {
+        sdl3d_vec3_make(LAUNCHER_PAD_X - 1.5f, -0.15f, LAUNCHER_PAD_Z - 1.5f),
+        sdl3d_vec3_make(LAUNCHER_PAD_X + 1.5f, 0.45f, LAUNCHER_PAD_Z + 1.5f),
+    };
+    sdl3d_logic_contact_sensor_init(&state->launcher_sensor, 1, bounds, SIG_LAUNCHER_ENTER, SDL3D_TRIGGER_EDGE_ENTER);
+}
+
 static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
 {
     state->logic = sdl3d_logic_world_create(ctx->bus, ctx->timers);
@@ -289,7 +372,17 @@ static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
     adapters.restore_camera = doom_logic_restore_camera;
     adapters.set_ambient = doom_logic_set_ambient;
     adapters.trigger_feedback = doom_logic_trigger_feedback;
+    adapters.door_command = doom_logic_door_command;
+    adapters.set_sector_geometry = doom_logic_set_sector_geometry;
+    adapters.launch_player = doom_logic_launch_player;
     sdl3d_logic_world_set_game_adapters(state->logic, &adapters);
+
+    sdl3d_logic_target_context target_context;
+    SDL_zero(target_context);
+    target_context.level = &state->level.unlit;
+    target_context.sectors = g_sectors;
+    target_context.sector_count = g_sector_count;
+    sdl3d_logic_world_set_target_context(state->logic, &target_context);
 
     sdl3d_logic_action ambient_action =
         sdl3d_logic_action_make_set_ambient_from_payload("ambient_sound_id", AMBIENT_FADE_SECONDS);
@@ -335,6 +428,20 @@ static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
         return false;
     }
 
+    sdl3d_logic_action door_action =
+        sdl3d_logic_action_make_door_command_from_payload_ex(SDL3D_LOGIC_DOOR_OPEN, DOOR_AUTO_CLOSE_SECONDS);
+    if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_DOOR_INTERACT, &door_action) == 0)
+    {
+        return false;
+    }
+
+    sdl3d_logic_action launcher_action =
+        sdl3d_logic_action_make_launch_player(sdl3d_vec3_make(0.0f, LAUNCHER_VERTICAL_VELOCITY, 0.0f));
+    if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_LAUNCHER_ENTER, &launcher_action) == 0)
+    {
+        return false;
+    }
+
     return true;
 }
 
@@ -376,6 +483,7 @@ static void bind_doom_actions(sdl3d_input_manager *input, doom_state *state)
     sdl3d_input_bind_fps_defaults(input);
     state->action_pause = sdl3d_input_find_action(input, "pause");
     state->action_menu = sdl3d_input_find_action(input, "menu");
+    state->action_interact = sdl3d_input_find_action(input, "interact");
     state->action_toggle_lighting = bind_doom_key_action(input, "toggle_lighting", SDL_SCANCODE_L);
     state->action_toggle_lightmaps = bind_doom_key_action(input, "toggle_lightmaps", SDL_SCANCODE_M);
     state->action_toggle_debug_stats = bind_doom_key_action(input, "toggle_debug_stats", SDL_SCANCODE_F1);
@@ -417,8 +525,7 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
         return false;
     }
     state->level_ready = true;
-    state->lift_timer = 0.0f;
-    state->lift_last_floor_y = g_sectors[DOOM_DYNAMIC_LIFT_SECTOR].floor_y;
+    init_dynamic_lift(state);
 
     if (!entities_init(&state->ent, &state->level.unlit, ctx->registry, ctx->bus))
     {
@@ -434,9 +541,17 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
         return false;
     }
 
+    if (!doom_doors_init(&state->doors))
+    {
+        doom_state_cleanup(state);
+        return false;
+    }
+    state->doors_ready = true;
+
     player_init(&state->player, ctx->input);
     init_dragon_teleporter(state);
     init_surveillance_camera(state);
+    init_launcher_sensor(state);
     if (!bind_doom_logic(ctx, state))
     {
         doom_state_cleanup(state);
@@ -550,39 +665,16 @@ static void apply_doom_profile_actions(sdl3d_game_context *ctx, doom_state *stat
 
 static void update_dynamic_lift(doom_state *state, float dt)
 {
-    if (state == NULL || !state->level_ready)
+    if (state == NULL || !state->level_ready || state->logic == NULL)
     {
         return;
     }
 
-    state->lift_timer += dt;
-    while (state->lift_timer >= LIFT_CYCLE_SECONDS)
+    const sdl3d_logic_sector_platform_result result =
+        sdl3d_logic_sector_platform_update(state->logic, &state->dynamic_lift, dt);
+    if (result.attempted && !result.applied)
     {
-        state->lift_timer -= LIFT_CYCLE_SECONDS;
-    }
-
-    const float phase = state->lift_timer / LIFT_CYCLE_SECONDS;
-    const float wave = (SDL_sinf(phase * SDL_PI_F * 2.0f - SDL_PI_F * 0.5f) + 1.0f) * 0.5f;
-    const float floor_y = LIFT_FLOOR_MIN_Y + (LIFT_FLOOR_MAX_Y - LIFT_FLOOR_MIN_Y) * wave;
-    if (SDL_fabsf(floor_y - state->lift_last_floor_y) < LIFT_REBUILD_MIN_DELTA)
-    {
-        return;
-    }
-
-    sdl3d_sector_geometry geometry;
-    SDL_zero(geometry);
-    geometry.floor_y = floor_y;
-    geometry.ceil_y = LIFT_CEIL_Y;
-    geometry.floor_normal[1] = 1.0f;
-    geometry.ceil_normal[1] = -1.0f;
-
-    if (level_data_set_sector_geometry(&state->level, DOOM_DYNAMIC_LIFT_SECTOR, &geometry))
-    {
-        state->lift_last_floor_y = floor_y;
-    }
-    else
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Dynamic lift update failed: %s", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Dynamic lift logic action failed: %s", SDL_GetError());
     }
 }
 
@@ -642,6 +734,11 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     }
 
     apply_doom_debug_actions(ctx, state);
+    if (sdl3d_input_is_pressed(ctx->input, state->action_interact))
+    {
+        doom_doors_emit_interact(&state->doors, state->logic, SIG_DOOR_INTERACT, state->player.mover.position,
+                                 state->player.mover.yaw);
+    }
 
     if (state->demo_player != NULL && sdl3d_demo_playback_finished(state->demo_player))
     {
@@ -650,6 +747,7 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 
     sdl3d_transition_update(&state->transition, ctx->bus, dt);
     update_dynamic_lift(state, dt);
+    doom_doors_update(&state->doors, dt);
     doom_hazard_particles_update(&state->hazards, dt);
     entities_update(&state->ent, &state->level.unlit, dt, state->player.mover.position);
     if (!player_update(&state->player, ctx->input, &state->level.unlit, g_sectors, dt))
@@ -658,6 +756,11 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     }
     else
     {
+        doom_doors_resolve_player(&state->doors, &state->player.mover);
+        sdl3d_logic_contact_sensor_update(&state->launcher_sensor, state->logic,
+                                          sdl3d_vec3_make(state->player.mover.position.x,
+                                                          state->player.mover.position.y - PLAYER_HEIGHT,
+                                                          state->player.mover.position.z));
         const float damage_this_tick = player_apply_sector_damage(&state->player, g_sectors, g_sector_count, dt);
         update_damage_feedback(state, damage_this_tick, dt);
     }
@@ -676,6 +779,14 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
         if (state->teleport_feedback_timer < 0.0f)
         {
             state->teleport_feedback_timer = 0.0f;
+        }
+    }
+    if (state->launcher_feedback_timer > 0.0f)
+    {
+        state->launcher_feedback_timer -= dt;
+        if (state->launcher_feedback_timer < 0.0f)
+        {
+            state->launcher_feedback_timer = 0.0f;
         }
     }
 
@@ -795,9 +906,10 @@ static void game_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     const float frame_dt = sdl3d_time_get_unscaled_delta_time();
 
     render_draw_frame(&state->render, ctx->renderer, state->has_font ? &state->debug_font : NULL, state->ui,
-                      &state->level, &state->ent, &state->hazards, &state->surveillance, &state->player, WINDOW_W,
-                      WINDOW_H, frame_dt, backend_profile_name(state->render_profile),
-                      state->ambient_feedback_timer > 0.0f, state->teleport_feedback_timer > 0.0f);
+                      &state->level, &state->ent, &state->hazards, &state->doors, &state->surveillance, &state->player,
+                      WINDOW_W, WINDOW_H, frame_dt, backend_profile_name(state->render_profile),
+                      state->ambient_feedback_timer > 0.0f, state->teleport_feedback_timer > 0.0f,
+                      state->launcher_feedback_timer > 0.0f);
     sdl3d_transition_draw(&state->transition, ctx->renderer);
     draw_damage_overlay(ctx, state);
     if (ctx->paused && !state->quit_pending)
