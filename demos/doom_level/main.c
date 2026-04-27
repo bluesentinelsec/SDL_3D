@@ -22,6 +22,8 @@
 #include "surveillance.h"
 
 #define SIG_FADE_OUT_DONE 2001
+#define SIG_SURVEILLANCE_ENTER 2002
+#define SIG_SURVEILLANCE_EXIT 2003
 #define LIFT_FLOOR_MIN_Y 0.0f
 #define LIFT_FLOOR_MAX_Y 2.5f
 #define LIFT_CEIL_Y 12.0f
@@ -51,6 +53,7 @@ typedef struct doom_state
     sdl3d_ui_context *ui;
     sdl3d_demo_player *demo_player;
     sdl3d_audio_engine *audio;
+    sdl3d_logic_world *logic;
     sdl3d_sector_watcher sector_watcher;
     sdl3d_teleporter dragon_teleporter;
     doom_surveillance_camera surveillance;
@@ -79,6 +82,8 @@ typedef struct doom_state
 
 static void doom_state_cleanup(doom_state *state)
 {
+    sdl3d_logic_world_destroy(state->logic);
+    state->logic = NULL;
     render_state_free(&state->render);
     doom_hazard_particles_free(&state->hazards);
     if (state->entities_ready)
@@ -159,24 +164,54 @@ static void on_entered_sector(void *userdata, int signal_id, const sdl3d_propert
     }
 }
 
-static void on_teleport(void *userdata, int signal_id, const sdl3d_properties *payload)
+static bool doom_logic_teleport_player(void *userdata, const sdl3d_teleport_destination *destination,
+                                       const sdl3d_properties *payload)
 {
-    (void)signal_id;
     doom_state *state = (doom_state *)userdata;
-    sdl3d_teleport_destination destination;
 
-    if (state == NULL || !sdl3d_teleport_destination_from_payload(payload, &destination))
+    if (state == NULL || destination == NULL)
     {
-        return;
+        return false;
     }
 
-    sdl3d_fps_mover_teleport(&state->player.mover, destination.position, destination.use_yaw, destination.yaw,
-                             destination.use_pitch, destination.pitch);
+    sdl3d_fps_mover_teleport(&state->player.mover, destination->position, destination->use_yaw, destination->yaw,
+                             destination->use_pitch, destination->pitch);
     state->player.proj_active = false;
     state->teleport_feedback_timer = TELEPORT_FEEDBACK_SECONDS;
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Teleporter %d moved player to %.1f %.1f %.1f",
-                sdl3d_properties_get_int(payload, "teleporter_id", -1), destination.position.x, destination.position.y,
-                destination.position.z);
+                sdl3d_properties_get_int(payload, "teleporter_id", -1), destination->position.x,
+                destination->position.y, destination->position.z);
+    return true;
+}
+
+static bool doom_logic_set_active_camera(void *userdata, const char *camera_name, const sdl3d_camera3d *camera,
+                                         const sdl3d_properties *payload)
+{
+    (void)payload;
+    doom_state *state = (doom_state *)userdata;
+    if (state == NULL || camera == NULL)
+    {
+        return false;
+    }
+
+    state->surveillance.camera = *camera;
+    state->surveillance.active = true;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Activated surveillance camera '%s'",
+                camera_name != NULL ? camera_name : "unnamed");
+    return true;
+}
+
+static bool doom_logic_restore_camera(void *userdata, const sdl3d_properties *payload)
+{
+    (void)payload;
+    doom_state *state = (doom_state *)userdata;
+    if (state == NULL)
+    {
+        return false;
+    }
+
+    state->surveillance.active = false;
+    return true;
 }
 
 static void init_dragon_teleporter(doom_state *state)
@@ -210,7 +245,45 @@ static void init_surveillance_camera(doom_state *state)
     camera.fovy = 70.0f;
     camera.projection = SDL3D_CAMERA_PERSPECTIVE;
 
-    doom_surveillance_init(&state->surveillance, button_bounds, camera);
+    doom_surveillance_init(&state->surveillance, button_bounds, camera, SIG_SURVEILLANCE_ENTER, SIG_SURVEILLANCE_EXIT);
+}
+
+static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
+{
+    state->logic = sdl3d_logic_world_create(ctx->bus, ctx->timers);
+    if (state->logic == NULL)
+    {
+        return false;
+    }
+
+    sdl3d_logic_game_adapters adapters;
+    SDL_zero(adapters);
+    adapters.userdata = state;
+    adapters.teleport_player = doom_logic_teleport_player;
+    adapters.set_active_camera = doom_logic_set_active_camera;
+    adapters.restore_camera = doom_logic_restore_camera;
+    sdl3d_logic_world_set_game_adapters(state->logic, &adapters);
+
+    sdl3d_logic_action teleport_action = sdl3d_logic_action_make_teleport_player_from_payload();
+    if (sdl3d_logic_world_bind_logic_action(state->logic, SDL3D_SIGNAL_TELEPORT, &teleport_action) == 0)
+    {
+        return false;
+    }
+
+    sdl3d_logic_action camera_action =
+        sdl3d_logic_action_make_set_active_camera("nukage_surveillance", &state->surveillance.camera);
+    if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_SURVEILLANCE_ENTER, &camera_action) == 0)
+    {
+        return false;
+    }
+
+    sdl3d_logic_action restore_camera_action = sdl3d_logic_action_make_restore_camera();
+    if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_SURVEILLANCE_EXIT, &restore_camera_action) == 0)
+    {
+        return false;
+    }
+
+    return true;
 }
 
 static void start_quit_fade(sdl3d_game_context *ctx, doom_state *state)
@@ -283,11 +356,6 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     {
         return false;
     }
-    if (sdl3d_signal_connect(ctx->bus, SDL3D_SIGNAL_TELEPORT, on_teleport, state) == 0)
-    {
-        return false;
-    }
-
     state->has_font = sdl3d_load_font(SDL3D_MEDIA_DIR "/fonts/Roboto.ttf", 40.0f, &state->debug_font);
     if (!sdl3d_ui_create(state->has_font ? &state->debug_font : NULL, &state->ui))
     {
@@ -321,6 +389,11 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     player_init(&state->player, ctx->input);
     init_dragon_teleporter(state);
     init_surveillance_camera(state);
+    if (!bind_doom_logic(ctx, state))
+    {
+        doom_state_cleanup(state);
+        return false;
+    }
     render_state_init(&state->render);
     sdl3d_transition_start(&state->transition, SDL3D_TRANSITION_FADE, SDL3D_TRANSITION_IN, (sdl3d_color){0, 0, 0, 255},
                            1.0f, -1);
@@ -564,9 +637,10 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
                                             state->player.mover.position.z),
                             dt, ctx->bus);
 
-    doom_surveillance_update(&state->surveillance, sdl3d_vec3_make(state->player.mover.position.x,
-                                                                   state->player.mover.position.y - PLAYER_HEIGHT,
-                                                                   state->player.mover.position.z));
+    doom_surveillance_update(&state->surveillance, state->logic,
+                             sdl3d_vec3_make(state->player.mover.position.x,
+                                             state->player.mover.position.y - PLAYER_HEIGHT,
+                                             state->player.mover.position.z));
 
     sdl3d_sector_watcher_update(&state->sector_watcher, &state->level.unlit, g_sectors,
                                 sdl3d_vec3_make(state->player.mover.position.x,

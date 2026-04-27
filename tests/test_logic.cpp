@@ -69,6 +69,62 @@ static void capture_logic_signal(void *userdata, int signal_id, const sdl3d_prop
     SDL_snprintf(capture->entity_type, sizeof(capture->entity_type), "%s", entity_type);
 }
 
+struct logic_adapter_capture
+{
+    int teleport_count = 0;
+    int set_camera_count = 0;
+    int restore_camera_count = 0;
+    int last_teleporter_id = -1;
+    char last_camera_name[64] = {};
+    sdl3d_teleport_destination last_destination = {};
+    sdl3d_camera3d last_camera = {};
+};
+
+static bool capture_teleport_player(void *userdata, const sdl3d_teleport_destination *destination,
+                                    const sdl3d_properties *payload)
+{
+    logic_adapter_capture *capture = (logic_adapter_capture *)userdata;
+    if (capture == nullptr || destination == nullptr)
+    {
+        return false;
+    }
+
+    capture->teleport_count++;
+    capture->last_destination = *destination;
+    capture->last_teleporter_id = sdl3d_properties_get_int(payload, "teleporter_id", -1);
+    return true;
+}
+
+static bool capture_set_active_camera(void *userdata, const char *camera_name, const sdl3d_camera3d *camera,
+                                      const sdl3d_properties *payload)
+{
+    (void)payload;
+    logic_adapter_capture *capture = (logic_adapter_capture *)userdata;
+    if (capture == nullptr || camera == nullptr)
+    {
+        return false;
+    }
+
+    capture->set_camera_count++;
+    capture->last_camera = *camera;
+    SDL_snprintf(capture->last_camera_name, sizeof(capture->last_camera_name), "%s",
+                 camera_name != nullptr ? camera_name : "");
+    return true;
+}
+
+static bool capture_restore_camera(void *userdata, const sdl3d_properties *payload)
+{
+    (void)payload;
+    logic_adapter_capture *capture = (logic_adapter_capture *)userdata;
+    if (capture == nullptr)
+    {
+        return false;
+    }
+
+    capture->restore_camera_count++;
+    return true;
+}
+
 struct ordered_signal_capture
 {
     int count = 0;
@@ -130,6 +186,33 @@ TEST(LogicWorld, CreateRequiresBus)
 TEST(LogicWorld, DestroyNullIsSafe)
 {
     sdl3d_logic_world_destroy(nullptr);
+}
+
+TEST(LogicWorld, GameAdaptersCanBeSetAndCleared)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_adapter_capture capture{};
+
+    EXPECT_EQ(sdl3d_logic_world_get_game_adapters(world), nullptr);
+    sdl3d_logic_world_set_game_adapters(nullptr, nullptr);
+
+    sdl3d_logic_game_adapters adapters{};
+    adapters.userdata = &capture;
+    adapters.teleport_player = capture_teleport_player;
+    sdl3d_logic_world_set_game_adapters(world, &adapters);
+
+    const sdl3d_logic_game_adapters *stored = sdl3d_logic_world_get_game_adapters(world);
+    ASSERT_NE(stored, nullptr);
+    EXPECT_EQ(stored->userdata, &capture);
+    EXPECT_EQ(stored->teleport_player, capture_teleport_player);
+
+    sdl3d_logic_world_set_game_adapters(world, nullptr);
+    EXPECT_EQ(sdl3d_logic_world_get_game_adapters(world), nullptr);
+    EXPECT_EQ(sdl3d_logic_world_get_game_adapters(nullptr), nullptr);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
 }
 
 TEST(LogicWorld, BoundActionExecutesWhenSignalIsEmitted)
@@ -729,6 +812,146 @@ TEST(LogicWorldActions, SetSectorAmbientClampsNegativeToZero)
 
     EXPECT_TRUE(sdl3d_logic_world_execute_action(world, &action));
     EXPECT_EQ(sectors[0].ambient_sound_id, 0);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, TeleportPlayerFromPayloadForwardsSignalPayload)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_adapter_capture capture{};
+    sdl3d_logic_game_adapters adapters{};
+    adapters.userdata = &capture;
+    adapters.teleport_player = capture_teleport_player;
+    sdl3d_logic_world_set_game_adapters(world, &adapters);
+
+    sdl3d_logic_action action = sdl3d_logic_action_make_teleport_player_from_payload();
+    ASSERT_GT(sdl3d_logic_world_bind_logic_action(world, 81, &action), 0);
+
+    sdl3d_properties *payload = sdl3d_properties_create();
+    sdl3d_properties_set_int(payload, "teleporter_id", 17);
+    sdl3d_properties_set_vec3(payload, "destination", sdl3d_vec3_make(4.0f, 5.0f, 6.0f));
+    sdl3d_properties_set_float(payload, "destination_yaw", 1.25f);
+    sdl3d_properties_set_float(payload, "destination_pitch", -0.125f);
+    sdl3d_properties_set_bool(payload, "use_yaw", true);
+    sdl3d_properties_set_bool(payload, "use_pitch", true);
+
+    sdl3d_signal_emit(bus, 81, payload);
+
+    EXPECT_EQ(capture.teleport_count, 1);
+    EXPECT_EQ(capture.last_teleporter_id, 17);
+    EXPECT_FLOAT_EQ(capture.last_destination.position.x, 4.0f);
+    EXPECT_FLOAT_EQ(capture.last_destination.position.y, 5.0f);
+    EXPECT_FLOAT_EQ(capture.last_destination.position.z, 6.0f);
+    EXPECT_FLOAT_EQ(capture.last_destination.yaw, 1.25f);
+    EXPECT_FLOAT_EQ(capture.last_destination.pitch, -0.125f);
+    EXPECT_TRUE(capture.last_destination.use_yaw);
+    EXPECT_TRUE(capture.last_destination.use_pitch);
+
+    sdl3d_properties_destroy(payload);
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, StaticTeleportPlayerUsesConfiguredDestination)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_adapter_capture capture{};
+    sdl3d_logic_game_adapters adapters{};
+    adapters.userdata = &capture;
+    adapters.teleport_player = capture_teleport_player;
+    sdl3d_logic_world_set_game_adapters(world, &adapters);
+
+    sdl3d_teleport_destination destination{};
+    destination.position = sdl3d_vec3_make(-2.0f, 3.0f, 8.0f);
+    destination.yaw = 0.5f;
+    destination.use_yaw = true;
+
+    sdl3d_logic_action action = sdl3d_logic_action_make_teleport_player(destination);
+    EXPECT_TRUE(sdl3d_logic_world_execute_action(world, &action));
+
+    EXPECT_EQ(capture.teleport_count, 1);
+    EXPECT_FLOAT_EQ(capture.last_destination.position.x, -2.0f);
+    EXPECT_FLOAT_EQ(capture.last_destination.position.y, 3.0f);
+    EXPECT_FLOAT_EQ(capture.last_destination.position.z, 8.0f);
+    EXPECT_FLOAT_EQ(capture.last_destination.yaw, 0.5f);
+    EXPECT_TRUE(capture.last_destination.use_yaw);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, TeleportPlayerRejectsMissingAdapterOrPayload)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    sdl3d_logic_action action = sdl3d_logic_action_make_teleport_player_from_payload();
+
+    EXPECT_FALSE(sdl3d_logic_world_execute_action_with_payload(world, &action, nullptr));
+
+    logic_adapter_capture capture{};
+    sdl3d_logic_game_adapters adapters{};
+    adapters.userdata = &capture;
+    adapters.teleport_player = capture_teleport_player;
+    sdl3d_logic_world_set_game_adapters(world, &adapters);
+
+    EXPECT_FALSE(sdl3d_logic_world_execute_action_with_payload(world, &action, nullptr));
+    EXPECT_EQ(capture.teleport_count, 0);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, CameraActionsUseGameAdaptersInSignalOrder)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_adapter_capture capture{};
+    sdl3d_logic_game_adapters adapters{};
+    adapters.userdata = &capture;
+    adapters.set_active_camera = capture_set_active_camera;
+    adapters.restore_camera = capture_restore_camera;
+    sdl3d_logic_world_set_game_adapters(world, &adapters);
+
+    sdl3d_camera3d camera{};
+    camera.position = sdl3d_vec3_make(1.0f, 2.0f, 3.0f);
+    camera.target = sdl3d_vec3_make(4.0f, 5.0f, 6.0f);
+    camera.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    camera.fovy = 75.0f;
+    camera.projection = SDL3D_CAMERA_PERSPECTIVE;
+
+    sdl3d_logic_action set_camera = sdl3d_logic_action_make_set_active_camera("security", &camera);
+    sdl3d_logic_action restore_camera = sdl3d_logic_action_make_restore_camera();
+    ASSERT_GT(sdl3d_logic_world_bind_logic_action(world, 91, &set_camera), 0);
+    ASSERT_GT(sdl3d_logic_world_bind_logic_action(world, 91, &restore_camera), 0);
+
+    sdl3d_signal_emit(bus, 91, nullptr);
+
+    EXPECT_EQ(capture.set_camera_count, 1);
+    EXPECT_EQ(capture.restore_camera_count, 1);
+    EXPECT_STREQ(capture.last_camera_name, "security");
+    EXPECT_FLOAT_EQ(capture.last_camera.position.x, 1.0f);
+    EXPECT_FLOAT_EQ(capture.last_camera.position.y, 2.0f);
+    EXPECT_FLOAT_EQ(capture.last_camera.position.z, 3.0f);
+    EXPECT_FLOAT_EQ(capture.last_camera.fovy, 75.0f);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldActions, CameraActionsRejectMissingAdapters)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    sdl3d_camera3d camera{};
+    sdl3d_logic_action set_camera = sdl3d_logic_action_make_set_active_camera("missing", &camera);
+    sdl3d_logic_action restore_camera = sdl3d_logic_action_make_restore_camera();
+
+    EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &set_camera));
+    EXPECT_FALSE(sdl3d_logic_world_execute_action(world, &restore_camera));
 
     sdl3d_logic_world_destroy(world);
     sdl3d_signal_bus_destroy(bus);

@@ -4,7 +4,7 @@
 #include <SDL3/SDL_stdinc.h>
 
 void doom_surveillance_init(doom_surveillance_camera *surveillance, sdl3d_bounding_box button_bounds,
-                            sdl3d_camera3d camera)
+                            sdl3d_camera3d camera, int enter_signal_id, int exit_signal_id)
 {
     if (surveillance == NULL)
     {
@@ -13,21 +13,26 @@ void doom_surveillance_init(doom_surveillance_camera *surveillance, sdl3d_boundi
 
     SDL_zerop(surveillance);
     surveillance->button_bounds = button_bounds;
-    sdl3d_logic_contact_sensor_init(&surveillance->button_sensor, 0, button_bounds, 0, SDL3D_TRIGGER_LEVEL);
+    sdl3d_logic_contact_sensor_init(&surveillance->enter_sensor, 0, button_bounds, enter_signal_id,
+                                    SDL3D_TRIGGER_EDGE_ENTER);
+    sdl3d_logic_contact_sensor_init(&surveillance->exit_sensor, 0, button_bounds, exit_signal_id,
+                                    SDL3D_TRIGGER_EDGE_EXIT);
     surveillance->camera = camera;
     surveillance->enabled = true;
 }
 
-bool doom_surveillance_update(doom_surveillance_camera *surveillance, sdl3d_vec3 sample_position)
+bool doom_surveillance_update(doom_surveillance_camera *surveillance, sdl3d_logic_world *world,
+                              sdl3d_vec3 sample_position)
 {
     if (surveillance == NULL)
     {
         return false;
     }
 
-    surveillance->button_sensor.enabled = surveillance->enabled;
-    surveillance->active =
-        sdl3d_logic_contact_sensor_update(&surveillance->button_sensor, NULL, sample_position).active;
+    surveillance->enter_sensor.enabled = surveillance->enabled;
+    surveillance->exit_sensor.enabled = surveillance->enabled;
+    sdl3d_logic_contact_sensor_update(&surveillance->enter_sensor, world, sample_position);
+    sdl3d_logic_contact_sensor_update(&surveillance->exit_sensor, world, sample_position);
     return surveillance->active;
 }
 
