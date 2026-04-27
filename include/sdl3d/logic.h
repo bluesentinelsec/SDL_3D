@@ -22,8 +22,10 @@
 
 #include "sdl3d/action.h"
 #include "sdl3d/actor_registry.h"
+#include "sdl3d/camera.h"
 #include "sdl3d/level.h"
 #include "sdl3d/signal_bus.h"
+#include "sdl3d/teleporter.h"
 #include "sdl3d/timer_pool.h"
 #include "sdl3d/trigger.h"
 
@@ -123,7 +125,57 @@ extern "C"
         SDL3D_LOGIC_ACTION_SET_SECTOR_PUSH = 5,     /**< Set a sector push/current velocity. */
         SDL3D_LOGIC_ACTION_SET_SECTOR_DAMAGE = 6,   /**< Set non-negative sector damage per second. */
         SDL3D_LOGIC_ACTION_SET_SECTOR_AMBIENT = 7,  /**< Set a non-negative ambient sound id. */
+        SDL3D_LOGIC_ACTION_TELEPORT_PLAYER = 8,     /**< Request a game-owned player teleport. */
+        SDL3D_LOGIC_ACTION_SET_ACTIVE_CAMERA = 9,   /**< Request a game-owned active camera override. */
+        SDL3D_LOGIC_ACTION_RESTORE_CAMERA = 10,     /**< Request restoration of the game-owned camera. */
     } sdl3d_logic_action_type;
+
+    /**
+     * @brief Callback used by logic actions that request a player teleport.
+     *
+     * The logic world does not own player movement state, so games provide this
+     * adapter when they want designer-authored signals to move the player. The
+     * payload pointer is borrowed from the signal emission that triggered the
+     * action and may be NULL for immediate/static execution.
+     *
+     * @return true when the game accepted and applied the teleport.
+     */
+    typedef bool (*sdl3d_logic_teleport_player_fn)(void *userdata, const sdl3d_teleport_destination *destination,
+                                                   const sdl3d_properties *payload);
+
+    /**
+     * @brief Callback used by logic actions that request a camera override.
+     *
+     * @p camera_name may be NULL. @p camera points at the camera copied into
+     * the action. The game decides how that override affects rendering.
+     *
+     * @return true when the game accepted and applied the camera override.
+     */
+    typedef bool (*sdl3d_logic_set_active_camera_fn)(void *userdata, const char *camera_name,
+                                                     const sdl3d_camera3d *camera, const sdl3d_properties *payload);
+
+    /**
+     * @brief Callback used by logic actions that request camera restoration.
+     *
+     * @return true when the game accepted and restored normal camera behavior.
+     */
+    typedef bool (*sdl3d_logic_restore_camera_fn)(void *userdata, const sdl3d_properties *payload);
+
+    /**
+     * @brief Game-owned operations exposed to generic logic actions.
+     *
+     * These callbacks keep the logic world open for game-specific effects
+     * without coupling it to a particular player controller, render camera, UI,
+     * inventory, or health model. The struct is copied by value into the world;
+     * userdata remains caller-owned.
+     */
+    typedef struct sdl3d_logic_game_adapters
+    {
+        void *userdata;                                     /**< Caller-owned data passed to every callback. */
+        sdl3d_logic_teleport_player_fn teleport_player;     /**< Optional player teleport adapter. */
+        sdl3d_logic_set_active_camera_fn set_active_camera; /**< Optional camera override adapter. */
+        sdl3d_logic_restore_camera_fn restore_camera;       /**< Optional camera restore adapter. */
+    } sdl3d_logic_game_adapters;
 
     /**
      * @brief Target-aware action executed by a logic world.
@@ -175,6 +227,20 @@ extern "C"
                 sdl3d_logic_target_ref target;
                 int ambient_sound_id;
             } sector_ambient;
+
+            /** @brief Request a game-owned player teleport. */
+            struct
+            {
+                sdl3d_teleport_destination destination;
+                bool use_signal_payload;
+            } teleport_player;
+
+            /** @brief Request a game-owned camera override. */
+            struct
+            {
+                const char *camera_name;
+                sdl3d_camera3d camera;
+            } camera;
         };
     } sdl3d_logic_action;
 
@@ -438,6 +504,19 @@ extern "C"
     const sdl3d_logic_target_context *sdl3d_logic_world_get_target_context(const sdl3d_logic_world *world);
 
     /**
+     * @brief Set callbacks for game-owned logic actions.
+     *
+     * Passing NULL clears all adapters. The world copies the struct by value and
+     * never owns @p adapters->userdata.
+     */
+    void sdl3d_logic_world_set_game_adapters(sdl3d_logic_world *world, const sdl3d_logic_game_adapters *adapters);
+
+    /**
+     * @brief Return the currently configured game adapters, or NULL.
+     */
+    const sdl3d_logic_game_adapters *sdl3d_logic_world_get_game_adapters(const sdl3d_logic_world *world);
+
+    /**
      * @brief Assign a stable editor-facing name to a sector index.
      *
      * The name is copied by the logic world. Names are unique: assigning an
@@ -511,6 +590,34 @@ extern "C"
     sdl3d_logic_action sdl3d_logic_action_make_set_sector_ambient(sdl3d_logic_target_ref target, int ambient_sound_id);
 
     /**
+     * @brief Create an action that teleports the player to a fixed destination.
+     *
+     * Execution requires a teleport_player game adapter on the logic world.
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_teleport_player(sdl3d_teleport_destination destination);
+
+    /**
+     * @brief Create an action that teleports the player from the signal payload.
+     *
+     * The action decodes the payload with sdl3d_teleport_destination_from_payload().
+     * Execution fails if no payload or no teleport_player adapter is available.
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_teleport_player_from_payload(void);
+
+    /**
+     * @brief Create an action that requests a game-owned camera override.
+     *
+     * The camera value is copied into the action. The camera_name pointer is
+     * borrowed and must remain valid while the action can execute.
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_set_active_camera(const char *camera_name, const sdl3d_camera3d *camera);
+
+    /**
+     * @brief Create an action that requests restoration of normal camera behavior.
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_restore_camera(void);
+
+    /**
      * @brief Execute a target-aware action immediately.
      *
      * Core actions execute through sdl3d_action_execute using the world's signal
@@ -521,6 +628,19 @@ extern "C"
      *         or target was invalid.
      */
     bool sdl3d_logic_world_execute_action(sdl3d_logic_world *world, const sdl3d_logic_action *action);
+
+    /**
+     * @brief Execute a target-aware action with an optional signal payload.
+     *
+     * This is the immediate-execution equivalent of a signal binding. It is
+     * mainly useful for actions that consume event payloads, such as
+     * SDL3D_LOGIC_ACTION_TELEPORT_PLAYER actions created with
+     * sdl3d_logic_action_make_teleport_player_from_payload().
+     *
+     * @return true when the action was valid and applied, false otherwise.
+     */
+    bool sdl3d_logic_world_execute_action_with_payload(sdl3d_logic_world *world, const sdl3d_logic_action *action,
+                                                       const sdl3d_properties *payload);
 
     /* ================================================================== */
     /* Sensors                                                            */

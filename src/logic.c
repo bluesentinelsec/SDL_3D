@@ -54,6 +54,7 @@ struct sdl3d_logic_world
     logic_binding *bindings;
     logic_entity_binding *entity_bindings;
     sdl3d_logic_target_context target_context;
+    sdl3d_logic_game_adapters game_adapters;
     sector_alias *sector_aliases;
     int binding_count;
     int entity_binding_count;
@@ -61,6 +62,7 @@ struct sdl3d_logic_world
     int sector_alias_capacity;
     int next_binding_id;
     bool has_target_context;
+    bool has_game_adapters;
 };
 
 static logic_binding *find_binding(const sdl3d_logic_world *world, int binding_id)
@@ -318,14 +320,12 @@ static void set_property_value(sdl3d_properties *target, const char *key, const 
 
 static void execute_binding(void *userdata, int signal_id, const sdl3d_properties *payload)
 {
-    (void)payload;
-
     logic_binding *binding = (logic_binding *)userdata;
     if (binding == NULL || !binding->enabled || binding->signal_id != signal_id)
         return;
 
     sdl3d_logic_world *world = binding->owner;
-    sdl3d_logic_world_execute_action(world, &binding->action);
+    sdl3d_logic_world_execute_action_with_payload(world, &binding->action, payload);
 }
 
 static void execute_entity_binding(void *userdata, int signal_id, const sdl3d_properties *payload)
@@ -460,6 +460,27 @@ void sdl3d_logic_world_set_target_context(sdl3d_logic_world *world, const sdl3d_
 const sdl3d_logic_target_context *sdl3d_logic_world_get_target_context(const sdl3d_logic_world *world)
 {
     return world != NULL && world->has_target_context ? &world->target_context : NULL;
+}
+
+void sdl3d_logic_world_set_game_adapters(sdl3d_logic_world *world, const sdl3d_logic_game_adapters *adapters)
+{
+    if (world == NULL)
+        return;
+
+    if (adapters == NULL)
+    {
+        SDL_zero(world->game_adapters);
+        world->has_game_adapters = false;
+        return;
+    }
+
+    world->game_adapters = *adapters;
+    world->has_game_adapters = true;
+}
+
+const sdl3d_logic_game_adapters *sdl3d_logic_world_get_game_adapters(const sdl3d_logic_world *world)
+{
+    return world != NULL && world->has_game_adapters ? &world->game_adapters : NULL;
 }
 
 bool sdl3d_logic_world_set_sector_name(sdl3d_logic_world *world, int sector_index, const char *name)
@@ -642,12 +663,59 @@ sdl3d_logic_action sdl3d_logic_action_make_set_sector_ambient(sdl3d_logic_target
     return action;
 }
 
+sdl3d_logic_action sdl3d_logic_action_make_teleport_player(sdl3d_teleport_destination destination)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_TELEPORT_PLAYER;
+    action.teleport_player.destination = destination;
+    action.teleport_player.use_signal_payload = false;
+    return action;
+}
+
+sdl3d_logic_action sdl3d_logic_action_make_teleport_player_from_payload(void)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_TELEPORT_PLAYER;
+    action.teleport_player.use_signal_payload = true;
+    return action;
+}
+
+sdl3d_logic_action sdl3d_logic_action_make_set_active_camera(const char *camera_name, const sdl3d_camera3d *camera)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_SET_ACTIVE_CAMERA;
+    action.camera.camera_name = camera_name;
+    if (camera != NULL)
+    {
+        action.camera.camera = *camera;
+    }
+    return action;
+}
+
+sdl3d_logic_action sdl3d_logic_action_make_restore_camera(void)
+{
+    sdl3d_logic_action action;
+    SDL_zero(action);
+    action.type = SDL3D_LOGIC_ACTION_RESTORE_CAMERA;
+    return action;
+}
+
 bool sdl3d_logic_world_execute_action(sdl3d_logic_world *world, const sdl3d_logic_action *action)
+{
+    return sdl3d_logic_world_execute_action_with_payload(world, action, NULL);
+}
+
+bool sdl3d_logic_world_execute_action_with_payload(sdl3d_logic_world *world, const sdl3d_logic_action *action,
+                                                   const sdl3d_properties *payload)
 {
     if (world == NULL || action == NULL)
         return false;
 
     sdl3d_logic_resolved_target target;
+    const sdl3d_logic_game_adapters *adapters = sdl3d_logic_world_get_game_adapters(world);
     switch (action->type)
     {
     case SDL3D_LOGIC_ACTION_CORE:
@@ -710,6 +778,37 @@ bool sdl3d_logic_world_execute_action(sdl3d_logic_world *world, const sdl3d_logi
         }
         target.sector.sector->ambient_sound_id = clamp_non_negative_int(action->sector_ambient.ambient_sound_id);
         return true;
+
+    case SDL3D_LOGIC_ACTION_TELEPORT_PLAYER: {
+        if (adapters == NULL || adapters->teleport_player == NULL)
+        {
+            return false;
+        }
+
+        sdl3d_teleport_destination destination = action->teleport_player.destination;
+        if (action->teleport_player.use_signal_payload &&
+            !sdl3d_teleport_destination_from_payload(payload, &destination))
+        {
+            return false;
+        }
+
+        return adapters->teleport_player(adapters->userdata, &destination, payload);
+    }
+
+    case SDL3D_LOGIC_ACTION_SET_ACTIVE_CAMERA:
+        if (adapters == NULL || adapters->set_active_camera == NULL)
+        {
+            return false;
+        }
+        return adapters->set_active_camera(adapters->userdata, action->camera.camera_name, &action->camera.camera,
+                                           payload);
+
+    case SDL3D_LOGIC_ACTION_RESTORE_CAMERA:
+        if (adapters == NULL || adapters->restore_camera == NULL)
+        {
+            return false;
+        }
+        return adapters->restore_camera(adapters->userdata, payload);
 
     case SDL3D_LOGIC_ACTION_NONE:
         break;
