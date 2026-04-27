@@ -27,6 +27,8 @@
 #include "sdl3d/timer_pool.h"
 #include "sdl3d/trigger.h"
 
+#define SDL3D_LOGIC_MAX_ENTITY_OUTPUTS 8
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -249,6 +251,131 @@ extern "C"
     } sdl3d_logic_proximity_sensor;
 
     /**
+     * @brief Result returned by a logic entity activation.
+     */
+    typedef struct sdl3d_logic_entity_result
+    {
+        bool emitted;     /**< Whether the entity emitted a signal. */
+        int signal_id;    /**< Last emitted signal, or 0 when none. */
+        int output_index; /**< Output slot selected, or -1 when none. */
+    } sdl3d_logic_entity_result;
+
+    /**
+     * @brief Relay entity that emits each configured output in order.
+     *
+     * Relays are useful for fan-out composition: one input signal can trigger
+     * several downstream signals/actions without a bespoke callback.
+     */
+    typedef struct sdl3d_logic_relay
+    {
+        int entity_id;                               /**< Stable editor/game id included in generated payloads. */
+        int outputs[SDL3D_LOGIC_MAX_ENTITY_OUTPUTS]; /**< Signals emitted by activation. */
+        int output_count;                            /**< Number of active entries in @p outputs. */
+        bool enabled;                                /**< Disabled relays emit nothing. */
+    } sdl3d_logic_relay;
+
+    /**
+     * @brief Toggle entity that flips boolean state and emits on/off signals.
+     */
+    typedef struct sdl3d_logic_toggle
+    {
+        int entity_id;  /**< Stable editor/game id included in payloads. */
+        int on_signal;  /**< Signal emitted when state becomes true. */
+        int off_signal; /**< Signal emitted when state becomes false. */
+        bool state;     /**< Current toggle state. */
+        bool enabled;   /**< Disabled toggles ignore activation. */
+    } sdl3d_logic_toggle;
+
+    /**
+     * @brief Counter entity that emits when a threshold is reached.
+     */
+    typedef struct sdl3d_logic_counter
+    {
+        int entity_id;      /**< Stable editor/game id included in payloads. */
+        int threshold;      /**< Activations required to emit. Values less than 1 clamp to 1. */
+        int count;          /**< Current activation count. */
+        int output_signal;  /**< Signal emitted at the threshold. */
+        bool reset_on_fire; /**< If true, count resets after each emission. */
+        bool fired;         /**< True after a non-resetting counter has emitted. */
+        bool enabled;       /**< Disabled counters ignore activation. */
+    } sdl3d_logic_counter;
+
+    /**
+     * @brief Branch entity that compares a property value and emits true/false.
+     *
+     * The property bag, key pointer, and string value pointer are borrowed and
+     * must remain valid until activation. The entity does not own them.
+     */
+    typedef struct sdl3d_logic_branch
+    {
+        int entity_id;                 /**< Stable editor/game id included in payloads. */
+        const sdl3d_properties *props; /**< Property bag to inspect. */
+        const char *key;               /**< Property key to compare. */
+        sdl3d_value expected;          /**< Expected value. String pointer is borrowed. */
+        int true_signal;               /**< Signal emitted when comparison succeeds. */
+        int false_signal;              /**< Signal emitted when comparison fails. */
+        bool enabled;                  /**< Disabled branches ignore activation. */
+    } sdl3d_logic_branch;
+
+    /**
+     * @brief Deterministic random selector that emits one configured output.
+     *
+     * Uses an internal deterministic PRNG state so seeded selectors are stable
+     * in tests, demos, and recorded playback.
+     */
+    typedef struct sdl3d_logic_random
+    {
+        int entity_id;                               /**< Stable editor/game id included in payloads. */
+        int outputs[SDL3D_LOGIC_MAX_ENTITY_OUTPUTS]; /**< Candidate output signals. */
+        int output_count;                            /**< Number of active entries in @p outputs. */
+        unsigned int state;                          /**< Deterministic PRNG state. */
+        bool enabled;                                /**< Disabled selectors emit nothing. */
+    } sdl3d_logic_random;
+
+    /**
+     * @brief Sequence entity that emits outputs in authored order.
+     */
+    typedef struct sdl3d_logic_sequence
+    {
+        int entity_id;                               /**< Stable editor/game id included in payloads. */
+        int outputs[SDL3D_LOGIC_MAX_ENTITY_OUTPUTS]; /**< Ordered output signals. */
+        int output_count;                            /**< Number of active entries in @p outputs. */
+        int next_index;                              /**< Next output slot to emit. */
+        bool loop;                                   /**< If true, wraps to the first output after the last. */
+        bool enabled;                                /**< Disabled sequences emit nothing. */
+    } sdl3d_logic_sequence;
+
+    /**
+     * @brief Once gate that passes only the first activation until reset.
+     */
+    typedef struct sdl3d_logic_once
+    {
+        int entity_id;     /**< Stable editor/game id included in payloads. */
+        int output_signal; /**< Signal emitted on the first activation. */
+        bool fired;        /**< True after the first successful activation. */
+        bool enabled;      /**< Disabled gates emit nothing. */
+    } sdl3d_logic_once;
+
+    /**
+     * @brief Stateful timer entity that emits when its countdown expires.
+     *
+     * This is intended for authored logic graphs that need a timer as an
+     * inspectable entity. It emits at most once per update call, matching the
+     * timer pool's spiral-of-death guard behavior.
+     */
+    typedef struct sdl3d_logic_timer
+    {
+        int entity_id;     /**< Stable editor/game id included in payloads. */
+        float delay;       /**< Initial delay in seconds. Must be > 0 to start. */
+        float remaining;   /**< Remaining countdown while active. */
+        int output_signal; /**< Signal emitted when the timer expires. */
+        bool repeating;    /**< Whether the timer repeats. */
+        float interval;    /**< Repeat interval in seconds. Must be > 0 when repeating. */
+        bool active;       /**< Whether the timer is currently counting down. */
+        bool enabled;      /**< Disabled timers cannot be started or updated. */
+    } sdl3d_logic_timer;
+
+    /**
      * @brief Create a logic world that listens to a signal bus.
      *
      * The logic world references @p bus and @p timers but does not own either
@@ -460,6 +587,181 @@ extern "C"
      * @brief Reset a proximity sensor's edge state.
      */
     void sdl3d_logic_proximity_sensor_reset(sdl3d_logic_proximity_sensor *sensor);
+
+    /* ================================================================== */
+    /* Logic entities                                                     */
+    /* ================================================================== */
+
+    /**
+     * @brief Emit a signal through a logic world's signal bus.
+     *
+     * This is a small convenience for gameplay code that owns a logic world
+     * but should not need direct access to the underlying signal bus pointer.
+     *
+     * @return true when the signal was emitted, false on invalid input.
+     */
+    bool sdl3d_logic_world_emit_signal(sdl3d_logic_world *world, int signal_id, const sdl3d_properties *payload);
+
+    /** @brief Initialize an empty relay entity. */
+    void sdl3d_logic_relay_init(sdl3d_logic_relay *relay, int entity_id);
+
+    /**
+     * @brief Add an output signal to a relay.
+     * @return true on success, false if the relay is NULL or full.
+     */
+    bool sdl3d_logic_relay_add_output(sdl3d_logic_relay *relay, int signal_id);
+
+    /**
+     * @brief Activate a relay, emitting each output in configured order.
+     *
+     * Relays forward @p payload unchanged to each output. The returned result
+     * reports the last signal emitted.
+     */
+    sdl3d_logic_entity_result sdl3d_logic_relay_activate(sdl3d_logic_world *world, sdl3d_logic_relay *relay,
+                                                         const sdl3d_properties *payload);
+
+    /** @brief Initialize a toggle entity. */
+    void sdl3d_logic_toggle_init(sdl3d_logic_toggle *toggle, int entity_id, bool initial_state, int on_signal,
+                                 int off_signal);
+
+    /** @brief Activate a toggle, flipping state and emitting on/off. */
+    sdl3d_logic_entity_result sdl3d_logic_toggle_activate(sdl3d_logic_world *world, sdl3d_logic_toggle *toggle);
+
+    /** @brief Reset a toggle to an explicit state without emitting. */
+    void sdl3d_logic_toggle_reset(sdl3d_logic_toggle *toggle, bool state);
+
+    /** @brief Initialize a counter entity. */
+    void sdl3d_logic_counter_init(sdl3d_logic_counter *counter, int entity_id, int threshold, int output_signal,
+                                  bool reset_on_fire);
+
+    /** @brief Activate a counter and emit when its threshold is reached. */
+    sdl3d_logic_entity_result sdl3d_logic_counter_activate(sdl3d_logic_world *world, sdl3d_logic_counter *counter);
+
+    /** @brief Reset a counter to zero and clear its fired state. */
+    void sdl3d_logic_counter_reset(sdl3d_logic_counter *counter);
+
+    /** @brief Initialize a property branch entity. */
+    void sdl3d_logic_branch_init(sdl3d_logic_branch *branch, int entity_id, const sdl3d_properties *props,
+                                 const char *key, sdl3d_value expected, int true_signal, int false_signal);
+
+    /** @brief Activate a branch and emit true_signal or false_signal. */
+    sdl3d_logic_entity_result sdl3d_logic_branch_activate(sdl3d_logic_world *world, sdl3d_logic_branch *branch);
+
+    /** @brief Initialize a deterministic random selector. */
+    void sdl3d_logic_random_init(sdl3d_logic_random *random, int entity_id, unsigned int seed);
+
+    /**
+     * @brief Add a candidate output signal to a random selector.
+     * @return true on success, false if the selector is NULL or full.
+     */
+    bool sdl3d_logic_random_add_output(sdl3d_logic_random *random, int signal_id);
+
+    /** @brief Activate a random selector and emit one candidate output. */
+    sdl3d_logic_entity_result sdl3d_logic_random_activate(sdl3d_logic_world *world, sdl3d_logic_random *random);
+
+    /** @brief Reset a random selector's deterministic PRNG seed. */
+    void sdl3d_logic_random_reset(sdl3d_logic_random *random, unsigned int seed);
+
+    /** @brief Initialize an ordered sequence entity. */
+    void sdl3d_logic_sequence_init(sdl3d_logic_sequence *sequence, int entity_id, bool loop);
+
+    /**
+     * @brief Add an output signal to a sequence.
+     * @return true on success, false if the sequence is NULL or full.
+     */
+    bool sdl3d_logic_sequence_add_output(sdl3d_logic_sequence *sequence, int signal_id);
+
+    /** @brief Activate a sequence and emit its next output. */
+    sdl3d_logic_entity_result sdl3d_logic_sequence_activate(sdl3d_logic_world *world, sdl3d_logic_sequence *sequence);
+
+    /** @brief Reset a sequence to its first output without emitting. */
+    void sdl3d_logic_sequence_reset(sdl3d_logic_sequence *sequence);
+
+    /** @brief Initialize a once gate. */
+    void sdl3d_logic_once_init(sdl3d_logic_once *once, int entity_id, int output_signal);
+
+    /** @brief Activate a once gate. Emits only the first time until reset. */
+    sdl3d_logic_entity_result sdl3d_logic_once_activate(sdl3d_logic_world *world, sdl3d_logic_once *once);
+
+    /** @brief Reset a once gate so it can emit again. */
+    void sdl3d_logic_once_reset(sdl3d_logic_once *once);
+
+    /** @brief Initialize a timer entity. */
+    void sdl3d_logic_timer_init(sdl3d_logic_timer *timer, int entity_id, float delay, int output_signal, bool repeating,
+                                float interval);
+
+    /**
+     * @brief Start or restart a timer entity.
+     * @return true when the timer was started, false on invalid input.
+     */
+    bool sdl3d_logic_timer_start(sdl3d_logic_timer *timer);
+
+    /**
+     * @brief Update a timer entity by elapsed seconds and emit on expiry.
+     */
+    sdl3d_logic_entity_result sdl3d_logic_timer_update(sdl3d_logic_world *world, sdl3d_logic_timer *timer, float dt);
+
+    /** @brief Stop an active timer entity without emitting. */
+    void sdl3d_logic_timer_stop(sdl3d_logic_timer *timer);
+
+    /** @brief Return whether the timer entity is currently counting down. */
+    bool sdl3d_logic_timer_active(const sdl3d_logic_timer *timer);
+
+    /**
+     * @brief Bind a relay entity to activate when a signal is emitted.
+     *
+     * The entity pointer is borrowed and must remain valid while the binding is
+     * live. Entity bindings execute in signal connection order.
+     *
+     * @return A binding id greater than zero, or zero on failure.
+     */
+    int sdl3d_logic_world_bind_relay(sdl3d_logic_world *world, int signal_id, sdl3d_logic_relay *relay);
+
+    /** @brief Bind a toggle entity to activate when a signal is emitted. */
+    int sdl3d_logic_world_bind_toggle(sdl3d_logic_world *world, int signal_id, sdl3d_logic_toggle *toggle);
+
+    /** @brief Bind a counter entity to activate when a signal is emitted. */
+    int sdl3d_logic_world_bind_counter(sdl3d_logic_world *world, int signal_id, sdl3d_logic_counter *counter);
+
+    /** @brief Bind a branch entity to activate when a signal is emitted. */
+    int sdl3d_logic_world_bind_branch(sdl3d_logic_world *world, int signal_id, sdl3d_logic_branch *branch);
+
+    /** @brief Bind a random selector entity to activate when a signal is emitted. */
+    int sdl3d_logic_world_bind_random(sdl3d_logic_world *world, int signal_id, sdl3d_logic_random *random);
+
+    /** @brief Bind a sequence entity to activate when a signal is emitted. */
+    int sdl3d_logic_world_bind_sequence(sdl3d_logic_world *world, int signal_id, sdl3d_logic_sequence *sequence);
+
+    /** @brief Bind a once gate entity to activate when a signal is emitted. */
+    int sdl3d_logic_world_bind_once(sdl3d_logic_world *world, int signal_id, sdl3d_logic_once *once);
+
+    /**
+     * @brief Remove an entity binding by id.
+     *
+     * Disconnects the binding from the signal bus. No-op if @p binding_id is
+     * invalid or has already been removed.
+     */
+    void sdl3d_logic_world_unbind_entity(sdl3d_logic_world *world, int binding_id);
+
+    /**
+     * @brief Enable or disable an entity binding.
+     *
+     * Disabled entity bindings remain connected and keep their deterministic
+     * order, but they skip entity activation while disabled.
+     */
+    bool sdl3d_logic_world_set_entity_binding_enabled(sdl3d_logic_world *world, int binding_id, bool enabled);
+
+    /**
+     * @brief Return whether an entity binding is currently enabled.
+     *
+     * @return false when the world or binding id is invalid.
+     */
+    bool sdl3d_logic_world_entity_binding_enabled(const sdl3d_logic_world *world, int binding_id);
+
+    /**
+     * @brief Return the number of live entity bindings in the logic world.
+     */
+    int sdl3d_logic_world_entity_binding_count(const sdl3d_logic_world *world);
 
     /**
      * @brief Bind one action to a signal.
