@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <string>
+
 extern "C"
 {
 #include <SDL3/SDL_stdinc.h>
@@ -30,6 +32,11 @@ bool serve_adapter(void *userdata, sdl3d_game_data_runtime *runtime, const char 
     sdl3d_properties_set_vec3(target->props, "velocity", sdl3d_vec3_make(3.0f, 1.0f, 0.0f));
     capture->calls++;
     return true;
+}
+
+std::string fixture_path(const char *filename)
+{
+    return std::string(SDL3D_GAME_DATA_FIXTURE_DIR) + "/" + filename;
 }
 
 } // namespace
@@ -163,6 +170,54 @@ TEST(GameDataRuntime, RegisteredCAdaptersOverrideLuaAdapters)
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, LoadsLuaScriptDependenciesBeforeDependentAdapters)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    const std::string path = fixture_path("module_success.game.json");
+    ASSERT_TRUE(sdl3d_game_data_load_file(path.c_str(), session, &runtime, error, sizeof(error))) << error;
+
+    const int run_signal = sdl3d_game_data_find_signal(runtime, "signal.run");
+    ASSERT_GE(run_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), run_signal, nullptr);
+
+    sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, "entity.target");
+    ASSERT_NE(target, nullptr);
+    const sdl3d_vec3 velocity = sdl3d_properties_get_vec3(target->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_FLOAT_EQ(velocity.x, 7.0f);
+    EXPECT_FLOAT_EQ(velocity.y, 2.0f);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, RejectsLuaScriptManifestErrorsBeforeGameplay)
+{
+    const char *bad_files[] = {
+        "missing_dependency.game.json", "missing_file.game.json", "dependency_cycle.game.json",
+        "missing_function.game.json",   "no_table.game.json",
+    };
+
+    for (const char *file : bad_files)
+    {
+        sdl3d_game_session *session = nullptr;
+        ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+        char error[512]{};
+        sdl3d_game_data_runtime *runtime = nullptr;
+        const std::string path = fixture_path(file);
+        EXPECT_FALSE(sdl3d_game_data_load_file(path.c_str(), session, &runtime, error, sizeof(error))) << file;
+        EXPECT_NE(error[0], '\0') << file;
+        EXPECT_EQ(runtime, nullptr);
+
+        sdl3d_game_data_destroy(runtime);
+        sdl3d_game_session_destroy(session);
+    }
 }
 
 TEST(GameDataRuntime, AuthoredGoalSensorDrivesScoreBinding)

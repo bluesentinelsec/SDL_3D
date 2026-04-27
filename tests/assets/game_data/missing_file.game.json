@@ -1,0 +1,19 @@
+{
+  "schema": "sdl3d.game.v0",
+  "metadata": {
+    "name": "Missing Script File",
+    "id": "test.missing_file",
+    "version": "0.1.0"
+  },
+  "scripts": [
+    {
+      "id": "script.missing",
+      "path": "scripts/does_not_exist.lua",
+      "module": "test.missing"
+    }
+  ],
+  "world": {
+    "name": "world.test",
+    "kind": "fixed_screen"
+  }
+}

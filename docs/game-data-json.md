@@ -163,19 +163,40 @@ Lua-backed adapters are loaded from top-level scripts:
 
 ```json
 "scripts": [
-  { "id": "script.pong", "path": "scripts/pong.lua" }
+  {
+    "id": "script.pong",
+    "path": "scripts/pong.lua",
+    "module": "pong.rules",
+    "dependencies": [],
+    "autoload": true
+  }
 ],
 "adapters": [
   {
     "name": "adapter.pong.reflect_from_paddle",
     "kind": "action",
     "script": "script.pong",
-    "function": "pong.reflect_from_paddle"
+    "function": "reflect_from_paddle"
   }
 ]
 ```
 
-The loader resolves script paths relative to the JSON file, loads them into the embedded Lua runtime, and resolves dotted function names when an adapter is invoked. Native C registration remains available for host applications that need engine-facing integrations or highly optimized behavior; re-registering an adapter name overrides the authored Lua binding.
+The loader resolves script paths relative to the JSON file, validates script ids/modules/dependencies, loads modules in deterministic dependency order, and requires each Lua module file to return a table. Adapter functions are resolved from that module table at load time and stored as Lua registry references, so per-frame adapter calls do not perform dotted global string lookup.
+
+Lua modules should avoid global namespace ownership. A typical module returns a table:
+
+```lua
+local rules = {}
+
+function rules.reflect_from_paddle(target, payload)
+  -- game-specific rule code
+  return true
+end
+
+return rules
+```
+
+Native C registration remains available for host applications that need engine-facing integrations or highly optimized behavior; re-registering an adapter name overrides the authored Lua binding.
 
 Good Pong adapters:
 
@@ -221,6 +242,7 @@ The first runtime loader should:
 - parse `schema` and reject unsupported versions
 - reject duplicate entity, signal, timer, sensor, and binding names
 - validate references before gameplay starts
+- validate script ids, modules, dependency order, and adapter function references before gameplay starts
 - validate component/action payload types
 - preserve unknown properties under entity property bags
 - allow unknown component types only when configured for permissive tooling mode

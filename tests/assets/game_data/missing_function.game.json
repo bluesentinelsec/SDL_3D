@@ -1,0 +1,28 @@
+{
+  "schema": "sdl3d.game.v0",
+  "metadata": {
+    "name": "Missing Function",
+    "id": "test.missing_function",
+    "version": "0.1.0"
+  },
+  "scripts": [
+    {
+      "id": "script.rules",
+      "path": "scripts/rules.lua",
+      "module": "test.rules"
+    }
+  ],
+  "world": {
+    "name": "world.test",
+    "kind": "fixed_screen"
+  },
+  "entities": [],
+  "adapters": [
+    {
+      "name": "adapter.test.missing",
+      "kind": "action",
+      "script": "script.rules",
+      "function": "missing"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "sdl3d.game.v0",
+  "metadata": {
+    "name": "Missing Dependency",
+    "id": "test.missing_dependency",
+    "version": "0.1.0"
+  },
+  "scripts": [
+    {
+      "id": "script.rules",
+      "path": "scripts/rules.lua",
+      "module": "test.rules",
+      "dependencies": ["script.missing"]
+    }
+  ],
+  "world": {
+    "name": "world.test",
+    "kind": "fixed_screen"
+  },
+  "entities": []
+}

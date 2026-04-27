@@ -1,0 +1,54 @@
+{
+  "schema": "sdl3d.game.v0",
+  "metadata": {
+    "name": "Module Success",
+    "id": "test.module_success",
+    "version": "0.1.0"
+  },
+  "scripts": [
+    {
+      "id": "script.shared",
+      "path": "scripts/shared.lua",
+      "module": "test.shared"
+    },
+    {
+      "id": "script.rules",
+      "path": "scripts/rules.lua",
+      "module": "test.rules",
+      "dependencies": ["script.shared"],
+      "autoload": false
+    }
+  ],
+  "world": {
+    "name": "world.test",
+    "kind": "fixed_screen"
+  },
+  "entities": [
+    {
+      "name": "entity.target",
+      "active": true,
+      "properties": {
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.0] }
+      }
+    }
+  ],
+  "signals": ["signal.run"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.run",
+        "actions": [
+          { "type": "adapter.invoke", "adapter": "adapter.test.run", "target": "entity.target" }
+        ]
+      }
+    ]
+  },
+  "adapters": [
+    {
+      "name": "adapter.test.run",
+      "kind": "action",
+      "script": "script.rules",
+      "function": "run"
+    }
+  ]
+}

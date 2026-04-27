@@ -75,4 +75,4 @@ function pong.ball_chase_camera()
     return true
 end
 
-_G.pong = pong
+return pong

@@ -204,18 +204,25 @@ else()
     sdl3d_add_test(sdl3d_game_session_test test_game_session.cpp unit)
     sdl3d_add_test(sdl3d_game_data_test test_game_data.cpp unit)
     if(EMSCRIPTEN)
-        target_compile_definitions(sdl3d_game_data_test PRIVATE SDL3D_PONG_DATA_PATH="/pong.game.json")
+        target_compile_definitions(
+            sdl3d_game_data_test
+            PRIVATE
+                SDL3D_PONG_DATA_PATH="/pong.game.json"
+                SDL3D_GAME_DATA_FIXTURE_DIR="/game_data"
+        )
         target_link_options(
             sdl3d_game_data_test
             PRIVATE
                 "--preload-file=${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json@/pong.game.json"
                 "--preload-file=${CMAKE_SOURCE_DIR}/demos/pong/data/scripts/pong.lua@/scripts/pong.lua"
+                "--preload-file=${CMAKE_SOURCE_DIR}/tests/assets/game_data@/game_data"
         )
     else()
         target_compile_definitions(
             sdl3d_game_data_test
             PRIVATE
                 SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
+                SDL3D_GAME_DATA_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/assets/game_data"
         )
     endif()
     sdl3d_add_test(sdl3d_input_test test_input.cpp unit)
