@@ -127,6 +127,7 @@ target_sources(
         $<TARGET_OBJECTS:sdl3d_ufbx>
         $<TARGET_OBJECTS:sdl3d_stb>
         $<TARGET_OBJECTS:sdl3d_miniaudio>
+        $<TARGET_OBJECTS:sdl3d_yyjson>
 )
 
 target_compile_features(sdl3d PUBLIC c_std_17)
@@ -151,6 +152,7 @@ target_include_directories(
         $<TARGET_PROPERTY:sdl3d_ufbx,INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:sdl3d_stb,INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:sdl3d_miniaudio,INCLUDE_DIRECTORIES>
+        $<TARGET_PROPERTY:sdl3d_yyjson,INCLUDE_DIRECTORIES>
 )
 
 target_compile_definitions(

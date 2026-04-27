@@ -100,6 +100,7 @@ set(SDL3D_TEST_SOURCES
     test_audio.cpp
     test_effects.cpp
     test_game.cpp
+    test_game_session.cpp
     test_input.cpp
     test_transition.cpp
     test_level.cpp
@@ -200,6 +201,7 @@ else()
     sdl3d_add_test(sdl3d_audio_test test_audio.cpp unit)
     sdl3d_add_test(sdl3d_effects_test test_effects.cpp unit)
     sdl3d_add_test(sdl3d_game_test test_game.cpp render)
+    sdl3d_add_test(sdl3d_game_session_test test_game_session.cpp unit)
     sdl3d_add_test(sdl3d_input_test test_input.cpp unit)
     sdl3d_add_test(sdl3d_transition_test test_transition.cpp render)
     sdl3d_add_test(sdl3d_level_test test_level.cpp unit)
@@ -215,6 +217,12 @@ else()
     sdl3d_add_test(doom_surveillance_test test_doom_surveillance.cpp unit)
     target_sources(doom_surveillance_test PRIVATE ${CMAKE_SOURCE_DIR}/demos/doom_level/surveillance.c)
     target_include_directories(doom_surveillance_test PRIVATE ${CMAKE_SOURCE_DIR}/demos/doom_level)
+    sdl3d_add_test(pong_rules_test test_pong_rules.cpp unit)
+    target_sources(pong_rules_test PRIVATE ${CMAKE_SOURCE_DIR}/demos/pong/pong_rules.c)
+    target_include_directories(pong_rules_test PRIVATE ${CMAKE_SOURCE_DIR}/demos/pong)
+    sdl3d_add_test(game_data_json_test test_game_data_json.cpp unit)
+    target_compile_definitions(game_data_json_test PRIVATE SDL3D_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+    target_include_directories(game_data_json_test PRIVATE ${CMAKE_SOURCE_DIR}/vendor)
     sdl3d_add_test(sdl3d_sprite_actor_test test_sprite_actor.cpp unit)
     sdl3d_add_test(sdl3d_teleporter_test test_teleporter.cpp unit)
     sdl3d_add_test(sdl3d_ui_test test_ui.cpp unit)
