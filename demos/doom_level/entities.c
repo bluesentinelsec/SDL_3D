@@ -291,6 +291,7 @@ bool entities_init(entities *e, const sdl3d_level *level, sdl3d_actor_registry *
                 config.signals.idle_started = DOOM_SIGNAL_ROBOT_IDLE_STARTED;
                 config.signals.walk_started = DOOM_SIGNAL_ROBOT_WALK_STARTED;
                 sdl3d_actor_patrol_controller_init(&npc->patrol, robot_number, npc->actor_id, &config);
+                sdl3d_actor_patrol_controller_set_enabled(&npc->patrol, false);
                 sdl3d_actor_patrol_controller_add_waypoint(&npc->patrol, a->position);
                 sdl3d_actor_patrol_controller_add_waypoint(
                     &npc->patrol,

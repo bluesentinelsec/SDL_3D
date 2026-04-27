@@ -132,7 +132,8 @@ extern "C"
         SDL3D_LOGIC_ACTION_TRIGGER_FEEDBACK = 12,    /**< Request a named game-owned feedback cue. */
         SDL3D_LOGIC_ACTION_DOOR_COMMAND = 13,        /**< Request a game-owned door command. */
         SDL3D_LOGIC_ACTION_SET_SECTOR_GEOMETRY = 14, /**< Request a game-owned sector geometry change. */
-        SDL3D_LOGIC_ACTION_LAUNCH_PLAYER = 15        /**< Request a game-owned player launch impulse. */
+        SDL3D_LOGIC_ACTION_LAUNCH_PLAYER = 15,       /**< Request a game-owned player launch impulse. */
+        SDL3D_LOGIC_ACTION_SET_EFFECT_ACTIVE = 16    /**< Request a game-owned named effect enable/disable. */
     } sdl3d_logic_action_type;
 
     /**
@@ -239,6 +240,17 @@ extern "C"
     typedef bool (*sdl3d_logic_launch_player_fn)(void *userdata, sdl3d_vec3 velocity, const sdl3d_properties *payload);
 
     /**
+     * @brief Callback used by logic actions that enable or disable a named effect.
+     *
+     * Effects are intentionally game-owned. A name may map to particles,
+     * lights, post-processing, decals, sound emitters, or any combination.
+     *
+     * @return true when the game recognized and applied the effect state.
+     */
+    typedef bool (*sdl3d_logic_set_effect_active_fn)(void *userdata, const char *effect_name, bool active,
+                                                     const sdl3d_properties *payload);
+
+    /**
      * @brief Game-owned operations exposed to generic logic actions.
      *
      * These callbacks keep the logic world open for game-specific effects
@@ -257,6 +269,7 @@ extern "C"
         sdl3d_logic_door_command_fn door_command;               /**< Optional door command adapter. */
         sdl3d_logic_set_sector_geometry_fn set_sector_geometry; /**< Optional sector geometry adapter. */
         sdl3d_logic_launch_player_fn launch_player;             /**< Optional player launch adapter. */
+        sdl3d_logic_set_effect_active_fn set_effect_active;     /**< Optional named effect adapter. */
     } sdl3d_logic_game_adapters;
 
     /**
@@ -362,6 +375,13 @@ extern "C"
             {
                 sdl3d_vec3 velocity;
             } launch_player;
+
+            /** @brief Request a game-owned named effect state. */
+            struct
+            {
+                const char *effect_name;
+                bool active;
+            } effect;
         };
     } sdl3d_logic_action;
 
@@ -436,6 +456,23 @@ extern "C"
         bool enabled;                 /**< Disabled sensors never emit. */
         bool was_inside;              /**< Previous proximity state, managed by update/reset. */
     } sdl3d_logic_proximity_sensor;
+
+    /**
+     * @brief Sector damage sensor for floor hazards.
+     *
+     * The sensor samples the logic world's active sector context and emits
+     * every update while @p sample_position occupies a sector whose
+     * damage_per_second is greater than or equal to @p minimum_damage_per_second.
+     * Payloads include sensor_id, event, inside, sample_position, sector_index,
+     * damage_per_second, damage_amount, and dt.
+     */
+    typedef struct sdl3d_logic_sector_damage_sensor
+    {
+        int sensor_id;                   /**< Stable editor/game id included in payloads. */
+        int signal_id;                   /**< Signal emitted for damaging floor contact. */
+        float minimum_damage_per_second; /**< Non-negative minimum damage rate required to emit. */
+        bool enabled;                    /**< Disabled sensors never emit. */
+    } sdl3d_logic_sector_damage_sensor;
 
     /**
      * @brief Result returned by a logic entity activation.
@@ -857,6 +894,15 @@ extern "C"
     sdl3d_logic_action sdl3d_logic_action_make_launch_player(sdl3d_vec3 velocity);
 
     /**
+     * @brief Create an action that enables or disables a named game-owned effect.
+     *
+     * Execution requires a set_effect_active game adapter on the logic world.
+     * The effect_name pointer is borrowed and must remain valid while the
+     * action may execute.
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_set_effect_active(const char *effect_name, bool active);
+
+    /**
      * @brief Execute a target-aware action immediately.
      *
      * Core actions execute through sdl3d_action_execute using the world's signal
@@ -946,6 +992,25 @@ extern "C"
      * @brief Reset a proximity sensor's edge state.
      */
     void sdl3d_logic_proximity_sensor_reset(sdl3d_logic_proximity_sensor *sensor);
+
+    /**
+     * @brief Initialize a sector damage sensor.
+     *
+     * The sensor emits level-style events while the sampled point is in a
+     * damaging sector. @p minimum_damage_per_second is clamped to zero.
+     */
+    void sdl3d_logic_sector_damage_sensor_init(sdl3d_logic_sector_damage_sensor *sensor, int sensor_id, int signal_id,
+                                               float minimum_damage_per_second);
+
+    /**
+     * @brief Update a sector damage sensor and emit through @p world when needed.
+     *
+     * @param dt Simulation timestep used to compute damage_amount. Non-positive
+     *        dt prevents emission because no damage is dealt.
+     */
+    sdl3d_logic_sensor_result sdl3d_logic_sector_damage_sensor_update(sdl3d_logic_sector_damage_sensor *sensor,
+                                                                      sdl3d_logic_world *world,
+                                                                      sdl3d_vec3 sample_position, float dt);
 
     /* ================================================================== */
     /* Logic entities                                                     */
