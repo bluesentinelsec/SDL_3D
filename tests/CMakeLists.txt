@@ -262,6 +262,7 @@ else()
     sdl3d_add_test(sdl3d_parity_test test_parity.cpp render)
 
     if(NOT EMSCRIPTEN)
+        sdl3d_add_test(sdl3d_asset_test test_asset.cpp unit)
         sdl3d_add_test(sdl3d_image_test test_image.cpp unit)
         sdl3d_add_test(sdl3d_font_test test_font.cpp unit)
         sdl3d_add_test(sdl3d_time_test test_time.cpp unit)

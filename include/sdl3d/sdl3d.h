@@ -8,6 +8,7 @@
 
 #include "sdl3d/actor_controller.h"
 #include "sdl3d/animation.h"
+#include "sdl3d/asset.h"
 #include "sdl3d/audio.h"
 #include "sdl3d/camera.h"
 #include "sdl3d/collision.h"

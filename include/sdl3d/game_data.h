@@ -18,6 +18,7 @@
 #include <stdbool.h>
 
 #include "sdl3d/actor_registry.h"
+#include "sdl3d/asset.h"
 #include "sdl3d/game.h"
 #include "sdl3d/properties.h"
 
@@ -95,6 +96,24 @@ extern "C"
                                    char *error_buffer, int error_buffer_size);
 
     /**
+     * @brief Load a JSON game data asset through a resolver.
+     *
+     * This is the preferred loading entry point for games that may ship data in
+     * source directories, packed archives, or embedded packs. Script paths in
+     * the JSON are resolved relative to @p asset_path through the same resolver.
+     *
+     * @param assets Resolver containing the JSON asset and referenced scripts.
+     * @param asset_path Virtual path, such as asset://pong.game.json.
+     * @param session Target session whose services receive the authored data.
+     * @param out_runtime Receives the created runtime on success.
+     * @param error_buffer Optional buffer for a human-readable error.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true on success.
+     */
+    bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_path, sdl3d_game_session *session,
+                                    sdl3d_game_data_runtime **out_runtime, char *error_buffer, int error_buffer_size);
+
+    /**
      * @brief Validate a JSON game data file without instantiating runtime state.
      *
      * Validation checks schema, authored names, references, supported generic
@@ -110,6 +129,24 @@ extern "C"
      */
     bool sdl3d_game_data_validate_file(const char *path, const sdl3d_game_data_validation_options *options,
                                        char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Validate a JSON game data asset through a resolver.
+     *
+     * Validation reads the JSON and referenced script files from @p assets, so
+     * authored data can be checked the same way whether it comes from a source
+     * tree, packed archive, or embedded pack.
+     *
+     * @param assets Resolver containing the JSON asset and referenced scripts.
+     * @param asset_path Virtual path, such as asset://pong.game.json.
+     * @param options Optional validation options and diagnostic callback.
+     * @param error_buffer Optional buffer for the first fatal diagnostic.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when no fatal validation error was found.
+     */
+    bool sdl3d_game_data_validate_asset(sdl3d_asset_resolver *assets, const char *asset_path,
+                                        const sdl3d_game_data_validation_options *options, char *error_buffer,
+                                        int error_buffer_size);
 
     /**
      * @brief Destroy a loaded game data runtime.

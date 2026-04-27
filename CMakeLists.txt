@@ -84,6 +84,7 @@ target_sources(
         src/actor_controller.c
         src/actor_registry.c
         src/app.c
+        src/asset.c
         src/animation.c
         src/audio.c
         src/camera.c

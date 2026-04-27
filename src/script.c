@@ -182,9 +182,56 @@ bool sdl3d_script_engine_load_module_file(sdl3d_script_engine *engine, const cha
 
     int result = luaL_loadfile(engine->lua, path);
     if (result == LUA_OK)
-    {
         result = lua_pcall(engine->lua, 0, 1, 0);
+    if (result != LUA_OK)
+    {
+        set_script_error(error_buffer, error_buffer_size, lua_tostring(engine->lua, -1));
+        lua_pop(engine->lua, 1);
+        return false;
     }
+
+    if (!lua_istable(engine->lua, -1))
+    {
+        lua_pop(engine->lua, 1);
+        set_script_error(error_buffer, error_buffer_size, "Lua module must return a table");
+        return false;
+    }
+
+    if (!publish_module_global(engine->lua, module_name))
+    {
+        lua_pop(engine->lua, 1);
+        set_script_error(error_buffer, error_buffer_size, "failed to publish Lua module");
+        return false;
+    }
+
+    *out_module_ref = luaL_ref(engine->lua, LUA_REGISTRYINDEX);
+    if (*out_module_ref == LUA_NOREF || *out_module_ref == LUA_REFNIL)
+    {
+        *out_module_ref = SDL3D_SCRIPT_REF_INVALID;
+        set_script_error(error_buffer, error_buffer_size, "failed to store Lua module reference");
+        return false;
+    }
+
+    return true;
+}
+
+bool sdl3d_script_engine_load_module_buffer(sdl3d_script_engine *engine, const void *source, size_t source_size,
+                                            const char *chunk_name, const char *module_name,
+                                            sdl3d_script_ref *out_module_ref, char *error_buffer, int error_buffer_size)
+{
+    if (out_module_ref != NULL)
+        *out_module_ref = SDL3D_SCRIPT_REF_INVALID;
+    if (engine == NULL || engine->lua == NULL || source == NULL || source_size == 0u || module_name == NULL ||
+        module_name[0] == '\0' || out_module_ref == NULL)
+    {
+        set_script_error(error_buffer, error_buffer_size, "invalid Lua module load arguments");
+        return false;
+    }
+
+    const char *name = chunk_name != NULL && chunk_name[0] != '\0' ? chunk_name : module_name;
+    int result = luaL_loadbufferx(engine->lua, (const char *)source, source_size, name, NULL);
+    if (result == LUA_OK)
+        result = lua_pcall(engine->lua, 0, 1, 0);
     if (result != LUA_OK)
     {
         set_script_error(error_buffer, error_buffer_size, lua_tostring(engine->lua, -1));
