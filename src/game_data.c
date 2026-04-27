@@ -1022,8 +1022,8 @@ bool sdl3d_game_data_load_file(const char *path, sdl3d_game_session *session, sd
     if (doc == NULL)
     {
         if (error_buffer != NULL && error_buffer_size > 0)
-            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "yyjson error %u at byte %zu: %s", err.code, err.pos,
-                         err.msg != NULL ? err.msg : "");
+            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "yyjson error %u at byte %" SDL_PRIu64 ": %s",
+                         err.code, (Uint64)err.pos, err.msg != NULL ? err.msg : "");
         return false;
     }
 
