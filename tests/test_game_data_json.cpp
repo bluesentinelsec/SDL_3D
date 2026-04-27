@@ -191,6 +191,7 @@ TEST(GameDataJson, PongDataDeclaresGenericTopLevelModel)
     EXPECT_TRUE(yyjson_is_obj(yyjson_obj_get(doc.root(), "metadata")));
     EXPECT_TRUE(yyjson_is_obj(yyjson_obj_get(doc.root(), "world")));
     EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(doc.root(), "entities")));
+    EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(doc.root(), "scripts")));
     EXPECT_TRUE(yyjson_is_obj(yyjson_obj_get(doc.root(), "logic")));
 }
 
@@ -213,14 +214,17 @@ TEST(GameDataJson, PongDataHasUniqueAuthoredNames)
     std::set<std::string> entity_names;
     std::set<std::string> signal_names;
     std::set<std::string> adapter_names;
+    std::set<std::string> script_names;
     collect_named_objects(required_array(doc.root(), "entities"), "name", &entity_names);
     collect_signals(required_array(doc.root(), "signals"), &signal_names);
     collect_named_objects(required_array(doc.root(), "adapters"), "name", &adapter_names);
+    collect_named_objects(required_array(doc.root(), "scripts"), "id", &script_names);
 
     EXPECT_NE(entity_names.find("entity.ball"), entity_names.end());
     EXPECT_NE(entity_names.find("entity.score.player"), entity_names.end());
     EXPECT_NE(signal_names.find("signal.ball.serve"), signal_names.end());
     EXPECT_NE(adapter_names.find("adapter.pong.reflect_from_paddle"), adapter_names.end());
+    EXPECT_NE(script_names.find("script.pong"), script_names.end());
 }
 
 TEST(GameDataJson, PongLogicReferencesKnownEntitiesSignalsTimersCamerasAndAdapters)
@@ -233,10 +237,21 @@ TEST(GameDataJson, PongLogicReferencesKnownEntitiesSignalsTimersCamerasAndAdapte
     std::set<std::string> timers;
     std::set<std::string> cameras;
     std::set<std::string> adapters;
+    std::set<std::string> scripts;
 
     collect_named_objects(required_array(doc.root(), "entities"), "name", &entities);
     collect_signals(required_array(doc.root(), "signals"), &signals);
     collect_named_objects(required_array(doc.root(), "adapters"), "name", &adapters);
+    collect_named_objects(required_array(doc.root(), "scripts"), "id", &scripts);
+
+    yyjson_val *adapter_array = required_array(doc.root(), "adapters");
+    for (size_t i = 0; i < yyjson_arr_size(adapter_array); ++i)
+    {
+        yyjson_val *adapter = yyjson_arr_get(adapter_array, i);
+        ASSERT_TRUE(yyjson_is_obj(adapter));
+        expect_ref(scripts, adapter, "script");
+        EXPECT_FALSE(required_string(adapter, "function").empty());
+    }
 
     yyjson_val *world = required_object(doc.root(), "world");
     collect_named_objects(required_array(world, "cameras"), "name", &cameras);

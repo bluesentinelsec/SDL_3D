@@ -110,6 +110,7 @@ target_sources(
         src/rasterizer.c
         src/render_context.c
         src/scene.c
+        src/script.c
         src/signal_bus.c
         src/trigger.c
         src/sprite_actor.c
@@ -129,6 +130,7 @@ target_sources(
         $<TARGET_OBJECTS:sdl3d_stb>
         $<TARGET_OBJECTS:sdl3d_miniaudio>
         $<TARGET_OBJECTS:sdl3d_yyjson>
+        $<TARGET_OBJECTS:sdl3d_lua>
 )
 
 target_compile_features(sdl3d PUBLIC c_std_17)
@@ -154,6 +156,7 @@ target_include_directories(
         $<TARGET_PROPERTY:sdl3d_stb,INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:sdl3d_miniaudio,INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:sdl3d_yyjson,INCLUDE_DIRECTORIES>
+        $<TARGET_PROPERTY:sdl3d_lua,INCLUDE_DIRECTORIES>
 )
 
 target_compile_definitions(
@@ -174,6 +177,9 @@ if(TARGET Threads::Threads)
 endif()
 if(CMAKE_DL_LIBS)
     set_property(TARGET sdl3d APPEND PROPERTY INTERFACE_LINK_LIBRARIES ${CMAKE_DL_LIBS})
+endif()
+if(UNIX AND NOT EMSCRIPTEN)
+    set_property(TARGET sdl3d APPEND PROPERTY INTERFACE_LINK_LIBRARIES m)
 endif()
 if(APPLE)
     set_property(

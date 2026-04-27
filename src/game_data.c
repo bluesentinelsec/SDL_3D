@@ -9,8 +9,12 @@
 #include <SDL3/SDL_scancode.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include "lauxlib.h"
+#include "lua.h"
+#include "script_internal.h"
 #include "sdl3d/input.h"
 #include "sdl3d/math.h"
+#include "sdl3d/script.h"
 #include "sdl3d/signal_bus.h"
 #include "sdl3d/timer_pool.h"
 #include "yyjson.h"
@@ -49,6 +53,7 @@ typedef struct named_action
 typedef struct adapter_entry
 {
     char *name;
+    char *lua_function;
     sdl3d_game_data_adapter_fn callback;
     void *userdata;
 } adapter_entry;
@@ -91,8 +96,11 @@ typedef struct sdl3d_game_data_runtime
     int binding_count;
     sensor_entry *sensors;
     int sensor_count;
+    sdl3d_script_engine *scripts;
+    char *base_dir;
     const char *active_camera;
     float current_dt;
+    unsigned int rng_state;
 } sdl3d_game_data_runtime;
 
 static void set_error(char *buffer, int buffer_size, const char *message)
@@ -101,6 +109,65 @@ static void set_error(char *buffer, int buffer_size, const char *message)
     {
         SDL_snprintf(buffer, (size_t)buffer_size, "%s", message != NULL ? message : "unknown game data error");
     }
+}
+
+static bool path_is_absolute(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+        return false;
+    if (path[0] == '/' || path[0] == '\\')
+        return true;
+    return SDL_strlen(path) > 2 && path[1] == ':';
+}
+
+static char *path_dirname(const char *path)
+{
+    if (path == NULL)
+        return NULL;
+
+    const char *last = NULL;
+    for (const char *p = path; *p != '\0'; ++p)
+    {
+        if (*p == '/' || *p == '\\')
+            last = p;
+    }
+
+    if (last == NULL)
+        return SDL_strdup(".");
+
+    const size_t length = (size_t)(last - path);
+    if (length == 0)
+        return SDL_strdup(path[0] == '\\' ? "\\" : "/");
+
+    char *dir = (char *)SDL_malloc(length + 1);
+    if (dir == NULL)
+        return NULL;
+    SDL_memcpy(dir, path, length);
+    dir[length] = '\0';
+    return dir;
+}
+
+static char *path_join(const char *base_dir, const char *path)
+{
+    if (path == NULL)
+        return NULL;
+    if (path_is_absolute(path) || base_dir == NULL || base_dir[0] == '\0')
+        return SDL_strdup(path);
+
+    const size_t base_len = SDL_strlen(base_dir);
+    const size_t path_len = SDL_strlen(path);
+    const bool needs_sep = base_len > 0 && base_dir[base_len - 1] != '/' && base_dir[base_len - 1] != '\\';
+    char *joined = (char *)SDL_malloc(base_len + (needs_sep ? 1u : 0u) + path_len + 1u);
+    if (joined == NULL)
+        return NULL;
+
+    SDL_memcpy(joined, base_dir, base_len);
+    size_t offset = base_len;
+    if (needs_sep)
+        joined[offset++] = '/';
+    SDL_memcpy(joined + offset, path, path_len);
+    joined[offset + path_len] = '\0';
+    return joined;
 }
 
 static sdl3d_actor_registry *runtime_registry(const sdl3d_game_data_runtime *runtime)
@@ -121,6 +188,192 @@ static sdl3d_timer_pool *runtime_timers(const sdl3d_game_data_runtime *runtime)
 static sdl3d_input_manager *runtime_input(const sdl3d_game_data_runtime *runtime)
 {
     return runtime != NULL ? sdl3d_game_session_get_input(runtime->session) : NULL;
+}
+
+static void actor_set_position(sdl3d_registered_actor *actor, sdl3d_vec3 position);
+
+static sdl3d_game_data_runtime *lua_runtime(lua_State *lua)
+{
+    return (sdl3d_game_data_runtime *)lua_touserdata(lua, lua_upvalueindex(1));
+}
+
+static sdl3d_registered_actor *lua_actor_arg(lua_State *lua, sdl3d_game_data_runtime *runtime, int index)
+{
+    const char *actor_name = luaL_checkstring(lua, index);
+    return sdl3d_game_data_find_actor(runtime, actor_name);
+}
+
+static int lua_get_position(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    sdl3d_registered_actor *actor = lua_actor_arg(lua, runtime, 1);
+    if (actor == NULL)
+    {
+        lua_pushnil(lua);
+        return 1;
+    }
+
+    lua_pushnumber(lua, actor->position.x);
+    lua_pushnumber(lua, actor->position.y);
+    lua_pushnumber(lua, actor->position.z);
+    return 3;
+}
+
+static int lua_set_position(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    sdl3d_registered_actor *actor = lua_actor_arg(lua, runtime, 1);
+    if (actor == NULL)
+        return 0;
+
+    const sdl3d_vec3 position = sdl3d_vec3_make((float)luaL_checknumber(lua, 2), (float)luaL_checknumber(lua, 3),
+                                                (float)luaL_optnumber(lua, 4, actor->position.z));
+    actor_set_position(actor, position);
+    return 0;
+}
+
+static int lua_get_float(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    sdl3d_registered_actor *actor = lua_actor_arg(lua, runtime, 1);
+    const char *key = luaL_checkstring(lua, 2);
+    const float fallback = (float)luaL_optnumber(lua, 3, 0.0);
+    lua_pushnumber(lua, actor != NULL ? sdl3d_properties_get_float(actor->props, key, fallback) : fallback);
+    return 1;
+}
+
+static int lua_set_float(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    sdl3d_registered_actor *actor = lua_actor_arg(lua, runtime, 1);
+    if (actor != NULL)
+        sdl3d_properties_set_float(actor->props, luaL_checkstring(lua, 2), (float)luaL_checknumber(lua, 3));
+    return 0;
+}
+
+static int lua_get_int(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    sdl3d_registered_actor *actor = lua_actor_arg(lua, runtime, 1);
+    const char *key = luaL_checkstring(lua, 2);
+    const int fallback = (int)luaL_optinteger(lua, 3, 0);
+    lua_pushinteger(lua, actor != NULL ? sdl3d_properties_get_int(actor->props, key, fallback) : fallback);
+    return 1;
+}
+
+static int lua_set_int(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    sdl3d_registered_actor *actor = lua_actor_arg(lua, runtime, 1);
+    if (actor != NULL)
+        sdl3d_properties_set_int(actor->props, luaL_checkstring(lua, 2), (int)luaL_checkinteger(lua, 3));
+    return 0;
+}
+
+static int lua_get_bool(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    sdl3d_registered_actor *actor = lua_actor_arg(lua, runtime, 1);
+    const char *key = luaL_checkstring(lua, 2);
+    const bool fallback = lua_toboolean(lua, 3);
+    lua_pushboolean(lua, actor != NULL ? sdl3d_properties_get_bool(actor->props, key, fallback) : fallback);
+    return 1;
+}
+
+static int lua_set_bool(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    sdl3d_registered_actor *actor = lua_actor_arg(lua, runtime, 1);
+    if (actor != NULL)
+        sdl3d_properties_set_bool(actor->props, luaL_checkstring(lua, 2), lua_toboolean(lua, 3));
+    return 0;
+}
+
+static int lua_get_vec3(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    sdl3d_registered_actor *actor = lua_actor_arg(lua, runtime, 1);
+    const char *key = luaL_checkstring(lua, 2);
+    const sdl3d_vec3 value = actor != NULL
+                                 ? sdl3d_properties_get_vec3(actor->props, key, sdl3d_vec3_make(0.0f, 0.0f, 0.0f))
+                                 : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    lua_pushnumber(lua, value.x);
+    lua_pushnumber(lua, value.y);
+    lua_pushnumber(lua, value.z);
+    return 3;
+}
+
+static int lua_set_vec3(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    sdl3d_registered_actor *actor = lua_actor_arg(lua, runtime, 1);
+    if (actor != NULL)
+    {
+        sdl3d_properties_set_vec3(actor->props, luaL_checkstring(lua, 2),
+                                  sdl3d_vec3_make((float)luaL_checknumber(lua, 3), (float)luaL_checknumber(lua, 4),
+                                                  (float)luaL_optnumber(lua, 5, 0.0)));
+    }
+    return 0;
+}
+
+static int lua_get_dt(lua_State *lua)
+{
+    lua_pushnumber(lua, sdl3d_game_data_delta_time(lua_runtime(lua)));
+    return 1;
+}
+
+static int lua_random(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    if (runtime == NULL)
+    {
+        lua_pushnumber(lua, 0.0);
+        return 1;
+    }
+
+    runtime->rng_state = runtime->rng_state * 1664525u + 1013904223u;
+    lua_pushnumber(lua, (lua_Number)((runtime->rng_state >> 8) & 0x00FFFFFFu) / (lua_Number)0x01000000u);
+    return 1;
+}
+
+static int lua_log(lua_State *lua)
+{
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[lua] %s", luaL_checkstring(lua, 1));
+    return 0;
+}
+
+static void register_lua_api(sdl3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scripts == NULL)
+        return;
+
+    lua_State *lua = sdl3d_script_engine_lua_state(runtime->scripts);
+    if (lua == NULL)
+        return;
+
+    lua_newtable(lua);
+#define SDL3D_LUA_BIND(name, fn)                                                                                       \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        lua_pushlightuserdata(lua, runtime);                                                                           \
+        lua_pushcclosure(lua, (fn), 1);                                                                                \
+        lua_setfield(lua, -2, (name));                                                                                 \
+    } while (0)
+    SDL3D_LUA_BIND("get_position", lua_get_position);
+    SDL3D_LUA_BIND("set_position", lua_set_position);
+    SDL3D_LUA_BIND("get_float", lua_get_float);
+    SDL3D_LUA_BIND("set_float", lua_set_float);
+    SDL3D_LUA_BIND("get_int", lua_get_int);
+    SDL3D_LUA_BIND("set_int", lua_set_int);
+    SDL3D_LUA_BIND("get_bool", lua_get_bool);
+    SDL3D_LUA_BIND("set_bool", lua_set_bool);
+    SDL3D_LUA_BIND("get_vec3", lua_get_vec3);
+    SDL3D_LUA_BIND("set_vec3", lua_set_vec3);
+    SDL3D_LUA_BIND("dt", lua_get_dt);
+    SDL3D_LUA_BIND("random", lua_random);
+    SDL3D_LUA_BIND("log", lua_log);
+#undef SDL3D_LUA_BIND
+    lua_setglobal(lua, "sdl3d");
 }
 
 static yyjson_val *obj_get(yyjson_val *object, const char *key)
@@ -317,6 +570,165 @@ static bool append_adapter(sdl3d_game_data_runtime *runtime, const char *name, s
     entry->userdata = userdata;
     runtime->adapter_count++;
     return true;
+}
+
+static bool set_adapter_lua_function(sdl3d_game_data_runtime *runtime, const char *name, const char *function_name)
+{
+    if (runtime == NULL || name == NULL || name[0] == '\0' || function_name == NULL || function_name[0] == '\0')
+        return false;
+
+    adapter_entry *entry = find_adapter(runtime, name);
+    if (entry == NULL)
+    {
+        if (!append_adapter(runtime, name, NULL, NULL))
+            return false;
+        entry = find_adapter(runtime, name);
+    }
+    if (entry == NULL)
+        return false;
+
+    char *copy = SDL_strdup(function_name);
+    if (copy == NULL)
+        return false;
+    SDL_free(entry->lua_function);
+    entry->lua_function = copy;
+    return true;
+}
+
+static bool lua_push_function_path(lua_State *lua, const char *function_name)
+{
+    if (lua == NULL || function_name == NULL || function_name[0] == '\0')
+        return false;
+
+    char *copy = SDL_strdup(function_name);
+    if (copy == NULL)
+    {
+        lua_pushnil(lua);
+        return false;
+    }
+
+    char *save = NULL;
+    char *part = SDL_strtok_r(copy, ".", &save);
+    if (part == NULL)
+    {
+        SDL_free(copy);
+        lua_pushnil(lua);
+        return false;
+    }
+
+    lua_getglobal(lua, part);
+    part = SDL_strtok_r(NULL, ".", &save);
+    while (part != NULL && !lua_isnil(lua, -1))
+    {
+        lua_getfield(lua, -1, part);
+        lua_remove(lua, -2);
+        part = SDL_strtok_r(NULL, ".", &save);
+    }
+
+    SDL_free(copy);
+    return lua_isfunction(lua, -1);
+}
+
+static void lua_push_property_value(lua_State *lua, const sdl3d_value *value)
+{
+    if (value == NULL)
+    {
+        lua_pushnil(lua);
+        return;
+    }
+
+    switch (value->type)
+    {
+    case SDL3D_VALUE_INT:
+        lua_pushinteger(lua, value->as_int);
+        break;
+    case SDL3D_VALUE_FLOAT:
+        lua_pushnumber(lua, value->as_float);
+        break;
+    case SDL3D_VALUE_BOOL:
+        lua_pushboolean(lua, value->as_bool);
+        break;
+    case SDL3D_VALUE_STRING:
+        lua_pushstring(lua, value->as_string != NULL ? value->as_string : "");
+        break;
+    case SDL3D_VALUE_VEC3:
+        lua_newtable(lua);
+        lua_pushnumber(lua, value->as_vec3.x);
+        lua_setfield(lua, -2, "x");
+        lua_pushnumber(lua, value->as_vec3.y);
+        lua_setfield(lua, -2, "y");
+        lua_pushnumber(lua, value->as_vec3.z);
+        lua_setfield(lua, -2, "z");
+        break;
+    case SDL3D_VALUE_COLOR:
+        lua_newtable(lua);
+        lua_pushinteger(lua, value->as_color.r);
+        lua_setfield(lua, -2, "r");
+        lua_pushinteger(lua, value->as_color.g);
+        lua_setfield(lua, -2, "g");
+        lua_pushinteger(lua, value->as_color.b);
+        lua_setfield(lua, -2, "b");
+        lua_pushinteger(lua, value->as_color.a);
+        lua_setfield(lua, -2, "a");
+        break;
+    }
+}
+
+static void lua_push_payload(lua_State *lua, const sdl3d_properties *payload)
+{
+    lua_newtable(lua);
+    if (payload == NULL)
+        return;
+
+    const int count = sdl3d_properties_count(payload);
+    for (int i = 0; i < count; ++i)
+    {
+        const char *key = NULL;
+        if (!sdl3d_properties_get_key_at(payload, i, &key, NULL) || key == NULL)
+            continue;
+        lua_push_property_value(lua, sdl3d_properties_get_value(payload, key));
+        lua_setfield(lua, -2, key);
+    }
+}
+
+static bool call_lua_adapter(sdl3d_game_data_runtime *runtime, const adapter_entry *adapter,
+                             sdl3d_registered_actor *target, const sdl3d_properties *payload)
+{
+    if (runtime == NULL || runtime->scripts == NULL || adapter == NULL || adapter->lua_function == NULL)
+        return false;
+
+    lua_State *lua = sdl3d_script_engine_lua_state(runtime->scripts);
+    if (lua == NULL || !lua_push_function_path(lua, adapter->lua_function))
+    {
+        if (lua != NULL)
+            lua_pop(lua, 1);
+        return false;
+    }
+
+    lua_pushstring(lua, target != NULL ? target->name : "");
+    lua_push_payload(lua, payload);
+    lua_pushstring(lua, adapter->name);
+
+    if (lua_pcall(lua, 3, 1, 0) != LUA_OK)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[lua] adapter %s failed: %s", adapter->name, lua_tostring(lua, -1));
+        lua_pop(lua, 1);
+        return false;
+    }
+
+    const bool ok = lua_isboolean(lua, -1) ? lua_toboolean(lua, -1) : true;
+    lua_pop(lua, 1);
+    return ok;
+}
+
+static bool invoke_adapter(sdl3d_game_data_runtime *runtime, adapter_entry *adapter, sdl3d_registered_actor *target,
+                           const sdl3d_properties *payload)
+{
+    if (adapter == NULL)
+        return false;
+    if (adapter->callback != NULL)
+        return adapter->callback(adapter->userdata, runtime, adapter->name, target, payload);
+    return call_lua_adapter(runtime, adapter, target, payload);
 }
 
 int sdl3d_game_data_find_signal(const sdl3d_game_data_runtime *runtime, const char *name)
@@ -558,6 +970,89 @@ static bool load_timers(sdl3d_game_data_runtime *runtime, yyjson_val *logic, cha
     return true;
 }
 
+static bool load_scripts(sdl3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
+{
+    yyjson_val *scripts = obj_get(root, "scripts");
+    if (!yyjson_is_arr(scripts) || yyjson_arr_size(scripts) == 0)
+        return true;
+
+    runtime->scripts = sdl3d_script_engine_create();
+    if (runtime->scripts == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to create Lua script engine");
+        return false;
+    }
+
+    register_lua_api(runtime);
+    for (size_t i = 0; i < yyjson_arr_size(scripts); ++i)
+    {
+        yyjson_val *script = yyjson_arr_get(scripts, i);
+        const char *path = json_string(script, "path", NULL);
+        if (path == NULL || path[0] == '\0')
+        {
+            set_error(error_buffer, error_buffer_size, "script entry is missing a non-empty path");
+            return false;
+        }
+
+        char *resolved = path_join(runtime->base_dir, path);
+        if (resolved == NULL)
+        {
+            set_error(error_buffer, error_buffer_size, "failed to resolve script path");
+            return false;
+        }
+
+        char script_error[512];
+        const bool ok =
+            sdl3d_script_engine_load_file(runtime->scripts, resolved, script_error, (int)sizeof(script_error));
+        SDL_free(resolved);
+        if (!ok)
+        {
+            set_error(error_buffer, error_buffer_size, script_error);
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool load_lua_adapters(sdl3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                              int error_buffer_size)
+{
+    yyjson_val *adapters = obj_get(root, "adapters");
+    if (!yyjson_is_arr(adapters))
+        return true;
+
+    for (size_t i = 0; i < yyjson_arr_size(adapters); ++i)
+    {
+        yyjson_val *adapter = yyjson_arr_get(adapters, i);
+        const char *function_name = json_string(adapter, "function", NULL);
+        if (function_name == NULL)
+            continue;
+        if (runtime->scripts == NULL)
+        {
+            set_error(error_buffer, error_buffer_size, "Lua adapter declared without any loaded scripts");
+            return false;
+        }
+
+        const char *name = json_string(adapter, "name", NULL);
+        if (!set_adapter_lua_function(runtime, name, function_name))
+        {
+            set_error(error_buffer, error_buffer_size, "failed to register Lua adapter");
+            return false;
+        }
+
+        lua_State *lua = sdl3d_script_engine_lua_state(runtime->scripts);
+        if (lua == NULL || !lua_push_function_path(lua, function_name))
+        {
+            if (lua != NULL)
+                lua_pop(lua, 1);
+            set_error(error_buffer, error_buffer_size, "Lua adapter function was not found");
+            return false;
+        }
+        lua_pop(lua, 1);
+    }
+    return true;
+}
+
 static int action_signal_id(sdl3d_game_data_runtime *runtime, yyjson_val *action, const char *key)
 {
     return sdl3d_game_data_find_signal(runtime, json_string(action, key, NULL));
@@ -679,10 +1174,10 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
     {
         const char *adapter_name = json_string(action, "adapter", NULL);
         adapter_entry *adapter = find_adapter(runtime, adapter_name);
-        if (adapter == NULL || adapter->callback == NULL)
+        if (adapter == NULL)
             return false;
         sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, json_string(action, "target", NULL));
-        return adapter->callback(adapter->userdata, runtime, adapter_name, target, payload);
+        return invoke_adapter(runtime, adapter, target, payload);
     }
 
     if (SDL_strcmp(type, "branch") == 0)
@@ -851,14 +1346,14 @@ static void update_control_components(sdl3d_game_data_runtime *runtime, yyjson_v
             else if (SDL_strcmp(type, "adapter.controller") == 0)
             {
                 adapter_entry *adapter = find_adapter(runtime, json_string(component, "adapter", NULL));
-                if (adapter != NULL && adapter->callback != NULL)
+                if (adapter != NULL)
                 {
                     sdl3d_properties *payload = sdl3d_properties_create();
                     if (payload != NULL)
                     {
                         sdl3d_properties_set_string(payload, "target_actor_name", json_string(component, "target", ""));
                     }
-                    adapter->callback(adapter->userdata, runtime, adapter->name, actor, payload);
+                    invoke_adapter(runtime, adapter, actor, payload);
                     sdl3d_properties_destroy(payload);
                 }
             }
@@ -999,6 +1494,8 @@ bool sdl3d_game_data_register_adapter(sdl3d_game_data_runtime *runtime, const ch
     adapter_entry *entry = find_adapter(runtime, name);
     if (entry != NULL)
     {
+        SDL_free(entry->lua_function);
+        entry->lua_function = NULL;
         entry->callback = callback;
         entry->userdata = userdata;
         return true;
@@ -1044,12 +1541,22 @@ bool sdl3d_game_data_load_file(const char *path, sdl3d_game_session *session, sd
     }
     runtime->doc = doc;
     runtime->session = session;
+    runtime->base_dir = path_dirname(path);
+    runtime->rng_state = 0xC0FFEEu;
+    if (runtime->base_dir == NULL)
+    {
+        sdl3d_game_data_destroy(runtime);
+        set_error(error_buffer, error_buffer_size, "failed to resolve game data base directory");
+        return false;
+    }
 
     yyjson_val *logic = obj_get(root, "logic");
     bool ok = load_signals(runtime, root, error_buffer, error_buffer_size) &&
               load_entities(runtime, root, error_buffer, error_buffer_size) &&
               load_input(runtime, root, error_buffer, error_buffer_size) &&
               load_timers(runtime, logic, error_buffer, error_buffer_size) && load_sensors(runtime, logic) &&
+              load_scripts(runtime, root, error_buffer, error_buffer_size) &&
+              load_lua_adapters(runtime, root, error_buffer, error_buffer_size) &&
               load_bindings(runtime, logic, error_buffer, error_buffer_size);
     if (!ok)
     {
@@ -1074,8 +1581,13 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
             sdl3d_signal_disconnect(bus, runtime->bindings[i].connection_id);
     }
     for (int i = 0; i < runtime->adapter_count; ++i)
+    {
         SDL_free(runtime->adapters[i].name);
+        SDL_free(runtime->adapters[i].lua_function);
+    }
 
+    sdl3d_script_engine_destroy(runtime->scripts);
+    SDL_free(runtime->base_dir);
     SDL_free(runtime->signals);
     SDL_free(runtime->timers);
     SDL_free(runtime->actions);

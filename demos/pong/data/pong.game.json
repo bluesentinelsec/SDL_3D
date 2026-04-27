@@ -34,6 +34,12 @@
       }
     ]
   },
+  "scripts": [
+    {
+      "id": "script.pong",
+      "path": "scripts/pong.lua"
+    }
+  ],
   "input": {
     "contexts": [
       {
@@ -187,6 +193,7 @@
         "radius": { "type": "float", "value": 0.22 },
         "velocity": { "type": "vec2", "value": [0.0, 0.0] },
         "base_speed": { "type": "float", "value": 5.6 },
+        "speedup_per_hit": { "type": "float", "value": 0.28 },
         "max_speed": { "type": "float", "value": 10.0 },
         "active_motion": { "type": "bool", "value": false }
       },
@@ -410,21 +417,29 @@
     {
       "name": "adapter.pong.serve_random",
       "kind": "action",
+      "script": "script.pong",
+      "function": "pong.serve_random",
       "description": "Choose a non-extreme random serve vector for the ball."
     },
     {
       "name": "adapter.pong.reflect_from_paddle",
       "kind": "action",
+      "script": "script.pong",
+      "function": "pong.reflect_from_paddle",
       "description": "Reflect ball velocity using Pong-specific hit-offset deflection."
     },
     {
       "name": "adapter.pong.cpu_track_ball",
       "kind": "controller",
+      "script": "script.pong",
+      "function": "pong.cpu_track_ball",
       "description": "Move the CPU paddle toward the current ball position."
     },
     {
       "name": "adapter.pong.ball_chase_camera",
       "kind": "camera",
+      "script": "script.pong",
+      "function": "pong.ball_chase_camera",
       "description": "Build a third-person camera from the ball position and velocity."
     }
   ]

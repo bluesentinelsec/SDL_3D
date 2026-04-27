@@ -23,12 +23,13 @@ Every file is a JSON object with these fields:
 | `metadata` | yes | Human-readable identity and versioning. |
 | `profiles` | no | Genre/profile hints and required modules. |
 | `assets` | no | Stable asset ids mapped to paths or future archive refs. |
+| `scripts` | no | Lua scripts that provide game-specific behavior used by adapters. |
 | `input` | no | Named actions and bindings. |
 | `world` | yes | World identity, coordinate policy, bounds, cameras, lights. |
 | `entities` | yes | Stable named actors with tags, transforms, properties, and components. |
 | `signals` | no | Authored signal names. |
 | `logic` | no | Sensors, timers, bindings, conditions, and actions. |
-| `adapters` | no | Named game-specific extension points used by logic actions. |
+| `adapters` | no | Named game-specific extension points used by logic actions or controllers. |
 
 ## Naming
 
@@ -156,7 +157,25 @@ Conditions should be generic comparisons over properties, signal payloads, tags,
 
 ## Adapters
 
-Adapters are named extension points registered by game code. They should be narrow and inspectable.
+Adapters are named extension points implemented either by native C callbacks registered at runtime or by Lua functions declared in JSON. They should be narrow and inspectable.
+
+Lua-backed adapters are loaded from top-level scripts:
+
+```json
+"scripts": [
+  { "id": "script.pong", "path": "scripts/pong.lua" }
+],
+"adapters": [
+  {
+    "name": "adapter.pong.reflect_from_paddle",
+    "kind": "action",
+    "script": "script.pong",
+    "function": "pong.reflect_from_paddle"
+  }
+]
+```
+
+The loader resolves script paths relative to the JSON file, loads them into the embedded Lua runtime, and resolves dotted function names when an adapter is invoked. Native C registration remains available for host applications that need engine-facing integrations or highly optimized behavior; re-registering an adapter name overrides the authored Lua binding.
 
 Good Pong adapters:
 
@@ -187,13 +206,13 @@ Those are generic actions and should remain data.
 - score/reset/serve/win bindings
 - adapter calls only for serve randomness, paddle reflection, and CPU steering
 
-Pong still keeps specialized math and policy in C adapters:
+Pong keeps specialized math and policy in Lua adapters loaded from `demos/pong/data/scripts/pong.lua`:
 
 - `adapter.pong.serve_random`
 - `adapter.pong.reflect_from_paddle`
 - `adapter.pong.cpu_track_ball`
 
-The JSON decides when those adapters run and handles the ordinary composition around them, such as score increments, round reset, serve timers, camera toggles, and goal/wall/contact sensors.
+The JSON decides when those adapters run and handles the ordinary composition around them, such as score increments, round reset, serve timers, camera toggles, and goal/wall/contact sensors. The Pong executable does not register Pong-specific C rule callbacks; its C code owns presentation, rendering, and process lifecycle.
 
 ## Loader Acceptance Criteria
 
