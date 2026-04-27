@@ -216,7 +216,17 @@ static sdl3d_game_data_runtime *lua_runtime(lua_State *lua)
 
 static sdl3d_registered_actor *lua_actor_arg(lua_State *lua, sdl3d_game_data_runtime *runtime, int index)
 {
-    const char *actor_name = luaL_checkstring(lua, index);
+    const char *actor_name = NULL;
+    if (lua_istable(lua, index))
+    {
+        lua_getfield(lua, index, "_name");
+        actor_name = lua_tostring(lua, -1);
+        lua_pop(lua, 1);
+    }
+    else
+    {
+        actor_name = luaL_checkstring(lua, index);
+    }
     return sdl3d_game_data_find_actor(runtime, actor_name);
 }
 
@@ -359,6 +369,117 @@ static int lua_log(lua_State *lua)
     return 0;
 }
 
+static void install_lua_helpers(lua_State *lua)
+{
+    static const char *source =
+        "local Actor = {}\n"
+        "local Vec3 = {}\n"
+        "local Vec3_mt = { __index = Vec3 }\n"
+        "local function as_vec3(value, fallback)\n"
+        "    if value == nil then return fallback or Vec3(0, 0, 0) end\n"
+        "    if getmetatable(value) == Vec3_mt then return value end\n"
+        "    return Vec3(value.x or value[1] or 0, value.y or value[2] or 0, value.z or value[3] or 0)\n"
+        "end\n"
+        "function Vec3.new(x, y, z)\n"
+        "    return setmetatable({ x = x or 0, y = y or 0, z = z or 0 }, Vec3_mt)\n"
+        "end\n"
+        "setmetatable(Vec3, { __call = function(_, x, y, z) return Vec3.new(x, y, z) end })\n"
+        "function Vec3.length(v)\n"
+        "    v = as_vec3(v)\n"
+        "    return math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)\n"
+        "end\n"
+        "function Vec3.normalize(v)\n"
+        "    v = as_vec3(v)\n"
+        "    local len = Vec3.length(v)\n"
+        "    if len <= 0.000001 then return Vec3(0, 0, 0) end\n"
+        "    return Vec3(v.x / len, v.y / len, v.z / len)\n"
+        "end\n"
+        "function Vec3.clamp(v, lo, hi)\n"
+        "    v = as_vec3(v)\n"
+        "    return Vec3(math.clamp(v.x, lo, hi), math.clamp(v.y, lo, hi), math.clamp(v.z, lo, hi))\n"
+        "end\n"
+        "function Vec3_mt.__add(a, b)\n"
+        "    a, b = as_vec3(a), as_vec3(b)\n"
+        "    return Vec3(a.x + b.x, a.y + b.y, a.z + b.z)\n"
+        "end\n"
+        "function Vec3_mt.__sub(a, b)\n"
+        "    a, b = as_vec3(a), as_vec3(b)\n"
+        "    return Vec3(a.x - b.x, a.y - b.y, a.z - b.z)\n"
+        "end\n"
+        "function Vec3_mt.__mul(a, b)\n"
+        "    if type(a) == 'number' then return Vec3(a * b.x, a * b.y, a * b.z) end\n"
+        "    if type(b) == 'number' then return Vec3(a.x * b, a.y * b, a.z * b) end\n"
+        "    return Vec3(a.x * b.x, a.y * b.y, a.z * b.z)\n"
+        "end\n"
+        "function math.clamp(value, lo, hi)\n"
+        "    if value < lo then return lo end\n"
+        "    if value > hi then return hi end\n"
+        "    return value\n"
+        "end\n"
+        "function math.lerp(a, b, t)\n"
+        "    return a + (b - a) * t\n"
+        "end\n"
+        "function Actor:get_float(key, fallback) return sdl3d.get_float(self, key, fallback or 0) end\n"
+        "function Actor:set_float(key, value) sdl3d.set_float(self, key, value) end\n"
+        "function Actor:get_int(key, fallback) return sdl3d.get_int(self, key, fallback or 0) end\n"
+        "function Actor:set_int(key, value) sdl3d.set_int(self, key, value) end\n"
+        "function Actor:get_bool(key, fallback) return sdl3d.get_bool(self, key, fallback or false) end\n"
+        "function Actor:set_bool(key, value) sdl3d.set_bool(self, key, value and true or false) end\n"
+        "function Actor:get_vec3(key, fallback)\n"
+        "    local x, y, z = sdl3d.get_vec3(self, key)\n"
+        "    if x == nil then return fallback end\n"
+        "    return Vec3(x, y, z)\n"
+        "end\n"
+        "function Actor:set_vec3(key, value)\n"
+        "    value = as_vec3(value)\n"
+        "    sdl3d.set_vec3(self, key, value.x, value.y, value.z)\n"
+        "end\n"
+        "function Actor:get_position()\n"
+        "    local x, y, z = sdl3d.get_position(self)\n"
+        "    if x == nil then return nil end\n"
+        "    return Vec3(x, y, z)\n"
+        "end\n"
+        "function Actor:set_position(value)\n"
+        "    value = as_vec3(value)\n"
+        "    sdl3d.set_position(self, value.x, value.y, value.z)\n"
+        "end\n"
+        "Actor.__index = function(self, key)\n"
+        "    if key == 'name' then return rawget(self, '_name') end\n"
+        "    if key == 'position' then return Actor.get_position(self) end\n"
+        "    if key == 'velocity' then return Actor.get_vec3(self, 'velocity', Vec3(0, 0, 0)) end\n"
+        "    return Actor[key]\n"
+        "end\n"
+        "Actor.__newindex = function(self, key, value)\n"
+        "    if key == 'position' then Actor.set_position(self, value); return end\n"
+        "    if key == 'velocity' then Actor.set_vec3(self, 'velocity', value); return end\n"
+        "    rawset(self, key, value)\n"
+        "end\n"
+        "function sdl3d.actor(name)\n"
+        "    if name == nil or name == '' then return nil end\n"
+        "    return setmetatable({ _name = name }, Actor)\n"
+        "end\n"
+        "function sdl3d._context(adapter, dt)\n"
+        "    return {\n"
+        "        adapter = adapter,\n"
+        "        name = adapter,\n"
+        "        dt = dt or 0,\n"
+        "        actor = function(self_or_name, maybe_name) return sdl3d.actor(maybe_name or self_or_name) end,\n"
+        "        random = function(_) return sdl3d.random() end,\n"
+        "        log = function(self_or_message, maybe_message) sdl3d.log(maybe_message or self_or_message) end,\n"
+        "    }\n"
+        "end\n"
+        "sdl3d.Actor = Actor\n"
+        "sdl3d.Vec3 = Vec3\n"
+        "sdl3d.api = 'sdl3d.lua.v1'\n"
+        "_G.Vec3 = Vec3\n";
+
+    if (luaL_dostring(lua, source) != LUA_OK)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[lua] failed to install gameplay API: %s", lua_tostring(lua, -1));
+        lua_pop(lua, 1);
+    }
+}
+
 static void register_lua_api(sdl3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->scripts == NULL)
@@ -391,6 +512,7 @@ static void register_lua_api(sdl3d_game_data_runtime *runtime)
     SDL3D_LUA_BIND("log", lua_log);
 #undef SDL3D_LUA_BIND
     lua_setglobal(lua, "sdl3d");
+    install_lua_helpers(lua);
 }
 
 static yyjson_val *obj_get(yyjson_val *object, const char *key)
@@ -691,6 +813,68 @@ static void lua_push_payload(lua_State *lua, const sdl3d_properties *payload)
     }
 }
 
+static void lua_push_actor_wrapper(lua_State *lua, const sdl3d_registered_actor *actor)
+{
+    if (actor == NULL)
+    {
+        lua_pushnil(lua);
+        return;
+    }
+
+    lua_getglobal(lua, "sdl3d");
+    if (!lua_istable(lua, -1))
+    {
+        lua_pop(lua, 1);
+        lua_pushnil(lua);
+        return;
+    }
+    lua_getfield(lua, -1, "actor");
+    if (!lua_isfunction(lua, -1))
+    {
+        lua_pop(lua, 2);
+        lua_pushnil(lua);
+        return;
+    }
+    lua_pushstring(lua, actor->name);
+    if (lua_pcall(lua, 1, 1, 0) != LUA_OK)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[lua] actor wrapper creation failed: %s", lua_tostring(lua, -1));
+        lua_pop(lua, 2);
+        lua_pushnil(lua);
+        return;
+    }
+    lua_remove(lua, -2);
+}
+
+static void lua_push_adapter_context(lua_State *lua, const sdl3d_game_data_runtime *runtime,
+                                     const adapter_entry *adapter)
+{
+    lua_getglobal(lua, "sdl3d");
+    if (!lua_istable(lua, -1))
+    {
+        lua_pop(lua, 1);
+        lua_newtable(lua);
+        return;
+    }
+    lua_getfield(lua, -1, "_context");
+    if (!lua_isfunction(lua, -1))
+    {
+        lua_pop(lua, 2);
+        lua_newtable(lua);
+        return;
+    }
+    lua_pushstring(lua, adapter != NULL ? adapter->name : "");
+    lua_pushnumber(lua, runtime != NULL ? runtime->current_dt : 0.0f);
+    if (lua_pcall(lua, 2, 1, 0) != LUA_OK)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[lua] adapter context creation failed: %s", lua_tostring(lua, -1));
+        lua_pop(lua, 2);
+        lua_newtable(lua);
+        return;
+    }
+    lua_remove(lua, -2);
+}
+
 static bool call_lua_adapter(sdl3d_game_data_runtime *runtime, const adapter_entry *adapter,
                              sdl3d_registered_actor *target, const sdl3d_properties *payload)
 {
@@ -702,9 +886,9 @@ static bool call_lua_adapter(sdl3d_game_data_runtime *runtime, const adapter_ent
     if (lua == NULL || !sdl3d_script_engine_push_ref(runtime->scripts, adapter->lua_function_ref))
         return false;
 
-    lua_pushstring(lua, target != NULL ? target->name : "");
+    lua_push_actor_wrapper(lua, target);
     lua_push_payload(lua, payload);
-    lua_pushstring(lua, adapter->name);
+    lua_push_adapter_context(lua, runtime, adapter);
 
     if (lua_pcall(lua, 3, 1, 0) != LUA_OK)
     {

@@ -188,13 +188,35 @@ Lua modules should avoid global namespace ownership. A typical module returns a 
 ```lua
 local rules = {}
 
-function rules.reflect_from_paddle(target, payload)
+function rules.reflect_from_paddle(ball, payload, ctx)
+  local paddle = ctx:actor(payload.other_actor_name)
+  if paddle == nil then
+    return false
+  end
+
   -- game-specific rule code
+  ball.velocity = Vec3(7.0, 1.5, 0.0)
   return true
 end
 
 return rules
 ```
+
+Lua adapters receive `(target, payload, ctx)`:
+
+- `target` is an actor wrapper for the authored action/component target, or `nil`.
+- `payload` is a table copied from the signal payload or component payload.
+- `ctx` provides adapter context: `ctx.adapter`, `ctx.dt`, `ctx:actor(name)`, `ctx:random()`, and `ctx:log(message)`.
+
+The preferred Lua API is intentionally game-script oriented. Scripts can check `sdl3d.api`, currently `sdl3d.lua.v1`, when they need to guard version-specific behavior:
+
+```lua
+local speed = ball:get_float("base_speed", 5.6)
+ball.position = Vec3(0, 0, 0.12)
+ball.velocity = Vec3.normalize(ball.velocity) * speed
+```
+
+Actor wrappers expose property helpers (`get_float`, `set_float`, `get_int`, `set_int`, `get_bool`, `set_bool`, `get_vec3`, `set_vec3`) plus `position` and `velocity` convenience fields. `Vec3` provides `new`, `length`, `normalize`, `clamp`, and arithmetic operators. `math.clamp` and `math.lerp` are also available. The lower-level `sdl3d.get_*` and `sdl3d.set_*` functions remain available as implementation primitives, but gameplay scripts should prefer the wrapper API.
 
 Native C registration remains available for host applications that need engine-facing integrations or highly optimized behavior; re-registering an adapter name overrides the authored Lua binding.
 
