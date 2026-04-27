@@ -128,6 +128,8 @@ extern "C"
         SDL3D_LOGIC_ACTION_TELEPORT_PLAYER = 8,     /**< Request a game-owned player teleport. */
         SDL3D_LOGIC_ACTION_SET_ACTIVE_CAMERA = 9,   /**< Request a game-owned active camera override. */
         SDL3D_LOGIC_ACTION_RESTORE_CAMERA = 10,     /**< Request restoration of the game-owned camera. */
+        SDL3D_LOGIC_ACTION_SET_AMBIENT = 11,        /**< Request a game-owned ambient audio transition. */
+        SDL3D_LOGIC_ACTION_TRIGGER_FEEDBACK = 12,   /**< Request a named game-owned feedback cue. */
     } sdl3d_logic_action_type;
 
     /**
@@ -162,6 +164,28 @@ extern "C"
     typedef bool (*sdl3d_logic_restore_camera_fn)(void *userdata, const sdl3d_properties *payload);
 
     /**
+     * @brief Callback used by logic actions that request an ambient transition.
+     *
+     * The logic world does not own audio zone tables, so games provide this
+     * adapter to map an ambient id to their own ambient definitions.
+     *
+     * @return true when the game accepted the ambient request.
+     */
+    typedef bool (*sdl3d_logic_set_ambient_fn)(void *userdata, int ambient_id, float fade_seconds,
+                                               const sdl3d_properties *payload);
+
+    /**
+     * @brief Callback used by logic actions that request a named feedback cue.
+     *
+     * Feedback cues are intentionally game-owned because they may be UI flashes,
+     * material changes, lights, particles, sounds, or any combination of those.
+     *
+     * @return true when the game accepted the feedback request.
+     */
+    typedef bool (*sdl3d_logic_trigger_feedback_fn)(void *userdata, const char *feedback_name, float duration_seconds,
+                                                    const sdl3d_properties *payload);
+
+    /**
      * @brief Game-owned operations exposed to generic logic actions.
      *
      * These callbacks keep the logic world open for game-specific effects
@@ -175,6 +199,8 @@ extern "C"
         sdl3d_logic_teleport_player_fn teleport_player;     /**< Optional player teleport adapter. */
         sdl3d_logic_set_active_camera_fn set_active_camera; /**< Optional camera override adapter. */
         sdl3d_logic_restore_camera_fn restore_camera;       /**< Optional camera restore adapter. */
+        sdl3d_logic_set_ambient_fn set_ambient;             /**< Optional ambient audio adapter. */
+        sdl3d_logic_trigger_feedback_fn trigger_feedback;   /**< Optional named feedback adapter. */
     } sdl3d_logic_game_adapters;
 
     /**
@@ -241,6 +267,22 @@ extern "C"
                 const char *camera_name;
                 sdl3d_camera3d camera;
             } camera;
+
+            /** @brief Request a game-owned ambient transition. */
+            struct
+            {
+                const char *payload_key;
+                int ambient_id;
+                float fade_seconds;
+                bool use_signal_payload;
+            } ambient;
+
+            /** @brief Request a named game-owned feedback cue. */
+            struct
+            {
+                const char *feedback_name;
+                float duration_seconds;
+            } feedback;
         };
     } sdl3d_logic_action;
 
@@ -367,10 +409,11 @@ extern "C"
     } sdl3d_logic_counter;
 
     /**
-     * @brief Branch entity that compares a property value and emits true/false.
+     * @brief Branch entity that compares a property or payload value and emits true/false.
      *
      * The property bag, key pointer, and string value pointer are borrowed and
-     * must remain valid until activation. The entity does not own them.
+     * must remain valid until activation. Payload branches inspect the payload
+     * passed to sdl3d_logic_branch_activate_with_payload().
      */
     typedef struct sdl3d_logic_branch
     {
@@ -381,6 +424,7 @@ extern "C"
         int true_signal;               /**< Signal emitted when comparison succeeds. */
         int false_signal;              /**< Signal emitted when comparison fails. */
         bool enabled;                  /**< Disabled branches ignore activation. */
+        bool use_activation_payload;   /**< If true, compare the activation payload instead of @p props. */
     } sdl3d_logic_branch;
 
     /**
@@ -618,6 +662,31 @@ extern "C"
     sdl3d_logic_action sdl3d_logic_action_make_restore_camera(void);
 
     /**
+     * @brief Create an action that requests a fixed ambient id.
+     *
+     * Execution requires a set_ambient game adapter on the logic world.
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_set_ambient(int ambient_id, float fade_seconds);
+
+    /**
+     * @brief Create an action that requests an ambient id from the signal payload.
+     *
+     * The action reads @p payload_key as an int. Missing payloads or missing
+     * keys cause execution to fail rather than silently choosing a fallback.
+     * Execution requires a set_ambient game adapter on the logic world.
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_set_ambient_from_payload(const char *payload_key, float fade_seconds);
+
+    /**
+     * @brief Create an action that requests a named game-owned feedback cue.
+     *
+     * The feedback_name pointer is borrowed and must remain valid while the
+     * action can execute. Negative durations are clamped to zero during
+     * execution.
+     */
+    sdl3d_logic_action sdl3d_logic_action_make_trigger_feedback(const char *feedback_name, float duration_seconds);
+
+    /**
      * @brief Execute a target-aware action immediately.
      *
      * Core actions execute through sdl3d_action_execute using the world's signal
@@ -764,8 +833,17 @@ extern "C"
     void sdl3d_logic_branch_init(sdl3d_logic_branch *branch, int entity_id, const sdl3d_properties *props,
                                  const char *key, sdl3d_value expected, int true_signal, int false_signal);
 
+    /** @brief Initialize a branch entity that compares the activation payload. */
+    void sdl3d_logic_branch_init_payload(sdl3d_logic_branch *branch, int entity_id, const char *key,
+                                         sdl3d_value expected, int true_signal, int false_signal);
+
     /** @brief Activate a branch and emit true_signal or false_signal. */
     sdl3d_logic_entity_result sdl3d_logic_branch_activate(sdl3d_logic_world *world, sdl3d_logic_branch *branch);
+
+    /** @brief Activate a branch with an optional signal payload. */
+    sdl3d_logic_entity_result sdl3d_logic_branch_activate_with_payload(sdl3d_logic_world *world,
+                                                                       sdl3d_logic_branch *branch,
+                                                                       const sdl3d_properties *payload);
 
     /** @brief Initialize a deterministic random selector. */
     void sdl3d_logic_random_init(sdl3d_logic_random *random, int entity_id, unsigned int seed);
