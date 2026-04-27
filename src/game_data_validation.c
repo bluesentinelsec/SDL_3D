@@ -36,6 +36,7 @@ typedef struct validation_context
     const sdl3d_game_data_validation_options *options;
     const char *source_path;
     const char *base_dir;
+    const sdl3d_asset_resolver *assets;
     char *error_buffer;
     int error_buffer_size;
     bool failed;
@@ -305,12 +306,26 @@ static char *path_join(const char *base_dir, const char *path)
     return joined;
 }
 
+static const char *asset_path_without_scheme(const char *path)
+{
+    return path != NULL && SDL_strncmp(path, "asset://", 8) == 0 ? path + 8 : path;
+}
+
 static bool script_path_exists(validation_context *ctx, const char *script_path, const char *json_path)
 {
     char *resolved = path_join(ctx->base_dir, script_path);
     if (resolved == NULL)
     {
         return validation_error(ctx, json_path, "failed to resolve script path '%s'", script_path);
+    }
+
+    if (ctx->assets != NULL)
+    {
+        const bool exists = sdl3d_asset_resolver_exists(ctx->assets, resolved);
+        SDL_free(resolved);
+        if (!exists)
+            return validation_error(ctx, json_path, "script asset '%s' does not exist", script_path);
+        return true;
     }
 
     SDL_IOStream *io = SDL_IOFromFile(resolved, "rb");
@@ -1031,6 +1046,7 @@ static void validation_names_destroy(validation_names *names)
 }
 
 bool sdl3d_game_data_validate_document(yyjson_val *root, const char *source_path, const char *base_dir,
+                                       const sdl3d_asset_resolver *assets,
                                        const sdl3d_game_data_validation_options *options, char *error_buffer,
                                        int error_buffer_size)
 {
@@ -1041,6 +1057,7 @@ bool sdl3d_game_data_validate_document(yyjson_val *root, const char *source_path
         .options = options,
         .source_path = source_path,
         .base_dir = base_dir,
+        .assets = assets,
         .error_buffer = error_buffer,
         .error_buffer_size = error_buffer_size,
         .failed = false,
@@ -1074,13 +1091,86 @@ bool sdl3d_game_data_validate_file(const char *path, const sdl3d_game_data_valid
         return validation_error(&ctx, "$", "invalid game data validation path");
     }
 
-    yyjson_read_err err;
-    yyjson_doc *doc = yyjson_read_file(path, YYJSON_READ_NOFLAG, NULL, &err);
-    if (doc == NULL)
+    char *base_dir = path_dirname(path);
+    const char *asset_name = path;
+    for (const char *p = path; *p != '\0'; ++p)
     {
+        if (*p == '/' || *p == '\\')
+            asset_name = p + 1;
+    }
+    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    if (base_dir == NULL || assets == NULL)
+    {
+        SDL_free(base_dir);
+        sdl3d_asset_resolver_destroy(assets);
         validation_context ctx = {
             .options = options,
             .source_path = path,
+            .error_buffer = error_buffer,
+            .error_buffer_size = error_buffer_size,
+        };
+        return validation_error(&ctx, "$", "failed to create validation asset resolver");
+    }
+
+    char asset_error[256];
+    if (!sdl3d_asset_resolver_mount_directory(assets, base_dir, asset_error, (int)sizeof(asset_error)))
+    {
+        SDL_free(base_dir);
+        sdl3d_asset_resolver_destroy(assets);
+        validation_context ctx = {
+            .options = options,
+            .source_path = path,
+            .error_buffer = error_buffer,
+            .error_buffer_size = error_buffer_size,
+        };
+        return validation_error(&ctx, "$", "failed to mount validation directory: %s", asset_error);
+    }
+
+    const bool ok = sdl3d_game_data_validate_asset(assets, asset_name, options, error_buffer, error_buffer_size);
+    SDL_free(base_dir);
+    sdl3d_asset_resolver_destroy(assets);
+    return ok;
+}
+
+bool sdl3d_game_data_validate_asset(sdl3d_asset_resolver *assets, const char *asset_path,
+                                    const sdl3d_game_data_validation_options *options, char *error_buffer,
+                                    int error_buffer_size)
+{
+    if (error_buffer != NULL && error_buffer_size > 0)
+        error_buffer[0] = '\0';
+    if (assets == NULL || asset_path == NULL || asset_path[0] == '\0')
+    {
+        validation_context ctx = {
+            .options = options,
+            .source_path = asset_path != NULL ? asset_path : "<game-data>",
+            .error_buffer = error_buffer,
+            .error_buffer_size = error_buffer_size,
+        };
+        return validation_error(&ctx, "$", "invalid game data asset validation arguments");
+    }
+
+    sdl3d_asset_buffer buffer;
+    SDL_zero(buffer);
+    char asset_error[256];
+    if (!sdl3d_asset_resolver_read_file(assets, asset_path, &buffer, asset_error, (int)sizeof(asset_error)))
+    {
+        validation_context ctx = {
+            .options = options,
+            .source_path = asset_path,
+            .error_buffer = error_buffer,
+            .error_buffer_size = error_buffer_size,
+        };
+        return validation_error(&ctx, "$", "failed to read game data asset: %s", asset_error);
+    }
+
+    yyjson_read_err err;
+    yyjson_doc *doc = yyjson_read_opts((char *)buffer.data, buffer.size, YYJSON_READ_NOFLAG, NULL, &err);
+    if (doc == NULL)
+    {
+        sdl3d_asset_buffer_free(&buffer);
+        validation_context ctx = {
+            .options = options,
+            .source_path = asset_path,
             .error_buffer = error_buffer,
             .error_buffer_size = error_buffer_size,
         };
@@ -1088,10 +1178,11 @@ bool sdl3d_game_data_validate_file(const char *path, const sdl3d_game_data_valid
                                 err.msg != NULL ? err.msg : "");
     }
 
-    char *base_dir = path_dirname(path);
-    const bool ok = sdl3d_game_data_validate_document(yyjson_doc_get_root(doc), path, base_dir, options, error_buffer,
-                                                      error_buffer_size);
+    char *base_dir = path_dirname(asset_path_without_scheme(asset_path));
+    const bool ok = sdl3d_game_data_validate_document(yyjson_doc_get_root(doc), asset_path, base_dir, assets, options,
+                                                      error_buffer, error_buffer_size);
     SDL_free(base_dir);
     yyjson_doc_free(doc);
+    sdl3d_asset_buffer_free(&buffer);
     return ok;
 }

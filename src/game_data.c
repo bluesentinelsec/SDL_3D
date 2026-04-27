@@ -13,6 +13,7 @@
 #include "lauxlib.h"
 #include "lua.h"
 #include "script_internal.h"
+#include "sdl3d/asset.h"
 #include "sdl3d/input.h"
 #include "sdl3d/math.h"
 #include "sdl3d/script.h"
@@ -114,6 +115,7 @@ typedef struct sdl3d_game_data_runtime
     sdl3d_script_engine *scripts;
     script_entry *script_entries;
     int script_count;
+    sdl3d_asset_resolver *assets;
     char *base_dir;
     const char *active_camera;
     float current_dt;
@@ -162,6 +164,25 @@ static char *path_dirname(const char *path)
     SDL_memcpy(dir, path, length);
     dir[length] = '\0';
     return dir;
+}
+
+static char *path_basename(const char *path)
+{
+    if (path == NULL)
+        return NULL;
+
+    const char *base = path;
+    for (const char *p = path; *p != '\0'; ++p)
+    {
+        if (*p == '/' || *p == '\\')
+            base = p + 1;
+    }
+    return SDL_strdup(base);
+}
+
+static const char *asset_path_without_scheme(const char *path)
+{
+    return path != NULL && SDL_strncmp(path, "asset://", 8) == 0 ? path + 8 : path;
 }
 
 static char *path_join(const char *base_dir, const char *path)
@@ -1188,8 +1209,8 @@ static bool load_script_entry(sdl3d_game_data_runtime *runtime, script_entry *en
         }
     }
 
-    char *resolved = path_join(runtime->base_dir, entry->path);
-    if (resolved == NULL)
+    char *resolved_path = path_join(runtime->base_dir, entry->path);
+    if (resolved_path == NULL)
     {
         if (error_buffer != NULL && error_buffer_size > 0)
         {
@@ -1199,10 +1220,28 @@ static bool load_script_entry(sdl3d_game_data_runtime *runtime, script_entry *en
         return false;
     }
 
+    sdl3d_asset_buffer script_buffer;
+    SDL_zero(script_buffer);
+    char asset_error[256];
+    if (!sdl3d_asset_resolver_read_file(runtime->assets, resolved_path, &script_buffer, asset_error,
+                                        (int)sizeof(asset_error)))
+    {
+        if (error_buffer != NULL && error_buffer_size > 0)
+        {
+            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "Lua script %s (%s) could not be read: %s", entry->id,
+                         entry->path, asset_error);
+        }
+        SDL_free(resolved_path);
+        entry->loading = false;
+        return false;
+    }
+
     char script_error[512];
-    const bool ok = sdl3d_script_engine_load_module_file(runtime->scripts, resolved, entry->module, &entry->module_ref,
-                                                         script_error, (int)sizeof(script_error));
-    SDL_free(resolved);
+    const bool ok = sdl3d_script_engine_load_module_buffer(runtime->scripts, script_buffer.data, script_buffer.size,
+                                                           resolved_path, entry->module, &entry->module_ref,
+                                                           script_error, (int)sizeof(script_error));
+    sdl3d_asset_buffer_free(&script_buffer);
+    SDL_free(resolved_path);
     if (!ok)
     {
         if (error_buffer != NULL && error_buffer_size > 0)
@@ -1837,19 +1876,31 @@ bool sdl3d_game_data_register_adapter(sdl3d_game_data_runtime *runtime, const ch
     return append_adapter(runtime, name, callback, userdata);
 }
 
-bool sdl3d_game_data_load_file(const char *path, sdl3d_game_session *session, sdl3d_game_data_runtime **out_runtime,
-                               char *error_buffer, int error_buffer_size)
+bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_path, sdl3d_game_session *session,
+                                sdl3d_game_data_runtime **out_runtime, char *error_buffer, int error_buffer_size)
 {
     if (out_runtime != NULL)
         *out_runtime = NULL;
-    if (path == NULL || session == NULL || out_runtime == NULL)
+    if (assets == NULL || asset_path == NULL || asset_path[0] == '\0' || session == NULL || out_runtime == NULL)
     {
         set_error(error_buffer, error_buffer_size, "invalid game data load arguments");
         return false;
     }
 
+    sdl3d_asset_buffer buffer;
+    SDL_zero(buffer);
+    char asset_error[256];
+    if (!sdl3d_asset_resolver_read_file(assets, asset_path, &buffer, asset_error, (int)sizeof(asset_error)))
+    {
+        if (error_buffer != NULL && error_buffer_size > 0)
+            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "failed to read game data asset %s: %s", asset_path,
+                         asset_error);
+        return false;
+    }
+
     yyjson_read_err err;
-    yyjson_doc *doc = yyjson_read_file(path, YYJSON_READ_NOFLAG, NULL, &err);
+    yyjson_doc *doc = yyjson_read_opts((char *)buffer.data, buffer.size, YYJSON_READ_NOFLAG, NULL, &err);
+    sdl3d_asset_buffer_free(&buffer);
     if (doc == NULL)
     {
         if (error_buffer != NULL && error_buffer_size > 0)
@@ -1875,7 +1926,8 @@ bool sdl3d_game_data_load_file(const char *path, sdl3d_game_session *session, sd
     }
     runtime->doc = doc;
     runtime->session = session;
-    runtime->base_dir = path_dirname(path);
+    runtime->assets = assets;
+    runtime->base_dir = path_dirname(asset_path_without_scheme(asset_path));
     runtime->rng_state = 0xC0FFEEu;
     if (runtime->base_dir == NULL)
     {
@@ -1883,7 +1935,8 @@ bool sdl3d_game_data_load_file(const char *path, sdl3d_game_session *session, sd
         set_error(error_buffer, error_buffer_size, "failed to resolve game data base directory");
         return false;
     }
-    if (!sdl3d_game_data_validate_document(root, path, runtime->base_dir, NULL, error_buffer, error_buffer_size))
+    if (!sdl3d_game_data_validate_document(root, asset_path, runtime->base_dir, assets, NULL, error_buffer,
+                                           error_buffer_size))
     {
         sdl3d_game_data_destroy(runtime);
         return false;
@@ -1904,8 +1957,53 @@ bool sdl3d_game_data_load_file(const char *path, sdl3d_game_session *session, sd
     }
 
     load_active_camera(runtime, root);
+    runtime->assets = NULL;
     *out_runtime = runtime;
     return true;
+}
+
+bool sdl3d_game_data_load_file(const char *path, sdl3d_game_session *session, sdl3d_game_data_runtime **out_runtime,
+                               char *error_buffer, int error_buffer_size)
+{
+    if (out_runtime != NULL)
+        *out_runtime = NULL;
+    if (path == NULL || path[0] == '\0' || session == NULL || out_runtime == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "invalid game data load arguments");
+        return false;
+    }
+
+    char *base_dir = path_dirname(path);
+    char *asset_name = path_basename(path);
+    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    if (base_dir == NULL || asset_name == NULL || assets == NULL)
+    {
+        SDL_free(base_dir);
+        SDL_free(asset_name);
+        sdl3d_asset_resolver_destroy(assets);
+        set_error(error_buffer, error_buffer_size, "failed to create game data asset resolver");
+        return false;
+    }
+
+    char asset_error[256];
+    const bool mounted = sdl3d_asset_resolver_mount_directory(assets, base_dir, asset_error, (int)sizeof(asset_error));
+    if (!mounted)
+    {
+        if (error_buffer != NULL && error_buffer_size > 0)
+            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "failed to mount game data directory: %s",
+                         asset_error);
+        SDL_free(base_dir);
+        SDL_free(asset_name);
+        sdl3d_asset_resolver_destroy(assets);
+        return false;
+    }
+
+    const bool ok =
+        sdl3d_game_data_load_asset(assets, asset_name, session, out_runtime, error_buffer, error_buffer_size);
+    SDL_free(base_dir);
+    SDL_free(asset_name);
+    sdl3d_asset_resolver_destroy(assets);
+    return ok;
 }
 
 void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)

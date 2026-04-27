@@ -12,6 +12,7 @@
 #define SDL3D_SCRIPT_H
 
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -81,6 +82,29 @@ extern "C"
     bool sdl3d_script_engine_load_module_file(sdl3d_script_engine *engine, const char *path, const char *module_name,
                                               sdl3d_script_ref *out_module_ref, char *error_buffer,
                                               int error_buffer_size);
+
+    /**
+     * @brief Load Lua source bytes as a named module table.
+     *
+     * This is equivalent to sdl3d_script_engine_load_module_file(), but the
+     * caller supplies already-resolved bytes and a chunk name for diagnostics.
+     * Use this when loading scripts through an asset resolver, packed archive,
+     * or embedded resource.
+     *
+     * @param engine Script engine.
+     * @param source Lua source bytes.
+     * @param source_size Number of bytes in @p source.
+     * @param chunk_name Human-readable source name for Lua error messages.
+     * @param module_name Stable module name, such as "pong.rules".
+     * @param out_module_ref Receives a registry reference to the returned table.
+     * @param error_buffer Optional human-readable error output.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when the source loaded, returned a table, and was registered.
+     */
+    bool sdl3d_script_engine_load_module_buffer(sdl3d_script_engine *engine, const void *source, size_t source_size,
+                                                const char *chunk_name, const char *module_name,
+                                                sdl3d_script_ref *out_module_ref, char *error_buffer,
+                                                int error_buffer_size);
 
     /**
      * @brief Resolve a function from a loaded module table.

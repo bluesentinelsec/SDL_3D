@@ -1,12 +1,17 @@
 #include <gtest/gtest.h>
 
+#include <cstdint>
+#include <fstream>
+#include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
 
 extern "C"
 {
 #include <SDL3/SDL_stdinc.h>
 
+#include "sdl3d/asset.h"
 #include "sdl3d/game.h"
 #include "sdl3d/game_data.h"
 #include "sdl3d/math.h"
@@ -58,6 +63,57 @@ void capture_diagnostic(void *userdata, sdl3d_game_data_diagnostic_severity seve
 std::string fixture_path(const char *filename)
 {
     return std::string(SDL3D_GAME_DATA_FIXTURE_DIR) + "/" + filename;
+}
+
+std::string read_fixture_file(const char *filename)
+{
+    std::ifstream in(fixture_path(filename), std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+void append_u16(std::vector<std::uint8_t> &bytes, std::uint16_t value)
+{
+    bytes.push_back(static_cast<std::uint8_t>(value & 0xFFu));
+    bytes.push_back(static_cast<std::uint8_t>((value >> 8u) & 0xFFu));
+}
+
+void append_u32(std::vector<std::uint8_t> &bytes, std::uint32_t value)
+{
+    for (int i = 0; i < 4; ++i)
+        bytes.push_back(static_cast<std::uint8_t>((value >> (i * 8)) & 0xFFu));
+}
+
+void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value)
+{
+    for (int i = 0; i < 8; ++i)
+        bytes.push_back(static_cast<std::uint8_t>((value >> (i * 8)) & 0xFFu));
+}
+
+std::vector<std::uint8_t> make_pack(const std::vector<std::pair<std::string, std::string>> &entries)
+{
+    std::uint64_t table_size = 0;
+    for (const auto &entry : entries)
+        table_size += 18u + static_cast<std::uint64_t>(entry.first.size());
+
+    std::vector<std::uint8_t> bytes;
+    bytes.insert(bytes.end(), {'S', '3', 'D', 'P', 'A', 'K', '1', '\0'});
+    append_u32(bytes, 1);
+    append_u32(bytes, static_cast<std::uint32_t>(entries.size()));
+    append_u64(bytes, 24);
+
+    std::uint64_t data_offset = 24u + table_size;
+    for (const auto &entry : entries)
+    {
+        append_u16(bytes, static_cast<std::uint16_t>(entry.first.size()));
+        append_u64(bytes, data_offset);
+        append_u64(bytes, static_cast<std::uint64_t>(entry.second.size()));
+        bytes.insert(bytes.end(), entry.first.begin(), entry.first.end());
+        data_offset += static_cast<std::uint64_t>(entry.second.size());
+    }
+
+    for (const auto &entry : entries)
+        bytes.insert(bytes.end(), entry.second.begin(), entry.second.end());
+    return bytes;
 }
 
 } // namespace
@@ -236,6 +292,54 @@ TEST(GameDataRuntime, LoadsLuaScriptDependenciesBeforeDependentAdapters)
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, LoadsLuaBackedGameDataFromMemoryPack)
+{
+    const std::string game_json = read_fixture_file("module_success.game.json");
+    const std::string shared_lua = read_fixture_file("scripts/shared.lua");
+    const std::string rules_lua = read_fixture_file("scripts/rules.lua");
+    ASSERT_FALSE(game_json.empty());
+    ASSERT_FALSE(shared_lua.empty());
+    ASSERT_FALSE(rules_lua.empty());
+
+    const std::vector<std::uint8_t> pack = make_pack({
+        {"module_success.game.json", game_json},
+        {"scripts/shared.lua", shared_lua},
+        {"scripts/rules.lua", rules_lua},
+    });
+
+    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    char error[512]{};
+    ASSERT_TRUE(sdl3d_asset_resolver_mount_memory_pack(assets, pack.data(), pack.size(), "module-fixture", error,
+                                                       sizeof(error)))
+        << error;
+    EXPECT_TRUE(
+        sdl3d_game_data_validate_asset(assets, "asset://module_success.game.json", nullptr, error, sizeof(error)))
+        << error;
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        sdl3d_game_data_load_asset(assets, "asset://module_success.game.json", session, &runtime, error, sizeof(error)))
+        << error;
+
+    const int run_signal = sdl3d_game_data_find_signal(runtime, "signal.run");
+    ASSERT_GE(run_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), run_signal, nullptr);
+
+    sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, "entity.target");
+    ASSERT_NE(target, nullptr);
+    EXPECT_FLOAT_EQ(target->position.x, 1.0f);
+    EXPECT_FLOAT_EQ(target->position.y, 2.0f);
+    EXPECT_TRUE(sdl3d_properties_get_bool(target->props, "ctx_ok", false));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    sdl3d_asset_resolver_destroy(assets);
 }
 
 TEST(GameDataRuntime, ValidatesPongDataWithoutDiagnostics)
