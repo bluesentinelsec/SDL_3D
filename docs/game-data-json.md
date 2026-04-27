@@ -214,6 +214,22 @@ Bad Pong adapters:
 
 Those are generic actions and should remain data.
 
+## Validation
+
+Game data is validated before runtime state is instantiated. Host tools can call `sdl3d_game_data_validate_file()` directly to collect diagnostics without creating actors, input bindings, timers, or signal handlers. `sdl3d_game_data_load_file()` runs the same validation pass before loading scripts and wiring logic.
+
+Diagnostics are designed for authored content. Errors include the source file, a best-effort JSON path, and the referenced name when a reference cannot be resolved. For example, a binding action that targets a missing entity reports the action path and the missing entity name. Validation currently checks:
+
+- schema support
+- duplicate names within entity, signal, script, adapter, input action, timer, camera, and sensor namespaces
+- script ids, modules, dependencies, dependency cycles, and script file existence
+- input binding structure
+- sensor, timer, binding, action, component, adapter, and camera references
+- supported generic logic action types and required action payloads
+- warnings for suspicious data such as unused adapters, unused scripts, or unsupported component types
+
+Validation warnings are non-fatal by default. Tooling can set `treat_warnings_as_errors` in `sdl3d_game_data_validation_options` when strict authoring is desired.
+
 ## Pong Data Proof
 
 `demos/pong/data/pong.game.json` is the first concrete file using this format. It is loaded by the Pong demo through `sdl3d_game_data_load_file()`, which instantiates the authored actors, input actions, signals, timers, sensors, and bindings into the managed game session.

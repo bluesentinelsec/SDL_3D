@@ -1,0 +1,20 @@
+{
+  "schema": "sdl3d.game.v0",
+  "metadata": {
+    "name": "Unsupported Component Warning",
+    "id": "test.warning_unsupported_component",
+    "version": "0.1.0"
+  },
+  "world": {
+    "name": "world.test",
+    "kind": "fixed_screen"
+  },
+  "entities": [
+    {
+      "name": "entity.future",
+      "components": [
+        { "type": "custom.future_component" }
+      ]
+    }
+  ]
+}

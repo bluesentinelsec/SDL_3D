@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <string>
+#include <vector>
 
 extern "C"
 {
@@ -21,6 +22,18 @@ struct AdapterCapture
     int calls = 0;
 };
 
+struct CapturedDiagnostic
+{
+    sdl3d_game_data_diagnostic_severity severity = SDL3D_GAME_DATA_DIAGNOSTIC_WARNING;
+    std::string path;
+    std::string message;
+};
+
+struct DiagnosticCapture
+{
+    std::vector<CapturedDiagnostic> diagnostics;
+};
+
 bool serve_adapter(void *userdata, sdl3d_game_data_runtime *runtime, const char *adapter_name,
                    sdl3d_registered_actor *target, const sdl3d_properties *payload)
 {
@@ -32,6 +45,14 @@ bool serve_adapter(void *userdata, sdl3d_game_data_runtime *runtime, const char 
     sdl3d_properties_set_vec3(target->props, "velocity", sdl3d_vec3_make(3.0f, 1.0f, 0.0f));
     capture->calls++;
     return true;
+}
+
+void capture_diagnostic(void *userdata, sdl3d_game_data_diagnostic_severity severity, const char *json_path,
+                        const char *message)
+{
+    auto *capture = static_cast<DiagnosticCapture *>(userdata);
+    capture->diagnostics.push_back(
+        {severity, json_path != nullptr ? json_path : "", message != nullptr ? message : ""});
 }
 
 std::string fixture_path(const char *filename)
@@ -194,6 +215,56 @@ TEST(GameDataRuntime, LoadsLuaScriptDependenciesBeforeDependentAdapters)
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, ValidatesPongDataWithoutDiagnostics)
+{
+    DiagnosticCapture capture;
+    sdl3d_game_data_validation_options options{};
+    options.diagnostic = capture_diagnostic;
+    options.userdata = &capture;
+
+    char error[512]{};
+    EXPECT_TRUE(sdl3d_game_data_validate_file(SDL3D_PONG_DATA_PATH, &options, error, sizeof(error))) << error;
+    EXPECT_TRUE(capture.diagnostics.empty());
+    EXPECT_EQ(error[0], '\0');
+}
+
+TEST(GameDataRuntime, ValidationReportsJsonPathAndMissingReference)
+{
+    DiagnosticCapture capture;
+    sdl3d_game_data_validation_options options{};
+    options.diagnostic = capture_diagnostic;
+    options.userdata = &capture;
+
+    char error[512]{};
+    const std::string path = fixture_path("bad_reference.game.json");
+    EXPECT_FALSE(sdl3d_game_data_validate_file(path.c_str(), &options, error, sizeof(error)));
+    ASSERT_FALSE(capture.diagnostics.empty());
+    EXPECT_EQ(capture.diagnostics[0].severity, SDL3D_GAME_DATA_DIAGNOSTIC_ERROR);
+    EXPECT_NE(capture.diagnostics[0].path.find("$.logic.bindings[0].actions[0]"), std::string::npos);
+    EXPECT_NE(capture.diagnostics[0].message.find("entity.missing"), std::string::npos);
+    EXPECT_NE(std::string(error).find("$.logic.bindings[0].actions[0]"), std::string::npos);
+}
+
+TEST(GameDataRuntime, ValidationReportsWarningsWithoutFailingByDefault)
+{
+    DiagnosticCapture capture;
+    sdl3d_game_data_validation_options options{};
+    options.diagnostic = capture_diagnostic;
+    options.userdata = &capture;
+
+    char error[512]{};
+    const std::string path = fixture_path("warning_unsupported_component.game.json");
+    EXPECT_TRUE(sdl3d_game_data_validate_file(path.c_str(), &options, error, sizeof(error))) << error;
+    ASSERT_EQ(capture.diagnostics.size(), 1u);
+    EXPECT_EQ(capture.diagnostics[0].severity, SDL3D_GAME_DATA_DIAGNOSTIC_WARNING);
+    EXPECT_NE(capture.diagnostics[0].message.find("unsupported component type"), std::string::npos);
+    EXPECT_EQ(error[0], '\0');
+
+    options.treat_warnings_as_errors = true;
+    EXPECT_FALSE(sdl3d_game_data_validate_file(path.c_str(), &options, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("unsupported component type"), std::string::npos);
 }
 
 TEST(GameDataRuntime, RejectsLuaScriptManifestErrorsBeforeGameplay)
