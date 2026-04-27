@@ -176,7 +176,7 @@ Those are generic actions and should remain data.
 
 ## Pong Data Proof
 
-`demos/pong/data/pong.game.json` is the first concrete file using this format. It captures the target authoring shape for Pong:
+`demos/pong/data/pong.game.json` is the first concrete file using this format. It is loaded by the Pong demo through `sdl3d_game_data_load_file()`, which instantiates the authored actors, input actions, signals, timers, sensors, and bindings into the managed game session.
 
 - fixed-screen non-sector world
 - player and CPU paddles
@@ -187,7 +187,13 @@ Those are generic actions and should remain data.
 - score/reset/serve/win bindings
 - adapter calls only for serve randomness, paddle reflection, and CPU steering
 
-The current Pong demo still has C rule code for the playable implementation. The next slice should load this JSON into the session, instantiate generic actors/properties, and then migrate the current imperative rule wiring to the data graph.
+Pong still keeps specialized math and policy in C adapters:
+
+- `adapter.pong.serve_random`
+- `adapter.pong.reflect_from_paddle`
+- `adapter.pong.cpu_track_ball`
+
+The JSON decides when those adapters run and handles the ordinary composition around them, such as score increments, round reset, serve timers, camera toggles, and goal/wall/contact sensors.
 
 ## Loader Acceptance Criteria
 

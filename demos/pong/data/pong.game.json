@@ -71,6 +71,13 @@
             ]
           },
           {
+            "name": "action.restart",
+            "bindings": [
+              { "device": "keyboard", "key": "RETURN" },
+              { "device": "gamepad", "button": "SOUTH" }
+            ]
+          },
+          {
             "name": "action.camera.ball.toggle",
             "bindings": [
               { "device": "keyboard", "key": "B" }
@@ -314,6 +321,12 @@
         "signal": "signal.ball.hit_paddle",
         "actions": [
           { "type": "adapter.invoke", "adapter": "adapter.pong.reflect_from_paddle", "target": "entity.ball" },
+          { "type": "signal.emit", "signal": "signal.presentation.flash_border" }
+        ]
+      },
+      {
+        "signal": "signal.ball.hit_wall",
+        "actions": [
           { "type": "signal.emit", "signal": "signal.presentation.flash_border" }
         ]
       },
