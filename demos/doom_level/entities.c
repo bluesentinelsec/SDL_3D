@@ -11,6 +11,10 @@
 #define ROBOT_GROUND_STEP_HEIGHT 1.1f
 #define ROBOT_COLLISION_HEIGHT 2.0f
 #define ROBOT_DEFAULT_ARRIVAL_RADIUS 0.12f
+#define DOOM_SIGNAL_ROBOT_WAYPOINT_REACHED 6201
+#define DOOM_SIGNAL_ROBOT_LOOP_COMPLETED 6202
+#define DOOM_SIGNAL_ROBOT_IDLE_STARTED 6203
+#define DOOM_SIGNAL_ROBOT_WALK_STARTED 6204
 
 static void configure_sprite_texture(sdl3d_texture2d *texture)
 {
@@ -35,114 +39,114 @@ static sdl3d_vec2 normalized_walk_direction(float x, float z)
     return (sdl3d_vec2){x * inv_length, z * inv_length};
 }
 
-static void robot_enter_idle(sdl3d_sprite_actor *actor, doom_robot_npc *npc)
+static doom_robot_npc *find_robot_by_actor_id(entities *e, int actor_id)
 {
-    if (actor == NULL || npc == NULL)
-        return;
-    npc->state = DOOM_ROBOT_AI_IDLE;
-    npc->state_timer = npc->idle_duration;
-    sdl3d_sprite_actor_stop_animation(actor);
+    if (e == NULL || actor_id <= 0)
+        return NULL;
+    for (int i = 0; i < e->robot_count; ++i)
+    {
+        if (e->robots[i].actor_id == actor_id)
+            return &e->robots[i];
+    }
+    return NULL;
 }
 
-static void robot_enter_walk(entities *e, sdl3d_sprite_actor *actor, doom_robot_npc *npc)
+typedef struct robot_patrol_move_context
 {
-    if (e == NULL || actor == NULL || npc == NULL)
-        return;
-    npc->state = DOOM_ROBOT_AI_WALK;
-    npc->state_timer = npc->walk_duration;
-    sdl3d_sprite_actor_play_animation(actor, e->enemy_walk_rotations, DOOM_ROBOT_WALK_FRAME_COUNT, 8.0f, true);
-}
+    entities *entities;
+    const sdl3d_level *level;
+} robot_patrol_move_context;
 
-static bool robot_move_toward_target(sdl3d_sprite_actor *actor, doom_robot_npc *npc, const sdl3d_level *level, float dt)
+static bool robot_patrol_move(void *userdata, const sdl3d_actor_patrol_controller *controller,
+                              sdl3d_registered_actor *registered_actor, sdl3d_vec3 desired_position,
+                              sdl3d_vec3 *out_position)
 {
-    if (actor == NULL || npc == NULL || level == NULL || npc->target_patrol_point < 0 ||
-        npc->target_patrol_point >= DOOM_ROBOT_PATROL_POINT_COUNT)
+    robot_patrol_move_context *context = (robot_patrol_move_context *)userdata;
+    if (context == NULL || context->entities == NULL || controller == NULL || registered_actor == NULL ||
+        out_position == NULL)
+        return false;
+
+    doom_robot_npc *npc = find_robot_by_actor_id(context->entities, controller->actor_id);
+    if (npc == NULL || npc->sprite_index < 0 || npc->sprite_index >= context->entities->sprites.count)
+        return false;
+
+    sdl3d_sprite_actor *sprite = &context->entities->sprites.actors[npc->sprite_index];
+    sprite->position = registered_actor->position;
+
+    float floor_y = registered_actor->position.y;
+    if (!sdl3d_sprite_actor_can_stand_at(sprite, context->level, g_sectors, desired_position.x, desired_position.z,
+                                         ROBOT_GROUND_STEP_HEIGHT, ROBOT_COLLISION_HEIGHT, &floor_y))
     {
         return false;
     }
 
-    sdl3d_vec3 target = npc->patrol_points[npc->target_patrol_point];
-    float dx = target.x - actor->position.x;
-    float dz = target.z - actor->position.z;
-    float distance_sq = dx * dx + dz * dz;
-    float arrival_radius_sq = npc->arrival_radius * npc->arrival_radius;
-    if (distance_sq <= arrival_radius_sq)
-        return false;
+    out_position->x = desired_position.x;
+    out_position->y = floor_y;
+    out_position->z = desired_position.z;
 
-    float distance = SDL_sqrtf(distance_sq);
-    float step = npc->speed * dt;
-    if (step > distance)
-        step = distance;
-
-    float move_x = dx / distance;
-    float move_z = dz / distance;
-    float next_x = actor->position.x + move_x * step;
-    float next_z = actor->position.z + move_z * step;
-    float floor_y = actor->position.y;
-    if (!sdl3d_sprite_actor_can_stand_at(actor, level, g_sectors, next_x, next_z, ROBOT_GROUND_STEP_HEIGHT,
-                                         ROBOT_COLLISION_HEIGHT, &floor_y))
-    {
-        return false;
-    }
-
-    actor->position = sdl3d_vec3_make(next_x, floor_y, next_z);
-    sdl3d_sprite_actor_set_facing_direction(actor, move_x, move_z);
+    sdl3d_sprite_actor_set_facing_direction(sprite, desired_position.x - registered_actor->position.x,
+                                            desired_position.z - registered_actor->position.z);
     return true;
 }
 
-static void robot_advance_patrol_target(doom_robot_npc *npc)
-{
-    if (npc == NULL)
-        return;
-    npc->target_patrol_point = (npc->target_patrol_point + 1) % DOOM_ROBOT_PATROL_POINT_COUNT;
-}
-
-static void robot_update_npc(entities *e, doom_robot_npc *npc, const sdl3d_level *level, float dt)
-{
-    if (e == NULL || npc == NULL || npc->sprite_index < 0 || npc->sprite_index >= e->sprites.count)
-        return;
-
-    sdl3d_sprite_actor *actor = &e->sprites.actors[npc->sprite_index];
-    robot_set_floor_position(actor, level);
-
-    if (npc->state == DOOM_ROBOT_AI_WALK)
-    {
-        if (!robot_move_toward_target(actor, npc, level, dt))
-        {
-            robot_advance_patrol_target(npc);
-            robot_enter_idle(actor, npc);
-            return;
-        }
-    }
-
-    npc->state_timer -= dt;
-    if (npc->state_timer > 0.0f)
-        return;
-
-    if (npc->state == DOOM_ROBOT_AI_IDLE)
-    {
-        robot_enter_walk(e, actor, npc);
-    }
-    else
-    {
-        robot_enter_idle(actor, npc);
-    }
-}
-
-static void register_robot(entities *e, int robot_number, const sdl3d_sprite_actor *actor)
+static sdl3d_registered_actor *register_robot(entities *e, int robot_number, const sdl3d_sprite_actor *actor)
 {
     if (e == NULL || e->registry == NULL || actor == NULL)
-        return;
+        return NULL;
 
     char name[32];
     SDL_snprintf(name, sizeof(name), "robot_%d", robot_number);
     sdl3d_registered_actor *ra = sdl3d_actor_registry_add(e->registry, name);
     if (ra == NULL)
-        return;
+        return NULL;
 
     ra->position = actor->position;
     sdl3d_properties_set_string(ra->props, "classname", "npc_robot");
     sdl3d_properties_set_int(ra->props, "health", 100);
+    return ra;
+}
+
+static void robot_update_visual_state(entities *e, doom_robot_npc *npc, const sdl3d_registered_actor *registered_actor)
+{
+    if (e == NULL || npc == NULL || registered_actor == NULL || npc->sprite_index < 0 ||
+        npc->sprite_index >= e->sprites.count)
+    {
+        return;
+    }
+
+    sdl3d_sprite_actor *sprite = &e->sprites.actors[npc->sprite_index];
+    sprite->position = registered_actor->position;
+
+    if (npc->last_visual_state == npc->patrol.state)
+        return;
+
+    npc->last_visual_state = npc->patrol.state;
+    if (npc->patrol.state == SDL3D_ACTOR_PATROL_WALK)
+        sdl3d_sprite_actor_play_animation(sprite, e->enemy_walk_rotations, DOOM_ROBOT_WALK_FRAME_COUNT, 8.0f, true);
+    else
+        sdl3d_sprite_actor_stop_animation(sprite);
+}
+
+static void robot_update_npc(entities *e, doom_robot_npc *npc, const sdl3d_level *level, float dt)
+{
+    if (e == NULL || npc == NULL || npc->sprite_index < 0 || npc->sprite_index >= e->sprites.count ||
+        e->registry == NULL)
+    {
+        return;
+    }
+
+    sdl3d_registered_actor *registered_actor = sdl3d_actor_registry_get(e->registry, npc->actor_id);
+    if (registered_actor == NULL)
+        return;
+
+    sdl3d_sprite_actor *sprite = &e->sprites.actors[npc->sprite_index];
+    sprite->position = registered_actor->position;
+    robot_set_floor_position(sprite, level);
+    registered_actor->position = sprite->position;
+
+    robot_patrol_move_context move_context = {e, level};
+    sdl3d_actor_patrol_controller_update(&npc->patrol, e->registry, e->bus, dt, robot_patrol_move, &move_context);
+    robot_update_visual_state(e, npc, registered_actor);
 }
 
 bool entities_init(entities *e, const sdl3d_level *level, sdl3d_actor_registry *registry, sdl3d_signal_bus *bus)
@@ -233,23 +237,18 @@ bool entities_init(entities *e, const sdl3d_level *level, sdl3d_actor_registry *
         const sdl3d_sprite_rotation_set *rot;
         float x, y, z, w, h, amp, spd;
         bool robot;
-        float walk_x, walk_z, patrol_distance, speed, idle_duration, walk_duration;
+        float walk_x, walk_z, patrol_distance, speed, idle_duration;
     } defs[] = {
-        {NULL, &e->enemy_rotations, 5.8f, 0.0f, 6.8f, 3.4f, 5.2f, 0.0f, 0.0f, true, 1.0f, 0.0f, 2.4f, 0.75f, 1.4f,
-         2.4f},
-        {&e->health_tex, NULL, 5.0f, 0.25f, 10.8f, 1.0f, 1.0f, 0.12f, 1.8f, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
-        {NULL, &e->enemy_rotations, 4.2f, 0.0f, 21.5f, 3.2f, 4.8f, 0.0f, 0.0f, true, 1.0f, 0.0f, 3.0f, 0.65f, 1.8f,
-         2.8f},
-        {&e->health_tex, NULL, 24.0f, 0.25f, 4.5f, 1.0f, 1.0f, 0.15f, 1.5f, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
-        {NULL, &e->enemy_rotations, 24.0f, 0.0f, 19.0f, 3.6f, 5.6f, 0.0f, 0.0f, true, 0.0f, 1.0f, 4.0f, 0.8f, 1.2f,
-         2.0f},
-        {&e->health_tex, NULL, 24.0f, 0.25f, 28.5f, 1.0f, 1.0f, 0.12f, 2.1f, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
-        {NULL, &e->enemy_rotations, 24.0f, 0.0f, 37.5f, 3.4f, 5.2f, 0.0f, 0.0f, true, 0.0f, 1.0f, 4.0f, 0.7f, 1.6f,
-         2.6f},
-        {&e->health_tex, NULL, 35.5f, 0.25f, 27.0f, 1.0f, 1.0f, 0.1f, 1.7f, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
-        {NULL, &e->enemy_rotations, 24.0f, 0.0f, 72.0f, 3.6f, 5.6f, 0.0f, 0.0f, true, 1.0f, 0.0f, 8.0f, 1.0f, 1.5f,
-         3.0f},
-        {&e->health_tex, NULL, 10.0f, 0.25f, 84.0f, 1.0f, 1.0f, 0.14f, 1.6f, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
+        {NULL, &e->enemy_rotations, 5.8f, 0.0f, 6.8f, 3.4f, 5.2f, 0.0f, 0.0f, true, 1.0f, 0.0f, 2.4f, 0.75f, 1.4f},
+        {&e->health_tex, NULL, 5.0f, 0.25f, 10.8f, 1.0f, 1.0f, 0.12f, 1.8f, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
+        {NULL, &e->enemy_rotations, 4.2f, 0.0f, 21.5f, 3.2f, 4.8f, 0.0f, 0.0f, true, 1.0f, 0.0f, 3.0f, 0.65f, 1.8f},
+        {&e->health_tex, NULL, 24.0f, 0.25f, 4.5f, 1.0f, 1.0f, 0.15f, 1.5f, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
+        {NULL, &e->enemy_rotations, 24.0f, 0.0f, 19.0f, 3.6f, 5.6f, 0.0f, 0.0f, true, 0.0f, 1.0f, 4.0f, 0.8f, 1.2f},
+        {&e->health_tex, NULL, 24.0f, 0.25f, 28.5f, 1.0f, 1.0f, 0.12f, 2.1f, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
+        {NULL, &e->enemy_rotations, 24.0f, 0.0f, 37.5f, 3.4f, 5.2f, 0.0f, 0.0f, true, 0.0f, 1.0f, 4.0f, 0.7f, 1.6f},
+        {&e->health_tex, NULL, 35.5f, 0.25f, 27.0f, 1.0f, 1.0f, 0.1f, 1.7f, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
+        {NULL, &e->enemy_rotations, 24.0f, 0.0f, 72.0f, 3.6f, 5.6f, 0.0f, 0.0f, true, 1.0f, 0.0f, 8.0f, 1.0f, 1.5f},
+        {&e->health_tex, NULL, 10.0f, 0.25f, 84.0f, 1.0f, 1.0f, 0.14f, 1.6f, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
     };
     for (int i = 0; i < (int)SDL_arraysize(defs); ++i)
     {
@@ -274,21 +273,32 @@ bool entities_init(entities *e, const sdl3d_level *level, sdl3d_actor_registry *
             if (e->robot_count < DOOM_ROBOT_NPC_COUNT)
             {
                 doom_robot_npc *npc = &e->robots[e->robot_count];
+                const int robot_number = e->robot_count + 1;
+                sdl3d_registered_actor *registered_actor = register_robot(e, robot_number, a);
                 npc->sprite_index = i;
-                npc->state = DOOM_ROBOT_AI_IDLE;
-                npc->state_timer = defs[i].idle_duration;
-                npc->idle_duration = defs[i].idle_duration;
-                npc->walk_duration = defs[i].walk_duration;
-                npc->speed = defs[i].speed;
-                npc->walk_direction = normalized_walk_direction(defs[i].walk_x, defs[i].walk_z);
-                npc->patrol_points[0] = a->position;
-                npc->patrol_points[1] =
-                    sdl3d_vec3_make(a->position.x + npc->walk_direction.x * defs[i].patrol_distance, a->position.y,
-                                    a->position.z + npc->walk_direction.y * defs[i].patrol_distance);
-                npc->target_patrol_point = 1;
-                npc->arrival_radius = ROBOT_DEFAULT_ARRIVAL_RADIUS;
+                npc->actor_id = registered_actor != NULL ? registered_actor->id : 0;
+                npc->last_visual_state = SDL3D_ACTOR_PATROL_IDLE;
+
+                sdl3d_vec2 walk_direction = normalized_walk_direction(defs[i].walk_x, defs[i].walk_z);
+                sdl3d_actor_patrol_config config = sdl3d_actor_patrol_default_config();
+                config.speed = defs[i].speed;
+                config.wait_time = defs[i].idle_duration;
+                config.arrival_radius = ROBOT_DEFAULT_ARRIVAL_RADIUS;
+                config.mode = SDL3D_ACTOR_PATROL_LOOP;
+                config.start_idle = true;
+                config.signals.waypoint_reached = DOOM_SIGNAL_ROBOT_WAYPOINT_REACHED;
+                config.signals.loop_completed = DOOM_SIGNAL_ROBOT_LOOP_COMPLETED;
+                config.signals.idle_started = DOOM_SIGNAL_ROBOT_IDLE_STARTED;
+                config.signals.walk_started = DOOM_SIGNAL_ROBOT_WALK_STARTED;
+                sdl3d_actor_patrol_controller_init(&npc->patrol, robot_number, npc->actor_id, &config);
+                sdl3d_actor_patrol_controller_add_waypoint(&npc->patrol, a->position);
+                sdl3d_actor_patrol_controller_add_waypoint(
+                    &npc->patrol,
+                    sdl3d_vec3_make(a->position.x + walk_direction.x * defs[i].patrol_distance, a->position.y,
+                                    a->position.z + walk_direction.y * defs[i].patrol_distance));
+                if (registered_actor != NULL)
+                    sdl3d_actor_patrol_controller_sync_properties(&npc->patrol, registered_actor);
                 e->robot_count++;
-                register_robot(e, e->robot_count, a);
             }
         }
     }
@@ -375,21 +385,6 @@ void entities_update(entities *e, const sdl3d_level *level, float dt, sdl3d_vec3
             sdl3d_actor *a = sdl3d_scene_get_actor_at(e->scene, i);
             if (a)
                 sdl3d_actor_advance_animation(a, dt);
-        }
-    }
-    if (e->registry)
-    {
-        for (int i = 0; i < e->robot_count; ++i)
-        {
-            const doom_robot_npc *npc = &e->robots[i];
-            if (npc->sprite_index < 0 || npc->sprite_index >= e->sprites.count)
-                continue;
-
-            char name[32];
-            SDL_snprintf(name, sizeof(name), "robot_%d", i + 1);
-            sdl3d_registered_actor *ra = sdl3d_actor_registry_find(e->registry, name);
-            if (ra)
-                ra->position = e->sprites.actors[npc->sprite_index].position;
         }
     }
     sdl3d_actor_registry_update(e->registry, e->bus, player_position);

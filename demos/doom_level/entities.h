@@ -2,6 +2,7 @@
 #ifndef DOOM_ENTITIES_H
 #define DOOM_ENTITIES_H
 
+#include "sdl3d/actor_controller.h"
 #include "sdl3d/actor_registry.h"
 #include "sdl3d/model.h"
 #include "sdl3d/scene.h"
@@ -15,26 +16,13 @@
 
 #define DOOM_ROBOT_WALK_FRAME_COUNT 6
 #define DOOM_ROBOT_NPC_COUNT 5
-#define DOOM_ROBOT_PATROL_POINT_COUNT 2
-
-typedef enum doom_robot_ai_state
-{
-    DOOM_ROBOT_AI_IDLE = 0,
-    DOOM_ROBOT_AI_WALK
-} doom_robot_ai_state;
 
 typedef struct doom_robot_npc
 {
     int sprite_index;
-    doom_robot_ai_state state;
-    float state_timer;
-    float idle_duration;
-    float walk_duration;
-    float speed;
-    sdl3d_vec2 walk_direction;
-    sdl3d_vec3 patrol_points[DOOM_ROBOT_PATROL_POINT_COUNT];
-    int target_patrol_point;
-    float arrival_radius;
+    int actor_id;
+    sdl3d_actor_patrol_state last_visual_state;
+    sdl3d_actor_patrol_controller patrol;
 } doom_robot_npc;
 
 typedef struct entities

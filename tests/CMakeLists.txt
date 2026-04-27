@@ -78,6 +78,7 @@ endfunction()
 
 set(SDL3D_TEST_SOURCES
     test_api.cpp
+    test_actor_controller.cpp
     test_math.cpp
     test_rasterizer.cpp
     test_render_context_unit.cpp
@@ -191,6 +192,7 @@ else()
     sdl3d_add_test(sdl3d_scene_test test_scene.cpp unit)
     sdl3d_add_test(sdl3d_collision_test test_collision.cpp unit)
     sdl3d_add_test(sdl3d_action_test test_action.cpp unit)
+    sdl3d_add_test(sdl3d_actor_controller_test test_actor_controller.cpp unit)
     sdl3d_add_test(sdl3d_actor_registry_test test_actor_registry.cpp unit)
     sdl3d_add_test(sdl3d_animation_test test_animation.cpp unit)
     sdl3d_add_test(sdl3d_audio_test test_audio.cpp unit)

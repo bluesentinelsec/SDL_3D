@@ -81,6 +81,7 @@ target_sources(
     sdl3d
     PRIVATE
         src/action.c
+        src/actor_controller.c
         src/actor_registry.c
         src/app.c
         src/animation.c
