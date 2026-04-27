@@ -29,6 +29,38 @@ extern "C"
     /** @brief Opaque runtime created from one game JSON document. */
     typedef struct sdl3d_game_data_runtime sdl3d_game_data_runtime;
 
+    /** @brief Authored game data diagnostic severity. */
+    typedef enum sdl3d_game_data_diagnostic_severity
+    {
+        /** @brief Non-fatal issue that authors should review. */
+        SDL3D_GAME_DATA_DIAGNOSTIC_WARNING = 1,
+        /** @brief Fatal issue that prevents the data from loading. */
+        SDL3D_GAME_DATA_DIAGNOSTIC_ERROR = 2,
+    } sdl3d_game_data_diagnostic_severity;
+
+    /**
+     * @brief Callback for authored game data validation diagnostics.
+     *
+     * @p json_path is a best-effort JSON path to the authored object or field
+     * that produced the diagnostic. @p message is a human-readable description
+     * intended to be actionable without stepping through engine code.
+     */
+    typedef void (*sdl3d_game_data_diagnostic_fn)(void *userdata, sdl3d_game_data_diagnostic_severity severity,
+                                                  const char *json_path, const char *message);
+
+    /**
+     * @brief Options controlling authored game data validation.
+     */
+    typedef struct sdl3d_game_data_validation_options
+    {
+        /** @brief Optional diagnostic callback. */
+        sdl3d_game_data_diagnostic_fn diagnostic;
+        /** @brief User pointer passed to @p diagnostic. */
+        void *userdata;
+        /** @brief When true, warnings also make validation fail. */
+        bool treat_warnings_as_errors;
+    } sdl3d_game_data_validation_options;
+
     /**
      * @brief Named game-specific callback invoked by JSON actions/components.
      *
@@ -61,6 +93,23 @@ extern "C"
      */
     bool sdl3d_game_data_load_file(const char *path, sdl3d_game_session *session, sdl3d_game_data_runtime **out_runtime,
                                    char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Validate a JSON game data file without instantiating runtime state.
+     *
+     * Validation checks schema, authored names, references, supported generic
+     * logic primitives, script manifest structure, dependency cycles, and script
+     * file existence. It can emit warnings for suspicious but non-fatal data,
+     * such as unused adapters or unsupported component types.
+     *
+     * @param path JSON file path.
+     * @param options Optional validation options and diagnostic callback.
+     * @param error_buffer Optional buffer for the first fatal diagnostic.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when no fatal validation error was found.
+     */
+    bool sdl3d_game_data_validate_file(const char *path, const sdl3d_game_data_validation_options *options,
+                                       char *error_buffer, int error_buffer_size);
 
     /**
      * @brief Destroy a loaded game data runtime.

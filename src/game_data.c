@@ -9,6 +9,7 @@
 #include <SDL3/SDL_scancode.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include "game_data_validation.h"
 #include "lauxlib.h"
 #include "lua.h"
 #include "script_internal.h"
@@ -1696,6 +1697,11 @@ bool sdl3d_game_data_load_file(const char *path, sdl3d_game_session *session, sd
     {
         sdl3d_game_data_destroy(runtime);
         set_error(error_buffer, error_buffer_size, "failed to resolve game data base directory");
+        return false;
+    }
+    if (!sdl3d_game_data_validate_document(root, path, runtime->base_dir, NULL, error_buffer, error_buffer_size))
+    {
+        sdl3d_game_data_destroy(runtime);
         return false;
     }
 

@@ -1,0 +1,29 @@
+{
+  "schema": "sdl3d.game.v0",
+  "metadata": {
+    "name": "Bad Reference",
+    "id": "test.bad_reference",
+    "version": "0.1.0"
+  },
+  "world": {
+    "name": "world.test",
+    "kind": "fixed_screen"
+  },
+  "entities": [
+    {
+      "name": "entity.target",
+      "active": true
+    }
+  ],
+  "signals": ["signal.run"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.run",
+        "actions": [
+          { "type": "property.set", "target": "entity.missing", "key": "active", "value": true }
+        ]
+      }
+    ]
+  }
+}
