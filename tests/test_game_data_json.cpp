@@ -245,6 +245,15 @@ TEST(GameDataJson, PongLogicReferencesKnownEntitiesSignalsTimersCamerasAndAdapte
     collect_named_objects(required_array(doc.root(), "scripts"), "id", &scripts);
 
     yyjson_val *adapter_array = required_array(doc.root(), "adapters");
+    yyjson_val *script_array = required_array(doc.root(), "scripts");
+    for (size_t i = 0; i < yyjson_arr_size(script_array); ++i)
+    {
+        yyjson_val *script = yyjson_arr_get(script_array, i);
+        ASSERT_TRUE(yyjson_is_obj(script));
+        EXPECT_FALSE(required_string(script, "module").empty());
+        EXPECT_FALSE(required_string(script, "path").empty());
+    }
+
     for (size_t i = 0; i < yyjson_arr_size(adapter_array); ++i)
     {
         yyjson_val *adapter = yyjson_arr_get(adapter_array, i);

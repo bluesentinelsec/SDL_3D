@@ -1,0 +1,20 @@
+{
+  "schema": "sdl3d.game.v0",
+  "metadata": {
+    "name": "No Table",
+    "id": "test.no_table",
+    "version": "0.1.0"
+  },
+  "scripts": [
+    {
+      "id": "script.bad",
+      "path": "scripts/no_table.lua",
+      "module": "test.bad"
+    }
+  ],
+  "world": {
+    "name": "world.test",
+    "kind": "fixed_screen"
+  },
+  "entities": []
+}

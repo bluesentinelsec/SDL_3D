@@ -1,0 +1,27 @@
+{
+  "schema": "sdl3d.game.v0",
+  "metadata": {
+    "name": "Dependency Cycle",
+    "id": "test.dependency_cycle",
+    "version": "0.1.0"
+  },
+  "scripts": [
+    {
+      "id": "script.a",
+      "path": "scripts/shared.lua",
+      "module": "test.a",
+      "dependencies": ["script.b"]
+    },
+    {
+      "id": "script.b",
+      "path": "scripts/rules.lua",
+      "module": "test.b",
+      "dependencies": ["script.a"]
+    }
+  ],
+  "world": {
+    "name": "world.test",
+    "kind": "fixed_screen"
+  },
+  "entities": []
+}
