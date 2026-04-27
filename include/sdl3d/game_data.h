@@ -7,10 +7,9 @@
  * actions, signals, timers, sensors, and signal-to-action bindings.
  *
  * Game-specific behavior stays behind named adapters. JSON chooses where an
- * adapter is invoked; game code registers the callback that implements the
- * specialized math or policy. This keeps game rules mostly data-driven while
- * preserving clean, testable C for logic that is not a reusable engine
- * primitive.
+ * adapter is invoked and can bind it to a Lua function loaded from a script
+ * next to the data file. Game code may also register native C callbacks for
+ * adapters that need host integration or optimized native code.
  */
 
 #ifndef SDL3D_GAME_DATA_H
@@ -72,10 +71,11 @@ extern "C"
     void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime);
 
     /**
-     * @brief Register a named game-specific adapter callback.
+     * @brief Register a named native game-specific adapter callback.
      *
-     * Re-registering a name replaces the callback and userdata. The adapter name
-     * is copied by the runtime.
+     * Re-registering a name replaces the callback and userdata. If the JSON file
+     * declared a Lua function for the same adapter, the native callback becomes
+     * the active implementation. The adapter name is copied by the runtime.
      */
     bool sdl3d_game_data_register_adapter(sdl3d_game_data_runtime *runtime, const char *name,
                                           sdl3d_game_data_adapter_fn callback, void *userdata);
