@@ -208,10 +208,8 @@ else()
         target_link_options(
             sdl3d_game_data_test
             PRIVATE
-                "--preload-file"
-                "${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json@/pong.game.json"
-                "--preload-file"
-                "${CMAKE_SOURCE_DIR}/demos/pong/data/scripts/pong.lua@/scripts/pong.lua"
+                "--preload-file=${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json@/pong.game.json"
+                "--preload-file=${CMAKE_SOURCE_DIR}/demos/pong/data/scripts/pong.lua@/scripts/pong.lua"
         )
     else()
         target_compile_definitions(
@@ -241,8 +239,7 @@ else()
         target_link_options(
             game_data_json_test
             PRIVATE
-                "--preload-file"
-                "${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json@/pong.game.json"
+                "--preload-file=${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json@/pong.game.json"
         )
     else()
         target_compile_definitions(
