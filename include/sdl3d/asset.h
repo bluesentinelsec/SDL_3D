@@ -38,6 +38,21 @@ extern "C"
     } sdl3d_asset_buffer;
 
     /**
+     * @brief Source file entry used when writing an SDL3D asset pack.
+     *
+     * @p asset_path is the stable virtual path stored in the pack, such as
+     * scripts/pong.lua. @p source_path is the filesystem path read at build
+     * time. The writer copies both strings only for the duration of the call.
+     */
+    typedef struct sdl3d_asset_pack_source
+    {
+        /** @brief Stable virtual path stored in the pack. */
+        const char *asset_path;
+        /** @brief Filesystem path whose bytes are stored for @p asset_path. */
+        const char *source_path;
+    } sdl3d_asset_pack_source;
+
+    /**
      * @brief Create an empty asset resolver.
      *
      * Mount directories and packs before attempting to read assets. Later mounts
@@ -117,6 +132,25 @@ extern "C"
      * Safe to call with NULL or an already empty buffer.
      */
     void sdl3d_asset_buffer_free(sdl3d_asset_buffer *buffer);
+
+    /**
+     * @brief Write an SDL3D asset pack from explicit source files.
+     *
+     * Entries are normalized, sorted by asset path for deterministic output,
+     * checked for duplicates, and written with explicit little-endian integers.
+     * The format is currently uncompressed and unencrypted by design; future
+     * compression, encryption, and patch metadata can be added while preserving
+     * this API shape and the resolver abstraction.
+     *
+     * @param pack_path Filesystem output path to create or replace.
+     * @param entries Source files to include.
+     * @param entry_count Number of entries in @p entries.
+     * @param error_buffer Optional human-readable error output.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when the pack was written successfully.
+     */
+    bool sdl3d_asset_pack_write_file(const char *pack_path, const sdl3d_asset_pack_source *entries, int entry_count,
+                                     char *error_buffer, int error_buffer_size);
 
 #ifdef __cplusplus
 }

@@ -5,6 +5,7 @@
 
 #include <stdbool.h>
 
+#include "sdl3d/asset.h"
 #include "sdl3d/camera.h"
 #include "sdl3d/drawing3d.h"
 #include "sdl3d/effects.h"
@@ -19,6 +20,10 @@
 #include "sdl3d/shapes.h"
 #include "sdl3d/signal_bus.h"
 #include "sdl3d/transition.h"
+
+#if SDL3D_PONG_EMBEDDED_ASSETS
+#include "sdl3d_pong_assets.h"
+#endif
 
 #define PONG_WINDOW_WIDTH 1280
 #define PONG_WINDOW_HEIGHT 720
@@ -266,12 +271,37 @@ static void on_match_finished(void *userdata, int signal_id, const sdl3d_propert
 
 static bool init_game_data(sdl3d_game_context *ctx, pong_state *state)
 {
-    char error[512];
-    if (!sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, ctx->session, &state->data, error, (int)sizeof(error)))
+    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    if (assets == NULL)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong data load failed: %s", error);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong asset resolver allocation failed");
         return false;
     }
+
+    char error[512];
+#if SDL3D_PONG_EMBEDDED_ASSETS
+    bool assets_ready = sdl3d_asset_resolver_mount_memory_pack(assets, sdl3d_pong_assets, sdl3d_pong_assets_size,
+                                                               "pong.embedded", error, (int)sizeof(error));
+#elif defined(SDL3D_PONG_PACK_PATH)
+    bool assets_ready = sdl3d_asset_resolver_mount_pack_file(assets, SDL3D_PONG_PACK_PATH, error, (int)sizeof(error));
+#else
+    bool assets_ready = sdl3d_asset_resolver_mount_directory(assets, SDL3D_PONG_DATA_DIR, error, (int)sizeof(error));
+#endif
+    if (!assets_ready)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong asset mount failed: %s", error);
+        sdl3d_asset_resolver_destroy(assets);
+        return false;
+    }
+
+    if (!sdl3d_game_data_load_asset(assets, SDL3D_PONG_DATA_ASSET_PATH, ctx->session, &state->data, error,
+                                    (int)sizeof(error)))
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong data load failed: %s", error);
+        sdl3d_asset_resolver_destroy(assets);
+        return false;
+    }
+    sdl3d_asset_resolver_destroy(assets);
 
     state->actions.up = sdl3d_game_data_find_action(state->data, "action.paddle.up");
     state->actions.down = sdl3d_game_data_find_action(state->data, "action.paddle.down");

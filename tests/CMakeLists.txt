@@ -207,16 +207,12 @@ else()
         target_compile_definitions(
             sdl3d_game_data_test
             PRIVATE
-                SDL3D_PONG_DATA_PATH="/pong.game.json"
+                SDL3D_PONG_DATA_PATH="/pong/pong.game.json"
                 SDL3D_GAME_DATA_FIXTURE_DIR="/game_data"
         )
-        target_link_options(
-            sdl3d_game_data_test
-            PRIVATE
-                "--preload-file=${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json@/pong.game.json"
-                "--preload-file=${CMAKE_SOURCE_DIR}/demos/pong/data/scripts/pong.lua@/scripts/pong.lua"
-                "--preload-file=${CMAKE_SOURCE_DIR}/tests/assets/game_data@/game_data"
-        )
+        sdl3d_target_preload_asset_directory(sdl3d_game_data_test "${CMAKE_SOURCE_DIR}/demos/pong/data" "/pong")
+        sdl3d_target_preload_asset_directory(sdl3d_game_data_test "${CMAKE_SOURCE_DIR}/tests/assets/game_data"
+                                             "/game_data")
     else()
         target_compile_definitions(
             sdl3d_game_data_test
@@ -242,12 +238,8 @@ else()
     target_include_directories(doom_surveillance_test PRIVATE ${CMAKE_SOURCE_DIR}/demos/doom_level)
     sdl3d_add_test(game_data_json_test test_game_data_json.cpp unit)
     if(EMSCRIPTEN)
-        target_compile_definitions(game_data_json_test PRIVATE SDL3D_PONG_DATA_PATH="/pong.game.json")
-        target_link_options(
-            game_data_json_test
-            PRIVATE
-                "--preload-file=${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json@/pong.game.json"
-        )
+        target_compile_definitions(game_data_json_test PRIVATE SDL3D_PONG_DATA_PATH="/pong/pong.game.json")
+        sdl3d_target_preload_asset_directory(game_data_json_test "${CMAKE_SOURCE_DIR}/demos/pong/data" "/pong")
     else()
         target_compile_definitions(
             game_data_json_test
