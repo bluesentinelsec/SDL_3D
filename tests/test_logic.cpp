@@ -32,10 +32,17 @@ struct logic_signal_capture
     int event = 0;
     int sector_index = -1;
     int actor_id = -1;
+    int entity_id = -1;
+    int output_index = -1;
+    int count_value = -1;
+    int threshold = -1;
     bool inside = false;
+    bool state = false;
+    bool matched = false;
     float distance = -1.0f;
     sdl3d_vec3 sample_position = {};
     char actor_name[64] = {};
+    char entity_type[32] = {};
 };
 
 static void capture_logic_signal(void *userdata, int signal_id, const sdl3d_properties *payload)
@@ -48,10 +55,38 @@ static void capture_logic_signal(void *userdata, int signal_id, const sdl3d_prop
     capture->inside = sdl3d_properties_get_bool(payload, "inside", false);
     capture->sector_index = sdl3d_properties_get_int(payload, "sector_index", -1);
     capture->actor_id = sdl3d_properties_get_int(payload, "actor_id", -1);
+    capture->entity_id = sdl3d_properties_get_int(payload, "entity_id", -1);
+    capture->output_index = sdl3d_properties_get_int(payload, "output_index", -1);
+    capture->count_value = sdl3d_properties_get_int(payload, "count", -1);
+    capture->threshold = sdl3d_properties_get_int(payload, "threshold", -1);
     capture->distance = sdl3d_properties_get_float(payload, "distance", -1.0f);
+    capture->state = sdl3d_properties_get_bool(payload, "state", false);
+    capture->matched = sdl3d_properties_get_bool(payload, "matched", false);
     capture->sample_position = sdl3d_properties_get_vec3(payload, "sample_position", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
     const char *actor_name = sdl3d_properties_get_string(payload, "actor_name", "");
     SDL_snprintf(capture->actor_name, sizeof(capture->actor_name), "%s", actor_name);
+    const char *entity_type = sdl3d_properties_get_string(payload, "entity_type", "");
+    SDL_snprintf(capture->entity_type, sizeof(capture->entity_type), "%s", entity_type);
+}
+
+struct ordered_signal_capture
+{
+    int count = 0;
+    int signals[16] = {};
+    int entity_ids[16] = {};
+    int payload_value[16] = {};
+};
+
+static void capture_ordered_signal(void *userdata, int signal_id, const sdl3d_properties *payload)
+{
+    ordered_signal_capture *capture = (ordered_signal_capture *)userdata;
+    if (capture->count >= (int)SDL_arraysize(capture->signals))
+        return;
+
+    const int index = capture->count++;
+    capture->signals[index] = signal_id;
+    capture->entity_ids[index] = sdl3d_properties_get_int(payload, "entity_id", -1);
+    capture->payload_value[index] = sdl3d_properties_get_int(payload, "payload_value", -1);
 }
 
 static sdl3d_sector make_square_sector(float min_x, float min_z, float max_x, float max_z)
@@ -1040,6 +1075,431 @@ TEST(LogicWorldSensors, InvalidSensorsAreSafe)
                                       SDL3D_TRIGGER_EDGE_ENTER);
     EXPECT_FALSE(sdl3d_logic_proximity_sensor_update(&proximity, world, sdl3d_vec3_make(0.0f, 0.0f, 0.0f)).emitted);
     sdl3d_logic_proximity_sensor_reset(nullptr);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, RelayEmitsOutputsInOrderAndForwardsPayload)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    ordered_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 300, capture_ordered_signal, &capture), 0);
+    ASSERT_GT(sdl3d_signal_connect(bus, 301, capture_ordered_signal, &capture), 0);
+    ASSERT_GT(sdl3d_signal_connect(bus, 302, capture_ordered_signal, &capture), 0);
+
+    sdl3d_logic_relay relay{};
+    sdl3d_logic_relay_init(&relay, 21);
+    ASSERT_TRUE(sdl3d_logic_relay_add_output(&relay, 300));
+    ASSERT_TRUE(sdl3d_logic_relay_add_output(&relay, 301));
+    ASSERT_TRUE(sdl3d_logic_relay_add_output(&relay, 302));
+
+    sdl3d_properties *payload = sdl3d_properties_create();
+    sdl3d_properties_set_int(payload, "payload_value", 99);
+    sdl3d_logic_entity_result result = sdl3d_logic_relay_activate(world, &relay, payload);
+
+    EXPECT_TRUE(result.emitted);
+    EXPECT_EQ(result.signal_id, 302);
+    EXPECT_EQ(result.output_index, 2);
+    ASSERT_EQ(capture.count, 3);
+    EXPECT_EQ(capture.signals[0], 300);
+    EXPECT_EQ(capture.signals[1], 301);
+    EXPECT_EQ(capture.signals[2], 302);
+    EXPECT_EQ(capture.payload_value[0], 99);
+    EXPECT_EQ(capture.payload_value[1], 99);
+    EXPECT_EQ(capture.payload_value[2], 99);
+
+    sdl3d_properties_destroy(payload);
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, ToggleFlipsAndEmitsStatePayload)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 310, capture_logic_signal, &capture), 0);
+    ASSERT_GT(sdl3d_signal_connect(bus, 311, capture_logic_signal, &capture), 0);
+
+    sdl3d_logic_toggle toggle{};
+    sdl3d_logic_toggle_init(&toggle, 22, false, 310, 311);
+
+    sdl3d_logic_entity_result on = sdl3d_logic_toggle_activate(world, &toggle);
+    EXPECT_TRUE(on.emitted);
+    EXPECT_EQ(on.signal_id, 310);
+    EXPECT_TRUE(toggle.state);
+    EXPECT_EQ(capture.entity_id, 22);
+    EXPECT_STREQ(capture.entity_type, "toggle");
+    EXPECT_TRUE(capture.state);
+
+    sdl3d_logic_entity_result off = sdl3d_logic_toggle_activate(world, &toggle);
+    EXPECT_TRUE(off.emitted);
+    EXPECT_EQ(off.signal_id, 311);
+    EXPECT_FALSE(toggle.state);
+    EXPECT_FALSE(capture.state);
+
+    sdl3d_logic_toggle_reset(&toggle, true);
+    EXPECT_TRUE(toggle.state);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, CounterEmitsAtThresholdAndCanResetOnFire)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 320, capture_logic_signal, &capture), 0);
+
+    sdl3d_logic_counter counter{};
+    sdl3d_logic_counter_init(&counter, 23, 3, 320, true);
+
+    EXPECT_FALSE(sdl3d_logic_counter_activate(world, &counter).emitted);
+    EXPECT_FALSE(sdl3d_logic_counter_activate(world, &counter).emitted);
+    sdl3d_logic_entity_result fired = sdl3d_logic_counter_activate(world, &counter);
+    EXPECT_TRUE(fired.emitted);
+    EXPECT_EQ(fired.signal_id, 320);
+    EXPECT_EQ(counter.count, 0);
+    EXPECT_EQ(capture.entity_id, 23);
+    EXPECT_STREQ(capture.entity_type, "counter");
+    EXPECT_EQ(capture.count_value, 3);
+    EXPECT_EQ(capture.threshold, 3);
+
+    EXPECT_FALSE(sdl3d_logic_counter_activate(world, &counter).emitted);
+    EXPECT_FALSE(sdl3d_logic_counter_activate(world, &counter).emitted);
+    EXPECT_TRUE(sdl3d_logic_counter_activate(world, &counter).emitted);
+    EXPECT_EQ(capture.count, 2);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, NonResettingCounterFiresOnceUntilReset)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 321, capture_logic_signal, &capture), 0);
+
+    sdl3d_logic_counter counter{};
+    sdl3d_logic_counter_init(&counter, 24, 2, 321, false);
+
+    EXPECT_FALSE(sdl3d_logic_counter_activate(world, &counter).emitted);
+    EXPECT_TRUE(sdl3d_logic_counter_activate(world, &counter).emitted);
+    EXPECT_FALSE(sdl3d_logic_counter_activate(world, &counter).emitted);
+    EXPECT_EQ(capture.count, 1);
+    EXPECT_TRUE(counter.fired);
+
+    sdl3d_logic_counter_reset(&counter);
+    EXPECT_FALSE(counter.fired);
+    EXPECT_FALSE(sdl3d_logic_counter_activate(world, &counter).emitted);
+    EXPECT_TRUE(sdl3d_logic_counter_activate(world, &counter).emitted);
+    EXPECT_EQ(capture.count, 2);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, BranchComparesPropertyValues)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 330, capture_logic_signal, &capture), 0);
+    ASSERT_GT(sdl3d_signal_connect(bus, 331, capture_logic_signal, &capture), 0);
+
+    sdl3d_properties *props = sdl3d_properties_create();
+    sdl3d_properties_set_bool(props, "locked", true);
+    sdl3d_value expected{};
+    expected.type = SDL3D_VALUE_BOOL;
+    expected.as_bool = true;
+
+    sdl3d_logic_branch branch{};
+    sdl3d_logic_branch_init(&branch, 25, props, "locked", expected, 330, 331);
+
+    EXPECT_TRUE(sdl3d_logic_branch_activate(world, &branch).emitted);
+    EXPECT_EQ(capture.signal_id, 330);
+    EXPECT_TRUE(capture.matched);
+
+    sdl3d_properties_set_bool(props, "locked", false);
+    EXPECT_TRUE(sdl3d_logic_branch_activate(world, &branch).emitted);
+    EXPECT_EQ(capture.signal_id, 331);
+    EXPECT_FALSE(capture.matched);
+
+    sdl3d_properties_destroy(props);
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, RandomSelectorIsDeterministicAfterReset)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    ordered_signal_capture first{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 340, capture_ordered_signal, &first), 0);
+    ASSERT_GT(sdl3d_signal_connect(bus, 341, capture_ordered_signal, &first), 0);
+    ASSERT_GT(sdl3d_signal_connect(bus, 342, capture_ordered_signal, &first), 0);
+
+    sdl3d_logic_random selector{};
+    sdl3d_logic_random_init(&selector, 26, 123);
+    ASSERT_TRUE(sdl3d_logic_random_add_output(&selector, 340));
+    ASSERT_TRUE(sdl3d_logic_random_add_output(&selector, 341));
+    ASSERT_TRUE(sdl3d_logic_random_add_output(&selector, 342));
+
+    int expected[5] = {};
+    for (int i = 0; i < 5; ++i)
+    {
+        sdl3d_logic_entity_result result = sdl3d_logic_random_activate(world, &selector);
+        ASSERT_TRUE(result.emitted);
+        expected[i] = result.signal_id;
+    }
+
+    sdl3d_logic_random_reset(&selector, 123);
+    for (int i = 0; i < 5; ++i)
+    {
+        sdl3d_logic_entity_result result = sdl3d_logic_random_activate(world, &selector);
+        ASSERT_TRUE(result.emitted);
+        EXPECT_EQ(result.signal_id, expected[i]);
+    }
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, SequenceEmitsInOrderThenStopsUntilReset)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    ordered_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 350, capture_ordered_signal, &capture), 0);
+    ASSERT_GT(sdl3d_signal_connect(bus, 351, capture_ordered_signal, &capture), 0);
+
+    sdl3d_logic_sequence sequence{};
+    sdl3d_logic_sequence_init(&sequence, 27, false);
+    ASSERT_TRUE(sdl3d_logic_sequence_add_output(&sequence, 350));
+    ASSERT_TRUE(sdl3d_logic_sequence_add_output(&sequence, 351));
+
+    EXPECT_EQ(sdl3d_logic_sequence_activate(world, &sequence).signal_id, 350);
+    EXPECT_EQ(sdl3d_logic_sequence_activate(world, &sequence).signal_id, 351);
+    EXPECT_FALSE(sdl3d_logic_sequence_activate(world, &sequence).emitted);
+    ASSERT_EQ(capture.count, 2);
+    EXPECT_EQ(capture.signals[0], 350);
+    EXPECT_EQ(capture.signals[1], 351);
+
+    sdl3d_logic_sequence_reset(&sequence);
+    EXPECT_EQ(sdl3d_logic_sequence_activate(world, &sequence).signal_id, 350);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, LoopingSequenceWraps)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    ordered_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 352, capture_ordered_signal, &capture), 0);
+    ASSERT_GT(sdl3d_signal_connect(bus, 353, capture_ordered_signal, &capture), 0);
+
+    sdl3d_logic_sequence sequence{};
+    sdl3d_logic_sequence_init(&sequence, 28, true);
+    ASSERT_TRUE(sdl3d_logic_sequence_add_output(&sequence, 352));
+    ASSERT_TRUE(sdl3d_logic_sequence_add_output(&sequence, 353));
+
+    EXPECT_EQ(sdl3d_logic_sequence_activate(world, &sequence).signal_id, 352);
+    EXPECT_EQ(sdl3d_logic_sequence_activate(world, &sequence).signal_id, 353);
+    EXPECT_EQ(sdl3d_logic_sequence_activate(world, &sequence).signal_id, 352);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, OnceGatePassesFirstActivationUntilReset)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 360, capture_logic_signal, &capture), 0);
+
+    sdl3d_logic_once once{};
+    sdl3d_logic_once_init(&once, 29, 360);
+
+    EXPECT_TRUE(sdl3d_logic_once_activate(world, &once).emitted);
+    EXPECT_FALSE(sdl3d_logic_once_activate(world, &once).emitted);
+    EXPECT_EQ(capture.count, 1);
+    EXPECT_TRUE(once.fired);
+
+    sdl3d_logic_once_reset(&once);
+    EXPECT_TRUE(sdl3d_logic_once_activate(world, &once).emitted);
+    EXPECT_EQ(capture.count, 2);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, TimerEntityUpdatesAndStopsAccurately)
+{
+    sdl3d_signal_bus *bus = sdl3d_signal_bus_create();
+    sdl3d_logic_world *world = sdl3d_logic_world_create(bus, nullptr);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 370, capture_logic_signal, &capture), 0);
+
+    sdl3d_logic_timer timer{};
+    sdl3d_logic_timer_init(&timer, 30, 0.5f, 370, false, 0.0f);
+    EXPECT_TRUE(sdl3d_logic_timer_start(&timer));
+    EXPECT_TRUE(sdl3d_logic_timer_active(&timer));
+
+    EXPECT_FALSE(sdl3d_logic_timer_update(world, &timer, 0.49f).emitted);
+    EXPECT_EQ(capture.count, 0);
+    sdl3d_logic_entity_result fired = sdl3d_logic_timer_update(world, &timer, 0.01f);
+    EXPECT_TRUE(fired.emitted);
+    EXPECT_FALSE(sdl3d_logic_timer_active(&timer));
+    EXPECT_EQ(capture.count, 1);
+    EXPECT_EQ(capture.entity_id, 30);
+    EXPECT_STREQ(capture.entity_type, "timer");
+
+    EXPECT_TRUE(sdl3d_logic_timer_start(&timer));
+    sdl3d_logic_timer_stop(&timer);
+    EXPECT_FALSE(sdl3d_logic_timer_active(&timer));
+    EXPECT_FALSE(sdl3d_logic_timer_update(world, &timer, 0.5f).emitted);
+    EXPECT_EQ(capture.count, 1);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, RepeatingTimerEmitsAtMostOncePerUpdateAndStaysActive)
+{
+    sdl3d_signal_bus *bus = sdl3d_signal_bus_create();
+    sdl3d_logic_world *world = sdl3d_logic_world_create(bus, nullptr);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 371, capture_logic_signal, &capture), 0);
+
+    sdl3d_logic_timer timer{};
+    sdl3d_logic_timer_init(&timer, 31, 0.25f, 371, true, 0.25f);
+    ASSERT_TRUE(sdl3d_logic_timer_start(&timer));
+
+    EXPECT_TRUE(sdl3d_logic_timer_update(world, &timer, 1.0f).emitted);
+    EXPECT_TRUE(sdl3d_logic_timer_active(&timer));
+    EXPECT_EQ(capture.count, 1);
+    EXPECT_FLOAT_EQ(timer.remaining, 0.25f);
+
+    EXPECT_TRUE(sdl3d_logic_timer_update(world, &timer, 0.25f).emitted);
+    EXPECT_EQ(capture.count, 2);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, EntityBindingActivatesRelayFromSignal)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    ordered_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 401, capture_ordered_signal, &capture), 0);
+    ASSERT_GT(sdl3d_signal_connect(bus, 402, capture_ordered_signal, &capture), 0);
+
+    sdl3d_logic_relay relay{};
+    sdl3d_logic_relay_init(&relay, 32);
+    ASSERT_TRUE(sdl3d_logic_relay_add_output(&relay, 401));
+    ASSERT_TRUE(sdl3d_logic_relay_add_output(&relay, 402));
+    int binding_id = sdl3d_logic_world_bind_relay(world, 400, &relay);
+    ASSERT_GT(binding_id, 0);
+    EXPECT_EQ(sdl3d_logic_world_entity_binding_count(world), 1);
+    EXPECT_TRUE(sdl3d_logic_world_entity_binding_enabled(world, binding_id));
+
+    sdl3d_properties *payload = sdl3d_properties_create();
+    sdl3d_properties_set_int(payload, "payload_value", 123);
+    sdl3d_signal_emit(bus, 400, payload);
+
+    ASSERT_EQ(capture.count, 2);
+    EXPECT_EQ(capture.signals[0], 401);
+    EXPECT_EQ(capture.signals[1], 402);
+    EXPECT_EQ(capture.payload_value[0], 123);
+    EXPECT_EQ(capture.payload_value[1], 123);
+
+    sdl3d_properties_destroy(payload);
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, EntityBindingCanBeDisabledAndUnbound)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+    logic_signal_capture capture{};
+    ASSERT_GT(sdl3d_signal_connect(bus, 411, capture_logic_signal, &capture), 0);
+
+    sdl3d_logic_toggle toggle{};
+    sdl3d_logic_toggle_init(&toggle, 33, false, 411, 412);
+    int binding_id = sdl3d_logic_world_bind_toggle(world, 410, &toggle);
+    ASSERT_GT(binding_id, 0);
+
+    EXPECT_TRUE(sdl3d_logic_world_set_entity_binding_enabled(world, binding_id, false));
+    EXPECT_FALSE(sdl3d_logic_world_entity_binding_enabled(world, binding_id));
+    sdl3d_signal_emit(bus, 410, nullptr);
+    EXPECT_FALSE(toggle.state);
+    EXPECT_EQ(capture.count, 0);
+
+    EXPECT_TRUE(sdl3d_logic_world_set_entity_binding_enabled(world, binding_id, true));
+    sdl3d_signal_emit(bus, 410, nullptr);
+    EXPECT_TRUE(toggle.state);
+    EXPECT_EQ(capture.count, 1);
+
+    sdl3d_logic_world_unbind_entity(world, binding_id);
+    EXPECT_EQ(sdl3d_logic_world_entity_binding_count(world), 0);
+    sdl3d_signal_emit(bus, 410, nullptr);
+    EXPECT_TRUE(toggle.state);
+    EXPECT_EQ(capture.count, 1);
+
+    sdl3d_logic_world_destroy(world);
+    sdl3d_signal_bus_destroy(bus);
+}
+
+TEST(LogicWorldEntities, InvalidEntityOperationsAreSafe)
+{
+    sdl3d_signal_bus *bus = nullptr;
+    sdl3d_logic_world *world = make_logic_world(&bus);
+
+    EXPECT_FALSE(sdl3d_logic_world_emit_signal(nullptr, 1, nullptr));
+    EXPECT_FALSE(sdl3d_logic_relay_add_output(nullptr, 1));
+    EXPECT_FALSE(sdl3d_logic_relay_activate(world, nullptr, nullptr).emitted);
+    EXPECT_FALSE(sdl3d_logic_toggle_activate(world, nullptr).emitted);
+    EXPECT_FALSE(sdl3d_logic_counter_activate(world, nullptr).emitted);
+    EXPECT_FALSE(sdl3d_logic_branch_activate(world, nullptr).emitted);
+    EXPECT_FALSE(sdl3d_logic_random_add_output(nullptr, 1));
+    EXPECT_FALSE(sdl3d_logic_random_activate(world, nullptr).emitted);
+    EXPECT_FALSE(sdl3d_logic_sequence_add_output(nullptr, 1));
+    EXPECT_FALSE(sdl3d_logic_sequence_activate(world, nullptr).emitted);
+    EXPECT_FALSE(sdl3d_logic_once_activate(world, nullptr).emitted);
+    EXPECT_FALSE(sdl3d_logic_timer_start(nullptr));
+    EXPECT_FALSE(sdl3d_logic_timer_update(world, nullptr, 1.0f).emitted);
+    sdl3d_logic_timer_stop(nullptr);
+    EXPECT_FALSE(sdl3d_logic_timer_active(nullptr));
+    EXPECT_EQ(sdl3d_logic_world_bind_relay(nullptr, 1, nullptr), 0);
+    EXPECT_EQ(sdl3d_logic_world_bind_relay(world, 1, nullptr), 0);
+    EXPECT_EQ(sdl3d_logic_world_bind_toggle(world, 1, nullptr), 0);
+    EXPECT_EQ(sdl3d_logic_world_bind_counter(world, 1, nullptr), 0);
+    EXPECT_EQ(sdl3d_logic_world_bind_branch(world, 1, nullptr), 0);
+    EXPECT_EQ(sdl3d_logic_world_bind_random(world, 1, nullptr), 0);
+    EXPECT_EQ(sdl3d_logic_world_bind_sequence(world, 1, nullptr), 0);
+    EXPECT_EQ(sdl3d_logic_world_bind_once(world, 1, nullptr), 0);
+    sdl3d_logic_world_unbind_entity(nullptr, 1);
+    sdl3d_logic_world_unbind_entity(world, 999);
+    EXPECT_FALSE(sdl3d_logic_world_set_entity_binding_enabled(nullptr, 1, true));
+    EXPECT_FALSE(sdl3d_logic_world_set_entity_binding_enabled(world, 999, true));
+    EXPECT_FALSE(sdl3d_logic_world_entity_binding_enabled(nullptr, 1));
+    EXPECT_FALSE(sdl3d_logic_world_entity_binding_enabled(world, 999));
+    EXPECT_EQ(sdl3d_logic_world_entity_binding_count(nullptr), 0);
+
+    sdl3d_logic_relay relay{};
+    sdl3d_logic_relay_init(&relay, 31);
+    for (int i = 0; i < SDL3D_LOGIC_MAX_ENTITY_OUTPUTS; ++i)
+        ASSERT_TRUE(sdl3d_logic_relay_add_output(&relay, i + 1));
+    EXPECT_FALSE(sdl3d_logic_relay_add_output(&relay, 99));
 
     sdl3d_logic_world_destroy(world);
     sdl3d_signal_bus_destroy(bus);
