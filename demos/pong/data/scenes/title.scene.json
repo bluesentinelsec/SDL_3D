@@ -4,6 +4,13 @@
   "updates_game": false,
   "renders_world": false,
   "entities": [],
+  "input": {
+    "actions": [
+      "action.menu.up",
+      "action.menu.down",
+      "action.menu.select"
+    ]
+  },
   "transitions": {
     "enter": "scene_in",
     "exit": "scene_out"

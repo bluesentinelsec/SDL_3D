@@ -1074,6 +1074,89 @@ static bool validate_app_refs(validation_context *ctx, yyjson_val *root, validat
         if (!require_ref(ctx, &names->scenes, "scene", json_string(shortcut, "scene"), path))
             return false;
     }
+
+    yyjson_val *input_policy = obj_get(app, "input_policy");
+    if (input_policy != NULL && !yyjson_is_obj(input_policy))
+        return validation_error(ctx, "$.app.input_policy", "input_policy must be an object");
+    yyjson_val *global_actions = obj_get(input_policy, "global_actions");
+    if (global_actions != NULL && !yyjson_is_arr(global_actions))
+        return validation_error(ctx, "$.app.input_policy.global_actions", "global_actions must be an array");
+    for (size_t i = 0; yyjson_is_arr(global_actions) && i < yyjson_arr_size(global_actions); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.app.input_policy.global_actions[%zu]", i);
+        yyjson_val *global_action = yyjson_arr_get(global_actions, i);
+        if (!yyjson_is_str(global_action) ||
+            !require_ref(ctx, &names->actions, "input action", yyjson_get_str(global_action), path))
+            return false;
+    }
+
+    yyjson_val *transition_policy = obj_get(app, "scene_transition_policy");
+    if (transition_policy != NULL && !yyjson_is_obj(transition_policy))
+        return validation_error(ctx, "$.app.scene_transition_policy", "scene_transition_policy must be an object");
+    return true;
+}
+
+static bool validate_update_phases(validation_context *ctx, yyjson_val *phases, const char *json_path)
+{
+    if (phases == NULL)
+        return true;
+    if (!yyjson_is_obj(phases))
+        return validation_error(ctx, json_path, "update_phases must be an object");
+
+    yyjson_val *key;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(phases, &iter);
+    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+    {
+        yyjson_val *entry = yyjson_obj_iter_get_val(key);
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "%s.%s", json_path, yyjson_get_str(key));
+        if (!yyjson_is_bool(entry) && !yyjson_is_obj(entry))
+            return validation_error(ctx, path, "update phase must be a bool or object");
+    }
+    return true;
+}
+
+static bool validate_presentation(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *presentation = obj_get(root, "presentation");
+    if (presentation == NULL)
+        return true;
+    if (!yyjson_is_obj(presentation))
+        return validation_error(ctx, "$.presentation", "presentation must be an object");
+
+    yyjson_val *clocks = obj_get(presentation, "clocks");
+    if (clocks != NULL && !yyjson_is_arr(clocks))
+        return validation_error(ctx, "$.presentation.clocks", "clocks must be an array");
+    for (size_t i = 0; yyjson_is_arr(clocks) && i < yyjson_arr_size(clocks); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.presentation.clocks[%zu]", i);
+        yyjson_val *clock = yyjson_arr_get(clocks, i);
+        if (!yyjson_is_obj(clock))
+            return validation_error(ctx, path, "presentation clock must be an object");
+        if (!is_non_empty_string(clock, "name"))
+            return validation_error(ctx, path, "presentation clock requires a non-empty name");
+        if (!require_ref(ctx, &names->entities, "entity", json_string(clock, "target"), path))
+            return false;
+        if (!is_non_empty_string(clock, "key"))
+            return validation_error(ctx, path, "presentation clock requires a non-empty key");
+        yyjson_val *speed_property = obj_get(clock, "speed_property");
+        if (speed_property != NULL)
+        {
+            if (!yyjson_is_obj(speed_property))
+                return validation_error(ctx, path, "speed_property must be an object");
+            if (!require_ref(ctx, &names->entities, "entity", json_string(speed_property, "target"), path))
+                return false;
+            if (!is_non_empty_string(speed_property, "key"))
+                return validation_error(ctx, path, "speed_property requires a non-empty key");
+        }
+        char condition_path[PATH_BUFFER_SIZE];
+        format_path(condition_path, sizeof(condition_path), "%s.active_if", path);
+        if (!validate_data_condition(ctx, obj_get(clock, "active_if"), condition_path, names))
+            return false;
+    }
     return true;
 }
 
@@ -1413,6 +1496,38 @@ static bool validate_scene_ui_condition(validation_context *ctx, yyjson_val *con
     return validate_data_condition(ctx, condition, path, names);
 }
 
+static bool validate_menu_item_control(validation_context *ctx, yyjson_val *control, const char *path,
+                                       validation_names *names)
+{
+    if (control == NULL)
+        return true;
+    if (!yyjson_is_obj(control))
+        return validation_error(ctx, path, "menu item control must be an object");
+
+    const char *type = json_string(control, "type");
+    if (type == NULL ||
+        (SDL_strcmp(type, "toggle") != 0 && SDL_strcmp(type, "choice") != 0 && SDL_strcmp(type, "range") != 0))
+        return validation_error(ctx, path, "menu item control requires type toggle, choice, or range");
+    if (!require_ref(ctx, &names->entities, "entity", json_string(control, "target"), path))
+        return false;
+    if (!is_non_empty_string(control, "key"))
+        return validation_error(ctx, path, "menu item control requires a non-empty key");
+
+    if (SDL_strcmp(type, "choice") == 0)
+    {
+        yyjson_val *choices = obj_get(control, "choices");
+        if (!yyjson_is_arr(choices) || yyjson_arr_size(choices) == 0)
+            return validation_error(ctx, path, "choice control requires at least one choice");
+    }
+    if (SDL_strcmp(type, "range") == 0)
+    {
+        if (!yyjson_is_num(obj_get(control, "min")) || !yyjson_is_num(obj_get(control, "max")) ||
+            !yyjson_is_num(obj_get(control, "step")))
+            return validation_error(ctx, path, "range control requires numeric min, max, and step");
+    }
+    return true;
+}
+
 static bool scene_has_menu_name(yyjson_val *scene_root, const char *name)
 {
     yyjson_val *menus = obj_get(scene_root, "menus");
@@ -1450,6 +1565,27 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
     const char *camera = json_string(root, "camera");
     if (camera != NULL && !require_ref(ctx, &names->cameras, "camera", camera, json_path))
         return false;
+
+    char phases_path[PATH_BUFFER_SIZE];
+    format_path(phases_path, sizeof(phases_path), "%s.update_phases", json_path);
+    if (!validate_update_phases(ctx, obj_get(root, "update_phases"), phases_path))
+        return false;
+
+    yyjson_val *scene_input = obj_get(root, "input");
+    if (scene_input != NULL && !yyjson_is_obj(scene_input))
+        return validation_error(ctx, json_path, "scene input must be an object");
+    yyjson_val *scene_actions = obj_get(scene_input, "actions");
+    if (scene_actions != NULL && !yyjson_is_arr(scene_actions))
+        return validation_error(ctx, json_path, "scene input.actions must be an array");
+    for (size_t i = 0; yyjson_is_arr(scene_actions) && i < yyjson_arr_size(scene_actions); ++i)
+    {
+        char action_path[PATH_BUFFER_SIZE];
+        format_path(action_path, sizeof(action_path), "%s.input.actions[%zu]", json_path, i);
+        yyjson_val *action = yyjson_arr_get(scene_actions, i);
+        if (!yyjson_is_str(action) ||
+            !require_ref(ctx, &names->actions, "input action", yyjson_get_str(action), action_path))
+            return false;
+    }
 
     yyjson_val *entities = obj_get(root, "entities");
     if (entities != NULL && !yyjson_is_arr(entities))
@@ -1495,6 +1631,10 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
                 return false;
             const char *signal = json_string(item, "signal");
             if (signal != NULL && !require_ref(ctx, &names->signals, "signal", signal, item_path))
+                return false;
+            char control_path[PATH_BUFFER_SIZE];
+            format_path(control_path, sizeof(control_path), "%s.control", item_path);
+            if (!validate_menu_item_control(ctx, obj_get(item, "control"), control_path, names))
                 return false;
         }
     }
@@ -1623,10 +1763,12 @@ static bool warn_unused(validation_context *ctx, const name_table *declared, con
 static bool validate_details(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     return validate_input_bindings(ctx, root) && validate_components(ctx, root, names) &&
+           validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases") &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
            validate_app_refs(ctx, root, names) && validate_cameras(ctx, root, names) && validate_ui(ctx, root, names) &&
-           validate_render_effects(ctx, root, names) && validate_lights(ctx, root, names) &&
-           validate_logic(ctx, root, names) && validate_adapters(ctx, root, names) &&
+           validate_presentation(ctx, root, names) && validate_render_effects(ctx, root, names) &&
+           validate_lights(ctx, root, names) && validate_logic(ctx, root, names) &&
+           validate_adapters(ctx, root, names) &&
            warn_unused(ctx, &names->adapters, &names->used_adapters, "adapter") &&
            warn_unused(ctx, &names->scripts, &names->used_scripts, "script");
 }

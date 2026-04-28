@@ -91,13 +91,14 @@ extern "C"
      */
     typedef struct sdl3d_game_data_menu_update_result
     {
-        const char *menu;   /**< Runtime-owned active menu name, or NULL. */
-        const char *scene;  /**< Runtime-owned selected target scene, or NULL. */
-        int selected_index; /**< Selected item index after this update, or -1. */
-        int signal_id;      /**< Selected signal id, or -1. */
-        bool handled_input; /**< True when a menu action was consumed. */
-        bool selected;      /**< True when the selected item was activated. */
-        bool quit;          /**< True when the selected item requests quit. */
+        const char *menu;     /**< Runtime-owned active menu name, or NULL. */
+        const char *scene;    /**< Runtime-owned selected target scene, or NULL. */
+        int selected_index;   /**< Selected item index after this update, or -1. */
+        int signal_id;        /**< Selected signal id, or -1. */
+        bool handled_input;   /**< True when a menu action was consumed. */
+        bool selected;        /**< True when the selected item was activated. */
+        bool quit;            /**< True when the selected item requests quit. */
+        bool control_changed; /**< True when selecting the item changed a data-bound control. */
     } sdl3d_game_data_menu_update_result;
 
     /**
@@ -115,6 +116,39 @@ extern "C"
         bool quit_pending;                     /**< True after quit has been requested. */
         bool scene_input_armed;                /**< True once menu input is idle after scene entry. */
     } sdl3d_game_data_app_flow;
+
+    /**
+     * @brief Reusable presentation and update clocks for data-authored games.
+     *
+     * Hosts keep one instance for the lifetime of a game. The state samples FPS
+     * and frame counters, tracks real presentation time, evaluates authored
+     * presentation clocks, and exposes ready-to-pass UI metrics/render inputs.
+     */
+    typedef struct sdl3d_game_data_frame_state
+    {
+        sdl3d_game_data_ui_metrics metrics;      /**< Latest UI metrics. */
+        sdl3d_game_data_render_eval render_eval; /**< Latest render effect inputs. */
+        float time;                              /**< Presentation time in seconds. */
+        float ui_pulse_phase;                    /**< Normalized phase for pulse_alpha UI. */
+        float last_render_time;                  /**< Last sampled real render time. */
+        float fps_sample_time;                   /**< Accumulated FPS sample time. */
+        float displayed_fps;                     /**< Most recently sampled FPS. */
+        int fps_sample_frames;                   /**< Frames accumulated in current FPS sample. */
+        Uint64 rendered_frames;                  /**< Number of rendered frames. */
+        bool was_paused;                         /**< Pause state from the previous update. */
+    } sdl3d_game_data_frame_state;
+
+    /**
+     * @brief Inputs for the generic data-authored update-frame helper.
+     */
+    typedef struct sdl3d_game_data_update_frame_desc
+    {
+        sdl3d_game_context *ctx;                        /**< Managed game context. */
+        sdl3d_game_data_runtime *runtime;               /**< Authored runtime to update. */
+        sdl3d_game_data_app_flow *app_flow;             /**< Optional app flow to update. */
+        sdl3d_game_data_particle_cache *particle_cache; /**< Optional authored particle cache. */
+        float dt;                                       /**< Real or fixed delta time for this update. */
+    } sdl3d_game_data_update_frame_desc;
 
     typedef struct sdl3d_game_data_frame_desc sdl3d_game_data_frame_desc;
 
@@ -234,6 +268,27 @@ extern "C"
      */
     bool sdl3d_game_data_update_menus(sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input,
                                       bool *input_armed, sdl3d_game_data_menu_update_result *out_result);
+
+    /**
+     * @brief Initialize reusable frame/update state.
+     */
+    void sdl3d_game_data_frame_state_init(sdl3d_game_data_frame_state *state);
+
+    /**
+     * @brief Advance authored app flow, update phases, presentation clocks, and simulation.
+     *
+     * This helper is intended for thin managed-loop hosts. It uses
+     * data-authored update phase policy to decide whether to update app flow,
+     * property effects, particles, and simulation while paused or unpaused.
+     */
+    bool sdl3d_game_data_update_frame(sdl3d_game_data_frame_state *state,
+                                      const sdl3d_game_data_update_frame_desc *desc);
+
+    /**
+     * @brief Sample render metrics before drawing a frame.
+     */
+    void sdl3d_game_data_frame_state_record_render(sdl3d_game_data_frame_state *state, const sdl3d_game_context *ctx,
+                                                   const sdl3d_game_data_runtime *runtime);
 
     /**
      * @brief Initialize a scene transition flow.

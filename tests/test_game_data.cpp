@@ -670,8 +670,34 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options");
     EXPECT_EQ(menu.item_count, 5);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Difficulty");
+    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_CHOICE);
+    EXPECT_STREQ(item.control_target, "entity.settings");
+    EXPECT_STREQ(item.control_key, "difficulty");
+    EXPECT_EQ(item.choice_count, 3);
+    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    ASSERT_NE(settings, nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "difficulty", ""), "normal");
+    ASSERT_TRUE(sdl3d_game_data_apply_menu_item_control(runtime, &item));
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "difficulty", ""), "hard");
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 4, &item));
     EXPECT_STREQ(item.scene, "scene.title");
+
+    bool saw_options_value = false;
+    auto find_options_value = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        auto *saw = static_cast<bool *>(userdata);
+        const std::string name = text->name != nullptr ? text->name : "";
+        const std::string value = text->text != nullptr ? text->text : "";
+        if (name == "ui.options.menu" && value == "Difficulty: Hard")
+        {
+            *saw = true;
+            return false;
+        }
+        return true;
+    };
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_options_value, &saw_options_value));
+    EXPECT_TRUE(saw_options_value);
 
     ScenePayloadCapture payload_capture{};
     const int start_signal = sdl3d_game_data_find_signal(runtime, "signal.game.start");
@@ -696,6 +722,58 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     sdl3d_properties_set_string(scene_state, "selected_level", "level.002");
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
     EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "selected_level", ""), "level.002");
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, DataAuthoredInputPolicyUpdatePhasesAndPresentationClocks)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+
+    const int pause = sdl3d_game_data_find_action(runtime, "action.pause");
+    const int scene_play = sdl3d_game_data_find_action(runtime, "action.scene.play");
+    ASSERT_GE(pause, 0);
+    ASSERT_GE(scene_play, 0);
+    EXPECT_FALSE(sdl3d_game_data_active_scene_allows_action(runtime, pause));
+    EXPECT_TRUE(sdl3d_game_data_active_scene_allows_action(runtime, scene_play));
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
+    EXPECT_TRUE(sdl3d_game_data_active_scene_allows_action(runtime, pause));
+    EXPECT_TRUE(sdl3d_game_data_active_scene_update_phase(runtime, "presentation", true));
+    EXPECT_FALSE(sdl3d_game_data_active_scene_update_phase(runtime, "simulation", true));
+
+    sdl3d_registered_actor *presentation = sdl3d_game_data_find_actor(runtime, "entity.presentation");
+    ASSERT_NE(presentation, nullptr);
+    sdl3d_game_context ctx{};
+    ctx.session = session;
+
+    sdl3d_game_data_frame_state frame_state{};
+    sdl3d_game_data_frame_state_init(&frame_state);
+    sdl3d_game_data_update_frame_desc update{};
+    update.ctx = &ctx;
+    update.runtime = runtime;
+    update.dt = 0.25f;
+    ASSERT_TRUE(sdl3d_game_data_update_frame(&frame_state, &update));
+    EXPECT_NEAR(frame_state.time, 0.25f, 0.0001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(presentation->props, "pause_flash", -1.0f), 0.0f, 0.0001f);
+
+    ctx.paused = true;
+    update.dt = 0.1f;
+    ASSERT_TRUE(sdl3d_game_data_update_frame(&frame_state, &update));
+    EXPECT_NEAR(sdl3d_properties_get_float(presentation->props, "pause_flash", -1.0f), 0.3f, 0.0001f);
+    EXPECT_NEAR(sdl3d_game_data_ui_pulse_phase(runtime, -1.0f), 0.3f, 0.0001f);
+
+    sdl3d_game_data_scene_transition_policy policy{};
+    ASSERT_TRUE(sdl3d_game_data_get_scene_transition_policy(runtime, &policy));
+    EXPECT_FALSE(policy.allow_same_scene);
+    EXPECT_FALSE(policy.allow_interrupt);
+    EXPECT_TRUE(policy.reset_menu_input_on_request);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);

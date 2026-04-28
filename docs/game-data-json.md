@@ -99,7 +99,15 @@ The optional `app` object lets a managed-loop game declare startup settings befo
     "scene_shortcuts": [
       { "action": "action.scene.title", "scene": "scene.title" },
       { "action": "action.scene.play", "scene": "scene.play" }
-    ]
+    ],
+    "input_policy": {
+      "global_actions": ["action.exit", "action.scene.title", "action.scene.play"]
+    },
+    "scene_transition_policy": {
+      "allow_same_scene": false,
+      "allow_interrupt": false,
+      "reset_menu_input_on_request": true
+    }
   }
 }
 ```
@@ -112,7 +120,46 @@ runtime ownership of the renderer. Games read these descriptors and decide how t
 `app.pause.allowed_if` is optional; when present, the app-flow helper evaluates it before entering pause.
 `app.quit` lets data choose which input action requests quit, which transition plays, and which signal completes
 the quit. `app.scene_shortcuts` maps authored input actions to scene names, which is useful for development
-hotkeys, debug level jumps, and simple game flows. The host still owns process shutdown.
+hotkeys, debug level jumps, and simple game flows. `app.input_policy.global_actions`
+lists actions that remain valid in every scene, while each scene can further
+limit its own actions. `app.scene_transition_policy` controls whether scene
+requests can re-enter the current scene, interrupt an active transition, and
+reset menu input arming after accepted requests. The host still owns process shutdown.
+
+The optional `update_phases` and `presentation` sections let thin managed-loop
+hosts use generic frame orchestration:
+
+```json
+{
+  "update_phases": {
+    "app_flow": { "active": true, "when_paused": true },
+    "presentation": { "active": true, "when_paused": true },
+    "property_effects": { "active": true, "when_paused": true },
+    "particles": { "active": true, "when_paused": true },
+    "simulation": { "active": true, "when_paused": false }
+  },
+  "presentation": {
+    "metrics": { "fps_sample_seconds": 0.25 },
+    "ui_pulse_clock": "clock.pause_flash",
+    "clocks": [
+      {
+        "name": "clock.pause_flash",
+        "target": "entity.presentation",
+        "key": "pause_flash",
+        "speed_property": { "target": "entity.presentation", "key": "pause_flash_speed" },
+        "wrap": 1.0,
+        "reset_on_pause_enter": true,
+        "active_if": { "type": "app.paused", "equals": true }
+      }
+    ]
+  }
+}
+```
+
+`sdl3d_game_data_update_frame()` uses these phases to advance app flow,
+presentation clocks, property effects, particles, and simulation. Presentation
+clocks are reusable oscillators/counters that can write into actor properties;
+UI, lights, scripts, and render helpers can all read the resulting value.
 
 Font assets can be authored under `assets.fonts`:
 
@@ -176,6 +223,27 @@ selected styling, and cursor styling:
 
 This keeps title/options/menu screens data-authored: the input menu defines
 choices and actions, while the UI presenter defines how the choices are laid out.
+Menu items can also author generic settings controls:
+
+```json
+{
+  "label": "Difficulty",
+  "control": {
+    "type": "choice",
+    "target": "entity.settings",
+    "key": "difficulty",
+    "choices": [
+      { "label": "Easy", "value": "easy" },
+      { "label": "Normal", "value": "normal" },
+      { "label": "Hard", "value": "hard" }
+    ]
+  }
+}
+```
+
+Supported control types are `toggle`, `choice`, and `range`. The generic menu
+controller applies these controls directly to actor properties and the menu UI
+presenter displays the current value.
 
 ## Scenes
 
@@ -208,6 +276,9 @@ enter/exit transitions, menus, and scene-local UI:
   "camera": "camera.main",
   "on_enter_signal": "signal.level.enter",
   "entities": ["entity.player", "entity.goal"],
+  "input": {
+    "actions": ["action.move.left", "action.move.right", "action.pause"]
+  },
   "transitions": { "enter": "scene_in", "exit": "scene_out" }
 }
 ```
@@ -215,6 +286,9 @@ enter/exit transitions, menus, and scene-local UI:
 Scenes that omit `entities` include all top-level entities; scenes with an empty
 `entities` array include none. This keeps small demos terse while letting large
 games isolate title screens, menus, levels, dungeons, and cutscenes.
+Scenes that omit `input.actions` accept every action except where app-level
+policy says otherwise. Scenes that author `input.actions` accept only those
+actions plus app-level `global_actions`.
 
 When a scene is activated, the runtime emits the scene's `on_enter_signal` if
 one is authored. The enter payload always includes `from_scene` and `to_scene`.
@@ -233,6 +307,11 @@ starts the active scene's authored `exit` transition, switches scenes when the
 transition finishes, then starts the target scene's authored `enter` transition.
 Hosts that need custom loading screens or streaming can still orchestrate scene
 changes themselves.
+
+`sdl3d_game_data_update_frame()` is the higher-level update companion for thin
+managed-loop games. It evaluates authored update phases, advances app flow,
+presentation clocks, property effects, particle emitters, and simulation using
+the same scene/input policies as the lower-level helpers.
 
 The same helper module can draw authored `render.cube`, `render.sphere`, UI
 text descriptors, and active `particles.emitter` components for the active

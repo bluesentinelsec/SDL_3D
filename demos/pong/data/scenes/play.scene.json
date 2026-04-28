@@ -19,8 +19,18 @@
     "entity.score.cpu",
     "entity.match",
     "entity.presentation",
+    "entity.settings",
     "entity.effect.ambient_particles"
   ],
+  "input": {
+    "actions": [
+      "action.paddle.up",
+      "action.paddle.down",
+      "action.pause",
+      "action.restart",
+      "action.camera.ball.toggle"
+    ]
+  },
   "transitions": {
     "enter": "scene_in",
     "exit": "scene_out"

@@ -240,12 +240,26 @@ extern "C"
         int item_count;
     } sdl3d_game_data_menu;
 
+    /** @brief Generic data-authored control kind for menu items. */
+    typedef enum sdl3d_game_data_menu_control_type
+    {
+        /** @brief Menu item is a command, not a setting control. */
+        SDL3D_GAME_DATA_MENU_CONTROL_NONE = 0,
+        /** @brief Menu item toggles a boolean actor property. */
+        SDL3D_GAME_DATA_MENU_CONTROL_TOGGLE = 1,
+        /** @brief Menu item cycles through authored choices. */
+        SDL3D_GAME_DATA_MENU_CONTROL_CHOICE = 2,
+        /** @brief Menu item increments a numeric property within a range. */
+        SDL3D_GAME_DATA_MENU_CONTROL_RANGE = 3,
+    } sdl3d_game_data_menu_control_type;
+
     /**
      * @brief Runtime descriptor for one authored menu item.
      *
-     * A menu item may request a scene change, request app quit, and/or emit a
-     * signal. Hosts can use these fields directly or translate them into a
-     * higher-level scene transition flow.
+     * A menu item may request a scene change, request app quit, emit a signal,
+     * or mutate an actor property as a generic option control. Hosts can use
+     * these fields directly or translate them into a higher-level scene
+     * transition flow.
      */
     typedef struct sdl3d_game_data_menu_item
     {
@@ -257,7 +271,26 @@ extern "C"
         bool quit;
         /** @brief Signal emitted by this item, or -1 when not authored. */
         int signal_id;
+        /** @brief Authored generic control type. */
+        sdl3d_game_data_menu_control_type control_type;
+        /** @brief Actor that owns the controlled property, or NULL. */
+        const char *control_target;
+        /** @brief Controlled property key, or NULL. */
+        const char *control_key;
+        /** @brief Number of authored choices for choice controls. */
+        int choice_count;
     } sdl3d_game_data_menu_item;
+
+    /** @brief Authored scene transition behavior policy. */
+    typedef struct sdl3d_game_data_scene_transition_policy
+    {
+        /** @brief Permit requesting the currently active scene. */
+        bool allow_same_scene;
+        /** @brief Permit a new scene request to replace an active transition. */
+        bool allow_interrupt;
+        /** @brief Reset menu input arming after an accepted scene request. */
+        bool reset_menu_input_on_request;
+    } sdl3d_game_data_scene_transition_policy;
 
     /** @brief Authored input shortcut that requests a scene change. */
     typedef struct sdl3d_game_data_scene_shortcut
@@ -546,6 +579,30 @@ extern "C"
     bool sdl3d_game_data_app_pause_allowed(const sdl3d_game_data_runtime *runtime,
                                            const sdl3d_game_data_ui_metrics *metrics);
 
+    /**
+     * @brief Advance data-authored presentation clocks.
+     *
+     * Presentation clocks are generic data-driven oscillators/counters used by
+     * UI, lights, and other render-facing effects. Authored clocks may write
+     * into actor properties so scripts, UI bindings, and render evaluation can
+     * share the same source of truth.
+     */
+    bool sdl3d_game_data_update_presentation_clocks(sdl3d_game_data_runtime *runtime, float dt, bool paused,
+                                                    bool pause_entered);
+
+    /**
+     * @brief Read the authored UI pulse phase.
+     *
+     * Returns @p fallback when no `presentation.ui_pulse_clock` is authored or
+     * the named clock has no current value.
+     */
+    float sdl3d_game_data_ui_pulse_phase(const sdl3d_game_data_runtime *runtime, float fallback);
+
+    /**
+     * @brief Read authored FPS metric sample duration in seconds.
+     */
+    float sdl3d_game_data_fps_sample_seconds(const sdl3d_game_data_runtime *runtime, float fallback);
+
     /** @brief Read a font asset descriptor by id from `assets.fonts`. */
     bool sdl3d_game_data_get_font_asset(const sdl3d_game_data_runtime *runtime, const char *id,
                                         sdl3d_game_data_font_asset *out_font);
@@ -730,6 +787,19 @@ extern "C"
     bool sdl3d_game_data_active_scene_updates_game(const sdl3d_game_data_runtime *runtime);
 
     /**
+     * @brief Return whether an authored update phase should run for the active scene.
+     *
+     * @p phase is an authored phase name such as `simulation`,
+     * `property_effects`, `particles`, or `presentation`. Scene-level
+     * `update_phases` entries override top-level entries. Missing phases use
+     * conservative defaults: simulation follows `updates_game` and does not run
+     * while paused; presentation/property effects/particles run in both paused
+     * and unpaused frames.
+     */
+    bool sdl3d_game_data_active_scene_update_phase(const sdl3d_game_data_runtime *runtime, const char *phase,
+                                                   bool paused);
+
+    /**
      * @brief Return whether the active scene should render the authored world.
      *
      * Scenes default to rendering the world when they do not specify
@@ -744,6 +814,25 @@ extern "C"
      * backward compatibility. Scenes with an empty list include no entities.
      */
     bool sdl3d_game_data_active_scene_has_entity(const sdl3d_game_data_runtime *runtime, const char *entity_name);
+
+    /**
+     * @brief Return whether the active scene allows an input action.
+     *
+     * If a scene omits `input.actions`, all actions are allowed. When present,
+     * the action must be listed there or in top-level
+     * `app.input_policy.global_actions`.
+     */
+    bool sdl3d_game_data_active_scene_allows_action(const sdl3d_game_data_runtime *runtime, int action_id);
+
+    /**
+     * @brief Read authored scene transition policy.
+     *
+     * Missing fields use stable defaults: same-scene requests and interrupting
+     * active transitions are rejected, and accepted scene requests reset menu
+     * input arming.
+     */
+    bool sdl3d_game_data_get_scene_transition_policy(const sdl3d_game_data_runtime *runtime,
+                                                     sdl3d_game_data_scene_transition_policy *out_policy);
 
     /**
      * @brief Read the transition descriptor attached to a scene phase.
@@ -777,6 +866,17 @@ extern "C"
      */
     bool sdl3d_game_data_get_menu_item(const sdl3d_game_data_runtime *runtime, const char *menu_name, int index,
                                        sdl3d_game_data_menu_item *out_item);
+
+    /**
+     * @brief Apply the generic control behavior authored on a menu item.
+     *
+     * Toggle controls flip boolean properties, choice controls advance to the
+     * next authored choice, and range controls increment numeric properties with
+     * wrapping. Returns false when @p item is not a control or its target cannot
+     * be resolved.
+     */
+    bool sdl3d_game_data_apply_menu_item_control(sdl3d_game_data_runtime *runtime,
+                                                 const sdl3d_game_data_menu_item *item);
 
     /**
      * @brief Return the number of scene shortcuts authored under `app.scene_shortcuts`.

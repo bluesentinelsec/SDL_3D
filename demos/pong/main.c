@@ -9,7 +9,6 @@
 #include "sdl3d/game.h"
 #include "sdl3d/game_data.h"
 #include "sdl3d/game_presentation.h"
-#include "sdl3d/properties.h"
 
 #if SDL3D_PONG_EMBEDDED_ASSETS
 #include "sdl3d_pong_assets.h"
@@ -21,13 +20,7 @@ typedef struct pong_state
     sdl3d_game_data_font_cache font_cache;
     sdl3d_game_data_particle_cache particle_cache;
     sdl3d_game_data_app_flow app_flow;
-    float time;
-    float pause_flash;
-    float last_render_time;
-    float fps_sample_time;
-    float displayed_fps;
-    int fps_sample_frames;
-    Uint64 rendered_frames;
+    sdl3d_game_data_frame_state frame_state;
 } pong_state;
 
 static bool mount_pong_assets(sdl3d_asset_resolver *assets, char *error, int error_size)
@@ -40,12 +33,6 @@ static bool mount_pong_assets(sdl3d_asset_resolver *assets, char *error, int err
 #else
     return sdl3d_asset_resolver_mount_directory(assets, SDL3D_PONG_DATA_DIR, error, error_size);
 #endif
-}
-
-static float presentation_float(const pong_state *state, const char *key, float fallback)
-{
-    sdl3d_registered_actor *presentation = sdl3d_game_data_find_actor_with_tag(state->data, "presentation");
-    return presentation != NULL ? sdl3d_properties_get_float(presentation->props, key, fallback) : fallback;
 }
 
 static bool init_game_data(sdl3d_game_context *ctx, pong_state *state)
@@ -88,6 +75,7 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
     sdl3d_game_data_font_cache_init(&state->font_cache, SDL3D_MEDIA_DIR);
     sdl3d_game_data_particle_cache_init(&state->particle_cache);
     sdl3d_game_data_app_flow_init(&state->app_flow);
+    sdl3d_game_data_frame_state_init(&state->frame_state);
 
     if (!init_game_data(ctx, state))
     {
@@ -108,45 +96,28 @@ static bool pong_handle_event(sdl3d_game_context *ctx, void *userdata, const SDL
     return true;
 }
 
-static void update_visual_effects(pong_state *state, float dt)
-{
-    state->time += dt;
-    sdl3d_game_data_update_property_effects(state->data, dt);
-    sdl3d_game_data_update_particles(state->data, &state->particle_cache, dt);
-}
-
 static void pong_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 {
     pong_state *state = (pong_state *)userdata;
 
-    const bool was_paused = ctx->paused;
-    sdl3d_game_data_app_flow_update(&state->app_flow, ctx, state->data, dt);
-    if (!was_paused && ctx->paused)
-        state->pause_flash = 0.0f;
-
-    update_visual_effects(state, dt);
-
-    if (!sdl3d_game_data_app_flow_quit_pending(&state->app_flow) && !ctx->paused &&
-        sdl3d_game_data_active_scene_updates_game(state->data))
-    {
-        sdl3d_game_data_update(state->data, dt);
-    }
+    const sdl3d_game_data_update_frame_desc frame = {.ctx = ctx,
+                                                     .runtime = state->data,
+                                                     .app_flow = &state->app_flow,
+                                                     .particle_cache = &state->particle_cache,
+                                                     .dt = dt};
+    (void)sdl3d_game_data_update_frame(&state->frame_state, &frame);
 }
 
 static void pong_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_dt)
 {
     pong_state *state = (pong_state *)userdata;
 
-    sdl3d_game_data_app_flow_update(&state->app_flow, ctx, state->data, real_dt);
-    if (!ctx->paused)
-        return;
-
-    state->pause_flash += real_dt * presentation_float(state, "pause_flash_speed", 3.0f);
-    while (state->pause_flash >= 1.0f)
-    {
-        state->pause_flash -= 1.0f;
-    }
-    update_visual_effects(state, real_dt);
+    const sdl3d_game_data_update_frame_desc frame = {.ctx = ctx,
+                                                     .runtime = state->data,
+                                                     .app_flow = &state->app_flow,
+                                                     .particle_cache = &state->particle_cache,
+                                                     .dt = real_dt};
+    (void)sdl3d_game_data_update_frame(&state->frame_state, &frame);
 }
 
 static void pong_render(sdl3d_game_context *ctx, void *userdata, float alpha)
@@ -154,31 +125,8 @@ static void pong_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     pong_state *state = (pong_state *)userdata;
     (void)alpha;
 
-    if (state->rendered_frames > 0)
-    {
-        const float frame_dt = ctx->real_time - state->last_render_time;
-        if (frame_dt > 0.0f)
-        {
-            state->fps_sample_time += frame_dt;
-            ++state->fps_sample_frames;
-            if (state->fps_sample_time >= 0.25f)
-            {
-                state->displayed_fps = (float)state->fps_sample_frames / state->fps_sample_time;
-                state->fps_sample_time = 0.0f;
-                state->fps_sample_frames = 0;
-            }
-        }
-    }
-    state->last_render_time = ctx->real_time;
-    ++state->rendered_frames;
+    sdl3d_game_data_frame_state_record_render(&state->frame_state, ctx, state->data);
 
-    sdl3d_game_data_ui_metrics metrics;
-    SDL_zero(metrics);
-    metrics.paused = ctx->paused;
-    metrics.fps = state->displayed_fps;
-    metrics.frame = state->rendered_frames;
-
-    const sdl3d_game_data_render_eval render_eval = {.time = state->time};
     sdl3d_game_data_frame_desc frame;
     SDL_zero(frame);
     frame.runtime = state->data;
@@ -186,9 +134,9 @@ static void pong_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     frame.font_cache = &state->font_cache;
     frame.particle_cache = &state->particle_cache;
     frame.app_flow = &state->app_flow;
-    frame.metrics = &metrics;
-    frame.render_eval = &render_eval;
-    frame.pulse_phase = state->pause_flash;
+    frame.metrics = &state->frame_state.metrics;
+    frame.render_eval = &state->frame_state.render_eval;
+    frame.pulse_phase = state->frame_state.ui_pulse_phase;
     sdl3d_game_data_draw_frame(&frame);
 }
 

@@ -1505,6 +1505,18 @@ int sdl3d_game_data_find_action(const sdl3d_game_data_runtime *runtime, const ch
     return -1;
 }
 
+static const char *find_action_name(const sdl3d_game_data_runtime *runtime, int action_id)
+{
+    if (runtime == NULL || action_id < 0)
+        return NULL;
+    for (int i = 0; i < runtime->action_count; ++i)
+    {
+        if (runtime->actions[i].id == action_id)
+            return runtime->actions[i].name;
+    }
+    return NULL;
+}
+
 sdl3d_registered_actor *sdl3d_game_data_find_actor(const sdl3d_game_data_runtime *runtime, const char *name)
 {
     return sdl3d_actor_registry_find(runtime_registry(runtime), name);
@@ -2200,6 +2212,46 @@ bool sdl3d_game_data_active_scene_updates_game(const sdl3d_game_data_runtime *ru
     return scene != NULL ? json_bool(scene->root, "updates_game", true) : true;
 }
 
+static bool update_phase_default(const sdl3d_game_data_runtime *runtime, const char *phase, bool paused)
+{
+    if (phase != NULL && SDL_strcmp(phase, "simulation") == 0)
+        return !paused && sdl3d_game_data_active_scene_updates_game(runtime);
+    if (phase != NULL && SDL_strcmp(phase, "app_flow") == 0)
+        return true;
+    if (phase != NULL && (SDL_strcmp(phase, "presentation") == 0 || SDL_strcmp(phase, "property_effects") == 0 ||
+                          SDL_strcmp(phase, "particles") == 0))
+        return true;
+    return !paused;
+}
+
+static bool eval_update_phase_entry(yyjson_val *entry, bool paused, bool fallback)
+{
+    if (yyjson_is_bool(entry))
+        return yyjson_get_bool(entry);
+    if (!yyjson_is_obj(entry))
+        return fallback;
+    if (!json_bool(entry, "active", true))
+        return false;
+    if (paused)
+        return json_bool(entry, "when_paused", fallback);
+    return json_bool(entry, "when_unpaused", true);
+}
+
+bool sdl3d_game_data_active_scene_update_phase(const sdl3d_game_data_runtime *runtime, const char *phase, bool paused)
+{
+    if (runtime == NULL || phase == NULL)
+        return false;
+
+    const bool fallback = update_phase_default(runtime, phase, paused);
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    yyjson_val *scene_entry_json = obj_get(obj_get(scene != NULL ? scene->root : NULL, "update_phases"), phase);
+    if (scene_entry_json != NULL)
+        return eval_update_phase_entry(scene_entry_json, paused, fallback);
+
+    yyjson_val *root_entry_json = obj_get(obj_get(runtime_root(runtime), "update_phases"), phase);
+    return eval_update_phase_entry(root_entry_json, paused, fallback);
+}
+
 bool sdl3d_game_data_active_scene_renders_world(const sdl3d_game_data_runtime *runtime)
 {
     const scene_entry *scene = active_scene_entry_const(runtime);
@@ -2209,6 +2261,56 @@ bool sdl3d_game_data_active_scene_renders_world(const sdl3d_game_data_runtime *r
 bool sdl3d_game_data_active_scene_has_entity(const sdl3d_game_data_runtime *runtime, const char *entity_name)
 {
     return runtime != NULL && active_scene_has_entity_internal(runtime, entity_name);
+}
+
+static bool string_array_contains(yyjson_val *array, const char *value)
+{
+    for (size_t i = 0; value != NULL && yyjson_is_arr(array) && i < yyjson_arr_size(array); ++i)
+    {
+        yyjson_val *item = yyjson_arr_get(array, i);
+        const char *text = yyjson_is_str(item) ? yyjson_get_str(item) : NULL;
+        if (text != NULL && SDL_strcmp(text, value) == 0)
+            return true;
+    }
+    return false;
+}
+
+bool sdl3d_game_data_active_scene_allows_action(const sdl3d_game_data_runtime *runtime, int action_id)
+{
+    const char *action = find_action_name(runtime, action_id);
+    if (runtime == NULL || action == NULL)
+        return false;
+
+    yyjson_val *global_actions =
+        obj_get(obj_get(obj_get(runtime_root(runtime), "app"), "input_policy"), "global_actions");
+    if (string_array_contains(global_actions, action))
+        return true;
+
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    yyjson_val *actions = obj_get(obj_get(scene != NULL ? scene->root : NULL, "input"), "actions");
+    if (actions == NULL)
+        return true;
+    return string_array_contains(actions, action);
+}
+
+bool sdl3d_game_data_get_scene_transition_policy(const sdl3d_game_data_runtime *runtime,
+                                                 sdl3d_game_data_scene_transition_policy *out_policy)
+{
+    if (out_policy != NULL)
+    {
+        out_policy->allow_same_scene = false;
+        out_policy->allow_interrupt = false;
+        out_policy->reset_menu_input_on_request = true;
+    }
+    if (runtime == NULL || out_policy == NULL)
+        return false;
+
+    yyjson_val *policy = obj_get(obj_get(runtime_root(runtime), "app"), "scene_transition_policy");
+    out_policy->allow_same_scene = json_bool(policy, "allow_same_scene", out_policy->allow_same_scene);
+    out_policy->allow_interrupt = json_bool(policy, "allow_interrupt", out_policy->allow_interrupt);
+    out_policy->reset_menu_input_on_request =
+        json_bool(policy, "reset_menu_input_on_request", out_policy->reset_menu_input_on_request);
+    return true;
 }
 
 bool sdl3d_game_data_get_scene_transition(const sdl3d_game_data_runtime *runtime, const char *scene_name,
@@ -2259,6 +2361,21 @@ bool sdl3d_game_data_menu_move(sdl3d_game_data_runtime *runtime, const char *men
     return true;
 }
 
+static sdl3d_game_data_menu_control_type parse_menu_control_type(const char *type)
+{
+    if (type == NULL)
+        return SDL3D_GAME_DATA_MENU_CONTROL_NONE;
+    if (SDL_strcmp(type, "toggle") == 0)
+        return SDL3D_GAME_DATA_MENU_CONTROL_TOGGLE;
+    if (SDL_strcmp(type, "choice") == 0)
+        return SDL3D_GAME_DATA_MENU_CONTROL_CHOICE;
+    if (SDL_strcmp(type, "range") == 0)
+        return SDL3D_GAME_DATA_MENU_CONTROL_RANGE;
+    return SDL3D_GAME_DATA_MENU_CONTROL_NONE;
+}
+
+static bool json_value_matches_property(yyjson_val *value, const sdl3d_value *property);
+
 bool sdl3d_game_data_get_menu_item(const sdl3d_game_data_runtime *runtime, const char *menu_name, int index,
                                    sdl3d_game_data_menu_item *out_item)
 {
@@ -2272,11 +2389,147 @@ bool sdl3d_game_data_get_menu_item(const sdl3d_game_data_runtime *runtime, const
         return false;
 
     yyjson_val *item = yyjson_arr_get(obj_get(menu->menu, "items"), (size_t)index);
+    yyjson_val *control = obj_get(item, "control");
     out_item->label = json_string(item, "label", NULL);
     out_item->scene = json_string(item, "scene", NULL);
     out_item->quit = json_bool(item, "quit", false);
     out_item->signal_id = sdl3d_game_data_find_signal(runtime, json_string(item, "signal", NULL));
+    out_item->control_type = parse_menu_control_type(json_string(control, "type", NULL));
+    out_item->control_target = json_string(control, "target", NULL);
+    out_item->control_key = json_string(control, "key", NULL);
+    out_item->choice_count =
+        yyjson_is_arr(obj_get(control, "choices")) ? (int)yyjson_arr_size(obj_get(control, "choices")) : 0;
     return yyjson_is_obj(item) && out_item->label != NULL;
+}
+
+static yyjson_val *find_menu_item_control_json(const sdl3d_game_data_runtime *runtime,
+                                               const sdl3d_game_data_menu_item *item)
+{
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    for (int m = 0; scene != NULL && item != NULL && m < scene->menu_count; ++m)
+    {
+        yyjson_val *items = obj_get(scene->menus[m].menu, "items");
+        for (size_t i = 0; yyjson_is_arr(items) && i < yyjson_arr_size(items); ++i)
+        {
+            yyjson_val *candidate = yyjson_arr_get(items, i);
+            yyjson_val *control = obj_get(candidate, "control");
+            const char *label = json_string(candidate, "label", NULL);
+            const char *target = json_string(control, "target", NULL);
+            const char *key = json_string(control, "key", NULL);
+            if (label != NULL && target != NULL && key != NULL && item->label != NULL && item->control_target != NULL &&
+                item->control_key != NULL && SDL_strcmp(label, item->label) == 0 &&
+                SDL_strcmp(target, item->control_target) == 0 && SDL_strcmp(key, item->control_key) == 0)
+                return control;
+        }
+    }
+    return NULL;
+}
+
+static bool set_property_from_json(sdl3d_properties *props, const char *key, yyjson_val *value)
+{
+    if (props == NULL || key == NULL || value == NULL)
+        return false;
+    if (yyjson_is_bool(value))
+    {
+        sdl3d_properties_set_bool(props, key, yyjson_get_bool(value));
+        return true;
+    }
+    if (yyjson_is_int(value))
+    {
+        sdl3d_properties_set_int(props, key, (int)yyjson_get_sint(value));
+        return true;
+    }
+    if (yyjson_is_num(value))
+    {
+        sdl3d_properties_set_float(props, key, (float)yyjson_get_num(value));
+        return true;
+    }
+    if (yyjson_is_str(value))
+    {
+        sdl3d_properties_set_string(props, key, yyjson_get_str(value));
+        return true;
+    }
+    return false;
+}
+
+static bool json_value_matches_property(yyjson_val *value, const sdl3d_value *property)
+{
+    if (value == NULL || property == NULL)
+        return false;
+    switch (property->type)
+    {
+    case SDL3D_VALUE_BOOL:
+        return yyjson_is_bool(value) && yyjson_get_bool(value) == property->as_bool;
+    case SDL3D_VALUE_INT:
+        return yyjson_is_int(value) && (int)yyjson_get_sint(value) == property->as_int;
+    case SDL3D_VALUE_FLOAT:
+        return yyjson_is_num(value) && SDL_fabsf((float)yyjson_get_num(value) - property->as_float) < 0.0001f;
+    case SDL3D_VALUE_STRING:
+        return yyjson_is_str(value) &&
+               SDL_strcmp(yyjson_get_str(value), property->as_string != NULL ? property->as_string : "") == 0;
+    case SDL3D_VALUE_VEC3:
+    case SDL3D_VALUE_COLOR:
+        return false;
+    }
+    return false;
+}
+
+bool sdl3d_game_data_apply_menu_item_control(sdl3d_game_data_runtime *runtime, const sdl3d_game_data_menu_item *item)
+{
+    if (runtime == NULL || item == NULL || item->control_type == SDL3D_GAME_DATA_MENU_CONTROL_NONE ||
+        item->control_target == NULL || item->control_key == NULL)
+        return false;
+
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, item->control_target);
+    if (actor == NULL)
+        return false;
+
+    yyjson_val *control = find_menu_item_control_json(runtime, item);
+    switch (item->control_type)
+    {
+    case SDL3D_GAME_DATA_MENU_CONTROL_TOGGLE: {
+        const bool current =
+            sdl3d_properties_get_bool(actor->props, item->control_key, json_bool(control, "default", false));
+        sdl3d_properties_set_bool(actor->props, item->control_key, !current);
+        return true;
+    }
+    case SDL3D_GAME_DATA_MENU_CONTROL_CHOICE: {
+        yyjson_val *choices = obj_get(control, "choices");
+        if (!yyjson_is_arr(choices) || yyjson_arr_size(choices) == 0)
+            return false;
+        const sdl3d_value *current = sdl3d_properties_get_value(actor->props, item->control_key);
+        int current_index = -1;
+        for (size_t i = 0; i < yyjson_arr_size(choices); ++i)
+        {
+            yyjson_val *choice = yyjson_arr_get(choices, i);
+            yyjson_val *value = yyjson_is_obj(choice) ? obj_get(choice, "value") : choice;
+            if (json_value_matches_property(value, current))
+            {
+                current_index = (int)i;
+                break;
+            }
+        }
+        const int next_index = (current_index + 1) % (int)yyjson_arr_size(choices);
+        yyjson_val *next = yyjson_arr_get(choices, (size_t)next_index);
+        return set_property_from_json(actor->props, item->control_key,
+                                      yyjson_is_obj(next) ? obj_get(next, "value") : next);
+    }
+    case SDL3D_GAME_DATA_MENU_CONTROL_RANGE: {
+        const float min_value = json_float(control, "min", 0.0f);
+        const float max_value = json_float(control, "max", 1.0f);
+        const float step = json_float(control, "step", 1.0f);
+        float value =
+            sdl3d_properties_get_float(actor->props, item->control_key, json_float(control, "default", min_value));
+        value += step;
+        if (value > max_value)
+            value = min_value;
+        sdl3d_properties_set_float(actor->props, item->control_key, SDL_clamp(value, min_value, max_value));
+        return true;
+    }
+    case SDL3D_GAME_DATA_MENU_CONTROL_NONE:
+        return false;
+    }
+    return false;
 }
 
 int sdl3d_game_data_scene_shortcut_count(const sdl3d_game_data_runtime *runtime)
@@ -2313,9 +2566,12 @@ bool sdl3d_game_data_active_menu_input_is_idle(const sdl3d_game_data_runtime *ru
     if (input == NULL)
         return false;
 
-    return (menu.up_action_id < 0 || !sdl3d_input_is_held(input, menu.up_action_id)) &&
-           (menu.down_action_id < 0 || !sdl3d_input_is_held(input, menu.down_action_id)) &&
-           (menu.select_action_id < 0 || !sdl3d_input_is_held(input, menu.select_action_id));
+    return (menu.up_action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, menu.up_action_id) ||
+            !sdl3d_input_is_held(input, menu.up_action_id)) &&
+           (menu.down_action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, menu.down_action_id) ||
+            !sdl3d_input_is_held(input, menu.down_action_id)) &&
+           (menu.select_action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, menu.select_action_id) ||
+            !sdl3d_input_is_held(input, menu.select_action_id));
 }
 
 static void ui_text_from_json(yyjson_val *item, sdl3d_game_data_ui_text *text)
@@ -2375,8 +2631,67 @@ static bool emit_ui_menu_cursor(yyjson_val *presenter, float row_y, sdl3d_game_d
     return callback(userdata, &text);
 }
 
-static bool for_each_ui_menu_presenter(const scene_entry *scene, yyjson_val *presenter,
-                                       sdl3d_game_data_ui_text_fn callback, void *userdata)
+static const char *choice_label_for_property(const sdl3d_game_data_runtime *runtime, yyjson_val *control)
+{
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, json_string(control, "target", NULL));
+    const char *key = json_string(control, "key", NULL);
+    const sdl3d_value *value = actor != NULL && key != NULL ? sdl3d_properties_get_value(actor->props, key) : NULL;
+    yyjson_val *choices = obj_get(control, "choices");
+    for (size_t i = 0; yyjson_is_arr(choices) && i < yyjson_arr_size(choices); ++i)
+    {
+        yyjson_val *choice = yyjson_arr_get(choices, i);
+        yyjson_val *choice_value = yyjson_is_obj(choice) ? obj_get(choice, "value") : choice;
+        if (json_value_matches_property(choice_value, value))
+            return yyjson_is_obj(choice) ? json_string(choice, "label", NULL) : NULL;
+    }
+    return NULL;
+}
+
+static void format_menu_item_label(const sdl3d_game_data_runtime *runtime, yyjson_val *item, char *buffer,
+                                   size_t buffer_size)
+{
+    const char *label = json_string(item, "label", "");
+    yyjson_val *control = obj_get(item, "control");
+    const sdl3d_game_data_menu_control_type type = parse_menu_control_type(json_string(control, "type", NULL));
+    if (buffer == NULL || buffer_size == 0)
+        return;
+
+    if (type == SDL3D_GAME_DATA_MENU_CONTROL_NONE)
+    {
+        SDL_strlcpy(buffer, label, buffer_size);
+        return;
+    }
+
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, json_string(control, "target", NULL));
+    const char *key = json_string(control, "key", NULL);
+    const sdl3d_value *value = actor != NULL && key != NULL ? sdl3d_properties_get_value(actor->props, key) : NULL;
+    if (type == SDL3D_GAME_DATA_MENU_CONTROL_TOGGLE)
+    {
+        const bool enabled =
+            value != NULL && value->type == SDL3D_VALUE_BOOL ? value->as_bool : json_bool(control, "default", false);
+        SDL_snprintf(buffer, buffer_size, "%s: %s", label, enabled ? "On" : "Off");
+        return;
+    }
+    if (type == SDL3D_GAME_DATA_MENU_CONTROL_CHOICE)
+    {
+        const char *choice_label = choice_label_for_property(runtime, control);
+        if (choice_label == NULL && value != NULL && value->type == SDL3D_VALUE_STRING)
+            choice_label = value->as_string;
+        SDL_snprintf(buffer, buffer_size, "%s: %s", label, choice_label != NULL ? choice_label : "-");
+        return;
+    }
+    if (type == SDL3D_GAME_DATA_MENU_CONTROL_RANGE)
+    {
+        const float current =
+            value != NULL && value->type == SDL3D_VALUE_FLOAT ? value->as_float : json_float(control, "default", 0.0f);
+        SDL_snprintf(buffer, buffer_size, "%s: %.2g", label, current);
+        return;
+    }
+    SDL_strlcpy(buffer, label, buffer_size);
+}
+
+static bool for_each_ui_menu_presenter(const sdl3d_game_data_runtime *runtime, const scene_entry *scene,
+                                       yyjson_val *presenter, sdl3d_game_data_ui_text_fn callback, void *userdata)
 {
     if (scene == NULL || presenter == NULL)
         return true;
@@ -2403,10 +2718,12 @@ static bool for_each_ui_menu_presenter(const scene_entry *scene, yyjson_val *pre
             return false;
 
         sdl3d_game_data_ui_text text;
+        char label[128];
+        format_menu_item_label(runtime, item, label, sizeof(label));
         SDL_zero(text);
         text.name = json_string(presenter, "name", NULL);
         text.font = json_string(presenter, "font", NULL);
-        text.text = json_string(item, "label", "");
+        text.text = label;
         text.visible = "always";
         text.x = x;
         text.y = row_y;
@@ -2423,13 +2740,13 @@ static bool for_each_ui_menu_presenter(const scene_entry *scene, yyjson_val *pre
     return true;
 }
 
-static bool for_each_ui_menu_root(const scene_entry *scene, yyjson_val *root, sdl3d_game_data_ui_text_fn callback,
-                                  void *userdata)
+static bool for_each_ui_menu_root(const sdl3d_game_data_runtime *runtime, const scene_entry *scene, yyjson_val *root,
+                                  sdl3d_game_data_ui_text_fn callback, void *userdata)
 {
     yyjson_val *menus = obj_get(obj_get(root, "ui"), "menus");
     for (size_t i = 0; yyjson_is_arr(menus) && i < yyjson_arr_size(menus); ++i)
     {
-        if (!for_each_ui_menu_presenter(scene, yyjson_arr_get(menus, i), callback, userdata))
+        if (!for_each_ui_menu_presenter(runtime, scene, yyjson_arr_get(menus, i), callback, userdata))
             return false;
     }
     return true;
@@ -2448,7 +2765,7 @@ bool sdl3d_game_data_for_each_ui_text(const sdl3d_game_data_runtime *runtime, sd
 
     for (int root_index = 0; root_index < 2; ++root_index)
         if (!for_each_authored_ui_text_root(roots[root_index], callback, userdata) ||
-            !for_each_ui_menu_root(scene, roots[root_index], callback, userdata))
+            !for_each_ui_menu_root(runtime, scene, roots[root_index], callback, userdata))
             return true;
     return true;
 }
@@ -3174,6 +3491,95 @@ bool sdl3d_game_data_app_pause_allowed(const sdl3d_game_data_runtime *runtime,
     if (condition == NULL)
         return true;
     return eval_data_condition(runtime, condition, metrics);
+}
+
+static yyjson_val *find_presentation_clock(const sdl3d_game_data_runtime *runtime, const char *name)
+{
+    yyjson_val *clocks = obj_get(obj_get(runtime_root(runtime), "presentation"), "clocks");
+    for (size_t i = 0; name != NULL && yyjson_is_arr(clocks) && i < yyjson_arr_size(clocks); ++i)
+    {
+        yyjson_val *clock = yyjson_arr_get(clocks, i);
+        const char *clock_name = json_string(clock, "name", NULL);
+        if (clock_name != NULL && SDL_strcmp(clock_name, name) == 0)
+            return clock;
+    }
+    return NULL;
+}
+
+static sdl3d_registered_actor *clock_actor(const sdl3d_game_data_runtime *runtime, yyjson_val *clock)
+{
+    return sdl3d_game_data_find_actor(runtime, json_string(clock, "target", NULL));
+}
+
+static float clock_property_float(const sdl3d_game_data_runtime *runtime, yyjson_val *ref, float fallback)
+{
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, json_string(ref, "target", NULL));
+    const char *key = json_string(ref, "key", NULL);
+    return actor != NULL && key != NULL ? sdl3d_properties_get_float(actor->props, key, fallback) : fallback;
+}
+
+bool sdl3d_game_data_update_presentation_clocks(sdl3d_game_data_runtime *runtime, float dt, bool paused,
+                                                bool pause_entered)
+{
+    if (runtime == NULL)
+        return false;
+    yyjson_val *clocks = obj_get(obj_get(runtime_root(runtime), "presentation"), "clocks");
+    if (!yyjson_is_arr(clocks))
+        return true;
+
+    sdl3d_game_data_ui_metrics metrics;
+    SDL_zero(metrics);
+    metrics.paused = paused;
+    for (size_t i = 0; i < yyjson_arr_size(clocks); ++i)
+    {
+        yyjson_val *clock = yyjson_arr_get(clocks, i);
+        sdl3d_registered_actor *actor = clock_actor(runtime, clock);
+        const char *key = json_string(clock, "key", NULL);
+        if (actor == NULL || key == NULL)
+            continue;
+
+        float value = sdl3d_properties_get_float(actor->props, key, json_float(clock, "initial", 0.0f));
+        if (pause_entered && json_bool(clock, "reset_on_pause_enter", false))
+            value = json_float(clock, "reset_value", 0.0f);
+
+        yyjson_val *condition = obj_get(clock, "active_if");
+        const bool active = condition == NULL || eval_data_condition(runtime, condition, &metrics);
+        if (active)
+        {
+            const float speed =
+                clock_property_float(runtime, obj_get(clock, "speed_property"), json_float(clock, "speed", 1.0f));
+            value += dt * speed;
+            const float wrap = json_float(clock, "wrap", 0.0f);
+            if (wrap > 0.0f)
+            {
+                while (value >= wrap)
+                    value -= wrap;
+                while (value < 0.0f)
+                    value += wrap;
+            }
+        }
+        sdl3d_properties_set_float(actor->props, key, value);
+    }
+    return true;
+}
+
+float sdl3d_game_data_ui_pulse_phase(const sdl3d_game_data_runtime *runtime, float fallback)
+{
+    if (runtime == NULL)
+        return fallback;
+    const char *clock_name = json_string(obj_get(runtime_root(runtime), "presentation"), "ui_pulse_clock", NULL);
+    yyjson_val *clock = find_presentation_clock(runtime, clock_name);
+    sdl3d_registered_actor *actor = clock_actor(runtime, clock);
+    const char *key = json_string(clock, "key", NULL);
+    return actor != NULL && key != NULL ? sdl3d_properties_get_float(actor->props, key, fallback) : fallback;
+}
+
+float sdl3d_game_data_fps_sample_seconds(const sdl3d_game_data_runtime *runtime, float fallback)
+{
+    if (runtime == NULL)
+        return fallback;
+    return json_float(obj_get(obj_get(runtime_root(runtime), "presentation"), "metrics"), "fps_sample_seconds",
+                      fallback);
 }
 
 typedef enum ui_value_type
