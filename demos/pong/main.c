@@ -42,22 +42,9 @@ static bool mount_pong_assets(sdl3d_asset_resolver *assets, char *error, int err
 #endif
 }
 
-static sdl3d_registered_actor *actor_with_tags(const pong_state *state, const char *tag0, const char *tag1)
-{
-    const char *tags[2] = {tag0, tag1};
-    return tag1 != NULL ? sdl3d_game_data_find_actor_with_tags(state->data, tags, 2)
-                        : sdl3d_game_data_find_actor_with_tag(state->data, tag0);
-}
-
-static bool match_is_finished(const pong_state *state)
-{
-    sdl3d_registered_actor *match = actor_with_tags(state, "state", "match");
-    return match != NULL && sdl3d_properties_get_bool(match->props, "finished", false);
-}
-
 static float presentation_float(const pong_state *state, const char *key, float fallback)
 {
-    sdl3d_registered_actor *presentation = actor_with_tags(state, "state", "presentation");
+    sdl3d_registered_actor *presentation = sdl3d_game_data_find_actor_with_tag(state->data, "presentation");
     return presentation != NULL ? sdl3d_properties_get_float(presentation->props, key, fallback) : fallback;
 }
 
@@ -133,7 +120,7 @@ static void pong_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     pong_state *state = (pong_state *)userdata;
 
     const bool was_paused = ctx->paused;
-    sdl3d_game_data_app_flow_update(&state->app_flow, ctx, state->data, !match_is_finished(state), dt);
+    sdl3d_game_data_app_flow_update(&state->app_flow, ctx, state->data, dt);
     if (!was_paused && ctx->paused)
         state->pause_flash = 0.0f;
 
@@ -150,7 +137,7 @@ static void pong_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_
 {
     pong_state *state = (pong_state *)userdata;
 
-    sdl3d_game_data_app_flow_update(&state->app_flow, ctx, state->data, true, real_dt);
+    sdl3d_game_data_app_flow_update(&state->app_flow, ctx, state->data, real_dt);
     if (!ctx->paused)
         return;
 

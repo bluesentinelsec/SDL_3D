@@ -80,7 +80,16 @@ The optional `app` object lets a managed-loop game declare startup settings befo
     "tick_rate": 0.008333333,
     "max_ticks_per_frame": 12,
     "start_signal": "signal.game.start",
-    "pause_action": "action.pause",
+    "pause": {
+      "action": "action.pause",
+      "allowed_if": {
+        "type": "property.compare",
+        "target": "entity.match",
+        "key": "finished",
+        "op": "==",
+        "value": false
+      }
+    },
     "startup_transition": "startup",
     "quit": {
       "action": "action.exit",
@@ -99,7 +108,8 @@ The optional `render`, `transitions`, and `ui` sections describe presentation wi
 runtime ownership of the renderer. Games read these descriptors and decide how to apply them.
 
 `start_signal` lets data kick off initial timers or scripted startup logic after the host has loaded the runtime.
-`pause_action` and `startup_transition` let the managed-loop host avoid hardcoded action/transition names.
+`app.pause.action` and `startup_transition` let the managed-loop host avoid hardcoded action/transition names.
+`app.pause.allowed_if` is optional; when present, the app-flow helper evaluates it before entering pause.
 `app.quit` lets data choose which input action requests quit, which transition plays, and which signal completes
 the quit. `app.scene_shortcuts` maps authored input actions to scene names, which is useful for development
 hotkeys, debug level jumps, and simple game flows. The host still owns process shutdown.

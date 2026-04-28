@@ -426,6 +426,13 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_STREQ(app.quit_transition, "quit");
     EXPECT_GE(app.quit_signal_id, 0);
 
+    sdl3d_registered_actor *match = sdl3d_game_data_find_actor(runtime, "entity.match");
+    ASSERT_NE(match, nullptr);
+    EXPECT_TRUE(sdl3d_game_data_app_pause_allowed(runtime, nullptr));
+    sdl3d_properties_set_bool(match->props, "finished", true);
+    EXPECT_FALSE(sdl3d_game_data_app_pause_allowed(runtime, nullptr));
+    sdl3d_properties_set_bool(match->props, "finished", false);
+
     sdl3d_game_data_font_asset font{};
     ASSERT_TRUE(sdl3d_game_data_get_font_asset(runtime, "font.hud", &font));
     EXPECT_TRUE(font.builtin);
@@ -765,7 +772,7 @@ TEST(GameDataRuntime, AppFlowConsumesAuthoredLifecycleAndSceneShortcutControls)
     ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
     EXPECT_TRUE(sdl3d_game_data_app_flow_is_transitioning(&flow));
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, true, 0.8f));
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.8f));
     EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
     EXPECT_FALSE(ctx.quit_requested);
 
@@ -778,13 +785,13 @@ TEST(GameDataRuntime, AppFlowConsumesAuthoredLifecycleAndSceneShortcutControls)
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 1);
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, true, 0.0f));
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
     EXPECT_TRUE(sdl3d_game_data_app_flow_is_transitioning(&flow));
     EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, true, 0.29f));
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.29f));
     EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.play");
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, true, 0.29f));
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.29f));
     EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
 
     key.type = SDL_EVENT_KEY_UP;
@@ -794,7 +801,7 @@ TEST(GameDataRuntime, AppFlowConsumesAuthoredLifecycleAndSceneShortcutControls)
     key.key.scancode = SDL_SCANCODE_RETURN;
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 3);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, true, 0.0f));
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
     EXPECT_TRUE(ctx.paused);
 
     key.type = SDL_EVENT_KEY_UP;
@@ -804,21 +811,35 @@ TEST(GameDataRuntime, AppFlowConsumesAuthoredLifecycleAndSceneShortcutControls)
     key.key.scancode = SDL_SCANCODE_RETURN;
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 5);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, true, 0.0f));
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
     EXPECT_FALSE(ctx.paused);
+
+    sdl3d_registered_actor *match = sdl3d_game_data_find_actor(runtime, "entity.match");
+    ASSERT_NE(match, nullptr);
+    sdl3d_properties_set_bool(match->props, "finished", true);
 
     key.type = SDL_EVENT_KEY_UP;
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 6);
     key.type = SDL_EVENT_KEY_DOWN;
-    key.key.scancode = SDL_SCANCODE_ESCAPE;
+    key.key.scancode = SDL_SCANCODE_RETURN;
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 7);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, true, 0.0f));
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_FALSE(ctx.paused);
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 8);
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_ESCAPE;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 9);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
     EXPECT_TRUE(sdl3d_game_data_app_flow_quit_pending(&flow));
     EXPECT_FALSE(ctx.quit_requested);
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, true, 0.5f));
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.5f));
     EXPECT_TRUE(ctx.quit_requested);
 
     sdl3d_game_data_destroy(runtime);

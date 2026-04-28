@@ -14,7 +14,16 @@
     "tick_rate": 0.008333333,
     "max_ticks_per_frame": 12,
     "enable_audio": false,
-    "pause_action": "action.pause",
+    "pause": {
+      "action": "action.pause",
+      "allowed_if": {
+        "type": "property.compare",
+        "target": "entity.match",
+        "key": "finished",
+        "op": "==",
+        "value": false
+      }
+    },
     "startup_transition": "startup",
     "quit": {
       "action": "action.exit",

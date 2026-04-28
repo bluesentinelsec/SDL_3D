@@ -727,7 +727,7 @@ bool sdl3d_game_data_app_flow_is_transitioning(const sdl3d_game_data_app_flow *f
 }
 
 bool sdl3d_game_data_app_flow_update(sdl3d_game_data_app_flow *flow, sdl3d_game_context *ctx,
-                                     sdl3d_game_data_runtime *runtime, bool pause_allowed, float dt)
+                                     sdl3d_game_data_runtime *runtime, float dt)
 {
     if (flow == NULL || ctx == NULL || runtime == NULL || ctx->session == NULL)
         return false;
@@ -746,8 +746,15 @@ bool sdl3d_game_data_app_flow_update(sdl3d_game_data_app_flow *flow, sdl3d_game_
     {
         if (ctx->paused)
             ctx->paused = false;
-        else if (pause_allowed && sdl3d_game_data_active_scene_updates_game(runtime))
-            ctx->paused = true;
+        else
+        {
+            sdl3d_game_data_ui_metrics metrics;
+            SDL_zero(metrics);
+            metrics.paused = ctx->paused;
+            if (sdl3d_game_data_app_pause_allowed(runtime, &metrics) &&
+                sdl3d_game_data_active_scene_updates_game(runtime))
+                ctx->paused = true;
+        }
     }
 
     app_flow_update_transition(flow, ctx, bus, dt);

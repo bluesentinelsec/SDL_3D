@@ -268,6 +268,20 @@ TEST(GameDataJson, PongLogicReferencesKnownEntitiesSignalsTimersCamerasAndAdapte
     yyjson_val *logic = required_object(doc.root(), "logic");
     collect_named_objects(required_array(logic, "timers"), "name", &timers);
 
+    std::set<std::string> actions;
+    yyjson_val *input_contexts = required_array(required_object(doc.root(), "input"), "contexts");
+    for (size_t i = 0; i < yyjson_arr_size(input_contexts); ++i)
+    {
+        yyjson_val *context = yyjson_arr_get(input_contexts, i);
+        ASSERT_TRUE(yyjson_is_obj(context));
+        collect_named_objects(required_array(context, "actions"), "name", &actions);
+    }
+    yyjson_val *pause = required_object(required_object(doc.root(), "app"), "pause");
+    expect_ref(actions, pause, "action");
+    yyjson_val *allowed_if = required_object(pause, "allowed_if");
+    expect_ref(entities, allowed_if, "target");
+    EXPECT_EQ(required_string(allowed_if, "type"), "property.compare");
+
     yyjson_val *sensors = required_array(logic, "sensors");
     for (size_t i = 0; i < yyjson_arr_size(sensors); ++i)
     {

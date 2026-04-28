@@ -534,6 +534,18 @@ extern "C"
     bool sdl3d_game_data_get_app_control(const sdl3d_game_data_runtime *runtime,
                                          sdl3d_game_data_app_control *out_control);
 
+    /**
+     * @brief Evaluate the data-authored app pause condition.
+     *
+     * Returns true when `app.pause.allowed_if` is absent. When present, the
+     * condition uses the same generic condition language as UI visibility:
+     * actor property comparisons, app pause checks, camera checks, and
+     * all/any/not composition. @p metrics may be NULL when the condition does
+     * not refer to app metrics.
+     */
+    bool sdl3d_game_data_app_pause_allowed(const sdl3d_game_data_runtime *runtime,
+                                           const sdl3d_game_data_ui_metrics *metrics);
+
     /** @brief Read a font asset descriptor by id from `assets.fonts`. */
     bool sdl3d_game_data_get_font_asset(const sdl3d_game_data_runtime *runtime, const char *id,
                                         sdl3d_game_data_font_asset *out_font);

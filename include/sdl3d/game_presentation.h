@@ -296,13 +296,13 @@ extern "C"
     /**
      * @brief Consume authored app/menu/scene input and advance transitions.
      *
-     * @p pause_allowed lets game-specific state, such as a finished match,
-     * suppress pause without duplicating menu, quit, or scene transition logic
-     * in the host. The function updates ctx->paused and ctx->quit_requested
-     * when authored controls request those state changes.
+     * The function updates ctx->paused and ctx->quit_requested when authored
+     * controls request those state changes. If `app.pause.allowed_if` is
+     * authored, it is evaluated before entering pause; unpausing remains
+     * available so games cannot trap the app in a paused state.
      */
     bool sdl3d_game_data_app_flow_update(sdl3d_game_data_app_flow *flow, sdl3d_game_context *ctx,
-                                         sdl3d_game_data_runtime *runtime, bool pause_allowed, float dt);
+                                         sdl3d_game_data_runtime *runtime, float dt);
 
     /**
      * @brief Draw active app-level and scene-level transitions.

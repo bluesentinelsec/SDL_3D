@@ -61,6 +61,9 @@ typedef struct validation_names
     int script_count;
 } validation_names;
 
+static bool validate_data_condition(validation_context *ctx, yyjson_val *condition, const char *path,
+                                    validation_names *names);
+
 static yyjson_val *obj_get(yyjson_val *object, const char *key)
 {
     return yyjson_is_obj(object) ? yyjson_obj_get(object, key) : NULL;
@@ -1030,8 +1033,13 @@ static bool validate_app_refs(validation_context *ctx, yyjson_val *root, validat
     const char *start_signal = json_string(app, "start_signal");
     if (start_signal != NULL && !require_ref(ctx, &names->signals, "signal", start_signal, "$.app.start_signal"))
         return false;
-    const char *pause_action = json_string(app, "pause_action");
-    if (pause_action != NULL && !require_ref(ctx, &names->actions, "input action", pause_action, "$.app.pause_action"))
+    yyjson_val *pause = obj_get(app, "pause");
+    if (pause != NULL && !yyjson_is_obj(pause))
+        return validation_error(ctx, "$.app.pause", "pause must be an object");
+    const char *pause_action = json_string(pause, "action");
+    if (pause_action != NULL && !require_ref(ctx, &names->actions, "input action", pause_action, "$.app.pause.action"))
+        return false;
+    if (!validate_data_condition(ctx, obj_get(pause, "allowed_if"), "$.app.pause.allowed_if", names))
         return false;
     const char *startup_transition = json_string(app, "startup_transition");
     if (startup_transition != NULL && !yyjson_is_obj(obj_get(obj_get(root, "transitions"), startup_transition)))
@@ -1098,8 +1106,8 @@ static bool validate_cameras(validation_context *ctx, yyjson_val *root, validati
     return true;
 }
 
-static bool validate_ui_condition(validation_context *ctx, yyjson_val *condition, const char *path,
-                                  validation_names *names)
+static bool validate_data_condition(validation_context *ctx, yyjson_val *condition, const char *path,
+                                    validation_names *names)
 {
     if (condition == NULL)
         return true;
@@ -1117,32 +1125,34 @@ static bool validate_ui_condition(validation_context *ctx, yyjson_val *condition
         if (!require_ref(ctx, &names->entities, "entity", json_string(condition, "target"), path))
             return false;
         if (!is_non_empty_string(condition, "key"))
-            return validation_error(ctx, path, "UI property condition requires a non-empty key");
+            return validation_error(ctx, path, "property condition requires a non-empty key");
         if (SDL_strcmp(type, "property.compare") == 0 && !is_compare_op(json_string(condition, "op")))
-            return validation_error(ctx, path, "UI property.compare requires a supported comparison operator");
+            return validation_error(ctx, path, "property.compare condition requires a supported comparison operator");
+        if (SDL_strcmp(type, "property.compare") == 0 && obj_get(condition, "value") == NULL)
+            return validation_error(ctx, path, "property.compare condition requires a value");
         return true;
     }
     if (SDL_strcmp(type != NULL ? type : "", "not") == 0)
     {
         char child_path[PATH_BUFFER_SIZE];
         format_path(child_path, sizeof(child_path), "%s.condition", path);
-        return validate_ui_condition(ctx, obj_get(condition, "condition"), child_path, names);
+        return validate_data_condition(ctx, obj_get(condition, "condition"), child_path, names);
     }
     if (SDL_strcmp(type != NULL ? type : "", "all") == 0 || SDL_strcmp(type != NULL ? type : "", "any") == 0)
     {
         yyjson_val *conditions = obj_get(condition, "conditions");
         if (!yyjson_is_arr(conditions))
-            return validation_error(ctx, path, "UI %s condition requires a conditions array", type);
+            return validation_error(ctx, path, "%s condition requires a conditions array", type);
         for (size_t i = 0; i < yyjson_arr_size(conditions); ++i)
         {
             char child_path[PATH_BUFFER_SIZE];
             format_path(child_path, sizeof(child_path), "%s.conditions[%zu]", path, i);
-            if (!validate_ui_condition(ctx, yyjson_arr_get(conditions, i), child_path, names))
+            if (!validate_data_condition(ctx, yyjson_arr_get(conditions, i), child_path, names))
                 return false;
         }
         return true;
     }
-    return validation_error(ctx, path, "unsupported UI condition type '%s'", type != NULL ? type : "<missing>");
+    return validation_error(ctx, path, "unsupported condition type '%s'", type != NULL ? type : "<missing>");
 }
 
 static bool validate_ui(validation_context *ctx, yyjson_val *root, validation_names *names)
@@ -1169,7 +1179,7 @@ static bool validate_ui(validation_context *ctx, yyjson_val *root, validation_na
             return false;
         char condition_path[PATH_BUFFER_SIZE];
         format_path(condition_path, sizeof(condition_path), "%s.visible_if", path);
-        if (!validate_ui_condition(ctx, obj_get(text, "visible_if"), condition_path, names))
+        if (!validate_data_condition(ctx, obj_get(text, "visible_if"), condition_path, names))
             return false;
 
         yyjson_val *bindings = obj_get(text, "bindings");
@@ -1213,7 +1223,7 @@ static bool validate_ui(validation_context *ctx, yyjson_val *root, validation_na
             return false;
         char condition_path[PATH_BUFFER_SIZE];
         format_path(condition_path, sizeof(condition_path), "%s.visible_if", path);
-        if (!validate_ui_condition(ctx, obj_get(menu, "visible_if"), condition_path, names))
+        if (!validate_data_condition(ctx, obj_get(menu, "visible_if"), condition_path, names))
             return false;
     }
     return true;
@@ -1400,7 +1410,7 @@ static bool validate_scene_ui_condition(validation_context *ctx, yyjson_val *con
             return validation_error(ctx, path, "menu.selected condition requires an integer index");
         return true;
     }
-    return validate_ui_condition(ctx, condition, path, names);
+    return validate_data_condition(ctx, condition, path, names);
 }
 
 static bool scene_has_menu_name(yyjson_val *scene_root, const char *name)

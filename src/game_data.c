@@ -1550,9 +1550,10 @@ bool sdl3d_game_data_get_app_control(const sdl3d_game_data_runtime *runtime, sdl
         return false;
 
     yyjson_val *app = obj_get(runtime_root(runtime), "app");
+    yyjson_val *pause = obj_get(app, "pause");
     yyjson_val *quit = obj_get(app, "quit");
     out_control->start_signal_id = sdl3d_game_data_find_signal(runtime, json_string(app, "start_signal", NULL));
-    out_control->pause_action_id = sdl3d_game_data_find_action(runtime, json_string(app, "pause_action", NULL));
+    out_control->pause_action_id = sdl3d_game_data_find_action(runtime, json_string(pause, "action", NULL));
     out_control->startup_transition = json_string(app, "startup_transition", NULL);
     out_control->quit_action_id = sdl3d_game_data_find_action(runtime, json_string(quit, "action", NULL));
     out_control->quit_transition = json_string(quit, "transition", NULL);
@@ -3083,8 +3084,8 @@ static bool value_equals_json_bool(const sdl3d_value *left, bool right)
     return left != NULL && left->type == SDL3D_VALUE_BOOL && left->as_bool == right;
 }
 
-static bool eval_ui_condition(const sdl3d_game_data_runtime *runtime, yyjson_val *condition,
-                              const sdl3d_game_data_ui_metrics *metrics)
+static bool eval_data_condition(const sdl3d_game_data_runtime *runtime, yyjson_val *condition,
+                                const sdl3d_game_data_ui_metrics *metrics)
 {
     if (condition == NULL)
         return true;
@@ -3137,7 +3138,7 @@ static bool eval_ui_condition(const sdl3d_game_data_runtime *runtime, yyjson_val
         for (size_t i = 0; i < yyjson_arr_size(conditions); ++i)
         {
             saw_any = true;
-            const bool passed = eval_ui_condition(runtime, yyjson_arr_get(conditions, i), metrics);
+            const bool passed = eval_data_condition(runtime, yyjson_arr_get(conditions, i), metrics);
             if (require_all && !passed)
                 return false;
             if (!require_all && passed)
@@ -3146,7 +3147,7 @@ static bool eval_ui_condition(const sdl3d_game_data_runtime *runtime, yyjson_val
         return require_all && saw_any;
     }
     if (SDL_strcmp(type, "not") == 0)
-        return !eval_ui_condition(runtime, obj_get(condition, "condition"), metrics);
+        return !eval_data_condition(runtime, obj_get(condition, "condition"), metrics);
     return false;
 }
 
@@ -3158,8 +3159,21 @@ bool sdl3d_game_data_ui_text_is_visible(const sdl3d_game_data_runtime *runtime, 
     yyjson_val *text_json = find_ui_text_json(runtime, text->name);
     yyjson_val *condition = obj_get(text_json, "visible_if");
     if (condition != NULL)
-        return eval_ui_condition(runtime, condition, metrics);
+        return eval_data_condition(runtime, condition, metrics);
     return text->visible == NULL || SDL_strcmp(text->visible, "always") == 0;
+}
+
+bool sdl3d_game_data_app_pause_allowed(const sdl3d_game_data_runtime *runtime,
+                                       const sdl3d_game_data_ui_metrics *metrics)
+{
+    if (runtime == NULL)
+        return false;
+
+    yyjson_val *pause = obj_get(obj_get(runtime_root(runtime), "app"), "pause");
+    yyjson_val *condition = obj_get(pause, "allowed_if");
+    if (condition == NULL)
+        return true;
+    return eval_data_condition(runtime, condition, metrics);
 }
 
 typedef enum ui_value_type
