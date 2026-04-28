@@ -6,6 +6,7 @@
 #include "sdl3d/asset.h"
 
 #include <stdint.h>
+#include <stdlib.h>
 
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_stdinc.h>
@@ -28,6 +29,15 @@ typedef struct asset_pack_entry
     uint64_t offset;
     uint64_t size;
 } asset_pack_entry;
+
+typedef struct asset_pack_write_entry
+{
+    char *asset_path;
+    const char *source_path;
+    uint8_t *data;
+    size_t size;
+    uint64_t offset;
+} asset_pack_write_entry;
 
 typedef struct asset_pack
 {
@@ -70,6 +80,26 @@ static uint32_t read_u32le(const uint8_t *data)
 static uint64_t read_u64le(const uint8_t *data)
 {
     return (uint64_t)read_u32le(data) | ((uint64_t)read_u32le(data + 4) << 32u);
+}
+
+static void write_u16le(uint8_t *data, uint16_t value)
+{
+    data[0] = (uint8_t)(value & 0xFFu);
+    data[1] = (uint8_t)((value >> 8u) & 0xFFu);
+}
+
+static void write_u32le(uint8_t *data, uint32_t value)
+{
+    data[0] = (uint8_t)(value & 0xFFu);
+    data[1] = (uint8_t)((value >> 8u) & 0xFFu);
+    data[2] = (uint8_t)((value >> 16u) & 0xFFu);
+    data[3] = (uint8_t)((value >> 24u) & 0xFFu);
+}
+
+static void write_u64le(uint8_t *data, uint64_t value)
+{
+    write_u32le(data, (uint32_t)(value & UINT32_MAX));
+    write_u32le(data + 4, (uint32_t)(value >> 32u));
 }
 
 static bool has_uri_scheme(const char *path)
@@ -169,6 +199,25 @@ static void destroy_pack(asset_pack *pack)
     SDL_zero(*pack);
 }
 
+static void destroy_write_entries(asset_pack_write_entry *entries, int count)
+{
+    if (entries == NULL)
+        return;
+    for (int i = 0; i < count; ++i)
+    {
+        SDL_free(entries[i].asset_path);
+        SDL_free(entries[i].data);
+    }
+    SDL_free(entries);
+}
+
+static int compare_write_entries(const void *a, const void *b)
+{
+    const asset_pack_write_entry *left = (const asset_pack_write_entry *)a;
+    const asset_pack_write_entry *right = (const asset_pack_write_entry *)b;
+    return SDL_strcmp(left->asset_path, right->asset_path);
+}
+
 static bool append_mount(sdl3d_asset_resolver *resolver, asset_mount **out_mount)
 {
     if (out_mount != NULL)
@@ -187,6 +236,13 @@ static bool append_mount(sdl3d_asset_resolver *resolver, asset_mount **out_mount
     resolver->mount_count++;
     *out_mount = mount;
     return true;
+}
+
+static bool write_all(SDL_IOStream *io, const void *data, size_t size)
+{
+    if (size == 0u)
+        return true;
+    return SDL_WriteIO(io, data, size) == size;
 }
 
 static bool parse_pack_entries(asset_pack *pack, char *error_buffer, int error_buffer_size)
@@ -518,4 +574,138 @@ void sdl3d_asset_buffer_free(sdl3d_asset_buffer *buffer)
     SDL_free(buffer->data);
     buffer->data = NULL;
     buffer->size = 0u;
+}
+
+bool sdl3d_asset_pack_write_file(const char *pack_path, const sdl3d_asset_pack_source *entries, int entry_count,
+                                 char *error_buffer, int error_buffer_size)
+{
+    if (error_buffer != NULL && error_buffer_size > 0)
+        error_buffer[0] = '\0';
+    if (pack_path == NULL || pack_path[0] == '\0' || entries == NULL || entry_count <= 0)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "invalid asset pack write arguments");
+        return false;
+    }
+
+    asset_pack_write_entry *write_entries =
+        (asset_pack_write_entry *)SDL_calloc((size_t)entry_count, sizeof(*write_entries));
+    if (write_entries == NULL)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "failed to allocate asset pack entries");
+        return false;
+    }
+
+    bool ok = true;
+    uint64_t table_size = 0u;
+    for (int i = 0; i < entry_count && ok; ++i)
+    {
+        if (entries[i].asset_path == NULL || entries[i].source_path == NULL || entries[i].source_path[0] == '\0')
+        {
+            set_asset_error(error_buffer, error_buffer_size, "asset pack entry is missing a path");
+            ok = false;
+            break;
+        }
+
+        write_entries[i].asset_path = normalize_asset_path(entries[i].asset_path);
+        write_entries[i].source_path = entries[i].source_path;
+        if (write_entries[i].asset_path == NULL)
+        {
+            set_asset_error(error_buffer, error_buffer_size, "asset pack entry has an invalid asset path");
+            ok = false;
+            break;
+        }
+
+        const size_t path_len = SDL_strlen(write_entries[i].asset_path);
+        if (path_len == 0u || path_len > UINT16_MAX)
+        {
+            set_asset_error(error_buffer, error_buffer_size, "asset pack entry path is too long");
+            ok = false;
+            break;
+        }
+
+        size_t bytes = 0u;
+        write_entries[i].data = (uint8_t *)SDL_LoadFile(entries[i].source_path, &bytes);
+        if (write_entries[i].data == NULL)
+        {
+            if (error_buffer != NULL && error_buffer_size > 0)
+            {
+                SDL_snprintf(error_buffer, (size_t)error_buffer_size, "failed to read asset source '%s': %s",
+                             entries[i].source_path, SDL_GetError());
+            }
+            ok = false;
+            break;
+        }
+        write_entries[i].size = bytes;
+        table_size += SDL3D_PACK_ENTRY_FIXED_SIZE + path_len;
+    }
+
+    if (ok)
+    {
+        qsort(write_entries, (size_t)entry_count, sizeof(*write_entries), compare_write_entries);
+        for (int i = 1; i < entry_count; ++i)
+        {
+            if (SDL_strcmp(write_entries[i - 1].asset_path, write_entries[i].asset_path) == 0)
+            {
+                set_asset_error(error_buffer, error_buffer_size, "asset pack contains duplicate asset paths");
+                ok = false;
+                break;
+            }
+        }
+    }
+
+    uint64_t data_offset = SDL3D_PACK_HEADER_SIZE + table_size;
+    for (int i = 0; i < entry_count && ok; ++i)
+    {
+        if (data_offset > UINT64_MAX - (uint64_t)write_entries[i].size)
+        {
+            set_asset_error(error_buffer, error_buffer_size, "asset pack is too large");
+            ok = false;
+            break;
+        }
+        write_entries[i].offset = data_offset;
+        data_offset += (uint64_t)write_entries[i].size;
+    }
+
+    SDL_IOStream *io = NULL;
+    if (ok)
+    {
+        io = SDL_IOFromFile(pack_path, "wb");
+        if (io == NULL)
+        {
+            set_asset_error(error_buffer, error_buffer_size, SDL_GetError());
+            ok = false;
+        }
+    }
+
+    if (ok)
+    {
+        uint8_t header[SDL3D_PACK_HEADER_SIZE];
+        SDL_zeroa(header);
+        SDL_memcpy(header, SDL3D_PACK_MAGIC, SDL3D_PACK_MAGIC_SIZE - 1u);
+        write_u32le(header + 8, SDL3D_PACK_VERSION);
+        write_u32le(header + 12, (uint32_t)entry_count);
+        write_u64le(header + 16, SDL3D_PACK_HEADER_SIZE);
+        ok = write_all(io, header, sizeof(header));
+    }
+
+    for (int i = 0; i < entry_count && ok; ++i)
+    {
+        const size_t path_len = SDL_strlen(write_entries[i].asset_path);
+        uint8_t entry_header[SDL3D_PACK_ENTRY_FIXED_SIZE];
+        write_u16le(entry_header, (uint16_t)path_len);
+        write_u64le(entry_header + 2, write_entries[i].offset);
+        write_u64le(entry_header + 10, (uint64_t)write_entries[i].size);
+        ok = write_all(io, entry_header, sizeof(entry_header)) && write_all(io, write_entries[i].asset_path, path_len);
+    }
+
+    for (int i = 0; i < entry_count && ok; ++i)
+        ok = write_all(io, write_entries[i].data, write_entries[i].size);
+
+    if (io != NULL && !SDL_CloseIO(io))
+        ok = false;
+    if (!ok && error_buffer != NULL && error_buffer_size > 0 && error_buffer[0] == '\0')
+        SDL_snprintf(error_buffer, (size_t)error_buffer_size, "failed to write asset pack '%s'", pack_path);
+
+    destroy_write_entries(write_entries, entry_count);
+    return ok;
 }

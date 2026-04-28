@@ -32,6 +32,7 @@ set(SDL3D_USING_FETCHED_SDL3 OFF)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(SDL3DCompilerWarnings)
 include(SDL3DSanitizers)
+include(SDL3DAssets)
 
 if(NOT TARGET SDL3::SDL3)
     find_package(SDL3 3.2 CONFIG QUIET COMPONENTS SDL3)
@@ -204,6 +205,14 @@ sdl3d_enable_sanitizers(sdl3d)
 
 if(MSVC)
     target_compile_options(sdl3d PRIVATE /permissive-)
+endif()
+
+if(NOT CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
+    add_executable(sdl3d_pack tools/sdl3d_pack.c)
+    target_link_libraries(sdl3d_pack PRIVATE SDL3D::sdl3d)
+    target_compile_features(sdl3d_pack PRIVATE c_std_17)
+    sdl3d_enable_warnings(sdl3d_pack)
+    sdl3d_enable_sanitizers(sdl3d_pack)
 endif()
 
 if(SDL3D_BUILD_TESTS)
