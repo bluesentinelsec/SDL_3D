@@ -52,11 +52,8 @@ typedef enum pong_winner
 
 typedef struct pong_actions
 {
-    int up;
-    int down;
     int pause;
     int exit;
-    int restart;
 } pong_actions;
 
 typedef struct pong_state
@@ -77,10 +74,6 @@ typedef struct pong_state
     int fps_sample_frames;
     Uint64 rendered_frames;
     int signal_game_start;
-    int signal_round_reset;
-    int signal_match_player_won;
-    int signal_match_cpu_won;
-    int signal_flash_border;
     int player_score;
     int cpu_score;
     float player_y;
@@ -196,6 +189,8 @@ static void sync_state_from_data(pong_state *state)
     sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(state->data, "entity.ball");
     sdl3d_registered_actor *player_score = sdl3d_game_data_find_actor(state->data, "entity.score.player");
     sdl3d_registered_actor *cpu_score = sdl3d_game_data_find_actor(state->data, "entity.score.cpu");
+    sdl3d_registered_actor *match = sdl3d_game_data_find_actor(state->data, "entity.match");
+    sdl3d_registered_actor *presentation = sdl3d_game_data_find_actor(state->data, "entity.presentation");
 
     if (player != NULL)
     {
@@ -220,6 +215,22 @@ static void sync_state_from_data(pong_state *state)
     if (cpu_score != NULL)
     {
         state->cpu_score = sdl3d_properties_get_int(cpu_score->props, "value", 0);
+    }
+    if (match != NULL)
+    {
+        const char *winner = sdl3d_properties_get_string(match->props, "winner", "none");
+        state->match_finished = sdl3d_properties_get_bool(match->props, "finished", false);
+        if (winner != NULL && SDL_strcmp(winner, "player") == 0)
+            state->winner = PONG_WINNER_PLAYER;
+        else if (winner != NULL && SDL_strcmp(winner, "cpu") == 0)
+            state->winner = PONG_WINNER_CPU;
+        else
+            state->winner = PONG_WINNER_NONE;
+    }
+    if (presentation != NULL)
+    {
+        state->border_flash = sdl3d_properties_get_float(presentation->props, "border_flash", 0.0f);
+        state->paddle_flash = sdl3d_properties_get_float(presentation->props, "paddle_flash", 0.0f);
     }
 }
 
@@ -250,23 +261,6 @@ static bool create_particles(pong_state *state)
 
     state->ambient_particles = sdl3d_create_particle_emitter(&config);
     return state->ambient_particles != NULL;
-}
-
-static void on_flash_border(void *userdata, int signal_id, const sdl3d_properties *payload)
-{
-    pong_state *state = (pong_state *)userdata;
-    (void)signal_id;
-    (void)payload;
-    state->border_flash = 1.0f;
-    state->paddle_flash = 1.0f;
-}
-
-static void on_match_finished(void *userdata, int signal_id, const sdl3d_properties *payload)
-{
-    pong_state *state = (pong_state *)userdata;
-    (void)payload;
-    state->match_finished = true;
-    state->winner = signal_id == state->signal_match_player_won ? PONG_WINNER_PLAYER : PONG_WINNER_CPU;
 }
 
 static bool init_game_data(sdl3d_game_context *ctx, pong_state *state)
@@ -303,20 +297,10 @@ static bool init_game_data(sdl3d_game_context *ctx, pong_state *state)
     }
     sdl3d_asset_resolver_destroy(assets);
 
-    state->actions.up = sdl3d_game_data_find_action(state->data, "action.paddle.up");
-    state->actions.down = sdl3d_game_data_find_action(state->data, "action.paddle.down");
     state->actions.pause = sdl3d_game_data_find_action(state->data, "action.pause");
     state->actions.exit = sdl3d_game_data_find_action(state->data, "action.exit");
-    state->actions.restart = sdl3d_game_data_find_action(state->data, "action.restart");
     state->signal_game_start = sdl3d_game_data_find_signal(state->data, "signal.game.start");
-    state->signal_round_reset = sdl3d_game_data_find_signal(state->data, "signal.round.reset");
-    state->signal_match_player_won = sdl3d_game_data_find_signal(state->data, "signal.match.player_won");
-    state->signal_match_cpu_won = sdl3d_game_data_find_signal(state->data, "signal.match.cpu_won");
-    state->signal_flash_border = sdl3d_game_data_find_signal(state->data, "signal.presentation.flash_border");
 
-    sdl3d_signal_connect(ctx_bus(ctx), state->signal_flash_border, on_flash_border, state);
-    sdl3d_signal_connect(ctx_bus(ctx), state->signal_match_player_won, on_match_finished, state);
-    sdl3d_signal_connect(ctx_bus(ctx), state->signal_match_cpu_won, on_match_finished, state);
     sync_state_from_data(state);
     sdl3d_signal_emit(ctx_bus(ctx), state->signal_game_start, NULL);
     return true;
@@ -367,32 +351,17 @@ static bool pong_handle_event(sdl3d_game_context *ctx, void *userdata, const SDL
     return true;
 }
 
-static void reset_match(sdl3d_game_context *ctx, pong_state *state)
-{
-    sdl3d_registered_actor *player_score = sdl3d_game_data_find_actor(state->data, "entity.score.player");
-    sdl3d_registered_actor *cpu_score = sdl3d_game_data_find_actor(state->data, "entity.score.cpu");
-    if (player_score != NULL)
-    {
-        sdl3d_properties_set_int(player_score->props, "value", 0);
-    }
-    if (cpu_score != NULL)
-    {
-        sdl3d_properties_set_int(cpu_score->props, "value", 0);
-    }
-    state->match_finished = false;
-    state->winner = PONG_WINNER_NONE;
-    state->border_flash = 0.0f;
-    state->paddle_flash = 0.0f;
-    sdl3d_signal_emit(ctx_bus(ctx), state->signal_round_reset, NULL);
-    sdl3d_signal_emit(ctx_bus(ctx), state->signal_game_start, NULL);
-    sync_state_from_data(state);
-}
-
 static void update_visual_effects(pong_state *state, float dt)
 {
     state->time += dt;
     state->border_flash = fade_down(state->border_flash, dt, 2.8f);
     state->paddle_flash = fade_down(state->paddle_flash, dt, 4.0f);
+    sdl3d_registered_actor *presentation = sdl3d_game_data_find_actor(state->data, "entity.presentation");
+    if (presentation != NULL)
+    {
+        sdl3d_properties_set_float(presentation->props, "border_flash", state->border_flash);
+        sdl3d_properties_set_float(presentation->props, "paddle_flash", state->paddle_flash);
+    }
     if (state->ambient_particles != NULL)
     {
         sdl3d_particle_emitter_update(state->ambient_particles, dt);
@@ -417,15 +386,10 @@ static void pong_tick(sdl3d_game_context *ctx, void *userdata, float dt)
         ctx->paused = true;
         state->pause_flash = 0.0f;
     }
-    if (state->match_finished && sdl3d_input_is_pressed(ctx_input(ctx), state->actions.restart))
-    {
-        reset_match(ctx, state);
-    }
-
     update_visual_effects(state, dt);
     sdl3d_transition_update(&state->transition, ctx_bus(ctx), dt);
 
-    if (!state->match_finished && !state->quit_pending)
+    if (!state->quit_pending)
     {
         sdl3d_game_data_update(state->data, dt);
     }

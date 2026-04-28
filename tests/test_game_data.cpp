@@ -321,6 +321,53 @@ TEST(GameDataRuntime, LuaControllerMovesCpuPaddleTowardBall)
     sdl3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, PongMatchStateAndRestartAreAuthoredLogic)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+
+    sdl3d_registered_actor *player_score = sdl3d_game_data_find_actor(runtime, "entity.score.player");
+    sdl3d_registered_actor *cpu_score = sdl3d_game_data_find_actor(runtime, "entity.score.cpu");
+    sdl3d_registered_actor *match = sdl3d_game_data_find_actor(runtime, "entity.match");
+    sdl3d_registered_actor *presentation = sdl3d_game_data_find_actor(runtime, "entity.presentation");
+    sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
+    ASSERT_NE(player_score, nullptr);
+    ASSERT_NE(cpu_score, nullptr);
+    ASSERT_NE(match, nullptr);
+    ASSERT_NE(presentation, nullptr);
+    ASSERT_NE(ball, nullptr);
+
+    sdl3d_properties_set_int(player_score->props, "value", 9);
+    const int player_score_signal = sdl3d_game_data_find_signal(runtime, "signal.score.player");
+    ASSERT_GE(player_score_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), player_score_signal, nullptr);
+
+    EXPECT_EQ(sdl3d_properties_get_int(player_score->props, "value", 0), 10);
+    EXPECT_TRUE(sdl3d_properties_get_bool(match->props, "finished", false));
+    EXPECT_STREQ(sdl3d_properties_get_string(match->props, "winner", ""), "player");
+    EXPECT_FALSE(sdl3d_properties_get_bool(ball->props, "active_motion", true));
+
+    sdl3d_properties_set_float(presentation->props, "border_flash", 1.0f);
+    sdl3d_properties_set_float(presentation->props, "paddle_flash", 1.0f);
+    const int restart_signal = sdl3d_game_data_find_signal(runtime, "signal.match.restart");
+    ASSERT_GE(restart_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), restart_signal, nullptr);
+
+    EXPECT_EQ(sdl3d_properties_get_int(player_score->props, "value", -1), 0);
+    EXPECT_EQ(sdl3d_properties_get_int(cpu_score->props, "value", -1), 0);
+    EXPECT_FALSE(sdl3d_properties_get_bool(match->props, "finished", true));
+    EXPECT_STREQ(sdl3d_properties_get_string(match->props, "winner", ""), "none");
+    EXPECT_FLOAT_EQ(sdl3d_properties_get_float(presentation->props, "border_flash", -1.0f), 0.0f);
+    EXPECT_FLOAT_EQ(sdl3d_properties_get_float(presentation->props, "paddle_flash", -1.0f), 0.0f);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, RegisteredCAdaptersOverrideLuaAdapters)
 {
     sdl3d_game_session *session = nullptr;

@@ -198,6 +198,8 @@
         "base_speed": { "type": "float", "value": 5.6 },
         "speedup_per_hit": { "type": "float", "value": 0.28 },
         "max_speed": { "type": "float", "value": 10.0 },
+        "max_serve_angle": { "type": "float", "value": 0.52 },
+        "max_reflect_angle": { "type": "float", "value": 1.05 },
         "active_motion": { "type": "bool", "value": false }
       },
       "components": [
@@ -220,6 +222,25 @@
       "tags": ["score", "cpu"],
       "properties": {
         "value": { "type": "int", "value": 0 }
+      }
+    },
+    {
+      "name": "entity.match",
+      "active": true,
+      "tags": ["state", "match"],
+      "properties": {
+        "finished": { "type": "bool", "value": false },
+        "winner": { "type": "string", "value": "none" },
+        "field_half_height": { "type": "float", "value": 5.0 }
+      }
+    },
+    {
+      "name": "entity.presentation",
+      "active": true,
+      "tags": ["state", "presentation"],
+      "properties": {
+        "border_flash": { "type": "float", "value": 0.0 },
+        "paddle_flash": { "type": "float", "value": 0.0 }
       }
     },
     {
@@ -252,6 +273,7 @@
     "signal.round.reset",
     "signal.match.player_won",
     "signal.match.cpu_won",
+    "signal.match.restart",
     "signal.camera.ball.toggle",
     "signal.presentation.flash_border"
   ],
@@ -303,6 +325,12 @@
         "type": "sensor.input_pressed",
         "action": "action.camera.ball.toggle",
         "on_pressed": "signal.camera.ball.toggle"
+      },
+      {
+        "name": "logic.match.restart_input",
+        "type": "sensor.input_pressed",
+        "action": "action.restart",
+        "on_pressed": "signal.match.restart"
       }
     ],
     "timers": [
@@ -338,6 +366,13 @@
         "signal": "signal.ball.hit_wall",
         "actions": [
           { "type": "signal.emit", "signal": "signal.presentation.flash_border" }
+        ]
+      },
+      {
+        "signal": "signal.presentation.flash_border",
+        "actions": [
+          { "type": "property.set", "target": "entity.presentation", "key": "border_flash", "value": 1.0 },
+          { "type": "property.set", "target": "entity.presentation", "key": "paddle_flash", "value": 1.0 }
         ]
       },
       {
@@ -399,6 +434,20 @@
         ]
       },
       {
+        "signal": "signal.match.player_won",
+        "actions": [
+          { "type": "property.set", "target": "entity.match", "key": "finished", "value": true },
+          { "type": "property.set", "target": "entity.match", "key": "winner", "value": "player" }
+        ]
+      },
+      {
+        "signal": "signal.match.cpu_won",
+        "actions": [
+          { "type": "property.set", "target": "entity.match", "key": "finished", "value": true },
+          { "type": "property.set", "target": "entity.match", "key": "winner", "value": "cpu" }
+        ]
+      },
+      {
         "signal": "signal.round.reset",
         "actions": [
           { "type": "property.set", "target": "entity.ball", "key": "active_motion", "value": false },
@@ -406,6 +455,32 @@
           { "type": "transform.set_position", "target": "entity.ball", "position": [0.0, 0.0, 0.12] },
           { "type": "transform.set_position", "target": "entity.paddle.player", "position": [-8.0, 0.0, 0.0] },
           { "type": "transform.set_position", "target": "entity.paddle.cpu", "position": [8.0, 0.0, 0.0] }
+        ]
+      },
+      {
+        "signal": "signal.match.restart",
+        "actions": [
+          {
+            "type": "branch",
+            "if": {
+              "type": "property.compare",
+              "target": "entity.match",
+              "key": "finished",
+              "op": "==",
+              "value": true
+            },
+            "then": [
+              { "type": "property.set", "target": "entity.score.player", "key": "value", "value": 0 },
+              { "type": "property.set", "target": "entity.score.cpu", "key": "value", "value": 0 },
+              { "type": "property.set", "target": "entity.match", "key": "finished", "value": false },
+              { "type": "property.set", "target": "entity.match", "key": "winner", "value": "none" },
+              { "type": "property.set", "target": "entity.presentation", "key": "border_flash", "value": 0.0 },
+              { "type": "property.set", "target": "entity.presentation", "key": "paddle_flash", "value": 0.0 },
+              { "type": "signal.emit", "signal": "signal.round.reset" },
+              { "type": "signal.emit", "signal": "signal.game.start" }
+            ],
+            "else": []
+          }
         ]
       },
       {
