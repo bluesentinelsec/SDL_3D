@@ -853,6 +853,69 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
 static bool validate_action_array(validation_context *ctx, yyjson_val *actions, const char *json_path,
                                   validation_names *names);
 
+static bool is_tween_easing(const char *easing)
+{
+    return easing == NULL || SDL_strcmp(easing, "linear") == 0 || SDL_strcmp(easing, "in_quad") == 0 ||
+           SDL_strcmp(easing, "out_quad") == 0 || SDL_strcmp(easing, "in_out_quad") == 0;
+}
+
+static bool is_tween_repeat(const char *repeat)
+{
+    return repeat == NULL || SDL_strcmp(repeat, "none") == 0 || SDL_strcmp(repeat, "loop") == 0 ||
+           SDL_strcmp(repeat, "ping_pong") == 0;
+}
+
+static bool is_tween_value_type(const char *value_type)
+{
+    return value_type == NULL || SDL_strcmp(value_type, "int") == 0 || SDL_strcmp(value_type, "float") == 0 ||
+           SDL_strcmp(value_type, "number") == 0 || SDL_strcmp(value_type, "vec3") == 0 ||
+           SDL_strcmp(value_type, "color") == 0;
+}
+
+static bool is_ui_tween_property(const char *property)
+{
+    return property != NULL && (SDL_strcmp(property, "alpha") == 0 || SDL_strcmp(property, "scale") == 0 ||
+                                SDL_strcmp(property, "offset_x") == 0 || SDL_strcmp(property, "offset_y") == 0 ||
+                                SDL_strcmp(property, "x") == 0 || SDL_strcmp(property, "y") == 0 ||
+                                SDL_strcmp(property, "tint") == 0 || SDL_strcmp(property, "color") == 0);
+}
+
+static bool validate_tween_value(validation_context *ctx, yyjson_val *value, const char *json_path,
+                                 const char *field_name)
+{
+    if (yyjson_is_num(value) || is_vec_array(value, 2))
+        return true;
+    return validation_error(ctx, json_path, "%s must be a number or numeric array", field_name);
+}
+
+static bool validate_animation_common(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                      validation_names *names)
+{
+    yyjson_val *to = obj_get(action, "to");
+    if (to == NULL)
+        to = obj_get(action, "value");
+    if (to == NULL)
+        return validation_error(ctx, json_path, "animation action requires to or value");
+    if (!validate_tween_value(ctx, to, json_path, "animation target value"))
+        return false;
+    yyjson_val *from = obj_get(action, "from");
+    if (from != NULL && !validate_tween_value(ctx, from, json_path, "animation start value"))
+        return false;
+    yyjson_val *duration = obj_get(action, "duration");
+    if (duration != NULL && (!yyjson_is_num(duration) || yyjson_get_num(duration) < 0.0))
+        return validation_error(ctx, json_path, "animation duration must be a non-negative number");
+    if (!is_tween_easing(json_string(action, "easing")))
+        return validation_error(ctx, json_path, "animation easing must be linear, in_quad, out_quad, or in_out_quad");
+    if (!is_tween_repeat(json_string(action, "repeat")))
+        return validation_error(ctx, json_path, "animation repeat must be none, loop, or ping_pong");
+    if (!is_tween_value_type(json_string(action, "value_type")))
+        return validation_error(ctx, json_path, "animation value_type must be int, float, number, vec3, or color");
+    const char *done_signal = json_string(action, "done_signal");
+    if (done_signal != NULL && !require_ref(ctx, &names->signals, "signal", done_signal, json_path))
+        return false;
+    return true;
+}
+
 static bool validate_one_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                 validation_names *names)
 {
@@ -875,6 +938,25 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (obj_get(action, "value") == NULL)
             return validation_error(ctx, json_path, "%s requires a value", type);
         return true;
+    }
+    if (SDL_strcmp(type, "property.animate") == 0)
+    {
+        if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
+            return false;
+        if (!is_non_empty_string(action, "key"))
+            return validation_error(ctx, json_path, "property.animate requires a non-empty key");
+        return validate_animation_common(ctx, action, json_path, names);
+    }
+    if (SDL_strcmp(type, "ui.animate") == 0)
+    {
+        if (!is_non_empty_string(action, "target") && !is_non_empty_string(action, "ui"))
+            return validation_error(ctx, json_path, "ui.animate requires a non-empty target");
+        if (!is_non_empty_string(action, "property"))
+            return validation_error(ctx, json_path, "ui.animate requires a non-empty property");
+        if (!is_ui_tween_property(json_string(action, "property")))
+            return validation_error(
+                ctx, json_path, "ui.animate property must be alpha, scale, offset_x, offset_y, x, y, tint, or color");
+        return validate_animation_common(ctx, action, json_path, names);
     }
     if (SDL_strcmp(type, "transform.set_position") == 0)
     {
