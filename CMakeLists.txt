@@ -96,6 +96,7 @@ target_sources(
         src/fbx_loader.c
         src/game.c
         src/game_data.c
+        src/game_presentation.c
         src/game_data_validation.c
         src/gltf_loader.c
         src/gl_renderer.c

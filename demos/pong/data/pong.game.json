@@ -14,14 +14,48 @@
     "tick_rate": 0.008333333,
     "max_ticks_per_frame": 12,
     "enable_audio": false,
-    "start_signal": "signal.game.start",
-    "pause_action": "action.pause",
+    "pause": {
+      "action": "action.pause",
+      "allowed_if": {
+        "type": "property.compare",
+        "target": "entity.match",
+        "key": "finished",
+        "op": "==",
+        "value": false
+      }
+    },
     "startup_transition": "startup",
     "quit": {
       "action": "action.exit",
       "transition": "quit",
       "quit_signal": "signal.app.quit_fade_done"
+    },
+    "scene_shortcuts": [
+      { "action": "action.scene.title", "scene": "scene.title" },
+      { "action": "action.scene.options", "scene": "scene.options" },
+      { "action": "action.scene.play", "scene": "scene.play" }
+    ],
+    "input_policy": {
+      "global_actions": [
+        "action.exit",
+        "action.scene.title",
+        "action.scene.options",
+        "action.scene.play"
+      ]
+    },
+    "scene_transition_policy": {
+      "allow_same_scene": false,
+      "allow_interrupt": false,
+      "reset_menu_input_on_request": true
     }
+  },
+  "scenes": {
+    "initial": "scene.title",
+    "files": [
+      "scenes/title.scene.json",
+      "scenes/options.scene.json",
+      "scenes/play.scene.json"
+    ]
   },
   "render": {
     "clear_color": [3, 4, 8, 255],
@@ -29,6 +63,31 @@
     "bloom": true,
     "ssao": true,
     "tonemap": "aces"
+  },
+  "update_phases": {
+    "app_flow": { "active": true, "when_paused": true },
+    "presentation": { "active": true, "when_paused": true },
+    "property_effects": { "active": true, "when_paused": true },
+    "particles": { "active": true, "when_paused": true },
+    "simulation": { "active": true, "when_paused": false }
+  },
+  "presentation": {
+    "metrics": {
+      "fps_sample_seconds": 0.25
+    },
+    "ui_pulse_clock": "clock.pause_flash",
+    "clocks": [
+      {
+        "name": "clock.pause_flash",
+        "target": "entity.presentation",
+        "key": "pause_flash",
+        "speed_property": { "target": "entity.presentation", "key": "pause_flash_speed" },
+        "wrap": 1.0,
+        "reset_on_pause_enter": true,
+        "reset_value": 0.0,
+        "active_if": { "type": "app.paused", "equals": true }
+      }
+    ]
   },
   "transitions": {
     "startup": {
@@ -43,6 +102,18 @@
       "color": [0, 0, 0, 255],
       "duration": 0.45,
       "done_signal": "signal.app.quit_fade_done"
+    },
+    "scene_out": {
+      "type": "fade",
+      "direction": "out",
+      "color": [0, 0, 0, 255],
+      "duration": 0.28
+    },
+    "scene_in": {
+      "type": "fade",
+      "direction": "in",
+      "color": [0, 0, 0, 255],
+      "duration": 0.28
     }
   },
   "profiles": [
@@ -70,129 +141,15 @@
         "id": "font.hud",
         "builtin": "Inter",
         "size": 34
+      },
+      {
+        "id": "font.title",
+        "builtin": "Inter",
+        "size": 96
       }
     ]
   },
-  "ui": {
-    "text": [
-      {
-        "name": "ui.debug.frame_counter",
-        "font": "font.hud",
-        "format": "FPS %.0f  Frame %llu",
-        "bindings": [
-          { "type": "metric", "metric": "fps" },
-          { "type": "metric", "metric": "frame" }
-        ],
-        "x": 18.0,
-        "y": 16.0,
-        "color": [170, 190, 220, 230]
-      },
-      {
-        "name": "ui.camera.ball_label",
-        "font": "font.hud",
-        "visible_if": { "type": "camera.active", "camera": "camera.ball_chase" },
-        "text": "BALL CAM",
-        "x": 18.0,
-        "y": 56.0,
-        "color": [255, 222, 140, 235]
-      },
-      {
-        "name": "ui.score",
-        "font": "font.hud",
-        "format": "%02d   %02d",
-        "bindings": [
-          { "type": "property", "entity": "entity.score.player", "key": "value" },
-          { "type": "property", "entity": "entity.score.cpu", "key": "value" }
-        ],
-        "x": 0.5,
-        "y": 22.0,
-        "normalized": true,
-        "centered": true,
-        "color": [235, 242, 255, 255]
-      },
-      {
-        "name": "ui.match.player_won",
-        "font": "font.hud",
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
-            { "type": "property.compare", "target": "entity.match", "key": "winner", "op": "==", "value": "player" }
-          ]
-        },
-        "text": "You win!",
-        "x": 0.5,
-        "y": 0.40,
-        "normalized": true,
-        "centered": true,
-        "color": [255, 255, 255, 255]
-      },
-      {
-        "name": "ui.match.cpu_won",
-        "font": "font.hud",
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
-            { "type": "property.compare", "target": "entity.match", "key": "winner", "op": "==", "value": "cpu" }
-          ]
-        },
-        "text": "You lose!",
-        "x": 0.5,
-        "y": 0.40,
-        "normalized": true,
-        "centered": true,
-        "color": [255, 255, 255, 255]
-      },
-      {
-        "name": "ui.match.restart",
-        "font": "font.hud",
-        "visible_if": { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
-        "text": "Press enter to play again",
-        "x": 0.5,
-        "y": 0.49,
-        "normalized": true,
-        "centered": true,
-        "color": [200, 220, 255, 235]
-      },
-      {
-        "name": "ui.pause",
-        "font": "font.hud",
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "app.paused", "equals": true },
-            { "type": "not", "condition": { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true } }
-          ]
-        },
-        "text": "PAUSED",
-        "x": 0.5,
-        "y": 0.44,
-        "normalized": true,
-        "centered": true,
-        "pulse_alpha": true,
-        "color": [245, 248, 255, 255]
-      },
-      {
-        "name": "ui.ready",
-        "font": "font.hud",
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "app.paused", "equals": false },
-            { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": false },
-            { "type": "property.compare", "target": "entity.ball", "key": "active_motion", "op": "==", "value": false }
-          ]
-        },
-        "text": "Get ready",
-        "x": 0.5,
-        "y": 0.44,
-        "normalized": true,
-        "centered": true,
-        "color": [210, 225, 255, 190]
-      }
-    ]
-  },
+  "ui": { "text": [] },
   "scripts": [
     {
       "id": "script.pong",
@@ -250,6 +207,48 @@
             "bindings": [
               { "device": "keyboard", "key": "B" }
             ]
+          },
+          {
+            "name": "action.menu.up",
+            "bindings": [
+              { "device": "keyboard", "key": "UP" },
+              { "device": "keyboard", "key": "W" },
+              { "device": "gamepad", "button": "DPAD_UP" }
+            ]
+          },
+          {
+            "name": "action.menu.down",
+            "bindings": [
+              { "device": "keyboard", "key": "DOWN" },
+              { "device": "keyboard", "key": "S" },
+              { "device": "gamepad", "button": "DPAD_DOWN" }
+            ]
+          },
+          {
+            "name": "action.menu.select",
+            "bindings": [
+              { "device": "keyboard", "key": "RETURN" },
+              { "device": "keyboard", "key": "SPACE" },
+              { "device": "gamepad", "button": "SOUTH" }
+            ]
+          },
+          {
+            "name": "action.scene.title",
+            "bindings": [
+              { "device": "keyboard", "key": "1" }
+            ]
+          },
+          {
+            "name": "action.scene.options",
+            "bindings": [
+              { "device": "keyboard", "key": "2" }
+            ]
+          },
+          {
+            "name": "action.scene.play",
+            "bindings": [
+              { "device": "keyboard", "key": "3" }
+            ]
           }
         ]
       }
@@ -301,7 +300,10 @@
         "position": [-7.0, 4.4, 3.2],
         "color": [1.0, 0.1, 0.08],
         "intensity": 2.8,
-        "range": 12.0
+        "range": 12.0,
+        "effects": [
+          { "type": "flash", "source": "entity.presentation", "property": "border_flash", "color": [0.65, 0.78, 1.0], "color_blend": 0.55, "intensity_add": 1.6, "range_add": 1.8 }
+        ]
       },
       {
         "name": "light.green",
@@ -309,7 +311,10 @@
         "position": [7.0, 4.4, 3.2],
         "color": [0.08, 1.0, 0.18],
         "intensity": 2.7,
-        "range": 12.0
+        "range": 12.0,
+        "effects": [
+          { "type": "pulse", "rate": 3.8, "color": [0.18, 1.0, 0.50], "color_blend": 0.20, "intensity_add": 0.45, "range_add": 0.8 }
+        ]
       },
       {
         "name": "light.blue",
@@ -317,7 +322,10 @@
         "position": [0.0, -4.2, 3.5],
         "color": [0.14, 0.34, 1.0],
         "intensity": 2.9,
-        "range": 12.0
+        "range": 12.0,
+        "effects": [
+          { "type": "pulse", "rate": 2.5, "phase": 1.2, "color": [0.28, 0.48, 1.0], "color_blend": 0.20, "intensity_add": 0.35, "range_add": 0.7 }
+        ]
       },
       {
         "name": "light.ball",
@@ -326,7 +334,11 @@
         "offset": [0.0, 0.0, 1.2],
         "color": [1.0, 0.86, 0.34],
         "intensity": 3.1,
-        "range": 5.0
+        "range": 5.0,
+        "effects": [
+          { "type": "pulse", "rate": 9.0, "color": [1.0, 0.96, 0.54], "color_blend": 0.35, "intensity_add": 0.9, "range_add": 0.6 },
+          { "type": "flash", "source": "entity.presentation", "property": "paddle_flash", "color": [1.0, 1.0, 1.0], "color_blend": 0.45, "intensity_add": 1.5, "range_add": 1.1 }
+        ]
       }
     ]
   },
@@ -533,11 +545,27 @@
       "active": true,
       "tags": ["state", "presentation"],
       "properties": {
+        "pause_flash": { "type": "float", "value": 0.0 },
         "border_flash": { "type": "float", "value": 0.0 },
         "paddle_flash": { "type": "float", "value": 0.0 },
         "border_flash_decay": { "type": "float", "value": 2.8 },
         "paddle_flash_decay": { "type": "float", "value": 4.0 },
         "pause_flash_speed": { "type": "float", "value": 3.0 }
+      },
+      "components": [
+        { "type": "property.decay", "property": "border_flash", "rate_property": "border_flash_decay", "target": 0.0, "min": 0.0, "max": 1.0 },
+        { "type": "property.decay", "property": "paddle_flash", "rate_property": "paddle_flash_decay", "target": 0.0, "min": 0.0, "max": 1.0 }
+      ]
+    },
+    {
+      "name": "entity.settings",
+      "active": true,
+      "tags": ["state", "settings"],
+      "properties": {
+        "difficulty": { "type": "string", "value": "normal" },
+        "lighting_profile": { "type": "string", "value": "cinematic" },
+        "fullscreen": { "type": "bool", "value": false },
+        "input_style": { "type": "string", "value": "keyboard" }
       }
     },
     {

@@ -1,0 +1,110 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.options",
+  "updates_game": false,
+  "renders_world": false,
+  "entities": [],
+  "input": {
+    "actions": [
+      "action.menu.up",
+      "action.menu.down",
+      "action.menu.select"
+    ]
+  },
+  "transitions": {
+    "enter": "scene_in",
+    "exit": "scene_out"
+  },
+  "menus": [
+    {
+      "name": "menu.options",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "selected": 0,
+      "items": [
+        {
+          "label": "Difficulty",
+          "control": {
+            "type": "choice",
+            "target": "entity.settings",
+            "key": "difficulty",
+            "choices": [
+              { "label": "Easy", "value": "easy" },
+              { "label": "Normal", "value": "normal" },
+              { "label": "Hard", "value": "hard" }
+            ]
+          }
+        },
+        {
+          "label": "Fullscreen",
+          "control": {
+            "type": "toggle",
+            "target": "entity.settings",
+            "key": "fullscreen"
+          }
+        },
+        {
+          "label": "Lighting",
+          "control": {
+            "type": "choice",
+            "target": "entity.settings",
+            "key": "lighting_profile",
+            "choices": [
+              { "label": "Clean", "value": "clean" },
+              { "label": "Cinematic", "value": "cinematic" },
+              { "label": "Arcade", "value": "arcade" }
+            ]
+          }
+        },
+        {
+          "label": "Input",
+          "control": {
+            "type": "choice",
+            "target": "entity.settings",
+            "key": "input_style",
+            "choices": [
+              { "label": "Keyboard", "value": "keyboard" },
+              { "label": "Gamepad", "value": "gamepad" }
+            ]
+          }
+        },
+        { "label": "Back", "scene": "scene.title" }
+      ]
+    }
+  ],
+  "ui": {
+    "text": [
+      {
+        "name": "ui.options.title",
+        "font": "font.title",
+        "text": "OPTIONS",
+        "x": 0.5,
+        "y": 0.23,
+        "normalized": true,
+        "centered": true,
+        "color": [242, 248, 255, 255]
+      }
+    ],
+    "menus": [
+      {
+        "name": "ui.options.menu",
+        "menu": "menu.options",
+        "font": "font.hud",
+        "x": 0.5,
+        "y": 0.40,
+        "gap": 0.075,
+        "normalized": true,
+        "align": "center",
+        "color": [225, 236, 255, 245],
+        "selected_color": [255, 245, 208, 255],
+        "cursor": {
+          "text": ">",
+          "offset_x": -0.10,
+          "align": "center",
+          "color": [255, 222, 140, 255]
+        }
+      }
+    ]
+  }
+}
