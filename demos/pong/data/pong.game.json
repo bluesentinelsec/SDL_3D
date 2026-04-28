@@ -6,6 +6,45 @@
     "version": "0.1.0",
     "description": "Fixed-screen arcade proof that SDL3D gameplay rules can be authored through generic entities, sensors, signals, timers, and actions."
   },
+  "app": {
+    "title": "SDL3D Pong",
+    "width": 1280,
+    "height": 720,
+    "backend": "auto",
+    "tick_rate": 0.008333333,
+    "max_ticks_per_frame": 12,
+    "enable_audio": false,
+    "start_signal": "signal.game.start",
+    "pause_action": "action.pause",
+    "startup_transition": "startup",
+    "quit": {
+      "action": "action.exit",
+      "transition": "quit",
+      "quit_signal": "signal.app.quit_fade_done"
+    }
+  },
+  "render": {
+    "clear_color": [3, 4, 8, 255],
+    "lighting": true,
+    "bloom": true,
+    "ssao": true,
+    "tonemap": "aces"
+  },
+  "transitions": {
+    "startup": {
+      "type": "fade",
+      "direction": "in",
+      "color": [0, 0, 0, 255],
+      "duration": 0.7
+    },
+    "quit": {
+      "type": "fade",
+      "direction": "out",
+      "color": [0, 0, 0, 255],
+      "duration": 0.45,
+      "done_signal": "signal.app.quit_fade_done"
+    }
+  },
   "profiles": [
     {
       "name": "profile.fixed_screen_arcade",
@@ -31,6 +70,126 @@
         "id": "font.hud",
         "builtin": "Inter",
         "size": 34
+      }
+    ]
+  },
+  "ui": {
+    "text": [
+      {
+        "name": "ui.debug.frame_counter",
+        "font": "font.hud",
+        "format": "FPS %.0f  Frame %llu",
+        "bindings": [
+          { "type": "metric", "metric": "fps" },
+          { "type": "metric", "metric": "frame" }
+        ],
+        "x": 18.0,
+        "y": 16.0,
+        "color": [170, 190, 220, 230]
+      },
+      {
+        "name": "ui.camera.ball_label",
+        "font": "font.hud",
+        "visible_if": { "type": "camera.active", "camera": "camera.ball_chase" },
+        "text": "BALL CAM",
+        "x": 18.0,
+        "y": 56.0,
+        "color": [255, 222, 140, 235]
+      },
+      {
+        "name": "ui.score",
+        "font": "font.hud",
+        "format": "%02d   %02d",
+        "bindings": [
+          { "type": "property", "entity": "entity.score.player", "key": "value" },
+          { "type": "property", "entity": "entity.score.cpu", "key": "value" }
+        ],
+        "x": 0.5,
+        "y": 22.0,
+        "normalized": true,
+        "centered": true,
+        "color": [235, 242, 255, 255]
+      },
+      {
+        "name": "ui.match.player_won",
+        "font": "font.hud",
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
+            { "type": "property.compare", "target": "entity.match", "key": "winner", "op": "==", "value": "player" }
+          ]
+        },
+        "text": "You win!",
+        "x": 0.5,
+        "y": 0.40,
+        "normalized": true,
+        "centered": true,
+        "color": [255, 255, 255, 255]
+      },
+      {
+        "name": "ui.match.cpu_won",
+        "font": "font.hud",
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
+            { "type": "property.compare", "target": "entity.match", "key": "winner", "op": "==", "value": "cpu" }
+          ]
+        },
+        "text": "You lose!",
+        "x": 0.5,
+        "y": 0.40,
+        "normalized": true,
+        "centered": true,
+        "color": [255, 255, 255, 255]
+      },
+      {
+        "name": "ui.match.restart",
+        "font": "font.hud",
+        "visible_if": { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
+        "text": "Press enter to play again",
+        "x": 0.5,
+        "y": 0.49,
+        "normalized": true,
+        "centered": true,
+        "color": [200, 220, 255, 235]
+      },
+      {
+        "name": "ui.pause",
+        "font": "font.hud",
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "app.paused", "equals": true },
+            { "type": "not", "condition": { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true } }
+          ]
+        },
+        "text": "PAUSED",
+        "x": 0.5,
+        "y": 0.44,
+        "normalized": true,
+        "centered": true,
+        "pulse_alpha": true,
+        "color": [245, 248, 255, 255]
+      },
+      {
+        "name": "ui.ready",
+        "font": "font.hud",
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "app.paused", "equals": false },
+            { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": false },
+            { "type": "property.compare", "target": "entity.ball", "key": "active_motion", "op": "==", "value": false }
+          ]
+        },
+        "text": "Get ready",
+        "x": 0.5,
+        "y": 0.44,
+        "normalized": true,
+        "centered": true,
+        "color": [210, 225, 255, 190]
       }
     ]
   },
@@ -109,6 +268,7 @@
       "min": [-9.0, -5.0, -1.0],
       "max": [9.0, 5.0, 2.0]
     },
+    "ambient_light": [0.015, 0.018, 0.026],
     "cameras": [
       {
         "name": "camera.overhead",
@@ -121,9 +281,16 @@
       },
       {
         "name": "camera.ball_chase",
-        "type": "adapter",
-        "adapter": "adapter.pong.ball_chase_camera",
+        "type": "chase",
         "target_entity": "entity.ball",
+        "velocity_property": "velocity",
+        "chase_distance": 2.6,
+        "height": 1.57,
+        "lookahead": 4.4,
+        "fovy": 68.0,
+        "target_offset": [0.0, 0.0, 0.22],
+        "target_z_offset": -0.05,
+        "up": [0.0, 0.0, 1.0],
         "active": false
       }
     ],
@@ -151,10 +318,113 @@
         "color": [0.14, 0.34, 1.0],
         "intensity": 2.9,
         "range": 12.0
+      },
+      {
+        "name": "light.ball",
+        "type": "point",
+        "target_entity": "entity.ball",
+        "offset": [0.0, 0.0, 1.2],
+        "color": [1.0, 0.86, 0.34],
+        "intensity": 3.1,
+        "range": 5.0
       }
     ]
   },
   "entities": [
+    {
+      "name": "entity.field.base",
+      "active": true,
+      "tags": ["render", "field"],
+      "transform": { "position": [0.0, 0.0, -0.45] },
+      "components": [
+        { "type": "render.cube", "size": [18.8, 10.8, 0.10], "color": [42, 48, 62, 255] }
+      ]
+    },
+    {
+      "name": "entity.field.border.top",
+      "active": true,
+      "tags": ["render", "field", "border"],
+      "transform": { "position": [0.0, 5.12, 0.0] },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [18.35, 0.12, 0.18],
+          "color": [62, 72, 92, 255],
+          "emissive": true,
+          "effects": [
+            { "type": "flash", "source": "entity.presentation", "property": "border_flash", "color": [210, 235, 255, 255], "size_add": [0.06, 0.06, 0.0], "size_mode": "minor_axis", "emissive": [0.55, 0.70, 1.0] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.field.border.bottom",
+      "active": true,
+      "tags": ["render", "field", "border"],
+      "transform": { "position": [0.0, -5.12, 0.0] },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [18.35, 0.12, 0.18],
+          "color": [62, 72, 92, 255],
+          "emissive": true,
+          "effects": [
+            { "type": "flash", "source": "entity.presentation", "property": "border_flash", "color": [210, 235, 255, 255], "size_add": [0.06, 0.06, 0.0], "size_mode": "minor_axis", "emissive": [0.55, 0.70, 1.0] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.field.border.left",
+      "active": true,
+      "tags": ["render", "field", "border"],
+      "transform": { "position": [-9.12, 0.0, 0.0] },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [0.12, 10.35, 0.18],
+          "color": [62, 72, 92, 255],
+          "emissive": true,
+          "effects": [
+            { "type": "flash", "source": "entity.presentation", "property": "border_flash", "color": [210, 235, 255, 255], "size_add": [0.06, 0.06, 0.0], "size_mode": "minor_axis", "emissive": [0.55, 0.70, 1.0] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.field.border.right",
+      "active": true,
+      "tags": ["render", "field", "border"],
+      "transform": { "position": [9.12, 0.0, 0.0] },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [0.12, 10.35, 0.18],
+          "color": [62, 72, 92, 255],
+          "emissive": true,
+          "effects": [
+            { "type": "flash", "source": "entity.presentation", "property": "border_flash", "color": [210, 235, 255, 255], "size_add": [0.06, 0.06, 0.0], "size_mode": "minor_axis", "emissive": [0.55, 0.70, 1.0] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.field.center_ticks",
+      "active": true,
+      "tags": ["render", "field", "centerline"],
+      "transform": { "position": [0.0, 0.0, 0.02] },
+      "components": [
+        { "type": "render.cube", "offset": [0.0, -4.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] },
+        { "type": "render.cube", "offset": [0.0, -3.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] },
+        { "type": "render.cube", "offset": [0.0, -2.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] },
+        { "type": "render.cube", "offset": [0.0, -1.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] },
+        { "type": "render.cube", "offset": [0.0, 0.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] },
+        { "type": "render.cube", "offset": [0.0, 1.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] },
+        { "type": "render.cube", "offset": [0.0, 2.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] },
+        { "type": "render.cube", "offset": [0.0, 3.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] },
+        { "type": "render.cube", "offset": [0.0, 4.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] }
+      ]
+    },
     {
       "name": "entity.paddle.player",
       "active": true,
@@ -166,7 +436,14 @@
         "speed": { "type": "float", "value": 7.5 }
       },
       "components": [
-        { "type": "render.cube", "size": [0.36, 1.9, 0.28], "color": [205, 230, 255, 255] },
+        {
+          "type": "render.cube",
+          "size": [0.36, 1.9, 0.28],
+          "color": [205, 230, 255, 255],
+          "effects": [
+            { "type": "flash", "source": "entity.presentation", "property": "paddle_flash", "color": [255, 255, 255, 255], "emissive": [0.35, 0.42, 0.50] }
+          ]
+        },
         { "type": "collision.aabb", "half_extents": [0.18, 0.95, 0.14] },
         { "type": "control.axis_1d", "axis": "y", "negative": "action.paddle.down", "positive": "action.paddle.up" }
       ]
@@ -182,7 +459,14 @@
         "speed": { "type": "float", "value": 5.5 }
       },
       "components": [
-        { "type": "render.cube", "size": [0.36, 1.9, 0.28], "color": [195, 255, 212, 255] },
+        {
+          "type": "render.cube",
+          "size": [0.36, 1.9, 0.28],
+          "color": [195, 255, 212, 255],
+          "effects": [
+            { "type": "flash", "source": "entity.presentation", "property": "paddle_flash", "color": [255, 255, 255, 255], "emissive": [0.35, 0.42, 0.50] }
+          ]
+        },
         { "type": "collision.aabb", "half_extents": [0.18, 0.95, 0.14] },
         { "type": "adapter.controller", "adapter": "adapter.pong.cpu_track_ball", "target": "entity.ball" }
       ]
@@ -198,10 +482,22 @@
         "base_speed": { "type": "float", "value": 5.6 },
         "speedup_per_hit": { "type": "float", "value": 0.28 },
         "max_speed": { "type": "float", "value": 10.0 },
+        "max_serve_angle": { "type": "float", "value": 0.52 },
+        "max_reflect_angle": { "type": "float", "value": 1.05 },
         "active_motion": { "type": "bool", "value": false }
       },
       "components": [
-        { "type": "render.sphere", "radius": 0.22, "rings": 12, "slices": 18, "emissive": true },
+        {
+          "type": "render.sphere",
+          "radius": 0.22,
+          "rings": 12,
+          "slices": 18,
+          "color": [255, 184, 82, 255],
+          "emissive": true,
+          "effects": [
+            { "type": "pulse", "rate": 9.0, "color": [255, 245, 156, 255], "emissive_base": [0.75, 0.48, 0.08], "emissive_add": [0.65, 0.30, 0.0] }
+          ]
+        },
         { "type": "collision.circle", "radius": 0.22 },
         { "type": "motion.velocity_2d", "property": "velocity" }
       ]
@@ -223,6 +519,28 @@
       }
     },
     {
+      "name": "entity.match",
+      "active": true,
+      "tags": ["state", "match"],
+      "properties": {
+        "finished": { "type": "bool", "value": false },
+        "winner": { "type": "string", "value": "none" },
+        "field_half_height": { "type": "float", "value": 5.0 }
+      }
+    },
+    {
+      "name": "entity.presentation",
+      "active": true,
+      "tags": ["state", "presentation"],
+      "properties": {
+        "border_flash": { "type": "float", "value": 0.0 },
+        "paddle_flash": { "type": "float", "value": 0.0 },
+        "border_flash_decay": { "type": "float", "value": 2.8 },
+        "paddle_flash_decay": { "type": "float", "value": 4.0 },
+        "pause_flash_speed": { "type": "float", "value": 3.0 }
+      }
+    },
+    {
       "name": "entity.effect.ambient_particles",
       "active": true,
       "tags": ["effect", "particles"],
@@ -232,10 +550,24 @@
           "type": "particles.emitter",
           "shape": "box",
           "extents": [8.8, 4.8, 0.18],
+          "direction": [0.0, 1.0, 0.0],
+          "spread": 1.1,
+          "speed_min": 0.08,
+          "speed_max": 0.45,
+          "lifetime_min": 2.5,
+          "lifetime_max": 5.0,
+          "size_start": 0.035,
+          "size_end": 0.012,
+          "gravity": 0.0,
           "max_particles": 360,
           "emit_rate": 95.0,
           "color_start": [220, 235, 255, 105],
-          "color_end": [255, 255, 255, 0]
+          "color_end": [255, 255, 255, 0],
+          "emissive_intensity": 1.35,
+          "camera_facing": true,
+          "depth_test": true,
+          "draw_emissive": [0.8, 0.9, 1.0],
+          "random_seed": 19088743
         }
       ]
     }
@@ -252,8 +584,10 @@
     "signal.round.reset",
     "signal.match.player_won",
     "signal.match.cpu_won",
+    "signal.match.restart",
     "signal.camera.ball.toggle",
-    "signal.presentation.flash_border"
+    "signal.presentation.flash_border",
+    "signal.app.quit_fade_done"
   ],
   "logic": {
     "sensors": [
@@ -303,6 +637,12 @@
         "type": "sensor.input_pressed",
         "action": "action.camera.ball.toggle",
         "on_pressed": "signal.camera.ball.toggle"
+      },
+      {
+        "name": "logic.match.restart_input",
+        "type": "sensor.input_pressed",
+        "action": "action.restart",
+        "on_pressed": "signal.match.restart"
       }
     ],
     "timers": [
@@ -338,6 +678,13 @@
         "signal": "signal.ball.hit_wall",
         "actions": [
           { "type": "signal.emit", "signal": "signal.presentation.flash_border" }
+        ]
+      },
+      {
+        "signal": "signal.presentation.flash_border",
+        "actions": [
+          { "type": "property.set", "target": "entity.presentation", "key": "border_flash", "value": 1.0 },
+          { "type": "property.set", "target": "entity.presentation", "key": "paddle_flash", "value": 1.0 }
         ]
       },
       {
@@ -399,6 +746,20 @@
         ]
       },
       {
+        "signal": "signal.match.player_won",
+        "actions": [
+          { "type": "property.set", "target": "entity.match", "key": "finished", "value": true },
+          { "type": "property.set", "target": "entity.match", "key": "winner", "value": "player" }
+        ]
+      },
+      {
+        "signal": "signal.match.cpu_won",
+        "actions": [
+          { "type": "property.set", "target": "entity.match", "key": "finished", "value": true },
+          { "type": "property.set", "target": "entity.match", "key": "winner", "value": "cpu" }
+        ]
+      },
+      {
         "signal": "signal.round.reset",
         "actions": [
           { "type": "property.set", "target": "entity.ball", "key": "active_motion", "value": false },
@@ -406,6 +767,32 @@
           { "type": "transform.set_position", "target": "entity.ball", "position": [0.0, 0.0, 0.12] },
           { "type": "transform.set_position", "target": "entity.paddle.player", "position": [-8.0, 0.0, 0.0] },
           { "type": "transform.set_position", "target": "entity.paddle.cpu", "position": [8.0, 0.0, 0.0] }
+        ]
+      },
+      {
+        "signal": "signal.match.restart",
+        "actions": [
+          {
+            "type": "branch",
+            "if": {
+              "type": "property.compare",
+              "target": "entity.match",
+              "key": "finished",
+              "op": "==",
+              "value": true
+            },
+            "then": [
+              { "type": "property.set", "target": "entity.score.player", "key": "value", "value": 0 },
+              { "type": "property.set", "target": "entity.score.cpu", "key": "value", "value": 0 },
+              { "type": "property.set", "target": "entity.match", "key": "finished", "value": false },
+              { "type": "property.set", "target": "entity.match", "key": "winner", "value": "none" },
+              { "type": "property.set", "target": "entity.presentation", "key": "border_flash", "value": 0.0 },
+              { "type": "property.set", "target": "entity.presentation", "key": "paddle_flash", "value": 0.0 },
+              { "type": "signal.emit", "signal": "signal.round.reset" },
+              { "type": "signal.emit", "signal": "signal.game.start" }
+            ],
+            "else": []
+          }
         ]
       },
       {
@@ -437,13 +824,6 @@
       "script": "script.pong",
       "function": "cpu_track_ball",
       "description": "Move the CPU paddle toward the current ball position."
-    },
-    {
-      "name": "adapter.pong.ball_chase_camera",
-      "kind": "camera",
-      "script": "script.pong",
-      "function": "ball_chase_camera",
-      "description": "Build a third-person camera from the ball position and velocity."
     }
   ]
 }

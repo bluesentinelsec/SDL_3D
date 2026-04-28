@@ -52,6 +52,7 @@ typedef struct validation_names
     name_table actions;
     name_table timers;
     name_table cameras;
+    name_table fonts;
     name_table sensors;
     name_table used_adapters;
     name_table used_scripts;
@@ -495,6 +496,29 @@ static bool collect_cameras(validation_context *ctx, yyjson_val *root, validatio
     return true;
 }
 
+static bool collect_fonts(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *fonts = obj_get(obj_get(root, "assets"), "fonts");
+    if (fonts == NULL)
+        return true;
+    if (!yyjson_is_arr(fonts))
+        return validation_error(ctx, "$.assets.fonts", "font assets must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(fonts); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.assets.fonts[%zu]", i);
+        yyjson_val *font = yyjson_arr_get(fonts, i);
+        if (!yyjson_is_obj(font))
+            return validation_error(ctx, path, "font asset entries must be objects");
+        if (!require_unique_name(ctx, &names->fonts, "font asset", json_string(font, "id"), path))
+            return false;
+        if (!is_non_empty_string(font, "builtin") && !is_non_empty_string(font, "path"))
+            return validation_error(ctx, path, "font asset requires builtin or path");
+    }
+    return true;
+}
+
 static bool collect_input_actions(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *contexts = obj_get(obj_get(root, "input"), "contexts");
@@ -665,7 +689,7 @@ static bool collect_names(validation_context *ctx, yyjson_val *root, validation_
     return collect_signals(ctx, root, names) && collect_entities(ctx, root, names) &&
            collect_scripts(ctx, root, names) && collect_adapters(ctx, root, names) &&
            collect_input_actions(ctx, root, names) && collect_cameras(ctx, root, names) &&
-           collect_timers(ctx, root, names) && collect_sensors(ctx, root, names);
+           collect_fonts(ctx, root, names) && collect_timers(ctx, root, names) && collect_sensors(ctx, root, names);
 }
 
 static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)
@@ -979,6 +1003,37 @@ static bool validate_adapters(validation_context *ctx, yyjson_val *root, validat
     return true;
 }
 
+static bool validate_app_refs(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *app = obj_get(root, "app");
+    if (!yyjson_is_obj(app))
+        return true;
+    const char *start_signal = json_string(app, "start_signal");
+    if (start_signal != NULL && !require_ref(ctx, &names->signals, "signal", start_signal, "$.app.start_signal"))
+        return false;
+    const char *pause_action = json_string(app, "pause_action");
+    if (pause_action != NULL && !require_ref(ctx, &names->actions, "input action", pause_action, "$.app.pause_action"))
+        return false;
+    const char *startup_transition = json_string(app, "startup_transition");
+    if (startup_transition != NULL && !yyjson_is_obj(obj_get(obj_get(root, "transitions"), startup_transition)))
+        return validation_error(ctx, "$.app.startup_transition", "unknown transition reference '%s'",
+                                startup_transition);
+
+    yyjson_val *quit = obj_get(app, "quit");
+    if (!yyjson_is_obj(quit))
+        return true;
+    const char *action = json_string(quit, "action");
+    if (action != NULL && !require_ref(ctx, &names->actions, "input action", action, "$.app.quit.action"))
+        return false;
+    const char *quit_signal = json_string(quit, "quit_signal");
+    if (quit_signal != NULL && !require_ref(ctx, &names->signals, "signal", quit_signal, "$.app.quit.quit_signal"))
+        return false;
+    const char *transition = json_string(quit, "transition");
+    if (transition != NULL && !yyjson_is_obj(obj_get(obj_get(root, "transitions"), transition)))
+        return validation_error(ctx, "$.app.quit.transition", "unknown transition reference '%s'", transition);
+    return true;
+}
+
 static bool validate_cameras(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *cameras = obj_get(obj_get(root, "world"), "cameras");
@@ -999,6 +1054,185 @@ static bool validate_cameras(validation_context *ctx, yyjson_val *root, validati
                 !require_ref(ctx, &names->entities, "entity", json_string(camera, "target_entity"), path))
                 return false;
         }
+        else if (SDL_strcmp(type != NULL ? type : "", "chase") == 0)
+        {
+            if (!require_ref(ctx, &names->entities, "entity", json_string(camera, "target_entity"), path))
+                return false;
+        }
+    }
+    return true;
+}
+
+static bool validate_ui_condition(validation_context *ctx, yyjson_val *condition, const char *path,
+                                  validation_names *names)
+{
+    if (condition == NULL)
+        return true;
+    if (!yyjson_is_obj(condition))
+        return validation_error(ctx, path, "UI condition must be an object");
+
+    const char *type = json_string(condition, "type");
+    if (SDL_strcmp(type != NULL ? type : "", "always") == 0 || SDL_strcmp(type != NULL ? type : "", "app.paused") == 0)
+        return true;
+    if (SDL_strcmp(type != NULL ? type : "", "camera.active") == 0)
+        return require_ref(ctx, &names->cameras, "camera", json_string(condition, "camera"), path);
+    if (SDL_strcmp(type != NULL ? type : "", "property.compare") == 0 ||
+        SDL_strcmp(type != NULL ? type : "", "property.bool") == 0)
+    {
+        if (!require_ref(ctx, &names->entities, "entity", json_string(condition, "target"), path))
+            return false;
+        if (!is_non_empty_string(condition, "key"))
+            return validation_error(ctx, path, "UI property condition requires a non-empty key");
+        if (SDL_strcmp(type, "property.compare") == 0 && !is_compare_op(json_string(condition, "op")))
+            return validation_error(ctx, path, "UI property.compare requires a supported comparison operator");
+        return true;
+    }
+    if (SDL_strcmp(type != NULL ? type : "", "not") == 0)
+    {
+        char child_path[PATH_BUFFER_SIZE];
+        format_path(child_path, sizeof(child_path), "%s.condition", path);
+        return validate_ui_condition(ctx, obj_get(condition, "condition"), child_path, names);
+    }
+    if (SDL_strcmp(type != NULL ? type : "", "all") == 0 || SDL_strcmp(type != NULL ? type : "", "any") == 0)
+    {
+        yyjson_val *conditions = obj_get(condition, "conditions");
+        if (!yyjson_is_arr(conditions))
+            return validation_error(ctx, path, "UI %s condition requires a conditions array", type);
+        for (size_t i = 0; i < yyjson_arr_size(conditions); ++i)
+        {
+            char child_path[PATH_BUFFER_SIZE];
+            format_path(child_path, sizeof(child_path), "%s.conditions[%zu]", path, i);
+            if (!validate_ui_condition(ctx, yyjson_arr_get(conditions, i), child_path, names))
+                return false;
+        }
+        return true;
+    }
+    return validation_error(ctx, path, "unsupported UI condition type '%s'", type != NULL ? type : "<missing>");
+}
+
+static bool validate_ui(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *texts = obj_get(obj_get(root, "ui"), "text");
+    if (texts == NULL)
+        return true;
+    if (!yyjson_is_arr(texts))
+        return validation_error(ctx, "$.ui.text", "UI text must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(texts); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.ui.text[%zu]", i);
+        yyjson_val *text = yyjson_arr_get(texts, i);
+        if (!yyjson_is_obj(text))
+            return validation_error(ctx, path, "UI text entries must be objects");
+        if (json_string(text, "font") != NULL &&
+            !require_ref(ctx, &names->fonts, "font asset", json_string(text, "font"), path))
+            return false;
+        char condition_path[PATH_BUFFER_SIZE];
+        format_path(condition_path, sizeof(condition_path), "%s.visible_if", path);
+        if (!validate_ui_condition(ctx, obj_get(text, "visible_if"), condition_path, names))
+            return false;
+
+        yyjson_val *bindings = obj_get(text, "bindings");
+        for (size_t b = 0; yyjson_is_arr(bindings) && b < yyjson_arr_size(bindings); ++b)
+        {
+            char binding_path[PATH_BUFFER_SIZE];
+            format_path(binding_path, sizeof(binding_path), "%s.bindings[%zu]", path, b);
+            yyjson_val *binding = yyjson_arr_get(bindings, b);
+            const char *type = json_string(binding, "type");
+            if (SDL_strcmp(type != NULL ? type : "", "property") == 0)
+            {
+                if (!require_ref(ctx, &names->entities, "entity", json_string(binding, "entity"), binding_path))
+                    return false;
+                if (!is_non_empty_string(binding, "key"))
+                    return validation_error(ctx, binding_path, "UI property binding requires a non-empty key");
+            }
+            else if (SDL_strcmp(type != NULL ? type : "", "metric") != 0)
+            {
+                return validation_error(ctx, binding_path, "unsupported UI binding type '%s'",
+                                        type != NULL ? type : "<missing>");
+            }
+        }
+    }
+    return true;
+}
+
+static bool validate_render_effects(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *entities = obj_get(root, "entities");
+    for (size_t e = 0; yyjson_is_arr(entities) && e < yyjson_arr_size(entities); ++e)
+    {
+        yyjson_val *components = obj_get(yyjson_arr_get(entities, e), "components");
+        for (size_t c = 0; yyjson_is_arr(components) && c < yyjson_arr_size(components); ++c)
+        {
+            yyjson_val *effects = obj_get(yyjson_arr_get(components, c), "effects");
+            for (size_t i = 0; yyjson_is_arr(effects) && i < yyjson_arr_size(effects); ++i)
+            {
+                char path[PATH_BUFFER_SIZE];
+                format_path(path, sizeof(path), "$.entities[%zu].components[%zu].effects[%zu]", e, c, i);
+                yyjson_val *effect = yyjson_arr_get(effects, i);
+                const char *type = json_string(effect, "type");
+                if (SDL_strcmp(type != NULL ? type : "", "flash") == 0)
+                {
+                    if (!require_ref(ctx, &names->entities, "entity", json_string(effect, "source"), path))
+                        return false;
+                    if (!is_non_empty_string(effect, "property"))
+                        return validation_error(ctx, path, "flash effect requires a non-empty property");
+                }
+                else if (SDL_strcmp(type != NULL ? type : "", "pulse") != 0 &&
+                         SDL_strcmp(type != NULL ? type : "", "emissive") != 0)
+                {
+                    return validation_error(ctx, path, "unsupported render effect type '%s'",
+                                            type != NULL ? type : "<missing>");
+                }
+            }
+        }
+    }
+    return true;
+}
+
+static bool validate_lights(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *lights = obj_get(obj_get(root, "world"), "lights");
+    if (lights == NULL)
+        return true;
+    if (!yyjson_is_arr(lights))
+        return validation_error(ctx, "$.world.lights", "world lights must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(lights); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.world.lights[%zu]", i);
+        yyjson_val *light = yyjson_arr_get(lights, i);
+        const char *target_entity = json_string(light, "target_entity");
+        if (target_entity != NULL && !require_ref(ctx, &names->entities, "entity", target_entity, path))
+            return false;
+    }
+    return true;
+}
+
+static bool validate_transitions(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *transitions = obj_get(root, "transitions");
+    if (transitions == NULL)
+        return true;
+    if (!yyjson_is_obj(transitions))
+        return validation_error(ctx, "$.transitions", "transitions must be an object");
+
+    yyjson_val *key;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(transitions, &iter);
+    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+    {
+        yyjson_val *transition = yyjson_obj_iter_get_val(key);
+        const char *name = yyjson_get_str(key);
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.transitions.%s", name != NULL ? name : "<unknown>");
+        if (!yyjson_is_obj(transition))
+            return validation_error(ctx, path, "transition entries must be objects");
+        const char *done_signal = json_string(transition, "done_signal");
+        if (done_signal != NULL && !require_ref(ctx, &names->signals, "signal", done_signal, path))
+            return false;
     }
     return true;
 }
@@ -1019,7 +1253,9 @@ static bool warn_unused(validation_context *ctx, const name_table *declared, con
 static bool validate_details(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     return validate_input_bindings(ctx, root) && validate_components(ctx, root, names) &&
-           validate_cameras(ctx, root, names) && validate_logic(ctx, root, names) &&
+           validate_app_refs(ctx, root, names) && validate_cameras(ctx, root, names) && validate_ui(ctx, root, names) &&
+           validate_render_effects(ctx, root, names) && validate_lights(ctx, root, names) &&
+           validate_transitions(ctx, root, names) && validate_logic(ctx, root, names) &&
            validate_adapters(ctx, root, names) &&
            warn_unused(ctx, &names->adapters, &names->used_adapters, "adapter") &&
            warn_unused(ctx, &names->scripts, &names->used_scripts, "script");
@@ -1040,6 +1276,7 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->actions);
     name_table_destroy(&names->timers);
     name_table_destroy(&names->cameras);
+    name_table_destroy(&names->fonts);
     name_table_destroy(&names->sensors);
     name_table_destroy(&names->used_adapters);
     name_table_destroy(&names->used_scripts);
