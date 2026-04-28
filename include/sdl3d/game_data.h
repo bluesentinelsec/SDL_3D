@@ -91,6 +91,17 @@ extern "C"
         float time;
     } sdl3d_game_data_render_eval;
 
+    /** @brief Horizontal UI alignment for authored text and generated menu items. */
+    typedef enum sdl3d_game_data_ui_align
+    {
+        /** @brief Anchor text at its left edge. */
+        SDL3D_GAME_DATA_UI_ALIGN_LEFT = 0,
+        /** @brief Anchor text at its center. */
+        SDL3D_GAME_DATA_UI_ALIGN_CENTER = 1,
+        /** @brief Anchor text at its right edge. */
+        SDL3D_GAME_DATA_UI_ALIGN_RIGHT = 2,
+    } sdl3d_game_data_ui_align;
+
     /** @brief Authored render primitive kind. */
     typedef enum sdl3d_game_data_render_primitive_type
     {
@@ -192,6 +203,8 @@ extern "C"
         bool normalized;
         /** @brief Whether the text should be horizontally centered by the caller. */
         bool centered;
+        /** @brief Horizontal alignment used by richer UI layouts. */
+        sdl3d_game_data_ui_align align;
         /** @brief Whether alpha should pulse while visible. */
         bool pulse_alpha;
         /** @brief Text color. */
@@ -204,6 +217,98 @@ extern "C"
      * Return false to stop iteration early.
      */
     typedef bool (*sdl3d_game_data_ui_text_fn)(void *userdata, const sdl3d_game_data_ui_text *text);
+
+    /**
+     * @brief Runtime descriptor for the active scene's primary menu.
+     *
+     * Menus are authored in scene JSON files and map input actions to a
+     * selected item. The runtime owns all string pointers.
+     */
+    typedef struct sdl3d_game_data_menu
+    {
+        /** @brief Stable menu name. */
+        const char *name;
+        /** @brief Input action that moves selection up, or -1. */
+        int up_action_id;
+        /** @brief Input action that moves selection down, or -1. */
+        int down_action_id;
+        /** @brief Input action that activates the selected item, or -1. */
+        int select_action_id;
+        /** @brief Currently selected zero-based item index. */
+        int selected_index;
+        /** @brief Number of selectable menu items. */
+        int item_count;
+    } sdl3d_game_data_menu;
+
+    /**
+     * @brief Runtime descriptor for one authored menu item.
+     *
+     * A menu item may request a scene change, request app quit, and/or emit a
+     * signal. Hosts can use these fields directly or translate them into a
+     * higher-level scene transition flow.
+     */
+    typedef struct sdl3d_game_data_menu_item
+    {
+        /** @brief Display label for the item. */
+        const char *label;
+        /** @brief Target scene name, or NULL when this item does not change scene. */
+        const char *scene;
+        /** @brief True when selecting this item requests application quit. */
+        bool quit;
+        /** @brief Signal emitted by this item, or -1 when not authored. */
+        int signal_id;
+    } sdl3d_game_data_menu_item;
+
+    /** @brief Authored input shortcut that requests a scene change. */
+    typedef struct sdl3d_game_data_scene_shortcut
+    {
+        /** @brief Input action id resolved from the authored action name, or -1. */
+        int action_id;
+        /** @brief Authored input action name. */
+        const char *action;
+        /** @brief Target scene name. */
+        const char *scene;
+    } sdl3d_game_data_scene_shortcut;
+
+    /** @brief Read-only descriptor for an authored particle emitter component. */
+    typedef struct sdl3d_game_data_particle_emitter
+    {
+        /** @brief Name of the entity that owns the emitter. */
+        const char *entity_name;
+        /** @brief Emitter configuration evaluated from authored data and actor position. */
+        sdl3d_particle_config config;
+        /** @brief Draw-time emissive color to apply around particle rendering. */
+        sdl3d_vec3 draw_emissive;
+    } sdl3d_game_data_particle_emitter;
+
+    /**
+     * @brief Callback for iterating active authored particle emitters.
+     *
+     * Return false to stop iteration early.
+     */
+    typedef bool (*sdl3d_game_data_particle_emitter_fn)(void *userdata,
+                                                        const sdl3d_game_data_particle_emitter *emitter);
+
+    /**
+     * @brief Persistent state bag shared across authored scene changes.
+     *
+     * Scene-transition payloads are transient and exist only while the target
+     * scene's enter signal is emitted. This runtime-owned bag is the durable
+     * handoff point for data that should survive after the transition, such as
+     * selected character, level index, difficulty, or inventory snapshot ids.
+     *
+     * The returned pointer is owned by @p runtime and remains valid until the
+     * runtime is destroyed. Callers may mutate it with the normal
+     * sdl3d_properties setters.
+     */
+    sdl3d_properties *sdl3d_game_data_mutable_scene_state(sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Read the persistent scene-state bag.
+     *
+     * @see sdl3d_game_data_mutable_scene_state
+     */
+    const sdl3d_properties *sdl3d_game_data_scene_state(const sdl3d_game_data_runtime *runtime);
 
     /** @brief Authored game data diagnostic severity. */
     typedef enum sdl3d_game_data_diagnostic_severity
@@ -479,6 +584,17 @@ extern "C"
     bool sdl3d_game_data_get_world_light(const sdl3d_game_data_runtime *runtime, int index, sdl3d_light *out_light);
 
     /**
+     * @brief Read an authored world light with generic visual effects evaluated.
+     *
+     * Supported light effects include `pulse` and `flash`, allowing data to
+     * drive color blends, intensity changes, and range changes over time or
+     * from actor properties. Passing NULL for @p eval uses a zeroed evaluation
+     * context.
+     */
+    bool sdl3d_game_data_get_world_light_evaluated(const sdl3d_game_data_runtime *runtime, int index,
+                                                   const sdl3d_game_data_render_eval *eval, sdl3d_light *out_light);
+
+    /**
      * @brief Iterate active authored render primitive components.
      *
      * Components currently supported by this iterator are `render.cube` and
@@ -519,6 +635,15 @@ extern "C"
                                                             const char *entity_name, sdl3d_vec3 *out_rgb);
 
     /**
+     * @brief Iterate active authored particle emitter components.
+     *
+     * Iteration skips inactive actors and entities not included by the active
+     * scene. The descriptor's config is ready for sdl3d_create_particle_emitter().
+     */
+    bool sdl3d_game_data_for_each_particle_emitter(const sdl3d_game_data_runtime *runtime,
+                                                   sdl3d_game_data_particle_emitter_fn callback, void *userdata);
+
+    /**
      * @brief Read authored render setup.
      *
      * Missing fields produce conservative defaults: black clear color, lighting
@@ -534,6 +659,140 @@ extern "C"
      */
     bool sdl3d_game_data_get_transition(const sdl3d_game_data_runtime *runtime, const char *name,
                                         sdl3d_game_data_transition_desc *out_transition);
+
+    /**
+     * @brief Return the active scene name.
+     *
+     * Scene names come from the top-level `scenes.initial` field and referenced
+     * scene files. Returns NULL when the game does not author scenes.
+     */
+    const char *sdl3d_game_data_active_scene(const sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Return the number of authored scenes loaded by the runtime.
+     *
+     * Games without a `scenes.files` manifest return 0. Scene order matches
+     * the authored manifest order and is stable for the lifetime of the
+     * runtime.
+     */
+    int sdl3d_game_data_scene_count(const sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Return an authored scene name by manifest index.
+     *
+     * @param index Zero-based scene index in the loaded manifest.
+     * @return Runtime-owned scene name, or NULL when @p index is out of range.
+     */
+    const char *sdl3d_game_data_scene_name_at(const sdl3d_game_data_runtime *runtime, int index);
+
+    /**
+     * @brief Switch to an authored scene by name.
+     *
+     * The new scene's `on_enter_signal`, when present, is emitted after the
+     * active scene changes. The enter payload always includes `from_scene` and
+     * `to_scene` string keys. Returns false when @p scene_name is unknown.
+     */
+    bool sdl3d_game_data_set_active_scene(sdl3d_game_data_runtime *runtime, const char *scene_name);
+
+    /**
+     * @brief Switch to an authored scene and pass state to its enter signal.
+     *
+     * @p payload is copied into a transient enter payload and forwarded to the
+     * target scene's `on_enter_signal`; the caller keeps ownership of @p
+     * payload. The runtime also writes `from_scene` and `to_scene`, overriding
+     * same-named keys in @p payload so every scene-enter observer receives
+     * reliable transition context.
+     *
+     * Use sdl3d_game_data_mutable_scene_state() for data that must persist
+     * after enter-signal processing.
+     */
+    bool sdl3d_game_data_set_active_scene_with_payload(sdl3d_game_data_runtime *runtime, const char *scene_name,
+                                                       const sdl3d_properties *payload);
+
+    /**
+     * @brief Return whether the active scene should advance gameplay systems.
+     *
+     * Scenes default to updating gameplay when they do not specify
+     * `updates_game`. Games without authored scenes return true.
+     */
+    bool sdl3d_game_data_active_scene_updates_game(const sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Return whether the active scene should render the authored world.
+     *
+     * Scenes default to rendering the world when they do not specify
+     * `renders_world`. Games without authored scenes return true.
+     */
+    bool sdl3d_game_data_active_scene_renders_world(const sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Return whether an entity belongs to the active scene.
+     *
+     * Scenes that omit an `entities` list include all loaded entities for
+     * backward compatibility. Scenes with an empty list include no entities.
+     */
+    bool sdl3d_game_data_active_scene_has_entity(const sdl3d_game_data_runtime *runtime, const char *entity_name);
+
+    /**
+     * @brief Read the transition descriptor attached to a scene phase.
+     *
+     * @p phase is commonly `enter` or `exit` and is looked up under the scene's
+     * `transitions` object. Returns false when the scene or phase is missing.
+     */
+    bool sdl3d_game_data_get_scene_transition(const sdl3d_game_data_runtime *runtime, const char *scene_name,
+                                              const char *phase, sdl3d_game_data_transition_desc *out_transition);
+
+    /**
+     * @brief Read the active scene's primary menu, if any.
+     *
+     * The first menu in the active scene is considered primary. Returns false
+     * when the scene has no menus.
+     */
+    bool sdl3d_game_data_get_active_menu(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_menu *out_menu);
+
+    /**
+     * @brief Move a menu selection by @p delta with wrap-around.
+     *
+     * Positive values move down, negative values move up. Returns false when
+     * the menu is unknown or contains no items.
+     */
+    bool sdl3d_game_data_menu_move(sdl3d_game_data_runtime *runtime, const char *menu_name, int delta);
+
+    /**
+     * @brief Read one item from an authored menu.
+     *
+     * @p index is zero based. The returned strings remain owned by the runtime.
+     */
+    bool sdl3d_game_data_get_menu_item(const sdl3d_game_data_runtime *runtime, const char *menu_name, int index,
+                                       sdl3d_game_data_menu_item *out_item);
+
+    /**
+     * @brief Return the number of scene shortcuts authored under `app.scene_shortcuts`.
+     */
+    int sdl3d_game_data_scene_shortcut_count(const sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Read an authored scene shortcut by index.
+     *
+     * Invalid or unresolved shortcut entries still return their authored names,
+     * but use action id -1. This lets validators and hosts report useful
+     * diagnostics without failing at runtime.
+     */
+    bool sdl3d_game_data_scene_shortcut_at(const sdl3d_game_data_runtime *runtime, int index,
+                                           sdl3d_game_data_scene_shortcut *out_shortcut);
+
+    /**
+     * @brief Return whether the active menu has no held navigation actions.
+     *
+     * This lets hosts arm menu input after scene entry. Waiting for idle input
+     * prevents a key or gamepad button held while launching or switching scenes
+     * from immediately activating the new scene's default menu item.
+     *
+     * Scenes without an active menu return true. A NULL input manager returns
+     * false when a menu exists because the runtime cannot prove the menu is idle.
+     */
+    bool sdl3d_game_data_active_menu_input_is_idle(const sdl3d_game_data_runtime *runtime,
+                                                   const sdl3d_input_manager *input);
 
     /** @brief Iterate authored UI text descriptors. */
     bool sdl3d_game_data_for_each_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_ui_text_fn callback,
@@ -558,6 +817,16 @@ extern "C"
      */
     bool sdl3d_game_data_format_ui_text(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_text *text,
                                         const sdl3d_game_data_ui_metrics *metrics, char *buffer, size_t buffer_size);
+
+    /**
+     * @brief Advance data-authored property animation components.
+     *
+     * Currently supports `property.decay` components, which move a numeric
+     * actor property toward a target value at an authored rate. This is useful
+     * for reusable presentation state such as flashes, glow weights, and other
+     * transient values without per-game C code.
+     */
+    bool sdl3d_game_data_update_property_effects(sdl3d_game_data_runtime *runtime, float dt);
 
     /**
      * @brief Return the dt currently being processed by sdl3d_game_data_update().

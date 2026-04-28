@@ -1,5 +1,8 @@
 set(SDL3D_PONG_ASSET_FILES
     pong.game.json
+    scenes/options.scene.json
+    scenes/play.scene.json
+    scenes/title.scene.json
     scripts/pong.lua)
 
 sdl3d_add_embedded_asset_pack(pong_assets

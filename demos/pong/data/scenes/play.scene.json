@@ -1,0 +1,148 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "renders_world": true,
+  "camera": "camera.overhead",
+  "on_enter_signal": "signal.game.start",
+  "entities": [
+    "entity.field.base",
+    "entity.field.border.top",
+    "entity.field.border.bottom",
+    "entity.field.border.left",
+    "entity.field.border.right",
+    "entity.field.center_ticks",
+    "entity.paddle.player",
+    "entity.paddle.cpu",
+    "entity.ball",
+    "entity.score.player",
+    "entity.score.cpu",
+    "entity.match",
+    "entity.presentation",
+    "entity.effect.ambient_particles"
+  ],
+  "transitions": {
+    "enter": "scene_in",
+    "exit": "scene_out"
+  },
+  "ui": {
+    "text": [
+      {
+        "name": "ui.debug.frame_counter",
+        "font": "font.hud",
+        "format": "FPS %.0f  Frame %llu",
+        "bindings": [
+          { "type": "metric", "metric": "fps" },
+          { "type": "metric", "metric": "frame" }
+        ],
+        "x": 18.0,
+        "y": 16.0,
+        "color": [170, 190, 220, 230]
+      },
+      {
+        "name": "ui.camera.ball_label",
+        "font": "font.hud",
+        "visible_if": { "type": "camera.active", "camera": "camera.ball_chase" },
+        "text": "BALL CAM",
+        "x": 18.0,
+        "y": 56.0,
+        "color": [255, 222, 140, 235]
+      },
+      {
+        "name": "ui.score",
+        "font": "font.hud",
+        "format": "%02d   %02d",
+        "bindings": [
+          { "type": "property", "entity": "entity.score.player", "key": "value" },
+          { "type": "property", "entity": "entity.score.cpu", "key": "value" }
+        ],
+        "x": 0.5,
+        "y": 22.0,
+        "normalized": true,
+        "centered": true,
+        "color": [235, 242, 255, 255]
+      },
+      {
+        "name": "ui.match.player_won",
+        "font": "font.hud",
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
+            { "type": "property.compare", "target": "entity.match", "key": "winner", "op": "==", "value": "player" }
+          ]
+        },
+        "text": "You win!",
+        "x": 0.5,
+        "y": 0.40,
+        "normalized": true,
+        "centered": true,
+        "color": [255, 255, 255, 255]
+      },
+      {
+        "name": "ui.match.cpu_won",
+        "font": "font.hud",
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
+            { "type": "property.compare", "target": "entity.match", "key": "winner", "op": "==", "value": "cpu" }
+          ]
+        },
+        "text": "You lose!",
+        "x": 0.5,
+        "y": 0.40,
+        "normalized": true,
+        "centered": true,
+        "color": [255, 255, 255, 255]
+      },
+      {
+        "name": "ui.match.restart",
+        "font": "font.hud",
+        "visible_if": { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
+        "text": "Press enter to play again",
+        "x": 0.5,
+        "y": 0.49,
+        "normalized": true,
+        "centered": true,
+        "color": [200, 220, 255, 235]
+      },
+      {
+        "name": "ui.pause",
+        "font": "font.hud",
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "app.paused", "equals": true },
+            { "type": "not", "condition": { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true } }
+          ]
+        },
+        "text": "PAUSED",
+        "x": 0.5,
+        "y": 0.44,
+        "normalized": true,
+        "centered": true,
+        "pulse_alpha": true,
+        "color": [245, 248, 255, 255]
+      },
+      {
+        "name": "ui.ready",
+        "font": "font.hud",
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "app.paused", "equals": false },
+            { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": false },
+            { "type": "property.compare", "target": "entity.ball", "key": "active_motion", "op": "==", "value": false }
+          ]
+        },
+        "text": "Get ready",
+        "x": 0.5,
+        "y": 0.44,
+        "normalized": true,
+        "centered": true,
+        "color": [210, 225, 255, 190]
+      }
+    ]
+  }
+}

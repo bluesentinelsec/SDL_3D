@@ -17,6 +17,7 @@
 #include "sdl3d/effects.h"
 #include "sdl3d/game.h"
 #include "sdl3d/game_data.h"
+#include "sdl3d/game_presentation.h"
 #include "sdl3d/image.h"
 #include "sdl3d/input.h"
 #include "sdl3d/lighting.h"

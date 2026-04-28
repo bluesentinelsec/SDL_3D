@@ -86,7 +86,11 @@ The optional `app` object lets a managed-loop game declare startup settings befo
       "action": "action.exit",
       "transition": "quit",
       "quit_signal": "signal.app.quit_fade_done"
-    }
+    },
+    "scene_shortcuts": [
+      { "action": "action.scene.title", "scene": "scene.title" },
+      { "action": "action.scene.play", "scene": "scene.play" }
+    ]
   }
 }
 ```
@@ -97,7 +101,8 @@ runtime ownership of the renderer. Games read these descriptors and decide how t
 `start_signal` lets data kick off initial timers or scripted startup logic after the host has loaded the runtime.
 `pause_action` and `startup_transition` let the managed-loop host avoid hardcoded action/transition names.
 `app.quit` lets data choose which input action requests quit, which transition plays, and which signal completes
-the quit. The host still owns pause state and process shutdown.
+the quit. `app.scene_shortcuts` maps authored input actions to scene names, which is useful for development
+hotkeys, debug level jumps, and simple game flows. The host still owns process shutdown.
 
 Font assets can be authored under `assets.fonts`:
 
@@ -133,6 +138,105 @@ Supported UI binding sources are `metric` (`fps`, `frame`, `paused`) and `proper
 Supported UI conditions include `always`, `app.paused`, `camera.active`, `property.compare`,
 `property.bool`, `all`, `any`, and `not`.
 
+Scene UI can also declare data-driven menu presenters. A presenter turns a
+scene `menus[]` controller into a visible stack with authored alignment, colors,
+selected styling, and cursor styling:
+
+```json
+{
+  "ui": {
+    "menus": [
+      {
+        "name": "ui.title.menu",
+        "menu": "menu.title",
+        "font": "font.hud",
+        "x": 0.5,
+        "y": 0.48,
+        "gap": 0.09,
+        "normalized": true,
+        "align": "center",
+        "color": [225, 236, 255, 245],
+        "selected_color": [255, 245, 208, 255],
+        "cursor": { "text": ">", "offset_x": -0.12, "color": [255, 222, 140, 255] }
+      }
+    ]
+  }
+}
+```
+
+This keeps title/options/menu screens data-authored: the input menu defines
+choices and actions, while the UI presenter defines how the choices are laid out.
+
+## Scenes
+
+Games can split authored content across many scene files. The top-level game
+file declares the initial scene and the scene files to load:
+
+```json
+{
+  "scenes": {
+    "initial": "scene.title",
+    "files": [
+      "scenes/title.scene.json",
+      "scenes/level_001.scene.json"
+    ]
+  }
+}
+```
+
+Each scene file is a JSON object with schema `sdl3d.scene.v0`. Scene files may
+declare whether gameplay updates, whether the authored world renders, which
+entities belong to the scene, which camera becomes active on entry, scene
+enter/exit transitions, menus, and scene-local UI:
+
+```json
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.level_001",
+  "updates_game": true,
+  "renders_world": true,
+  "camera": "camera.main",
+  "on_enter_signal": "signal.level.enter",
+  "entities": ["entity.player", "entity.goal"],
+  "transitions": { "enter": "scene_in", "exit": "scene_out" }
+}
+```
+
+Scenes that omit `entities` include all top-level entities; scenes with an empty
+`entities` array include none. This keeps small demos terse while letting large
+games isolate title screens, menus, levels, dungeons, and cutscenes.
+
+When a scene is activated, the runtime emits the scene's `on_enter_signal` if
+one is authored. The enter payload always includes `from_scene` and `to_scene`.
+Callers may pass additional transient payload properties with
+`sdl3d_game_data_set_active_scene_with_payload()`.
+
+For state that must survive after a transition, use the runtime scene-state
+property bag exposed by `sdl3d_game_data_mutable_scene_state()`. Lua adapters
+can access the same persistent bag through `ctx:state_get(key, fallback)` and
+`ctx:state_set(key, value)`.
+
+The optional `game_presentation` helper API can run common app and scene flow
+directly from data. `sdl3d_game_data_app_flow_update()` consumes authored quit,
+pause, menu, and scene-shortcut actions, while `sdl3d_game_data_scene_flow_request()`
+starts the active scene's authored `exit` transition, switches scenes when the
+transition finishes, then starts the target scene's authored `enter` transition.
+Hosts that need custom loading screens or streaming can still orchestrate scene
+changes themselves.
+
+The same helper module can draw authored `render.cube`, `render.sphere`, UI
+text descriptors, and active `particles.emitter` components for the active
+scene. `sdl3d_game_data_draw_frame()` applies authored render settings, lights,
+camera, world primitives, particles, UI text, and transitions in the usual order,
+with hooks for custom game rendering. Lower-level helpers remain available for
+hosts that need a custom frame graph.
+
+Authored menus can also be updated independently through
+`sdl3d_game_data_update_menus()`. The helper handles input arming, movement, and
+selected-item resolution, then returns a data command for the host or app-flow
+controller to apply. This keeps title screens, options screens, and simple scene
+menus from growing bespoke per-game input code.
+
 ## Entities
 
 Entities are the data form of actor registry entries plus optional component ownership.
@@ -163,8 +267,9 @@ The first generic presentation components are deliberately simple descriptors:
 - `render.sphere` describes a sphere with `radius`, `rings`, `slices`, `color`, and `emissive`.
 - `particles.emitter` describes an emitter config that can be passed to the particle system.
 
-The game data runtime exposes these as read-only descriptors. It does not issue draw calls; each game or
-renderer decides how to render, sort, tint, or override them.
+The game data runtime exposes these as read-only descriptors. It does not issue draw calls itself; each game or
+renderer decides how to render, sort, tint, or override them. The optional `game_presentation` helpers provide
+a default implementation for simple demos and tools.
 
 Render primitives may also author generic visual effects:
 
@@ -192,6 +297,26 @@ Supported primitive effects are:
 - `emissive`: adds a constant emissive color.
 
 Particle emitters may include `draw_emissive` for host renderers that draw particles through emissive lighting.
+
+World lights may also declare `effects`. `pulse` effects can blend color and
+add intensity/range over time; `flash` effects read a float actor property and
+use it as the effect weight. This lets data tune glows, brightness, color shifts,
+and transient flashes without host code.
+
+```json
+{
+  "name": "light.ball",
+  "type": "point",
+  "target_entity": "entity.ball",
+  "color": [1.0, 0.86, 0.34],
+  "intensity": 3.1,
+  "range": 5.0,
+  "effects": [
+    { "type": "pulse", "rate": 9.0, "color": [1.0, 0.96, 0.54], "intensity_add": 0.9 },
+    { "type": "flash", "source": "entity.presentation", "property": "paddle_flash", "intensity_add": 1.5 }
+  ]
+}
+```
 
 ### Cameras
 
@@ -272,6 +397,30 @@ Actions run in array order. Conditions may be embedded per action.
 }
 ```
 
+Presentation state that changes continuously can be expressed with components
+instead of host code. `property.decay` moves an integer or float actor property
+toward a target value at an authored rate:
+
+```json
+{
+  "name": "entity.presentation",
+  "properties": {
+    "border_flash": { "type": "float", "value": 0.0 },
+    "border_flash_decay": { "type": "float", "value": 2.8 }
+  },
+  "components": [
+    {
+      "type": "property.decay",
+      "property": "border_flash",
+      "rate_property": "border_flash_decay",
+      "target": 0.0,
+      "min": 0.0,
+      "max": 1.0
+    }
+  ]
+}
+```
+
 ### Conditions
 
 Conditions should be generic comparisons over properties, signal payloads, tags, and entity active state.
@@ -335,7 +484,8 @@ Lua adapters receive `(target, payload, ctx)`:
 - `target` is an actor wrapper for the authored action/component target, or `nil`.
 - `payload` is a table copied from the signal payload or component payload.
 - `ctx` provides adapter context: `ctx.adapter`, `ctx.dt`, `ctx:actor(name)`,
-  `ctx:actor_with_tags(...)`, `ctx:random()`, and `ctx:log(message)`.
+  `ctx:actor_with_tags(...)`, `ctx:state_get(key, fallback)`,
+  `ctx:state_set(key, value)`, `ctx:random()`, and `ctx:log(message)`.
 
 The preferred Lua API is intentionally game-script oriented. Scripts can check `sdl3d.api`, currently `sdl3d.lua.v1`, when they need to guard version-specific behavior:
 
