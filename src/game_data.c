@@ -2250,6 +2250,61 @@ bool sdl3d_game_data_get_active_splash(const sdl3d_game_data_runtime *runtime, s
     return out_splash->next_scene != NULL;
 }
 
+static yyjson_val *active_skip_policy_json(const sdl3d_game_data_runtime *runtime)
+{
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    yyjson_val *root = scene != NULL ? scene->root : NULL;
+    yyjson_val *policy = obj_get(root, "skip_policy");
+    if (yyjson_is_obj(policy))
+        return policy;
+
+    yyjson_val *timeline = obj_get(root, "timeline");
+    policy = obj_get(timeline, "skip_policy");
+    return yyjson_is_obj(policy) ? policy : NULL;
+}
+
+bool sdl3d_game_data_get_active_skip_policy(const sdl3d_game_data_runtime *runtime,
+                                            sdl3d_game_data_skip_policy *out_policy)
+{
+    if (out_policy != NULL)
+    {
+        SDL_zero(*out_policy);
+        out_policy->enabled = false;
+        out_policy->input = SDL3D_GAME_DATA_SKIP_INPUT_ANY;
+        out_policy->action_id = -1;
+        out_policy->preserve_exit_transition = true;
+        out_policy->consume_input = true;
+    }
+    if (runtime == NULL || out_policy == NULL)
+        return false;
+
+    yyjson_val *policy = active_skip_policy_json(runtime);
+    if (!yyjson_is_obj(policy))
+        return false;
+
+    out_policy->enabled = json_bool(policy, "enabled", true);
+    if (!out_policy->enabled)
+        return false;
+
+    const char *input = json_string(policy, "input", NULL);
+    out_policy->action = json_string(policy, "action", NULL);
+    if (input == NULL)
+        out_policy->input =
+            out_policy->action != NULL ? SDL3D_GAME_DATA_SKIP_INPUT_ACTION : SDL3D_GAME_DATA_SKIP_INPUT_ANY;
+    else if (SDL_strcmp(input, "any") == 0 || SDL_strcmp(input, "any_input") == 0)
+        out_policy->input = SDL3D_GAME_DATA_SKIP_INPUT_ANY;
+    else if (SDL_strcmp(input, "action") == 0)
+        out_policy->input = SDL3D_GAME_DATA_SKIP_INPUT_ACTION;
+    else
+        out_policy->input = SDL3D_GAME_DATA_SKIP_INPUT_DISABLED;
+
+    out_policy->action_id = sdl3d_game_data_find_action(runtime, out_policy->action);
+    out_policy->scene = json_string(policy, "scene", json_string(policy, "target_scene", NULL));
+    out_policy->preserve_exit_transition = json_bool(policy, "preserve_exit_transition", true);
+    out_policy->consume_input = json_bool(policy, "consume_input", true);
+    return out_policy->input != SDL3D_GAME_DATA_SKIP_INPUT_DISABLED;
+}
+
 static yyjson_val *active_timeline_events(const sdl3d_game_data_runtime *runtime)
 {
     const scene_entry *scene = active_scene_entry_const(runtime);

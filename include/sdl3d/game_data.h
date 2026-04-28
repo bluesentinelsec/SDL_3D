@@ -285,6 +285,43 @@ extern "C"
         bool skip_on_input;
     } sdl3d_game_data_splash;
 
+    /** @brief Input mode used by a data-authored scene skip policy. */
+    typedef enum sdl3d_game_data_skip_input
+    {
+        /** @brief The active scene cannot be skipped by input. */
+        SDL3D_GAME_DATA_SKIP_INPUT_DISABLED = 0,
+        /** @brief Any key, pointer, or gamepad press skips the scene. */
+        SDL3D_GAME_DATA_SKIP_INPUT_ANY = 1,
+        /** @brief A specific authored input action skips the scene. */
+        SDL3D_GAME_DATA_SKIP_INPUT_ACTION = 2,
+    } sdl3d_game_data_skip_input;
+
+    /**
+     * @brief Data-authored input policy for skipping the active scene.
+     *
+     * Skip policies are generic scene-flow primitives. They are appropriate
+     * for splash screens, cutscenes, attract modes, and any scene whose author
+     * wants controlled early advancement without hard-coding scene-specific
+     * input handling.
+     */
+    typedef struct sdl3d_game_data_skip_policy
+    {
+        /** @brief True when this policy should be evaluated. */
+        bool enabled;
+        /** @brief Input source that can trigger the skip. */
+        sdl3d_game_data_skip_input input;
+        /** @brief Authored input action name when @p input is SDL3D_GAME_DATA_SKIP_INPUT_ACTION. */
+        const char *action;
+        /** @brief Resolved action id for @p action, or -1. */
+        int action_id;
+        /** @brief Target scene requested when the policy triggers. */
+        const char *scene;
+        /** @brief True to route the request through the active scene's exit transition. */
+        bool preserve_exit_transition;
+        /** @brief True to suppress other app/menu controls for the triggering frame. */
+        bool consume_input;
+    } sdl3d_game_data_skip_policy;
+
     /**
      * @brief Runtime state for a data-authored active-scene timeline.
      *
@@ -1045,6 +1082,17 @@ extern "C"
      * scene and how to apply transitions.
      */
     bool sdl3d_game_data_get_active_splash(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_splash *out_splash);
+
+    /**
+     * @brief Read the active scene's authored skip policy.
+     *
+     * The runtime first checks `scene.skip_policy`, then
+     * `scene.timeline.skip_policy`. Returns false when no enabled policy is
+     * authored for the active scene. Missing fields use conservative defaults:
+     * any input, transition preservation enabled, and input consumption enabled.
+     */
+    bool sdl3d_game_data_get_active_skip_policy(const sdl3d_game_data_runtime *runtime,
+                                                sdl3d_game_data_skip_policy *out_policy);
 
     /**
      * @brief Initialize reusable timeline state.

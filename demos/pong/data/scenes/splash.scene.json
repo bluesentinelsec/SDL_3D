@@ -7,10 +7,21 @@
   "input": {
     "actions": []
   },
-  "splash": {
-    "next_scene": "scene.title",
-    "hold_seconds": 1.0,
-    "skip_on_input": true
+  "timeline": {
+    "autoplay": true,
+    "skip_policy": {
+      "enabled": true,
+      "input": "any",
+      "scene": "scene.title",
+      "preserve_exit_transition": true,
+      "consume_input": true
+    },
+    "events": [
+      {
+        "time": 1.7,
+        "action": { "type": "scene.request", "scene": "scene.title" }
+      }
+    ]
   },
   "transitions": {
     "enter": "scene_in",
