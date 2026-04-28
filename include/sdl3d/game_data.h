@@ -1217,6 +1217,21 @@ extern "C"
                                          float dt, sdl3d_game_data_timeline_update_result *out_result);
 
     /**
+     * @brief Advance data-authored runtime animations.
+     *
+     * Animations are started by generic actions such as `ui.animate` and
+     * `property.animate`. This function advances active tweens, applies eased
+     * values to UI runtime state or actor properties, emits completion signals
+     * for one-shot animations, and clears scene-scoped animation state when the
+     * active scene changes.
+     *
+     * @param runtime Runtime created by sdl3d_game_data_load_file().
+     * @param dt Delta time in seconds.
+     * @return true when active animations were advanced successfully.
+     */
+    bool sdl3d_game_data_update_animations(sdl3d_game_data_runtime *runtime, float dt);
+
+    /**
      * @brief Resolve UI text content from data-authored bindings.
      *
      * Literal `text` entries are copied directly. Entries with `bindings`

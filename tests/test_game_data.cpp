@@ -390,6 +390,140 @@ void write_skip_policy_json(const std::filesystem::path &dir)
 })json");
 }
 
+void write_animation_json(const std::filesystem::path &dir)
+{
+    write_text(dir / "animation.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Animation", "id": "test.animation", "version": "0.1.0" },
+  "entities": [
+    {
+      "name": "entity.box",
+      "active": true,
+      "properties": {
+        "x": { "type": "float", "value": 0.0 },
+        "ease": { "type": "float", "value": 0.0 },
+        "loop": { "type": "float", "value": 0.0 },
+        "ping": { "type": "float", "value": 0.0 }
+      }
+    }
+  ],
+  "signals": ["signal.property.done", "signal.ui.done"],
+  "scenes": {
+    "initial": "scene.intro",
+    "files": [
+      "scenes/intro.scene.json",
+      "scenes/title.scene.json"
+    ]
+  }
+})json");
+    write_text(dir / "scenes" / "intro.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.intro",
+  "updates_game": false,
+  "renders_world": false,
+  "entities": ["entity.box"],
+  "ui": {
+    "text": [
+      {
+        "name": "ui.logo",
+        "text": "LOGO",
+        "x": 0.5,
+        "y": 0.5,
+        "normalized": true,
+        "align": "center",
+        "color": [255, 255, 255, 255]
+      }
+    ]
+  },
+  "timeline": {
+    "autoplay": true,
+    "events": [
+      {
+        "time": 0.0,
+        "action": {
+          "type": "property.animate",
+          "target": "entity.box",
+          "key": "x",
+          "from": 0.0,
+          "to": 10.0,
+          "duration": 1.0,
+          "done_signal": "signal.property.done"
+        }
+      },
+      {
+        "time": 0.0,
+        "action": {
+          "type": "property.animate",
+          "target": "entity.box",
+          "key": "ease",
+          "from": 0.0,
+          "to": 1.0,
+          "duration": 1.0,
+          "easing": "out_quad"
+        }
+      },
+      {
+        "time": 0.0,
+        "action": {
+          "type": "property.animate",
+          "target": "entity.box",
+          "key": "loop",
+          "from": 0.0,
+          "to": 1.0,
+          "duration": 1.0,
+          "repeat": "loop"
+        }
+      },
+      {
+        "time": 0.0,
+        "action": {
+          "type": "property.animate",
+          "target": "entity.box",
+          "key": "ping",
+          "from": 0.0,
+          "to": 1.0,
+          "duration": 1.0,
+          "repeat": "ping_pong"
+        }
+      },
+      {
+        "time": 0.0,
+        "action": {
+          "type": "ui.animate",
+          "target": "ui.logo",
+          "property": "alpha",
+          "from": 0.0,
+          "to": 1.0,
+          "duration": 1.0,
+          "done_signal": "signal.ui.done"
+        }
+      },
+      {
+        "time": 0.0,
+        "action": {
+          "type": "ui.animate",
+          "target": "ui.logo",
+          "property": "scale",
+          "from": 1.0,
+          "to": 2.0,
+          "duration": 1.0
+        }
+      }
+    ]
+  }
+})json");
+    write_text(dir / "scenes" / "title.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.title",
+  "updates_game": false,
+  "renders_world": false,
+  "entities": []
+})json");
+}
+
 void write_hot_reload_script(const std::filesystem::path &dir, int value)
 {
     const std::string script = std::string("local rules = {}\n"
@@ -1440,6 +1574,100 @@ TEST(GameDataRuntime, AppFlowAppliesAuthoredSkipPolicyWithoutMenuBleedThrough)
 
     ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.11f));
     EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.play");
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, AppFlowRunsAuthoredTweenActions)
+{
+    const std::filesystem::path dir = unique_test_dir("animation");
+    write_animation_json(dir);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "animation.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    const int property_done = sdl3d_game_data_find_signal(runtime, "signal.property.done");
+    const int ui_done = sdl3d_game_data_find_signal(runtime, "signal.ui.done");
+    ASSERT_GE(property_done, 0);
+    ASSERT_GE(ui_done, 0);
+    SignalCapture property_capture{};
+    SignalCapture ui_capture{};
+    ASSERT_NE(sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(session), property_done, count_signal,
+                                   &property_capture),
+              0);
+    ASSERT_NE(sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(session), ui_done, count_signal, &ui_capture), 0);
+
+    sdl3d_game_context ctx{};
+    ctx.session = session;
+    sdl3d_game_data_app_flow flow{};
+    sdl3d_game_data_app_flow_init(&flow);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+
+    sdl3d_registered_actor *box = sdl3d_game_data_find_actor(runtime, "entity.box");
+    ASSERT_NE(box, nullptr);
+
+    ASSERT_TRUE(sdl3d_game_data_update_animations(runtime, 0.5f));
+    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "x", -1.0f), 5.0f, 0.0001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "ease", -1.0f), 0.75f, 0.0001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "loop", -1.0f), 0.5f, 0.0001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "ping", -1.0f), 0.5f, 0.0001f);
+    EXPECT_EQ(property_capture.calls, 0);
+    EXPECT_EQ(ui_capture.calls, 0);
+
+    sdl3d_game_data_ui_text logo{};
+    bool saw_logo = false;
+    auto find_logo = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        auto *args = static_cast<std::pair<sdl3d_game_data_ui_text *, bool *> *>(userdata);
+        if (text->name != nullptr && std::string(text->name) == "ui.logo")
+        {
+            *args->first = *text;
+            *args->second = true;
+            return false;
+        }
+        return true;
+    };
+    std::pair<sdl3d_game_data_ui_text *, bool *> logo_args{&logo, &saw_logo};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_logo, &logo_args));
+    ASSERT_TRUE(saw_logo);
+
+    sdl3d_game_data_ui_text resolved_logo{};
+    bool logo_visible = false;
+    ASSERT_TRUE(sdl3d_game_data_resolve_ui_text(runtime, &logo, nullptr, &resolved_logo, &logo_visible));
+    EXPECT_TRUE(logo_visible);
+    EXPECT_EQ(resolved_logo.color.a, 128);
+    EXPECT_NEAR(resolved_logo.scale, 1.5f, 0.0001f);
+
+    ASSERT_TRUE(sdl3d_game_data_update_animations(runtime, 0.5f));
+    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "x", -1.0f), 10.0f, 0.0001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "ease", -1.0f), 1.0f, 0.0001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "loop", -1.0f), 0.0f, 0.0001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "ping", -1.0f), 1.0f, 0.0001f);
+    EXPECT_EQ(property_capture.calls, 1);
+    EXPECT_EQ(ui_capture.calls, 1);
+
+    ASSERT_TRUE(sdl3d_game_data_resolve_ui_text(runtime, &logo, nullptr, &resolved_logo, &logo_visible));
+    EXPECT_TRUE(logo_visible);
+    EXPECT_EQ(resolved_logo.color.a, 255);
+    EXPECT_NEAR(resolved_logo.scale, 2.0f, 0.0001f);
+
+    ASSERT_TRUE(sdl3d_game_data_update_animations(runtime, 0.25f));
+    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "loop", -1.0f), 0.25f, 0.0001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "ping", -1.0f), 0.75f, 0.0001f);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
+    ASSERT_TRUE(sdl3d_game_data_update_animations(runtime, 1.0f));
+    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "loop", -1.0f), 0.25f, 0.0001f);
+    sdl3d_game_data_ui_state logo_state{};
+    EXPECT_FALSE(sdl3d_game_data_get_ui_state(runtime, "ui.logo", &logo_state));
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);

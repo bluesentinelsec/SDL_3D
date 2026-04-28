@@ -760,6 +760,8 @@ bool sdl3d_game_data_update_frame(sdl3d_game_data_frame_state *state, const sdl3
         state->time += desc->dt;
         if (!sdl3d_game_data_update_presentation_clocks(runtime, desc->dt, ctx->paused, pause_entered))
             return false;
+        if (!sdl3d_game_data_update_animations(runtime, desc->dt))
+            return false;
         state->ui_pulse_phase = sdl3d_game_data_ui_pulse_phase(runtime, state->ui_pulse_phase);
     }
     if (sdl3d_game_data_active_scene_update_phase(runtime, "property_effects", ctx->paused) &&
