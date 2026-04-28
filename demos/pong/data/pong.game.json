@@ -13,7 +13,15 @@
     "backend": "auto",
     "tick_rate": 0.008333333,
     "max_ticks_per_frame": 12,
-    "enable_audio": false
+    "enable_audio": false,
+    "start_signal": "signal.game.start",
+    "pause_action": "action.pause",
+    "startup_transition": "startup",
+    "quit": {
+      "action": "action.exit",
+      "transition": "quit",
+      "quit_signal": "signal.app.quit_fade_done"
+    }
   },
   "render": {
     "clear_color": [3, 4, 8, 255],
@@ -70,8 +78,11 @@
       {
         "name": "ui.debug.frame_counter",
         "font": "font.hud",
-        "source": "debug.fps_frame",
         "format": "FPS %.0f  Frame %llu",
+        "bindings": [
+          { "type": "metric", "metric": "fps" },
+          { "type": "metric", "metric": "frame" }
+        ],
         "x": 18.0,
         "y": 16.0,
         "color": [170, 190, 220, 230]
@@ -79,7 +90,7 @@
       {
         "name": "ui.camera.ball_label",
         "font": "font.hud",
-        "visible": "camera.ball_chase",
+        "visible_if": { "type": "camera.active", "camera": "camera.ball_chase" },
         "text": "BALL CAM",
         "x": 18.0,
         "y": 56.0,
@@ -88,8 +99,11 @@
       {
         "name": "ui.score",
         "font": "font.hud",
-        "source": "score.player_cpu",
         "format": "%02d   %02d",
+        "bindings": [
+          { "type": "property", "entity": "entity.score.player", "key": "value" },
+          { "type": "property", "entity": "entity.score.cpu", "key": "value" }
+        ],
         "x": 0.5,
         "y": 22.0,
         "normalized": true,
@@ -99,7 +113,13 @@
       {
         "name": "ui.match.player_won",
         "font": "font.hud",
-        "visible": "match.player_won",
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
+            { "type": "property.compare", "target": "entity.match", "key": "winner", "op": "==", "value": "player" }
+          ]
+        },
         "text": "You win!",
         "x": 0.5,
         "y": 0.40,
@@ -110,7 +130,13 @@
       {
         "name": "ui.match.cpu_won",
         "font": "font.hud",
-        "visible": "match.cpu_won",
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
+            { "type": "property.compare", "target": "entity.match", "key": "winner", "op": "==", "value": "cpu" }
+          ]
+        },
         "text": "You lose!",
         "x": 0.5,
         "y": 0.40,
@@ -121,7 +147,7 @@
       {
         "name": "ui.match.restart",
         "font": "font.hud",
-        "visible": "match.finished",
+        "visible_if": { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
         "text": "Press enter to play again",
         "x": 0.5,
         "y": 0.49,
@@ -132,7 +158,13 @@
       {
         "name": "ui.pause",
         "font": "font.hud",
-        "visible": "paused",
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "app.paused", "equals": true },
+            { "type": "not", "condition": { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true } }
+          ]
+        },
         "text": "PAUSED",
         "x": 0.5,
         "y": 0.44,
@@ -144,7 +176,14 @@
       {
         "name": "ui.ready",
         "font": "font.hud",
-        "visible": "round.waiting_to_serve",
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "app.paused", "equals": false },
+            { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": false },
+            { "type": "property.compare", "target": "entity.ball", "key": "active_motion", "op": "==", "value": false }
+          ]
+        },
         "text": "Get ready",
         "x": 0.5,
         "y": 0.44,
@@ -242,17 +281,16 @@
       },
       {
         "name": "camera.ball_chase",
-        "type": "adapter",
-        "adapter": "adapter.pong.ball_chase_camera",
+        "type": "chase",
         "target_entity": "entity.ball",
-        "properties": {
-          "chase_distance": 2.6,
-          "height": 1.35,
-          "lookahead": 4.4,
-          "fovy": 68.0,
-          "ball_z_offset": 0.22,
-          "target_z_offset": -0.05
-        },
+        "velocity_property": "velocity",
+        "chase_distance": 2.6,
+        "height": 1.57,
+        "lookahead": 4.4,
+        "fovy": 68.0,
+        "target_offset": [0.0, 0.0, 0.22],
+        "target_z_offset": -0.05,
+        "up": [0.0, 0.0, 1.0],
         "active": false
       }
     ],
@@ -308,7 +346,15 @@
       "tags": ["render", "field", "border"],
       "transform": { "position": [0.0, 5.12, 0.0] },
       "components": [
-        { "type": "render.cube", "size": [18.35, 0.12, 0.18], "color": [62, 72, 92, 255], "emissive": true }
+        {
+          "type": "render.cube",
+          "size": [18.35, 0.12, 0.18],
+          "color": [62, 72, 92, 255],
+          "emissive": true,
+          "effects": [
+            { "type": "flash", "source": "entity.presentation", "property": "border_flash", "color": [210, 235, 255, 255], "size_add": [0.06, 0.06, 0.0], "size_mode": "minor_axis", "emissive": [0.55, 0.70, 1.0] }
+          ]
+        }
       ]
     },
     {
@@ -317,7 +363,15 @@
       "tags": ["render", "field", "border"],
       "transform": { "position": [0.0, -5.12, 0.0] },
       "components": [
-        { "type": "render.cube", "size": [18.35, 0.12, 0.18], "color": [62, 72, 92, 255], "emissive": true }
+        {
+          "type": "render.cube",
+          "size": [18.35, 0.12, 0.18],
+          "color": [62, 72, 92, 255],
+          "emissive": true,
+          "effects": [
+            { "type": "flash", "source": "entity.presentation", "property": "border_flash", "color": [210, 235, 255, 255], "size_add": [0.06, 0.06, 0.0], "size_mode": "minor_axis", "emissive": [0.55, 0.70, 1.0] }
+          ]
+        }
       ]
     },
     {
@@ -326,7 +380,15 @@
       "tags": ["render", "field", "border"],
       "transform": { "position": [-9.12, 0.0, 0.0] },
       "components": [
-        { "type": "render.cube", "size": [0.12, 10.35, 0.18], "color": [62, 72, 92, 255], "emissive": true }
+        {
+          "type": "render.cube",
+          "size": [0.12, 10.35, 0.18],
+          "color": [62, 72, 92, 255],
+          "emissive": true,
+          "effects": [
+            { "type": "flash", "source": "entity.presentation", "property": "border_flash", "color": [210, 235, 255, 255], "size_add": [0.06, 0.06, 0.0], "size_mode": "minor_axis", "emissive": [0.55, 0.70, 1.0] }
+          ]
+        }
       ]
     },
     {
@@ -335,7 +397,15 @@
       "tags": ["render", "field", "border"],
       "transform": { "position": [9.12, 0.0, 0.0] },
       "components": [
-        { "type": "render.cube", "size": [0.12, 10.35, 0.18], "color": [62, 72, 92, 255], "emissive": true }
+        {
+          "type": "render.cube",
+          "size": [0.12, 10.35, 0.18],
+          "color": [62, 72, 92, 255],
+          "emissive": true,
+          "effects": [
+            { "type": "flash", "source": "entity.presentation", "property": "border_flash", "color": [210, 235, 255, 255], "size_add": [0.06, 0.06, 0.0], "size_mode": "minor_axis", "emissive": [0.55, 0.70, 1.0] }
+          ]
+        }
       ]
     },
     {
@@ -344,15 +414,15 @@
       "tags": ["render", "field", "centerline"],
       "transform": { "position": [0.0, 0.0, 0.02] },
       "components": [
-        { "type": "render.cube", "offset": [0.0, -4.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true },
-        { "type": "render.cube", "offset": [0.0, -3.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true },
-        { "type": "render.cube", "offset": [0.0, -2.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true },
-        { "type": "render.cube", "offset": [0.0, -1.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true },
-        { "type": "render.cube", "offset": [0.0, 0.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true },
-        { "type": "render.cube", "offset": [0.0, 1.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true },
-        { "type": "render.cube", "offset": [0.0, 2.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true },
-        { "type": "render.cube", "offset": [0.0, 3.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true },
-        { "type": "render.cube", "offset": [0.0, 4.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true }
+        { "type": "render.cube", "offset": [0.0, -4.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] },
+        { "type": "render.cube", "offset": [0.0, -3.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] },
+        { "type": "render.cube", "offset": [0.0, -2.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] },
+        { "type": "render.cube", "offset": [0.0, -1.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] },
+        { "type": "render.cube", "offset": [0.0, 0.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] },
+        { "type": "render.cube", "offset": [0.0, 1.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] },
+        { "type": "render.cube", "offset": [0.0, 2.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] },
+        { "type": "render.cube", "offset": [0.0, 3.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] },
+        { "type": "render.cube", "offset": [0.0, 4.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true, "effects": [{ "type": "emissive", "color": [0.10, 0.12, 0.16] }] }
       ]
     },
     {
@@ -366,7 +436,14 @@
         "speed": { "type": "float", "value": 7.5 }
       },
       "components": [
-        { "type": "render.cube", "size": [0.36, 1.9, 0.28], "color": [205, 230, 255, 255] },
+        {
+          "type": "render.cube",
+          "size": [0.36, 1.9, 0.28],
+          "color": [205, 230, 255, 255],
+          "effects": [
+            { "type": "flash", "source": "entity.presentation", "property": "paddle_flash", "color": [255, 255, 255, 255], "emissive": [0.35, 0.42, 0.50] }
+          ]
+        },
         { "type": "collision.aabb", "half_extents": [0.18, 0.95, 0.14] },
         { "type": "control.axis_1d", "axis": "y", "negative": "action.paddle.down", "positive": "action.paddle.up" }
       ]
@@ -382,7 +459,14 @@
         "speed": { "type": "float", "value": 5.5 }
       },
       "components": [
-        { "type": "render.cube", "size": [0.36, 1.9, 0.28], "color": [195, 255, 212, 255] },
+        {
+          "type": "render.cube",
+          "size": [0.36, 1.9, 0.28],
+          "color": [195, 255, 212, 255],
+          "effects": [
+            { "type": "flash", "source": "entity.presentation", "property": "paddle_flash", "color": [255, 255, 255, 255], "emissive": [0.35, 0.42, 0.50] }
+          ]
+        },
         { "type": "collision.aabb", "half_extents": [0.18, 0.95, 0.14] },
         { "type": "adapter.controller", "adapter": "adapter.pong.cpu_track_ball", "target": "entity.ball" }
       ]
@@ -403,7 +487,17 @@
         "active_motion": { "type": "bool", "value": false }
       },
       "components": [
-        { "type": "render.sphere", "radius": 0.22, "rings": 12, "slices": 18, "color": [255, 184, 82, 255], "emissive": true },
+        {
+          "type": "render.sphere",
+          "radius": 0.22,
+          "rings": 12,
+          "slices": 18,
+          "color": [255, 184, 82, 255],
+          "emissive": true,
+          "effects": [
+            { "type": "pulse", "rate": 9.0, "color": [255, 245, 156, 255], "emissive_base": [0.75, 0.48, 0.08], "emissive_add": [0.65, 0.30, 0.0] }
+          ]
+        },
         { "type": "collision.circle", "radius": 0.22 },
         { "type": "motion.velocity_2d", "property": "velocity" }
       ]
@@ -472,6 +566,7 @@
           "emissive_intensity": 1.35,
           "camera_facing": true,
           "depth_test": true,
+          "draw_emissive": [0.8, 0.9, 1.0],
           "random_seed": 19088743
         }
       ]
@@ -729,13 +824,6 @@
       "script": "script.pong",
       "function": "cpu_track_ball",
       "description": "Move the CPU paddle toward the current ball position."
-    },
-    {
-      "name": "adapter.pong.ball_chase_camera",
-      "kind": "camera",
-      "script": "script.pong",
-      "function": "ball_chase_camera",
-      "description": "Build a third-person camera from the ball position and velocity."
     }
   ]
 }

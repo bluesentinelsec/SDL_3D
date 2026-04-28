@@ -7,6 +7,7 @@
 #include <iterator>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -55,6 +56,12 @@ struct UiTextCapture
     int count = 0;
     bool saw_score = false;
     bool saw_pause = false;
+};
+
+struct EvaluatedPrimitiveCapture
+{
+    bool saw_border = false;
+    bool saw_ball = false;
 };
 
 bool serve_adapter(void *userdata, sdl3d_game_data_runtime *runtime, const char *adapter_name,
@@ -221,7 +228,6 @@ bool capture_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
     if (std::string(text->name) == "ui.score")
     {
         capture->saw_score = true;
-        EXPECT_STREQ(text->source, "score.player_cpu");
         EXPECT_TRUE(text->centered);
         EXPECT_TRUE(text->normalized);
         EXPECT_NEAR(text->x, 0.5f, 0.0001f);
@@ -229,9 +235,26 @@ bool capture_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
     if (std::string(text->name) == "ui.pause")
     {
         capture->saw_pause = true;
-        EXPECT_STREQ(text->visible, "paused");
         EXPECT_STREQ(text->text, "PAUSED");
         EXPECT_TRUE(text->pulse_alpha);
+    }
+    return true;
+}
+
+bool capture_evaluated_primitive(void *userdata, const sdl3d_game_data_render_primitive *primitive)
+{
+    auto *capture = static_cast<EvaluatedPrimitiveCapture *>(userdata);
+    if (std::string(primitive->entity_name) == "entity.field.border.top")
+    {
+        capture->saw_border = true;
+        EXPECT_GT(primitive->color.r, 62);
+        EXPECT_GT(primitive->size.y, 0.12f);
+        EXPECT_GT(primitive->emissive_color.z, 0.9f);
+    }
+    if (std::string(primitive->entity_name) == "entity.ball")
+    {
+        capture->saw_ball = true;
+        EXPECT_GT(primitive->emissive_color.x, 0.7f);
     }
     return true;
 }
@@ -293,6 +316,9 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
 
     EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.ball"), nullptr);
+    EXPECT_NE(sdl3d_game_data_find_actor_with_tag(runtime, "ball"), nullptr);
+    const char *paddle_tags[] = {"paddle", "player"};
+    EXPECT_NE(sdl3d_game_data_find_actor_with_tags(runtime, paddle_tags, 2), nullptr);
     EXPECT_GE(sdl3d_game_data_find_signal(runtime, "signal.ball.serve"), 0);
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.paddle.up"), 0);
     EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead");
@@ -328,11 +354,30 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_EQ(camera.projection, SDL3D_CAMERA_ORTHOGRAPHIC);
     EXPECT_NEAR(camera.position.z, 16.0f, 0.0001f);
     EXPECT_NEAR(camera.fovy, 11.4f, 0.0001f);
-    EXPECT_FALSE(sdl3d_game_data_get_camera(runtime, "camera.ball_chase", &camera));
 
+    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.ball_chase", &camera));
+    EXPECT_EQ(camera.projection, SDL3D_CAMERA_PERSPECTIVE);
+    EXPECT_NEAR(camera.fovy, 68.0f, 0.0001f);
+    EXPECT_NEAR(camera.position.x, -2.6f, 0.0001f);
+    EXPECT_NEAR(camera.position.z, 1.91f, 0.0001f);
     float chase_fovy = 0.0f;
     ASSERT_TRUE(sdl3d_game_data_get_camera_float(runtime, "camera.ball_chase", "fovy", &chase_fovy));
     EXPECT_NEAR(chase_fovy, 68.0f, 0.0001f);
+
+    sdl3d_game_data_app_control app{};
+    ASSERT_TRUE(sdl3d_game_data_get_app_control(runtime, &app));
+    EXPECT_GE(app.start_signal_id, 0);
+    EXPECT_GE(app.quit_action_id, 0);
+    EXPECT_GE(app.pause_action_id, 0);
+    EXPECT_STREQ(app.startup_transition, "startup");
+    EXPECT_STREQ(app.quit_transition, "quit");
+    EXPECT_GE(app.quit_signal_id, 0);
+
+    sdl3d_game_data_font_asset font{};
+    ASSERT_TRUE(sdl3d_game_data_get_font_asset(runtime, "font.hud", &font));
+    EXPECT_TRUE(font.builtin);
+    EXPECT_EQ(font.builtin_id, SDL3D_BUILTIN_FONT_INTER);
+    EXPECT_NEAR(font.size, 34.0f, 0.0001f);
 
     float ambient[3]{};
     ASSERT_TRUE(sdl3d_game_data_get_world_ambient_light(runtime, ambient));
@@ -354,6 +399,10 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_EQ(particles.max_particles, 360);
     EXPECT_NEAR(particles.emit_rate, 95.0f, 0.0001f);
     EXPECT_EQ(particles.color_start.a, 105);
+    sdl3d_vec3 particle_emissive{};
+    ASSERT_TRUE(sdl3d_game_data_get_particle_emitter_draw_emissive(runtime, "entity.effect.ambient_particles",
+                                                                   &particle_emissive));
+    EXPECT_NEAR(particle_emissive.x, 0.8f, 0.0001f);
 
     sdl3d_game_data_render_settings render{};
     ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &render));
@@ -382,12 +431,50 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     sdl3d_registered_actor *presentation = sdl3d_game_data_find_actor(runtime, "entity.presentation");
     ASSERT_NE(presentation, nullptr);
     EXPECT_NEAR(sdl3d_properties_get_float(presentation->props, "border_flash_decay", 0.0f), 2.8f, 0.0001f);
+    sdl3d_properties_set_float(presentation->props, "border_flash", 1.0f);
+    sdl3d_game_data_render_eval render_eval{};
+    render_eval.time = 0.25f;
+    EvaluatedPrimitiveCapture evaluated{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive_evaluated(runtime, &render_eval, capture_evaluated_primitive,
+                                                                    &evaluated));
+    EXPECT_TRUE(evaluated.saw_border);
+    EXPECT_TRUE(evaluated.saw_ball);
 
     UiTextCapture ui{};
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui_text, &ui));
     EXPECT_EQ(ui.count, 8);
     EXPECT_TRUE(ui.saw_score);
     EXPECT_TRUE(ui.saw_pause);
+
+    sdl3d_game_data_ui_metrics metrics{};
+    metrics.fps = 119.5f;
+    metrics.frame = 42;
+    char ui_buffer[128]{};
+    auto format_score = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        if (std::string(text->name) != "ui.score")
+            return true;
+        auto *args = static_cast<std::pair<sdl3d_game_data_runtime *, char *> *>(userdata);
+        sdl3d_game_data_ui_metrics local_metrics{};
+        EXPECT_TRUE(sdl3d_game_data_format_ui_text(args->first, text, &local_metrics, args->second, 128));
+        return false;
+    };
+    std::pair<sdl3d_game_data_runtime *, char *> score_args{runtime, ui_buffer};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, format_score, &score_args));
+    EXPECT_STREQ(ui_buffer, "00   00");
+    auto find_pause_visible = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        if (std::string(text->name) != "ui.pause")
+            return true;
+        auto *args =
+            static_cast<std::tuple<sdl3d_game_data_runtime *, sdl3d_game_data_ui_metrics *, bool *> *>(userdata);
+        *std::get<2>(*args) = sdl3d_game_data_ui_text_is_visible(std::get<0>(*args), text, std::get<1>(*args));
+        return false;
+    };
+    bool pause_visible = false;
+    metrics.paused = true;
+    std::tuple<sdl3d_game_data_runtime *, sdl3d_game_data_ui_metrics *, bool *> pause_args{runtime, &metrics,
+                                                                                           &pause_visible};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_pause_visible, &pause_args));
+    EXPECT_TRUE(pause_visible);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);

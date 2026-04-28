@@ -21,6 +21,7 @@
 #include "sdl3d/asset.h"
 #include "sdl3d/camera.h"
 #include "sdl3d/effects.h"
+#include "sdl3d/font.h"
 #include "sdl3d/game.h"
 #include "sdl3d/lighting.h"
 #include "sdl3d/properties.h"
@@ -33,6 +34,62 @@ extern "C"
 
     /** @brief Opaque runtime created from one game JSON document. */
     typedef struct sdl3d_game_data_runtime sdl3d_game_data_runtime;
+
+    /** @brief Authored application lifecycle hooks. */
+    typedef struct sdl3d_game_data_app_control
+    {
+        /** @brief Signal emitted by the host after game data has loaded, or -1. */
+        int start_signal_id;
+        /** @brief Input action that requests app quit, or -1. */
+        int quit_action_id;
+        /** @brief Input action that requests pause/unpause, or -1. */
+        int pause_action_id;
+        /** @brief Transition name to play at startup, or NULL. */
+        const char *startup_transition;
+        /** @brief Transition name to play before quit, or NULL. */
+        const char *quit_transition;
+        /** @brief Signal that means the app should quit immediately, or -1. */
+        int quit_signal_id;
+    } sdl3d_game_data_app_control;
+
+    /** @brief Authored font asset descriptor. */
+    typedef struct sdl3d_game_data_font_asset
+    {
+        /** @brief Stable asset id, such as `font.hud`. */
+        const char *id;
+        /** @brief Built-in font id when @p builtin is true. */
+        sdl3d_builtin_font builtin_id;
+        /** @brief True when this asset refers to an SDL3D built-in font. */
+        bool builtin;
+        /** @brief External font path when @p builtin is false, or NULL. */
+        const char *path;
+        /** @brief Requested font pixel size. */
+        float size;
+    } sdl3d_game_data_font_asset;
+
+    /**
+     * @brief Runtime metrics used when evaluating data-authored UI bindings.
+     *
+     * Games provide this small host-state snapshot each frame. The game data
+     * runtime combines it with actor properties and active camera state to
+     * resolve UI visibility and text content without game-specific string maps.
+     */
+    typedef struct sdl3d_game_data_ui_metrics
+    {
+        /** @brief Whether the managed loop is currently paused. */
+        bool paused;
+        /** @brief Most recently sampled frames per second. */
+        float fps;
+        /** @brief Number of rendered frames. */
+        Uint64 frame;
+    } sdl3d_game_data_ui_metrics;
+
+    /** @brief Optional render evaluation inputs for dynamic visual effects. */
+    typedef struct sdl3d_game_data_render_eval
+    {
+        /** @brief Elapsed presentation time in seconds, used by pulse effects. */
+        float time;
+    } sdl3d_game_data_render_eval;
 
     /** @brief Authored render primitive kind. */
     typedef enum sdl3d_game_data_render_primitive_type
@@ -70,6 +127,8 @@ extern "C"
         sdl3d_color color;
         /** @brief Whether the primitive should be treated as emissive by the caller. */
         bool emissive;
+        /** @brief Evaluated emissive RGB contribution. */
+        sdl3d_vec3 emissive_color;
     } sdl3d_game_data_render_primitive;
 
     /**
@@ -347,6 +406,33 @@ extern "C"
     /** @brief Find an authored actor by name in the runtime's session registry. */
     sdl3d_registered_actor *sdl3d_game_data_find_actor(const sdl3d_game_data_runtime *runtime, const char *name);
 
+    /** @brief Find the first authored actor whose entity data contains @p tag. */
+    sdl3d_registered_actor *sdl3d_game_data_find_actor_with_tag(const sdl3d_game_data_runtime *runtime,
+                                                                const char *tag);
+
+    /**
+     * @brief Find the first authored actor whose entity data contains every tag.
+     *
+     * Tags are matched against the entity's `tags` array in the loaded JSON
+     * document. This lets game code request roles like `{"paddle", "player"}`
+     * without depending on exact entity names.
+     */
+    sdl3d_registered_actor *sdl3d_game_data_find_actor_with_tags(const sdl3d_game_data_runtime *runtime,
+                                                                 const char *const *tags, int tag_count);
+
+    /**
+     * @brief Read data-authored application lifecycle hooks.
+     *
+     * Missing fields return neutral values: signal/action ids are -1 and
+     * transition names are NULL.
+     */
+    bool sdl3d_game_data_get_app_control(const sdl3d_game_data_runtime *runtime,
+                                         sdl3d_game_data_app_control *out_control);
+
+    /** @brief Read a font asset descriptor by id from `assets.fonts`. */
+    bool sdl3d_game_data_get_font_asset(const sdl3d_game_data_runtime *runtime, const char *id,
+                                        sdl3d_game_data_font_asset *out_font);
+
     /**
      * @brief Return the currently active authored camera name.
      *
@@ -402,6 +488,18 @@ extern "C"
                                                    sdl3d_game_data_render_primitive_fn callback, void *userdata);
 
     /**
+     * @brief Iterate active authored render primitives with dynamic effects evaluated.
+     *
+     * This applies generic `effects` authored on render primitive components,
+     * such as property-driven flash colors, size offsets, and time-driven
+     * pulses. Passing NULL for @p eval uses a zeroed evaluation context.
+     */
+    bool sdl3d_game_data_for_each_render_primitive_evaluated(const sdl3d_game_data_runtime *runtime,
+                                                             const sdl3d_game_data_render_eval *eval,
+                                                             sdl3d_game_data_render_primitive_fn callback,
+                                                             void *userdata);
+
+    /**
      * @brief Read an authored particle emitter component from an entity.
      *
      * The returned config is ready for sdl3d_create_particle_emitter(). Texture
@@ -410,6 +508,15 @@ extern "C"
      */
     bool sdl3d_game_data_get_particle_emitter(const sdl3d_game_data_runtime *runtime, const char *entity_name,
                                               sdl3d_particle_config *out_config);
+
+    /**
+     * @brief Read optional draw-time emissive color for a particle emitter entity.
+     *
+     * The color is read from the emitter component's `draw_emissive` field and
+     * defaults to zero when not authored.
+     */
+    bool sdl3d_game_data_get_particle_emitter_draw_emissive(const sdl3d_game_data_runtime *runtime,
+                                                            const char *entity_name, sdl3d_vec3 *out_rgb);
 
     /**
      * @brief Read authored render setup.
@@ -431,6 +538,26 @@ extern "C"
     /** @brief Iterate authored UI text descriptors. */
     bool sdl3d_game_data_for_each_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_ui_text_fn callback,
                                           void *userdata);
+
+    /**
+     * @brief Evaluate a UI text descriptor's authored visibility condition.
+     *
+     * Supports camera-active checks, app pause checks, actor property
+     * comparisons, and boolean all/any/not composition. Descriptors without a
+     * condition are visible.
+     */
+    bool sdl3d_game_data_ui_text_is_visible(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_text *text,
+                                            const sdl3d_game_data_ui_metrics *metrics);
+
+    /**
+     * @brief Resolve UI text content from data-authored bindings.
+     *
+     * Literal `text` entries are copied directly. Entries with `bindings`
+     * resolve engine metrics and actor properties, then format them using the
+     * descriptor's `format` string.
+     */
+    bool sdl3d_game_data_format_ui_text(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_text *text,
+                                        const sdl3d_game_data_ui_metrics *metrics, char *buffer, size_t buffer_size);
 
     /**
      * @brief Return the dt currently being processed by sdl3d_game_data_update().

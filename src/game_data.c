@@ -230,6 +230,7 @@ static sdl3d_input_manager *runtime_input(const sdl3d_game_data_runtime *runtime
 }
 
 static void actor_set_position(sdl3d_registered_actor *actor, sdl3d_vec3 position);
+static void lua_push_actor_wrapper(lua_State *lua, const sdl3d_registered_actor *actor);
 
 static sdl3d_game_data_runtime *lua_runtime(lua_State *lua)
 {
@@ -385,6 +386,38 @@ static int lua_random(lua_State *lua)
     return 1;
 }
 
+static int lua_actor_with_tags(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    const int arg_count = lua_gettop(lua);
+    const char *tags[16];
+    int tag_count = 0;
+    if (lua_istable(lua, 1))
+    {
+        const lua_Integer count = luaL_len(lua, 1);
+        for (lua_Integer i = 1; i <= count && tag_count < (int)SDL_arraysize(tags); ++i)
+        {
+            lua_geti(lua, 1, i);
+            const char *tag = lua_tostring(lua, -1);
+            if (tag != NULL && tag[0] != '\0')
+                tags[tag_count++] = tag;
+            lua_pop(lua, 1);
+        }
+    }
+    else
+    {
+        for (int i = 1; i <= arg_count && tag_count < (int)SDL_arraysize(tags); ++i)
+        {
+            const char *tag = lua_tostring(lua, i);
+            if (tag != NULL && tag[0] != '\0')
+                tags[tag_count++] = tag;
+        }
+    }
+
+    lua_push_actor_wrapper(lua, sdl3d_game_data_find_actor_with_tags(runtime, tags, tag_count));
+    return 1;
+}
+
 static int lua_log(lua_State *lua)
 {
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[lua] %s", luaL_checkstring(lua, 1));
@@ -393,7 +426,7 @@ static int lua_log(lua_State *lua)
 
 static void install_lua_helpers(lua_State *lua)
 {
-    static const char *source =
+    static const char *source_parts[] = {
         "local Actor = {}\n"
         "local Vec3 = {}\n"
         "local Vec3_mt = { __index = Vec3 }\n"
@@ -440,7 +473,7 @@ static void install_lua_helpers(lua_State *lua)
         "end\n"
         "function math.lerp(a, b, t)\n"
         "    return a + (b - a) * t\n"
-        "end\n"
+        "end\n",
         "function Actor:get_float(key, fallback) return sdl3d.get_float(self, key, fallback or 0) end\n"
         "function Actor:set_float(key, value) sdl3d.set_float(self, key, value) end\n"
         "function Actor:get_int(key, fallback) return sdl3d.get_int(self, key, fallback or 0) end\n"
@@ -486,6 +519,13 @@ static void install_lua_helpers(lua_State *lua)
         "        name = adapter,\n"
         "        dt = dt or 0,\n"
         "        actor = function(self_or_name, maybe_name) return sdl3d.actor(maybe_name or self_or_name) end,\n"
+        "        actor_with_tags = function(self_or_tag, maybe_tag, ...)\n"
+        "            if type(self_or_tag) == 'table' and self_or_tag.adapter ~= nil then\n"
+        "                return sdl3d.actor_with_tags(maybe_tag, ...)\n"
+        "            end\n"
+        "            if type(self_or_tag) == 'table' then return sdl3d.actor_with_tags(self_or_tag) end\n"
+        "            return sdl3d.actor_with_tags(self_or_tag, maybe_tag, ...)\n"
+        "        end,\n"
         "        random = function(_) return sdl3d.random() end,\n"
         "        log = function(self_or_message, maybe_message) sdl3d.log(maybe_message or self_or_message) end,\n"
         "    }\n"
@@ -493,13 +533,35 @@ static void install_lua_helpers(lua_State *lua)
         "sdl3d.Actor = Actor\n"
         "sdl3d.Vec3 = Vec3\n"
         "sdl3d.api = 'sdl3d.lua.v1'\n"
-        "_G.Vec3 = Vec3\n";
+        "_G.Vec3 = Vec3\n",
+    };
+
+    size_t source_len = 0;
+    for (size_t i = 0; i < SDL_arraysize(source_parts); ++i)
+        source_len += SDL_strlen(source_parts[i]);
+
+    char *source = (char *)SDL_malloc(source_len + 1u);
+    if (source == NULL)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[lua] failed to allocate gameplay API source");
+        return;
+    }
+
+    size_t offset = 0;
+    for (size_t i = 0; i < SDL_arraysize(source_parts); ++i)
+    {
+        const size_t part_len = SDL_strlen(source_parts[i]);
+        SDL_memcpy(source + offset, source_parts[i], part_len);
+        offset += part_len;
+    }
+    source[offset] = '\0';
 
     if (luaL_dostring(lua, source) != LUA_OK)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[lua] failed to install gameplay API: %s", lua_tostring(lua, -1));
         lua_pop(lua, 1);
     }
+    SDL_free(source);
 }
 
 static void register_lua_api(sdl3d_game_data_runtime *runtime, sdl3d_script_engine *engine)
@@ -531,6 +593,7 @@ static void register_lua_api(sdl3d_game_data_runtime *runtime, sdl3d_script_engi
     SDL3D_LUA_BIND("set_vec3", lua_set_vec3);
     SDL3D_LUA_BIND("dt", lua_get_dt);
     SDL3D_LUA_BIND("random", lua_random);
+    SDL3D_LUA_BIND("actor_with_tags", lua_actor_with_tags);
     SDL3D_LUA_BIND("log", lua_log);
 #undef SDL3D_LUA_BIND
     lua_setglobal(lua, "sdl3d");
@@ -629,6 +692,30 @@ static yyjson_val *find_entity_json(const sdl3d_game_data_runtime *runtime, cons
     return NULL;
 }
 
+static bool entity_json_has_tag(yyjson_val *entity, const char *tag)
+{
+    yyjson_val *tags = obj_get(entity, "tags");
+    for (size_t i = 0; tag != NULL && yyjson_is_arr(tags) && i < yyjson_arr_size(tags); ++i)
+    {
+        yyjson_val *item = yyjson_arr_get(tags, i);
+        if (yyjson_is_str(item) && SDL_strcmp(yyjson_get_str(item), tag) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool entity_json_has_tags(yyjson_val *entity, const char *const *tags, int tag_count)
+{
+    if (tag_count <= 0)
+        return false;
+    for (int i = 0; i < tag_count; ++i)
+    {
+        if (!entity_json_has_tag(entity, tags[i]))
+            return false;
+    }
+    return true;
+}
+
 static yyjson_val *find_component_json(yyjson_val *entity, const char *type)
 {
     yyjson_val *components = obj_get(entity, "components");
@@ -638,6 +725,19 @@ static yyjson_val *find_component_json(yyjson_val *entity, const char *type)
         const char *component_type = json_string(component, "type", NULL);
         if (component_type != NULL && type != NULL && SDL_strcmp(component_type, type) == 0)
             return component;
+    }
+    return NULL;
+}
+
+static yyjson_val *find_font_json(const sdl3d_game_data_runtime *runtime, const char *id)
+{
+    yyjson_val *fonts = obj_get(obj_get(runtime_root(runtime), "assets"), "fonts");
+    for (size_t i = 0; id != NULL && yyjson_is_arr(fonts) && i < yyjson_arr_size(fonts); ++i)
+    {
+        yyjson_val *font = yyjson_arr_get(fonts, i);
+        const char *font_id = json_string(font, "id", NULL);
+        if (font_id != NULL && SDL_strcmp(font_id, id) == 0)
+            return font;
     }
     return NULL;
 }
@@ -704,6 +804,15 @@ static sdl3d_transition_direction parse_transition_direction(const char *value, 
         return SDL3D_TRANSITION_IN;
     if (SDL_strcasecmp(value, "out") == 0)
         return SDL3D_TRANSITION_OUT;
+    return fallback;
+}
+
+static sdl3d_builtin_font parse_builtin_font(const char *value, sdl3d_builtin_font fallback)
+{
+    if (value == NULL)
+        return fallback;
+    if (SDL_strcasecmp(value, "Inter") == 0 || SDL_strcasecmp(value, "inter") == 0)
+        return SDL3D_BUILTIN_FONT_INTER;
     return fallback;
 }
 
@@ -1098,6 +1207,81 @@ sdl3d_registered_actor *sdl3d_game_data_find_actor(const sdl3d_game_data_runtime
     return sdl3d_actor_registry_find(runtime_registry(runtime), name);
 }
 
+sdl3d_registered_actor *sdl3d_game_data_find_actor_with_tag(const sdl3d_game_data_runtime *runtime, const char *tag)
+{
+    const char *tags[1] = {tag};
+    return sdl3d_game_data_find_actor_with_tags(runtime, tags, 1);
+}
+
+sdl3d_registered_actor *sdl3d_game_data_find_actor_with_tags(const sdl3d_game_data_runtime *runtime,
+                                                             const char *const *tags, int tag_count)
+{
+    yyjson_val *entities = obj_get(runtime_root(runtime), "entities");
+    if (runtime == NULL || tags == NULL || tag_count <= 0 || !yyjson_is_arr(entities))
+        return NULL;
+
+    for (size_t i = 0; i < yyjson_arr_size(entities); ++i)
+    {
+        yyjson_val *entity = yyjson_arr_get(entities, i);
+        if (!entity_json_has_tags(entity, tags, tag_count))
+            continue;
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, json_string(entity, "name", NULL));
+        if (actor != NULL)
+            return actor;
+    }
+    return NULL;
+}
+
+bool sdl3d_game_data_get_app_control(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_app_control *out_control)
+{
+    if (out_control != NULL)
+    {
+        out_control->start_signal_id = -1;
+        out_control->quit_action_id = -1;
+        out_control->pause_action_id = -1;
+        out_control->startup_transition = NULL;
+        out_control->quit_transition = NULL;
+        out_control->quit_signal_id = -1;
+    }
+    if (runtime == NULL || out_control == NULL)
+        return false;
+
+    yyjson_val *app = obj_get(runtime_root(runtime), "app");
+    yyjson_val *quit = obj_get(app, "quit");
+    out_control->start_signal_id = sdl3d_game_data_find_signal(runtime, json_string(app, "start_signal", NULL));
+    out_control->pause_action_id = sdl3d_game_data_find_action(runtime, json_string(app, "pause_action", NULL));
+    out_control->startup_transition = json_string(app, "startup_transition", NULL);
+    out_control->quit_action_id = sdl3d_game_data_find_action(runtime, json_string(quit, "action", NULL));
+    out_control->quit_transition = json_string(quit, "transition", NULL);
+    out_control->quit_signal_id = sdl3d_game_data_find_signal(runtime, json_string(quit, "quit_signal", NULL));
+    return true;
+}
+
+bool sdl3d_game_data_get_font_asset(const sdl3d_game_data_runtime *runtime, const char *id,
+                                    sdl3d_game_data_font_asset *out_font)
+{
+    if (out_font != NULL)
+    {
+        SDL_zero(*out_font);
+        out_font->builtin_id = SDL3D_BUILTIN_FONT_INTER;
+        out_font->size = 16.0f;
+    }
+    if (runtime == NULL || id == NULL || out_font == NULL)
+        return false;
+
+    yyjson_val *font = find_font_json(runtime, id);
+    if (!yyjson_is_obj(font))
+        return false;
+
+    out_font->id = json_string(font, "id", NULL);
+    out_font->path = json_string(font, "path", NULL);
+    out_font->size = json_float(font, "size", out_font->size);
+    const char *builtin = json_string(font, "builtin", NULL);
+    out_font->builtin = builtin != NULL;
+    out_font->builtin_id = parse_builtin_font(builtin, out_font->builtin_id);
+    return true;
+}
+
 const char *sdl3d_game_data_active_camera(const sdl3d_game_data_runtime *runtime)
 {
     return runtime != NULL ? runtime->active_camera : NULL;
@@ -1117,6 +1301,53 @@ bool sdl3d_game_data_get_camera(const sdl3d_game_data_runtime *runtime, const ch
     const char *type = json_string(camera_json, "type", "perspective");
     if (SDL_strcmp(type, "adapter") == 0)
         return false;
+
+    if (SDL_strcmp(type, "chase") == 0)
+    {
+        sdl3d_registered_actor *target =
+            sdl3d_game_data_find_actor(runtime, json_string(camera_json, "target_entity", NULL));
+        if (target == NULL)
+            return false;
+
+        const char *velocity_property = json_string(camera_json, "velocity_property", "velocity");
+        sdl3d_vec3 velocity =
+            sdl3d_properties_get_vec3(target->props, velocity_property, sdl3d_vec3_make(1.0f, 0.0f, 0.0f));
+        velocity.z = 0.0f;
+        float velocity_len = SDL_sqrtf(velocity.x * velocity.x + velocity.y * velocity.y);
+        if (velocity_len < 0.001f)
+        {
+            velocity = json_vec3(camera_json, "fallback_forward", sdl3d_vec3_make(1.0f, 0.0f, 0.0f));
+            velocity.z = 0.0f;
+            velocity_len = SDL_sqrtf(velocity.x * velocity.x + velocity.y * velocity.y);
+        }
+        if (velocity_len < 0.001f)
+            velocity = sdl3d_vec3_make(1.0f, 0.0f, 0.0f);
+        else
+        {
+            velocity.x /= velocity_len;
+            velocity.y /= velocity_len;
+        }
+
+        const float target_z_offset = json_float(camera_json, "target_z_offset", 0.0f);
+        const float camera_height = json_float(camera_json, "height", 1.0f);
+        const float chase_distance = json_float(camera_json, "chase_distance", 2.0f);
+        const float lookahead = json_float(camera_json, "lookahead", 1.0f);
+        const sdl3d_vec3 target_offset = json_vec3(camera_json, "target_offset", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+        const sdl3d_vec3 eye_offset = json_vec3(camera_json, "eye_offset", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+        const sdl3d_vec3 anchor =
+            sdl3d_vec3_make(target->position.x + target_offset.x, target->position.y + target_offset.y,
+                            target->position.z + target_offset.z);
+
+        out_camera->position = sdl3d_vec3_make(anchor.x - velocity.x * chase_distance + eye_offset.x,
+                                               anchor.y - velocity.y * chase_distance + eye_offset.y,
+                                               anchor.z + camera_height + eye_offset.z);
+        out_camera->target = sdl3d_vec3_make(anchor.x + velocity.x * lookahead, anchor.y + velocity.y * lookahead,
+                                             anchor.z + target_z_offset);
+        out_camera->up = json_vec3(camera_json, "up", sdl3d_vec3_make(0.0f, 0.0f, 1.0f));
+        out_camera->fovy = json_float(camera_json, "fovy", 60.0f);
+        out_camera->projection = SDL3D_CAMERA_PERSPECTIVE;
+        return true;
+    }
 
     out_camera->position = json_vec3(camera_json, "position", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
     out_camera->target = json_vec3(camera_json, "target", sdl3d_vec3_make(0.0f, 0.0f, -1.0f));
@@ -1144,6 +1375,8 @@ bool sdl3d_game_data_get_camera_float(const sdl3d_game_data_runtime *runtime, co
 
     yyjson_val *camera = find_camera_json(runtime, camera_name);
     yyjson_val *value = obj_get(obj_get(camera, "properties"), property_name);
+    if (!yyjson_is_num(value))
+        value = obj_get(camera, property_name);
     if (!yyjson_is_num(value))
         return false;
 
@@ -1227,7 +1460,94 @@ bool sdl3d_game_data_get_world_light(const sdl3d_game_data_runtime *runtime, int
     return true;
 }
 
-bool sdl3d_game_data_for_each_render_primitive(const sdl3d_game_data_runtime *runtime,
+static float game_data_clampf(float value, float lo, float hi)
+{
+    if (value < lo)
+        return lo;
+    if (value > hi)
+        return hi;
+    return value;
+}
+
+static sdl3d_color game_data_color_lerp(sdl3d_color a, sdl3d_color b, float t)
+{
+    t = game_data_clampf(t, 0.0f, 1.0f);
+    return (sdl3d_color){
+        (Uint8)((float)a.r + ((float)b.r - (float)a.r) * t),
+        (Uint8)((float)a.g + ((float)b.g - (float)a.g) * t),
+        (Uint8)((float)a.b + ((float)b.b - (float)a.b) * t),
+        (Uint8)((float)a.a + ((float)b.a - (float)a.a) * t),
+    };
+}
+
+static void apply_render_effects(const sdl3d_game_data_runtime *runtime, yyjson_val *component,
+                                 const sdl3d_game_data_render_eval *eval, sdl3d_game_data_render_primitive *primitive)
+{
+    yyjson_val *effects = obj_get(component, "effects");
+    if (!yyjson_is_arr(effects) || primitive == NULL)
+        return;
+
+    for (size_t i = 0; i < yyjson_arr_size(effects); ++i)
+    {
+        yyjson_val *effect = yyjson_arr_get(effects, i);
+        const char *type = json_string(effect, "type", "");
+        if (SDL_strcmp(type, "flash") == 0)
+        {
+            sdl3d_registered_actor *source = sdl3d_game_data_find_actor(runtime, json_string(effect, "source", NULL));
+            const char *property = json_string(effect, "property", NULL);
+            const float value = game_data_clampf(
+                source != NULL && property != NULL ? sdl3d_properties_get_float(source->props, property, 0.0f) : 0.0f,
+                0.0f, 1.0f);
+            primitive->color =
+                game_data_color_lerp(primitive->color, json_color(effect, "color", primitive->color), value);
+
+            const sdl3d_vec3 size_add = json_vec3(effect, "size_add", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+            const char *size_mode = json_string(effect, "size_mode", "vector");
+            if (SDL_strcmp(size_mode, "minor_axis") == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
+            {
+                if (primitive->size.x <= primitive->size.y)
+                    primitive->size.x += size_add.x * value;
+                else
+                    primitive->size.y += size_add.y * value;
+            }
+            else
+            {
+                primitive->size.x += size_add.x * value;
+                primitive->size.y += size_add.y * value;
+                primitive->size.z += size_add.z * value;
+            }
+
+            const sdl3d_vec3 emissive = json_vec3(effect, "emissive", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+            primitive->emissive_color.x += emissive.x * value;
+            primitive->emissive_color.y += emissive.y * value;
+            primitive->emissive_color.z += emissive.z * value;
+        }
+        else if (SDL_strcmp(type, "pulse") == 0)
+        {
+            const float time = eval != NULL ? eval->time : 0.0f;
+            const float rate = json_float(effect, "rate", 1.0f);
+            const float pulse = 0.5f + 0.5f * SDL_sinf(time * rate);
+            primitive->color =
+                game_data_color_lerp(primitive->color, json_color(effect, "color", primitive->color), pulse);
+
+            const sdl3d_vec3 base = json_vec3(effect, "emissive_base", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+            const sdl3d_vec3 add = json_vec3(effect, "emissive_add", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+            primitive->emissive_color.x += base.x + add.x * pulse;
+            primitive->emissive_color.y += base.y + add.y * pulse;
+            primitive->emissive_color.z += base.z + add.z * pulse;
+        }
+        else if (SDL_strcmp(type, "emissive") == 0)
+        {
+            const sdl3d_vec3 rgb = json_vec3(effect, "color", sdl3d_vec3_make(0.2f, 0.2f, 0.2f));
+            primitive->emissive_color.x += rgb.x;
+            primitive->emissive_color.y += rgb.y;
+            primitive->emissive_color.z += rgb.z;
+        }
+    }
+}
+
+static bool for_each_render_primitive_internal(const sdl3d_game_data_runtime *runtime,
+                                               const sdl3d_game_data_render_eval *eval,
                                                sdl3d_game_data_render_primitive_fn callback, void *userdata)
 {
     if (runtime == NULL || callback == NULL)
@@ -1257,6 +1577,8 @@ bool sdl3d_game_data_for_each_render_primitive(const sdl3d_game_data_runtime *ru
             primitive.position.z += offset.z;
             primitive.color = json_color(component, "color", (sdl3d_color){255, 255, 255, 255});
             primitive.emissive = json_bool(component, "emissive", false);
+            primitive.emissive_color =
+                primitive.emissive ? sdl3d_vec3_make(0.2f, 0.2f, 0.2f) : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
 
             if (SDL_strcmp(type, "render.cube") == 0)
             {
@@ -1275,11 +1597,26 @@ bool sdl3d_game_data_for_each_render_primitive(const sdl3d_game_data_runtime *ru
                 continue;
             }
 
+            if (eval != NULL)
+                apply_render_effects(runtime, component, eval, &primitive);
             if (!callback(userdata, &primitive))
                 return true;
         }
     }
     return true;
+}
+
+bool sdl3d_game_data_for_each_render_primitive(const sdl3d_game_data_runtime *runtime,
+                                               sdl3d_game_data_render_primitive_fn callback, void *userdata)
+{
+    return for_each_render_primitive_internal(runtime, NULL, callback, userdata);
+}
+
+bool sdl3d_game_data_for_each_render_primitive_evaluated(const sdl3d_game_data_runtime *runtime,
+                                                         const sdl3d_game_data_render_eval *eval,
+                                                         sdl3d_game_data_render_primitive_fn callback, void *userdata)
+{
+    return for_each_render_primitive_internal(runtime, eval, callback, userdata);
 }
 
 bool sdl3d_game_data_get_particle_emitter(const sdl3d_game_data_runtime *runtime, const char *entity_name,
@@ -1325,6 +1662,23 @@ bool sdl3d_game_data_get_particle_emitter(const sdl3d_game_data_runtime *runtime
     out_config->additive_blend = json_bool(component, "additive_blend", false);
     out_config->texture = NULL;
     out_config->random_seed = (Uint32)json_int(component, "random_seed", 0);
+    return true;
+}
+
+bool sdl3d_game_data_get_particle_emitter_draw_emissive(const sdl3d_game_data_runtime *runtime, const char *entity_name,
+                                                        sdl3d_vec3 *out_rgb)
+{
+    if (out_rgb != NULL)
+        *out_rgb = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    if (runtime == NULL || entity_name == NULL || out_rgb == NULL)
+        return false;
+
+    yyjson_val *entity = find_entity_json(runtime, entity_name);
+    yyjson_val *component = find_component_json(entity, "particles.emitter");
+    if (component == NULL)
+        return false;
+
+    *out_rgb = json_vec3(component, "draw_emissive", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
     return true;
 }
 
@@ -1999,6 +2353,250 @@ static bool compare_value(const sdl3d_value *left, const char *op, yyjson_val *r
         return left->as_bool == yyjson_get_bool(right);
     if (left->type == SDL3D_VALUE_STRING && yyjson_is_str(right) && SDL_strcmp(op, "==") == 0)
         return SDL_strcmp(left->as_string, yyjson_get_str(right)) == 0;
+    return false;
+}
+
+static yyjson_val *find_ui_text_json(const sdl3d_game_data_runtime *runtime, const char *name)
+{
+    yyjson_val *texts = obj_get(obj_get(runtime_root(runtime), "ui"), "text");
+    for (size_t i = 0; name != NULL && yyjson_is_arr(texts) && i < yyjson_arr_size(texts); ++i)
+    {
+        yyjson_val *text = yyjson_arr_get(texts, i);
+        const char *text_name = json_string(text, "name", NULL);
+        if (text_name != NULL && SDL_strcmp(text_name, name) == 0)
+            return text;
+    }
+    return NULL;
+}
+
+static bool value_equals_json_bool(const sdl3d_value *left, bool right)
+{
+    return left != NULL && left->type == SDL3D_VALUE_BOOL && left->as_bool == right;
+}
+
+static bool eval_ui_condition(const sdl3d_game_data_runtime *runtime, yyjson_val *condition,
+                              const sdl3d_game_data_ui_metrics *metrics)
+{
+    if (condition == NULL)
+        return true;
+    if (!yyjson_is_obj(condition))
+        return false;
+
+    const char *type = json_string(condition, "type", "");
+    if (SDL_strcmp(type, "always") == 0)
+        return true;
+    if (SDL_strcmp(type, "camera.active") == 0)
+    {
+        const char *camera = json_string(condition, "camera", NULL);
+        const char *active = sdl3d_game_data_active_camera(runtime);
+        return camera != NULL && active != NULL && SDL_strcmp(camera, active) == 0;
+    }
+    if (SDL_strcmp(type, "app.paused") == 0)
+    {
+        const bool expected = json_bool(condition, "equals", true);
+        return (metrics != NULL && metrics->paused) == expected;
+    }
+    if (SDL_strcmp(type, "property.compare") == 0)
+    {
+        sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, json_string(condition, "target", NULL));
+        const char *key = json_string(condition, "key", NULL);
+        const char *op = json_string(condition, "op", NULL);
+        return target != NULL && key != NULL &&
+               compare_value(sdl3d_properties_get_value(target->props, key), op, obj_get(condition, "value"));
+    }
+    if (SDL_strcmp(type, "property.bool") == 0)
+    {
+        sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, json_string(condition, "target", NULL));
+        const char *key = json_string(condition, "key", NULL);
+        return target != NULL && key != NULL &&
+               value_equals_json_bool(sdl3d_properties_get_value(target->props, key),
+                                      json_bool(condition, "equals", true));
+    }
+    if (SDL_strcmp(type, "all") == 0 || SDL_strcmp(type, "any") == 0)
+    {
+        yyjson_val *conditions = obj_get(condition, "conditions");
+        if (!yyjson_is_arr(conditions))
+            return false;
+        const bool require_all = SDL_strcmp(type, "all") == 0;
+        bool saw_any = false;
+        for (size_t i = 0; i < yyjson_arr_size(conditions); ++i)
+        {
+            saw_any = true;
+            const bool passed = eval_ui_condition(runtime, yyjson_arr_get(conditions, i), metrics);
+            if (require_all && !passed)
+                return false;
+            if (!require_all && passed)
+                return true;
+        }
+        return require_all && saw_any;
+    }
+    if (SDL_strcmp(type, "not") == 0)
+        return !eval_ui_condition(runtime, obj_get(condition, "condition"), metrics);
+    return false;
+}
+
+bool sdl3d_game_data_ui_text_is_visible(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_text *text,
+                                        const sdl3d_game_data_ui_metrics *metrics)
+{
+    if (runtime == NULL || text == NULL)
+        return false;
+    yyjson_val *text_json = find_ui_text_json(runtime, text->name);
+    yyjson_val *condition = obj_get(text_json, "visible_if");
+    if (condition != NULL)
+        return eval_ui_condition(runtime, condition, metrics);
+    return text->visible == NULL || SDL_strcmp(text->visible, "always") == 0;
+}
+
+typedef enum ui_value_type
+{
+    UI_VALUE_NONE,
+    UI_VALUE_INT,
+    UI_VALUE_FLOAT,
+    UI_VALUE_UINT64,
+    UI_VALUE_BOOL,
+    UI_VALUE_STRING,
+} ui_value_type;
+
+typedef struct ui_value
+{
+    ui_value_type type;
+    union {
+        int as_int;
+        float as_float;
+        Uint64 as_uint64;
+        bool as_bool;
+        const char *as_string;
+    };
+} ui_value;
+
+static bool read_ui_binding_value(const sdl3d_game_data_runtime *runtime, yyjson_val *binding,
+                                  const sdl3d_game_data_ui_metrics *metrics, ui_value *out_value)
+{
+    if (out_value != NULL)
+        SDL_zero(*out_value);
+    if (binding == NULL || out_value == NULL)
+        return false;
+
+    const char *type = json_string(binding, "type", "");
+    if (SDL_strcmp(type, "metric") == 0)
+    {
+        const char *metric = json_string(binding, "metric", NULL);
+        if (metric != NULL && SDL_strcmp(metric, "fps") == 0)
+        {
+            out_value->type = UI_VALUE_FLOAT;
+            out_value->as_float = metrics != NULL ? metrics->fps : 0.0f;
+            return true;
+        }
+        if (metric != NULL && SDL_strcmp(metric, "frame") == 0)
+        {
+            out_value->type = UI_VALUE_UINT64;
+            out_value->as_uint64 = metrics != NULL ? metrics->frame : 0u;
+            return true;
+        }
+        if (metric != NULL && SDL_strcmp(metric, "paused") == 0)
+        {
+            out_value->type = UI_VALUE_BOOL;
+            out_value->as_bool = metrics != NULL && metrics->paused;
+            return true;
+        }
+        return false;
+    }
+
+    if (SDL_strcmp(type, "property") == 0)
+    {
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, json_string(binding, "entity", NULL));
+        const char *key = json_string(binding, "key", NULL);
+        const sdl3d_value *value = actor != NULL && key != NULL ? sdl3d_properties_get_value(actor->props, key) : NULL;
+        if (value == NULL)
+            return false;
+        switch (value->type)
+        {
+        case SDL3D_VALUE_INT:
+            out_value->type = UI_VALUE_INT;
+            out_value->as_int = value->as_int;
+            return true;
+        case SDL3D_VALUE_FLOAT:
+            out_value->type = UI_VALUE_FLOAT;
+            out_value->as_float = value->as_float;
+            return true;
+        case SDL3D_VALUE_BOOL:
+            out_value->type = UI_VALUE_BOOL;
+            out_value->as_bool = value->as_bool;
+            return true;
+        case SDL3D_VALUE_STRING:
+            out_value->type = UI_VALUE_STRING;
+            out_value->as_string = value->as_string != NULL ? value->as_string : "";
+            return true;
+        case SDL3D_VALUE_VEC3:
+        case SDL3D_VALUE_COLOR:
+            return false;
+        }
+    }
+    return false;
+}
+
+static bool format_bound_ui_text(const char *format, const ui_value *values, int value_count, char *buffer,
+                                 size_t buffer_size)
+{
+    if (format == NULL || values == NULL || buffer == NULL || buffer_size == 0)
+        return false;
+
+    if (value_count == 1)
+    {
+        if (values[0].type == UI_VALUE_INT)
+            SDL_snprintf(buffer, buffer_size, format, values[0].as_int);
+        else if (values[0].type == UI_VALUE_FLOAT)
+            SDL_snprintf(buffer, buffer_size, format, values[0].as_float);
+        else if (values[0].type == UI_VALUE_UINT64)
+            SDL_snprintf(buffer, buffer_size, format, (unsigned long long)values[0].as_uint64);
+        else if (values[0].type == UI_VALUE_BOOL)
+            SDL_snprintf(buffer, buffer_size, format, values[0].as_bool ? 1 : 0);
+        else if (values[0].type == UI_VALUE_STRING)
+            SDL_snprintf(buffer, buffer_size, format, values[0].as_string);
+        else
+            return false;
+        return true;
+    }
+    if (value_count == 2 && values[0].type == UI_VALUE_INT && values[1].type == UI_VALUE_INT)
+    {
+        SDL_snprintf(buffer, buffer_size, format, values[0].as_int, values[1].as_int);
+        return true;
+    }
+    if (value_count == 2 && values[0].type == UI_VALUE_FLOAT && values[1].type == UI_VALUE_UINT64)
+    {
+        SDL_snprintf(buffer, buffer_size, format, values[0].as_float, (unsigned long long)values[1].as_uint64);
+        return true;
+    }
+    return false;
+}
+
+bool sdl3d_game_data_format_ui_text(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_text *text,
+                                    const sdl3d_game_data_ui_metrics *metrics, char *buffer, size_t buffer_size)
+{
+    if (buffer != NULL && buffer_size > 0)
+        buffer[0] = '\0';
+    if (runtime == NULL || text == NULL || buffer == NULL || buffer_size == 0)
+        return false;
+
+    yyjson_val *text_json = find_ui_text_json(runtime, text->name);
+    yyjson_val *bindings = obj_get(text_json, "bindings");
+    if (yyjson_is_arr(bindings) && yyjson_arr_size(bindings) > 0)
+    {
+        ui_value values[4];
+        const int value_count = (int)SDL_min(yyjson_arr_size(bindings), SDL_arraysize(values));
+        for (int i = 0; i < value_count; ++i)
+        {
+            if (!read_ui_binding_value(runtime, yyjson_arr_get(bindings, (size_t)i), metrics, &values[i]))
+                return false;
+        }
+        return format_bound_ui_text(text->format, values, value_count, buffer, buffer_size);
+    }
+
+    if (text->text != NULL)
+    {
+        SDL_snprintf(buffer, buffer_size, "%s", text->text);
+        return true;
+    }
     return false;
 }
 

@@ -25,27 +25,16 @@
 #include "sdl3d_pong_assets.h"
 #endif
 
-typedef enum pong_winner
-{
-    PONG_WINNER_NONE = 0,
-    PONG_WINNER_PLAYER,
-    PONG_WINNER_CPU,
-} pong_winner;
-
-typedef struct pong_actions
-{
-    int pause;
-    int exit;
-} pong_actions;
-
 typedef struct pong_state
 {
     sdl3d_game_data_runtime *data;
-    pong_actions actions;
     sdl3d_font font;
     bool has_font;
     sdl3d_particle_emitter *ambient_particles;
+    const char *ambient_particles_entity;
+    sdl3d_vec3 ambient_particles_emissive;
     sdl3d_transition transition;
+    sdl3d_game_data_app_control app;
     float time;
     float pause_flash;
     float border_flash;
@@ -55,19 +44,8 @@ typedef struct pong_state
     float displayed_fps;
     int fps_sample_frames;
     Uint64 rendered_frames;
-    int signal_game_start;
-    int signal_quit_fade_done;
-    int player_score;
-    int cpu_score;
-    float player_y;
-    float cpu_y;
-    sdl3d_vec2 ball_position;
-    sdl3d_vec2 ball_velocity;
-    float ball_z;
-    float ball_radius;
     bool ball_active;
     bool match_finished;
-    pong_winner winner;
     bool quit_pending;
 } pong_state;
 
@@ -93,69 +71,10 @@ static sdl3d_signal_bus *ctx_bus(const sdl3d_game_context *ctx)
     return sdl3d_game_session_get_signal_bus(ctx->session);
 }
 
-static float clampf(float value, float lo, float hi)
-{
-    if (value < lo)
-    {
-        return lo;
-    }
-    if (value > hi)
-    {
-        return hi;
-    }
-    return value;
-}
-
 static float fade_down(float value, float dt, float speed)
 {
     value -= dt * speed;
     return value > 0.0f ? value : 0.0f;
-}
-
-static sdl3d_color color_lerp(sdl3d_color a, sdl3d_color b, float t)
-{
-    t = clampf(t, 0.0f, 1.0f);
-    return (sdl3d_color){
-        (Uint8)((float)a.r + ((float)b.r - (float)a.r) * t),
-        (Uint8)((float)a.g + ((float)b.g - (float)a.g) * t),
-        (Uint8)((float)a.b + ((float)b.b - (float)a.b) * t),
-        (Uint8)((float)a.a + ((float)b.a - (float)a.a) * t),
-    };
-}
-
-static float vec2_length(sdl3d_vec2 value)
-{
-    return SDL_sqrtf(value.x * value.x + value.y * value.y);
-}
-
-static sdl3d_vec2 make_vec2(float x, float y)
-{
-    sdl3d_vec2 value;
-    value.x = x;
-    value.y = y;
-    return value;
-}
-
-static sdl3d_vec2 ball_camera_forward(const pong_state *state)
-{
-    sdl3d_vec2 forward = state->ball_velocity;
-    float len = vec2_length(forward);
-    if (len < 0.001f)
-    {
-        forward.x = 1.0f;
-        forward.y = 0.0f;
-        return forward;
-    }
-
-    forward.x /= len;
-    forward.y /= len;
-    return forward;
-}
-
-static bool ball_camera_is_active(const pong_state *state)
-{
-    const char *camera = sdl3d_game_data_active_camera(state->data);
-    return camera != NULL && SDL_strcmp(camera, "camera.ball_chase") == 0;
 }
 
 static void start_quit_fade(sdl3d_game_context *ctx, pong_state *state)
@@ -167,20 +86,17 @@ static void start_quit_fade(sdl3d_game_context *ctx, pong_state *state)
 
     state->quit_pending = true;
     sdl3d_game_data_transition_desc transition;
-    if (!sdl3d_game_data_get_transition(state->data, "quit", &transition))
+    if (state->app.quit_transition == NULL ||
+        !sdl3d_game_data_get_transition(state->data, state->app.quit_transition, &transition))
     {
-        transition.type = SDL3D_TRANSITION_FADE;
-        transition.direction = SDL3D_TRANSITION_OUT;
-        transition.color = (sdl3d_color){0, 0, 0, 255};
-        transition.duration = 0.45f;
-        transition.done_signal_id = state->signal_quit_fade_done;
+        ctx->quit_requested = true;
+        return;
     }
     sdl3d_transition_start(&state->transition, transition.type, transition.direction, transition.color,
                            transition.duration, transition.done_signal_id);
-    (void)ctx;
 }
 
-static void on_fade_out_done(void *userdata, int signal_id, const sdl3d_properties *payload)
+static void on_quit_signal(void *userdata, int signal_id, const sdl3d_properties *payload)
 {
     sdl3d_game_context *ctx = (sdl3d_game_context *)userdata;
     (void)signal_id;
@@ -188,52 +104,26 @@ static void on_fade_out_done(void *userdata, int signal_id, const sdl3d_properti
     ctx->quit_requested = true;
 }
 
+static sdl3d_registered_actor *actor_with_tags(const pong_state *state, const char *tag0, const char *tag1)
+{
+    const char *tags[2] = {tag0, tag1};
+    return tag1 != NULL ? sdl3d_game_data_find_actor_with_tags(state->data, tags, 2)
+                        : sdl3d_game_data_find_actor_with_tag(state->data, tag0);
+}
+
 static void sync_state_from_data(pong_state *state)
 {
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(state->data, "entity.paddle.player");
-    sdl3d_registered_actor *cpu = sdl3d_game_data_find_actor(state->data, "entity.paddle.cpu");
-    sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(state->data, "entity.ball");
-    sdl3d_registered_actor *player_score = sdl3d_game_data_find_actor(state->data, "entity.score.player");
-    sdl3d_registered_actor *cpu_score = sdl3d_game_data_find_actor(state->data, "entity.score.cpu");
-    sdl3d_registered_actor *match = sdl3d_game_data_find_actor(state->data, "entity.match");
-    sdl3d_registered_actor *presentation = sdl3d_game_data_find_actor(state->data, "entity.presentation");
+    sdl3d_registered_actor *ball = actor_with_tags(state, "ball", NULL);
+    sdl3d_registered_actor *match = actor_with_tags(state, "state", "match");
+    sdl3d_registered_actor *presentation = actor_with_tags(state, "state", "presentation");
 
-    if (player != NULL)
-    {
-        state->player_y = player->position.y;
-    }
-    if (cpu != NULL)
-    {
-        state->cpu_y = cpu->position.y;
-    }
     if (ball != NULL)
     {
-        const sdl3d_vec3 velocity =
-            sdl3d_properties_get_vec3(ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
-        state->ball_position = make_vec2(ball->position.x, ball->position.y);
-        state->ball_velocity = make_vec2(velocity.x, velocity.y);
-        state->ball_z = ball->position.z;
-        state->ball_radius = sdl3d_properties_get_float(ball->props, "radius", 0.22f);
         state->ball_active = sdl3d_properties_get_bool(ball->props, "active_motion", false);
-    }
-    if (player_score != NULL)
-    {
-        state->player_score = sdl3d_properties_get_int(player_score->props, "value", 0);
-    }
-    if (cpu_score != NULL)
-    {
-        state->cpu_score = sdl3d_properties_get_int(cpu_score->props, "value", 0);
     }
     if (match != NULL)
     {
-        const char *winner = sdl3d_properties_get_string(match->props, "winner", "none");
         state->match_finished = sdl3d_properties_get_bool(match->props, "finished", false);
-        if (winner != NULL && SDL_strcmp(winner, "player") == 0)
-            state->winner = PONG_WINNER_PLAYER;
-        else if (winner != NULL && SDL_strcmp(winner, "cpu") == 0)
-            state->winner = PONG_WINNER_CPU;
-        else
-            state->winner = PONG_WINNER_NONE;
     }
     if (presentation != NULL)
     {
@@ -244,7 +134,7 @@ static void sync_state_from_data(pong_state *state)
 
 static sdl3d_registered_actor *presentation_actor(const pong_state *state)
 {
-    return sdl3d_game_data_find_actor(state->data, "entity.presentation");
+    return actor_with_tags(state, "state", "presentation");
 }
 
 static float presentation_float(const pong_state *state, const char *key, float fallback)
@@ -255,13 +145,23 @@ static float presentation_float(const pong_state *state, const char *key, float 
 
 static bool create_particles(pong_state *state)
 {
-    sdl3d_particle_config config;
-    if (!sdl3d_game_data_get_particle_emitter(state->data, "entity.effect.ambient_particles", &config))
+    sdl3d_registered_actor *particles = actor_with_tags(state, "effect", "particles");
+    if (particles == NULL)
     {
-        SDL_SetError("missing entity.effect.ambient_particles particles.emitter component");
+        SDL_SetError("missing effect particles entity");
         return false;
     }
 
+    state->ambient_particles_entity = particles->name;
+    sdl3d_particle_config config;
+    if (!sdl3d_game_data_get_particle_emitter(state->data, state->ambient_particles_entity, &config))
+    {
+        SDL_SetError("missing particles.emitter component");
+        return false;
+    }
+
+    sdl3d_game_data_get_particle_emitter_draw_emissive(state->data, state->ambient_particles_entity,
+                                                       &state->ambient_particles_emissive);
     state->ambient_particles = sdl3d_create_particle_emitter(&config);
     return state->ambient_particles != NULL;
 }
@@ -293,14 +193,45 @@ static bool init_game_data(sdl3d_game_context *ctx, pong_state *state)
     }
     sdl3d_asset_resolver_destroy(assets);
 
-    state->actions.pause = sdl3d_game_data_find_action(state->data, "action.pause");
-    state->actions.exit = sdl3d_game_data_find_action(state->data, "action.exit");
-    state->signal_game_start = sdl3d_game_data_find_signal(state->data, "signal.game.start");
-    state->signal_quit_fade_done = sdl3d_game_data_find_signal(state->data, "signal.app.quit_fade_done");
+    sdl3d_game_data_get_app_control(state->data, &state->app);
 
     sync_state_from_data(state);
-    sdl3d_signal_emit(ctx_bus(ctx), state->signal_game_start, NULL);
+    if (state->app.start_signal_id >= 0)
+    {
+        sdl3d_signal_emit(ctx_bus(ctx), state->app.start_signal_id, NULL);
+    }
     return true;
+}
+
+typedef struct font_capture
+{
+    const char *font_id;
+} font_capture;
+
+static bool capture_first_ui_font(void *userdata, const sdl3d_game_data_ui_text *text)
+{
+    font_capture *capture = (font_capture *)userdata;
+    if (capture->font_id == NULL && text->font != NULL)
+        capture->font_id = text->font;
+    return capture->font_id == NULL;
+}
+
+static bool load_authored_font(pong_state *state)
+{
+    font_capture capture;
+    SDL_zero(capture);
+    sdl3d_game_data_for_each_ui_text(state->data, capture_first_ui_font, &capture);
+    if (capture.font_id == NULL)
+        return false;
+
+    sdl3d_game_data_font_asset font;
+    if (!sdl3d_game_data_get_font_asset(state->data, capture.font_id, &font))
+        return false;
+    if (font.builtin)
+        return sdl3d_load_builtin_font(SDL3D_MEDIA_DIR, font.builtin_id, font.size, &state->font);
+
+    SDL_SetError("Pong demo currently supports built-in authored fonts only");
+    return false;
 }
 
 static bool pong_init(sdl3d_game_context *ctx, void *userdata)
@@ -312,13 +243,13 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
     {
         return false;
     }
-    if (state->signal_quit_fade_done < 0 ||
-        sdl3d_signal_connect(ctx_bus(ctx), state->signal_quit_fade_done, on_fade_out_done, ctx) == 0)
+    if (state->app.quit_signal_id < 0 ||
+        sdl3d_signal_connect(ctx_bus(ctx), state->app.quit_signal_id, on_quit_signal, ctx) == 0)
     {
         return false;
     }
 
-    state->has_font = sdl3d_load_builtin_font(SDL3D_MEDIA_DIR, SDL3D_BUILTIN_FONT_INTER, 34.0f, &state->font);
+    state->has_font = load_authored_font(state);
     if (!state->has_font)
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong font load failed: %s", SDL_GetError());
@@ -337,7 +268,8 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
     sdl3d_set_tonemap_mode(ctx->renderer, render_settings.tonemap);
 
     sdl3d_game_data_transition_desc transition;
-    if (sdl3d_game_data_get_transition(state->data, "startup", &transition))
+    if (state->app.startup_transition != NULL &&
+        sdl3d_game_data_get_transition(state->data, state->app.startup_transition, &transition))
     {
         sdl3d_transition_start(&state->transition, transition.type, transition.direction, transition.color,
                                transition.duration, transition.done_signal_id);
@@ -372,7 +304,7 @@ static void update_visual_effects(pong_state *state, float dt)
 
 static void consume_common_actions(sdl3d_game_context *ctx, pong_state *state)
 {
-    if (sdl3d_input_is_pressed(ctx_input(ctx), state->actions.exit))
+    if (state->app.quit_action_id >= 0 && sdl3d_input_is_pressed(ctx_input(ctx), state->app.quit_action_id))
     {
         start_quit_fade(ctx, state);
     }
@@ -383,7 +315,8 @@ static void pong_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     pong_state *state = (pong_state *)userdata;
 
     consume_common_actions(ctx, state);
-    if (sdl3d_input_is_pressed(ctx_input(ctx), state->actions.pause) && !state->match_finished)
+    if (state->app.pause_action_id >= 0 && sdl3d_input_is_pressed(ctx_input(ctx), state->app.pause_action_id) &&
+        !state->match_finished)
     {
         ctx->paused = true;
         state->pause_flash = 0.0f;
@@ -404,7 +337,7 @@ static void pong_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_
     pong_state *state = (pong_state *)userdata;
 
     consume_common_actions(ctx, state);
-    if (sdl3d_input_is_pressed(ctx_input(ctx), state->actions.pause))
+    if (state->app.pause_action_id >= 0 && sdl3d_input_is_pressed(ctx_input(ctx), state->app.pause_action_id))
     {
         ctx->paused = false;
         return;
@@ -420,11 +353,6 @@ static void pong_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_
     {
         sdl3d_transition_update(&state->transition, ctx_bus(ctx), real_dt);
     }
-}
-
-static bool string_starts_with(const char *value, const char *prefix)
-{
-    return value != NULL && prefix != NULL && SDL_strncmp(value, prefix, SDL_strlen(prefix)) == 0;
 }
 
 static void configure_lights(sdl3d_render_context *renderer, const pong_state *state)
@@ -466,100 +394,11 @@ static void draw_emissive_render_primitive(sdl3d_render_context *renderer,
 static bool draw_authored_primitive(void *userdata, const sdl3d_game_data_render_primitive *primitive)
 {
     primitive_draw_context *context = (primitive_draw_context *)userdata;
-    const pong_state *state = context->state;
-    sdl3d_color color = primitive->color;
-    sdl3d_vec3 size = primitive->size;
-    float radius = primitive->radius;
-    float emissive_r = 0.0f;
-    float emissive_g = 0.0f;
-    float emissive_b = 0.0f;
-
-    if (string_starts_with(primitive->entity_name, "entity.field.border."))
-    {
-        const float flash = clampf(state->border_flash, 0.0f, 1.0f);
-        color = color_lerp(color, (sdl3d_color){210, 235, 255, 255}, flash);
-        if (size.x < size.y)
-            size.x += 0.06f * flash;
-        else
-            size.y += 0.06f * flash;
-        emissive_r = flash * 0.55f;
-        emissive_g = flash * 0.70f;
-        emissive_b = flash;
-    }
-    else if (string_starts_with(primitive->entity_name, "entity.field.center_ticks"))
-    {
-        emissive_r = 0.10f;
-        emissive_g = 0.12f;
-        emissive_b = 0.16f;
-    }
-    else if (string_starts_with(primitive->entity_name, "entity.paddle."))
-    {
-        const float flash = clampf(state->paddle_flash, 0.0f, 1.0f);
-        color = color_lerp(color, (sdl3d_color){255, 255, 255, 255}, flash);
-        emissive_r = flash * 0.35f;
-        emissive_g = flash * 0.42f;
-        emissive_b = flash * 0.50f;
-    }
-    else if (SDL_strcmp(primitive->entity_name, "entity.ball") == 0)
-    {
-        const float pulse = 0.5f + 0.5f * SDL_sinf(state->time * 9.0f);
-        color = color_lerp(color, (sdl3d_color){255, 245, 156, 255}, pulse);
-        emissive_r = 0.75f + pulse * 0.65f;
-        emissive_g = 0.48f + pulse * 0.30f;
-        emissive_b = 0.08f;
-    }
-    else if (primitive->emissive)
-    {
-        emissive_r = 0.2f;
-        emissive_g = 0.2f;
-        emissive_b = 0.2f;
-    }
-
-    draw_emissive_render_primitive(context->renderer, primitive, color, size, radius, emissive_r, emissive_g,
-                                   emissive_b);
+    (void)context->state;
+    draw_emissive_render_primitive(context->renderer, primitive, primitive->color, primitive->size, primitive->radius,
+                                   primitive->emissive_color.x, primitive->emissive_color.y,
+                                   primitive->emissive_color.z);
     return true;
-}
-
-static bool ui_visible(const sdl3d_game_context *ctx, const pong_state *state, const char *visible)
-{
-    if (visible == NULL || SDL_strcmp(visible, "always") == 0)
-        return true;
-    if (SDL_strcmp(visible, "camera.ball_chase") == 0)
-        return ball_camera_is_active(state);
-    if (SDL_strcmp(visible, "match.player_won") == 0)
-        return state->match_finished && state->winner == PONG_WINNER_PLAYER;
-    if (SDL_strcmp(visible, "match.cpu_won") == 0)
-        return state->match_finished && state->winner == PONG_WINNER_CPU;
-    if (SDL_strcmp(visible, "match.finished") == 0)
-        return state->match_finished;
-    if (SDL_strcmp(visible, "paused") == 0)
-        return ctx->paused && !state->match_finished;
-    if (SDL_strcmp(visible, "round.waiting_to_serve") == 0)
-        return !ctx->paused && !state->match_finished && !state->ball_active;
-    return false;
-}
-
-static bool ui_text_content(const pong_state *state, const sdl3d_game_data_ui_text *text, char *buffer,
-                            size_t buffer_size)
-{
-    if (text->source != NULL && SDL_strcmp(text->source, "debug.fps_frame") == 0)
-    {
-        SDL_snprintf(buffer, buffer_size, text->format != NULL ? text->format : "FPS %.0f  Frame %" SDL_PRIu64,
-                     state->displayed_fps, (unsigned long long)state->rendered_frames);
-        return true;
-    }
-    if (text->source != NULL && SDL_strcmp(text->source, "score.player_cpu") == 0)
-    {
-        SDL_snprintf(buffer, buffer_size, text->format != NULL ? text->format : "%02d   %02d", state->player_score,
-                     state->cpu_score);
-        return true;
-    }
-    if (text->text != NULL)
-    {
-        SDL_snprintf(buffer, buffer_size, "%s", text->text);
-        return true;
-    }
-    return false;
 }
 
 typedef struct ui_draw_context
@@ -571,11 +410,17 @@ typedef struct ui_draw_context
 static bool draw_authored_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
 {
     ui_draw_context *draw = (ui_draw_context *)userdata;
-    if (!ui_visible(draw->ctx, draw->state, text->visible))
+    sdl3d_game_data_ui_metrics metrics;
+    SDL_zero(metrics);
+    metrics.paused = draw->ctx->paused;
+    metrics.fps = draw->state->displayed_fps;
+    metrics.frame = draw->state->rendered_frames;
+
+    if (!sdl3d_game_data_ui_text_is_visible(draw->state->data, text, &metrics))
         return true;
 
     char content[128];
-    if (!ui_text_content(draw->state, text, content, sizeof(content)))
+    if (!sdl3d_game_data_format_ui_text(draw->state->data, text, &metrics, content, sizeof(content)))
         return true;
 
     sdl3d_color color = text->color;
@@ -612,44 +457,11 @@ static void draw_hud(sdl3d_game_context *ctx, const pong_state *state)
     sdl3d_game_data_for_each_ui_text(state->data, draw_authored_ui_text, &draw);
 }
 
-static float camera_float_or(const pong_state *state, const char *camera_name, const char *property_name,
-                             float fallback)
-{
-    float value = 0.0f;
-    return sdl3d_game_data_get_camera_float(state->data, camera_name, property_name, &value) ? value : fallback;
-}
-
-static sdl3d_camera3d make_ball_camera(const pong_state *state)
-{
-    const char *camera_name = "camera.ball_chase";
-    const sdl3d_vec2 forward = ball_camera_forward(state);
-    const float ball_z_offset = camera_float_or(state, camera_name, "ball_z_offset", state->ball_radius);
-    const sdl3d_vec3 ball =
-        sdl3d_vec3_make(state->ball_position.x, state->ball_position.y, state->ball_z + ball_z_offset);
-    const float chase_distance = camera_float_or(state, camera_name, "chase_distance", 2.6f);
-    const float camera_height = camera_float_or(state, camera_name, "height", 1.35f);
-    const float lookahead = camera_float_or(state, camera_name, "lookahead", 4.4f);
-    const float target_z_offset = camera_float_or(state, camera_name, "target_z_offset", -0.05f);
-
-    sdl3d_camera3d camera;
-    SDL_zero(camera);
-    camera.position = sdl3d_vec3_make(ball.x - forward.x * chase_distance, ball.y - forward.y * chase_distance,
-                                      ball.z + camera_height);
-    camera.target =
-        sdl3d_vec3_make(ball.x + forward.x * lookahead, ball.y + forward.y * lookahead, ball.z + target_z_offset);
-    camera.up = sdl3d_vec3_make(0.0f, 0.0f, 1.0f);
-    camera.fovy = camera_float_or(state, camera_name, "fovy", 68.0f);
-    camera.projection = SDL3D_CAMERA_PERSPECTIVE;
-    return camera;
-}
-
 static sdl3d_camera3d make_active_camera(const pong_state *state)
 {
-    if (ball_camera_is_active(state))
-        return make_ball_camera(state);
-
     sdl3d_camera3d camera;
-    if (sdl3d_game_data_get_camera(state->data, "camera.overhead", &camera))
+    const char *active_camera = sdl3d_game_data_active_camera(state->data);
+    if (active_camera != NULL && sdl3d_game_data_get_camera(state->data, active_camera, &camera))
         return camera;
 
     SDL_zero(camera);
@@ -695,12 +507,15 @@ static void pong_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     {
         if (state->ambient_particles != NULL)
         {
-            sdl3d_set_emissive(ctx->renderer, 0.8f, 0.9f, 1.0f);
+            sdl3d_set_emissive(ctx->renderer, state->ambient_particles_emissive.x, state->ambient_particles_emissive.y,
+                               state->ambient_particles_emissive.z);
             sdl3d_draw_particles(ctx->renderer, state->ambient_particles);
             sdl3d_set_emissive(ctx->renderer, 0.0f, 0.0f, 0.0f);
         }
         primitive_draw_context draw_context = {ctx->renderer, state};
-        sdl3d_game_data_for_each_render_primitive(state->data, draw_authored_primitive, &draw_context);
+        const sdl3d_game_data_render_eval render_eval = {.time = state->time};
+        sdl3d_game_data_for_each_render_primitive_evaluated(state->data, &render_eval, draw_authored_primitive,
+                                                            &draw_context);
         sdl3d_end_mode_3d(ctx->renderer);
     }
 

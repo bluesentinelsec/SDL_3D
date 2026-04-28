@@ -44,7 +44,7 @@ function pong.reflect_from_paddle(ball, payload, ctx)
 end
 
 function pong.cpu_track_ball(paddle, payload, ctx)
-    local ball = ctx:actor(payload.target_actor_name or "entity.ball")
+    local ball = payload.target_actor_name and ctx:actor(payload.target_actor_name) or ctx:actor_with_tags("ball")
     local ball_position = ball ~= nil and ball.position or nil
     local paddle_position = paddle.position
     if ball_position == nil or paddle_position == nil then
@@ -53,16 +53,12 @@ function pong.cpu_track_ball(paddle, payload, ctx)
 
     local speed = paddle:get_float("speed", 5.5)
     local half_height = paddle:get_float("half_height", 0.95)
-    local match = ctx:actor("entity.match")
+    local match = ctx:actor_with_tags("state", "match")
     local field_half_height = match ~= nil and match:get_float("field_half_height", 5.0) or 5.0
     local max_step = speed * ctx.dt
     local step = math.clamp(ball_position.y - paddle_position.y, -max_step, max_step)
     local next_y = math.clamp(paddle_position.y + step, -field_half_height + half_height, field_half_height - half_height)
     paddle.position = Vec3(paddle_position.x, next_y, paddle_position.z)
-    return true
-end
-
-function pong.ball_chase_camera()
     return true
 end
 
