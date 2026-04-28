@@ -1,8 +1,11 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -52,6 +55,19 @@ bool serve_adapter(void *userdata, sdl3d_game_data_runtime *runtime, const char 
     return true;
 }
 
+bool reload_native_adapter(void *userdata, sdl3d_game_data_runtime *runtime, const char *adapter_name,
+                           sdl3d_registered_actor *target, const sdl3d_properties *payload)
+{
+    auto *capture = static_cast<AdapterCapture *>(userdata);
+    EXPECT_NE(runtime, nullptr);
+    EXPECT_STREQ(adapter_name, "adapter.reload.run");
+    EXPECT_NE(target, nullptr);
+    EXPECT_EQ(payload, nullptr);
+    sdl3d_properties_set_int(target->props, "value", 99);
+    capture->calls++;
+    return true;
+}
+
 void capture_diagnostic(void *userdata, sdl3d_game_data_diagnostic_severity severity, const char *json_path,
                         const char *message)
 {
@@ -69,6 +85,89 @@ std::string read_fixture_file(const char *filename)
 {
     std::ifstream in(fixture_path(filename), std::ios::binary);
     return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+std::filesystem::path unique_test_dir(const char *name)
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path();
+    const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+    for (int attempt = 0; attempt < 100; ++attempt)
+    {
+        const std::filesystem::path dir = root / ("sdl3d_game_data_test_" + std::string(name) + "_" +
+                                                  std::to_string(now) + "_" + std::to_string(attempt));
+        std::error_code error;
+        if (std::filesystem::create_directories(dir, error))
+            return dir;
+    }
+    throw std::runtime_error("failed to create unique game data test directory");
+}
+
+void remove_test_dir(const std::filesystem::path &dir)
+{
+    std::error_code error;
+    std::filesystem::remove_all(dir, error);
+}
+
+void write_text(const std::filesystem::path &path, const char *text)
+{
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream out(path, std::ios::binary);
+    out << text;
+}
+
+void write_hot_reload_json(const std::filesystem::path &dir)
+{
+    write_text(dir / "reload.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Reload", "id": "test.reload", "version": "0.1.0" },
+  "scripts": [
+    { "id": "script.rules", "path": "scripts/rules.lua", "module": "reload.rules" }
+  ],
+  "world": { "name": "world.reload", "kind": "fixed_screen" },
+  "entities": [
+    { "name": "entity.target", "active": true }
+  ],
+  "signals": ["signal.run"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.run",
+        "actions": [
+          { "type": "adapter.invoke", "adapter": "adapter.reload.run", "target": "entity.target" }
+        ]
+      }
+    ]
+  },
+  "adapters": [
+    {
+      "name": "adapter.reload.run",
+      "kind": "action",
+      "script": "script.rules",
+      "function": "run"
+    }
+  ]
+})json");
+}
+
+void write_hot_reload_script(const std::filesystem::path &dir, int value)
+{
+    const std::string script = std::string("local rules = {}\n"
+                                           "function rules.run(target)\n"
+                                           "    target:set_int(\"value\", ") +
+                               std::to_string(value) +
+                               ")\n"
+                               "    return true\n"
+                               "end\n"
+                               "return rules\n";
+    write_text(dir / "scripts" / "rules.lua", script.c_str());
+}
+
+void emit_reload_signal(sdl3d_game_session *session, sdl3d_game_data_runtime *runtime)
+{
+    const int signal = sdl3d_game_data_find_signal(runtime, "signal.run");
+    ASSERT_GE(signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), signal, nullptr);
 }
 
 void append_u16(std::vector<std::uint8_t> &bytes, std::uint16_t value)
@@ -340,6 +439,150 @@ TEST(GameDataRuntime, LoadsLuaBackedGameDataFromMemoryPack)
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
     sdl3d_asset_resolver_destroy(assets);
+}
+
+TEST(GameDataRuntime, ReloadScriptsCommitsUpdatedLuaAdapters)
+{
+    const std::filesystem::path dir = unique_test_dir("reload_success");
+    write_hot_reload_json(dir);
+    write_hot_reload_script(dir, 1);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        sdl3d_game_data_load_file((dir / "reload.game.json").string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, "entity.target");
+    ASSERT_NE(target, nullptr);
+    emit_reload_signal(session, runtime);
+    EXPECT_EQ(sdl3d_properties_get_int(target->props, "value", 0), 1);
+
+    write_hot_reload_script(dir, 2);
+    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    ASSERT_TRUE(sdl3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_reload_scripts(runtime, assets, error, sizeof(error))) << error;
+
+    sdl3d_properties_set_int(target->props, "value", 0);
+    emit_reload_signal(session, runtime);
+    EXPECT_EQ(sdl3d_properties_get_int(target->props, "value", 0), 2);
+
+    sdl3d_asset_resolver_destroy(assets);
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, ReloadScriptsPreservesLastGoodAdapterOnSyntaxFailure)
+{
+    const std::filesystem::path dir = unique_test_dir("reload_syntax_failure");
+    write_hot_reload_json(dir);
+    write_hot_reload_script(dir, 7);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        sdl3d_game_data_load_file((dir / "reload.game.json").string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, "entity.target");
+    ASSERT_NE(target, nullptr);
+    emit_reload_signal(session, runtime);
+    EXPECT_EQ(sdl3d_properties_get_int(target->props, "value", 0), 7);
+
+    write_text(dir / "scripts" / "rules.lua", "local rules = \n");
+    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    ASSERT_TRUE(sdl3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+    EXPECT_FALSE(sdl3d_game_data_reload_scripts(runtime, assets, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("script.rules"), std::string::npos);
+
+    sdl3d_properties_set_int(target->props, "value", 0);
+    emit_reload_signal(session, runtime);
+    EXPECT_EQ(sdl3d_properties_get_int(target->props, "value", 0), 7);
+
+    sdl3d_asset_resolver_destroy(assets);
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, ReloadScriptsPreservesLastGoodAdapterOnMissingFunction)
+{
+    const std::filesystem::path dir = unique_test_dir("reload_missing_function");
+    write_hot_reload_json(dir);
+    write_hot_reload_script(dir, 3);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        sdl3d_game_data_load_file((dir / "reload.game.json").string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, "entity.target");
+    ASSERT_NE(target, nullptr);
+    write_text(dir / "scripts" / "rules.lua", "return {}\n");
+
+    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    ASSERT_TRUE(sdl3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+    EXPECT_FALSE(sdl3d_game_data_reload_scripts(runtime, assets, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("adapter.reload.run"), std::string::npos);
+
+    sdl3d_properties_set_int(target->props, "value", 0);
+    emit_reload_signal(session, runtime);
+    EXPECT_EQ(sdl3d_properties_get_int(target->props, "value", 0), 3);
+
+    sdl3d_asset_resolver_destroy(assets);
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, ReloadScriptsKeepsNativeAdapterOverrides)
+{
+    const std::filesystem::path dir = unique_test_dir("reload_native_override");
+    write_hot_reload_json(dir);
+    write_hot_reload_script(dir, 1);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        sdl3d_game_data_load_file((dir / "reload.game.json").string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    AdapterCapture capture{};
+    ASSERT_TRUE(sdl3d_game_data_register_adapter(runtime, "adapter.reload.run", reload_native_adapter, &capture));
+    write_hot_reload_script(dir, 2);
+
+    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    ASSERT_TRUE(sdl3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_reload_scripts(runtime, assets, error, sizeof(error))) << error;
+
+    sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, "entity.target");
+    ASSERT_NE(target, nullptr);
+    emit_reload_signal(session, runtime);
+    EXPECT_EQ(capture.calls, 1);
+    EXPECT_EQ(sdl3d_properties_get_int(target->props, "value", 0), 99);
+
+    sdl3d_asset_resolver_destroy(assets);
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, ValidatesPongDataWithoutDiagnostics)
