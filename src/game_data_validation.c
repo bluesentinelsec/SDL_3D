@@ -956,6 +956,51 @@ static bool validate_timeline_action(validation_context *ctx, yyjson_val *action
     return validate_one_action(ctx, action, json_path, names);
 }
 
+static bool validate_skip_policy(validation_context *ctx, yyjson_val *policy, const char *json_path,
+                                 validation_names *names)
+{
+    if (policy == NULL)
+        return true;
+    if (!yyjson_is_obj(policy))
+        return validation_error(ctx, json_path, "scene skip_policy must be an object");
+
+    yyjson_val *enabled = obj_get(policy, "enabled");
+    if (enabled != NULL && !yyjson_is_bool(enabled))
+        return validation_error(ctx, json_path, "skip_policy enabled must be a boolean");
+    if (yyjson_is_bool(enabled) && !yyjson_get_bool(enabled))
+        return true;
+
+    const char *input = json_string(policy, "input");
+    const bool input_missing = input == NULL || input[0] == '\0';
+    const bool has_action = json_string(policy, "action") != NULL;
+    const bool input_any = (input_missing && !has_action) || SDL_strcmp(input != NULL ? input : "", "any") == 0 ||
+                           SDL_strcmp(input != NULL ? input : "", "any_input") == 0;
+    const bool input_action = SDL_strcmp(input != NULL ? input : "", "action") == 0 || (input_missing && has_action);
+    const bool input_disabled =
+        SDL_strcmp(input != NULL ? input : "", "none") == 0 || SDL_strcmp(input != NULL ? input : "", "disabled") == 0;
+    if (!input_any && !input_action && !input_disabled)
+        return validation_error(ctx, json_path, "skip_policy input must be any, any_input, action, none, or disabled");
+
+    yyjson_val *preserve = obj_get(policy, "preserve_exit_transition");
+    if (preserve != NULL && !yyjson_is_bool(preserve))
+        return validation_error(ctx, json_path, "skip_policy preserve_exit_transition must be a boolean");
+    yyjson_val *consume = obj_get(policy, "consume_input");
+    if (consume != NULL && !yyjson_is_bool(consume))
+        return validation_error(ctx, json_path, "skip_policy consume_input must be a boolean");
+
+    if (input_disabled)
+        return true;
+
+    const char *scene = json_string(policy, "scene");
+    if (scene == NULL)
+        scene = json_string(policy, "target_scene");
+    if (!require_ref(ctx, &names->scenes, "scene", scene, json_path))
+        return false;
+    if (input_action && !require_ref(ctx, &names->actions, "input action", json_string(policy, "action"), json_path))
+        return false;
+    return true;
+}
+
 static bool validate_logic(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *logic = obj_get(root, "logic");
@@ -1646,6 +1691,10 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
     {
         if (!yyjson_is_obj(timeline))
             return validation_error(ctx, json_path, "scene timeline must be an object");
+        char timeline_skip_path[PATH_BUFFER_SIZE];
+        format_path(timeline_skip_path, sizeof(timeline_skip_path), "%s.timeline.skip_policy", json_path);
+        if (!validate_skip_policy(ctx, obj_get(timeline, "skip_policy"), timeline_skip_path, names))
+            return false;
         yyjson_val *events = obj_get(timeline, "events");
         if (events == NULL)
             events = obj_get(timeline, "tracks");
@@ -1673,6 +1722,11 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
                 return false;
         }
     }
+
+    char skip_path[PATH_BUFFER_SIZE];
+    format_path(skip_path, sizeof(skip_path), "%s.skip_policy", json_path);
+    if (!validate_skip_policy(ctx, obj_get(root, "skip_policy"), skip_path, names))
+        return false;
 
     yyjson_val *splash = obj_get(root, "splash");
     if (splash != NULL)

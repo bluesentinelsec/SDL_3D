@@ -140,9 +140,8 @@ extern "C"
         sdl3d_game_data_app_control app;         /**< Resolved app controls from game data. */
         bool quit_pending;                       /**< True after quit has been requested. */
         bool scene_input_armed;                  /**< True once menu input is idle after scene entry. */
-        const char *splash_scene;                /**< Active splash scene tracked for hold timing. */
-        float splash_elapsed;                    /**< Seconds held after splash transitions finish. */
-        bool splash_skip_requested;              /**< True once input asks the splash to advance. */
+        const char *skip_scene;                  /**< Active scene tracked for pending skip input. */
+        bool skip_requested;                     /**< True once input asks the active scene to skip. */
         sdl3d_game_data_timeline_state timeline; /**< Runtime state for the active scene's authored timeline. */
     } sdl3d_game_data_app_flow;
 

@@ -966,48 +966,80 @@ static void app_flow_consume_scene_shortcuts(sdl3d_game_data_app_flow *flow, sdl
     }
 }
 
-static bool app_flow_capture_splash_input(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime,
-                                          const sdl3d_input_manager *input)
+static bool app_flow_set_scene_without_transition(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime,
+                                                  const char *scene_name)
 {
-    sdl3d_game_data_splash splash;
-    if (flow == NULL || runtime == NULL || !sdl3d_game_data_get_active_splash(runtime, &splash))
+    if (flow == NULL || runtime == NULL || scene_name == NULL)
+        return false;
+
+    if (!sdl3d_game_data_set_active_scene(runtime, scene_name))
+        return false;
+
+    sdl3d_game_data_scene_flow_init(&flow->scene_flow);
+    flow->scene_input_armed = false;
+    sdl3d_game_data_timeline_state_init(&flow->timeline);
+    return true;
+}
+
+static bool app_flow_apply_skip_policy(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime,
+                                       const sdl3d_input_manager *input, bool capture_input, bool *out_applied)
+{
+    if (out_applied != NULL)
+        *out_applied = false;
+    if (flow == NULL || runtime == NULL)
+        return false;
+
+    sdl3d_game_data_skip_policy policy;
+    if (!sdl3d_game_data_get_active_skip_policy(runtime, &policy))
     {
-        if (flow != NULL)
-        {
-            flow->splash_scene = NULL;
-            flow->splash_elapsed = 0.0f;
-            flow->splash_skip_requested = false;
-        }
+        flow->skip_scene = NULL;
+        flow->skip_requested = false;
         return false;
     }
 
     const char *active_scene = sdl3d_game_data_active_scene(runtime);
-    if (flow->splash_scene != active_scene)
+    if (flow->skip_scene != active_scene)
     {
-        flow->splash_scene = active_scene;
-        flow->splash_elapsed = 0.0f;
-        flow->splash_skip_requested = false;
-    }
-    if (splash.skip_on_input && sdl3d_input_any_pressed(input))
-        flow->splash_skip_requested = true;
-    return true;
-}
-
-static void app_flow_advance_splash(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime, float dt)
-{
-    if (flow == NULL || runtime == NULL || flow->quit_pending || flow->transition.active ||
-        sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
-    {
-        return;
+        flow->skip_scene = active_scene;
+        flow->skip_requested = false;
     }
 
-    sdl3d_game_data_splash splash;
-    if (!sdl3d_game_data_get_active_splash(runtime, &splash))
-        return;
+    bool consumed = false;
+    if (capture_input && input != NULL)
+    {
+        bool matched = false;
+        if (policy.input == SDL3D_GAME_DATA_SKIP_INPUT_ANY)
+        {
+            matched = sdl3d_input_any_pressed(input);
+        }
+        else if (policy.input == SDL3D_GAME_DATA_SKIP_INPUT_ACTION)
+        {
+            matched = policy.action_id >= 0 && sdl3d_game_data_active_scene_allows_action(runtime, policy.action_id) &&
+                      sdl3d_input_is_pressed(input, policy.action_id);
+        }
 
-    flow->splash_elapsed += dt > 0.0f ? dt : 0.0f;
-    if (flow->splash_skip_requested || flow->splash_elapsed >= splash.hold_seconds)
-        (void)app_flow_request_scene(flow, runtime, splash.next_scene);
+        if (matched)
+        {
+            flow->skip_requested = true;
+            consumed = policy.consume_input;
+        }
+    }
+
+    if (flow->skip_requested && !flow->quit_pending && !flow->transition.active &&
+        !sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
+    {
+        const bool requested = policy.preserve_exit_transition
+                                   ? app_flow_request_scene(flow, runtime, policy.scene)
+                                   : app_flow_set_scene_without_transition(flow, runtime, policy.scene);
+        if (requested)
+        {
+            flow->skip_requested = false;
+            if (out_applied != NULL)
+                *out_applied = true;
+        }
+    }
+
+    return consumed;
 }
 
 static bool app_flow_update_timeline(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime, float dt)
@@ -1058,9 +1090,8 @@ bool sdl3d_game_data_app_flow_start(sdl3d_game_data_app_flow *flow, sdl3d_game_d
     sdl3d_transition_reset(&flow->transition);
     flow->quit_pending = false;
     flow->scene_input_armed = false;
-    flow->splash_scene = NULL;
-    flow->splash_elapsed = 0.0f;
-    flow->splash_skip_requested = false;
+    flow->skip_scene = NULL;
+    flow->skip_requested = false;
     sdl3d_game_data_timeline_state_init(&flow->timeline);
     if (!sdl3d_game_data_get_app_control(runtime, &flow->app))
         return false;
@@ -1093,9 +1124,10 @@ bool sdl3d_game_data_app_flow_update(sdl3d_game_data_app_flow *flow, sdl3d_game_
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(ctx->session);
     sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(ctx->session);
-    const bool splash_active = app_flow_capture_splash_input(flow, runtime, input);
+    bool skip_applied = false;
+    const bool skip_consumed = app_flow_apply_skip_policy(flow, runtime, input, true, &skip_applied);
 
-    if (!splash_active)
+    if (!skip_consumed)
     {
         if (flow->app.quit_action_id >= 0 &&
             sdl3d_game_data_active_scene_allows_action(runtime, flow->app.quit_action_id) &&
@@ -1126,9 +1158,11 @@ bool sdl3d_game_data_app_flow_update(sdl3d_game_data_app_flow *flow, sdl3d_game_
     const bool scene_transitioning_before = sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow);
     app_flow_update_transition(flow, ctx, bus, dt);
     sdl3d_game_data_scene_flow_update(&flow->scene_flow, runtime, bus, dt);
-    if (!scene_transitioning_before && !app_flow_update_timeline(flow, runtime, dt))
+    bool deferred_skip_applied = false;
+    (void)app_flow_apply_skip_policy(flow, runtime, input, false, &deferred_skip_applied);
+    skip_applied = skip_applied || deferred_skip_applied;
+    if (!scene_transitioning_before && !skip_applied && !app_flow_update_timeline(flow, runtime, dt))
         return false;
-    app_flow_advance_splash(flow, runtime, dt);
     return true;
 }
 
