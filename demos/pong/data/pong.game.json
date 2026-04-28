@@ -13,7 +13,7 @@
     "backend": "auto",
     "tick_rate": 0.008333333,
     "max_ticks_per_frame": 12,
-    "enable_audio": false,
+    "enable_audio": true,
     "pause": {
       "action": "action.pause",
       "allowed_if": {
@@ -153,6 +153,46 @@
       {
         "id": "image.splash.logo",
         "path": "asset://images/splash-logo.jpg"
+      }
+    ],
+    "sounds": [
+      {
+        "id": "sound.ui.select",
+        "path": "asset://audio/ui/click1.wav",
+        "volume": 0.65,
+        "bus": "sfx"
+      },
+      {
+        "id": "sound.ui.move",
+        "path": "asset://audio/ui/rollover1.wav",
+        "volume": 0.45,
+        "bus": "sfx"
+      },
+      {
+        "id": "sound.ui.splash",
+        "path": "asset://audio/ui/switch3.wav",
+        "volume": 0.55,
+        "bus": "sfx"
+      },
+      {
+        "id": "sound.pong.hit",
+        "path": "asset://audio/ui/click3.wav",
+        "volume": 0.55,
+        "bus": "sfx"
+      },
+      {
+        "id": "sound.pong.score",
+        "path": "asset://audio/ui/switch10.wav",
+        "volume": 0.75,
+        "bus": "sfx"
+      }
+    ],
+    "music": [
+      {
+        "id": "music.title",
+        "path": "asset://audio/music/moonlight-sonata-allegretto.ogg",
+        "volume": 0.50,
+        "loop": true
       }
     ]
   },
@@ -622,6 +662,8 @@
     "signal.match.restart",
     "signal.camera.ball.toggle",
     "signal.presentation.flash_border",
+    "signal.ui.menu.move",
+    "signal.ui.menu.select",
     "signal.app.quit_fade_done"
   ],
   "logic": {
@@ -690,6 +732,18 @@
     ],
     "bindings": [
       {
+        "signal": "signal.ui.menu.move",
+        "actions": [
+          { "type": "audio.play_sfx", "sound": "sound.ui.move" }
+        ]
+      },
+      {
+        "signal": "signal.ui.menu.select",
+        "actions": [
+          { "type": "audio.play_sfx", "sound": "sound.ui.select" }
+        ]
+      },
+      {
         "signal": "signal.game.start",
         "actions": [
           { "type": "timer.start", "timer": "timer.round.serve" }
@@ -706,12 +760,14 @@
         "signal": "signal.ball.hit_paddle",
         "actions": [
           { "type": "adapter.invoke", "adapter": "adapter.pong.reflect_from_paddle", "target": "entity.ball" },
+          { "type": "audio.play_sfx", "sound": "sound.pong.hit" },
           { "type": "signal.emit", "signal": "signal.presentation.flash_border" }
         ]
       },
       {
         "signal": "signal.ball.hit_wall",
         "actions": [
+          { "type": "audio.play_sfx", "sound": "sound.pong.hit", "volume": 0.35 },
           { "type": "signal.emit", "signal": "signal.presentation.flash_border" }
         ]
       },
@@ -737,6 +793,7 @@
       {
         "signal": "signal.score.player",
         "actions": [
+          { "type": "audio.play_sfx", "sound": "sound.pong.score" },
           { "type": "property.add", "target": "entity.score.player", "key": "value", "value": 1 },
           { "type": "signal.emit", "signal": "signal.round.reset" },
           {
@@ -760,6 +817,7 @@
       {
         "signal": "signal.score.cpu",
         "actions": [
+          { "type": "audio.play_sfx", "sound": "sound.pong.score" },
           { "type": "property.add", "target": "entity.score.cpu", "key": "value", "value": 1 },
           { "type": "signal.emit", "signal": "signal.round.reset" },
           {

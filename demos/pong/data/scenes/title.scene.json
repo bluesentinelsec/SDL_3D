@@ -21,6 +21,8 @@
       "up_action": "action.menu.up",
       "down_action": "action.menu.down",
       "select_action": "action.menu.select",
+      "move_signal": "signal.ui.menu.move",
+      "select_signal": "signal.ui.menu.select",
       "selected": 0,
       "items": [
         { "label": "Play", "scene": "scene.play" },

@@ -120,6 +120,8 @@ extern "C"
         const char *scene;    /**< Runtime-owned selected target scene, or NULL. */
         int selected_index;   /**< Selected item index after this update, or -1. */
         int signal_id;        /**< Selected signal id, or -1. */
+        int move_signal_id;   /**< Menu navigation signal id emitted by the host, or -1. */
+        int select_signal_id; /**< Menu activation signal id emitted by the host, or -1. */
         bool handled_input;   /**< True when a menu action was consumed. */
         bool selected;        /**< True when the selected item was activated. */
         bool quit;            /**< True when the selected item requests quit. */

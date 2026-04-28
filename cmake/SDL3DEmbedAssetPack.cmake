@@ -51,6 +51,17 @@ function(_sdl3d_bytes_to_c_array out_var)
     set(${out_var} "${_out}" PARENT_SCOPE)
 endfunction()
 
+function(_sdl3d_hex_to_c_array out_var hex)
+    if("${hex}" STREQUAL "")
+        set(${out_var} "" PARENT_SCOPE)
+        return()
+    endif()
+
+    string(REGEX REPLACE "([0-9A-Fa-f][0-9A-Fa-f])" "0x\\1, " _out "${hex}")
+    string(REGEX REPLACE "((0x[0-9A-Fa-f][0-9A-Fa-f], ){24})" "\\1\n    " _out "${_out}")
+    set(${out_var} "    ${_out}\n" PARENT_SCOPE)
+endfunction()
+
 if(NOT OUTPUT_C OR NOT OUTPUT_H OR NOT SYMBOL OR NOT ROOT OR NOT FILES)
     message(FATAL_ERROR "SDL3DEmbedAssetPack.cmake requires OUTPUT_C, OUTPUT_H, SYMBOL, ROOT, and FILES")
 endif()
@@ -109,10 +120,11 @@ foreach(_file IN LISTS _files)
 endforeach()
 
 foreach(_chunk IN LISTS _data_chunks)
-    _sdl3d_append_hex(_bytes "${_chunk}")
+    _sdl3d_hex_to_c_array(_chunk_array "${_chunk}")
+    string(APPEND _data_array "${_chunk_array}")
 endforeach()
 
-_sdl3d_bytes_to_c_array(_array ${_bytes})
+_sdl3d_bytes_to_c_array(_header_array ${_bytes})
 get_filename_component(_output_c_dir "${OUTPUT_C}" DIRECTORY)
 get_filename_component(_output_h_dir "${OUTPUT_H}" DIRECTORY)
 file(MAKE_DIRECTORY "${_output_c_dir}")
@@ -132,6 +144,7 @@ file(WRITE "${OUTPUT_H}"
 file(WRITE "${OUTPUT_C}"
 "#include \"${SYMBOL}.h\"\n\n"
 "const unsigned char ${SYMBOL}[] = {\n"
-"${_array}"
+"${_header_array}"
+"${_data_array}"
 "};\n\n"
 "const size_t ${SYMBOL}_size = sizeof(${SYMBOL});\n")

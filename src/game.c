@@ -391,11 +391,18 @@ static bool sdl3d_game_create_context(const sdl3d_game_config *config, sdl3d_gam
     {
         session_desc.create_services |= SDL3D_GAME_SESSION_SERVICE_AUDIO;
         session_desc.optional_audio = true;
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio requested by game config");
+    }
+    else
+    {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio not requested by game config");
     }
     if (!sdl3d_game_session_create(&session_desc, &ctx->session))
     {
         return false;
     }
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio engine %s",
+                sdl3d_game_session_get_audio(ctx->session) != NULL ? "created" : "unavailable");
 
     return true;
 }

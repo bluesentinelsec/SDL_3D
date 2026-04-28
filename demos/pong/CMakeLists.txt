@@ -1,4 +1,11 @@
+file(GLOB SDL3D_PONG_AUDIO_FILES CONFIGURE_DEPENDS
+    RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/data"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/audio/music/*"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/audio/ui/*")
+list(SORT SDL3D_PONG_AUDIO_FILES)
+
 set(SDL3D_PONG_ASSET_FILES
+    ${SDL3D_PONG_AUDIO_FILES}
     images/splash-logo.jpg
     pong.game.json
     scenes/options.scene.json
