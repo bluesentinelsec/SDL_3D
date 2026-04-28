@@ -655,6 +655,58 @@ static yyjson_val *find_camera_json(const sdl3d_game_data_runtime *runtime, cons
     return NULL;
 }
 
+static sdl3d_backend parse_backend(const char *value, sdl3d_backend fallback)
+{
+    if (value == NULL)
+        return fallback;
+    if (SDL_strcasecmp(value, "auto") == 0)
+        return SDL3D_BACKEND_AUTO;
+    if (SDL_strcasecmp(value, "software") == 0)
+        return SDL3D_BACKEND_SOFTWARE;
+    if (SDL_strcasecmp(value, "sdlgpu") == 0 || SDL_strcasecmp(value, "gpu") == 0)
+        return SDL3D_BACKEND_SDLGPU;
+    return fallback;
+}
+
+static sdl3d_tonemap_mode parse_tonemap(const char *value, sdl3d_tonemap_mode fallback)
+{
+    if (value == NULL)
+        return fallback;
+    if (SDL_strcasecmp(value, "none") == 0)
+        return SDL3D_TONEMAP_NONE;
+    if (SDL_strcasecmp(value, "reinhard") == 0)
+        return SDL3D_TONEMAP_REINHARD;
+    if (SDL_strcasecmp(value, "aces") == 0)
+        return SDL3D_TONEMAP_ACES;
+    return fallback;
+}
+
+static sdl3d_transition_type parse_transition_type(const char *value, sdl3d_transition_type fallback)
+{
+    if (value == NULL)
+        return fallback;
+    if (SDL_strcasecmp(value, "fade") == 0)
+        return SDL3D_TRANSITION_FADE;
+    if (SDL_strcasecmp(value, "circle") == 0)
+        return SDL3D_TRANSITION_CIRCLE;
+    if (SDL_strcasecmp(value, "melt") == 0)
+        return SDL3D_TRANSITION_MELT;
+    if (SDL_strcasecmp(value, "pixelate") == 0)
+        return SDL3D_TRANSITION_PIXELATE;
+    return fallback;
+}
+
+static sdl3d_transition_direction parse_transition_direction(const char *value, sdl3d_transition_direction fallback)
+{
+    if (value == NULL)
+        return fallback;
+    if (SDL_strcasecmp(value, "in") == 0)
+        return SDL3D_TRANSITION_IN;
+    if (SDL_strcasecmp(value, "out") == 0)
+        return SDL3D_TRANSITION_OUT;
+    return fallback;
+}
+
 static int axis_index(const char *axis)
 {
     if (axis == NULL)
@@ -1273,6 +1325,93 @@ bool sdl3d_game_data_get_particle_emitter(const sdl3d_game_data_runtime *runtime
     out_config->additive_blend = json_bool(component, "additive_blend", false);
     out_config->texture = NULL;
     out_config->random_seed = (Uint32)json_int(component, "random_seed", 0);
+    return true;
+}
+
+bool sdl3d_game_data_get_render_settings(const sdl3d_game_data_runtime *runtime,
+                                         sdl3d_game_data_render_settings *out_settings)
+{
+    if (out_settings != NULL)
+    {
+        SDL_zero(*out_settings);
+        out_settings->clear_color = (sdl3d_color){0, 0, 0, 255};
+        out_settings->lighting_enabled = true;
+        out_settings->bloom_enabled = true;
+        out_settings->ssao_enabled = true;
+        out_settings->tonemap = SDL3D_TONEMAP_ACES;
+    }
+    if (runtime == NULL || out_settings == NULL)
+        return false;
+
+    yyjson_val *render = obj_get(runtime_root(runtime), "render");
+    if (!yyjson_is_obj(render))
+        return true;
+
+    out_settings->clear_color = json_color(render, "clear_color", out_settings->clear_color);
+    out_settings->lighting_enabled = json_bool(render, "lighting", out_settings->lighting_enabled);
+    out_settings->bloom_enabled = json_bool(render, "bloom", out_settings->bloom_enabled);
+    out_settings->ssao_enabled = json_bool(render, "ssao", out_settings->ssao_enabled);
+    out_settings->tonemap = parse_tonemap(json_string(render, "tonemap", NULL), out_settings->tonemap);
+    return true;
+}
+
+bool sdl3d_game_data_get_transition(const sdl3d_game_data_runtime *runtime, const char *name,
+                                    sdl3d_game_data_transition_desc *out_transition)
+{
+    if (out_transition != NULL)
+    {
+        SDL_zero(*out_transition);
+        out_transition->type = SDL3D_TRANSITION_FADE;
+        out_transition->direction = SDL3D_TRANSITION_IN;
+        out_transition->color = (sdl3d_color){0, 0, 0, 255};
+        out_transition->duration = 0.5f;
+        out_transition->done_signal_id = -1;
+    }
+    if (runtime == NULL || name == NULL || out_transition == NULL)
+        return false;
+
+    yyjson_val *transition = obj_get(obj_get(runtime_root(runtime), "transitions"), name);
+    if (!yyjson_is_obj(transition))
+        return false;
+
+    out_transition->type = parse_transition_type(json_string(transition, "type", NULL), out_transition->type);
+    out_transition->direction =
+        parse_transition_direction(json_string(transition, "direction", NULL), out_transition->direction);
+    out_transition->color = json_color(transition, "color", out_transition->color);
+    out_transition->duration = json_float(transition, "duration", out_transition->duration);
+    const char *done_signal = json_string(transition, "done_signal", NULL);
+    out_transition->done_signal_id =
+        done_signal != NULL ? sdl3d_game_data_find_signal(runtime, done_signal) : out_transition->done_signal_id;
+    return true;
+}
+
+bool sdl3d_game_data_for_each_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_ui_text_fn callback,
+                                      void *userdata)
+{
+    if (runtime == NULL || callback == NULL)
+        return false;
+
+    yyjson_val *texts = obj_get(obj_get(runtime_root(runtime), "ui"), "text");
+    for (size_t i = 0; yyjson_is_arr(texts) && i < yyjson_arr_size(texts); ++i)
+    {
+        yyjson_val *item = yyjson_arr_get(texts, i);
+        sdl3d_game_data_ui_text text;
+        SDL_zero(text);
+        text.name = json_string(item, "name", NULL);
+        text.font = json_string(item, "font", NULL);
+        text.text = json_string(item, "text", NULL);
+        text.format = json_string(item, "format", NULL);
+        text.source = json_string(item, "source", NULL);
+        text.visible = json_string(item, "visible", "always");
+        text.x = json_float(item, "x", 0.0f);
+        text.y = json_float(item, "y", 0.0f);
+        text.normalized = json_bool(item, "normalized", false);
+        text.centered = json_bool(item, "centered", false);
+        text.pulse_alpha = json_bool(item, "pulse_alpha", false);
+        text.color = json_color(item, "color", (sdl3d_color){255, 255, 255, 255});
+        if (!callback(userdata, &text))
+            return true;
+    }
     return true;
 }
 
@@ -2392,6 +2531,114 @@ bool sdl3d_game_data_reload_scripts(sdl3d_game_data_runtime *runtime, sdl3d_asse
     SDL_free(loading);
     SDL_free(loaded);
     return true;
+}
+
+static bool apply_app_config_from_root(yyjson_val *root, sdl3d_game_config *out_config, char *title_buffer,
+                                       int title_buffer_size, char *error_buffer, int error_buffer_size)
+{
+    if (!yyjson_is_obj(root) || SDL_strcmp(json_string(root, "schema", ""), "sdl3d.game.v0") != 0)
+    {
+        set_error(error_buffer, error_buffer_size, "unsupported or missing game data schema");
+        return false;
+    }
+
+    yyjson_val *app = obj_get(root, "app");
+    if (!yyjson_is_obj(app))
+        return true;
+
+    const char *title = json_string(app, "title", NULL);
+    if (title != NULL && title_buffer != NULL && title_buffer_size > 0)
+    {
+        SDL_snprintf(title_buffer, (size_t)title_buffer_size, "%s", title);
+        out_config->title = title_buffer;
+    }
+    out_config->width = json_int(app, "width", out_config->width);
+    out_config->height = json_int(app, "height", out_config->height);
+    out_config->backend = parse_backend(json_string(app, "backend", NULL), out_config->backend);
+    out_config->tick_rate = json_float(app, "tick_rate", out_config->tick_rate);
+    out_config->max_ticks_per_frame = json_int(app, "max_ticks_per_frame", out_config->max_ticks_per_frame);
+    out_config->enable_audio = json_bool(app, "enable_audio", out_config->enable_audio);
+    return true;
+}
+
+bool sdl3d_game_data_load_app_config_asset(sdl3d_asset_resolver *assets, const char *asset_path,
+                                           sdl3d_game_config *out_config, char *title_buffer, int title_buffer_size,
+                                           char *error_buffer, int error_buffer_size)
+{
+    if (assets == NULL || asset_path == NULL || asset_path[0] == '\0' || out_config == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "invalid app config load arguments");
+        return false;
+    }
+
+    sdl3d_asset_buffer buffer;
+    SDL_zero(buffer);
+    char asset_error[256];
+    if (!sdl3d_asset_resolver_read_file(assets, asset_path, &buffer, asset_error, (int)sizeof(asset_error)))
+    {
+        if (error_buffer != NULL && error_buffer_size > 0)
+            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "failed to read game data asset %s: %s", asset_path,
+                         asset_error);
+        return false;
+    }
+
+    yyjson_read_err err;
+    yyjson_doc *doc = yyjson_read_opts((char *)buffer.data, buffer.size, YYJSON_READ_NOFLAG, NULL, &err);
+    sdl3d_asset_buffer_free(&buffer);
+    if (doc == NULL)
+    {
+        if (error_buffer != NULL && error_buffer_size > 0)
+            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "yyjson error %u at byte %llu: %s", err.code,
+                         (unsigned long long)err.pos, err.msg != NULL ? err.msg : "");
+        return false;
+    }
+
+    const bool ok = apply_app_config_from_root(yyjson_doc_get_root(doc), out_config, title_buffer, title_buffer_size,
+                                               error_buffer, error_buffer_size);
+    yyjson_doc_free(doc);
+    return ok;
+}
+
+bool sdl3d_game_data_load_app_config_file(const char *path, sdl3d_game_config *out_config, char *title_buffer,
+                                          int title_buffer_size, char *error_buffer, int error_buffer_size)
+{
+    if (path == NULL || path[0] == '\0' || out_config == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "invalid app config load arguments");
+        return false;
+    }
+
+    char *base_dir = path_dirname(path);
+    char *asset_name = path_basename(path);
+    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    if (base_dir == NULL || asset_name == NULL || assets == NULL)
+    {
+        SDL_free(base_dir);
+        SDL_free(asset_name);
+        sdl3d_asset_resolver_destroy(assets);
+        set_error(error_buffer, error_buffer_size, "failed to allocate app config loader");
+        return false;
+    }
+
+    char asset_error[256];
+    const bool mounted = sdl3d_asset_resolver_mount_directory(assets, base_dir, asset_error, (int)sizeof(asset_error));
+    bool ok = false;
+    if (!mounted)
+    {
+        if (error_buffer != NULL && error_buffer_size > 0)
+            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "failed to mount game data directory %s: %s",
+                         base_dir, asset_error);
+    }
+    else
+    {
+        ok = sdl3d_game_data_load_app_config_asset(assets, asset_name, out_config, title_buffer, title_buffer_size,
+                                                   error_buffer, error_buffer_size);
+    }
+
+    sdl3d_asset_resolver_destroy(assets);
+    SDL_free(base_dir);
+    SDL_free(asset_name);
+    return ok;
 }
 
 bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_path, sdl3d_game_session *session,

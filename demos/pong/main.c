@@ -25,15 +25,6 @@
 #include "sdl3d_pong_assets.h"
 #endif
 
-#define PONG_WINDOW_WIDTH 1280
-#define PONG_WINDOW_HEIGHT 720
-#define PONG_TICK_RATE (1.0f / 120.0f)
-
-enum
-{
-    SIG_PONG_FADE_OUT_DONE = 9000
-};
-
 typedef enum pong_winner
 {
     PONG_WINNER_NONE = 0,
@@ -65,6 +56,7 @@ typedef struct pong_state
     int fps_sample_frames;
     Uint64 rendered_frames;
     int signal_game_start;
+    int signal_quit_fade_done;
     int player_score;
     int cpu_score;
     float player_y;
@@ -78,6 +70,18 @@ typedef struct pong_state
     pong_winner winner;
     bool quit_pending;
 } pong_state;
+
+static bool mount_pong_assets(sdl3d_asset_resolver *assets, char *error, int error_size)
+{
+#if SDL3D_PONG_EMBEDDED_ASSETS
+    return sdl3d_asset_resolver_mount_memory_pack(assets, sdl3d_pong_assets, sdl3d_pong_assets_size, "pong.embedded",
+                                                  error, error_size);
+#elif defined(SDL3D_PONG_PACK_PATH)
+    return sdl3d_asset_resolver_mount_pack_file(assets, SDL3D_PONG_PACK_PATH, error, error_size);
+#else
+    return sdl3d_asset_resolver_mount_directory(assets, SDL3D_PONG_DATA_DIR, error, error_size);
+#endif
+}
 
 static sdl3d_input_manager *ctx_input(const sdl3d_game_context *ctx)
 {
@@ -162,8 +166,17 @@ static void start_quit_fade(sdl3d_game_context *ctx, pong_state *state)
     }
 
     state->quit_pending = true;
-    sdl3d_transition_start(&state->transition, SDL3D_TRANSITION_FADE, SDL3D_TRANSITION_OUT, (sdl3d_color){0, 0, 0, 255},
-                           0.45f, SIG_PONG_FADE_OUT_DONE);
+    sdl3d_game_data_transition_desc transition;
+    if (!sdl3d_game_data_get_transition(state->data, "quit", &transition))
+    {
+        transition.type = SDL3D_TRANSITION_FADE;
+        transition.direction = SDL3D_TRANSITION_OUT;
+        transition.color = (sdl3d_color){0, 0, 0, 255};
+        transition.duration = 0.45f;
+        transition.done_signal_id = state->signal_quit_fade_done;
+    }
+    sdl3d_transition_start(&state->transition, transition.type, transition.direction, transition.color,
+                           transition.duration, transition.done_signal_id);
     (void)ctx;
 }
 
@@ -240,14 +253,6 @@ static float presentation_float(const pong_state *state, const char *key, float 
     return presentation != NULL ? sdl3d_properties_get_float(presentation->props, key, fallback) : fallback;
 }
 
-static const char *presentation_string(const pong_state *state, const char *key, const char *fallback)
-{
-    sdl3d_registered_actor *presentation = presentation_actor(state);
-    const char *value =
-        presentation != NULL ? sdl3d_properties_get_string(presentation->props, key, fallback) : fallback;
-    return value != NULL ? value : fallback;
-}
-
 static bool create_particles(pong_state *state)
 {
     sdl3d_particle_config config;
@@ -271,14 +276,7 @@ static bool init_game_data(sdl3d_game_context *ctx, pong_state *state)
     }
 
     char error[512];
-#if SDL3D_PONG_EMBEDDED_ASSETS
-    bool assets_ready = sdl3d_asset_resolver_mount_memory_pack(assets, sdl3d_pong_assets, sdl3d_pong_assets_size,
-                                                               "pong.embedded", error, (int)sizeof(error));
-#elif defined(SDL3D_PONG_PACK_PATH)
-    bool assets_ready = sdl3d_asset_resolver_mount_pack_file(assets, SDL3D_PONG_PACK_PATH, error, (int)sizeof(error));
-#else
-    bool assets_ready = sdl3d_asset_resolver_mount_directory(assets, SDL3D_PONG_DATA_DIR, error, (int)sizeof(error));
-#endif
+    bool assets_ready = mount_pong_assets(assets, error, (int)sizeof(error));
     if (!assets_ready)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong asset mount failed: %s", error);
@@ -298,6 +296,7 @@ static bool init_game_data(sdl3d_game_context *ctx, pong_state *state)
     state->actions.pause = sdl3d_game_data_find_action(state->data, "action.pause");
     state->actions.exit = sdl3d_game_data_find_action(state->data, "action.exit");
     state->signal_game_start = sdl3d_game_data_find_signal(state->data, "signal.game.start");
+    state->signal_quit_fade_done = sdl3d_game_data_find_signal(state->data, "signal.app.quit_fade_done");
 
     sync_state_from_data(state);
     sdl3d_signal_emit(ctx_bus(ctx), state->signal_game_start, NULL);
@@ -309,12 +308,12 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
     pong_state *state = (pong_state *)userdata;
     SDL_zero(*state);
 
-    if (sdl3d_signal_connect(ctx_bus(ctx), SIG_PONG_FADE_OUT_DONE, on_fade_out_done, ctx) == 0)
+    if (!init_game_data(ctx, state))
     {
         return false;
     }
-
-    if (!init_game_data(ctx, state))
+    if (state->signal_quit_fade_done < 0 ||
+        sdl3d_signal_connect(ctx_bus(ctx), state->signal_quit_fade_done, on_fade_out_done, ctx) == 0)
     {
         return false;
     }
@@ -330,14 +329,19 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong particles disabled: %s", SDL_GetError());
     }
 
-    sdl3d_set_lighting_enabled(ctx->renderer, true);
-    sdl3d_set_ambient_light(ctx->renderer, 0.015f, 0.018f, 0.025f);
-    sdl3d_set_bloom_enabled(ctx->renderer, true);
-    sdl3d_set_ssao_enabled(ctx->renderer, true);
-    sdl3d_set_tonemap_mode(ctx->renderer, SDL3D_TONEMAP_ACES);
+    sdl3d_game_data_render_settings render_settings;
+    sdl3d_game_data_get_render_settings(state->data, &render_settings);
+    sdl3d_set_lighting_enabled(ctx->renderer, render_settings.lighting_enabled);
+    sdl3d_set_bloom_enabled(ctx->renderer, render_settings.bloom_enabled);
+    sdl3d_set_ssao_enabled(ctx->renderer, render_settings.ssao_enabled);
+    sdl3d_set_tonemap_mode(ctx->renderer, render_settings.tonemap);
 
-    sdl3d_transition_start(&state->transition, SDL3D_TRANSITION_FADE, SDL3D_TRANSITION_IN, (sdl3d_color){0, 0, 0, 255},
-                           0.7f, -1);
+    sdl3d_game_data_transition_desc transition;
+    if (sdl3d_game_data_get_transition(state->data, "startup", &transition))
+    {
+        sdl3d_transition_start(&state->transition, transition.type, transition.direction, transition.color,
+                               transition.duration, transition.done_signal_id);
+    }
     return true;
 }
 
@@ -516,14 +520,85 @@ static bool draw_authored_primitive(void *userdata, const sdl3d_game_data_render
     return true;
 }
 
-static void draw_centered_text(sdl3d_render_context *renderer, const sdl3d_font *font, const char *text, float y,
-                               sdl3d_color color)
+static bool ui_visible(const sdl3d_game_context *ctx, const pong_state *state, const char *visible)
 {
-    float text_w = 0.0f;
-    float text_h = 0.0f;
-    sdl3d_measure_text(font, text, &text_w, &text_h);
-    const int width = sdl3d_get_render_context_width(renderer);
-    sdl3d_draw_text_overlay(renderer, font, text, ((float)width - text_w) * 0.5f, y, color);
+    if (visible == NULL || SDL_strcmp(visible, "always") == 0)
+        return true;
+    if (SDL_strcmp(visible, "camera.ball_chase") == 0)
+        return ball_camera_is_active(state);
+    if (SDL_strcmp(visible, "match.player_won") == 0)
+        return state->match_finished && state->winner == PONG_WINNER_PLAYER;
+    if (SDL_strcmp(visible, "match.cpu_won") == 0)
+        return state->match_finished && state->winner == PONG_WINNER_CPU;
+    if (SDL_strcmp(visible, "match.finished") == 0)
+        return state->match_finished;
+    if (SDL_strcmp(visible, "paused") == 0)
+        return ctx->paused && !state->match_finished;
+    if (SDL_strcmp(visible, "round.waiting_to_serve") == 0)
+        return !ctx->paused && !state->match_finished && !state->ball_active;
+    return false;
+}
+
+static bool ui_text_content(const pong_state *state, const sdl3d_game_data_ui_text *text, char *buffer,
+                            size_t buffer_size)
+{
+    if (text->source != NULL && SDL_strcmp(text->source, "debug.fps_frame") == 0)
+    {
+        SDL_snprintf(buffer, buffer_size, text->format != NULL ? text->format : "FPS %.0f  Frame %" SDL_PRIu64,
+                     state->displayed_fps, (unsigned long long)state->rendered_frames);
+        return true;
+    }
+    if (text->source != NULL && SDL_strcmp(text->source, "score.player_cpu") == 0)
+    {
+        SDL_snprintf(buffer, buffer_size, text->format != NULL ? text->format : "%02d   %02d", state->player_score,
+                     state->cpu_score);
+        return true;
+    }
+    if (text->text != NULL)
+    {
+        SDL_snprintf(buffer, buffer_size, "%s", text->text);
+        return true;
+    }
+    return false;
+}
+
+typedef struct ui_draw_context
+{
+    sdl3d_game_context *ctx;
+    const pong_state *state;
+} ui_draw_context;
+
+static bool draw_authored_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
+{
+    ui_draw_context *draw = (ui_draw_context *)userdata;
+    if (!ui_visible(draw->ctx, draw->state, text->visible))
+        return true;
+
+    char content[128];
+    if (!ui_text_content(draw->state, text, content, sizeof(content)))
+        return true;
+
+    sdl3d_color color = text->color;
+    if (text->pulse_alpha)
+    {
+        const float pulse = 0.5f + 0.5f * SDL_sinf(draw->state->pause_flash * SDL_PI_F * 2.0f);
+        color.a = (Uint8)(120.0f + pulse * 135.0f);
+    }
+
+    const int width = sdl3d_get_render_context_width(draw->ctx->renderer);
+    const int height = sdl3d_get_render_context_height(draw->ctx->renderer);
+    float x = text->normalized ? text->x * (float)width : text->x;
+    const float y = text->normalized ? text->y * (float)height : text->y;
+    if (text->centered)
+    {
+        float text_w = 0.0f;
+        float text_h = 0.0f;
+        sdl3d_measure_text(&draw->state->font, content, &text_w, &text_h);
+        x -= text_w * 0.5f;
+    }
+
+    sdl3d_draw_text_overlay(draw->ctx->renderer, &draw->state->font, content, x, y, color);
+    return true;
 }
 
 static void draw_hud(sdl3d_game_context *ctx, const pong_state *state)
@@ -533,42 +608,8 @@ static void draw_hud(sdl3d_game_context *ctx, const pong_state *state)
         return;
     }
 
-    const int width = sdl3d_get_render_context_width(ctx->renderer);
-    const int height = sdl3d_get_render_context_height(ctx->renderer);
-    sdl3d_draw_textf_overlay(ctx->renderer, &state->font, 18.0f, 16.0f, (sdl3d_color){170, 190, 220, 230},
-                             "FPS %.0f  Frame %" SDL_PRIu64, state->displayed_fps, state->rendered_frames);
-    if (ball_camera_is_active(state))
-    {
-        sdl3d_draw_text_overlay(ctx->renderer, &state->font,
-                                presentation_string(state, "ball_camera_label", "BALL CAM"), 18.0f, 56.0f,
-                                (sdl3d_color){255, 222, 140, 235});
-    }
-    sdl3d_draw_textf_overlay(ctx->renderer, &state->font, (float)width * 0.5f - 94.0f, 22.0f,
-                             (sdl3d_color){235, 242, 255, 255}, "%02d   %02d", state->player_score, state->cpu_score);
-
-    if (state->match_finished)
-    {
-        const char *winner = state->winner == PONG_WINNER_PLAYER
-                                 ? presentation_string(state, "player_win_text", "You win!")
-                                 : presentation_string(state, "cpu_win_text", "You lose!");
-        draw_centered_text(ctx->renderer, &state->font, winner, (float)height * 0.40f,
-                           (sdl3d_color){255, 255, 255, 255});
-        draw_centered_text(ctx->renderer, &state->font,
-                           presentation_string(state, "restart_text", "Press enter to play again"),
-                           (float)height * 0.49f, (sdl3d_color){200, 220, 255, 235});
-    }
-    else if (ctx->paused)
-    {
-        const float pulse = 0.5f + 0.5f * SDL_sinf(state->pause_flash * SDL_PI_F * 2.0f);
-        const Uint8 alpha = (Uint8)(120.0f + pulse * 135.0f);
-        draw_centered_text(ctx->renderer, &state->font, presentation_string(state, "pause_text", "PAUSED"),
-                           (float)height * 0.44f, (sdl3d_color){245, 248, 255, alpha});
-    }
-    else if (!state->ball_active)
-    {
-        draw_centered_text(ctx->renderer, &state->font, presentation_string(state, "ready_text", "Get ready"),
-                           (float)height * 0.44f, (sdl3d_color){210, 225, 255, 190});
-    }
+    ui_draw_context draw = {ctx, state};
+    sdl3d_game_data_for_each_ui_text(state->data, draw_authored_ui_text, &draw);
 }
 
 static float camera_float_or(const pong_state *state, const char *camera_name, const char *property_name,
@@ -643,7 +684,9 @@ static void pong_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     state->last_render_time = ctx->real_time;
     ++state->rendered_frames;
 
-    sdl3d_clear_render_context(ctx->renderer, (sdl3d_color){3, 4, 8, 255});
+    sdl3d_game_data_render_settings render_settings;
+    sdl3d_game_data_get_render_settings(state->data, &render_settings);
+    sdl3d_clear_render_context(ctx->renderer, render_settings.clear_color);
     configure_lights(ctx->renderer, state);
 
     const sdl3d_camera3d camera = make_active_camera(state);
@@ -689,12 +732,18 @@ int main(int argc, char **argv)
     pong_state state;
     sdl3d_game_config config;
     SDL_zero(config);
-    config.title = "SDL3D Pong";
-    config.width = PONG_WINDOW_WIDTH;
-    config.height = PONG_WINDOW_HEIGHT;
-    config.backend = SDL3D_BACKEND_AUTO;
-    config.tick_rate = PONG_TICK_RATE;
-    config.max_ticks_per_frame = 12;
+    char title[128] = "SDL3D";
+    char error[512];
+    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    if (assets == NULL || !mount_pong_assets(assets, error, (int)sizeof(error)) ||
+        !sdl3d_game_data_load_app_config_asset(assets, SDL3D_PONG_DATA_ASSET_PATH, &config, title, (int)sizeof(title),
+                                               error, (int)sizeof(error)))
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong app config load failed: %s", assets != NULL ? error : "");
+        sdl3d_asset_resolver_destroy(assets);
+        return 1;
+    }
+    sdl3d_asset_resolver_destroy(assets);
 
     sdl3d_game_callbacks callbacks;
     SDL_zero(callbacks);

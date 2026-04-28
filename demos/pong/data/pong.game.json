@@ -6,6 +6,37 @@
     "version": "0.1.0",
     "description": "Fixed-screen arcade proof that SDL3D gameplay rules can be authored through generic entities, sensors, signals, timers, and actions."
   },
+  "app": {
+    "title": "SDL3D Pong",
+    "width": 1280,
+    "height": 720,
+    "backend": "auto",
+    "tick_rate": 0.008333333,
+    "max_ticks_per_frame": 12,
+    "enable_audio": false
+  },
+  "render": {
+    "clear_color": [3, 4, 8, 255],
+    "lighting": true,
+    "bloom": true,
+    "ssao": true,
+    "tonemap": "aces"
+  },
+  "transitions": {
+    "startup": {
+      "type": "fade",
+      "direction": "in",
+      "color": [0, 0, 0, 255],
+      "duration": 0.7
+    },
+    "quit": {
+      "type": "fade",
+      "direction": "out",
+      "color": [0, 0, 0, 255],
+      "duration": 0.45,
+      "done_signal": "signal.app.quit_fade_done"
+    }
+  },
   "profiles": [
     {
       "name": "profile.fixed_screen_arcade",
@@ -31,6 +62,95 @@
         "id": "font.hud",
         "builtin": "Inter",
         "size": 34
+      }
+    ]
+  },
+  "ui": {
+    "text": [
+      {
+        "name": "ui.debug.frame_counter",
+        "font": "font.hud",
+        "source": "debug.fps_frame",
+        "format": "FPS %.0f  Frame %llu",
+        "x": 18.0,
+        "y": 16.0,
+        "color": [170, 190, 220, 230]
+      },
+      {
+        "name": "ui.camera.ball_label",
+        "font": "font.hud",
+        "visible": "camera.ball_chase",
+        "text": "BALL CAM",
+        "x": 18.0,
+        "y": 56.0,
+        "color": [255, 222, 140, 235]
+      },
+      {
+        "name": "ui.score",
+        "font": "font.hud",
+        "source": "score.player_cpu",
+        "format": "%02d   %02d",
+        "x": 0.5,
+        "y": 22.0,
+        "normalized": true,
+        "centered": true,
+        "color": [235, 242, 255, 255]
+      },
+      {
+        "name": "ui.match.player_won",
+        "font": "font.hud",
+        "visible": "match.player_won",
+        "text": "You win!",
+        "x": 0.5,
+        "y": 0.40,
+        "normalized": true,
+        "centered": true,
+        "color": [255, 255, 255, 255]
+      },
+      {
+        "name": "ui.match.cpu_won",
+        "font": "font.hud",
+        "visible": "match.cpu_won",
+        "text": "You lose!",
+        "x": 0.5,
+        "y": 0.40,
+        "normalized": true,
+        "centered": true,
+        "color": [255, 255, 255, 255]
+      },
+      {
+        "name": "ui.match.restart",
+        "font": "font.hud",
+        "visible": "match.finished",
+        "text": "Press enter to play again",
+        "x": 0.5,
+        "y": 0.49,
+        "normalized": true,
+        "centered": true,
+        "color": [200, 220, 255, 235]
+      },
+      {
+        "name": "ui.pause",
+        "font": "font.hud",
+        "visible": "paused",
+        "text": "PAUSED",
+        "x": 0.5,
+        "y": 0.44,
+        "normalized": true,
+        "centered": true,
+        "pulse_alpha": true,
+        "color": [245, 248, 255, 255]
+      },
+      {
+        "name": "ui.ready",
+        "font": "font.hud",
+        "visible": "round.waiting_to_serve",
+        "text": "Get ready",
+        "x": 0.5,
+        "y": 0.44,
+        "normalized": true,
+        "centered": true,
+        "color": [210, 225, 255, 190]
       }
     ]
   },
@@ -323,13 +443,7 @@
         "paddle_flash": { "type": "float", "value": 0.0 },
         "border_flash_decay": { "type": "float", "value": 2.8 },
         "paddle_flash_decay": { "type": "float", "value": 4.0 },
-        "pause_flash_speed": { "type": "float", "value": 3.0 },
-        "pause_text": { "type": "string", "value": "PAUSED" },
-        "ready_text": { "type": "string", "value": "Get ready" },
-        "restart_text": { "type": "string", "value": "Press enter to play again" },
-        "player_win_text": { "type": "string", "value": "You win!" },
-        "cpu_win_text": { "type": "string", "value": "You lose!" },
-        "ball_camera_label": { "type": "string", "value": "BALL CAM" }
+        "pause_flash_speed": { "type": "float", "value": 3.0 }
       }
     },
     {
@@ -377,7 +491,8 @@
     "signal.match.cpu_won",
     "signal.match.restart",
     "signal.camera.ball.toggle",
-    "signal.presentation.flash_border"
+    "signal.presentation.flash_border",
+    "signal.app.quit_fade_done"
   ],
   "logic": {
     "sensors": [

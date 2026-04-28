@@ -21,11 +21,15 @@ Every file is a JSON object with these fields:
 | --- | --- | --- |
 | `schema` | yes | Schema id. First value: `sdl3d.game.v0`. |
 | `metadata` | yes | Human-readable identity and versioning. |
+| `app` | no | Managed-loop startup config such as title, window size, backend, tick rate, and tick cap. |
 | `profiles` | no | Genre/profile hints and required modules. |
 | `assets` | no | Stable asset ids mapped to paths or future archive refs. |
 | `scripts` | no | Lua scripts that provide game-specific behavior used by adapters. |
 | `input` | no | Named actions and bindings. |
 | `world` | yes | World identity, coordinate policy, bounds, cameras, lights. |
+| `render` | no | Renderer setup such as clear color, lighting, bloom, SSAO, and tonemapping. |
+| `transitions` | no | Named screen transition descriptors such as startup and quit fades. |
+| `ui` | no | Authored UI descriptors. |
 | `entities` | yes | Stable named actors with tags, transforms, properties, and components. |
 | `signals` | no | Authored signal names. |
 | `logic` | no | Sensors, timers, bindings, conditions, and actions. |
@@ -61,6 +65,26 @@ The world object declares one spatial context. It does not imply a sector map.
 ```
 
 Future world kinds can include `tile_grid`, `room_graph`, `sector_map`, and `scene_3d`.
+
+## App And Presentation
+
+The optional `app` object lets a managed-loop game declare startup settings before a window exists:
+
+```json
+{
+  "app": {
+    "title": "SDL3D Pong",
+    "width": 1280,
+    "height": 720,
+    "backend": "auto",
+    "tick_rate": 0.008333333,
+    "max_ticks_per_frame": 12
+  }
+}
+```
+
+The optional `render`, `transitions`, and `ui` sections describe presentation without giving the data
+runtime ownership of the renderer. Games read these descriptors and decide how to apply them.
 
 ## Entities
 

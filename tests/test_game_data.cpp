@@ -50,6 +50,13 @@ struct RenderPrimitiveCapture
     bool saw_ball = false;
 };
 
+struct UiTextCapture
+{
+    int count = 0;
+    bool saw_score = false;
+    bool saw_pause = false;
+};
+
 bool serve_adapter(void *userdata, sdl3d_game_data_runtime *runtime, const char *adapter_name,
                    sdl3d_registered_actor *target, const sdl3d_properties *payload)
 {
@@ -207,6 +214,28 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
     return true;
 }
 
+bool capture_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
+{
+    auto *capture = static_cast<UiTextCapture *>(userdata);
+    capture->count++;
+    if (std::string(text->name) == "ui.score")
+    {
+        capture->saw_score = true;
+        EXPECT_STREQ(text->source, "score.player_cpu");
+        EXPECT_TRUE(text->centered);
+        EXPECT_TRUE(text->normalized);
+        EXPECT_NEAR(text->x, 0.5f, 0.0001f);
+    }
+    if (std::string(text->name) == "ui.pause")
+    {
+        capture->saw_pause = true;
+        EXPECT_STREQ(text->visible, "paused");
+        EXPECT_STREQ(text->text, "PAUSED");
+        EXPECT_TRUE(text->pulse_alpha);
+    }
+    return true;
+}
+
 void append_u16(std::vector<std::uint8_t> &bytes, std::uint16_t value)
 {
     bytes.push_back(static_cast<std::uint8_t>(value & 0xFFu));
@@ -274,6 +303,19 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
 
 TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
 {
+    sdl3d_game_config config{};
+    char title[128]{};
+    char app_error[512]{};
+    ASSERT_TRUE(sdl3d_game_data_load_app_config_file(SDL3D_PONG_DATA_PATH, &config, title, sizeof(title), app_error,
+                                                     sizeof(app_error)))
+        << app_error;
+    EXPECT_STREQ(config.title, "SDL3D Pong");
+    EXPECT_EQ(config.width, 1280);
+    EXPECT_EQ(config.height, 720);
+    EXPECT_EQ(config.backend, SDL3D_BACKEND_AUTO);
+    EXPECT_NEAR(config.tick_rate, 1.0f / 120.0f, 0.00001f);
+    EXPECT_EQ(config.max_ticks_per_frame, 12);
+
     sdl3d_game_session *session = nullptr;
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
 
@@ -313,6 +355,23 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_NEAR(particles.emit_rate, 95.0f, 0.0001f);
     EXPECT_EQ(particles.color_start.a, 105);
 
+    sdl3d_game_data_render_settings render{};
+    ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &render));
+    EXPECT_EQ(render.clear_color.r, 3);
+    EXPECT_EQ(render.clear_color.g, 4);
+    EXPECT_EQ(render.clear_color.b, 8);
+    EXPECT_TRUE(render.lighting_enabled);
+    EXPECT_TRUE(render.bloom_enabled);
+    EXPECT_TRUE(render.ssao_enabled);
+    EXPECT_EQ(render.tonemap, SDL3D_TONEMAP_ACES);
+
+    sdl3d_game_data_transition_desc transition{};
+    ASSERT_TRUE(sdl3d_game_data_get_transition(runtime, "quit", &transition));
+    EXPECT_EQ(transition.type, SDL3D_TRANSITION_FADE);
+    EXPECT_EQ(transition.direction, SDL3D_TRANSITION_OUT);
+    EXPECT_NEAR(transition.duration, 0.45f, 0.0001f);
+    EXPECT_GE(transition.done_signal_id, 0);
+
     RenderPrimitiveCapture capture{};
     ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &capture));
     EXPECT_EQ(capture.cubes, 16);
@@ -323,8 +382,12 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     sdl3d_registered_actor *presentation = sdl3d_game_data_find_actor(runtime, "entity.presentation");
     ASSERT_NE(presentation, nullptr);
     EXPECT_NEAR(sdl3d_properties_get_float(presentation->props, "border_flash_decay", 0.0f), 2.8f, 0.0001f);
-    EXPECT_STREQ(sdl3d_properties_get_string(presentation->props, "pause_text", ""), "PAUSED");
-    EXPECT_STREQ(sdl3d_properties_get_string(presentation->props, "ball_camera_label", ""), "BALL CAM");
+
+    UiTextCapture ui{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui_text, &ui));
+    EXPECT_EQ(ui.count, 8);
+    EXPECT_TRUE(ui.saw_score);
+    EXPECT_TRUE(ui.saw_pause);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);

@@ -24,6 +24,7 @@
 #include "sdl3d/game.h"
 #include "sdl3d/lighting.h"
 #include "sdl3d/properties.h"
+#include "sdl3d/transition.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -78,6 +79,72 @@ extern "C"
      */
     typedef bool (*sdl3d_game_data_render_primitive_fn)(void *userdata,
                                                         const sdl3d_game_data_render_primitive *primitive);
+
+    /** @brief Authored render setup that can be applied to a render context. */
+    typedef struct sdl3d_game_data_render_settings
+    {
+        /** @brief Clear color for the frame. */
+        sdl3d_color clear_color;
+        /** @brief Whether 3D lighting should be enabled. */
+        bool lighting_enabled;
+        /** @brief Whether bloom post-processing should be enabled. */
+        bool bloom_enabled;
+        /** @brief Whether SSAO post-processing should be enabled. */
+        bool ssao_enabled;
+        /** @brief Tonemap operator for lit rendering. */
+        sdl3d_tonemap_mode tonemap;
+    } sdl3d_game_data_render_settings;
+
+    /** @brief Authored transition effect descriptor. */
+    typedef struct sdl3d_game_data_transition_desc
+    {
+        /** @brief Transition effect type. */
+        sdl3d_transition_type type;
+        /** @brief Transition direction. */
+        sdl3d_transition_direction direction;
+        /** @brief Transition color. */
+        sdl3d_color color;
+        /** @brief Duration in seconds. */
+        float duration;
+        /** @brief Signal emitted on completion, or -1. */
+        int done_signal_id;
+    } sdl3d_game_data_transition_desc;
+
+    /** @brief Authored UI text descriptor. */
+    typedef struct sdl3d_game_data_ui_text
+    {
+        /** @brief Stable UI item name. */
+        const char *name;
+        /** @brief Font asset id. */
+        const char *font;
+        /** @brief Literal text, or NULL when @p format is used. */
+        const char *text;
+        /** @brief Format string interpreted by the caller. */
+        const char *format;
+        /** @brief Caller-defined source key for dynamic text. */
+        const char *source;
+        /** @brief Caller-defined visibility key. */
+        const char *visible;
+        /** @brief Horizontal position. For centered text, this is a normalized y-independent coordinate. */
+        float x;
+        /** @brief Vertical position. */
+        float y;
+        /** @brief Whether x/y are normalized to the current render size. */
+        bool normalized;
+        /** @brief Whether the text should be horizontally centered by the caller. */
+        bool centered;
+        /** @brief Whether alpha should pulse while visible. */
+        bool pulse_alpha;
+        /** @brief Text color. */
+        sdl3d_color color;
+    } sdl3d_game_data_ui_text;
+
+    /**
+     * @brief Callback for iterating authored UI text descriptors.
+     *
+     * Return false to stop iteration early.
+     */
+    typedef bool (*sdl3d_game_data_ui_text_fn)(void *userdata, const sdl3d_game_data_ui_text *text);
 
     /** @brief Authored game data diagnostic severity. */
     typedef enum sdl3d_game_data_diagnostic_severity
@@ -161,6 +228,30 @@ extern "C"
      */
     bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_path, sdl3d_game_session *session,
                                     sdl3d_game_data_runtime **out_runtime, char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Read the managed-loop config authored in a JSON game data asset.
+     *
+     * This lightweight reader is intended for startup, before a managed loop
+     * creates a window or game session. Missing fields keep the values already
+     * present in @p out_config, so callers can initialize defaults first. When
+     * an authored title is present, it is copied into @p title_buffer and
+     * out_config->title points at that buffer.
+     */
+    bool sdl3d_game_data_load_app_config_asset(sdl3d_asset_resolver *assets, const char *asset_path,
+                                               sdl3d_game_config *out_config, char *title_buffer, int title_buffer_size,
+                                               char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Read the managed-loop config authored in a JSON game data file.
+     *
+     * Missing fields keep the values already present in @p out_config, so
+     * callers can initialize defaults first. When an authored title is present,
+     * it is copied into @p title_buffer and out_config->title points at that
+     * buffer.
+     */
+    bool sdl3d_game_data_load_app_config_file(const char *path, sdl3d_game_config *out_config, char *title_buffer,
+                                              int title_buffer_size, char *error_buffer, int error_buffer_size);
 
     /**
      * @brief Validate a JSON game data file without instantiating runtime state.
@@ -319,6 +410,27 @@ extern "C"
      */
     bool sdl3d_game_data_get_particle_emitter(const sdl3d_game_data_runtime *runtime, const char *entity_name,
                                               sdl3d_particle_config *out_config);
+
+    /**
+     * @brief Read authored render setup.
+     *
+     * Missing fields produce conservative defaults: black clear color, lighting
+     * enabled, bloom/SSAO enabled, and ACES tonemapping.
+     */
+    bool sdl3d_game_data_get_render_settings(const sdl3d_game_data_runtime *runtime,
+                                             sdl3d_game_data_render_settings *out_settings);
+
+    /**
+     * @brief Read a named authored transition descriptor.
+     *
+     * @p name is looked up under the top-level `transitions` object.
+     */
+    bool sdl3d_game_data_get_transition(const sdl3d_game_data_runtime *runtime, const char *name,
+                                        sdl3d_game_data_transition_desc *out_transition);
+
+    /** @brief Iterate authored UI text descriptors. */
+    bool sdl3d_game_data_for_each_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_ui_text_fn callback,
+                                          void *userdata);
 
     /**
      * @brief Return the dt currently being processed by sdl3d_game_data_update().

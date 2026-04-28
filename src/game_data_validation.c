@@ -1023,6 +1023,32 @@ static bool validate_lights(validation_context *ctx, yyjson_val *root, validatio
     return true;
 }
 
+static bool validate_transitions(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *transitions = obj_get(root, "transitions");
+    if (transitions == NULL)
+        return true;
+    if (!yyjson_is_obj(transitions))
+        return validation_error(ctx, "$.transitions", "transitions must be an object");
+
+    yyjson_val *key;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(transitions, &iter);
+    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+    {
+        yyjson_val *transition = yyjson_obj_iter_get_val(key);
+        const char *name = yyjson_get_str(key);
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.transitions.%s", name != NULL ? name : "<unknown>");
+        if (!yyjson_is_obj(transition))
+            return validation_error(ctx, path, "transition entries must be objects");
+        const char *done_signal = json_string(transition, "done_signal");
+        if (done_signal != NULL && !require_ref(ctx, &names->signals, "signal", done_signal, path))
+            return false;
+    }
+    return true;
+}
+
 static bool warn_unused(validation_context *ctx, const name_table *declared, const name_table *used, const char *kind)
 {
     for (int i = 0; i < declared->count; ++i)
@@ -1040,7 +1066,8 @@ static bool validate_details(validation_context *ctx, yyjson_val *root, validati
 {
     return validate_input_bindings(ctx, root) && validate_components(ctx, root, names) &&
            validate_cameras(ctx, root, names) && validate_lights(ctx, root, names) &&
-           validate_logic(ctx, root, names) && validate_adapters(ctx, root, names) &&
+           validate_transitions(ctx, root, names) && validate_logic(ctx, root, names) &&
+           validate_adapters(ctx, root, names) &&
            warn_unused(ctx, &names->adapters, &names->used_adapters, "adapter") &&
            warn_unused(ctx, &names->scripts, &names->used_scripts, "script");
 }
