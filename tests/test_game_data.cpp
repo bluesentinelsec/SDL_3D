@@ -955,6 +955,118 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     sdl3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, ResolvesRuntimeUiStateForTextAndImages)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+
+    sdl3d_game_data_ui_image logo{};
+    bool saw_logo = false;
+    auto find_logo = [](void *userdata, const sdl3d_game_data_ui_image *image) -> bool {
+        auto *args = static_cast<std::pair<sdl3d_game_data_ui_image *, bool *> *>(userdata);
+        if (image->name != nullptr && std::string(image->name) == "ui.splash.logo")
+        {
+            *args->first = *image;
+            *args->second = true;
+            return false;
+        }
+        return true;
+    };
+    std::pair<sdl3d_game_data_ui_image *, bool *> logo_args{&logo, &saw_logo};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_image(runtime, find_logo, &logo_args));
+    ASSERT_TRUE(saw_logo);
+
+    sdl3d_game_data_ui_state image_state{};
+    sdl3d_game_data_ui_state_init(&image_state);
+    image_state.flags = SDL3D_GAME_DATA_UI_STATE_OFFSET | SDL3D_GAME_DATA_UI_STATE_SCALE |
+                        SDL3D_GAME_DATA_UI_STATE_ALPHA | SDL3D_GAME_DATA_UI_STATE_TINT;
+    image_state.offset_x = 0.10f;
+    image_state.offset_y = -0.05f;
+    image_state.scale = 0.5f;
+    image_state.alpha = 0.25f;
+    image_state.tint = {128, 64, 255, 200};
+    ASSERT_TRUE(sdl3d_game_data_set_ui_state(runtime, "ui.splash.logo", &image_state));
+
+    sdl3d_game_data_ui_state stored_image_state{};
+    ASSERT_TRUE(sdl3d_game_data_get_ui_state(runtime, "ui.splash.logo", &stored_image_state));
+    EXPECT_EQ(stored_image_state.flags, image_state.flags);
+    EXPECT_NEAR(stored_image_state.scale, 0.5f, 0.0001f);
+
+    sdl3d_game_data_ui_image resolved_logo{};
+    bool logo_visible = false;
+    ASSERT_TRUE(sdl3d_game_data_resolve_ui_image(runtime, &logo, nullptr, &resolved_logo, &logo_visible));
+    EXPECT_TRUE(logo_visible);
+    EXPECT_NEAR(resolved_logo.x, 0.60f, 0.0001f);
+    EXPECT_NEAR(resolved_logo.y, 0.45f, 0.0001f);
+    EXPECT_NEAR(resolved_logo.scale, 0.5f, 0.0001f);
+    EXPECT_EQ(resolved_logo.color.r, 128);
+    EXPECT_EQ(resolved_logo.color.g, 64);
+    EXPECT_EQ(resolved_logo.color.b, 255);
+    EXPECT_EQ(resolved_logo.color.a, 50);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
+
+    sdl3d_game_data_ui_text pause{};
+    bool saw_pause = false;
+    auto find_pause = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        auto *args = static_cast<std::pair<sdl3d_game_data_ui_text *, bool *> *>(userdata);
+        if (text->name != nullptr && std::string(text->name) == "ui.pause")
+        {
+            *args->first = *text;
+            *args->second = true;
+            return false;
+        }
+        return true;
+    };
+    std::pair<sdl3d_game_data_ui_text *, bool *> pause_args{&pause, &saw_pause};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_pause, &pause_args));
+    ASSERT_TRUE(saw_pause);
+
+    sdl3d_game_data_ui_metrics metrics{};
+    metrics.paused = false;
+    EXPECT_FALSE(sdl3d_game_data_ui_text_is_visible(runtime, &pause, &metrics));
+
+    sdl3d_game_data_ui_state text_state{};
+    sdl3d_game_data_ui_state_init(&text_state);
+    text_state.flags = SDL3D_GAME_DATA_UI_STATE_VISIBLE | SDL3D_GAME_DATA_UI_STATE_OFFSET |
+                       SDL3D_GAME_DATA_UI_STATE_SCALE | SDL3D_GAME_DATA_UI_STATE_ALPHA | SDL3D_GAME_DATA_UI_STATE_TINT;
+    text_state.visible = true;
+    text_state.offset_x = 0.02f;
+    text_state.offset_y = -0.03f;
+    text_state.scale = 2.0f;
+    text_state.alpha = 0.5f;
+    text_state.tint = {128, 255, 64, 128};
+    ASSERT_TRUE(sdl3d_game_data_set_ui_state(runtime, "ui.pause", &text_state));
+
+    sdl3d_game_data_ui_text resolved_pause{};
+    bool pause_visible = false;
+    ASSERT_TRUE(sdl3d_game_data_resolve_ui_text(runtime, &pause, &metrics, &resolved_pause, &pause_visible));
+    EXPECT_TRUE(pause_visible);
+    EXPECT_NEAR(resolved_pause.x, 0.52f, 0.0001f);
+    EXPECT_NEAR(resolved_pause.y, 0.41f, 0.0001f);
+    EXPECT_NEAR(resolved_pause.scale, 2.0f, 0.0001f);
+    EXPECT_EQ(resolved_pause.color.r, 123);
+    EXPECT_EQ(resolved_pause.color.g, 248);
+    EXPECT_EQ(resolved_pause.color.b, 64);
+    EXPECT_EQ(resolved_pause.color.a, 64);
+
+    text_state.visible = false;
+    ASSERT_TRUE(sdl3d_game_data_set_ui_state(runtime, "ui.pause", &text_state));
+    EXPECT_FALSE(sdl3d_game_data_ui_text_is_visible(runtime, &pause, &metrics));
+
+    EXPECT_TRUE(sdl3d_game_data_clear_ui_state(runtime, "ui.pause"));
+    EXPECT_FALSE(sdl3d_game_data_get_ui_state(runtime, "ui.pause", &text_state));
+    sdl3d_game_data_clear_ui_states(runtime);
+    EXPECT_FALSE(sdl3d_game_data_get_ui_state(runtime, "ui.splash.logo", &image_state));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, DataAuthoredInputPolicyUpdatePhasesAndPresentationClocks)
 {
     sdl3d_game_session *session = nullptr;

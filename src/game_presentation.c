@@ -336,47 +336,56 @@ static bool draw_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
     if (draw == NULL || text == NULL)
         return false;
 
-    if (!sdl3d_game_data_ui_text_is_visible(draw->runtime, text, draw->metrics))
+    sdl3d_game_data_ui_text resolved;
+    bool visible = false;
+    if (!sdl3d_game_data_resolve_ui_text(draw->runtime, text, draw->metrics, &resolved, &visible))
+    {
+        draw->ok = false;
+        return true;
+    }
+    if (!visible)
         return true;
 
     char content[128];
-    if (!sdl3d_game_data_format_ui_text(draw->runtime, text, draw->metrics, content, sizeof(content)))
+    if (!sdl3d_game_data_format_ui_text(draw->runtime, &resolved, draw->metrics, content, sizeof(content)))
         return true;
 
-    sdl3d_font *font = find_or_load_font(draw->runtime, draw->font_cache, text->font);
+    sdl3d_font *font = find_or_load_font(draw->runtime, draw->font_cache, resolved.font);
     if (font == NULL)
     {
         draw->ok = false;
         return true;
     }
 
-    sdl3d_color color = text->color;
-    if (text->pulse_alpha)
+    sdl3d_color color = resolved.color;
+    if (resolved.pulse_alpha)
     {
         const float pulse = 0.5f + 0.5f * SDL_sinf(draw->pulse_phase * SDL_PI_F * 2.0f);
-        color.a = (Uint8)(120.0f + pulse * 135.0f);
+        const float alpha = (120.0f + pulse * 135.0f) / 255.0f;
+        color.a = (Uint8)SDL_clamp((int)((float)color.a * alpha + 0.5f), 0, 255);
     }
 
     const int width = sdl3d_get_render_context_width(draw->renderer);
     const int height = sdl3d_get_render_context_height(draw->renderer);
-    float x = text->normalized ? text->x * (float)width : text->x;
-    const float y = text->normalized ? text->y * (float)height : text->y;
-    if (text->align == SDL3D_GAME_DATA_UI_ALIGN_CENTER || text->centered)
+    const float scale = resolved.scale > 0.0f ? resolved.scale : 1.0f;
+    float x = resolved.normalized ? resolved.x * (float)width : resolved.x;
+    const float y = resolved.normalized ? resolved.y * (float)height : resolved.y;
+    if (resolved.align == SDL3D_GAME_DATA_UI_ALIGN_CENTER || resolved.centered)
     {
         float text_w = 0.0f;
         float text_h = 0.0f;
         sdl3d_measure_text(font, content, &text_w, &text_h);
-        x -= text_w * 0.5f;
+        x -= text_w * scale * 0.5f;
     }
-    else if (text->align == SDL3D_GAME_DATA_UI_ALIGN_RIGHT)
+    else if (resolved.align == SDL3D_GAME_DATA_UI_ALIGN_RIGHT)
     {
         float text_w = 0.0f;
         float text_h = 0.0f;
         sdl3d_measure_text(font, content, &text_w, &text_h);
-        x -= text_w;
+        x -= text_w * scale;
     }
 
-    if (!sdl3d_draw_text_overlay(draw->renderer, font, content, x, y, color))
+    if (!sdl3d_draw_text_overlay_scaled(draw->renderer, font, content, x, y, scale, color))
         draw->ok = false;
     return true;
 }
@@ -388,6 +397,7 @@ static void resolve_ui_image_rect(const sdl3d_game_data_ui_image *image, const s
     float h = image->normalized ? image->h * (float)height : image->h;
     const float texture_w = (float)texture->width;
     const float texture_h = (float)texture->height;
+    const float scale = image->scale > 0.0f ? image->scale : 1.0f;
 
     if (w <= 0.0f && h <= 0.0f)
     {
@@ -408,6 +418,8 @@ static void resolve_ui_image_rect(const sdl3d_game_data_ui_image *image, const s
         w = texture_w * fit;
         h = texture_h * fit;
     }
+    w *= scale;
+    h *= scale;
 
     float x = image->normalized ? image->x * (float)width : image->x;
     float y = image->normalized ? image->y * (float)height : image->y;
@@ -432,10 +444,17 @@ static bool draw_ui_image(void *userdata, const sdl3d_game_data_ui_image *image)
     if (draw == NULL || image == NULL)
         return false;
 
-    if (!sdl3d_game_data_ui_image_is_visible(draw->runtime, image, draw->metrics))
+    sdl3d_game_data_ui_image resolved;
+    bool visible = false;
+    if (!sdl3d_game_data_resolve_ui_image(draw->runtime, image, draw->metrics, &resolved, &visible))
+    {
+        draw->ok = false;
+        return true;
+    }
+    if (!visible)
         return true;
 
-    sdl3d_texture2d *texture = find_or_load_image(draw->runtime, draw->image_cache, image->image);
+    sdl3d_texture2d *texture = find_or_load_image(draw->runtime, draw->image_cache, resolved.image);
     if (texture == NULL)
     {
         draw->ok = false;
@@ -448,8 +467,8 @@ static bool draw_ui_image(void *userdata, const sdl3d_game_data_ui_image *image)
     float y = 0.0f;
     float w = 0.0f;
     float h = 0.0f;
-    resolve_ui_image_rect(image, texture, width, height, &x, &y, &w, &h);
-    if (!sdl3d_draw_texture_overlay(draw->renderer, texture, x, y, w, h, image->color))
+    resolve_ui_image_rect(&resolved, texture, width, height, &x, &y, &w, &h);
+    if (!sdl3d_draw_texture_overlay(draw->renderer, texture, x, y, w, h, resolved.color))
         draw->ok = false;
     return true;
 }

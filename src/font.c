@@ -237,7 +237,7 @@ void sdl3d_measure_text(const sdl3d_font *font, const char *text, float *out_wid
  * characters use their native advance.
  */
 static bool draw_text_internal(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text, float x,
-                               float y, sdl3d_color color, float digit_cell_width)
+                               float y, sdl3d_color color, float digit_cell_width, float scale)
 {
     int ctx_w, ctx_h;
     sdl3d_camera3d ortho;
@@ -264,6 +264,10 @@ static bool draw_text_internal(struct sdl3d_render_context *context, const sdl3d
     if (ctx_w <= 0 || ctx_h <= 0)
     {
         return SDL_SetError("Invalid render context dimensions");
+    }
+    if (scale <= 0.0f)
+    {
+        return true;
     }
 
     ortho.position = sdl3d_vec3_make(0.0f, 0.0f, 1.0f);
@@ -293,8 +297,8 @@ static bool draw_text_internal(struct sdl3d_render_context *context, const sdl3d
     }
 
     float cursor_x = x;
-    float cursor_y = y + font->ascent;
-    float line_h = font->ascent - font->descent + font->line_gap;
+    float cursor_y = y + font->ascent * scale;
+    float line_h = (font->ascent - font->descent + font->line_gap) * scale;
     float hx = (float)ctx_w * 0.5f;
     float hy = (float)ctx_h * 0.5f;
 
@@ -325,15 +329,15 @@ static bool draw_text_internal(struct sdl3d_render_context *context, const sdl3d
         float gh = g->yoff2 - g->yoff;
         if (gw <= 0 || gh <= 0)
         {
-            cursor_x += advance;
+            cursor_x += advance * scale;
             continue;
         }
 
         /* Screen-space pixel rect for this glyph. */
-        float sx0 = cursor_x + glyph_shift + g->xoff;
-        float sy0 = cursor_y + g->yoff;
-        float sx1 = cursor_x + glyph_shift + g->xoff2;
-        float sy1 = cursor_y + g->yoff2;
+        float sx0 = cursor_x + (glyph_shift + g->xoff) * scale;
+        float sy0 = cursor_y + g->yoff * scale;
+        float sx1 = cursor_x + (glyph_shift + g->xoff2) * scale;
+        float sy1 = cursor_y + g->yoff2 * scale;
 
         /* Map screen pixels to ortho world space (Y flipped). */
         float wx0 = sx0 - hx;
@@ -367,7 +371,7 @@ static bool draw_text_internal(struct sdl3d_render_context *context, const sdl3d
             break;
         }
 
-        cursor_x += advance;
+        cursor_x += advance * scale;
     }
 
     sdl3d_end_mode_3d(context);
@@ -383,7 +387,7 @@ static bool draw_text_internal(struct sdl3d_render_context *context, const sdl3d
 bool sdl3d_draw_text(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text, float x, float y,
                      sdl3d_color color)
 {
-    return draw_text_internal(context, font, text, x, y, color, 0.0f);
+    return draw_text_internal(context, font, text, x, y, color, 0.0f, 1.0f);
 }
 
 /* ------------------------------------------------------------------ */
@@ -464,7 +468,7 @@ bool sdl3d_draw_fps(struct sdl3d_render_context *context, const sdl3d_font *font
     float prefix_w, prefix_h;
     sdl3d_measure_text(font, prefix, &prefix_w, &prefix_h);
 
-    if (!draw_text_internal(context, font, prefix, origin_x, origin_y, color, 0.0f))
+    if (!draw_text_internal(context, font, prefix, origin_x, origin_y, color, 0.0f, 1.0f))
     {
         return false;
     }
@@ -484,8 +488,8 @@ bool sdl3d_draw_fps(struct sdl3d_render_context *context, const sdl3d_font *font
     digits[2] = (char)('0' + (ival % 10));
     digits[3] = '\0';
 
-    return draw_text_internal(context, font, digits, origin_x + prefix_w, origin_y, color,
-                              font_max_digit_advance(font));
+    return draw_text_internal(context, font, digits, origin_x + prefix_w, origin_y, color, font_max_digit_advance(font),
+                              1.0f);
 }
 
 /* ------------------------------------------------------------------ */
@@ -560,8 +564,8 @@ bool sdl3d_load_builtin_font(const char *media_dir, sdl3d_builtin_font id, float
 
 #include "gl_renderer.h"
 
-bool sdl3d_draw_text_overlay(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text, float x,
-                             float y, sdl3d_color color)
+bool sdl3d_draw_text_overlay_scaled(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text,
+                                    float x, float y, float scale, sdl3d_color color)
 {
     SDL_Rect scissor_rect = {0, 0, 0, 0};
     bool scissor_enabled = false;
@@ -570,12 +574,14 @@ bool sdl3d_draw_text_overlay(struct sdl3d_render_context *context, const sdl3d_f
         return SDL_InvalidParamError("context");
     if (!font->atlas_texture.pixels)
         return SDL_SetError("sdl3d_draw_text_overlay: font atlas not initialized");
+    if (scale <= 0.0f)
+        return true;
 
     /* Software backend: enable alpha blending for text overlay. */
     if (!context->gl)
     {
         context->color_buffer_blend = true;
-        bool ok = sdl3d_draw_text(context, font, text, x, y, color);
+        bool ok = draw_text_internal(context, font, text, x, y, color, 0.0f, scale);
         context->color_buffer_blend = false;
         return ok;
     }
@@ -627,8 +633,8 @@ bool sdl3d_draw_text_overlay(struct sdl3d_render_context *context, const sdl3d_f
                      (float)color.a / 255.0f};
 
     float cursor_x = x;
-    float cursor_y = y + font->ascent;
-    float line_h = font->ascent - font->descent + font->line_gap;
+    float cursor_y = y + font->ascent * scale;
+    float line_h = (font->ascent - font->descent + font->line_gap) * scale;
     int vi = 0;
 
     for (const char *p = text; *p; p++)
@@ -648,14 +654,14 @@ bool sdl3d_draw_text_overlay(struct sdl3d_render_context *context, const sdl3d_f
         float gh = g->yoff2 - g->yoff;
         if (gw <= 0 || gh <= 0)
         {
-            cursor_x += g->xadvance;
+            cursor_x += g->xadvance * scale;
             continue;
         }
 
-        float sx0 = cursor_x + g->xoff;
-        float sy0 = cursor_y + g->yoff;
-        float sx1 = cursor_x + g->xoff2;
-        float sy1 = cursor_y + g->yoff2;
+        float sx0 = cursor_x + g->xoff * scale;
+        float sy0 = cursor_y + g->yoff * scale;
+        float sx1 = cursor_x + g->xoff2 * scale;
+        float sy1 = cursor_y + g->yoff2 * scale;
 
         /* Map to ortho world space (Y flipped). */
         float wx0 = sx0 - hx, wx1 = sx1 - hx;
@@ -696,7 +702,7 @@ bool sdl3d_draw_text_overlay(struct sdl3d_render_context *context, const sdl3d_f
         uvs[ui + 11] = g->v0;
 
         vi += 6;
-        cursor_x += g->xadvance;
+        cursor_x += g->xadvance * scale;
     }
 
     bool ok = sdl3d_gl_append_overlay(context->gl, positions, uvs, vi, mvp, tint, &font->atlas_texture, scissor_enabled,
@@ -704,6 +710,12 @@ bool sdl3d_draw_text_overlay(struct sdl3d_render_context *context, const sdl3d_f
     SDL_free(positions);
     SDL_free(uvs);
     return ok;
+}
+
+bool sdl3d_draw_text_overlay(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text, float x,
+                             float y, sdl3d_color color)
+{
+    return sdl3d_draw_text_overlay_scaled(context, font, text, x, y, 1.0f, color);
 }
 
 bool sdl3d_draw_textf_overlay(struct sdl3d_render_context *context, const sdl3d_font *font, float x, float y,
