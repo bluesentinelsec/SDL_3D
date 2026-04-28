@@ -627,6 +627,8 @@ extern "C"
      * This is the preferred loading entry point for games that may ship data in
      * source directories, packed archives, or embedded packs. Script paths in
      * the JSON are resolved relative to @p asset_path through the same resolver.
+     * The runtime borrows @p assets for later runtime asset actions, so callers
+     * must keep the resolver alive until the runtime is destroyed.
      *
      * @param assets Resolver containing the JSON asset and referenced scripts.
      * @param asset_path Virtual path, such as asset://pong.game.json.

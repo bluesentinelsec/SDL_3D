@@ -1,6 +1,7 @@
 #include "sdl3d/audio.h"
 
 #include <SDL3/SDL_error.h>
+#include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
 #include "miniaudio.h"
@@ -276,6 +277,7 @@ bool sdl3d_audio_create(sdl3d_audio_engine **out_audio)
     }
     audio->current_ambient_id = -1;
     *out_audio = audio;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio engine initialized");
     return true;
 }
 
@@ -395,6 +397,8 @@ void sdl3d_audio_set_bus_volume(sdl3d_audio_engine *audio, sdl3d_audio_bus bus, 
     }
 
     audio->bus_volumes[bus] = clamp_non_negative(volume);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio bus %d volume set to %.3f", (int)bus,
+                audio->bus_volumes[bus]);
     if (audio->music_current != NULL && audio->music_current->bus == bus && !audio->music_fading &&
         !audio->music_volume_fading)
     {
@@ -522,6 +526,7 @@ bool sdl3d_audio_play_sound_file(sdl3d_audio_engine *audio, const char *path, co
     if (ma_sound_init_from_file(&audio->engine, path, MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_NO_SPATIALIZATION, NULL,
                                 NULL, &active->sound) != MA_SUCCESS)
     {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio failed to load SFX: %s", path);
         return SDL_SetError("Could not load sound file: %s", path);
     }
 
@@ -533,6 +538,7 @@ bool sdl3d_audio_play_sound_file(sdl3d_audio_engine *audio, const char *path, co
     }
 
     ++audio->active_count;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio playing SFX: %s", path);
     return true;
 }
 
@@ -554,6 +560,7 @@ bool sdl3d_audio_play_music(sdl3d_audio_engine *audio, const char *path, bool lo
     next = music_slot_create(audio, path, loop, volume, -1, SDL3D_AUDIO_BUS_MUSIC);
     if (next == NULL)
     {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio failed to load music: %s", path);
         return false;
     }
 
@@ -576,6 +583,7 @@ bool sdl3d_audio_play_music(sdl3d_audio_engine *audio, const char *path, bool lo
         audio->music_fading = false;
         audio->music_volume_fading = false;
         audio->current_ambient_id = audio->music_current->ambient_id;
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio playing music: %s", path);
         return true;
     }
 
@@ -592,6 +600,7 @@ bool sdl3d_audio_play_music(sdl3d_audio_engine *audio, const char *path, bool lo
     audio->music_fade_duration = fade_seconds;
     audio->music_fading = true;
     audio->music_volume_fading = false;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio fading music to: %s", path);
     return true;
 }
 

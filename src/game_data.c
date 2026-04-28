@@ -206,6 +206,7 @@ typedef struct sdl3d_game_data_runtime
     script_entry *script_entries;
     int script_count;
     sdl3d_asset_resolver *assets;
+    bool owns_assets;
     char *base_dir;
     scene_entry *scenes;
     int scene_count;
@@ -5052,11 +5053,17 @@ static bool ensure_audio_cache_dir(sdl3d_game_data_runtime *runtime)
         return false;
 
     if (SDL_CreateDirectory(runtime->audio_cache_dir))
+    {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio cache directory: %s", runtime->audio_cache_dir);
         return true;
+    }
 
     SDL_PathInfo info;
     SDL_zero(info);
-    return SDL_GetPathInfo(runtime->audio_cache_dir, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+    const bool ok = SDL_GetPathInfo(runtime->audio_cache_dir, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+    if (ok)
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio cache directory: %s", runtime->audio_cache_dir);
+    return ok;
 }
 
 static char *resolve_authored_audio_path(const sdl3d_game_data_runtime *runtime, const char *path)
@@ -5078,13 +5085,18 @@ static char *materialize_audio_asset(sdl3d_game_data_runtime *runtime, const cha
     {
         if (SDL_strcmp(runtime->audio_files[i].asset_path, resolved) == 0)
         {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio asset cache hit: %s -> %s", resolved,
+                        runtime->audio_files[i].file_path);
             SDL_free(resolved);
             return SDL_strdup(runtime->audio_files[i].file_path);
         }
     }
 
     if (runtime->assets == NULL || !sdl3d_asset_resolver_exists(runtime->assets, resolved))
+    {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio using filesystem path: %s", resolved);
         return resolved;
+    }
 
     if (!ensure_audio_cache_dir(runtime))
     {
@@ -5143,6 +5155,7 @@ static char *materialize_audio_asset(sdl3d_game_data_runtime *runtime, const cha
         return NULL;
     }
     ++runtime->audio_file_count;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio asset materialized: %s -> %s", resolved, file_path);
     SDL_free(resolved);
     return file_path;
 }
@@ -5151,14 +5164,21 @@ static bool execute_audio_play_sfx(sdl3d_game_data_runtime *runtime, yyjson_val 
 {
     sdl3d_audio_engine *audio = sdl3d_game_session_get_audio(runtime != NULL ? runtime->session : NULL);
     if (audio == NULL)
+    {
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio.play_sfx ignored because audio engine is unavailable");
         return true;
+    }
 
     sdl3d_game_data_sound_asset sound;
     const char *sound_id = json_string(action, "sound", json_string(action, "asset", NULL));
     const bool has_asset = sdl3d_game_data_get_sound_asset(runtime, sound_id, &sound);
     const char *path = json_string(action, "path", has_asset ? sound.path : NULL);
     if (path == NULL)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio.play_sfx missing sound asset/path: %s",
+                    sound_id != NULL ? sound_id : "<none>");
         return false;
+    }
 
     sdl3d_audio_play_desc desc = sdl3d_audio_play_desc_default();
     if (has_asset)
@@ -5175,8 +5195,15 @@ static bool execute_audio_play_sfx(sdl3d_game_data_runtime *runtime, yyjson_val 
 
     char *file_path = materialize_audio_asset(runtime, path);
     if (file_path == NULL)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio.play_sfx failed to resolve: %s", path);
         return false;
+    }
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio.play_sfx sound=%s path=%s resolved=%s volume=%.3f bus=%d",
+                sound_id != NULL ? sound_id : "<path>", path, file_path, desc.volume, (int)desc.bus);
     const bool ok = sdl3d_audio_play_sound_file(audio, file_path, &desc);
+    if (!ok)
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio.play_sfx failed: %s", SDL_GetError());
     SDL_free(file_path);
     return ok;
 }
@@ -5185,14 +5212,22 @@ static bool execute_audio_play_music(sdl3d_game_data_runtime *runtime, yyjson_va
 {
     sdl3d_audio_engine *audio = sdl3d_game_session_get_audio(runtime != NULL ? runtime->session : NULL);
     if (audio == NULL)
+    {
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                     "SDL3D audio.play_music ignored because audio engine is unavailable");
         return true;
+    }
 
     sdl3d_game_data_music_asset music;
     const char *music_id = json_string(action, "music", json_string(action, "asset", NULL));
     const bool has_asset = sdl3d_game_data_get_music_asset(runtime, music_id, &music);
     const char *path = json_string(action, "path", has_asset ? music.path : NULL);
     if (path == NULL)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio.play_music missing music asset/path: %s",
+                    music_id != NULL ? music_id : "<none>");
         return false;
+    }
 
     const float volume = json_float(action, "volume", has_asset ? music.volume : 1.0f);
     const bool loop = json_bool(action, "loop", has_asset ? music.loop : true);
@@ -5200,8 +5235,15 @@ static bool execute_audio_play_music(sdl3d_game_data_runtime *runtime, yyjson_va
 
     char *file_path = materialize_audio_asset(runtime, path);
     if (file_path == NULL)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio.play_music failed to resolve: %s", path);
         return false;
+    }
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio.play_music music=%s path=%s resolved=%s volume=%.3f loop=%d",
+                music_id != NULL ? music_id : "<path>", path, file_path, volume, loop ? 1 : 0);
     const bool ok = sdl3d_audio_play_music(audio, file_path, loop, volume, fade);
+    if (!ok)
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio.play_music failed: %s", SDL_GetError());
     SDL_free(file_path);
     return ok;
 }
@@ -5214,7 +5256,10 @@ static bool execute_audio_action(sdl3d_game_data_runtime *runtime, yyjson_val *a
     if (SDL_strcmp(type, "audio.play_music") == 0)
         return execute_audio_play_music(runtime, action);
     if (audio == NULL)
+    {
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D %s ignored because audio engine is unavailable", type);
         return true;
+    }
     if (SDL_strcmp(type, "audio.stop_sfx") == 0)
     {
         sdl3d_audio_stop_bus(audio, parse_audio_bus(json_string(action, "bus", NULL), SDL3D_AUDIO_BUS_SOUND_EFFECTS));
@@ -6243,7 +6288,6 @@ bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_
         return false;
     }
 
-    runtime->assets = NULL;
     *out_runtime = runtime;
     return true;
 }
@@ -6286,9 +6330,12 @@ bool sdl3d_game_data_load_file(const char *path, sdl3d_game_session *session, sd
 
     const bool ok =
         sdl3d_game_data_load_asset(assets, asset_name, session, out_runtime, error_buffer, error_buffer_size);
+    if (ok && out_runtime != NULL && *out_runtime != NULL)
+        (*out_runtime)->owns_assets = true;
+    else
+        sdl3d_asset_resolver_destroy(assets);
     SDL_free(base_dir);
     SDL_free(asset_name);
-    sdl3d_asset_resolver_destroy(assets);
     return ok;
 }
 
@@ -6331,6 +6378,8 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
 
     sdl3d_script_engine_destroy(runtime->scripts);
     sdl3d_properties_destroy(runtime->scene_state);
+    if (runtime->owns_assets)
+        sdl3d_asset_resolver_destroy(runtime->assets);
     SDL_free(runtime->base_dir);
     SDL_free(runtime->audio_cache_dir);
     SDL_free(runtime->scenes);
