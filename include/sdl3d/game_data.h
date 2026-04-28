@@ -348,17 +348,6 @@ extern "C"
      */
     typedef bool (*sdl3d_game_data_ui_image_fn)(void *userdata, const sdl3d_game_data_ui_image *image);
 
-    /** @brief Data-authored splash scene flow descriptor. */
-    typedef struct sdl3d_game_data_splash
-    {
-        /** @brief Target scene requested after the splash completes. */
-        const char *next_scene;
-        /** @brief Seconds to hold after the splash fade-in has finished. */
-        float hold_seconds;
-        /** @brief True when any input press should skip the remaining hold time. */
-        bool skip_on_input;
-    } sdl3d_game_data_splash;
-
     /** @brief Input mode used by a data-authored scene skip policy. */
     typedef enum sdl3d_game_data_skip_input
     {
@@ -1214,15 +1203,6 @@ extern "C"
     bool sdl3d_game_data_ui_image_is_visible(const sdl3d_game_data_runtime *runtime,
                                              const sdl3d_game_data_ui_image *image,
                                              const sdl3d_game_data_ui_metrics *metrics);
-
-    /**
-     * @brief Read the active scene's authored splash descriptor.
-     *
-     * Returns false when the active scene has no `splash` block. The descriptor
-     * is data-only; application flow helpers decide when to request the next
-     * scene and how to apply transitions.
-     */
-    bool sdl3d_game_data_get_active_splash(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_splash *out_splash);
 
     /**
      * @brief Read the active scene's authored skip policy.

@@ -2885,28 +2885,6 @@ static bool start_animation(sdl3d_game_data_runtime *runtime, const game_data_an
     return true;
 }
 
-bool sdl3d_game_data_get_active_splash(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_splash *out_splash)
-{
-    if (out_splash != NULL)
-    {
-        SDL_zero(*out_splash);
-        out_splash->hold_seconds = 1.0f;
-        out_splash->skip_on_input = true;
-    }
-    if (runtime == NULL || out_splash == NULL)
-        return false;
-
-    const scene_entry *scene = active_scene_entry_const(runtime);
-    yyjson_val *splash = obj_get(scene != NULL ? scene->root : NULL, "splash");
-    if (!yyjson_is_obj(splash))
-        return false;
-
-    out_splash->next_scene = json_string(splash, "next_scene", NULL);
-    out_splash->hold_seconds = json_float(splash, "hold_seconds", out_splash->hold_seconds);
-    out_splash->skip_on_input = json_bool(splash, "skip_on_input", out_splash->skip_on_input);
-    return out_splash->next_scene != NULL;
-}
-
 static yyjson_val *active_skip_policy_json(const sdl3d_game_data_runtime *runtime)
 {
     const scene_entry *scene = active_scene_entry_const(runtime);
