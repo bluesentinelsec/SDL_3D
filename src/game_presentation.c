@@ -9,6 +9,7 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "sdl3d/drawing3d.h"
+#include "sdl3d/image.h"
 #include "sdl3d/lighting.h"
 #include "sdl3d/shapes.h"
 
@@ -26,6 +27,15 @@ typedef struct ui_draw_context
     float pulse_phase;
     bool ok;
 } ui_draw_context;
+
+typedef struct ui_image_draw_context
+{
+    const sdl3d_game_data_runtime *runtime;
+    sdl3d_render_context *renderer;
+    sdl3d_game_data_image_cache *image_cache;
+    const sdl3d_game_data_ui_metrics *metrics;
+    bool ok;
+} ui_image_draw_context;
 
 typedef struct particle_update_context
 {
@@ -155,6 +165,26 @@ static bool ensure_particle_cache_capacity(sdl3d_game_data_particle_cache *cache
     return true;
 }
 
+static bool ensure_image_cache_capacity(sdl3d_game_data_image_cache *cache, int required)
+{
+    if (cache == NULL || required <= cache->capacity)
+        return cache != NULL;
+
+    int next_capacity = cache->capacity < 4 ? 4 : cache->capacity * 2;
+    while (next_capacity < required)
+        next_capacity *= 2;
+
+    sdl3d_game_data_image_cache_entry *entries =
+        (sdl3d_game_data_image_cache_entry *)SDL_realloc(cache->entries, (size_t)next_capacity * sizeof(*entries));
+    if (entries == NULL)
+        return false;
+
+    SDL_memset(entries + cache->capacity, 0, (size_t)(next_capacity - cache->capacity) * sizeof(*entries));
+    cache->entries = entries;
+    cache->capacity = next_capacity;
+    return true;
+}
+
 static sdl3d_game_data_particle_cache_entry *find_particle_entry(sdl3d_game_data_particle_cache *cache,
                                                                  const char *entity_name)
 {
@@ -224,6 +254,59 @@ static sdl3d_font *find_or_load_font(const sdl3d_game_data_runtime *runtime, sdl
     cache->font_ids[cache->count] = font_id;
     cache->count++;
     return slot;
+}
+
+static sdl3d_texture2d *find_or_load_image(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_image_cache *cache,
+                                           const char *image_id)
+{
+    if (runtime == NULL || cache == NULL || cache->assets == NULL || image_id == NULL)
+        return NULL;
+
+    for (int i = 0; i < cache->count; ++i)
+    {
+        if (cache->entries[i].image_id != NULL && SDL_strcmp(cache->entries[i].image_id, image_id) == 0)
+            return cache->entries[i].loaded ? &cache->entries[i].texture : NULL;
+    }
+
+    if (!ensure_image_cache_capacity(cache, cache->count + 1))
+        return NULL;
+
+    sdl3d_game_data_image_asset asset;
+    if (!sdl3d_game_data_get_image_asset(runtime, image_id, &asset) || asset.path == NULL)
+        return NULL;
+
+    sdl3d_asset_buffer buffer;
+    SDL_zero(buffer);
+    char error[256];
+    if (!sdl3d_asset_resolver_read_file(cache->assets, asset.path, &buffer, error, (int)sizeof(error)))
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to read UI image asset %s: %s", asset.path, error);
+        return NULL;
+    }
+
+    sdl3d_image image;
+    SDL_zero(image);
+    const bool decoded = sdl3d_load_image_from_memory(buffer.data, buffer.size, &image);
+    sdl3d_asset_buffer_free(&buffer);
+    if (!decoded)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to decode UI image asset %s", asset.path);
+        return NULL;
+    }
+
+    sdl3d_game_data_image_cache_entry *entry = &cache->entries[cache->count];
+    SDL_zero(*entry);
+    entry->image_id = asset.id;
+    entry->loaded = sdl3d_create_texture_from_image(&image, &entry->texture);
+    sdl3d_free_image(&image);
+    if (!entry->loaded)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create texture for UI image asset %s", asset.path);
+        return NULL;
+    }
+
+    ++cache->count;
+    return &entry->texture;
 }
 
 static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitive *primitive)
@@ -298,6 +381,79 @@ static bool draw_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
     return true;
 }
 
+static void resolve_ui_image_rect(const sdl3d_game_data_ui_image *image, const sdl3d_texture2d *texture, int width,
+                                  int height, float *out_x, float *out_y, float *out_w, float *out_h)
+{
+    float w = image->normalized ? image->w * (float)width : image->w;
+    float h = image->normalized ? image->h * (float)height : image->h;
+    const float texture_w = (float)texture->width;
+    const float texture_h = (float)texture->height;
+
+    if (w <= 0.0f && h <= 0.0f)
+    {
+        w = texture_w;
+        h = texture_h;
+    }
+    else if (w <= 0.0f)
+    {
+        w = h * texture_w / texture_h;
+    }
+    else if (h <= 0.0f)
+    {
+        h = w * texture_h / texture_w;
+    }
+    else if (image->preserve_aspect)
+    {
+        const float fit = SDL_min(w / texture_w, h / texture_h);
+        w = texture_w * fit;
+        h = texture_h * fit;
+    }
+
+    float x = image->normalized ? image->x * (float)width : image->x;
+    float y = image->normalized ? image->y * (float)height : image->y;
+    if (image->align == SDL3D_GAME_DATA_UI_ALIGN_CENTER)
+        x -= w * 0.5f;
+    else if (image->align == SDL3D_GAME_DATA_UI_ALIGN_RIGHT)
+        x -= w;
+    if (image->valign == SDL3D_GAME_DATA_UI_VALIGN_CENTER)
+        y -= h * 0.5f;
+    else if (image->valign == SDL3D_GAME_DATA_UI_VALIGN_BOTTOM)
+        y -= h;
+
+    *out_x = x;
+    *out_y = y;
+    *out_w = w;
+    *out_h = h;
+}
+
+static bool draw_ui_image(void *userdata, const sdl3d_game_data_ui_image *image)
+{
+    ui_image_draw_context *draw = (ui_image_draw_context *)userdata;
+    if (draw == NULL || image == NULL)
+        return false;
+
+    if (!sdl3d_game_data_ui_image_is_visible(draw->runtime, image, draw->metrics))
+        return true;
+
+    sdl3d_texture2d *texture = find_or_load_image(draw->runtime, draw->image_cache, image->image);
+    if (texture == NULL)
+    {
+        draw->ok = false;
+        return true;
+    }
+
+    const int width = sdl3d_get_render_context_width(draw->renderer);
+    const int height = sdl3d_get_render_context_height(draw->renderer);
+    float x = 0.0f;
+    float y = 0.0f;
+    float w = 0.0f;
+    float h = 0.0f;
+    resolve_ui_image_rect(image, texture, width, height, &x, &y, &w, &h);
+    if (!sdl3d_draw_texture_overlay(draw->renderer, texture, x, y, w, h, image->color))
+        draw->ok = false;
+    return true;
+}
+
 static bool update_particle(void *userdata, const sdl3d_game_data_particle_emitter *emitter)
 {
     particle_update_context *context = (particle_update_context *)userdata;
@@ -341,6 +497,27 @@ void sdl3d_game_data_font_cache_free(sdl3d_game_data_font_cache *cache)
     SDL_zero(*cache);
 }
 
+void sdl3d_game_data_image_cache_init(sdl3d_game_data_image_cache *cache, sdl3d_asset_resolver *assets)
+{
+    if (cache == NULL)
+        return;
+    SDL_zero(*cache);
+    cache->assets = assets;
+}
+
+void sdl3d_game_data_image_cache_free(sdl3d_game_data_image_cache *cache)
+{
+    if (cache == NULL)
+        return;
+    for (int i = 0; i < cache->count; ++i)
+    {
+        if (cache->entries[i].loaded)
+            sdl3d_free_texture(&cache->entries[i].texture);
+    }
+    SDL_free(cache->entries);
+    SDL_zero(*cache);
+}
+
 bool sdl3d_game_data_draw_render_primitives(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer)
 {
     return sdl3d_game_data_draw_render_primitives_evaluated(runtime, renderer, NULL);
@@ -374,6 +551,23 @@ bool sdl3d_game_data_draw_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_
     context.ok = true;
 
     return sdl3d_game_data_for_each_ui_text(runtime, draw_ui_text, &context) && context.ok;
+}
+
+bool sdl3d_game_data_draw_ui_images(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
+                                    sdl3d_game_data_image_cache *image_cache, const sdl3d_game_data_ui_metrics *metrics)
+{
+    if (runtime == NULL || renderer == NULL || image_cache == NULL)
+        return false;
+
+    ui_image_draw_context context;
+    SDL_zero(context);
+    context.runtime = runtime;
+    context.renderer = renderer;
+    context.image_cache = image_cache;
+    context.metrics = metrics;
+    context.ok = true;
+
+    return sdl3d_game_data_for_each_ui_image(runtime, draw_ui_image, &context) && context.ok;
 }
 
 void sdl3d_game_data_particle_cache_init(sdl3d_game_data_particle_cache *cache)
@@ -772,6 +966,50 @@ static void app_flow_consume_scene_shortcuts(sdl3d_game_data_app_flow *flow, sdl
     }
 }
 
+static bool app_flow_capture_splash_input(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime,
+                                          const sdl3d_input_manager *input)
+{
+    sdl3d_game_data_splash splash;
+    if (flow == NULL || runtime == NULL || !sdl3d_game_data_get_active_splash(runtime, &splash))
+    {
+        if (flow != NULL)
+        {
+            flow->splash_scene = NULL;
+            flow->splash_elapsed = 0.0f;
+            flow->splash_skip_requested = false;
+        }
+        return false;
+    }
+
+    const char *active_scene = sdl3d_game_data_active_scene(runtime);
+    if (flow->splash_scene != active_scene)
+    {
+        flow->splash_scene = active_scene;
+        flow->splash_elapsed = 0.0f;
+        flow->splash_skip_requested = false;
+    }
+    if (splash.skip_on_input && sdl3d_input_any_pressed(input))
+        flow->splash_skip_requested = true;
+    return true;
+}
+
+static void app_flow_advance_splash(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime, float dt)
+{
+    if (flow == NULL || runtime == NULL || flow->quit_pending || flow->transition.active ||
+        sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
+    {
+        return;
+    }
+
+    sdl3d_game_data_splash splash;
+    if (!sdl3d_game_data_get_active_splash(runtime, &splash))
+        return;
+
+    flow->splash_elapsed += dt > 0.0f ? dt : 0.0f;
+    if (flow->splash_skip_requested || flow->splash_elapsed >= splash.hold_seconds)
+        (void)app_flow_request_scene(flow, runtime, splash.next_scene);
+}
+
 static void app_flow_update_transition(sdl3d_game_data_app_flow *flow, sdl3d_game_context *ctx, sdl3d_signal_bus *bus,
                                        float dt)
 {
@@ -803,6 +1041,9 @@ bool sdl3d_game_data_app_flow_start(sdl3d_game_data_app_flow *flow, sdl3d_game_d
     sdl3d_transition_reset(&flow->transition);
     flow->quit_pending = false;
     flow->scene_input_armed = false;
+    flow->splash_scene = NULL;
+    flow->splash_elapsed = 0.0f;
+    flow->splash_skip_requested = false;
     if (!sdl3d_game_data_get_app_control(runtime, &flow->app))
         return false;
 
@@ -834,34 +1075,39 @@ bool sdl3d_game_data_app_flow_update(sdl3d_game_data_app_flow *flow, sdl3d_game_
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(ctx->session);
     sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(ctx->session);
+    const bool splash_active = app_flow_capture_splash_input(flow, runtime, input);
 
-    if (flow->app.quit_action_id >= 0 &&
-        sdl3d_game_data_active_scene_allows_action(runtime, flow->app.quit_action_id) &&
-        sdl3d_input_is_pressed(input, flow->app.quit_action_id))
-        app_flow_request_quit(flow, ctx, runtime);
-
-    app_flow_consume_scene_shortcuts(flow, runtime, input);
-    app_flow_consume_menu(flow, ctx, runtime, input, bus);
-
-    if (flow->app.pause_action_id >= 0 && sdl3d_input_is_pressed(input, flow->app.pause_action_id) &&
-        sdl3d_game_data_active_scene_allows_action(runtime, flow->app.pause_action_id) && !flow->quit_pending &&
-        !sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
+    if (!splash_active)
     {
-        if (ctx->paused)
-            ctx->paused = false;
-        else
+        if (flow->app.quit_action_id >= 0 &&
+            sdl3d_game_data_active_scene_allows_action(runtime, flow->app.quit_action_id) &&
+            sdl3d_input_is_pressed(input, flow->app.quit_action_id))
+            app_flow_request_quit(flow, ctx, runtime);
+
+        app_flow_consume_scene_shortcuts(flow, runtime, input);
+        app_flow_consume_menu(flow, ctx, runtime, input, bus);
+
+        if (flow->app.pause_action_id >= 0 && sdl3d_input_is_pressed(input, flow->app.pause_action_id) &&
+            sdl3d_game_data_active_scene_allows_action(runtime, flow->app.pause_action_id) && !flow->quit_pending &&
+            !sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
         {
-            sdl3d_game_data_ui_metrics metrics;
-            SDL_zero(metrics);
-            metrics.paused = ctx->paused;
-            if (sdl3d_game_data_app_pause_allowed(runtime, &metrics) &&
-                sdl3d_game_data_active_scene_updates_game(runtime))
-                ctx->paused = true;
+            if (ctx->paused)
+                ctx->paused = false;
+            else
+            {
+                sdl3d_game_data_ui_metrics metrics;
+                SDL_zero(metrics);
+                metrics.paused = ctx->paused;
+                if (sdl3d_game_data_app_pause_allowed(runtime, &metrics) &&
+                    sdl3d_game_data_active_scene_updates_game(runtime))
+                    ctx->paused = true;
+            }
         }
     }
 
     app_flow_update_transition(flow, ctx, bus, dt);
     sdl3d_game_data_scene_flow_update(&flow->scene_flow, runtime, bus, dt);
+    app_flow_advance_splash(flow, runtime, dt);
     return true;
 }
 
@@ -903,6 +1149,8 @@ bool sdl3d_game_data_draw_frame(const sdl3d_game_data_frame_desc *frame)
     }
 
     ok = run_frame_hook(frame, frame->before_ui) && ok;
+    if (frame->image_cache != NULL)
+        ok = sdl3d_game_data_draw_ui_images(frame->runtime, frame->renderer, frame->image_cache, frame->metrics) && ok;
     if (frame->font_cache != NULL)
     {
         ok = sdl3d_game_data_draw_ui_text(frame->runtime, frame->renderer, frame->font_cache, frame->metrics,

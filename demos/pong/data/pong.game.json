@@ -50,8 +50,9 @@
     }
   },
   "scenes": {
-    "initial": "scene.title",
+    "initial": "scene.splash",
     "files": [
+      "scenes/splash.scene.json",
       "scenes/title.scene.json",
       "scenes/options.scene.json",
       "scenes/play.scene.json"
@@ -147,9 +148,15 @@
         "builtin": "Inter",
         "size": 96
       }
+    ],
+    "images": [
+      {
+        "id": "image.splash.logo",
+        "path": "asset://images/splash-logo.jpg"
+      }
     ]
   },
-  "ui": { "text": [] },
+  "ui": { "text": [], "images": [] },
   "scripts": [
     {
       "id": "script.pong",

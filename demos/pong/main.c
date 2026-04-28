@@ -16,8 +16,10 @@
 
 typedef struct pong_state
 {
+    sdl3d_asset_resolver *assets;
     sdl3d_game_data_runtime *data;
     sdl3d_game_data_font_cache font_cache;
+    sdl3d_game_data_image_cache image_cache;
     sdl3d_game_data_particle_cache particle_cache;
     sdl3d_game_data_app_flow app_flow;
     sdl3d_game_data_frame_state frame_state;
@@ -37,30 +39,31 @@ static bool mount_pong_assets(sdl3d_asset_resolver *assets, char *error, int err
 
 static bool init_game_data(sdl3d_game_context *ctx, pong_state *state)
 {
-    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
-    if (assets == NULL)
+    state->assets = sdl3d_asset_resolver_create();
+    if (state->assets == NULL)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong asset resolver allocation failed");
         return false;
     }
 
     char error[512];
-    bool assets_ready = mount_pong_assets(assets, error, (int)sizeof(error));
+    bool assets_ready = mount_pong_assets(state->assets, error, (int)sizeof(error));
     if (!assets_ready)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong asset mount failed: %s", error);
-        sdl3d_asset_resolver_destroy(assets);
+        sdl3d_asset_resolver_destroy(state->assets);
+        state->assets = NULL;
         return false;
     }
 
-    if (!sdl3d_game_data_load_asset(assets, SDL3D_PONG_DATA_ASSET_PATH, ctx->session, &state->data, error,
+    if (!sdl3d_game_data_load_asset(state->assets, SDL3D_PONG_DATA_ASSET_PATH, ctx->session, &state->data, error,
                                     (int)sizeof(error)))
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong data load failed: %s", error);
-        sdl3d_asset_resolver_destroy(assets);
+        sdl3d_asset_resolver_destroy(state->assets);
+        state->assets = NULL;
         return false;
     }
-    sdl3d_asset_resolver_destroy(assets);
 
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong data loaded: asset=%s active_scene=%s", SDL3D_PONG_DATA_ASSET_PATH,
                 sdl3d_game_data_active_scene(state->data) != NULL ? sdl3d_game_data_active_scene(state->data)
@@ -81,8 +84,14 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
     {
         return false;
     }
+    sdl3d_game_data_image_cache_init(&state->image_cache, state->assets);
     if (!sdl3d_game_data_app_flow_start(&state->app_flow, state->data))
     {
+        sdl3d_game_data_image_cache_free(&state->image_cache);
+        sdl3d_game_data_destroy(state->data);
+        state->data = NULL;
+        sdl3d_asset_resolver_destroy(state->assets);
+        state->assets = NULL;
         return false;
     }
     return true;
@@ -132,6 +141,7 @@ static void pong_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     frame.runtime = state->data;
     frame.renderer = ctx->renderer;
     frame.font_cache = &state->font_cache;
+    frame.image_cache = &state->image_cache;
     frame.particle_cache = &state->particle_cache;
     frame.app_flow = &state->app_flow;
     frame.metrics = &state->frame_state.metrics;
@@ -146,9 +156,12 @@ static void pong_shutdown(sdl3d_game_context *ctx, void *userdata)
     (void)ctx;
 
     sdl3d_game_data_particle_cache_free(&state->particle_cache);
+    sdl3d_game_data_image_cache_free(&state->image_cache);
     sdl3d_game_data_font_cache_free(&state->font_cache);
     sdl3d_game_data_destroy(state->data);
     state->data = NULL;
+    sdl3d_asset_resolver_destroy(state->assets);
+    state->assets = NULL;
 }
 
 int main(int argc, char **argv)

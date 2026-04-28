@@ -1,7 +1,9 @@
 set(SDL3D_PONG_ASSET_FILES
+    images/splash-logo.jpg
     pong.game.json
     scenes/options.scene.json
     scenes/play.scene.json
+    scenes/splash.scene.json
     scenes/title.scene.json
     scripts/pong.lua)
 

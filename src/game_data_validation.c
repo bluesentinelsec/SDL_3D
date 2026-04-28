@@ -53,6 +53,7 @@ typedef struct validation_names
     name_table timers;
     name_table cameras;
     name_table fonts;
+    name_table images;
     name_table scenes;
     name_table sensors;
     name_table used_adapters;
@@ -532,6 +533,43 @@ static bool collect_fonts(validation_context *ctx, yyjson_val *root, validation_
     return true;
 }
 
+static bool collect_images(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *images = obj_get(obj_get(root, "assets"), "images");
+    if (images == NULL)
+        return true;
+    if (!yyjson_is_arr(images))
+        return validation_error(ctx, "$.assets.images", "image assets must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(images); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.assets.images[%zu]", i);
+        yyjson_val *image = yyjson_arr_get(images, i);
+        if (!yyjson_is_obj(image))
+            return validation_error(ctx, path, "image asset entries must be objects");
+        if (!require_unique_name(ctx, &names->images, "image asset", json_string(image, "id"), path))
+            return false;
+        if (!is_non_empty_string(image, "path"))
+            return validation_error(ctx, path, "image asset requires a non-empty path");
+
+        if (ctx->assets != NULL)
+        {
+            const char *image_path = json_string(image, "path");
+            char *resolved = image_path != NULL && SDL_strncmp(image_path, "asset://", 8) == 0
+                                 ? SDL_strdup(image_path)
+                                 : path_join(ctx->base_dir, image_path);
+            if (resolved == NULL)
+                return validation_error(ctx, path, "failed to resolve image asset path");
+            const bool exists = sdl3d_asset_resolver_exists(ctx->assets, resolved);
+            SDL_free(resolved);
+            if (!exists)
+                return validation_error(ctx, path, "image asset path '%s' does not exist", image_path);
+        }
+    }
+    return true;
+}
+
 static bool collect_input_actions(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *contexts = obj_get(obj_get(root, "input"), "contexts");
@@ -702,7 +740,8 @@ static bool collect_names(validation_context *ctx, yyjson_val *root, validation_
     return collect_signals(ctx, root, names) && collect_entities(ctx, root, names) &&
            collect_scripts(ctx, root, names) && collect_adapters(ctx, root, names) &&
            collect_input_actions(ctx, root, names) && collect_cameras(ctx, root, names) &&
-           collect_fonts(ctx, root, names) && collect_timers(ctx, root, names) && collect_sensors(ctx, root, names);
+           collect_fonts(ctx, root, names) && collect_images(ctx, root, names) && collect_timers(ctx, root, names) &&
+           collect_sensors(ctx, root, names);
 }
 
 static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)
@@ -1242,11 +1281,14 @@ static bool validate_ui(validation_context *ctx, yyjson_val *root, validation_na
 {
     yyjson_val *ui = obj_get(root, "ui");
     yyjson_val *texts = obj_get(ui, "text");
+    yyjson_val *images = obj_get(ui, "images");
     yyjson_val *menus = obj_get(ui, "menus");
-    if (texts == NULL && menus == NULL)
+    if (texts == NULL && images == NULL && menus == NULL)
         return true;
     if (texts != NULL && !yyjson_is_arr(texts))
         return validation_error(ctx, "$.ui.text", "UI text must be an array");
+    if (images != NULL && !yyjson_is_arr(images))
+        return validation_error(ctx, "$.ui.images", "UI images must be an array");
     if (menus != NULL && !yyjson_is_arr(menus))
         return validation_error(ctx, "$.ui.menus", "UI menus must be an array");
 
@@ -1285,6 +1327,23 @@ static bool validate_ui(validation_context *ctx, yyjson_val *root, validation_na
                                         type != NULL ? type : "<missing>");
             }
         }
+    }
+
+    for (size_t i = 0; yyjson_is_arr(images) && i < yyjson_arr_size(images); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.ui.images[%zu]", i);
+        yyjson_val *image = yyjson_arr_get(images, i);
+        if (!yyjson_is_obj(image))
+            return validation_error(ctx, path, "UI image entries must be objects");
+        if (!is_non_empty_string(image, "name"))
+            return validation_error(ctx, path, "UI image requires a non-empty name");
+        if (!require_ref(ctx, &names->images, "image asset", json_string(image, "image"), path))
+            return false;
+        char condition_path[PATH_BUFFER_SIZE];
+        format_path(condition_path, sizeof(condition_path), "%s.visible_if", path);
+        if (!validate_data_condition(ctx, obj_get(image, "visible_if"), condition_path, names))
+            return false;
     }
 
     for (size_t i = 0; yyjson_is_arr(menus) && i < yyjson_arr_size(menus); ++i)
@@ -1571,6 +1630,18 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
     if (!validate_update_phases(ctx, obj_get(root, "update_phases"), phases_path))
         return false;
 
+    yyjson_val *splash = obj_get(root, "splash");
+    if (splash != NULL)
+    {
+        if (!yyjson_is_obj(splash))
+            return validation_error(ctx, json_path, "scene splash must be an object");
+        if (!require_ref(ctx, &names->scenes, "scene", json_string(splash, "next_scene"), json_path))
+            return false;
+        yyjson_val *hold = obj_get(splash, "hold_seconds");
+        if (hold != NULL && (!yyjson_is_num(hold) || yyjson_get_num(hold) < 0.0))
+            return validation_error(ctx, json_path, "scene splash hold_seconds must be a non-negative number");
+    }
+
     yyjson_val *scene_input = obj_get(root, "input");
     if (scene_input != NULL && !yyjson_is_obj(scene_input))
         return validation_error(ctx, json_path, "scene input must be an object");
@@ -1640,7 +1711,10 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
     }
 
     yyjson_val *texts = obj_get(obj_get(root, "ui"), "text");
+    yyjson_val *images = obj_get(obj_get(root, "ui"), "images");
     yyjson_val *ui_menus = obj_get(obj_get(root, "ui"), "menus");
+    if (images != NULL && !yyjson_is_arr(images))
+        return validation_error(ctx, json_path, "scene UI images must be an array");
     if (ui_menus != NULL && !yyjson_is_arr(ui_menus))
         return validation_error(ctx, json_path, "scene UI menus must be an array");
     for (size_t i = 0; yyjson_is_arr(ui_menus) && i < yyjson_arr_size(ui_menus); ++i)
@@ -1665,6 +1739,23 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
         char condition_path[PATH_BUFFER_SIZE];
         format_path(condition_path, sizeof(condition_path), "%s.visible_if", menu_path);
         if (!validate_scene_ui_condition(ctx, obj_get(presenter, "visible_if"), condition_path, names))
+            return false;
+    }
+
+    for (size_t i = 0; yyjson_is_arr(images) && i < yyjson_arr_size(images); ++i)
+    {
+        char image_path[PATH_BUFFER_SIZE];
+        format_path(image_path, sizeof(image_path), "%s.ui.images[%zu]", json_path, i);
+        yyjson_val *image = yyjson_arr_get(images, i);
+        if (!yyjson_is_obj(image))
+            return validation_error(ctx, image_path, "scene UI image entries must be objects");
+        if (!is_non_empty_string(image, "name"))
+            return validation_error(ctx, image_path, "scene UI image requires a non-empty name");
+        if (!require_ref(ctx, &names->images, "image asset", json_string(image, "image"), image_path))
+            return false;
+        char condition_path[PATH_BUFFER_SIZE];
+        format_path(condition_path, sizeof(condition_path), "%s.visible_if", image_path);
+        if (!validate_scene_ui_condition(ctx, obj_get(image, "visible_if"), condition_path, names))
             return false;
     }
 
@@ -1789,6 +1880,7 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->timers);
     name_table_destroy(&names->cameras);
     name_table_destroy(&names->fonts);
+    name_table_destroy(&names->images);
     name_table_destroy(&names->scenes);
     name_table_destroy(&names->sensors);
     name_table_destroy(&names->used_adapters);

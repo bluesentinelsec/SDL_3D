@@ -67,6 +67,15 @@ extern "C"
         float size;
     } sdl3d_game_data_font_asset;
 
+    /** @brief Authored image asset descriptor. */
+    typedef struct sdl3d_game_data_image_asset
+    {
+        /** @brief Stable asset id, such as `image.logo`. */
+        const char *id;
+        /** @brief Virtual or filesystem path to the image bytes. */
+        const char *path;
+    } sdl3d_game_data_image_asset;
+
     /**
      * @brief Runtime metrics used when evaluating data-authored UI bindings.
      *
@@ -101,6 +110,17 @@ extern "C"
         /** @brief Anchor text at its right edge. */
         SDL3D_GAME_DATA_UI_ALIGN_RIGHT = 2,
     } sdl3d_game_data_ui_align;
+
+    /** @brief Vertical UI alignment for authored images. */
+    typedef enum sdl3d_game_data_ui_valign
+    {
+        /** @brief Anchor at the top edge. */
+        SDL3D_GAME_DATA_UI_VALIGN_TOP = 0,
+        /** @brief Anchor at the center. */
+        SDL3D_GAME_DATA_UI_VALIGN_CENTER = 1,
+        /** @brief Anchor at the bottom edge. */
+        SDL3D_GAME_DATA_UI_VALIGN_BOTTOM = 2,
+    } sdl3d_game_data_ui_valign;
 
     /** @brief Authored render primitive kind. */
     typedef enum sdl3d_game_data_render_primitive_type
@@ -211,12 +231,59 @@ extern "C"
         sdl3d_color color;
     } sdl3d_game_data_ui_text;
 
+    /** @brief Authored UI image descriptor. */
+    typedef struct sdl3d_game_data_ui_image
+    {
+        /** @brief Stable UI item name. */
+        const char *name;
+        /** @brief Image asset id. */
+        const char *image;
+        /** @brief Caller-defined visibility key. */
+        const char *visible;
+        /** @brief Horizontal anchor position. */
+        float x;
+        /** @brief Vertical anchor position. */
+        float y;
+        /** @brief Desired width. */
+        float w;
+        /** @brief Desired height. */
+        float h;
+        /** @brief Whether x/y/w/h are normalized to the current render size. */
+        bool normalized;
+        /** @brief Whether to preserve the source image aspect ratio inside w/h. */
+        bool preserve_aspect;
+        /** @brief Horizontal alignment of the image rectangle around x. */
+        sdl3d_game_data_ui_align align;
+        /** @brief Vertical alignment of the image rectangle around y. */
+        sdl3d_game_data_ui_valign valign;
+        /** @brief Image tint color. */
+        sdl3d_color color;
+    } sdl3d_game_data_ui_image;
+
     /**
      * @brief Callback for iterating authored UI text descriptors.
      *
      * Return false to stop iteration early.
      */
     typedef bool (*sdl3d_game_data_ui_text_fn)(void *userdata, const sdl3d_game_data_ui_text *text);
+
+    /**
+     * @brief Callback for iterating authored UI image descriptors.
+     *
+     * Return false to stop iteration early.
+     */
+    typedef bool (*sdl3d_game_data_ui_image_fn)(void *userdata, const sdl3d_game_data_ui_image *image);
+
+    /** @brief Data-authored splash scene flow descriptor. */
+    typedef struct sdl3d_game_data_splash
+    {
+        /** @brief Target scene requested after the splash completes. */
+        const char *next_scene;
+        /** @brief Seconds to hold after the splash fade-in has finished. */
+        float hold_seconds;
+        /** @brief True when any input press should skip the remaining hold time. */
+        bool skip_on_input;
+    } sdl3d_game_data_splash;
 
     /**
      * @brief Runtime descriptor for the active scene's primary menu.
@@ -607,6 +674,10 @@ extern "C"
     bool sdl3d_game_data_get_font_asset(const sdl3d_game_data_runtime *runtime, const char *id,
                                         sdl3d_game_data_font_asset *out_font);
 
+    /** @brief Read an image asset descriptor by id from `assets.images`. */
+    bool sdl3d_game_data_get_image_asset(const sdl3d_game_data_runtime *runtime, const char *id,
+                                         sdl3d_game_data_image_asset *out_image);
+
     /**
      * @brief Return the currently active authored camera name.
      *
@@ -911,6 +982,16 @@ extern "C"
                                           void *userdata);
 
     /**
+     * @brief Iterate authored UI images visible to the active scene.
+     *
+     * Iteration includes global `ui.images` followed by active-scene
+     * `ui.images`. Visibility is evaluated separately by
+     * sdl3d_game_data_ui_image_is_visible().
+     */
+    bool sdl3d_game_data_for_each_ui_image(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_ui_image_fn callback,
+                                           void *userdata);
+
+    /**
      * @brief Evaluate a UI text descriptor's authored visibility condition.
      *
      * Supports camera-active checks, app pause checks, actor property
@@ -919,6 +1000,20 @@ extern "C"
      */
     bool sdl3d_game_data_ui_text_is_visible(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_text *text,
                                             const sdl3d_game_data_ui_metrics *metrics);
+
+    /** @brief Evaluate a UI image's authored `visible_if` condition. */
+    bool sdl3d_game_data_ui_image_is_visible(const sdl3d_game_data_runtime *runtime,
+                                             const sdl3d_game_data_ui_image *image,
+                                             const sdl3d_game_data_ui_metrics *metrics);
+
+    /**
+     * @brief Read the active scene's authored splash descriptor.
+     *
+     * Returns false when the active scene has no `splash` block. The descriptor
+     * is data-only; application flow helpers decide when to request the next
+     * scene and how to apply transitions.
+     */
+    bool sdl3d_game_data_get_active_splash(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_splash *out_splash);
 
     /**
      * @brief Resolve UI text content from data-authored bindings.

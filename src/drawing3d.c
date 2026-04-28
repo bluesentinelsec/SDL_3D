@@ -1859,6 +1859,148 @@ bool sdl3d_draw_rect_overlay(sdl3d_render_context *context, float x, float y, fl
                                    scissor_enabled ? &scissor_rect : NULL);
 }
 
+static Uint8 overlay_to_u8(float value)
+{
+    return (Uint8)SDL_clamp((int)(value * 255.0f + 0.5f), 0, 255);
+}
+
+static void overlay_blend_pixel(Uint8 *pixel, sdl3d_color color)
+{
+    if (pixel == NULL || color.a == 0)
+    {
+        return;
+    }
+    if (color.a == 255)
+    {
+        pixel[0] = color.r;
+        pixel[1] = color.g;
+        pixel[2] = color.b;
+        pixel[3] = color.a;
+        return;
+    }
+
+    const float src_a = (float)color.a / 255.0f;
+    const float dst_a = (float)pixel[3] / 255.0f;
+    const float out_a = src_a + dst_a * (1.0f - src_a);
+    float out_r = (float)color.r * src_a;
+    float out_g = (float)color.g * src_a;
+    float out_b = (float)color.b * src_a;
+    if (out_a > 0.0f)
+    {
+        out_r += (float)pixel[0] * dst_a * (1.0f - src_a);
+        out_g += (float)pixel[1] * dst_a * (1.0f - src_a);
+        out_b += (float)pixel[2] * dst_a * (1.0f - src_a);
+        out_r /= out_a;
+        out_g /= out_a;
+        out_b /= out_a;
+    }
+    pixel[0] = (Uint8)SDL_clamp((int)(out_r + 0.5f), 0, 255);
+    pixel[1] = (Uint8)SDL_clamp((int)(out_g + 0.5f), 0, 255);
+    pixel[2] = (Uint8)SDL_clamp((int)(out_b + 0.5f), 0, 255);
+    pixel[3] = (Uint8)SDL_clamp((int)(out_a * 255.0f + 0.5f), 0, 255);
+}
+
+static bool draw_texture_overlay_software(sdl3d_render_context *context, const sdl3d_texture2d *texture, float x,
+                                          float y, float w, float h, sdl3d_color tint, bool scissor_enabled,
+                                          const SDL_Rect *scissor_rect)
+{
+    SDL_Rect rect = {(int)x, (int)y, (int)w, (int)h};
+    rect = sdl3d_rect_overlay_intersect_scissor(rect, scissor_enabled, scissor_rect);
+    if (rect.w <= 0 || rect.h <= 0)
+    {
+        return true;
+    }
+
+    const float inv_w = 1.0f / w;
+    const float inv_h = 1.0f / h;
+    for (int py = rect.y; py < rect.y + rect.h; ++py)
+    {
+        for (int px = rect.x; px < rect.x + rect.w; ++px)
+        {
+            float r = 0.0f;
+            float g = 0.0f;
+            float b = 0.0f;
+            float a = 0.0f;
+            const float u = ((float)px + 0.5f - x) * inv_w;
+            const float v = ((float)py + 0.5f - y) * inv_h;
+            sdl3d_texture_sample_rgba(texture, u, v, 0.0f, &r, &g, &b, &a);
+            const sdl3d_color color = {
+                overlay_to_u8(r * ((float)tint.r / 255.0f)),
+                overlay_to_u8(g * ((float)tint.g / 255.0f)),
+                overlay_to_u8(b * ((float)tint.b / 255.0f)),
+                overlay_to_u8(a * ((float)tint.a / 255.0f)),
+            };
+            overlay_blend_pixel(&context->color_buffer[((size_t)py * (size_t)context->width + (size_t)px) * 4u], color);
+        }
+    }
+    return true;
+}
+
+bool sdl3d_draw_texture_overlay(sdl3d_render_context *context, const sdl3d_texture2d *texture, float x, float y,
+                                float w, float h, sdl3d_color tint)
+{
+    SDL_Rect scissor_rect = {0, 0, 0, 0};
+    bool scissor_enabled = false;
+
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (texture == NULL || texture->pixels == NULL || texture->width <= 0 || texture->height <= 0)
+    {
+        return SDL_InvalidParamError("texture");
+    }
+    if (w <= 0.0f || h <= 0.0f || tint.a == 0)
+    {
+        return true;
+    }
+    if (sdl3d_is_in_mode_3d(context))
+    {
+        return SDL_SetError("sdl3d_draw_texture_overlay must be called outside sdl3d_begin_mode_3d / "
+                            "sdl3d_end_mode_3d");
+    }
+    if (!sdl3d_overlay_capture_scissor(context, &scissor_enabled, &scissor_rect))
+    {
+        return false;
+    }
+
+    if (!context->gl)
+    {
+        return draw_texture_overlay_software(context, texture, x, y, w, h, tint, scissor_enabled, &scissor_rect);
+    }
+
+    const int ctx_w = sdl3d_get_render_context_width(context);
+    const int ctx_h = sdl3d_get_render_context_height(context);
+    if (ctx_w <= 0 || ctx_h <= 0)
+    {
+        return SDL_SetError("Invalid render context dimensions");
+    }
+
+    const float hx = (float)ctx_w * 0.5f;
+    const float hy = (float)ctx_h * 0.5f;
+    const float wx0 = x - hx;
+    const float wx1 = x + w - hx;
+    const float wy0 = hy - y;
+    const float wy1 = hy - (y + h);
+
+    float positions[18] = {
+        wx0, wy0, 0.0f, wx0, wy1, 0.0f, wx1, wy1, 0.0f, wx0, wy0, 0.0f, wx1, wy1, 0.0f, wx1, wy0, 0.0f,
+    };
+    float uvs[12] = {
+        0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+    };
+    float mvp[16] = {0};
+    float gl_tint[4] = {(float)tint.r / 255.0f, (float)tint.g / 255.0f, (float)tint.b / 255.0f, (float)tint.a / 255.0f};
+
+    mvp[0] = 1.0f / hx;
+    mvp[5] = 1.0f / hy;
+    mvp[10] = -1.0f;
+    mvp[15] = 1.0f;
+
+    return sdl3d_gl_append_overlay(context->gl, positions, uvs, 6, mvp, gl_tint, texture, scissor_enabled,
+                                   scissor_enabled ? &scissor_rect : NULL);
+}
+
 bool sdl3d_get_framebuffer_pixel(const sdl3d_render_context *context, int x, int y, sdl3d_color *out_color)
 {
     if (context == NULL)
