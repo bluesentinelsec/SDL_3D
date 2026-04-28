@@ -60,6 +60,12 @@ struct UiTextCapture
     bool saw_pause = false;
 };
 
+struct UiImageCapture
+{
+    int count = 0;
+    bool saw_splash_logo = false;
+};
+
 struct ParticleCapture
 {
     int count = 0;
@@ -364,13 +370,14 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.scene.options"), 0);
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.scene.play"), 0);
     EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead");
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
-    EXPECT_EQ(sdl3d_game_data_scene_count(runtime), 3);
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 0), "scene.title");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 1), "scene.options");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 2), "scene.play");
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.splash");
+    EXPECT_EQ(sdl3d_game_data_scene_count(runtime), 4);
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 0), "scene.splash");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 1), "scene.title");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 2), "scene.options");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 3), "scene.play");
     EXPECT_EQ(sdl3d_game_data_scene_name_at(runtime, -1), nullptr);
-    EXPECT_EQ(sdl3d_game_data_scene_name_at(runtime, 3), nullptr);
+    EXPECT_EQ(sdl3d_game_data_scene_name_at(runtime, 4), nullptr);
     EXPECT_FALSE(sdl3d_game_data_active_scene_updates_game(runtime));
     EXPECT_FALSE(sdl3d_game_data_active_scene_renders_world(runtime));
     EXPECT_FALSE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.ball"));
@@ -593,6 +600,36 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     sdl3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
 
+    sdl3d_game_data_splash splash{};
+    ASSERT_TRUE(sdl3d_game_data_get_active_splash(runtime, &splash));
+    EXPECT_STREQ(splash.next_scene, "scene.title");
+    EXPECT_NEAR(splash.hold_seconds, 1.0f, 0.0001f);
+    EXPECT_TRUE(splash.skip_on_input);
+
+    sdl3d_game_data_image_asset image_asset{};
+    ASSERT_TRUE(sdl3d_game_data_get_image_asset(runtime, "image.splash.logo", &image_asset));
+    EXPECT_STREQ(image_asset.path, "asset://images/splash-logo.jpg");
+
+    UiImageCapture images{};
+    auto capture_image = [](void *userdata, const sdl3d_game_data_ui_image *image) -> bool {
+        auto *capture = static_cast<UiImageCapture *>(userdata);
+        capture->count++;
+        if (image->name != nullptr && std::string(image->name) == "ui.splash.logo")
+        {
+            capture->saw_splash_logo = true;
+            EXPECT_STREQ(image->image, "image.splash.logo");
+            EXPECT_EQ(image->align, SDL3D_GAME_DATA_UI_ALIGN_CENTER);
+            EXPECT_EQ(image->valign, SDL3D_GAME_DATA_UI_VALIGN_CENTER);
+            EXPECT_TRUE(image->preserve_aspect);
+        }
+        return true;
+    };
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_image(runtime, capture_image, &images));
+    EXPECT_EQ(images.count, 1);
+    EXPECT_TRUE(images.saw_splash_logo);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
+
     sdl3d_game_data_menu menu{};
     ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.title");
@@ -787,6 +824,7 @@ TEST(GameDataRuntime, MenuControllerConsumesAuthoredMenuInput)
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
@@ -853,16 +891,33 @@ TEST(GameDataRuntime, AppFlowConsumesAuthoredLifecycleAndSceneShortcutControls)
     ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.8f));
     EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
     EXPECT_FALSE(ctx.quit_requested);
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.splash");
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
-    key.key.scancode = SDL_SCANCODE_3;
+    key.key.scancode = SDL_SCANCODE_F9;
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 1);
 
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_TRUE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.splash");
+
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.29f));
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.29f));
+    EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 2);
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_3;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 3);
     ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
     EXPECT_TRUE(sdl3d_game_data_app_flow_is_transitioning(&flow));
     EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
@@ -874,27 +929,13 @@ TEST(GameDataRuntime, AppFlowConsumesAuthoredLifecycleAndSceneShortcutControls)
 
     key.type = SDL_EVENT_KEY_UP;
     sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 2);
-    key.type = SDL_EVENT_KEY_DOWN;
-    key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 3);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
-    EXPECT_TRUE(ctx.paused);
-
-    key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 4);
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 5);
     ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
-    EXPECT_FALSE(ctx.paused);
-
-    sdl3d_registered_actor *match = sdl3d_game_data_find_actor(runtime, "entity.match");
-    ASSERT_NE(match, nullptr);
-    sdl3d_properties_set_bool(match->props, "finished", true);
+    EXPECT_TRUE(ctx.paused);
 
     key.type = SDL_EVENT_KEY_UP;
     sdl3d_input_process_event(input, &key);
@@ -906,13 +947,27 @@ TEST(GameDataRuntime, AppFlowConsumesAuthoredLifecycleAndSceneShortcutControls)
     ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
     EXPECT_FALSE(ctx.paused);
 
+    sdl3d_registered_actor *match = sdl3d_game_data_find_actor(runtime, "entity.match");
+    ASSERT_NE(match, nullptr);
+    sdl3d_properties_set_bool(match->props, "finished", true);
+
     key.type = SDL_EVENT_KEY_UP;
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 8);
     key.type = SDL_EVENT_KEY_DOWN;
-    key.key.scancode = SDL_SCANCODE_ESCAPE;
+    key.key.scancode = SDL_SCANCODE_RETURN;
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 9);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_FALSE(ctx.paused);
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 10);
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_ESCAPE;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 11);
     ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
     EXPECT_TRUE(sdl3d_game_data_app_flow_quit_pending(&flow));
     EXPECT_FALSE(ctx.quit_requested);
@@ -932,6 +987,7 @@ TEST(GameDataRuntime, SceneFlowRunsAuthoredExitAndEnterTransitions)
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
 
     sdl3d_game_data_scene_flow flow{};
     sdl3d_game_data_scene_flow_init(&flow);

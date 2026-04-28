@@ -10,7 +10,7 @@
 #define SDL3D_INPUT_MAX_MOUSE_BUTTONS 16
 #define SDL3D_INPUT_DEMO_MAGIC "SDL3DEMO"
 #define SDL3D_INPUT_DEMO_MAGIC_SIZE 8
-#define SDL3D_INPUT_DEMO_VERSION 2U
+#define SDL3D_INPUT_DEMO_VERSION 3U
 #define SDL3D_INPUT_DEMO_ACTION_COUNT SDL3D_INPUT_MAX_ACTIONS
 #define SDL3D_INPUT_DEMO_FLAG_PRESSED 0x01U
 #define SDL3D_INPUT_DEMO_FLAG_RELEASED 0x02U
@@ -414,6 +414,37 @@ static void sdl3d_input_reset_transients(sdl3d_input_manager *input)
     SDL_memset(input->gamepad_button_released_this_frame, 0, sizeof(input->gamepad_button_released_this_frame));
 }
 
+static bool sdl3d_input_physical_any_pressed(const sdl3d_input_manager *input)
+{
+    if (input == NULL)
+    {
+        return false;
+    }
+
+    for (int i = 0; i < SDL_SCANCODE_COUNT; ++i)
+    {
+        if (input->key_pressed_this_frame[i])
+        {
+            return true;
+        }
+    }
+    for (int i = 0; i < SDL3D_INPUT_MAX_MOUSE_BUTTONS; ++i)
+    {
+        if (input->mouse_pressed_this_frame[i])
+        {
+            return true;
+        }
+    }
+    for (int i = 0; i < SDL_GAMEPAD_BUTTON_COUNT; ++i)
+    {
+        if (input->gamepad_button_pressed_this_frame[i])
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool sdl3d_demo_recorder_append(sdl3d_demo_recorder *recorder, const sdl3d_input_snapshot *snapshot)
 {
     sdl3d_input_snapshot *grown;
@@ -580,7 +611,8 @@ static bool sdl3d_demo_write_snapshot(SDL_IOStream *stream, const sdl3d_input_sn
     }
 
     if (!sdl3d_input_write_i32_le(stream, snapshot->tick) || !sdl3d_input_write_f32_le(stream, snapshot->mouse_dx) ||
-        !sdl3d_input_write_f32_le(stream, snapshot->mouse_dy))
+        !sdl3d_input_write_f32_le(stream, snapshot->mouse_dy) ||
+        !sdl3d_input_write_u8(stream, snapshot->any_pressed ? 1U : 0U))
     {
         return false;
     }
@@ -605,11 +637,13 @@ static bool sdl3d_demo_read_snapshot(SDL_IOStream *stream, sdl3d_input_snapshot 
     }
 
     SDL_zero(*snapshot);
+    Uint8 any_pressed = 0U;
     if (!sdl3d_input_read_i32_le(stream, &snapshot->tick) || !sdl3d_input_read_f32_le(stream, &snapshot->mouse_dx) ||
-        !sdl3d_input_read_f32_le(stream, &snapshot->mouse_dy))
+        !sdl3d_input_read_f32_le(stream, &snapshot->mouse_dy) || !sdl3d_input_read_u8(stream, &any_pressed))
     {
         return false;
     }
+    snapshot->any_pressed = any_pressed != 0U;
 
     for (int i = 0; i < SDL3D_INPUT_DEMO_ACTION_COUNT; ++i)
     {
@@ -899,6 +933,7 @@ const sdl3d_input_snapshot *sdl3d_input_update(sdl3d_input_manager *input, int t
     next.tick = tick;
     next.mouse_dx = input->mouse_dx_accum;
     next.mouse_dy = input->mouse_dy_accum;
+    next.any_pressed = sdl3d_input_physical_any_pressed(input);
 
     for (int action_id = 0; action_id < input->action_count; ++action_id)
     {
@@ -926,6 +961,7 @@ const sdl3d_input_snapshot *sdl3d_input_update(sdl3d_input_manager *input, int t
         next.actions[action_id].pressed = (next.actions[action_id].held && !was_held) || explicit_pressed;
         next.actions[action_id].released =
             (!next.actions[action_id].held && was_held) || (explicit_released && (was_held || explicit_pressed));
+        next.any_pressed = next.any_pressed || next.actions[action_id].pressed;
         input->prev_held[action_id] = next.actions[action_id].held;
     }
 
@@ -953,6 +989,11 @@ bool sdl3d_input_is_held(const sdl3d_input_manager *input, int action_id)
 float sdl3d_input_get_value(const sdl3d_input_manager *input, int action_id)
 {
     return input != NULL && sdl3d_input_action_id_valid(action_id) ? input->snapshot.actions[action_id].value : 0.0f;
+}
+
+bool sdl3d_input_any_pressed(const sdl3d_input_manager *input)
+{
+    return input != NULL && input->snapshot.any_pressed;
 }
 
 float sdl3d_input_get_mouse_dx(const sdl3d_input_manager *input)

@@ -102,9 +102,10 @@ extern "C"
     typedef struct sdl3d_input_snapshot
     {
         sdl3d_action_state actions[SDL3D_INPUT_MAX_ACTIONS];
-        float mouse_dx; /**< Raw horizontal mouse motion accumulated this tick. */
-        float mouse_dy; /**< Raw vertical mouse motion accumulated this tick. */
-        int tick;       /**< Simulation tick number for demo synchronization. */
+        float mouse_dx;   /**< Raw horizontal mouse motion accumulated this tick. */
+        float mouse_dy;   /**< Raw vertical mouse motion accumulated this tick. */
+        int tick;         /**< Simulation tick number for demo synchronization. */
+        bool any_pressed; /**< True when any key, mouse button, gamepad button, or action was pressed. */
     } sdl3d_input_snapshot;
 
     /** @brief Opaque action input manager. */
@@ -232,6 +233,15 @@ extern "C"
 
     /** @brief Return the action's current analog value. */
     float sdl3d_input_get_value(const sdl3d_input_manager *input, int action_id);
+
+    /**
+     * @brief Return true if any button-like input or action was pressed this tick.
+     *
+     * This supports generic flows such as splash screens where "press anything
+     * to continue" should work without binding every possible key to a
+     * game-specific action.
+     */
+    bool sdl3d_input_any_pressed(const sdl3d_input_manager *input);
 
     /** @brief Return raw horizontal mouse motion for the current tick. */
     float sdl3d_input_get_mouse_dx(const sdl3d_input_manager *input);

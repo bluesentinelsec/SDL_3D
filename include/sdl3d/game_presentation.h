@@ -15,6 +15,7 @@
 
 #include <stdbool.h>
 
+#include "sdl3d/asset.h"
 #include "sdl3d/camera.h"
 #include "sdl3d/effects.h"
 #include "sdl3d/font.h"
@@ -23,6 +24,7 @@
 #include "sdl3d/input.h"
 #include "sdl3d/render_context.h"
 #include "sdl3d/signal_bus.h"
+#include "sdl3d/texture.h"
 #include "sdl3d/transition.h"
 
 #ifdef __cplusplus
@@ -44,6 +46,29 @@ extern "C"
         int capacity;          /**< Allocated cache slots. */
         const char *media_dir; /**< SDL3D media directory used for built-in fonts. */
     } sdl3d_game_data_font_cache;
+
+    /** @brief One cached texture referenced by authored UI image data. */
+    typedef struct sdl3d_game_data_image_cache_entry
+    {
+        sdl3d_texture2d texture; /**< Loaded texture. */
+        const char *image_id;    /**< Runtime-owned image asset id. */
+        bool loaded;             /**< True once the texture owns valid pixels. */
+    } sdl3d_game_data_image_cache_entry;
+
+    /**
+     * @brief Runtime cache for images referenced by authored UI data.
+     *
+     * The cache owns loaded textures. It reads image bytes through an asset
+     * resolver supplied by the host, so the same authored paths work from a
+     * source directory, pack file, or embedded pack.
+     */
+    typedef struct sdl3d_game_data_image_cache
+    {
+        sdl3d_game_data_image_cache_entry *entries; /**< Cached image entries. */
+        int count;                                  /**< Number of cached images. */
+        int capacity;                               /**< Allocated cache slots. */
+        sdl3d_asset_resolver *assets;               /**< Resolver used for lazy image loads; not owned. */
+    } sdl3d_game_data_image_cache;
 
     /**
      * @brief Scene transition flow driven by authored scene transition data.
@@ -115,6 +140,9 @@ extern "C"
         sdl3d_game_data_app_control app;       /**< Resolved app controls from game data. */
         bool quit_pending;                     /**< True after quit has been requested. */
         bool scene_input_armed;                /**< True once menu input is idle after scene entry. */
+        const char *splash_scene;              /**< Active splash scene tracked for hold timing. */
+        float splash_elapsed;                  /**< Seconds held after splash transitions finish. */
+        bool splash_skip_requested;            /**< True once input asks the splash to advance. */
     } sdl3d_game_data_app_flow;
 
     /**
@@ -173,6 +201,7 @@ extern "C"
         const sdl3d_game_data_runtime *runtime;         /**< Authored runtime to render. */
         sdl3d_render_context *renderer;                 /**< Render context receiving draw calls. */
         sdl3d_game_data_font_cache *font_cache;         /**< Font cache used by authored UI text. */
+        sdl3d_game_data_image_cache *image_cache;       /**< Image cache used by authored UI images. */
         sdl3d_game_data_particle_cache *particle_cache; /**< Particle cache used by authored emitters. */
         const sdl3d_game_data_app_flow *app_flow;       /**< Optional app flow whose transitions are drawn. */
         const sdl3d_game_data_ui_metrics *metrics;      /**< Optional UI metrics. */
@@ -202,6 +231,21 @@ extern "C"
     void sdl3d_game_data_font_cache_free(sdl3d_game_data_font_cache *cache);
 
     /**
+     * @brief Initialize a UI image cache.
+     *
+     * @param cache Cache to initialize.
+     * @param assets Asset resolver used to read authored image paths; not owned.
+     */
+    void sdl3d_game_data_image_cache_init(sdl3d_game_data_image_cache *cache, sdl3d_asset_resolver *assets);
+
+    /**
+     * @brief Free all textures owned by an image cache.
+     *
+     * Safe to call with NULL or an already-freed cache.
+     */
+    void sdl3d_game_data_image_cache_free(sdl3d_game_data_image_cache *cache);
+
+    /**
      * @brief Draw authored render primitives for the active scene.
      *
      * This renders currently supported primitive components (`render.cube` and
@@ -229,6 +273,16 @@ extern "C"
     bool sdl3d_game_data_draw_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
                                       sdl3d_game_data_font_cache *font_cache, const sdl3d_game_data_ui_metrics *metrics,
                                       float pulse_phase);
+
+    /**
+     * @brief Draw authored UI images for the active scene.
+     *
+     * Images are loaded lazily through @p image_cache and drawn on SDL3D's
+     * overlay path after world rendering.
+     */
+    bool sdl3d_game_data_draw_ui_images(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
+                                        sdl3d_game_data_image_cache *image_cache,
+                                        const sdl3d_game_data_ui_metrics *metrics);
 
     /**
      * @brief Initialize a particle emitter cache.

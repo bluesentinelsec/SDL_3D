@@ -996,6 +996,19 @@ static yyjson_val *find_font_json(const sdl3d_game_data_runtime *runtime, const 
     return NULL;
 }
 
+static yyjson_val *find_image_json(const sdl3d_game_data_runtime *runtime, const char *id)
+{
+    yyjson_val *images = obj_get(obj_get(runtime_root(runtime), "assets"), "images");
+    for (size_t i = 0; id != NULL && yyjson_is_arr(images) && i < yyjson_arr_size(images); ++i)
+    {
+        yyjson_val *image = yyjson_arr_get(images, i);
+        const char *image_id = json_string(image, "id", NULL);
+        if (image_id != NULL && SDL_strcmp(image_id, id) == 0)
+            return image;
+    }
+    return NULL;
+}
+
 static yyjson_val *find_camera_json(const sdl3d_game_data_runtime *runtime, const char *name)
 {
     yyjson_val *cameras = obj_get(obj_get(runtime_root(runtime), "world"), "cameras");
@@ -1080,6 +1093,19 @@ static sdl3d_game_data_ui_align parse_ui_align(const char *value, sdl3d_game_dat
         return SDL3D_GAME_DATA_UI_ALIGN_CENTER;
     if (SDL_strcasecmp(value, "right") == 0)
         return SDL3D_GAME_DATA_UI_ALIGN_RIGHT;
+    return fallback;
+}
+
+static sdl3d_game_data_ui_valign parse_ui_valign(const char *value, sdl3d_game_data_ui_valign fallback)
+{
+    if (value == NULL)
+        return fallback;
+    if (SDL_strcasecmp(value, "top") == 0)
+        return SDL3D_GAME_DATA_UI_VALIGN_TOP;
+    if (SDL_strcasecmp(value, "center") == 0 || SDL_strcasecmp(value, "middle") == 0)
+        return SDL3D_GAME_DATA_UI_VALIGN_CENTER;
+    if (SDL_strcasecmp(value, "bottom") == 0)
+        return SDL3D_GAME_DATA_UI_VALIGN_BOTTOM;
     return fallback;
 }
 
@@ -1596,6 +1622,23 @@ bool sdl3d_game_data_get_font_asset(const sdl3d_game_data_runtime *runtime, cons
     out_font->builtin = builtin != NULL;
     out_font->builtin_id = parse_builtin_font(builtin, out_font->builtin_id);
     return true;
+}
+
+bool sdl3d_game_data_get_image_asset(const sdl3d_game_data_runtime *runtime, const char *id,
+                                     sdl3d_game_data_image_asset *out_image)
+{
+    if (out_image != NULL)
+        SDL_zero(*out_image);
+    if (runtime == NULL || id == NULL || out_image == NULL)
+        return false;
+
+    yyjson_val *image = find_image_json(runtime, id);
+    if (!yyjson_is_obj(image))
+        return false;
+
+    out_image->id = json_string(image, "id", NULL);
+    out_image->path = json_string(image, "path", NULL);
+    return out_image->id != NULL && out_image->path != NULL;
 }
 
 const char *sdl3d_game_data_active_camera(const sdl3d_game_data_runtime *runtime)
@@ -2185,6 +2228,28 @@ const sdl3d_properties *sdl3d_game_data_scene_state(const sdl3d_game_data_runtim
     return runtime != NULL ? runtime->scene_state : NULL;
 }
 
+bool sdl3d_game_data_get_active_splash(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_splash *out_splash)
+{
+    if (out_splash != NULL)
+    {
+        SDL_zero(*out_splash);
+        out_splash->hold_seconds = 1.0f;
+        out_splash->skip_on_input = true;
+    }
+    if (runtime == NULL || out_splash == NULL)
+        return false;
+
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    yyjson_val *splash = obj_get(scene != NULL ? scene->root : NULL, "splash");
+    if (!yyjson_is_obj(splash))
+        return false;
+
+    out_splash->next_scene = json_string(splash, "next_scene", NULL);
+    out_splash->hold_seconds = json_float(splash, "hold_seconds", out_splash->hold_seconds);
+    out_splash->skip_on_input = json_bool(splash, "skip_on_input", out_splash->skip_on_input);
+    return out_splash->next_scene != NULL;
+}
+
 bool sdl3d_game_data_set_active_scene(sdl3d_game_data_runtime *runtime, const char *scene_name)
 {
     return sdl3d_game_data_set_active_scene_with_payload(runtime, scene_name, NULL);
@@ -2766,6 +2831,55 @@ bool sdl3d_game_data_for_each_ui_text(const sdl3d_game_data_runtime *runtime, sd
     for (int root_index = 0; root_index < 2; ++root_index)
         if (!for_each_authored_ui_text_root(roots[root_index], callback, userdata) ||
             !for_each_ui_menu_root(runtime, scene, roots[root_index], callback, userdata))
+            return true;
+    return true;
+}
+
+static void ui_image_from_json(yyjson_val *item, sdl3d_game_data_ui_image *image)
+{
+    if (image == NULL)
+        return;
+    SDL_zero(*image);
+    image->name = json_string(item, "name", NULL);
+    image->image = json_string(item, "image", NULL);
+    image->visible = json_string(item, "visible", "always");
+    image->x = json_float(item, "x", 0.0f);
+    image->y = json_float(item, "y", 0.0f);
+    image->w = json_float(item, "w", json_float(item, "width", 0.0f));
+    image->h = json_float(item, "h", json_float(item, "height", 0.0f));
+    image->normalized = json_bool(item, "normalized", false);
+    image->preserve_aspect = json_bool(item, "preserve_aspect", true);
+    image->align = parse_ui_align(json_string(item, "align", NULL), SDL3D_GAME_DATA_UI_ALIGN_LEFT);
+    image->valign = parse_ui_valign(json_string(item, "valign", NULL), SDL3D_GAME_DATA_UI_VALIGN_TOP);
+    image->color = json_color(item, "color", (sdl3d_color){255, 255, 255, 255});
+}
+
+static bool for_each_authored_ui_image_root(yyjson_val *root, sdl3d_game_data_ui_image_fn callback, void *userdata)
+{
+    yyjson_val *images = obj_get(obj_get(root, "ui"), "images");
+    for (size_t i = 0; yyjson_is_arr(images) && i < yyjson_arr_size(images); ++i)
+    {
+        sdl3d_game_data_ui_image image;
+        ui_image_from_json(yyjson_arr_get(images, i), &image);
+        if (!callback(userdata, &image))
+            return false;
+    }
+    return true;
+}
+
+bool sdl3d_game_data_for_each_ui_image(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_ui_image_fn callback,
+                                       void *userdata)
+{
+    if (runtime == NULL || callback == NULL)
+        return false;
+
+    yyjson_val *roots[2];
+    roots[0] = runtime_root(runtime);
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    roots[1] = scene != NULL ? scene->root : NULL;
+
+    for (int root_index = 0; root_index < 2; ++root_index)
+        if (!for_each_authored_ui_image_root(roots[root_index], callback, userdata))
             return true;
     return true;
 }
@@ -3396,6 +3510,29 @@ static yyjson_val *find_ui_text_json(const sdl3d_game_data_runtime *runtime, con
     return NULL;
 }
 
+static yyjson_val *find_ui_image_json(const sdl3d_game_data_runtime *runtime, const char *name)
+{
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    yyjson_val *scene_images = obj_get(obj_get(scene != NULL ? scene->root : NULL, "ui"), "images");
+    for (size_t i = 0; name != NULL && yyjson_is_arr(scene_images) && i < yyjson_arr_size(scene_images); ++i)
+    {
+        yyjson_val *image = yyjson_arr_get(scene_images, i);
+        const char *image_name = json_string(image, "name", NULL);
+        if (image_name != NULL && SDL_strcmp(image_name, name) == 0)
+            return image;
+    }
+
+    yyjson_val *images = obj_get(obj_get(runtime_root(runtime), "ui"), "images");
+    for (size_t i = 0; name != NULL && yyjson_is_arr(images) && i < yyjson_arr_size(images); ++i)
+    {
+        yyjson_val *image = yyjson_arr_get(images, i);
+        const char *image_name = json_string(image, "name", NULL);
+        if (image_name != NULL && SDL_strcmp(image_name, name) == 0)
+            return image;
+    }
+    return NULL;
+}
+
 static bool value_equals_json_bool(const sdl3d_value *left, bool right)
 {
     return left != NULL && left->type == SDL3D_VALUE_BOOL && left->as_bool == right;
@@ -3478,6 +3615,18 @@ bool sdl3d_game_data_ui_text_is_visible(const sdl3d_game_data_runtime *runtime, 
     if (condition != NULL)
         return eval_data_condition(runtime, condition, metrics);
     return text->visible == NULL || SDL_strcmp(text->visible, "always") == 0;
+}
+
+bool sdl3d_game_data_ui_image_is_visible(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_image *image,
+                                         const sdl3d_game_data_ui_metrics *metrics)
+{
+    if (runtime == NULL || image == NULL)
+        return false;
+    yyjson_val *image_json = find_ui_image_json(runtime, image->name);
+    yyjson_val *condition = obj_get(image_json, "visible_if");
+    if (condition != NULL)
+        return eval_data_condition(runtime, condition, metrics);
+    return image->visible == NULL || SDL_strcmp(image->visible, "always") == 0;
 }
 
 bool sdl3d_game_data_app_pause_allowed(const sdl3d_game_data_runtime *runtime,

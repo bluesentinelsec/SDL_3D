@@ -334,6 +334,28 @@ TEST(Input, UnbindActionRemovesBindings)
     EXPECT_FALSE(sdl3d_input_is_held(input.input, action));
 }
 
+TEST(Input, AnyPressedTracksUnboundAndBoundButtonLikeInput)
+{
+    InputPtr input;
+    int fire = sdl3d_input_register_action(input.input, "fire");
+    sdl3d_input_bind_mouse_button(input.input, fire, SDL_BUTTON_LEFT);
+
+    push_key(input.input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F9);
+    const sdl3d_input_snapshot *unbound_key = sdl3d_input_update(input.input, 1);
+    ASSERT_NE(unbound_key, nullptr);
+    EXPECT_TRUE(unbound_key->any_pressed);
+    EXPECT_TRUE(sdl3d_input_any_pressed(input.input));
+
+    sdl3d_input_update(input.input, 2);
+    EXPECT_FALSE(sdl3d_input_any_pressed(input.input));
+
+    push_mouse_button(input.input, SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_BUTTON_LEFT);
+    const sdl3d_input_snapshot *bound_mouse = sdl3d_input_update(input.input, 3);
+    ASSERT_NE(bound_mouse, nullptr);
+    EXPECT_TRUE(bound_mouse->actions[fire].pressed);
+    EXPECT_TRUE(sdl3d_input_any_pressed(input.input));
+}
+
 TEST(Input, FpsDefaultsRegisterAllActions)
 {
     InputPtr input;
@@ -446,7 +468,7 @@ TEST(InputDemo, RecordAndPlayback)
 
     std::vector<unsigned char> bytes = read_binary_file(path);
     constexpr size_t kDemoHeaderSize = 24U;
-    constexpr size_t kDemoSnapshotSize = 12U + SDL3D_INPUT_MAX_ACTIONS * 5U;
+    constexpr size_t kDemoSnapshotSize = 13U + SDL3D_INPUT_MAX_ACTIONS * 5U;
     ASSERT_EQ(kDemoHeaderSize + 2U * kDemoSnapshotSize, bytes.size());
     EXPECT_EQ('S', bytes[0]);
     EXPECT_EQ('D', bytes[1]);
@@ -456,7 +478,7 @@ TEST(InputDemo, RecordAndPlayback)
     EXPECT_EQ('E', bytes[5]);
     EXPECT_EQ('M', bytes[6]);
     EXPECT_EQ('O', bytes[7]);
-    EXPECT_EQ(2U, read_u32_le(bytes, 8));
+    EXPECT_EQ(3U, read_u32_le(bytes, 8));
     EXPECT_EQ(2U, read_u32_le(bytes, 16));
     EXPECT_EQ(SDL3D_INPUT_MAX_ACTIONS, read_u32_le(bytes, 20));
 
@@ -472,6 +494,8 @@ TEST(InputDemo, RecordAndPlayback)
     const sdl3d_input_snapshot *played_first = sdl3d_input_update(playback_input.input, 0);
     ASSERT_NE(played_first, nullptr);
     EXPECT_TRUE(played_first->actions[fire].pressed);
+    EXPECT_TRUE(played_first->any_pressed);
+    EXPECT_TRUE(sdl3d_input_any_pressed(playback_input.input));
     EXPECT_FALSE(sdl3d_demo_playback_finished(player));
 
     const sdl3d_input_snapshot *played_second = sdl3d_input_update(playback_input.input, 1);

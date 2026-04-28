@@ -1,0 +1,37 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.splash",
+  "updates_game": false,
+  "renders_world": false,
+  "entities": [],
+  "input": {
+    "actions": []
+  },
+  "splash": {
+    "next_scene": "scene.title",
+    "hold_seconds": 1.0,
+    "skip_on_input": true
+  },
+  "transitions": {
+    "enter": "scene_in",
+    "exit": "scene_out"
+  },
+  "ui": {
+    "images": [
+      {
+        "name": "ui.splash.logo",
+        "image": "image.splash.logo",
+        "x": 0.5,
+        "y": 0.5,
+        "w": 0.42,
+        "h": 0.78,
+        "normalized": true,
+        "preserve_aspect": true,
+        "align": "center",
+        "valign": "center",
+        "color": [255, 255, 255, 255]
+      }
+    ],
+    "text": []
+  }
+}

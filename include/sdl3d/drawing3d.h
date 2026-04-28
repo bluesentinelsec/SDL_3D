@@ -149,6 +149,25 @@ extern "C"
      */
     bool sdl3d_draw_rect_overlay(sdl3d_render_context *context, float x, float y, float w, float h, sdl3d_color color);
 
+    /**
+     * @brief Draw a textured screen-space rectangle on the UI overlay layer.
+     *
+     * Coordinates are in logical render-context pixels with (0, 0) at the
+     * top-left. The texture is sampled across the full rectangle and modulated
+     * by @p tint. The current scissor rect, when enabled, is honored.
+     *
+     * @param context Render context receiving the overlay draw.
+     * @param texture RGBA texture to draw.
+     * @param x Left edge in render-context pixels.
+     * @param y Top edge in render-context pixels.
+     * @param w Width in render-context pixels.
+     * @param h Height in render-context pixels.
+     * @param tint Color multiplier and alpha applied to the texture.
+     * @return true on success.
+     */
+    bool sdl3d_draw_texture_overlay(sdl3d_render_context *context, const sdl3d_texture2d *texture, float x, float y,
+                                    float w, float h, sdl3d_color tint);
+
     /*
      * Read a single pixel from the color backbuffer. Returns false if x or y
      * fall outside the backbuffer. Intended for tests, screenshots, and
