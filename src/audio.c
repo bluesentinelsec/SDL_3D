@@ -80,6 +80,7 @@ static void active_sound_uninit(sdl3d_active_sound *active)
 {
     if (active != NULL && active->loaded)
     {
+        ma_sound_stop(&active->sound);
         ma_sound_uninit(&active->sound);
         active->loaded = false;
     }
@@ -94,6 +95,7 @@ static void music_slot_destroy(sdl3d_music_slot *slot)
 
     if (slot->loaded)
     {
+        ma_sound_stop(&slot->sound);
         ma_sound_uninit(&slot->sound);
     }
     SDL_free(slot->path);
@@ -236,6 +238,12 @@ static sdl3d_music_slot *music_slot_create(sdl3d_audio_engine *audio, const char
     update_music_slot_target_volume(audio, slot);
     slot->loop = loop;
     return slot;
+}
+
+static bool music_slot_matches(const sdl3d_music_slot *slot, const char *path, bool loop)
+{
+    return slot != NULL && path != NULL && slot->path != NULL && slot->loop == loop &&
+           SDL_strcmp(slot->path, path) == 0;
 }
 
 sdl3d_audio_play_desc sdl3d_audio_play_desc_default(void)
@@ -554,6 +562,22 @@ bool sdl3d_audio_play_music(sdl3d_audio_engine *audio, const char *path, bool lo
     if (path == NULL || path[0] == '\0')
     {
         sdl3d_audio_stop_music(audio, fade_seconds);
+        return true;
+    }
+
+    if (!audio->music_fading && music_slot_matches(audio->music_current, path, loop))
+    {
+        sdl3d_audio_fade_music(audio, volume, fade_seconds);
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio music already playing: %s", path);
+        return true;
+    }
+
+    if (music_slot_matches(audio->music_next, path, loop))
+    {
+        audio->music_next->base_volume = clamp_non_negative(volume);
+        update_music_slot_target_volume(audio, audio->music_next);
+        audio->music_next_target_volume = audio->music_next->target_volume;
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio music already queued: %s", path);
         return true;
     }
 

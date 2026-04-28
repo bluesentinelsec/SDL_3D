@@ -176,7 +176,7 @@
       },
       {
         "id": "sound.pong.hit",
-        "path": "asset://audio/ui/switch1.wav",
+        "path": "asset://audio/ui/click3.wav",
         "volume": 0.55,
         "bus": "sfx"
       },
@@ -190,8 +190,8 @@
     "music": [
       {
         "id": "music.title",
-        "path": "asset://audio/music/observing-the-star.ogg",
-        "volume": 0.42,
+        "path": "asset://audio/music/moonlight-sonata-allegretto.ogg",
+        "volume": 0.50,
         "loop": true
       }
     ]

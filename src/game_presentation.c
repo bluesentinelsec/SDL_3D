@@ -932,6 +932,7 @@ static void app_flow_request_quit(sdl3d_game_data_app_flow *flow, sdl3d_game_con
         return;
 
     flow->quit_pending = true;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D app quit requested");
     sdl3d_game_data_transition_desc transition;
     if (flow->app.quit_transition == NULL ||
         !sdl3d_game_data_get_transition(runtime, flow->app.quit_transition, &transition))
@@ -1102,7 +1103,10 @@ static void app_flow_update_transition(sdl3d_game_data_app_flow *flow, sdl3d_gam
     if (flow->transition.active)
         sdl3d_transition_update(&flow->transition, bus, dt);
     if (flow->quit_pending && flow->transition.finished && !flow->transition.active)
+    {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D app quit transition finished");
         ctx->quit_requested = true;
+    }
 }
 
 void sdl3d_game_data_app_flow_init(sdl3d_game_data_app_flow *flow)
