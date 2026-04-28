@@ -6,6 +6,9 @@
 
 #include "miniaudio.h"
 
+#define SDL3D_AUDIO_INITIAL_ACTIVE_CAPACITY 16
+#define SDL3D_AUDIO_MAX_ACTIVE_SOUNDS 64
+
 typedef struct sdl3d_active_sound
 {
     ma_sound sound;
@@ -25,6 +28,12 @@ typedef struct sdl3d_music_slot
     bool loop;
 } sdl3d_music_slot;
 
+typedef struct sdl3d_cached_clip
+{
+    char *path;
+    sdl3d_audio_clip *clip;
+} sdl3d_cached_clip;
+
 struct sdl3d_audio_engine
 {
     ma_engine engine;
@@ -34,6 +43,9 @@ struct sdl3d_audio_engine
     int active_count;
     int active_capacity;
     float bus_volumes[SDL3D_AUDIO_BUS_COUNT];
+    sdl3d_cached_clip *clips;
+    int clip_count;
+    int clip_capacity;
 
     sdl3d_music_slot *music_current;
     sdl3d_music_slot *music_next;
@@ -56,6 +68,8 @@ struct sdl3d_audio_clip
     ma_sound sound;
     bool loaded;
 };
+
+static void cleanup_finished_sounds(sdl3d_audio_engine *audio);
 
 static float clamp_non_negative(float value)
 {
@@ -102,14 +116,13 @@ static void music_slot_destroy(sdl3d_music_slot *slot)
     SDL_free(slot);
 }
 
-static bool ensure_active_capacity(sdl3d_audio_engine *audio)
+static bool grow_active_capacity(sdl3d_audio_engine *audio)
 {
-    if (audio->active_count < audio->active_capacity)
+    int new_capacity = audio->active_capacity > 0 ? audio->active_capacity * 2 : SDL3D_AUDIO_INITIAL_ACTIVE_CAPACITY;
+    if (new_capacity > SDL3D_AUDIO_MAX_ACTIVE_SOUNDS)
     {
-        return true;
+        new_capacity = SDL3D_AUDIO_MAX_ACTIVE_SOUNDS;
     }
-
-    int new_capacity = audio->active_capacity > 0 ? audio->active_capacity * 2 : 16;
     sdl3d_active_sound *active_sounds =
         SDL_realloc(audio->active_sounds, (size_t)new_capacity * sizeof(*active_sounds));
     if (active_sounds == NULL)
@@ -126,26 +139,52 @@ static bool ensure_active_capacity(sdl3d_audio_engine *audio)
 
 static void cleanup_finished_sounds(sdl3d_audio_engine *audio)
 {
-    int write_index = 0;
-
     for (int i = 0; i < audio->active_count; ++i)
     {
         sdl3d_active_sound *active = &audio->active_sounds[i];
         if (!active->loaded || ma_sound_at_end(&active->sound))
         {
             active_sound_uninit(active);
-            continue;
         }
-
-        if (write_index != i)
-        {
-            audio->active_sounds[write_index] = *active;
-            SDL_zero(*active);
-        }
-        ++write_index;
     }
 
-    audio->active_count = write_index;
+    while (audio->active_count > 0 && !audio->active_sounds[audio->active_count - 1].loaded)
+    {
+        --audio->active_count;
+    }
+}
+
+static sdl3d_active_sound *reserve_active_sound(sdl3d_audio_engine *audio)
+{
+    cleanup_finished_sounds(audio);
+
+    for (int i = 0; i < audio->active_count; ++i)
+    {
+        if (!audio->active_sounds[i].loaded)
+        {
+            SDL_zero(audio->active_sounds[i]);
+            return &audio->active_sounds[i];
+        }
+    }
+
+    if (audio->active_count < audio->active_capacity ||
+        (audio->active_capacity < SDL3D_AUDIO_MAX_ACTIVE_SOUNDS && grow_active_capacity(audio)))
+    {
+        sdl3d_active_sound *active = &audio->active_sounds[audio->active_count];
+        SDL_zero(*active);
+        ++audio->active_count;
+        return active;
+    }
+
+    if (audio->active_capacity > 0)
+    {
+        sdl3d_active_sound *active = &audio->active_sounds[0];
+        active_sound_uninit(active);
+        SDL_zero(*active);
+        return active;
+    }
+
+    return NULL;
 }
 
 static bool start_sound_instance(sdl3d_audio_engine *audio, sdl3d_active_sound *active,
@@ -246,6 +285,68 @@ static bool music_slot_matches(const sdl3d_music_slot *slot, const char *path, b
            SDL_strcmp(slot->path, path) == 0;
 }
 
+static bool ensure_clip_capacity(sdl3d_audio_engine *audio)
+{
+    if (audio->clip_count < audio->clip_capacity)
+    {
+        return true;
+    }
+
+    const int new_capacity = audio->clip_capacity > 0 ? audio->clip_capacity * 2 : 16;
+    sdl3d_cached_clip *clips = SDL_realloc(audio->clips, (size_t)new_capacity * sizeof(*clips));
+    if (clips == NULL)
+    {
+        return SDL_OutOfMemory();
+    }
+
+    SDL_memset(clips + audio->clip_capacity, 0, (size_t)(new_capacity - audio->clip_capacity) * sizeof(*clips));
+    audio->clips = clips;
+    audio->clip_capacity = new_capacity;
+    return true;
+}
+
+static sdl3d_audio_clip *find_cached_clip(const sdl3d_audio_engine *audio, const char *path)
+{
+    for (int i = 0; audio != NULL && path != NULL && i < audio->clip_count; ++i)
+    {
+        if (audio->clips[i].path != NULL && SDL_strcmp(audio->clips[i].path, path) == 0)
+        {
+            return audio->clips[i].clip;
+        }
+    }
+    return NULL;
+}
+
+static sdl3d_audio_clip *load_cached_clip(sdl3d_audio_engine *audio, const char *path)
+{
+    sdl3d_audio_clip *clip = find_cached_clip(audio, path);
+    if (clip != NULL)
+    {
+        return clip;
+    }
+
+    if (!ensure_clip_capacity(audio))
+    {
+        return NULL;
+    }
+
+    if (!sdl3d_audio_load_clip(audio, path, &clip))
+    {
+        return NULL;
+    }
+
+    audio->clips[audio->clip_count].path = SDL_strdup(path);
+    if (audio->clips[audio->clip_count].path == NULL)
+    {
+        sdl3d_audio_clip_destroy(clip);
+        SDL_OutOfMemory();
+        return NULL;
+    }
+    audio->clips[audio->clip_count].clip = clip;
+    ++audio->clip_count;
+    return clip;
+}
+
 sdl3d_audio_play_desc sdl3d_audio_play_desc_default(void)
 {
     sdl3d_audio_play_desc desc;
@@ -296,6 +397,12 @@ void sdl3d_audio_destroy(sdl3d_audio_engine *audio)
         return;
     }
 
+    if (audio->loaded)
+    {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio engine stopping");
+        (void)ma_engine_stop(&audio->engine);
+    }
+
     for (int i = 0; i < audio->active_count; ++i)
     {
         active_sound_uninit(&audio->active_sounds[i]);
@@ -303,10 +410,17 @@ void sdl3d_audio_destroy(sdl3d_audio_engine *audio)
     SDL_free(audio->active_sounds);
     music_slot_destroy(audio->music_current);
     music_slot_destroy(audio->music_next);
+    for (int i = 0; i < audio->clip_count; ++i)
+    {
+        sdl3d_audio_clip_destroy(audio->clips[i].clip);
+        SDL_free(audio->clips[i].path);
+    }
+    SDL_free(audio->clips);
     if (audio->loaded)
     {
         ma_engine_uninit(&audio->engine);
     }
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio engine destroyed");
     SDL_free(audio);
 }
 
@@ -471,6 +585,7 @@ void sdl3d_audio_clip_destroy(sdl3d_audio_clip *clip)
 
     if (clip->loaded)
     {
+        ma_sound_stop(&clip->sound);
         ma_sound_uninit(&clip->sound);
     }
     SDL_free(clip);
@@ -488,13 +603,10 @@ bool sdl3d_audio_play_clip(sdl3d_audio_engine *audio, const sdl3d_audio_clip *cl
     {
         return SDL_InvalidParamError("clip");
     }
-    if (!ensure_active_capacity(audio))
-    {
+    active = reserve_active_sound(audio);
+    if (active == NULL)
         return false;
-    }
 
-    active = &audio->active_sounds[audio->active_count];
-    SDL_zero(*active);
     if (ma_sound_init_copy(&audio->engine, &clip->sound, MA_SOUND_FLAG_NO_SPATIALIZATION, NULL, &active->sound) !=
         MA_SUCCESS)
     {
@@ -508,14 +620,11 @@ bool sdl3d_audio_play_clip(sdl3d_audio_engine *audio, const sdl3d_audio_clip *cl
         return false;
     }
 
-    ++audio->active_count;
     return true;
 }
 
 bool sdl3d_audio_play_sound_file(sdl3d_audio_engine *audio, const char *path, const sdl3d_audio_play_desc *desc)
 {
-    sdl3d_active_sound *active;
-
     if (audio == NULL)
     {
         return SDL_InvalidParamError("audio");
@@ -524,28 +633,17 @@ bool sdl3d_audio_play_sound_file(sdl3d_audio_engine *audio, const char *path, co
     {
         return SDL_InvalidParamError("path");
     }
-    if (!ensure_active_capacity(audio))
-    {
-        return false;
-    }
-
-    active = &audio->active_sounds[audio->active_count];
-    SDL_zero(*active);
-    if (ma_sound_init_from_file(&audio->engine, path, MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_NO_SPATIALIZATION, NULL,
-                                NULL, &active->sound) != MA_SUCCESS)
+    sdl3d_audio_clip *clip = load_cached_clip(audio, path);
+    if (clip == NULL)
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio failed to load SFX: %s", path);
-        return SDL_SetError("Could not load sound file: %s", path);
-    }
-
-    active->loaded = true;
-    if (!start_sound_instance(audio, active, desc))
-    {
-        active_sound_uninit(active);
         return false;
     }
 
-    ++audio->active_count;
+    if (!sdl3d_audio_play_clip(audio, clip, desc))
+    {
+        return false;
+    }
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio playing SFX: %s", path);
     return true;
 }
