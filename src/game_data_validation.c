@@ -1992,6 +1992,12 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
             !require_ref(ctx, &names->actions, "input action", json_string(menu, "down_action"), menu_path) ||
             !require_ref(ctx, &names->actions, "input action", json_string(menu, "select_action"), menu_path))
             return false;
+        const char *move_signal = json_string(menu, "move_signal");
+        if (move_signal != NULL && !require_ref(ctx, &names->signals, "signal", move_signal, menu_path))
+            return false;
+        const char *select_signal = json_string(menu, "select_signal");
+        if (select_signal != NULL && !require_ref(ctx, &names->signals, "signal", select_signal, menu_path))
+            return false;
 
         yyjson_val *items = obj_get(menu, "items");
         if (!yyjson_is_arr(items) || yyjson_arr_size(items) == 0)

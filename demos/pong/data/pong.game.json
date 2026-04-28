@@ -169,6 +169,12 @@
         "bus": "sfx"
       },
       {
+        "id": "sound.ui.splash",
+        "path": "asset://audio/ui/switch3.wav",
+        "volume": 0.55,
+        "bus": "sfx"
+      },
+      {
         "id": "sound.pong.hit",
         "path": "asset://audio/ui/switch1.wav",
         "volume": 0.55,
@@ -656,6 +662,8 @@
     "signal.match.restart",
     "signal.camera.ball.toggle",
     "signal.presentation.flash_border",
+    "signal.ui.menu.move",
+    "signal.ui.menu.select",
     "signal.app.quit_fade_done"
   ],
   "logic": {
@@ -723,6 +731,18 @@
       }
     ],
     "bindings": [
+      {
+        "signal": "signal.ui.menu.move",
+        "actions": [
+          { "type": "audio.play_sfx", "sound": "sound.ui.move" }
+        ]
+      },
+      {
+        "signal": "signal.ui.menu.select",
+        "actions": [
+          { "type": "audio.play_sfx", "sound": "sound.ui.select" }
+        ]
+      },
       {
         "signal": "signal.game.start",
         "actions": [

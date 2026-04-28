@@ -3198,6 +3198,8 @@ bool sdl3d_game_data_get_active_menu(const sdl3d_game_data_runtime *runtime, sdl
         out_menu->up_action_id = -1;
         out_menu->down_action_id = -1;
         out_menu->select_action_id = -1;
+        out_menu->move_signal_id = -1;
+        out_menu->select_signal_id = -1;
     }
     const scene_entry *scene = active_scene_entry_const(runtime);
     if (runtime == NULL || out_menu == NULL || scene == NULL || scene->menu_count <= 0)
@@ -3209,6 +3211,8 @@ bool sdl3d_game_data_get_active_menu(const sdl3d_game_data_runtime *runtime, sdl
     out_menu->up_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "up_action", NULL));
     out_menu->down_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "down_action", NULL));
     out_menu->select_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "select_action", NULL));
+    out_menu->move_signal_id = sdl3d_game_data_find_signal(runtime, json_string(menu, "move_signal", NULL));
+    out_menu->select_signal_id = sdl3d_game_data_find_signal(runtime, json_string(menu, "select_signal", NULL));
     out_menu->selected_index = state->selected_index;
     out_menu->item_count = state->item_count;
     return out_menu->name != NULL && out_menu->item_count > 0;

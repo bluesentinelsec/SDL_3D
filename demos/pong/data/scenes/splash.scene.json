@@ -38,6 +38,10 @@
         "action": { "type": "audio.play_music", "music": "music.title", "fade": 0.45 }
       },
       {
+        "time": 0.05,
+        "action": { "type": "audio.play_sfx", "sound": "sound.ui.splash" }
+      },
+      {
         "time": 1.7,
         "action": { "type": "scene.request", "scene": "scene.title" }
       }

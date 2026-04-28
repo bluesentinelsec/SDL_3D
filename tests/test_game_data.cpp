@@ -1286,6 +1286,13 @@ TEST(GameDataRuntime, MenuControllerConsumesAuthoredMenuInput)
     EXPECT_FALSE(result.selected);
     EXPECT_STREQ(result.menu, "menu.title");
     EXPECT_EQ(result.selected_index, 0);
+    EXPECT_EQ(result.move_signal_id, -1);
+    EXPECT_EQ(result.select_signal_id, -1);
+
+    const int menu_move_signal = sdl3d_game_data_find_signal(runtime, "signal.ui.menu.move");
+    const int menu_select_signal = sdl3d_game_data_find_signal(runtime, "signal.ui.menu.select");
+    ASSERT_GE(menu_move_signal, 0);
+    ASSERT_GE(menu_select_signal, 0);
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
@@ -1298,6 +1305,8 @@ TEST(GameDataRuntime, MenuControllerConsumesAuthoredMenuInput)
     EXPECT_FALSE(result.selected);
     EXPECT_STREQ(result.menu, "menu.title");
     EXPECT_EQ(result.selected_index, 1);
+    EXPECT_EQ(result.move_signal_id, menu_move_signal);
+    EXPECT_EQ(result.select_signal_id, -1);
 
     key.type = SDL_EVENT_KEY_UP;
     sdl3d_input_process_event(input, &key);
@@ -1315,6 +1324,8 @@ TEST(GameDataRuntime, MenuControllerConsumesAuthoredMenuInput)
     EXPECT_EQ(result.selected_index, 1);
     EXPECT_STREQ(result.scene, "scene.options");
     EXPECT_EQ(result.signal_id, -1);
+    EXPECT_EQ(result.move_signal_id, -1);
+    EXPECT_EQ(result.select_signal_id, menu_select_signal);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
