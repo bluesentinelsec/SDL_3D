@@ -2250,6 +2250,96 @@ bool sdl3d_game_data_get_active_splash(const sdl3d_game_data_runtime *runtime, s
     return out_splash->next_scene != NULL;
 }
 
+static yyjson_val *active_timeline_events(const sdl3d_game_data_runtime *runtime)
+{
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    yyjson_val *timeline = obj_get(scene != NULL ? scene->root : NULL, "timeline");
+    if (!yyjson_is_obj(timeline) || !json_bool(timeline, "autoplay", false))
+        return NULL;
+
+    yyjson_val *events = obj_get(timeline, "events");
+    if (events == NULL)
+        events = obj_get(timeline, "tracks");
+    return yyjson_is_arr(events) ? events : NULL;
+}
+
+static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const sdl3d_properties *payload);
+
+void sdl3d_game_data_timeline_state_init(sdl3d_game_data_timeline_state *state)
+{
+    if (state != NULL)
+        SDL_zero(*state);
+}
+
+bool sdl3d_game_data_update_timeline(sdl3d_game_data_runtime *runtime, sdl3d_game_data_timeline_state *state, float dt,
+                                     sdl3d_game_data_timeline_update_result *out_result)
+{
+    if (out_result != NULL)
+        SDL_zero(*out_result);
+    if (runtime == NULL || state == NULL)
+        return false;
+
+    const char *active_scene = sdl3d_game_data_active_scene(runtime);
+    if (state->scene != active_scene)
+    {
+        state->scene = active_scene;
+        state->time = 0.0f;
+        state->next_event_index = 0;
+        state->complete = false;
+    }
+
+    yyjson_val *events = active_timeline_events(runtime);
+    if (!yyjson_is_arr(events))
+    {
+        state->complete = true;
+        if (out_result != NULL)
+            out_result->complete = true;
+        return true;
+    }
+
+    const int event_count = (int)yyjson_arr_size(events);
+    if (state->next_event_index >= event_count)
+    {
+        state->complete = true;
+        if (out_result != NULL)
+            out_result->complete = true;
+        return true;
+    }
+
+    state->time += dt > 0.0f ? dt : 0.0f;
+    bool ok = true;
+    while (state->next_event_index < event_count)
+    {
+        yyjson_val *event = yyjson_arr_get(events, (size_t)state->next_event_index);
+        const float event_time = json_float(event, "time", 0.0f);
+        if (event_time > state->time)
+            break;
+
+        ++state->next_event_index;
+        yyjson_val *action = obj_get(event, "action");
+        const char *type = json_string(action, "type", "");
+        if (SDL_strcmp(type, "scene.request") == 0)
+        {
+            if (out_result != NULL)
+                out_result->scene_request = json_string(action, "scene", NULL);
+        }
+        else if (yyjson_is_obj(action))
+        {
+            ok = execute_one_action(runtime, action, NULL) && ok;
+        }
+
+        if (out_result != NULL)
+            ++out_result->actions_executed;
+        if (out_result != NULL && out_result->scene_request != NULL)
+            break;
+    }
+
+    state->complete = state->next_event_index >= event_count;
+    if (out_result != NULL)
+        out_result->complete = state->complete;
+    return ok;
+}
+
 bool sdl3d_game_data_set_active_scene(sdl3d_game_data_runtime *runtime, const char *scene_name)
 {
     return sdl3d_game_data_set_active_scene_with_payload(runtime, scene_name, NULL);
