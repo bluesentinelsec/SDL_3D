@@ -28,15 +28,6 @@
 #define PONG_WINDOW_WIDTH 1280
 #define PONG_WINDOW_HEIGHT 720
 #define PONG_TICK_RATE (1.0f / 120.0f)
-#define PONG_FIELD_DEPTH -0.45f
-#define PONG_PADDLE_DEPTH 0.28f
-#define PONG_BALL_Z 0.12f
-#define PONG_HALF_WIDTH 9.0f
-#define PONG_HALF_HEIGHT 5.0f
-#define PONG_PADDLE_X 8.0f
-#define PONG_PADDLE_HALF_WIDTH 0.18f
-#define PONG_PADDLE_HALF_HEIGHT 0.95f
-#define PONG_BALL_RADIUS 0.22f
 
 enum
 {
@@ -80,6 +71,8 @@ typedef struct pong_state
     float cpu_y;
     sdl3d_vec2 ball_position;
     sdl3d_vec2 ball_velocity;
+    float ball_z;
+    float ball_radius;
     bool ball_active;
     bool match_finished;
     pong_winner winner;
@@ -206,6 +199,8 @@ static void sync_state_from_data(pong_state *state)
             sdl3d_properties_get_vec3(ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
         state->ball_position = make_vec2(ball->position.x, ball->position.y);
         state->ball_velocity = make_vec2(velocity.x, velocity.y);
+        state->ball_z = ball->position.z;
+        state->ball_radius = sdl3d_properties_get_float(ball->props, "radius", 0.22f);
         state->ball_active = sdl3d_properties_get_bool(ball->props, "active_motion", false);
     }
     if (player_score != NULL)
@@ -234,30 +229,33 @@ static void sync_state_from_data(pong_state *state)
     }
 }
 
+static sdl3d_registered_actor *presentation_actor(const pong_state *state)
+{
+    return sdl3d_game_data_find_actor(state->data, "entity.presentation");
+}
+
+static float presentation_float(const pong_state *state, const char *key, float fallback)
+{
+    sdl3d_registered_actor *presentation = presentation_actor(state);
+    return presentation != NULL ? sdl3d_properties_get_float(presentation->props, key, fallback) : fallback;
+}
+
+static const char *presentation_string(const pong_state *state, const char *key, const char *fallback)
+{
+    sdl3d_registered_actor *presentation = presentation_actor(state);
+    const char *value =
+        presentation != NULL ? sdl3d_properties_get_string(presentation->props, key, fallback) : fallback;
+    return value != NULL ? value : fallback;
+}
+
 static bool create_particles(pong_state *state)
 {
     sdl3d_particle_config config;
-    SDL_zero(config);
-    config.position = sdl3d_vec3_make(0.0f, 0.0f, 0.35f);
-    config.direction = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
-    config.spread = 1.1f;
-    config.speed_min = 0.08f;
-    config.speed_max = 0.45f;
-    config.lifetime_min = 2.5f;
-    config.lifetime_max = 5.0f;
-    config.size_start = 0.035f;
-    config.size_end = 0.012f;
-    config.color_start = (sdl3d_color){220, 235, 255, 105};
-    config.color_end = (sdl3d_color){255, 255, 255, 0};
-    config.gravity = 0.0f;
-    config.max_particles = 360;
-    config.emit_rate = 95.0f;
-    config.shape = SDL3D_PARTICLE_EMITTER_BOX;
-    config.extents = sdl3d_vec3_make(8.8f, 4.8f, 0.18f);
-    config.emissive_intensity = 1.35f;
-    config.camera_facing = true;
-    config.depth_test = true;
-    config.random_seed = 0x1234567u;
+    if (!sdl3d_game_data_get_particle_emitter(state->data, "entity.effect.ambient_particles", &config))
+    {
+        SDL_SetError("missing entity.effect.ambient_particles particles.emitter component");
+        return false;
+    }
 
     state->ambient_particles = sdl3d_create_particle_emitter(&config);
     return state->ambient_particles != NULL;
@@ -354,9 +352,9 @@ static bool pong_handle_event(sdl3d_game_context *ctx, void *userdata, const SDL
 static void update_visual_effects(pong_state *state, float dt)
 {
     state->time += dt;
-    state->border_flash = fade_down(state->border_flash, dt, 2.8f);
-    state->paddle_flash = fade_down(state->paddle_flash, dt, 4.0f);
-    sdl3d_registered_actor *presentation = sdl3d_game_data_find_actor(state->data, "entity.presentation");
+    state->border_flash = fade_down(state->border_flash, dt, presentation_float(state, "border_flash_decay", 2.8f));
+    state->paddle_flash = fade_down(state->paddle_flash, dt, presentation_float(state, "paddle_flash_decay", 4.0f));
+    sdl3d_registered_actor *presentation = presentation_actor(state);
     if (presentation != NULL)
     {
         sdl3d_properties_set_float(presentation->props, "border_flash", state->border_flash);
@@ -408,7 +406,7 @@ static void pong_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_
         return;
     }
 
-    state->pause_flash += real_dt * 3.0f;
+    state->pause_flash += real_dt * presentation_float(state, "pause_flash_speed", 3.0f);
     while (state->pause_flash >= 1.0f)
     {
         state->pause_flash -= 1.0f;
@@ -420,86 +418,102 @@ static void pong_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_
     }
 }
 
-static void add_point_light(sdl3d_render_context *renderer, sdl3d_vec3 position, float r, float g, float b,
-                            float intensity, float range)
+static bool string_starts_with(const char *value, const char *prefix)
 {
-    sdl3d_light light;
-    SDL_zero(light);
-    light.type = SDL3D_LIGHT_POINT;
-    light.position = position;
-    light.color[0] = r;
-    light.color[1] = g;
-    light.color[2] = b;
-    light.intensity = intensity;
-    light.range = range;
-    sdl3d_add_light(renderer, &light);
+    return value != NULL && prefix != NULL && SDL_strncmp(value, prefix, SDL_strlen(prefix)) == 0;
 }
 
 static void configure_lights(sdl3d_render_context *renderer, const pong_state *state)
 {
-    const float pulse = 0.5f + 0.5f * SDL_sinf(state->time * 7.0f);
+    float ambient[3] = {0.015f, 0.018f, 0.026f};
+    sdl3d_game_data_get_world_ambient_light(state->data, ambient);
+
     sdl3d_clear_lights(renderer);
-    sdl3d_set_ambient_light(renderer, 0.015f, 0.018f, 0.026f);
-    add_point_light(renderer, sdl3d_vec3_make(-7.0f, 4.4f, 3.2f), 1.0f, 0.10f, 0.08f, 2.8f, 12.0f);
-    add_point_light(renderer, sdl3d_vec3_make(7.0f, 4.4f, 3.2f), 0.08f, 1.0f, 0.18f, 2.7f, 12.0f);
-    add_point_light(renderer, sdl3d_vec3_make(0.0f, -4.2f, 3.5f), 0.14f, 0.34f, 1.0f, 2.9f, 12.0f);
-    add_point_light(renderer, sdl3d_vec3_make(state->ball_position.x, state->ball_position.y, PONG_BALL_Z + 1.2f), 1.0f,
-                    0.72f + 0.28f * pulse, 0.22f, 2.1f + pulse * 2.0f, 5.0f);
-}
+    sdl3d_set_ambient_light(renderer, ambient[0], ambient[1], ambient[2]);
 
-static void draw_playfield(sdl3d_render_context *renderer, const pong_state *state)
-{
-    const float flash = clampf(state->border_flash, 0.0f, 1.0f);
-    const sdl3d_color base = (sdl3d_color){42, 48, 62, 255};
-    const sdl3d_color pulse = (sdl3d_color){210, 235, 255, 255};
-    const sdl3d_color border = color_lerp((sdl3d_color){62, 72, 92, 255}, pulse, flash);
-    const float border_size = 0.12f + 0.06f * flash;
-
-    sdl3d_set_emissive(renderer, 0.0f, 0.0f, 0.0f);
-    sdl3d_draw_cube(renderer, sdl3d_vec3_make(0.0f, 0.0f, PONG_FIELD_DEPTH),
-                    sdl3d_vec3_make(PONG_HALF_WIDTH * 2.0f + 0.8f, PONG_HALF_HEIGHT * 2.0f + 0.8f, 0.10f), base);
-    sdl3d_set_emissive(renderer, flash * 0.55f, flash * 0.7f, flash);
-    sdl3d_draw_cube(renderer, sdl3d_vec3_make(0.0f, PONG_HALF_HEIGHT + border_size, 0.0f),
-                    sdl3d_vec3_make(PONG_HALF_WIDTH * 2.0f + 0.35f, border_size, 0.18f), border);
-    sdl3d_draw_cube(renderer, sdl3d_vec3_make(0.0f, -PONG_HALF_HEIGHT - border_size, 0.0f),
-                    sdl3d_vec3_make(PONG_HALF_WIDTH * 2.0f + 0.35f, border_size, 0.18f), border);
-    sdl3d_draw_cube(renderer, sdl3d_vec3_make(-PONG_HALF_WIDTH - border_size, 0.0f, 0.0f),
-                    sdl3d_vec3_make(border_size, PONG_HALF_HEIGHT * 2.0f + 0.35f, 0.18f), border);
-    sdl3d_draw_cube(renderer, sdl3d_vec3_make(PONG_HALF_WIDTH + border_size, 0.0f, 0.0f),
-                    sdl3d_vec3_make(border_size, PONG_HALF_HEIGHT * 2.0f + 0.35f, 0.18f), border);
-
-    sdl3d_set_emissive(renderer, 0.10f, 0.12f, 0.16f);
-    for (int i = -4; i <= 4; ++i)
+    const int light_count = sdl3d_game_data_world_light_count(state->data);
+    for (int i = 0; i < light_count; ++i)
     {
-        sdl3d_draw_cube(renderer, sdl3d_vec3_make(0.0f, (float)i, 0.02f), sdl3d_vec3_make(0.055f, 0.42f, 0.08f),
-                        (sdl3d_color){115, 132, 162, 180});
+        sdl3d_light light;
+        if (sdl3d_game_data_get_world_light(state->data, i, &light))
+            sdl3d_add_light(renderer, &light);
     }
+}
+
+typedef struct primitive_draw_context
+{
+    sdl3d_render_context *renderer;
+    const pong_state *state;
+} primitive_draw_context;
+
+static void draw_emissive_render_primitive(sdl3d_render_context *renderer,
+                                           const sdl3d_game_data_render_primitive *primitive, sdl3d_color color,
+                                           sdl3d_vec3 size, float radius, float emissive_r, float emissive_g,
+                                           float emissive_b)
+{
+    sdl3d_set_emissive(renderer, emissive_r, emissive_g, emissive_b);
+    if (primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
+        sdl3d_draw_cube(renderer, primitive->position, size, color);
+    else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
+        sdl3d_draw_sphere(renderer, primitive->position, radius, primitive->slices, primitive->rings, color);
     sdl3d_set_emissive(renderer, 0.0f, 0.0f, 0.0f);
 }
 
-static void draw_game_objects(sdl3d_render_context *renderer, const pong_state *state)
+static bool draw_authored_primitive(void *userdata, const sdl3d_game_data_render_primitive *primitive)
 {
-    const float paddle_flash = clampf(state->paddle_flash, 0.0f, 1.0f);
-    const sdl3d_color player_color =
-        color_lerp((sdl3d_color){205, 230, 255, 255}, (sdl3d_color){255, 255, 255, 255}, paddle_flash);
-    const sdl3d_color cpu_color =
-        color_lerp((sdl3d_color){195, 255, 212, 255}, (sdl3d_color){255, 255, 255, 255}, paddle_flash);
-    const float ball_pulse = 0.5f + 0.5f * SDL_sinf(state->time * 9.0f);
-    const sdl3d_color ball_color =
-        color_lerp((sdl3d_color){255, 184, 82, 255}, (sdl3d_color){255, 245, 156, 255}, ball_pulse);
+    primitive_draw_context *context = (primitive_draw_context *)userdata;
+    const pong_state *state = context->state;
+    sdl3d_color color = primitive->color;
+    sdl3d_vec3 size = primitive->size;
+    float radius = primitive->radius;
+    float emissive_r = 0.0f;
+    float emissive_g = 0.0f;
+    float emissive_b = 0.0f;
 
-    sdl3d_set_emissive(renderer, paddle_flash * 0.35f, paddle_flash * 0.42f, paddle_flash * 0.50f);
-    sdl3d_draw_cube(renderer, sdl3d_vec3_make(-PONG_PADDLE_X, state->player_y, 0.0f),
-                    sdl3d_vec3_make(PONG_PADDLE_HALF_WIDTH * 2.0f, PONG_PADDLE_HALF_HEIGHT * 2.0f, PONG_PADDLE_DEPTH),
-                    player_color);
-    sdl3d_draw_cube(renderer, sdl3d_vec3_make(PONG_PADDLE_X, state->cpu_y, 0.0f),
-                    sdl3d_vec3_make(PONG_PADDLE_HALF_WIDTH * 2.0f, PONG_PADDLE_HALF_HEIGHT * 2.0f, PONG_PADDLE_DEPTH),
-                    cpu_color);
+    if (string_starts_with(primitive->entity_name, "entity.field.border."))
+    {
+        const float flash = clampf(state->border_flash, 0.0f, 1.0f);
+        color = color_lerp(color, (sdl3d_color){210, 235, 255, 255}, flash);
+        if (size.x < size.y)
+            size.x += 0.06f * flash;
+        else
+            size.y += 0.06f * flash;
+        emissive_r = flash * 0.55f;
+        emissive_g = flash * 0.70f;
+        emissive_b = flash;
+    }
+    else if (string_starts_with(primitive->entity_name, "entity.field.center_ticks"))
+    {
+        emissive_r = 0.10f;
+        emissive_g = 0.12f;
+        emissive_b = 0.16f;
+    }
+    else if (string_starts_with(primitive->entity_name, "entity.paddle."))
+    {
+        const float flash = clampf(state->paddle_flash, 0.0f, 1.0f);
+        color = color_lerp(color, (sdl3d_color){255, 255, 255, 255}, flash);
+        emissive_r = flash * 0.35f;
+        emissive_g = flash * 0.42f;
+        emissive_b = flash * 0.50f;
+    }
+    else if (SDL_strcmp(primitive->entity_name, "entity.ball") == 0)
+    {
+        const float pulse = 0.5f + 0.5f * SDL_sinf(state->time * 9.0f);
+        color = color_lerp(color, (sdl3d_color){255, 245, 156, 255}, pulse);
+        emissive_r = 0.75f + pulse * 0.65f;
+        emissive_g = 0.48f + pulse * 0.30f;
+        emissive_b = 0.08f;
+    }
+    else if (primitive->emissive)
+    {
+        emissive_r = 0.2f;
+        emissive_g = 0.2f;
+        emissive_b = 0.2f;
+    }
 
-    sdl3d_set_emissive(renderer, 0.75f + ball_pulse * 0.65f, 0.48f + ball_pulse * 0.30f, 0.08f);
-    sdl3d_draw_sphere(renderer, sdl3d_vec3_make(state->ball_position.x, state->ball_position.y, PONG_BALL_Z),
-                      PONG_BALL_RADIUS, 12, 18, ball_color);
-    sdl3d_set_emissive(renderer, 0.0f, 0.0f, 0.0f);
+    draw_emissive_render_primitive(context->renderer, primitive, color, size, radius, emissive_r, emissive_g,
+                                   emissive_b);
+    return true;
 }
 
 static void draw_centered_text(sdl3d_render_context *renderer, const sdl3d_font *font, const char *text, float y,
@@ -525,7 +539,8 @@ static void draw_hud(sdl3d_game_context *ctx, const pong_state *state)
                              "FPS %.0f  Frame %" SDL_PRIu64, state->displayed_fps, state->rendered_frames);
     if (ball_camera_is_active(state))
     {
-        sdl3d_draw_text_overlay(ctx->renderer, &state->font, "BALL CAM", 18.0f, 56.0f,
+        sdl3d_draw_text_overlay(ctx->renderer, &state->font,
+                                presentation_string(state, "ball_camera_label", "BALL CAM"), 18.0f, 56.0f,
                                 (sdl3d_color){255, 222, 140, 235});
     }
     sdl3d_draw_textf_overlay(ctx->renderer, &state->font, (float)width * 0.5f - 94.0f, 22.0f,
@@ -533,54 +548,75 @@ static void draw_hud(sdl3d_game_context *ctx, const pong_state *state)
 
     if (state->match_finished)
     {
-        const char *winner = state->winner == PONG_WINNER_PLAYER ? "You win!" : "You lose!";
+        const char *winner = state->winner == PONG_WINNER_PLAYER
+                                 ? presentation_string(state, "player_win_text", "You win!")
+                                 : presentation_string(state, "cpu_win_text", "You lose!");
         draw_centered_text(ctx->renderer, &state->font, winner, (float)height * 0.40f,
                            (sdl3d_color){255, 255, 255, 255});
-        draw_centered_text(ctx->renderer, &state->font, "Press enter to play again", (float)height * 0.49f,
-                           (sdl3d_color){200, 220, 255, 235});
+        draw_centered_text(ctx->renderer, &state->font,
+                           presentation_string(state, "restart_text", "Press enter to play again"),
+                           (float)height * 0.49f, (sdl3d_color){200, 220, 255, 235});
     }
     else if (ctx->paused)
     {
         const float pulse = 0.5f + 0.5f * SDL_sinf(state->pause_flash * SDL_PI_F * 2.0f);
         const Uint8 alpha = (Uint8)(120.0f + pulse * 135.0f);
-        draw_centered_text(ctx->renderer, &state->font, "PAUSED", (float)height * 0.44f,
-                           (sdl3d_color){245, 248, 255, alpha});
+        draw_centered_text(ctx->renderer, &state->font, presentation_string(state, "pause_text", "PAUSED"),
+                           (float)height * 0.44f, (sdl3d_color){245, 248, 255, alpha});
     }
     else if (!state->ball_active)
     {
-        draw_centered_text(ctx->renderer, &state->font, "Get ready", (float)height * 0.44f,
-                           (sdl3d_color){210, 225, 255, 190});
+        draw_centered_text(ctx->renderer, &state->font, presentation_string(state, "ready_text", "Get ready"),
+                           (float)height * 0.44f, (sdl3d_color){210, 225, 255, 190});
     }
 }
 
-static sdl3d_camera3d make_overhead_camera(void)
+static float camera_float_or(const pong_state *state, const char *camera_name, const char *property_name,
+                             float fallback)
 {
+    float value = 0.0f;
+    return sdl3d_game_data_get_camera_float(state->data, camera_name, property_name, &value) ? value : fallback;
+}
+
+static sdl3d_camera3d make_ball_camera(const pong_state *state)
+{
+    const char *camera_name = "camera.ball_chase";
+    const sdl3d_vec2 forward = ball_camera_forward(state);
+    const float ball_z_offset = camera_float_or(state, camera_name, "ball_z_offset", state->ball_radius);
+    const sdl3d_vec3 ball =
+        sdl3d_vec3_make(state->ball_position.x, state->ball_position.y, state->ball_z + ball_z_offset);
+    const float chase_distance = camera_float_or(state, camera_name, "chase_distance", 2.6f);
+    const float camera_height = camera_float_or(state, camera_name, "height", 1.35f);
+    const float lookahead = camera_float_or(state, camera_name, "lookahead", 4.4f);
+    const float target_z_offset = camera_float_or(state, camera_name, "target_z_offset", -0.05f);
+
     sdl3d_camera3d camera;
+    SDL_zero(camera);
+    camera.position = sdl3d_vec3_make(ball.x - forward.x * chase_distance, ball.y - forward.y * chase_distance,
+                                      ball.z + camera_height);
+    camera.target =
+        sdl3d_vec3_make(ball.x + forward.x * lookahead, ball.y + forward.y * lookahead, ball.z + target_z_offset);
+    camera.up = sdl3d_vec3_make(0.0f, 0.0f, 1.0f);
+    camera.fovy = camera_float_or(state, camera_name, "fovy", 68.0f);
+    camera.projection = SDL3D_CAMERA_PERSPECTIVE;
+    return camera;
+}
+
+static sdl3d_camera3d make_active_camera(const pong_state *state)
+{
+    if (ball_camera_is_active(state))
+        return make_ball_camera(state);
+
+    sdl3d_camera3d camera;
+    if (sdl3d_game_data_get_camera(state->data, "camera.overhead", &camera))
+        return camera;
+
     SDL_zero(camera);
     camera.position = sdl3d_vec3_make(0.0f, 0.0f, 16.0f);
     camera.target = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
     camera.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
     camera.fovy = 11.4f;
     camera.projection = SDL3D_CAMERA_ORTHOGRAPHIC;
-    return camera;
-}
-
-static sdl3d_camera3d make_ball_camera(const pong_state *state)
-{
-    const sdl3d_vec2 forward = ball_camera_forward(state);
-    const sdl3d_vec3 ball = sdl3d_vec3_make(state->ball_position.x, state->ball_position.y, PONG_BALL_Z + 0.22f);
-    const float chase_distance = 2.6f;
-    const float camera_height = 1.35f;
-    const float lookahead = 4.4f;
-
-    sdl3d_camera3d camera;
-    SDL_zero(camera);
-    camera.position = sdl3d_vec3_make(ball.x - forward.x * chase_distance, ball.y - forward.y * chase_distance,
-                                      ball.z + camera_height);
-    camera.target = sdl3d_vec3_make(ball.x + forward.x * lookahead, ball.y + forward.y * lookahead, ball.z - 0.05f);
-    camera.up = sdl3d_vec3_make(0.0f, 0.0f, 1.0f);
-    camera.fovy = 68.0f;
-    camera.projection = SDL3D_CAMERA_PERSPECTIVE;
     return camera;
 }
 
@@ -610,19 +646,18 @@ static void pong_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     sdl3d_clear_render_context(ctx->renderer, (sdl3d_color){3, 4, 8, 255});
     configure_lights(ctx->renderer, state);
 
-    const bool ball_camera_enabled = ball_camera_is_active(state);
-    const sdl3d_camera3d camera = ball_camera_enabled ? make_ball_camera(state) : make_overhead_camera();
+    const sdl3d_camera3d camera = make_active_camera(state);
 
     if (sdl3d_begin_mode_3d(ctx->renderer, camera))
     {
-        draw_playfield(ctx->renderer, state);
         if (state->ambient_particles != NULL)
         {
             sdl3d_set_emissive(ctx->renderer, 0.8f, 0.9f, 1.0f);
             sdl3d_draw_particles(ctx->renderer, state->ambient_particles);
             sdl3d_set_emissive(ctx->renderer, 0.0f, 0.0f, 0.0f);
         }
-        draw_game_objects(ctx->renderer, state);
+        primitive_draw_context draw_context = {ctx->renderer, state};
+        sdl3d_game_data_for_each_render_primitive(state->data, draw_authored_primitive, &draw_context);
         sdl3d_end_mode_3d(ctx->renderer);
     }
 

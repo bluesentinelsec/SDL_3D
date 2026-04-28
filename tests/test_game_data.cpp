@@ -42,6 +42,14 @@ struct DiagnosticCapture
     std::vector<CapturedDiagnostic> diagnostics;
 };
 
+struct RenderPrimitiveCapture
+{
+    int cubes = 0;
+    int spheres = 0;
+    bool saw_player_paddle = false;
+    bool saw_ball = false;
+};
+
 bool serve_adapter(void *userdata, sdl3d_game_data_runtime *runtime, const char *adapter_name,
                    sdl3d_registered_actor *target, const sdl3d_properties *payload)
 {
@@ -170,6 +178,35 @@ void emit_reload_signal(sdl3d_game_session *session, sdl3d_game_data_runtime *ru
     sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), signal, nullptr);
 }
 
+bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primitive *primitive)
+{
+    auto *capture = static_cast<RenderPrimitiveCapture *>(userdata);
+    if (primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
+        capture->cubes++;
+    else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
+        capture->spheres++;
+
+    if (std::string(primitive->entity_name) == "entity.paddle.player")
+    {
+        capture->saw_player_paddle = true;
+        EXPECT_NEAR(primitive->position.x, -8.0f, 0.0001f);
+        EXPECT_NEAR(primitive->size.x, 0.36f, 0.0001f);
+        EXPECT_EQ(primitive->color.r, 205);
+        EXPECT_EQ(primitive->color.g, 230);
+        EXPECT_EQ(primitive->color.b, 255);
+    }
+    if (std::string(primitive->entity_name) == "entity.ball")
+    {
+        capture->saw_ball = true;
+        EXPECT_NEAR(primitive->position.z, 0.12f, 0.0001f);
+        EXPECT_NEAR(primitive->radius, 0.22f, 0.0001f);
+        EXPECT_EQ(primitive->rings, 12);
+        EXPECT_EQ(primitive->slices, 18);
+        EXPECT_TRUE(primitive->emissive);
+    }
+    return true;
+}
+
 void append_u16(std::vector<std::uint8_t> &bytes, std::uint16_t value)
 {
     bytes.push_back(static_cast<std::uint8_t>(value & 0xFFu));
@@ -230,6 +267,64 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     EXPECT_GE(sdl3d_game_data_find_signal(runtime, "signal.ball.serve"), 0);
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.paddle.up"), 0);
     EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead");
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+
+    sdl3d_camera3d camera{};
+    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.overhead", &camera));
+    EXPECT_EQ(camera.projection, SDL3D_CAMERA_ORTHOGRAPHIC);
+    EXPECT_NEAR(camera.position.z, 16.0f, 0.0001f);
+    EXPECT_NEAR(camera.fovy, 11.4f, 0.0001f);
+    EXPECT_FALSE(sdl3d_game_data_get_camera(runtime, "camera.ball_chase", &camera));
+
+    float chase_fovy = 0.0f;
+    ASSERT_TRUE(sdl3d_game_data_get_camera_float(runtime, "camera.ball_chase", "fovy", &chase_fovy));
+    EXPECT_NEAR(chase_fovy, 68.0f, 0.0001f);
+
+    float ambient[3]{};
+    ASSERT_TRUE(sdl3d_game_data_get_world_ambient_light(runtime, ambient));
+    EXPECT_NEAR(ambient[0], 0.015f, 0.0001f);
+    EXPECT_NEAR(ambient[1], 0.018f, 0.0001f);
+    EXPECT_NEAR(ambient[2], 0.026f, 0.0001f);
+
+    EXPECT_EQ(sdl3d_game_data_world_light_count(runtime), 4);
+    sdl3d_light ball_light{};
+    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 3, &ball_light));
+    EXPECT_EQ(ball_light.type, SDL3D_LIGHT_POINT);
+    EXPECT_NEAR(ball_light.position.x, 0.0f, 0.0001f);
+    EXPECT_NEAR(ball_light.position.y, 0.0f, 0.0001f);
+    EXPECT_NEAR(ball_light.position.z, 1.32f, 0.0001f);
+
+    sdl3d_particle_config particles{};
+    ASSERT_TRUE(sdl3d_game_data_get_particle_emitter(runtime, "entity.effect.ambient_particles", &particles));
+    EXPECT_EQ(particles.shape, SDL3D_PARTICLE_EMITTER_BOX);
+    EXPECT_EQ(particles.max_particles, 360);
+    EXPECT_NEAR(particles.emit_rate, 95.0f, 0.0001f);
+    EXPECT_EQ(particles.color_start.a, 105);
+
+    RenderPrimitiveCapture capture{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &capture));
+    EXPECT_EQ(capture.cubes, 16);
+    EXPECT_EQ(capture.spheres, 1);
+    EXPECT_TRUE(capture.saw_player_paddle);
+    EXPECT_TRUE(capture.saw_ball);
+
+    sdl3d_registered_actor *presentation = sdl3d_game_data_find_actor(runtime, "entity.presentation");
+    ASSERT_NE(presentation, nullptr);
+    EXPECT_NEAR(sdl3d_properties_get_float(presentation->props, "border_flash_decay", 0.0f), 2.8f, 0.0001f);
+    EXPECT_STREQ(sdl3d_properties_get_string(presentation->props, "pause_text", ""), "PAUSED");
+    EXPECT_STREQ(sdl3d_properties_get_string(presentation->props, "ball_camera_label", ""), "BALL CAM");
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);

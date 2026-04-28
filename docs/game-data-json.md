@@ -84,6 +84,17 @@ Entities are the data form of actor registry entries plus optional component own
 
 Core fields are generic. Components are module-owned and may be ignored by runtimes that do not load that module.
 
+### Presentation Components
+
+The first generic presentation components are deliberately simple descriptors:
+
+- `render.cube` describes an axis-aligned box with `size`, optional `offset`, `color`, and `emissive`.
+- `render.sphere` describes a sphere with `radius`, `rings`, `slices`, `color`, and `emissive`.
+- `particles.emitter` describes an emitter config that can be passed to the particle system.
+
+The game data runtime exposes these as read-only descriptors. It does not issue draw calls; each game or
+renderer decides how to render, sort, tint, or override them.
+
 ## Logic
 
 Logic is event composition:

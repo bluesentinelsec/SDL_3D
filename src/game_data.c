@@ -557,7 +557,13 @@ static bool json_bool(yyjson_val *object, const char *key, bool fallback)
 static float json_float(yyjson_val *object, const char *key, float fallback)
 {
     yyjson_val *value = obj_get(object, key);
-    return yyjson_is_num(value) ? (float)yyjson_get_real(value) : fallback;
+    return yyjson_is_num(value) ? (float)yyjson_get_num(value) : fallback;
+}
+
+static int json_int(yyjson_val *object, const char *key, int fallback)
+{
+    yyjson_val *value = obj_get(object, key);
+    return yyjson_is_int(value) ? (int)yyjson_get_int(value) : fallback;
 }
 
 static sdl3d_vec3 json_vec3_value(yyjson_val *value, sdl3d_vec3 fallback)
@@ -571,13 +577,82 @@ static sdl3d_vec3 json_vec3_value(yyjson_val *value, sdl3d_vec3 fallback)
     if (!yyjson_is_num(x) || !yyjson_is_num(y))
         return fallback;
 
-    return sdl3d_vec3_make((float)yyjson_get_real(x), (float)yyjson_get_real(y),
-                           yyjson_is_num(z) ? (float)yyjson_get_real(z) : fallback.z);
+    return sdl3d_vec3_make((float)yyjson_get_num(x), (float)yyjson_get_num(y),
+                           yyjson_is_num(z) ? (float)yyjson_get_num(z) : fallback.z);
 }
 
 static sdl3d_vec3 json_vec3(yyjson_val *object, const char *key, sdl3d_vec3 fallback)
 {
     return json_vec3_value(obj_get(object, key), fallback);
+}
+
+static sdl3d_color json_color_value(yyjson_val *value, sdl3d_color fallback)
+{
+    if (!yyjson_is_arr(value) || yyjson_arr_size(value) < 3)
+        return fallback;
+
+    yyjson_val *r = yyjson_arr_get(value, 0);
+    yyjson_val *g = yyjson_arr_get(value, 1);
+    yyjson_val *b = yyjson_arr_get(value, 2);
+    yyjson_val *a = yyjson_arr_get(value, 3);
+    if (!yyjson_is_num(r) || !yyjson_is_num(g) || !yyjson_is_num(b))
+        return fallback;
+
+    return (sdl3d_color){
+        (Uint8)SDL_clamp((int)yyjson_get_num(r), 0, 255),
+        (Uint8)SDL_clamp((int)yyjson_get_num(g), 0, 255),
+        (Uint8)SDL_clamp((int)yyjson_get_num(b), 0, 255),
+        yyjson_is_num(a) ? (Uint8)SDL_clamp((int)yyjson_get_num(a), 0, 255) : fallback.a,
+    };
+}
+
+static sdl3d_color json_color(yyjson_val *object, const char *key, sdl3d_color fallback)
+{
+    return json_color_value(obj_get(object, key), fallback);
+}
+
+static yyjson_val *runtime_root(const sdl3d_game_data_runtime *runtime)
+{
+    return runtime != NULL && runtime->doc != NULL ? yyjson_doc_get_root(runtime->doc) : NULL;
+}
+
+static yyjson_val *find_entity_json(const sdl3d_game_data_runtime *runtime, const char *name)
+{
+    yyjson_val *entities = obj_get(runtime_root(runtime), "entities");
+    for (size_t i = 0; yyjson_is_arr(entities) && i < yyjson_arr_size(entities); ++i)
+    {
+        yyjson_val *entity = yyjson_arr_get(entities, i);
+        const char *entity_name = json_string(entity, "name", NULL);
+        if (entity_name != NULL && name != NULL && SDL_strcmp(entity_name, name) == 0)
+            return entity;
+    }
+    return NULL;
+}
+
+static yyjson_val *find_component_json(yyjson_val *entity, const char *type)
+{
+    yyjson_val *components = obj_get(entity, "components");
+    for (size_t i = 0; yyjson_is_arr(components) && i < yyjson_arr_size(components); ++i)
+    {
+        yyjson_val *component = yyjson_arr_get(components, i);
+        const char *component_type = json_string(component, "type", NULL);
+        if (component_type != NULL && type != NULL && SDL_strcmp(component_type, type) == 0)
+            return component;
+    }
+    return NULL;
+}
+
+static yyjson_val *find_camera_json(const sdl3d_game_data_runtime *runtime, const char *name)
+{
+    yyjson_val *cameras = obj_get(obj_get(runtime_root(runtime), "world"), "cameras");
+    for (size_t i = 0; yyjson_is_arr(cameras) && i < yyjson_arr_size(cameras); ++i)
+    {
+        yyjson_val *camera = yyjson_arr_get(cameras, i);
+        const char *camera_name = json_string(camera, "name", NULL);
+        if (camera_name != NULL && name != NULL && SDL_strcmp(camera_name, name) == 0)
+            return camera;
+    }
+    return NULL;
 }
 
 static int axis_index(const char *axis)
@@ -974,6 +1049,231 @@ sdl3d_registered_actor *sdl3d_game_data_find_actor(const sdl3d_game_data_runtime
 const char *sdl3d_game_data_active_camera(const sdl3d_game_data_runtime *runtime)
 {
     return runtime != NULL ? runtime->active_camera : NULL;
+}
+
+bool sdl3d_game_data_get_camera(const sdl3d_game_data_runtime *runtime, const char *name, sdl3d_camera3d *out_camera)
+{
+    if (out_camera != NULL)
+        SDL_zero(*out_camera);
+    if (runtime == NULL || name == NULL || out_camera == NULL)
+        return false;
+
+    yyjson_val *camera_json = find_camera_json(runtime, name);
+    if (camera_json == NULL)
+        return false;
+
+    const char *type = json_string(camera_json, "type", "perspective");
+    if (SDL_strcmp(type, "adapter") == 0)
+        return false;
+
+    out_camera->position = json_vec3(camera_json, "position", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    out_camera->target = json_vec3(camera_json, "target", sdl3d_vec3_make(0.0f, 0.0f, -1.0f));
+    out_camera->up = json_vec3(camera_json, "up", sdl3d_vec3_make(0.0f, 1.0f, 0.0f));
+    if (SDL_strcmp(type, "orthographic") == 0)
+    {
+        out_camera->projection = SDL3D_CAMERA_ORTHOGRAPHIC;
+        out_camera->fovy = json_float(camera_json, "size", 10.0f);
+    }
+    else
+    {
+        out_camera->projection = SDL3D_CAMERA_PERSPECTIVE;
+        out_camera->fovy = json_float(camera_json, "fovy", 60.0f);
+    }
+    return true;
+}
+
+bool sdl3d_game_data_get_camera_float(const sdl3d_game_data_runtime *runtime, const char *camera_name,
+                                      const char *property_name, float *out_value)
+{
+    if (out_value != NULL)
+        *out_value = 0.0f;
+    if (runtime == NULL || camera_name == NULL || property_name == NULL || out_value == NULL)
+        return false;
+
+    yyjson_val *camera = find_camera_json(runtime, camera_name);
+    yyjson_val *value = obj_get(obj_get(camera, "properties"), property_name);
+    if (!yyjson_is_num(value))
+        return false;
+
+    *out_value = (float)yyjson_get_num(value);
+    return true;
+}
+
+int sdl3d_game_data_world_light_count(const sdl3d_game_data_runtime *runtime)
+{
+    yyjson_val *lights = obj_get(obj_get(runtime_root(runtime), "world"), "lights");
+    return yyjson_is_arr(lights) ? (int)yyjson_arr_size(lights) : 0;
+}
+
+bool sdl3d_game_data_get_world_ambient_light(const sdl3d_game_data_runtime *runtime, float out_rgb[3])
+{
+    if (out_rgb != NULL)
+    {
+        out_rgb[0] = 0.0f;
+        out_rgb[1] = 0.0f;
+        out_rgb[2] = 0.0f;
+    }
+    if (runtime == NULL || out_rgb == NULL)
+        return false;
+
+    yyjson_val *ambient = obj_get(obj_get(runtime_root(runtime), "world"), "ambient_light");
+    if (!yyjson_is_arr(ambient) || yyjson_arr_size(ambient) < 3)
+        return false;
+
+    for (int i = 0; i < 3; ++i)
+    {
+        yyjson_val *channel = yyjson_arr_get(ambient, (size_t)i);
+        if (!yyjson_is_num(channel))
+            return false;
+        out_rgb[i] = (float)yyjson_get_num(channel);
+    }
+    return true;
+}
+
+bool sdl3d_game_data_get_world_light(const sdl3d_game_data_runtime *runtime, int index, sdl3d_light *out_light)
+{
+    if (out_light != NULL)
+        SDL_zero(*out_light);
+    yyjson_val *lights = obj_get(obj_get(runtime_root(runtime), "world"), "lights");
+    if (runtime == NULL || index < 0 || out_light == NULL || !yyjson_is_arr(lights) ||
+        (size_t)index >= yyjson_arr_size(lights))
+        return false;
+
+    yyjson_val *light_json = yyjson_arr_get(lights, (size_t)index);
+    const char *type = json_string(light_json, "type", "point");
+    if (SDL_strcmp(type, "directional") == 0)
+        out_light->type = SDL3D_LIGHT_DIRECTIONAL;
+    else if (SDL_strcmp(type, "spot") == 0)
+        out_light->type = SDL3D_LIGHT_SPOT;
+    else
+        out_light->type = SDL3D_LIGHT_POINT;
+
+    out_light->position = json_vec3(light_json, "position", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const char *target_entity = json_string(light_json, "target_entity", NULL);
+    sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, target_entity);
+    if (target != NULL)
+    {
+        const sdl3d_vec3 offset = json_vec3(light_json, "offset", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+        out_light->position = sdl3d_vec3_make(target->position.x + offset.x, target->position.y + offset.y,
+                                              target->position.z + offset.z);
+    }
+    out_light->direction = json_vec3(light_json, "direction", sdl3d_vec3_make(0.0f, -1.0f, 0.0f));
+    yyjson_val *color = obj_get(light_json, "color");
+    out_light->color[0] = 1.0f;
+    out_light->color[1] = 1.0f;
+    out_light->color[2] = 1.0f;
+    for (int i = 0; yyjson_is_arr(color) && i < 3; ++i)
+    {
+        yyjson_val *channel = yyjson_arr_get(color, (size_t)i);
+        if (yyjson_is_num(channel))
+            out_light->color[i] = (float)yyjson_get_num(channel);
+    }
+    out_light->intensity = json_float(light_json, "intensity", 1.0f);
+    out_light->range = json_float(light_json, "range", 10.0f);
+    out_light->inner_cutoff = json_float(light_json, "inner_cutoff", 0.0f);
+    out_light->outer_cutoff = json_float(light_json, "outer_cutoff", 0.0f);
+    return true;
+}
+
+bool sdl3d_game_data_for_each_render_primitive(const sdl3d_game_data_runtime *runtime,
+                                               sdl3d_game_data_render_primitive_fn callback, void *userdata)
+{
+    if (runtime == NULL || callback == NULL)
+        return false;
+
+    yyjson_val *entities = obj_get(runtime_root(runtime), "entities");
+    for (size_t i = 0; yyjson_is_arr(entities) && i < yyjson_arr_size(entities); ++i)
+    {
+        yyjson_val *entity = yyjson_arr_get(entities, i);
+        const char *entity_name = json_string(entity, "name", NULL);
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, entity_name);
+        yyjson_val *components = obj_get(entity, "components");
+        if (actor == NULL || !actor->active || !yyjson_is_arr(components))
+            continue;
+
+        for (size_t c = 0; c < yyjson_arr_size(components); ++c)
+        {
+            yyjson_val *component = yyjson_arr_get(components, c);
+            const char *type = json_string(component, "type", "");
+            sdl3d_game_data_render_primitive primitive;
+            SDL_zero(primitive);
+            primitive.entity_name = entity_name;
+            primitive.position = actor->position;
+            const sdl3d_vec3 offset = json_vec3(component, "offset", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+            primitive.position.x += offset.x;
+            primitive.position.y += offset.y;
+            primitive.position.z += offset.z;
+            primitive.color = json_color(component, "color", (sdl3d_color){255, 255, 255, 255});
+            primitive.emissive = json_bool(component, "emissive", false);
+
+            if (SDL_strcmp(type, "render.cube") == 0)
+            {
+                primitive.type = SDL3D_GAME_DATA_RENDER_CUBE;
+                primitive.size = json_vec3(component, "size", sdl3d_vec3_make(1.0f, 1.0f, 1.0f));
+            }
+            else if (SDL_strcmp(type, "render.sphere") == 0)
+            {
+                primitive.type = SDL3D_GAME_DATA_RENDER_SPHERE;
+                primitive.radius = json_float(component, "radius", 0.5f);
+                primitive.slices = json_int(component, "slices", 16);
+                primitive.rings = json_int(component, "rings", 8);
+            }
+            else
+            {
+                continue;
+            }
+
+            if (!callback(userdata, &primitive))
+                return true;
+        }
+    }
+    return true;
+}
+
+bool sdl3d_game_data_get_particle_emitter(const sdl3d_game_data_runtime *runtime, const char *entity_name,
+                                          sdl3d_particle_config *out_config)
+{
+    if (out_config != NULL)
+        SDL_zero(*out_config);
+    if (runtime == NULL || entity_name == NULL || out_config == NULL)
+        return false;
+
+    yyjson_val *entity = find_entity_json(runtime, entity_name);
+    yyjson_val *component = find_component_json(entity, "particles.emitter");
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, entity_name);
+    if (component == NULL || actor == NULL)
+        return false;
+
+    out_config->position = actor->position;
+    out_config->direction = json_vec3(component, "direction", sdl3d_vec3_make(0.0f, 1.0f, 0.0f));
+    out_config->spread = json_float(component, "spread", 0.0f);
+    out_config->speed_min = json_float(component, "speed_min", 0.0f);
+    out_config->speed_max = json_float(component, "speed_max", 0.0f);
+    out_config->lifetime_min = json_float(component, "lifetime_min", 1.0f);
+    out_config->lifetime_max = json_float(component, "lifetime_max", 1.0f);
+    out_config->size_start = json_float(component, "size_start", 0.05f);
+    out_config->size_end = json_float(component, "size_end", 0.01f);
+    out_config->color_start = json_color(component, "color_start", (sdl3d_color){255, 255, 255, 255});
+    out_config->color_end = json_color(component, "color_end", (sdl3d_color){255, 255, 255, 0});
+    out_config->gravity = json_float(component, "gravity", 0.0f);
+    out_config->max_particles = json_int(component, "max_particles", 128);
+    out_config->emit_rate = json_float(component, "emit_rate", 0.0f);
+    const char *shape = json_string(component, "shape", "point");
+    if (SDL_strcmp(shape, "box") == 0)
+        out_config->shape = SDL3D_PARTICLE_EMITTER_BOX;
+    else if (SDL_strcmp(shape, "circle") == 0)
+        out_config->shape = SDL3D_PARTICLE_EMITTER_CIRCLE;
+    else
+        out_config->shape = SDL3D_PARTICLE_EMITTER_POINT;
+    out_config->extents = json_vec3(component, "extents", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    out_config->radius = json_float(component, "radius", 0.0f);
+    out_config->emissive_intensity = json_float(component, "emissive_intensity", 1.0f);
+    out_config->camera_facing = json_bool(component, "camera_facing", true);
+    out_config->depth_test = json_bool(component, "depth_test", true);
+    out_config->additive_blend = json_bool(component, "additive_blend", false);
+    out_config->texture = NULL;
+    out_config->random_seed = (Uint32)json_int(component, "random_seed", 0);
+    return true;
 }
 
 float sdl3d_game_data_delta_time(const sdl3d_game_data_runtime *runtime)

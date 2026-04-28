@@ -109,6 +109,7 @@
       "min": [-9.0, -5.0, -1.0],
       "max": [9.0, 5.0, 2.0]
     },
+    "ambient_light": [0.015, 0.018, 0.026],
     "cameras": [
       {
         "name": "camera.overhead",
@@ -124,6 +125,14 @@
         "type": "adapter",
         "adapter": "adapter.pong.ball_chase_camera",
         "target_entity": "entity.ball",
+        "properties": {
+          "chase_distance": 2.6,
+          "height": 1.35,
+          "lookahead": 4.4,
+          "fovy": 68.0,
+          "ball_z_offset": 0.22,
+          "target_z_offset": -0.05
+        },
         "active": false
       }
     ],
@@ -151,10 +160,81 @@
         "color": [0.14, 0.34, 1.0],
         "intensity": 2.9,
         "range": 12.0
+      },
+      {
+        "name": "light.ball",
+        "type": "point",
+        "target_entity": "entity.ball",
+        "offset": [0.0, 0.0, 1.2],
+        "color": [1.0, 0.86, 0.34],
+        "intensity": 3.1,
+        "range": 5.0
       }
     ]
   },
   "entities": [
+    {
+      "name": "entity.field.base",
+      "active": true,
+      "tags": ["render", "field"],
+      "transform": { "position": [0.0, 0.0, -0.45] },
+      "components": [
+        { "type": "render.cube", "size": [18.8, 10.8, 0.10], "color": [42, 48, 62, 255] }
+      ]
+    },
+    {
+      "name": "entity.field.border.top",
+      "active": true,
+      "tags": ["render", "field", "border"],
+      "transform": { "position": [0.0, 5.12, 0.0] },
+      "components": [
+        { "type": "render.cube", "size": [18.35, 0.12, 0.18], "color": [62, 72, 92, 255], "emissive": true }
+      ]
+    },
+    {
+      "name": "entity.field.border.bottom",
+      "active": true,
+      "tags": ["render", "field", "border"],
+      "transform": { "position": [0.0, -5.12, 0.0] },
+      "components": [
+        { "type": "render.cube", "size": [18.35, 0.12, 0.18], "color": [62, 72, 92, 255], "emissive": true }
+      ]
+    },
+    {
+      "name": "entity.field.border.left",
+      "active": true,
+      "tags": ["render", "field", "border"],
+      "transform": { "position": [-9.12, 0.0, 0.0] },
+      "components": [
+        { "type": "render.cube", "size": [0.12, 10.35, 0.18], "color": [62, 72, 92, 255], "emissive": true }
+      ]
+    },
+    {
+      "name": "entity.field.border.right",
+      "active": true,
+      "tags": ["render", "field", "border"],
+      "transform": { "position": [9.12, 0.0, 0.0] },
+      "components": [
+        { "type": "render.cube", "size": [0.12, 10.35, 0.18], "color": [62, 72, 92, 255], "emissive": true }
+      ]
+    },
+    {
+      "name": "entity.field.center_ticks",
+      "active": true,
+      "tags": ["render", "field", "centerline"],
+      "transform": { "position": [0.0, 0.0, 0.02] },
+      "components": [
+        { "type": "render.cube", "offset": [0.0, -4.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true },
+        { "type": "render.cube", "offset": [0.0, -3.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true },
+        { "type": "render.cube", "offset": [0.0, -2.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true },
+        { "type": "render.cube", "offset": [0.0, -1.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true },
+        { "type": "render.cube", "offset": [0.0, 0.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true },
+        { "type": "render.cube", "offset": [0.0, 1.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true },
+        { "type": "render.cube", "offset": [0.0, 2.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true },
+        { "type": "render.cube", "offset": [0.0, 3.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true },
+        { "type": "render.cube", "offset": [0.0, 4.0, 0.0], "size": [0.055, 0.42, 0.08], "color": [115, 132, 162, 180], "emissive": true }
+      ]
+    },
     {
       "name": "entity.paddle.player",
       "active": true,
@@ -203,7 +283,7 @@
         "active_motion": { "type": "bool", "value": false }
       },
       "components": [
-        { "type": "render.sphere", "radius": 0.22, "rings": 12, "slices": 18, "emissive": true },
+        { "type": "render.sphere", "radius": 0.22, "rings": 12, "slices": 18, "color": [255, 184, 82, 255], "emissive": true },
         { "type": "collision.circle", "radius": 0.22 },
         { "type": "motion.velocity_2d", "property": "velocity" }
       ]
@@ -240,7 +320,16 @@
       "tags": ["state", "presentation"],
       "properties": {
         "border_flash": { "type": "float", "value": 0.0 },
-        "paddle_flash": { "type": "float", "value": 0.0 }
+        "paddle_flash": { "type": "float", "value": 0.0 },
+        "border_flash_decay": { "type": "float", "value": 2.8 },
+        "paddle_flash_decay": { "type": "float", "value": 4.0 },
+        "pause_flash_speed": { "type": "float", "value": 3.0 },
+        "pause_text": { "type": "string", "value": "PAUSED" },
+        "ready_text": { "type": "string", "value": "Get ready" },
+        "restart_text": { "type": "string", "value": "Press enter to play again" },
+        "player_win_text": { "type": "string", "value": "You win!" },
+        "cpu_win_text": { "type": "string", "value": "You lose!" },
+        "ball_camera_label": { "type": "string", "value": "BALL CAM" }
       }
     },
     {
@@ -253,10 +342,23 @@
           "type": "particles.emitter",
           "shape": "box",
           "extents": [8.8, 4.8, 0.18],
+          "direction": [0.0, 1.0, 0.0],
+          "spread": 1.1,
+          "speed_min": 0.08,
+          "speed_max": 0.45,
+          "lifetime_min": 2.5,
+          "lifetime_max": 5.0,
+          "size_start": 0.035,
+          "size_end": 0.012,
+          "gravity": 0.0,
           "max_particles": 360,
           "emit_rate": 95.0,
           "color_start": [220, 235, 255, 105],
-          "color_end": [255, 255, 255, 0]
+          "color_end": [255, 255, 255, 0],
+          "emissive_intensity": 1.35,
+          "camera_facing": true,
+          "depth_test": true,
+          "random_seed": 19088743
         }
       ]
     }

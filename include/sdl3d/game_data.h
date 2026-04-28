@@ -19,7 +19,10 @@
 
 #include "sdl3d/actor_registry.h"
 #include "sdl3d/asset.h"
+#include "sdl3d/camera.h"
+#include "sdl3d/effects.h"
 #include "sdl3d/game.h"
+#include "sdl3d/lighting.h"
 #include "sdl3d/properties.h"
 
 #ifdef __cplusplus
@@ -29,6 +32,52 @@ extern "C"
 
     /** @brief Opaque runtime created from one game JSON document. */
     typedef struct sdl3d_game_data_runtime sdl3d_game_data_runtime;
+
+    /** @brief Authored render primitive kind. */
+    typedef enum sdl3d_game_data_render_primitive_type
+    {
+        /** @brief Axis-aligned cube/box primitive. */
+        SDL3D_GAME_DATA_RENDER_CUBE = 1,
+        /** @brief Sphere primitive. */
+        SDL3D_GAME_DATA_RENDER_SPHERE = 2,
+    } sdl3d_game_data_render_primitive_type;
+
+    /**
+     * @brief Read-only descriptor for an authored render primitive component.
+     *
+     * This is an engine-data description, not a draw call. Renderers or demos
+     * may interpret these descriptors to draw simple generic primitives while
+     * preserving renderer ownership outside the game data runtime.
+     */
+    typedef struct sdl3d_game_data_render_primitive
+    {
+        /** @brief Name of the entity that owns the component. */
+        const char *entity_name;
+        /** @brief Primitive type declared by the component. */
+        sdl3d_game_data_render_primitive_type type;
+        /** @brief Current world-space position from the owning actor plus optional component offset. */
+        sdl3d_vec3 position;
+        /** @brief Cube size for SDL3D_GAME_DATA_RENDER_CUBE. */
+        sdl3d_vec3 size;
+        /** @brief Sphere radius for SDL3D_GAME_DATA_RENDER_SPHERE. */
+        float radius;
+        /** @brief Sphere longitudinal slices for SDL3D_GAME_DATA_RENDER_SPHERE. */
+        int slices;
+        /** @brief Sphere latitudinal rings for SDL3D_GAME_DATA_RENDER_SPHERE. */
+        int rings;
+        /** @brief Authored tint color. */
+        sdl3d_color color;
+        /** @brief Whether the primitive should be treated as emissive by the caller. */
+        bool emissive;
+    } sdl3d_game_data_render_primitive;
+
+    /**
+     * @brief Callback for iterating authored render primitives.
+     *
+     * Return false to stop iteration early.
+     */
+    typedef bool (*sdl3d_game_data_render_primitive_fn)(void *userdata,
+                                                        const sdl3d_game_data_render_primitive *primitive);
 
     /** @brief Authored game data diagnostic severity. */
     typedef enum sdl3d_game_data_diagnostic_severity
@@ -214,6 +263,62 @@ extern "C"
      * valid until the runtime is destroyed.
      */
     const char *sdl3d_game_data_active_camera(const sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Read an authored non-adapter camera by name.
+     *
+     * Adapter cameras are game-specific and return false here because their
+     * final pose is computed by game code or script. Orthographic cameras use
+     * `size` as sdl3d_camera3d::fovy; perspective cameras use `fovy`.
+     */
+    bool sdl3d_game_data_get_camera(const sdl3d_game_data_runtime *runtime, const char *name,
+                                    sdl3d_camera3d *out_camera);
+
+    /**
+     * @brief Read a numeric custom property from an authored camera.
+     *
+     * This lets games keep camera tuning data in JSON even when the camera pose
+     * itself is adapter-driven.
+     */
+    bool sdl3d_game_data_get_camera_float(const sdl3d_game_data_runtime *runtime, const char *camera_name,
+                                          const char *property_name, float *out_value);
+
+    /** @brief Return the number of authored world lights. */
+    int sdl3d_game_data_world_light_count(const sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Read the authored world ambient light color.
+     *
+     * Values are linear RGB in the same range expected by
+     * sdl3d_set_ambient_light().
+     */
+    bool sdl3d_game_data_get_world_ambient_light(const sdl3d_game_data_runtime *runtime, float out_rgb[3]);
+
+    /**
+     * @brief Read an authored world light by zero-based index.
+     *
+     * The returned light is suitable for passing to sdl3d_add_light().
+     */
+    bool sdl3d_game_data_get_world_light(const sdl3d_game_data_runtime *runtime, int index, sdl3d_light *out_light);
+
+    /**
+     * @brief Iterate active authored render primitive components.
+     *
+     * Components currently supported by this iterator are `render.cube` and
+     * `render.sphere`. Iteration skips inactive actors.
+     */
+    bool sdl3d_game_data_for_each_render_primitive(const sdl3d_game_data_runtime *runtime,
+                                                   sdl3d_game_data_render_primitive_fn callback, void *userdata);
+
+    /**
+     * @brief Read an authored particle emitter component from an entity.
+     *
+     * The returned config is ready for sdl3d_create_particle_emitter(). Texture
+     * references are intentionally not resolved here yet, so config.texture is
+     * always NULL.
+     */
+    bool sdl3d_game_data_get_particle_emitter(const sdl3d_game_data_runtime *runtime, const char *entity_name,
+                                              sdl3d_particle_config *out_config);
 
     /**
      * @brief Return the dt currently being processed by sdl3d_game_data_update().

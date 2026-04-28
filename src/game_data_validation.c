@@ -1003,6 +1003,26 @@ static bool validate_cameras(validation_context *ctx, yyjson_val *root, validati
     return true;
 }
 
+static bool validate_lights(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *lights = obj_get(obj_get(root, "world"), "lights");
+    if (lights == NULL)
+        return true;
+    if (!yyjson_is_arr(lights))
+        return validation_error(ctx, "$.world.lights", "world lights must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(lights); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.world.lights[%zu]", i);
+        yyjson_val *light = yyjson_arr_get(lights, i);
+        const char *target_entity = json_string(light, "target_entity");
+        if (target_entity != NULL && !require_ref(ctx, &names->entities, "entity", target_entity, path))
+            return false;
+    }
+    return true;
+}
+
 static bool warn_unused(validation_context *ctx, const name_table *declared, const name_table *used, const char *kind)
 {
     for (int i = 0; i < declared->count; ++i)
@@ -1019,8 +1039,8 @@ static bool warn_unused(validation_context *ctx, const name_table *declared, con
 static bool validate_details(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     return validate_input_bindings(ctx, root) && validate_components(ctx, root, names) &&
-           validate_cameras(ctx, root, names) && validate_logic(ctx, root, names) &&
-           validate_adapters(ctx, root, names) &&
+           validate_cameras(ctx, root, names) && validate_lights(ctx, root, names) &&
+           validate_logic(ctx, root, names) && validate_adapters(ctx, root, names) &&
            warn_unused(ctx, &names->adapters, &names->used_adapters, "adapter") &&
            warn_unused(ctx, &names->scripts, &names->used_scripts, "script");
 }
