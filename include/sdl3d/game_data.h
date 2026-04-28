@@ -286,6 +286,37 @@ extern "C"
     } sdl3d_game_data_splash;
 
     /**
+     * @brief Runtime state for a data-authored active-scene timeline.
+     *
+     * Hosts keep this state across frames. The game data runtime resets it
+     * automatically when the active scene changes.
+     */
+    typedef struct sdl3d_game_data_timeline_state
+    {
+        /** @brief Runtime-owned active scene pointer currently tracked by this state. */
+        const char *scene;
+        /** @brief Elapsed timeline time in seconds for @p scene. */
+        float time;
+        /** @brief Next authored event index to evaluate. */
+        int next_event_index;
+        /** @brief True once all authored events have fired. */
+        bool complete;
+    } sdl3d_game_data_timeline_state;
+
+    /**
+     * @brief Result produced after advancing an active-scene timeline.
+     */
+    typedef struct sdl3d_game_data_timeline_update_result
+    {
+        /** @brief Scene requested by a `scene.request` timeline action, or NULL. */
+        const char *scene_request;
+        /** @brief Number of timeline actions executed during this update. */
+        int actions_executed;
+        /** @brief True when the active timeline has no more events to fire. */
+        bool complete;
+    } sdl3d_game_data_timeline_update_result;
+
+    /**
      * @brief Runtime descriptor for the active scene's primary menu.
      *
      * Menus are authored in scene JSON files and map input actions to a
@@ -1014,6 +1045,31 @@ extern "C"
      * scene and how to apply transitions.
      */
     bool sdl3d_game_data_get_active_splash(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_splash *out_splash);
+
+    /**
+     * @brief Initialize reusable timeline state.
+     *
+     * Safe to call with NULL.
+     */
+    void sdl3d_game_data_timeline_state_init(sdl3d_game_data_timeline_state *state);
+
+    /**
+     * @brief Advance the active scene's authored autoplay timeline.
+     *
+     * Timeline events are one-shot and must be authored in non-decreasing time
+     * order. This helper executes generic actions that are safe to apply inside
+     * the data runtime (`signal.emit`, `property.set`, etc.). `scene.request`
+     * is reported in @p out_result so hosts can route the request through their
+     * own transition flow instead of forcing an immediate scene switch.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param state Persistent timeline state owned by the host.
+     * @param dt Delta time in seconds.
+     * @param out_result Optional update result.
+     * @return true when the timeline update completed without an execution error.
+     */
+    bool sdl3d_game_data_update_timeline(sdl3d_game_data_runtime *runtime, sdl3d_game_data_timeline_state *state,
+                                         float dt, sdl3d_game_data_timeline_update_result *out_result);
 
     /**
      * @brief Resolve UI text content from data-authored bindings.

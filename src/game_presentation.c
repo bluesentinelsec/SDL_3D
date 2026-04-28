@@ -1010,6 +1010,23 @@ static void app_flow_advance_splash(sdl3d_game_data_app_flow *flow, sdl3d_game_d
         (void)app_flow_request_scene(flow, runtime, splash.next_scene);
 }
 
+static bool app_flow_update_timeline(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime, float dt)
+{
+    if (flow == NULL || runtime == NULL || flow->quit_pending || flow->transition.active ||
+        sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
+    {
+        return true;
+    }
+
+    sdl3d_game_data_timeline_update_result result;
+    if (!sdl3d_game_data_update_timeline(runtime, &flow->timeline, dt, &result))
+        return false;
+
+    if (result.scene_request != NULL)
+        (void)app_flow_request_scene(flow, runtime, result.scene_request);
+    return true;
+}
+
 static void app_flow_update_transition(sdl3d_game_data_app_flow *flow, sdl3d_game_context *ctx, sdl3d_signal_bus *bus,
                                        float dt)
 {
@@ -1044,6 +1061,7 @@ bool sdl3d_game_data_app_flow_start(sdl3d_game_data_app_flow *flow, sdl3d_game_d
     flow->splash_scene = NULL;
     flow->splash_elapsed = 0.0f;
     flow->splash_skip_requested = false;
+    sdl3d_game_data_timeline_state_init(&flow->timeline);
     if (!sdl3d_game_data_get_app_control(runtime, &flow->app))
         return false;
 
@@ -1105,8 +1123,11 @@ bool sdl3d_game_data_app_flow_update(sdl3d_game_data_app_flow *flow, sdl3d_game_
         }
     }
 
+    const bool scene_transitioning_before = sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow);
     app_flow_update_transition(flow, ctx, bus, dt);
     sdl3d_game_data_scene_flow_update(&flow->scene_flow, runtime, bus, dt);
+    if (!scene_transitioning_before && !app_flow_update_timeline(flow, runtime, dt))
+        return false;
     app_flow_advance_splash(flow, runtime, dt);
     return true;
 }

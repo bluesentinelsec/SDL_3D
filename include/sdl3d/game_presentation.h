@@ -135,14 +135,15 @@ extern "C"
      */
     typedef struct sdl3d_game_data_app_flow
     {
-        sdl3d_game_data_scene_flow scene_flow; /**< Data-authored scene transition flow. */
-        sdl3d_transition transition;           /**< App-level startup/quit transition. */
-        sdl3d_game_data_app_control app;       /**< Resolved app controls from game data. */
-        bool quit_pending;                     /**< True after quit has been requested. */
-        bool scene_input_armed;                /**< True once menu input is idle after scene entry. */
-        const char *splash_scene;              /**< Active splash scene tracked for hold timing. */
-        float splash_elapsed;                  /**< Seconds held after splash transitions finish. */
-        bool splash_skip_requested;            /**< True once input asks the splash to advance. */
+        sdl3d_game_data_scene_flow scene_flow;   /**< Data-authored scene transition flow. */
+        sdl3d_transition transition;             /**< App-level startup/quit transition. */
+        sdl3d_game_data_app_control app;         /**< Resolved app controls from game data. */
+        bool quit_pending;                       /**< True after quit has been requested. */
+        bool scene_input_armed;                  /**< True once menu input is idle after scene entry. */
+        const char *splash_scene;                /**< Active splash scene tracked for hold timing. */
+        float splash_elapsed;                    /**< Seconds held after splash transitions finish. */
+        bool splash_skip_requested;              /**< True once input asks the splash to advance. */
+        sdl3d_game_data_timeline_state timeline; /**< Runtime state for the active scene's authored timeline. */
     } sdl3d_game_data_app_flow;
 
     /**

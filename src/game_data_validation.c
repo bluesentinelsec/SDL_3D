@@ -945,6 +945,17 @@ static bool validate_action_array(validation_context *ctx, yyjson_val *actions, 
     return true;
 }
 
+static bool validate_timeline_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                     validation_names *names)
+{
+    if (!yyjson_is_obj(action))
+        return validation_error(ctx, json_path, "timeline action must be an object");
+    const char *type = json_string(action, "type");
+    if (SDL_strcmp(type != NULL ? type : "", "scene.request") == 0)
+        return require_ref(ctx, &names->scenes, "scene", json_string(action, "scene"), json_path);
+    return validate_one_action(ctx, action, json_path, names);
+}
+
 static bool validate_logic(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *logic = obj_get(root, "logic");
@@ -1629,6 +1640,39 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
     format_path(phases_path, sizeof(phases_path), "%s.update_phases", json_path);
     if (!validate_update_phases(ctx, obj_get(root, "update_phases"), phases_path))
         return false;
+
+    yyjson_val *timeline = obj_get(root, "timeline");
+    if (timeline != NULL)
+    {
+        if (!yyjson_is_obj(timeline))
+            return validation_error(ctx, json_path, "scene timeline must be an object");
+        yyjson_val *events = obj_get(timeline, "events");
+        if (events == NULL)
+            events = obj_get(timeline, "tracks");
+        if (events != NULL && !yyjson_is_arr(events))
+            return validation_error(ctx, json_path, "scene timeline events must be an array");
+
+        double previous_time = 0.0;
+        for (size_t i = 0; yyjson_is_arr(events) && i < yyjson_arr_size(events); ++i)
+        {
+            char event_path[PATH_BUFFER_SIZE];
+            format_path(event_path, sizeof(event_path), "%s.timeline.events[%zu]", json_path, i);
+            yyjson_val *event = yyjson_arr_get(events, i);
+            if (!yyjson_is_obj(event))
+                return validation_error(ctx, event_path, "timeline event must be an object");
+            yyjson_val *time = obj_get(event, "time");
+            if (!yyjson_is_num(time) || yyjson_get_num(time) < 0.0)
+                return validation_error(ctx, event_path, "timeline event requires a non-negative time");
+            if (yyjson_get_num(time) < previous_time)
+                return validation_error(ctx, event_path, "timeline event times must be non-decreasing");
+            previous_time = yyjson_get_num(time);
+
+            char action_path[PATH_BUFFER_SIZE];
+            format_path(action_path, sizeof(action_path), "%s.action", event_path);
+            if (!validate_timeline_action(ctx, obj_get(event, "action"), action_path, names))
+                return false;
+        }
+    }
 
     yyjson_val *splash = obj_get(root, "splash");
     if (splash != NULL)

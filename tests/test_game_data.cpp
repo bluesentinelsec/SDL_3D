@@ -86,6 +86,11 @@ struct ScenePayloadCapture
     std::string selected_level;
 };
 
+struct SignalCapture
+{
+    int calls = 0;
+};
+
 bool serve_adapter(void *userdata, sdl3d_game_data_runtime *runtime, const char *adapter_name,
                    sdl3d_registered_actor *target, const sdl3d_properties *payload)
 {
@@ -128,6 +133,14 @@ void capture_scene_payload(void *userdata, int signal_id, const sdl3d_properties
     capture->from_scene = sdl3d_properties_get_string(payload, "from_scene", "");
     capture->to_scene = sdl3d_properties_get_string(payload, "to_scene", "");
     capture->selected_level = sdl3d_properties_get_string(payload, "selected_level", "");
+}
+
+void count_signal(void *userdata, int signal_id, const sdl3d_properties *payload)
+{
+    auto *capture = static_cast<SignalCapture *>(userdata);
+    (void)signal_id;
+    (void)payload;
+    capture->calls++;
 }
 
 std::string fixture_path(const char *filename)
@@ -201,6 +214,71 @@ void write_hot_reload_json(const std::filesystem::path &dir)
       "function": "run"
     }
   ]
+})json");
+}
+
+void write_timeline_json(const std::filesystem::path &dir)
+{
+    write_text(dir / "timeline.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Timeline", "id": "test.timeline", "version": "0.1.0" },
+  "transitions": {
+    "scene_out": { "type": "fade", "direction": "out", "color": [0, 0, 0, 255], "duration": 0.10 },
+    "scene_in": { "type": "fade", "direction": "in", "color": [0, 0, 0, 255], "duration": 0.10 }
+  },
+  "entities": [
+    {
+      "name": "entity.flag",
+      "active": true,
+      "properties": {
+        "ready": { "type": "bool", "value": false }
+      }
+    }
+  ],
+  "signals": ["signal.timeline"],
+  "scenes": {
+    "initial": "scene.intro",
+    "files": [
+      "scenes/intro.scene.json",
+      "scenes/title.scene.json"
+    ]
+  }
+})json");
+    write_text(dir / "scenes" / "intro.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.intro",
+  "updates_game": false,
+  "renders_world": false,
+  "entities": [],
+  "transitions": { "exit": "scene_out" },
+  "timeline": {
+    "autoplay": true,
+    "events": [
+      {
+        "time": 0.10,
+        "action": { "type": "property.set", "target": "entity.flag", "key": "ready", "value": true }
+      },
+      {
+        "time": 0.20,
+        "action": { "type": "signal.emit", "signal": "signal.timeline" }
+      },
+      {
+        "time": 0.30,
+        "action": { "type": "scene.request", "scene": "scene.title" }
+      }
+    ]
+  }
+})json");
+    write_text(dir / "scenes" / "title.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.title",
+  "updates_game": false,
+  "renders_world": false,
+  "entities": [],
+  "transitions": { "enter": "scene_in" }
 })json");
 }
 
@@ -1008,6 +1086,64 @@ TEST(GameDataRuntime, SceneFlowRunsAuthoredExitAndEnterTransitions)
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, AppFlowRunsAuthoredSceneTimelineActions)
+{
+    const std::filesystem::path dir = unique_test_dir("timeline");
+    write_timeline_json(dir);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "timeline.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    const int timeline_signal = sdl3d_game_data_find_signal(runtime, "signal.timeline");
+    ASSERT_GE(timeline_signal, 0);
+    SignalCapture signal_capture{};
+    ASSERT_NE(sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(session), timeline_signal, count_signal,
+                                   &signal_capture),
+              0);
+
+    sdl3d_registered_actor *flag = sdl3d_game_data_find_actor(runtime, "entity.flag");
+    ASSERT_NE(flag, nullptr);
+    EXPECT_FALSE(sdl3d_properties_get_bool(flag->props, "ready", true));
+
+    sdl3d_game_context ctx{};
+    ctx.session = session;
+    sdl3d_game_data_app_flow flow{};
+    sdl3d_game_data_app_flow_init(&flow);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.intro");
+
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.05f));
+    EXPECT_FALSE(sdl3d_properties_get_bool(flag->props, "ready", true));
+    EXPECT_EQ(signal_capture.calls, 0);
+
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.06f));
+    EXPECT_TRUE(sdl3d_properties_get_bool(flag->props, "ready", false));
+    EXPECT_EQ(signal_capture.calls, 0);
+
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.09f));
+    EXPECT_EQ(signal_capture.calls, 1);
+
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.10f));
+    EXPECT_TRUE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.intro");
+
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.11f));
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.11f));
+    EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+    EXPECT_EQ(signal_capture.calls, 1);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, SignalBindingsResolveLuaAdaptersDeclaredInJson)
