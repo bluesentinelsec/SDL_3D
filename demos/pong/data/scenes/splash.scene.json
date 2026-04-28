@@ -18,6 +18,26 @@
     },
     "events": [
       {
+        "time": 0.0,
+        "action": { "type": "audio.set_bus_volume", "bus": "music", "volume": 1.0 }
+      },
+      {
+        "time": 0.0,
+        "action": { "type": "audio.set_bus_volume", "bus": "sfx", "volume": 1.0 }
+      },
+      {
+        "time": 0.0,
+        "action": { "type": "audio.set_bus_volume", "bus": "dialogue", "volume": 1.0 }
+      },
+      {
+        "time": 0.0,
+        "action": { "type": "audio.set_bus_volume", "bus": "ambience", "volume": 1.0 }
+      },
+      {
+        "time": 0.0,
+        "action": { "type": "audio.play_music", "music": "music.title", "fade": 0.45 }
+      },
+      {
         "time": 1.7,
         "action": { "type": "scene.request", "scene": "scene.title" }
       }

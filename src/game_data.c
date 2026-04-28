@@ -5,6 +5,8 @@
 
 #include "sdl3d/game_data.h"
 
+#include <SDL3/SDL_filesystem.h>
+#include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_scancode.h>
 #include <SDL3/SDL_stdinc.h>
@@ -166,6 +168,12 @@ typedef struct game_data_animation
     int done_signal_id;
 } game_data_animation;
 
+typedef struct materialized_audio_file
+{
+    char *asset_path;
+    char *file_path;
+} materialized_audio_file;
+
 typedef struct scene_entry
 {
     yyjson_doc *doc;
@@ -210,6 +218,10 @@ typedef struct sdl3d_game_data_runtime
     int animation_count;
     int animation_capacity;
     const char *animation_scene;
+    materialized_audio_file *audio_files;
+    int audio_file_count;
+    int audio_file_capacity;
+    char *audio_cache_dir;
     const char *active_camera;
     float current_dt;
     unsigned int rng_state;
@@ -1078,6 +1090,47 @@ static yyjson_val *find_image_json(const sdl3d_game_data_runtime *runtime, const
     return NULL;
 }
 
+static yyjson_val *find_sound_json(const sdl3d_game_data_runtime *runtime, const char *id)
+{
+    yyjson_val *sounds = obj_get(obj_get(runtime_root(runtime), "assets"), "sounds");
+    for (size_t i = 0; id != NULL && yyjson_is_arr(sounds) && i < yyjson_arr_size(sounds); ++i)
+    {
+        yyjson_val *sound = yyjson_arr_get(sounds, i);
+        const char *sound_id = json_string(sound, "id", NULL);
+        if (sound_id != NULL && SDL_strcmp(sound_id, id) == 0)
+            return sound;
+    }
+    return NULL;
+}
+
+static yyjson_val *find_music_json(const sdl3d_game_data_runtime *runtime, const char *id)
+{
+    yyjson_val *music_assets = obj_get(obj_get(runtime_root(runtime), "assets"), "music");
+    for (size_t i = 0; id != NULL && yyjson_is_arr(music_assets) && i < yyjson_arr_size(music_assets); ++i)
+    {
+        yyjson_val *music = yyjson_arr_get(music_assets, i);
+        const char *music_id = json_string(music, "id", NULL);
+        if (music_id != NULL && SDL_strcmp(music_id, id) == 0)
+            return music;
+    }
+    return NULL;
+}
+
+static sdl3d_audio_bus parse_audio_bus(const char *bus, sdl3d_audio_bus fallback)
+{
+    if (bus == NULL)
+        return fallback;
+    if (SDL_strcmp(bus, "music") == 0)
+        return SDL3D_AUDIO_BUS_MUSIC;
+    if (SDL_strcmp(bus, "sound_effects") == 0 || SDL_strcmp(bus, "sfx") == 0)
+        return SDL3D_AUDIO_BUS_SOUND_EFFECTS;
+    if (SDL_strcmp(bus, "dialogue") == 0 || SDL_strcmp(bus, "dialog") == 0)
+        return SDL3D_AUDIO_BUS_DIALOGUE;
+    if (SDL_strcmp(bus, "ambience") == 0 || SDL_strcmp(bus, "ambiance") == 0 || SDL_strcmp(bus, "ambient") == 0)
+        return SDL3D_AUDIO_BUS_AMBIENCE;
+    return fallback;
+}
+
 static yyjson_val *find_camera_json(const sdl3d_game_data_runtime *runtime, const char *name)
 {
     yyjson_val *cameras = obj_get(obj_get(runtime_root(runtime), "world"), "cameras");
@@ -1708,6 +1761,55 @@ bool sdl3d_game_data_get_image_asset(const sdl3d_game_data_runtime *runtime, con
     out_image->id = json_string(image, "id", NULL);
     out_image->path = json_string(image, "path", NULL);
     return out_image->id != NULL && out_image->path != NULL;
+}
+
+bool sdl3d_game_data_get_sound_asset(const sdl3d_game_data_runtime *runtime, const char *id,
+                                     sdl3d_game_data_sound_asset *out_sound)
+{
+    if (out_sound != NULL)
+    {
+        SDL_zero(*out_sound);
+        out_sound->volume = 1.0f;
+        out_sound->pitch = 1.0f;
+        out_sound->bus = SDL3D_AUDIO_BUS_SOUND_EFFECTS;
+    }
+    if (runtime == NULL || id == NULL || out_sound == NULL)
+        return false;
+
+    yyjson_val *sound = find_sound_json(runtime, id);
+    if (!yyjson_is_obj(sound))
+        return false;
+
+    out_sound->id = json_string(sound, "id", NULL);
+    out_sound->path = json_string(sound, "path", NULL);
+    out_sound->volume = json_float(sound, "volume", out_sound->volume);
+    out_sound->pitch = json_float(sound, "pitch", out_sound->pitch);
+    out_sound->pan = json_float(sound, "pan", out_sound->pan);
+    out_sound->bus = parse_audio_bus(json_string(sound, "bus", NULL), out_sound->bus);
+    return out_sound->id != NULL && out_sound->path != NULL;
+}
+
+bool sdl3d_game_data_get_music_asset(const sdl3d_game_data_runtime *runtime, const char *id,
+                                     sdl3d_game_data_music_asset *out_music)
+{
+    if (out_music != NULL)
+    {
+        SDL_zero(*out_music);
+        out_music->volume = 1.0f;
+        out_music->loop = true;
+    }
+    if (runtime == NULL || id == NULL || out_music == NULL)
+        return false;
+
+    yyjson_val *music = find_music_json(runtime, id);
+    if (!yyjson_is_obj(music))
+        return false;
+
+    out_music->id = json_string(music, "id", NULL);
+    out_music->path = json_string(music, "path", NULL);
+    out_music->volume = json_float(music, "volume", out_music->volume);
+    out_music->loop = json_bool(music, "loop", out_music->loop);
+    return out_music->id != NULL && out_music->path != NULL;
 }
 
 const char *sdl3d_game_data_active_camera(const sdl3d_game_data_runtime *runtime)
@@ -4864,6 +4966,276 @@ bool sdl3d_game_data_update_animations(sdl3d_game_data_runtime *runtime, float d
     return true;
 }
 
+static bool ensure_audio_file_capacity(sdl3d_game_data_runtime *runtime, int required)
+{
+    if (runtime == NULL)
+        return false;
+    if (required <= runtime->audio_file_capacity)
+        return true;
+
+    int next_capacity = runtime->audio_file_capacity < 8 ? 8 : runtime->audio_file_capacity * 2;
+    while (next_capacity < required)
+        next_capacity *= 2;
+
+    materialized_audio_file *files =
+        (materialized_audio_file *)SDL_realloc(runtime->audio_files, (size_t)next_capacity * sizeof(*files));
+    if (files == NULL)
+        return false;
+
+    SDL_memset(files + runtime->audio_file_capacity, 0,
+               (size_t)(next_capacity - runtime->audio_file_capacity) * sizeof(*files));
+    runtime->audio_files = files;
+    runtime->audio_file_capacity = next_capacity;
+    return true;
+}
+
+static uint32_t hash_audio_asset_path(const char *path)
+{
+    uint32_t hash = 2166136261u;
+    for (const unsigned char *p = (const unsigned char *)path; p != NULL && *p != '\0'; ++p)
+    {
+        hash ^= (uint32_t)*p;
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
+static char *make_safe_audio_filename(const char *path)
+{
+    char *base = path_basename(asset_path_without_scheme(path));
+    if (base == NULL)
+        return NULL;
+
+    for (char *p = base; *p != '\0'; ++p)
+    {
+        if (!((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9') || *p == '.' ||
+              *p == '_' || *p == '-'))
+        {
+            *p = '_';
+        }
+    }
+
+    char hash[16];
+    SDL_snprintf(hash, sizeof(hash), "%08x-", (unsigned int)hash_audio_asset_path(path));
+    const size_t hash_len = SDL_strlen(hash);
+    const size_t base_len = SDL_strlen(base);
+    char *filename = (char *)SDL_malloc(hash_len + base_len + 1u);
+    if (filename == NULL)
+    {
+        SDL_free(base);
+        return NULL;
+    }
+    SDL_memcpy(filename, hash, hash_len);
+    SDL_memcpy(filename + hash_len, base, base_len + 1u);
+    SDL_free(base);
+    return filename;
+}
+
+static bool ensure_audio_cache_dir(sdl3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return false;
+    if (runtime->audio_cache_dir != NULL)
+        return true;
+
+    char *pref = SDL_GetPrefPath("bluesentinelsec", "SDL3D");
+    if (pref == NULL)
+        return false;
+
+    runtime->audio_cache_dir = path_join(pref, "audio-cache");
+    SDL_free(pref);
+    if (runtime->audio_cache_dir == NULL)
+        return false;
+
+    if (SDL_CreateDirectory(runtime->audio_cache_dir))
+        return true;
+
+    SDL_PathInfo info;
+    SDL_zero(info);
+    return SDL_GetPathInfo(runtime->audio_cache_dir, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+}
+
+static char *resolve_authored_audio_path(const sdl3d_game_data_runtime *runtime, const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+        return NULL;
+    if (SDL_strncmp(path, "asset://", 8) == 0)
+        return SDL_strdup(path);
+    return path_join(runtime != NULL ? runtime->base_dir : NULL, path);
+}
+
+static char *materialize_audio_asset(sdl3d_game_data_runtime *runtime, const char *path)
+{
+    char *resolved = resolve_authored_audio_path(runtime, path);
+    if (runtime == NULL || resolved == NULL)
+        return resolved;
+
+    for (int i = 0; i < runtime->audio_file_count; ++i)
+    {
+        if (SDL_strcmp(runtime->audio_files[i].asset_path, resolved) == 0)
+        {
+            SDL_free(resolved);
+            return SDL_strdup(runtime->audio_files[i].file_path);
+        }
+    }
+
+    if (runtime->assets == NULL || !sdl3d_asset_resolver_exists(runtime->assets, resolved))
+        return resolved;
+
+    if (!ensure_audio_cache_dir(runtime))
+    {
+        SDL_free(resolved);
+        return NULL;
+    }
+
+    sdl3d_asset_buffer buffer;
+    SDL_zero(buffer);
+    char asset_error[256];
+    if (!sdl3d_asset_resolver_read_file(runtime->assets, resolved, &buffer, asset_error, (int)sizeof(asset_error)))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio asset read failed: %s", asset_error);
+        SDL_free(resolved);
+        return NULL;
+    }
+
+    char *filename = make_safe_audio_filename(resolved);
+    char *file_path = filename != NULL ? path_join(runtime->audio_cache_dir, filename) : NULL;
+    SDL_free(filename);
+    if (file_path == NULL)
+    {
+        sdl3d_asset_buffer_free(&buffer);
+        SDL_free(resolved);
+        return NULL;
+    }
+
+    SDL_IOStream *io = SDL_IOFromFile(file_path, "wb");
+    const bool wrote = io != NULL && SDL_WriteIO(io, buffer.data, buffer.size) == buffer.size;
+    if (io != NULL)
+        SDL_CloseIO(io);
+    sdl3d_asset_buffer_free(&buffer);
+    if (!wrote)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio asset materialization failed: %s", file_path);
+        SDL_free(file_path);
+        SDL_free(resolved);
+        return NULL;
+    }
+
+    if (!ensure_audio_file_capacity(runtime, runtime->audio_file_count + 1))
+    {
+        SDL_free(file_path);
+        SDL_free(resolved);
+        return NULL;
+    }
+    runtime->audio_files[runtime->audio_file_count].asset_path = SDL_strdup(resolved);
+    runtime->audio_files[runtime->audio_file_count].file_path = SDL_strdup(file_path);
+    if (runtime->audio_files[runtime->audio_file_count].asset_path == NULL ||
+        runtime->audio_files[runtime->audio_file_count].file_path == NULL)
+    {
+        SDL_free(runtime->audio_files[runtime->audio_file_count].asset_path);
+        SDL_free(runtime->audio_files[runtime->audio_file_count].file_path);
+        SDL_free(file_path);
+        SDL_free(resolved);
+        return NULL;
+    }
+    ++runtime->audio_file_count;
+    SDL_free(resolved);
+    return file_path;
+}
+
+static bool execute_audio_play_sfx(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    sdl3d_audio_engine *audio = sdl3d_game_session_get_audio(runtime != NULL ? runtime->session : NULL);
+    if (audio == NULL)
+        return true;
+
+    sdl3d_game_data_sound_asset sound;
+    const char *sound_id = json_string(action, "sound", json_string(action, "asset", NULL));
+    const bool has_asset = sdl3d_game_data_get_sound_asset(runtime, sound_id, &sound);
+    const char *path = json_string(action, "path", has_asset ? sound.path : NULL);
+    if (path == NULL)
+        return false;
+
+    sdl3d_audio_play_desc desc = sdl3d_audio_play_desc_default();
+    if (has_asset)
+    {
+        desc.volume = sound.volume;
+        desc.pitch = sound.pitch;
+        desc.pan = sound.pan;
+        desc.bus = sound.bus;
+    }
+    desc.volume = json_float(action, "volume", desc.volume);
+    desc.pitch = json_float(action, "pitch", desc.pitch);
+    desc.pan = json_float(action, "pan", desc.pan);
+    desc.bus = parse_audio_bus(json_string(action, "bus", NULL), desc.bus);
+
+    char *file_path = materialize_audio_asset(runtime, path);
+    if (file_path == NULL)
+        return false;
+    const bool ok = sdl3d_audio_play_sound_file(audio, file_path, &desc);
+    SDL_free(file_path);
+    return ok;
+}
+
+static bool execute_audio_play_music(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    sdl3d_audio_engine *audio = sdl3d_game_session_get_audio(runtime != NULL ? runtime->session : NULL);
+    if (audio == NULL)
+        return true;
+
+    sdl3d_game_data_music_asset music;
+    const char *music_id = json_string(action, "music", json_string(action, "asset", NULL));
+    const bool has_asset = sdl3d_game_data_get_music_asset(runtime, music_id, &music);
+    const char *path = json_string(action, "path", has_asset ? music.path : NULL);
+    if (path == NULL)
+        return false;
+
+    const float volume = json_float(action, "volume", has_asset ? music.volume : 1.0f);
+    const bool loop = json_bool(action, "loop", has_asset ? music.loop : true);
+    const float fade = json_float(action, "fade", json_float(action, "fade_seconds", 0.0f));
+
+    char *file_path = materialize_audio_asset(runtime, path);
+    if (file_path == NULL)
+        return false;
+    const bool ok = sdl3d_audio_play_music(audio, file_path, loop, volume, fade);
+    SDL_free(file_path);
+    return ok;
+}
+
+static bool execute_audio_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const char *type)
+{
+    sdl3d_audio_engine *audio = sdl3d_game_session_get_audio(runtime != NULL ? runtime->session : NULL);
+    if (SDL_strcmp(type, "audio.play_sfx") == 0)
+        return execute_audio_play_sfx(runtime, action);
+    if (SDL_strcmp(type, "audio.play_music") == 0)
+        return execute_audio_play_music(runtime, action);
+    if (audio == NULL)
+        return true;
+    if (SDL_strcmp(type, "audio.stop_sfx") == 0)
+    {
+        sdl3d_audio_stop_bus(audio, parse_audio_bus(json_string(action, "bus", NULL), SDL3D_AUDIO_BUS_SOUND_EFFECTS));
+        return true;
+    }
+    if (SDL_strcmp(type, "audio.stop_music") == 0)
+    {
+        sdl3d_audio_stop_music(audio, json_float(action, "fade", json_float(action, "fade_seconds", 0.0f)));
+        return true;
+    }
+    if (SDL_strcmp(type, "audio.fade_music") == 0)
+    {
+        sdl3d_audio_fade_music(audio, json_float(action, "volume", 1.0f),
+                               json_float(action, "duration", json_float(action, "fade_seconds", 0.0f)));
+        return true;
+    }
+    if (SDL_strcmp(type, "audio.set_bus_volume") == 0)
+    {
+        sdl3d_audio_set_bus_volume(audio, parse_audio_bus(json_string(action, "bus", NULL), SDL3D_AUDIO_BUS_COUNT),
+                                   json_float(action, "volume", 1.0f));
+        return true;
+    }
+    return false;
+}
+
 static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const sdl3d_properties *payload)
 {
     const char *type = json_string(action, "type", "");
@@ -4918,6 +5290,9 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
 
     if (SDL_strcmp(type, "ui.animate") == 0)
         return start_ui_animation_from_json(runtime, action);
+
+    if (SDL_strncmp(type, "audio.", 6) == 0)
+        return execute_audio_action(runtime, action, type);
 
     if (SDL_strcmp(type, "transform.set_position") == 0)
     {
@@ -5944,10 +6319,16 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     }
     for (int i = 0; i < runtime->ui_state_count; ++i)
         SDL_free(runtime->ui_states[i].name);
+    for (int i = 0; i < runtime->audio_file_count; ++i)
+    {
+        SDL_free(runtime->audio_files[i].asset_path);
+        SDL_free(runtime->audio_files[i].file_path);
+    }
 
     sdl3d_script_engine_destroy(runtime->scripts);
     sdl3d_properties_destroy(runtime->scene_state);
     SDL_free(runtime->base_dir);
+    SDL_free(runtime->audio_cache_dir);
     SDL_free(runtime->scenes);
     SDL_free(runtime->script_entries);
     SDL_free(runtime->signals);
@@ -5958,6 +6339,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->sensors);
     SDL_free(runtime->ui_states);
     SDL_free(runtime->animations);
+    SDL_free(runtime->audio_files);
     yyjson_doc_free(runtime->doc);
     SDL_free(runtime);
 }

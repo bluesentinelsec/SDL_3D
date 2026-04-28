@@ -935,6 +935,18 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     ASSERT_TRUE(sdl3d_game_data_get_image_asset(runtime, "image.splash.logo", &image_asset));
     EXPECT_STREQ(image_asset.path, "asset://images/splash-logo.jpg");
 
+    sdl3d_game_data_sound_asset sound_asset{};
+    ASSERT_TRUE(sdl3d_game_data_get_sound_asset(runtime, "sound.pong.hit", &sound_asset));
+    EXPECT_STREQ(sound_asset.path, "asset://audio/ui/switch1.wav");
+    EXPECT_EQ(sound_asset.bus, SDL3D_AUDIO_BUS_SOUND_EFFECTS);
+    EXPECT_GT(sound_asset.volume, 0.0f);
+
+    sdl3d_game_data_music_asset music_asset{};
+    ASSERT_TRUE(sdl3d_game_data_get_music_asset(runtime, "music.title", &music_asset));
+    EXPECT_STREQ(music_asset.path, "asset://audio/music/observing-the-star.ogg");
+    EXPECT_TRUE(music_asset.loop);
+    EXPECT_GT(music_asset.volume, 0.0f);
+
     UiImageCapture images{};
     auto capture_image = [](void *userdata, const sdl3d_game_data_ui_image *image) -> bool {
         auto *capture = static_cast<UiImageCapture *>(userdata);

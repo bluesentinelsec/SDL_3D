@@ -76,6 +76,36 @@ extern "C"
         const char *path;
     } sdl3d_game_data_image_asset;
 
+    /** @brief Authored sound-effect asset descriptor. */
+    typedef struct sdl3d_game_data_sound_asset
+    {
+        /** @brief Stable asset id, such as `sound.ui.select`. */
+        const char *id;
+        /** @brief Virtual or filesystem path to the sound bytes. */
+        const char *path;
+        /** @brief Default authored gain before bus volume. */
+        float volume;
+        /** @brief Default playback pitch. */
+        float pitch;
+        /** @brief Default stereo pan in [-1, 1]. */
+        float pan;
+        /** @brief Logical mix bus used by default. */
+        sdl3d_audio_bus bus;
+    } sdl3d_game_data_sound_asset;
+
+    /** @brief Authored music asset descriptor. */
+    typedef struct sdl3d_game_data_music_asset
+    {
+        /** @brief Stable asset id, such as `music.title`. */
+        const char *id;
+        /** @brief Virtual or filesystem path to the stream bytes. */
+        const char *path;
+        /** @brief Default authored gain before bus volume. */
+        float volume;
+        /** @brief Whether playback should loop by default. */
+        bool loop;
+    } sdl3d_game_data_music_asset;
+
     /**
      * @brief Runtime metrics used when evaluating data-authored UI bindings.
      *
@@ -789,6 +819,14 @@ extern "C"
     /** @brief Read an image asset descriptor by id from `assets.images`. */
     bool sdl3d_game_data_get_image_asset(const sdl3d_game_data_runtime *runtime, const char *id,
                                          sdl3d_game_data_image_asset *out_image);
+
+    /** @brief Read a sound-effect asset descriptor by id from `assets.sounds`. */
+    bool sdl3d_game_data_get_sound_asset(const sdl3d_game_data_runtime *runtime, const char *id,
+                                         sdl3d_game_data_sound_asset *out_sound);
+
+    /** @brief Read a music asset descriptor by id from `assets.music`. */
+    bool sdl3d_game_data_get_music_asset(const sdl3d_game_data_runtime *runtime, const char *id,
+                                         sdl3d_game_data_music_asset *out_music);
 
     /**
      * @brief Return the currently active authored camera name.

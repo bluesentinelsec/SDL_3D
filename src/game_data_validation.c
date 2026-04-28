@@ -54,6 +54,8 @@ typedef struct validation_names
     name_table cameras;
     name_table fonts;
     name_table images;
+    name_table sounds;
+    name_table music;
     name_table scenes;
     name_table sensors;
     name_table used_adapters;
@@ -570,6 +572,74 @@ static bool collect_images(validation_context *ctx, yyjson_val *root, validation
     return true;
 }
 
+static bool is_audio_bus_name(const char *bus)
+{
+    return bus == NULL || SDL_strcmp(bus, "sound_effects") == 0 || SDL_strcmp(bus, "sfx") == 0 ||
+           SDL_strcmp(bus, "music") == 0 || SDL_strcmp(bus, "dialogue") == 0 || SDL_strcmp(bus, "dialog") == 0 ||
+           SDL_strcmp(bus, "ambience") == 0 || SDL_strcmp(bus, "ambiance") == 0 || SDL_strcmp(bus, "ambient") == 0;
+}
+
+static bool asset_path_exists(validation_context *ctx, const char *asset_path, const char *json_path,
+                              const char *asset_kind)
+{
+    if (ctx->assets == NULL)
+        return true;
+
+    char *resolved = asset_path != NULL && SDL_strncmp(asset_path, "asset://", 8) == 0
+                         ? SDL_strdup(asset_path)
+                         : path_join(ctx->base_dir, asset_path);
+    if (resolved == NULL)
+        return validation_error(ctx, json_path, "failed to resolve %s asset path", asset_kind);
+    const bool exists = sdl3d_asset_resolver_exists(ctx->assets, resolved);
+    SDL_free(resolved);
+    if (!exists)
+        return validation_error(ctx, json_path, "%s asset path '%s' does not exist", asset_kind, asset_path);
+    return true;
+}
+
+static bool collect_audio_assets(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *assets = obj_get(root, "assets");
+    yyjson_val *sounds = obj_get(assets, "sounds");
+    if (sounds != NULL && !yyjson_is_arr(sounds))
+        return validation_error(ctx, "$.assets.sounds", "sound assets must be an array");
+    for (size_t i = 0; yyjson_is_arr(sounds) && i < yyjson_arr_size(sounds); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.assets.sounds[%zu]", i);
+        yyjson_val *sound = yyjson_arr_get(sounds, i);
+        if (!yyjson_is_obj(sound))
+            return validation_error(ctx, path, "sound asset entries must be objects");
+        if (!require_unique_name(ctx, &names->sounds, "sound asset", json_string(sound, "id"), path))
+            return false;
+        if (!is_non_empty_string(sound, "path"))
+            return validation_error(ctx, path, "sound asset requires a non-empty path");
+        if (!is_audio_bus_name(json_string(sound, "bus")))
+            return validation_error(ctx, path, "sound asset bus must be sfx, music, dialogue, or ambience");
+        if (!asset_path_exists(ctx, json_string(sound, "path"), path, "sound"))
+            return false;
+    }
+
+    yyjson_val *music = obj_get(assets, "music");
+    if (music != NULL && !yyjson_is_arr(music))
+        return validation_error(ctx, "$.assets.music", "music assets must be an array");
+    for (size_t i = 0; yyjson_is_arr(music) && i < yyjson_arr_size(music); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.assets.music[%zu]", i);
+        yyjson_val *track = yyjson_arr_get(music, i);
+        if (!yyjson_is_obj(track))
+            return validation_error(ctx, path, "music asset entries must be objects");
+        if (!require_unique_name(ctx, &names->music, "music asset", json_string(track, "id"), path))
+            return false;
+        if (!is_non_empty_string(track, "path"))
+            return validation_error(ctx, path, "music asset requires a non-empty path");
+        if (!asset_path_exists(ctx, json_string(track, "path"), path, "music"))
+            return false;
+    }
+    return true;
+}
+
 static bool collect_input_actions(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *contexts = obj_get(obj_get(root, "input"), "contexts");
@@ -740,7 +810,8 @@ static bool collect_names(validation_context *ctx, yyjson_val *root, validation_
     return collect_signals(ctx, root, names) && collect_entities(ctx, root, names) &&
            collect_scripts(ctx, root, names) && collect_adapters(ctx, root, names) &&
            collect_input_actions(ctx, root, names) && collect_cameras(ctx, root, names) &&
-           collect_fonts(ctx, root, names) && collect_images(ctx, root, names) && collect_timers(ctx, root, names) &&
+           collect_fonts(ctx, root, names) && collect_images(ctx, root, names) &&
+           collect_audio_assets(ctx, root, names) && collect_timers(ctx, root, names) &&
            collect_sensors(ctx, root, names);
 }
 
@@ -916,6 +987,59 @@ static bool validate_animation_common(validation_context *ctx, yyjson_val *actio
     return true;
 }
 
+static bool validate_audio_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                  validation_names *names, const char *type)
+{
+    if (SDL_strcmp(type, "audio.play_sfx") == 0)
+    {
+        const char *sound = json_string(action, "sound");
+        const char *asset = json_string(action, "asset");
+        const char *path = json_string(action, "path");
+        if (sound != NULL && !require_ref(ctx, &names->sounds, "sound asset", sound, json_path))
+            return false;
+        if (asset != NULL && !require_ref(ctx, &names->sounds, "sound asset", asset, json_path))
+            return false;
+        if (sound == NULL && asset == NULL && (path == NULL || path[0] == '\0'))
+            return validation_error(ctx, json_path, "audio.play_sfx requires sound, asset, or path");
+        if (path != NULL && !asset_path_exists(ctx, path, json_path, "sound"))
+            return false;
+    }
+    else if (SDL_strcmp(type, "audio.play_music") == 0)
+    {
+        const char *music = json_string(action, "music");
+        const char *asset = json_string(action, "asset");
+        const char *path = json_string(action, "path");
+        if (music != NULL && !require_ref(ctx, &names->music, "music asset", music, json_path))
+            return false;
+        if (asset != NULL && !require_ref(ctx, &names->music, "music asset", asset, json_path))
+            return false;
+        if (music == NULL && asset == NULL && (path == NULL || path[0] == '\0'))
+            return validation_error(ctx, json_path, "audio.play_music requires music, asset, or path");
+        if (path != NULL && !asset_path_exists(ctx, path, json_path, "music"))
+            return false;
+    }
+    else if (SDL_strcmp(type, "audio.stop_sfx") != 0 && SDL_strcmp(type, "audio.stop_music") != 0 &&
+             SDL_strcmp(type, "audio.fade_music") != 0 && SDL_strcmp(type, "audio.set_bus_volume") != 0)
+    {
+        return validation_error(ctx, json_path, "unknown audio action type '%s'", type);
+    }
+
+    if (SDL_strcmp(type, "audio.set_bus_volume") == 0 && json_string(action, "bus") == NULL)
+        return validation_error(ctx, json_path, "audio.set_bus_volume requires a bus");
+    if (!is_audio_bus_name(json_string(action, "bus")))
+        return validation_error(ctx, json_path, "audio bus must be sfx, music, dialogue, or ambience");
+    yyjson_val *volume = obj_get(action, "volume");
+    if (volume != NULL && !yyjson_is_num(volume))
+        return validation_error(ctx, json_path, "audio volume must be numeric");
+    yyjson_val *fade = obj_get(action, "fade");
+    if (fade != NULL && !yyjson_is_num(fade))
+        return validation_error(ctx, json_path, "audio fade must be numeric");
+    yyjson_val *duration = obj_get(action, "duration");
+    if (duration != NULL && !yyjson_is_num(duration))
+        return validation_error(ctx, json_path, "audio duration must be numeric");
+    return true;
+}
+
 static bool validate_one_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                 validation_names *names)
 {
@@ -958,6 +1082,8 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
                 ctx, json_path, "ui.animate property must be alpha, scale, offset_x, offset_y, x, y, tint, or color");
         return validate_animation_common(ctx, action, json_path, names);
     }
+    if (SDL_strncmp(type, "audio.", 6) == 0)
+        return validate_audio_action(ctx, action, json_path, names, type);
     if (SDL_strcmp(type, "transform.set_position") == 0)
     {
         if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
@@ -2061,6 +2187,8 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->cameras);
     name_table_destroy(&names->fonts);
     name_table_destroy(&names->images);
+    name_table_destroy(&names->sounds);
+    name_table_destroy(&names->music);
     name_table_destroy(&names->scenes);
     name_table_destroy(&names->sensors);
     name_table_destroy(&names->used_adapters);

@@ -92,7 +92,7 @@ if(APPLE)
 endif()
 
 add_library(sdl3d_miniaudio OBJECT miniaudio/miniaudio.c)
-target_include_directories(sdl3d_miniaudio PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/miniaudio)
+target_include_directories(sdl3d_miniaudio PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/miniaudio ${CMAKE_CURRENT_SOURCE_DIR}/stb)
 set_target_properties(sdl3d_miniaudio PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(sdl3d_miniaudio PRIVATE -w)

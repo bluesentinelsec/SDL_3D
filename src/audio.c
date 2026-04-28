@@ -8,6 +8,7 @@
 typedef struct sdl3d_active_sound
 {
     ma_sound sound;
+    sdl3d_audio_bus bus;
     bool loaded;
 } sdl3d_active_sound;
 
@@ -17,7 +18,9 @@ typedef struct sdl3d_music_slot
     bool loaded;
     char *path;
     int ambient_id;
+    float base_volume;
     float target_volume;
+    sdl3d_audio_bus bus;
     bool loop;
 } sdl3d_music_slot;
 
@@ -29,6 +32,7 @@ struct sdl3d_audio_engine
     sdl3d_active_sound *active_sounds;
     int active_count;
     int active_capacity;
+    float bus_volumes[SDL3D_AUDIO_BUS_COUNT];
 
     sdl3d_music_slot *music_current;
     sdl3d_music_slot *music_next;
@@ -37,6 +41,11 @@ struct sdl3d_audio_engine
     float music_current_start_volume;
     float music_next_target_volume;
     bool music_fading;
+    float music_volume_fade_elapsed;
+    float music_volume_fade_duration;
+    float music_volume_fade_start;
+    float music_volume_fade_target_base;
+    bool music_volume_fading;
     int current_ambient_id;
 };
 
@@ -50,6 +59,20 @@ struct sdl3d_audio_clip
 static float clamp_non_negative(float value)
 {
     return value < 0.0f ? 0.0f : value;
+}
+
+static bool valid_bus(sdl3d_audio_bus bus)
+{
+    return bus >= 0 && bus < SDL3D_AUDIO_BUS_COUNT;
+}
+
+static float bus_volume(const sdl3d_audio_engine *audio, sdl3d_audio_bus bus)
+{
+    if (audio == NULL || !valid_bus(bus))
+    {
+        return 0.0f;
+    }
+    return audio->bus_volumes[bus];
 }
 
 static void active_sound_uninit(sdl3d_active_sound *active)
@@ -122,7 +145,8 @@ static void cleanup_finished_sounds(sdl3d_audio_engine *audio)
     audio->active_count = write_index;
 }
 
-static bool start_sound_instance(sdl3d_active_sound *active, const sdl3d_audio_play_desc *desc)
+static bool start_sound_instance(sdl3d_audio_engine *audio, sdl3d_active_sound *active,
+                                 const sdl3d_audio_play_desc *desc)
 {
     sdl3d_audio_play_desc play_desc = desc != NULL ? *desc : sdl3d_audio_play_desc_default();
 
@@ -142,8 +166,13 @@ static bool start_sound_instance(sdl3d_active_sound *active, const sdl3d_audio_p
     {
         play_desc.pan = 1.0f;
     }
+    if (!valid_bus(play_desc.bus))
+    {
+        play_desc.bus = SDL3D_AUDIO_BUS_SOUND_EFFECTS;
+    }
 
-    ma_sound_set_volume(&active->sound, play_desc.volume);
+    active->bus = play_desc.bus;
+    ma_sound_set_volume(&active->sound, play_desc.volume * bus_volume(audio, play_desc.bus));
     ma_sound_set_pitch(&active->sound, play_desc.pitch);
     ma_sound_set_pan(&active->sound, play_desc.pan);
     if (ma_sound_seek_to_pcm_frame(&active->sound, 0) != MA_SUCCESS)
@@ -157,8 +186,17 @@ static bool start_sound_instance(sdl3d_active_sound *active, const sdl3d_audio_p
     return true;
 }
 
+static void update_music_slot_target_volume(sdl3d_audio_engine *audio, sdl3d_music_slot *slot)
+{
+    if (slot == NULL)
+    {
+        return;
+    }
+    slot->target_volume = slot->base_volume * bus_volume(audio, slot->bus);
+}
+
 static sdl3d_music_slot *music_slot_create(sdl3d_audio_engine *audio, const char *path, bool loop, float volume,
-                                           int ambient_id)
+                                           int ambient_id, sdl3d_audio_bus bus)
 {
     sdl3d_music_slot *slot;
     ma_uint32 flags = MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION;
@@ -192,7 +230,9 @@ static sdl3d_music_slot *music_slot_create(sdl3d_audio_engine *audio, const char
 
     slot->loaded = true;
     slot->ambient_id = ambient_id;
-    slot->target_volume = clamp_non_negative(volume);
+    slot->base_volume = clamp_non_negative(volume);
+    slot->bus = valid_bus(bus) ? bus : SDL3D_AUDIO_BUS_MUSIC;
+    update_music_slot_target_volume(audio, slot);
     slot->loop = loop;
     return slot;
 }
@@ -203,6 +243,7 @@ sdl3d_audio_play_desc sdl3d_audio_play_desc_default(void)
     desc.volume = 1.0f;
     desc.pitch = 1.0f;
     desc.pan = 0.0f;
+    desc.bus = SDL3D_AUDIO_BUS_SOUND_EFFECTS;
     return desc;
 }
 
@@ -229,6 +270,10 @@ bool sdl3d_audio_create(sdl3d_audio_engine **out_audio)
     }
 
     audio->loaded = true;
+    for (int i = 0; i < SDL3D_AUDIO_BUS_COUNT; ++i)
+    {
+        audio->bus_volumes[i] = 1.0f;
+    }
     audio->current_ambient_id = -1;
     *out_audio = audio;
     return true;
@@ -266,6 +311,28 @@ void sdl3d_audio_update(sdl3d_audio_engine *audio, float dt)
 
     if (!audio->music_fading || audio->music_fade_duration <= 0.0f)
     {
+        if (!audio->music_volume_fading || audio->music_volume_fade_duration <= 0.0f || audio->music_current == NULL)
+        {
+            return;
+        }
+
+        audio->music_volume_fade_elapsed += dt > 0.0f ? dt : 0.0f;
+        float volume_t = audio->music_volume_fade_elapsed / audio->music_volume_fade_duration;
+        if (volume_t > 1.0f)
+        {
+            volume_t = 1.0f;
+        }
+        const float target = audio->music_volume_fade_target_base * bus_volume(audio, audio->music_current->bus);
+        const float value = audio->music_volume_fade_start + (target - audio->music_volume_fade_start) * volume_t;
+        ma_sound_set_volume(&audio->music_current->sound, value);
+        if (volume_t >= 1.0f)
+        {
+            audio->music_current->base_volume = clamp_non_negative(audio->music_volume_fade_target_base);
+            update_music_slot_target_volume(audio, audio->music_current);
+            audio->music_volume_fading = false;
+            audio->music_volume_fade_elapsed = 0.0f;
+            audio->music_volume_fade_duration = 0.0f;
+        }
         return;
     }
 
@@ -294,6 +361,7 @@ void sdl3d_audio_update(sdl3d_audio_engine *audio, float dt)
     audio->music_current = audio->music_next;
     audio->music_next = NULL;
     audio->music_fading = false;
+    audio->music_volume_fading = false;
     audio->music_fade_elapsed = 0.0f;
     audio->music_fade_duration = 0.0f;
     audio->current_ambient_id = audio->music_current != NULL ? audio->music_current->ambient_id : -1;
@@ -317,6 +385,32 @@ float sdl3d_audio_get_master_volume(const sdl3d_audio_engine *audio)
     }
 
     return ma_engine_get_volume((ma_engine *)&audio->engine);
+}
+
+void sdl3d_audio_set_bus_volume(sdl3d_audio_engine *audio, sdl3d_audio_bus bus, float volume)
+{
+    if (audio == NULL || !valid_bus(bus))
+    {
+        return;
+    }
+
+    audio->bus_volumes[bus] = clamp_non_negative(volume);
+    if (audio->music_current != NULL && audio->music_current->bus == bus && !audio->music_fading &&
+        !audio->music_volume_fading)
+    {
+        update_music_slot_target_volume(audio, audio->music_current);
+        ma_sound_set_volume(&audio->music_current->sound, audio->music_current->target_volume);
+    }
+    if (audio->music_next != NULL && audio->music_next->bus == bus)
+    {
+        update_music_slot_target_volume(audio, audio->music_next);
+        audio->music_next_target_volume = audio->music_next->target_volume;
+    }
+}
+
+float sdl3d_audio_get_bus_volume(const sdl3d_audio_engine *audio, sdl3d_audio_bus bus)
+{
+    return bus_volume(audio, bus);
 }
 
 bool sdl3d_audio_load_clip(sdl3d_audio_engine *audio, const char *path, sdl3d_audio_clip **out_clip)
@@ -396,7 +490,7 @@ bool sdl3d_audio_play_clip(sdl3d_audio_engine *audio, const sdl3d_audio_clip *cl
     }
 
     active->loaded = true;
-    if (!start_sound_instance(active, desc))
+    if (!start_sound_instance(audio, active, desc))
     {
         active_sound_uninit(active);
         return false;
@@ -432,7 +526,7 @@ bool sdl3d_audio_play_sound_file(sdl3d_audio_engine *audio, const char *path, co
     }
 
     active->loaded = true;
-    if (!start_sound_instance(active, desc))
+    if (!start_sound_instance(audio, active, desc))
     {
         active_sound_uninit(active);
         return false;
@@ -457,7 +551,7 @@ bool sdl3d_audio_play_music(sdl3d_audio_engine *audio, const char *path, bool lo
         return true;
     }
 
-    next = music_slot_create(audio, path, loop, volume, -1);
+    next = music_slot_create(audio, path, loop, volume, -1, SDL3D_AUDIO_BUS_MUSIC);
     if (next == NULL)
     {
         return false;
@@ -480,6 +574,7 @@ bool sdl3d_audio_play_music(sdl3d_audio_engine *audio, const char *path, bool lo
             return SDL_SetError("Could not start music.");
         }
         audio->music_fading = false;
+        audio->music_volume_fading = false;
         audio->current_ambient_id = audio->music_current->ambient_id;
         return true;
     }
@@ -496,6 +591,7 @@ bool sdl3d_audio_play_music(sdl3d_audio_engine *audio, const char *path, bool lo
     audio->music_fade_elapsed = 0.0f;
     audio->music_fade_duration = fade_seconds;
     audio->music_fading = true;
+    audio->music_volume_fading = false;
     return true;
 }
 
@@ -520,6 +616,7 @@ void sdl3d_audio_stop_music(sdl3d_audio_engine *audio, float fade_seconds)
         music_slot_destroy(audio->music_current);
         audio->music_current = NULL;
         audio->music_fading = false;
+        audio->music_volume_fading = false;
         audio->current_ambient_id = -1;
         return;
     }
@@ -529,6 +626,48 @@ void sdl3d_audio_stop_music(sdl3d_audio_engine *audio, float fade_seconds)
     audio->music_fade_elapsed = 0.0f;
     audio->music_fade_duration = fade_seconds;
     audio->music_fading = true;
+    audio->music_volume_fading = false;
+}
+
+void sdl3d_audio_fade_music(sdl3d_audio_engine *audio, float volume, float fade_seconds)
+{
+    if (audio == NULL || audio->music_current == NULL)
+    {
+        return;
+    }
+
+    const float target_base = clamp_non_negative(volume);
+    if (fade_seconds <= 0.0f)
+    {
+        audio->music_current->base_volume = target_base;
+        update_music_slot_target_volume(audio, audio->music_current);
+        ma_sound_set_volume(&audio->music_current->sound, audio->music_current->target_volume);
+        audio->music_volume_fading = false;
+        return;
+    }
+
+    audio->music_volume_fade_start = audio->music_current->target_volume;
+    audio->music_volume_fade_target_base = target_base;
+    audio->music_volume_fade_elapsed = 0.0f;
+    audio->music_volume_fade_duration = fade_seconds;
+    audio->music_volume_fading = true;
+}
+
+void sdl3d_audio_stop_bus(sdl3d_audio_engine *audio, sdl3d_audio_bus bus)
+{
+    if (audio == NULL || !valid_bus(bus))
+    {
+        return;
+    }
+
+    for (int i = 0; i < audio->active_count; ++i)
+    {
+        if (audio->active_sounds[i].loaded && audio->active_sounds[i].bus == bus)
+        {
+            active_sound_uninit(&audio->active_sounds[i]);
+        }
+    }
+    cleanup_finished_sounds(audio);
 }
 
 bool sdl3d_audio_set_ambient(sdl3d_audio_engine *audio, const sdl3d_audio_ambient *ambients, int ambient_count,
@@ -565,7 +704,8 @@ bool sdl3d_audio_set_ambient(sdl3d_audio_engine *audio, const sdl3d_audio_ambien
         return true;
     }
 
-    sdl3d_music_slot *next = music_slot_create(audio, selected->path, selected->loop, selected->volume, ambient_id);
+    sdl3d_music_slot *next = music_slot_create(audio, selected->path, selected->loop, selected->volume, ambient_id,
+                                               SDL3D_AUDIO_BUS_AMBIENCE);
     if (next == NULL)
     {
         return false;
@@ -587,6 +727,7 @@ bool sdl3d_audio_set_ambient(sdl3d_audio_engine *audio, const sdl3d_audio_ambien
             return SDL_SetError("Could not start ambient sound.");
         }
         audio->music_fading = false;
+        audio->music_volume_fading = false;
         audio->current_ambient_id = ambient_id;
         return true;
     }
@@ -603,6 +744,7 @@ bool sdl3d_audio_set_ambient(sdl3d_audio_engine *audio, const sdl3d_audio_ambien
     audio->music_fade_elapsed = 0.0f;
     audio->music_fade_duration = fade_seconds;
     audio->music_fading = true;
+    audio->music_volume_fading = false;
     return true;
 }
 
