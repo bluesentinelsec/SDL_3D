@@ -120,6 +120,14 @@ extern "C"
     bool sdl3d_draw_text_overlay(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text,
                                  float x, float y, sdl3d_color color);
 
+    /**
+     * @brief Draw text on the UI overlay layer with a pixel-space scale multiplier.
+     *
+     * A scale of 1.0 is equivalent to sdl3d_draw_text_overlay().
+     */
+    bool sdl3d_draw_text_overlay_scaled(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text,
+                                        float x, float y, float scale, sdl3d_color color);
+
     bool sdl3d_draw_textf_overlay(struct sdl3d_render_context *context, const sdl3d_font *font, float x, float y,
                                   sdl3d_color color, SDL_PRINTF_FORMAT_STRING const char *fmt, ...)
         SDL_PRINTF_VARARG_FUNC(6);

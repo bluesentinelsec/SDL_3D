@@ -104,6 +104,12 @@ typedef struct scene_menu_state
     int item_count;
 } scene_menu_state;
 
+typedef struct ui_state_entry
+{
+    char *name;
+    sdl3d_game_data_ui_state state;
+} ui_state_entry;
+
 typedef struct scene_entry
 {
     yyjson_doc *doc;
@@ -141,6 +147,9 @@ typedef struct sdl3d_game_data_runtime
     int scene_count;
     int active_scene_index;
     sdl3d_properties *scene_state;
+    ui_state_entry *ui_states;
+    int ui_state_count;
+    int ui_state_capacity;
     const char *active_camera;
     float current_dt;
     unsigned int rng_state;
@@ -2228,6 +2237,130 @@ const sdl3d_properties *sdl3d_game_data_scene_state(const sdl3d_game_data_runtim
     return runtime != NULL ? runtime->scene_state : NULL;
 }
 
+void sdl3d_game_data_ui_state_init(sdl3d_game_data_ui_state *state)
+{
+    if (state == NULL)
+        return;
+    SDL_zero(*state);
+    state->visible = true;
+    state->scale = 1.0f;
+    state->alpha = 1.0f;
+    state->tint = (sdl3d_color){255, 255, 255, 255};
+}
+
+static ui_state_entry *find_ui_state_entry(sdl3d_game_data_runtime *runtime, const char *name)
+{
+    if (runtime == NULL || name == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->ui_state_count; ++i)
+    {
+        if (runtime->ui_states[i].name != NULL && SDL_strcmp(runtime->ui_states[i].name, name) == 0)
+            return &runtime->ui_states[i];
+    }
+    return NULL;
+}
+
+static const ui_state_entry *find_ui_state_entry_const(const sdl3d_game_data_runtime *runtime, const char *name)
+{
+    if (runtime == NULL || name == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->ui_state_count; ++i)
+    {
+        if (runtime->ui_states[i].name != NULL && SDL_strcmp(runtime->ui_states[i].name, name) == 0)
+            return &runtime->ui_states[i];
+    }
+    return NULL;
+}
+
+static bool ensure_ui_state_capacity(sdl3d_game_data_runtime *runtime, int required)
+{
+    if (runtime == NULL)
+        return false;
+    if (required <= runtime->ui_state_capacity)
+        return true;
+
+    int next_capacity = runtime->ui_state_capacity < 8 ? 8 : runtime->ui_state_capacity * 2;
+    while (next_capacity < required)
+        next_capacity *= 2;
+
+    ui_state_entry *entries =
+        (ui_state_entry *)SDL_realloc(runtime->ui_states, (size_t)next_capacity * sizeof(*entries));
+    if (entries == NULL)
+        return false;
+
+    SDL_memset(entries + runtime->ui_state_capacity, 0,
+               (size_t)(next_capacity - runtime->ui_state_capacity) * sizeof(*entries));
+    runtime->ui_states = entries;
+    runtime->ui_state_capacity = next_capacity;
+    return true;
+}
+
+bool sdl3d_game_data_set_ui_state(sdl3d_game_data_runtime *runtime, const char *name,
+                                  const sdl3d_game_data_ui_state *state)
+{
+    if (runtime == NULL || name == NULL || name[0] == '\0' || state == NULL)
+        return false;
+
+    ui_state_entry *entry = find_ui_state_entry(runtime, name);
+    if (entry == NULL)
+    {
+        if (!ensure_ui_state_capacity(runtime, runtime->ui_state_count + 1))
+            return false;
+        entry = &runtime->ui_states[runtime->ui_state_count];
+        entry->name = SDL_strdup(name);
+        if (entry->name == NULL)
+            return false;
+        ++runtime->ui_state_count;
+    }
+
+    entry->state = *state;
+    return true;
+}
+
+bool sdl3d_game_data_get_ui_state(const sdl3d_game_data_runtime *runtime, const char *name,
+                                  sdl3d_game_data_ui_state *out_state)
+{
+    if (out_state != NULL)
+        sdl3d_game_data_ui_state_init(out_state);
+    if (runtime == NULL || name == NULL || out_state == NULL)
+        return false;
+
+    const ui_state_entry *entry = find_ui_state_entry_const(runtime, name);
+    if (entry == NULL)
+        return false;
+
+    *out_state = entry->state;
+    return true;
+}
+
+bool sdl3d_game_data_clear_ui_state(sdl3d_game_data_runtime *runtime, const char *name)
+{
+    if (runtime == NULL || name == NULL)
+        return false;
+
+    for (int i = 0; i < runtime->ui_state_count; ++i)
+    {
+        if (runtime->ui_states[i].name != NULL && SDL_strcmp(runtime->ui_states[i].name, name) == 0)
+        {
+            SDL_free(runtime->ui_states[i].name);
+            if (i + 1 < runtime->ui_state_count)
+                runtime->ui_states[i] = runtime->ui_states[runtime->ui_state_count - 1];
+            --runtime->ui_state_count;
+            return true;
+        }
+    }
+    return false;
+}
+
+void sdl3d_game_data_clear_ui_states(sdl3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+    for (int i = 0; i < runtime->ui_state_count; ++i)
+        SDL_free(runtime->ui_states[i].name);
+    runtime->ui_state_count = 0;
+}
+
 bool sdl3d_game_data_get_active_splash(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_splash *out_splash)
 {
     if (out_splash != NULL)
@@ -2802,6 +2935,7 @@ static void ui_text_from_json(yyjson_val *item, sdl3d_game_data_ui_text *text)
                                                                        ? SDL3D_GAME_DATA_UI_ALIGN_CENTER
                                                                        : SDL3D_GAME_DATA_UI_ALIGN_LEFT);
     text->centered = text->align == SDL3D_GAME_DATA_UI_ALIGN_CENTER;
+    text->scale = json_float(item, "scale", 1.0f);
     text->pulse_alpha = json_bool(item, "pulse_alpha", false);
     text->color = json_color(item, "color", (sdl3d_color){255, 255, 255, 255});
 }
@@ -2836,6 +2970,7 @@ static bool emit_ui_menu_cursor(yyjson_val *presenter, float row_y, sdl3d_game_d
     text.normalized = json_bool(presenter, "normalized", false);
     text.align = parse_ui_align(json_string(cursor, "align", NULL), SDL3D_GAME_DATA_UI_ALIGN_CENTER);
     text.centered = text.align == SDL3D_GAME_DATA_UI_ALIGN_CENTER;
+    text.scale = json_float(cursor, "scale", json_float(presenter, "scale", 1.0f));
     text.pulse_alpha = json_bool(cursor, "pulse_alpha", false);
     text.color = json_color(cursor, "color", (sdl3d_color){255, 222, 140, 255});
     return callback(userdata, &text);
@@ -2940,6 +3075,7 @@ static bool for_each_ui_menu_presenter(const sdl3d_game_data_runtime *runtime, c
         text.normalized = normalized;
         text.align = align;
         text.centered = align == SDL3D_GAME_DATA_UI_ALIGN_CENTER;
+        text.scale = json_float(presenter, "scale", 1.0f);
         text.pulse_alpha = selected && json_bool(presenter, "selected_pulse_alpha", false);
         text.color = selected ? json_color(presenter, "selected_color",
                                            json_color(presenter, "color", (sdl3d_color){255, 255, 255, 255}))
@@ -2996,6 +3132,7 @@ static void ui_image_from_json(yyjson_val *item, sdl3d_game_data_ui_image *image
     image->preserve_aspect = json_bool(item, "preserve_aspect", true);
     image->align = parse_ui_align(json_string(item, "align", NULL), SDL3D_GAME_DATA_UI_ALIGN_LEFT);
     image->valign = parse_ui_valign(json_string(item, "valign", NULL), SDL3D_GAME_DATA_UI_VALIGN_TOP);
+    image->scale = json_float(item, "scale", 1.0f);
     image->color = json_color(item, "color", (sdl3d_color){255, 255, 255, 255});
 }
 
@@ -3750,7 +3887,7 @@ static bool eval_data_condition(const sdl3d_game_data_runtime *runtime, yyjson_v
     return false;
 }
 
-bool sdl3d_game_data_ui_text_is_visible(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_text *text,
+static bool ui_text_authored_is_visible(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_text *text,
                                         const sdl3d_game_data_ui_metrics *metrics)
 {
     if (runtime == NULL || text == NULL)
@@ -3762,7 +3899,7 @@ bool sdl3d_game_data_ui_text_is_visible(const sdl3d_game_data_runtime *runtime, 
     return text->visible == NULL || SDL_strcmp(text->visible, "always") == 0;
 }
 
-bool sdl3d_game_data_ui_image_is_visible(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_image *image,
+static bool ui_image_authored_is_visible(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_image *image,
                                          const sdl3d_game_data_ui_metrics *metrics)
 {
     if (runtime == NULL || image == NULL)
@@ -3772,6 +3909,117 @@ bool sdl3d_game_data_ui_image_is_visible(const sdl3d_game_data_runtime *runtime,
     if (condition != NULL)
         return eval_data_condition(runtime, condition, metrics);
     return image->visible == NULL || SDL_strcmp(image->visible, "always") == 0;
+}
+
+static float clamp_unit(float value)
+{
+    return SDL_clamp(value, 0.0f, 1.0f);
+}
+
+static Uint8 multiply_u8(Uint8 value, float multiplier)
+{
+    return (Uint8)SDL_clamp((int)((float)value * multiplier + 0.5f), 0, 255);
+}
+
+static sdl3d_color apply_ui_state_color(sdl3d_color color, const sdl3d_game_data_ui_state *state)
+{
+    if (state == NULL)
+        return color;
+
+    if ((state->flags & SDL3D_GAME_DATA_UI_STATE_TINT) != 0u)
+    {
+        color.r = multiply_u8(color.r, (float)state->tint.r / 255.0f);
+        color.g = multiply_u8(color.g, (float)state->tint.g / 255.0f);
+        color.b = multiply_u8(color.b, (float)state->tint.b / 255.0f);
+        color.a = multiply_u8(color.a, (float)state->tint.a / 255.0f);
+    }
+    if ((state->flags & SDL3D_GAME_DATA_UI_STATE_ALPHA) != 0u)
+        color.a = multiply_u8(color.a, clamp_unit(state->alpha));
+    return color;
+}
+
+bool sdl3d_game_data_resolve_ui_text(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_text *text,
+                                     const sdl3d_game_data_ui_metrics *metrics, sdl3d_game_data_ui_text *out_text,
+                                     bool *out_visible)
+{
+    if (out_visible != NULL)
+        *out_visible = false;
+    if (runtime == NULL || text == NULL || out_text == NULL)
+        return false;
+
+    sdl3d_game_data_ui_text resolved = *text;
+    bool visible = ui_text_authored_is_visible(runtime, text, metrics);
+    sdl3d_game_data_ui_state state;
+    if (sdl3d_game_data_get_ui_state(runtime, text->name, &state))
+    {
+        if ((state.flags & SDL3D_GAME_DATA_UI_STATE_VISIBLE) != 0u)
+            visible = state.visible;
+        if ((state.flags & SDL3D_GAME_DATA_UI_STATE_OFFSET) != 0u)
+        {
+            resolved.x += state.offset_x;
+            resolved.y += state.offset_y;
+        }
+        if ((state.flags & SDL3D_GAME_DATA_UI_STATE_SCALE) != 0u)
+            resolved.scale *= state.scale;
+        resolved.color = apply_ui_state_color(resolved.color, &state);
+    }
+
+    if (resolved.scale <= 0.0f || resolved.color.a == 0)
+        visible = false;
+    if (out_visible != NULL)
+        *out_visible = visible;
+    *out_text = resolved;
+    return true;
+}
+
+bool sdl3d_game_data_resolve_ui_image(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_image *image,
+                                      const sdl3d_game_data_ui_metrics *metrics, sdl3d_game_data_ui_image *out_image,
+                                      bool *out_visible)
+{
+    if (out_visible != NULL)
+        *out_visible = false;
+    if (runtime == NULL || image == NULL || out_image == NULL)
+        return false;
+
+    sdl3d_game_data_ui_image resolved = *image;
+    bool visible = ui_image_authored_is_visible(runtime, image, metrics);
+    sdl3d_game_data_ui_state state;
+    if (sdl3d_game_data_get_ui_state(runtime, image->name, &state))
+    {
+        if ((state.flags & SDL3D_GAME_DATA_UI_STATE_VISIBLE) != 0u)
+            visible = state.visible;
+        if ((state.flags & SDL3D_GAME_DATA_UI_STATE_OFFSET) != 0u)
+        {
+            resolved.x += state.offset_x;
+            resolved.y += state.offset_y;
+        }
+        if ((state.flags & SDL3D_GAME_DATA_UI_STATE_SCALE) != 0u)
+            resolved.scale *= state.scale;
+        resolved.color = apply_ui_state_color(resolved.color, &state);
+    }
+
+    if (resolved.scale <= 0.0f || resolved.color.a == 0)
+        visible = false;
+    if (out_visible != NULL)
+        *out_visible = visible;
+    *out_image = resolved;
+    return true;
+}
+
+bool sdl3d_game_data_ui_text_is_visible(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_text *text,
+                                        const sdl3d_game_data_ui_metrics *metrics)
+{
+    bool visible = false;
+    sdl3d_game_data_ui_text resolved;
+    return sdl3d_game_data_resolve_ui_text(runtime, text, metrics, &resolved, &visible) && visible;
+}
+
+bool sdl3d_game_data_ui_image_is_visible(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_image *image,
+                                         const sdl3d_game_data_ui_metrics *metrics)
+{
+    bool visible = false;
+    sdl3d_game_data_ui_image resolved;
+    return sdl3d_game_data_resolve_ui_image(runtime, image, metrics, &resolved, &visible) && visible;
 }
 
 bool sdl3d_game_data_app_pause_allowed(const sdl3d_game_data_runtime *runtime,
@@ -5101,6 +5349,8 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
         SDL_free(runtime->scenes[i].menus);
         yyjson_doc_free(runtime->scenes[i].doc);
     }
+    for (int i = 0; i < runtime->ui_state_count; ++i)
+        SDL_free(runtime->ui_states[i].name);
 
     sdl3d_script_engine_destroy(runtime->scripts);
     sdl3d_properties_destroy(runtime->scene_state);
@@ -5113,6 +5363,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->adapters);
     SDL_free(runtime->bindings);
     SDL_free(runtime->sensors);
+    SDL_free(runtime->ui_states);
     yyjson_doc_free(runtime->doc);
     SDL_free(runtime);
 }

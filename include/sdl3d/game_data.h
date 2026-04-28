@@ -225,6 +225,8 @@ extern "C"
         bool centered;
         /** @brief Horizontal alignment used by richer UI layouts. */
         sdl3d_game_data_ui_align align;
+        /** @brief Runtime or authored scale multiplier applied during presentation. */
+        float scale;
         /** @brief Whether alpha should pulse while visible. */
         bool pulse_alpha;
         /** @brief Text color. */
@@ -256,9 +258,51 @@ extern "C"
         sdl3d_game_data_ui_align align;
         /** @brief Vertical alignment of the image rectangle around y. */
         sdl3d_game_data_ui_valign valign;
+        /** @brief Runtime or authored scale multiplier applied around the image anchor. */
+        float scale;
         /** @brief Image tint color. */
         sdl3d_color color;
     } sdl3d_game_data_ui_image;
+
+    /** @brief Bit flags indicating which runtime UI state fields override authored descriptor values. */
+    typedef enum sdl3d_game_data_ui_state_flags
+    {
+        /** @brief Override UI visibility. */
+        SDL3D_GAME_DATA_UI_STATE_VISIBLE = 1u << 0,
+        /** @brief Add a runtime x/y offset to the authored UI position. */
+        SDL3D_GAME_DATA_UI_STATE_OFFSET = 1u << 1,
+        /** @brief Multiply the authored UI scale. */
+        SDL3D_GAME_DATA_UI_STATE_SCALE = 1u << 2,
+        /** @brief Multiply the authored UI alpha. */
+        SDL3D_GAME_DATA_UI_STATE_ALPHA = 1u << 3,
+        /** @brief Multiply the authored UI tint/color. */
+        SDL3D_GAME_DATA_UI_STATE_TINT = 1u << 4,
+    } sdl3d_game_data_ui_state_flags;
+
+    /**
+     * @brief Runtime presentation state for an authored UI item.
+     *
+     * Runtime state is keyed by the UI item's authored `name`. It is layered on
+     * top of static JSON descriptors during resolution, which lets timelines,
+     * scripts, or host code animate UI elements without mutating game data.
+     */
+    typedef struct sdl3d_game_data_ui_state
+    {
+        /** @brief Combination of sdl3d_game_data_ui_state_flags values. */
+        Uint32 flags;
+        /** @brief Visibility override used when SDL3D_GAME_DATA_UI_STATE_VISIBLE is set. */
+        bool visible;
+        /** @brief Runtime x offset in the descriptor's coordinate space. */
+        float offset_x;
+        /** @brief Runtime y offset in the descriptor's coordinate space. */
+        float offset_y;
+        /** @brief Scale multiplier used when SDL3D_GAME_DATA_UI_STATE_SCALE is set. */
+        float scale;
+        /** @brief Alpha multiplier in [0, 1] used when SDL3D_GAME_DATA_UI_STATE_ALPHA is set. */
+        float alpha;
+        /** @brief Tint multiplier used when SDL3D_GAME_DATA_UI_STATE_TINT is set. */
+        sdl3d_color tint;
+    } sdl3d_game_data_ui_state;
 
     /**
      * @brief Callback for iterating authored UI text descriptors.
@@ -1058,6 +1102,59 @@ extern "C"
      */
     bool sdl3d_game_data_for_each_ui_image(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_ui_image_fn callback,
                                            void *userdata);
+
+    /**
+     * @brief Initialize runtime UI state to identity values.
+     *
+     * The initialized state has no override flags, zero offset, scale 1, alpha
+     * 1, and white tint.
+     */
+    void sdl3d_game_data_ui_state_init(sdl3d_game_data_ui_state *state);
+
+    /**
+     * @brief Store runtime state for a named authored UI item.
+     *
+     * The runtime copies @p state and owns the name key internally. State
+     * remains active until replaced, cleared by name, or all UI state is
+     * cleared.
+     */
+    bool sdl3d_game_data_set_ui_state(sdl3d_game_data_runtime *runtime, const char *name,
+                                      const sdl3d_game_data_ui_state *state);
+
+    /**
+     * @brief Read runtime state for a named authored UI item.
+     *
+     * Returns false when no state exists for @p name. @p out_state is
+     * initialized to identity values before lookup.
+     */
+    bool sdl3d_game_data_get_ui_state(const sdl3d_game_data_runtime *runtime, const char *name,
+                                      sdl3d_game_data_ui_state *out_state);
+
+    /** @brief Clear runtime state for one named UI item. */
+    bool sdl3d_game_data_clear_ui_state(sdl3d_game_data_runtime *runtime, const char *name);
+
+    /** @brief Clear all runtime UI item state. */
+    void sdl3d_game_data_clear_ui_states(sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Resolve authored text plus runtime UI state for presentation.
+     *
+     * @p out_visible receives the final visibility after authored conditions
+     * and runtime overrides. @p out_text may alias @p text.
+     */
+    bool sdl3d_game_data_resolve_ui_text(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_text *text,
+                                         const sdl3d_game_data_ui_metrics *metrics, sdl3d_game_data_ui_text *out_text,
+                                         bool *out_visible);
+
+    /**
+     * @brief Resolve authored image plus runtime UI state for presentation.
+     *
+     * @p out_visible receives the final visibility after authored conditions
+     * and runtime overrides. @p out_image may alias @p image.
+     */
+    bool sdl3d_game_data_resolve_ui_image(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_image *image,
+                                          const sdl3d_game_data_ui_metrics *metrics,
+                                          sdl3d_game_data_ui_image *out_image, bool *out_visible);
 
     /**
      * @brief Evaluate a UI text descriptor's authored visibility condition.
