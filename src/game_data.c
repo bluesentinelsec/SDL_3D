@@ -55,6 +55,7 @@ typedef struct named_action
 typedef struct adapter_entry
 {
     char *name;
+    char *lua_script_id;
     char *lua_function;
     sdl3d_script_ref lua_function_ref;
     sdl3d_game_data_adapter_fn callback;
@@ -501,12 +502,12 @@ static void install_lua_helpers(lua_State *lua)
     }
 }
 
-static void register_lua_api(sdl3d_game_data_runtime *runtime)
+static void register_lua_api(sdl3d_game_data_runtime *runtime, sdl3d_script_engine *engine)
 {
-    if (runtime == NULL || runtime->scripts == NULL)
+    if (runtime == NULL || engine == NULL)
         return;
 
-    lua_State *lua = sdl3d_script_engine_lua_state(runtime->scripts);
+    lua_State *lua = sdl3d_script_engine_lua_state(engine);
     if (lua == NULL)
         return;
 
@@ -744,11 +745,11 @@ static bool append_adapter(sdl3d_game_data_runtime *runtime, const char *name, s
     return true;
 }
 
-static bool set_adapter_lua_function(sdl3d_game_data_runtime *runtime, const char *name, const char *function_name,
-                                     sdl3d_script_ref function_ref)
+static bool set_adapter_lua_function(sdl3d_game_data_runtime *runtime, const char *name, const char *script_id,
+                                     const char *function_name, sdl3d_script_ref function_ref)
 {
-    if (runtime == NULL || name == NULL || name[0] == '\0' || function_name == NULL || function_name[0] == '\0' ||
-        function_ref == SDL3D_SCRIPT_REF_INVALID)
+    if (runtime == NULL || name == NULL || name[0] == '\0' || script_id == NULL || script_id[0] == '\0' ||
+        function_name == NULL || function_name[0] == '\0' || function_ref == SDL3D_SCRIPT_REF_INVALID)
         return false;
 
     adapter_entry *entry = find_adapter(runtime, name);
@@ -761,11 +762,19 @@ static bool set_adapter_lua_function(sdl3d_game_data_runtime *runtime, const cha
     if (entry == NULL)
         return false;
 
-    char *copy = SDL_strdup(function_name);
-    if (copy == NULL)
+    char *script_copy = SDL_strdup(script_id);
+    char *function_copy = SDL_strdup(function_name);
+    if (script_copy == NULL || function_copy == NULL)
+    {
+        SDL_free(script_copy);
+        SDL_free(function_copy);
         return false;
+    }
+
+    SDL_free(entry->lua_script_id);
     SDL_free(entry->lua_function);
-    entry->lua_function = copy;
+    entry->lua_script_id = script_copy;
+    entry->lua_function = function_copy;
     if (entry->lua_function_ref != SDL3D_SCRIPT_REF_INVALID)
         sdl3d_script_engine_unref(runtime->scripts, entry->lua_function_ref);
     entry->lua_function_ref = function_ref;
@@ -1258,6 +1267,91 @@ static bool load_script_entry(sdl3d_game_data_runtime *runtime, script_entry *en
     return true;
 }
 
+static bool load_script_index_into_engine(sdl3d_game_data_runtime *runtime, sdl3d_asset_resolver *assets,
+                                          sdl3d_script_engine *engine, int index, sdl3d_script_ref *module_refs,
+                                          bool *loading, bool *loaded, char *error_buffer, int error_buffer_size)
+{
+    if (runtime == NULL || assets == NULL || engine == NULL || index < 0 || index >= runtime->script_count ||
+        module_refs == NULL || loading == NULL || loaded == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "invalid Lua reload arguments");
+        return false;
+    }
+    if (loaded[index])
+        return true;
+    if (loading[index])
+    {
+        if (error_buffer != NULL && error_buffer_size > 0)
+        {
+            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "Lua script dependency cycle at %s",
+                         runtime->script_entries[index].id);
+        }
+        return false;
+    }
+
+    script_entry *entry = &runtime->script_entries[index];
+    loading[index] = true;
+    for (int dep = 0; dep < entry->dependency_count; ++dep)
+    {
+        script_entry *dependency = find_script(runtime, entry->dependencies[dep]);
+        const int dependency_index = dependency != NULL ? (int)(dependency - runtime->script_entries) : -1;
+        if (dependency_index < 0 ||
+            !load_script_index_into_engine(runtime, assets, engine, dependency_index, module_refs, loading, loaded,
+                                           error_buffer, error_buffer_size))
+        {
+            loading[index] = false;
+            return false;
+        }
+    }
+
+    char *resolved_path = path_join(runtime->base_dir, entry->path);
+    if (resolved_path == NULL)
+    {
+        if (error_buffer != NULL && error_buffer_size > 0)
+        {
+            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "failed to resolve script path for %s", entry->id);
+        }
+        loading[index] = false;
+        return false;
+    }
+
+    sdl3d_asset_buffer script_buffer;
+    SDL_zero(script_buffer);
+    char asset_error[256];
+    if (!sdl3d_asset_resolver_read_file(assets, resolved_path, &script_buffer, asset_error, (int)sizeof(asset_error)))
+    {
+        if (error_buffer != NULL && error_buffer_size > 0)
+        {
+            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "Lua script %s (%s) could not be read: %s", entry->id,
+                         entry->path, asset_error);
+        }
+        SDL_free(resolved_path);
+        loading[index] = false;
+        return false;
+    }
+
+    char script_error[512];
+    const bool ok = sdl3d_script_engine_load_module_buffer(engine, script_buffer.data, script_buffer.size,
+                                                           resolved_path, entry->module, &module_refs[index],
+                                                           script_error, (int)sizeof(script_error));
+    sdl3d_asset_buffer_free(&script_buffer);
+    SDL_free(resolved_path);
+    if (!ok)
+    {
+        if (error_buffer != NULL && error_buffer_size > 0)
+        {
+            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "Lua script %s (%s) failed: %s", entry->id,
+                         entry->path, script_error);
+        }
+        loading[index] = false;
+        return false;
+    }
+
+    loaded[index] = true;
+    loading[index] = false;
+    return true;
+}
+
 static bool load_scripts(sdl3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
 {
     yyjson_val *scripts = obj_get(root, "scripts");
@@ -1351,7 +1445,7 @@ static bool load_scripts(sdl3d_game_data_runtime *runtime, yyjson_val *root, cha
         return false;
     }
 
-    register_lua_api(runtime);
+    register_lua_api(runtime, runtime->scripts);
     for (int i = 0; i < runtime->script_count; ++i)
     {
         if (runtime->script_entries[i].autoload &&
@@ -1411,7 +1505,7 @@ static bool load_lua_adapters(sdl3d_game_data_runtime *runtime, yyjson_val *root
             return false;
         }
 
-        if (!set_adapter_lua_function(runtime, name, function_name, function_ref))
+        if (!set_adapter_lua_function(runtime, name, script->id, function_name, function_ref))
         {
             sdl3d_script_engine_unref(runtime->scripts, function_ref);
             set_error(error_buffer, error_buffer_size, "failed to register Lua adapter");
@@ -1862,6 +1956,8 @@ bool sdl3d_game_data_register_adapter(sdl3d_game_data_runtime *runtime, const ch
     adapter_entry *entry = find_adapter(runtime, name);
     if (entry != NULL)
     {
+        SDL_free(entry->lua_script_id);
+        entry->lua_script_id = NULL;
         SDL_free(entry->lua_function);
         entry->lua_function = NULL;
         if (entry->lua_function_ref != SDL3D_SCRIPT_REF_INVALID)
@@ -1874,6 +1970,128 @@ bool sdl3d_game_data_register_adapter(sdl3d_game_data_runtime *runtime, const ch
         return true;
     }
     return append_adapter(runtime, name, callback, userdata);
+}
+
+bool sdl3d_game_data_reload_scripts(sdl3d_game_data_runtime *runtime, sdl3d_asset_resolver *assets, char *error_buffer,
+                                    int error_buffer_size)
+{
+    if (runtime == NULL || assets == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "invalid Lua reload arguments");
+        return false;
+    }
+    if (runtime->script_count == 0)
+        return true;
+
+    sdl3d_script_engine *new_engine = sdl3d_script_engine_create();
+    if (new_engine == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to create Lua script engine");
+        return false;
+    }
+    register_lua_api(runtime, new_engine);
+
+    sdl3d_script_ref *module_refs = (sdl3d_script_ref *)SDL_calloc((size_t)runtime->script_count, sizeof(*module_refs));
+    sdl3d_script_ref *function_refs =
+        (sdl3d_script_ref *)SDL_calloc((size_t)runtime->adapter_count, sizeof(*function_refs));
+    bool *loading = (bool *)SDL_calloc((size_t)runtime->script_count, sizeof(*loading));
+    bool *loaded = (bool *)SDL_calloc((size_t)runtime->script_count, sizeof(*loaded));
+    if (module_refs == NULL || function_refs == NULL || loading == NULL || loaded == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate Lua reload state");
+        SDL_free(module_refs);
+        SDL_free(function_refs);
+        SDL_free(loading);
+        SDL_free(loaded);
+        sdl3d_script_engine_destroy(new_engine);
+        return false;
+    }
+
+    bool ok = true;
+    for (int i = 0; i < runtime->script_count && ok; ++i)
+    {
+        if (runtime->script_entries[i].autoload)
+        {
+            ok = load_script_index_into_engine(runtime, assets, new_engine, i, module_refs, loading, loaded,
+                                               error_buffer, error_buffer_size);
+        }
+    }
+
+    for (int i = 0; i < runtime->adapter_count && ok; ++i)
+    {
+        adapter_entry *adapter = &runtime->adapters[i];
+        if (adapter->callback != NULL || adapter->lua_script_id == NULL || adapter->lua_function == NULL)
+            continue;
+
+        script_entry *script = find_script(runtime, adapter->lua_script_id);
+        const int script_index = script != NULL ? (int)(script - runtime->script_entries) : -1;
+        if (script_index < 0)
+        {
+            if (error_buffer != NULL && error_buffer_size > 0)
+            {
+                SDL_snprintf(error_buffer, (size_t)error_buffer_size, "Lua adapter %s references missing script %s",
+                             adapter->name, adapter->lua_script_id);
+            }
+            ok = false;
+            break;
+        }
+        if (!load_script_index_into_engine(runtime, assets, new_engine, script_index, module_refs, loading, loaded,
+                                           error_buffer, error_buffer_size))
+        {
+            ok = false;
+            break;
+        }
+
+        char script_error[256];
+        if (!sdl3d_script_engine_ref_module_function(new_engine, module_refs[script_index], adapter->lua_function,
+                                                     &function_refs[i], script_error, (int)sizeof(script_error)))
+        {
+            if (error_buffer != NULL && error_buffer_size > 0)
+            {
+                SDL_snprintf(error_buffer, (size_t)error_buffer_size,
+                             "Lua adapter %s function %s in script %s failed: %s", adapter->name, adapter->lua_function,
+                             script->id, script_error);
+            }
+            ok = false;
+        }
+    }
+
+    if (!ok)
+    {
+        for (int i = 0; i < runtime->adapter_count; ++i)
+            sdl3d_script_engine_unref(new_engine, function_refs[i]);
+        for (int i = 0; i < runtime->script_count; ++i)
+            sdl3d_script_engine_unref(new_engine, module_refs[i]);
+        SDL_free(module_refs);
+        SDL_free(function_refs);
+        SDL_free(loading);
+        SDL_free(loaded);
+        sdl3d_script_engine_destroy(new_engine);
+        return false;
+    }
+
+    sdl3d_script_engine *old_engine = runtime->scripts;
+    for (int i = 0; i < runtime->script_count; ++i)
+    {
+        runtime->script_entries[i].module_ref = module_refs[i];
+        runtime->script_entries[i].loaded = loaded[i];
+        runtime->script_entries[i].loading = false;
+    }
+    runtime->scripts = new_engine;
+    for (int i = 0; i < runtime->adapter_count; ++i)
+    {
+        if (runtime->adapters[i].callback == NULL && runtime->adapters[i].lua_function != NULL)
+            runtime->adapters[i].lua_function_ref = function_refs[i];
+        else
+            runtime->adapters[i].lua_function_ref = SDL3D_SCRIPT_REF_INVALID;
+    }
+
+    sdl3d_script_engine_destroy(old_engine);
+    SDL_free(module_refs);
+    SDL_free(function_refs);
+    SDL_free(loading);
+    SDL_free(loaded);
+    return true;
 }
 
 bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_path, sdl3d_game_session *session,
@@ -2020,6 +2238,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     for (int i = 0; i < runtime->adapter_count; ++i)
     {
         SDL_free(runtime->adapters[i].name);
+        SDL_free(runtime->adapters[i].lua_script_id);
         SDL_free(runtime->adapters[i].lua_function);
         sdl3d_script_engine_unref(runtime->scripts, runtime->adapters[i].lua_function_ref);
     }

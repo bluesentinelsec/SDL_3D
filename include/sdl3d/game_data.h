@@ -167,6 +167,29 @@ extern "C"
                                           sdl3d_game_data_adapter_fn callback, void *userdata);
 
     /**
+     * @brief Reload Lua scripts and rebind Lua adapters atomically.
+     *
+     * This development-time API reloads the runtime's script manifest through
+     * @p assets, resolves all authored Lua adapter functions in a fresh Lua
+     * state, and commits the new state only after the full reload succeeds.
+     * When a script has a syntax error, returns the wrong type, is missing, or
+     * no longer contains a referenced adapter function, the existing scripts and
+     * adapter bindings remain active.
+     *
+     * Native adapters registered with sdl3d_game_data_register_adapter() remain
+     * active and are not replaced by reloaded Lua functions.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param assets Resolver containing the updated script assets.
+     * @param error_buffer Optional buffer for a human-readable error.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when scripts were reloaded and committed, or when the runtime
+     * has no scripts to reload.
+     */
+    bool sdl3d_game_data_reload_scripts(sdl3d_game_data_runtime *runtime, sdl3d_asset_resolver *assets,
+                                        char *error_buffer, int error_buffer_size);
+
+    /**
      * @brief Advance JSON-authored controllers, motion, and sensors by one tick.
      *
      * Call after input is refreshed and before rendering. This updates generic

@@ -220,6 +220,27 @@ Actor wrappers expose property helpers (`get_float`, `set_float`, `get_int`, `se
 
 Native C registration remains available for host applications that need engine-facing integrations or highly optimized behavior; re-registering an adapter name overrides the authored Lua binding.
 
+### Script Hot Reload
+
+Development builds can reload Lua modules without recreating the game session:
+
+```c
+sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+sdl3d_asset_resolver_mount_directory(assets, "data", error, sizeof(error));
+sdl3d_game_data_reload_scripts(runtime, assets, error, sizeof(error));
+sdl3d_asset_resolver_destroy(assets);
+```
+
+Reload is atomic. The runtime creates a fresh Lua state, reloads the script
+manifest through the supplied resolver, resolves authored Lua adapter functions,
+and commits only if every referenced script and adapter function is valid. If a
+script has a syntax error, returns a non-table value, is missing, or drops an
+adapter function, the existing script state remains active.
+
+Native adapter overrides remain active across reloads. This keeps host
+integrations explicit while still allowing authored Lua behavior to iterate
+quickly.
+
 Good Pong adapters:
 
 - `adapter.pong.serve_random`: choose a constrained non-extreme ball serve vector.
