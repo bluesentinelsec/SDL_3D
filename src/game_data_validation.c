@@ -1936,17 +1936,10 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
     if (!validate_skip_policy(ctx, obj_get(root, "skip_policy"), skip_path, names))
         return false;
 
-    yyjson_val *splash = obj_get(root, "splash");
-    if (splash != NULL)
-    {
-        if (!yyjson_is_obj(splash))
-            return validation_error(ctx, json_path, "scene splash must be an object");
-        if (!require_ref(ctx, &names->scenes, "scene", json_string(splash, "next_scene"), json_path))
-            return false;
-        yyjson_val *hold = obj_get(splash, "hold_seconds");
-        if (hold != NULL && (!yyjson_is_num(hold) || yyjson_get_num(hold) < 0.0))
-            return validation_error(ctx, json_path, "scene splash hold_seconds must be a non-negative number");
-    }
+    if (obj_get(root, "splash") != NULL)
+        return validation_error(ctx, json_path,
+                                "scene splash is no longer supported; use scene.timeline, skip_policy, UI images, "
+                                "and scene transitions");
 
     yyjson_val *scene_input = obj_get(root, "input");
     if (scene_input != NULL && !yyjson_is_obj(scene_input))

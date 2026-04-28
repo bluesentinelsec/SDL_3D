@@ -920,9 +920,6 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     sdl3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
 
-    sdl3d_game_data_splash splash{};
-    EXPECT_FALSE(sdl3d_game_data_get_active_splash(runtime, &splash));
-
     sdl3d_game_data_skip_policy skip{};
     ASSERT_TRUE(sdl3d_game_data_get_active_skip_policy(runtime, &skip));
     EXPECT_TRUE(skip.enabled);
@@ -2171,6 +2168,57 @@ TEST(GameDataRuntime, RejectsLuaScriptManifestErrorsBeforeGameplay)
         sdl3d_game_data_destroy(runtime);
         sdl3d_game_session_destroy(session);
     }
+}
+
+TEST(GameDataRuntime, RejectsLegacySplashSceneBlock)
+{
+    const std::filesystem::path dir = unique_test_dir("legacy_splash");
+    write_text(dir / "legacy_splash.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Legacy Splash", "id": "test.legacy_splash", "version": "0.1.0" },
+  "scenes": {
+    "initial": "scene.splash",
+    "files": [
+      "scenes/splash.scene.json",
+      "scenes/title.scene.json"
+    ]
+  }
+})json");
+    write_text(dir / "scenes" / "splash.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.splash",
+  "updates_game": false,
+  "renders_world": false,
+  "splash": {
+    "next_scene": "scene.title",
+    "hold_seconds": 1.0,
+    "skip_on_input": true
+  }
+})json");
+    write_text(dir / "scenes" / "title.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.title",
+  "updates_game": false,
+  "renders_world": false
+})json");
+
+    DiagnosticCapture capture;
+    sdl3d_game_data_validation_options options{};
+    options.diagnostic = capture_diagnostic;
+    options.userdata = &capture;
+
+    char error[512]{};
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "legacy_splash.game.json").string().c_str(), &options, error,
+                                               sizeof(error)));
+    ASSERT_FALSE(capture.diagnostics.empty());
+    EXPECT_EQ(capture.diagnostics[0].severity, SDL3D_GAME_DATA_DIAGNOSTIC_ERROR);
+    EXPECT_NE(capture.diagnostics[0].message.find("scene.timeline"), std::string::npos);
+    EXPECT_NE(std::string(error).find("scene splash is no longer supported"), std::string::npos);
+
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, AuthoredGoalSensorDrivesScoreBinding)
