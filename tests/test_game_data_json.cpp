@@ -195,6 +195,42 @@ TEST(GameDataJson, PongDataDeclaresGenericTopLevelModel)
     EXPECT_TRUE(yyjson_is_obj(yyjson_obj_get(doc.root(), "logic")));
 }
 
+TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
+{
+    JsonDoc doc(kPongDataPath);
+    ASSERT_NE(doc.root(), nullptr) << doc.error();
+
+    yyjson_val *scenes = required_object(doc.root(), "scenes");
+    yyjson_val *files = required_array(scenes, "files");
+    bool saw_package = false;
+    bool saw_legacy_options_file = false;
+    for (size_t i = 0; i < yyjson_arr_size(files); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(files, i);
+        if (yyjson_is_obj(entry))
+        {
+            EXPECT_EQ(required_string(entry, "package"), "standard_options");
+            saw_package = true;
+        }
+        if (yyjson_is_str(entry))
+        {
+            const std::string path = yyjson_get_str(entry) != nullptr ? yyjson_get_str(entry) : "";
+            if (path.find("options") != std::string::npos)
+            {
+                saw_legacy_options_file = true;
+            }
+        }
+    }
+    EXPECT_TRUE(saw_package);
+    EXPECT_FALSE(saw_legacy_options_file);
+
+    yyjson_val *options = required_object(scenes, "standard_options");
+    EXPECT_EQ(required_string(options, "settings"), "entity.settings");
+    EXPECT_EQ(required_string(options, "return_scene"), "scene.title");
+    EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(required_object(options, "bindings"), "keyboard")));
+    EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(required_object(options, "bindings"), "gamepad")));
+}
+
 TEST(GameDataJson, PongDataUsesNonSectorFixedScreenWorld)
 {
     JsonDoc doc(kPongDataPath);

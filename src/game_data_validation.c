@@ -10,6 +10,8 @@
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include "game_data_standard_options.h"
+
 #define PATH_BUFFER_SIZE 256
 
 typedef struct name_table
@@ -1998,6 +2000,60 @@ static bool validate_scene_file(validation_context *ctx, validation_names *names
     return true;
 }
 
+static const char *scene_file_entry_package(yyjson_val *entry)
+{
+    yyjson_val *package = obj_get(entry, "package");
+    return yyjson_is_str(package) ? yyjson_get_str(package) : NULL;
+}
+
+static bool validate_generated_scene_doc(validation_context *ctx, validation_names *names, yyjson_doc *doc,
+                                         const char *json_path, validation_scene_doc *out_doc)
+{
+    yyjson_val *scene_root = yyjson_doc_get_root(doc);
+    if (!yyjson_is_obj(scene_root) ||
+        SDL_strcmp(json_string(scene_root, "schema") != NULL ? json_string(scene_root, "schema") : "",
+                   "sdl3d.scene.v0") != 0)
+    {
+        yyjson_doc_free(doc);
+        return validation_error(ctx, json_path, "generated scene must use schema sdl3d.scene.v0");
+    }
+
+    const char *name = json_string(scene_root, "name");
+    if (!require_unique_name(ctx, &names->scenes, "scene", name, json_path))
+    {
+        yyjson_doc_free(doc);
+        return false;
+    }
+
+    out_doc->doc = doc;
+    out_doc->root = scene_root;
+    return true;
+}
+
+static int scene_source_doc_capacity(yyjson_val *files)
+{
+    int count = 0;
+    for (size_t i = 0; yyjson_is_arr(files) && i < yyjson_arr_size(files); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(files, i);
+        if (yyjson_is_str(entry))
+        {
+            count++;
+            continue;
+        }
+
+        const char *package = scene_file_entry_package(entry);
+        if (package != NULL && SDL_strcmp(package, "standard_options") == 0)
+        {
+            count += SDL3D_STANDARD_OPTIONS_SCENE_COUNT;
+            continue;
+        }
+
+        return -1;
+    }
+    return count;
+}
+
 static bool validate_scene_ui_condition(validation_context *ctx, yyjson_val *condition, const char *path,
                                         validation_names *names)
 {
@@ -2373,27 +2429,67 @@ static bool validate_scenes(validation_context *ctx, yyjson_val *root, validatio
     if (!yyjson_is_arr(files))
         return validation_error(ctx, "$.scenes.files", "scenes.files must be an array");
 
-    const int count = (int)yyjson_arr_size(files);
+    const int count = scene_source_doc_capacity(files);
+    if (count < 0)
+        return validation_error(ctx, "$.scenes.files", "scene files must be strings or known package objects");
     validation_scene_doc *docs = (validation_scene_doc *)SDL_calloc((size_t)count, sizeof(*docs));
     if (docs == NULL && count > 0)
         return validation_error(ctx, "$.scenes.files", "failed to allocate scene validation docs");
 
-    for (int i = 0; i < count; ++i)
+    int doc_count = 0;
+    for (size_t i = 0; i < yyjson_arr_size(files); ++i)
     {
-        yyjson_val *file = yyjson_arr_get(files, (size_t)i);
-        if (!validate_scene_file(ctx, names, yyjson_is_str(file) ? yyjson_get_str(file) : NULL, i, &docs[i]))
+        yyjson_val *entry = yyjson_arr_get(files, i);
+        if (yyjson_is_str(entry))
         {
-            validation_scene_docs_destroy(docs, count);
-            return false;
+            if (!validate_scene_file(ctx, names, yyjson_get_str(entry), (int)i, &docs[doc_count]))
+            {
+                validation_scene_docs_destroy(docs, count);
+                return false;
+            }
+            doc_count++;
+            continue;
         }
+
+        const char *package = scene_file_entry_package(entry);
+        if (package != NULL)
+        {
+            sdl3d_standard_options_scene_docs generated;
+            char package_error[256];
+            if (!sdl3d_standard_options_build_scene_docs(root, package, &generated, package_error,
+                                                         (int)sizeof(package_error)))
+            {
+                validation_scene_docs_destroy(docs, count);
+                return validation_error(ctx, "$.scenes.files", "%s", package_error);
+            }
+            for (int generated_index = 0; generated_index < generated.count; ++generated_index)
+            {
+                char path[PATH_BUFFER_SIZE];
+                format_path(path, sizeof(path), "$.scenes.files[%zu].package[%d]", i, generated_index);
+                yyjson_doc *doc = generated.docs[generated_index];
+                generated.docs[generated_index] = NULL;
+                if (!validate_generated_scene_doc(ctx, names, doc, path, &docs[doc_count]))
+                {
+                    sdl3d_standard_options_scene_docs_free(&generated);
+                    validation_scene_docs_destroy(docs, count);
+                    return false;
+                }
+                doc_count++;
+            }
+            sdl3d_standard_options_scene_docs_free(&generated);
+            continue;
+        }
+
+        validation_scene_docs_destroy(docs, count);
+        return validation_error(ctx, "$.scenes.files", "scene file entries must be strings or known package objects");
     }
 
     const char *initial = json_string(scenes, "initial");
     bool ok = initial == NULL || require_ref(ctx, &names->scenes, "scene", initial, "$.scenes.initial");
-    for (int i = 0; ok && i < count; ++i)
+    for (int i = 0; ok && i < doc_count; ++i)
     {
         char path[PATH_BUFFER_SIZE];
-        format_path(path, sizeof(path), "$.scenes.files[%d]", i);
+        format_path(path, sizeof(path), "$.scenes.resolved[%d]", i);
         ok = validate_scene_details(ctx, docs[i].root, root, names, path);
     }
 

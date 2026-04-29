@@ -11,6 +11,7 @@
 #include <SDL3/SDL_scancode.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include "game_data_standard_options.h"
 #include "game_data_validation.h"
 #include "lauxlib.h"
 #include "lua.h"
@@ -7120,6 +7121,142 @@ static bool load_scene_entities(scene_entry *scene, char *error_buffer, int erro
     return true;
 }
 
+static const char *scene_file_entry_package(yyjson_val *entry)
+{
+    yyjson_val *package = obj_get(entry, "package");
+    return yyjson_is_str(package) ? yyjson_get_str(package) : NULL;
+}
+
+static int scene_source_count(yyjson_val *files, char *error_buffer, int error_buffer_size)
+{
+    int count = 0;
+    for (size_t i = 0; yyjson_is_arr(files) && i < yyjson_arr_size(files); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(files, i);
+        if (yyjson_is_str(entry))
+        {
+            count++;
+            continue;
+        }
+
+        const char *package = scene_file_entry_package(entry);
+        if (package != NULL && SDL_strcmp(package, "standard_options") == 0)
+        {
+            count += SDL3D_STANDARD_OPTIONS_SCENE_COUNT;
+            continue;
+        }
+
+        set_error(error_buffer, error_buffer_size, "scene files must be strings or known package objects");
+        return -1;
+    }
+    return count;
+}
+
+static bool install_scene_doc(sdl3d_game_data_runtime *runtime, yyjson_doc *doc, int scene_index, char *error_buffer,
+                              int error_buffer_size)
+{
+    yyjson_val *scene_root = yyjson_doc_get_root(doc);
+    const char *schema = json_string(scene_root, "schema", NULL);
+    const char *name = json_string(scene_root, "name", NULL);
+    if (!yyjson_is_obj(scene_root) || schema == NULL || SDL_strcmp(schema, "sdl3d.scene.v0") != 0 || name == NULL ||
+        name[0] == '\0')
+    {
+        yyjson_doc_free(doc);
+        set_error(error_buffer, error_buffer_size, "scene file has unsupported schema or missing name");
+        return false;
+    }
+    for (int prior = 0; prior < scene_index; ++prior)
+    {
+        if (SDL_strcmp(runtime->scenes[prior].name, name) == 0)
+        {
+            yyjson_doc_free(doc);
+            set_error(error_buffer, error_buffer_size, "duplicate scene name");
+            return false;
+        }
+    }
+
+    runtime->scenes[scene_index].doc = doc;
+    runtime->scenes[scene_index].root = scene_root;
+    runtime->scenes[scene_index].name = name;
+    if (!load_scene_entities(&runtime->scenes[scene_index], error_buffer, error_buffer_size) ||
+        !load_scene_menus(&runtime->scenes[scene_index], error_buffer, error_buffer_size))
+        return false;
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                 "SDL3D game data scene loaded: name=%s updates_game=%d renders_world=%d entities=%d menus=%d", name,
+                 json_bool(scene_root, "updates_game", true) ? 1 : 0,
+                 json_bool(scene_root, "renders_world", true) ? 1 : 0, runtime->scenes[scene_index].entity_count,
+                 runtime->scenes[scene_index].menu_count);
+    return true;
+}
+
+static bool load_scene_file(sdl3d_game_data_runtime *runtime, const char *file_path, int scene_index,
+                            char *error_buffer, int error_buffer_size)
+{
+    if (file_path == NULL || file_path[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "scene files must be non-empty strings");
+        return false;
+    }
+
+    char *resolved_path = path_join(runtime->base_dir, file_path);
+    if (resolved_path == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to resolve scene path");
+        return false;
+    }
+
+    sdl3d_asset_buffer scene_buffer;
+    SDL_zero(scene_buffer);
+    char asset_error[256];
+    if (!sdl3d_asset_resolver_read_file(runtime->assets, resolved_path, &scene_buffer, asset_error,
+                                        (int)sizeof(asset_error)))
+    {
+        if (error_buffer != NULL && error_buffer_size > 0)
+        {
+            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "scene asset %s could not be read: %s", file_path,
+                         asset_error);
+        }
+        SDL_free(resolved_path);
+        return false;
+    }
+
+    yyjson_read_err err;
+    yyjson_doc *doc = yyjson_read_opts((char *)scene_buffer.data, scene_buffer.size, YYJSON_READ_NOFLAG, NULL, &err);
+    sdl3d_asset_buffer_free(&scene_buffer);
+    SDL_free(resolved_path);
+    if (doc == NULL)
+    {
+        if (error_buffer != NULL && error_buffer_size > 0)
+        {
+            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "scene yyjson error %u at byte %llu: %s", err.code,
+                         (unsigned long long)err.pos, err.msg != NULL ? err.msg : "");
+        }
+        return false;
+    }
+
+    return install_scene_doc(runtime, doc, scene_index, error_buffer, error_buffer_size);
+}
+
+static bool load_scene_package(sdl3d_game_data_runtime *runtime, yyjson_val *root, const char *package,
+                               int *scene_index, char *error_buffer, int error_buffer_size)
+{
+    sdl3d_standard_options_scene_docs docs;
+    if (!sdl3d_standard_options_build_scene_docs(root, package, &docs, error_buffer, error_buffer_size))
+        return false;
+
+    bool ok = true;
+    for (int i = 0; ok && i < docs.count; ++i)
+    {
+        yyjson_doc *doc = docs.docs[i];
+        docs.docs[i] = NULL;
+        ok = install_scene_doc(runtime, doc, *scene_index, error_buffer, error_buffer_size);
+        if (ok)
+            (*scene_index)++;
+    }
+    sdl3d_standard_options_scene_docs_free(&docs);
+    return ok;
+}
+
 static bool load_scenes(sdl3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
 {
     yyjson_val *scenes = obj_get(root, "scenes");
@@ -7130,7 +7267,9 @@ static bool load_scenes(sdl3d_game_data_runtime *runtime, yyjson_val *root, char
         return true;
     }
 
-    runtime->scene_count = (int)yyjson_arr_size(files);
+    runtime->scene_count = scene_source_count(files, error_buffer, error_buffer_size);
+    if (runtime->scene_count < 0)
+        return false;
     runtime->scenes = (scene_entry *)SDL_calloc((size_t)runtime->scene_count, sizeof(*runtime->scenes));
     if (runtime->scenes == NULL && runtime->scene_count > 0)
     {
@@ -7138,83 +7277,34 @@ static bool load_scenes(sdl3d_game_data_runtime *runtime, yyjson_val *root, char
         return false;
     }
 
-    for (int i = 0; i < runtime->scene_count; ++i)
+    int scene_index = 0;
+    for (size_t i = 0; i < yyjson_arr_size(files); ++i)
     {
-        yyjson_val *file = yyjson_arr_get(files, (size_t)i);
-        if (!yyjson_is_str(file) || yyjson_get_str(file)[0] == '\0')
+        yyjson_val *entry = yyjson_arr_get(files, i);
+        if (yyjson_is_str(entry))
         {
-            set_error(error_buffer, error_buffer_size, "scene files must be non-empty strings");
-            return false;
-        }
-
-        char *resolved_path = path_join(runtime->base_dir, yyjson_get_str(file));
-        if (resolved_path == NULL)
-        {
-            set_error(error_buffer, error_buffer_size, "failed to resolve scene path");
-            return false;
-        }
-
-        sdl3d_asset_buffer scene_buffer;
-        SDL_zero(scene_buffer);
-        char asset_error[256];
-        if (!sdl3d_asset_resolver_read_file(runtime->assets, resolved_path, &scene_buffer, asset_error,
-                                            (int)sizeof(asset_error)))
-        {
-            if (error_buffer != NULL && error_buffer_size > 0)
-            {
-                SDL_snprintf(error_buffer, (size_t)error_buffer_size, "scene asset %s could not be read: %s",
-                             yyjson_get_str(file), asset_error);
-            }
-            SDL_free(resolved_path);
-            return false;
-        }
-
-        yyjson_read_err err;
-        yyjson_doc *doc =
-            yyjson_read_opts((char *)scene_buffer.data, scene_buffer.size, YYJSON_READ_NOFLAG, NULL, &err);
-        sdl3d_asset_buffer_free(&scene_buffer);
-        SDL_free(resolved_path);
-        if (doc == NULL)
-        {
-            if (error_buffer != NULL && error_buffer_size > 0)
-            {
-                SDL_snprintf(error_buffer, (size_t)error_buffer_size, "scene yyjson error %u at byte %llu: %s",
-                             err.code, (unsigned long long)err.pos, err.msg != NULL ? err.msg : "");
-            }
-            return false;
-        }
-
-        yyjson_val *scene_root = yyjson_doc_get_root(doc);
-        const char *schema = json_string(scene_root, "schema", NULL);
-        const char *name = json_string(scene_root, "name", NULL);
-        if (!yyjson_is_obj(scene_root) || schema == NULL || SDL_strcmp(schema, "sdl3d.scene.v0") != 0 || name == NULL ||
-            name[0] == '\0')
-        {
-            yyjson_doc_free(doc);
-            set_error(error_buffer, error_buffer_size, "scene file has unsupported schema or missing name");
-            return false;
-        }
-        for (int prior = 0; prior < i; ++prior)
-        {
-            if (SDL_strcmp(runtime->scenes[prior].name, name) == 0)
-            {
-                yyjson_doc_free(doc);
-                set_error(error_buffer, error_buffer_size, "duplicate scene name");
+            if (!load_scene_file(runtime, yyjson_get_str(entry), scene_index, error_buffer, error_buffer_size))
                 return false;
-            }
+            scene_index++;
+            continue;
         }
 
-        runtime->scenes[i].doc = doc;
-        runtime->scenes[i].root = scene_root;
-        runtime->scenes[i].name = name;
-        if (!load_scene_entities(&runtime->scenes[i], error_buffer, error_buffer_size) ||
-            !load_scene_menus(&runtime->scenes[i], error_buffer, error_buffer_size))
-            return false;
-        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                     "SDL3D game data scene loaded: name=%s updates_game=%d renders_world=%d entities=%d menus=%d",
-                     name, json_bool(scene_root, "updates_game", true) ? 1 : 0,
-                     json_bool(scene_root, "renders_world", true) ? 1 : 0, runtime->scenes[i].entity_count,
-                     runtime->scenes[i].menu_count);
+        const char *package = scene_file_entry_package(entry);
+        if (package != NULL)
+        {
+            if (!load_scene_package(runtime, root, package, &scene_index, error_buffer, error_buffer_size))
+                return false;
+            continue;
+        }
+
+        set_error(error_buffer, error_buffer_size, "scene files must be strings or known package objects");
+        return false;
+    }
+
+    if (scene_index != runtime->scene_count)
+    {
+        set_error(error_buffer, error_buffer_size, "scene package generated an unexpected scene count");
+        return false;
     }
 
     runtime->active_scene_index = runtime->scene_count > 0 ? 0 : -1;

@@ -429,6 +429,81 @@ Reusable options scenes should prefer immediate apply for settings where the
 player benefits from real-time feedback. Use Apply/Cancel snapshots only for
 screens that intentionally stage changes before committing them.
 
+The `standard_options` scene package generates root Options, Display, Keyboard,
+Gamepad, and Audio scenes from reusable engine templates. The game controls the
+scene ids, menu ids, settings actor, signals, input actions, fonts, theme
+colors, and player-facing input binding rows:
+
+```json
+{
+  "scenes": {
+    "files": [
+      "scenes/title.scene.json",
+      { "package": "standard_options" },
+      "scenes/play.scene.json"
+    ],
+    "standard_options": {
+      "settings": "entity.settings",
+      "return_scene": "scene.title",
+      "scenes": {
+        "root": "scene.options",
+        "display": "scene.options.display",
+        "keyboard": "scene.options.keyboard",
+        "gamepad": "scene.options.gamepad",
+        "audio": "scene.options.audio"
+      },
+      "actions": {
+        "up": "action.menu.up",
+        "down": "action.menu.down",
+        "left": "action.menu.left",
+        "right": "action.menu.right",
+        "select": "action.menu.select"
+      },
+      "signals": {
+        "move": "signal.ui.menu.move",
+        "select": "signal.ui.menu.select",
+        "apply": "signal.settings.apply",
+        "apply_audio": "signal.settings.apply_audio",
+        "reset_display": "signal.settings.reset_display",
+        "reset_keyboard": "signal.settings.reset_keyboard",
+        "reset_gamepad": "signal.settings.reset_gamepad",
+        "reset_audio": "signal.settings.reset_audio"
+      },
+      "fonts": {
+        "title": "font.title",
+        "menu": "font.hud"
+      },
+      "bindings": {
+        "keyboard": [
+          {
+            "label": "Up",
+            "default": "UP",
+            "bindings": [
+              { "action": "action.player.up", "device": "keyboard" },
+              { "action": "action.menu.up", "device": "keyboard" }
+            ]
+          }
+        ],
+        "gamepad": [
+          {
+            "label": "Up",
+            "default": "DPAD_UP",
+            "bindings": [
+              { "action": "action.player.up", "device": "gamepad" },
+              { "action": "action.menu.up", "device": "gamepad" }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+The package owns common menu composition and standard setting controls; the game
+owns the bindings and names that make sense for its rules. Games can still
+author fully custom options scenes when they need a different structure.
+
 Audio bus volume can also be driven from actor properties so options menus can
 share one generic settings actor. Use `source.scale` when the authored setting
 uses player-facing integer units rather than normalized engine volume:
@@ -453,6 +528,22 @@ file declares the initial scene and the scene files to load:
     "files": [
       "scenes/title.scene.json",
       "scenes/level_001.scene.json"
+    ]
+  }
+}
+```
+
+Entries in `scenes.files` are normally scene-file paths. A game may also insert
+an engine-provided scene package at a specific point in the scene order:
+
+```json
+{
+  "scenes": {
+    "initial": "scene.title",
+    "files": [
+      "scenes/title.scene.json",
+      { "package": "standard_options" },
+      "scenes/play.scene.json"
     ]
   }
 }
