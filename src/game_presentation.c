@@ -1115,7 +1115,7 @@ static bool app_flow_consume_menu(sdl3d_game_data_app_flow *flow, sdl3d_game_con
 
     if (result.signal_id >= 0)
         sdl3d_signal_emit(bus, result.signal_id, NULL);
-    if (result.signal_id >= 0 && result.signal_id == flow->app.window_apply_signal_id)
+    if (sdl3d_game_data_app_signal_applies_window_settings(runtime, result.signal_id))
         (void)app_flow_apply_window_settings(flow, ctx, runtime);
 
     sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);

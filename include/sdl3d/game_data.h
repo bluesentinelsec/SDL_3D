@@ -840,6 +840,16 @@ extern "C"
                                          sdl3d_game_data_app_control *out_control);
 
     /**
+     * @brief Return whether an authored signal should apply live window settings.
+     *
+     * Games declare these signals under `app.window.apply_signal` or
+     * `app.window.apply_signals`. This lets reusable menu controls apply display
+     * mode, renderer, and V-sync changes immediately without hard-coding menu
+     * names in the host.
+     */
+    bool sdl3d_game_data_app_signal_applies_window_settings(const sdl3d_game_data_runtime *runtime, int signal_id);
+
+    /**
      * @brief Evaluate the data-authored app pause condition.
      *
      * Returns true when `app.pause.allowed_if` is absent. When present, the

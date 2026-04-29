@@ -2139,6 +2139,29 @@ bool sdl3d_game_data_get_app_control(const sdl3d_game_data_runtime *runtime, sdl
     return true;
 }
 
+bool sdl3d_game_data_app_signal_applies_window_settings(const sdl3d_game_data_runtime *runtime, int signal_id)
+{
+    if (runtime == NULL || signal_id < 0)
+        return false;
+
+    yyjson_val *window = obj_get(obj_get(runtime_root(runtime), "app"), "window");
+    const char *apply_signal = json_string(window, "apply_signal", NULL);
+    if (apply_signal != NULL && sdl3d_game_data_find_signal(runtime, apply_signal) == signal_id)
+        return true;
+
+    yyjson_val *apply_signals = obj_get(window, "apply_signals");
+    if (!yyjson_is_arr(apply_signals))
+        return false;
+
+    for (size_t i = 0; i < yyjson_arr_size(apply_signals); ++i)
+    {
+        yyjson_val *signal = yyjson_arr_get(apply_signals, i);
+        if (yyjson_is_str(signal) && sdl3d_game_data_find_signal(runtime, yyjson_get_str(signal)) == signal_id)
+            return true;
+    }
+    return false;
+}
+
 bool sdl3d_game_data_get_font_asset(const sdl3d_game_data_runtime *runtime, const char *id,
                                     sdl3d_game_data_font_asset *out_font)
 {

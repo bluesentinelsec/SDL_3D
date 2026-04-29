@@ -28,6 +28,7 @@
       "items": [
         {
           "label": "Display Mode",
+          "signal": "signal.settings.apply",
           "control": {
             "type": "choice",
             "target": "entity.settings",
@@ -41,6 +42,7 @@
         },
         {
           "label": "Vsync",
+          "signal": "signal.settings.apply",
           "control": {
             "type": "toggle",
             "target": "entity.settings",
@@ -49,6 +51,7 @@
         },
         {
           "label": "Renderer",
+          "signal": "signal.settings.apply",
           "control": {
             "type": "choice",
             "target": "entity.settings",
@@ -59,10 +62,8 @@
             ]
           }
         },
-        { "label": "Apply", "signal": "signal.settings.apply", "scene": "scene.options" },
-        { "label": "Cancel", "signal": "signal.settings.cancel_display", "scene": "scene.options" },
-        { "label": "Reset Display Defaults", "signal": "signal.settings.reset_display" },
-        { "label": "Back", "signal": "signal.settings.cancel_display", "scene": "scene.options" }
+        { "label": "Reset Settings", "signal": "signal.settings.reset_display" },
+        { "label": "Back", "scene": "scene.options" }
       ]
     }
   ],

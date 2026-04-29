@@ -25,6 +25,10 @@
       "vsync": true,
       "renderer": "opengl",
       "apply_signal": "signal.settings.apply",
+      "apply_signals": [
+        "signal.settings.apply",
+        "signal.settings.reset_display"
+      ],
       "settings": {
         "target": "entity.settings",
         "display_mode": "display_mode",

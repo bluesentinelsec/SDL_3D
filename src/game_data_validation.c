@@ -1518,6 +1518,16 @@ static bool validate_app_refs(validation_context *ctx, yyjson_val *root, validat
     if (window_apply_signal != NULL &&
         !require_ref(ctx, &names->signals, "signal", window_apply_signal, "$.app.window.apply_signal"))
         return false;
+    yyjson_val *window_apply_signals = obj_get(window, "apply_signals");
+    if (window_apply_signals != NULL && !yyjson_is_arr(window_apply_signals))
+        return validation_error(ctx, "$.app.window.apply_signals", "apply_signals must be an array");
+    for (size_t i = 0; yyjson_is_arr(window_apply_signals) && i < yyjson_arr_size(window_apply_signals); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.app.window.apply_signals[%zu]", i);
+        if (!require_ref(ctx, &names->signals, "signal", yyjson_get_str(yyjson_arr_get(window_apply_signals, i)), path))
+            return false;
+    }
     yyjson_val *window_settings = obj_get(window, "settings");
     if (window_settings != NULL && !yyjson_is_obj(window_settings))
         return validation_error(ctx, "$.app.window.settings", "window settings must be an object");
