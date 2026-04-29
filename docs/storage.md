@@ -49,6 +49,18 @@ Game-data audio actions materialize resolver-backed audio assets into
 `sdl3d_game_data_prepare_audio_file()`, which applies the same cache policy as
 `audio.play_sfx` and `audio.play_music`.
 
+Lua game scripts can use the same safe roots through the gameplay API:
+
+```lua
+local ok, err = sdl3d.storage.write("user://settings/options.json", json_text)
+local text, read_err = sdl3d.storage.read("user://settings/options.json")
+local exists = sdl3d.storage.exists("cache://generated/status.txt")
+```
+
+The adapter context exposes the same table as `ctx.storage`. These bindings use
+the storage API's normal validation, so scripts cannot escape through absolute
+paths, `..`, empty segments, backslashes, or unknown schemes.
+
 ## Safety Rules
 
 Storage virtual paths are intentionally strict:
