@@ -922,6 +922,18 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     sdl3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
 
+    sdl3d_storage_config storage{};
+    ASSERT_TRUE(sdl3d_game_data_get_storage_config(runtime, &storage));
+    EXPECT_STREQ(storage.organization, "Blue Sentinel Security");
+    EXPECT_STREQ(storage.application, "SDL3D Pong");
+    EXPECT_STREQ(storage.profile, "default");
+    EXPECT_EQ(storage.user_root_override, nullptr);
+    EXPECT_EQ(storage.cache_root_override, nullptr);
+    char storage_root[256]{};
+    ASSERT_TRUE(sdl3d_storage_build_root_path(&storage, SDL3D_STORAGE_PLATFORM_UNIX, SDL3D_STORAGE_ROOT_USER,
+                                              "/home/player/.local/share", storage_root, sizeof(storage_root)));
+    EXPECT_STREQ(storage_root, "/home/player/.local/share/Blue Sentinel Security/SDL3D Pong/profiles/default");
+
     sdl3d_camera3d camera{};
     ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.overhead", &camera));
     EXPECT_EQ(camera.projection, SDL3D_CAMERA_ORTHOGRAPHIC);
@@ -2734,6 +2746,43 @@ TEST(GameDataRuntime, ValidationReportsJsonPathAndMissingReference)
     EXPECT_NE(capture.diagnostics[0].path.find("$.logic.bindings[0].actions[0]"), std::string::npos);
     EXPECT_NE(capture.diagnostics[0].message.find("entity.missing"), std::string::npos);
     EXPECT_NE(std::string(error).find("$.logic.bindings[0].actions[0]"), std::string::npos);
+}
+
+TEST(GameDataRuntime, ValidatesAuthoredStorageConfig)
+{
+    const std::filesystem::path dir = unique_test_dir("storage_validation");
+    write_text(dir / "bad_storage.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad Storage", "id": "test.bad_storage", "version": "0.1.0" },
+  "storage": { "organization": "Bad/Org", "application": "Pong" },
+  "world": { "name": "world.bad_storage", "kind": "fixed_screen" },
+  "entities": []
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(
+        sdl3d_game_data_validate_file((dir / "bad_storage.game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("$.storage.organization"), std::string::npos);
+
+    write_text(dir / "good_storage.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Good Storage", "id": "test.good_storage", "version": "0.1.0" },
+  "storage": {
+    "organization": "Blue Sentinel Security",
+    "application": "Storage Test",
+    "profile": "dev"
+  },
+  "world": { "name": "world.good_storage", "kind": "fixed_screen" },
+  "entities": []
+})json");
+    error[0] = '\0';
+    EXPECT_TRUE(
+        sdl3d_game_data_validate_file((dir / "good_storage.game.json").string().c_str(), nullptr, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(error[0], '\0');
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, ValidationReportsWarningsWithoutFailingByDefault)

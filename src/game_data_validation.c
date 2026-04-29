@@ -66,6 +66,7 @@ typedef struct validation_names
 
 static bool validate_data_condition(validation_context *ctx, yyjson_val *condition, const char *path,
                                     validation_names *names);
+static bool validate_storage(validation_context *ctx, yyjson_val *root);
 
 static yyjson_val *obj_get(yyjson_val *object, const char *key)
 {
@@ -82,6 +83,15 @@ static bool is_non_empty_string(yyjson_val *object, const char *key)
 {
     const char *value = json_string(object, key);
     return value != NULL && value[0] != '\0';
+}
+
+static bool is_storage_path_segment(const char *value)
+{
+    if (value == NULL || value[0] == '\0')
+        return false;
+    if (SDL_strcmp(value, ".") == 0 || SDL_strcmp(value, "..") == 0)
+        return false;
+    return SDL_strchr(value, '/') == NULL && SDL_strchr(value, '\\') == NULL && SDL_strchr(value, ':') == NULL;
 }
 
 static void set_first_error(validation_context *ctx, const char *json_path, const char *message)
@@ -139,6 +149,34 @@ static bool validation_warning(validation_context *ctx, const char *json_path, c
     SDL_vsnprintf(message, sizeof(message), format, args);
     va_end(args);
     return emit_diagnostic(ctx, SDL3D_GAME_DATA_DIAGNOSTIC_WARNING, json_path, "%s", message);
+}
+
+static bool validate_storage_string(validation_context *ctx, yyjson_val *storage, const char *key,
+                                    const char *json_path, bool path_segment)
+{
+    yyjson_val *value = obj_get(storage, key);
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0')
+        return validation_error(ctx, json_path, "storage field must be a non-empty string");
+    if (path_segment && !is_storage_path_segment(yyjson_get_str(value)))
+        return validation_error(ctx, json_path, "storage field must be a safe path segment");
+    return true;
+}
+
+static bool validate_storage(validation_context *ctx, yyjson_val *root)
+{
+    yyjson_val *storage = obj_get(root, "storage");
+    if (storage == NULL)
+        return true;
+    if (!yyjson_is_obj(storage))
+        return validation_error(ctx, "$.storage", "storage must be an object");
+
+    return validate_storage_string(ctx, storage, "organization", "$.storage.organization", true) &&
+           validate_storage_string(ctx, storage, "application", "$.storage.application", true) &&
+           validate_storage_string(ctx, storage, "profile", "$.storage.profile", true) &&
+           validate_storage_string(ctx, storage, "user_root_override", "$.storage.user_root_override", false) &&
+           validate_storage_string(ctx, storage, "cache_root_override", "$.storage.cache_root_override", false);
 }
 
 static void format_path(char *buffer, size_t buffer_size, const char *format, ...)
@@ -2274,7 +2312,7 @@ static bool warn_unused(validation_context *ctx, const name_table *declared, con
 
 static bool validate_details(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
-    return validate_input_bindings(ctx, root) && validate_components(ctx, root, names) &&
+    return validate_storage(ctx, root) && validate_input_bindings(ctx, root) && validate_components(ctx, root, names) &&
            validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases") &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
            validate_app_refs(ctx, root, names) && validate_cameras(ctx, root, names) && validate_ui(ctx, root, names) &&

@@ -25,6 +25,7 @@
 #include "sdl3d/game.h"
 #include "sdl3d/lighting.h"
 #include "sdl3d/properties.h"
+#include "sdl3d/storage.h"
 #include "sdl3d/transition.h"
 
 #ifdef __cplusplus
@@ -695,6 +696,21 @@ extern "C"
      */
     bool sdl3d_game_data_load_app_config_file(const char *path, sdl3d_game_config *out_config, char *title_buffer,
                                               int title_buffer_size, char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Get the writable storage identity authored by the game data.
+     *
+     * The returned config is suitable for sdl3d_storage_create(). String
+     * pointers are owned by @p runtime and remain valid until
+     * sdl3d_game_data_destroy(). If the JSON omits the storage block, SDL3D
+     * derives conservative defaults from metadata/app fields and finally falls
+     * back to sdl3d_storage_config_init() defaults.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param out_config Receives the resolved storage configuration.
+     * @return true when @p out_config was filled.
+     */
+    bool sdl3d_game_data_get_storage_config(const sdl3d_game_data_runtime *runtime, sdl3d_storage_config *out_config);
 
     /**
      * @brief Validate a JSON game data file without instantiating runtime state.

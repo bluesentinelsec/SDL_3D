@@ -13,11 +13,15 @@ The storage root is derived from stable metadata:
 {
   "storage": {
     "organization": "Blue Sentinel Security",
-    "application": "Pong",
+    "application": "SDL3D Pong",
     "profile": "default"
   }
 }
 ```
+
+Game-data runtimes expose this authored block through
+`sdl3d_game_data_get_storage_config()`, so a managed app can create storage from
+the same data file that declares its window, assets, scenes, and gameplay.
 
 The organization and application identifiers are part of the root path on every
 SDL3D platform policy. This intentionally differs from some older PhysicsFS
@@ -31,11 +35,11 @@ storage. The deterministic planner used by tests and tools follows this shape:
 
 | Platform policy | Example user root |
 | --- | --- |
-| Windows | `%APPDATA%/Blue Sentinel Security/Pong` |
-| Apple | `Application Support/Blue Sentinel Security/Pong` |
-| Unix/Linux | `$XDG_DATA_HOME/Blue Sentinel Security/Pong` |
-| Android | app-private root plus `Blue Sentinel Security/Pong` |
-| Emscripten | persistent virtual root plus `Blue Sentinel Security/Pong` |
+| Windows | `%APPDATA%/Blue Sentinel Security/SDL3D Pong` |
+| Apple | `Application Support/Blue Sentinel Security/SDL3D Pong` |
+| Unix/Linux | `$XDG_DATA_HOME/Blue Sentinel Security/SDL3D Pong` |
+| Android | app-private root plus `Blue Sentinel Security/SDL3D Pong` |
+| Emscripten | persistent virtual root plus `Blue Sentinel Security/SDL3D Pong` |
 
 If a profile is configured, SDL3D appends `profiles/<profile>`. The cache root
 then appends `cache`.

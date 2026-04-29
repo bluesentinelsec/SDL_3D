@@ -6,6 +6,11 @@
     "version": "0.1.0",
     "description": "Fixed-screen arcade proof that SDL3D gameplay rules can be authored through generic entities, sensors, signals, timers, and actions."
   },
+  "storage": {
+    "organization": "Blue Sentinel Security",
+    "application": "SDL3D Pong",
+    "profile": "default"
+  },
   "app": {
     "title": "SDL3D Pong",
     "width": 1280,
