@@ -697,7 +697,7 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
 static bool switch_demo_backend(sdl3d_game_context *ctx, doom_state *state)
 {
     sdl3d_backend next =
-        (state->current_backend == SDL3D_BACKEND_SDLGPU) ? SDL3D_BACKEND_SOFTWARE : SDL3D_BACKEND_SDLGPU;
+        (state->current_backend == SDL3D_BACKEND_OPENGL) ? SDL3D_BACKEND_SOFTWARE : SDL3D_BACKEND_OPENGL;
 
     if (sdl3d_switch_backend(&ctx->window, &ctx->renderer, next))
     {
@@ -1060,7 +1060,7 @@ int main(int argc, char *argv[])
     config.title = "SDL3D - Doom Level";
     config.width = WINDOW_W;
     config.height = WINDOW_H;
-    config.backend = SDL3D_BACKEND_SDLGPU;
+    config.backend = SDL3D_BACKEND_OPENGL;
     config.tick_rate = 1.0f / 60.0f;
     config.enable_audio = true;
 

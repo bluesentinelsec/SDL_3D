@@ -44,6 +44,49 @@ typedef struct particle_update_context
     bool ok;
 } particle_update_context;
 
+static sdl3d_window_mode parse_window_mode_setting(const char *value, sdl3d_window_mode fallback)
+{
+    if (value == NULL || value[0] == '\0')
+        return fallback;
+    if (SDL_strcasecmp(value, "windowed") == 0 || SDL_strcasecmp(value, "window") == 0)
+        return SDL3D_WINDOW_MODE_WINDOWED;
+    if (SDL_strcasecmp(value, "fullscreen_exclusive") == 0 || SDL_strcasecmp(value, "exclusive") == 0)
+        return SDL3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE;
+    if (SDL_strcasecmp(value, "fullscreen_borderless") == 0 || SDL_strcasecmp(value, "borderless") == 0 ||
+        SDL_strcasecmp(value, "desktop_fullscreen") == 0)
+        return SDL3D_WINDOW_MODE_FULLSCREEN_BORDERLESS;
+    return fallback;
+}
+
+static const char *window_mode_setting_name(sdl3d_window_mode mode)
+{
+    switch (mode)
+    {
+    case SDL3D_WINDOW_MODE_WINDOWED:
+        return "windowed";
+    case SDL3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE:
+        return "fullscreen_exclusive";
+    case SDL3D_WINDOW_MODE_FULLSCREEN_BORDERLESS:
+        return "fullscreen_borderless";
+    case SDL3D_WINDOW_MODE_DEFAULT:
+    default:
+        return "default";
+    }
+}
+
+static sdl3d_backend parse_backend_setting(const char *value, sdl3d_backend fallback)
+{
+    if (value == NULL || value[0] == '\0')
+        return fallback;
+    if (SDL_strcasecmp(value, "software") == 0 || SDL_strcasecmp(value, "sw") == 0)
+        return SDL3D_BACKEND_SOFTWARE;
+    if (SDL_strcasecmp(value, "opengl") == 0 || SDL_strcasecmp(value, "gl") == 0)
+        return SDL3D_BACKEND_OPENGL;
+    if (SDL_strcasecmp(value, "auto") == 0)
+        return SDL3D_BACKEND_AUTO;
+    return fallback;
+}
+
 static sdl3d_camera3d default_camera(void)
 {
     sdl3d_camera3d camera;
@@ -659,6 +702,10 @@ static bool menu_input_is_idle(const sdl3d_game_data_runtime *runtime, const sdl
             !sdl3d_input_is_held(input, menu->up_action_id)) &&
            (menu->down_action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, menu->down_action_id) ||
             !sdl3d_input_is_held(input, menu->down_action_id)) &&
+           (menu->left_action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, menu->left_action_id) ||
+            !sdl3d_input_is_held(input, menu->left_action_id)) &&
+           (menu->right_action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, menu->right_action_id) ||
+            !sdl3d_input_is_held(input, menu->right_action_id)) &&
            (menu->select_action_id < 0 ||
             !sdl3d_game_data_active_scene_allows_action(runtime, menu->select_action_id) ||
             !sdl3d_input_is_held(input, menu->select_action_id));
@@ -689,6 +736,21 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
         out_result->selected_index = menu.selected_index;
     }
 
+    if (sdl3d_game_data_menu_key_binding_capture_active(runtime))
+    {
+        const sdl3d_game_data_key_binding_capture_status capture_status =
+            sdl3d_game_data_update_menu_key_binding_capture(runtime, input);
+        if (out_result != NULL)
+        {
+            out_result->handled_input = true;
+            out_result->key_binding_changed = capture_status == SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_CHANGED;
+            out_result->key_binding_conflict = capture_status == SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_CONFLICT;
+            out_result->selected = out_result->key_binding_changed;
+            out_result->select_signal_id = out_result->key_binding_changed ? menu.select_signal_id : -1;
+        }
+        return true;
+    }
+
     if (!*input_armed)
     {
         if (menu_input_is_idle(runtime, input, &menu))
@@ -713,11 +775,32 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
         if (moved && out_result != NULL)
             out_result->move_signal_id = menu.move_signal_id;
     }
+    int control_direction = 0;
+    bool control_adjust_input = false;
+    if (menu.left_action_id >= 0 && sdl3d_game_data_active_scene_allows_action(runtime, menu.left_action_id) &&
+        sdl3d_input_is_pressed(input, menu.left_action_id))
+    {
+        handled = true;
+        control_direction = -1;
+        control_adjust_input = true;
+    }
+    if (menu.right_action_id >= 0 && sdl3d_game_data_active_scene_allows_action(runtime, menu.right_action_id) &&
+        sdl3d_input_is_pressed(input, menu.right_action_id))
+    {
+        handled = true;
+        control_direction = 1;
+        control_adjust_input = true;
+    }
     if (menu.select_action_id >= 0 && sdl3d_game_data_active_scene_allows_action(runtime, menu.select_action_id) &&
         sdl3d_input_is_pressed(input, menu.select_action_id))
     {
         handled = true;
+        control_direction = 1;
+        control_adjust_input = false;
+    }
 
+    if (control_direction != 0)
+    {
         sdl3d_game_data_menu refreshed;
         if (!sdl3d_game_data_get_active_menu_for_metrics(runtime, metrics, &refreshed))
             return true;
@@ -730,22 +813,48 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
         {
             out_result->menu = refreshed.name;
             out_result->selected_index = refreshed.selected_index;
-            out_result->selected = true;
-            out_result->select_signal_id = refreshed.select_signal_id;
-            out_result->control_changed = sdl3d_game_data_apply_menu_item_control(runtime, &item);
-            out_result->quit = !out_result->control_changed && item.quit;
-            out_result->scene = !out_result->control_changed ? item.scene : NULL;
-            out_result->return_to = !out_result->control_changed ? item.return_to : NULL;
-            out_result->return_scene = !out_result->control_changed && item.return_scene;
-            out_result->signal_id = item.signal_id;
-            out_result->pause_command =
-                !out_result->control_changed ? item.pause_command : SDL3D_GAME_DATA_MENU_PAUSE_NONE;
-            out_result->has_return_paused = !out_result->control_changed && item.has_return_paused;
+            if (!control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING)
+            {
+                out_result->key_binding_capture_started =
+                    sdl3d_game_data_start_menu_key_binding_capture(runtime, refreshed.name, refreshed.selected_index);
+                out_result->selected = out_result->key_binding_capture_started;
+                out_result->select_signal_id = out_result->selected ? refreshed.select_signal_id : -1;
+                out_result->signal_id = -1;
+                out_result->quit = false;
+                out_result->scene = NULL;
+                out_result->return_to = NULL;
+                out_result->return_scene = false;
+                out_result->pause_command = SDL3D_GAME_DATA_MENU_PAUSE_NONE;
+                out_result->has_return_paused = false;
+                out_result->return_paused = false;
+                out_result->control_changed = false;
+                out_result->handled_input = true;
+                return true;
+            }
+            out_result->control_changed =
+                control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING
+                    ? false
+                    : sdl3d_game_data_adjust_menu_item_control(runtime, &item, control_direction);
+            out_result->selected = !control_adjust_input || out_result->control_changed;
+            out_result->select_signal_id = out_result->selected ? refreshed.select_signal_id : -1;
+            out_result->quit = !control_adjust_input && !out_result->control_changed && item.quit;
+            out_result->scene = !control_adjust_input && !out_result->control_changed ? item.scene : NULL;
+            out_result->return_to = !control_adjust_input && !out_result->control_changed ? item.return_to : NULL;
+            out_result->return_scene = !control_adjust_input && !out_result->control_changed && item.return_scene;
+            out_result->signal_id = out_result->selected ? item.signal_id : -1;
+            out_result->pause_command = !control_adjust_input && !out_result->control_changed
+                                            ? item.pause_command
+                                            : SDL3D_GAME_DATA_MENU_PAUSE_NONE;
+            out_result->has_return_paused =
+                !control_adjust_input && !out_result->control_changed && item.has_return_paused;
             out_result->return_paused = item.return_paused;
         }
         else
         {
-            (void)sdl3d_game_data_apply_menu_item_control(runtime, &item);
+            if (!control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING)
+                (void)sdl3d_game_data_start_menu_key_binding_capture(runtime, refreshed.name, refreshed.selected_index);
+            else if (item.control_type != SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING)
+                (void)sdl3d_game_data_adjust_menu_item_control(runtime, &item, control_direction);
         }
     }
     else if (handled && out_result != NULL)
@@ -1006,6 +1115,48 @@ static void app_flow_apply_pause_command(sdl3d_game_context *ctx, sdl3d_game_dat
         ctx->paused = !ctx->paused;
 }
 
+static bool app_flow_apply_window_settings(const sdl3d_game_data_app_flow *flow, sdl3d_game_context *ctx,
+                                           sdl3d_game_data_runtime *runtime)
+{
+    if (flow == NULL || ctx == NULL || runtime == NULL || ctx->window == NULL || ctx->renderer == NULL)
+        return false;
+
+    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, flow->app.window_settings_target);
+    if (settings == NULL)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D window settings skipped: settings actor '%s' was not found",
+                    flow->app.window_settings_target != NULL ? flow->app.window_settings_target : "");
+        return false;
+    }
+
+    int width = 0;
+    int height = 0;
+    SDL_GetWindowSize(ctx->window, &width, &height);
+
+    sdl3d_window_config config;
+    sdl3d_init_window_config(&config);
+    config.width = width;
+    config.height = height;
+    config.logical_width = sdl3d_get_render_context_width(ctx->renderer);
+    config.logical_height = sdl3d_get_render_context_height(ctx->renderer);
+    config.title = SDL_GetWindowTitle(ctx->window);
+    config.display_mode = parse_window_mode_setting(
+        sdl3d_properties_get_string(settings->props, flow->app.window_display_mode_key, "windowed"),
+        SDL3D_WINDOW_MODE_WINDOWED);
+    config.backend =
+        parse_backend_setting(sdl3d_properties_get_string(settings->props, flow->app.window_renderer_key, "opengl"),
+                              sdl3d_get_render_context_backend(ctx->renderer));
+    config.vsync = sdl3d_properties_get_bool(settings->props, flow->app.window_vsync_key, true);
+    config.maximized = true;
+    config.resizable = true;
+    config.allow_backend_fallback = false;
+
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D authored window apply requested: mode=%s renderer=%s vsync=%s",
+                window_mode_setting_name(config.display_mode), sdl3d_get_backend_name(config.backend),
+                config.vsync ? "on" : "off");
+    return sdl3d_apply_window_config(&ctx->window, &ctx->renderer, &config);
+}
+
 static bool app_flow_consume_menu(sdl3d_game_data_app_flow *flow, sdl3d_game_context *ctx,
                                   sdl3d_game_data_runtime *runtime, sdl3d_input_manager *input, sdl3d_signal_bus *bus)
 {
@@ -1030,6 +1181,8 @@ static bool app_flow_consume_menu(sdl3d_game_data_app_flow *flow, sdl3d_game_con
 
     if (result.signal_id >= 0)
         sdl3d_signal_emit(bus, result.signal_id, NULL);
+    if (sdl3d_game_data_app_signal_applies_window_settings(runtime, result.signal_id))
+        (void)app_flow_apply_window_settings(flow, ctx, runtime);
 
     sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
     if (result.return_to != NULL && scene_state != NULL)

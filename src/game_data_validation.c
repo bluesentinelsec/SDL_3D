@@ -1069,6 +1069,16 @@ static bool validate_audio_action(validation_context *ctx, yyjson_val *action, c
     yyjson_val *volume = obj_get(action, "volume");
     if (volume != NULL && !yyjson_is_num(volume))
         return validation_error(ctx, json_path, "audio volume must be numeric");
+    yyjson_val *source = obj_get(action, "source");
+    if (source != NULL)
+    {
+        if (!yyjson_is_obj(source))
+            return validation_error(ctx, json_path, "audio source must be an object");
+        if (!require_ref(ctx, &names->entities, "entity", json_string(source, "target"), json_path))
+            return false;
+        if (!is_non_empty_string(source, "key"))
+            return validation_error(ctx, json_path, "audio source requires a non-empty key");
+    }
     yyjson_val *fade = obj_get(action, "fade");
     if (fade != NULL && !yyjson_is_num(fade))
         return validation_error(ctx, json_path, "audio fade must be numeric");
@@ -1101,6 +1111,22 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             return validation_error(ctx, json_path, "%s requires a value", type);
         return true;
     }
+    if (SDL_strcmp(type, "property.snapshot") == 0 || SDL_strcmp(type, "property.restore_snapshot") == 0)
+    {
+        if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
+            return false;
+        if (!is_non_empty_string(action, "name"))
+            return validation_error(ctx, json_path, "%s requires a non-empty name", type);
+        yyjson_val *keys = obj_get(action, "keys");
+        if (keys != NULL && !yyjson_is_arr(keys))
+            return validation_error(ctx, json_path, "%s keys must be an array", type);
+        for (size_t i = 0; yyjson_is_arr(keys) && i < yyjson_arr_size(keys); ++i)
+        {
+            if (!yyjson_is_str(yyjson_arr_get(keys, i)))
+                return validation_error(ctx, json_path, "%s keys must be strings", type);
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "property.animate") == 0)
     {
         if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
@@ -1108,6 +1134,26 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (!is_non_empty_string(action, "key"))
             return validation_error(ctx, json_path, "property.animate requires a non-empty key");
         return validate_animation_common(ctx, action, json_path, names);
+    }
+    if (SDL_strcmp(type, "property.reset_defaults") == 0)
+    {
+        if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
+            return false;
+        yyjson_val *keys = obj_get(action, "keys");
+        if (keys != NULL && !yyjson_is_arr(keys))
+            return validation_error(ctx, json_path, "property.reset_defaults keys must be an array");
+        for (size_t i = 0; yyjson_is_arr(keys) && i < yyjson_arr_size(keys); ++i)
+        {
+            if (!yyjson_is_str(yyjson_arr_get(keys, i)))
+                return validation_error(ctx, json_path, "property.reset_defaults keys must be strings");
+        }
+        return true;
+    }
+    if (SDL_strcmp(type, "input.reset_bindings") == 0)
+    {
+        if (!is_non_empty_string(action, "menu"))
+            return validation_error(ctx, json_path, "input.reset_bindings requires a non-empty menu");
+        return true;
     }
     if (SDL_strcmp(type, "ui.animate") == 0)
     {
@@ -1471,6 +1517,31 @@ static bool validate_app_refs(validation_context *ctx, yyjson_val *root, validat
         return validation_error(ctx, "$.app.startup_transition", "unknown transition reference '%s'",
                                 startup_transition);
 
+    yyjson_val *window = obj_get(app, "window");
+    if (window != NULL && !yyjson_is_obj(window))
+        return validation_error(ctx, "$.app.window", "window must be an object");
+    const char *window_apply_signal = json_string(window, "apply_signal");
+    if (window_apply_signal != NULL &&
+        !require_ref(ctx, &names->signals, "signal", window_apply_signal, "$.app.window.apply_signal"))
+        return false;
+    yyjson_val *window_apply_signals = obj_get(window, "apply_signals");
+    if (window_apply_signals != NULL && !yyjson_is_arr(window_apply_signals))
+        return validation_error(ctx, "$.app.window.apply_signals", "apply_signals must be an array");
+    for (size_t i = 0; yyjson_is_arr(window_apply_signals) && i < yyjson_arr_size(window_apply_signals); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.app.window.apply_signals[%zu]", i);
+        if (!require_ref(ctx, &names->signals, "signal", yyjson_get_str(yyjson_arr_get(window_apply_signals, i)), path))
+            return false;
+    }
+    yyjson_val *window_settings = obj_get(window, "settings");
+    if (window_settings != NULL && !yyjson_is_obj(window_settings))
+        return validation_error(ctx, "$.app.window.settings", "window settings must be an object");
+    const char *window_settings_target = json_string(window_settings, "target");
+    if (window_settings_target != NULL &&
+        !require_ref(ctx, &names->entities, "entity", window_settings_target, "$.app.window.settings.target"))
+        return false;
+
     yyjson_val *quit = obj_get(app, "quit");
     if (!yyjson_is_obj(quit))
         return true;
@@ -1709,8 +1780,11 @@ static bool validate_ui(validation_context *ctx, yyjson_val *root, validation_na
             }
             else if (SDL_strcmp(type != NULL ? type : "", "metric") != 0)
             {
-                return validation_error(ctx, binding_path, "unsupported UI binding type '%s'",
-                                        type != NULL ? type : "<missing>");
+                if (SDL_strcmp(type != NULL ? type : "", "scene_state") != 0)
+                    return validation_error(ctx, binding_path, "unsupported UI binding type '%s'",
+                                            type != NULL ? type : "<missing>");
+                if (!is_non_empty_string(binding, "key"))
+                    return validation_error(ctx, binding_path, "UI scene_state binding requires a non-empty key");
             }
         }
     }
@@ -1950,13 +2024,17 @@ static bool validate_menu_item_control(validation_context *ctx, yyjson_val *cont
         return validation_error(ctx, path, "menu item control must be an object");
 
     const char *type = json_string(control, "type");
-    if (type == NULL ||
-        (SDL_strcmp(type, "toggle") != 0 && SDL_strcmp(type, "choice") != 0 && SDL_strcmp(type, "range") != 0))
-        return validation_error(ctx, path, "menu item control requires type toggle, choice, or range");
-    if (!require_ref(ctx, &names->entities, "entity", json_string(control, "target"), path))
-        return false;
-    if (!is_non_empty_string(control, "key"))
-        return validation_error(ctx, path, "menu item control requires a non-empty key");
+    if (type == NULL || (SDL_strcmp(type, "toggle") != 0 && SDL_strcmp(type, "choice") != 0 &&
+                         SDL_strcmp(type, "range") != 0 && SDL_strcmp(type, "key_binding") != 0))
+        return validation_error(ctx, path, "menu item control requires type toggle, choice, range, or key_binding");
+
+    if (SDL_strcmp(type, "key_binding") != 0)
+    {
+        if (!require_ref(ctx, &names->entities, "entity", json_string(control, "target"), path))
+            return false;
+        if (!is_non_empty_string(control, "key"))
+            return validation_error(ctx, path, "menu item control requires a non-empty key");
+    }
 
     if (SDL_strcmp(type, "choice") == 0)
     {
@@ -1969,6 +2047,23 @@ static bool validate_menu_item_control(validation_context *ctx, yyjson_val *cont
         if (!yyjson_is_num(obj_get(control, "min")) || !yyjson_is_num(obj_get(control, "max")) ||
             !yyjson_is_num(obj_get(control, "step")))
             return validation_error(ctx, path, "range control requires numeric min, max, and step");
+    }
+    if (SDL_strcmp(type, "key_binding") == 0)
+    {
+        yyjson_val *bindings = obj_get(control, "bindings");
+        if (!yyjson_is_arr(bindings) || yyjson_arr_size(bindings) == 0)
+            return validation_error(ctx, path, "key_binding control requires at least one binding");
+        if (!is_non_empty_string(control, "default"))
+            return validation_error(ctx, path, "key_binding control requires a default input");
+        for (size_t i = 0; i < yyjson_arr_size(bindings); ++i)
+        {
+            yyjson_val *binding = yyjson_arr_get(bindings, i);
+            if (!require_ref(ctx, &names->actions, "input action", json_string(binding, "action"), path))
+                return false;
+            const char *device = json_string(binding, "device");
+            if (device != NULL && SDL_strcmp(device, "keyboard") != 0 && SDL_strcmp(device, "gamepad") != 0)
+                return validation_error(ctx, path, "key_binding controls support keyboard or gamepad bindings");
+        }
     }
     return true;
 }
@@ -2121,6 +2216,12 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
             !require_ref(ctx, &names->actions, "input action", json_string(menu, "down_action"), menu_path) ||
             !require_ref(ctx, &names->actions, "input action", json_string(menu, "select_action"), menu_path))
             return false;
+        const char *left_action = json_string(menu, "left_action");
+        if (left_action != NULL && !require_ref(ctx, &names->actions, "input action", left_action, menu_path))
+            return false;
+        const char *right_action = json_string(menu, "right_action");
+        if (right_action != NULL && !require_ref(ctx, &names->actions, "input action", right_action, menu_path))
+            return false;
         char condition_path[PATH_BUFFER_SIZE];
         format_path(condition_path, sizeof(condition_path), "%s.active_if", menu_path);
         if (!validate_scene_ui_condition(ctx, obj_get(menu, "active_if"), condition_path, names))
@@ -2249,8 +2350,11 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
             }
             else if (SDL_strcmp(type != NULL ? type : "", "metric") != 0)
             {
-                return validation_error(ctx, binding_path, "unsupported scene UI binding type '%s'",
-                                        type != NULL ? type : "<missing>");
+                if (SDL_strcmp(type != NULL ? type : "", "scene_state") != 0)
+                    return validation_error(ctx, binding_path, "unsupported scene UI binding type '%s'",
+                                            type != NULL ? type : "<missing>");
+                if (!is_non_empty_string(binding, "key"))
+                    return validation_error(ctx, binding_path, "scene UI scene_state binding requires a non-empty key");
             }
         }
     }

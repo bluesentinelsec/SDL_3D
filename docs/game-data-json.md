@@ -22,7 +22,7 @@ Every file is a JSON object with these fields:
 | `schema` | yes | Schema id. First value: `sdl3d.game.v0`. |
 | `metadata` | yes | Human-readable identity and versioning. |
 | `storage` | no | Writable storage identity used to resolve `user://` and `cache://` roots. |
-| `app` | no | Managed-loop startup config such as title, window size, backend, tick rate, and tick cap. |
+| `app` | no | Managed-loop startup config such as title, logical resolution, window mode, backend, tick rate, and tick cap. |
 | `profiles` | no | Genre/profile hints and required modules. |
 | `assets` | no | Stable asset ids mapped to paths or future archive refs. |
 | `scripts` | no | Lua scripts that provide game-specific behavior used by adapters. |
@@ -96,9 +96,28 @@ The optional `app` object lets a managed-loop game declare startup settings befo
 {
   "app": {
     "title": "SDL3D Pong",
-    "width": 1280,
-    "height": 720,
-    "backend": "auto",
+    "logical_width": 1280,
+    "logical_height": 720,
+    "backend": "software",
+    "icon_path": "media/icons/game.png",
+    "settings_path": "user://settings/options.json",
+    "window": {
+      "display_mode": "fullscreen_borderless",
+      "development_display_mode": "windowed",
+      "production_display_mode": "fullscreen_borderless",
+      "maximized": true,
+      "resizable": true,
+      "vsync": true,
+      "renderer": "software",
+      "apply_signal": "signal.settings.apply",
+      "apply_signals": ["signal.settings.apply", "signal.settings.reset_display"],
+      "settings": {
+        "target": "entity.settings",
+        "display_mode": "display_mode",
+        "renderer": "renderer",
+        "vsync": "vsync"
+      }
+    },
     "tick_rate": 0.008333333,
     "max_ticks_per_frame": 12,
     "start_signal": "signal.game.start",
@@ -138,6 +157,14 @@ The optional `render`, `transitions`, and `ui` sections describe presentation wi
 runtime ownership of the renderer. Games read these descriptors and decide how to apply them.
 
 `start_signal` lets data kick off initial timers or scripted startup logic after the host has loaded the runtime.
+`app.logical_width` and `app.logical_height` define the game's virtual resolution; desktop window size and fullscreen
+presentation are policy, not game-world scale. `app.window` can author display mode, renderer, vsync, title/icon
+overrides, and development/production display-mode defaults. `settings_path`, when present, lets startup read persisted
+display options such as `display_mode`, `renderer`, and `vsync` before creating the window.
+`app.window.apply_signal`, when present, lets the reusable app-flow helper apply live window settings from the
+configured settings actor after a menu emits that signal. `app.window.apply_signals` can list additional signals,
+such as menu-specific reset signals, that should trigger the same live apply. The helper applies display mode and
+V-sync in place and recreates the window/render context when the renderer backend changes.
 `app.pause.action` and `startup_transition` let the managed-loop host avoid hardcoded action/transition names.
 `app.pause.allowed_if` is optional; when present, the app-flow helper evaluates it before entering pause.
 `app.quit` lets data choose which input action requests quit, which transition plays, and which signal completes
@@ -213,7 +240,8 @@ UI descriptors can bind text to engine metrics or actor properties and can use g
 }
 ```
 
-Supported UI binding sources are `metric` (`fps`, `frame`, `paused`) and `property`.
+Supported UI binding sources are `metric` (`fps`, `frame`, `paused`), `property`,
+and `scene_state`.
 Supported UI conditions include `always`, `app.paused`, `camera.active`, `property.compare`,
 `property.bool`, `all`, `any`, and `not`.
 
@@ -245,11 +273,12 @@ selected styling, and cursor styling:
 
 This keeps title/options/menu screens data-authored: the input menu defines
 choices and actions, while the UI presenter defines how the choices are laid out.
-Menu items can also author generic settings controls:
+Menu items can also author generic settings controls and emit data-authored signals when a value changes:
 
 ```json
 {
   "label": "Difficulty",
+  "signal": "signal.settings.apply",
   "control": {
     "type": "choice",
     "target": "entity.settings",
@@ -263,9 +292,114 @@ Menu items can also author generic settings controls:
 }
 ```
 
-Supported control types are `toggle`, `choice`, and `range`. The generic menu
-controller applies these controls directly to actor properties and the menu UI
-presenter displays the current value.
+Supported control types are `toggle`, `choice`, `range`, and `key_binding`.
+The generic menu controller applies property controls directly to actor
+properties and the menu UI presenter displays the current value. A menu can
+author `left_action` and `right_action` so range and choice controls can be
+adjusted without activating navigation items:
+
+```json
+{
+  "name": "menu.options.audio",
+  "up_action": "action.menu.up",
+  "down_action": "action.menu.down",
+  "left_action": "action.menu.left",
+  "right_action": "action.menu.right",
+  "select_action": "action.menu.select",
+  "items": [
+    {
+      "label": "Music",
+      "signal": "signal.settings.apply_audio",
+      "control": {
+        "type": "range",
+        "target": "entity.settings",
+        "key": "music_volume",
+        "value_type": "int",
+        "display": "slider",
+        "min": 0,
+        "max": 10,
+        "step": 1,
+        "default": 7
+      }
+    }
+  ]
+}
+```
+
+Range controls clamp to their authored min/max. Adding `"value_type": "int"`
+stores the result as an integer property; adding `"display": "slider"` renders
+the menu value as a compact slider label.
+
+`key_binding` controls capture the next keyboard key or gamepad button and
+immediately rebind all authored actions for that device. This is how games can
+expose one player-facing input such as `Up` while updating both gameplay and
+menu actions:
+
+```json
+{
+  "label": "Up",
+  "control": {
+    "type": "key_binding",
+    "default": "UP",
+    "bindings": [
+      { "action": "action.paddle.up", "device": "keyboard" },
+      { "action": "action.menu.up", "device": "keyboard" }
+    ]
+  }
+}
+```
+
+For gamepads, use the same control shape with `"device": "gamepad"` and a
+button name such as `"SOUTH"` or `"DPAD_UP"`. Duplicate inputs within the same
+menu are rejected during capture. Pressing the capture cancel key, Escape by
+default, cancels capture. Resetting authored binding controls is a logic action:
+
+```json
+{ "type": "input.reset_bindings", "menu": "menu.options.keyboard" }
+```
+
+Settings menus that need Apply/Cancel behavior can still snapshot the edited
+properties when a scene opens, let controls stage values in those actor
+properties, then either persist the staged values or restore the snapshot:
+
+```json
+{
+  "type": "property.snapshot",
+  "name": "options.display",
+  "target": "entity.settings",
+  "keys": ["display_mode", "vsync", "renderer"]
+}
+```
+
+```json
+{
+  "type": "property.restore_snapshot",
+  "name": "options.display",
+  "target": "entity.settings"
+}
+```
+
+Settings screens can reset authored defaults without game-specific code:
+
+```json
+{
+  "type": "property.reset_defaults",
+  "target": "entity.settings",
+  "keys": ["display_mode", "vsync", "renderer"]
+}
+```
+
+Audio bus volume can also be driven from actor properties so options menus can
+share one generic settings actor. Use `source.scale` when the authored setting
+uses player-facing integer units rather than normalized engine volume:
+
+```json
+{
+  "type": "audio.set_bus_volume",
+  "bus": "music",
+  "source": { "target": "entity.settings", "key": "music_volume", "scale": 0.1 }
+}
+```
 
 ## Scenes
 
@@ -483,6 +617,8 @@ Generic action types should cover common wiring:
 - `property.set`
 - `property.add`
 - `property.toggle`
+- `property.snapshot`
+- `property.restore_snapshot`
 - `entity.set_active` with `target` and boolean `active`, used to include or exclude an entity from generic updates and rendering
 - `transform.set_position`
 - `motion.set_velocity`

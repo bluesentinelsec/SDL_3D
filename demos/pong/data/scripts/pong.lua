@@ -136,27 +136,41 @@ local function apply_options(settings, options)
     if settings == nil or type(options) ~= "table" then
         return
     end
-    if type(options.difficulty) == "string" then
-        settings:set_string("difficulty", options.difficulty)
+    if type(options.display_mode) == "string" then
+        settings:set_string("display_mode", options.display_mode)
+    elseif type(options.fullscreen) == "boolean" then
+        settings:set_string("display_mode", options.fullscreen and "fullscreen_borderless" or "windowed")
     end
-    if type(options.lighting_profile) == "string" then
-        settings:set_string("lighting_profile", options.lighting_profile)
+    if type(options.vsync) == "boolean" then
+        settings:set_bool("vsync", options.vsync)
     end
-    if type(options.input_style) == "string" then
-        settings:set_string("input_style", options.input_style)
+    if type(options.renderer) == "string" then
+        settings:set_string("renderer", options.renderer)
     end
-    if type(options.fullscreen) == "boolean" then
-        settings:set_bool("fullscreen", options.fullscreen)
+    if type(options.gamepad_icons) == "string" then
+        settings:set_string("gamepad_icons", options.gamepad_icons)
+    end
+    if type(options.vibration) == "boolean" then
+        settings:set_bool("vibration", options.vibration)
+    end
+    if type(options.sfx_volume) == "number" then
+        settings:set_int("sfx_volume", math.floor(math.clamp(options.sfx_volume, 0, 10) + 0.5))
+    end
+    if type(options.music_volume) == "number" then
+        settings:set_int("music_volume", math.floor(math.clamp(options.music_volume, 0, 10) + 0.5))
     end
 end
 
 local function current_options(settings)
     return {
         schema = "sdl3d.pong.options.v1",
-        difficulty = settings:get_string("difficulty", "normal"),
-        lighting_profile = settings:get_string("lighting_profile", "cinematic"),
-        input_style = settings:get_string("input_style", "keyboard"),
-        fullscreen = settings:get_bool("fullscreen", false),
+        display_mode = settings:get_string("display_mode", "fullscreen_borderless"),
+        vsync = settings:get_bool("vsync", true),
+        renderer = settings:get_string("renderer", "software"),
+        gamepad_icons = settings:get_string("gamepad_icons", "xbox"),
+        vibration = settings:get_bool("vibration", true),
+        sfx_volume = settings:get_int("sfx_volume", 8),
+        music_volume = settings:get_int("music_volume", 7),
     }
 end
 
@@ -189,23 +203,29 @@ local function save_scores(ctx, scores)
     return write_json(ctx, scores_path, current_scores(scores))
 end
 
-local function persistence_enabled(ctx)
+local function options_persistence_enabled(ctx)
     local settings = settings_actor(ctx)
-    return settings ~= nil and settings:get_bool("persistence_enabled", false)
+    return settings ~= nil and settings:get_bool("options_persistence_enabled", false)
+end
+
+local function score_persistence_enabled(ctx)
+    local settings = settings_actor(ctx)
+    return settings ~= nil and settings:get_bool("score_persistence_enabled", false)
 end
 
 function pong.load_persistence(_, _, ctx)
     local settings = settings_actor(ctx)
-    if settings ~= nil then
-        settings:set_bool("persistence_enabled", true)
+    if options_persistence_enabled(ctx) then
+        apply_options(settings, read_json(ctx, options_path))
     end
-    apply_options(settings, read_json(ctx, options_path))
-    apply_scores(scores_actor(ctx), read_json(ctx, scores_path))
+    if score_persistence_enabled(ctx) then
+        apply_scores(scores_actor(ctx), read_json(ctx, scores_path))
+    end
     return true
 end
 
 function pong.save_options(_, _, ctx)
-    if not persistence_enabled(ctx) then
+    if not options_persistence_enabled(ctx) then
         return true
     end
     local settings = settings_actor(ctx)
@@ -216,7 +236,7 @@ function pong.save_options(_, _, ctx)
 end
 
 function pong.record_player_win(_, _, ctx)
-    if not persistence_enabled(ctx) then
+    if not score_persistence_enabled(ctx) then
         return true
     end
     local scores = scores_actor(ctx)
@@ -230,7 +250,7 @@ function pong.record_player_win(_, _, ctx)
 end
 
 function pong.record_cpu_win(_, _, ctx)
-    if not persistence_enabled(ctx) then
+    if not score_persistence_enabled(ctx) then
         return true
     end
     local scores = scores_actor(ctx)

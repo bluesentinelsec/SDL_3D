@@ -328,13 +328,19 @@ extern "C"
      */
     typedef struct sdl3d_game_config
     {
-        const char *title;       /**< Window title, or "SDL3D" when NULL. */
-        int width;               /**< Window width in pixels, or 1280 when <= 0. */
-        int height;              /**< Window height in pixels, or 720 when <= 0. */
-        sdl3d_backend backend;   /**< Requested backend, or SDL3D_BACKEND_AUTO when zero. */
-        float tick_rate;         /**< Fixed timestep in seconds, or 1/60 when <= 0. */
-        int max_ticks_per_frame; /**< Catch-up tick cap per rendered frame, or 8 when <= 0. */
-        bool enable_audio;       /**< When true, create session audio before init when available. */
+        const char *title;              /**< Window title, or "SDL3D" when NULL. */
+        int width;                      /**< Initial window width in pixels, or logical width when <= 0. */
+        int height;                     /**< Initial window height in pixels, or logical height when <= 0. */
+        int logical_width;              /**< Virtual render width, or 1280 when <= 0. */
+        int logical_height;             /**< Virtual render height, or 720 when <= 0. */
+        const char *icon_path;          /**< Optional filesystem path to a window icon image. */
+        sdl3d_backend backend;          /**< Requested backend, or SDL3D_BACKEND_AUTO when zero. */
+        sdl3d_window_mode display_mode; /**< Window presentation mode, or SDL3D default when zero. */
+        int vsync;                      /**< >0 enables vsync, <0 disables vsync, 0 uses the SDL3D default. */
+        int maximized;                  /**< >0 maximizes, <0 keeps window normal, 0 uses the SDL3D default. */
+        float tick_rate;                /**< Fixed timestep in seconds, or 1/60 when <= 0. */
+        int max_ticks_per_frame;        /**< Catch-up tick cap per rendered frame, or 8 when <= 0. */
+        bool enable_audio;              /**< When true, create session audio before init when available. */
     } sdl3d_game_config;
 
     /**

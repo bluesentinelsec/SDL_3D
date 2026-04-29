@@ -56,7 +56,7 @@ class GLRendererTest : public ::testing::Test
 
         sdl3d_render_context_config cfg;
         sdl3d_init_render_context_config(&cfg);
-        cfg.backend = SDL3D_BACKEND_SDLGPU;
+        cfg.backend = SDL3D_BACKEND_OPENGL;
         cfg.logical_width = 320;
         cfg.logical_height = 240;
 
@@ -714,7 +714,7 @@ TEST_F(GLRendererTest, ToggleRecreateProducesCorrectOutput)
 
     sdl3d_render_context_config cfg;
     sdl3d_init_render_context_config(&cfg);
-    cfg.backend = SDL3D_BACKEND_SDLGPU;
+    cfg.backend = SDL3D_BACKEND_OPENGL;
     cfg.logical_width = 320;
     cfg.logical_height = 240;
     ASSERT_TRUE(sdl3d_create_render_context(win, nullptr, &cfg, &ctx));

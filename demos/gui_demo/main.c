@@ -543,7 +543,7 @@ int main(int argc, char *argv[])
                 if (ev.key.scancode == SDL_SCANCODE_GRAVE)
                 {
                     sdl3d_backend cur = sdl3d_get_render_context_backend(ctx);
-                    sdl3d_backend next = (cur == SDL3D_BACKEND_SDLGPU) ? SDL3D_BACKEND_SOFTWARE : SDL3D_BACKEND_SDLGPU;
+                    sdl3d_backend next = (cur == SDL3D_BACKEND_OPENGL) ? SDL3D_BACKEND_SOFTWARE : SDL3D_BACKEND_OPENGL;
                     if (sdl3d_switch_backend(&win, &ctx, next))
                     {
                         SDL_StartTextInput(win);

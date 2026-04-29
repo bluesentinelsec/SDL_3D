@@ -101,6 +101,36 @@ typedef struct sensor_entry
     bool was_active;
 } sensor_entry;
 
+typedef struct input_binding_spec
+{
+    const char *action;
+    int action_id;
+    sdl3d_input_source source;
+    int required_modifiers;
+    int excluded_modifiers;
+    union {
+        SDL_Scancode scancode;
+        Uint8 mouse_button;
+        sdl3d_mouse_axis mouse_axis;
+        SDL_GamepadButton gamepad_button;
+        SDL_GamepadAxis gamepad_axis;
+    };
+    float scale;
+} input_binding_spec;
+
+typedef struct menu_key_binding_capture
+{
+    bool active;
+    const char *menu;
+    int item_index;
+} menu_key_binding_capture;
+
+typedef enum menu_binding_device
+{
+    MENU_BINDING_DEVICE_KEYBOARD = 0,
+    MENU_BINDING_DEVICE_GAMEPAD_BUTTON = 1,
+} menu_binding_device;
+
 typedef struct scene_menu_state
 {
     yyjson_val *menu;
@@ -176,6 +206,13 @@ typedef struct materialized_audio_file
     char *file_path;
 } materialized_audio_file;
 
+typedef struct property_snapshot
+{
+    char *name;
+    char *target;
+    sdl3d_properties *properties;
+} property_snapshot;
+
 typedef struct scene_activity_state
 {
     const char *scene;
@@ -215,6 +252,10 @@ typedef struct sdl3d_game_data_runtime
     int binding_count;
     sensor_entry *sensors;
     int sensor_count;
+    input_binding_spec *input_bindings;
+    int input_binding_count;
+    int input_binding_capacity;
+    menu_key_binding_capture key_capture;
     sdl3d_script_engine *scripts;
     script_entry *script_entries;
     int script_count;
@@ -236,6 +277,9 @@ typedef struct sdl3d_game_data_runtime
     materialized_audio_file *audio_files;
     int audio_file_count;
     int audio_file_capacity;
+    property_snapshot *property_snapshots;
+    int property_snapshot_count;
+    int property_snapshot_capacity;
     sdl3d_storage *storage;
     const char *active_camera;
     scene_activity_state activity;
@@ -250,6 +294,10 @@ static void set_error(char *buffer, int buffer_size, const char *message)
         SDL_snprintf(buffer, (size_t)buffer_size, "%s", message != NULL ? message : "unknown game data error");
     }
 }
+
+static bool set_action_keyboard_binding(sdl3d_game_data_runtime *runtime, const char *action, SDL_Scancode scancode);
+static bool set_action_gamepad_button_binding(sdl3d_game_data_runtime *runtime, const char *action,
+                                              SDL_GamepadButton button);
 
 static bool path_is_absolute(const char *path)
 {
@@ -1531,10 +1579,26 @@ static sdl3d_backend parse_backend(const char *value, sdl3d_backend fallback)
         return SDL3D_BACKEND_AUTO;
     if (SDL_strcasecmp(value, "software") == 0)
         return SDL3D_BACKEND_SOFTWARE;
-    if (SDL_strcasecmp(value, "sdlgpu") == 0 || SDL_strcasecmp(value, "gpu") == 0)
-        return SDL3D_BACKEND_SDLGPU;
+    if (SDL_strcasecmp(value, "opengl") == 0 || SDL_strcasecmp(value, "gl") == 0 || SDL_strcasecmp(value, "gpu") == 0)
+        return SDL3D_BACKEND_OPENGL;
     return fallback;
 }
+
+static sdl3d_window_mode parse_window_mode(const char *value, sdl3d_window_mode fallback)
+{
+    if (value == NULL)
+        return fallback;
+    if (SDL_strcasecmp(value, "windowed") == 0 || SDL_strcasecmp(value, "window") == 0)
+        return SDL3D_WINDOW_MODE_WINDOWED;
+    if (SDL_strcasecmp(value, "fullscreen_exclusive") == 0 || SDL_strcasecmp(value, "exclusive") == 0)
+        return SDL3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE;
+    if (SDL_strcasecmp(value, "fullscreen_borderless") == 0 || SDL_strcasecmp(value, "borderless") == 0 ||
+        SDL_strcasecmp(value, "desktop_fullscreen") == 0)
+        return SDL3D_WINDOW_MODE_FULLSCREEN_BORDERLESS;
+    return fallback;
+}
+
+static void storage_config_from_root(yyjson_val *root, sdl3d_storage_config *out_config);
 
 static sdl3d_tonemap_mode parse_tonemap(const char *value, sdl3d_tonemap_mode fallback)
 {
@@ -1704,9 +1768,27 @@ static SDL_Scancode scancode_from_json(const char *name)
         return SDL_SCANCODE_RETURN;
     if (SDL_strcmp(name, "ESCAPE") == 0)
         return SDL_SCANCODE_ESCAPE;
+    if (SDL_strcmp(name, "BACKSPACE") == 0 || SDL_strcmp(name, "DELETE") == 0)
+        return SDL_SCANCODE_BACKSPACE;
     if (SDL_strlen(name) == 1)
         return SDL_GetScancodeFromKey(SDL_GetKeyFromName(name), NULL);
     return SDL_GetScancodeFromName(name);
+}
+
+static const char *scancode_display_name(SDL_Scancode scancode)
+{
+    if (scancode == SDL_SCANCODE_UNKNOWN)
+        return "-";
+    const char *name = SDL_GetScancodeName(scancode);
+    return name != NULL && name[0] != '\0' ? name : "-";
+}
+
+static const char *gamepad_button_display_name(SDL_GamepadButton button)
+{
+    if (button == SDL_GAMEPAD_BUTTON_INVALID)
+        return "-";
+    const char *name = SDL_GetGamepadStringForButton(button);
+    return name != NULL && name[0] != '\0' ? name : "-";
 }
 
 static SDL_GamepadAxis gamepad_axis_from_json(const char *name)
@@ -1744,6 +1826,14 @@ static SDL_GamepadButton gamepad_button_from_json(const char *name)
         return SDL_GAMEPAD_BUTTON_EAST;
     if (SDL_strcmp(name, "WEST") == 0)
         return SDL_GAMEPAD_BUTTON_WEST;
+    if (SDL_strcmp(name, "LEFT_STICK") == 0)
+        return SDL_GAMEPAD_BUTTON_LEFT_STICK;
+    if (SDL_strcmp(name, "RIGHT_STICK") == 0)
+        return SDL_GAMEPAD_BUTTON_RIGHT_STICK;
+    if (SDL_strcmp(name, "LEFT_SHOULDER") == 0)
+        return SDL_GAMEPAD_BUTTON_LEFT_SHOULDER;
+    if (SDL_strcmp(name, "RIGHT_SHOULDER") == 0)
+        return SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER;
     if (SDL_strcmp(name, "DPAD_UP") == 0)
         return SDL_GAMEPAD_BUTTON_DPAD_UP;
     if (SDL_strcmp(name, "DPAD_DOWN") == 0)
@@ -1752,6 +1842,20 @@ static SDL_GamepadButton gamepad_button_from_json(const char *name)
         return SDL_GAMEPAD_BUTTON_DPAD_LEFT;
     if (SDL_strcmp(name, "DPAD_RIGHT") == 0)
         return SDL_GAMEPAD_BUTTON_DPAD_RIGHT;
+    if (SDL_strcmp(name, "GUIDE") == 0)
+        return SDL_GAMEPAD_BUTTON_GUIDE;
+    if (SDL_strcmp(name, "MISC1") == 0)
+        return SDL_GAMEPAD_BUTTON_MISC1;
+    if (SDL_strcmp(name, "RIGHT_PADDLE1") == 0)
+        return SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1;
+    if (SDL_strcmp(name, "LEFT_PADDLE1") == 0)
+        return SDL_GAMEPAD_BUTTON_LEFT_PADDLE1;
+    if (SDL_strcmp(name, "RIGHT_PADDLE2") == 0)
+        return SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2;
+    if (SDL_strcmp(name, "LEFT_PADDLE2") == 0)
+        return SDL_GAMEPAD_BUTTON_LEFT_PADDLE2;
+    if (SDL_strcmp(name, "TOUCHPAD") == 0)
+        return SDL_GAMEPAD_BUTTON_TOUCHPAD;
     return SDL_GAMEPAD_BUTTON_INVALID;
 }
 
@@ -2084,6 +2188,11 @@ bool sdl3d_game_data_get_app_control(const sdl3d_game_data_runtime *runtime, sdl
         out_control->startup_transition = NULL;
         out_control->quit_transition = NULL;
         out_control->quit_signal_id = -1;
+        out_control->window_apply_signal_id = -1;
+        out_control->window_settings_target = NULL;
+        out_control->window_display_mode_key = NULL;
+        out_control->window_renderer_key = NULL;
+        out_control->window_vsync_key = NULL;
     }
     if (runtime == NULL || out_control == NULL)
         return false;
@@ -2091,13 +2200,44 @@ bool sdl3d_game_data_get_app_control(const sdl3d_game_data_runtime *runtime, sdl
     yyjson_val *app = obj_get(runtime_root(runtime), "app");
     yyjson_val *pause = obj_get(app, "pause");
     yyjson_val *quit = obj_get(app, "quit");
+    yyjson_val *window = obj_get(app, "window");
+    yyjson_val *window_settings = obj_get(window, "settings");
     out_control->start_signal_id = sdl3d_game_data_find_signal(runtime, json_string(app, "start_signal", NULL));
     out_control->pause_action_id = sdl3d_game_data_find_action(runtime, json_string(pause, "action", NULL));
     out_control->startup_transition = json_string(app, "startup_transition", NULL);
     out_control->quit_action_id = sdl3d_game_data_find_action(runtime, json_string(quit, "action", NULL));
     out_control->quit_transition = json_string(quit, "transition", NULL);
     out_control->quit_signal_id = sdl3d_game_data_find_signal(runtime, json_string(quit, "quit_signal", NULL));
+    out_control->window_apply_signal_id =
+        sdl3d_game_data_find_signal(runtime, json_string(window, "apply_signal", NULL));
+    out_control->window_settings_target = json_string(window_settings, "target", "entity.settings");
+    out_control->window_display_mode_key = json_string(window_settings, "display_mode", "display_mode");
+    out_control->window_renderer_key = json_string(window_settings, "renderer", "renderer");
+    out_control->window_vsync_key = json_string(window_settings, "vsync", "vsync");
     return true;
+}
+
+bool sdl3d_game_data_app_signal_applies_window_settings(const sdl3d_game_data_runtime *runtime, int signal_id)
+{
+    if (runtime == NULL || signal_id < 0)
+        return false;
+
+    yyjson_val *window = obj_get(obj_get(runtime_root(runtime), "app"), "window");
+    const char *apply_signal = json_string(window, "apply_signal", NULL);
+    if (apply_signal != NULL && sdl3d_game_data_find_signal(runtime, apply_signal) == signal_id)
+        return true;
+
+    yyjson_val *apply_signals = obj_get(window, "apply_signals");
+    if (!yyjson_is_arr(apply_signals))
+        return false;
+
+    for (size_t i = 0; i < yyjson_arr_size(apply_signals); ++i)
+    {
+        yyjson_val *signal = yyjson_arr_get(apply_signals, i);
+        if (yyjson_is_str(signal) && sdl3d_game_data_find_signal(runtime, yyjson_get_str(signal)) == signal_id)
+            return true;
+    }
+    return false;
 }
 
 bool sdl3d_game_data_get_font_asset(const sdl3d_game_data_runtime *runtime, const char *id,
@@ -3446,6 +3586,7 @@ bool sdl3d_game_data_set_active_scene_with_payload(sdl3d_game_data_runtime *runt
 
     const char *previous = sdl3d_game_data_active_scene(runtime);
     runtime->active_scene_index = (int)(scene - runtime->scenes);
+    runtime->key_capture.active = false;
     apply_scene_camera(runtime, scene);
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D game data scene set: %s -> %s",
                  previous != NULL ? previous : "<none>", scene->name != NULL ? scene->name : "<none>");
@@ -3599,6 +3740,8 @@ bool sdl3d_game_data_get_active_menu_for_metrics(const sdl3d_game_data_runtime *
         SDL_zero(*out_menu);
         out_menu->up_action_id = -1;
         out_menu->down_action_id = -1;
+        out_menu->left_action_id = -1;
+        out_menu->right_action_id = -1;
         out_menu->select_action_id = -1;
         out_menu->move_signal_id = -1;
         out_menu->select_signal_id = -1;
@@ -3613,6 +3756,8 @@ bool sdl3d_game_data_get_active_menu_for_metrics(const sdl3d_game_data_runtime *
     out_menu->name = json_string(menu, "name", NULL);
     out_menu->up_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "up_action", NULL));
     out_menu->down_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "down_action", NULL));
+    out_menu->left_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "left_action", NULL));
+    out_menu->right_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "right_action", NULL));
     out_menu->select_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "select_action", NULL));
     out_menu->move_signal_id = sdl3d_game_data_find_signal(runtime, json_string(menu, "move_signal", NULL));
     out_menu->select_signal_id = sdl3d_game_data_find_signal(runtime, json_string(menu, "select_signal", NULL));
@@ -3649,6 +3794,8 @@ static sdl3d_game_data_menu_control_type parse_menu_control_type(const char *typ
         return SDL3D_GAME_DATA_MENU_CONTROL_CHOICE;
     if (SDL_strcmp(type, "range") == 0)
         return SDL3D_GAME_DATA_MENU_CONTROL_RANGE;
+    if (SDL_strcmp(type, "key_binding") == 0)
+        return SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING;
     return SDL3D_GAME_DATA_MENU_CONTROL_NONE;
 }
 
@@ -3694,6 +3841,8 @@ bool sdl3d_game_data_get_menu_item(const sdl3d_game_data_runtime *runtime, const
     out_item->control_key = json_string(control, "key", NULL);
     out_item->choice_count =
         yyjson_is_arr(obj_get(control, "choices")) ? (int)yyjson_arr_size(obj_get(control, "choices")) : 0;
+    out_item->key_binding_count =
+        yyjson_is_arr(obj_get(control, "bindings")) ? (int)yyjson_arr_size(obj_get(control, "bindings")) : 0;
     return yyjson_is_obj(item) && out_item->label != NULL;
 }
 
@@ -3718,6 +3867,303 @@ static yyjson_val *find_menu_item_control_json(const sdl3d_game_data_runtime *ru
         }
     }
     return NULL;
+}
+
+static yyjson_val *find_menu_item_at(const sdl3d_game_data_runtime *runtime, const char *menu_name, int item_index)
+{
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    const scene_menu_state *menu = find_scene_menu_const(scene, menu_name);
+    yyjson_val *items = menu != NULL ? obj_get(menu->menu, "items") : NULL;
+    if (runtime == NULL || menu == NULL || !yyjson_is_arr(items) || item_index < 0 || item_index >= menu->item_count)
+        return NULL;
+    return yyjson_arr_get(items, (size_t)item_index);
+}
+
+static void set_menu_binding_status(sdl3d_game_data_runtime *runtime, const char *status)
+{
+    if (runtime != NULL && runtime->scene_state != NULL)
+    {
+        sdl3d_properties_set_string(runtime->scene_state, "keyboard_binding_status", status != NULL ? status : "");
+        sdl3d_properties_set_string(runtime->scene_state, "gamepad_binding_status", status != NULL ? status : "");
+    }
+}
+
+static menu_binding_device menu_binding_control_device(yyjson_val *control)
+{
+    yyjson_val *bindings = obj_get(control, "bindings");
+    for (size_t i = 0; yyjson_is_arr(bindings) && i < yyjson_arr_size(bindings); ++i)
+    {
+        yyjson_val *binding = yyjson_arr_get(bindings, i);
+        if (SDL_strcmp(json_string(binding, "device", "keyboard"), "gamepad") == 0)
+            return MENU_BINDING_DEVICE_GAMEPAD_BUTTON;
+    }
+    return MENU_BINDING_DEVICE_KEYBOARD;
+}
+
+static SDL_Scancode current_action_keyboard_binding(const sdl3d_game_data_runtime *runtime, const char *action)
+{
+    const int action_id = sdl3d_game_data_find_action(runtime, action);
+    for (int i = 0; runtime != NULL && action_id >= 0 && i < runtime->input_binding_count; ++i)
+    {
+        const input_binding_spec *spec = &runtime->input_bindings[i];
+        if (spec->action_id == action_id && spec->source == SDL3D_INPUT_KEYBOARD)
+            return spec->scancode;
+    }
+    return SDL_SCANCODE_UNKNOWN;
+}
+
+static SDL_GamepadButton current_action_gamepad_button_binding(const sdl3d_game_data_runtime *runtime,
+                                                               const char *action)
+{
+    const int action_id = sdl3d_game_data_find_action(runtime, action);
+    for (int i = 0; runtime != NULL && action_id >= 0 && i < runtime->input_binding_count; ++i)
+    {
+        const input_binding_spec *spec = &runtime->input_bindings[i];
+        if (spec->action_id == action_id && spec->source == SDL3D_INPUT_GAMEPAD_BUTTON)
+            return spec->gamepad_button;
+    }
+    return SDL_GAMEPAD_BUTTON_INVALID;
+}
+
+static SDL_Scancode current_key_binding_control_scancode(const sdl3d_game_data_runtime *runtime, yyjson_val *control)
+{
+    yyjson_val *bindings = obj_get(control, "bindings");
+    for (size_t i = 0; yyjson_is_arr(bindings) && i < yyjson_arr_size(bindings); ++i)
+    {
+        yyjson_val *binding = yyjson_arr_get(bindings, i);
+        if (SDL_strcmp(json_string(binding, "device", "keyboard"), "keyboard") != 0)
+            continue;
+        const SDL_Scancode current = current_action_keyboard_binding(runtime, json_string(binding, "action", NULL));
+        if (current != SDL_SCANCODE_UNKNOWN)
+            return current;
+    }
+    return scancode_from_json(json_string(control, "default", NULL));
+}
+
+static SDL_GamepadButton current_key_binding_control_gamepad_button(const sdl3d_game_data_runtime *runtime,
+                                                                    yyjson_val *control)
+{
+    yyjson_val *bindings = obj_get(control, "bindings");
+    for (size_t i = 0; yyjson_is_arr(bindings) && i < yyjson_arr_size(bindings); ++i)
+    {
+        yyjson_val *binding = yyjson_arr_get(bindings, i);
+        if (SDL_strcmp(json_string(binding, "device", "keyboard"), "gamepad") != 0)
+            continue;
+        const SDL_GamepadButton current =
+            current_action_gamepad_button_binding(runtime, json_string(binding, "action", NULL));
+        if (current != SDL_GAMEPAD_BUTTON_INVALID)
+            return current;
+    }
+    return gamepad_button_from_json(json_string(control, "default", NULL));
+}
+
+static bool set_key_binding_control_scancode(sdl3d_game_data_runtime *runtime, yyjson_val *control,
+                                             SDL_Scancode scancode)
+{
+    bool changed = false;
+    yyjson_val *bindings = obj_get(control, "bindings");
+    for (size_t i = 0; yyjson_is_arr(bindings) && i < yyjson_arr_size(bindings); ++i)
+    {
+        yyjson_val *binding = yyjson_arr_get(bindings, i);
+        if (SDL_strcmp(json_string(binding, "device", "keyboard"), "keyboard") != 0)
+            continue;
+        if (set_action_keyboard_binding(runtime, json_string(binding, "action", NULL), scancode))
+            changed = true;
+    }
+    return changed;
+}
+
+static bool set_key_binding_control_gamepad_button(sdl3d_game_data_runtime *runtime, yyjson_val *control,
+                                                   SDL_GamepadButton button)
+{
+    bool changed = false;
+    yyjson_val *bindings = obj_get(control, "bindings");
+    for (size_t i = 0; yyjson_is_arr(bindings) && i < yyjson_arr_size(bindings); ++i)
+    {
+        yyjson_val *binding = yyjson_arr_get(bindings, i);
+        if (SDL_strcmp(json_string(binding, "device", "keyboard"), "gamepad") != 0)
+            continue;
+        if (set_action_gamepad_button_binding(runtime, json_string(binding, "action", NULL), button))
+            changed = true;
+    }
+    return changed;
+}
+
+static const char *keyboard_binding_conflict_label(const sdl3d_game_data_runtime *runtime, const char *menu_name,
+                                                   int item_index, SDL_Scancode scancode)
+{
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    const scene_menu_state *menu = find_scene_menu_const(scene, menu_name);
+    yyjson_val *items = menu != NULL ? obj_get(menu->menu, "items") : NULL;
+    for (int i = 0; yyjson_is_arr(items) && i < menu->item_count; ++i)
+    {
+        if (i == item_index)
+            continue;
+        yyjson_val *item = yyjson_arr_get(items, (size_t)i);
+        yyjson_val *control = obj_get(item, "control");
+        if (parse_menu_control_type(json_string(control, "type", NULL)) != SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING)
+            continue;
+        if (menu_binding_control_device(control) != MENU_BINDING_DEVICE_KEYBOARD)
+            continue;
+        if (current_key_binding_control_scancode(runtime, control) == scancode)
+            return json_string(item, "label", NULL);
+    }
+    return NULL;
+}
+
+static const char *gamepad_button_binding_conflict_label(const sdl3d_game_data_runtime *runtime, const char *menu_name,
+                                                         int item_index, SDL_GamepadButton button)
+{
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    const scene_menu_state *menu = find_scene_menu_const(scene, menu_name);
+    yyjson_val *items = menu != NULL ? obj_get(menu->menu, "items") : NULL;
+    for (int i = 0; yyjson_is_arr(items) && i < menu->item_count; ++i)
+    {
+        if (i == item_index)
+            continue;
+        yyjson_val *item = yyjson_arr_get(items, (size_t)i);
+        yyjson_val *control = obj_get(item, "control");
+        if (parse_menu_control_type(json_string(control, "type", NULL)) != SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING)
+            continue;
+        if (menu_binding_control_device(control) != MENU_BINDING_DEVICE_GAMEPAD_BUTTON)
+            continue;
+        if (current_key_binding_control_gamepad_button(runtime, control) == button)
+            return json_string(item, "label", NULL);
+    }
+    return NULL;
+}
+
+bool sdl3d_game_data_start_menu_key_binding_capture(sdl3d_game_data_runtime *runtime, const char *menu_name,
+                                                    int item_index)
+{
+    yyjson_val *item = find_menu_item_at(runtime, menu_name, item_index);
+    yyjson_val *control = obj_get(item, "control");
+    if (runtime == NULL || menu_name == NULL ||
+        parse_menu_control_type(json_string(control, "type", NULL)) != SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING)
+        return false;
+
+    runtime->key_capture.active = true;
+    runtime->key_capture.menu = menu_name;
+    runtime->key_capture.item_index = item_index;
+    char status[128];
+    const char *device_name =
+        menu_binding_control_device(control) == MENU_BINDING_DEVICE_GAMEPAD_BUTTON ? "button" : "key";
+    SDL_snprintf(status, sizeof(status), "Press a %s for %s", device_name, json_string(item, "label", "binding"));
+    set_menu_binding_status(runtime, status);
+    return true;
+}
+
+bool sdl3d_game_data_menu_key_binding_capture_active(const sdl3d_game_data_runtime *runtime)
+{
+    return runtime != NULL && runtime->key_capture.active;
+}
+
+sdl3d_game_data_key_binding_capture_status sdl3d_game_data_update_menu_key_binding_capture(
+    sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input)
+{
+    if (runtime == NULL || !runtime->key_capture.active)
+        return SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_NONE;
+
+    yyjson_val *item = find_menu_item_at(runtime, runtime->key_capture.menu, runtime->key_capture.item_index);
+    yyjson_val *control = obj_get(item, "control");
+    if (menu_binding_control_device(control) == MENU_BINDING_DEVICE_GAMEPAD_BUTTON)
+    {
+        const SDL_Scancode cancel_key = scancode_from_json(json_string(control, "cancel_key", "ESCAPE"));
+        if (sdl3d_input_get_pressed_scancode(input) == cancel_key)
+        {
+            runtime->key_capture.active = false;
+            set_menu_binding_status(runtime, "Canceled");
+            return SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_CANCELED;
+        }
+
+        const SDL_GamepadButton button = sdl3d_input_get_pressed_gamepad_button(input);
+        if (button == SDL_GAMEPAD_BUTTON_INVALID)
+            return SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_WAITING;
+
+        const char *conflict = gamepad_button_binding_conflict_label(runtime, runtime->key_capture.menu,
+                                                                     runtime->key_capture.item_index, button);
+        if (conflict != NULL)
+        {
+            char status[128];
+            SDL_snprintf(status, sizeof(status), "%s already uses %s", conflict, gamepad_button_display_name(button));
+            set_menu_binding_status(runtime, status);
+            return SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_CONFLICT;
+        }
+
+        if (!set_key_binding_control_gamepad_button(runtime, control, button))
+            return SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_WAITING;
+
+        char status[128];
+        SDL_snprintf(status, sizeof(status), "%s set to %s", json_string(item, "label", "Binding"),
+                     gamepad_button_display_name(button));
+        runtime->key_capture.active = false;
+        set_menu_binding_status(runtime, status);
+        return SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_CHANGED;
+    }
+
+    const SDL_Scancode scancode = sdl3d_input_get_pressed_scancode(input);
+    if (scancode == SDL_SCANCODE_UNKNOWN)
+        return SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_WAITING;
+
+    const SDL_Scancode cancel = scancode_from_json(json_string(control, "cancel_key", "ESCAPE"));
+    if (scancode == cancel && !json_bool(control, "allow_escape", false))
+    {
+        runtime->key_capture.active = false;
+        set_menu_binding_status(runtime, "Canceled");
+        return SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_CANCELED;
+    }
+
+    const char *conflict =
+        keyboard_binding_conflict_label(runtime, runtime->key_capture.menu, runtime->key_capture.item_index, scancode);
+    if (conflict != NULL)
+    {
+        char status[128];
+        SDL_snprintf(status, sizeof(status), "%s already uses %s", conflict, scancode_display_name(scancode));
+        set_menu_binding_status(runtime, status);
+        return SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_CONFLICT;
+    }
+
+    if (!set_key_binding_control_scancode(runtime, control, scancode))
+        return SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_WAITING;
+
+    char status[128];
+    SDL_snprintf(status, sizeof(status), "%s set to %s", json_string(item, "label", "Binding"),
+                 scancode_display_name(scancode));
+    runtime->key_capture.active = false;
+    set_menu_binding_status(runtime, status);
+    return SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_CHANGED;
+}
+
+bool sdl3d_game_data_reset_menu_key_bindings(sdl3d_game_data_runtime *runtime, const char *menu_name)
+{
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    const scene_menu_state *menu = find_scene_menu_const(scene, menu_name);
+    yyjson_val *items = menu != NULL ? obj_get(menu->menu, "items") : NULL;
+    bool changed = false;
+    for (int i = 0; yyjson_is_arr(items) && i < menu->item_count; ++i)
+    {
+        yyjson_val *item = yyjson_arr_get(items, (size_t)i);
+        yyjson_val *control = obj_get(item, "control");
+        if (parse_menu_control_type(json_string(control, "type", NULL)) != SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING)
+            continue;
+        if (menu_binding_control_device(control) == MENU_BINDING_DEVICE_GAMEPAD_BUTTON)
+        {
+            const SDL_GamepadButton button = gamepad_button_from_json(json_string(control, "default", NULL));
+            if (button != SDL_GAMEPAD_BUTTON_INVALID &&
+                set_key_binding_control_gamepad_button(runtime, control, button))
+                changed = true;
+        }
+        else
+        {
+            const SDL_Scancode key = scancode_from_json(json_string(control, "default", NULL));
+            if (key != SDL_SCANCODE_UNKNOWN && set_key_binding_control_scancode(runtime, control, key))
+                changed = true;
+        }
+    }
+    runtime->key_capture.active = false;
+    if (changed)
+        set_menu_binding_status(runtime, "Input settings reset");
+    return changed;
 }
 
 static bool set_property_from_json(sdl3d_properties *props, const char *key, yyjson_val *value)
@@ -3769,8 +4215,26 @@ static bool json_value_matches_property(yyjson_val *value, const sdl3d_value *pr
     return false;
 }
 
-bool sdl3d_game_data_apply_menu_item_control(sdl3d_game_data_runtime *runtime, const sdl3d_game_data_menu_item *item)
+static bool menu_range_is_integer(yyjson_val *control)
 {
+    return SDL_strcmp(json_string(control, "value_type", ""), "int") == 0 ||
+           SDL_strcmp(json_string(control, "value_type", ""), "integer") == 0;
+}
+
+static float menu_control_numeric_value(const sdl3d_value *value, yyjson_val *control, float fallback)
+{
+    if (value != NULL && value->type == SDL3D_VALUE_INT)
+        return (float)value->as_int;
+    if (value != NULL && value->type == SDL3D_VALUE_FLOAT)
+        return value->as_float;
+    return json_float(control, "default", fallback);
+}
+
+bool sdl3d_game_data_adjust_menu_item_control(sdl3d_game_data_runtime *runtime, const sdl3d_game_data_menu_item *item,
+                                              int direction)
+{
+    if (direction == 0)
+        return false;
     if (runtime == NULL || item == NULL || item->control_type == SDL3D_GAME_DATA_MENU_CONTROL_NONE ||
         item->control_target == NULL || item->control_key == NULL)
         return false;
@@ -3780,6 +4244,7 @@ bool sdl3d_game_data_apply_menu_item_control(sdl3d_game_data_runtime *runtime, c
         return false;
 
     yyjson_val *control = find_menu_item_control_json(runtime, item);
+    const int step_direction = direction < 0 ? -1 : 1;
     switch (item->control_type)
     {
     case SDL3D_GAME_DATA_MENU_CONTROL_TOGGLE: {
@@ -3804,7 +4269,12 @@ bool sdl3d_game_data_apply_menu_item_control(sdl3d_game_data_runtime *runtime, c
                 break;
             }
         }
-        const int next_index = (current_index + 1) % (int)yyjson_arr_size(choices);
+        const int choice_count = (int)yyjson_arr_size(choices);
+        int next_index =
+            current_index >= 0 ? current_index + step_direction : (step_direction < 0 ? choice_count - 1 : 0);
+        next_index %= choice_count;
+        if (next_index < 0)
+            next_index += choice_count;
         yyjson_val *next = yyjson_arr_get(choices, (size_t)next_index);
         return set_property_from_json(actor->props, item->control_key,
                                       yyjson_is_obj(next) ? obj_get(next, "value") : next);
@@ -3813,18 +4283,25 @@ bool sdl3d_game_data_apply_menu_item_control(sdl3d_game_data_runtime *runtime, c
         const float min_value = json_float(control, "min", 0.0f);
         const float max_value = json_float(control, "max", 1.0f);
         const float step = json_float(control, "step", 1.0f);
-        float value =
-            sdl3d_properties_get_float(actor->props, item->control_key, json_float(control, "default", min_value));
-        value += step;
-        if (value > max_value)
-            value = min_value;
-        sdl3d_properties_set_float(actor->props, item->control_key, SDL_clamp(value, min_value, max_value));
+        const sdl3d_value *current = sdl3d_properties_get_value(actor->props, item->control_key);
+        float value = menu_control_numeric_value(current, control, min_value);
+        value = SDL_clamp(value + step * (float)step_direction, min_value, max_value);
+        if (menu_range_is_integer(control))
+            sdl3d_properties_set_int(actor->props, item->control_key, (int)SDL_lroundf(value));
+        else
+            sdl3d_properties_set_float(actor->props, item->control_key, value);
         return true;
     }
     case SDL3D_GAME_DATA_MENU_CONTROL_NONE:
+    case SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING:
         return false;
     }
     return false;
+}
+
+bool sdl3d_game_data_apply_menu_item_control(sdl3d_game_data_runtime *runtime, const sdl3d_game_data_menu_item *item)
+{
+    return sdl3d_game_data_adjust_menu_item_control(runtime, item, 1);
 }
 
 int sdl3d_game_data_scene_shortcut_count(const sdl3d_game_data_runtime *runtime)
@@ -3855,6 +4332,8 @@ bool sdl3d_game_data_scene_shortcut_at(const sdl3d_game_data_runtime *runtime, i
 
 bool sdl3d_game_data_active_menu_input_is_idle(const sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input)
 {
+    if (sdl3d_game_data_menu_key_binding_capture_active(runtime))
+        return false;
     sdl3d_game_data_menu menu;
     if (!sdl3d_game_data_get_active_menu(runtime, &menu))
         return true;
@@ -3865,6 +4344,10 @@ bool sdl3d_game_data_active_menu_input_is_idle(const sdl3d_game_data_runtime *ru
             !sdl3d_input_is_held(input, menu.up_action_id)) &&
            (menu.down_action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, menu.down_action_id) ||
             !sdl3d_input_is_held(input, menu.down_action_id)) &&
+           (menu.left_action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, menu.left_action_id) ||
+            !sdl3d_input_is_held(input, menu.left_action_id)) &&
+           (menu.right_action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, menu.right_action_id) ||
+            !sdl3d_input_is_held(input, menu.right_action_id)) &&
            (menu.select_action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, menu.select_action_id) ||
             !sdl3d_input_is_held(input, menu.select_action_id));
 }
@@ -3958,6 +4441,28 @@ static void format_menu_item_label(const sdl3d_game_data_runtime *runtime, yyjso
         SDL_strlcpy(buffer, label, buffer_size);
         return;
     }
+    if (type == SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING)
+    {
+        if (runtime != NULL && runtime->key_capture.active &&
+            item == find_menu_item_at(runtime, runtime->key_capture.menu, runtime->key_capture.item_index))
+        {
+            const char *device_name =
+                menu_binding_control_device(control) == MENU_BINDING_DEVICE_GAMEPAD_BUTTON ? "button" : "key";
+            SDL_snprintf(buffer, buffer_size, "%s: Press a %s", label, device_name);
+            return;
+        }
+        if (menu_binding_control_device(control) == MENU_BINDING_DEVICE_GAMEPAD_BUTTON)
+        {
+            SDL_snprintf(buffer, buffer_size, "%s: %s", label,
+                         gamepad_button_display_name(current_key_binding_control_gamepad_button(runtime, control)));
+        }
+        else
+        {
+            SDL_snprintf(buffer, buffer_size, "%s: %s", label,
+                         scancode_display_name(current_key_binding_control_scancode(runtime, control)));
+        }
+        return;
+    }
 
     sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, json_string(control, "target", NULL));
     const char *key = json_string(control, "key", NULL);
@@ -3979,9 +4484,33 @@ static void format_menu_item_label(const sdl3d_game_data_runtime *runtime, yyjso
     }
     if (type == SDL3D_GAME_DATA_MENU_CONTROL_RANGE)
     {
-        const float current =
-            value != NULL && value->type == SDL3D_VALUE_FLOAT ? value->as_float : json_float(control, "default", 0.0f);
-        SDL_snprintf(buffer, buffer_size, "%s: %.2g", label, current);
+        const float min_value = json_float(control, "min", 0.0f);
+        const float max_value = json_float(control, "max", 1.0f);
+        const float current = SDL_clamp(menu_control_numeric_value(value, control, min_value), min_value, max_value);
+        if (SDL_strcmp(json_string(control, "display", ""), "slider") == 0)
+        {
+            const int slots = SDL_max(1, json_int(control, "slots", 10));
+            const float t = max_value > min_value ? (current - min_value) / (max_value - min_value) : 0.0f;
+            int filled = (int)SDL_lroundf(SDL_clamp(t, 0.0f, 1.0f) * (float)slots);
+            filled = SDL_clamp(filled, 0, slots);
+            char slider[64];
+            size_t pos = 0;
+            slider[pos++] = '[';
+            for (int i = 0; i < slots && pos + 2 < sizeof(slider); ++i)
+                slider[pos++] = i < filled ? '#' : '-';
+            slider[pos++] = ']';
+            slider[pos] = '\0';
+            if (menu_range_is_integer(control))
+                SDL_snprintf(buffer, buffer_size, "%s  %s %d/%d", label, slider, (int)SDL_lroundf(current),
+                             (int)SDL_lroundf(max_value));
+            else
+                SDL_snprintf(buffer, buffer_size, "%s  %s %.2g", label, slider, current);
+            return;
+        }
+        if (menu_range_is_integer(control))
+            SDL_snprintf(buffer, buffer_size, "%s: %d", label, (int)SDL_lroundf(current));
+        else
+            SDL_snprintf(buffer, buffer_size, "%s: %.2g", label, current);
         return;
     }
     SDL_strlcpy(buffer, label, buffer_size);
@@ -4234,6 +4763,133 @@ static bool load_signals(sdl3d_game_data_runtime *runtime, yyjson_val *root, cha
     return true;
 }
 
+static bool append_input_binding_spec(sdl3d_game_data_runtime *runtime, const input_binding_spec *spec)
+{
+    if (runtime == NULL || spec == NULL)
+        return false;
+    if (runtime->input_binding_count >= runtime->input_binding_capacity)
+    {
+        const int next_capacity = runtime->input_binding_capacity > 0 ? runtime->input_binding_capacity * 2 : 32;
+        input_binding_spec *next = (input_binding_spec *)SDL_realloc(
+            runtime->input_bindings, (size_t)next_capacity * sizeof(*runtime->input_bindings));
+        if (next == NULL)
+            return false;
+        SDL_memset(next + runtime->input_binding_capacity, 0,
+                   (size_t)(next_capacity - runtime->input_binding_capacity) * sizeof(*runtime->input_bindings));
+        runtime->input_bindings = next;
+        runtime->input_binding_capacity = next_capacity;
+    }
+    runtime->input_bindings[runtime->input_binding_count++] = *spec;
+    return true;
+}
+
+static void bind_input_spec(sdl3d_input_manager *input, const input_binding_spec *spec)
+{
+    if (input == NULL || spec == NULL || spec->action_id < 0)
+        return;
+
+    switch (spec->source)
+    {
+    case SDL3D_INPUT_KEYBOARD:
+        sdl3d_input_bind_key_mod_mask(input, spec->action_id, spec->scancode, spec->required_modifiers,
+                                      spec->excluded_modifiers);
+        break;
+    case SDL3D_INPUT_MOUSE_BUTTON:
+        sdl3d_input_bind_mouse_button(input, spec->action_id, spec->mouse_button);
+        break;
+    case SDL3D_INPUT_MOUSE_AXIS:
+        sdl3d_input_bind_mouse_axis(input, spec->action_id, spec->mouse_axis, spec->scale);
+        break;
+    case SDL3D_INPUT_GAMEPAD_BUTTON:
+        sdl3d_input_bind_gamepad_button(input, spec->action_id, spec->gamepad_button);
+        break;
+    case SDL3D_INPUT_GAMEPAD_AXIS:
+        sdl3d_input_bind_gamepad_axis(input, spec->action_id, spec->gamepad_axis, spec->scale);
+        break;
+    }
+}
+
+static void rebind_action_from_specs(sdl3d_game_data_runtime *runtime, int action_id)
+{
+    sdl3d_input_manager *input = runtime_input(runtime);
+    if (input == NULL || action_id < 0)
+        return;
+
+    sdl3d_input_unbind_action(input, action_id);
+    for (int i = 0; i < runtime->input_binding_count; ++i)
+    {
+        if (runtime->input_bindings[i].action_id == action_id)
+            bind_input_spec(input, &runtime->input_bindings[i]);
+    }
+}
+
+static bool set_action_keyboard_binding(sdl3d_game_data_runtime *runtime, const char *action, SDL_Scancode scancode)
+{
+    const int action_id = sdl3d_game_data_find_action(runtime, action);
+    if (runtime == NULL || action == NULL || action_id < 0 || scancode == SDL_SCANCODE_UNKNOWN)
+        return false;
+
+    for (int i = 0; i < runtime->input_binding_count;)
+    {
+        input_binding_spec *spec = &runtime->input_bindings[i];
+        if (spec->action_id == action_id && spec->source == SDL3D_INPUT_KEYBOARD)
+        {
+            *spec = runtime->input_bindings[runtime->input_binding_count - 1];
+            runtime->input_binding_count--;
+        }
+        else
+        {
+            i++;
+        }
+    }
+
+    input_binding_spec spec;
+    SDL_zero(spec);
+    spec.action = action;
+    spec.action_id = action_id;
+    spec.source = SDL3D_INPUT_KEYBOARD;
+    spec.scancode = scancode;
+    spec.scale = 1.0f;
+    if (!append_input_binding_spec(runtime, &spec))
+        return false;
+    rebind_action_from_specs(runtime, action_id);
+    return true;
+}
+
+static bool set_action_gamepad_button_binding(sdl3d_game_data_runtime *runtime, const char *action,
+                                              SDL_GamepadButton button)
+{
+    const int action_id = sdl3d_game_data_find_action(runtime, action);
+    if (runtime == NULL || action == NULL || action_id < 0 || button == SDL_GAMEPAD_BUTTON_INVALID)
+        return false;
+
+    for (int i = 0; i < runtime->input_binding_count;)
+    {
+        input_binding_spec *spec = &runtime->input_bindings[i];
+        if (spec->action_id == action_id && spec->source == SDL3D_INPUT_GAMEPAD_BUTTON)
+        {
+            *spec = runtime->input_bindings[runtime->input_binding_count - 1];
+            runtime->input_binding_count--;
+        }
+        else
+        {
+            i++;
+        }
+    }
+
+    input_binding_spec spec;
+    SDL_zero(spec);
+    spec.action = action;
+    spec.action_id = action_id;
+    spec.source = SDL3D_INPUT_GAMEPAD_BUTTON;
+    spec.gamepad_button = button;
+    spec.scale = 1.0f;
+    if (!append_input_binding_spec(runtime, &spec))
+        return false;
+    rebind_action_from_specs(runtime, action_id);
+    return true;
+}
+
 static bool load_input(sdl3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
 {
     sdl3d_input_manager *input = runtime_input(runtime);
@@ -4279,16 +4935,57 @@ static bool load_input(sdl3d_game_data_runtime *runtime, yyjson_val *root, char 
                 {
                     SDL_Scancode code = scancode_from_json(json_string(binding, "key", NULL));
                     if (code != SDL_SCANCODE_UNKNOWN)
-                        sdl3d_input_bind_key(input, action_id, code);
+                    {
+                        input_binding_spec spec;
+                        SDL_zero(spec);
+                        spec.action = name;
+                        spec.action_id = action_id;
+                        spec.source = SDL3D_INPUT_KEYBOARD;
+                        spec.scancode = code;
+                        spec.scale = 1.0f;
+                        if (!append_input_binding_spec(runtime, &spec))
+                            return false;
+                        bind_input_spec(input, &spec);
+                    }
                 }
                 else if (SDL_strcmp(device, "gamepad") == 0)
                 {
                     const char *axis = json_string(binding, "axis", NULL);
                     const char *button = json_string(binding, "button", NULL);
                     if (axis != NULL)
-                        sdl3d_input_bind_gamepad_axis(input, action_id, gamepad_axis_from_json(axis), scale);
+                    {
+                        const SDL_GamepadAxis gamepad_axis = gamepad_axis_from_json(axis);
+                        if (gamepad_axis != SDL_GAMEPAD_AXIS_INVALID)
+                        {
+                            input_binding_spec spec;
+                            SDL_zero(spec);
+                            spec.action = name;
+                            spec.action_id = action_id;
+                            spec.source = SDL3D_INPUT_GAMEPAD_AXIS;
+                            spec.gamepad_axis = gamepad_axis;
+                            spec.scale = scale;
+                            if (!append_input_binding_spec(runtime, &spec))
+                                return false;
+                            bind_input_spec(input, &spec);
+                        }
+                    }
                     else if (button != NULL)
-                        sdl3d_input_bind_gamepad_button(input, action_id, gamepad_button_from_json(button));
+                    {
+                        const SDL_GamepadButton gamepad_button = gamepad_button_from_json(button);
+                        if (gamepad_button != SDL_GAMEPAD_BUTTON_INVALID)
+                        {
+                            input_binding_spec spec;
+                            SDL_zero(spec);
+                            spec.action = name;
+                            spec.action_id = action_id;
+                            spec.source = SDL3D_INPUT_GAMEPAD_BUTTON;
+                            spec.gamepad_button = gamepad_button;
+                            spec.scale = 1.0f;
+                            if (!append_input_binding_spec(runtime, &spec))
+                                return false;
+                            bind_input_spec(input, &spec);
+                        }
+                    }
                 }
             }
         }
@@ -5161,6 +5858,37 @@ static bool read_ui_binding_value(const sdl3d_game_data_runtime *runtime, yyjson
             return false;
         }
     }
+    if (SDL_strcmp(type, "scene_state") == 0)
+    {
+        const char *key = json_string(binding, "key", NULL);
+        const sdl3d_value *value = runtime != NULL && runtime->scene_state != NULL && key != NULL
+                                       ? sdl3d_properties_get_value(runtime->scene_state, key)
+                                       : NULL;
+        if (value == NULL)
+            return false;
+        switch (value->type)
+        {
+        case SDL3D_VALUE_INT:
+            out_value->type = UI_VALUE_INT;
+            out_value->as_int = value->as_int;
+            return true;
+        case SDL3D_VALUE_FLOAT:
+            out_value->type = UI_VALUE_FLOAT;
+            out_value->as_float = value->as_float;
+            return true;
+        case SDL3D_VALUE_BOOL:
+            out_value->type = UI_VALUE_BOOL;
+            out_value->as_bool = value->as_bool;
+            return true;
+        case SDL3D_VALUE_STRING:
+            out_value->type = UI_VALUE_STRING;
+            out_value->as_string = value->as_string != NULL ? value->as_string : "";
+            return true;
+        case SDL3D_VALUE_VEC3:
+        case SDL3D_VALUE_COLOR:
+            return false;
+        }
+    }
     return false;
 }
 
@@ -5711,6 +6439,24 @@ static bool execute_audio_play_music(sdl3d_game_data_runtime *runtime, yyjson_va
     return ok;
 }
 
+static float action_float_or_property(sdl3d_game_data_runtime *runtime, yyjson_val *action, const char *key,
+                                      float fallback)
+{
+    yyjson_val *source = obj_get(action, "source");
+    if (yyjson_is_obj(source))
+    {
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, json_string(source, "target", NULL));
+        const char *property = json_string(source, "key", NULL);
+        const sdl3d_value *value =
+            actor != NULL && property != NULL ? sdl3d_properties_get_value(actor->props, property) : NULL;
+        if (value != NULL && value->type == SDL3D_VALUE_FLOAT)
+            return value->as_float * json_float(source, "scale", 1.0f);
+        if (value != NULL && value->type == SDL3D_VALUE_INT)
+            return (float)value->as_int * json_float(source, "scale", 1.0f);
+    }
+    return json_float(action, key, fallback);
+}
+
 static bool execute_audio_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const char *type)
 {
     sdl3d_audio_engine *audio = sdl3d_game_session_get_audio(runtime != NULL ? runtime->session : NULL);
@@ -5742,10 +6488,152 @@ static bool execute_audio_action(sdl3d_game_data_runtime *runtime, yyjson_val *a
     if (SDL_strcmp(type, "audio.set_bus_volume") == 0)
     {
         sdl3d_audio_set_bus_volume(audio, parse_audio_bus(json_string(action, "bus", NULL), SDL3D_AUDIO_BUS_COUNT),
-                                   json_float(action, "volume", 1.0f));
+                                   action_float_or_property(runtime, action, "volume", 1.0f));
         return true;
     }
     return false;
+}
+
+static bool json_string_array_contains(yyjson_val *array, const char *value)
+{
+    if (!yyjson_is_arr(array) || value == NULL)
+        return false;
+    for (size_t i = 0; i < yyjson_arr_size(array); ++i)
+    {
+        const char *entry = yyjson_get_str(yyjson_arr_get(array, i));
+        if (entry != NULL && SDL_strcmp(entry, value) == 0)
+            return true;
+    }
+    return false;
+}
+
+static property_snapshot *find_property_snapshot(sdl3d_game_data_runtime *runtime, const char *name, const char *target)
+{
+    if (runtime == NULL || name == NULL || target == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->property_snapshot_count; ++i)
+    {
+        property_snapshot *snapshot = &runtime->property_snapshots[i];
+        if (snapshot->name != NULL && snapshot->target != NULL && SDL_strcmp(snapshot->name, name) == 0 &&
+            SDL_strcmp(snapshot->target, target) == 0)
+            return snapshot;
+    }
+    return NULL;
+}
+
+static property_snapshot *get_or_create_property_snapshot(sdl3d_game_data_runtime *runtime, const char *name,
+                                                          const char *target)
+{
+    property_snapshot *existing = find_property_snapshot(runtime, name, target);
+    if (existing != NULL)
+        return existing;
+    if (runtime == NULL || name == NULL || name[0] == '\0' || target == NULL || target[0] == '\0')
+        return NULL;
+    if (runtime->property_snapshot_count >= runtime->property_snapshot_capacity)
+    {
+        const int next_capacity = runtime->property_snapshot_capacity > 0 ? runtime->property_snapshot_capacity * 2 : 4;
+        property_snapshot *next = (property_snapshot *)SDL_realloc(
+            runtime->property_snapshots, (size_t)next_capacity * sizeof(*runtime->property_snapshots));
+        if (next == NULL)
+            return NULL;
+        SDL_memset(next + runtime->property_snapshot_capacity, 0,
+                   (size_t)(next_capacity - runtime->property_snapshot_capacity) *
+                       sizeof(*runtime->property_snapshots));
+        runtime->property_snapshots = next;
+        runtime->property_snapshot_capacity = next_capacity;
+    }
+
+    property_snapshot *snapshot = &runtime->property_snapshots[runtime->property_snapshot_count];
+    snapshot->name = SDL_strdup(name);
+    snapshot->target = SDL_strdup(target);
+    snapshot->properties = sdl3d_properties_create();
+    if (snapshot->name == NULL || snapshot->target == NULL || snapshot->properties == NULL)
+    {
+        SDL_free(snapshot->name);
+        SDL_free(snapshot->target);
+        sdl3d_properties_destroy(snapshot->properties);
+        SDL_zero(*snapshot);
+        return NULL;
+    }
+    runtime->property_snapshot_count++;
+    return snapshot;
+}
+
+static void copy_selected_properties(sdl3d_properties *target, const sdl3d_properties *source, yyjson_val *keys)
+{
+    if (target == NULL || source == NULL)
+        return;
+    if (yyjson_is_arr(keys))
+    {
+        for (size_t i = 0; i < yyjson_arr_size(keys); ++i)
+        {
+            const char *key = yyjson_get_str(yyjson_arr_get(keys, i));
+            copy_property_value(target, key, sdl3d_properties_get_value(source, key));
+        }
+        return;
+    }
+
+    const int count = sdl3d_properties_count(source);
+    for (int i = 0; i < count; ++i)
+    {
+        const char *key = NULL;
+        if (sdl3d_properties_get_key_at(source, i, &key, NULL))
+            copy_property_value(target, key, sdl3d_properties_get_value(source, key));
+    }
+}
+
+static bool snapshot_actor_properties(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    const char *target = json_string(action, "target", NULL);
+    const char *name = json_string(action, "name", NULL);
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, target);
+    property_snapshot *snapshot = get_or_create_property_snapshot(runtime, name, target);
+    if (actor == NULL || snapshot == NULL)
+        return false;
+
+    sdl3d_properties_clear(snapshot->properties);
+    copy_selected_properties(snapshot->properties, actor->props, obj_get(action, "keys"));
+    return true;
+}
+
+static bool restore_actor_property_snapshot(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    const char *target = json_string(action, "target", NULL);
+    const char *name = json_string(action, "name", NULL);
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, target);
+    property_snapshot *snapshot = find_property_snapshot(runtime, name, target);
+    if (actor == NULL || snapshot == NULL)
+        return false;
+
+    copy_selected_properties(actor->props, snapshot->properties, obj_get(action, "keys"));
+    return true;
+}
+
+static bool reset_actor_properties_to_authored_defaults(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    const char *target = json_string(action, "target", NULL);
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, target);
+    yyjson_val *entity = find_entity_json(runtime, target);
+    yyjson_val *properties = obj_get(entity, "properties");
+    yyjson_val *keys = obj_get(action, "keys");
+    if (actor == NULL || !yyjson_is_obj(properties))
+        return false;
+
+    yyjson_val *key;
+    yyjson_val *entry;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(properties, &iter);
+    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+    {
+        const char *name = yyjson_get_str(key);
+        if (yyjson_is_arr(keys) && !json_string_array_contains(keys, name))
+            continue;
+        entry = yyjson_obj_iter_get_val(key);
+        yyjson_val *value = obj_get(entry, "value");
+        if (value != NULL)
+            set_actor_property_from_json(actor, name, value);
+    }
+    return true;
 }
 
 static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const sdl3d_properties *payload)
@@ -5797,8 +6685,20 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
         return true;
     }
 
+    if (SDL_strcmp(type, "property.snapshot") == 0)
+        return snapshot_actor_properties(runtime, action);
+
+    if (SDL_strcmp(type, "property.restore_snapshot") == 0)
+        return restore_actor_property_snapshot(runtime, action);
+
     if (SDL_strcmp(type, "property.animate") == 0)
         return start_property_animation_from_json(runtime, action);
+
+    if (SDL_strcmp(type, "property.reset_defaults") == 0)
+        return reset_actor_properties_to_authored_defaults(runtime, action);
+
+    if (SDL_strcmp(type, "input.reset_bindings") == 0)
+        return sdl3d_game_data_reset_menu_key_bindings(runtime, json_string(action, "menu", NULL));
 
     if (SDL_strcmp(type, "ui.animate") == 0)
         return start_ui_animation_from_json(runtime, action);
@@ -6763,13 +7663,83 @@ static bool apply_app_config_from_root(yyjson_val *root, sdl3d_game_config *out_
         SDL_snprintf(title_buffer, (size_t)title_buffer_size, "%s", title);
         out_config->title = title_buffer;
     }
-    out_config->width = json_int(app, "width", out_config->width);
-    out_config->height = json_int(app, "height", out_config->height);
+    out_config->width = json_int(app, "window_width", json_int(app, "width", out_config->width));
+    out_config->height = json_int(app, "window_height", json_int(app, "height", out_config->height));
+    out_config->logical_width = json_int(app, "logical_width", json_int(app, "width", out_config->logical_width));
+    out_config->logical_height = json_int(app, "logical_height", json_int(app, "height", out_config->logical_height));
+    out_config->icon_path = json_string(app, "icon_path", json_string(app, "icon", out_config->icon_path));
     out_config->backend = parse_backend(json_string(app, "backend", NULL), out_config->backend);
+    yyjson_val *window = obj_get(app, "window");
+    if (yyjson_is_obj(window))
+    {
+        const char *window_title = json_string(window, "title", NULL);
+        if (window_title != NULL && title_buffer != NULL && title_buffer_size > 0)
+        {
+            SDL_snprintf(title_buffer, (size_t)title_buffer_size, "%s", window_title);
+            out_config->title = title_buffer;
+        }
+#if defined(SDL3D_PRODUCTION_BUILD)
+        const char *mode = json_string(window, "production_display_mode", json_string(window, "display_mode", NULL));
+#else
+        const char *mode = json_string(window, "development_display_mode", json_string(window, "display_mode", NULL));
+#endif
+        out_config->display_mode = parse_window_mode(mode, out_config->display_mode);
+        yyjson_val *vsync = obj_get(window, "vsync");
+        if (yyjson_is_bool(vsync))
+            out_config->vsync = yyjson_get_bool(vsync) ? 1 : -1;
+        yyjson_val *maximized = obj_get(window, "maximized");
+        if (yyjson_is_bool(maximized))
+            out_config->maximized = yyjson_get_bool(maximized) ? 1 : -1;
+        out_config->backend = parse_backend(json_string(window, "renderer", NULL), out_config->backend);
+        out_config->icon_path = json_string(window, "icon_path", json_string(window, "icon", out_config->icon_path));
+    }
     out_config->tick_rate = json_float(app, "tick_rate", out_config->tick_rate);
     out_config->max_ticks_per_frame = json_int(app, "max_ticks_per_frame", out_config->max_ticks_per_frame);
     out_config->enable_audio = json_bool(app, "enable_audio", out_config->enable_audio);
     return true;
+}
+
+static void apply_persisted_app_settings(yyjson_val *root, sdl3d_game_config *out_config)
+{
+    yyjson_val *app = obj_get(root, "app");
+    const char *settings_path = json_string(app, "settings_path", NULL);
+    if (settings_path == NULL || settings_path[0] == '\0')
+        return;
+
+    sdl3d_storage_config storage_config;
+    storage_config_from_root(root, &storage_config);
+
+    char storage_error[256];
+    sdl3d_storage *storage = NULL;
+    if (!sdl3d_storage_create(&storage_config, &storage, storage_error, (int)sizeof(storage_error)))
+    {
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D app settings storage unavailable: %s", storage_error);
+        return;
+    }
+
+    sdl3d_storage_buffer buffer;
+    SDL_zero(buffer);
+    if (!sdl3d_storage_read_file(storage, settings_path, &buffer, storage_error, (int)sizeof(storage_error)))
+    {
+        sdl3d_storage_destroy(storage);
+        return;
+    }
+
+    yyjson_doc *doc = yyjson_read_opts((char *)buffer.data, buffer.size, YYJSON_READ_NOFLAG, NULL, NULL);
+    yyjson_val *settings = doc != NULL ? yyjson_doc_get_root(doc) : NULL;
+    if (yyjson_is_obj(settings))
+    {
+        out_config->display_mode =
+            parse_window_mode(json_string(settings, "display_mode", NULL), out_config->display_mode);
+        out_config->backend = parse_backend(json_string(settings, "renderer", NULL), out_config->backend);
+        yyjson_val *vsync = obj_get(settings, "vsync");
+        if (yyjson_is_bool(vsync))
+            out_config->vsync = yyjson_get_bool(vsync) ? 1 : -1;
+    }
+
+    yyjson_doc_free(doc);
+    sdl3d_storage_buffer_free(&buffer);
+    sdl3d_storage_destroy(storage);
 }
 
 bool sdl3d_game_data_load_app_config_asset(sdl3d_asset_resolver *assets, const char *asset_path,
@@ -6804,8 +7774,11 @@ bool sdl3d_game_data_load_app_config_asset(sdl3d_asset_resolver *assets, const c
         return false;
     }
 
-    const bool ok = apply_app_config_from_root(yyjson_doc_get_root(doc), out_config, title_buffer, title_buffer_size,
-                                               error_buffer, error_buffer_size);
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    const bool ok =
+        apply_app_config_from_root(root, out_config, title_buffer, title_buffer_size, error_buffer, error_buffer_size);
+    if (ok)
+        apply_persisted_app_settings(root, out_config);
     yyjson_doc_free(doc);
     return ok;
 }
@@ -6987,23 +7960,32 @@ bool sdl3d_game_data_load_file(const char *path, sdl3d_game_session *session, sd
     return ok;
 }
 
-static void load_storage_config(sdl3d_game_data_runtime *runtime, yyjson_val *root)
+static void storage_config_from_root(yyjson_val *root, sdl3d_storage_config *out_config)
 {
-    sdl3d_storage_config_init(&runtime->storage_config);
+    if (out_config == NULL)
+        return;
+    sdl3d_storage_config_init(out_config);
 
     yyjson_val *storage = obj_get(root, "storage");
     yyjson_val *metadata = obj_get(root, "metadata");
     yyjson_val *app = obj_get(root, "app");
 
-    runtime->storage_config.organization =
+    out_config->organization =
         first_non_empty_string(json_string(storage, "organization", NULL), json_string(metadata, "organization", NULL),
-                               runtime->storage_config.organization);
-    runtime->storage_config.application = first_non_empty_string(
+                               out_config->organization);
+    out_config->application = first_non_empty_string(
         json_string(storage, "application", NULL), json_string(app, "title", NULL),
-        first_non_empty_string(json_string(metadata, "name", NULL), NULL, runtime->storage_config.application));
-    runtime->storage_config.profile = json_string(storage, "profile", NULL);
-    runtime->storage_config.user_root_override = json_string(storage, "user_root_override", NULL);
-    runtime->storage_config.cache_root_override = json_string(storage, "cache_root_override", NULL);
+        first_non_empty_string(json_string(metadata, "name", NULL), NULL, out_config->application));
+    out_config->profile = json_string(storage, "profile", NULL);
+    out_config->user_root_override = json_string(storage, "user_root_override", NULL);
+    out_config->cache_root_override = json_string(storage, "cache_root_override", NULL);
+}
+
+static void load_storage_config(sdl3d_game_data_runtime *runtime, yyjson_val *root)
+{
+    if (runtime == NULL)
+        return;
+    storage_config_from_root(root, &runtime->storage_config);
 }
 
 bool sdl3d_game_data_get_storage_config(const sdl3d_game_data_runtime *runtime, sdl3d_storage_config *out_config)
@@ -7051,6 +8033,12 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
         SDL_free(runtime->audio_files[i].asset_path);
         SDL_free(runtime->audio_files[i].file_path);
     }
+    for (int i = 0; i < runtime->property_snapshot_count; ++i)
+    {
+        SDL_free(runtime->property_snapshots[i].name);
+        SDL_free(runtime->property_snapshots[i].target);
+        sdl3d_properties_destroy(runtime->property_snapshots[i].properties);
+    }
 
     sdl3d_script_engine_destroy(runtime->scripts);
     sdl3d_properties_destroy(runtime->scene_state);
@@ -7066,9 +8054,11 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->adapters);
     SDL_free(runtime->bindings);
     SDL_free(runtime->sensors);
+    SDL_free(runtime->input_bindings);
     SDL_free(runtime->ui_states);
     SDL_free(runtime->animations);
     SDL_free(runtime->audio_files);
+    SDL_free(runtime->property_snapshots);
     SDL_free(runtime->activity.periodic_elapsed);
     yyjson_doc_free(runtime->doc);
     SDL_free(runtime);

@@ -169,14 +169,82 @@ TEST_F(SDLVideoFixture, LogicalPresentationConfigIsApplied)
     sdl3d_destroy_render_context(context);
 }
 
-TEST_F(SDLVideoFixture, SdlGpuBackendAcceptsRequest)
+TEST_F(SDLVideoFixture, HighLevelSoftwareWindowLetterboxesLogicalPresentation)
+{
+    SDL3DBackendOverrideGuard backend_override("software");
+    sdl3d_window_config config;
+    sdl3d_init_window_config(&config);
+    config.width = 640;
+    config.height = 480;
+    config.logical_width = 320;
+    config.logical_height = 180;
+    config.backend = SDL3D_BACKEND_SOFTWARE;
+    config.allow_backend_fallback = false;
+    config.vsync = false;
+
+    SDL_Window *window = nullptr;
+    sdl3d_render_context *context = nullptr;
+    ASSERT_TRUE(sdl3d_create_window(&config, &window, &context)) << SDL_GetError();
+    ASSERT_NE(window, nullptr);
+    ASSERT_NE(context, nullptr);
+    SDL_Renderer *renderer = SDL_GetRenderer(window);
+    ASSERT_NE(renderer, nullptr);
+
+    int logical_width = 0;
+    int logical_height = 0;
+    SDL_RendererLogicalPresentation mode = SDL_LOGICAL_PRESENTATION_DISABLED;
+    ASSERT_TRUE(SDL_GetRenderLogicalPresentation(renderer, &logical_width, &logical_height, &mode)) << SDL_GetError();
+    EXPECT_EQ(320, logical_width);
+    EXPECT_EQ(180, logical_height);
+    EXPECT_EQ(SDL_LOGICAL_PRESENTATION_LETTERBOX, mode);
+
+    sdl3d_destroy_window(window, context);
+}
+
+TEST_F(SDLVideoFixture, HighLevelSoftwareWindowAppliesVSyncAtRuntime)
+{
+    SDL3DBackendOverrideGuard backend_override("software");
+    sdl3d_window_config config;
+    sdl3d_init_window_config(&config);
+    config.backend = SDL3D_BACKEND_SOFTWARE;
+    config.allow_backend_fallback = false;
+    config.vsync = false;
+
+    SDL_Window *window = nullptr;
+    sdl3d_render_context *context = nullptr;
+    ASSERT_TRUE(sdl3d_create_window(&config, &window, &context)) << SDL_GetError();
+    SDL_Renderer *renderer = SDL_GetRenderer(window);
+    ASSERT_NE(renderer, nullptr);
+
+    int vsync = -1;
+    ASSERT_TRUE(SDL_GetRenderVSync(renderer, &vsync)) << SDL_GetError();
+    EXPECT_EQ(SDL_RENDERER_VSYNC_DISABLED, vsync);
+
+    config.vsync = true;
+    ASSERT_TRUE(sdl3d_apply_window_config(&window, &context, &config)) << SDL_GetError();
+    renderer = SDL_GetRenderer(window);
+    ASSERT_NE(renderer, nullptr);
+    ASSERT_TRUE(SDL_GetRenderVSync(renderer, &vsync)) << SDL_GetError();
+    EXPECT_EQ(1, vsync);
+
+    config.vsync = false;
+    ASSERT_TRUE(sdl3d_apply_window_config(&window, &context, &config)) << SDL_GetError();
+    renderer = SDL_GetRenderer(window);
+    ASSERT_NE(renderer, nullptr);
+    ASSERT_TRUE(SDL_GetRenderVSync(renderer, &vsync)) << SDL_GetError();
+    EXPECT_EQ(SDL_RENDERER_VSYNC_DISABLED, vsync);
+
+    sdl3d_destroy_window(window, context);
+}
+
+TEST_F(SDLVideoFixture, OpenGLBackendAcceptsRequest)
 {
     SDLWindowRendererPair pair;
     ASSERT_TRUE(pair.is_valid()) << SDL_GetError();
 
     sdl3d_render_context_config config;
     sdl3d_init_render_context_config(&config);
-    config.backend = SDL3D_BACKEND_SDLGPU;
+    config.backend = SDL3D_BACKEND_OPENGL;
     config.allow_backend_fallback = false;
 
     sdl3d_render_context *context = nullptr;
@@ -201,7 +269,7 @@ TEST_F(SDLVideoFixture, EnvironmentOverrideCanForceSoftwareBackend)
     SDL3DBackendOverrideGuard backend_override("software");
     sdl3d_render_context_config config;
     sdl3d_init_render_context_config(&config);
-    config.backend = SDL3D_BACKEND_SDLGPU;
+    config.backend = SDL3D_BACKEND_OPENGL;
     config.allow_backend_fallback = false;
 
     sdl3d_render_context *context = nullptr;
@@ -262,14 +330,14 @@ TEST_F(SDLVideoFixture, SoftwareBackendVtableIsFullyPopulated)
     sdl3d_destroy_render_context(context);
 }
 
-TEST_F(SDLVideoFixture, SdlGpuBackendClearAndPresentSucceedWhenAvailable)
+TEST_F(SDLVideoFixture, OpenGLBackendClearAndPresentSucceedWhenAvailable)
 {
     SDLWindowRendererPair pair;
     ASSERT_TRUE(pair.is_valid());
 
     sdl3d_render_context_config config;
     sdl3d_init_render_context_config(&config);
-    config.backend = SDL3D_BACKEND_SDLGPU;
+    config.backend = SDL3D_BACKEND_OPENGL;
     config.allow_backend_fallback = false;
 
     sdl3d_render_context *context = nullptr;
@@ -285,7 +353,7 @@ TEST_F(SDLVideoFixture, SdlGpuBackendClearAndPresentSucceedWhenAvailable)
     EXPECT_TRUE(sdl3d_clear_render_context(context, red));
     EXPECT_TRUE(sdl3d_present_render_context(context));
 
-    EXPECT_EQ(SDL3D_BACKEND_SDLGPU, sdl3d_get_render_context_backend(context));
+    EXPECT_EQ(SDL3D_BACKEND_OPENGL, sdl3d_get_render_context_backend(context));
 
     sdl3d_destroy_render_context(context);
 }

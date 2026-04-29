@@ -915,13 +915,17 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.scene.play"), 0);
     EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead");
     EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.splash");
-    EXPECT_EQ(sdl3d_game_data_scene_count(runtime), 4);
+    EXPECT_EQ(sdl3d_game_data_scene_count(runtime), 8);
     EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 0), "scene.splash");
     EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 1), "scene.title");
     EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 2), "scene.options");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 3), "scene.play");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 3), "scene.options.display");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 4), "scene.options.keyboard");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 5), "scene.options.gamepad");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 6), "scene.options.audio");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 7), "scene.play");
     EXPECT_EQ(sdl3d_game_data_scene_name_at(runtime, -1), nullptr);
-    EXPECT_EQ(sdl3d_game_data_scene_name_at(runtime, 4), nullptr);
+    EXPECT_EQ(sdl3d_game_data_scene_name_at(runtime, 8), nullptr);
     EXPECT_FALSE(sdl3d_game_data_active_scene_updates_game(runtime));
     EXPECT_FALSE(sdl3d_game_data_active_scene_renders_world(runtime));
     EXPECT_FALSE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.ball"));
@@ -933,16 +937,26 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
 
 TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
 {
+    const std::filesystem::path dir = unique_test_dir("pong_presentation");
+    const std::filesystem::path user_root = dir / "user";
+    const std::filesystem::path cache_root = dir / "cache";
+    const std::filesystem::path game_path = copy_pong_data_with_storage_overrides(dir, user_root, cache_root);
+
     sdl3d_game_config config{};
     char title[128]{};
     char app_error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_load_app_config_file(SDL3D_PONG_DATA_PATH, &config, title, sizeof(title), app_error,
-                                                     sizeof(app_error)))
+    ASSERT_TRUE(sdl3d_game_data_load_app_config_file(game_path.string().c_str(), &config, title, sizeof(title),
+                                                     app_error, sizeof(app_error)))
         << app_error;
     EXPECT_STREQ(config.title, "SDL3D Pong");
-    EXPECT_EQ(config.width, 1280);
-    EXPECT_EQ(config.height, 720);
-    EXPECT_EQ(config.backend, SDL3D_BACKEND_AUTO);
+    EXPECT_EQ(config.width, 0);
+    EXPECT_EQ(config.height, 0);
+    EXPECT_EQ(config.logical_width, 1280);
+    EXPECT_EQ(config.logical_height, 720);
+    EXPECT_EQ(config.backend, SDL3D_BACKEND_OPENGL);
+    EXPECT_EQ(config.display_mode, SDL3D_WINDOW_MODE_WINDOWED);
+    EXPECT_GT(config.vsync, 0);
+    EXPECT_GT(config.maximized, 0);
     EXPECT_NEAR(config.tick_rate, 1.0f / 120.0f, 0.00001f);
     EXPECT_EQ(config.max_ticks_per_frame, 12);
 
@@ -951,15 +965,18 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(game_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_storage_config storage{};
     ASSERT_TRUE(sdl3d_game_data_get_storage_config(runtime, &storage));
     EXPECT_STREQ(storage.organization, "Blue Sentinel Security");
     EXPECT_STREQ(storage.application, "SDL3D Pong");
     EXPECT_STREQ(storage.profile, "default");
-    EXPECT_EQ(storage.user_root_override, nullptr);
-    EXPECT_EQ(storage.cache_root_override, nullptr);
+    const std::string user_root_text = user_root.generic_string();
+    const std::string cache_root_text = cache_root.generic_string();
+    EXPECT_STREQ(storage.user_root_override, user_root_text.c_str());
+    EXPECT_STREQ(storage.cache_root_override, cache_root_text.c_str());
     char storage_root[256]{};
     ASSERT_TRUE(sdl3d_storage_build_root_path(&storage, SDL3D_STORAGE_PLATFORM_UNIX, SDL3D_STORAGE_ROOT_USER,
                                               "/home/player/.local/share", storage_root, sizeof(storage_root)));
@@ -988,6 +1005,11 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_STREQ(app.startup_transition, "startup");
     EXPECT_STREQ(app.quit_transition, "quit");
     EXPECT_GE(app.quit_signal_id, 0);
+    EXPECT_EQ(app.window_apply_signal_id, sdl3d_game_data_find_signal(runtime, "signal.settings.apply"));
+    EXPECT_STREQ(app.window_settings_target, "entity.settings");
+    EXPECT_STREQ(app.window_display_mode_key, "display_mode");
+    EXPECT_STREQ(app.window_renderer_key, "renderer");
+    EXPECT_STREQ(app.window_vsync_key, "vsync");
 
     sdl3d_registered_actor *match = sdl3d_game_data_find_actor(runtime, "entity.match");
     ASSERT_NE(match, nullptr);
@@ -1145,6 +1167,7 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
@@ -1282,25 +1305,63 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_STREQ(menu.name, "menu.options");
     EXPECT_EQ(menu.item_count, 5);
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
-    EXPECT_STREQ(item.label, "Difficulty");
+    EXPECT_STREQ(item.label, "Display");
+    EXPECT_STREQ(item.scene, "scene.options.display");
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.keyboard"));
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.options.keyboard");
+    EXPECT_EQ(menu.item_count, 9);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Up");
+    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING);
+    EXPECT_EQ(item.key_binding_count, 2);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 5, &item));
+    EXPECT_STREQ(item.label, "Cancel");
+    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING);
+    EXPECT_EQ(item.key_binding_count, 1);
+
+    bool saw_keyboard_up = false;
+    bool saw_keyboard_cancel = false;
+    auto find_keyboard_up = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        auto *saw = static_cast<std::pair<bool *, bool *> *>(userdata);
+        const std::string name = text->name != nullptr ? text->name : "";
+        const std::string value = text->text != nullptr ? text->text : "";
+        if (name == "ui.options.keyboard.menu" && value == "Up: Up")
+        {
+            *saw->first = true;
+        }
+        if (name == "ui.options.keyboard.menu" && value == "Cancel: Backspace")
+        {
+            *saw->second = true;
+        }
+        return !*saw->first || !*saw->second;
+    };
+    std::pair<bool *, bool *> keyboard_binding_labels{&saw_keyboard_up, &saw_keyboard_cancel};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_keyboard_up, &keyboard_binding_labels));
+    EXPECT_TRUE(saw_keyboard_up);
+    EXPECT_TRUE(saw_keyboard_cancel);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.options.display");
+    EXPECT_EQ(menu.item_count, 5);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Display Mode");
     EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_CHOICE);
     EXPECT_STREQ(item.control_target, "entity.settings");
-    EXPECT_STREQ(item.control_key, "difficulty");
+    EXPECT_STREQ(item.control_key, "display_mode");
     EXPECT_EQ(item.choice_count, 3);
     sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings, nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "difficulty", ""), "normal");
-    ASSERT_TRUE(sdl3d_game_data_apply_menu_item_control(runtime, &item));
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "difficulty", ""), "hard");
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 4, &item));
-    EXPECT_STREQ(item.scene, "scene.title");
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
 
     bool saw_options_value = false;
     auto find_options_value = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
         auto *saw = static_cast<bool *>(userdata);
         const std::string name = text->name != nullptr ? text->name : "";
         const std::string value = text->text != nullptr ? text->text : "";
-        if (name == "ui.options.menu" && value == "Difficulty: Hard")
+        if (name == "ui.options.display.menu" && value == "Display Mode: Windowed")
         {
             *saw = true;
             return false;
@@ -1309,6 +1370,47 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     };
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_options_value, &saw_options_value));
     EXPECT_TRUE(saw_options_value);
+
+    ASSERT_TRUE(sdl3d_game_data_apply_menu_item_control(runtime, &item));
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "fullscreen_exclusive");
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 3, &item));
+    EXPECT_STREQ(item.label, "Reset Settings");
+    EXPECT_TRUE(sdl3d_game_data_app_signal_applies_window_settings(runtime, item.signal_id));
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 4, &item));
+    EXPECT_STREQ(item.scene, "scene.options");
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.audio"));
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.options.audio");
+    EXPECT_EQ(menu.item_count, 4);
+    EXPECT_GE(menu.left_action_id, 0);
+    EXPECT_GE(menu.right_action_id, 0);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Sound Effects");
+    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_RANGE);
+    EXPECT_STREQ(item.control_target, "entity.settings");
+    EXPECT_STREQ(item.control_key, "sfx_volume");
+    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
+    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "music_volume", 0), 7);
+
+    bool saw_sfx_slider = false;
+    bool saw_music_slider = false;
+    auto find_audio_sliders = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        auto *flags = static_cast<std::pair<bool *, bool *> *>(userdata);
+        const std::string name = text->name != nullptr ? text->name : "";
+        const std::string value = text->text != nullptr ? text->text : "";
+        if (name == "ui.options.audio.menu" && value == "Sound Effects  [########--] 8/10")
+            *flags->first = true;
+        if (name == "ui.options.audio.menu" && value == "Music  [#######---] 7/10")
+            *flags->second = true;
+        if (*flags->first && *flags->second)
+            return false;
+        return true;
+    };
+    std::pair<bool *, bool *> audio_slider_flags{&saw_sfx_slider, &saw_music_slider};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_audio_sliders, &audio_slider_flags));
+    EXPECT_TRUE(saw_sfx_slider);
+    EXPECT_TRUE(saw_music_slider);
 
     ScenePayloadCapture payload_capture{};
     const int start_signal = sdl3d_game_data_find_signal(runtime, "signal.game.start");
@@ -1321,6 +1423,7 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     ASSERT_NE(payload, nullptr);
     sdl3d_properties_set_string(payload, "from_scene", "scene.options");
     sdl3d_properties_set_string(payload, "selected_level", "level.test");
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
     ASSERT_TRUE(sdl3d_game_data_set_active_scene_with_payload(runtime, "scene.play", payload));
     EXPECT_TRUE(payload_capture.called);
     EXPECT_EQ(payload_capture.from_scene, "scene.options");
@@ -1685,7 +1788,7 @@ TEST(GameDataRuntime, OptionsMenuCanReturnToAuthoredScene)
     sdl3d_game_session_destroy(session);
 }
 
-TEST(GameDataRuntime, OptionControlsCanEmitAuthoredSignals)
+TEST(GameDataRuntime, OptionsSubmenusDoNotOverwriteCallerReturnScene)
 {
     sdl3d_game_session *session = nullptr;
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
@@ -1693,12 +1796,48 @@ TEST(GameDataRuntime, OptionControlsCanEmitAuthoredSignals)
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+
+    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    sdl3d_properties_set_string(scene_state, "return_scene", "scene.title");
+    sdl3d_properties_set_bool(scene_state, "return_paused", false);
+
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
+    sdl3d_game_data_menu_item item{};
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options", 0, &item));
+    EXPECT_STREQ(item.label, "Display");
+    EXPECT_STREQ(item.scene, "scene.options.display");
+    EXPECT_EQ(item.return_to, nullptr);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options.display", 4, &item));
+    EXPECT_STREQ(item.label, "Back");
+    EXPECT_STREQ(item.scene, "scene.options");
+    EXPECT_FALSE(item.return_scene);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options", 4, &item));
+    EXPECT_STREQ(item.label, "Back");
+    EXPECT_TRUE(item.return_scene);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "return_scene", ""), "scene.title");
+    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "return_paused", true));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, DisplayOptionControlsApplyImmediately)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
 
     const int menu_select_signal = sdl3d_game_data_find_signal(runtime, "signal.ui.menu.select");
-    const int save_options_signal = sdl3d_game_data_find_signal(runtime, "signal.persistence.save_options");
     ASSERT_GE(menu_select_signal, 0);
-    ASSERT_GE(save_options_signal, 0);
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
@@ -1715,12 +1854,418 @@ TEST(GameDataRuntime, OptionControlsCanEmitAuthoredSignals)
     EXPECT_TRUE(result.selected);
     EXPECT_TRUE(result.control_changed);
     EXPECT_EQ(result.select_signal_id, menu_select_signal);
-    EXPECT_EQ(result.signal_id, save_options_signal);
+    EXPECT_EQ(result.signal_id, sdl3d_game_data_find_signal(runtime, "signal.settings.apply"));
+    EXPECT_TRUE(sdl3d_game_data_app_signal_applies_window_settings(runtime, result.signal_id));
     EXPECT_EQ(result.scene, nullptr);
 
     sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings, nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "difficulty", ""), "hard");
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "fullscreen_exclusive");
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, AudioOptionSlidersApplyImmediatelyWithLeftRightInput)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.audio"));
+
+    const int menu_select_signal = sdl3d_game_data_find_signal(runtime, "signal.ui.menu.select");
+    const int apply_audio_signal = sdl3d_game_data_find_signal(runtime, "signal.settings.apply_audio");
+    ASSERT_GE(menu_select_signal, 0);
+    ASSERT_GE(apply_audio_signal, 0);
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    ASSERT_NE(settings, nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
+
+    bool armed = true;
+    sdl3d_game_data_menu_update_result result{};
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_LEFT;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 1);
+
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.handled_input);
+    EXPECT_TRUE(result.selected);
+    EXPECT_TRUE(result.control_changed);
+    EXPECT_EQ(result.select_signal_id, menu_select_signal);
+    EXPECT_EQ(result.signal_id, apply_audio_signal);
+    EXPECT_EQ(result.scene, nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 7);
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 2);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_RIGHT;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 3);
+
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.handled_input);
+    EXPECT_TRUE(result.selected);
+    EXPECT_TRUE(result.control_changed);
+    EXPECT_EQ(result.signal_id, apply_audio_signal);
+    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 4);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    ASSERT_TRUE(sdl3d_game_data_menu_move(runtime, "menu.options.audio", 3));
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_LEFT;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 5);
+
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.handled_input);
+    EXPECT_FALSE(result.selected);
+    EXPECT_FALSE(result.control_changed);
+    EXPECT_EQ(result.select_signal_id, -1);
+    EXPECT_EQ(result.signal_id, -1);
+    EXPECT_EQ(result.scene, nullptr);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, KeyboardOptionsCaptureAndApplyAuthoredKeyBindings)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.keyboard"));
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    const int paddle_up = sdl3d_game_data_find_action(runtime, "action.paddle.up");
+    ASSERT_GE(paddle_up, 0);
+    const int menu_up = sdl3d_game_data_find_action(runtime, "action.menu.up");
+    ASSERT_GE(menu_up, 0);
+    const int exit_action = sdl3d_game_data_find_action(runtime, "action.exit");
+    ASSERT_GE(exit_action, 0);
+
+    bool armed = true;
+    sdl3d_game_data_menu_update_result result{};
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_RETURN;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 1);
+
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.handled_input);
+    EXPECT_TRUE(result.selected);
+    EXPECT_TRUE(result.key_binding_capture_started);
+    EXPECT_TRUE(sdl3d_game_data_menu_key_binding_capture_active(runtime));
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 2);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_I;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 3);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.handled_input);
+    EXPECT_TRUE(result.key_binding_changed);
+    EXPECT_FALSE(sdl3d_game_data_menu_key_binding_capture_active(runtime));
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 4);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_I;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 5);
+    EXPECT_TRUE(sdl3d_input_is_pressed(input, paddle_up));
+    EXPECT_TRUE(sdl3d_input_is_pressed(input, menu_up));
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 6);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    ASSERT_TRUE(sdl3d_game_data_menu_move(runtime, "menu.options.keyboard", 1));
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_RETURN;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 7);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.key_binding_capture_started);
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 8);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_I;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 9);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.handled_input);
+    EXPECT_TRUE(result.key_binding_conflict);
+    EXPECT_TRUE(sdl3d_game_data_menu_key_binding_capture_active(runtime));
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 10);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_ESCAPE;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 11);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_FALSE(sdl3d_game_data_menu_key_binding_capture_active(runtime));
+
+    const int reset_keyboard = sdl3d_game_data_find_signal(runtime, "signal.settings.reset_keyboard");
+    ASSERT_GE(reset_keyboard, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), reset_keyboard, nullptr);
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 12);
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 13);
+    EXPECT_TRUE(sdl3d_input_is_pressed(input, paddle_up));
+    EXPECT_TRUE(sdl3d_input_is_pressed(input, menu_up));
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 14);
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_BACKSPACE;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 15);
+    EXPECT_TRUE(sdl3d_input_is_pressed(input, exit_action));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, GamepadOptionsCaptureAndApplyAuthoredButtonBindings)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.gamepad"));
+
+    sdl3d_game_data_menu menu{};
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.options.gamepad");
+    EXPECT_EQ(menu.item_count, 12);
+
+    sdl3d_game_data_menu_item item{};
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Button Icons");
+    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_CHOICE);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
+    EXPECT_STREQ(item.label, "Up");
+    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING);
+    EXPECT_EQ(item.key_binding_count, 2);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 10, &item));
+    EXPECT_STREQ(item.label, "Reset Settings");
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    const int paddle_up = sdl3d_game_data_find_action(runtime, "action.paddle.up");
+    ASSERT_GE(paddle_up, 0);
+    const int menu_up = sdl3d_game_data_find_action(runtime, "action.menu.up");
+    ASSERT_GE(menu_up, 0);
+    const int exit_action = sdl3d_game_data_find_action(runtime, "action.exit");
+    ASSERT_GE(exit_action, 0);
+
+    ASSERT_TRUE(sdl3d_game_data_menu_move(runtime, "menu.options.gamepad", 2));
+    bool armed = true;
+    sdl3d_game_data_menu_update_result result{};
+    SDL_Event event{};
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_SOUTH;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 1);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.key_binding_capture_started);
+    EXPECT_TRUE(sdl3d_game_data_menu_key_binding_capture_active(runtime));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 2);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_WEST;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 3);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.key_binding_changed);
+    EXPECT_FALSE(sdl3d_game_data_menu_key_binding_capture_active(runtime));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 4);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_WEST;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 5);
+    EXPECT_TRUE(sdl3d_input_is_pressed(input, paddle_up));
+    EXPECT_TRUE(sdl3d_input_is_pressed(input, menu_up));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 6);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    ASSERT_TRUE(sdl3d_game_data_menu_move(runtime, "menu.options.gamepad", 1));
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_SOUTH;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 7);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.key_binding_capture_started);
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 8);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_WEST;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 9);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.key_binding_conflict);
+    EXPECT_TRUE(sdl3d_game_data_menu_key_binding_capture_active(runtime));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 10);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.scancode = SDL_SCANCODE_ESCAPE;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 11);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_FALSE(sdl3d_game_data_menu_key_binding_capture_active(runtime));
+
+    const int reset_gamepad = sdl3d_game_data_find_signal(runtime, "signal.settings.reset_gamepad");
+    ASSERT_GE(reset_gamepad, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), reset_gamepad, nullptr);
+
+    event.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 12);
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_DPAD_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 13);
+    EXPECT_TRUE(sdl3d_input_is_pressed(input, paddle_up));
+    EXPECT_TRUE(sdl3d_input_is_pressed(input, menu_up));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 14);
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_BACK;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 15);
+    EXPECT_TRUE(sdl3d_input_is_pressed(input, exit_action));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, AuthoredSettingsResetRestoresSelectedDefaults)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+
+    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    ASSERT_NE(settings, nullptr);
+    sdl3d_properties_set_string(settings->props, "display_mode", "fullscreen_exclusive");
+    sdl3d_properties_set_bool(settings->props, "vsync", false);
+    sdl3d_properties_set_string(settings->props, "renderer", "software");
+    sdl3d_properties_set_int(settings->props, "sfx_volume", 2);
+    sdl3d_properties_set_int(settings->props, "music_volume", 3);
+
+    const int reset_display = sdl3d_game_data_find_signal(runtime, "signal.settings.reset_display");
+    ASSERT_GE(reset_display, 0);
+    EXPECT_TRUE(sdl3d_game_data_app_signal_applies_window_settings(runtime, reset_display));
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), reset_display, nullptr);
+
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
+    EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vsync", false));
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "renderer", ""), "opengl");
+
+    const int reset_audio = sdl3d_game_data_find_signal(runtime, "signal.settings.reset_audio");
+    ASSERT_GE(reset_audio, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), reset_audio, nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
+    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "music_volume", 0), 7);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, AuthoredSettingsCancelRestoresSceneEntrySnapshot)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+
+    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    ASSERT_NE(settings, nullptr);
+    sdl3d_properties_set_string(settings->props, "display_mode", "windowed");
+    sdl3d_properties_set_bool(settings->props, "vsync", true);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
+    sdl3d_properties_set_string(settings->props, "display_mode", "fullscreen_exclusive");
+    sdl3d_properties_set_bool(settings->props, "vsync", false);
+
+    const int cancel_display = sdl3d_game_data_find_signal(runtime, "signal.settings.cancel_display");
+    ASSERT_GE(cancel_display, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), cancel_display, nullptr);
+
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
+    EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vsync", false));
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
@@ -1820,7 +2365,7 @@ TEST(GameDataRuntime, AppFlowConsumesAuthoredLifecycleAndSceneShortcutControls)
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 10);
     key.type = SDL_EVENT_KEY_DOWN;
-    key.key.scancode = SDL_SCANCODE_ESCAPE;
+    key.key.scancode = SDL_SCANCODE_BACKSPACE;
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 11);
     ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
@@ -3019,7 +3564,7 @@ return storage
     remove_test_dir(dir);
 }
 
-TEST(GameDataRuntime, PongPersistenceLoadsOptionsAndHighScoresFromUserStorage)
+TEST(GameDataRuntime, PongPersistenceSkipsOptionsAndLoadsHighScoresFromUserStorage)
 {
     const std::filesystem::path dir = unique_test_dir("pong_persistence");
     const std::filesystem::path user_root = dir / "user";
@@ -3044,19 +3589,22 @@ TEST(GameDataRuntime, PongPersistenceLoadsOptionsAndHighScoresFromUserStorage)
 
         sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
         ASSERT_NE(settings, nullptr);
-        EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "persistence_enabled", true));
+        EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "options_persistence_enabled", true));
+        EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "score_persistence_enabled", false));
 
-        sdl3d_properties_set_string(settings->props, "difficulty", "hard");
         emit(session, runtime, "signal.persistence.save_options");
         EXPECT_FALSE(std::filesystem::exists(user_root / "settings" / "options.json"));
 
         emit(session, runtime, "signal.persistence.load");
-        EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "persistence_enabled", false));
+        EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "options_persistence_enabled", true));
 
-        sdl3d_properties_set_string(settings->props, "difficulty", "hard");
-        sdl3d_properties_set_string(settings->props, "lighting_profile", "arcade");
-        sdl3d_properties_set_string(settings->props, "input_style", "gamepad");
-        sdl3d_properties_set_bool(settings->props, "fullscreen", true);
+        sdl3d_properties_set_string(settings->props, "display_mode", "windowed");
+        sdl3d_properties_set_bool(settings->props, "vsync", false);
+        sdl3d_properties_set_string(settings->props, "renderer", "opengl");
+        sdl3d_properties_set_string(settings->props, "gamepad_icons", "playstation");
+        sdl3d_properties_set_bool(settings->props, "vibration", false);
+        sdl3d_properties_set_int(settings->props, "sfx_volume", 4);
+        sdl3d_properties_set_int(settings->props, "music_volume", 7);
         emit(session, runtime, "signal.persistence.save_options");
 
         emit(session, runtime, "signal.match.player_won");
@@ -3070,8 +3618,21 @@ TEST(GameDataRuntime, PongPersistenceLoadsOptionsAndHighScoresFromUserStorage)
         sdl3d_game_session_destroy(session);
     }
 
-    EXPECT_TRUE(std::filesystem::exists(user_root / "settings" / "options.json"));
+    EXPECT_FALSE(std::filesystem::exists(user_root / "settings" / "options.json"));
     EXPECT_TRUE(std::filesystem::exists(user_root / "scores" / "pong_scores.json"));
+    write_text(
+        user_root / "settings" / "options.json",
+        R"json({"schema":"sdl3d.pong.options.v1","display_mode":"windowed","vsync":false,"renderer":"opengl","gamepad_icons":"playstation","vibration":false,"sfx_volume":4,"music_volume":7})json");
+
+    sdl3d_game_config persisted_config{};
+    char title[128]{};
+    char app_error[512]{};
+    ASSERT_TRUE(sdl3d_game_data_load_app_config_file(game_path.string().c_str(), &persisted_config, title,
+                                                     sizeof(title), app_error, sizeof(app_error)))
+        << app_error;
+    EXPECT_EQ(persisted_config.display_mode, SDL3D_WINDOW_MODE_WINDOWED);
+    EXPECT_EQ(persisted_config.backend, SDL3D_BACKEND_OPENGL);
+    EXPECT_GT(persisted_config.vsync, 0);
 
     {
         sdl3d_game_session *session = nullptr;
@@ -3086,10 +3647,13 @@ TEST(GameDataRuntime, PongPersistenceLoadsOptionsAndHighScoresFromUserStorage)
 
         sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
         ASSERT_NE(settings, nullptr);
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "difficulty", ""), "hard");
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "lighting_profile", ""), "arcade");
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "input_style", ""), "gamepad");
-        EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "fullscreen", false));
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
+        EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vsync", false));
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "renderer", ""), "opengl");
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "gamepad_icons", ""), "xbox");
+        EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vibration", false));
+        EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
+        EXPECT_EQ(sdl3d_properties_get_int(settings->props, "music_volume", 0), 7);
 
         sdl3d_registered_actor *scores = sdl3d_game_data_find_actor(runtime, "entity.high_scores");
         ASSERT_NE(scores, nullptr);

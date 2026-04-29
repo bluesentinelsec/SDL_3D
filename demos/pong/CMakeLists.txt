@@ -9,6 +9,10 @@ set(SDL3D_PONG_ASSET_FILES
     images/splash-logo.jpg
     pong.game.json
     scenes/options.scene.json
+    scenes/options_audio.scene.json
+    scenes/options_display.scene.json
+    scenes/options_gamepad.scene.json
+    scenes/options_keyboard.scene.json
     scenes/play.scene.json
     scenes/splash.scene.json
     scenes/title.scene.json
