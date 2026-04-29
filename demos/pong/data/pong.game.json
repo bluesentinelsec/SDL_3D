@@ -306,6 +306,22 @@
             ]
           },
           {
+            "name": "action.menu.left",
+            "bindings": [
+              { "device": "keyboard", "key": "LEFT" },
+              { "device": "keyboard", "key": "A" },
+              { "device": "gamepad", "button": "DPAD_LEFT" }
+            ]
+          },
+          {
+            "name": "action.menu.right",
+            "bindings": [
+              { "device": "keyboard", "key": "RIGHT" },
+              { "device": "keyboard", "key": "D" },
+              { "device": "gamepad", "button": "DPAD_RIGHT" }
+            ]
+          },
+          {
             "name": "action.menu.select",
             "bindings": [
               { "device": "keyboard", "key": "RETURN" },
@@ -754,10 +770,8 @@
         "keyboard_cancel": { "type": "string", "value": "escape_backspace" },
         "gamepad_icons": { "type": "string", "value": "xbox" },
         "vibration": { "type": "bool", "value": true },
-        "sfx_volume": { "type": "float", "value": 1.0 },
-        "music_volume": { "type": "float", "value": 1.0 },
-        "dialogue_volume": { "type": "float", "value": 1.0 },
-        "ambience_volume": { "type": "float", "value": 1.0 },
+        "sfx_volume": { "type": "int", "value": 8 },
+        "music_volume": { "type": "int", "value": 7 },
         "options_persistence_enabled": { "type": "bool", "value": false },
         "score_persistence_enabled": { "type": "bool", "value": true }
       }
@@ -983,10 +997,8 @@
       {
         "signal": "signal.settings.apply_audio",
         "actions": [
-          { "type": "audio.set_bus_volume", "bus": "sfx", "source": { "target": "entity.settings", "key": "sfx_volume" } },
-          { "type": "audio.set_bus_volume", "bus": "music", "source": { "target": "entity.settings", "key": "music_volume" } },
-          { "type": "audio.set_bus_volume", "bus": "dialogue", "source": { "target": "entity.settings", "key": "dialogue_volume" } },
-          { "type": "audio.set_bus_volume", "bus": "ambience", "source": { "target": "entity.settings", "key": "ambience_volume" } }
+          { "type": "audio.set_bus_volume", "bus": "sfx", "source": { "target": "entity.settings", "key": "sfx_volume", "scale": 0.1 } },
+          { "type": "audio.set_bus_volume", "bus": "music", "source": { "target": "entity.settings", "key": "music_volume", "scale": 0.1 } }
         ]
       },
       {
@@ -1010,7 +1022,7 @@
       {
         "signal": "signal.settings.snapshot_audio",
         "actions": [
-          { "type": "property.snapshot", "name": "options.audio", "target": "entity.settings", "keys": ["sfx_volume", "music_volume", "dialogue_volume", "ambience_volume"] }
+          { "type": "property.snapshot", "name": "options.audio", "target": "entity.settings", "keys": ["sfx_volume", "music_volume"] }
         ]
       },
       {
@@ -1059,7 +1071,8 @@
       {
         "signal": "signal.settings.reset_audio",
         "actions": [
-          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["sfx_volume", "music_volume", "dialogue_volume", "ambience_volume"] }
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["sfx_volume", "music_volume"] },
+          { "type": "signal.emit", "signal": "signal.settings.apply_audio" }
         ]
       },
       {

@@ -2186,6 +2186,12 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
             !require_ref(ctx, &names->actions, "input action", json_string(menu, "down_action"), menu_path) ||
             !require_ref(ctx, &names->actions, "input action", json_string(menu, "select_action"), menu_path))
             return false;
+        const char *left_action = json_string(menu, "left_action");
+        if (left_action != NULL && !require_ref(ctx, &names->actions, "input action", left_action, menu_path))
+            return false;
+        const char *right_action = json_string(menu, "right_action");
+        if (right_action != NULL && !require_ref(ctx, &names->actions, "input action", right_action, menu_path))
+            return false;
         char condition_path[PATH_BUFFER_SIZE];
         format_path(condition_path, sizeof(condition_path), "%s.active_if", menu_path);
         if (!validate_scene_ui_condition(ctx, obj_get(menu, "active_if"), condition_path, names))

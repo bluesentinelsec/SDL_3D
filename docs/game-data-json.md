@@ -293,10 +293,44 @@ Menu items can also author generic settings controls and emit data-authored sign
 
 Supported control types are `toggle`, `choice`, and `range`. The generic menu
 controller applies these controls directly to actor properties and the menu UI
-presenter displays the current value. Settings menus that need Apply/Cancel
-behavior can snapshot the edited properties when a scene opens, let controls
-stage values in those actor properties, then either persist the staged values or
-restore the snapshot:
+presenter displays the current value. A menu can author `left_action` and
+`right_action` so range and choice controls can be adjusted without activating
+navigation items:
+
+```json
+{
+  "name": "menu.options.audio",
+  "up_action": "action.menu.up",
+  "down_action": "action.menu.down",
+  "left_action": "action.menu.left",
+  "right_action": "action.menu.right",
+  "select_action": "action.menu.select",
+  "items": [
+    {
+      "label": "Music",
+      "signal": "signal.settings.apply_audio",
+      "control": {
+        "type": "range",
+        "target": "entity.settings",
+        "key": "music_volume",
+        "value_type": "int",
+        "display": "slider",
+        "min": 0,
+        "max": 10,
+        "step": 1,
+        "default": 7
+      }
+    }
+  ]
+}
+```
+
+Range controls clamp to their authored min/max. Adding `"value_type": "int"`
+stores the result as an integer property; adding `"display": "slider"` renders
+the menu value as a compact slider label. Settings menus that need Apply/Cancel
+behavior can still snapshot the edited properties when a scene opens, let
+controls stage values in those actor properties, then either persist the staged
+values or restore the snapshot:
 
 ```json
 {
@@ -326,13 +360,14 @@ Settings screens can reset authored defaults without game-specific code:
 ```
 
 Audio bus volume can also be driven from actor properties so options menus can
-share one generic settings actor:
+share one generic settings actor. Use `source.scale` when the authored setting
+uses player-facing integer units rather than normalized engine volume:
 
 ```json
 {
   "type": "audio.set_bus_volume",
   "bus": "music",
-  "source": { "target": "entity.settings", "key": "music_volume" }
+  "source": { "target": "entity.settings", "key": "music_volume", "scale": 0.1 }
 }
 ```
 

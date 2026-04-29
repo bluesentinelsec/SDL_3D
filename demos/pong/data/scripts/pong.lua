@@ -169,16 +169,10 @@ local function apply_options(settings, options)
         settings:set_bool("vibration", options.vibration)
     end
     if type(options.sfx_volume) == "number" then
-        settings:set_float("sfx_volume", math.clamp(options.sfx_volume, 0.0, 1.0))
+        settings:set_int("sfx_volume", math.floor(math.clamp(options.sfx_volume, 0, 10) + 0.5))
     end
     if type(options.music_volume) == "number" then
-        settings:set_float("music_volume", math.clamp(options.music_volume, 0.0, 1.0))
-    end
-    if type(options.dialogue_volume) == "number" then
-        settings:set_float("dialogue_volume", math.clamp(options.dialogue_volume, 0.0, 1.0))
-    end
-    if type(options.ambience_volume) == "number" then
-        settings:set_float("ambience_volume", math.clamp(options.ambience_volume, 0.0, 1.0))
+        settings:set_int("music_volume", math.floor(math.clamp(options.music_volume, 0, 10) + 0.5))
     end
 end
 
@@ -195,10 +189,8 @@ local function current_options(settings)
         keyboard_cancel = settings:get_string("keyboard_cancel", "escape_backspace"),
         gamepad_icons = settings:get_string("gamepad_icons", "xbox"),
         vibration = settings:get_bool("vibration", true),
-        sfx_volume = settings:get_float("sfx_volume", 1.0),
-        music_volume = settings:get_float("music_volume", 1.0),
-        dialogue_volume = settings:get_float("dialogue_volume", 1.0),
-        ambience_volume = settings:get_float("ambience_volume", 1.0),
+        sfx_volume = settings:get_int("sfx_volume", 8),
+        music_volume = settings:get_int("music_volume", 7),
     }
 end
 

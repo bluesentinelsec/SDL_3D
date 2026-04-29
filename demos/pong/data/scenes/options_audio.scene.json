@@ -9,6 +9,8 @@
     "actions": [
       "action.menu.up",
       "action.menu.down",
+      "action.menu.left",
+      "action.menu.right",
       "action.menu.select"
     ]
   },
@@ -21,6 +23,8 @@
       "name": "menu.options.audio",
       "up_action": "action.menu.up",
       "down_action": "action.menu.down",
+      "left_action": "action.menu.left",
+      "right_action": "action.menu.right",
       "select_action": "action.menu.select",
       "move_signal": "signal.ui.menu.move",
       "select_signal": "signal.ui.menu.select",
@@ -28,52 +32,36 @@
       "items": [
         {
           "label": "Sound Effects",
+          "signal": "signal.settings.apply_audio",
           "control": {
             "type": "range",
             "target": "entity.settings",
             "key": "sfx_volume",
-            "min": 0.0,
-            "max": 1.0,
-            "step": 0.1
+            "value_type": "int",
+            "display": "slider",
+            "min": 0,
+            "max": 10,
+            "step": 1,
+            "default": 8
           }
         },
         {
           "label": "Music",
+          "signal": "signal.settings.apply_audio",
           "control": {
             "type": "range",
             "target": "entity.settings",
             "key": "music_volume",
-            "min": 0.0,
-            "max": 1.0,
-            "step": 0.1
+            "value_type": "int",
+            "display": "slider",
+            "min": 0,
+            "max": 10,
+            "step": 1,
+            "default": 7
           }
         },
-        {
-          "label": "Dialogue",
-          "control": {
-            "type": "range",
-            "target": "entity.settings",
-            "key": "dialogue_volume",
-            "min": 0.0,
-            "max": 1.0,
-            "step": 0.1
-          }
-        },
-        {
-          "label": "Ambience",
-          "control": {
-            "type": "range",
-            "target": "entity.settings",
-            "key": "ambience_volume",
-            "min": 0.0,
-            "max": 1.0,
-            "step": 0.1
-          }
-        },
-        { "label": "Apply", "signal": "signal.settings.apply", "scene": "scene.options" },
-        { "label": "Cancel", "signal": "signal.settings.cancel_audio", "scene": "scene.options" },
-        { "label": "Reset Audio Defaults", "signal": "signal.settings.reset_audio" },
-        { "label": "Back", "signal": "signal.settings.cancel_audio", "scene": "scene.options" }
+        { "label": "Reset Settings", "signal": "signal.settings.reset_audio" },
+        { "label": "Back", "scene": "scene.options" }
       ]
     }
   ],
@@ -96,8 +84,8 @@
         "menu": "menu.options.audio",
         "font": "font.hud",
         "x": 0.5,
-        "y": 0.34,
-        "gap": 0.068,
+        "y": 0.39,
+        "gap": 0.078,
         "normalized": true,
         "align": "center",
         "color": [225, 236, 255, 245],

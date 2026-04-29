@@ -3661,6 +3661,8 @@ bool sdl3d_game_data_get_active_menu_for_metrics(const sdl3d_game_data_runtime *
         SDL_zero(*out_menu);
         out_menu->up_action_id = -1;
         out_menu->down_action_id = -1;
+        out_menu->left_action_id = -1;
+        out_menu->right_action_id = -1;
         out_menu->select_action_id = -1;
         out_menu->move_signal_id = -1;
         out_menu->select_signal_id = -1;
@@ -3675,6 +3677,8 @@ bool sdl3d_game_data_get_active_menu_for_metrics(const sdl3d_game_data_runtime *
     out_menu->name = json_string(menu, "name", NULL);
     out_menu->up_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "up_action", NULL));
     out_menu->down_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "down_action", NULL));
+    out_menu->left_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "left_action", NULL));
+    out_menu->right_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "right_action", NULL));
     out_menu->select_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "select_action", NULL));
     out_menu->move_signal_id = sdl3d_game_data_find_signal(runtime, json_string(menu, "move_signal", NULL));
     out_menu->select_signal_id = sdl3d_game_data_find_signal(runtime, json_string(menu, "select_signal", NULL));
@@ -3831,8 +3835,26 @@ static bool json_value_matches_property(yyjson_val *value, const sdl3d_value *pr
     return false;
 }
 
-bool sdl3d_game_data_apply_menu_item_control(sdl3d_game_data_runtime *runtime, const sdl3d_game_data_menu_item *item)
+static bool menu_range_is_integer(yyjson_val *control)
 {
+    return SDL_strcmp(json_string(control, "value_type", ""), "int") == 0 ||
+           SDL_strcmp(json_string(control, "value_type", ""), "integer") == 0;
+}
+
+static float menu_control_numeric_value(const sdl3d_value *value, yyjson_val *control, float fallback)
+{
+    if (value != NULL && value->type == SDL3D_VALUE_INT)
+        return (float)value->as_int;
+    if (value != NULL && value->type == SDL3D_VALUE_FLOAT)
+        return value->as_float;
+    return json_float(control, "default", fallback);
+}
+
+bool sdl3d_game_data_adjust_menu_item_control(sdl3d_game_data_runtime *runtime, const sdl3d_game_data_menu_item *item,
+                                              int direction)
+{
+    if (direction == 0)
+        return false;
     if (runtime == NULL || item == NULL || item->control_type == SDL3D_GAME_DATA_MENU_CONTROL_NONE ||
         item->control_target == NULL || item->control_key == NULL)
         return false;
@@ -3842,6 +3864,7 @@ bool sdl3d_game_data_apply_menu_item_control(sdl3d_game_data_runtime *runtime, c
         return false;
 
     yyjson_val *control = find_menu_item_control_json(runtime, item);
+    const int step_direction = direction < 0 ? -1 : 1;
     switch (item->control_type)
     {
     case SDL3D_GAME_DATA_MENU_CONTROL_TOGGLE: {
@@ -3866,7 +3889,12 @@ bool sdl3d_game_data_apply_menu_item_control(sdl3d_game_data_runtime *runtime, c
                 break;
             }
         }
-        const int next_index = (current_index + 1) % (int)yyjson_arr_size(choices);
+        const int choice_count = (int)yyjson_arr_size(choices);
+        int next_index =
+            current_index >= 0 ? current_index + step_direction : (step_direction < 0 ? choice_count - 1 : 0);
+        next_index %= choice_count;
+        if (next_index < 0)
+            next_index += choice_count;
         yyjson_val *next = yyjson_arr_get(choices, (size_t)next_index);
         return set_property_from_json(actor->props, item->control_key,
                                       yyjson_is_obj(next) ? obj_get(next, "value") : next);
@@ -3875,18 +3903,24 @@ bool sdl3d_game_data_apply_menu_item_control(sdl3d_game_data_runtime *runtime, c
         const float min_value = json_float(control, "min", 0.0f);
         const float max_value = json_float(control, "max", 1.0f);
         const float step = json_float(control, "step", 1.0f);
-        float value =
-            sdl3d_properties_get_float(actor->props, item->control_key, json_float(control, "default", min_value));
-        value += step;
-        if (value > max_value)
-            value = min_value;
-        sdl3d_properties_set_float(actor->props, item->control_key, SDL_clamp(value, min_value, max_value));
+        const sdl3d_value *current = sdl3d_properties_get_value(actor->props, item->control_key);
+        float value = menu_control_numeric_value(current, control, min_value);
+        value = SDL_clamp(value + step * (float)step_direction, min_value, max_value);
+        if (menu_range_is_integer(control))
+            sdl3d_properties_set_int(actor->props, item->control_key, (int)SDL_lroundf(value));
+        else
+            sdl3d_properties_set_float(actor->props, item->control_key, value);
         return true;
     }
     case SDL3D_GAME_DATA_MENU_CONTROL_NONE:
         return false;
     }
     return false;
+}
+
+bool sdl3d_game_data_apply_menu_item_control(sdl3d_game_data_runtime *runtime, const sdl3d_game_data_menu_item *item)
+{
+    return sdl3d_game_data_adjust_menu_item_control(runtime, item, 1);
 }
 
 int sdl3d_game_data_scene_shortcut_count(const sdl3d_game_data_runtime *runtime)
@@ -4041,9 +4075,33 @@ static void format_menu_item_label(const sdl3d_game_data_runtime *runtime, yyjso
     }
     if (type == SDL3D_GAME_DATA_MENU_CONTROL_RANGE)
     {
-        const float current =
-            value != NULL && value->type == SDL3D_VALUE_FLOAT ? value->as_float : json_float(control, "default", 0.0f);
-        SDL_snprintf(buffer, buffer_size, "%s: %.2g", label, current);
+        const float min_value = json_float(control, "min", 0.0f);
+        const float max_value = json_float(control, "max", 1.0f);
+        const float current = SDL_clamp(menu_control_numeric_value(value, control, min_value), min_value, max_value);
+        if (SDL_strcmp(json_string(control, "display", ""), "slider") == 0)
+        {
+            const int slots = SDL_max(1, json_int(control, "slots", 10));
+            const float t = max_value > min_value ? (current - min_value) / (max_value - min_value) : 0.0f;
+            int filled = (int)SDL_lroundf(SDL_clamp(t, 0.0f, 1.0f) * (float)slots);
+            filled = SDL_clamp(filled, 0, slots);
+            char slider[64];
+            size_t pos = 0;
+            slider[pos++] = '[';
+            for (int i = 0; i < slots && pos + 2 < sizeof(slider); ++i)
+                slider[pos++] = i < filled ? '#' : '-';
+            slider[pos++] = ']';
+            slider[pos] = '\0';
+            if (menu_range_is_integer(control))
+                SDL_snprintf(buffer, buffer_size, "%s  %s %d/%d", label, slider, (int)SDL_lroundf(current),
+                             (int)SDL_lroundf(max_value));
+            else
+                SDL_snprintf(buffer, buffer_size, "%s  %s %.2g", label, slider, current);
+            return;
+        }
+        if (menu_range_is_integer(control))
+            SDL_snprintf(buffer, buffer_size, "%s: %d", label, (int)SDL_lroundf(current));
+        else
+            SDL_snprintf(buffer, buffer_size, "%s: %.2g", label, current);
         return;
     }
     SDL_strlcpy(buffer, label, buffer_size);
@@ -5781,8 +5839,12 @@ static float action_float_or_property(sdl3d_game_data_runtime *runtime, yyjson_v
     {
         sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, json_string(source, "target", NULL));
         const char *property = json_string(source, "key", NULL);
-        if (actor != NULL && property != NULL)
-            return sdl3d_properties_get_float(actor->props, property, fallback);
+        const sdl3d_value *value =
+            actor != NULL && property != NULL ? sdl3d_properties_get_value(actor->props, property) : NULL;
+        if (value != NULL && value->type == SDL3D_VALUE_FLOAT)
+            return value->as_float * json_float(source, "scale", 1.0f);
+        if (value != NULL && value->type == SDL3D_VALUE_INT)
+            return (float)value->as_int * json_float(source, "scale", 1.0f);
     }
     return json_float(action, key, fallback);
 }

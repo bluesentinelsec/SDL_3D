@@ -460,6 +460,10 @@ extern "C"
         int up_action_id;
         /** @brief Input action that moves selection down, or -1. */
         int down_action_id;
+        /** @brief Input action that decreases the selected control, or -1. */
+        int left_action_id;
+        /** @brief Input action that increases the selected control, or -1. */
+        int right_action_id;
         /** @brief Input action that activates the selected item, or -1. */
         int select_action_id;
         /** @brief Signal emitted after successful navigation, or -1. */
@@ -1215,13 +1219,27 @@ extern "C"
     /**
      * @brief Apply the generic control behavior authored on a menu item.
      *
-     * Toggle controls flip boolean properties, choice controls advance to the
-     * next authored choice, and range controls increment numeric properties with
-     * wrapping. Returns false when @p item is not a control or its target cannot
-     * be resolved.
+     * Toggle controls flip boolean properties, choice controls advance by one
+     * authored choice, and range controls increase by one authored step.
+     * Returns false when @p item is not a control or its target cannot be
+     * resolved.
      */
     bool sdl3d_game_data_apply_menu_item_control(sdl3d_game_data_runtime *runtime,
                                                  const sdl3d_game_data_menu_item *item);
+
+    /**
+     * @brief Adjust the generic control behavior authored on a menu item.
+     *
+     * @p direction should be positive to increase/advance or negative to
+     * decrease/rewind. Choice controls wrap across authored choices; range
+     * controls clamp to their authored min/max and preserve integer properties
+     * when authored with `value_type: "int"`. Toggle controls ignore direction
+     * and flip the current boolean value.
+     *
+     * @return true when a control value changed.
+     */
+    bool sdl3d_game_data_adjust_menu_item_control(sdl3d_game_data_runtime *runtime,
+                                                  const sdl3d_game_data_menu_item *item, int direction);
 
     /**
      * @brief Return the number of scene shortcuts authored under `app.scene_shortcuts`.
