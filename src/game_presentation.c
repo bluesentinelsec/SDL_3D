@@ -764,6 +764,10 @@ bool sdl3d_game_data_update_frame(sdl3d_game_data_frame_state *state, const sdl3
     }
 
     const bool pause_entered = !state->was_paused && ctx->paused;
+    if (sdl3d_game_data_active_scene_update_phase(runtime, "scene_activity", ctx->paused) &&
+        !sdl3d_game_data_update_scene_activity(runtime, sdl3d_game_session_get_input(ctx->session), desc->dt))
+        return false;
+
     if (sdl3d_game_data_active_scene_update_phase(runtime, "presentation", ctx->paused))
     {
         state->time += desc->dt;

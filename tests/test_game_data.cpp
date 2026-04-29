@@ -502,6 +502,86 @@ void write_scene_flow_policy_json(const std::filesystem::path &dir, bool block_m
 })json");
 }
 
+void write_scene_activity_json(const std::filesystem::path &dir)
+{
+    write_text(dir / "activity.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Activity", "id": "test.activity", "version": "0.1.0" },
+  "world": {
+    "cameras": [
+      {
+        "name": "camera.overhead",
+        "type": "orthographic",
+        "position": [0.0, 0.0, 10.0],
+        "target": [0.0, 0.0, 0.0],
+        "up": [0.0, 1.0, 0.0],
+        "size": 10.0,
+        "active": true
+      },
+      {
+        "name": "camera.close",
+        "type": "orthographic",
+        "position": [0.0, 0.0, 6.0],
+        "target": [0.0, 0.0, 0.0],
+        "up": [0.0, 1.0, 0.0],
+        "size": 4.0,
+        "active": false
+      }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.state",
+      "active": true,
+      "properties": {
+        "entered": { "type": "bool", "value": false },
+        "idle": { "type": "bool", "value": false },
+        "periodic": { "type": "int", "value": 0 }
+      }
+    }
+  ],
+  "scenes": {
+    "initial": "scene.title",
+    "files": ["scenes/title.scene.json"]
+  }
+})json");
+    write_text(dir / "scenes" / "title.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.title",
+  "updates_game": false,
+  "renders_world": false,
+  "camera": "camera.overhead",
+  "entities": ["entity.state"],
+  "activity": {
+    "enabled": true,
+    "input": "any",
+    "idle_after": 1.0,
+    "on_enter": [
+      { "type": "property.set", "target": "entity.state", "key": "entered", "value": true },
+      { "type": "camera.set", "camera": "camera.close" }
+    ],
+    "on_idle": [
+      { "type": "property.set", "target": "entity.state", "key": "idle", "value": true }
+    ],
+    "on_active": [
+      { "type": "property.set", "target": "entity.state", "key": "idle", "value": false }
+    ],
+    "periodic": [
+      {
+        "interval": 2.0,
+        "reset_idle": true,
+        "actions": [
+          { "type": "property.set", "target": "entity.state", "key": "idle", "value": false },
+          { "type": "property.add", "target": "entity.state", "key": "periodic", "value": 1 }
+        ]
+      }
+    ]
+  }
+})json");
+}
+
 void write_animation_json(const std::filesystem::path &dir)
 {
     write_text(dir / "animation.game.json",
@@ -1075,6 +1155,10 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_TRUE(images.saw_splash_logo);
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
+    EXPECT_TRUE(sdl3d_game_data_active_scene_updates_game(runtime));
+    EXPECT_TRUE(sdl3d_game_data_active_scene_renders_world(runtime));
+    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.ball.attract"));
+    EXPECT_FALSE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.ball"));
 
     sdl3d_game_data_menu menu{};
     ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
@@ -1825,6 +1909,58 @@ TEST(GameDataRuntime, TimelinePolicyCanAllowInteractiveIntroMenus)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, SceneActivityDrivesIdleWakeAndPeriodicActions)
+{
+    const std::filesystem::path dir = unique_test_dir("scene_activity");
+    write_scene_activity_json(dir);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "activity.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    sdl3d_registered_actor *state = sdl3d_game_data_find_actor(runtime, "entity.state");
+    ASSERT_NE(state, nullptr);
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+
+    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead");
+    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 0.0f));
+    EXPECT_TRUE(sdl3d_properties_get_bool(state->props, "entered", false));
+    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.close");
+
+    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 0.75f));
+    EXPECT_FALSE(sdl3d_properties_get_bool(state->props, "idle", false));
+    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 0.30f));
+    EXPECT_TRUE(sdl3d_properties_get_bool(state->props, "idle", false));
+
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_SPACE;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 1);
+    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 0.0f));
+    EXPECT_FALSE(sdl3d_properties_get_bool(state->props, "idle", true));
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 2);
+    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 2.1f));
+    EXPECT_EQ(sdl3d_properties_get_int(state->props, "periodic", 0), 1);
+    EXPECT_FALSE(sdl3d_properties_get_bool(state->props, "idle", true));
+
+    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 1.1f));
+    EXPECT_TRUE(sdl3d_properties_get_bool(state->props, "idle", false));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, AppFlowRunsAuthoredTweenActions)
 {
     const std::filesystem::path dir = unique_test_dir("animation");
@@ -1963,6 +2099,7 @@ TEST(GameDataRuntime, LuaAdapterReflectsBallFromPaddle)
 
     sdl3d_properties *payload = sdl3d_properties_create();
     ASSERT_NE(payload, nullptr);
+    sdl3d_properties_set_string(payload, "actor_name", "entity.ball");
     sdl3d_properties_set_string(payload, "other_actor_name", "entity.paddle.player");
     const int hit_signal = sdl3d_game_data_find_signal(runtime, "signal.ball.hit_paddle");
     ASSERT_GE(hit_signal, 0);

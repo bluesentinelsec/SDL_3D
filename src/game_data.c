@@ -174,6 +174,17 @@ typedef struct materialized_audio_file
     char *file_path;
 } materialized_audio_file;
 
+typedef struct scene_activity_state
+{
+    const char *scene;
+    float idle_elapsed;
+    float *periodic_elapsed;
+    int periodic_count;
+    int periodic_capacity;
+    bool idle;
+    bool entered;
+} scene_activity_state;
+
 typedef struct scene_entry
 {
     yyjson_doc *doc;
@@ -224,6 +235,7 @@ typedef struct sdl3d_game_data_runtime
     int audio_file_capacity;
     char *audio_cache_dir;
     const char *active_camera;
+    scene_activity_state activity;
     float current_dt;
     unsigned int rng_state;
 } sdl3d_game_data_runtime;
@@ -3087,8 +3099,8 @@ static bool update_phase_default(const sdl3d_game_data_runtime *runtime, const c
         return !paused && sdl3d_game_data_active_scene_updates_game(runtime);
     if (phase != NULL && SDL_strcmp(phase, "app_flow") == 0)
         return true;
-    if (phase != NULL && (SDL_strcmp(phase, "presentation") == 0 || SDL_strcmp(phase, "property_effects") == 0 ||
-                          SDL_strcmp(phase, "particles") == 0))
+    if (phase != NULL && (SDL_strcmp(phase, "scene_activity") == 0 || SDL_strcmp(phase, "presentation") == 0 ||
+                          SDL_strcmp(phase, "property_effects") == 0 || SDL_strcmp(phase, "particles") == 0))
         return true;
     return !paused;
 }
@@ -5365,6 +5377,15 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
         return runtime->active_camera != NULL;
     }
 
+    if (SDL_strcmp(type, "camera.set") == 0)
+    {
+        const char *camera = json_string(action, "camera", NULL);
+        if (camera == NULL)
+            return false;
+        runtime->active_camera = camera;
+        return true;
+    }
+
     if (SDL_strcmp(type, "scene.set") == 0)
         return sdl3d_game_data_set_active_scene_with_payload(runtime, json_string(action, "scene", NULL), payload);
 
@@ -5374,7 +5395,10 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
         adapter_entry *adapter = find_adapter(runtime, adapter_name);
         if (adapter == NULL)
             return false;
-        sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, json_string(action, "target", NULL));
+        const char *target_name = json_string(action, "target", NULL);
+        if ((target_name == NULL || target_name[0] == '\0') && payload != NULL)
+            target_name = sdl3d_properties_get_string(payload, "actor_name", NULL);
+        sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, target_name);
         return invoke_adapter(runtime, adapter, target, payload);
     }
 
@@ -5404,6 +5428,163 @@ static bool execute_action_array(sdl3d_game_data_runtime *runtime, yyjson_val *a
         yyjson_val *action = yyjson_arr_get(actions, i);
         if (yyjson_is_obj(action))
             ok = execute_one_action(runtime, action, payload) && ok;
+    }
+    return ok;
+}
+
+static bool execute_optional_action_array(sdl3d_game_data_runtime *runtime, yyjson_val *actions,
+                                          const sdl3d_properties *payload)
+{
+    if (actions == NULL)
+        return true;
+    return execute_action_array(runtime, actions, payload);
+}
+
+static yyjson_val *active_scene_activity_json(const sdl3d_game_data_runtime *runtime)
+{
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    yyjson_val *activity = obj_get(scene != NULL ? scene->root : NULL, "activity");
+    if (!yyjson_is_obj(activity) || !json_bool(activity, "enabled", true))
+        return NULL;
+    return activity;
+}
+
+static bool ensure_activity_periodic_capacity(scene_activity_state *state, int required)
+{
+    if (state == NULL)
+        return false;
+    if (required <= state->periodic_capacity)
+        return true;
+
+    int next_capacity = state->periodic_capacity < 4 ? 4 : state->periodic_capacity * 2;
+    while (next_capacity < required)
+        next_capacity *= 2;
+
+    float *elapsed = (float *)SDL_realloc(state->periodic_elapsed, (size_t)next_capacity * sizeof(*elapsed));
+    if (elapsed == NULL)
+        return false;
+    SDL_memset(elapsed + state->periodic_capacity, 0,
+               (size_t)(next_capacity - state->periodic_capacity) * sizeof(*elapsed));
+    state->periodic_elapsed = elapsed;
+    state->periodic_capacity = next_capacity;
+    return true;
+}
+
+static bool activity_reset_for_scene(sdl3d_game_data_runtime *runtime, const char *scene, yyjson_val *activity)
+{
+    scene_activity_state *state = &runtime->activity;
+    state->scene = scene;
+    state->idle_elapsed = 0.0f;
+    state->idle = false;
+    state->entered = false;
+
+    const int periodic_count = (int)yyjson_arr_size(obj_get(activity, "periodic"));
+    if (!ensure_activity_periodic_capacity(state, periodic_count))
+        return false;
+    state->periodic_count = periodic_count;
+    if (periodic_count > 0)
+        SDL_memset(state->periodic_elapsed, 0, (size_t)periodic_count * sizeof(*state->periodic_elapsed));
+    return true;
+}
+
+static bool activity_input_matches(const sdl3d_game_data_runtime *runtime, yyjson_val *activity,
+                                   const sdl3d_input_manager *input)
+{
+    if (runtime == NULL || activity == NULL || input == NULL)
+        return false;
+
+    const char *mode = json_string(activity, "input", "any");
+    if (SDL_strcmp(mode, "disabled") == 0 || SDL_strcmp(mode, "none") == 0)
+        return false;
+    if (SDL_strcmp(mode, "action") == 0)
+    {
+        const int action_id = sdl3d_game_data_find_action(runtime, json_string(activity, "action", NULL));
+        return action_id >= 0 && sdl3d_input_is_pressed(input, action_id);
+    }
+    return sdl3d_input_any_pressed(input);
+}
+
+bool sdl3d_game_data_update_scene_activity(sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input, float dt)
+{
+    if (runtime == NULL)
+        return false;
+
+    if (dt < 0.0f)
+        dt = 0.0f;
+
+    yyjson_val *activity = active_scene_activity_json(runtime);
+    const char *active_scene = sdl3d_game_data_active_scene(runtime);
+    scene_activity_state *state = &runtime->activity;
+    if (activity == NULL)
+    {
+        state->scene = active_scene;
+        state->idle_elapsed = 0.0f;
+        state->idle = false;
+        state->entered = false;
+        state->periodic_count = 0;
+        return true;
+    }
+
+    if (state->scene != active_scene)
+    {
+        if (!activity_reset_for_scene(runtime, active_scene, activity))
+            return false;
+    }
+
+    bool ok = true;
+    if (!state->entered)
+    {
+        ok = execute_optional_action_array(runtime, obj_get(activity, "on_enter"), NULL) && ok;
+        state->entered = true;
+    }
+
+    const bool input_active = activity_input_matches(runtime, activity, input);
+    if (input_active)
+    {
+        state->idle_elapsed = 0.0f;
+        if (json_bool(activity, "reset_periodic_on_input", true) && state->periodic_count > 0)
+            SDL_memset(state->periodic_elapsed, 0, (size_t)state->periodic_count * sizeof(*state->periodic_elapsed));
+        if (state->idle)
+        {
+            state->idle = false;
+            ok = execute_optional_action_array(runtime, obj_get(activity, "on_active"), NULL) && ok;
+        }
+    }
+    else
+    {
+        state->idle_elapsed += dt;
+    }
+
+    const float idle_after = json_float(activity, "idle_after", json_float(activity, "idle_seconds", -1.0f));
+    if (idle_after >= 0.0f && !state->idle && state->idle_elapsed >= idle_after)
+    {
+        state->idle = true;
+        ok = execute_optional_action_array(runtime, obj_get(activity, "on_idle"), NULL) && ok;
+    }
+
+    yyjson_val *periodic = obj_get(activity, "periodic");
+    const int periodic_count = (int)yyjson_arr_size(periodic);
+    if (periodic_count != state->periodic_count && !activity_reset_for_scene(runtime, active_scene, activity))
+        return false;
+    for (int i = 0; i < state->periodic_count; ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(periodic, (size_t)i);
+        if (!yyjson_is_obj(entry))
+            continue;
+        const float interval = json_float(entry, "interval", 0.0f);
+        if (interval <= 0.0f)
+            continue;
+        state->periodic_elapsed[i] += dt;
+        if (state->periodic_elapsed[i] < interval)
+            continue;
+
+        state->periodic_elapsed[i] = SDL_fmodf(state->periodic_elapsed[i], interval);
+        ok = execute_optional_action_array(runtime, obj_get(entry, "actions"), NULL) && ok;
+        if (json_bool(entry, "reset_idle", false))
+        {
+            state->idle_elapsed = 0.0f;
+            state->idle = false;
+        }
     }
     return ok;
 }
@@ -5723,6 +5904,11 @@ static void update_control_components(sdl3d_game_data_runtime *runtime, yyjson_v
             {
                 const int negative = sdl3d_game_data_find_action(runtime, json_string(component, "negative", NULL));
                 const int positive = sdl3d_game_data_find_action(runtime, json_string(component, "positive", NULL));
+                if ((negative >= 0 && !sdl3d_game_data_active_scene_allows_action(runtime, negative)) ||
+                    (positive >= 0 && !sdl3d_game_data_active_scene_allows_action(runtime, positive)))
+                {
+                    continue;
+                }
                 const int axis = axis_index(json_string(component, "axis", NULL));
                 const float value = sdl3d_input_get_value(input, positive) - sdl3d_input_get_value(input, negative);
                 const float speed = sdl3d_properties_get_float(actor->props, "speed", 0.0f);
@@ -6395,6 +6581,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->ui_states);
     SDL_free(runtime->animations);
     SDL_free(runtime->audio_files);
+    SDL_free(runtime->activity.periodic_elapsed);
     yyjson_doc_free(runtime->doc);
     SDL_free(runtime);
 }
