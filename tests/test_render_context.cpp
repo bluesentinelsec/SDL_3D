@@ -201,6 +201,42 @@ TEST_F(SDLVideoFixture, HighLevelSoftwareWindowLetterboxesLogicalPresentation)
     sdl3d_destroy_window(window, context);
 }
 
+TEST_F(SDLVideoFixture, HighLevelSoftwareWindowAppliesVSyncAtRuntime)
+{
+    SDL3DBackendOverrideGuard backend_override("software");
+    sdl3d_window_config config;
+    sdl3d_init_window_config(&config);
+    config.backend = SDL3D_BACKEND_SOFTWARE;
+    config.allow_backend_fallback = false;
+    config.vsync = false;
+
+    SDL_Window *window = nullptr;
+    sdl3d_render_context *context = nullptr;
+    ASSERT_TRUE(sdl3d_create_window(&config, &window, &context)) << SDL_GetError();
+    SDL_Renderer *renderer = SDL_GetRenderer(window);
+    ASSERT_NE(renderer, nullptr);
+
+    int vsync = -1;
+    ASSERT_TRUE(SDL_GetRenderVSync(renderer, &vsync)) << SDL_GetError();
+    EXPECT_EQ(SDL_RENDERER_VSYNC_DISABLED, vsync);
+
+    config.vsync = true;
+    ASSERT_TRUE(sdl3d_apply_window_config(&window, &context, &config)) << SDL_GetError();
+    renderer = SDL_GetRenderer(window);
+    ASSERT_NE(renderer, nullptr);
+    ASSERT_TRUE(SDL_GetRenderVSync(renderer, &vsync)) << SDL_GetError();
+    EXPECT_EQ(1, vsync);
+
+    config.vsync = false;
+    ASSERT_TRUE(sdl3d_apply_window_config(&window, &context, &config)) << SDL_GetError();
+    renderer = SDL_GetRenderer(window);
+    ASSERT_NE(renderer, nullptr);
+    ASSERT_TRUE(SDL_GetRenderVSync(renderer, &vsync)) << SDL_GetError();
+    EXPECT_EQ(SDL_RENDERER_VSYNC_DISABLED, vsync);
+
+    sdl3d_destroy_window(window, context);
+}
+
 TEST_F(SDLVideoFixture, OpenGLBackendAcceptsRequest)
 {
     SDLWindowRendererPair pair;

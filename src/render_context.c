@@ -651,6 +651,21 @@ static bool sdl3d_apply_context_vsync(sdl3d_render_context *context, bool vsync)
     return true;
 }
 
+static bool sdl3d_get_context_vsync(const sdl3d_render_context *context, int *out_interval)
+{
+    if (context == NULL)
+        return SDL_InvalidParamError("context");
+    if (out_interval == NULL)
+        return SDL_InvalidParamError("out_interval");
+    if (context->backend == SDL3D_BACKEND_OPENGL)
+        return SDL_GL_GetSwapInterval(out_interval);
+    if (context->renderer != NULL)
+        return SDL_GetRenderVSync(context->renderer, out_interval);
+
+    *out_interval = 0;
+    return true;
+}
+
 static const char *sdl3d_actual_window_mode_name(SDL_Window *window)
 {
     if (window == NULL || (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) == 0)
@@ -740,7 +755,11 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
             SDL_DestroyWindow(window);
             return false;
         }
-        (void)SDL_SetRenderVSync(renderer, local.vsync ? 1 : 0);
+        if (!SDL_SetRenderVSync(renderer, local.vsync ? 1 : 0))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D renderer vsync request failed: %s", SDL_GetError());
+            SDL_ClearError();
+        }
     }
 
     sdl3d_init_render_context_config(&rcfg);
@@ -764,11 +783,20 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
         SDL_ClearError();
     }
 
+    int actual_vsync = 0;
+    bool have_actual_vsync = sdl3d_get_context_vsync(context, &actual_vsync);
+    if (!have_actual_vsync)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D vsync query failed: %s", SDL_GetError());
+        SDL_ClearError();
+    }
+
     *out_window = window;
     *out_context = context;
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D window created: mode=%s backend=%s vsync=%s size=%dx%d",
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "SDL3D window created: mode=%s backend=%s requested_vsync=%s actual_vsync=%d size=%dx%d",
                 sdl3d_window_mode_name(local.display_mode), sdl3d_get_backend_name(resolved),
-                local.vsync ? "on" : "off", local.width, local.height);
+                local.vsync ? "on" : "off", have_actual_vsync ? actual_vsync : -999, local.width, local.height);
     return true;
 }
 
@@ -832,10 +860,20 @@ bool sdl3d_apply_window_config(SDL_Window **window, sdl3d_render_context **conte
         }
     }
 
+    int actual_vsync = 0;
+    bool have_actual_vsync = sdl3d_get_context_vsync(*context, &actual_vsync);
+    if (!have_actual_vsync)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D vsync query failed: %s", SDL_GetError());
+        SDL_ClearError();
+    }
+
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "SDL3D window settings applied: requested_mode=%s actual_mode=%s backend=%s vsync=%s",
+                "SDL3D window settings applied: requested_mode=%s actual_mode=%s backend=%s requested_vsync=%s "
+                "actual_vsync=%d",
                 sdl3d_window_mode_name(local.display_mode), sdl3d_actual_window_mode_name(*window),
-                sdl3d_get_backend_name(sdl3d_get_render_context_backend(*context)), local.vsync ? "on" : "off");
+                sdl3d_get_backend_name(sdl3d_get_render_context_backend(*context)), local.vsync ? "on" : "off",
+                have_actual_vsync ? actual_vsync : -999);
     return true;
 }
 
