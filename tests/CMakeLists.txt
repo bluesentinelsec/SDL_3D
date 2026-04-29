@@ -106,6 +106,7 @@ set(SDL3D_TEST_SOURCES
     test_level.cpp
     test_properties.cpp
     test_signal_bus.cpp
+    test_storage.cpp
     test_trigger.cpp
     test_timer_pool.cpp
     test_fps_mover.cpp
@@ -227,6 +228,7 @@ else()
     target_include_directories(sdl3d_level_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     sdl3d_add_test(sdl3d_properties_test test_properties.cpp unit)
     sdl3d_add_test(sdl3d_signal_bus_test test_signal_bus.cpp unit)
+    sdl3d_add_test(sdl3d_storage_test test_storage.cpp unit)
     sdl3d_add_test(sdl3d_trigger_test test_trigger.cpp unit)
     sdl3d_add_test(sdl3d_timer_pool_test test_timer_pool.cpp unit)
     sdl3d_add_test(sdl3d_fps_mover_test test_fps_mover.cpp unit)

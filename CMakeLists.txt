@@ -121,6 +121,7 @@ target_sources(
         src/sdl3d.c
         src/shading.c
         src/shapes.c
+        src/storage.c
         src/sw_backend.c
         src/texture.c
         src/teleporter.c
