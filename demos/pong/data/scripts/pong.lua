@@ -147,21 +147,6 @@ local function apply_options(settings, options)
     if type(options.renderer) == "string" then
         settings:set_string("renderer", options.renderer)
     end
-    if type(options.input_style) == "string" then
-        settings:set_string("input_style", options.input_style)
-    end
-    if type(options.keyboard_preset) == "string" then
-        settings:set_string("keyboard_preset", options.keyboard_preset)
-    end
-    if type(options.keyboard_move) == "string" then
-        settings:set_string("keyboard_move", options.keyboard_move)
-    end
-    if type(options.keyboard_confirm) == "string" then
-        settings:set_string("keyboard_confirm", options.keyboard_confirm)
-    end
-    if type(options.keyboard_cancel) == "string" then
-        settings:set_string("keyboard_cancel", options.keyboard_cancel)
-    end
     if type(options.gamepad_icons) == "string" then
         settings:set_string("gamepad_icons", options.gamepad_icons)
     end
@@ -182,11 +167,6 @@ local function current_options(settings)
         display_mode = settings:get_string("display_mode", "fullscreen_borderless"),
         vsync = settings:get_bool("vsync", true),
         renderer = settings:get_string("renderer", "software"),
-        input_style = settings:get_string("input_style", "keyboard"),
-        keyboard_preset = settings:get_string("keyboard_preset", "xbox_parity"),
-        keyboard_move = settings:get_string("keyboard_move", "wasd"),
-        keyboard_confirm = settings:get_string("keyboard_confirm", "enter_space"),
-        keyboard_cancel = settings:get_string("keyboard_cancel", "escape_backspace"),
         gamepad_icons = settings:get_string("gamepad_icons", "xbox"),
         vibration = settings:get_bool("vibration", true),
         sfx_volume = settings:get_int("sfx_volume", 8),

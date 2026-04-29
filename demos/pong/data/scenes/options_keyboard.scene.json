@@ -1,7 +1,6 @@
 {
   "schema": "sdl3d.scene.v0",
   "name": "scene.options.keyboard",
-  "on_enter_signal": "signal.settings.snapshot_keyboard",
   "updates_game": false,
   "renders_world": false,
   "entities": [],
@@ -27,69 +26,82 @@
       "selected": 0,
       "items": [
         {
-          "label": "Input Style",
+          "label": "Up",
           "control": {
-            "type": "choice",
-            "target": "entity.settings",
-            "key": "input_style",
-            "choices": [
-              { "label": "Keyboard", "value": "keyboard" },
-              { "label": "Gamepad", "value": "gamepad" }
+            "type": "key_binding",
+            "default": "W",
+            "bindings": [
+              { "action": "action.paddle.up", "device": "keyboard" },
+              { "action": "action.menu.up", "device": "keyboard" }
             ]
           }
         },
         {
-          "label": "Preset",
+          "label": "Down",
           "control": {
-            "type": "choice",
-            "target": "entity.settings",
-            "key": "keyboard_preset",
-            "choices": [
-              { "label": "Xbox Parity", "value": "xbox_parity" },
-              { "label": "Classic PC", "value": "classic_pc" }
+            "type": "key_binding",
+            "default": "S",
+            "bindings": [
+              { "action": "action.paddle.down", "device": "keyboard" },
+              { "action": "action.menu.down", "device": "keyboard" }
             ]
           }
         },
         {
-          "label": "Move",
+          "label": "Left",
           "control": {
-            "type": "choice",
-            "target": "entity.settings",
-            "key": "keyboard_move",
-            "choices": [
-              { "label": "WASD", "value": "wasd" },
-              { "label": "Arrow Keys", "value": "arrows" }
+            "type": "key_binding",
+            "default": "A",
+            "bindings": [
+              { "action": "action.menu.left", "device": "keyboard" }
             ]
           }
         },
         {
-          "label": "Confirm",
+          "label": "Right",
           "control": {
-            "type": "choice",
-            "target": "entity.settings",
-            "key": "keyboard_confirm",
-            "choices": [
-              { "label": "Enter / Space", "value": "enter_space" },
-              { "label": "Z / Enter", "value": "z_enter" }
+            "type": "key_binding",
+            "default": "D",
+            "bindings": [
+              { "action": "action.menu.right", "device": "keyboard" }
             ]
           }
         },
         {
-          "label": "Cancel Button",
+          "label": "Accept",
           "control": {
-            "type": "choice",
-            "target": "entity.settings",
-            "key": "keyboard_cancel",
-            "choices": [
-              { "label": "Escape / Backspace", "value": "escape_backspace" },
-              { "label": "X / Escape", "value": "x_escape" }
+            "type": "key_binding",
+            "default": "RETURN",
+            "bindings": [
+              { "action": "action.menu.select", "device": "keyboard" },
+              { "action": "action.pause", "device": "keyboard" },
+              { "action": "action.restart", "device": "keyboard" }
             ]
           }
         },
-        { "label": "Apply", "signal": "signal.settings.apply", "scene": "scene.options" },
-        { "label": "Cancel Changes", "signal": "signal.settings.cancel_keyboard", "scene": "scene.options" },
-        { "label": "Reset Keyboard Defaults", "signal": "signal.settings.reset_keyboard" },
-        { "label": "Back", "signal": "signal.settings.cancel_keyboard", "scene": "scene.options" }
+        {
+          "label": "Cancel",
+          "control": {
+            "type": "key_binding",
+            "default": "ESCAPE",
+            "allow_escape": true,
+            "bindings": [
+              { "action": "action.exit", "device": "keyboard" }
+            ]
+          }
+        },
+        {
+          "label": "Ball Camera",
+          "control": {
+            "type": "key_binding",
+            "default": "B",
+            "bindings": [
+              { "action": "action.camera.ball.toggle", "device": "keyboard" }
+            ]
+          }
+        },
+        { "label": "Reset Settings", "signal": "signal.settings.reset_keyboard" },
+        { "label": "Back", "scene": "scene.options" }
       ]
     }
   ],
@@ -100,10 +112,23 @@
         "font": "font.title",
         "text": "KEYBOARD",
         "x": 0.5,
-        "y": 0.16,
+        "y": 0.13,
         "normalized": true,
         "centered": true,
         "color": [242, 248, 255, 255]
+      },
+      {
+        "name": "ui.options.keyboard.status",
+        "font": "font.hud",
+        "format": "%s",
+        "bindings": [
+          { "type": "scene_state", "key": "keyboard_binding_status" }
+        ],
+        "x": 0.5,
+        "y": 0.88,
+        "normalized": true,
+        "centered": true,
+        "color": [255, 222, 140, 230]
       }
     ],
     "menus": [
@@ -112,7 +137,7 @@
         "menu": "menu.options.keyboard",
         "font": "font.hud",
         "x": 0.5,
-        "y": 0.31,
+        "y": 0.25,
         "gap": 0.062,
         "normalized": true,
         "align": "center",

@@ -763,11 +763,6 @@
         "display_mode": { "type": "string", "value": "windowed" },
         "vsync": { "type": "bool", "value": true },
         "renderer": { "type": "string", "value": "opengl" },
-        "input_style": { "type": "string", "value": "keyboard" },
-        "keyboard_preset": { "type": "string", "value": "xbox_parity" },
-        "keyboard_move": { "type": "string", "value": "wasd" },
-        "keyboard_confirm": { "type": "string", "value": "enter_space" },
-        "keyboard_cancel": { "type": "string", "value": "escape_backspace" },
         "gamepad_icons": { "type": "string", "value": "xbox" },
         "vibration": { "type": "bool", "value": true },
         "sfx_volume": { "type": "int", "value": 8 },
@@ -839,13 +834,11 @@
     "signal.persistence.load",
     "signal.persistence.save_options",
     "signal.settings.snapshot_display",
-    "signal.settings.snapshot_keyboard",
     "signal.settings.snapshot_gamepad",
     "signal.settings.snapshot_audio",
     "signal.settings.apply",
     "signal.settings.apply_audio",
     "signal.settings.cancel_display",
-    "signal.settings.cancel_keyboard",
     "signal.settings.cancel_gamepad",
     "signal.settings.cancel_audio",
     "signal.settings.reset_display",
@@ -1008,12 +1001,6 @@
         ]
       },
       {
-        "signal": "signal.settings.snapshot_keyboard",
-        "actions": [
-          { "type": "property.snapshot", "name": "options.keyboard", "target": "entity.settings", "keys": ["input_style", "keyboard_preset", "keyboard_move", "keyboard_confirm", "keyboard_cancel"] }
-        ]
-      },
-      {
         "signal": "signal.settings.snapshot_gamepad",
         "actions": [
           { "type": "property.snapshot", "name": "options.gamepad", "target": "entity.settings", "keys": ["gamepad_icons", "vibration"] }
@@ -1029,12 +1016,6 @@
         "signal": "signal.settings.cancel_display",
         "actions": [
           { "type": "property.restore_snapshot", "name": "options.display", "target": "entity.settings" }
-        ]
-      },
-      {
-        "signal": "signal.settings.cancel_keyboard",
-        "actions": [
-          { "type": "property.restore_snapshot", "name": "options.keyboard", "target": "entity.settings" }
         ]
       },
       {
@@ -1059,7 +1040,7 @@
       {
         "signal": "signal.settings.reset_keyboard",
         "actions": [
-          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["input_style", "keyboard_preset", "keyboard_move", "keyboard_confirm", "keyboard_cancel"] }
+          { "type": "input.reset_key_bindings", "menu": "menu.options.keyboard" }
         ]
       },
       {

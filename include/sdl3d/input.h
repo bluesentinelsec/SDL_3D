@@ -235,6 +235,15 @@ extern "C"
     float sdl3d_input_get_value(const sdl3d_input_manager *input, int action_id);
 
     /**
+     * @brief Return the first keyboard scancode pressed during the current input tick.
+     *
+     * The value is captured by sdl3d_input_update() before transient key
+     * edges are cleared. Returns SDL_SCANCODE_UNKNOWN when no key was pressed
+     * or live keyboard input is unavailable, such as during demo playback.
+     */
+    SDL_Scancode sdl3d_input_get_pressed_scancode(const sdl3d_input_manager *input);
+
+    /**
      * @brief Return true if any button-like input or action was pressed this tick.
      *
      * This supports generic flows such as splash screens where "press anything

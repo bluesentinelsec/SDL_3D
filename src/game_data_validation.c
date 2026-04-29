@@ -1149,6 +1149,12 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         }
         return true;
     }
+    if (SDL_strcmp(type, "input.reset_key_bindings") == 0)
+    {
+        if (!is_non_empty_string(action, "menu"))
+            return validation_error(ctx, json_path, "input.reset_key_bindings requires a non-empty menu");
+        return true;
+    }
     if (SDL_strcmp(type, "ui.animate") == 0)
     {
         if (!is_non_empty_string(action, "target") && !is_non_empty_string(action, "ui"))
@@ -1774,8 +1780,11 @@ static bool validate_ui(validation_context *ctx, yyjson_val *root, validation_na
             }
             else if (SDL_strcmp(type != NULL ? type : "", "metric") != 0)
             {
-                return validation_error(ctx, binding_path, "unsupported UI binding type '%s'",
-                                        type != NULL ? type : "<missing>");
+                if (SDL_strcmp(type != NULL ? type : "", "scene_state") != 0)
+                    return validation_error(ctx, binding_path, "unsupported UI binding type '%s'",
+                                            type != NULL ? type : "<missing>");
+                if (!is_non_empty_string(binding, "key"))
+                    return validation_error(ctx, binding_path, "UI scene_state binding requires a non-empty key");
             }
         }
     }
@@ -2015,13 +2024,17 @@ static bool validate_menu_item_control(validation_context *ctx, yyjson_val *cont
         return validation_error(ctx, path, "menu item control must be an object");
 
     const char *type = json_string(control, "type");
-    if (type == NULL ||
-        (SDL_strcmp(type, "toggle") != 0 && SDL_strcmp(type, "choice") != 0 && SDL_strcmp(type, "range") != 0))
-        return validation_error(ctx, path, "menu item control requires type toggle, choice, or range");
-    if (!require_ref(ctx, &names->entities, "entity", json_string(control, "target"), path))
-        return false;
-    if (!is_non_empty_string(control, "key"))
-        return validation_error(ctx, path, "menu item control requires a non-empty key");
+    if (type == NULL || (SDL_strcmp(type, "toggle") != 0 && SDL_strcmp(type, "choice") != 0 &&
+                         SDL_strcmp(type, "range") != 0 && SDL_strcmp(type, "key_binding") != 0))
+        return validation_error(ctx, path, "menu item control requires type toggle, choice, range, or key_binding");
+
+    if (SDL_strcmp(type, "key_binding") != 0)
+    {
+        if (!require_ref(ctx, &names->entities, "entity", json_string(control, "target"), path))
+            return false;
+        if (!is_non_empty_string(control, "key"))
+            return validation_error(ctx, path, "menu item control requires a non-empty key");
+    }
 
     if (SDL_strcmp(type, "choice") == 0)
     {
@@ -2034,6 +2047,23 @@ static bool validate_menu_item_control(validation_context *ctx, yyjson_val *cont
         if (!yyjson_is_num(obj_get(control, "min")) || !yyjson_is_num(obj_get(control, "max")) ||
             !yyjson_is_num(obj_get(control, "step")))
             return validation_error(ctx, path, "range control requires numeric min, max, and step");
+    }
+    if (SDL_strcmp(type, "key_binding") == 0)
+    {
+        yyjson_val *bindings = obj_get(control, "bindings");
+        if (!yyjson_is_arr(bindings) || yyjson_arr_size(bindings) == 0)
+            return validation_error(ctx, path, "key_binding control requires at least one binding");
+        if (!is_non_empty_string(control, "default"))
+            return validation_error(ctx, path, "key_binding control requires a default key");
+        for (size_t i = 0; i < yyjson_arr_size(bindings); ++i)
+        {
+            yyjson_val *binding = yyjson_arr_get(bindings, i);
+            if (!require_ref(ctx, &names->actions, "input action", json_string(binding, "action"), path))
+                return false;
+            const char *device = json_string(binding, "device");
+            if (device != NULL && SDL_strcmp(device, "keyboard") != 0)
+                return validation_error(ctx, path, "key_binding controls currently support keyboard bindings only");
+        }
     }
     return true;
 }
@@ -2320,8 +2350,11 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
             }
             else if (SDL_strcmp(type != NULL ? type : "", "metric") != 0)
             {
-                return validation_error(ctx, binding_path, "unsupported scene UI binding type '%s'",
-                                        type != NULL ? type : "<missing>");
+                if (SDL_strcmp(type != NULL ? type : "", "scene_state") != 0)
+                    return validation_error(ctx, binding_path, "unsupported scene UI binding type '%s'",
+                                            type != NULL ? type : "<missing>");
+                if (!is_non_empty_string(binding, "key"))
+                    return validation_error(ctx, binding_path, "scene UI scene_state binding requires a non-empty key");
             }
         }
     }

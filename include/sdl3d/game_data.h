@@ -487,6 +487,8 @@ extern "C"
         SDL3D_GAME_DATA_MENU_CONTROL_CHOICE = 2,
         /** @brief Menu item increments a numeric property within a range. */
         SDL3D_GAME_DATA_MENU_CONTROL_RANGE = 3,
+        /** @brief Menu item captures a keyboard key and rebinds authored actions. */
+        SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING = 4,
     } sdl3d_game_data_menu_control_type;
 
     /** @brief App pause command authored on a menu item. */
@@ -501,6 +503,21 @@ extern "C"
         /** @brief Selecting the item toggles the app pause state. */
         SDL3D_GAME_DATA_MENU_PAUSE_TOGGLE = 3,
     } sdl3d_game_data_menu_pause_command;
+
+    /** @brief Result of advancing an active key-binding capture. */
+    typedef enum sdl3d_game_data_key_binding_capture_status
+    {
+        /** @brief No key-binding capture is active. */
+        SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_NONE = 0,
+        /** @brief Capture is active and still waiting for a key press. */
+        SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_WAITING = 1,
+        /** @brief Capture was canceled by its cancel key. */
+        SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_CANCELED = 2,
+        /** @brief The captured key was applied to authored action bindings. */
+        SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_CHANGED = 3,
+        /** @brief The captured key was rejected because another binding uses it. */
+        SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_CONFLICT = 4,
+    } sdl3d_game_data_key_binding_capture_status;
 
     /**
      * @brief Runtime descriptor for one authored menu item.
@@ -538,6 +555,8 @@ extern "C"
         const char *control_key;
         /** @brief Number of authored choices for choice controls. */
         int choice_count;
+        /** @brief Number of action bindings affected by a key-binding control. */
+        int key_binding_count;
     } sdl3d_game_data_menu_item;
 
     /** @brief Authored scene transition behavior policy. */
@@ -1240,6 +1259,35 @@ extern "C"
      */
     bool sdl3d_game_data_adjust_menu_item_control(sdl3d_game_data_runtime *runtime,
                                                   const sdl3d_game_data_menu_item *item, int direction);
+
+    /**
+     * @brief Start keyboard-capture mode for a key-binding menu item.
+     *
+     * The menu item must author a `control` with `type: "key_binding"`.
+     * While capture is active, callers should pass input snapshots to
+     * sdl3d_game_data_update_menu_key_binding_capture() before normal menu
+     * navigation.
+     */
+    bool sdl3d_game_data_start_menu_key_binding_capture(sdl3d_game_data_runtime *runtime, const char *menu_name,
+                                                        int item_index);
+
+    /** @brief Return true while a key-binding menu item is waiting for a key. */
+    bool sdl3d_game_data_menu_key_binding_capture_active(const sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Advance active key-binding capture from current input.
+     *
+     * The runtime reads the first keyboard scancode captured by
+     * sdl3d_input_update(). Successful captures immediately update the live
+     * input manager for every action authored by the menu item.
+     */
+    sdl3d_game_data_key_binding_capture_status sdl3d_game_data_update_menu_key_binding_capture(
+        sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input);
+
+    /**
+     * @brief Reset all key-binding controls in a menu to their authored defaults.
+     */
+    bool sdl3d_game_data_reset_menu_key_bindings(sdl3d_game_data_runtime *runtime, const char *menu_name);
 
     /**
      * @brief Return the number of scene shortcuts authored under `app.scene_shortcuts`.

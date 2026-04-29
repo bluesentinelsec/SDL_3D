@@ -161,6 +161,19 @@ TEST(Input, PressedEdgeDetection)
     EXPECT_TRUE(sdl3d_input_is_held(input.input, action));
 }
 
+TEST(Input, PressedScancodeIsCapturedForCurrentTick)
+{
+    InputPtr input;
+
+    EXPECT_EQ(sdl3d_input_get_pressed_scancode(input.input), SDL_SCANCODE_UNKNOWN);
+    push_key(input.input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_I);
+    sdl3d_input_update(input.input, 1);
+    EXPECT_EQ(sdl3d_input_get_pressed_scancode(input.input), SDL_SCANCODE_I);
+
+    sdl3d_input_update(input.input, 2);
+    EXPECT_EQ(sdl3d_input_get_pressed_scancode(input.input), SDL_SCANCODE_UNKNOWN);
+}
+
 TEST(Input, ReleasedEdgeDetection)
 {
     InputPtr input;

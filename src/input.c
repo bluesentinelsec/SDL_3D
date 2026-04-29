@@ -67,6 +67,7 @@ struct sdl3d_input_manager
 
     sdl3d_input_snapshot snapshot;
     bool prev_held[SDL3D_INPUT_MAX_ACTIONS];
+    SDL_Scancode pressed_scancode;
 
     SDL_Gamepad *gamepad;
     SDL_JoystickID gamepad_id;
@@ -443,6 +444,23 @@ static bool sdl3d_input_physical_any_pressed(const sdl3d_input_manager *input)
         }
     }
     return false;
+}
+
+static SDL_Scancode sdl3d_input_first_pressed_scancode(const sdl3d_input_manager *input)
+{
+    if (input == NULL)
+    {
+        return SDL_SCANCODE_UNKNOWN;
+    }
+
+    for (int i = 0; i < SDL_SCANCODE_COUNT; ++i)
+    {
+        if (input->key_pressed_this_frame[i])
+        {
+            return (SDL_Scancode)i;
+        }
+    }
+    return SDL_SCANCODE_UNKNOWN;
 }
 
 static bool sdl3d_demo_recorder_append(sdl3d_demo_recorder *recorder, const sdl3d_input_snapshot *snapshot)
@@ -918,6 +936,7 @@ const sdl3d_input_snapshot *sdl3d_input_update(sdl3d_input_manager *input, int t
         if (player->cursor < player->count)
         {
             input->snapshot = player->snapshots[player->cursor++];
+            input->pressed_scancode = SDL_SCANCODE_UNKNOWN;
             SDL_memset(input->prev_held, 0, sizeof(input->prev_held));
             for (int i = 0; i < SDL3D_INPUT_MAX_ACTIONS; ++i)
             {
@@ -934,6 +953,7 @@ const sdl3d_input_snapshot *sdl3d_input_update(sdl3d_input_manager *input, int t
     next.mouse_dx = input->mouse_dx_accum;
     next.mouse_dy = input->mouse_dy_accum;
     next.any_pressed = sdl3d_input_physical_any_pressed(input);
+    input->pressed_scancode = sdl3d_input_first_pressed_scancode(input);
 
     for (int action_id = 0; action_id < input->action_count; ++action_id)
     {
@@ -989,6 +1009,11 @@ bool sdl3d_input_is_held(const sdl3d_input_manager *input, int action_id)
 float sdl3d_input_get_value(const sdl3d_input_manager *input, int action_id)
 {
     return input != NULL && sdl3d_input_action_id_valid(action_id) ? input->snapshot.actions[action_id].value : 0.0f;
+}
+
+SDL_Scancode sdl3d_input_get_pressed_scancode(const sdl3d_input_manager *input)
+{
+    return input != NULL ? input->pressed_scancode : SDL_SCANCODE_UNKNOWN;
 }
 
 bool sdl3d_input_any_pressed(const sdl3d_input_manager *input)

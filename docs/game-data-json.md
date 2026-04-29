@@ -240,7 +240,8 @@ UI descriptors can bind text to engine metrics or actor properties and can use g
 }
 ```
 
-Supported UI binding sources are `metric` (`fps`, `frame`, `paused`) and `property`.
+Supported UI binding sources are `metric` (`fps`, `frame`, `paused`), `property`,
+and `scene_state`.
 Supported UI conditions include `always`, `app.paused`, `camera.active`, `property.compare`,
 `property.bool`, `all`, `any`, and `not`.
 
@@ -291,11 +292,11 @@ Menu items can also author generic settings controls and emit data-authored sign
 }
 ```
 
-Supported control types are `toggle`, `choice`, and `range`. The generic menu
-controller applies these controls directly to actor properties and the menu UI
-presenter displays the current value. A menu can author `left_action` and
-`right_action` so range and choice controls can be adjusted without activating
-navigation items:
+Supported control types are `toggle`, `choice`, `range`, and `key_binding`.
+The generic menu controller applies property controls directly to actor
+properties and the menu UI presenter displays the current value. A menu can
+author `left_action` and `right_action` so range and choice controls can be
+adjusted without activating navigation items:
 
 ```json
 {
@@ -327,10 +328,38 @@ navigation items:
 
 Range controls clamp to their authored min/max. Adding `"value_type": "int"`
 stores the result as an integer property; adding `"display": "slider"` renders
-the menu value as a compact slider label. Settings menus that need Apply/Cancel
-behavior can still snapshot the edited properties when a scene opens, let
-controls stage values in those actor properties, then either persist the staged
-values or restore the snapshot:
+the menu value as a compact slider label.
+
+`key_binding` controls capture the next keyboard key and immediately rebind all
+authored actions. This is how games can expose one player-facing input such as
+`Up` while updating both gameplay and menu actions:
+
+```json
+{
+  "label": "Up",
+  "control": {
+    "type": "key_binding",
+    "default": "W",
+    "bindings": [
+      { "action": "action.paddle.up", "device": "keyboard" },
+      { "action": "action.menu.up", "device": "keyboard" }
+    ]
+  }
+}
+```
+
+Duplicate keys within the same menu are rejected during capture. Pressing the
+capture cancel key, Escape by default, cancels capture unless the binding opts
+into `"allow_escape": true`. Resetting authored keyboard controls is a logic
+action:
+
+```json
+{ "type": "input.reset_key_bindings", "menu": "menu.options.keyboard" }
+```
+
+Settings menus that need Apply/Cancel behavior can still snapshot the edited
+properties when a scene opens, let controls stage values in those actor
+properties, then either persist the staged values or restore the snapshot:
 
 ```json
 {
