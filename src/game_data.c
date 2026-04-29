@@ -219,6 +219,7 @@ typedef struct sdl3d_game_data_runtime
     sdl3d_asset_resolver *assets;
     bool owns_assets;
     char *base_dir;
+    sdl3d_storage_config storage_config;
     scene_entry *scenes;
     int scene_count;
     int active_scene_index;
@@ -833,6 +834,17 @@ static const char *json_string(yyjson_val *object, const char *key, const char *
     yyjson_val *value = obj_get(object, key);
     return yyjson_is_str(value) ? yyjson_get_str(value) : fallback;
 }
+
+static const char *first_non_empty_string(const char *first, const char *second, const char *fallback)
+{
+    if (first != NULL && first[0] != '\0')
+        return first;
+    if (second != NULL && second[0] != '\0')
+        return second;
+    return fallback;
+}
+
+static void load_storage_config(sdl3d_game_data_runtime *runtime, yyjson_val *root);
 
 static bool json_bool(yyjson_val *object, const char *key, bool fallback)
 {
@@ -6513,6 +6525,7 @@ bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_
         sdl3d_game_data_destroy(runtime);
         return false;
     }
+    load_storage_config(runtime, root);
 
     yyjson_val *logic = obj_get(root, "logic");
     load_active_camera(runtime, root);
@@ -6579,6 +6592,34 @@ bool sdl3d_game_data_load_file(const char *path, sdl3d_game_session *session, sd
     SDL_free(base_dir);
     SDL_free(asset_name);
     return ok;
+}
+
+static void load_storage_config(sdl3d_game_data_runtime *runtime, yyjson_val *root)
+{
+    sdl3d_storage_config_init(&runtime->storage_config);
+
+    yyjson_val *storage = obj_get(root, "storage");
+    yyjson_val *metadata = obj_get(root, "metadata");
+    yyjson_val *app = obj_get(root, "app");
+
+    runtime->storage_config.organization =
+        first_non_empty_string(json_string(storage, "organization", NULL), json_string(metadata, "organization", NULL),
+                               runtime->storage_config.organization);
+    runtime->storage_config.application = first_non_empty_string(
+        json_string(storage, "application", NULL), json_string(app, "title", NULL),
+        first_non_empty_string(json_string(metadata, "name", NULL), NULL, runtime->storage_config.application));
+    runtime->storage_config.profile = json_string(storage, "profile", NULL);
+    runtime->storage_config.user_root_override = json_string(storage, "user_root_override", NULL);
+    runtime->storage_config.cache_root_override = json_string(storage, "cache_root_override", NULL);
+}
+
+bool sdl3d_game_data_get_storage_config(const sdl3d_game_data_runtime *runtime, sdl3d_storage_config *out_config)
+{
+    if (runtime == NULL || out_config == NULL)
+        return false;
+
+    *out_config = runtime->storage_config;
+    return true;
 }
 
 void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)

@@ -21,6 +21,7 @@ Every file is a JSON object with these fields:
 | --- | --- | --- |
 | `schema` | yes | Schema id. First value: `sdl3d.game.v0`. |
 | `metadata` | yes | Human-readable identity and versioning. |
+| `storage` | no | Writable storage identity used to resolve `user://` and `cache://` roots. |
 | `app` | no | Managed-loop startup config such as title, window size, backend, tick rate, and tick cap. |
 | `profiles` | no | Genre/profile hints and required modules. |
 | `assets` | no | Stable asset ids mapped to paths or future archive refs. |
@@ -47,6 +48,27 @@ Names are authored handles and should be stable across reloads. Use role namespa
 - `adapter.pong.reflect_ball`
 
 Loaders should reject duplicate names inside a namespace and should report the JSON pointer of the failure.
+
+## Storage
+
+The optional `storage` block declares the platform-stable identity used by
+`sdl3d_storage_create()`:
+
+```json
+{
+  "storage": {
+    "organization": "Blue Sentinel Security",
+    "application": "SDL3D Pong",
+    "profile": "default"
+  }
+}
+```
+
+`organization` and `application` should be stable after release because they
+become part of the writable save/settings/cache paths on every platform.
+`profile` is optional and scopes roots below `profiles/<profile>`. Test tools
+may also author `user_root_override` and `cache_root_override`, but shipped
+games should normally let SDL3D choose platform-idiomatic locations.
 
 ## World
 
