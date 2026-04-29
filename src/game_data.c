@@ -2110,6 +2110,11 @@ bool sdl3d_game_data_get_app_control(const sdl3d_game_data_runtime *runtime, sdl
         out_control->startup_transition = NULL;
         out_control->quit_transition = NULL;
         out_control->quit_signal_id = -1;
+        out_control->window_apply_signal_id = -1;
+        out_control->window_settings_target = NULL;
+        out_control->window_display_mode_key = NULL;
+        out_control->window_renderer_key = NULL;
+        out_control->window_vsync_key = NULL;
     }
     if (runtime == NULL || out_control == NULL)
         return false;
@@ -2117,12 +2122,20 @@ bool sdl3d_game_data_get_app_control(const sdl3d_game_data_runtime *runtime, sdl
     yyjson_val *app = obj_get(runtime_root(runtime), "app");
     yyjson_val *pause = obj_get(app, "pause");
     yyjson_val *quit = obj_get(app, "quit");
+    yyjson_val *window = obj_get(app, "window");
+    yyjson_val *window_settings = obj_get(window, "settings");
     out_control->start_signal_id = sdl3d_game_data_find_signal(runtime, json_string(app, "start_signal", NULL));
     out_control->pause_action_id = sdl3d_game_data_find_action(runtime, json_string(pause, "action", NULL));
     out_control->startup_transition = json_string(app, "startup_transition", NULL);
     out_control->quit_action_id = sdl3d_game_data_find_action(runtime, json_string(quit, "action", NULL));
     out_control->quit_transition = json_string(quit, "transition", NULL);
     out_control->quit_signal_id = sdl3d_game_data_find_signal(runtime, json_string(quit, "quit_signal", NULL));
+    out_control->window_apply_signal_id =
+        sdl3d_game_data_find_signal(runtime, json_string(window, "apply_signal", NULL));
+    out_control->window_settings_target = json_string(window_settings, "target", "entity.settings");
+    out_control->window_display_mode_key = json_string(window_settings, "display_mode", "display_mode");
+    out_control->window_renderer_key = json_string(window_settings, "renderer", "renderer");
+    out_control->window_vsync_key = json_string(window_settings, "vsync", "vsync");
     return true;
 }
 

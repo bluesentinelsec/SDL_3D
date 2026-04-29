@@ -51,6 +51,16 @@ extern "C"
         const char *quit_transition;
         /** @brief Signal that means the app should quit immediately, or -1. */
         int quit_signal_id;
+        /** @brief Signal that applies live window settings, or -1. */
+        int window_apply_signal_id;
+        /** @brief Actor containing authored window setting properties, or NULL. */
+        const char *window_settings_target;
+        /** @brief Property key containing display mode, or NULL. */
+        const char *window_display_mode_key;
+        /** @brief Property key containing renderer/backend, or NULL. */
+        const char *window_renderer_key;
+        /** @brief Property key containing V-sync, or NULL. */
+        const char *window_vsync_key;
     } sdl3d_game_data_app_control;
 
     /** @brief Authored font asset descriptor. */

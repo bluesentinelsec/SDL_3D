@@ -108,7 +108,14 @@ The optional `app` object lets a managed-loop game declare startup settings befo
       "maximized": true,
       "resizable": true,
       "vsync": true,
-      "renderer": "software"
+      "renderer": "software",
+      "apply_signal": "signal.settings.apply",
+      "settings": {
+        "target": "entity.settings",
+        "display_mode": "display_mode",
+        "renderer": "renderer",
+        "vsync": "vsync"
+      }
     },
     "tick_rate": 0.008333333,
     "max_ticks_per_frame": 12,
@@ -153,6 +160,9 @@ runtime ownership of the renderer. Games read these descriptors and decide how t
 presentation are policy, not game-world scale. `app.window` can author display mode, renderer, vsync, title/icon
 overrides, and development/production display-mode defaults. `settings_path`, when present, lets startup read persisted
 display options such as `display_mode`, `renderer`, and `vsync` before creating the window.
+`app.window.apply_signal`, when present, lets the reusable app-flow helper apply live window settings from the
+configured settings actor after a menu emits that signal. The helper applies display mode and V-sync in place and
+recreates the window/render context when the renderer backend changes.
 `app.pause.action` and `startup_transition` let the managed-loop host avoid hardcoded action/transition names.
 `app.pause.allowed_if` is optional; when present, the app-flow helper evaluates it before entering pause.
 `app.quit` lets data choose which input action requests quit, which transition plays, and which signal completes

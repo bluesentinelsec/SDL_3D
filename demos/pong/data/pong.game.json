@@ -23,7 +23,14 @@
       "maximized": true,
       "resizable": true,
       "vsync": true,
-      "renderer": "opengl"
+      "renderer": "opengl",
+      "apply_signal": "signal.settings.apply",
+      "settings": {
+        "target": "entity.settings",
+        "display_mode": "display_mode",
+        "vsync": "vsync",
+        "renderer": "renderer"
+      }
     },
     "tick_rate": 0.008333333,
     "max_ticks_per_frame": 12,

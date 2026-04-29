@@ -369,6 +369,17 @@ TEST(SDL3DWindowConfig, DefaultsAreReasonable)
     EXPECT_TRUE(cfg.resizable);
 }
 
+TEST(SDL3DWindowConfig, ApplyWindowConfigRejectsInvalidArguments)
+{
+    sdl3d_window_config cfg;
+    sdl3d_init_window_config(&cfg);
+
+    SDL_ClearError();
+    EXPECT_FALSE(sdl3d_apply_window_config(nullptr, nullptr, &cfg));
+    EXPECT_NE(std::string_view(SDL_GetError()).find("Parameter 'window/context/config' is invalid"),
+              std::string_view::npos);
+}
+
 TEST(SDL3DFeatureQuery, SoftwareHasNoPostProcessing)
 {
     /* We can't create a real context in unit tests without a display,

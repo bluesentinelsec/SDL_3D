@@ -118,6 +118,23 @@ extern "C"
                              sdl3d_render_context **out_context);
 
     /**
+     * @brief Apply live window presentation settings to an existing window.
+     *
+     * The function applies display mode and V-sync in place when the backend is
+     * unchanged. If @p config requests a different backend, it creates a new
+     * window/render context using @p config before destroying the old pair, so
+     * failure leaves the existing window usable. On success, @p window and
+     * @p context are updated to the active objects.
+     *
+     * @param window  Pointer to the SDL window pointer to update.
+     * @param context Pointer to the SDL3D render context pointer to update.
+     * @param config  Desired window/backend settings.
+     * @return true on success, false on failure.
+     */
+    bool sdl3d_apply_window_config(SDL_Window **window, sdl3d_render_context **context,
+                                   const sdl3d_window_config *config);
+
+    /**
      * @brief Destroy a window and render context created by sdl3d_create_window.
      *
      * This releases the SDL3D render context, the SDL_Renderer owned by the

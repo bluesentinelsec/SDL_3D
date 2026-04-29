@@ -44,6 +44,49 @@ typedef struct particle_update_context
     bool ok;
 } particle_update_context;
 
+static sdl3d_window_mode parse_window_mode_setting(const char *value, sdl3d_window_mode fallback)
+{
+    if (value == NULL || value[0] == '\0')
+        return fallback;
+    if (SDL_strcasecmp(value, "windowed") == 0 || SDL_strcasecmp(value, "window") == 0)
+        return SDL3D_WINDOW_MODE_WINDOWED;
+    if (SDL_strcasecmp(value, "fullscreen_exclusive") == 0 || SDL_strcasecmp(value, "exclusive") == 0)
+        return SDL3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE;
+    if (SDL_strcasecmp(value, "fullscreen_borderless") == 0 || SDL_strcasecmp(value, "borderless") == 0 ||
+        SDL_strcasecmp(value, "desktop_fullscreen") == 0)
+        return SDL3D_WINDOW_MODE_FULLSCREEN_BORDERLESS;
+    return fallback;
+}
+
+static const char *window_mode_setting_name(sdl3d_window_mode mode)
+{
+    switch (mode)
+    {
+    case SDL3D_WINDOW_MODE_WINDOWED:
+        return "windowed";
+    case SDL3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE:
+        return "fullscreen_exclusive";
+    case SDL3D_WINDOW_MODE_FULLSCREEN_BORDERLESS:
+        return "fullscreen_borderless";
+    case SDL3D_WINDOW_MODE_DEFAULT:
+    default:
+        return "default";
+    }
+}
+
+static sdl3d_backend parse_backend_setting(const char *value, sdl3d_backend fallback)
+{
+    if (value == NULL || value[0] == '\0')
+        return fallback;
+    if (SDL_strcasecmp(value, "software") == 0 || SDL_strcasecmp(value, "sw") == 0)
+        return SDL3D_BACKEND_SOFTWARE;
+    if (SDL_strcasecmp(value, "opengl") == 0 || SDL_strcasecmp(value, "gl") == 0)
+        return SDL3D_BACKEND_OPENGL;
+    if (SDL_strcasecmp(value, "auto") == 0)
+        return SDL3D_BACKEND_AUTO;
+    return fallback;
+}
+
 static sdl3d_camera3d default_camera(void)
 {
     sdl3d_camera3d camera;
@@ -1006,6 +1049,48 @@ static void app_flow_apply_pause_command(sdl3d_game_context *ctx, sdl3d_game_dat
         ctx->paused = !ctx->paused;
 }
 
+static bool app_flow_apply_window_settings(const sdl3d_game_data_app_flow *flow, sdl3d_game_context *ctx,
+                                           sdl3d_game_data_runtime *runtime)
+{
+    if (flow == NULL || ctx == NULL || runtime == NULL || ctx->window == NULL || ctx->renderer == NULL)
+        return false;
+
+    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, flow->app.window_settings_target);
+    if (settings == NULL)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D window settings skipped: settings actor '%s' was not found",
+                    flow->app.window_settings_target != NULL ? flow->app.window_settings_target : "");
+        return false;
+    }
+
+    int width = 0;
+    int height = 0;
+    SDL_GetWindowSize(ctx->window, &width, &height);
+
+    sdl3d_window_config config;
+    sdl3d_init_window_config(&config);
+    config.width = width;
+    config.height = height;
+    config.logical_width = sdl3d_get_render_context_width(ctx->renderer);
+    config.logical_height = sdl3d_get_render_context_height(ctx->renderer);
+    config.title = SDL_GetWindowTitle(ctx->window);
+    config.display_mode = parse_window_mode_setting(
+        sdl3d_properties_get_string(settings->props, flow->app.window_display_mode_key, "windowed"),
+        SDL3D_WINDOW_MODE_WINDOWED);
+    config.backend =
+        parse_backend_setting(sdl3d_properties_get_string(settings->props, flow->app.window_renderer_key, "opengl"),
+                              sdl3d_get_render_context_backend(ctx->renderer));
+    config.vsync = sdl3d_properties_get_bool(settings->props, flow->app.window_vsync_key, true);
+    config.maximized = true;
+    config.resizable = true;
+    config.allow_backend_fallback = false;
+
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D authored window apply requested: mode=%s renderer=%s vsync=%s",
+                window_mode_setting_name(config.display_mode), sdl3d_get_backend_name(config.backend),
+                config.vsync ? "on" : "off");
+    return sdl3d_apply_window_config(&ctx->window, &ctx->renderer, &config);
+}
+
 static bool app_flow_consume_menu(sdl3d_game_data_app_flow *flow, sdl3d_game_context *ctx,
                                   sdl3d_game_data_runtime *runtime, sdl3d_input_manager *input, sdl3d_signal_bus *bus)
 {
@@ -1030,6 +1115,8 @@ static bool app_flow_consume_menu(sdl3d_game_data_app_flow *flow, sdl3d_game_con
 
     if (result.signal_id >= 0)
         sdl3d_signal_emit(bus, result.signal_id, NULL);
+    if (result.signal_id >= 0 && result.signal_id == flow->app.window_apply_signal_id)
+        (void)app_flow_apply_window_settings(flow, ctx, runtime);
 
     sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
     if (result.return_to != NULL && scene_state != NULL)

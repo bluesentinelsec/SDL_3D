@@ -1005,6 +1005,11 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_STREQ(app.startup_transition, "startup");
     EXPECT_STREQ(app.quit_transition, "quit");
     EXPECT_GE(app.quit_signal_id, 0);
+    EXPECT_EQ(app.window_apply_signal_id, sdl3d_game_data_find_signal(runtime, "signal.settings.apply"));
+    EXPECT_STREQ(app.window_settings_target, "entity.settings");
+    EXPECT_STREQ(app.window_display_mode_key, "display_mode");
+    EXPECT_STREQ(app.window_renderer_key, "renderer");
+    EXPECT_STREQ(app.window_vsync_key, "vsync");
 
     sdl3d_registered_actor *match = sdl3d_game_data_find_actor(runtime, "entity.match");
     ASSERT_NE(match, nullptr);

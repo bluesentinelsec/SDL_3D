@@ -1511,6 +1511,21 @@ static bool validate_app_refs(validation_context *ctx, yyjson_val *root, validat
         return validation_error(ctx, "$.app.startup_transition", "unknown transition reference '%s'",
                                 startup_transition);
 
+    yyjson_val *window = obj_get(app, "window");
+    if (window != NULL && !yyjson_is_obj(window))
+        return validation_error(ctx, "$.app.window", "window must be an object");
+    const char *window_apply_signal = json_string(window, "apply_signal");
+    if (window_apply_signal != NULL &&
+        !require_ref(ctx, &names->signals, "signal", window_apply_signal, "$.app.window.apply_signal"))
+        return false;
+    yyjson_val *window_settings = obj_get(window, "settings");
+    if (window_settings != NULL && !yyjson_is_obj(window_settings))
+        return validation_error(ctx, "$.app.window.settings", "window settings must be an object");
+    const char *window_settings_target = json_string(window_settings, "target");
+    if (window_settings_target != NULL &&
+        !require_ref(ctx, &names->entities, "entity", window_settings_target, "$.app.window.settings.target"))
+        return false;
+
     yyjson_val *quit = obj_get(app, "quit");
     if (!yyjson_is_obj(quit))
         return true;

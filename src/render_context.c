@@ -599,28 +599,63 @@ static void sdl3d_apply_window_icon(SDL_Window *window, const char *icon_path)
     sdl3d_free_image(&icon);
 }
 
-static void sdl3d_apply_window_mode(SDL_Window *window, sdl3d_window_mode mode)
+static const char *sdl3d_window_mode_name(sdl3d_window_mode mode)
+{
+    switch (mode)
+    {
+    case SDL3D_WINDOW_MODE_WINDOWED:
+        return "windowed";
+    case SDL3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE:
+        return "fullscreen_exclusive";
+    case SDL3D_WINDOW_MODE_FULLSCREEN_BORDERLESS:
+        return "fullscreen_borderless";
+    case SDL3D_WINDOW_MODE_DEFAULT:
+    default:
+        return "default";
+    }
+}
+
+static bool sdl3d_apply_window_mode(SDL_Window *window, sdl3d_window_mode mode)
 {
     if (window == NULL)
-        return;
+        return SDL_InvalidParamError("window");
 
     if (mode == SDL3D_WINDOW_MODE_FULLSCREEN_BORDERLESS)
     {
-        SDL_SetWindowFullscreenMode(window, NULL);
-        SDL_SetWindowFullscreen(window, true);
+        if (!SDL_SetWindowFullscreenMode(window, NULL))
+            return false;
+        return SDL_SetWindowFullscreen(window, true);
     }
     else if (mode == SDL3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE)
     {
         SDL_DisplayID display = SDL_GetDisplayForWindow(window);
         const SDL_DisplayMode *desktop = display != 0 ? SDL_GetDesktopDisplayMode(display) : NULL;
-        if (desktop != NULL)
-            SDL_SetWindowFullscreenMode(window, desktop);
-        SDL_SetWindowFullscreen(window, true);
+        if (desktop == NULL)
+            return SDL_SetError("Unable to resolve desktop display mode for exclusive fullscreen");
+        if (!SDL_SetWindowFullscreenMode(window, desktop))
+            return false;
+        return SDL_SetWindowFullscreen(window, true);
     }
-    else
-    {
-        SDL_SetWindowFullscreen(window, false);
-    }
+
+    return SDL_SetWindowFullscreen(window, false);
+}
+
+static bool sdl3d_apply_context_vsync(sdl3d_render_context *context, bool vsync)
+{
+    if (context == NULL)
+        return SDL_InvalidParamError("context");
+    if (context->backend == SDL3D_BACKEND_OPENGL)
+        return SDL_GL_SetSwapInterval(vsync ? 1 : 0);
+    if (context->renderer != NULL)
+        return SDL_SetRenderVSync(context->renderer, vsync ? 1 : 0);
+    return true;
+}
+
+static const char *sdl3d_actual_window_mode_name(SDL_Window *window)
+{
+    if (window == NULL || (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) == 0)
+        return "windowed";
+    return SDL_GetWindowFullscreenMode(window) == NULL ? "fullscreen_borderless" : "fullscreen_exclusive";
 }
 
 bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_window, sdl3d_render_context **out_context)
@@ -690,7 +725,11 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
         return false;
     }
     sdl3d_apply_window_icon(window, local.icon_path);
-    sdl3d_apply_window_mode(window, local.display_mode);
+    if (!sdl3d_apply_window_mode(window, local.display_mode))
+    {
+        SDL_DestroyWindow(window);
+        return false;
+    }
 
     /* Software backend needs an SDL_Renderer; GL does not. */
     if (resolved != SDL3D_BACKEND_OPENGL)
@@ -726,6 +765,76 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
 
     *out_window = window;
     *out_context = context;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D window created: mode=%s backend=%s vsync=%s size=%dx%d",
+                sdl3d_window_mode_name(local.display_mode), sdl3d_get_backend_name(resolved),
+                local.vsync ? "on" : "off", local.width, local.height);
+    return true;
+}
+
+bool sdl3d_apply_window_config(SDL_Window **window, sdl3d_render_context **context, const sdl3d_window_config *config)
+{
+    sdl3d_window_config local;
+    sdl3d_backend requested_backend;
+    sdl3d_backend current_backend;
+
+    if (window == NULL || context == NULL || *window == NULL || *context == NULL || config == NULL)
+        return SDL_InvalidParamError("window/context/config");
+
+    local = *config;
+    if (local.display_mode == SDL3D_WINDOW_MODE_DEFAULT)
+        local.display_mode = SDL3D_WINDOW_MODE_WINDOWED;
+    if (local.title == NULL)
+        local.title = SDL_GetWindowTitle(*window);
+    if (local.width <= 0 || local.height <= 0)
+        SDL_GetWindowSize(*window, &local.width, &local.height);
+    if (local.logical_width <= 0)
+        local.logical_width = sdl3d_get_render_context_width(*context);
+    if (local.logical_height <= 0)
+        local.logical_height = sdl3d_get_render_context_height(*context);
+
+    if (!sdl3d_resolve_backend(local.backend, local.allow_backend_fallback, &requested_backend))
+        return false;
+    current_backend = sdl3d_get_render_context_backend(*context);
+
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D applying window settings: mode=%s backend=%s vsync=%s",
+                sdl3d_window_mode_name(local.display_mode), sdl3d_get_backend_name(requested_backend),
+                local.vsync ? "on" : "off");
+
+    if (requested_backend != current_backend)
+    {
+        SDL_Window *new_window = NULL;
+        sdl3d_render_context *new_context = NULL;
+        local.backend = requested_backend;
+        local.allow_backend_fallback = false;
+        if (!sdl3d_create_window(&local, &new_window, &new_context))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D backend switch failed, keeping current window: %s",
+                        SDL_GetError());
+            return false;
+        }
+
+        sdl3d_destroy_window(*window, *context);
+        *window = new_window;
+        *context = new_context;
+    }
+    else
+    {
+        if (!sdl3d_apply_window_mode(*window, local.display_mode))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D display mode apply failed: %s", SDL_GetError());
+            return false;
+        }
+        if (!sdl3d_apply_context_vsync(*context, local.vsync))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D vsync apply failed: %s", SDL_GetError());
+            SDL_ClearError();
+        }
+    }
+
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "SDL3D window settings applied: requested_mode=%s actual_mode=%s backend=%s vsync=%s",
+                sdl3d_window_mode_name(local.display_mode), sdl3d_actual_window_mode_name(*window),
+                sdl3d_get_backend_name(sdl3d_get_render_context_backend(*context)), local.vsync ? "on" : "off");
     return true;
 }
 
