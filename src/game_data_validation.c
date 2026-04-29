@@ -1195,6 +1195,15 @@ static bool validate_skip_policy(validation_context *ctx, yyjson_val *policy, co
     yyjson_val *consume = obj_get(policy, "consume_input");
     if (consume != NULL && !yyjson_is_bool(consume))
         return validation_error(ctx, json_path, "skip_policy consume_input must be a boolean");
+    yyjson_val *block_menus = obj_get(policy, "block_menus");
+    if (block_menus != NULL && !yyjson_is_bool(block_menus))
+        return validation_error(ctx, json_path, "skip_policy block_menus must be a boolean");
+    yyjson_val *block_shortcuts = obj_get(policy, "block_scene_shortcuts");
+    if (block_shortcuts != NULL && !yyjson_is_bool(block_shortcuts))
+        return validation_error(ctx, json_path, "skip_policy block_scene_shortcuts must be a boolean");
+    block_shortcuts = obj_get(policy, "block_shortcuts");
+    if (block_shortcuts != NULL && !yyjson_is_bool(block_shortcuts))
+        return validation_error(ctx, json_path, "skip_policy block_shortcuts must be a boolean");
 
     if (input_disabled)
         return true;
@@ -1899,6 +1908,15 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
     {
         if (!yyjson_is_obj(timeline))
             return validation_error(ctx, json_path, "scene timeline must be an object");
+        yyjson_val *timeline_block_menus = obj_get(timeline, "block_menus");
+        if (timeline_block_menus != NULL && !yyjson_is_bool(timeline_block_menus))
+            return validation_error(ctx, json_path, "scene timeline block_menus must be a boolean");
+        yyjson_val *timeline_block_shortcuts = obj_get(timeline, "block_scene_shortcuts");
+        if (timeline_block_shortcuts != NULL && !yyjson_is_bool(timeline_block_shortcuts))
+            return validation_error(ctx, json_path, "scene timeline block_scene_shortcuts must be a boolean");
+        timeline_block_shortcuts = obj_get(timeline, "block_shortcuts");
+        if (timeline_block_shortcuts != NULL && !yyjson_is_bool(timeline_block_shortcuts))
+            return validation_error(ctx, json_path, "scene timeline block_shortcuts must be a boolean");
         char timeline_skip_path[PATH_BUFFER_SIZE];
         format_path(timeline_skip_path, sizeof(timeline_skip_path), "%s.timeline.skip_policy", json_path);
         if (!validate_skip_policy(ctx, obj_get(timeline, "skip_policy"), timeline_skip_path, names))

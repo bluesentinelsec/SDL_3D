@@ -390,6 +390,118 @@ void write_skip_policy_json(const std::filesystem::path &dir)
 })json");
 }
 
+void write_scene_flow_policy_json(const std::filesystem::path &dir, bool block_menus, bool block_scene_shortcuts)
+{
+    const char *block_menus_text = block_menus ? "true" : "false";
+    const char *block_shortcuts_text = block_scene_shortcuts ? "true" : "false";
+    const std::string game_json = R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Scene Flow Policy", "id": "test.scene_flow_policy", "version": "0.1.0" },
+  "app": {
+    "scene_shortcuts": [
+      { "action": "action.scene.play", "scene": "scene.play" }
+    ],
+    "input_policy": {
+      "global_actions": ["action.scene.play"]
+    }
+  },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.main",
+        "actions": [
+          {
+            "name": "action.menu.select",
+            "bindings": [
+              { "device": "keyboard", "key": "RETURN" }
+            ]
+          },
+          {
+            "name": "action.menu.up",
+            "bindings": [
+              { "device": "keyboard", "key": "UP" }
+            ]
+          },
+          {
+            "name": "action.menu.down",
+            "bindings": [
+              { "device": "keyboard", "key": "DOWN" }
+            ]
+          },
+          {
+            "name": "action.scene.play",
+            "bindings": [
+              { "device": "keyboard", "key": "3" }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": {
+    "initial": "scene.intro",
+    "files": [
+      "scenes/intro.scene.json",
+      "scenes/title.scene.json",
+      "scenes/play.scene.json"
+    ]
+  }
+})json";
+    write_text(dir / "flow_policy.game.json", game_json.c_str());
+
+    std::string intro_json = R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.intro",
+  "updates_game": false,
+  "renders_world": false,
+  "entities": [],
+  "input": { "actions": ["action.menu.select"] },
+  "timeline": {
+    "autoplay": true,
+    "block_menus": )json";
+    intro_json += block_menus_text;
+    intro_json += R"json(,
+    "block_scene_shortcuts": )json";
+    intro_json += block_shortcuts_text;
+    intro_json += R"json(,
+    "events": [
+      {
+        "time": 1.0,
+        "action": { "type": "scene.request", "scene": "scene.title" }
+      }
+    ]
+  },
+  "menus": [
+    {
+      "name": "menu.intro",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "items": [
+        { "label": "Play", "scene": "scene.play" }
+      ]
+    }
+  ]
+})json";
+    write_text(dir / "scenes" / "intro.scene.json", intro_json.c_str());
+    write_text(dir / "scenes" / "title.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.title",
+  "updates_game": false,
+  "renders_world": false,
+  "entities": []
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "renders_world": true,
+  "entities": []
+})json");
+}
+
 void write_animation_json(const std::filesystem::path &dir)
 {
     write_text(dir / "animation.game.json",
@@ -1552,9 +1664,14 @@ TEST(GameDataRuntime, AppFlowAppliesAuthoredSkipPolicyWithoutMenuBleedThrough)
     EXPECT_STREQ(policy.action, "action.skip");
     EXPECT_STREQ(policy.scene, "scene.title");
     EXPECT_TRUE(policy.preserve_exit_transition);
+    EXPECT_TRUE(policy.block_menus);
+    EXPECT_TRUE(policy.block_scene_shortcuts);
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
+
+    sdl3d_input_update(input, 0);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
@@ -1593,6 +1710,114 @@ TEST(GameDataRuntime, AppFlowAppliesAuthoredSkipPolicyWithoutMenuBleedThrough)
     EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
 
     ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.11f));
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.play");
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, TimelinePolicyCanBlockMenusAndSceneShortcuts)
+{
+    const std::filesystem::path dir = unique_test_dir("timeline_blocks_input");
+    write_scene_flow_policy_json(dir, true, true);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "flow_policy.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    sdl3d_game_data_timeline_policy policy{};
+    ASSERT_TRUE(sdl3d_game_data_get_active_timeline_policy(runtime, &policy));
+    EXPECT_TRUE(policy.block_menus);
+    EXPECT_TRUE(policy.block_scene_shortcuts);
+
+    sdl3d_game_context ctx{};
+    ctx.session = session;
+    sdl3d_game_data_app_flow flow{};
+    sdl3d_game_data_app_flow_init(&flow);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+
+    sdl3d_input_update(input, 0);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_RETURN;
+    sdl3d_input_process_event(input, &key);
+    key.key.scancode = SDL_SCANCODE_3;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 1);
+
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.intro");
+
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 1.0f));
+    EXPECT_TRUE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.intro");
+
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, TimelinePolicyCanAllowInteractiveIntroMenus)
+{
+    const std::filesystem::path dir = unique_test_dir("timeline_allows_input");
+    write_scene_flow_policy_json(dir, false, false);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "flow_policy.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    sdl3d_game_data_timeline_policy policy{};
+    ASSERT_TRUE(sdl3d_game_data_get_active_timeline_policy(runtime, &policy));
+    EXPECT_FALSE(policy.block_menus);
+    EXPECT_FALSE(policy.block_scene_shortcuts);
+
+    sdl3d_game_context ctx{};
+    ctx.session = session;
+    sdl3d_game_data_app_flow flow{};
+    sdl3d_game_data_app_flow_init(&flow);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+
+    sdl3d_input_update(input, 0);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_TRUE(flow.scene_input_armed);
+
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_RETURN;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 1);
+
+    bool menu_armed = true;
+    sdl3d_game_data_menu_update_result menu_result{};
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &menu_armed, &menu_result));
+    EXPECT_TRUE(menu_result.selected);
+    EXPECT_STREQ(menu_result.scene, "scene.play");
+
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
     EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.play");
 
     sdl3d_game_data_destroy(runtime);

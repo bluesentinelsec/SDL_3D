@@ -1020,10 +1020,15 @@ static bool app_flow_set_scene_without_transition(sdl3d_game_data_app_flow *flow
 }
 
 static bool app_flow_apply_skip_policy(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime,
-                                       const sdl3d_input_manager *input, bool capture_input, bool *out_applied)
+                                       const sdl3d_input_manager *input, bool capture_input, bool *out_applied,
+                                       bool *out_block_menus, bool *out_block_scene_shortcuts)
 {
     if (out_applied != NULL)
         *out_applied = false;
+    if (out_block_menus != NULL)
+        *out_block_menus = false;
+    if (out_block_scene_shortcuts != NULL)
+        *out_block_scene_shortcuts = false;
     if (flow == NULL || runtime == NULL)
         return false;
 
@@ -1060,6 +1065,10 @@ static bool app_flow_apply_skip_policy(sdl3d_game_data_app_flow *flow, sdl3d_gam
         {
             flow->skip_requested = true;
             consumed = policy.consume_input;
+            if (out_block_menus != NULL)
+                *out_block_menus = policy.block_menus || policy.consume_input;
+            if (out_block_scene_shortcuts != NULL)
+                *out_block_scene_shortcuts = policy.block_scene_shortcuts || policy.consume_input;
         }
     }
 
@@ -1078,6 +1087,38 @@ static bool app_flow_apply_skip_policy(sdl3d_game_data_app_flow *flow, sdl3d_gam
     }
 
     return consumed;
+}
+
+static bool app_flow_timeline_is_pending(const sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime)
+{
+    sdl3d_game_data_timeline_policy policy;
+    if (flow == NULL || runtime == NULL || flow->timeline.complete ||
+        !sdl3d_game_data_get_active_timeline_policy(runtime, &policy))
+    {
+        return false;
+    }
+    return true;
+}
+
+static void app_flow_timeline_blocks(const sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime,
+                                     bool *out_block_menus, bool *out_block_scene_shortcuts)
+{
+    if (out_block_menus != NULL)
+        *out_block_menus = false;
+    if (out_block_scene_shortcuts != NULL)
+        *out_block_scene_shortcuts = false;
+
+    if (!app_flow_timeline_is_pending(flow, runtime))
+        return;
+
+    sdl3d_game_data_timeline_policy policy;
+    if (!sdl3d_game_data_get_active_timeline_policy(runtime, &policy))
+        return;
+
+    if (out_block_menus != NULL)
+        *out_block_menus = policy.block_menus;
+    if (out_block_scene_shortcuts != NULL)
+        *out_block_scene_shortcuts = policy.block_scene_shortcuts;
 }
 
 static bool app_flow_update_timeline(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime, float dt)
@@ -1166,7 +1207,13 @@ bool sdl3d_game_data_app_flow_update(sdl3d_game_data_app_flow *flow, sdl3d_game_
     sdl3d_input_manager *input = sdl3d_game_session_get_input(ctx->session);
     sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(ctx->session);
     bool skip_applied = false;
-    const bool skip_consumed = app_flow_apply_skip_policy(flow, runtime, input, true, &skip_applied);
+    bool skip_blocks_menus = false;
+    bool skip_blocks_scene_shortcuts = false;
+    const bool skip_consumed = app_flow_apply_skip_policy(flow, runtime, input, true, &skip_applied, &skip_blocks_menus,
+                                                          &skip_blocks_scene_shortcuts);
+    bool timeline_blocks_menus = false;
+    bool timeline_blocks_scene_shortcuts = false;
+    app_flow_timeline_blocks(flow, runtime, &timeline_blocks_menus, &timeline_blocks_scene_shortcuts);
 
     if (!skip_consumed)
     {
@@ -1175,8 +1222,10 @@ bool sdl3d_game_data_app_flow_update(sdl3d_game_data_app_flow *flow, sdl3d_game_
             sdl3d_input_is_pressed(input, flow->app.quit_action_id))
             app_flow_request_quit(flow, ctx, runtime);
 
-        app_flow_consume_scene_shortcuts(flow, runtime, input);
-        app_flow_consume_menu(flow, ctx, runtime, input, bus);
+        if (!skip_blocks_scene_shortcuts && !timeline_blocks_scene_shortcuts)
+            app_flow_consume_scene_shortcuts(flow, runtime, input);
+        if (!skip_blocks_menus && !timeline_blocks_menus)
+            app_flow_consume_menu(flow, ctx, runtime, input, bus);
 
         if (flow->app.pause_action_id >= 0 && sdl3d_input_is_pressed(input, flow->app.pause_action_id) &&
             sdl3d_game_data_active_scene_allows_action(runtime, flow->app.pause_action_id) && !flow->quit_pending &&
@@ -1200,7 +1249,7 @@ bool sdl3d_game_data_app_flow_update(sdl3d_game_data_app_flow *flow, sdl3d_game_
     app_flow_update_transition(flow, ctx, bus, dt);
     sdl3d_game_data_scene_flow_update(&flow->scene_flow, runtime, bus, dt);
     bool deferred_skip_applied = false;
-    (void)app_flow_apply_skip_policy(flow, runtime, input, false, &deferred_skip_applied);
+    (void)app_flow_apply_skip_policy(flow, runtime, input, false, &deferred_skip_applied, NULL, NULL);
     skip_applied = skip_applied || deferred_skip_applied;
     if (!scene_transitioning_before && !skip_applied && !app_flow_update_timeline(flow, runtime, dt))
         return false;

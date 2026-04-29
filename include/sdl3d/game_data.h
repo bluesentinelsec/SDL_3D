@@ -383,7 +383,26 @@ extern "C"
         bool preserve_exit_transition;
         /** @brief True to suppress other app/menu controls for the triggering frame. */
         bool consume_input;
+        /** @brief True to suppress active-scene menus when skip input triggers. */
+        bool block_menus;
+        /** @brief True to suppress authored scene shortcuts when skip input triggers. */
+        bool block_scene_shortcuts;
     } sdl3d_game_data_skip_policy;
+
+    /**
+     * @brief Interaction policy for an active scene's autoplay timeline.
+     *
+     * These flags let intro, splash, attract, and cutscene authors decide
+     * whether a still-running timeline owns scene flow or whether normal menus
+     * and scene shortcuts remain interactive while timed events continue.
+     */
+    typedef struct sdl3d_game_data_timeline_policy
+    {
+        /** @brief True while an incomplete autoplay timeline suppresses active-scene menus. */
+        bool block_menus;
+        /** @brief True while an incomplete autoplay timeline suppresses authored scene shortcuts. */
+        bool block_scene_shortcuts;
+    } sdl3d_game_data_timeline_policy;
 
     /**
      * @brief Runtime state for a data-authored active-scene timeline.
@@ -1214,6 +1233,16 @@ extern "C"
      */
     bool sdl3d_game_data_get_active_skip_policy(const sdl3d_game_data_runtime *runtime,
                                                 sdl3d_game_data_skip_policy *out_policy);
+
+    /**
+     * @brief Read the active scene's authored timeline interaction policy.
+     *
+     * Returns false when the active scene has no autoplaying `timeline` object.
+     * Missing policy fields default to false so timelines remain interactive
+     * unless the scene author explicitly blocks menus or scene shortcuts.
+     */
+    bool sdl3d_game_data_get_active_timeline_policy(const sdl3d_game_data_runtime *runtime,
+                                                    sdl3d_game_data_timeline_policy *out_policy);
 
     /**
      * @brief Initialize reusable timeline state.

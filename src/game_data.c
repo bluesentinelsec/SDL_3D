@@ -2909,6 +2909,8 @@ bool sdl3d_game_data_get_active_skip_policy(const sdl3d_game_data_runtime *runti
         out_policy->action_id = -1;
         out_policy->preserve_exit_transition = true;
         out_policy->consume_input = true;
+        out_policy->block_menus = true;
+        out_policy->block_scene_shortcuts = true;
     }
     if (runtime == NULL || out_policy == NULL)
         return false;
@@ -2937,7 +2939,29 @@ bool sdl3d_game_data_get_active_skip_policy(const sdl3d_game_data_runtime *runti
     out_policy->scene = json_string(policy, "scene", json_string(policy, "target_scene", NULL));
     out_policy->preserve_exit_transition = json_bool(policy, "preserve_exit_transition", true);
     out_policy->consume_input = json_bool(policy, "consume_input", true);
+    out_policy->block_menus = json_bool(policy, "block_menus", out_policy->consume_input);
+    out_policy->block_scene_shortcuts =
+        json_bool(policy, "block_scene_shortcuts", json_bool(policy, "block_shortcuts", out_policy->consume_input));
     return out_policy->input != SDL3D_GAME_DATA_SKIP_INPUT_DISABLED;
+}
+
+bool sdl3d_game_data_get_active_timeline_policy(const sdl3d_game_data_runtime *runtime,
+                                                sdl3d_game_data_timeline_policy *out_policy)
+{
+    if (out_policy != NULL)
+        SDL_zero(*out_policy);
+    if (runtime == NULL || out_policy == NULL)
+        return false;
+
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    yyjson_val *timeline = obj_get(scene != NULL ? scene->root : NULL, "timeline");
+    if (!yyjson_is_obj(timeline) || !json_bool(timeline, "autoplay", false))
+        return false;
+
+    out_policy->block_menus = json_bool(timeline, "block_menus", false);
+    out_policy->block_scene_shortcuts =
+        json_bool(timeline, "block_scene_shortcuts", json_bool(timeline, "block_shortcuts", false));
+    return true;
 }
 
 static yyjson_val *active_timeline_events(const sdl3d_game_data_runtime *runtime)
