@@ -1712,6 +1712,44 @@ TEST(GameDataRuntime, OptionsMenuCanReturnToAuthoredScene)
     sdl3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, OptionsSubmenusDoNotOverwriteCallerReturnScene)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+
+    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    sdl3d_properties_set_string(scene_state, "return_scene", "scene.title");
+    sdl3d_properties_set_bool(scene_state, "return_paused", false);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
+    sdl3d_game_data_menu_item item{};
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options", 0, &item));
+    EXPECT_STREQ(item.label, "Display");
+    EXPECT_STREQ(item.scene, "scene.options.display");
+    EXPECT_EQ(item.return_to, nullptr);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options.display", 6, &item));
+    EXPECT_STREQ(item.label, "Back");
+    EXPECT_STREQ(item.scene, "scene.options");
+    EXPECT_FALSE(item.return_scene);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options", 9, &item));
+    EXPECT_STREQ(item.label, "Back");
+    EXPECT_TRUE(item.return_scene);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "return_scene", ""), "scene.title");
+    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "return_paused", true));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, OptionControlsStageValuesUntilApply)
 {
     sdl3d_game_session *session = nullptr;

@@ -26,10 +26,10 @@
       "select_signal": "signal.ui.menu.select",
       "selected": 0,
       "items": [
-        { "label": "Display", "scene": "scene.options.display", "return_to": "scene.options" },
-        { "label": "Keyboard", "scene": "scene.options.keyboard", "return_to": "scene.options" },
-        { "label": "Gamepad", "scene": "scene.options.gamepad", "return_to": "scene.options" },
-        { "label": "Audio", "scene": "scene.options.audio", "return_to": "scene.options" },
+        { "label": "Display", "scene": "scene.options.display" },
+        { "label": "Keyboard", "scene": "scene.options.keyboard" },
+        { "label": "Gamepad", "scene": "scene.options.gamepad" },
+        { "label": "Audio", "scene": "scene.options.audio" },
         {
           "label": "Gameplay",
           "control": {
