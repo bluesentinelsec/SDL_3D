@@ -1531,10 +1531,26 @@ static sdl3d_backend parse_backend(const char *value, sdl3d_backend fallback)
         return SDL3D_BACKEND_AUTO;
     if (SDL_strcasecmp(value, "software") == 0)
         return SDL3D_BACKEND_SOFTWARE;
-    if (SDL_strcasecmp(value, "sdlgpu") == 0 || SDL_strcasecmp(value, "gpu") == 0)
-        return SDL3D_BACKEND_SDLGPU;
+    if (SDL_strcasecmp(value, "opengl") == 0 || SDL_strcasecmp(value, "gl") == 0 || SDL_strcasecmp(value, "gpu") == 0)
+        return SDL3D_BACKEND_OPENGL;
     return fallback;
 }
+
+static sdl3d_window_mode parse_window_mode(const char *value, sdl3d_window_mode fallback)
+{
+    if (value == NULL)
+        return fallback;
+    if (SDL_strcasecmp(value, "windowed") == 0 || SDL_strcasecmp(value, "window") == 0)
+        return SDL3D_WINDOW_MODE_WINDOWED;
+    if (SDL_strcasecmp(value, "fullscreen_exclusive") == 0 || SDL_strcasecmp(value, "exclusive") == 0)
+        return SDL3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE;
+    if (SDL_strcasecmp(value, "fullscreen_borderless") == 0 || SDL_strcasecmp(value, "borderless") == 0 ||
+        SDL_strcasecmp(value, "desktop_fullscreen") == 0)
+        return SDL3D_WINDOW_MODE_FULLSCREEN_BORDERLESS;
+    return fallback;
+}
+
+static void storage_config_from_root(yyjson_val *root, sdl3d_storage_config *out_config);
 
 static sdl3d_tonemap_mode parse_tonemap(const char *value, sdl3d_tonemap_mode fallback)
 {
@@ -5711,6 +5727,20 @@ static bool execute_audio_play_music(sdl3d_game_data_runtime *runtime, yyjson_va
     return ok;
 }
 
+static float action_float_or_property(sdl3d_game_data_runtime *runtime, yyjson_val *action, const char *key,
+                                      float fallback)
+{
+    yyjson_val *source = obj_get(action, "source");
+    if (yyjson_is_obj(source))
+    {
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, json_string(source, "target", NULL));
+        const char *property = json_string(source, "key", NULL);
+        if (actor != NULL && property != NULL)
+            return sdl3d_properties_get_float(actor->props, property, fallback);
+    }
+    return json_float(action, key, fallback);
+}
+
 static bool execute_audio_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const char *type)
 {
     sdl3d_audio_engine *audio = sdl3d_game_session_get_audio(runtime != NULL ? runtime->session : NULL);
@@ -5742,10 +5772,50 @@ static bool execute_audio_action(sdl3d_game_data_runtime *runtime, yyjson_val *a
     if (SDL_strcmp(type, "audio.set_bus_volume") == 0)
     {
         sdl3d_audio_set_bus_volume(audio, parse_audio_bus(json_string(action, "bus", NULL), SDL3D_AUDIO_BUS_COUNT),
-                                   json_float(action, "volume", 1.0f));
+                                   action_float_or_property(runtime, action, "volume", 1.0f));
         return true;
     }
     return false;
+}
+
+static bool json_string_array_contains(yyjson_val *array, const char *value)
+{
+    if (!yyjson_is_arr(array) || value == NULL)
+        return false;
+    for (size_t i = 0; i < yyjson_arr_size(array); ++i)
+    {
+        const char *entry = yyjson_get_str(yyjson_arr_get(array, i));
+        if (entry != NULL && SDL_strcmp(entry, value) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool reset_actor_properties_to_authored_defaults(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    const char *target = json_string(action, "target", NULL);
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, target);
+    yyjson_val *entity = find_entity_json(runtime, target);
+    yyjson_val *properties = obj_get(entity, "properties");
+    yyjson_val *keys = obj_get(action, "keys");
+    if (actor == NULL || !yyjson_is_obj(properties))
+        return false;
+
+    yyjson_val *key;
+    yyjson_val *entry;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(properties, &iter);
+    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+    {
+        const char *name = yyjson_get_str(key);
+        if (yyjson_is_arr(keys) && !json_string_array_contains(keys, name))
+            continue;
+        entry = yyjson_obj_iter_get_val(key);
+        yyjson_val *value = obj_get(entry, "value");
+        if (value != NULL)
+            set_actor_property_from_json(actor, name, value);
+    }
+    return true;
 }
 
 static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const sdl3d_properties *payload)
@@ -5799,6 +5869,9 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
 
     if (SDL_strcmp(type, "property.animate") == 0)
         return start_property_animation_from_json(runtime, action);
+
+    if (SDL_strcmp(type, "property.reset_defaults") == 0)
+        return reset_actor_properties_to_authored_defaults(runtime, action);
 
     if (SDL_strcmp(type, "ui.animate") == 0)
         return start_ui_animation_from_json(runtime, action);
@@ -6763,13 +6836,83 @@ static bool apply_app_config_from_root(yyjson_val *root, sdl3d_game_config *out_
         SDL_snprintf(title_buffer, (size_t)title_buffer_size, "%s", title);
         out_config->title = title_buffer;
     }
-    out_config->width = json_int(app, "width", out_config->width);
-    out_config->height = json_int(app, "height", out_config->height);
+    out_config->width = json_int(app, "window_width", json_int(app, "width", out_config->width));
+    out_config->height = json_int(app, "window_height", json_int(app, "height", out_config->height));
+    out_config->logical_width = json_int(app, "logical_width", json_int(app, "width", out_config->logical_width));
+    out_config->logical_height = json_int(app, "logical_height", json_int(app, "height", out_config->logical_height));
+    out_config->icon_path = json_string(app, "icon_path", json_string(app, "icon", out_config->icon_path));
     out_config->backend = parse_backend(json_string(app, "backend", NULL), out_config->backend);
+    yyjson_val *window = obj_get(app, "window");
+    if (yyjson_is_obj(window))
+    {
+        const char *window_title = json_string(window, "title", NULL);
+        if (window_title != NULL && title_buffer != NULL && title_buffer_size > 0)
+        {
+            SDL_snprintf(title_buffer, (size_t)title_buffer_size, "%s", window_title);
+            out_config->title = title_buffer;
+        }
+#if defined(SDL3D_PRODUCTION_BUILD)
+        const char *mode = json_string(window, "production_display_mode", json_string(window, "display_mode", NULL));
+#else
+        const char *mode = json_string(window, "development_display_mode", json_string(window, "display_mode", NULL));
+#endif
+        out_config->display_mode = parse_window_mode(mode, out_config->display_mode);
+        yyjson_val *vsync = obj_get(window, "vsync");
+        if (yyjson_is_bool(vsync))
+            out_config->vsync = yyjson_get_bool(vsync) ? 1 : -1;
+        yyjson_val *maximized = obj_get(window, "maximized");
+        if (yyjson_is_bool(maximized))
+            out_config->maximized = yyjson_get_bool(maximized) ? 1 : -1;
+        out_config->backend = parse_backend(json_string(window, "renderer", NULL), out_config->backend);
+        out_config->icon_path = json_string(window, "icon_path", json_string(window, "icon", out_config->icon_path));
+    }
     out_config->tick_rate = json_float(app, "tick_rate", out_config->tick_rate);
     out_config->max_ticks_per_frame = json_int(app, "max_ticks_per_frame", out_config->max_ticks_per_frame);
     out_config->enable_audio = json_bool(app, "enable_audio", out_config->enable_audio);
     return true;
+}
+
+static void apply_persisted_app_settings(yyjson_val *root, sdl3d_game_config *out_config)
+{
+    yyjson_val *app = obj_get(root, "app");
+    const char *settings_path = json_string(app, "settings_path", "user://settings/options.json");
+    if (settings_path == NULL || settings_path[0] == '\0')
+        return;
+
+    sdl3d_storage_config storage_config;
+    storage_config_from_root(root, &storage_config);
+
+    char storage_error[256];
+    sdl3d_storage *storage = NULL;
+    if (!sdl3d_storage_create(&storage_config, &storage, storage_error, (int)sizeof(storage_error)))
+    {
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D app settings storage unavailable: %s", storage_error);
+        return;
+    }
+
+    sdl3d_storage_buffer buffer;
+    SDL_zero(buffer);
+    if (!sdl3d_storage_read_file(storage, settings_path, &buffer, storage_error, (int)sizeof(storage_error)))
+    {
+        sdl3d_storage_destroy(storage);
+        return;
+    }
+
+    yyjson_doc *doc = yyjson_read_opts((char *)buffer.data, buffer.size, YYJSON_READ_NOFLAG, NULL, NULL);
+    yyjson_val *settings = doc != NULL ? yyjson_doc_get_root(doc) : NULL;
+    if (yyjson_is_obj(settings))
+    {
+        out_config->display_mode =
+            parse_window_mode(json_string(settings, "display_mode", NULL), out_config->display_mode);
+        out_config->backend = parse_backend(json_string(settings, "renderer", NULL), out_config->backend);
+        yyjson_val *vsync = obj_get(settings, "vsync");
+        if (yyjson_is_bool(vsync))
+            out_config->vsync = yyjson_get_bool(vsync) ? 1 : -1;
+    }
+
+    yyjson_doc_free(doc);
+    sdl3d_storage_buffer_free(&buffer);
+    sdl3d_storage_destroy(storage);
 }
 
 bool sdl3d_game_data_load_app_config_asset(sdl3d_asset_resolver *assets, const char *asset_path,
@@ -6804,8 +6947,11 @@ bool sdl3d_game_data_load_app_config_asset(sdl3d_asset_resolver *assets, const c
         return false;
     }
 
-    const bool ok = apply_app_config_from_root(yyjson_doc_get_root(doc), out_config, title_buffer, title_buffer_size,
-                                               error_buffer, error_buffer_size);
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    const bool ok =
+        apply_app_config_from_root(root, out_config, title_buffer, title_buffer_size, error_buffer, error_buffer_size);
+    if (ok)
+        apply_persisted_app_settings(root, out_config);
     yyjson_doc_free(doc);
     return ok;
 }
@@ -6987,23 +7133,32 @@ bool sdl3d_game_data_load_file(const char *path, sdl3d_game_session *session, sd
     return ok;
 }
 
-static void load_storage_config(sdl3d_game_data_runtime *runtime, yyjson_val *root)
+static void storage_config_from_root(yyjson_val *root, sdl3d_storage_config *out_config)
 {
-    sdl3d_storage_config_init(&runtime->storage_config);
+    if (out_config == NULL)
+        return;
+    sdl3d_storage_config_init(out_config);
 
     yyjson_val *storage = obj_get(root, "storage");
     yyjson_val *metadata = obj_get(root, "metadata");
     yyjson_val *app = obj_get(root, "app");
 
-    runtime->storage_config.organization =
+    out_config->organization =
         first_non_empty_string(json_string(storage, "organization", NULL), json_string(metadata, "organization", NULL),
-                               runtime->storage_config.organization);
-    runtime->storage_config.application = first_non_empty_string(
+                               out_config->organization);
+    out_config->application = first_non_empty_string(
         json_string(storage, "application", NULL), json_string(app, "title", NULL),
-        first_non_empty_string(json_string(metadata, "name", NULL), NULL, runtime->storage_config.application));
-    runtime->storage_config.profile = json_string(storage, "profile", NULL);
-    runtime->storage_config.user_root_override = json_string(storage, "user_root_override", NULL);
-    runtime->storage_config.cache_root_override = json_string(storage, "cache_root_override", NULL);
+        first_non_empty_string(json_string(metadata, "name", NULL), NULL, out_config->application));
+    out_config->profile = json_string(storage, "profile", NULL);
+    out_config->user_root_override = json_string(storage, "user_root_override", NULL);
+    out_config->cache_root_override = json_string(storage, "cache_root_override", NULL);
+}
+
+static void load_storage_config(sdl3d_game_data_runtime *runtime, yyjson_val *root)
+{
+    if (runtime == NULL)
+        return;
+    storage_config_from_root(root, &runtime->storage_config);
 }
 
 bool sdl3d_game_data_get_storage_config(const sdl3d_game_data_runtime *runtime, sdl3d_storage_config *out_config)

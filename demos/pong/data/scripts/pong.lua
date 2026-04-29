@@ -142,11 +142,49 @@ local function apply_options(settings, options)
     if type(options.lighting_profile) == "string" then
         settings:set_string("lighting_profile", options.lighting_profile)
     end
+    if type(options.display_mode) == "string" then
+        settings:set_string("display_mode", options.display_mode)
+    elseif type(options.fullscreen) == "boolean" then
+        settings:set_string("display_mode", options.fullscreen and "fullscreen_borderless" or "windowed")
+    end
+    if type(options.vsync) == "boolean" then
+        settings:set_bool("vsync", options.vsync)
+    end
+    if type(options.renderer) == "string" then
+        settings:set_string("renderer", options.renderer)
+    end
     if type(options.input_style) == "string" then
         settings:set_string("input_style", options.input_style)
     end
-    if type(options.fullscreen) == "boolean" then
-        settings:set_bool("fullscreen", options.fullscreen)
+    if type(options.keyboard_preset) == "string" then
+        settings:set_string("keyboard_preset", options.keyboard_preset)
+    end
+    if type(options.keyboard_move) == "string" then
+        settings:set_string("keyboard_move", options.keyboard_move)
+    end
+    if type(options.keyboard_confirm) == "string" then
+        settings:set_string("keyboard_confirm", options.keyboard_confirm)
+    end
+    if type(options.keyboard_cancel) == "string" then
+        settings:set_string("keyboard_cancel", options.keyboard_cancel)
+    end
+    if type(options.gamepad_icons) == "string" then
+        settings:set_string("gamepad_icons", options.gamepad_icons)
+    end
+    if type(options.vibration) == "boolean" then
+        settings:set_bool("vibration", options.vibration)
+    end
+    if type(options.sfx_volume) == "number" then
+        settings:set_float("sfx_volume", math.clamp(options.sfx_volume, 0.0, 1.0))
+    end
+    if type(options.music_volume) == "number" then
+        settings:set_float("music_volume", math.clamp(options.music_volume, 0.0, 1.0))
+    end
+    if type(options.dialogue_volume) == "number" then
+        settings:set_float("dialogue_volume", math.clamp(options.dialogue_volume, 0.0, 1.0))
+    end
+    if type(options.ambience_volume) == "number" then
+        settings:set_float("ambience_volume", math.clamp(options.ambience_volume, 0.0, 1.0))
     end
 end
 
@@ -155,8 +193,20 @@ local function current_options(settings)
         schema = "sdl3d.pong.options.v1",
         difficulty = settings:get_string("difficulty", "normal"),
         lighting_profile = settings:get_string("lighting_profile", "cinematic"),
+        display_mode = settings:get_string("display_mode", "fullscreen_borderless"),
+        vsync = settings:get_bool("vsync", true),
+        renderer = settings:get_string("renderer", "software"),
         input_style = settings:get_string("input_style", "keyboard"),
-        fullscreen = settings:get_bool("fullscreen", false),
+        keyboard_preset = settings:get_string("keyboard_preset", "xbox_parity"),
+        keyboard_move = settings:get_string("keyboard_move", "wasd"),
+        keyboard_confirm = settings:get_string("keyboard_confirm", "enter_space"),
+        keyboard_cancel = settings:get_string("keyboard_cancel", "escape_backspace"),
+        gamepad_icons = settings:get_string("gamepad_icons", "xbox"),
+        vibration = settings:get_bool("vibration", true),
+        sfx_volume = settings:get_float("sfx_volume", 1.0),
+        music_volume = settings:get_float("music_volume", 1.0),
+        dialogue_volume = settings:get_float("dialogue_volume", 1.0),
+        ambience_volume = settings:get_float("ambience_volume", 1.0),
     }
 end
 

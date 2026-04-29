@@ -16,8 +16,21 @@ extern "C"
     {
         SDL3D_BACKEND_AUTO = 0,
         SDL3D_BACKEND_SOFTWARE = 1,
-        SDL3D_BACKEND_SDLGPU = 2
+        SDL3D_BACKEND_OPENGL = 2
     } sdl3d_backend;
+
+    /** @brief Window presentation mode used by high-level window creation. */
+    typedef enum sdl3d_window_mode
+    {
+        /** @brief Use SDL3D's build/profile default window mode. */
+        SDL3D_WINDOW_MODE_DEFAULT = 0,
+        /** @brief Desktop window. */
+        SDL3D_WINDOW_MODE_WINDOWED = 1,
+        /** @brief Exclusive fullscreen display mode. */
+        SDL3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE = 2,
+        /** @brief Borderless desktop fullscreen. */
+        SDL3D_WINDOW_MODE_FULLSCREEN_BORDERLESS = 3
+    } sdl3d_window_mode;
 
     typedef struct sdl3d_render_context_config
     {
@@ -28,18 +41,28 @@ extern "C"
         SDL_RendererLogicalPresentation logical_presentation;
     } sdl3d_render_context_config;
 
-    /*
-     * High-level window configuration. Use sdl3d_init_window_config for
-     * sensible defaults, then override what you need.
+    /**
+     * @brief High-level window configuration.
+     *
+     * Use sdl3d_init_window_config() for sensible defaults, then override what
+     * the game needs. Windowed mode is resizable by default. Games should
+     * prefer logical_width/logical_height for authored layout and world scale;
+     * width/height only describe the initial desktop window size.
      */
     typedef struct sdl3d_window_config
     {
-        int width;
-        int height;
-        const char *title;
-        sdl3d_backend backend;       /* AUTO, SOFTWARE, or SDLGPU */
-        bool allow_backend_fallback; /* try next backend if preferred fails */
-        bool resizable;
+        int width;                      /**< Initial window width in pixels. */
+        int height;                     /**< Initial window height in pixels. */
+        int logical_width;              /**< Virtual render width used for layout and presentation. */
+        int logical_height;             /**< Virtual render height used for layout and presentation. */
+        const char *title;              /**< Window title, or "SDL3D" when NULL. */
+        const char *icon_path;          /**< Optional filesystem path to a window icon image. */
+        sdl3d_backend backend;          /**< AUTO, SOFTWARE, or OPENGL. */
+        bool allow_backend_fallback;    /**< Try the next backend if the preferred backend fails. */
+        sdl3d_window_mode display_mode; /**< Windowed, exclusive fullscreen, or borderless fullscreen. */
+        bool vsync;                     /**< Request synchronized presentation where supported. */
+        bool maximized;                 /**< Create the desktop window maximized. */
+        bool resizable;                 /**< Allow the user to resize desktop windowed mode. */
     } sdl3d_window_config;
 
     /*
@@ -68,20 +91,28 @@ extern "C"
 
     /* ---- High-level API (recommended: library manages window setup) ---- */
 
-    /*
-     * Fill a window config with sensible defaults:
-     *   width=1280, height=720, title="SDL3D", backend=AUTO,
-     *   allow_backend_fallback=true, resizable=true.
+    /**
+     * @brief Fill a window config with sensible defaults.
+     *
+     * Defaults are width=1280, height=720, logical_width=1280,
+     * logical_height=720, title="SDL3D", backend=AUTO,
+     * display_mode=WINDOWED, vsync=true, maximized=false,
+     * allow_backend_fallback=true, and resizable=true.
      */
     void sdl3d_init_window_config(sdl3d_window_config *config);
 
-    /*
-     * Create a window and render context in one call. Handles all
-     * backend-specific setup (GL attributes, SDL_Renderer for software,
-     * window flags) internally. The caller receives an SDL_Window* for
-     * event polling and an sdl3d_render_context* for rendering.
+    /**
+     * @brief Create a window and render context in one call.
      *
-     * The logical resolution matches the requested width/height.
+     * Handles backend-specific setup, SDL_Renderer creation for the software
+     * path, window flags, optional title/icon metadata, presentation mode, and
+     * logical resolution. The caller receives an SDL_Window* for event polling
+     * and an sdl3d_render_context* for rendering.
+     *
+     * @param config Optional window configuration. NULL selects defaults.
+     * @param out_window Receives the SDL window on success.
+     * @param out_context Receives the render context on success.
+     * @return true on success, false on failure.
      */
     bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_window,
                              sdl3d_render_context **out_context);

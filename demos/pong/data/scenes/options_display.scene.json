@@ -1,6 +1,6 @@
 {
   "schema": "sdl3d.scene.v0",
-  "name": "scene.options",
+  "name": "scene.options.display",
   "updates_game": false,
   "renders_world": false,
   "entities": [],
@@ -17,7 +17,7 @@
   },
   "menus": [
     {
-      "name": "menu.options",
+      "name": "menu.options.display",
       "up_action": "action.menu.up",
       "down_action": "action.menu.down",
       "select_action": "action.menu.select",
@@ -25,64 +25,78 @@
       "select_signal": "signal.ui.menu.select",
       "selected": 0,
       "items": [
-        { "label": "Display", "scene": "scene.options.display", "return_to": "scene.options" },
-        { "label": "Keyboard", "scene": "scene.options.keyboard", "return_to": "scene.options" },
-        { "label": "Gamepad", "scene": "scene.options.gamepad", "return_to": "scene.options" },
-        { "label": "Audio", "scene": "scene.options.audio", "return_to": "scene.options" },
         {
-          "label": "Gameplay",
+          "label": "Display Mode",
           "signal": "signal.settings.apply",
           "control": {
             "type": "choice",
             "target": "entity.settings",
-            "key": "difficulty",
+            "key": "display_mode",
             "choices": [
-              { "label": "Easy", "value": "easy" },
-              { "label": "Normal", "value": "normal" },
-              { "label": "Hard", "value": "hard" }
+              { "label": "Windowed", "value": "windowed" },
+              { "label": "Fullscreen Exclusive", "value": "fullscreen_exclusive" },
+              { "label": "Fullscreen Borderless", "value": "fullscreen_borderless" }
             ]
           }
         },
         {
-          "label": "Lighting",
+          "label": "Vsync",
+          "signal": "signal.settings.apply",
+          "control": {
+            "type": "toggle",
+            "target": "entity.settings",
+            "key": "vsync"
+          }
+        },
+        {
+          "label": "Renderer",
           "signal": "signal.settings.apply",
           "control": {
             "type": "choice",
             "target": "entity.settings",
-            "key": "lighting_profile",
+            "key": "renderer",
             "choices": [
-              { "label": "Clean", "value": "clean" },
-              { "label": "Cinematic", "value": "cinematic" },
-              { "label": "Arcade", "value": "arcade" }
+              { "label": "Software", "value": "software" },
+              { "label": "OpenGL", "value": "opengl" }
             ]
           }
         },
-        { "label": "Reset All Defaults", "signal": "signal.settings.reset_all" },
-        { "label": "Back", "return_scene": true, "scene": "scene.title" }
+        { "label": "Reset Display Defaults", "signal": "signal.settings.reset_display" },
+        { "label": "Back", "scene": "scene.options" }
       ]
     }
   ],
   "ui": {
     "text": [
       {
-        "name": "ui.options.title",
+        "name": "ui.options.display.title",
         "font": "font.title",
-        "text": "OPTIONS",
+        "text": "DISPLAY",
         "x": 0.5,
-        "y": 0.18,
+        "y": 0.20,
         "normalized": true,
         "centered": true,
         "color": [242, 248, 255, 255]
+      },
+      {
+        "name": "ui.options.display.note",
+        "font": "font.small",
+        "text": "Display changes apply next launch.",
+        "x": 0.5,
+        "y": 0.82,
+        "normalized": true,
+        "centered": true,
+        "color": [160, 182, 220, 210]
       }
     ],
     "menus": [
       {
-        "name": "ui.options.menu",
-        "menu": "menu.options",
+        "name": "ui.options.display.menu",
+        "menu": "menu.options.display",
         "font": "font.hud",
         "x": 0.5,
-        "y": 0.31,
-        "gap": 0.064,
+        "y": 0.38,
+        "gap": 0.074,
         "normalized": true,
         "align": "center",
         "color": [225, 236, 255, 245],
@@ -90,7 +104,7 @@
         "selected_pulse_alpha": true,
         "cursor": {
           "text": ">",
-          "offset_x": -0.14,
+          "offset_x": -0.18,
           "align": "center",
           "color": [255, 222, 140, 255]
         }

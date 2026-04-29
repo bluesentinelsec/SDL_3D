@@ -7,6 +7,7 @@
 #include "gl_renderer.h"
 #include "rasterizer.h"
 #include "render_context_internal.h"
+#include "sdl3d/image.h"
 #include "texture_internal.h"
 
 static const char *const SDL3D_BACKEND_ENV = "SDL3D_BACKEND";
@@ -65,9 +66,9 @@ static bool sdl3d_parse_backend_name(const char *name, sdl3d_backend *backend)
         return true;
     }
 
-    if (SDL_strcasecmp(name, "sdlgpu") == 0 || SDL_strcasecmp(name, "gpu") == 0)
+    if (SDL_strcasecmp(name, "opengl") == 0 || SDL_strcasecmp(name, "gl") == 0 || SDL_strcasecmp(name, "gpu") == 0)
     {
-        *backend = SDL3D_BACKEND_SDLGPU;
+        *backend = SDL3D_BACKEND_OPENGL;
         return true;
     }
 
@@ -88,9 +89,9 @@ static bool sdl3d_resolve_backend(sdl3d_backend requested_backend, bool allow_ba
     case SDL3D_BACKEND_SOFTWARE:
         *resolved_backend = SDL3D_BACKEND_SOFTWARE;
         return true;
-    case SDL3D_BACKEND_SDLGPU:
+    case SDL3D_BACKEND_OPENGL:
         (void)allow_backend_fallback;
-        *resolved_backend = SDL3D_BACKEND_SDLGPU;
+        *resolved_backend = SDL3D_BACKEND_OPENGL;
         return true;
     default:
         return SDL_SetError("Unknown SDL3D backend value: %d", (int)requested_backend);
@@ -120,8 +121,8 @@ const char *sdl3d_get_backend_name(sdl3d_backend backend)
         return "auto";
     case SDL3D_BACKEND_SOFTWARE:
         return "software";
-    case SDL3D_BACKEND_SDLGPU:
-        return "sdlgpu";
+    case SDL3D_BACKEND_OPENGL:
+        return "opengl";
     default:
         return "unknown";
     }
@@ -297,7 +298,7 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     context->backend = resolved_backend;
 
     /* Initialize the backend dispatch table. */
-    if (resolved_backend == SDL3D_BACKEND_SDLGPU)
+    if (resolved_backend == SDL3D_BACKEND_OPENGL)
     {
         sdl3d_gl_backend_init(&context->backend_iface);
     }
@@ -557,10 +558,69 @@ void sdl3d_init_window_config(sdl3d_window_config *config)
     SDL_zerop(config);
     config->width = 1280;
     config->height = 720;
+    config->logical_width = 1280;
+    config->logical_height = 720;
     config->title = "SDL3D";
+    config->icon_path = NULL;
     config->backend = SDL3D_BACKEND_AUTO;
     config->allow_backend_fallback = true;
+    config->display_mode = SDL3D_WINDOW_MODE_WINDOWED;
+    config->vsync = true;
+    config->maximized = false;
     config->resizable = true;
+}
+
+static void sdl3d_apply_window_icon(SDL_Window *window, const char *icon_path)
+{
+    if (window == NULL || icon_path == NULL || icon_path[0] == '\0')
+        return;
+
+    sdl3d_image icon;
+    SDL_zero(icon);
+    if (!sdl3d_load_image_from_file(icon_path, &icon))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D window icon load failed: %s", SDL_GetError());
+        SDL_ClearError();
+        return;
+    }
+
+    SDL_Surface *surface =
+        SDL_CreateSurfaceFrom(icon.width, icon.height, SDL_PIXELFORMAT_RGBA32, icon.pixels, icon.width * 4);
+    if (surface != NULL)
+    {
+        SDL_SetWindowIcon(window, surface);
+        SDL_DestroySurface(surface);
+    }
+    else
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D window icon surface creation failed: %s", SDL_GetError());
+        SDL_ClearError();
+    }
+    sdl3d_free_image(&icon);
+}
+
+static void sdl3d_apply_window_mode(SDL_Window *window, sdl3d_window_mode mode)
+{
+    if (window == NULL)
+        return;
+
+    if (mode == SDL3D_WINDOW_MODE_FULLSCREEN_BORDERLESS)
+    {
+        SDL_SetWindowFullscreenMode(window, NULL);
+        SDL_SetWindowFullscreen(window, true);
+    }
+    else if (mode == SDL3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE)
+    {
+        SDL_DisplayID display = SDL_GetDisplayForWindow(window);
+        const SDL_DisplayMode *desktop = display != 0 ? SDL_GetDesktopDisplayMode(display) : NULL;
+        if (desktop != NULL)
+            SDL_SetWindowFullscreenMode(window, desktop);
+        SDL_SetWindowFullscreen(window, true);
+    }
+    else
+    {
+        SDL_SetWindowFullscreen(window, false);
+    }
 }
 
 bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_window, sdl3d_render_context **out_context)
@@ -592,8 +652,14 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
         local.width = 1280;
     if (local.height <= 0)
         local.height = 720;
+    if (local.logical_width <= 0)
+        local.logical_width = local.width;
+    if (local.logical_height <= 0)
+        local.logical_height = local.height;
     if (local.title == NULL)
         local.title = "SDL3D";
+    if (local.display_mode == SDL3D_WINDOW_MODE_DEFAULT)
+        local.display_mode = SDL3D_WINDOW_MODE_WINDOWED;
 
     /* Resolve which backend we'll actually use. */
     if (!sdl3d_resolve_backend(local.backend, local.allow_backend_fallback, &resolved))
@@ -605,8 +671,10 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
     SDL_WindowFlags flags = 0;
     if (local.resizable)
         flags |= SDL_WINDOW_RESIZABLE;
+    if (local.maximized)
+        flags |= SDL_WINDOW_MAXIMIZED;
 
-    if (resolved == SDL3D_BACKEND_SDLGPU)
+    if (resolved == SDL3D_BACKEND_OPENGL)
     {
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -621,9 +689,11 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
     {
         return false;
     }
+    sdl3d_apply_window_icon(window, local.icon_path);
+    sdl3d_apply_window_mode(window, local.display_mode);
 
     /* Software backend needs an SDL_Renderer; GL does not. */
-    if (resolved != SDL3D_BACKEND_SDLGPU)
+    if (resolved != SDL3D_BACKEND_OPENGL)
     {
         renderer = SDL_CreateRenderer(window, NULL);
         if (renderer == NULL)
@@ -631,13 +701,14 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
             SDL_DestroyWindow(window);
             return false;
         }
+        (void)SDL_SetRenderVSync(renderer, local.vsync ? 1 : 0);
     }
 
     sdl3d_init_render_context_config(&rcfg);
     rcfg.backend = resolved;
     rcfg.allow_backend_fallback = false; /* already resolved */
-    rcfg.logical_width = local.width;
-    rcfg.logical_height = local.height;
+    rcfg.logical_width = local.logical_width;
+    rcfg.logical_height = local.logical_height;
 
     if (!sdl3d_create_render_context(window, renderer, &rcfg, &context))
     {
@@ -645,6 +716,12 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
             SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         return false;
+    }
+
+    if (resolved == SDL3D_BACKEND_OPENGL && !SDL_GL_SetSwapInterval(local.vsync ? 1 : 0))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL vsync request failed: %s", SDL_GetError());
+        SDL_ClearError();
     }
 
     *out_window = window;
@@ -720,7 +797,7 @@ bool sdl3d_is_feature_available(const sdl3d_render_context *context, sdl3d_featu
         return false;
     }
 
-    bool is_gl = (context->backend == SDL3D_BACKEND_SDLGPU);
+    bool is_gl = (context->backend == SDL3D_BACKEND_OPENGL);
 
     switch (feature)
     {

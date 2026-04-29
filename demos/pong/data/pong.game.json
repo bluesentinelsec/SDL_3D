@@ -13,9 +13,19 @@
   },
   "app": {
     "title": "SDL3D Pong",
-    "width": 1280,
-    "height": 720,
-    "backend": "auto",
+    "logical_width": 1280,
+    "logical_height": 720,
+    "backend": "software",
+    "settings_path": "user://settings/options.json",
+    "window": {
+      "display_mode": "fullscreen_borderless",
+      "development_display_mode": "windowed",
+      "production_display_mode": "fullscreen_borderless",
+      "maximized": true,
+      "resizable": true,
+      "vsync": true,
+      "renderer": "software"
+    },
     "tick_rate": 0.008333333,
     "max_ticks_per_frame": 12,
     "enable_audio": true,
@@ -60,6 +70,10 @@
       "scenes/splash.scene.json",
       "scenes/title.scene.json",
       "scenes/options.scene.json",
+      "scenes/options_display.scene.json",
+      "scenes/options_keyboard.scene.json",
+      "scenes/options_gamepad.scene.json",
+      "scenes/options_audio.scene.json",
       "scenes/play.scene.json"
     ]
   },
@@ -147,6 +161,11 @@
         "id": "font.hud",
         "builtin": "Inter",
         "size": 34
+      },
+      {
+        "id": "font.small",
+        "builtin": "Inter",
+        "size": 22
       },
       {
         "id": "font.title",
@@ -717,8 +736,20 @@
       "properties": {
         "difficulty": { "type": "string", "value": "normal" },
         "lighting_profile": { "type": "string", "value": "cinematic" },
-        "fullscreen": { "type": "bool", "value": false },
+        "display_mode": { "type": "string", "value": "fullscreen_borderless" },
+        "vsync": { "type": "bool", "value": true },
+        "renderer": { "type": "string", "value": "software" },
         "input_style": { "type": "string", "value": "keyboard" },
+        "keyboard_preset": { "type": "string", "value": "xbox_parity" },
+        "keyboard_move": { "type": "string", "value": "wasd" },
+        "keyboard_confirm": { "type": "string", "value": "enter_space" },
+        "keyboard_cancel": { "type": "string", "value": "escape_backspace" },
+        "gamepad_icons": { "type": "string", "value": "xbox" },
+        "vibration": { "type": "bool", "value": true },
+        "sfx_volume": { "type": "float", "value": 1.0 },
+        "music_volume": { "type": "float", "value": 1.0 },
+        "dialogue_volume": { "type": "float", "value": 1.0 },
+        "ambience_volume": { "type": "float", "value": 1.0 },
         "persistence_enabled": { "type": "bool", "value": false }
       }
     },
@@ -784,6 +815,13 @@
     "signal.presentation.flash_border",
     "signal.persistence.load",
     "signal.persistence.save_options",
+    "signal.settings.apply",
+    "signal.settings.apply_audio",
+    "signal.settings.reset_all",
+    "signal.settings.reset_display",
+    "signal.settings.reset_keyboard",
+    "signal.settings.reset_gamepad",
+    "signal.settings.reset_audio",
     "signal.ui.menu.move",
     "signal.ui.menu.select",
     "signal.app.quit_fade_done"
@@ -909,13 +947,65 @@
       {
         "signal": "signal.persistence.load",
         "actions": [
-          { "type": "adapter.invoke", "adapter": "adapter.pong.load_persistence" }
+          { "type": "adapter.invoke", "adapter": "adapter.pong.load_persistence" },
+          { "type": "signal.emit", "signal": "signal.settings.apply_audio" }
         ]
       },
       {
         "signal": "signal.persistence.save_options",
         "actions": [
           { "type": "adapter.invoke", "adapter": "adapter.pong.save_options" }
+        ]
+      },
+      {
+        "signal": "signal.settings.apply",
+        "actions": [
+          { "type": "signal.emit", "signal": "signal.settings.apply_audio" },
+          { "type": "signal.emit", "signal": "signal.persistence.save_options" }
+        ]
+      },
+      {
+        "signal": "signal.settings.apply_audio",
+        "actions": [
+          { "type": "audio.set_bus_volume", "bus": "sfx", "source": { "target": "entity.settings", "key": "sfx_volume" } },
+          { "type": "audio.set_bus_volume", "bus": "music", "source": { "target": "entity.settings", "key": "music_volume" } },
+          { "type": "audio.set_bus_volume", "bus": "dialogue", "source": { "target": "entity.settings", "key": "dialogue_volume" } },
+          { "type": "audio.set_bus_volume", "bus": "ambience", "source": { "target": "entity.settings", "key": "ambience_volume" } }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_all",
+        "actions": [
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["difficulty", "lighting_profile", "display_mode", "vsync", "renderer", "input_style", "keyboard_preset", "keyboard_move", "keyboard_confirm", "keyboard_cancel", "gamepad_icons", "vibration", "sfx_volume", "music_volume", "dialogue_volume", "ambience_volume"] },
+          { "type": "signal.emit", "signal": "signal.settings.apply" }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_display",
+        "actions": [
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["display_mode", "vsync", "renderer"] },
+          { "type": "signal.emit", "signal": "signal.settings.apply" }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_keyboard",
+        "actions": [
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["input_style", "keyboard_preset", "keyboard_move", "keyboard_confirm", "keyboard_cancel"] },
+          { "type": "signal.emit", "signal": "signal.settings.apply" }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_gamepad",
+        "actions": [
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["gamepad_icons", "vibration"] },
+          { "type": "signal.emit", "signal": "signal.settings.apply" }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_audio",
+        "actions": [
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["sfx_volume", "music_volume", "dialogue_volume", "ambience_volume"] },
+          { "type": "signal.emit", "signal": "signal.settings.apply" }
         ]
       },
       {

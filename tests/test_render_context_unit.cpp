@@ -63,7 +63,7 @@ class SDL3DBackendEnvGuard
 TEST(SDL3DRenderContextConfig, InitRenderContextConfigSetsDocumentedDefaults)
 {
     sdl3d_render_context_config config{};
-    config.backend = SDL3D_BACKEND_SDLGPU;
+    config.backend = SDL3D_BACKEND_OPENGL;
     config.allow_backend_fallback = false;
     config.logical_width = 42;
     config.logical_height = 42;
@@ -98,7 +98,7 @@ TEST(SDL3DBackendName, MapsKnownBackendsToStableStrings)
 {
     EXPECT_EQ(std::string_view("auto"), sdl3d_get_backend_name(SDL3D_BACKEND_AUTO));
     EXPECT_EQ(std::string_view("software"), sdl3d_get_backend_name(SDL3D_BACKEND_SOFTWARE));
-    EXPECT_EQ(std::string_view("sdlgpu"), sdl3d_get_backend_name(SDL3D_BACKEND_SDLGPU));
+    EXPECT_EQ(std::string_view("opengl"), sdl3d_get_backend_name(SDL3D_BACKEND_OPENGL));
 }
 
 TEST(SDL3DBackendName, UnknownBackendsMapToUnknown)
@@ -110,19 +110,19 @@ TEST(SDL3DBackendName, UnknownBackendsMapToUnknown)
 TEST(SDL3DBackendEnvOverride, UnsetEnvReturnsFalseWithoutTouchingOutput)
 {
     SDL3DBackendEnvGuard guard(nullptr);
-    sdl3d_backend backend = SDL3D_BACKEND_SDLGPU;
+    sdl3d_backend backend = SDL3D_BACKEND_OPENGL;
 
     EXPECT_FALSE(sdl3d_get_backend_override_from_environment(&backend));
-    EXPECT_EQ(SDL3D_BACKEND_SDLGPU, backend);
+    EXPECT_EQ(SDL3D_BACKEND_OPENGL, backend);
 }
 
 TEST(SDL3DBackendEnvOverride, EmptyEnvReturnsFalseWithoutTouchingOutput)
 {
     SDL3DBackendEnvGuard guard("");
-    sdl3d_backend backend = SDL3D_BACKEND_SDLGPU;
+    sdl3d_backend backend = SDL3D_BACKEND_OPENGL;
 
     EXPECT_FALSE(sdl3d_get_backend_override_from_environment(&backend));
-    EXPECT_EQ(SDL3D_BACKEND_SDLGPU, backend);
+    EXPECT_EQ(SDL3D_BACKEND_OPENGL, backend);
 }
 
 TEST(SDL3DBackendEnvOverride, ParsesSoftware)
@@ -137,26 +137,26 @@ TEST(SDL3DBackendEnvOverride, ParsesSoftware)
 TEST(SDL3DBackendEnvOverride, ParsesAuto)
 {
     SDL3DBackendEnvGuard guard("AUTO");
-    sdl3d_backend backend = SDL3D_BACKEND_SDLGPU;
+    sdl3d_backend backend = SDL3D_BACKEND_OPENGL;
 
     EXPECT_TRUE(sdl3d_get_backend_override_from_environment(&backend));
     EXPECT_EQ(SDL3D_BACKEND_AUTO, backend);
 }
 
-TEST(SDL3DBackendEnvOverride, ParsesSdlGpuAndGpuAliasCaseInsensitively)
+TEST(SDL3DBackendEnvOverride, ParsesOpenGlAndGpuAliasesCaseInsensitively)
 {
     {
-        SDL3DBackendEnvGuard guard("SdlGpu");
+        SDL3DBackendEnvGuard guard("OpenGL");
         sdl3d_backend backend = SDL3D_BACKEND_AUTO;
         EXPECT_TRUE(sdl3d_get_backend_override_from_environment(&backend));
-        EXPECT_EQ(SDL3D_BACKEND_SDLGPU, backend);
+        EXPECT_EQ(SDL3D_BACKEND_OPENGL, backend);
     }
 
     {
         SDL3DBackendEnvGuard guard("GPU");
         sdl3d_backend backend = SDL3D_BACKEND_AUTO;
         EXPECT_TRUE(sdl3d_get_backend_override_from_environment(&backend));
-        EXPECT_EQ(SDL3D_BACKEND_SDLGPU, backend);
+        EXPECT_EQ(SDL3D_BACKEND_OPENGL, backend);
     }
 }
 
@@ -251,12 +251,12 @@ TEST(SDL3DCreateRenderContext, InvalidEnvOverrideFailsBeforeTouchingRenderer)
     EXPECT_NE(std::string_view(SDL_GetError()).find("Unsupported SDL3D backend override"), std::string_view::npos);
 }
 
-TEST(SDL3DCreateRenderContext, SdlGpuBackendAcceptsRequest)
+TEST(SDL3DCreateRenderContext, OpenGLBackendAcceptsRequest)
 {
     SDL3DBackendEnvGuard guard(nullptr);
     sdl3d_render_context_config config;
     sdl3d_init_render_context_config(&config);
-    config.backend = SDL3D_BACKEND_SDLGPU;
+    config.backend = SDL3D_BACKEND_OPENGL;
     config.allow_backend_fallback = false;
 
     /* The GL backend is now implemented. Creating with a fake window will
@@ -357,9 +357,15 @@ TEST(SDL3DWindowConfig, DefaultsAreReasonable)
     sdl3d_init_window_config(&cfg);
     EXPECT_EQ(cfg.width, 1280);
     EXPECT_EQ(cfg.height, 720);
+    EXPECT_EQ(cfg.logical_width, 1280);
+    EXPECT_EQ(cfg.logical_height, 720);
     EXPECT_NE(cfg.title, nullptr);
+    EXPECT_EQ(cfg.icon_path, nullptr);
     EXPECT_EQ(cfg.backend, SDL3D_BACKEND_AUTO);
     EXPECT_TRUE(cfg.allow_backend_fallback);
+    EXPECT_EQ(cfg.display_mode, SDL3D_WINDOW_MODE_WINDOWED);
+    EXPECT_TRUE(cfg.vsync);
+    EXPECT_FALSE(cfg.maximized);
     EXPECT_TRUE(cfg.resizable);
 }
 

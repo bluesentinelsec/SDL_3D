@@ -1069,6 +1069,16 @@ static bool validate_audio_action(validation_context *ctx, yyjson_val *action, c
     yyjson_val *volume = obj_get(action, "volume");
     if (volume != NULL && !yyjson_is_num(volume))
         return validation_error(ctx, json_path, "audio volume must be numeric");
+    yyjson_val *source = obj_get(action, "source");
+    if (source != NULL)
+    {
+        if (!yyjson_is_obj(source))
+            return validation_error(ctx, json_path, "audio source must be an object");
+        if (!require_ref(ctx, &names->entities, "entity", json_string(source, "target"), json_path))
+            return false;
+        if (!is_non_empty_string(source, "key"))
+            return validation_error(ctx, json_path, "audio source requires a non-empty key");
+    }
     yyjson_val *fade = obj_get(action, "fade");
     if (fade != NULL && !yyjson_is_num(fade))
         return validation_error(ctx, json_path, "audio fade must be numeric");
@@ -1108,6 +1118,20 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (!is_non_empty_string(action, "key"))
             return validation_error(ctx, json_path, "property.animate requires a non-empty key");
         return validate_animation_common(ctx, action, json_path, names);
+    }
+    if (SDL_strcmp(type, "property.reset_defaults") == 0)
+    {
+        if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
+            return false;
+        yyjson_val *keys = obj_get(action, "keys");
+        if (keys != NULL && !yyjson_is_arr(keys))
+            return validation_error(ctx, json_path, "property.reset_defaults keys must be an array");
+        for (size_t i = 0; yyjson_is_arr(keys) && i < yyjson_arr_size(keys); ++i)
+        {
+            if (!yyjson_is_str(yyjson_arr_get(keys, i)))
+                return validation_error(ctx, json_path, "property.reset_defaults keys must be strings");
+        }
+        return true;
     }
     if (SDL_strcmp(type, "ui.animate") == 0)
     {

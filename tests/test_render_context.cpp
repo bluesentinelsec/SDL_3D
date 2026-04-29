@@ -169,14 +169,14 @@ TEST_F(SDLVideoFixture, LogicalPresentationConfigIsApplied)
     sdl3d_destroy_render_context(context);
 }
 
-TEST_F(SDLVideoFixture, SdlGpuBackendAcceptsRequest)
+TEST_F(SDLVideoFixture, OpenGLBackendAcceptsRequest)
 {
     SDLWindowRendererPair pair;
     ASSERT_TRUE(pair.is_valid()) << SDL_GetError();
 
     sdl3d_render_context_config config;
     sdl3d_init_render_context_config(&config);
-    config.backend = SDL3D_BACKEND_SDLGPU;
+    config.backend = SDL3D_BACKEND_OPENGL;
     config.allow_backend_fallback = false;
 
     sdl3d_render_context *context = nullptr;
@@ -201,7 +201,7 @@ TEST_F(SDLVideoFixture, EnvironmentOverrideCanForceSoftwareBackend)
     SDL3DBackendOverrideGuard backend_override("software");
     sdl3d_render_context_config config;
     sdl3d_init_render_context_config(&config);
-    config.backend = SDL3D_BACKEND_SDLGPU;
+    config.backend = SDL3D_BACKEND_OPENGL;
     config.allow_backend_fallback = false;
 
     sdl3d_render_context *context = nullptr;
@@ -262,14 +262,14 @@ TEST_F(SDLVideoFixture, SoftwareBackendVtableIsFullyPopulated)
     sdl3d_destroy_render_context(context);
 }
 
-TEST_F(SDLVideoFixture, SdlGpuBackendClearAndPresentSucceedWhenAvailable)
+TEST_F(SDLVideoFixture, OpenGLBackendClearAndPresentSucceedWhenAvailable)
 {
     SDLWindowRendererPair pair;
     ASSERT_TRUE(pair.is_valid());
 
     sdl3d_render_context_config config;
     sdl3d_init_render_context_config(&config);
-    config.backend = SDL3D_BACKEND_SDLGPU;
+    config.backend = SDL3D_BACKEND_OPENGL;
     config.allow_backend_fallback = false;
 
     sdl3d_render_context *context = nullptr;
@@ -285,7 +285,7 @@ TEST_F(SDLVideoFixture, SdlGpuBackendClearAndPresentSucceedWhenAvailable)
     EXPECT_TRUE(sdl3d_clear_render_context(context, red));
     EXPECT_TRUE(sdl3d_present_render_context(context));
 
-    EXPECT_EQ(SDL3D_BACKEND_SDLGPU, sdl3d_get_render_context_backend(context));
+    EXPECT_EQ(SDL3D_BACKEND_OPENGL, sdl3d_get_render_context_backend(context));
 
     sdl3d_destroy_render_context(context);
 }

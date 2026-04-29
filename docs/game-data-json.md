@@ -22,7 +22,7 @@ Every file is a JSON object with these fields:
 | `schema` | yes | Schema id. First value: `sdl3d.game.v0`. |
 | `metadata` | yes | Human-readable identity and versioning. |
 | `storage` | no | Writable storage identity used to resolve `user://` and `cache://` roots. |
-| `app` | no | Managed-loop startup config such as title, window size, backend, tick rate, and tick cap. |
+| `app` | no | Managed-loop startup config such as title, logical resolution, window mode, backend, tick rate, and tick cap. |
 | `profiles` | no | Genre/profile hints and required modules. |
 | `assets` | no | Stable asset ids mapped to paths or future archive refs. |
 | `scripts` | no | Lua scripts that provide game-specific behavior used by adapters. |
@@ -96,9 +96,20 @@ The optional `app` object lets a managed-loop game declare startup settings befo
 {
   "app": {
     "title": "SDL3D Pong",
-    "width": 1280,
-    "height": 720,
-    "backend": "auto",
+    "logical_width": 1280,
+    "logical_height": 720,
+    "backend": "software",
+    "icon_path": "media/icons/game.png",
+    "settings_path": "user://settings/options.json",
+    "window": {
+      "display_mode": "fullscreen_borderless",
+      "development_display_mode": "windowed",
+      "production_display_mode": "fullscreen_borderless",
+      "maximized": true,
+      "resizable": true,
+      "vsync": true,
+      "renderer": "software"
+    },
     "tick_rate": 0.008333333,
     "max_ticks_per_frame": 12,
     "start_signal": "signal.game.start",
@@ -138,6 +149,10 @@ The optional `render`, `transitions`, and `ui` sections describe presentation wi
 runtime ownership of the renderer. Games read these descriptors and decide how to apply them.
 
 `start_signal` lets data kick off initial timers or scripted startup logic after the host has loaded the runtime.
+`app.logical_width` and `app.logical_height` define the game's virtual resolution; desktop window size and fullscreen
+presentation are policy, not game-world scale. `app.window` can author display mode, renderer, vsync, title/icon
+overrides, and development/production display-mode defaults. `settings_path`, when present, lets startup read persisted
+display options such as `display_mode`, `renderer`, and `vsync` before creating the window.
 `app.pause.action` and `startup_transition` let the managed-loop host avoid hardcoded action/transition names.
 `app.pause.allowed_if` is optional; when present, the app-flow helper evaluates it before entering pause.
 `app.quit` lets data choose which input action requests quit, which transition plays, and which signal completes
@@ -245,11 +260,12 @@ selected styling, and cursor styling:
 
 This keeps title/options/menu screens data-authored: the input menu defines
 choices and actions, while the UI presenter defines how the choices are laid out.
-Menu items can also author generic settings controls:
+Menu items can also author generic settings controls and emit data-authored signals when a value changes:
 
 ```json
 {
   "label": "Difficulty",
+  "signal": "signal.settings.apply",
   "control": {
     "type": "choice",
     "target": "entity.settings",
@@ -266,6 +282,27 @@ Menu items can also author generic settings controls:
 Supported control types are `toggle`, `choice`, and `range`. The generic menu
 controller applies these controls directly to actor properties and the menu UI
 presenter displays the current value.
+
+Settings screens can reset authored defaults without game-specific code:
+
+```json
+{
+  "type": "property.reset_defaults",
+  "target": "entity.settings",
+  "keys": ["display_mode", "vsync", "renderer"]
+}
+```
+
+Audio bus volume can also be driven from actor properties so options menus can
+share one generic settings actor:
+
+```json
+{
+  "type": "audio.set_bus_volume",
+  "bus": "music",
+  "source": { "target": "entity.settings", "key": "music_volume" }
+}
+```
 
 ## Scenes
 

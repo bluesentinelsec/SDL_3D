@@ -1,6 +1,6 @@
 {
   "schema": "sdl3d.scene.v0",
-  "name": "scene.options",
+  "name": "scene.options.gamepad",
   "updates_game": false,
   "renders_world": false,
   "entities": [],
@@ -17,7 +17,7 @@
   },
   "menus": [
     {
-      "name": "menu.options",
+      "name": "menu.options.gamepad",
       "up_action": "action.menu.up",
       "down_action": "action.menu.down",
       "select_action": "action.menu.select",
@@ -25,51 +25,42 @@
       "select_signal": "signal.ui.menu.select",
       "selected": 0,
       "items": [
-        { "label": "Display", "scene": "scene.options.display", "return_to": "scene.options" },
-        { "label": "Keyboard", "scene": "scene.options.keyboard", "return_to": "scene.options" },
-        { "label": "Gamepad", "scene": "scene.options.gamepad", "return_to": "scene.options" },
-        { "label": "Audio", "scene": "scene.options.audio", "return_to": "scene.options" },
         {
-          "label": "Gameplay",
+          "label": "Button Icons",
           "signal": "signal.settings.apply",
           "control": {
             "type": "choice",
             "target": "entity.settings",
-            "key": "difficulty",
+            "key": "gamepad_icons",
             "choices": [
-              { "label": "Easy", "value": "easy" },
-              { "label": "Normal", "value": "normal" },
-              { "label": "Hard", "value": "hard" }
+              { "label": "Xbox", "value": "xbox" },
+              { "label": "Nintendo", "value": "nintendo" },
+              { "label": "PlayStation", "value": "playstation" }
             ]
           }
         },
         {
-          "label": "Lighting",
+          "label": "Vibration",
           "signal": "signal.settings.apply",
           "control": {
-            "type": "choice",
+            "type": "toggle",
             "target": "entity.settings",
-            "key": "lighting_profile",
-            "choices": [
-              { "label": "Clean", "value": "clean" },
-              { "label": "Cinematic", "value": "cinematic" },
-              { "label": "Arcade", "value": "arcade" }
-            ]
+            "key": "vibration"
           }
         },
-        { "label": "Reset All Defaults", "signal": "signal.settings.reset_all" },
-        { "label": "Back", "return_scene": true, "scene": "scene.title" }
+        { "label": "Reset Gamepad Defaults", "signal": "signal.settings.reset_gamepad" },
+        { "label": "Back", "scene": "scene.options" }
       ]
     }
   ],
   "ui": {
     "text": [
       {
-        "name": "ui.options.title",
+        "name": "ui.options.gamepad.title",
         "font": "font.title",
-        "text": "OPTIONS",
+        "text": "GAMEPAD",
         "x": 0.5,
-        "y": 0.18,
+        "y": 0.20,
         "normalized": true,
         "centered": true,
         "color": [242, 248, 255, 255]
@@ -77,12 +68,12 @@
     ],
     "menus": [
       {
-        "name": "ui.options.menu",
-        "menu": "menu.options",
+        "name": "ui.options.gamepad.menu",
+        "menu": "menu.options.gamepad",
         "font": "font.hud",
         "x": 0.5,
-        "y": 0.31,
-        "gap": 0.064,
+        "y": 0.38,
+        "gap": 0.078,
         "normalized": true,
         "align": "center",
         "color": [225, 236, 255, 245],
@@ -90,7 +81,7 @@
         "selected_pulse_alpha": true,
         "cursor": {
           "text": ">",
-          "offset_x": -0.14,
+          "offset_x": -0.18,
           "align": "center",
           "color": [255, 222, 140, 255]
         }

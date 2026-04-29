@@ -14,6 +14,12 @@
 #define SDL3D_GAME_DEFAULT_FIXED_DT (1.0f / 60.0f)
 #define SDL3D_GAME_DEFAULT_MAX_TICKS 8
 
+#if defined(SDL3D_PRODUCTION_BUILD)
+#define SDL3D_GAME_DEFAULT_WINDOW_MODE SDL3D_WINDOW_MODE_FULLSCREEN_BORDERLESS
+#else
+#define SDL3D_GAME_DEFAULT_WINDOW_MODE SDL3D_WINDOW_MODE_WINDOWED
+#endif
+
 struct sdl3d_game_session
 {
     sdl3d_actor_registry *registry;
@@ -374,12 +380,28 @@ static bool sdl3d_game_create_context(const sdl3d_game_config *config, sdl3d_gam
 {
     sdl3d_window_config window_config;
     sdl3d_game_session_desc session_desc;
+    const int logical_width =
+        (config != NULL && config->logical_width > 0) ? config->logical_width : SDL3D_GAME_DEFAULT_WIDTH;
+    const int logical_height =
+        (config != NULL && config->logical_height > 0) ? config->logical_height : SDL3D_GAME_DEFAULT_HEIGHT;
 
     sdl3d_init_window_config(&window_config);
-    window_config.width = (config != NULL && config->width > 0) ? config->width : SDL3D_GAME_DEFAULT_WIDTH;
-    window_config.height = (config != NULL && config->height > 0) ? config->height : SDL3D_GAME_DEFAULT_HEIGHT;
+    window_config.width = (config != NULL && config->width > 0) ? config->width : logical_width;
+    window_config.height = (config != NULL && config->height > 0) ? config->height : logical_height;
+    window_config.logical_width = logical_width;
+    window_config.logical_height = logical_height;
     window_config.title = (config != NULL && config->title != NULL) ? config->title : "SDL3D";
+    window_config.icon_path = config != NULL ? config->icon_path : NULL;
     window_config.backend = (config != NULL) ? config->backend : SDL3D_BACKEND_AUTO;
+    window_config.display_mode = (config != NULL && config->display_mode != SDL3D_WINDOW_MODE_DEFAULT)
+                                     ? config->display_mode
+                                     : SDL3D_GAME_DEFAULT_WINDOW_MODE;
+    if (config != NULL && config->vsync != 0)
+        window_config.vsync = config->vsync > 0;
+    if (config != NULL && config->maximized != 0)
+        window_config.maximized = config->maximized > 0;
+    else
+        window_config.maximized = true;
 
     if (!sdl3d_create_window(&window_config, &ctx->window, &ctx->renderer))
     {
