@@ -736,17 +736,17 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
         out_result->selected_index = menu.selected_index;
     }
 
-    if (sdl3d_game_data_menu_key_binding_capture_active(runtime))
+    if (sdl3d_game_data_menu_input_binding_capture_active(runtime))
     {
-        const sdl3d_game_data_key_binding_capture_status capture_status =
-            sdl3d_game_data_update_menu_key_binding_capture(runtime, input);
+        const sdl3d_game_data_input_binding_capture_status capture_status =
+            sdl3d_game_data_update_menu_input_binding_capture(runtime, input);
         if (out_result != NULL)
         {
             out_result->handled_input = true;
-            out_result->key_binding_changed = capture_status == SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_CHANGED;
-            out_result->key_binding_conflict = capture_status == SDL3D_GAME_DATA_KEY_BINDING_CAPTURE_CONFLICT;
-            out_result->selected = out_result->key_binding_changed;
-            out_result->select_signal_id = out_result->key_binding_changed ? menu.select_signal_id : -1;
+            out_result->input_binding_changed = capture_status == SDL3D_GAME_DATA_INPUT_BINDING_CAPTURE_CHANGED;
+            out_result->input_binding_conflict = capture_status == SDL3D_GAME_DATA_INPUT_BINDING_CAPTURE_CONFLICT;
+            out_result->selected = out_result->input_binding_changed;
+            out_result->select_signal_id = out_result->input_binding_changed ? menu.select_signal_id : -1;
         }
         return true;
     }
@@ -813,11 +813,11 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
         {
             out_result->menu = refreshed.name;
             out_result->selected_index = refreshed.selected_index;
-            if (!control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING)
+            if (!control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING)
             {
-                out_result->key_binding_capture_started =
-                    sdl3d_game_data_start_menu_key_binding_capture(runtime, refreshed.name, refreshed.selected_index);
-                out_result->selected = out_result->key_binding_capture_started;
+                out_result->input_binding_capture_started =
+                    sdl3d_game_data_start_menu_input_binding_capture(runtime, refreshed.name, refreshed.selected_index);
+                out_result->selected = out_result->input_binding_capture_started;
                 out_result->select_signal_id = out_result->selected ? refreshed.select_signal_id : -1;
                 out_result->signal_id = -1;
                 out_result->quit = false;
@@ -832,7 +832,7 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
                 return true;
             }
             out_result->control_changed =
-                control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING
+                control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING
                     ? false
                     : sdl3d_game_data_adjust_menu_item_control(runtime, &item, control_direction);
             out_result->selected = !control_adjust_input || out_result->control_changed;
@@ -851,9 +851,10 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
         }
         else
         {
-            if (!control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING)
-                (void)sdl3d_game_data_start_menu_key_binding_capture(runtime, refreshed.name, refreshed.selected_index);
-            else if (item.control_type != SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING)
+            if (!control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING)
+                (void)sdl3d_game_data_start_menu_input_binding_capture(runtime, refreshed.name,
+                                                                       refreshed.selected_index);
+            else if (item.control_type != SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING)
                 (void)sdl3d_game_data_adjust_menu_item_control(runtime, &item, control_direction);
         }
     }

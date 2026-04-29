@@ -292,7 +292,7 @@ Menu items can also author generic settings controls and emit data-authored sign
 }
 ```
 
-Supported control types are `toggle`, `choice`, `range`, and `key_binding`.
+Supported control types are `toggle`, `choice`, `range`, and `input_binding`.
 The generic menu controller applies property controls directly to actor
 properties and the menu UI presenter displays the current value. A menu can
 author `left_action` and `right_action` so range and choice controls can be
@@ -330,7 +330,7 @@ Range controls clamp to their authored min/max. Adding `"value_type": "int"`
 stores the result as an integer property; adding `"display": "slider"` renders
 the menu value as a compact slider label.
 
-`key_binding` controls capture the next keyboard key or gamepad button and
+`input_binding` controls capture the next keyboard key or gamepad button and
 immediately rebind all authored actions for that device. This is how games can
 expose one player-facing input such as `Up` while updating both gameplay and
 menu actions:
@@ -339,7 +339,7 @@ menu actions:
 {
   "label": "Up",
   "control": {
-    "type": "key_binding",
+    "type": "input_binding",
     "default": "UP",
     "bindings": [
       { "action": "action.paddle.up", "device": "keyboard" },
@@ -388,6 +388,46 @@ Settings screens can reset authored defaults without game-specific code:
   "keys": ["display_mode", "vsync", "renderer"]
 }
 ```
+
+### Standard Options Contract
+
+Games that want SDL3D's reusable options behavior should author one settings
+actor and bind option controls to that actor. The actor name is game-defined,
+but `entity.settings` is the recommended default because it matches the app
+window and audio examples.
+
+Standard display properties:
+
+| Property | Type | Expected values |
+| --- | --- | --- |
+| `display_mode` | string | `windowed`, `fullscreen_exclusive`, `fullscreen_borderless` |
+| `vsync` | bool | `true` or `false` |
+| `renderer` | string | `software` or `opengl` |
+
+Standard audio properties:
+
+| Property | Type | Expected values |
+| --- | --- | --- |
+| `sfx_volume` | int | Usually `0` to `10`; use `scale: 0.1` for bus volume |
+| `music_volume` | int | Usually `0` to `10`; use `scale: 0.1` for bus volume |
+
+Standard gamepad properties:
+
+| Property | Type | Expected values |
+| --- | --- | --- |
+| `gamepad_icons` | string | `xbox`, `nintendo`, `playstation` |
+| `vibration` | bool | `true` or `false` |
+
+Keyboard and gamepad configuration should be authored as action-oriented
+`input_binding` menu controls. Games decide which actions to expose, but each
+control should represent a player-facing intent such as `Up`, `Accept`,
+`Cancel`, or `Pause`, not a low-level device-specific operation. The same
+player-facing item may update multiple engine actions, such as gameplay
+movement and menu navigation.
+
+Reusable options scenes should prefer immediate apply for settings where the
+player benefits from real-time feedback. Use Apply/Cancel snapshots only for
+screens that intentionally stage changes before committing them.
 
 Audio bus volume can also be driven from actor properties so options menus can
 share one generic settings actor. Use `source.scale` when the authored setting

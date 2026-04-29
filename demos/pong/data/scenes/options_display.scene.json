@@ -1,7 +1,6 @@
 {
   "schema": "sdl3d.scene.v0",
   "name": "scene.options.display",
-  "on_enter_signal": "signal.settings.snapshot_display",
   "updates_game": false,
   "renders_world": false,
   "entities": [],

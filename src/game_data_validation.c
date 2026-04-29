@@ -2025,10 +2025,10 @@ static bool validate_menu_item_control(validation_context *ctx, yyjson_val *cont
 
     const char *type = json_string(control, "type");
     if (type == NULL || (SDL_strcmp(type, "toggle") != 0 && SDL_strcmp(type, "choice") != 0 &&
-                         SDL_strcmp(type, "range") != 0 && SDL_strcmp(type, "key_binding") != 0))
-        return validation_error(ctx, path, "menu item control requires type toggle, choice, range, or key_binding");
+                         SDL_strcmp(type, "range") != 0 && SDL_strcmp(type, "input_binding") != 0))
+        return validation_error(ctx, path, "menu item control requires type toggle, choice, range, or input_binding");
 
-    if (SDL_strcmp(type, "key_binding") != 0)
+    if (SDL_strcmp(type, "input_binding") != 0)
     {
         if (!require_ref(ctx, &names->entities, "entity", json_string(control, "target"), path))
             return false;
@@ -2048,13 +2048,13 @@ static bool validate_menu_item_control(validation_context *ctx, yyjson_val *cont
             !yyjson_is_num(obj_get(control, "step")))
             return validation_error(ctx, path, "range control requires numeric min, max, and step");
     }
-    if (SDL_strcmp(type, "key_binding") == 0)
+    if (SDL_strcmp(type, "input_binding") == 0)
     {
         yyjson_val *bindings = obj_get(control, "bindings");
         if (!yyjson_is_arr(bindings) || yyjson_arr_size(bindings) == 0)
-            return validation_error(ctx, path, "key_binding control requires at least one binding");
+            return validation_error(ctx, path, "input_binding control requires at least one binding");
         if (!is_non_empty_string(control, "default"))
-            return validation_error(ctx, path, "key_binding control requires a default input");
+            return validation_error(ctx, path, "input_binding control requires a default input");
         for (size_t i = 0; i < yyjson_arr_size(bindings); ++i)
         {
             yyjson_val *binding = yyjson_arr_get(bindings, i);
@@ -2062,7 +2062,7 @@ static bool validate_menu_item_control(validation_context *ctx, yyjson_val *cont
                 return false;
             const char *device = json_string(binding, "device");
             if (device != NULL && SDL_strcmp(device, "keyboard") != 0 && SDL_strcmp(device, "gamepad") != 0)
-                return validation_error(ctx, path, "key_binding controls support keyboard or gamepad bindings");
+                return validation_error(ctx, path, "input_binding controls support keyboard or gamepad bindings");
         }
     }
     return true;
