@@ -115,6 +115,7 @@
         "root": "scene.options",
         "display": "scene.options.display",
         "keyboard": "scene.options.keyboard",
+        "mouse": "scene.options.mouse",
         "gamepad": "scene.options.gamepad",
         "audio": "scene.options.audio"
       },
@@ -122,6 +123,7 @@
         "root": "menu.options",
         "display": "menu.options.display",
         "keyboard": "menu.options.keyboard",
+        "mouse": "menu.options.mouse",
         "gamepad": "menu.options.gamepad",
         "audio": "menu.options.audio"
       },
@@ -139,6 +141,7 @@
         "apply_audio": "signal.settings.apply_audio",
         "reset_display": "signal.settings.reset_display",
         "reset_keyboard": "signal.settings.reset_keyboard",
+        "reset_mouse": "signal.settings.reset_mouse",
         "reset_gamepad": "signal.settings.reset_gamepad",
         "reset_audio": "signal.settings.reset_audio"
       },
@@ -185,6 +188,12 @@
         "keyboard": {
           "title_y": 0.13,
           "menu_y": 0.25,
+          "gap": 0.062,
+          "cursor_offset_x": -0.18
+        },
+        "mouse": {
+          "title_y": 0.13,
+          "menu_y": 0.30,
           "gap": 0.062,
           "cursor_offset_x": -0.18
         },
@@ -254,6 +263,15 @@
             "default": "B",
             "bindings": [
               { "action": "action.camera.ball.toggle", "device": "keyboard" }
+            ]
+          }
+        ],
+        "mouse": [
+          {
+            "label": "Accept",
+            "default": "LEFT",
+            "bindings": [
+              { "action": "action.menu.select", "device": "mouse" }
             ]
           }
         ],
@@ -559,6 +577,7 @@
             "bindings": [
               { "device": "keyboard", "key": "RETURN" },
               { "device": "keyboard", "key": "SPACE" },
+              { "device": "mouse", "button": "LEFT" },
               { "device": "gamepad", "button": "SOUTH" }
             ]
           },
@@ -1070,6 +1089,7 @@
     "signal.settings.apply_audio",
     "signal.settings.reset_display",
     "signal.settings.reset_keyboard",
+    "signal.settings.reset_mouse",
     "signal.settings.reset_gamepad",
     "signal.settings.reset_audio",
     "signal.ui.menu.move",
@@ -1233,6 +1253,12 @@
         "signal": "signal.settings.reset_keyboard",
         "actions": [
           { "type": "input.reset_bindings", "menu": "menu.options.keyboard" }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_mouse",
+        "actions": [
+          { "type": "input.reset_bindings", "menu": "menu.options.mouse" }
         ]
       },
       {

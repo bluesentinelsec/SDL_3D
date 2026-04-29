@@ -971,6 +971,11 @@ static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)
                     if (!is_non_empty_string(binding, "axis") && !is_non_empty_string(binding, "button"))
                         return validation_error(ctx, path, "gamepad binding requires an axis or button");
                 }
+                else if (SDL_strcmp(device != NULL ? device : "", "mouse") == 0)
+                {
+                    if (!is_non_empty_string(binding, "axis") && !is_non_empty_string(binding, "button"))
+                        return validation_error(ctx, path, "mouse binding requires an axis or button");
+                }
                 else
                 {
                     return validation_error(ctx, path, "unsupported input binding device '%s'",
@@ -2205,8 +2210,10 @@ static bool validate_menu_item_control(validation_context *ctx, yyjson_val *cont
             if (!require_ref(ctx, &names->actions, "input action", json_string(binding, "action"), path))
                 return false;
             const char *device = json_string(binding, "device");
-            if (device != NULL && SDL_strcmp(device, "keyboard") != 0 && SDL_strcmp(device, "gamepad") != 0)
-                return validation_error(ctx, path, "input_binding controls support keyboard or gamepad bindings");
+            if (device != NULL && SDL_strcmp(device, "keyboard") != 0 && SDL_strcmp(device, "gamepad") != 0 &&
+                SDL_strcmp(device, "mouse") != 0)
+                return validation_error(ctx, path,
+                                        "input_binding controls support keyboard, mouse, or gamepad bindings");
         }
     }
     return true;

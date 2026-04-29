@@ -239,6 +239,7 @@ TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
     EXPECT_TRUE(yyjson_is_num(yyjson_obj_get(required_object(layout, "root"), "menu_y")));
     EXPECT_TRUE(yyjson_is_num(yyjson_obj_get(required_object(layout, "audio"), "cursor_offset_x")));
     EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(required_object(options, "bindings"), "keyboard")));
+    EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(required_object(options, "bindings"), "mouse")));
     EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(required_object(options, "bindings"), "gamepad")));
 }
 

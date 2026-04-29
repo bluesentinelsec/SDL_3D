@@ -254,6 +254,15 @@ extern "C"
     SDL_GamepadButton sdl3d_input_get_pressed_gamepad_button(const sdl3d_input_manager *input);
 
     /**
+     * @brief Return the first mouse button pressed during the current input tick.
+     *
+     * The value is captured by sdl3d_input_update() before transient button
+     * edges are cleared. Returns 0 when no mouse button was pressed or live
+     * mouse input is unavailable, such as during demo playback.
+     */
+    Uint8 sdl3d_input_get_pressed_mouse_button(const sdl3d_input_manager *input);
+
+    /**
      * @brief Return true if any button-like input or action was pressed this tick.
      *
      * This supports generic flows such as splash screens where "press anything

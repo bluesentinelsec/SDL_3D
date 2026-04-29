@@ -129,7 +129,8 @@ typedef struct menu_input_binding_capture
 typedef enum menu_binding_device
 {
     MENU_BINDING_DEVICE_KEYBOARD = 0,
-    MENU_BINDING_DEVICE_GAMEPAD_BUTTON = 1,
+    MENU_BINDING_DEVICE_MOUSE_BUTTON = 1,
+    MENU_BINDING_DEVICE_GAMEPAD_BUTTON = 2,
 } menu_binding_device;
 
 typedef struct scene_menu_state
@@ -297,6 +298,7 @@ static void set_error(char *buffer, int buffer_size, const char *message)
 }
 
 static bool set_action_keyboard_binding(sdl3d_game_data_runtime *runtime, const char *action, SDL_Scancode scancode);
+static bool set_action_mouse_button_binding(sdl3d_game_data_runtime *runtime, const char *action, Uint8 button);
 static bool set_action_gamepad_button_binding(sdl3d_game_data_runtime *runtime, const char *action,
                                               SDL_GamepadButton button);
 
@@ -1788,6 +1790,65 @@ static const char *scancode_display_name(SDL_Scancode scancode)
         return "-";
     const char *name = SDL_GetScancodeName(scancode);
     return name != NULL && name[0] != '\0' ? name : "-";
+}
+
+static Uint8 mouse_button_from_json(const char *name)
+{
+    if (name == NULL)
+        return 0;
+    if (SDL_strcmp(name, "LEFT") == 0)
+        return SDL_BUTTON_LEFT;
+    if (SDL_strcmp(name, "MIDDLE") == 0)
+        return SDL_BUTTON_MIDDLE;
+    if (SDL_strcmp(name, "RIGHT") == 0)
+        return SDL_BUTTON_RIGHT;
+    if (SDL_strcmp(name, "X1") == 0)
+        return SDL_BUTTON_X1;
+    if (SDL_strcmp(name, "X2") == 0)
+        return SDL_BUTTON_X2;
+    return 0;
+}
+
+static const char *mouse_button_display_name(Uint8 button)
+{
+    switch (button)
+    {
+    case SDL_BUTTON_LEFT:
+        return "Left Mouse";
+    case SDL_BUTTON_MIDDLE:
+        return "Middle Mouse";
+    case SDL_BUTTON_RIGHT:
+        return "Right Mouse";
+    case SDL_BUTTON_X1:
+        return "Mouse X1";
+    case SDL_BUTTON_X2:
+        return "Mouse X2";
+    default:
+        return "-";
+    }
+}
+
+static sdl3d_mouse_axis mouse_axis_from_json(const char *name, bool *valid)
+{
+    if (valid != NULL)
+        *valid = true;
+    if (name == NULL)
+    {
+        if (valid != NULL)
+            *valid = false;
+        return SDL3D_MOUSE_AXIS_X;
+    }
+    if (SDL_strcmp(name, "x") == 0)
+        return SDL3D_MOUSE_AXIS_X;
+    if (SDL_strcmp(name, "y") == 0)
+        return SDL3D_MOUSE_AXIS_Y;
+    if (SDL_strcmp(name, "wheel") == 0)
+        return SDL3D_MOUSE_AXIS_WHEEL;
+    if (SDL_strcmp(name, "wheel_x") == 0)
+        return SDL3D_MOUSE_AXIS_WHEEL_X;
+    if (valid != NULL)
+        *valid = false;
+    return SDL3D_MOUSE_AXIS_X;
 }
 
 static const char *gamepad_button_display_name(SDL_GamepadButton button)
@@ -3891,6 +3952,7 @@ static void set_menu_binding_status(sdl3d_game_data_runtime *runtime, const char
     if (runtime != NULL && runtime->scene_state != NULL)
     {
         sdl3d_properties_set_string(runtime->scene_state, "keyboard_binding_status", status != NULL ? status : "");
+        sdl3d_properties_set_string(runtime->scene_state, "mouse_binding_status", status != NULL ? status : "");
         sdl3d_properties_set_string(runtime->scene_state, "gamepad_binding_status", status != NULL ? status : "");
     }
 }
@@ -3901,10 +3963,27 @@ static menu_binding_device menu_binding_control_device(yyjson_val *control)
     for (size_t i = 0; yyjson_is_arr(bindings) && i < yyjson_arr_size(bindings); ++i)
     {
         yyjson_val *binding = yyjson_arr_get(bindings, i);
-        if (SDL_strcmp(json_string(binding, "device", "keyboard"), "gamepad") == 0)
+        const char *device = json_string(binding, "device", "keyboard");
+        if (SDL_strcmp(device, "mouse") == 0)
+            return MENU_BINDING_DEVICE_MOUSE_BUTTON;
+        if (SDL_strcmp(device, "gamepad") == 0)
             return MENU_BINDING_DEVICE_GAMEPAD_BUTTON;
     }
     return MENU_BINDING_DEVICE_KEYBOARD;
+}
+
+static const char *menu_binding_device_input_name(menu_binding_device device)
+{
+    switch (device)
+    {
+    case MENU_BINDING_DEVICE_MOUSE_BUTTON:
+        return "mouse button";
+    case MENU_BINDING_DEVICE_GAMEPAD_BUTTON:
+        return "button";
+    case MENU_BINDING_DEVICE_KEYBOARD:
+    default:
+        return "key";
+    }
 }
 
 static SDL_Scancode current_action_keyboard_binding(const sdl3d_game_data_runtime *runtime, const char *action)
@@ -3930,6 +4009,18 @@ static SDL_GamepadButton current_action_gamepad_button_binding(const sdl3d_game_
             return spec->gamepad_button;
     }
     return SDL_GAMEPAD_BUTTON_INVALID;
+}
+
+static Uint8 current_action_mouse_button_binding(const sdl3d_game_data_runtime *runtime, const char *action)
+{
+    const int action_id = sdl3d_game_data_find_action(runtime, action);
+    for (int i = 0; runtime != NULL && action_id >= 0 && i < runtime->input_binding_count; ++i)
+    {
+        const input_binding_spec *spec = &runtime->input_bindings[i];
+        if (spec->action_id == action_id && spec->source == SDL3D_INPUT_MOUSE_BUTTON)
+            return spec->mouse_button;
+    }
+    return 0;
 }
 
 static SDL_Scancode current_input_binding_control_scancode(const sdl3d_game_data_runtime *runtime, yyjson_val *control)
@@ -3964,6 +4055,21 @@ static SDL_GamepadButton current_input_binding_control_gamepad_button(const sdl3
     return gamepad_button_from_json(json_string(control, "default", NULL));
 }
 
+static Uint8 current_input_binding_control_mouse_button(const sdl3d_game_data_runtime *runtime, yyjson_val *control)
+{
+    yyjson_val *bindings = obj_get(control, "bindings");
+    for (size_t i = 0; yyjson_is_arr(bindings) && i < yyjson_arr_size(bindings); ++i)
+    {
+        yyjson_val *binding = yyjson_arr_get(bindings, i);
+        if (SDL_strcmp(json_string(binding, "device", "keyboard"), "mouse") != 0)
+            continue;
+        const Uint8 current = current_action_mouse_button_binding(runtime, json_string(binding, "action", NULL));
+        if (current != 0)
+            return current;
+    }
+    return mouse_button_from_json(json_string(control, "default", NULL));
+}
+
 static bool set_input_binding_control_scancode(sdl3d_game_data_runtime *runtime, yyjson_val *control,
                                                SDL_Scancode scancode)
 {
@@ -3991,6 +4097,21 @@ static bool set_input_binding_control_gamepad_button(sdl3d_game_data_runtime *ru
         if (SDL_strcmp(json_string(binding, "device", "keyboard"), "gamepad") != 0)
             continue;
         if (set_action_gamepad_button_binding(runtime, json_string(binding, "action", NULL), button))
+            changed = true;
+    }
+    return changed;
+}
+
+static bool set_input_binding_control_mouse_button(sdl3d_game_data_runtime *runtime, yyjson_val *control, Uint8 button)
+{
+    bool changed = false;
+    yyjson_val *bindings = obj_get(control, "bindings");
+    for (size_t i = 0; yyjson_is_arr(bindings) && i < yyjson_arr_size(bindings); ++i)
+    {
+        yyjson_val *binding = yyjson_arr_get(bindings, i);
+        if (SDL_strcmp(json_string(binding, "device", "keyboard"), "mouse") != 0)
+            continue;
+        if (set_action_mouse_button_binding(runtime, json_string(binding, "action", NULL), button))
             changed = true;
     }
     return changed;
@@ -4040,6 +4161,28 @@ static const char *gamepad_button_binding_conflict_label(const sdl3d_game_data_r
     return NULL;
 }
 
+static const char *mouse_button_binding_conflict_label(const sdl3d_game_data_runtime *runtime, const char *menu_name,
+                                                       int item_index, Uint8 button)
+{
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    const scene_menu_state *menu = find_scene_menu_const(scene, menu_name);
+    yyjson_val *items = menu != NULL ? obj_get(menu->menu, "items") : NULL;
+    for (int i = 0; yyjson_is_arr(items) && i < menu->item_count; ++i)
+    {
+        if (i == item_index)
+            continue;
+        yyjson_val *item = yyjson_arr_get(items, (size_t)i);
+        yyjson_val *control = obj_get(item, "control");
+        if (parse_menu_control_type(json_string(control, "type", NULL)) != SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING)
+            continue;
+        if (menu_binding_control_device(control) != MENU_BINDING_DEVICE_MOUSE_BUTTON)
+            continue;
+        if (current_input_binding_control_mouse_button(runtime, control) == button)
+            return json_string(item, "label", NULL);
+    }
+    return NULL;
+}
+
 bool sdl3d_game_data_start_menu_input_binding_capture(sdl3d_game_data_runtime *runtime, const char *menu_name,
                                                       int item_index)
 {
@@ -4053,9 +4196,9 @@ bool sdl3d_game_data_start_menu_input_binding_capture(sdl3d_game_data_runtime *r
     runtime->input_capture.menu = menu_name;
     runtime->input_capture.item_index = item_index;
     char status[128];
-    const char *device_name =
-        menu_binding_control_device(control) == MENU_BINDING_DEVICE_GAMEPAD_BUTTON ? "button" : "key";
-    SDL_snprintf(status, sizeof(status), "Press a %s for %s", device_name, json_string(item, "label", "binding"));
+    SDL_snprintf(status, sizeof(status), "Press a %s for %s",
+                 menu_binding_device_input_name(menu_binding_control_device(control)),
+                 json_string(item, "label", "binding"));
     set_menu_binding_status(runtime, status);
     return true;
 }
@@ -4073,7 +4216,8 @@ sdl3d_game_data_input_binding_capture_status sdl3d_game_data_update_menu_input_b
 
     yyjson_val *item = find_menu_item_at(runtime, runtime->input_capture.menu, runtime->input_capture.item_index);
     yyjson_val *control = obj_get(item, "control");
-    if (menu_binding_control_device(control) == MENU_BINDING_DEVICE_GAMEPAD_BUTTON)
+    const menu_binding_device device = menu_binding_control_device(control);
+    if (device == MENU_BINDING_DEVICE_GAMEPAD_BUTTON)
     {
         const SDL_Scancode cancel_key = scancode_from_json(json_string(control, "cancel_key", "ESCAPE"));
         if (sdl3d_input_get_pressed_scancode(input) == cancel_key)
@@ -4103,6 +4247,40 @@ sdl3d_game_data_input_binding_capture_status sdl3d_game_data_update_menu_input_b
         char status[128];
         SDL_snprintf(status, sizeof(status), "%s set to %s", json_string(item, "label", "Binding"),
                      gamepad_button_display_name(button));
+        runtime->input_capture.active = false;
+        set_menu_binding_status(runtime, status);
+        return SDL3D_GAME_DATA_INPUT_BINDING_CAPTURE_CHANGED;
+    }
+    if (device == MENU_BINDING_DEVICE_MOUSE_BUTTON)
+    {
+        const SDL_Scancode cancel_key = scancode_from_json(json_string(control, "cancel_key", "ESCAPE"));
+        if (sdl3d_input_get_pressed_scancode(input) == cancel_key)
+        {
+            runtime->input_capture.active = false;
+            set_menu_binding_status(runtime, "Canceled");
+            return SDL3D_GAME_DATA_INPUT_BINDING_CAPTURE_CANCELED;
+        }
+
+        const Uint8 button = sdl3d_input_get_pressed_mouse_button(input);
+        if (button == 0)
+            return SDL3D_GAME_DATA_INPUT_BINDING_CAPTURE_WAITING;
+
+        const char *conflict = mouse_button_binding_conflict_label(runtime, runtime->input_capture.menu,
+                                                                   runtime->input_capture.item_index, button);
+        if (conflict != NULL)
+        {
+            char status[128];
+            SDL_snprintf(status, sizeof(status), "%s already uses %s", conflict, mouse_button_display_name(button));
+            set_menu_binding_status(runtime, status);
+            return SDL3D_GAME_DATA_INPUT_BINDING_CAPTURE_CONFLICT;
+        }
+
+        if (!set_input_binding_control_mouse_button(runtime, control, button))
+            return SDL3D_GAME_DATA_INPUT_BINDING_CAPTURE_WAITING;
+
+        char status[128];
+        SDL_snprintf(status, sizeof(status), "%s set to %s", json_string(item, "label", "Binding"),
+                     mouse_button_display_name(button));
         runtime->input_capture.active = false;
         set_menu_binding_status(runtime, status);
         return SDL3D_GAME_DATA_INPUT_BINDING_CAPTURE_CHANGED;
@@ -4153,11 +4331,18 @@ bool sdl3d_game_data_reset_menu_input_bindings(sdl3d_game_data_runtime *runtime,
         yyjson_val *control = obj_get(item, "control");
         if (parse_menu_control_type(json_string(control, "type", NULL)) != SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING)
             continue;
-        if (menu_binding_control_device(control) == MENU_BINDING_DEVICE_GAMEPAD_BUTTON)
+        const menu_binding_device device = menu_binding_control_device(control);
+        if (device == MENU_BINDING_DEVICE_GAMEPAD_BUTTON)
         {
             const SDL_GamepadButton button = gamepad_button_from_json(json_string(control, "default", NULL));
             if (button != SDL_GAMEPAD_BUTTON_INVALID &&
                 set_input_binding_control_gamepad_button(runtime, control, button))
+                changed = true;
+        }
+        else if (device == MENU_BINDING_DEVICE_MOUSE_BUTTON)
+        {
+            const Uint8 button = mouse_button_from_json(json_string(control, "default", NULL));
+            if (button != 0 && set_input_binding_control_mouse_button(runtime, control, button))
                 changed = true;
         }
         else
@@ -4453,15 +4638,20 @@ static void format_menu_item_label(const sdl3d_game_data_runtime *runtime, yyjso
         if (runtime != NULL && runtime->input_capture.active &&
             item == find_menu_item_at(runtime, runtime->input_capture.menu, runtime->input_capture.item_index))
         {
-            const char *device_name =
-                menu_binding_control_device(control) == MENU_BINDING_DEVICE_GAMEPAD_BUTTON ? "button" : "key";
-            SDL_snprintf(buffer, buffer_size, "%s: Press a %s", label, device_name);
+            SDL_snprintf(buffer, buffer_size, "%s: Press a %s", label,
+                         menu_binding_device_input_name(menu_binding_control_device(control)));
             return;
         }
-        if (menu_binding_control_device(control) == MENU_BINDING_DEVICE_GAMEPAD_BUTTON)
+        const menu_binding_device device = menu_binding_control_device(control);
+        if (device == MENU_BINDING_DEVICE_GAMEPAD_BUTTON)
         {
             SDL_snprintf(buffer, buffer_size, "%s: %s", label,
                          gamepad_button_display_name(current_input_binding_control_gamepad_button(runtime, control)));
+        }
+        else if (device == MENU_BINDING_DEVICE_MOUSE_BUTTON)
+        {
+            SDL_snprintf(buffer, buffer_size, "%s: %s", label,
+                         mouse_button_display_name(current_input_binding_control_mouse_button(runtime, control)));
         }
         else
         {
@@ -4867,6 +5057,39 @@ static bool set_action_keyboard_binding(sdl3d_game_data_runtime *runtime, const 
     return true;
 }
 
+static bool set_action_mouse_button_binding(sdl3d_game_data_runtime *runtime, const char *action, Uint8 button)
+{
+    const int action_id = sdl3d_game_data_find_action(runtime, action);
+    if (runtime == NULL || action == NULL || action_id < 0 || button == 0)
+        return false;
+
+    for (int i = 0; i < runtime->input_binding_count;)
+    {
+        input_binding_spec *spec = &runtime->input_bindings[i];
+        if (spec->action_id == action_id && spec->source == SDL3D_INPUT_MOUSE_BUTTON)
+        {
+            *spec = runtime->input_bindings[runtime->input_binding_count - 1];
+            runtime->input_binding_count--;
+        }
+        else
+        {
+            i++;
+        }
+    }
+
+    input_binding_spec spec;
+    SDL_zero(spec);
+    spec.action = action;
+    spec.action_id = action_id;
+    spec.source = SDL3D_INPUT_MOUSE_BUTTON;
+    spec.mouse_button = button;
+    spec.scale = 1.0f;
+    if (!append_input_binding_spec(runtime, &spec))
+        return false;
+    rebind_action_from_specs(runtime, action_id);
+    return true;
+}
+
 static bool set_action_gamepad_button_binding(sdl3d_game_data_runtime *runtime, const char *action,
                                               SDL_GamepadButton button)
 {
@@ -4957,6 +5180,46 @@ static bool load_input(sdl3d_game_data_runtime *runtime, yyjson_val *root, char 
                         if (!append_input_binding_spec(runtime, &spec))
                             return false;
                         bind_input_spec(input, &spec);
+                    }
+                }
+                else if (SDL_strcmp(device, "mouse") == 0)
+                {
+                    const char *axis = json_string(binding, "axis", NULL);
+                    const char *button = json_string(binding, "button", NULL);
+                    if (axis != NULL)
+                    {
+                        bool valid_axis = false;
+                        const sdl3d_mouse_axis mouse_axis = mouse_axis_from_json(axis, &valid_axis);
+                        if (valid_axis)
+                        {
+                            input_binding_spec spec;
+                            SDL_zero(spec);
+                            spec.action = name;
+                            spec.action_id = action_id;
+                            spec.source = SDL3D_INPUT_MOUSE_AXIS;
+                            spec.mouse_axis = mouse_axis;
+                            spec.scale = scale;
+                            if (!append_input_binding_spec(runtime, &spec))
+                                return false;
+                            bind_input_spec(input, &spec);
+                        }
+                    }
+                    else if (button != NULL)
+                    {
+                        const Uint8 mouse_button = mouse_button_from_json(button);
+                        if (mouse_button != 0)
+                        {
+                            input_binding_spec spec;
+                            SDL_zero(spec);
+                            spec.action = name;
+                            spec.action_id = action_id;
+                            spec.source = SDL3D_INPUT_MOUSE_BUTTON;
+                            spec.mouse_button = mouse_button;
+                            spec.scale = 1.0f;
+                            if (!append_input_binding_spec(runtime, &spec))
+                                return false;
+                            bind_input_spec(input, &spec);
+                        }
                     }
                 }
                 else if (SDL_strcmp(device, "gamepad") == 0)
