@@ -169,6 +169,38 @@ TEST_F(SDLVideoFixture, LogicalPresentationConfigIsApplied)
     sdl3d_destroy_render_context(context);
 }
 
+TEST_F(SDLVideoFixture, HighLevelSoftwareWindowLetterboxesLogicalPresentation)
+{
+    SDL3DBackendOverrideGuard backend_override("software");
+    sdl3d_window_config config;
+    sdl3d_init_window_config(&config);
+    config.width = 640;
+    config.height = 480;
+    config.logical_width = 320;
+    config.logical_height = 180;
+    config.backend = SDL3D_BACKEND_SOFTWARE;
+    config.allow_backend_fallback = false;
+    config.vsync = false;
+
+    SDL_Window *window = nullptr;
+    sdl3d_render_context *context = nullptr;
+    ASSERT_TRUE(sdl3d_create_window(&config, &window, &context)) << SDL_GetError();
+    ASSERT_NE(window, nullptr);
+    ASSERT_NE(context, nullptr);
+    SDL_Renderer *renderer = SDL_GetRenderer(window);
+    ASSERT_NE(renderer, nullptr);
+
+    int logical_width = 0;
+    int logical_height = 0;
+    SDL_RendererLogicalPresentation mode = SDL_LOGICAL_PRESENTATION_DISABLED;
+    ASSERT_TRUE(SDL_GetRenderLogicalPresentation(renderer, &logical_width, &logical_height, &mode)) << SDL_GetError();
+    EXPECT_EQ(320, logical_width);
+    EXPECT_EQ(180, logical_height);
+    EXPECT_EQ(SDL_LOGICAL_PRESENTATION_LETTERBOX, mode);
+
+    sdl3d_destroy_window(window, context);
+}
+
 TEST_F(SDLVideoFixture, OpenGLBackendAcceptsRequest)
 {
     SDLWindowRendererPair pair;

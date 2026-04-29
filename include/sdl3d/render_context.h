@@ -106,8 +106,10 @@ extern "C"
      *
      * Handles backend-specific setup, SDL_Renderer creation for the software
      * path, window flags, optional title/icon metadata, presentation mode, and
-     * logical resolution. The caller receives an SDL_Window* for event polling
-     * and an sdl3d_render_context* for rendering.
+     * logical resolution. High-level windows present the logical resolution
+     * with letterboxing so resizable windows preserve the authored aspect
+     * ratio. The caller receives an SDL_Window* for event polling and an
+     * sdl3d_render_context* for rendering.
      *
      * @param config Optional window configuration. NULL selects defaults.
      * @param out_window Receives the SDL window on success.

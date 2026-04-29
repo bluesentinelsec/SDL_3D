@@ -748,6 +748,7 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
     rcfg.allow_backend_fallback = false; /* already resolved */
     rcfg.logical_width = local.logical_width;
     rcfg.logical_height = local.logical_height;
+    rcfg.logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
 
     if (!sdl3d_create_render_context(window, renderer, &rcfg, &context))
     {
