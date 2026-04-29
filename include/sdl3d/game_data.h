@@ -474,13 +474,26 @@ extern "C"
         SDL3D_GAME_DATA_MENU_CONTROL_RANGE = 3,
     } sdl3d_game_data_menu_control_type;
 
+    /** @brief App pause command authored on a menu item. */
+    typedef enum sdl3d_game_data_menu_pause_command
+    {
+        /** @brief Selecting the item does not change pause state. */
+        SDL3D_GAME_DATA_MENU_PAUSE_NONE = 0,
+        /** @brief Selecting the item pauses the app. */
+        SDL3D_GAME_DATA_MENU_PAUSE_PAUSE = 1,
+        /** @brief Selecting the item resumes the app. */
+        SDL3D_GAME_DATA_MENU_PAUSE_RESUME = 2,
+        /** @brief Selecting the item toggles the app pause state. */
+        SDL3D_GAME_DATA_MENU_PAUSE_TOGGLE = 3,
+    } sdl3d_game_data_menu_pause_command;
+
     /**
      * @brief Runtime descriptor for one authored menu item.
      *
      * A menu item may request a scene change, request app quit, emit a signal,
-     * or mutate an actor property as a generic option control. Hosts can use
-     * these fields directly or translate them into a higher-level scene
-     * transition flow.
+     * change pause state, return to a previously authored scene, or mutate an
+     * actor property as a generic option control. Hosts can use these fields
+     * directly or translate them into a higher-level scene transition flow.
      */
     typedef struct sdl3d_game_data_menu_item
     {
@@ -488,10 +501,20 @@ extern "C"
         const char *label;
         /** @brief Target scene name, or NULL when this item does not change scene. */
         const char *scene;
+        /** @brief Scene stored as the return target when this item changes scene, or NULL. */
+        const char *return_to;
+        /** @brief True when selecting this item requests the stored return scene. */
+        bool return_scene;
         /** @brief True when selecting this item requests application quit. */
         bool quit;
         /** @brief Signal emitted by this item, or -1 when not authored. */
         int signal_id;
+        /** @brief Authored pause command to apply when selecting this item. */
+        sdl3d_game_data_menu_pause_command pause_command;
+        /** @brief True when selecting this item stores a return pause state. */
+        bool has_return_paused;
+        /** @brief Pause state stored for a later return_scene item. */
+        bool return_paused;
         /** @brief Authored generic control type. */
         sdl3d_game_data_menu_control_type control_type;
         /** @brief Actor that owns the controlled property, or NULL. */
@@ -1102,10 +1125,22 @@ extern "C"
     /**
      * @brief Read the active scene's primary menu, if any.
      *
-     * The first menu in the active scene is considered primary. Returns false
-     * when the scene has no menus.
+     * The first menu whose optional `active_if` condition passes is considered
+     * active. Conditions that depend on frame metrics, such as `app.paused`,
+     * evaluate as false through this convenience wrapper.
      */
     bool sdl3d_game_data_get_active_menu(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_menu *out_menu);
+
+    /**
+     * @brief Read the active scene menu using current frame metrics.
+     *
+     * This variant lets authored menu `active_if` conditions depend on app
+     * pause state, camera state, actor properties, or other metrics-backed UI
+     * conditions. It returns false when no active scene menu is eligible.
+     */
+    bool sdl3d_game_data_get_active_menu_for_metrics(const sdl3d_game_data_runtime *runtime,
+                                                     const sdl3d_game_data_ui_metrics *metrics,
+                                                     sdl3d_game_data_menu *out_menu);
 
     /**
      * @brief Move a menu selection by @p delta with wrap-around.

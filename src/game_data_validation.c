@@ -2075,6 +2075,10 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
             !require_ref(ctx, &names->actions, "input action", json_string(menu, "down_action"), menu_path) ||
             !require_ref(ctx, &names->actions, "input action", json_string(menu, "select_action"), menu_path))
             return false;
+        char condition_path[PATH_BUFFER_SIZE];
+        format_path(condition_path, sizeof(condition_path), "%s.active_if", menu_path);
+        if (!validate_scene_ui_condition(ctx, obj_get(menu, "active_if"), condition_path, names))
+            return false;
         const char *move_signal = json_string(menu, "move_signal");
         if (move_signal != NULL && !require_ref(ctx, &names->signals, "signal", move_signal, menu_path))
             return false;
@@ -2095,9 +2099,23 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
             const char *scene = json_string(item, "scene");
             if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, item_path))
                 return false;
+            const char *return_to = json_string(item, "return_to");
+            if (return_to != NULL && !require_ref(ctx, &names->scenes, "scene", return_to, item_path))
+                return false;
             const char *signal = json_string(item, "signal");
             if (signal != NULL && !require_ref(ctx, &names->signals, "signal", signal, item_path))
                 return false;
+            yyjson_val *return_scene = obj_get(item, "return_scene");
+            if (return_scene != NULL && !yyjson_is_bool(return_scene))
+                return validation_error(ctx, item_path, "scene menu item return_scene must be a boolean");
+            yyjson_val *return_paused = obj_get(item, "return_paused");
+            if (return_paused != NULL && !yyjson_is_bool(return_paused))
+                return validation_error(ctx, item_path, "scene menu item return_paused must be a boolean");
+            const char *pause = json_string(item, "pause");
+            if (pause != NULL && SDL_strcmp(pause, "pause") != 0 && SDL_strcmp(pause, "resume") != 0 &&
+                SDL_strcmp(pause, "unpause") != 0 && SDL_strcmp(pause, "toggle") != 0)
+                return validation_error(ctx, item_path,
+                                        "scene menu item pause must be pause, resume, unpause, or toggle");
             char control_path[PATH_BUFFER_SIZE];
             format_path(control_path, sizeof(control_path), "%s.control", item_path);
             if (!validate_menu_item_control(ctx, obj_get(item, "control"), control_path, names))

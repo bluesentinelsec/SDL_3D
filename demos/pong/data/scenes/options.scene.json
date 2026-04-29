@@ -71,7 +71,7 @@
             ]
           }
         },
-        { "label": "Back", "scene": "scene.title" }
+        { "label": "Back", "return_scene": true, "scene": "scene.title" }
       ]
     }
   ],
