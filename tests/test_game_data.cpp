@@ -1303,7 +1303,7 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
     ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options");
-    EXPECT_EQ(menu.item_count, 10);
+    EXPECT_EQ(menu.item_count, 5);
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Display");
     EXPECT_STREQ(item.scene, "scene.options.display");
@@ -1684,7 +1684,7 @@ TEST(GameDataRuntime, OptionsMenuCanReturnToAuthoredScene)
     sdl3d_properties_set_bool(scene_state, "return_paused", true);
 
     sdl3d_game_data_menu_item item{};
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options", 9, &item));
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options", 4, &item));
     EXPECT_TRUE(item.return_scene);
     EXPECT_STREQ(item.scene, "scene.title");
 
@@ -1700,7 +1700,7 @@ TEST(GameDataRuntime, OptionsMenuCanReturnToAuthoredScene)
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 1);
     ASSERT_TRUE(sdl3d_game_data_update_menus_for_metrics(runtime, input, &armed, &metrics, &result));
-    EXPECT_EQ(result.selected_index, 9);
+    EXPECT_EQ(result.selected_index, 4);
 
     key.type = SDL_EVENT_KEY_UP;
     sdl3d_input_process_event(input, &key);
@@ -1749,7 +1749,7 @@ TEST(GameDataRuntime, OptionsSubmenusDoNotOverwriteCallerReturnScene)
     EXPECT_FALSE(item.return_scene);
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options", 9, &item));
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options", 4, &item));
     EXPECT_STREQ(item.label, "Back");
     EXPECT_TRUE(item.return_scene);
     EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "return_scene", ""), "scene.title");
@@ -1813,7 +1813,7 @@ TEST(GameDataRuntime, AuthoredSettingsResetRestoresSelectedDefaults)
     sdl3d_properties_set_string(settings->props, "display_mode", "fullscreen_exclusive");
     sdl3d_properties_set_bool(settings->props, "vsync", false);
     sdl3d_properties_set_string(settings->props, "renderer", "software");
-    sdl3d_properties_set_string(settings->props, "difficulty", "hard");
+    sdl3d_properties_set_string(settings->props, "input_style", "gamepad");
 
     const int reset_display = sdl3d_game_data_find_signal(runtime, "signal.settings.reset_display");
     ASSERT_GE(reset_display, 0);
@@ -1823,7 +1823,7 @@ TEST(GameDataRuntime, AuthoredSettingsResetRestoresSelectedDefaults)
     EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
     EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vsync", false));
     EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "renderer", ""), "opengl");
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "difficulty", ""), "hard");
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "input_style", ""), "gamepad");
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
@@ -3179,15 +3179,13 @@ TEST(GameDataRuntime, PongPersistenceSkipsOptionsAndLoadsHighScoresFromUserStora
         EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "options_persistence_enabled", true));
         EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "score_persistence_enabled", false));
 
-        sdl3d_properties_set_string(settings->props, "difficulty", "hard");
+        sdl3d_properties_set_string(settings->props, "input_style", "gamepad");
         emit(session, runtime, "signal.persistence.save_options");
         EXPECT_FALSE(std::filesystem::exists(user_root / "settings" / "options.json"));
 
         emit(session, runtime, "signal.persistence.load");
         EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "options_persistence_enabled", true));
 
-        sdl3d_properties_set_string(settings->props, "difficulty", "hard");
-        sdl3d_properties_set_string(settings->props, "lighting_profile", "arcade");
         sdl3d_properties_set_string(settings->props, "display_mode", "windowed");
         sdl3d_properties_set_bool(settings->props, "vsync", false);
         sdl3d_properties_set_string(settings->props, "renderer", "opengl");
@@ -3214,7 +3212,7 @@ TEST(GameDataRuntime, PongPersistenceSkipsOptionsAndLoadsHighScoresFromUserStora
     EXPECT_TRUE(std::filesystem::exists(user_root / "scores" / "pong_scores.json"));
     write_text(
         user_root / "settings" / "options.json",
-        R"json({"schema":"sdl3d.pong.options.v1","difficulty":"hard","lighting_profile":"arcade","display_mode":"windowed","vsync":false,"renderer":"opengl","input_style":"gamepad","keyboard_preset":"classic_pc","gamepad_icons":"playstation","vibration":false,"sfx_volume":0.4,"music_volume":0.7})json");
+        R"json({"schema":"sdl3d.pong.options.v1","display_mode":"windowed","vsync":false,"renderer":"opengl","input_style":"gamepad","keyboard_preset":"classic_pc","gamepad_icons":"playstation","vibration":false,"sfx_volume":0.4,"music_volume":0.7})json");
 
     sdl3d_game_config persisted_config{};
     char title[128]{};
@@ -3239,8 +3237,6 @@ TEST(GameDataRuntime, PongPersistenceSkipsOptionsAndLoadsHighScoresFromUserStora
 
         sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
         ASSERT_NE(settings, nullptr);
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "difficulty", ""), "normal");
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "lighting_profile", ""), "cinematic");
         EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
         EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vsync", false));
         EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "renderer", ""), "opengl");

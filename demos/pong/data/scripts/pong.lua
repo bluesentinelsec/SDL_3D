@@ -136,12 +136,6 @@ local function apply_options(settings, options)
     if settings == nil or type(options) ~= "table" then
         return
     end
-    if type(options.difficulty) == "string" then
-        settings:set_string("difficulty", options.difficulty)
-    end
-    if type(options.lighting_profile) == "string" then
-        settings:set_string("lighting_profile", options.lighting_profile)
-    end
     if type(options.display_mode) == "string" then
         settings:set_string("display_mode", options.display_mode)
     elseif type(options.fullscreen) == "boolean" then
@@ -191,8 +185,6 @@ end
 local function current_options(settings)
     return {
         schema = "sdl3d.pong.options.v1",
-        difficulty = settings:get_string("difficulty", "normal"),
-        lighting_profile = settings:get_string("lighting_profile", "cinematic"),
         display_mode = settings:get_string("display_mode", "fullscreen_borderless"),
         vsync = settings:get_bool("vsync", true),
         renderer = settings:get_string("renderer", "software"),

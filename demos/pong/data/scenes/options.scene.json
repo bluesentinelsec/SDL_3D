@@ -1,7 +1,6 @@
 {
   "schema": "sdl3d.scene.v0",
   "name": "scene.options",
-  "on_enter_signal": "signal.settings.snapshot_all",
   "updates_game": false,
   "renders_world": false,
   "entities": [],
@@ -30,36 +29,7 @@
         { "label": "Keyboard", "scene": "scene.options.keyboard" },
         { "label": "Gamepad", "scene": "scene.options.gamepad" },
         { "label": "Audio", "scene": "scene.options.audio" },
-        {
-          "label": "Gameplay",
-          "control": {
-            "type": "choice",
-            "target": "entity.settings",
-            "key": "difficulty",
-            "choices": [
-              { "label": "Easy", "value": "easy" },
-              { "label": "Normal", "value": "normal" },
-              { "label": "Hard", "value": "hard" }
-            ]
-          }
-        },
-        {
-          "label": "Lighting",
-          "control": {
-            "type": "choice",
-            "target": "entity.settings",
-            "key": "lighting_profile",
-            "choices": [
-              { "label": "Clean", "value": "clean" },
-              { "label": "Cinematic", "value": "cinematic" },
-              { "label": "Arcade", "value": "arcade" }
-            ]
-          }
-        },
-        { "label": "Apply", "signal": "signal.settings.apply", "return_scene": true, "scene": "scene.title" },
-        { "label": "Cancel", "signal": "signal.settings.cancel_all", "return_scene": true, "scene": "scene.title" },
-        { "label": "Reset All Defaults", "signal": "signal.settings.reset_all" },
-        { "label": "Back", "signal": "signal.settings.cancel_all", "return_scene": true, "scene": "scene.title" }
+        { "label": "Back", "return_scene": true, "scene": "scene.title" }
       ]
     }
   ],
@@ -82,8 +52,8 @@
         "menu": "menu.options",
         "font": "font.hud",
         "x": 0.5,
-        "y": 0.31,
-        "gap": 0.064,
+        "y": 0.36,
+        "gap": 0.078,
         "normalized": true,
         "align": "center",
         "color": [225, 236, 255, 245],
