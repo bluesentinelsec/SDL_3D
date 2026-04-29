@@ -680,7 +680,7 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
     SDL_Renderer *renderer = NULL;
     sdl3d_render_context *context = NULL;
     sdl3d_render_context_config rcfg;
-    sdl3d_backend resolved;
+    sdl3d_backend resolved = SDL3D_BACKEND_SOFTWARE;
 
     if (out_window == NULL || out_context == NULL)
     {
@@ -803,8 +803,8 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
 bool sdl3d_apply_window_config(SDL_Window **window, sdl3d_render_context **context, const sdl3d_window_config *config)
 {
     sdl3d_window_config local;
-    sdl3d_backend requested_backend;
-    sdl3d_backend current_backend;
+    sdl3d_backend requested_backend = SDL3D_BACKEND_SOFTWARE;
+    sdl3d_backend current_backend = SDL3D_BACKEND_SOFTWARE;
 
     if (window == NULL || context == NULL || *window == NULL || *context == NULL || config == NULL)
         return SDL_InvalidParamError("window/context/config");
