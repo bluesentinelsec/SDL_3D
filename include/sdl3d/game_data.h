@@ -814,6 +814,27 @@ extern "C"
                                                     bool pause_entered);
 
     /**
+     * @brief Advance the active scene's authored input-activity controller.
+     *
+     * Scenes may author an `activity` object to drive reusable attract-mode,
+     * kiosk, title-screen, or cutscene overlays. The controller tracks the
+     * active scene, detects input activity, emits `on_enter`, `on_idle`,
+     * `on_active`, and `periodic` action lists, and keeps behavior in game
+     * data instead of host glue.
+     *
+     * Supported activity input modes are `any`, `action`, and `disabled`.
+     * Periodic entries may reset idle time so data can temporarily reveal UI
+     * prompts before allowing them to fade away again.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param input Current input manager, or NULL when input activity should be ignored.
+     * @param dt Delta time in seconds.
+     * @return true when authored activity actions completed successfully.
+     */
+    bool sdl3d_game_data_update_scene_activity(sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input,
+                                               float dt);
+
+    /**
      * @brief Read the authored UI pulse phase.
      *
      * Returns @p fallback when no `presentation.ui_pulse_clock` is authored or

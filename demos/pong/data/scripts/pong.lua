@@ -1,10 +1,22 @@
 local pong = {}
 
+local function random_signed_angle(ctx, min_angle, max_angle)
+    if max_angle <= 0.0 then
+        return 0.0
+    end
+
+    min_angle = math.max(math.min(min_angle, max_angle), 0.0)
+    local angle_span = math.max(max_angle - min_angle, 0.0)
+    local angle_sign = ctx:random() < 0.5 and -1.0 or 1.0
+    return angle_sign * (min_angle + ctx:random() * angle_span)
+end
+
 function pong.serve_random(ball, _, ctx)
     local base_speed = ball:get_float("base_speed", 5.6)
     local max_angle = ball:get_float("max_serve_angle", 0.52)
+    local min_angle = math.min(ball:get_float("min_serve_angle", 0.14), max_angle)
     local direction = ctx:random() < 0.5 and -1.0 or 1.0
-    local angle = (ctx:random() * 2.0 - 1.0) * max_angle
+    local angle = random_signed_angle(ctx, min_angle, max_angle)
     local position = ball.position or Vec3(0.0, 0.0, 0.12)
 
     ball.position = Vec3(0.0, 0.0, position.z)
@@ -31,12 +43,43 @@ function pong.reflect_from_paddle(ball, payload, ctx)
     local max_speed = ball:get_float("max_speed", 10.0)
     local speedup = ball:get_float("speedup_per_hit", 0.28)
     local max_angle = ball:get_float("max_reflect_angle", 1.05)
+    local stagnant_epsilon = ball:get_float("stagnant_reflect_epsilon", 0.06)
+    local stagnant_limit = ball:get_int("stagnant_reflect_limit", 2)
+    local jitter_angle = math.min(ball:get_float("reflect_jitter_angle", 0.24), max_angle)
+    local random_jitter_angle = math.min(ball:get_float("reflect_random_angle", 0.0), max_angle)
+    local min_random_jitter_angle = math.min(ball:get_float("reflect_random_min_angle", 0.0), random_jitter_angle)
     local velocity = ball.velocity
 
     local speed = math.clamp(Vec3.length(velocity) + speedup, base_speed, max_speed)
     local impact = math.clamp((ball_position.y - paddle_position.y) / paddle_half_height, -1.0, 1.0)
     local direction = paddle_position.x < 0.0 and 1.0 or -1.0
     local angle = impact * max_angle
+    local stagnant_count = ball:get_int("stagnant_reflect_count", 0)
+
+    angle = math.clamp(angle + random_signed_angle(ctx, min_random_jitter_angle, random_jitter_angle), -max_angle, max_angle)
+
+    local last_reflect_y = ball:get_float("last_reflect_y", ball_position.y)
+    local repeated_y = math.abs(ball_position.y - last_reflect_y) <= stagnant_epsilon
+
+    if ball:get_bool("has_last_reflect_y", false) and repeated_y then
+        stagnant_count = stagnant_count + 1
+    else
+        stagnant_count = 1
+    end
+
+    if stagnant_limit > 0 and stagnant_count >= stagnant_limit and jitter_angle > 0.0 then
+        local jitter_sign = ctx:random() < 0.5 and -1.0 or 1.0
+        if math.abs(angle) < jitter_angle then
+            angle = jitter_sign * jitter_angle
+        else
+            angle = math.clamp(angle + jitter_sign * jitter_angle, -max_angle, max_angle)
+        end
+        stagnant_count = 0
+    end
+
+    ball:set_bool("has_last_reflect_y", true)
+    ball:set_float("last_reflect_y", ball_position.y)
+    ball:set_int("stagnant_reflect_count", stagnant_count)
 
     ball.velocity = Vec3(math.cos(angle) * direction * speed, math.sin(angle) * speed, 0.0)
     ball.position = Vec3(paddle_position.x + direction * (paddle_half_width + ball_radius + 0.01), ball_position.y, ball_position.z)

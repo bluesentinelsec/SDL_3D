@@ -338,6 +338,20 @@
         "target_z_offset": -0.05,
         "up": [0.0, 0.0, 1.0],
         "active": false
+      },
+      {
+        "name": "camera.attract_ball_chase",
+        "type": "chase",
+        "target_entity": "entity.ball.attract",
+        "velocity_property": "velocity",
+        "chase_distance": 2.6,
+        "height": 1.57,
+        "lookahead": 4.4,
+        "fovy": 68.0,
+        "target_offset": [0.0, 0.0, 0.22],
+        "target_z_offset": -0.05,
+        "up": [0.0, 0.0, 1.0],
+        "active": false
       }
     ],
     "lights": [
@@ -531,6 +545,52 @@
       ]
     },
     {
+      "name": "entity.paddle.attract_left",
+      "active": true,
+      "tags": ["paddle", "attract"],
+      "transform": { "position": [-8.0, 0.0, 0.0] },
+      "properties": {
+        "half_width": { "type": "float", "value": 0.18 },
+        "half_height": { "type": "float", "value": 0.95 },
+        "speed": { "type": "float", "value": 5.5 }
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [0.36, 1.9, 0.28],
+          "color": [205, 230, 255, 255],
+          "effects": [
+            { "type": "flash", "source": "entity.presentation", "property": "paddle_flash", "color": [255, 255, 255, 255], "emissive": [0.35, 0.42, 0.50] }
+          ]
+        },
+        { "type": "collision.aabb", "half_extents": [0.18, 0.95, 0.14] },
+        { "type": "adapter.controller", "adapter": "adapter.pong.cpu_track_ball", "target": "entity.ball.attract" }
+      ]
+    },
+    {
+      "name": "entity.paddle.attract_right",
+      "active": true,
+      "tags": ["paddle", "attract"],
+      "transform": { "position": [8.0, 0.0, 0.0] },
+      "properties": {
+        "half_width": { "type": "float", "value": 0.18 },
+        "half_height": { "type": "float", "value": 0.95 },
+        "speed": { "type": "float", "value": 5.5 }
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [0.36, 1.9, 0.28],
+          "color": [195, 255, 212, 255],
+          "effects": [
+            { "type": "flash", "source": "entity.presentation", "property": "paddle_flash", "color": [255, 255, 255, 255], "emissive": [0.35, 0.42, 0.50] }
+          ]
+        },
+        { "type": "collision.aabb", "half_extents": [0.18, 0.95, 0.14] },
+        { "type": "adapter.controller", "adapter": "adapter.pong.cpu_track_ball", "target": "entity.ball.attract" }
+      ]
+    },
+    {
       "name": "entity.ball",
       "active": true,
       "tags": ["ball", "dynamic"],
@@ -539,10 +599,51 @@
         "radius": { "type": "float", "value": 0.22 },
         "velocity": { "type": "vec2", "value": [0.0, 0.0] },
         "base_speed": { "type": "float", "value": 5.6 },
+        "min_serve_angle": { "type": "float", "value": 0.14 },
         "speedup_per_hit": { "type": "float", "value": 0.28 },
         "max_speed": { "type": "float", "value": 10.0 },
         "max_serve_angle": { "type": "float", "value": 0.52 },
         "max_reflect_angle": { "type": "float", "value": 1.05 },
+        "stagnant_reflect_epsilon": { "type": "float", "value": 0.08 },
+        "stagnant_reflect_limit": { "type": "int", "value": 2 },
+        "reflect_jitter_angle": { "type": "float", "value": 0.24 },
+        "active_motion": { "type": "bool", "value": false }
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.22,
+          "rings": 12,
+          "slices": 18,
+          "color": [255, 184, 82, 255],
+          "emissive": true,
+          "effects": [
+            { "type": "pulse", "rate": 9.0, "color": [255, 245, 156, 255], "emissive_base": [0.75, 0.48, 0.08], "emissive_add": [0.65, 0.30, 0.0] }
+          ]
+        },
+        { "type": "collision.circle", "radius": 0.22 },
+        { "type": "motion.velocity_2d", "property": "velocity" }
+      ]
+    },
+    {
+      "name": "entity.ball.attract",
+      "active": true,
+      "tags": ["ball", "dynamic", "attract"],
+      "transform": { "position": [0.0, 0.0, 0.12] },
+      "properties": {
+        "radius": { "type": "float", "value": 0.22 },
+        "velocity": { "type": "vec2", "value": [0.0, 0.0] },
+        "base_speed": { "type": "float", "value": 5.6 },
+        "min_serve_angle": { "type": "float", "value": 0.22 },
+        "speedup_per_hit": { "type": "float", "value": 0.28 },
+        "max_speed": { "type": "float", "value": 10.0 },
+        "max_serve_angle": { "type": "float", "value": 0.82 },
+        "max_reflect_angle": { "type": "float", "value": 1.05 },
+        "stagnant_reflect_epsilon": { "type": "float", "value": 0.08 },
+        "stagnant_reflect_limit": { "type": "int", "value": 2 },
+        "reflect_jitter_angle": { "type": "float", "value": 0.28 },
+        "reflect_random_min_angle": { "type": "float", "value": 0.10 },
+        "reflect_random_angle": { "type": "float", "value": 0.34 },
         "active_motion": { "type": "bool", "value": false }
       },
       "components": [
@@ -661,6 +762,7 @@
     "signal.match.cpu_won",
     "signal.match.restart",
     "signal.camera.ball.toggle",
+    "signal.attract.round_reset",
     "signal.presentation.flash_border",
     "signal.ui.menu.move",
     "signal.ui.menu.select",
@@ -707,6 +809,47 @@
         "type": "sensor.contact_2d",
         "a": "entity.ball",
         "b": "entity.paddle.cpu",
+        "on_enter": "signal.ball.hit_paddle"
+      },
+      {
+        "name": "logic.attract.goal.left",
+        "type": "sensor.bounds_exit",
+        "entity": "entity.ball.attract",
+        "axis": "x",
+        "side": "min",
+        "threshold": -9.22,
+        "on_enter": "signal.attract.round_reset"
+      },
+      {
+        "name": "logic.attract.goal.right",
+        "type": "sensor.bounds_exit",
+        "entity": "entity.ball.attract",
+        "axis": "x",
+        "side": "max",
+        "threshold": 9.22,
+        "on_enter": "signal.attract.round_reset"
+      },
+      {
+        "name": "logic.attract.wall.top_bottom",
+        "type": "sensor.bounds_reflect",
+        "entity": "entity.ball.attract",
+        "axis": "y",
+        "min": -4.78,
+        "max": 4.78,
+        "on_reflect": "signal.ball.hit_wall"
+      },
+      {
+        "name": "logic.attract.paddle_left_contact",
+        "type": "sensor.contact_2d",
+        "a": "entity.ball.attract",
+        "b": "entity.paddle.attract_left",
+        "on_enter": "signal.ball.hit_paddle"
+      },
+      {
+        "name": "logic.attract.paddle_right_contact",
+        "type": "sensor.contact_2d",
+        "a": "entity.ball.attract",
+        "b": "entity.paddle.attract_right",
         "on_enter": "signal.ball.hit_paddle"
       },
       {
@@ -759,7 +902,7 @@
       {
         "signal": "signal.ball.hit_paddle",
         "actions": [
-          { "type": "adapter.invoke", "adapter": "adapter.pong.reflect_from_paddle", "target": "entity.ball" },
+          { "type": "adapter.invoke", "adapter": "adapter.pong.reflect_from_paddle" },
           { "type": "audio.play_sfx", "sound": "sound.pong.hit" },
           { "type": "signal.emit", "signal": "signal.presentation.flash_border" }
         ]
@@ -857,9 +1000,25 @@
         "actions": [
           { "type": "property.set", "target": "entity.ball", "key": "active_motion", "value": false },
           { "type": "property.set", "target": "entity.ball", "key": "velocity", "value": [0.0, 0.0] },
+          { "type": "property.set", "target": "entity.ball", "key": "has_last_reflect_y", "value": false },
+          { "type": "property.set", "target": "entity.ball", "key": "stagnant_reflect_count", "value": 0 },
           { "type": "transform.set_position", "target": "entity.ball", "position": [0.0, 0.0, 0.12] },
           { "type": "transform.set_position", "target": "entity.paddle.player", "position": [-8.0, 0.0, 0.0] },
           { "type": "transform.set_position", "target": "entity.paddle.cpu", "position": [8.0, 0.0, 0.0] }
+        ]
+      },
+      {
+        "signal": "signal.attract.round_reset",
+        "actions": [
+          { "type": "property.set", "target": "entity.ball.attract", "key": "active_motion", "value": false },
+          { "type": "property.set", "target": "entity.ball.attract", "key": "velocity", "value": [0.0, 0.0] },
+          { "type": "property.set", "target": "entity.ball.attract", "key": "has_last_reflect_y", "value": false },
+          { "type": "property.set", "target": "entity.ball.attract", "key": "stagnant_reflect_count", "value": 0 },
+          { "type": "transform.set_position", "target": "entity.ball.attract", "position": [0.0, 0.0, 0.12] },
+          { "type": "transform.set_position", "target": "entity.paddle.attract_left", "position": [-8.0, 0.0, 0.0] },
+          { "type": "transform.set_position", "target": "entity.paddle.attract_right", "position": [8.0, 0.0, 0.0] },
+          { "type": "adapter.invoke", "adapter": "adapter.pong.serve_random", "target": "entity.ball.attract" },
+          { "type": "property.set", "target": "entity.ball.attract", "key": "active_motion", "value": true }
         ]
       },
       {

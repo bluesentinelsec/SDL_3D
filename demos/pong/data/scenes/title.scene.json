@@ -1,9 +1,22 @@
 {
   "schema": "sdl3d.scene.v0",
   "name": "scene.title",
-  "updates_game": false,
-  "renders_world": false,
-  "entities": [],
+  "updates_game": true,
+  "renders_world": true,
+  "camera": "camera.overhead",
+  "entities": [
+    "entity.field.base",
+    "entity.field.border.top",
+    "entity.field.border.bottom",
+    "entity.field.border.left",
+    "entity.field.border.right",
+    "entity.field.center_ticks",
+    "entity.paddle.attract_left",
+    "entity.paddle.attract_right",
+    "entity.ball.attract",
+    "entity.presentation",
+    "entity.effect.ambient_particles"
+  ],
   "input": {
     "actions": [
       "action.menu.up",
@@ -14,6 +27,41 @@
   "transitions": {
     "enter": "scene_in",
     "exit": "scene_out"
+  },
+  "activity": {
+    "enabled": true,
+    "input": "any",
+    "idle_after": 5.0,
+    "on_enter": [
+      { "type": "camera.set", "camera": "camera.overhead" },
+      { "type": "signal.emit", "signal": "signal.attract.round_reset" },
+      { "type": "ui.animate", "target": "ui.title.logo", "property": "alpha", "to": 1.0, "duration": 0.0 },
+      { "type": "ui.animate", "target": "ui.title.menu", "property": "alpha", "to": 1.0, "duration": 0.0 }
+    ],
+    "on_idle": [
+      { "type": "ui.animate", "target": "ui.title.logo", "property": "alpha", "to": 0.0, "duration": 0.65, "easing": "out_quad" },
+      { "type": "ui.animate", "target": "ui.title.menu", "property": "alpha", "to": 0.0, "duration": 0.65, "easing": "out_quad" }
+    ],
+    "on_active": [
+      { "type": "ui.animate", "target": "ui.title.logo", "property": "alpha", "to": 1.0, "duration": 0.20, "easing": "out_quad" },
+      { "type": "ui.animate", "target": "ui.title.menu", "property": "alpha", "to": 1.0, "duration": 0.20, "easing": "out_quad" }
+    ],
+    "periodic": [
+      {
+        "interval": 12.0,
+        "actions": [
+          { "type": "camera.toggle", "camera": "camera.attract_ball_chase", "fallback": "camera.overhead" }
+        ]
+      },
+      {
+        "interval": 60.0,
+        "reset_idle": true,
+        "actions": [
+          { "type": "ui.animate", "target": "ui.title.logo", "property": "alpha", "to": 1.0, "duration": 0.35, "easing": "out_quad" },
+          { "type": "ui.animate", "target": "ui.title.menu", "property": "alpha", "to": 1.0, "duration": 0.35, "easing": "out_quad" }
+        ]
+      }
+    ]
   },
   "menus": [
     {

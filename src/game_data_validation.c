@@ -1097,6 +1097,8 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         return require_ref(ctx, &names->cameras, "camera", json_string(action, "camera"), json_path) &&
                require_ref(ctx, &names->cameras, "camera", json_string(action, "fallback"), json_path);
     }
+    if (SDL_strcmp(type, "camera.set") == 0)
+        return require_ref(ctx, &names->cameras, "camera", json_string(action, "camera"), json_path);
     if (SDL_strcmp(type, "scene.set") == 0)
         return require_ref(ctx, &names->scenes, "scene", json_string(action, "scene"), json_path);
     if (SDL_strcmp(type, "adapter.invoke") == 0)
@@ -1215,6 +1217,71 @@ static bool validate_skip_policy(validation_context *ctx, yyjson_val *policy, co
         return false;
     if (input_action && !require_ref(ctx, &names->actions, "input action", json_string(policy, "action"), json_path))
         return false;
+    return true;
+}
+
+static bool validate_scene_activity(validation_context *ctx, yyjson_val *activity, const char *json_path,
+                                    validation_names *names)
+{
+    if (activity == NULL)
+        return true;
+    if (!yyjson_is_obj(activity))
+        return validation_error(ctx, json_path, "scene activity must be an object");
+
+    yyjson_val *enabled = obj_get(activity, "enabled");
+    if (enabled != NULL && !yyjson_is_bool(enabled))
+        return validation_error(ctx, json_path, "scene activity enabled must be a boolean");
+    yyjson_val *idle_after = obj_get(activity, "idle_after");
+    if (idle_after == NULL)
+        idle_after = obj_get(activity, "idle_seconds");
+    if (idle_after != NULL && (!yyjson_is_num(idle_after) || yyjson_get_num(idle_after) < 0.0))
+        return validation_error(ctx, json_path, "scene activity idle_after must be a non-negative number");
+    yyjson_val *reset_periodic = obj_get(activity, "reset_periodic_on_input");
+    if (reset_periodic != NULL && !yyjson_is_bool(reset_periodic))
+        return validation_error(ctx, json_path, "scene activity reset_periodic_on_input must be a boolean");
+
+    const char *input = json_string(activity, "input");
+    if (input != NULL && SDL_strcmp(input, "any") != 0 && SDL_strcmp(input, "action") != 0 &&
+        SDL_strcmp(input, "disabled") != 0 && SDL_strcmp(input, "none") != 0)
+        return validation_error(ctx, json_path, "scene activity input must be any, action, disabled, or none");
+    if (input != NULL && SDL_strcmp(input, "action") == 0 &&
+        !require_ref(ctx, &names->actions, "input action", json_string(activity, "action"), json_path))
+        return false;
+
+    const char *action_lists[] = {"on_enter", "on_idle", "on_active"};
+    for (size_t i = 0; i < SDL_arraysize(action_lists); ++i)
+    {
+        yyjson_val *actions = obj_get(activity, action_lists[i]);
+        if (actions == NULL)
+            continue;
+        char action_path[PATH_BUFFER_SIZE];
+        format_path(action_path, sizeof(action_path), "%s.%s", json_path, action_lists[i]);
+        if (!validate_action_array(ctx, actions, action_path, names))
+            return false;
+    }
+
+    yyjson_val *periodic = obj_get(activity, "periodic");
+    if (periodic != NULL && !yyjson_is_arr(periodic))
+        return validation_error(ctx, json_path, "scene activity periodic must be an array");
+    for (size_t i = 0; yyjson_is_arr(periodic) && i < yyjson_arr_size(periodic); ++i)
+    {
+        char entry_path[PATH_BUFFER_SIZE];
+        format_path(entry_path, sizeof(entry_path), "%s.periodic[%zu]", json_path, i);
+        yyjson_val *entry = yyjson_arr_get(periodic, i);
+        if (!yyjson_is_obj(entry))
+            return validation_error(ctx, entry_path, "scene activity periodic entry must be an object");
+        yyjson_val *interval = obj_get(entry, "interval");
+        if (!yyjson_is_num(interval) || yyjson_get_num(interval) <= 0.0)
+            return validation_error(ctx, entry_path, "scene activity periodic interval must be positive");
+        yyjson_val *reset_idle = obj_get(entry, "reset_idle");
+        if (reset_idle != NULL && !yyjson_is_bool(reset_idle))
+            return validation_error(ctx, entry_path, "scene activity periodic reset_idle must be a boolean");
+
+        char actions_path[PATH_BUFFER_SIZE];
+        format_path(actions_path, sizeof(actions_path), "%s.actions", entry_path);
+        if (!validate_action_array(ctx, obj_get(entry, "actions"), actions_path, names))
+            return false;
+    }
     return true;
 }
 
@@ -1952,6 +2019,11 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
     char skip_path[PATH_BUFFER_SIZE];
     format_path(skip_path, sizeof(skip_path), "%s.skip_policy", json_path);
     if (!validate_skip_policy(ctx, obj_get(root, "skip_policy"), skip_path, names))
+        return false;
+
+    char activity_path[PATH_BUFFER_SIZE];
+    format_path(activity_path, sizeof(activity_path), "%s.activity", json_path);
+    if (!validate_scene_activity(ctx, obj_get(root, "activity"), activity_path, names))
         return false;
 
     if (obj_get(root, "splash") != NULL)
