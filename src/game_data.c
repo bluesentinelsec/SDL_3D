@@ -372,6 +372,8 @@ static sdl3d_registered_actor *lua_actor_arg(lua_State *lua, sdl3d_game_data_run
     return sdl3d_game_data_find_actor(runtime, actor_name);
 }
 
+static bool ensure_runtime_storage(sdl3d_game_data_runtime *runtime, char *error_buffer, int error_buffer_size);
+
 static int lua_get_position(lua_State *lua)
 {
     sdl3d_game_data_runtime *runtime = lua_runtime(lua);
@@ -634,6 +636,98 @@ static int lua_log(lua_State *lua)
     return 0;
 }
 
+static int lua_storage_read(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    const char *path = luaL_checkstring(lua, 1);
+
+    char error[256];
+    if (!ensure_runtime_storage(runtime, error, (int)sizeof(error)))
+    {
+        lua_pushnil(lua);
+        lua_pushstring(lua, error);
+        return 2;
+    }
+
+    sdl3d_storage_buffer buffer;
+    SDL_zero(buffer);
+    if (!sdl3d_storage_read_file(runtime->storage, path, &buffer, error, (int)sizeof(error)))
+    {
+        lua_pushnil(lua);
+        lua_pushstring(lua, error);
+        return 2;
+    }
+
+    lua_pushlstring(lua, (const char *)buffer.data, buffer.size);
+    sdl3d_storage_buffer_free(&buffer);
+    return 1;
+}
+
+static int lua_storage_write(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    const char *path = luaL_checkstring(lua, 1);
+    size_t size = 0u;
+    const char *data = luaL_checklstring(lua, 2, &size);
+
+    char error[256];
+    const bool ok = ensure_runtime_storage(runtime, error, (int)sizeof(error)) &&
+                    sdl3d_storage_write_file(runtime->storage, path, data, size, error, (int)sizeof(error));
+    lua_pushboolean(lua, ok);
+    if (!ok)
+    {
+        lua_pushstring(lua, error);
+        return 2;
+    }
+    return 1;
+}
+
+static int lua_storage_exists(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    const char *path = luaL_checkstring(lua, 1);
+
+    char error[256];
+    const bool ok =
+        ensure_runtime_storage(runtime, error, (int)sizeof(error)) && sdl3d_storage_exists(runtime->storage, path);
+    lua_pushboolean(lua, ok);
+    return 1;
+}
+
+static int lua_storage_mkdir(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    const char *path = luaL_checkstring(lua, 1);
+
+    char error[256];
+    const bool ok = ensure_runtime_storage(runtime, error, (int)sizeof(error)) &&
+                    sdl3d_storage_create_directory(runtime->storage, path, error, (int)sizeof(error));
+    lua_pushboolean(lua, ok);
+    if (!ok)
+    {
+        lua_pushstring(lua, error);
+        return 2;
+    }
+    return 1;
+}
+
+static int lua_storage_delete(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    const char *path = luaL_checkstring(lua, 1);
+
+    char error[256];
+    const bool ok = ensure_runtime_storage(runtime, error, (int)sizeof(error)) &&
+                    sdl3d_storage_delete(runtime->storage, path, error, (int)sizeof(error));
+    lua_pushboolean(lua, ok);
+    if (!ok)
+    {
+        lua_pushstring(lua, error);
+        return 2;
+    }
+    return 1;
+}
+
 static void install_lua_helpers(lua_State *lua)
 {
     static const char *source_parts[] = {
@@ -750,8 +844,16 @@ static void install_lua_helpers(lua_State *lua)
         "        end,\n"
         "        random = function(_) return sdl3d.random() end,\n"
         "        log = function(self_or_message, maybe_message) sdl3d.log(maybe_message or self_or_message) end,\n"
+        "        storage = sdl3d.storage,\n"
         "    }\n"
         "end\n"
+        "sdl3d.storage = {\n"
+        "    read = sdl3d.storage_read,\n"
+        "    write = sdl3d.storage_write,\n"
+        "    exists = sdl3d.storage_exists,\n"
+        "    mkdir = sdl3d.storage_mkdir,\n"
+        "    delete = sdl3d.storage_delete,\n"
+        "}\n"
         "sdl3d.Actor = Actor\n"
         "sdl3d.Vec3 = Vec3\n"
         "sdl3d.api = 'sdl3d.lua.v1'\n"
@@ -819,6 +921,11 @@ static void register_lua_api(sdl3d_game_data_runtime *runtime, sdl3d_script_engi
     SDL3D_LUA_BIND("random", lua_random);
     SDL3D_LUA_BIND("actor_with_tags", lua_actor_with_tags);
     SDL3D_LUA_BIND("log", lua_log);
+    SDL3D_LUA_BIND("storage_read", lua_storage_read);
+    SDL3D_LUA_BIND("storage_write", lua_storage_write);
+    SDL3D_LUA_BIND("storage_exists", lua_storage_exists);
+    SDL3D_LUA_BIND("storage_mkdir", lua_storage_mkdir);
+    SDL3D_LUA_BIND("storage_delete", lua_storage_delete);
 #undef SDL3D_LUA_BIND
     lua_setglobal(lua, "sdl3d");
     install_lua_helpers(lua);
@@ -5106,14 +5213,23 @@ static char *make_safe_audio_filename(const char *path)
     return filename;
 }
 
-static bool ensure_audio_cache_storage(sdl3d_game_data_runtime *runtime)
+static bool ensure_runtime_storage(sdl3d_game_data_runtime *runtime, char *error_buffer, int error_buffer_size)
 {
     if (runtime == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "game data runtime is required");
         return false;
+    }
+    if (runtime->storage != NULL)
+        return true;
 
+    return sdl3d_storage_create(&runtime->storage_config, &runtime->storage, error_buffer, error_buffer_size);
+}
+
+static bool ensure_audio_cache_storage(sdl3d_game_data_runtime *runtime)
+{
     char storage_error[256];
-    if (runtime->storage == NULL &&
-        !sdl3d_storage_create(&runtime->storage_config, &runtime->storage, storage_error, (int)sizeof(storage_error)))
+    if (!ensure_runtime_storage(runtime, storage_error, (int)sizeof(storage_error)))
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio cache storage unavailable: %s", storage_error);
         return false;

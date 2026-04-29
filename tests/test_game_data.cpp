@@ -2840,6 +2840,107 @@ TEST(GameDataRuntime, MaterializesAudioAssetsThroughAuthoredCacheStorage)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, LuaStorageBindingsUseSafeVirtualRoots)
+{
+    const std::filesystem::path dir = unique_test_dir("lua_storage");
+    const std::filesystem::path user_root = dir / "user";
+    const std::filesystem::path cache_root = dir / "cache";
+
+    write_text(dir / "scripts" / "storage.lua",
+               R"lua(local storage = {}
+
+function storage.roundtrip(_, _, ctx)
+    local unsafe_ok = ctx.storage.write("user://../escape.txt", "no")
+    if unsafe_ok then
+        return false
+    end
+
+    local ok = ctx.storage.write("user://settings/options.json", "{\"difficulty\":\"hard\"}")
+    if not ok or not ctx.storage.exists("user://settings/options.json") then
+        return false
+    end
+
+    local data = ctx.storage.read("user://settings/options.json")
+    if data ~= "{\"difficulty\":\"hard\"}" then
+        return false
+    end
+
+    if not ctx.storage.mkdir("cache://script") then
+        return false
+    end
+    if not ctx.storage.write("cache://script/status.txt", "cached") then
+        return false
+    end
+
+    ctx:state_set("loaded_options", data)
+    return true
+end
+
+return storage
+)lua");
+
+    const std::string game_json = std::string(R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Lua Storage", "id": "test.lua_storage", "version": "0.1.0" },
+  "storage": {
+    "organization": "Blue Sentinel Security",
+    "application": "Lua Storage Test",
+    "user_root_override": ")json") +
+                                  user_root.generic_string() + R"json(",
+    "cache_root_override": ")json" +
+                                  cache_root.generic_string() + R"json("
+  },
+  "scripts": [
+    { "id": "script.storage", "path": "scripts/storage.lua", "module": "test.storage" }
+  ],
+  "world": { "name": "world.lua_storage", "kind": "fixed_screen" },
+  "entities": [],
+  "signals": [ "signal.storage.roundtrip" ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.storage.roundtrip",
+        "actions": [
+          { "type": "adapter.invoke", "adapter": "adapter.storage.roundtrip" }
+        ]
+      }
+    ]
+  },
+  "adapters": [
+    {
+      "name": "adapter.storage.roundtrip",
+      "kind": "action",
+      "script": "script.storage",
+      "function": "roundtrip"
+    }
+  ]
+})json";
+    write_text(dir / "lua_storage.game.json", game_json.c_str());
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "lua_storage.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    const int signal_id = sdl3d_game_data_find_signal(runtime, "signal.storage.roundtrip");
+    ASSERT_GE(signal_id, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), signal_id, nullptr);
+
+    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "loaded_options", ""),
+                 "{\"difficulty\":\"hard\"}");
+    EXPECT_TRUE(std::filesystem::exists(user_root / "settings" / "options.json"));
+    EXPECT_TRUE(std::filesystem::exists(cache_root / "script" / "status.txt"));
+    EXPECT_FALSE(std::filesystem::exists(dir / "escape.txt"));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, ValidationReportsWarningsWithoutFailingByDefault)
 {
     DiagnosticCapture capture;
