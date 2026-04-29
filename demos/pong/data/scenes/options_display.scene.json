@@ -1,6 +1,7 @@
 {
   "schema": "sdl3d.scene.v0",
   "name": "scene.options.display",
+  "on_enter_signal": "signal.settings.snapshot_display",
   "updates_game": false,
   "renders_world": false,
   "entities": [],
@@ -27,7 +28,6 @@
       "items": [
         {
           "label": "Display Mode",
-          "signal": "signal.settings.apply",
           "control": {
             "type": "choice",
             "target": "entity.settings",
@@ -41,7 +41,6 @@
         },
         {
           "label": "Vsync",
-          "signal": "signal.settings.apply",
           "control": {
             "type": "toggle",
             "target": "entity.settings",
@@ -50,7 +49,6 @@
         },
         {
           "label": "Renderer",
-          "signal": "signal.settings.apply",
           "control": {
             "type": "choice",
             "target": "entity.settings",
@@ -61,8 +59,10 @@
             ]
           }
         },
+        { "label": "Apply", "signal": "signal.settings.apply", "scene": "scene.options" },
+        { "label": "Cancel", "signal": "signal.settings.cancel_display", "scene": "scene.options" },
         { "label": "Reset Display Defaults", "signal": "signal.settings.reset_display" },
-        { "label": "Back", "scene": "scene.options" }
+        { "label": "Back", "signal": "signal.settings.cancel_display", "scene": "scene.options" }
       ]
     }
   ],
@@ -77,16 +77,6 @@
         "normalized": true,
         "centered": true,
         "color": [242, 248, 255, 255]
-      },
-      {
-        "name": "ui.options.display.note",
-        "font": "font.small",
-        "text": "Display changes apply next launch.",
-        "x": 0.5,
-        "y": 0.82,
-        "normalized": true,
-        "centered": true,
-        "color": [160, 182, 220, 210]
       }
     ],
     "menus": [

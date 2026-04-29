@@ -1,6 +1,7 @@
 {
   "schema": "sdl3d.scene.v0",
   "name": "scene.options",
+  "on_enter_signal": "signal.settings.snapshot_all",
   "updates_game": false,
   "renders_world": false,
   "entities": [],
@@ -31,7 +32,6 @@
         { "label": "Audio", "scene": "scene.options.audio", "return_to": "scene.options" },
         {
           "label": "Gameplay",
-          "signal": "signal.settings.apply",
           "control": {
             "type": "choice",
             "target": "entity.settings",
@@ -45,7 +45,6 @@
         },
         {
           "label": "Lighting",
-          "signal": "signal.settings.apply",
           "control": {
             "type": "choice",
             "target": "entity.settings",
@@ -57,8 +56,10 @@
             ]
           }
         },
+        { "label": "Apply", "signal": "signal.settings.apply", "return_scene": true, "scene": "scene.title" },
+        { "label": "Cancel", "signal": "signal.settings.cancel_all", "return_scene": true, "scene": "scene.title" },
         { "label": "Reset All Defaults", "signal": "signal.settings.reset_all" },
-        { "label": "Back", "return_scene": true, "scene": "scene.title" }
+        { "label": "Back", "signal": "signal.settings.cancel_all", "return_scene": true, "scene": "scene.title" }
       ]
     }
   ],

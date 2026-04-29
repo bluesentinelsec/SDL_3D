@@ -1111,6 +1111,22 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             return validation_error(ctx, json_path, "%s requires a value", type);
         return true;
     }
+    if (SDL_strcmp(type, "property.snapshot") == 0 || SDL_strcmp(type, "property.restore_snapshot") == 0)
+    {
+        if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
+            return false;
+        if (!is_non_empty_string(action, "name"))
+            return validation_error(ctx, json_path, "%s requires a non-empty name", type);
+        yyjson_val *keys = obj_get(action, "keys");
+        if (keys != NULL && !yyjson_is_arr(keys))
+            return validation_error(ctx, json_path, "%s keys must be an array", type);
+        for (size_t i = 0; yyjson_is_arr(keys) && i < yyjson_arr_size(keys); ++i)
+        {
+            if (!yyjson_is_str(yyjson_arr_get(keys, i)))
+                return validation_error(ctx, json_path, "%s keys must be strings", type);
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "property.animate") == 0)
     {
         if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))

@@ -1,6 +1,7 @@
 {
   "schema": "sdl3d.scene.v0",
   "name": "scene.options.keyboard",
+  "on_enter_signal": "signal.settings.snapshot_keyboard",
   "updates_game": false,
   "renders_world": false,
   "entities": [],
@@ -27,7 +28,6 @@
       "items": [
         {
           "label": "Input Style",
-          "signal": "signal.settings.apply",
           "control": {
             "type": "choice",
             "target": "entity.settings",
@@ -40,7 +40,6 @@
         },
         {
           "label": "Preset",
-          "signal": "signal.settings.apply",
           "control": {
             "type": "choice",
             "target": "entity.settings",
@@ -53,7 +52,6 @@
         },
         {
           "label": "Move",
-          "signal": "signal.settings.apply",
           "control": {
             "type": "choice",
             "target": "entity.settings",
@@ -66,7 +64,6 @@
         },
         {
           "label": "Confirm",
-          "signal": "signal.settings.apply",
           "control": {
             "type": "choice",
             "target": "entity.settings",
@@ -78,8 +75,7 @@
           }
         },
         {
-          "label": "Cancel",
-          "signal": "signal.settings.apply",
+          "label": "Cancel Button",
           "control": {
             "type": "choice",
             "target": "entity.settings",
@@ -90,8 +86,10 @@
             ]
           }
         },
+        { "label": "Apply", "signal": "signal.settings.apply", "scene": "scene.options" },
+        { "label": "Cancel Changes", "signal": "signal.settings.cancel_keyboard", "scene": "scene.options" },
         { "label": "Reset Keyboard Defaults", "signal": "signal.settings.reset_keyboard" },
-        { "label": "Back", "scene": "scene.options" }
+        { "label": "Back", "signal": "signal.settings.cancel_keyboard", "scene": "scene.options" }
       ]
     }
   ],

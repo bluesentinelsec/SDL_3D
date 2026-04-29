@@ -176,6 +176,13 @@ typedef struct materialized_audio_file
     char *file_path;
 } materialized_audio_file;
 
+typedef struct property_snapshot
+{
+    char *name;
+    char *target;
+    sdl3d_properties *properties;
+} property_snapshot;
+
 typedef struct scene_activity_state
 {
     const char *scene;
@@ -236,6 +243,9 @@ typedef struct sdl3d_game_data_runtime
     materialized_audio_file *audio_files;
     int audio_file_count;
     int audio_file_capacity;
+    property_snapshot *property_snapshots;
+    int property_snapshot_count;
+    int property_snapshot_capacity;
     sdl3d_storage *storage;
     const char *active_camera;
     scene_activity_state activity;
@@ -5791,6 +5801,108 @@ static bool json_string_array_contains(yyjson_val *array, const char *value)
     return false;
 }
 
+static property_snapshot *find_property_snapshot(sdl3d_game_data_runtime *runtime, const char *name, const char *target)
+{
+    if (runtime == NULL || name == NULL || target == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->property_snapshot_count; ++i)
+    {
+        property_snapshot *snapshot = &runtime->property_snapshots[i];
+        if (snapshot->name != NULL && snapshot->target != NULL && SDL_strcmp(snapshot->name, name) == 0 &&
+            SDL_strcmp(snapshot->target, target) == 0)
+            return snapshot;
+    }
+    return NULL;
+}
+
+static property_snapshot *get_or_create_property_snapshot(sdl3d_game_data_runtime *runtime, const char *name,
+                                                          const char *target)
+{
+    property_snapshot *existing = find_property_snapshot(runtime, name, target);
+    if (existing != NULL)
+        return existing;
+    if (runtime == NULL || name == NULL || name[0] == '\0' || target == NULL || target[0] == '\0')
+        return NULL;
+    if (runtime->property_snapshot_count >= runtime->property_snapshot_capacity)
+    {
+        const int next_capacity = runtime->property_snapshot_capacity > 0 ? runtime->property_snapshot_capacity * 2 : 4;
+        property_snapshot *next = (property_snapshot *)SDL_realloc(
+            runtime->property_snapshots, (size_t)next_capacity * sizeof(*runtime->property_snapshots));
+        if (next == NULL)
+            return NULL;
+        SDL_memset(next + runtime->property_snapshot_capacity, 0,
+                   (size_t)(next_capacity - runtime->property_snapshot_capacity) *
+                       sizeof(*runtime->property_snapshots));
+        runtime->property_snapshots = next;
+        runtime->property_snapshot_capacity = next_capacity;
+    }
+
+    property_snapshot *snapshot = &runtime->property_snapshots[runtime->property_snapshot_count];
+    snapshot->name = SDL_strdup(name);
+    snapshot->target = SDL_strdup(target);
+    snapshot->properties = sdl3d_properties_create();
+    if (snapshot->name == NULL || snapshot->target == NULL || snapshot->properties == NULL)
+    {
+        SDL_free(snapshot->name);
+        SDL_free(snapshot->target);
+        sdl3d_properties_destroy(snapshot->properties);
+        SDL_zero(*snapshot);
+        return NULL;
+    }
+    runtime->property_snapshot_count++;
+    return snapshot;
+}
+
+static void copy_selected_properties(sdl3d_properties *target, const sdl3d_properties *source, yyjson_val *keys)
+{
+    if (target == NULL || source == NULL)
+        return;
+    if (yyjson_is_arr(keys))
+    {
+        for (size_t i = 0; i < yyjson_arr_size(keys); ++i)
+        {
+            const char *key = yyjson_get_str(yyjson_arr_get(keys, i));
+            copy_property_value(target, key, sdl3d_properties_get_value(source, key));
+        }
+        return;
+    }
+
+    const int count = sdl3d_properties_count(source);
+    for (int i = 0; i < count; ++i)
+    {
+        const char *key = NULL;
+        if (sdl3d_properties_get_key_at(source, i, &key, NULL))
+            copy_property_value(target, key, sdl3d_properties_get_value(source, key));
+    }
+}
+
+static bool snapshot_actor_properties(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    const char *target = json_string(action, "target", NULL);
+    const char *name = json_string(action, "name", NULL);
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, target);
+    property_snapshot *snapshot = get_or_create_property_snapshot(runtime, name, target);
+    if (actor == NULL || snapshot == NULL)
+        return false;
+
+    sdl3d_properties_clear(snapshot->properties);
+    copy_selected_properties(snapshot->properties, actor->props, obj_get(action, "keys"));
+    return true;
+}
+
+static bool restore_actor_property_snapshot(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    const char *target = json_string(action, "target", NULL);
+    const char *name = json_string(action, "name", NULL);
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, target);
+    property_snapshot *snapshot = find_property_snapshot(runtime, name, target);
+    if (actor == NULL || snapshot == NULL)
+        return false;
+
+    copy_selected_properties(actor->props, snapshot->properties, obj_get(action, "keys"));
+    return true;
+}
+
 static bool reset_actor_properties_to_authored_defaults(sdl3d_game_data_runtime *runtime, yyjson_val *action)
 {
     const char *target = json_string(action, "target", NULL);
@@ -5866,6 +5978,12 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
         }
         return true;
     }
+
+    if (SDL_strcmp(type, "property.snapshot") == 0)
+        return snapshot_actor_properties(runtime, action);
+
+    if (SDL_strcmp(type, "property.restore_snapshot") == 0)
+        return restore_actor_property_snapshot(runtime, action);
 
     if (SDL_strcmp(type, "property.animate") == 0)
         return start_property_animation_from_json(runtime, action);
@@ -7206,6 +7324,12 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
         SDL_free(runtime->audio_files[i].asset_path);
         SDL_free(runtime->audio_files[i].file_path);
     }
+    for (int i = 0; i < runtime->property_snapshot_count; ++i)
+    {
+        SDL_free(runtime->property_snapshots[i].name);
+        SDL_free(runtime->property_snapshots[i].target);
+        sdl3d_properties_destroy(runtime->property_snapshots[i].properties);
+    }
 
     sdl3d_script_engine_destroy(runtime->scripts);
     sdl3d_properties_destroy(runtime->scene_state);
@@ -7224,6 +7348,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->ui_states);
     SDL_free(runtime->animations);
     SDL_free(runtime->audio_files);
+    SDL_free(runtime->property_snapshots);
     SDL_free(runtime->activity.periodic_elapsed);
     yyjson_doc_free(runtime->doc);
     SDL_free(runtime);

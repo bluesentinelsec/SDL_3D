@@ -815,8 +815,18 @@
     "signal.presentation.flash_border",
     "signal.persistence.load",
     "signal.persistence.save_options",
+    "signal.settings.snapshot_all",
+    "signal.settings.snapshot_display",
+    "signal.settings.snapshot_keyboard",
+    "signal.settings.snapshot_gamepad",
+    "signal.settings.snapshot_audio",
     "signal.settings.apply",
     "signal.settings.apply_audio",
+    "signal.settings.cancel_all",
+    "signal.settings.cancel_display",
+    "signal.settings.cancel_keyboard",
+    "signal.settings.cancel_gamepad",
+    "signal.settings.cancel_audio",
     "signal.settings.reset_all",
     "signal.settings.reset_display",
     "signal.settings.reset_keyboard",
@@ -974,38 +984,95 @@
         ]
       },
       {
+        "signal": "signal.settings.snapshot_all",
+        "actions": [
+          { "type": "property.snapshot", "name": "options.all", "target": "entity.settings", "keys": ["difficulty", "lighting_profile", "display_mode", "vsync", "renderer", "input_style", "keyboard_preset", "keyboard_move", "keyboard_confirm", "keyboard_cancel", "gamepad_icons", "vibration", "sfx_volume", "music_volume", "dialogue_volume", "ambience_volume"] }
+        ]
+      },
+      {
+        "signal": "signal.settings.snapshot_display",
+        "actions": [
+          { "type": "property.snapshot", "name": "options.display", "target": "entity.settings", "keys": ["display_mode", "vsync", "renderer"] }
+        ]
+      },
+      {
+        "signal": "signal.settings.snapshot_keyboard",
+        "actions": [
+          { "type": "property.snapshot", "name": "options.keyboard", "target": "entity.settings", "keys": ["input_style", "keyboard_preset", "keyboard_move", "keyboard_confirm", "keyboard_cancel"] }
+        ]
+      },
+      {
+        "signal": "signal.settings.snapshot_gamepad",
+        "actions": [
+          { "type": "property.snapshot", "name": "options.gamepad", "target": "entity.settings", "keys": ["gamepad_icons", "vibration"] }
+        ]
+      },
+      {
+        "signal": "signal.settings.snapshot_audio",
+        "actions": [
+          { "type": "property.snapshot", "name": "options.audio", "target": "entity.settings", "keys": ["sfx_volume", "music_volume", "dialogue_volume", "ambience_volume"] }
+        ]
+      },
+      {
+        "signal": "signal.settings.cancel_all",
+        "actions": [
+          { "type": "property.restore_snapshot", "name": "options.all", "target": "entity.settings" },
+          { "type": "signal.emit", "signal": "signal.settings.apply_audio" }
+        ]
+      },
+      {
+        "signal": "signal.settings.cancel_display",
+        "actions": [
+          { "type": "property.restore_snapshot", "name": "options.display", "target": "entity.settings" }
+        ]
+      },
+      {
+        "signal": "signal.settings.cancel_keyboard",
+        "actions": [
+          { "type": "property.restore_snapshot", "name": "options.keyboard", "target": "entity.settings" }
+        ]
+      },
+      {
+        "signal": "signal.settings.cancel_gamepad",
+        "actions": [
+          { "type": "property.restore_snapshot", "name": "options.gamepad", "target": "entity.settings" }
+        ]
+      },
+      {
+        "signal": "signal.settings.cancel_audio",
+        "actions": [
+          { "type": "property.restore_snapshot", "name": "options.audio", "target": "entity.settings" },
+          { "type": "signal.emit", "signal": "signal.settings.apply_audio" }
+        ]
+      },
+      {
         "signal": "signal.settings.reset_all",
         "actions": [
-          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["difficulty", "lighting_profile", "display_mode", "vsync", "renderer", "input_style", "keyboard_preset", "keyboard_move", "keyboard_confirm", "keyboard_cancel", "gamepad_icons", "vibration", "sfx_volume", "music_volume", "dialogue_volume", "ambience_volume"] },
-          { "type": "signal.emit", "signal": "signal.settings.apply" }
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["difficulty", "lighting_profile", "display_mode", "vsync", "renderer", "input_style", "keyboard_preset", "keyboard_move", "keyboard_confirm", "keyboard_cancel", "gamepad_icons", "vibration", "sfx_volume", "music_volume", "dialogue_volume", "ambience_volume"] }
         ]
       },
       {
         "signal": "signal.settings.reset_display",
         "actions": [
-          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["display_mode", "vsync", "renderer"] },
-          { "type": "signal.emit", "signal": "signal.settings.apply" }
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["display_mode", "vsync", "renderer"] }
         ]
       },
       {
         "signal": "signal.settings.reset_keyboard",
         "actions": [
-          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["input_style", "keyboard_preset", "keyboard_move", "keyboard_confirm", "keyboard_cancel"] },
-          { "type": "signal.emit", "signal": "signal.settings.apply" }
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["input_style", "keyboard_preset", "keyboard_move", "keyboard_confirm", "keyboard_cancel"] }
         ]
       },
       {
         "signal": "signal.settings.reset_gamepad",
         "actions": [
-          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["gamepad_icons", "vibration"] },
-          { "type": "signal.emit", "signal": "signal.settings.apply" }
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["gamepad_icons", "vibration"] }
         ]
       },
       {
         "signal": "signal.settings.reset_audio",
         "actions": [
-          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["sfx_volume", "music_volume", "dialogue_volume", "ambience_volume"] },
-          { "type": "signal.emit", "signal": "signal.settings.apply" }
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["sfx_volume", "music_volume", "dialogue_volume", "ambience_volume"] }
         ]
       },
       {

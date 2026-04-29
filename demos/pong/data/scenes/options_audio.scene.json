@@ -1,6 +1,7 @@
 {
   "schema": "sdl3d.scene.v0",
   "name": "scene.options.audio",
+  "on_enter_signal": "signal.settings.snapshot_audio",
   "updates_game": false,
   "renders_world": false,
   "entities": [],
@@ -27,7 +28,6 @@
       "items": [
         {
           "label": "Sound Effects",
-          "signal": "signal.settings.apply",
           "control": {
             "type": "range",
             "target": "entity.settings",
@@ -39,7 +39,6 @@
         },
         {
           "label": "Music",
-          "signal": "signal.settings.apply",
           "control": {
             "type": "range",
             "target": "entity.settings",
@@ -51,7 +50,6 @@
         },
         {
           "label": "Dialogue",
-          "signal": "signal.settings.apply",
           "control": {
             "type": "range",
             "target": "entity.settings",
@@ -63,7 +61,6 @@
         },
         {
           "label": "Ambience",
-          "signal": "signal.settings.apply",
           "control": {
             "type": "range",
             "target": "entity.settings",
@@ -73,8 +70,10 @@
             "step": 0.1
           }
         },
+        { "label": "Apply", "signal": "signal.settings.apply", "scene": "scene.options" },
+        { "label": "Cancel", "signal": "signal.settings.cancel_audio", "scene": "scene.options" },
         { "label": "Reset Audio Defaults", "signal": "signal.settings.reset_audio" },
-        { "label": "Back", "scene": "scene.options" }
+        { "label": "Back", "signal": "signal.settings.cancel_audio", "scene": "scene.options" }
       ]
     }
   ],

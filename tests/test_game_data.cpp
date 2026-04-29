@@ -1298,7 +1298,7 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
     ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options");
-    EXPECT_EQ(menu.item_count, 8);
+    EXPECT_EQ(menu.item_count, 10);
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Display");
     EXPECT_STREQ(item.scene, "scene.options.display");
@@ -1306,7 +1306,7 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
     ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options.display");
-    EXPECT_EQ(menu.item_count, 5);
+    EXPECT_EQ(menu.item_count, 7);
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Display Mode");
     EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_CHOICE);
@@ -1318,7 +1318,7 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "fullscreen_borderless");
     ASSERT_TRUE(sdl3d_game_data_apply_menu_item_control(runtime, &item));
     EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 4, &item));
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 6, &item));
     EXPECT_STREQ(item.scene, "scene.options");
 
     bool saw_options_value = false;
@@ -1675,7 +1675,7 @@ TEST(GameDataRuntime, OptionsMenuCanReturnToAuthoredScene)
     sdl3d_properties_set_bool(scene_state, "return_paused", true);
 
     sdl3d_game_data_menu_item item{};
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options", 7, &item));
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options", 9, &item));
     EXPECT_TRUE(item.return_scene);
     EXPECT_STREQ(item.scene, "scene.title");
 
@@ -1691,7 +1691,7 @@ TEST(GameDataRuntime, OptionsMenuCanReturnToAuthoredScene)
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 1);
     ASSERT_TRUE(sdl3d_game_data_update_menus_for_metrics(runtime, input, &armed, &metrics, &result));
-    EXPECT_EQ(result.selected_index, 7);
+    EXPECT_EQ(result.selected_index, 9);
 
     key.type = SDL_EVENT_KEY_UP;
     sdl3d_input_process_event(input, &key);
@@ -1712,7 +1712,7 @@ TEST(GameDataRuntime, OptionsMenuCanReturnToAuthoredScene)
     sdl3d_game_session_destroy(session);
 }
 
-TEST(GameDataRuntime, OptionControlsCanEmitAuthoredSignals)
+TEST(GameDataRuntime, OptionControlsStageValuesUntilApply)
 {
     sdl3d_game_session *session = nullptr;
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
@@ -1723,9 +1723,7 @@ TEST(GameDataRuntime, OptionControlsCanEmitAuthoredSignals)
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
 
     const int menu_select_signal = sdl3d_game_data_find_signal(runtime, "signal.ui.menu.select");
-    const int apply_settings_signal = sdl3d_game_data_find_signal(runtime, "signal.settings.apply");
     ASSERT_GE(menu_select_signal, 0);
-    ASSERT_GE(apply_settings_signal, 0);
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
@@ -1742,7 +1740,7 @@ TEST(GameDataRuntime, OptionControlsCanEmitAuthoredSignals)
     EXPECT_TRUE(result.selected);
     EXPECT_TRUE(result.control_changed);
     EXPECT_EQ(result.select_signal_id, menu_select_signal);
-    EXPECT_EQ(result.signal_id, apply_settings_signal);
+    EXPECT_EQ(result.signal_id, -1);
     EXPECT_EQ(result.scene, nullptr);
 
     sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
@@ -1777,6 +1775,35 @@ TEST(GameDataRuntime, AuthoredSettingsResetRestoresSelectedDefaults)
     EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vsync", false));
     EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "renderer", ""), "software");
     EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "difficulty", ""), "hard");
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, AuthoredSettingsCancelRestoresSceneEntrySnapshot)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+
+    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    ASSERT_NE(settings, nullptr);
+    sdl3d_properties_set_string(settings->props, "display_mode", "windowed");
+    sdl3d_properties_set_bool(settings->props, "vsync", true);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
+    sdl3d_properties_set_string(settings->props, "display_mode", "fullscreen_exclusive");
+    sdl3d_properties_set_bool(settings->props, "vsync", false);
+
+    const int cancel_display = sdl3d_game_data_find_signal(runtime, "signal.settings.cancel_display");
+    ASSERT_GE(cancel_display, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), cancel_display, nullptr);
+
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
+    EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vsync", false));
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);

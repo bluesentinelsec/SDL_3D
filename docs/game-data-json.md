@@ -281,7 +281,27 @@ Menu items can also author generic settings controls and emit data-authored sign
 
 Supported control types are `toggle`, `choice`, and `range`. The generic menu
 controller applies these controls directly to actor properties and the menu UI
-presenter displays the current value.
+presenter displays the current value. Settings menus that need Apply/Cancel
+behavior can snapshot the edited properties when a scene opens, let controls
+stage values in those actor properties, then either persist the staged values or
+restore the snapshot:
+
+```json
+{
+  "type": "property.snapshot",
+  "name": "options.display",
+  "target": "entity.settings",
+  "keys": ["display_mode", "vsync", "renderer"]
+}
+```
+
+```json
+{
+  "type": "property.restore_snapshot",
+  "name": "options.display",
+  "target": "entity.settings"
+}
+```
 
 Settings screens can reset authored defaults without game-specific code:
 
@@ -520,6 +540,8 @@ Generic action types should cover common wiring:
 - `property.set`
 - `property.add`
 - `property.toggle`
+- `property.snapshot`
+- `property.restore_snapshot`
 - `entity.set_active` with `target` and boolean `active`, used to include or exclude an entity from generic updates and rendering
 - `transform.set_position`
 - `motion.set_velocity`
