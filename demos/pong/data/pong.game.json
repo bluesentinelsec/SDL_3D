@@ -16,7 +16,6 @@
     "logical_width": 1280,
     "logical_height": 720,
     "backend": "software",
-    "settings_path": "user://settings/options.json",
     "window": {
       "display_mode": "fullscreen_borderless",
       "development_display_mode": "windowed",
@@ -750,7 +749,8 @@
         "music_volume": { "type": "float", "value": 1.0 },
         "dialogue_volume": { "type": "float", "value": 1.0 },
         "ambience_volume": { "type": "float", "value": 1.0 },
-        "persistence_enabled": { "type": "bool", "value": false }
+        "options_persistence_enabled": { "type": "bool", "value": false },
+        "score_persistence_enabled": { "type": "bool", "value": true }
       }
     },
     {

@@ -3102,7 +3102,7 @@ return storage
     remove_test_dir(dir);
 }
 
-TEST(GameDataRuntime, PongPersistenceLoadsOptionsAndHighScoresFromUserStorage)
+TEST(GameDataRuntime, PongPersistenceSkipsOptionsAndLoadsHighScoresFromUserStorage)
 {
     const std::filesystem::path dir = unique_test_dir("pong_persistence");
     const std::filesystem::path user_root = dir / "user";
@@ -3127,14 +3127,15 @@ TEST(GameDataRuntime, PongPersistenceLoadsOptionsAndHighScoresFromUserStorage)
 
         sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
         ASSERT_NE(settings, nullptr);
-        EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "persistence_enabled", true));
+        EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "options_persistence_enabled", true));
+        EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "score_persistence_enabled", false));
 
         sdl3d_properties_set_string(settings->props, "difficulty", "hard");
         emit(session, runtime, "signal.persistence.save_options");
         EXPECT_FALSE(std::filesystem::exists(user_root / "settings" / "options.json"));
 
         emit(session, runtime, "signal.persistence.load");
-        EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "persistence_enabled", false));
+        EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "options_persistence_enabled", true));
 
         sdl3d_properties_set_string(settings->props, "difficulty", "hard");
         sdl3d_properties_set_string(settings->props, "lighting_profile", "arcade");
@@ -3160,8 +3161,11 @@ TEST(GameDataRuntime, PongPersistenceLoadsOptionsAndHighScoresFromUserStorage)
         sdl3d_game_session_destroy(session);
     }
 
-    EXPECT_TRUE(std::filesystem::exists(user_root / "settings" / "options.json"));
+    EXPECT_FALSE(std::filesystem::exists(user_root / "settings" / "options.json"));
     EXPECT_TRUE(std::filesystem::exists(user_root / "scores" / "pong_scores.json"));
+    write_text(
+        user_root / "settings" / "options.json",
+        R"json({"schema":"sdl3d.pong.options.v1","difficulty":"hard","lighting_profile":"arcade","display_mode":"windowed","vsync":false,"renderer":"opengl","input_style":"gamepad","keyboard_preset":"classic_pc","gamepad_icons":"playstation","vibration":false,"sfx_volume":0.4,"music_volume":0.7})json");
 
     sdl3d_game_config persisted_config{};
     char title[128]{};
@@ -3170,8 +3174,8 @@ TEST(GameDataRuntime, PongPersistenceLoadsOptionsAndHighScoresFromUserStorage)
                                                      sizeof(title), app_error, sizeof(app_error)))
         << app_error;
     EXPECT_EQ(persisted_config.display_mode, SDL3D_WINDOW_MODE_WINDOWED);
-    EXPECT_EQ(persisted_config.backend, SDL3D_BACKEND_OPENGL);
-    EXPECT_LT(persisted_config.vsync, 0);
+    EXPECT_EQ(persisted_config.backend, SDL3D_BACKEND_SOFTWARE);
+    EXPECT_GT(persisted_config.vsync, 0);
 
     {
         sdl3d_game_session *session = nullptr;
@@ -3186,17 +3190,17 @@ TEST(GameDataRuntime, PongPersistenceLoadsOptionsAndHighScoresFromUserStorage)
 
         sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
         ASSERT_NE(settings, nullptr);
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "difficulty", ""), "hard");
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "lighting_profile", ""), "arcade");
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
-        EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "vsync", true));
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "renderer", ""), "opengl");
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "input_style", ""), "gamepad");
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "keyboard_preset", ""), "classic_pc");
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "gamepad_icons", ""), "playstation");
-        EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "vibration", true));
-        EXPECT_NEAR(sdl3d_properties_get_float(settings->props, "sfx_volume", 0.0f), 0.4f, 0.0001f);
-        EXPECT_NEAR(sdl3d_properties_get_float(settings->props, "music_volume", 0.0f), 0.7f, 0.0001f);
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "difficulty", ""), "normal");
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "lighting_profile", ""), "cinematic");
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "fullscreen_borderless");
+        EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vsync", false));
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "renderer", ""), "software");
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "input_style", ""), "keyboard");
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "keyboard_preset", ""), "xbox_parity");
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "gamepad_icons", ""), "xbox");
+        EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vibration", false));
+        EXPECT_NEAR(sdl3d_properties_get_float(settings->props, "sfx_volume", 0.0f), 1.0f, 0.0001f);
+        EXPECT_NEAR(sdl3d_properties_get_float(settings->props, "music_volume", 0.0f), 1.0f, 0.0001f);
 
         sdl3d_registered_actor *scores = sdl3d_game_data_find_actor(runtime, "entity.high_scores");
         ASSERT_NE(scores, nullptr);

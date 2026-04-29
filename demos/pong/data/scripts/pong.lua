@@ -239,23 +239,29 @@ local function save_scores(ctx, scores)
     return write_json(ctx, scores_path, current_scores(scores))
 end
 
-local function persistence_enabled(ctx)
+local function options_persistence_enabled(ctx)
     local settings = settings_actor(ctx)
-    return settings ~= nil and settings:get_bool("persistence_enabled", false)
+    return settings ~= nil and settings:get_bool("options_persistence_enabled", false)
+end
+
+local function score_persistence_enabled(ctx)
+    local settings = settings_actor(ctx)
+    return settings ~= nil and settings:get_bool("score_persistence_enabled", false)
 end
 
 function pong.load_persistence(_, _, ctx)
     local settings = settings_actor(ctx)
-    if settings ~= nil then
-        settings:set_bool("persistence_enabled", true)
+    if options_persistence_enabled(ctx) then
+        apply_options(settings, read_json(ctx, options_path))
     end
-    apply_options(settings, read_json(ctx, options_path))
-    apply_scores(scores_actor(ctx), read_json(ctx, scores_path))
+    if score_persistence_enabled(ctx) then
+        apply_scores(scores_actor(ctx), read_json(ctx, scores_path))
+    end
     return true
 end
 
 function pong.save_options(_, _, ctx)
-    if not persistence_enabled(ctx) then
+    if not options_persistence_enabled(ctx) then
         return true
     end
     local settings = settings_actor(ctx)
@@ -266,7 +272,7 @@ function pong.save_options(_, _, ctx)
 end
 
 function pong.record_player_win(_, _, ctx)
-    if not persistence_enabled(ctx) then
+    if not score_persistence_enabled(ctx) then
         return true
     end
     local scores = scores_actor(ctx)
@@ -280,7 +286,7 @@ function pong.record_player_win(_, _, ctx)
 end
 
 function pong.record_cpu_win(_, _, ctx)
-    if not persistence_enabled(ctx) then
+    if not score_persistence_enabled(ctx) then
         return true
     end
     local scores = scores_actor(ctx)

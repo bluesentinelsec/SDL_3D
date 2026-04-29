@@ -6993,7 +6993,7 @@ static bool apply_app_config_from_root(yyjson_val *root, sdl3d_game_config *out_
 static void apply_persisted_app_settings(yyjson_val *root, sdl3d_game_config *out_config)
 {
     yyjson_val *app = obj_get(root, "app");
-    const char *settings_path = json_string(app, "settings_path", "user://settings/options.json");
+    const char *settings_path = json_string(app, "settings_path", NULL);
     if (settings_path == NULL || settings_path[0] == '\0')
         return;
 
