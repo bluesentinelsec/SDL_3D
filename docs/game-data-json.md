@@ -22,6 +22,7 @@ Every file is a JSON object with these fields:
 | `schema` | yes | Schema id. First value: `sdl3d.game.v0`. |
 | `metadata` | yes | Human-readable identity and versioning. |
 | `storage` | no | Writable storage identity used to resolve `user://` and `cache://` roots. |
+| `persistence` | no | Reusable actor-property persistence entries for settings, saves, and profiles. |
 | `app` | no | Managed-loop startup config such as title, logical resolution, window mode, backend, tick rate, and tick cap. |
 | `profiles` | no | Genre/profile hints and required modules. |
 | `assets` | no | Stable asset ids mapped to paths or future archive refs. |
@@ -69,6 +70,54 @@ become part of the writable save/settings/cache paths on every platform.
 `profile` is optional and scopes roots below `profiles/<profile>`. Test tools
 may also author `user_root_override` and `cache_root_override`, but shipped
 games should normally let SDL3D choose platform-idiomatic locations.
+
+## Persistence
+
+The optional `persistence` block declares reusable save files for actor
+properties. Each entry owns one storage path and an allowlist of properties from
+one actor. Logic can load or save the entry without game-specific Lua:
+
+```json
+{
+  "persistence": {
+    "entries": [
+      {
+        "name": "persistence.options",
+        "path": "user://settings/options.json",
+        "schema": "sdl3d.options.v1",
+        "version": 1,
+        "target": "entity.settings",
+        "enabled_if": {
+          "type": "property.bool",
+          "target": "entity.settings",
+          "key": "options_persistence_enabled",
+          "equals": true
+        },
+        "properties": [
+          "display_mode",
+          "vsync",
+          "renderer",
+          "sfx_volume",
+          "music_volume"
+        ]
+      }
+    ]
+  }
+}
+```
+
+The generated JSON stores `schema` and `version` when authored, then writes the
+allowlisted properties at the top level. Load ignores missing files and
+incompatible schema/version files, which lets games reset defaults or migrate
+old data explicitly. `enabled_if` uses the same condition language as UI and
+logic, so games can disable persistence during development or per profile.
+
+Persistence actions are regular logic actions:
+
+```json
+{ "type": "persistence.load", "entry": "persistence.options" }
+{ "type": "persistence.save", "entry": "persistence.options" }
+```
 
 ## World
 

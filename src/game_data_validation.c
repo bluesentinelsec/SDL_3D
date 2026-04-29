@@ -60,6 +60,7 @@ typedef struct validation_names
     name_table music;
     name_table scenes;
     name_table sensors;
+    name_table persistence;
     name_table used_adapters;
     name_table used_scripts;
     script_manifest *script_manifests;
@@ -69,6 +70,11 @@ typedef struct validation_names
 static bool validate_data_condition(validation_context *ctx, yyjson_val *condition, const char *path,
                                     validation_names *names);
 static bool validate_storage(validation_context *ctx, yyjson_val *root);
+static bool require_unique_name(validation_context *ctx, name_table *table, const char *kind, const char *name,
+                                const char *json_path);
+static bool require_ref(validation_context *ctx, const name_table *table, const char *kind, const char *name,
+                        const char *json_path);
+static void format_path(char *buffer, size_t buffer_size, const char *format, ...);
 
 static yyjson_val *obj_get(yyjson_val *object, const char *key)
 {
@@ -94,6 +100,11 @@ static bool is_storage_path_segment(const char *value)
     if (SDL_strcmp(value, ".") == 0 || SDL_strcmp(value, "..") == 0)
         return false;
     return SDL_strchr(value, '/') == NULL && SDL_strchr(value, '\\') == NULL && SDL_strchr(value, ':') == NULL;
+}
+
+static bool is_virtual_storage_path(const char *value)
+{
+    return value != NULL && (SDL_strncmp(value, "user://", 7) == 0 || SDL_strncmp(value, "cache://", 8) == 0);
 }
 
 static void set_first_error(validation_context *ctx, const char *json_path, const char *message)
@@ -179,6 +190,76 @@ static bool validate_storage(validation_context *ctx, yyjson_val *root)
            validate_storage_string(ctx, storage, "profile", "$.storage.profile", true) &&
            validate_storage_string(ctx, storage, "user_root_override", "$.storage.user_root_override", false) &&
            validate_storage_string(ctx, storage, "cache_root_override", "$.storage.cache_root_override", false);
+}
+
+static bool validate_persistence_properties(validation_context *ctx, yyjson_val *properties, const char *json_path)
+{
+    if (!yyjson_is_arr(properties) || yyjson_arr_size(properties) == 0)
+        return validation_error(ctx, json_path, "persistence properties must be a non-empty array");
+
+    for (size_t i = 0; i < yyjson_arr_size(properties); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "%s[%zu]", json_path, i);
+        yyjson_val *property = yyjson_arr_get(properties, i);
+        if (yyjson_is_str(property) && yyjson_get_str(property)[0] != '\0')
+            continue;
+        if (yyjson_is_obj(property) && is_non_empty_string(property, "key"))
+            continue;
+        return validation_error(ctx, path, "persistence property must be a non-empty string or object with key");
+    }
+    return true;
+}
+
+static bool validate_persistence(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *persistence = obj_get(root, "persistence");
+    if (persistence == NULL)
+        return true;
+    if (!yyjson_is_obj(persistence))
+        return validation_error(ctx, "$.persistence", "persistence must be an object");
+
+    yyjson_val *entries = obj_get(persistence, "entries");
+    if (entries == NULL)
+        return true;
+    if (!yyjson_is_arr(entries))
+        return validation_error(ctx, "$.persistence.entries", "persistence.entries must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(entries); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.persistence.entries[%zu]", i);
+        yyjson_val *entry = yyjson_arr_get(entries, i);
+        if (!yyjson_is_obj(entry))
+            return validation_error(ctx, path, "persistence entry must be an object");
+        if (!require_unique_name(ctx, &names->persistence, "persistence entry", json_string(entry, "name"), path))
+            return false;
+
+        char field_path[PATH_BUFFER_SIZE];
+        format_path(field_path, sizeof(field_path), "%s.path", path);
+        const char *storage_path = json_string(entry, "path");
+        if (storage_path == NULL || storage_path[0] == '\0' || !is_virtual_storage_path(storage_path))
+            return validation_error(ctx, field_path, "persistence path must use user:// or cache://");
+        if (!require_ref(ctx, &names->entities, "entity", json_string(entry, "target"), path))
+            return false;
+        format_path(field_path, sizeof(field_path), "%s.properties", path);
+        if (!validate_persistence_properties(ctx, obj_get(entry, "properties"), field_path))
+            return false;
+        yyjson_val *schema = obj_get(entry, "schema");
+        if (schema != NULL && (!yyjson_is_str(schema) || yyjson_get_str(schema)[0] == '\0'))
+            return validation_error(ctx, path, "persistence schema must be a non-empty string");
+        yyjson_val *version = obj_get(entry, "version");
+        if (version != NULL && !yyjson_is_int(version))
+            return validation_error(ctx, path, "persistence version must be an integer");
+        yyjson_val *condition = obj_get(entry, "enabled_if");
+        if (condition != NULL)
+        {
+            format_path(field_path, sizeof(field_path), "%s.enabled_if", path);
+            if (!validate_data_condition(ctx, condition, field_path, names))
+                return false;
+        }
+    }
+    return true;
 }
 
 static void format_path(char *buffer, size_t buffer_size, const char *format, ...)
@@ -1170,6 +1251,13 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
     }
     if (SDL_strncmp(type, "audio.", 6) == 0)
         return validate_audio_action(ctx, action, json_path, names, type);
+    if (SDL_strcmp(type, "persistence.load") == 0 || SDL_strcmp(type, "persistence.save") == 0)
+    {
+        const char *entry = json_string(action, "entry");
+        if (entry == NULL)
+            entry = json_string(action, "name");
+        return require_ref(ctx, &names->persistence, "persistence entry", entry, json_path);
+    }
     if (SDL_strcmp(type, "entity.set_active") == 0)
     {
         if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
@@ -2512,7 +2600,8 @@ static bool warn_unused(validation_context *ctx, const name_table *declared, con
 
 static bool validate_details(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
-    return validate_storage(ctx, root) && validate_input_bindings(ctx, root) && validate_components(ctx, root, names) &&
+    return validate_storage(ctx, root) && validate_persistence(ctx, root, names) &&
+           validate_input_bindings(ctx, root) && validate_components(ctx, root, names) &&
            validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases") &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
            validate_app_refs(ctx, root, names) && validate_cameras(ctx, root, names) && validate_ui(ctx, root, names) &&
@@ -2544,6 +2633,7 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->music);
     name_table_destroy(&names->scenes);
     name_table_destroy(&names->sensors);
+    name_table_destroy(&names->persistence);
     name_table_destroy(&names->used_adapters);
     name_table_destroy(&names->used_scripts);
 }

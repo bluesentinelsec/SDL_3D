@@ -11,6 +11,32 @@
     "application": "SDL3D Pong",
     "profile": "default"
   },
+  "persistence": {
+    "entries": [
+      {
+        "name": "persistence.options",
+        "path": "user://settings/options.json",
+        "schema": "sdl3d.options.v1",
+        "version": 1,
+        "target": "entity.settings",
+        "enabled_if": {
+          "type": "property.bool",
+          "target": "entity.settings",
+          "key": "options_persistence_enabled",
+          "equals": true
+        },
+        "properties": [
+          "display_mode",
+          "vsync",
+          "renderer",
+          "gamepad_icons",
+          "vibration",
+          "sfx_volume",
+          "music_volume"
+        ]
+      }
+    ]
+  },
   "app": {
     "title": "SDL3D Pong",
     "logical_width": 1280,
@@ -1128,6 +1154,7 @@
       {
         "signal": "signal.persistence.load",
         "actions": [
+          { "type": "persistence.load", "entry": "persistence.options" },
           { "type": "adapter.invoke", "adapter": "adapter.pong.load_persistence" },
           { "type": "signal.emit", "signal": "signal.settings.apply_audio" }
         ]
@@ -1135,7 +1162,7 @@
       {
         "signal": "signal.persistence.save_options",
         "actions": [
-          { "type": "adapter.invoke", "adapter": "adapter.pong.save_options" }
+          { "type": "persistence.save", "entry": "persistence.options" }
         ]
       },
       {
@@ -1155,7 +1182,8 @@
       {
         "signal": "signal.settings.reset_display",
         "actions": [
-          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["display_mode", "vsync", "renderer"] }
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["display_mode", "vsync", "renderer"] },
+          { "type": "signal.emit", "signal": "signal.persistence.save_options" }
         ]
       },
       {
@@ -1168,14 +1196,16 @@
         "signal": "signal.settings.reset_gamepad",
         "actions": [
           { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["gamepad_icons", "vibration"] },
-          { "type": "input.reset_bindings", "menu": "menu.options.gamepad" }
+          { "type": "input.reset_bindings", "menu": "menu.options.gamepad" },
+          { "type": "signal.emit", "signal": "signal.persistence.save_options" }
         ]
       },
       {
         "signal": "signal.settings.reset_audio",
         "actions": [
           { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["sfx_volume", "music_volume"] },
-          { "type": "signal.emit", "signal": "signal.settings.apply_audio" }
+          { "type": "signal.emit", "signal": "signal.settings.apply_audio" },
+          { "type": "signal.emit", "signal": "signal.persistence.save_options" }
         ]
       },
       {
@@ -1385,14 +1415,7 @@
       "kind": "action",
       "script": "script.pong",
       "function": "load_persistence",
-      "description": "Load persisted Pong options and score records from user storage."
-    },
-    {
-      "name": "adapter.pong.save_options",
-      "kind": "action",
-      "script": "script.pong",
-      "function": "save_options",
-      "description": "Persist current Pong options to user storage."
+      "description": "Load persisted Pong score records from user storage."
     },
     {
       "name": "adapter.pong.record_player_win",

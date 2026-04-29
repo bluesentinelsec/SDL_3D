@@ -231,6 +231,42 @@ TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
     EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(required_object(options, "bindings"), "gamepad")));
 }
 
+TEST(GameDataJson, PongOptionsUseGenericPersistenceEntry)
+{
+    JsonDoc doc(kPongDataPath);
+    ASSERT_NE(doc.root(), nullptr) << doc.error();
+
+    yyjson_val *persistence = required_object(doc.root(), "persistence");
+    yyjson_val *entries = required_array(persistence, "entries");
+    ASSERT_EQ(yyjson_arr_size(entries), 1u);
+
+    yyjson_val *options = yyjson_arr_get(entries, 0);
+    EXPECT_EQ(required_string(options, "name"), "persistence.options");
+    EXPECT_EQ(required_string(options, "path"), "user://settings/options.json");
+    EXPECT_EQ(required_string(options, "target"), "entity.settings");
+    EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(options, "properties")));
+
+    yyjson_val *logic = required_object(doc.root(), "logic");
+    yyjson_val *bindings = required_array(logic, "bindings");
+    bool saw_generic_save = false;
+    bool saw_legacy_options_adapter = false;
+    for (size_t i = 0; i < yyjson_arr_size(bindings); ++i)
+    {
+        yyjson_val *actions = yyjson_obj_get(yyjson_arr_get(bindings, i), "actions");
+        for (size_t j = 0; yyjson_is_arr(actions) && j < yyjson_arr_size(actions); ++j)
+        {
+            yyjson_val *action = yyjson_arr_get(actions, j);
+            const std::string type = required_string(action, "type");
+            if (type == "persistence.save" && required_string(action, "entry") == "persistence.options")
+                saw_generic_save = true;
+            if (type == "adapter.invoke" && required_string(action, "adapter") == "adapter.pong.save_options")
+                saw_legacy_options_adapter = true;
+        }
+    }
+    EXPECT_TRUE(saw_generic_save);
+    EXPECT_FALSE(saw_legacy_options_adapter);
+}
+
 TEST(GameDataJson, PongDataUsesNonSectorFixedScreenWorld)
 {
     JsonDoc doc(kPongDataPath);

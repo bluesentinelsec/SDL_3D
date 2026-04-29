@@ -1,6 +1,5 @@
 local pong = {}
 
-local options_path = "user://settings/options.json"
 local scores_path = "user://scores/pong_scores.json"
 
 local function random_signed_angle(ctx, min_angle, max_angle)
@@ -132,48 +131,6 @@ local function write_json(ctx, path, value)
     return ctx.storage.write(path, text)
 end
 
-local function apply_options(settings, options)
-    if settings == nil or type(options) ~= "table" then
-        return
-    end
-    if type(options.display_mode) == "string" then
-        settings:set_string("display_mode", options.display_mode)
-    elseif type(options.fullscreen) == "boolean" then
-        settings:set_string("display_mode", options.fullscreen and "fullscreen_borderless" or "windowed")
-    end
-    if type(options.vsync) == "boolean" then
-        settings:set_bool("vsync", options.vsync)
-    end
-    if type(options.renderer) == "string" then
-        settings:set_string("renderer", options.renderer)
-    end
-    if type(options.gamepad_icons) == "string" then
-        settings:set_string("gamepad_icons", options.gamepad_icons)
-    end
-    if type(options.vibration) == "boolean" then
-        settings:set_bool("vibration", options.vibration)
-    end
-    if type(options.sfx_volume) == "number" then
-        settings:set_int("sfx_volume", math.floor(math.clamp(options.sfx_volume, 0, 10) + 0.5))
-    end
-    if type(options.music_volume) == "number" then
-        settings:set_int("music_volume", math.floor(math.clamp(options.music_volume, 0, 10) + 0.5))
-    end
-end
-
-local function current_options(settings)
-    return {
-        schema = "sdl3d.pong.options.v1",
-        display_mode = settings:get_string("display_mode", "fullscreen_borderless"),
-        vsync = settings:get_bool("vsync", true),
-        renderer = settings:get_string("renderer", "software"),
-        gamepad_icons = settings:get_string("gamepad_icons", "xbox"),
-        vibration = settings:get_bool("vibration", true),
-        sfx_volume = settings:get_int("sfx_volume", 8),
-        music_volume = settings:get_int("music_volume", 7),
-    }
-end
-
 local function apply_scores(scores, data)
     if scores == nil or type(data) ~= "table" then
         return
@@ -203,36 +160,16 @@ local function save_scores(ctx, scores)
     return write_json(ctx, scores_path, current_scores(scores))
 end
 
-local function options_persistence_enabled(ctx)
-    local settings = settings_actor(ctx)
-    return settings ~= nil and settings:get_bool("options_persistence_enabled", false)
-end
-
 local function score_persistence_enabled(ctx)
     local settings = settings_actor(ctx)
     return settings ~= nil and settings:get_bool("score_persistence_enabled", false)
 end
 
 function pong.load_persistence(_, _, ctx)
-    local settings = settings_actor(ctx)
-    if options_persistence_enabled(ctx) then
-        apply_options(settings, read_json(ctx, options_path))
-    end
     if score_persistence_enabled(ctx) then
         apply_scores(scores_actor(ctx), read_json(ctx, scores_path))
     end
     return true
-end
-
-function pong.save_options(_, _, ctx)
-    if not options_persistence_enabled(ctx) then
-        return true
-    end
-    local settings = settings_actor(ctx)
-    if settings == nil then
-        return false
-    end
-    return write_json(ctx, options_path, current_options(settings))
 end
 
 function pong.record_player_win(_, _, ctx)
