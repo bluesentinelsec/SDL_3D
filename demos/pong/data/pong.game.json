@@ -634,14 +634,16 @@
         "radius": { "type": "float", "value": 0.22 },
         "velocity": { "type": "vec2", "value": [0.0, 0.0] },
         "base_speed": { "type": "float", "value": 5.6 },
-        "min_serve_angle": { "type": "float", "value": 0.20 },
+        "min_serve_angle": { "type": "float", "value": 0.22 },
         "speedup_per_hit": { "type": "float", "value": 0.28 },
         "max_speed": { "type": "float", "value": 10.0 },
-        "max_serve_angle": { "type": "float", "value": 0.52 },
+        "max_serve_angle": { "type": "float", "value": 0.82 },
         "max_reflect_angle": { "type": "float", "value": 1.05 },
         "stagnant_reflect_epsilon": { "type": "float", "value": 0.08 },
         "stagnant_reflect_limit": { "type": "int", "value": 2 },
         "reflect_jitter_angle": { "type": "float", "value": 0.28 },
+        "reflect_random_min_angle": { "type": "float", "value": 0.10 },
+        "reflect_random_angle": { "type": "float", "value": 0.34 },
         "active_motion": { "type": "bool", "value": false }
       },
       "components": [
