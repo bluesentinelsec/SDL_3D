@@ -1,5 +1,8 @@
 local pong = {}
 
+local options_path = "user://settings/options.json"
+local scores_path = "user://scores/pong_scores.json"
+
 local function random_signed_angle(ctx, min_angle, max_angle)
     if max_angle <= 0.0 then
         return 0.0
@@ -103,6 +106,141 @@ function pong.cpu_track_ball(paddle, payload, ctx)
     local next_y = math.clamp(paddle_position.y + step, -field_half_height + half_height, field_half_height - half_height)
     paddle.position = Vec3(paddle_position.x, next_y, paddle_position.z)
     return true
+end
+
+local function settings_actor(ctx)
+    return ctx:actor("entity.settings")
+end
+
+local function scores_actor(ctx)
+    return ctx:actor("entity.high_scores")
+end
+
+local function read_json(ctx, path)
+    local text = ctx.storage.read(path)
+    if text == nil or text == "" then
+        return nil
+    end
+    return sdl3d.json.decode(text)
+end
+
+local function write_json(ctx, path, value)
+    local text = sdl3d.json.encode(value)
+    if text == nil then
+        return false
+    end
+    return ctx.storage.write(path, text)
+end
+
+local function apply_options(settings, options)
+    if settings == nil or type(options) ~= "table" then
+        return
+    end
+    if type(options.difficulty) == "string" then
+        settings:set_string("difficulty", options.difficulty)
+    end
+    if type(options.lighting_profile) == "string" then
+        settings:set_string("lighting_profile", options.lighting_profile)
+    end
+    if type(options.input_style) == "string" then
+        settings:set_string("input_style", options.input_style)
+    end
+    if type(options.fullscreen) == "boolean" then
+        settings:set_bool("fullscreen", options.fullscreen)
+    end
+end
+
+local function current_options(settings)
+    return {
+        schema = "sdl3d.pong.options.v1",
+        difficulty = settings:get_string("difficulty", "normal"),
+        lighting_profile = settings:get_string("lighting_profile", "cinematic"),
+        input_style = settings:get_string("input_style", "keyboard"),
+        fullscreen = settings:get_bool("fullscreen", false),
+    }
+end
+
+local function apply_scores(scores, data)
+    if scores == nil or type(data) ~= "table" then
+        return
+    end
+    scores:set_int("player_wins", tonumber(data.player_wins) or 0)
+    scores:set_int("cpu_wins", tonumber(data.cpu_wins) or 0)
+    scores:set_int("matches_played", tonumber(data.matches_played) or 0)
+    if type(data.latest_winner) == "string" then
+        scores:set_string("latest_winner", data.latest_winner)
+    end
+end
+
+local function current_scores(scores)
+    return {
+        schema = "sdl3d.pong.scores.v1",
+        player_wins = scores:get_int("player_wins", 0),
+        cpu_wins = scores:get_int("cpu_wins", 0),
+        matches_played = scores:get_int("matches_played", 0),
+        latest_winner = scores:get_string("latest_winner", "none"),
+    }
+end
+
+local function save_scores(ctx, scores)
+    if scores == nil then
+        return false
+    end
+    return write_json(ctx, scores_path, current_scores(scores))
+end
+
+local function persistence_enabled(ctx)
+    local settings = settings_actor(ctx)
+    return settings ~= nil and settings:get_bool("persistence_enabled", false)
+end
+
+function pong.load_persistence(_, _, ctx)
+    local settings = settings_actor(ctx)
+    if settings ~= nil then
+        settings:set_bool("persistence_enabled", true)
+    end
+    apply_options(settings, read_json(ctx, options_path))
+    apply_scores(scores_actor(ctx), read_json(ctx, scores_path))
+    return true
+end
+
+function pong.save_options(_, _, ctx)
+    if not persistence_enabled(ctx) then
+        return true
+    end
+    local settings = settings_actor(ctx)
+    if settings == nil then
+        return false
+    end
+    return write_json(ctx, options_path, current_options(settings))
+end
+
+function pong.record_player_win(_, _, ctx)
+    if not persistence_enabled(ctx) then
+        return true
+    end
+    local scores = scores_actor(ctx)
+    if scores == nil then
+        return false
+    end
+    scores:set_int("player_wins", scores:get_int("player_wins", 0) + 1)
+    scores:set_int("matches_played", scores:get_int("matches_played", 0) + 1)
+    scores:set_string("latest_winner", "player")
+    return save_scores(ctx, scores)
+end
+
+function pong.record_cpu_win(_, _, ctx)
+    if not persistence_enabled(ctx) then
+        return true
+    end
+    local scores = scores_actor(ctx)
+    if scores == nil then
+        return false
+    end
+    scores:set_int("cpu_wins", scores:get_int("cpu_wins", 0) + 1)
+    scores:set_int("matches_played", scores:get_int("matches_played", 0) + 1)
+    scores:set_string("latest_winner", "cpu")
+    return save_scores(ctx, scores)
 end
 
 return pong

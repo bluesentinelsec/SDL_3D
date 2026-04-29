@@ -57,6 +57,15 @@ local text, read_err = sdl3d.storage.read("user://settings/options.json")
 local exists = sdl3d.storage.exists("cache://generated/status.txt")
 ```
 
+Scripts can pair storage with the gameplay JSON helpers when persisting
+structured settings, saves, scores, or generated cache metadata:
+
+```lua
+local options = sdl3d.json.decode(ctx.storage.read("user://settings/options.json") or "{}")
+options.fullscreen = true
+ctx.storage.write("user://settings/options.json", sdl3d.json.encode(options))
+```
+
 The adapter context exposes the same table as `ctx.storage`. These bindings use
 the storage API's normal validation, so scripts cannot escape through absolute
 paths, `..`, empty segments, backslashes, or unknown schemes.

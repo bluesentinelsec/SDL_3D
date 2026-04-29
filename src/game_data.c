@@ -23,6 +23,8 @@
 #include "sdl3d/timer_pool.h"
 #include "yyjson.h"
 
+#include <stdlib.h>
+
 #define SDL3D_GAME_DATA_SIGNAL_BASE 20000
 
 typedef enum game_data_sensor_type
@@ -460,6 +462,25 @@ static int lua_set_bool(lua_State *lua)
     return 0;
 }
 
+static int lua_get_string(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    sdl3d_registered_actor *actor = lua_actor_arg(lua, runtime, 1);
+    const char *key = luaL_checkstring(lua, 2);
+    const char *fallback = luaL_optstring(lua, 3, "");
+    lua_pushstring(lua, actor != NULL ? sdl3d_properties_get_string(actor->props, key, fallback) : fallback);
+    return 1;
+}
+
+static int lua_set_string(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    sdl3d_registered_actor *actor = lua_actor_arg(lua, runtime, 1);
+    if (actor != NULL)
+        sdl3d_properties_set_string(actor->props, luaL_checkstring(lua, 2), luaL_checkstring(lua, 3));
+    return 0;
+}
+
 static int lua_get_vec3(lua_State *lua)
 {
     sdl3d_game_data_runtime *runtime = lua_runtime(lua);
@@ -728,6 +749,222 @@ static int lua_storage_delete(lua_State *lua)
     return 1;
 }
 
+static void lua_push_json_value(lua_State *lua, yyjson_val *value, int depth)
+{
+    if (value == NULL || depth > 64)
+    {
+        lua_pushnil(lua);
+        return;
+    }
+    if (yyjson_is_null(value))
+    {
+        lua_pushnil(lua);
+    }
+    else if (yyjson_is_bool(value))
+    {
+        lua_pushboolean(lua, yyjson_get_bool(value));
+    }
+    else if (yyjson_is_int(value))
+    {
+        lua_pushinteger(lua, (lua_Integer)yyjson_get_sint(value));
+    }
+    else if (yyjson_is_num(value))
+    {
+        lua_pushnumber(lua, (lua_Number)yyjson_get_real(value));
+    }
+    else if (yyjson_is_str(value))
+    {
+        lua_pushlstring(lua, yyjson_get_str(value), yyjson_get_len(value));
+    }
+    else if (yyjson_is_arr(value))
+    {
+        lua_newtable(lua);
+        size_t idx, max;
+        yyjson_val *entry;
+        yyjson_arr_foreach(value, idx, max, entry)
+        {
+            lua_push_json_value(lua, entry, depth + 1);
+            lua_seti(lua, -2, (lua_Integer)idx + 1);
+        }
+    }
+    else if (yyjson_is_obj(value))
+    {
+        lua_newtable(lua);
+        size_t idx, max;
+        yyjson_val *key;
+        yyjson_val *val;
+        yyjson_obj_foreach(value, idx, max, key, val)
+        {
+            lua_push_json_value(lua, val, depth + 1);
+            lua_setfield(lua, -2, yyjson_get_str(key));
+        }
+    }
+    else
+    {
+        lua_pushnil(lua);
+    }
+}
+
+static bool lua_table_is_json_array(lua_State *lua, int index, lua_Integer *out_count)
+{
+    lua_Integer max_index = 0;
+    lua_Integer count = 0;
+    bool array = true;
+
+    lua_pushnil(lua);
+    while (lua_next(lua, index) != 0)
+    {
+        if (lua_isinteger(lua, -2))
+        {
+            const lua_Integer key = lua_tointeger(lua, -2);
+            if (key <= 0)
+                array = false;
+            else
+            {
+                ++count;
+                if (key > max_index)
+                    max_index = key;
+            }
+        }
+        else
+        {
+            array = false;
+        }
+        lua_pop(lua, 1);
+    }
+
+    if (out_count != NULL)
+        *out_count = array && max_index == count ? count : 0;
+    return array && max_index == count;
+}
+
+static yyjson_mut_val *lua_value_to_json(lua_State *lua, yyjson_mut_doc *doc, int index, int depth, char *error,
+                                         int error_size)
+{
+    if (depth > 64)
+    {
+        set_error(error, error_size, "JSON value is too deeply nested");
+        return NULL;
+    }
+
+    index = lua_absindex(lua, index);
+    if (lua_isnoneornil(lua, index))
+        return yyjson_mut_null(doc);
+    if (lua_isboolean(lua, index))
+        return yyjson_mut_bool(doc, lua_toboolean(lua, index));
+    if (lua_isinteger(lua, index))
+        return yyjson_mut_sint(doc, (int64_t)lua_tointeger(lua, index));
+    if (lua_isnumber(lua, index))
+        return yyjson_mut_real(doc, (double)lua_tonumber(lua, index));
+    if (lua_isstring(lua, index))
+    {
+        size_t len = 0u;
+        const char *text = lua_tolstring(lua, index, &len);
+        return yyjson_mut_strncpy(doc, text, len);
+    }
+    if (!lua_istable(lua, index))
+    {
+        set_error(error, error_size, "JSON encode supports nil, bool, number, string, and table values");
+        return NULL;
+    }
+
+    lua_Integer count = 0;
+    if (lua_table_is_json_array(lua, index, &count))
+    {
+        yyjson_mut_val *arr = yyjson_mut_arr(doc);
+        if (arr == NULL)
+            return NULL;
+        for (lua_Integer i = 1; i <= count; ++i)
+        {
+            lua_geti(lua, index, i);
+            yyjson_mut_val *item = lua_value_to_json(lua, doc, -1, depth + 1, error, error_size);
+            lua_pop(lua, 1);
+            if (item == NULL || !yyjson_mut_arr_add_val(arr, item))
+                return NULL;
+        }
+        return arr;
+    }
+
+    yyjson_mut_val *obj = yyjson_mut_obj(doc);
+    if (obj == NULL)
+        return NULL;
+
+    lua_pushnil(lua);
+    while (lua_next(lua, index) != 0)
+    {
+        if (!lua_isstring(lua, -2))
+        {
+            lua_pop(lua, 2);
+            set_error(error, error_size, "JSON object keys must be strings");
+            return NULL;
+        }
+        size_t key_len = 0u;
+        const char *key_text = lua_tolstring(lua, -2, &key_len);
+        yyjson_mut_val *key = yyjson_mut_strncpy(doc, key_text, key_len);
+        yyjson_mut_val *val = lua_value_to_json(lua, doc, -1, depth + 1, error, error_size);
+        lua_pop(lua, 1);
+        if (key == NULL || val == NULL || !yyjson_mut_obj_add(obj, key, val))
+            return NULL;
+    }
+    return obj;
+}
+
+static int lua_json_decode(lua_State *lua)
+{
+    size_t len = 0u;
+    const char *text = luaL_checklstring(lua, 1, &len);
+    yyjson_read_err err;
+    yyjson_doc *doc = yyjson_read_opts((char *)(void *)(size_t)(const void *)text, len, YYJSON_READ_NOFLAG, NULL, &err);
+    if (doc == NULL)
+    {
+        lua_pushnil(lua);
+        lua_pushfstring(lua, "yyjson error %d at byte %d: %s", (int)err.code, (int)err.pos,
+                        err.msg != NULL ? err.msg : "");
+        return 2;
+    }
+
+    lua_push_json_value(lua, yyjson_doc_get_root(doc), 0);
+    yyjson_doc_free(doc);
+    return 1;
+}
+
+static int lua_json_encode(lua_State *lua)
+{
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    if (doc == NULL)
+    {
+        lua_pushnil(lua);
+        lua_pushstring(lua, "failed to allocate JSON document");
+        return 2;
+    }
+
+    char error[256];
+    error[0] = '\0';
+    yyjson_mut_val *root = lua_value_to_json(lua, doc, 1, 0, error, (int)sizeof(error));
+    if (root == NULL)
+    {
+        yyjson_mut_doc_free(doc);
+        lua_pushnil(lua);
+        lua_pushstring(lua, error[0] != '\0' ? error : "failed to encode JSON value");
+        return 2;
+    }
+
+    yyjson_mut_doc_set_root(doc, root);
+    size_t len = 0u;
+    char *json = yyjson_mut_write(doc, YYJSON_WRITE_NOFLAG, &len);
+    yyjson_mut_doc_free(doc);
+    if (json == NULL)
+    {
+        lua_pushnil(lua);
+        lua_pushstring(lua, "failed to write JSON");
+        return 2;
+    }
+
+    lua_pushlstring(lua, json, len);
+    free(json);
+    return 1;
+}
+
 static void install_lua_helpers(lua_State *lua)
 {
     static const char *source_parts[] = {
@@ -784,6 +1021,8 @@ static void install_lua_helpers(lua_State *lua)
         "function Actor:set_int(key, value) sdl3d.set_int(self, key, value) end\n"
         "function Actor:get_bool(key, fallback) return sdl3d.get_bool(self, key, fallback or false) end\n"
         "function Actor:set_bool(key, value) sdl3d.set_bool(self, key, value and true or false) end\n"
+        "function Actor:get_string(key, fallback) return sdl3d.get_string(self, key, fallback or '') end\n"
+        "function Actor:set_string(key, value) sdl3d.set_string(self, key, value or '') end\n"
         "function Actor:get_vec3(key, fallback)\n"
         "    local x, y, z = sdl3d.get_vec3(self, key)\n"
         "    if x == nil then return fallback end\n"
@@ -854,6 +1093,10 @@ static void install_lua_helpers(lua_State *lua)
         "    mkdir = sdl3d.storage_mkdir,\n"
         "    delete = sdl3d.storage_delete,\n"
         "}\n"
+        "sdl3d.json = {\n"
+        "    decode = sdl3d.json_decode,\n"
+        "    encode = sdl3d.json_encode,\n"
+        "}\n"
         "sdl3d.Actor = Actor\n"
         "sdl3d.Vec3 = Vec3\n"
         "sdl3d.api = 'sdl3d.lua.v1'\n"
@@ -913,6 +1156,8 @@ static void register_lua_api(sdl3d_game_data_runtime *runtime, sdl3d_script_engi
     SDL3D_LUA_BIND("set_int", lua_set_int);
     SDL3D_LUA_BIND("get_bool", lua_get_bool);
     SDL3D_LUA_BIND("set_bool", lua_set_bool);
+    SDL3D_LUA_BIND("get_string", lua_get_string);
+    SDL3D_LUA_BIND("set_string", lua_set_string);
     SDL3D_LUA_BIND("get_vec3", lua_get_vec3);
     SDL3D_LUA_BIND("set_vec3", lua_set_vec3);
     SDL3D_LUA_BIND("dt", lua_get_dt);
@@ -926,6 +1171,8 @@ static void register_lua_api(sdl3d_game_data_runtime *runtime, sdl3d_script_engi
     SDL3D_LUA_BIND("storage_exists", lua_storage_exists);
     SDL3D_LUA_BIND("storage_mkdir", lua_storage_mkdir);
     SDL3D_LUA_BIND("storage_delete", lua_storage_delete);
+    SDL3D_LUA_BIND("json_decode", lua_json_decode);
+    SDL3D_LUA_BIND("json_encode", lua_json_encode);
 #undef SDL3D_LUA_BIND
     lua_setglobal(lua, "sdl3d");
     install_lua_helpers(lua);

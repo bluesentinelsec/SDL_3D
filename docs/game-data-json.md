@@ -596,7 +596,8 @@ Lua adapters receive `(target, payload, ctx)`:
 - `payload` is a table copied from the signal payload or component payload.
 - `ctx` provides adapter context: `ctx.adapter`, `ctx.dt`, `ctx:actor(name)`,
   `ctx:actor_with_tags(...)`, `ctx:state_get(key, fallback)`,
-  `ctx:state_set(key, value)`, `ctx:random()`, and `ctx:log(message)`.
+  `ctx:state_set(key, value)`, `ctx:random()`, `ctx:log(message)`, and
+  `ctx.storage` safe access to `user://` and `cache://` paths.
 
 The preferred Lua API is intentionally game-script oriented. Scripts can check `sdl3d.api`, currently `sdl3d.lua.v1`, when they need to guard version-specific behavior:
 
@@ -606,7 +607,18 @@ ball.position = Vec3(0, 0, 0.12)
 ball.velocity = Vec3.normalize(ball.velocity) * speed
 ```
 
-Actor wrappers expose property helpers (`get_float`, `set_float`, `get_int`, `set_int`, `get_bool`, `set_bool`, `get_vec3`, `set_vec3`) plus `position` and `velocity` convenience fields. `Vec3` provides `new`, `length`, `normalize`, `clamp`, and arithmetic operators. `math.clamp` and `math.lerp` are also available. The lower-level `sdl3d.get_*` and `sdl3d.set_*` functions remain available as implementation primitives, but gameplay scripts should prefer the wrapper API.
+Actor wrappers expose property helpers (`get_float`, `set_float`, `get_int`, `set_int`, `get_bool`, `set_bool`, `get_string`, `set_string`, `get_vec3`, `set_vec3`) plus `position` and `velocity` convenience fields. `Vec3` provides `new`, `length`, `normalize`, `clamp`, and arithmetic operators. `math.clamp` and `math.lerp` are also available. The lower-level `sdl3d.get_*` and `sdl3d.set_*` functions remain available as implementation primitives, but gameplay scripts should prefer the wrapper API.
+
+Scripts can persist structured data through `sdl3d.json.decode(text)` and
+`sdl3d.json.encode(value)`. The JSON bridge accepts Lua booleans, numbers,
+strings, nil, array-like tables, and string-keyed object tables. It is intended
+for save files, settings, high scores, and other small gameplay data blobs:
+
+```lua
+local scores = sdl3d.json.decode(ctx.storage.read("user://scores/pong.json") or "{}")
+scores.player_wins = (scores.player_wins or 0) + 1
+ctx.storage.write("user://scores/pong.json", sdl3d.json.encode(scores))
+```
 
 Native C registration remains available for host applications that need engine-facing integrations or highly optimized behavior; re-registering an adapter name overrides the authored Lua binding.
 

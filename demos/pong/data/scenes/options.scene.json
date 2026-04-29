@@ -27,6 +27,7 @@
       "items": [
         {
           "label": "Difficulty",
+          "signal": "signal.persistence.save_options",
           "control": {
             "type": "choice",
             "target": "entity.settings",
@@ -40,6 +41,7 @@
         },
         {
           "label": "Fullscreen",
+          "signal": "signal.persistence.save_options",
           "control": {
             "type": "toggle",
             "target": "entity.settings",
@@ -48,6 +50,7 @@
         },
         {
           "label": "Lighting",
+          "signal": "signal.persistence.save_options",
           "control": {
             "type": "choice",
             "target": "entity.settings",
@@ -61,6 +64,7 @@
         },
         {
           "label": "Input",
+          "signal": "signal.persistence.save_options",
           "control": {
             "type": "choice",
             "target": "entity.settings",
