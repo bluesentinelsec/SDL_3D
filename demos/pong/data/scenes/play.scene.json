@@ -107,7 +107,7 @@
           { "type": "property", "entity": "entity.score.cpu", "key": "value" }
         ],
         "x": 0.5,
-        "y": 22.0,
+        "y": 0.06,
         "normalized": true,
         "centered": true,
         "color": [235, 242, 255, 255]

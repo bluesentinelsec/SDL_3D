@@ -775,6 +775,7 @@ bool capture_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
         EXPECT_TRUE(text->centered);
         EXPECT_TRUE(text->normalized);
         EXPECT_NEAR(text->x, 0.5f, 0.0001f);
+        EXPECT_NEAR(text->y, 0.06f, 0.0001f);
     }
     if (std::string(text->name) == "ui.pause")
     {
@@ -2416,6 +2417,7 @@ TEST(GameDataRuntime, PongMatchStateAndRestartAreAuthoredLogic)
     EXPECT_EQ(sdl3d_properties_get_int(player_score->props, "value", 0), 10);
     EXPECT_TRUE(sdl3d_properties_get_bool(match->props, "finished", false));
     EXPECT_STREQ(sdl3d_properties_get_string(match->props, "winner", ""), "player");
+    EXPECT_FALSE(ball->active);
     EXPECT_FALSE(sdl3d_properties_get_bool(ball->props, "active_motion", true));
 
     sdl3d_properties_set_float(presentation->props, "border_flash", 1.0f);
@@ -2428,6 +2430,7 @@ TEST(GameDataRuntime, PongMatchStateAndRestartAreAuthoredLogic)
     EXPECT_EQ(sdl3d_properties_get_int(cpu_score->props, "value", -1), 0);
     EXPECT_FALSE(sdl3d_properties_get_bool(match->props, "finished", true));
     EXPECT_STREQ(sdl3d_properties_get_string(match->props, "winner", ""), "none");
+    EXPECT_TRUE(ball->active);
     EXPECT_FLOAT_EQ(sdl3d_properties_get_float(presentation->props, "border_flash", -1.0f), 0.0f);
     EXPECT_FLOAT_EQ(sdl3d_properties_get_float(presentation->props, "paddle_flash", -1.0f), 0.0f);
 

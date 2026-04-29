@@ -1084,6 +1084,14 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
     }
     if (SDL_strncmp(type, "audio.", 6) == 0)
         return validate_audio_action(ctx, action, json_path, names, type);
+    if (SDL_strcmp(type, "entity.set_active") == 0)
+    {
+        if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
+            return false;
+        if (!yyjson_is_bool(obj_get(action, "active")))
+            return validation_error(ctx, json_path, "entity.set_active requires a boolean active value");
+        return true;
+    }
     if (SDL_strcmp(type, "transform.set_position") == 0)
     {
         if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))

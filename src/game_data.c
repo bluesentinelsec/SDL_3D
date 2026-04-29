@@ -5401,6 +5401,16 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
     if (SDL_strncmp(type, "audio.", 6) == 0)
         return execute_audio_action(runtime, action, type);
 
+    if (SDL_strcmp(type, "entity.set_active") == 0)
+    {
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, json_string(action, "target", NULL));
+        yyjson_val *active = obj_get(action, "active");
+        if (actor == NULL || !yyjson_is_bool(active))
+            return false;
+        actor->active = yyjson_get_bool(active);
+        return true;
+    }
+
     if (SDL_strcmp(type, "transform.set_position") == 0)
     {
         sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, json_string(action, "target", NULL));

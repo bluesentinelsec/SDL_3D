@@ -461,7 +461,7 @@ Generic action types should cover common wiring:
 - `property.set`
 - `property.add`
 - `property.toggle`
-- `entity.set_active`
+- `entity.set_active` with `target` and boolean `active`, used to include or exclude an entity from generic updates and rendering
 - `transform.set_position`
 - `motion.set_velocity`
 - `signal.emit`

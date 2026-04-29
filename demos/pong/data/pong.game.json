@@ -986,19 +986,22 @@
         "signal": "signal.match.player_won",
         "actions": [
           { "type": "property.set", "target": "entity.match", "key": "finished", "value": true },
-          { "type": "property.set", "target": "entity.match", "key": "winner", "value": "player" }
+          { "type": "property.set", "target": "entity.match", "key": "winner", "value": "player" },
+          { "type": "entity.set_active", "target": "entity.ball", "active": false }
         ]
       },
       {
         "signal": "signal.match.cpu_won",
         "actions": [
           { "type": "property.set", "target": "entity.match", "key": "finished", "value": true },
-          { "type": "property.set", "target": "entity.match", "key": "winner", "value": "cpu" }
+          { "type": "property.set", "target": "entity.match", "key": "winner", "value": "cpu" },
+          { "type": "entity.set_active", "target": "entity.ball", "active": false }
         ]
       },
       {
         "signal": "signal.round.reset",
         "actions": [
+          { "type": "entity.set_active", "target": "entity.ball", "active": true },
           { "type": "property.set", "target": "entity.ball", "key": "active_motion", "value": false },
           { "type": "property.set", "target": "entity.ball", "key": "velocity", "value": [0.0, 0.0] },
           { "type": "property.set", "target": "entity.ball", "key": "has_last_reflect_y", "value": false },
