@@ -19,6 +19,10 @@
     "events": [
       {
         "time": 0.0,
+        "action": { "type": "signal.emit", "signal": "signal.persistence.load" }
+      },
+      {
+        "time": 0.0,
         "action": { "type": "audio.set_bus_volume", "bus": "music", "volume": 1.0 }
       },
       {

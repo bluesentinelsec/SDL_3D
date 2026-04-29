@@ -718,7 +718,19 @@
         "difficulty": { "type": "string", "value": "normal" },
         "lighting_profile": { "type": "string", "value": "cinematic" },
         "fullscreen": { "type": "bool", "value": false },
-        "input_style": { "type": "string", "value": "keyboard" }
+        "input_style": { "type": "string", "value": "keyboard" },
+        "persistence_enabled": { "type": "bool", "value": false }
+      }
+    },
+    {
+      "name": "entity.high_scores",
+      "active": true,
+      "tags": ["state", "scores"],
+      "properties": {
+        "player_wins": { "type": "int", "value": 0 },
+        "cpu_wins": { "type": "int", "value": 0 },
+        "matches_played": { "type": "int", "value": 0 },
+        "latest_winner": { "type": "string", "value": "none" }
       }
     },
     {
@@ -770,6 +782,8 @@
     "signal.camera.ball.toggle",
     "signal.attract.round_reset",
     "signal.presentation.flash_border",
+    "signal.persistence.load",
+    "signal.persistence.save_options",
     "signal.ui.menu.move",
     "signal.ui.menu.select",
     "signal.app.quit_fade_done"
@@ -893,6 +907,18 @@
         ]
       },
       {
+        "signal": "signal.persistence.load",
+        "actions": [
+          { "type": "adapter.invoke", "adapter": "adapter.pong.load_persistence" }
+        ]
+      },
+      {
+        "signal": "signal.persistence.save_options",
+        "actions": [
+          { "type": "adapter.invoke", "adapter": "adapter.pong.save_options" }
+        ]
+      },
+      {
         "signal": "signal.game.start",
         "actions": [
           { "type": "timer.start", "timer": "timer.round.serve" }
@@ -992,6 +1018,7 @@
         "actions": [
           { "type": "property.set", "target": "entity.match", "key": "finished", "value": true },
           { "type": "property.set", "target": "entity.match", "key": "winner", "value": "player" },
+          { "type": "adapter.invoke", "adapter": "adapter.pong.record_player_win" },
           { "type": "entity.set_active", "target": "entity.ball", "active": false }
         ]
       },
@@ -1000,6 +1027,7 @@
         "actions": [
           { "type": "property.set", "target": "entity.match", "key": "finished", "value": true },
           { "type": "property.set", "target": "entity.match", "key": "winner", "value": "cpu" },
+          { "type": "adapter.invoke", "adapter": "adapter.pong.record_cpu_win" },
           { "type": "entity.set_active", "target": "entity.ball", "active": false }
         ]
       },
@@ -1091,6 +1119,34 @@
       "script": "script.pong",
       "function": "cpu_track_ball",
       "description": "Move the CPU paddle toward the current ball position."
+    },
+    {
+      "name": "adapter.pong.load_persistence",
+      "kind": "action",
+      "script": "script.pong",
+      "function": "load_persistence",
+      "description": "Load persisted Pong options and score records from user storage."
+    },
+    {
+      "name": "adapter.pong.save_options",
+      "kind": "action",
+      "script": "script.pong",
+      "function": "save_options",
+      "description": "Persist current Pong options to user storage."
+    },
+    {
+      "name": "adapter.pong.record_player_win",
+      "kind": "action",
+      "script": "script.pong",
+      "function": "record_player_win",
+      "description": "Record a player match win in persistent score data."
+    },
+    {
+      "name": "adapter.pong.record_cpu_win",
+      "kind": "action",
+      "script": "script.pong",
+      "function": "record_cpu_win",
+      "description": "Record a CPU match win in persistent score data."
     }
   ]
 }

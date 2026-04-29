@@ -154,6 +154,12 @@ std::string read_fixture_file(const char *filename)
     return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
+std::string read_text(const std::filesystem::path &path)
+{
+    std::ifstream in(path, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
 std::filesystem::path unique_test_dir(const char *name)
 {
     const std::filesystem::path root = std::filesystem::temp_directory_path();
@@ -180,6 +186,31 @@ void write_text(const std::filesystem::path &path, const char *text)
     std::filesystem::create_directories(path.parent_path());
     std::ofstream out(path, std::ios::binary);
     out << text;
+}
+
+std::filesystem::path copy_pong_data_with_storage_overrides(const std::filesystem::path &dir,
+                                                            const std::filesystem::path &user_root,
+                                                            const std::filesystem::path &cache_root)
+{
+    const std::filesystem::path source = std::filesystem::path(SDL3D_PONG_DATA_PATH).parent_path();
+    const std::filesystem::path dest = dir / "pong_data";
+    std::filesystem::copy(source, dest,
+                          std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing);
+
+    const std::filesystem::path game_path = dest / "pong.game.json";
+    std::string game_json = read_text(game_path);
+    const std::string marker = R"json("profile": "default")json";
+    const std::string replacement = std::string(R"json("profile": "default",
+    "user_root_override": ")json") + user_root.generic_string() +
+                                    R"json(",
+    "cache_root_override": ")json" + cache_root.generic_string() +
+                                    R"json(")json";
+    const size_t marker_pos = game_json.find(marker);
+    if (marker_pos == std::string::npos)
+        throw std::runtime_error("Pong storage profile marker not found");
+    game_json.replace(marker_pos, marker.size(), replacement);
+    write_text(game_path, game_json.c_str());
+    return game_path;
 }
 
 void write_hot_reload_json(const std::filesystem::path &dir)
@@ -1654,6 +1685,47 @@ TEST(GameDataRuntime, OptionsMenuCanReturnToAuthoredScene)
     sdl3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, OptionControlsCanEmitAuthoredSignals)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
+
+    const int menu_select_signal = sdl3d_game_data_find_signal(runtime, "signal.ui.menu.select");
+    const int save_options_signal = sdl3d_game_data_find_signal(runtime, "signal.persistence.save_options");
+    ASSERT_GE(menu_select_signal, 0);
+    ASSERT_GE(save_options_signal, 0);
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+
+    bool armed = true;
+    sdl3d_game_data_menu_update_result result{};
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_RETURN;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 1);
+
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.selected);
+    EXPECT_TRUE(result.control_changed);
+    EXPECT_EQ(result.select_signal_id, menu_select_signal);
+    EXPECT_EQ(result.signal_id, save_options_signal);
+    EXPECT_EQ(result.scene, nullptr);
+
+    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    ASSERT_NE(settings, nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "difficulty", ""), "hard");
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, AppFlowConsumesAuthoredLifecycleAndSceneShortcutControls)
 {
     sdl3d_game_session *session = nullptr;
@@ -2861,7 +2933,13 @@ function storage.roundtrip(_, _, ctx)
     end
 
     local data = ctx.storage.read("user://settings/options.json")
-    if data ~= "{\"difficulty\":\"hard\"}" then
+    local decoded, decode_error = sdl3d.json.decode(data)
+    if decoded == nil or decode_error ~= nil or decoded.difficulty ~= "hard" then
+        return false
+    end
+    local encoded = sdl3d.json.encode({ difficulty = decoded.difficulty, enabled = true, values = { 1, 2, 3 } })
+    local roundtrip = sdl3d.json.decode(encoded)
+    if roundtrip == nil or roundtrip.enabled ~= true or roundtrip.values[2] ~= 2 then
         return false
     end
 
@@ -2872,7 +2950,7 @@ function storage.roundtrip(_, _, ctx)
         return false
     end
 
-    ctx:state_set("loaded_options", data)
+    ctx:state_set("loaded_options", roundtrip.difficulty .. ":" .. tostring(roundtrip.values[2]) .. ":" .. tostring(roundtrip.enabled))
     return true
 end
 
@@ -2931,13 +3009,104 @@ return storage
     sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), signal_id, nullptr);
 
     EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "loaded_options", ""),
-                 "{\"difficulty\":\"hard\"}");
+                 "hard:2:true");
     EXPECT_TRUE(std::filesystem::exists(user_root / "settings" / "options.json"));
     EXPECT_TRUE(std::filesystem::exists(cache_root / "script" / "status.txt"));
     EXPECT_FALSE(std::filesystem::exists(dir / "escape.txt"));
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, PongPersistenceLoadsOptionsAndHighScoresFromUserStorage)
+{
+    const std::filesystem::path dir = unique_test_dir("pong_persistence");
+    const std::filesystem::path user_root = dir / "user";
+    const std::filesystem::path cache_root = dir / "cache";
+    const std::filesystem::path game_path = copy_pong_data_with_storage_overrides(dir, user_root, cache_root);
+
+    auto emit = [](sdl3d_game_session *session, sdl3d_game_data_runtime *runtime, const char *signal) {
+        const int signal_id = sdl3d_game_data_find_signal(runtime, signal);
+        EXPECT_GE(signal_id, 0) << signal;
+        if (signal_id >= 0)
+            sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), signal_id, nullptr);
+    };
+
+    {
+        sdl3d_game_session *session = nullptr;
+        ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+        char error[512]{};
+        sdl3d_game_data_runtime *runtime = nullptr;
+        ASSERT_TRUE(sdl3d_game_data_load_file(game_path.string().c_str(), session, &runtime, error, sizeof(error)))
+            << error;
+
+        sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+        ASSERT_NE(settings, nullptr);
+        EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "persistence_enabled", true));
+
+        sdl3d_properties_set_string(settings->props, "difficulty", "hard");
+        emit(session, runtime, "signal.persistence.save_options");
+        EXPECT_FALSE(std::filesystem::exists(user_root / "settings" / "options.json"));
+
+        emit(session, runtime, "signal.persistence.load");
+        EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "persistence_enabled", false));
+
+        sdl3d_properties_set_string(settings->props, "difficulty", "hard");
+        sdl3d_properties_set_string(settings->props, "lighting_profile", "arcade");
+        sdl3d_properties_set_string(settings->props, "input_style", "gamepad");
+        sdl3d_properties_set_bool(settings->props, "fullscreen", true);
+        emit(session, runtime, "signal.persistence.save_options");
+
+        emit(session, runtime, "signal.match.player_won");
+        sdl3d_registered_actor *scores = sdl3d_game_data_find_actor(runtime, "entity.high_scores");
+        ASSERT_NE(scores, nullptr);
+        EXPECT_EQ(sdl3d_properties_get_int(scores->props, "player_wins", 0), 1);
+        EXPECT_EQ(sdl3d_properties_get_int(scores->props, "matches_played", 0), 1);
+        EXPECT_STREQ(sdl3d_properties_get_string(scores->props, "latest_winner", ""), "player");
+
+        sdl3d_game_data_destroy(runtime);
+        sdl3d_game_session_destroy(session);
+    }
+
+    EXPECT_TRUE(std::filesystem::exists(user_root / "settings" / "options.json"));
+    EXPECT_TRUE(std::filesystem::exists(user_root / "scores" / "pong_scores.json"));
+
+    {
+        sdl3d_game_session *session = nullptr;
+        ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+        char error[512]{};
+        sdl3d_game_data_runtime *runtime = nullptr;
+        ASSERT_TRUE(sdl3d_game_data_load_file(game_path.string().c_str(), session, &runtime, error, sizeof(error)))
+            << error;
+
+        emit(session, runtime, "signal.persistence.load");
+
+        sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+        ASSERT_NE(settings, nullptr);
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "difficulty", ""), "hard");
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "lighting_profile", ""), "arcade");
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "input_style", ""), "gamepad");
+        EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "fullscreen", false));
+
+        sdl3d_registered_actor *scores = sdl3d_game_data_find_actor(runtime, "entity.high_scores");
+        ASSERT_NE(scores, nullptr);
+        EXPECT_EQ(sdl3d_properties_get_int(scores->props, "player_wins", 0), 1);
+        EXPECT_EQ(sdl3d_properties_get_int(scores->props, "cpu_wins", -1), 0);
+        EXPECT_EQ(sdl3d_properties_get_int(scores->props, "matches_played", 0), 1);
+        EXPECT_STREQ(sdl3d_properties_get_string(scores->props, "latest_winner", ""), "player");
+
+        emit(session, runtime, "signal.match.cpu_won");
+        EXPECT_EQ(sdl3d_properties_get_int(scores->props, "cpu_wins", 0), 1);
+        EXPECT_EQ(sdl3d_properties_get_int(scores->props, "matches_played", 0), 2);
+        EXPECT_STREQ(sdl3d_properties_get_string(scores->props, "latest_winner", ""), "cpu");
+
+        sdl3d_game_data_destroy(runtime);
+        sdl3d_game_session_destroy(session);
+    }
+
     remove_test_dir(dir);
 }
 

@@ -120,7 +120,7 @@ extern "C"
         const char *scene;     /**< Runtime-owned selected target scene, or NULL. */
         const char *return_to; /**< Runtime-owned scene to store as return target, or NULL. */
         int selected_index;    /**< Selected item index after this update, or -1. */
-        int signal_id;         /**< Selected signal id, or -1. */
+        int signal_id;         /**< Selected item signal id, including data-bound controls, or -1. */
         int move_signal_id;    /**< Menu navigation signal id emitted by the host, or -1. */
         int select_signal_id;  /**< Menu activation signal id emitted by the host, or -1. */
         sdl3d_game_data_menu_pause_command pause_command; /**< Pause command requested by selected item. */
