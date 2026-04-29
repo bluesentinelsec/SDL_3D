@@ -7,11 +7,36 @@
 
 #include <SDL3/SDL_stdinc.h>
 
+typedef struct standard_options_scene_layout
+{
+    double title_y;
+    double menu_y;
+    double gap;
+    double cursor_offset_x;
+} standard_options_scene_layout;
+
+typedef struct standard_options_layout
+{
+    double title_x;
+    double menu_x;
+    double status_x;
+    double status_y;
+    const char *menu_align;
+    const char *cursor_align;
+    bool selected_pulse_alpha;
+    standard_options_scene_layout root;
+    standard_options_scene_layout display;
+    standard_options_scene_layout keyboard;
+    standard_options_scene_layout gamepad;
+    standard_options_scene_layout audio;
+} standard_options_layout;
+
 typedef struct standard_options_config
 {
     yyjson_val *root;
     yyjson_val *theme;
     yyjson_val *bindings;
+    standard_options_layout layout;
     const char *settings_actor;
     const char *return_scene;
     const char *root_scene;
@@ -56,9 +81,61 @@ static const char *json_string(yyjson_val *object, const char *key, const char *
     return yyjson_is_str(value) ? yyjson_get_str(value) : fallback;
 }
 
+static bool json_bool(yyjson_val *object, const char *key, bool fallback)
+{
+    yyjson_val *value = obj_get(object, key);
+    return yyjson_is_bool(value) ? yyjson_get_bool(value) : fallback;
+}
+
+static double json_double(yyjson_val *object, const char *key, double fallback)
+{
+    yyjson_val *value = obj_get(object, key);
+    return yyjson_is_num(value) ? yyjson_get_num(value) : fallback;
+}
+
 static const char *section_string(yyjson_val *object, const char *section, const char *key, const char *fallback)
 {
     return json_string(obj_get(object, section), key, fallback);
+}
+
+static standard_options_scene_layout scene_layout_defaults(double title_y, double menu_y, double gap,
+                                                           double cursor_offset_x)
+{
+    return (standard_options_scene_layout){
+        .title_y = title_y,
+        .menu_y = menu_y,
+        .gap = gap,
+        .cursor_offset_x = cursor_offset_x,
+    };
+}
+
+static standard_options_scene_layout load_scene_layout(yyjson_val *layout, const char *section,
+                                                       standard_options_scene_layout fallback)
+{
+    yyjson_val *scene = obj_get(layout, section);
+    fallback.title_y = json_double(scene, "title_y", fallback.title_y);
+    fallback.menu_y = json_double(scene, "menu_y", fallback.menu_y);
+    fallback.gap = json_double(scene, "gap", fallback.gap);
+    fallback.cursor_offset_x =
+        json_double(scene, "cursor_offset_x", json_double(scene, "cursor_offset", fallback.cursor_offset_x));
+    return fallback;
+}
+
+static void load_layout(standard_options_config *config)
+{
+    yyjson_val *layout = obj_get(config->root, "layout");
+    config->layout.title_x = json_double(layout, "title_x", 0.5);
+    config->layout.menu_x = json_double(layout, "menu_x", 0.5);
+    config->layout.status_x = json_double(layout, "status_x", 0.5);
+    config->layout.status_y = json_double(layout, "status_y", 0.88);
+    config->layout.menu_align = json_string(layout, "menu_align", "center");
+    config->layout.cursor_align = json_string(layout, "cursor_align", "center");
+    config->layout.selected_pulse_alpha = json_bool(layout, "selected_pulse_alpha", true);
+    config->layout.root = load_scene_layout(layout, "root", scene_layout_defaults(0.18, 0.36, 0.078, -0.14));
+    config->layout.display = load_scene_layout(layout, "display", scene_layout_defaults(0.20, 0.38, 0.074, -0.18));
+    config->layout.keyboard = load_scene_layout(layout, "keyboard", scene_layout_defaults(0.13, 0.25, 0.062, -0.18));
+    config->layout.gamepad = load_scene_layout(layout, "gamepad", scene_layout_defaults(0.12, 0.22, 0.052, -0.18));
+    config->layout.audio = load_scene_layout(layout, "audio", scene_layout_defaults(0.18, 0.39, 0.078, -0.18));
 }
 
 static void set_error(char *buffer, int buffer_size, const char *message)
@@ -245,14 +322,19 @@ static bool add_reset_item(yyjson_mut_doc *doc, yyjson_mut_val *items, const cha
     return item != NULL && add_str(doc, item, "signal", signal);
 }
 
-static bool add_range_item(yyjson_mut_doc *doc, yyjson_mut_val *items, const char *label, const char *signal,
-                           const char *target, const char *key, int default_value)
+static bool add_range_item(yyjson_mut_doc *doc, yyjson_mut_val *items, const standard_options_config *config,
+                           const char *label, const char *signal, const char *target, const char *key,
+                           int default_value)
 {
     yyjson_mut_val *item = add_menu_item(doc, items, label);
     yyjson_mut_val *control = item != NULL ? add_control(doc, item, "range") : NULL;
     return item != NULL && add_str(doc, item, "signal", signal) && control != NULL &&
            add_str(doc, control, "target", target) && add_str(doc, control, "key", key) &&
            add_str(doc, control, "value_type", "int") && add_str(doc, control, "display", "slider") &&
+           add_str(doc, control, "slider_fill", json_string(config->theme, "slider_fill", "#")) &&
+           add_str(doc, control, "slider_empty", json_string(config->theme, "slider_empty", "-")) &&
+           add_str(doc, control, "slider_left", json_string(config->theme, "slider_left", "[")) &&
+           add_str(doc, control, "slider_right", json_string(config->theme, "slider_right", "]")) &&
            yyjson_mut_obj_add_int(doc, control, "min", 0) && yyjson_mut_obj_add_int(doc, control, "max", 10) &&
            yyjson_mut_obj_add_int(doc, control, "step", 1) &&
            yyjson_mut_obj_add_int(doc, control, "default", default_value);
@@ -303,7 +385,7 @@ static bool add_title_text(yyjson_mut_doc *doc, yyjson_mut_val *texts, const sta
     yyjson_mut_val *title = yyjson_mut_obj(doc);
     return texts != NULL && title != NULL && yyjson_mut_arr_add_val(texts, title) &&
            add_str(doc, title, "name", name) && add_str(doc, title, "font", config->title_font) &&
-           add_str(doc, title, "text", text) && yyjson_mut_obj_add_real(doc, title, "x", 0.5) &&
+           add_str(doc, title, "text", text) && yyjson_mut_obj_add_real(doc, title, "x", config->layout.title_x) &&
            yyjson_mut_obj_add_real(doc, title, "y", y) && yyjson_mut_obj_add_bool(doc, title, "normalized", true) &&
            yyjson_mut_obj_add_bool(doc, title, "centered", true) &&
            add_color(doc, title, "color", config->theme, "title_color", 242, 248, 255, 255);
@@ -319,8 +401,10 @@ static bool add_status_text(yyjson_mut_doc *doc, yyjson_mut_val *texts, const st
            add_str(doc, text, "font", config->menu_font) && add_str(doc, text, "format", "%s") &&
            (bindings = add_arr(doc, text, "bindings")) != NULL && (binding = yyjson_mut_obj(doc)) != NULL &&
            yyjson_mut_arr_add_val(bindings, binding) && add_str(doc, binding, "type", "scene_state") &&
-           add_str(doc, binding, "key", status_key) && yyjson_mut_obj_add_real(doc, text, "x", 0.5) &&
-           yyjson_mut_obj_add_real(doc, text, "y", 0.88) && yyjson_mut_obj_add_bool(doc, text, "normalized", true) &&
+           add_str(doc, binding, "key", status_key) &&
+           yyjson_mut_obj_add_real(doc, text, "x", config->layout.status_x) &&
+           yyjson_mut_obj_add_real(doc, text, "y", config->layout.status_y) &&
+           yyjson_mut_obj_add_bool(doc, text, "normalized", true) &&
            yyjson_mut_obj_add_bool(doc, text, "centered", true) &&
            add_color(doc, text, "color", config->theme, "status_color", r, g, b, 230);
 }
@@ -333,15 +417,18 @@ static bool add_menu_presenter(yyjson_mut_doc *doc, yyjson_mut_val *ui, const st
     yyjson_mut_val *cursor = NULL;
     return menus != NULL && presenter != NULL && yyjson_mut_arr_add_val(menus, presenter) &&
            add_str(doc, presenter, "name", name) && add_str(doc, presenter, "menu", menu_name) &&
-           add_str(doc, presenter, "font", config->menu_font) && yyjson_mut_obj_add_real(doc, presenter, "x", 0.5) &&
+           add_str(doc, presenter, "font", config->menu_font) &&
+           yyjson_mut_obj_add_real(doc, presenter, "x", config->layout.menu_x) &&
            yyjson_mut_obj_add_real(doc, presenter, "y", y) && yyjson_mut_obj_add_real(doc, presenter, "gap", gap) &&
-           yyjson_mut_obj_add_bool(doc, presenter, "normalized", true) && add_str(doc, presenter, "align", "center") &&
+           yyjson_mut_obj_add_bool(doc, presenter, "normalized", true) &&
+           add_str(doc, presenter, "align", config->layout.menu_align) &&
            add_color(doc, presenter, "color", config->theme, "menu_color", 225, 236, 255, 245) &&
            add_color(doc, presenter, "selected_color", config->theme, "selected_color", 255, 245, 208, 255) &&
-           yyjson_mut_obj_add_bool(doc, presenter, "selected_pulse_alpha", true) &&
+           yyjson_mut_obj_add_bool(doc, presenter, "selected_pulse_alpha", config->layout.selected_pulse_alpha) &&
            (cursor = add_obj(doc, presenter, "cursor")) != NULL &&
            add_str(doc, cursor, "text", json_string(config->theme, "cursor", ">")) &&
-           yyjson_mut_obj_add_real(doc, cursor, "offset_x", cursor_offset) && add_str(doc, cursor, "align", "center") &&
+           yyjson_mut_obj_add_real(doc, cursor, "offset_x", cursor_offset) &&
+           add_str(doc, cursor, "align", config->layout.cursor_align) &&
            add_color(doc, cursor, "color", config->theme, "cursor_color", 255, 222, 140, 255);
 }
 
@@ -376,8 +463,9 @@ static yyjson_doc *build_root_scene(const standard_options_config *config)
         !add_scene_item(doc, items, "Keyboard", config->keyboard_scene) ||
         !add_scene_item(doc, items, "Gamepad", config->gamepad_scene) ||
         !add_scene_item(doc, items, "Audio", config->audio_scene) || !add_back_item(doc, items, config, NULL) ||
-        !add_basic_ui(doc, scene, config, "ui.options.title", "OPTIONS", 0.18, "ui.options.menu", config->root_menu,
-                      0.36, 0.078, -0.14))
+        !add_basic_ui(doc, scene, config, "ui.options.title", "OPTIONS", config->layout.root.title_y, "ui.options.menu",
+                      config->root_menu, config->layout.root.menu_y, config->layout.root.gap,
+                      config->layout.root.cursor_offset_x))
     {
         yyjson_mut_doc_free(doc);
         return NULL;
@@ -394,8 +482,9 @@ static yyjson_doc *build_display_scene(const standard_options_config *config)
         !add_toggle_item(doc, items, "Vsync", config->apply_signal, config->settings_actor, "vsync") ||
         !add_renderer_item(doc, items, config) || !add_reset_item(doc, items, config->reset_display_signal) ||
         !add_back_item(doc, items, config, config->root_scene) ||
-        !add_basic_ui(doc, scene, config, "ui.options.display.title", "DISPLAY", 0.20, "ui.options.display.menu",
-                      config->display_menu, 0.38, 0.074, -0.18))
+        !add_basic_ui(doc, scene, config, "ui.options.display.title", "DISPLAY", config->layout.display.title_y,
+                      "ui.options.display.menu", config->display_menu, config->layout.display.menu_y,
+                      config->layout.display.gap, config->layout.display.cursor_offset_x))
     {
         yyjson_mut_doc_free(doc);
         return NULL;
@@ -409,13 +498,15 @@ static yyjson_doc *build_audio_scene(const standard_options_config *config)
     yyjson_mut_val *scene = doc != NULL ? create_scene(doc, config, config->audio_scene, true) : NULL;
     yyjson_mut_val *items = scene != NULL ? add_menu(doc, scene, config, config->audio_menu, true) : NULL;
     if (items == NULL ||
-        !add_range_item(doc, items, "Sound Effects", config->apply_audio_signal, config->settings_actor, "sfx_volume",
-                        8) ||
-        !add_range_item(doc, items, "Music", config->apply_audio_signal, config->settings_actor, "music_volume", 7) ||
+        !add_range_item(doc, items, config, "Sound Effects", config->apply_audio_signal, config->settings_actor,
+                        "sfx_volume", 8) ||
+        !add_range_item(doc, items, config, "Music", config->apply_audio_signal, config->settings_actor, "music_volume",
+                        7) ||
         !add_reset_item(doc, items, config->reset_audio_signal) ||
         !add_back_item(doc, items, config, config->root_scene) ||
-        !add_basic_ui(doc, scene, config, "ui.options.audio.title", "AUDIO", 0.18, "ui.options.audio.menu",
-                      config->audio_menu, 0.39, 0.078, -0.18))
+        !add_basic_ui(doc, scene, config, "ui.options.audio.title", "AUDIO", config->layout.audio.title_y,
+                      "ui.options.audio.menu", config->audio_menu, config->layout.audio.menu_y,
+                      config->layout.audio.gap, config->layout.audio.cursor_offset_x))
     {
         yyjson_mut_doc_free(doc);
         return NULL;
@@ -434,14 +525,16 @@ static yyjson_doc *build_keyboard_scene(const standard_options_config *config)
         !add_reset_item(doc, items, config->reset_keyboard_signal) ||
         !add_back_item(doc, items, config, config->root_scene) || (ui = add_ui(doc, scene)) == NULL ||
         (texts = add_arr(doc, ui, "text")) == NULL ||
-        !add_title_text(doc, texts, config, "ui.options.keyboard.title", "KEYBOARD", 0.13))
+        !add_title_text(doc, texts, config, "ui.options.keyboard.title", "KEYBOARD", config->layout.keyboard.title_y))
     {
         yyjson_mut_doc_free(doc);
         return NULL;
     }
     if (!add_status_text(doc, texts, config, "ui.options.keyboard.status", config->keyboard_status_key, 255, 222,
                          140) ||
-        !add_menu_presenter(doc, ui, config, "ui.options.keyboard.menu", config->keyboard_menu, 0.25, 0.062, -0.18))
+        !add_menu_presenter(doc, ui, config, "ui.options.keyboard.menu", config->keyboard_menu,
+                            config->layout.keyboard.menu_y, config->layout.keyboard.gap,
+                            config->layout.keyboard.cursor_offset_x))
     {
         yyjson_mut_doc_free(doc);
         return NULL;
@@ -462,9 +555,11 @@ static yyjson_doc *build_gamepad_scene(const standard_options_config *config)
         !add_reset_item(doc, items, config->reset_gamepad_signal) ||
         !add_back_item(doc, items, config, config->root_scene) || (ui = add_ui(doc, scene)) == NULL ||
         (texts = add_arr(doc, ui, "text")) == NULL ||
-        !add_title_text(doc, texts, config, "ui.options.gamepad.title", "GAMEPAD", 0.12) ||
+        !add_title_text(doc, texts, config, "ui.options.gamepad.title", "GAMEPAD", config->layout.gamepad.title_y) ||
         !add_status_text(doc, texts, config, "ui.options.gamepad.status", config->gamepad_status_key, 172, 206, 255) ||
-        !add_menu_presenter(doc, ui, config, "ui.options.gamepad.menu", config->gamepad_menu, 0.22, 0.052, -0.18))
+        !add_menu_presenter(doc, ui, config, "ui.options.gamepad.menu", config->gamepad_menu,
+                            config->layout.gamepad.menu_y, config->layout.gamepad.gap,
+                            config->layout.gamepad.cursor_offset_x))
     {
         yyjson_mut_doc_free(doc);
         return NULL;
@@ -523,6 +618,7 @@ static bool load_config(yyjson_val *game_root, const char *package_name, standar
     config->gamepad_status_key = json_string(root, "gamepad_status_key", "gamepad_binding_status");
     config->enter_transition = section_string(root, "transitions", "enter", "scene_in");
     config->exit_transition = section_string(root, "transitions", "exit", "scene_out");
+    load_layout(config);
     return true;
 }
 

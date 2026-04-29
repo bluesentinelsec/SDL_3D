@@ -1307,6 +1307,24 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Display");
     EXPECT_STREQ(item.scene, "scene.options.display");
+    bool saw_options_display = false;
+    auto find_options_display = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        auto *saw = static_cast<bool *>(userdata);
+        const std::string name = text->name != nullptr ? text->name : "";
+        const std::string value = text->text != nullptr ? text->text : "";
+        if (name == "ui.options.menu" && value == "Display")
+        {
+            *saw = true;
+            EXPECT_FLOAT_EQ(text->x, 0.5f);
+            EXPECT_FLOAT_EQ(text->y, 0.36f);
+            EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_CENTER);
+            EXPECT_TRUE(text->pulse_alpha);
+            return false;
+        }
+        return true;
+    };
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_options_display, &saw_options_display));
+    EXPECT_TRUE(saw_options_display);
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.keyboard"));
     ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));

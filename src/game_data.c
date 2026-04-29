@@ -1247,6 +1247,12 @@ static const char *first_non_empty_string(const char *first, const char *second,
     return fallback;
 }
 
+static char first_json_string_char(yyjson_val *object, const char *key, char fallback)
+{
+    const char *value = json_string(object, key, NULL);
+    return value != NULL && value[0] != '\0' ? value[0] : fallback;
+}
+
 static void load_storage_config(sdl3d_game_data_runtime *runtime, yyjson_val *root);
 
 static bool json_bool(yyjson_val *object, const char *key, bool fallback)
@@ -4494,12 +4500,16 @@ static void format_menu_item_label(const sdl3d_game_data_runtime *runtime, yyjso
             const float t = max_value > min_value ? (current - min_value) / (max_value - min_value) : 0.0f;
             int filled = (int)SDL_lroundf(SDL_clamp(t, 0.0f, 1.0f) * (float)slots);
             filled = SDL_clamp(filled, 0, slots);
+            const char left = first_json_string_char(control, "slider_left", '[');
+            const char fill = first_json_string_char(control, "slider_fill", '#');
+            const char empty = first_json_string_char(control, "slider_empty", '-');
+            const char right = first_json_string_char(control, "slider_right", ']');
             char slider[64];
             size_t pos = 0;
-            slider[pos++] = '[';
+            slider[pos++] = left;
             for (int i = 0; i < slots && pos + 2 < sizeof(slider); ++i)
-                slider[pos++] = i < filled ? '#' : '-';
-            slider[pos++] = ']';
+                slider[pos++] = i < filled ? fill : empty;
+            slider[pos++] = right;
             slider[pos] = '\0';
             if (menu_range_is_integer(control))
                 SDL_snprintf(buffer, buffer_size, "%s  %s %d/%d", label, slider, (int)SDL_lroundf(current),
