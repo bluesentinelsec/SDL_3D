@@ -79,13 +79,178 @@
     "files": [
       "scenes/splash.scene.json",
       "scenes/title.scene.json",
-      "scenes/options.scene.json",
-      "scenes/options_display.scene.json",
-      "scenes/options_keyboard.scene.json",
-      "scenes/options_gamepad.scene.json",
-      "scenes/options_audio.scene.json",
+      { "package": "standard_options" },
       "scenes/play.scene.json"
-    ]
+    ],
+    "standard_options": {
+      "settings": "entity.settings",
+      "return_scene": "scene.title",
+      "scenes": {
+        "root": "scene.options",
+        "display": "scene.options.display",
+        "keyboard": "scene.options.keyboard",
+        "gamepad": "scene.options.gamepad",
+        "audio": "scene.options.audio"
+      },
+      "menus": {
+        "root": "menu.options",
+        "display": "menu.options.display",
+        "keyboard": "menu.options.keyboard",
+        "gamepad": "menu.options.gamepad",
+        "audio": "menu.options.audio"
+      },
+      "actions": {
+        "up": "action.menu.up",
+        "down": "action.menu.down",
+        "left": "action.menu.left",
+        "right": "action.menu.right",
+        "select": "action.menu.select"
+      },
+      "signals": {
+        "move": "signal.ui.menu.move",
+        "select": "signal.ui.menu.select",
+        "apply": "signal.settings.apply",
+        "apply_audio": "signal.settings.apply_audio",
+        "reset_display": "signal.settings.reset_display",
+        "reset_keyboard": "signal.settings.reset_keyboard",
+        "reset_gamepad": "signal.settings.reset_gamepad",
+        "reset_audio": "signal.settings.reset_audio"
+      },
+      "fonts": {
+        "title": "font.title",
+        "menu": "font.hud"
+      },
+      "transitions": {
+        "enter": "scene_in",
+        "exit": "scene_out"
+      },
+      "theme": {
+        "title_color": [242, 248, 255, 255],
+        "menu_color": [225, 236, 255, 245],
+        "selected_color": [255, 245, 208, 255],
+        "cursor_color": [255, 222, 140, 255],
+        "status_color": [255, 222, 140, 230],
+        "cursor": ">"
+      },
+      "bindings": {
+        "keyboard": [
+          {
+            "label": "Up",
+            "default": "UP",
+            "bindings": [
+              { "action": "action.paddle.up", "device": "keyboard" },
+              { "action": "action.menu.up", "device": "keyboard" }
+            ]
+          },
+          {
+            "label": "Down",
+            "default": "DOWN",
+            "bindings": [
+              { "action": "action.paddle.down", "device": "keyboard" },
+              { "action": "action.menu.down", "device": "keyboard" }
+            ]
+          },
+          {
+            "label": "Left",
+            "default": "A",
+            "bindings": [
+              { "action": "action.menu.left", "device": "keyboard" }
+            ]
+          },
+          {
+            "label": "Right",
+            "default": "D",
+            "bindings": [
+              { "action": "action.menu.right", "device": "keyboard" }
+            ]
+          },
+          {
+            "label": "Accept",
+            "default": "RETURN",
+            "bindings": [
+              { "action": "action.menu.select", "device": "keyboard" },
+              { "action": "action.pause", "device": "keyboard" },
+              { "action": "action.restart", "device": "keyboard" }
+            ]
+          },
+          {
+            "label": "Cancel",
+            "default": "BACKSPACE",
+            "bindings": [
+              { "action": "action.exit", "device": "keyboard" }
+            ]
+          },
+          {
+            "label": "Ball Camera",
+            "default": "B",
+            "bindings": [
+              { "action": "action.camera.ball.toggle", "device": "keyboard" }
+            ]
+          }
+        ],
+        "gamepad": [
+          {
+            "label": "Up",
+            "default": "DPAD_UP",
+            "bindings": [
+              { "action": "action.paddle.up", "device": "gamepad" },
+              { "action": "action.menu.up", "device": "gamepad" }
+            ]
+          },
+          {
+            "label": "Down",
+            "default": "DPAD_DOWN",
+            "bindings": [
+              { "action": "action.paddle.down", "device": "gamepad" },
+              { "action": "action.menu.down", "device": "gamepad" }
+            ]
+          },
+          {
+            "label": "Left",
+            "default": "DPAD_LEFT",
+            "bindings": [
+              { "action": "action.menu.left", "device": "gamepad" }
+            ]
+          },
+          {
+            "label": "Right",
+            "default": "DPAD_RIGHT",
+            "bindings": [
+              { "action": "action.menu.right", "device": "gamepad" }
+            ]
+          },
+          {
+            "label": "Accept",
+            "default": "SOUTH",
+            "bindings": [
+              { "action": "action.menu.select", "device": "gamepad" },
+              { "action": "action.restart", "device": "gamepad" }
+            ]
+          },
+          {
+            "label": "Cancel",
+            "default": "BACK",
+            "bindings": [
+              { "action": "action.exit", "device": "gamepad" }
+            ]
+          },
+          {
+            "label": "Pause",
+            "default": "START",
+            "bindings": [
+              { "action": "action.pause", "device": "gamepad" }
+            ]
+          },
+          {
+            "label": "Ball Camera",
+            "default": "NORTH",
+            "bindings": [
+              { "action": "action.camera.ball.toggle", "device": "gamepad" }
+            ]
+          }
+        ]
+      }
+    }
   },
   "render": {
     "clear_color": [3, 4, 8, 255],
