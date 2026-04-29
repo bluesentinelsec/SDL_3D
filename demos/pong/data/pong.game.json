@@ -604,6 +604,9 @@
         "max_speed": { "type": "float", "value": 10.0 },
         "max_serve_angle": { "type": "float", "value": 0.52 },
         "max_reflect_angle": { "type": "float", "value": 1.05 },
+        "stagnant_reflect_epsilon": { "type": "float", "value": 0.08 },
+        "stagnant_reflect_limit": { "type": "int", "value": 2 },
+        "reflect_jitter_angle": { "type": "float", "value": 0.24 },
         "active_motion": { "type": "bool", "value": false }
       },
       "components": [
@@ -636,6 +639,9 @@
         "max_speed": { "type": "float", "value": 10.0 },
         "max_serve_angle": { "type": "float", "value": 0.52 },
         "max_reflect_angle": { "type": "float", "value": 1.05 },
+        "stagnant_reflect_epsilon": { "type": "float", "value": 0.08 },
+        "stagnant_reflect_limit": { "type": "int", "value": 2 },
+        "reflect_jitter_angle": { "type": "float", "value": 0.28 },
         "active_motion": { "type": "bool", "value": false }
       },
       "components": [
@@ -992,6 +998,8 @@
         "actions": [
           { "type": "property.set", "target": "entity.ball", "key": "active_motion", "value": false },
           { "type": "property.set", "target": "entity.ball", "key": "velocity", "value": [0.0, 0.0] },
+          { "type": "property.set", "target": "entity.ball", "key": "has_last_reflect_y", "value": false },
+          { "type": "property.set", "target": "entity.ball", "key": "stagnant_reflect_count", "value": 0 },
           { "type": "transform.set_position", "target": "entity.ball", "position": [0.0, 0.0, 0.12] },
           { "type": "transform.set_position", "target": "entity.paddle.player", "position": [-8.0, 0.0, 0.0] },
           { "type": "transform.set_position", "target": "entity.paddle.cpu", "position": [8.0, 0.0, 0.0] }
@@ -1002,6 +1010,8 @@
         "actions": [
           { "type": "property.set", "target": "entity.ball.attract", "key": "active_motion", "value": false },
           { "type": "property.set", "target": "entity.ball.attract", "key": "velocity", "value": [0.0, 0.0] },
+          { "type": "property.set", "target": "entity.ball.attract", "key": "has_last_reflect_y", "value": false },
+          { "type": "property.set", "target": "entity.ball.attract", "key": "stagnant_reflect_count", "value": 0 },
           { "type": "transform.set_position", "target": "entity.ball.attract", "position": [0.0, 0.0, 0.12] },
           { "type": "transform.set_position", "target": "entity.paddle.attract_left", "position": [-8.0, 0.0, 0.0] },
           { "type": "transform.set_position", "target": "entity.paddle.attract_right", "position": [8.0, 0.0, 0.0] },

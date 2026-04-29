@@ -2153,6 +2153,51 @@ TEST(GameDataRuntime, LuaAdapterReflectsBallFromPaddle)
     sdl3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, LuaAdapterAddsJitterAfterRepeatedFlatPaddleReflects)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+
+    sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
+    sdl3d_registered_actor *left = sdl3d_game_data_find_actor(runtime, "entity.paddle.player");
+    sdl3d_registered_actor *right = sdl3d_game_data_find_actor(runtime, "entity.paddle.cpu");
+    ASSERT_NE(ball, nullptr);
+    ASSERT_NE(left, nullptr);
+    ASSERT_NE(right, nullptr);
+
+    const int hit_signal = sdl3d_game_data_find_signal(runtime, "signal.ball.hit_paddle");
+    ASSERT_GE(hit_signal, 0);
+
+    auto emit_center_hit = [&](const char *paddle_name, float ball_x) {
+        ball->position = sdl3d_vec3_make(ball_x, 0.0f, 0.12f);
+        sdl3d_properties_set_vec3(ball->props, "origin", ball->position);
+
+        sdl3d_properties *payload = sdl3d_properties_create();
+        ASSERT_NE(payload, nullptr);
+        sdl3d_properties_set_string(payload, "actor_name", "entity.ball");
+        sdl3d_properties_set_string(payload, "other_actor_name", paddle_name);
+        sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), hit_signal, payload);
+        sdl3d_properties_destroy(payload);
+    };
+
+    emit_center_hit("entity.paddle.player", left->position.x + 0.10f);
+    sdl3d_vec3 velocity = sdl3d_properties_get_vec3(ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(velocity.y, 0.0f, 0.0001f);
+    EXPECT_EQ(sdl3d_properties_get_int(ball->props, "stagnant_reflect_count", -1), 1);
+
+    emit_center_hit("entity.paddle.cpu", right->position.x - 0.10f);
+    velocity = sdl3d_properties_get_vec3(ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_GT(SDL_fabsf(velocity.y), 1.0f);
+    EXPECT_EQ(sdl3d_properties_get_int(ball->props, "stagnant_reflect_count", -1), 0);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, LuaControllerMovesCpuPaddleTowardBall)
 {
     sdl3d_game_session *session = nullptr;
