@@ -1261,7 +1261,7 @@ extern "C"
                                                   const sdl3d_game_data_menu_item *item, int direction);
 
     /**
-     * @brief Start keyboard-capture mode for a key-binding menu item.
+     * @brief Start capture mode for a key or gamepad-button binding menu item.
      *
      * The menu item must author a `control` with `type: "key_binding"`.
      * While capture is active, callers should pass input snapshots to
@@ -1271,21 +1271,22 @@ extern "C"
     bool sdl3d_game_data_start_menu_key_binding_capture(sdl3d_game_data_runtime *runtime, const char *menu_name,
                                                         int item_index);
 
-    /** @brief Return true while a key-binding menu item is waiting for a key. */
+    /** @brief Return true while a binding menu item is waiting for an input. */
     bool sdl3d_game_data_menu_key_binding_capture_active(const sdl3d_game_data_runtime *runtime);
 
     /**
-     * @brief Advance active key-binding capture from current input.
+     * @brief Advance active binding capture from current input.
      *
-     * The runtime reads the first keyboard scancode captured by
-     * sdl3d_input_update(). Successful captures immediately update the live
-     * input manager for every action authored by the menu item.
+     * The runtime reads the first keyboard scancode or gamepad button captured
+     * by sdl3d_input_update(), depending on the menu item's authored device.
+     * Successful captures immediately update the live input manager for every
+     * action authored by the menu item.
      */
     sdl3d_game_data_key_binding_capture_status sdl3d_game_data_update_menu_key_binding_capture(
         sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input);
 
     /**
-     * @brief Reset all key-binding controls in a menu to their authored defaults.
+     * @brief Reset all binding controls in a menu to their authored defaults.
      */
     bool sdl3d_game_data_reset_menu_key_bindings(sdl3d_game_data_runtime *runtime, const char *menu_name);
 

@@ -271,11 +271,13 @@ TEST(Input, GamepadButtonPressAndRelease)
     sdl3d_input_update(input.input, 1);
     EXPECT_TRUE(sdl3d_input_is_held(input.input, pause));
     EXPECT_TRUE(sdl3d_input_is_pressed(input.input, pause));
+    EXPECT_EQ(sdl3d_input_get_pressed_gamepad_button(input.input), SDL_GAMEPAD_BUTTON_START);
 
     push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_UP, SDL_GAMEPAD_BUTTON_START);
     sdl3d_input_update(input.input, 2);
     EXPECT_FALSE(sdl3d_input_is_held(input.input, pause));
     EXPECT_TRUE(sdl3d_input_is_released(input.input, pause));
+    EXPECT_EQ(sdl3d_input_get_pressed_gamepad_button(input.input), SDL_GAMEPAD_BUTTON_INVALID);
 }
 
 TEST(Input, MultipleBindingsSameAction)

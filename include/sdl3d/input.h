@@ -244,6 +244,16 @@ extern "C"
     SDL_Scancode sdl3d_input_get_pressed_scancode(const sdl3d_input_manager *input);
 
     /**
+     * @brief Return the first gamepad button pressed during the current input tick.
+     *
+     * The value is captured by sdl3d_input_update() before transient button
+     * edges are cleared. Returns SDL_GAMEPAD_BUTTON_INVALID when no gamepad
+     * button was pressed or live gamepad input is unavailable, such as during
+     * demo playback.
+     */
+    SDL_GamepadButton sdl3d_input_get_pressed_gamepad_button(const sdl3d_input_manager *input);
+
+    /**
      * @brief Return true if any button-like input or action was pressed this tick.
      *
      * This supports generic flows such as splash screens where "press anything

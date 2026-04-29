@@ -1,7 +1,6 @@
 {
   "schema": "sdl3d.scene.v0",
   "name": "scene.options.gamepad",
-  "on_enter_signal": "signal.settings.snapshot_gamepad",
   "updates_game": false,
   "renders_world": false,
   "entities": [],
@@ -9,6 +8,8 @@
     "actions": [
       "action.menu.up",
       "action.menu.down",
+      "action.menu.left",
+      "action.menu.right",
       "action.menu.select"
     ]
   },
@@ -21,6 +22,8 @@
       "name": "menu.options.gamepad",
       "up_action": "action.menu.up",
       "down_action": "action.menu.down",
+      "left_action": "action.menu.left",
+      "right_action": "action.menu.right",
       "select_action": "action.menu.select",
       "move_signal": "signal.ui.menu.move",
       "select_signal": "signal.ui.menu.select",
@@ -47,10 +50,91 @@
             "key": "vibration"
           }
         },
-        { "label": "Apply", "signal": "signal.settings.apply", "scene": "scene.options" },
-        { "label": "Cancel", "signal": "signal.settings.cancel_gamepad", "scene": "scene.options" },
-        { "label": "Reset Gamepad Defaults", "signal": "signal.settings.reset_gamepad" },
-        { "label": "Back", "signal": "signal.settings.cancel_gamepad", "scene": "scene.options" }
+        {
+          "label": "Up",
+          "control": {
+            "type": "key_binding",
+            "default": "DPAD_UP",
+            "bindings": [
+              { "action": "action.paddle.up", "device": "gamepad" },
+              { "action": "action.menu.up", "device": "gamepad" }
+            ]
+          }
+        },
+        {
+          "label": "Down",
+          "control": {
+            "type": "key_binding",
+            "default": "DPAD_DOWN",
+            "bindings": [
+              { "action": "action.paddle.down", "device": "gamepad" },
+              { "action": "action.menu.down", "device": "gamepad" }
+            ]
+          }
+        },
+        {
+          "label": "Left",
+          "control": {
+            "type": "key_binding",
+            "default": "DPAD_LEFT",
+            "bindings": [
+              { "action": "action.menu.left", "device": "gamepad" }
+            ]
+          }
+        },
+        {
+          "label": "Right",
+          "control": {
+            "type": "key_binding",
+            "default": "DPAD_RIGHT",
+            "bindings": [
+              { "action": "action.menu.right", "device": "gamepad" }
+            ]
+          }
+        },
+        {
+          "label": "Accept",
+          "control": {
+            "type": "key_binding",
+            "default": "SOUTH",
+            "bindings": [
+              { "action": "action.menu.select", "device": "gamepad" },
+              { "action": "action.restart", "device": "gamepad" }
+            ]
+          }
+        },
+        {
+          "label": "Cancel",
+          "control": {
+            "type": "key_binding",
+            "default": "BACK",
+            "bindings": [
+              { "action": "action.exit", "device": "gamepad" }
+            ]
+          }
+        },
+        {
+          "label": "Pause",
+          "control": {
+            "type": "key_binding",
+            "default": "START",
+            "bindings": [
+              { "action": "action.pause", "device": "gamepad" }
+            ]
+          }
+        },
+        {
+          "label": "Ball Camera",
+          "control": {
+            "type": "key_binding",
+            "default": "NORTH",
+            "bindings": [
+              { "action": "action.camera.ball.toggle", "device": "gamepad" }
+            ]
+          }
+        },
+        { "label": "Reset Settings", "signal": "signal.settings.reset_gamepad" },
+        { "label": "Back", "scene": "scene.options" }
       ]
     }
   ],
@@ -61,10 +145,23 @@
         "font": "font.title",
         "text": "GAMEPAD",
         "x": 0.5,
-        "y": 0.20,
+        "y": 0.12,
         "normalized": true,
         "centered": true,
         "color": [242, 248, 255, 255]
+      },
+      {
+        "name": "ui.options.gamepad.status",
+        "font": "font.hud",
+        "format": "%s",
+        "bindings": [
+          { "type": "scene_state", "key": "gamepad_binding_status" }
+        ],
+        "x": 0.5,
+        "y": 0.88,
+        "normalized": true,
+        "centered": true,
+        "color": [172, 206, 255, 220]
       }
     ],
     "menus": [
@@ -73,8 +170,8 @@
         "menu": "menu.options.gamepad",
         "font": "font.hud",
         "x": 0.5,
-        "y": 0.38,
-        "gap": 0.078,
+        "y": 0.22,
+        "gap": 0.052,
         "normalized": true,
         "align": "center",
         "color": [225, 236, 255, 245],

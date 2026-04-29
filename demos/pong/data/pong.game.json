@@ -249,6 +249,7 @@
             "name": "action.paddle.up",
             "bindings": [
               { "device": "keyboard", "key": "UP" },
+              { "device": "gamepad", "button": "DPAD_UP" },
               { "device": "gamepad", "axis": "left_y", "scale": -1.0 }
             ]
           },
@@ -256,6 +257,7 @@
             "name": "action.paddle.down",
             "bindings": [
               { "device": "keyboard", "key": "DOWN" },
+              { "device": "gamepad", "button": "DPAD_DOWN" },
               { "device": "gamepad", "axis": "left_y", "scale": 1.0 }
             ]
           },
@@ -284,7 +286,8 @@
           {
             "name": "action.camera.ball.toggle",
             "bindings": [
-              { "device": "keyboard", "key": "B" }
+              { "device": "keyboard", "key": "B" },
+              { "device": "gamepad", "button": "NORTH" }
             ]
           },
           {
@@ -1036,13 +1039,14 @@
       {
         "signal": "signal.settings.reset_keyboard",
         "actions": [
-          { "type": "input.reset_key_bindings", "menu": "menu.options.keyboard" }
+          { "type": "input.reset_bindings", "menu": "menu.options.keyboard" }
         ]
       },
       {
         "signal": "signal.settings.reset_gamepad",
         "actions": [
-          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["gamepad_icons", "vibration"] }
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["gamepad_icons", "vibration"] },
+          { "type": "input.reset_bindings", "menu": "menu.options.gamepad" }
         ]
       },
       {

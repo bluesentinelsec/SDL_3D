@@ -2069,6 +2069,143 @@ TEST(GameDataRuntime, KeyboardOptionsCaptureAndApplyAuthoredKeyBindings)
     sdl3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, GamepadOptionsCaptureAndApplyAuthoredButtonBindings)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.gamepad"));
+
+    sdl3d_game_data_menu menu{};
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.options.gamepad");
+    EXPECT_EQ(menu.item_count, 12);
+
+    sdl3d_game_data_menu_item item{};
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Button Icons");
+    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_CHOICE);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
+    EXPECT_STREQ(item.label, "Up");
+    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING);
+    EXPECT_EQ(item.key_binding_count, 2);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 10, &item));
+    EXPECT_STREQ(item.label, "Reset Settings");
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    const int paddle_up = sdl3d_game_data_find_action(runtime, "action.paddle.up");
+    ASSERT_GE(paddle_up, 0);
+    const int menu_up = sdl3d_game_data_find_action(runtime, "action.menu.up");
+    ASSERT_GE(menu_up, 0);
+    const int exit_action = sdl3d_game_data_find_action(runtime, "action.exit");
+    ASSERT_GE(exit_action, 0);
+
+    ASSERT_TRUE(sdl3d_game_data_menu_move(runtime, "menu.options.gamepad", 2));
+    bool armed = true;
+    sdl3d_game_data_menu_update_result result{};
+    SDL_Event event{};
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_SOUTH;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 1);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.key_binding_capture_started);
+    EXPECT_TRUE(sdl3d_game_data_menu_key_binding_capture_active(runtime));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 2);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_WEST;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 3);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.key_binding_changed);
+    EXPECT_FALSE(sdl3d_game_data_menu_key_binding_capture_active(runtime));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 4);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_WEST;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 5);
+    EXPECT_TRUE(sdl3d_input_is_pressed(input, paddle_up));
+    EXPECT_TRUE(sdl3d_input_is_pressed(input, menu_up));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 6);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    ASSERT_TRUE(sdl3d_game_data_menu_move(runtime, "menu.options.gamepad", 1));
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_SOUTH;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 7);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.key_binding_capture_started);
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 8);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_WEST;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 9);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.key_binding_conflict);
+    EXPECT_TRUE(sdl3d_game_data_menu_key_binding_capture_active(runtime));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 10);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.scancode = SDL_SCANCODE_ESCAPE;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 11);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_FALSE(sdl3d_game_data_menu_key_binding_capture_active(runtime));
+
+    const int reset_gamepad = sdl3d_game_data_find_signal(runtime, "signal.settings.reset_gamepad");
+    ASSERT_GE(reset_gamepad, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), reset_gamepad, nullptr);
+
+    event.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 12);
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_DPAD_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 13);
+    EXPECT_TRUE(sdl3d_input_is_pressed(input, paddle_up));
+    EXPECT_TRUE(sdl3d_input_is_pressed(input, menu_up));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 14);
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_BACK;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 15);
+    EXPECT_TRUE(sdl3d_input_is_pressed(input, exit_action));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, AuthoredSettingsResetRestoresSelectedDefaults)
 {
     sdl3d_game_session *session = nullptr;

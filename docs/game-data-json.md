@@ -330,16 +330,17 @@ Range controls clamp to their authored min/max. Adding `"value_type": "int"`
 stores the result as an integer property; adding `"display": "slider"` renders
 the menu value as a compact slider label.
 
-`key_binding` controls capture the next keyboard key and immediately rebind all
-authored actions. This is how games can expose one player-facing input such as
-`Up` while updating both gameplay and menu actions:
+`key_binding` controls capture the next keyboard key or gamepad button and
+immediately rebind all authored actions for that device. This is how games can
+expose one player-facing input such as `Up` while updating both gameplay and
+menu actions:
 
 ```json
 {
   "label": "Up",
   "control": {
     "type": "key_binding",
-    "default": "W",
+    "default": "UP",
     "bindings": [
       { "action": "action.paddle.up", "device": "keyboard" },
       { "action": "action.menu.up", "device": "keyboard" }
@@ -348,13 +349,13 @@ authored actions. This is how games can expose one player-facing input such as
 }
 ```
 
-Duplicate keys within the same menu are rejected during capture. Pressing the
-capture cancel key, Escape by default, cancels capture unless the binding opts
-into `"allow_escape": true`. Resetting authored keyboard controls is a logic
-action:
+For gamepads, use the same control shape with `"device": "gamepad"` and a
+button name such as `"SOUTH"` or `"DPAD_UP"`. Duplicate inputs within the same
+menu are rejected during capture. Pressing the capture cancel key, Escape by
+default, cancels capture. Resetting authored binding controls is a logic action:
 
 ```json
-{ "type": "input.reset_key_bindings", "menu": "menu.options.keyboard" }
+{ "type": "input.reset_bindings", "menu": "menu.options.keyboard" }
 ```
 
 Settings menus that need Apply/Cancel behavior can still snapshot the edited

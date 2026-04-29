@@ -1149,10 +1149,10 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         }
         return true;
     }
-    if (SDL_strcmp(type, "input.reset_key_bindings") == 0)
+    if (SDL_strcmp(type, "input.reset_bindings") == 0)
     {
         if (!is_non_empty_string(action, "menu"))
-            return validation_error(ctx, json_path, "input.reset_key_bindings requires a non-empty menu");
+            return validation_error(ctx, json_path, "input.reset_bindings requires a non-empty menu");
         return true;
     }
     if (SDL_strcmp(type, "ui.animate") == 0)
@@ -2054,15 +2054,15 @@ static bool validate_menu_item_control(validation_context *ctx, yyjson_val *cont
         if (!yyjson_is_arr(bindings) || yyjson_arr_size(bindings) == 0)
             return validation_error(ctx, path, "key_binding control requires at least one binding");
         if (!is_non_empty_string(control, "default"))
-            return validation_error(ctx, path, "key_binding control requires a default key");
+            return validation_error(ctx, path, "key_binding control requires a default input");
         for (size_t i = 0; i < yyjson_arr_size(bindings); ++i)
         {
             yyjson_val *binding = yyjson_arr_get(bindings, i);
             if (!require_ref(ctx, &names->actions, "input action", json_string(binding, "action"), path))
                 return false;
             const char *device = json_string(binding, "device");
-            if (device != NULL && SDL_strcmp(device, "keyboard") != 0)
-                return validation_error(ctx, path, "key_binding controls currently support keyboard bindings only");
+            if (device != NULL && SDL_strcmp(device, "keyboard") != 0 && SDL_strcmp(device, "gamepad") != 0)
+                return validation_error(ctx, path, "key_binding controls support keyboard or gamepad bindings");
         }
     }
     return true;
