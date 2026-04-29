@@ -3205,7 +3205,28 @@ bool sdl3d_game_data_get_scene_transition(const sdl3d_game_data_runtime *runtime
     return transition_name != NULL && sdl3d_game_data_get_transition(runtime, transition_name, out_transition);
 }
 
-bool sdl3d_game_data_get_active_menu(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_menu *out_menu)
+static bool eval_data_condition(const sdl3d_game_data_runtime *runtime, yyjson_val *condition,
+                                const sdl3d_game_data_ui_metrics *metrics);
+
+static const scene_menu_state *active_scene_menu_for_metrics(const sdl3d_game_data_runtime *runtime,
+                                                             const sdl3d_game_data_ui_metrics *metrics)
+{
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    if (runtime == NULL || scene == NULL || scene->menu_count <= 0)
+        return NULL;
+
+    for (int i = 0; i < scene->menu_count; ++i)
+    {
+        yyjson_val *active_if = obj_get(scene->menus[i].menu, "active_if");
+        if (active_if == NULL || eval_data_condition(runtime, active_if, metrics))
+            return &scene->menus[i];
+    }
+    return NULL;
+}
+
+bool sdl3d_game_data_get_active_menu_for_metrics(const sdl3d_game_data_runtime *runtime,
+                                                 const sdl3d_game_data_ui_metrics *metrics,
+                                                 sdl3d_game_data_menu *out_menu)
 {
     if (out_menu != NULL)
     {
@@ -3216,11 +3237,12 @@ bool sdl3d_game_data_get_active_menu(const sdl3d_game_data_runtime *runtime, sdl
         out_menu->move_signal_id = -1;
         out_menu->select_signal_id = -1;
     }
-    const scene_entry *scene = active_scene_entry_const(runtime);
-    if (runtime == NULL || out_menu == NULL || scene == NULL || scene->menu_count <= 0)
+    if (runtime == NULL || out_menu == NULL)
         return false;
 
-    const scene_menu_state *state = &scene->menus[0];
+    const scene_menu_state *state = active_scene_menu_for_metrics(runtime, metrics);
+    if (state == NULL)
+        return false;
     yyjson_val *menu = state->menu;
     out_menu->name = json_string(menu, "name", NULL);
     out_menu->up_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "up_action", NULL));
@@ -3231,6 +3253,11 @@ bool sdl3d_game_data_get_active_menu(const sdl3d_game_data_runtime *runtime, sdl
     out_menu->selected_index = state->selected_index;
     out_menu->item_count = state->item_count;
     return out_menu->name != NULL && out_menu->item_count > 0;
+}
+
+bool sdl3d_game_data_get_active_menu(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_menu *out_menu)
+{
+    return sdl3d_game_data_get_active_menu_for_metrics(runtime, NULL, out_menu);
 }
 
 bool sdl3d_game_data_menu_move(sdl3d_game_data_runtime *runtime, const char *menu_name, int delta)
@@ -3260,6 +3287,18 @@ static sdl3d_game_data_menu_control_type parse_menu_control_type(const char *typ
 }
 
 static bool json_value_matches_property(yyjson_val *value, const sdl3d_value *property);
+static sdl3d_game_data_menu_pause_command parse_menu_pause_command(const char *pause)
+{
+    if (pause == NULL)
+        return SDL3D_GAME_DATA_MENU_PAUSE_NONE;
+    if (SDL_strcmp(pause, "pause") == 0)
+        return SDL3D_GAME_DATA_MENU_PAUSE_PAUSE;
+    if (SDL_strcmp(pause, "resume") == 0 || SDL_strcmp(pause, "unpause") == 0)
+        return SDL3D_GAME_DATA_MENU_PAUSE_RESUME;
+    if (SDL_strcmp(pause, "toggle") == 0)
+        return SDL3D_GAME_DATA_MENU_PAUSE_TOGGLE;
+    return SDL3D_GAME_DATA_MENU_PAUSE_NONE;
+}
 
 bool sdl3d_game_data_get_menu_item(const sdl3d_game_data_runtime *runtime, const char *menu_name, int index,
                                    sdl3d_game_data_menu_item *out_item)
@@ -3277,8 +3316,13 @@ bool sdl3d_game_data_get_menu_item(const sdl3d_game_data_runtime *runtime, const
     yyjson_val *control = obj_get(item, "control");
     out_item->label = json_string(item, "label", NULL);
     out_item->scene = json_string(item, "scene", NULL);
+    out_item->return_to = json_string(item, "return_to", NULL);
+    out_item->return_scene = json_bool(item, "return_scene", false);
     out_item->quit = json_bool(item, "quit", false);
     out_item->signal_id = sdl3d_game_data_find_signal(runtime, json_string(item, "signal", NULL));
+    out_item->pause_command = parse_menu_pause_command(json_string(item, "pause", NULL));
+    out_item->has_return_paused = obj_get(item, "return_paused") != NULL;
+    out_item->return_paused = json_bool(item, "return_paused", false);
     out_item->control_type = parse_menu_control_type(json_string(control, "type", NULL));
     out_item->control_target = json_string(control, "target", NULL);
     out_item->control_key = json_string(control, "key", NULL);
@@ -5356,6 +5400,16 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
 
     if (SDL_strncmp(type, "audio.", 6) == 0)
         return execute_audio_action(runtime, action, type);
+
+    if (SDL_strcmp(type, "entity.set_active") == 0)
+    {
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, json_string(action, "target", NULL));
+        yyjson_val *active = obj_get(action, "active");
+        if (actor == NULL || !yyjson_is_bool(active))
+            return false;
+        actor->active = yyjson_get_bool(active);
+        return true;
+    }
 
     if (SDL_strcmp(type, "transform.set_position") == 0)
     {

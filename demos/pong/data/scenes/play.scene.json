@@ -28,13 +28,53 @@
       "action.paddle.down",
       "action.pause",
       "action.restart",
-      "action.camera.ball.toggle"
+      "action.camera.ball.toggle",
+      "action.menu.up",
+      "action.menu.down",
+      "action.menu.select"
     ]
   },
   "transitions": {
     "enter": "scene_in",
     "exit": "scene_out"
   },
+  "menus": [
+    {
+      "name": "menu.match_over",
+      "active_if": { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "move_signal": "signal.ui.menu.move",
+      "select_signal": "signal.ui.menu.select",
+      "selected": 0,
+      "items": [
+        { "label": "Yes", "signal": "signal.match.restart" },
+        { "label": "No", "signal": "signal.match.reset", "scene": "scene.title" }
+      ]
+    },
+    {
+      "name": "menu.pause",
+      "active_if": {
+        "type": "all",
+        "conditions": [
+          { "type": "app.paused", "equals": true },
+          { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": false }
+        ]
+      },
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "move_signal": "signal.ui.menu.move",
+      "select_signal": "signal.ui.menu.select",
+      "selected": 0,
+      "items": [
+        { "label": "Resume", "pause": "resume" },
+        { "label": "Options", "pause": "resume", "scene": "scene.options", "return_to": "scene.play", "return_paused": true },
+        { "label": "Title", "pause": "resume", "signal": "signal.match.reset", "scene": "scene.title" }
+      ]
+    }
+  ],
   "ui": {
     "text": [
       {
@@ -67,7 +107,7 @@
           { "type": "property", "entity": "entity.score.cpu", "key": "value" }
         ],
         "x": 0.5,
-        "y": 22.0,
+        "y": 0.06,
         "normalized": true,
         "centered": true,
         "color": [235, 242, 255, 255]
@@ -82,9 +122,9 @@
             { "type": "property.compare", "target": "entity.match", "key": "winner", "op": "==", "value": "player" }
           ]
         },
-        "text": "You win!",
+        "text": "You win! Play again?",
         "x": 0.5,
-        "y": 0.40,
+        "y": 0.37,
         "normalized": true,
         "centered": true,
         "color": [255, 255, 255, 255]
@@ -99,23 +139,12 @@
             { "type": "property.compare", "target": "entity.match", "key": "winner", "op": "==", "value": "cpu" }
           ]
         },
-        "text": "You lose!",
+        "text": "You lose! Play again?",
         "x": 0.5,
-        "y": 0.40,
+        "y": 0.37,
         "normalized": true,
         "centered": true,
         "color": [255, 255, 255, 255]
-      },
-      {
-        "name": "ui.match.restart",
-        "font": "font.hud",
-        "visible_if": { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
-        "text": "Press enter to play again",
-        "x": 0.5,
-        "y": 0.49,
-        "normalized": true,
-        "centered": true,
-        "color": [200, 220, 255, 235]
       },
       {
         "name": "ui.pause",
@@ -129,7 +158,7 @@
         },
         "text": "PAUSED",
         "x": 0.5,
-        "y": 0.44,
+        "y": 0.35,
         "normalized": true,
         "centered": true,
         "pulse_alpha": true,
@@ -152,6 +181,56 @@
         "normalized": true,
         "centered": true,
         "color": [210, 225, 255, 190]
+      }
+    ],
+    "menus": [
+      {
+        "name": "ui.match.menu",
+        "menu": "menu.match_over",
+        "visible_if": { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
+        "font": "font.hud",
+        "x": 0.5,
+        "y": 0.48,
+        "gap": 0.08,
+        "normalized": true,
+        "align": "center",
+        "color": [225, 236, 255, 245],
+        "selected_color": [255, 245, 208, 255],
+        "selected_pulse_alpha": true,
+        "cursor": {
+          "text": ">",
+          "offset_x": -0.08,
+          "align": "center",
+          "color": [255, 222, 140, 255],
+          "pulse_alpha": true
+        }
+      },
+      {
+        "name": "ui.pause.menu",
+        "menu": "menu.pause",
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "app.paused", "equals": true },
+            { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": false }
+          ]
+        },
+        "font": "font.hud",
+        "x": 0.5,
+        "y": 0.45,
+        "gap": 0.075,
+        "normalized": true,
+        "align": "center",
+        "color": [225, 236, 255, 245],
+        "selected_color": [255, 245, 208, 255],
+        "selected_pulse_alpha": true,
+        "cursor": {
+          "text": ">",
+          "offset_x": -0.12,
+          "align": "center",
+          "color": [255, 222, 140, 255],
+          "pulse_alpha": true
+        }
       }
     ]
   }

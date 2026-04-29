@@ -647,8 +647,26 @@ bool sdl3d_game_data_draw_particles(const sdl3d_game_data_runtime *runtime, sdl3
     return true;
 }
 
-bool sdl3d_game_data_update_menus(sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input, bool *input_armed,
-                                  sdl3d_game_data_menu_update_result *out_result)
+static bool menu_input_is_idle(const sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input,
+                               const sdl3d_game_data_menu *menu)
+{
+    if (menu == NULL)
+        return true;
+    if (input == NULL)
+        return false;
+
+    return (menu->up_action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, menu->up_action_id) ||
+            !sdl3d_input_is_held(input, menu->up_action_id)) &&
+           (menu->down_action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, menu->down_action_id) ||
+            !sdl3d_input_is_held(input, menu->down_action_id)) &&
+           (menu->select_action_id < 0 ||
+            !sdl3d_game_data_active_scene_allows_action(runtime, menu->select_action_id) ||
+            !sdl3d_input_is_held(input, menu->select_action_id));
+}
+
+bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input,
+                                              bool *input_armed, const sdl3d_game_data_ui_metrics *metrics,
+                                              sdl3d_game_data_menu_update_result *out_result)
 {
     if (out_result != NULL)
     {
@@ -662,7 +680,7 @@ bool sdl3d_game_data_update_menus(sdl3d_game_data_runtime *runtime, const sdl3d_
         return false;
 
     sdl3d_game_data_menu menu;
-    if (!sdl3d_game_data_get_active_menu(runtime, &menu))
+    if (!sdl3d_game_data_get_active_menu_for_metrics(runtime, metrics, &menu))
         return true;
 
     if (out_result != NULL)
@@ -673,7 +691,7 @@ bool sdl3d_game_data_update_menus(sdl3d_game_data_runtime *runtime, const sdl3d_
 
     if (!*input_armed)
     {
-        if (sdl3d_game_data_active_menu_input_is_idle(runtime, input))
+        if (menu_input_is_idle(runtime, input, &menu))
             *input_armed = true;
         return true;
     }
@@ -701,7 +719,7 @@ bool sdl3d_game_data_update_menus(sdl3d_game_data_runtime *runtime, const sdl3d_
         handled = true;
 
         sdl3d_game_data_menu refreshed;
-        if (!sdl3d_game_data_get_active_menu(runtime, &refreshed))
+        if (!sdl3d_game_data_get_active_menu_for_metrics(runtime, metrics, &refreshed))
             return true;
 
         sdl3d_game_data_menu_item item;
@@ -717,7 +735,13 @@ bool sdl3d_game_data_update_menus(sdl3d_game_data_runtime *runtime, const sdl3d_
             out_result->control_changed = sdl3d_game_data_apply_menu_item_control(runtime, &item);
             out_result->quit = !out_result->control_changed && item.quit;
             out_result->scene = !out_result->control_changed ? item.scene : NULL;
+            out_result->return_to = !out_result->control_changed ? item.return_to : NULL;
+            out_result->return_scene = !out_result->control_changed && item.return_scene;
             out_result->signal_id = !out_result->control_changed ? item.signal_id : -1;
+            out_result->pause_command =
+                !out_result->control_changed ? item.pause_command : SDL3D_GAME_DATA_MENU_PAUSE_NONE;
+            out_result->has_return_paused = !out_result->control_changed && item.has_return_paused;
+            out_result->return_paused = item.return_paused;
         }
         else
         {
@@ -727,13 +751,19 @@ bool sdl3d_game_data_update_menus(sdl3d_game_data_runtime *runtime, const sdl3d_
     else if (handled && out_result != NULL)
     {
         sdl3d_game_data_menu refreshed;
-        if (sdl3d_game_data_get_active_menu(runtime, &refreshed))
+        if (sdl3d_game_data_get_active_menu_for_metrics(runtime, metrics, &refreshed))
             out_result->selected_index = refreshed.selected_index;
     }
 
     if (out_result != NULL)
         out_result->handled_input = handled;
     return true;
+}
+
+bool sdl3d_game_data_update_menus(sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input, bool *input_armed,
+                                  sdl3d_game_data_menu_update_result *out_result)
+{
+    return sdl3d_game_data_update_menus_for_metrics(runtime, input, input_armed, NULL, out_result);
 }
 
 void sdl3d_game_data_frame_state_init(sdl3d_game_data_frame_state *state)
@@ -963,29 +993,65 @@ static bool app_flow_request_scene(sdl3d_game_data_app_flow *flow, sdl3d_game_da
     return false;
 }
 
-static void app_flow_consume_menu(sdl3d_game_data_app_flow *flow, sdl3d_game_context *ctx,
+static void app_flow_apply_pause_command(sdl3d_game_context *ctx, sdl3d_game_data_menu_pause_command command)
+{
+    if (ctx == NULL)
+        return;
+
+    if (command == SDL3D_GAME_DATA_MENU_PAUSE_PAUSE)
+        ctx->paused = true;
+    else if (command == SDL3D_GAME_DATA_MENU_PAUSE_RESUME)
+        ctx->paused = false;
+    else if (command == SDL3D_GAME_DATA_MENU_PAUSE_TOGGLE)
+        ctx->paused = !ctx->paused;
+}
+
+static bool app_flow_consume_menu(sdl3d_game_data_app_flow *flow, sdl3d_game_context *ctx,
                                   sdl3d_game_data_runtime *runtime, sdl3d_input_manager *input, sdl3d_signal_bus *bus)
 {
     if (flow->quit_pending || sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
-        return;
+        return false;
+
+    sdl3d_game_data_ui_metrics metrics;
+    SDL_zero(metrics);
+    metrics.paused = ctx != NULL && ctx->paused;
 
     sdl3d_game_data_menu_update_result result;
-    if (!sdl3d_game_data_update_menus(runtime, input, &flow->scene_input_armed, &result) || !result.handled_input)
-        return;
+    if (!sdl3d_game_data_update_menus_for_metrics(runtime, input, &flow->scene_input_armed, &metrics, &result) ||
+        !result.handled_input)
+        return false;
 
     if (result.move_signal_id >= 0)
         sdl3d_signal_emit(bus, result.move_signal_id, NULL);
     if (result.select_signal_id >= 0)
         sdl3d_signal_emit(bus, result.select_signal_id, NULL);
     if (!result.selected)
-        return;
+        return true;
 
     if (result.signal_id >= 0)
         sdl3d_signal_emit(bus, result.signal_id, NULL);
+
+    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    if (result.return_to != NULL && scene_state != NULL)
+        sdl3d_properties_set_string(scene_state, "return_scene", result.return_to);
+    if (result.has_return_paused && scene_state != NULL)
+        sdl3d_properties_set_bool(scene_state, "return_paused", result.return_paused);
+
+    const char *scene = result.scene;
+    if (result.return_scene && scene_state != NULL)
+    {
+        scene = sdl3d_properties_get_string(scene_state, "return_scene", scene);
+        if (ctx != NULL)
+            ctx->paused = sdl3d_properties_get_bool(scene_state, "return_paused", ctx->paused);
+    }
+    app_flow_apply_pause_command(ctx, result.pause_command);
+
     if (result.quit)
         app_flow_request_quit(flow, ctx, runtime);
-    else if (result.scene != NULL)
-        (void)app_flow_request_scene(flow, runtime, result.scene);
+    else if (scene != NULL)
+        (void)app_flow_request_scene(flow, runtime, scene);
+
+    return true;
 }
 
 static void app_flow_consume_scene_shortcuts(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime,
@@ -1228,10 +1294,12 @@ bool sdl3d_game_data_app_flow_update(sdl3d_game_data_app_flow *flow, sdl3d_game_
 
         if (!skip_blocks_scene_shortcuts && !timeline_blocks_scene_shortcuts)
             app_flow_consume_scene_shortcuts(flow, runtime, input);
+        bool menu_consumed = false;
         if (!skip_blocks_menus && !timeline_blocks_menus)
-            app_flow_consume_menu(flow, ctx, runtime, input, bus);
+            menu_consumed = app_flow_consume_menu(flow, ctx, runtime, input, bus);
 
-        if (flow->app.pause_action_id >= 0 && sdl3d_input_is_pressed(input, flow->app.pause_action_id) &&
+        if (!menu_consumed && flow->app.pause_action_id >= 0 &&
+            sdl3d_input_is_pressed(input, flow->app.pause_action_id) &&
             sdl3d_game_data_active_scene_allows_action(runtime, flow->app.pause_action_id) && !flow->quit_pending &&
             !sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
         {

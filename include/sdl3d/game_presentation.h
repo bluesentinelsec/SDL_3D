@@ -116,16 +116,21 @@ extern "C"
      */
     typedef struct sdl3d_game_data_menu_update_result
     {
-        const char *menu;     /**< Runtime-owned active menu name, or NULL. */
-        const char *scene;    /**< Runtime-owned selected target scene, or NULL. */
-        int selected_index;   /**< Selected item index after this update, or -1. */
-        int signal_id;        /**< Selected signal id, or -1. */
-        int move_signal_id;   /**< Menu navigation signal id emitted by the host, or -1. */
-        int select_signal_id; /**< Menu activation signal id emitted by the host, or -1. */
-        bool handled_input;   /**< True when a menu action was consumed. */
-        bool selected;        /**< True when the selected item was activated. */
-        bool quit;            /**< True when the selected item requests quit. */
-        bool control_changed; /**< True when selecting the item changed a data-bound control. */
+        const char *menu;      /**< Runtime-owned active menu name, or NULL. */
+        const char *scene;     /**< Runtime-owned selected target scene, or NULL. */
+        const char *return_to; /**< Runtime-owned scene to store as return target, or NULL. */
+        int selected_index;    /**< Selected item index after this update, or -1. */
+        int signal_id;         /**< Selected signal id, or -1. */
+        int move_signal_id;    /**< Menu navigation signal id emitted by the host, or -1. */
+        int select_signal_id;  /**< Menu activation signal id emitted by the host, or -1. */
+        sdl3d_game_data_menu_pause_command pause_command; /**< Pause command requested by selected item. */
+        bool handled_input;                               /**< True when a menu action was consumed. */
+        bool selected;                                    /**< True when the selected item was activated. */
+        bool quit;                                        /**< True when the selected item requests quit. */
+        bool return_scene;      /**< True when the selected item requests the stored return scene. */
+        bool has_return_paused; /**< True when selected item stores a return pause state. */
+        bool return_paused;     /**< Pause state to store for a later return_scene item. */
+        bool control_changed;   /**< True when selecting the item changed a data-bound control. */
     } sdl3d_game_data_menu_update_result;
 
     /**
@@ -324,6 +329,17 @@ extern "C"
      */
     bool sdl3d_game_data_update_menus(sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input,
                                       bool *input_armed, sdl3d_game_data_menu_update_result *out_result);
+
+    /**
+     * @brief Update the active authored menu using current frame metrics.
+     *
+     * Use this when menu `active_if` conditions depend on metric-backed state
+     * such as app pause status. The basic sdl3d_game_data_update_menus()
+     * wrapper evaluates those metric-backed conditions with NULL metrics.
+     */
+    bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input,
+                                                  bool *input_armed, const sdl3d_game_data_ui_metrics *metrics,
+                                                  sdl3d_game_data_menu_update_result *out_result);
 
     /**
      * @brief Initialize reusable frame/update state.
