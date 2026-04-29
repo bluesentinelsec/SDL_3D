@@ -35,7 +35,7 @@
       },
       {
         "time": 0.0,
-        "action": { "type": "audio.play_music", "music": "music.title", "fade": 0.45 }
+        "action": { "type": "audio.play_music", "music": "music.title", "fade": 0.0 }
       },
       {
         "time": 0.05,

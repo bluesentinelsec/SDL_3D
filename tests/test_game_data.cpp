@@ -2074,7 +2074,45 @@ TEST(GameDataRuntime, SignalBindingsResolveLuaAdaptersDeclaredInJson)
     EXPECT_NEAR(ball->position.x, 0.0f, 0.0001f);
     EXPECT_NEAR(ball->position.y, 0.0f, 0.0001f);
     EXPECT_GT(SDL_sqrtf(velocity.x * velocity.x + velocity.y * velocity.y), 5.0f);
+    EXPECT_GT(SDL_fabsf(velocity.x), 4.8f);
+    EXPECT_GT(SDL_fabsf(velocity.y), 0.70f);
     EXPECT_TRUE(sdl3d_properties_get_bool(ball->props, "active_motion", false));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, PongTitleAttractServeHasJitterAndMovesCpuPaddles)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
+    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, sdl3d_game_session_get_input(session), 0.0f));
+
+    sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball.attract");
+    sdl3d_registered_actor *left = sdl3d_game_data_find_actor(runtime, "entity.paddle.attract_left");
+    sdl3d_registered_actor *right = sdl3d_game_data_find_actor(runtime, "entity.paddle.attract_right");
+    ASSERT_NE(ball, nullptr);
+    ASSERT_NE(left, nullptr);
+    ASSERT_NE(right, nullptr);
+
+    const sdl3d_vec3 velocity = sdl3d_properties_get_vec3(ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(sdl3d_properties_get_bool(ball->props, "active_motion", false));
+    EXPECT_GT(SDL_fabsf(velocity.x), 4.8f);
+    EXPECT_GT(SDL_fabsf(velocity.y), 1.0f);
+
+    const float initial_left_y = left->position.y;
+    const float initial_right_y = right->position.y;
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+
+    EXPECT_NE(left->position.y, initial_left_y);
+    EXPECT_NE(right->position.y, initial_right_y);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);

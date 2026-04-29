@@ -35,15 +35,6 @@
     "enter": "scene_in",
     "exit": "scene_out"
   },
-  "timeline": {
-    "autoplay": true,
-    "events": [
-      {
-        "time": 0.0,
-        "action": { "type": "audio.play_music", "music": "music.title", "fade": 0.35 }
-      }
-    ]
-  },
   "ui": {
     "text": [
       {

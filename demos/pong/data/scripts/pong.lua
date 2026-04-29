@@ -3,8 +3,11 @@ local pong = {}
 function pong.serve_random(ball, _, ctx)
     local base_speed = ball:get_float("base_speed", 5.6)
     local max_angle = ball:get_float("max_serve_angle", 0.52)
+    local min_angle = math.min(ball:get_float("min_serve_angle", 0.14), max_angle)
     local direction = ctx:random() < 0.5 and -1.0 or 1.0
-    local angle = (ctx:random() * 2.0 - 1.0) * max_angle
+    local angle_sign = ctx:random() < 0.5 and -1.0 or 1.0
+    local angle_span = math.max(max_angle - min_angle, 0.0)
+    local angle = angle_sign * (min_angle + ctx:random() * angle_span)
     local position = ball.position or Vec3(0.0, 0.0, 0.12)
 
     ball.position = Vec3(0.0, 0.0, position.z)
