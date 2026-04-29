@@ -15,15 +15,15 @@
     "title": "SDL3D Pong",
     "logical_width": 1280,
     "logical_height": 720,
-    "backend": "software",
+    "backend": "opengl",
     "window": {
-      "display_mode": "fullscreen_borderless",
+      "display_mode": "windowed",
       "development_display_mode": "windowed",
-      "production_display_mode": "fullscreen_borderless",
+      "production_display_mode": "windowed",
       "maximized": true,
       "resizable": true,
       "vsync": true,
-      "renderer": "software"
+      "renderer": "opengl"
     },
     "tick_rate": 0.008333333,
     "max_ticks_per_frame": 12,
@@ -735,9 +735,9 @@
       "properties": {
         "difficulty": { "type": "string", "value": "normal" },
         "lighting_profile": { "type": "string", "value": "cinematic" },
-        "display_mode": { "type": "string", "value": "fullscreen_borderless" },
+        "display_mode": { "type": "string", "value": "windowed" },
         "vsync": { "type": "bool", "value": true },
-        "renderer": { "type": "string", "value": "software" },
+        "renderer": { "type": "string", "value": "opengl" },
         "input_style": { "type": "string", "value": "keyboard" },
         "keyboard_preset": { "type": "string", "value": "xbox_parity" },
         "keyboard_move": { "type": "string", "value": "wasd" },

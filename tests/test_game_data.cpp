@@ -953,7 +953,7 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_EQ(config.height, 0);
     EXPECT_EQ(config.logical_width, 1280);
     EXPECT_EQ(config.logical_height, 720);
-    EXPECT_EQ(config.backend, SDL3D_BACKEND_SOFTWARE);
+    EXPECT_EQ(config.backend, SDL3D_BACKEND_OPENGL);
     EXPECT_EQ(config.display_mode, SDL3D_WINDOW_MODE_WINDOWED);
     EXPECT_GT(config.vsync, 0);
     EXPECT_GT(config.maximized, 0);
@@ -1315,11 +1315,7 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_EQ(item.choice_count, 3);
     sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings, nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "fullscreen_borderless");
-    ASSERT_TRUE(sdl3d_game_data_apply_menu_item_control(runtime, &item));
     EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 6, &item));
-    EXPECT_STREQ(item.scene, "scene.options");
 
     bool saw_options_value = false;
     auto find_options_value = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
@@ -1335,6 +1331,11 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     };
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_options_value, &saw_options_value));
     EXPECT_TRUE(saw_options_value);
+
+    ASSERT_TRUE(sdl3d_game_data_apply_menu_item_control(runtime, &item));
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "fullscreen_exclusive");
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 6, &item));
+    EXPECT_STREQ(item.scene, "scene.options");
 
     ScenePayloadCapture payload_capture{};
     const int start_signal = sdl3d_game_data_find_signal(runtime, "signal.game.start");
@@ -1783,7 +1784,7 @@ TEST(GameDataRuntime, OptionControlsStageValuesUntilApply)
 
     sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings, nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "fullscreen_exclusive");
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
@@ -1800,18 +1801,18 @@ TEST(GameDataRuntime, AuthoredSettingsResetRestoresSelectedDefaults)
 
     sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings, nullptr);
-    sdl3d_properties_set_string(settings->props, "display_mode", "windowed");
+    sdl3d_properties_set_string(settings->props, "display_mode", "fullscreen_exclusive");
     sdl3d_properties_set_bool(settings->props, "vsync", false);
-    sdl3d_properties_set_string(settings->props, "renderer", "opengl");
+    sdl3d_properties_set_string(settings->props, "renderer", "software");
     sdl3d_properties_set_string(settings->props, "difficulty", "hard");
 
     const int reset_display = sdl3d_game_data_find_signal(runtime, "signal.settings.reset_display");
     ASSERT_GE(reset_display, 0);
     sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), reset_display, nullptr);
 
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "fullscreen_borderless");
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
     EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vsync", false));
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "renderer", ""), "software");
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "renderer", ""), "opengl");
     EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "difficulty", ""), "hard");
 
     sdl3d_game_data_destroy(runtime);
@@ -3212,7 +3213,7 @@ TEST(GameDataRuntime, PongPersistenceSkipsOptionsAndLoadsHighScoresFromUserStora
                                                      sizeof(title), app_error, sizeof(app_error)))
         << app_error;
     EXPECT_EQ(persisted_config.display_mode, SDL3D_WINDOW_MODE_WINDOWED);
-    EXPECT_EQ(persisted_config.backend, SDL3D_BACKEND_SOFTWARE);
+    EXPECT_EQ(persisted_config.backend, SDL3D_BACKEND_OPENGL);
     EXPECT_GT(persisted_config.vsync, 0);
 
     {
@@ -3230,9 +3231,9 @@ TEST(GameDataRuntime, PongPersistenceSkipsOptionsAndLoadsHighScoresFromUserStora
         ASSERT_NE(settings, nullptr);
         EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "difficulty", ""), "normal");
         EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "lighting_profile", ""), "cinematic");
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "fullscreen_borderless");
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
         EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vsync", false));
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "renderer", ""), "software");
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "renderer", ""), "opengl");
         EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "input_style", ""), "keyboard");
         EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "keyboard_preset", ""), "xbox_parity");
         EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "gamepad_icons", ""), "xbox");
