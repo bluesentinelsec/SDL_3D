@@ -68,6 +68,7 @@ struct sdl3d_input_manager
     sdl3d_input_snapshot snapshot;
     bool prev_held[SDL3D_INPUT_MAX_ACTIONS];
     SDL_Scancode pressed_scancode;
+    Uint8 pressed_mouse_button;
     SDL_GamepadButton pressed_gamepad_button;
 
     SDL_Gamepad *gamepad;
@@ -479,6 +480,23 @@ static SDL_GamepadButton sdl3d_input_first_pressed_gamepad_button(const sdl3d_in
         }
     }
     return SDL_GAMEPAD_BUTTON_INVALID;
+}
+
+static Uint8 sdl3d_input_first_pressed_mouse_button(const sdl3d_input_manager *input)
+{
+    if (input == NULL)
+    {
+        return 0;
+    }
+
+    for (int i = 0; i < SDL3D_INPUT_MAX_MOUSE_BUTTONS; ++i)
+    {
+        if (input->mouse_pressed_this_frame[i])
+        {
+            return (Uint8)i;
+        }
+    }
+    return 0;
 }
 
 static bool sdl3d_demo_recorder_append(sdl3d_demo_recorder *recorder, const sdl3d_input_snapshot *snapshot)
@@ -957,6 +975,7 @@ const sdl3d_input_snapshot *sdl3d_input_update(sdl3d_input_manager *input, int t
         {
             input->snapshot = player->snapshots[player->cursor++];
             input->pressed_scancode = SDL_SCANCODE_UNKNOWN;
+            input->pressed_mouse_button = 0;
             input->pressed_gamepad_button = SDL_GAMEPAD_BUTTON_INVALID;
             SDL_memset(input->prev_held, 0, sizeof(input->prev_held));
             for (int i = 0; i < SDL3D_INPUT_MAX_ACTIONS; ++i)
@@ -975,6 +994,7 @@ const sdl3d_input_snapshot *sdl3d_input_update(sdl3d_input_manager *input, int t
     next.mouse_dy = input->mouse_dy_accum;
     next.any_pressed = sdl3d_input_physical_any_pressed(input);
     input->pressed_scancode = sdl3d_input_first_pressed_scancode(input);
+    input->pressed_mouse_button = sdl3d_input_first_pressed_mouse_button(input);
     input->pressed_gamepad_button = sdl3d_input_first_pressed_gamepad_button(input);
 
     for (int action_id = 0; action_id < input->action_count; ++action_id)
@@ -1041,6 +1061,11 @@ SDL_Scancode sdl3d_input_get_pressed_scancode(const sdl3d_input_manager *input)
 SDL_GamepadButton sdl3d_input_get_pressed_gamepad_button(const sdl3d_input_manager *input)
 {
     return input != NULL ? input->pressed_gamepad_button : SDL_GAMEPAD_BUTTON_INVALID;
+}
+
+Uint8 sdl3d_input_get_pressed_mouse_button(const sdl3d_input_manager *input)
+{
+    return input != NULL ? input->pressed_mouse_button : 0;
 }
 
 bool sdl3d_input_any_pressed(const sdl3d_input_manager *input)

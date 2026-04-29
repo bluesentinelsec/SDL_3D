@@ -379,8 +379,8 @@ Range controls clamp to their authored min/max. Adding `"value_type": "int"`
 stores the result as an integer property; adding `"display": "slider"` renders
 the menu value as a compact slider label.
 
-`input_binding` controls capture the next keyboard key or gamepad button and
-immediately rebind all authored actions for that device. This is how games can
+`input_binding` controls capture the next keyboard key, mouse button, or
+gamepad button and immediately rebind all authored actions for that device. This is how games can
 expose one player-facing input such as `Up` while updating both gameplay and
 menu actions:
 
@@ -467,19 +467,23 @@ Standard gamepad properties:
 | `gamepad_icons` | string | `xbox`, `nintendo`, `playstation` |
 | `vibration` | bool | `true` or `false` |
 
-Keyboard and gamepad configuration should be authored as action-oriented
+Keyboard, mouse, and gamepad configuration should be authored as action-oriented
 `input_binding` menu controls. Games decide which actions to expose, but each
 control should represent a player-facing intent such as `Up`, `Accept`,
 `Cancel`, or `Pause`, not a low-level device-specific operation. The same
 player-facing item may update multiple engine actions, such as gameplay
 movement and menu navigation.
 
+Gameplay input bindings may also use authored mouse axes and gamepad axes. The
+standard rebinding UI captures button-like inputs; analog axis rebinding needs
+game-specific policy for threshold, direction, and conflict behavior.
+
 Reusable options scenes should prefer immediate apply for settings where the
 player benefits from real-time feedback. Use Apply/Cancel snapshots only for
 screens that intentionally stage changes before committing them.
 
 The `standard_options` scene package generates root Options, Display, Keyboard,
-Gamepad, and Audio scenes from reusable engine templates. The game controls the
+Mouse, Gamepad, and Audio scenes from reusable engine templates. The game controls the
 scene ids, menu ids, settings actor, signals, input actions, fonts, theme
 colors, and player-facing input binding rows:
 
@@ -498,6 +502,7 @@ colors, and player-facing input binding rows:
         "root": "scene.options",
         "display": "scene.options.display",
         "keyboard": "scene.options.keyboard",
+        "mouse": "scene.options.mouse",
         "gamepad": "scene.options.gamepad",
         "audio": "scene.options.audio"
       },
@@ -515,6 +520,7 @@ colors, and player-facing input binding rows:
         "apply_audio": "signal.settings.apply_audio",
         "reset_display": "signal.settings.reset_display",
         "reset_keyboard": "signal.settings.reset_keyboard",
+        "reset_mouse": "signal.settings.reset_mouse",
         "reset_gamepad": "signal.settings.reset_gamepad",
         "reset_audio": "signal.settings.reset_audio"
       },
@@ -545,6 +551,7 @@ colors, and player-facing input binding rows:
         "root": { "title_y": 0.18, "menu_y": 0.36, "gap": 0.078, "cursor_offset_x": -0.14 },
         "display": { "title_y": 0.2, "menu_y": 0.38, "gap": 0.074, "cursor_offset_x": -0.18 },
         "keyboard": { "title_y": 0.13, "menu_y": 0.25, "gap": 0.062, "cursor_offset_x": -0.18 },
+        "mouse": { "title_y": 0.13, "menu_y": 0.30, "gap": 0.062, "cursor_offset_x": -0.18 },
         "gamepad": { "title_y": 0.12, "menu_y": 0.22, "gap": 0.052, "cursor_offset_x": -0.18 },
         "audio": { "title_y": 0.18, "menu_y": 0.39, "gap": 0.078, "cursor_offset_x": -0.18 }
       },
@@ -556,6 +563,15 @@ colors, and player-facing input binding rows:
             "bindings": [
               { "action": "action.player.up", "device": "keyboard" },
               { "action": "action.menu.up", "device": "keyboard" }
+            ]
+          }
+        ],
+        "mouse": [
+          {
+            "label": "Accept",
+            "default": "LEFT",
+            "bindings": [
+              { "action": "action.menu.select", "device": "mouse" }
             ]
           }
         ],

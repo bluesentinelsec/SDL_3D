@@ -254,11 +254,13 @@ TEST(Input, MouseButtonPressAndRelease)
     sdl3d_input_update(input.input, 1);
     EXPECT_TRUE(sdl3d_input_is_pressed(input.input, fire));
     EXPECT_TRUE(sdl3d_input_is_held(input.input, fire));
+    EXPECT_EQ(sdl3d_input_get_pressed_mouse_button(input.input), SDL_BUTTON_LEFT);
 
     push_mouse_button(input.input, SDL_EVENT_MOUSE_BUTTON_UP, SDL_BUTTON_LEFT);
     sdl3d_input_update(input.input, 2);
     EXPECT_TRUE(sdl3d_input_is_released(input.input, fire));
     EXPECT_FALSE(sdl3d_input_is_held(input.input, fire));
+    EXPECT_EQ(sdl3d_input_get_pressed_mouse_button(input.input), 0);
 }
 
 TEST(Input, GamepadButtonPressAndRelease)

@@ -17,7 +17,7 @@ extern "C"
 
     enum
     {
-        SDL3D_STANDARD_OPTIONS_SCENE_COUNT = 5
+        SDL3D_STANDARD_OPTIONS_SCENE_COUNT = 6
     };
 
     /**

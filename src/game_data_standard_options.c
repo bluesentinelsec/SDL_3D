@@ -27,6 +27,7 @@ typedef struct standard_options_layout
     standard_options_scene_layout root;
     standard_options_scene_layout display;
     standard_options_scene_layout keyboard;
+    standard_options_scene_layout mouse;
     standard_options_scene_layout gamepad;
     standard_options_scene_layout audio;
 } standard_options_layout;
@@ -42,11 +43,13 @@ typedef struct standard_options_config
     const char *root_scene;
     const char *display_scene;
     const char *keyboard_scene;
+    const char *mouse_scene;
     const char *gamepad_scene;
     const char *audio_scene;
     const char *root_menu;
     const char *display_menu;
     const char *keyboard_menu;
+    const char *mouse_menu;
     const char *gamepad_menu;
     const char *audio_menu;
     const char *up_action;
@@ -60,11 +63,13 @@ typedef struct standard_options_config
     const char *apply_audio_signal;
     const char *reset_display_signal;
     const char *reset_keyboard_signal;
+    const char *reset_mouse_signal;
     const char *reset_gamepad_signal;
     const char *reset_audio_signal;
     const char *title_font;
     const char *menu_font;
     const char *keyboard_status_key;
+    const char *mouse_status_key;
     const char *gamepad_status_key;
     const char *enter_transition;
     const char *exit_transition;
@@ -134,6 +139,7 @@ static void load_layout(standard_options_config *config)
     config->layout.root = load_scene_layout(layout, "root", scene_layout_defaults(0.18, 0.36, 0.078, -0.14));
     config->layout.display = load_scene_layout(layout, "display", scene_layout_defaults(0.20, 0.38, 0.074, -0.18));
     config->layout.keyboard = load_scene_layout(layout, "keyboard", scene_layout_defaults(0.13, 0.25, 0.062, -0.18));
+    config->layout.mouse = load_scene_layout(layout, "mouse", scene_layout_defaults(0.13, 0.30, 0.062, -0.18));
     config->layout.gamepad = load_scene_layout(layout, "gamepad", scene_layout_defaults(0.12, 0.22, 0.052, -0.18));
     config->layout.audio = load_scene_layout(layout, "audio", scene_layout_defaults(0.18, 0.39, 0.078, -0.18));
 }
@@ -461,6 +467,7 @@ static yyjson_doc *build_root_scene(const standard_options_config *config)
     yyjson_mut_val *items = scene != NULL ? add_menu(doc, scene, config, config->root_menu, false) : NULL;
     if (items == NULL || !add_scene_item(doc, items, "Display", config->display_scene) ||
         !add_scene_item(doc, items, "Keyboard", config->keyboard_scene) ||
+        !add_scene_item(doc, items, "Mouse", config->mouse_scene) ||
         !add_scene_item(doc, items, "Gamepad", config->gamepad_scene) ||
         !add_scene_item(doc, items, "Audio", config->audio_scene) || !add_back_item(doc, items, config, NULL) ||
         !add_basic_ui(doc, scene, config, "ui.options.title", "OPTIONS", config->layout.root.title_y, "ui.options.menu",
@@ -542,6 +549,32 @@ static yyjson_doc *build_keyboard_scene(const standard_options_config *config)
     return finish_scene_doc(doc, scene);
 }
 
+static yyjson_doc *build_mouse_scene(const standard_options_config *config)
+{
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *scene = doc != NULL ? create_scene(doc, config, config->mouse_scene, false) : NULL;
+    yyjson_mut_val *items = scene != NULL ? add_menu(doc, scene, config, config->mouse_menu, false) : NULL;
+    yyjson_mut_val *ui = NULL;
+    yyjson_mut_val *texts = NULL;
+    if (items == NULL || !add_input_binding_items(doc, items, obj_get(config->bindings, "mouse")) ||
+        !add_reset_item(doc, items, config->reset_mouse_signal) ||
+        !add_back_item(doc, items, config, config->root_scene) || (ui = add_ui(doc, scene)) == NULL ||
+        (texts = add_arr(doc, ui, "text")) == NULL ||
+        !add_title_text(doc, texts, config, "ui.options.mouse.title", "MOUSE", config->layout.mouse.title_y))
+    {
+        yyjson_mut_doc_free(doc);
+        return NULL;
+    }
+    if (!add_status_text(doc, texts, config, "ui.options.mouse.status", config->mouse_status_key, 255, 222, 140) ||
+        !add_menu_presenter(doc, ui, config, "ui.options.mouse.menu", config->mouse_menu, config->layout.mouse.menu_y,
+                            config->layout.mouse.gap, config->layout.mouse.cursor_offset_x))
+    {
+        yyjson_mut_doc_free(doc);
+        return NULL;
+    }
+    return finish_scene_doc(doc, scene);
+}
+
 static yyjson_doc *build_gamepad_scene(const standard_options_config *config)
 {
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
@@ -592,11 +625,13 @@ static bool load_config(yyjson_val *game_root, const char *package_name, standar
     config->root_scene = section_string(root, "scenes", "root", "scene.options");
     config->display_scene = section_string(root, "scenes", "display", "scene.options.display");
     config->keyboard_scene = section_string(root, "scenes", "keyboard", "scene.options.keyboard");
+    config->mouse_scene = section_string(root, "scenes", "mouse", "scene.options.mouse");
     config->gamepad_scene = section_string(root, "scenes", "gamepad", "scene.options.gamepad");
     config->audio_scene = section_string(root, "scenes", "audio", "scene.options.audio");
     config->root_menu = section_string(root, "menus", "root", "menu.options");
     config->display_menu = section_string(root, "menus", "display", "menu.options.display");
     config->keyboard_menu = section_string(root, "menus", "keyboard", "menu.options.keyboard");
+    config->mouse_menu = section_string(root, "menus", "mouse", "menu.options.mouse");
     config->gamepad_menu = section_string(root, "menus", "gamepad", "menu.options.gamepad");
     config->audio_menu = section_string(root, "menus", "audio", "menu.options.audio");
     config->up_action = section_string(root, "actions", "up", "action.menu.up");
@@ -610,11 +645,13 @@ static bool load_config(yyjson_val *game_root, const char *package_name, standar
     config->apply_audio_signal = section_string(root, "signals", "apply_audio", "signal.settings.apply_audio");
     config->reset_display_signal = section_string(root, "signals", "reset_display", "signal.settings.reset_display");
     config->reset_keyboard_signal = section_string(root, "signals", "reset_keyboard", "signal.settings.reset_keyboard");
+    config->reset_mouse_signal = section_string(root, "signals", "reset_mouse", "signal.settings.reset_mouse");
     config->reset_gamepad_signal = section_string(root, "signals", "reset_gamepad", "signal.settings.reset_gamepad");
     config->reset_audio_signal = section_string(root, "signals", "reset_audio", "signal.settings.reset_audio");
     config->title_font = section_string(root, "fonts", "title", "font.title");
     config->menu_font = section_string(root, "fonts", "menu", "font.hud");
     config->keyboard_status_key = json_string(root, "keyboard_status_key", "keyboard_binding_status");
+    config->mouse_status_key = json_string(root, "mouse_status_key", "mouse_binding_status");
     config->gamepad_status_key = json_string(root, "gamepad_status_key", "gamepad_binding_status");
     config->enter_transition = section_string(root, "transitions", "enter", "scene_in");
     config->exit_transition = section_string(root, "transitions", "exit", "scene_out");
@@ -648,8 +685,9 @@ bool sdl3d_standard_options_build_scene_docs(yyjson_val *game_root, const char *
     docs[0] = build_root_scene(&config);
     docs[1] = build_display_scene(&config);
     docs[2] = build_keyboard_scene(&config);
-    docs[3] = build_gamepad_scene(&config);
-    docs[4] = build_audio_scene(&config);
+    docs[3] = build_mouse_scene(&config);
+    docs[4] = build_gamepad_scene(&config);
+    docs[5] = build_audio_scene(&config);
     for (int i = 0; i < SDL3D_STANDARD_OPTIONS_SCENE_COUNT; ++i)
     {
         if (docs[i] == NULL)
