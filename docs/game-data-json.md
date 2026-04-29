@@ -522,6 +522,32 @@ colors, and player-facing input binding rows:
         "title": "font.title",
         "menu": "font.hud"
       },
+      "theme": {
+        "title_color": [242, 248, 255, 255],
+        "menu_color": [225, 236, 255, 245],
+        "selected_color": [255, 245, 208, 255],
+        "cursor_color": [255, 222, 140, 255],
+        "status_color": [255, 222, 140, 230],
+        "cursor": ">",
+        "slider_left": "[",
+        "slider_fill": "#",
+        "slider_empty": "-",
+        "slider_right": "]"
+      },
+      "layout": {
+        "title_x": 0.5,
+        "menu_x": 0.5,
+        "status_x": 0.5,
+        "status_y": 0.88,
+        "menu_align": "center",
+        "cursor_align": "center",
+        "selected_pulse_alpha": true,
+        "root": { "title_y": 0.18, "menu_y": 0.36, "gap": 0.078, "cursor_offset_x": -0.14 },
+        "display": { "title_y": 0.2, "menu_y": 0.38, "gap": 0.074, "cursor_offset_x": -0.18 },
+        "keyboard": { "title_y": 0.13, "menu_y": 0.25, "gap": 0.062, "cursor_offset_x": -0.18 },
+        "gamepad": { "title_y": 0.12, "menu_y": 0.22, "gap": 0.052, "cursor_offset_x": -0.18 },
+        "audio": { "title_y": 0.18, "menu_y": 0.39, "gap": 0.078, "cursor_offset_x": -0.18 }
+      },
       "bindings": {
         "keyboard": [
           {
@@ -550,8 +576,12 @@ colors, and player-facing input binding rows:
 ```
 
 The package owns common menu composition and standard setting controls; the game
-owns the bindings and names that make sense for its rules. Games can still
-author fully custom options scenes when they need a different structure.
+owns the bindings and names that make sense for its rules. `theme` controls
+colors, cursor text, and slider glyphs. `layout` controls normalized title,
+menu, status, row gap, cursor offset, alignment, and selected-item pulse values
+for each generated scene. Games can omit `theme` or `layout` fields to use sane
+defaults, or author fully custom options scenes when they need a different
+structure.
 
 Audio bus volume can also be driven from actor properties so options menus can
 share one generic settings actor. Use `source.scale` when the authored setting
