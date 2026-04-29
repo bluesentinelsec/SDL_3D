@@ -832,14 +832,8 @@
     "signal.presentation.flash_border",
     "signal.persistence.load",
     "signal.persistence.save_options",
-    "signal.settings.snapshot_display",
-    "signal.settings.snapshot_gamepad",
-    "signal.settings.snapshot_audio",
     "signal.settings.apply",
     "signal.settings.apply_audio",
-    "signal.settings.cancel_display",
-    "signal.settings.cancel_gamepad",
-    "signal.settings.cancel_audio",
     "signal.settings.reset_display",
     "signal.settings.reset_keyboard",
     "signal.settings.reset_gamepad",
@@ -991,43 +985,6 @@
         "actions": [
           { "type": "audio.set_bus_volume", "bus": "sfx", "source": { "target": "entity.settings", "key": "sfx_volume", "scale": 0.1 } },
           { "type": "audio.set_bus_volume", "bus": "music", "source": { "target": "entity.settings", "key": "music_volume", "scale": 0.1 } }
-        ]
-      },
-      {
-        "signal": "signal.settings.snapshot_display",
-        "actions": [
-          { "type": "property.snapshot", "name": "options.display", "target": "entity.settings", "keys": ["display_mode", "vsync", "renderer"] }
-        ]
-      },
-      {
-        "signal": "signal.settings.snapshot_gamepad",
-        "actions": [
-          { "type": "property.snapshot", "name": "options.gamepad", "target": "entity.settings", "keys": ["gamepad_icons", "vibration"] }
-        ]
-      },
-      {
-        "signal": "signal.settings.snapshot_audio",
-        "actions": [
-          { "type": "property.snapshot", "name": "options.audio", "target": "entity.settings", "keys": ["sfx_volume", "music_volume"] }
-        ]
-      },
-      {
-        "signal": "signal.settings.cancel_display",
-        "actions": [
-          { "type": "property.restore_snapshot", "name": "options.display", "target": "entity.settings" }
-        ]
-      },
-      {
-        "signal": "signal.settings.cancel_gamepad",
-        "actions": [
-          { "type": "property.restore_snapshot", "name": "options.gamepad", "target": "entity.settings" }
-        ]
-      },
-      {
-        "signal": "signal.settings.cancel_audio",
-        "actions": [
-          { "type": "property.restore_snapshot", "name": "options.audio", "target": "entity.settings" },
-          { "type": "signal.emit", "signal": "signal.settings.apply_audio" }
         ]
       },
       {

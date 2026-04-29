@@ -28,7 +28,7 @@
         {
           "label": "Up",
           "control": {
-            "type": "key_binding",
+            "type": "input_binding",
             "default": "UP",
             "bindings": [
               { "action": "action.paddle.up", "device": "keyboard" },
@@ -39,7 +39,7 @@
         {
           "label": "Down",
           "control": {
-            "type": "key_binding",
+            "type": "input_binding",
             "default": "DOWN",
             "bindings": [
               { "action": "action.paddle.down", "device": "keyboard" },
@@ -50,7 +50,7 @@
         {
           "label": "Left",
           "control": {
-            "type": "key_binding",
+            "type": "input_binding",
             "default": "A",
             "bindings": [
               { "action": "action.menu.left", "device": "keyboard" }
@@ -60,7 +60,7 @@
         {
           "label": "Right",
           "control": {
-            "type": "key_binding",
+            "type": "input_binding",
             "default": "D",
             "bindings": [
               { "action": "action.menu.right", "device": "keyboard" }
@@ -70,7 +70,7 @@
         {
           "label": "Accept",
           "control": {
-            "type": "key_binding",
+            "type": "input_binding",
             "default": "RETURN",
             "bindings": [
               { "action": "action.menu.select", "device": "keyboard" },
@@ -82,7 +82,7 @@
         {
           "label": "Cancel",
           "control": {
-            "type": "key_binding",
+            "type": "input_binding",
             "default": "BACKSPACE",
             "bindings": [
               { "action": "action.exit", "device": "keyboard" }
@@ -92,7 +92,7 @@
         {
           "label": "Ball Camera",
           "control": {
-            "type": "key_binding",
+            "type": "input_binding",
             "default": "B",
             "bindings": [
               { "action": "action.camera.ball.toggle", "device": "keyboard" }

@@ -127,13 +127,13 @@ extern "C"
         bool handled_input;                               /**< True when a menu action was consumed. */
         bool selected;                                    /**< True when the selected item was activated. */
         bool quit;                                        /**< True when the selected item requests quit. */
-        bool return_scene;                /**< True when the selected item requests the stored return scene. */
-        bool has_return_paused;           /**< True when selected item stores a return pause state. */
-        bool return_paused;               /**< Pause state to store for a later return_scene item. */
-        bool control_changed;             /**< True when selecting the item changed a data-bound control. */
-        bool key_binding_capture_started; /**< True when a key-binding item entered capture mode. */
-        bool key_binding_changed;         /**< True when a captured key changed authored action bindings. */
-        bool key_binding_conflict;        /**< True when a captured key was rejected as a duplicate binding. */
+        bool return_scene;                  /**< True when the selected item requests the stored return scene. */
+        bool has_return_paused;             /**< True when selected item stores a return pause state. */
+        bool return_paused;                 /**< Pause state to store for a later return_scene item. */
+        bool control_changed;               /**< True when selecting the item changed a data-bound control. */
+        bool input_binding_capture_started; /**< True when an input-binding item entered capture mode. */
+        bool input_binding_changed;         /**< True when a captured input changed authored action bindings. */
+        bool input_binding_conflict;        /**< True when a captured input was rejected as a duplicate binding. */
     } sdl3d_game_data_menu_update_result;
 
     /**

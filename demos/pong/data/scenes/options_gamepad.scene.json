@@ -53,7 +53,7 @@
         {
           "label": "Up",
           "control": {
-            "type": "key_binding",
+            "type": "input_binding",
             "default": "DPAD_UP",
             "bindings": [
               { "action": "action.paddle.up", "device": "gamepad" },
@@ -64,7 +64,7 @@
         {
           "label": "Down",
           "control": {
-            "type": "key_binding",
+            "type": "input_binding",
             "default": "DPAD_DOWN",
             "bindings": [
               { "action": "action.paddle.down", "device": "gamepad" },
@@ -75,7 +75,7 @@
         {
           "label": "Left",
           "control": {
-            "type": "key_binding",
+            "type": "input_binding",
             "default": "DPAD_LEFT",
             "bindings": [
               { "action": "action.menu.left", "device": "gamepad" }
@@ -85,7 +85,7 @@
         {
           "label": "Right",
           "control": {
-            "type": "key_binding",
+            "type": "input_binding",
             "default": "DPAD_RIGHT",
             "bindings": [
               { "action": "action.menu.right", "device": "gamepad" }
@@ -95,7 +95,7 @@
         {
           "label": "Accept",
           "control": {
-            "type": "key_binding",
+            "type": "input_binding",
             "default": "SOUTH",
             "bindings": [
               { "action": "action.menu.select", "device": "gamepad" },
@@ -106,7 +106,7 @@
         {
           "label": "Cancel",
           "control": {
-            "type": "key_binding",
+            "type": "input_binding",
             "default": "BACK",
             "bindings": [
               { "action": "action.exit", "device": "gamepad" }
@@ -116,7 +116,7 @@
         {
           "label": "Pause",
           "control": {
-            "type": "key_binding",
+            "type": "input_binding",
             "default": "START",
             "bindings": [
               { "action": "action.pause", "device": "gamepad" }
@@ -126,7 +126,7 @@
         {
           "label": "Ball Camera",
           "control": {
-            "type": "key_binding",
+            "type": "input_binding",
             "default": "NORTH",
             "bindings": [
               { "action": "action.camera.ball.toggle", "device": "gamepad" }

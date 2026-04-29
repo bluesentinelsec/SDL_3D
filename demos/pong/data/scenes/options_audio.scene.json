@@ -1,7 +1,6 @@
 {
   "schema": "sdl3d.scene.v0",
   "name": "scene.options.audio",
-  "on_enter_signal": "signal.settings.snapshot_audio",
   "updates_game": false,
   "renders_world": false,
   "entities": [],
