@@ -29,7 +29,7 @@
           "label": "Up",
           "control": {
             "type": "key_binding",
-            "default": "W",
+            "default": "UP",
             "bindings": [
               { "action": "action.paddle.up", "device": "keyboard" },
               { "action": "action.menu.up", "device": "keyboard" }
@@ -40,7 +40,7 @@
           "label": "Down",
           "control": {
             "type": "key_binding",
-            "default": "S",
+            "default": "DOWN",
             "bindings": [
               { "action": "action.paddle.down", "device": "keyboard" },
               { "action": "action.menu.down", "device": "keyboard" }
@@ -83,8 +83,7 @@
           "label": "Cancel",
           "control": {
             "type": "key_binding",
-            "default": "ESCAPE",
-            "allow_escape": true,
+            "default": "BACKSPACE",
             "bindings": [
               { "action": "action.exit", "device": "keyboard" }
             ]

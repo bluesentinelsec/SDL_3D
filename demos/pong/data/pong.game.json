@@ -248,7 +248,6 @@
           {
             "name": "action.paddle.up",
             "bindings": [
-              { "device": "keyboard", "key": "W" },
               { "device": "keyboard", "key": "UP" },
               { "device": "gamepad", "axis": "left_y", "scale": -1.0 }
             ]
@@ -256,7 +255,6 @@
           {
             "name": "action.paddle.down",
             "bindings": [
-              { "device": "keyboard", "key": "S" },
               { "device": "keyboard", "key": "DOWN" },
               { "device": "gamepad", "axis": "left_y", "scale": 1.0 }
             ]
@@ -272,7 +270,7 @@
           {
             "name": "action.exit",
             "bindings": [
-              { "device": "keyboard", "key": "ESCAPE" },
+              { "device": "keyboard", "key": "BACKSPACE" },
               { "device": "gamepad", "button": "BACK" }
             ]
           },
@@ -293,7 +291,6 @@
             "name": "action.menu.up",
             "bindings": [
               { "device": "keyboard", "key": "UP" },
-              { "device": "keyboard", "key": "W" },
               { "device": "gamepad", "button": "DPAD_UP" }
             ]
           },
@@ -301,7 +298,6 @@
             "name": "action.menu.down",
             "bindings": [
               { "device": "keyboard", "key": "DOWN" },
-              { "device": "keyboard", "key": "S" },
               { "device": "gamepad", "button": "DPAD_DOWN" }
             ]
           },

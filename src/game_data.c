@@ -1760,6 +1760,8 @@ static SDL_Scancode scancode_from_json(const char *name)
         return SDL_SCANCODE_RETURN;
     if (SDL_strcmp(name, "ESCAPE") == 0)
         return SDL_SCANCODE_ESCAPE;
+    if (SDL_strcmp(name, "BACKSPACE") == 0 || SDL_strcmp(name, "DELETE") == 0)
+        return SDL_SCANCODE_BACKSPACE;
     if (SDL_strlen(name) == 1)
         return SDL_GetScancodeFromKey(SDL_GetKeyFromName(name), NULL);
     return SDL_GetScancodeFromName(name);

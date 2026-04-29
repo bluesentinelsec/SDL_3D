@@ -1316,21 +1316,31 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_STREQ(item.label, "Up");
     EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING);
     EXPECT_EQ(item.key_binding_count, 2);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 5, &item));
+    EXPECT_STREQ(item.label, "Cancel");
+    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_KEY_BINDING);
+    EXPECT_EQ(item.key_binding_count, 1);
 
     bool saw_keyboard_up = false;
+    bool saw_keyboard_cancel = false;
     auto find_keyboard_up = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
-        auto *saw = static_cast<bool *>(userdata);
+        auto *saw = static_cast<std::pair<bool *, bool *> *>(userdata);
         const std::string name = text->name != nullptr ? text->name : "";
         const std::string value = text->text != nullptr ? text->text : "";
-        if (name == "ui.options.keyboard.menu" && value == "Up: W")
+        if (name == "ui.options.keyboard.menu" && value == "Up: Up")
         {
-            *saw = true;
-            return false;
+            *saw->first = true;
         }
-        return true;
+        if (name == "ui.options.keyboard.menu" && value == "Cancel: Backspace")
+        {
+            *saw->second = true;
+        }
+        return !*saw->first || !*saw->second;
     };
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_keyboard_up, &saw_keyboard_up));
+    std::pair<bool *, bool *> keyboard_binding_labels{&saw_keyboard_up, &saw_keyboard_cancel};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_keyboard_up, &keyboard_binding_labels));
     EXPECT_TRUE(saw_keyboard_up);
+    EXPECT_TRUE(saw_keyboard_cancel);
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
     ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
@@ -1950,6 +1960,8 @@ TEST(GameDataRuntime, KeyboardOptionsCaptureAndApplyAuthoredKeyBindings)
     ASSERT_GE(paddle_up, 0);
     const int menu_up = sdl3d_game_data_find_action(runtime, "action.menu.up");
     ASSERT_GE(menu_up, 0);
+    const int exit_action = sdl3d_game_data_find_action(runtime, "action.exit");
+    ASSERT_GE(exit_action, 0);
 
     bool armed = true;
     sdl3d_game_data_menu_update_result result{};
@@ -2038,11 +2050,20 @@ TEST(GameDataRuntime, KeyboardOptionsCaptureAndApplyAuthoredKeyBindings)
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 12);
     key.type = SDL_EVENT_KEY_DOWN;
-    key.key.scancode = SDL_SCANCODE_W;
+    key.key.scancode = SDL_SCANCODE_UP;
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 13);
     EXPECT_TRUE(sdl3d_input_is_pressed(input, paddle_up));
     EXPECT_TRUE(sdl3d_input_is_pressed(input, menu_up));
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 14);
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_BACKSPACE;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 15);
+    EXPECT_TRUE(sdl3d_input_is_pressed(input, exit_action));
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
@@ -2207,7 +2228,7 @@ TEST(GameDataRuntime, AppFlowConsumesAuthoredLifecycleAndSceneShortcutControls)
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 10);
     key.type = SDL_EVENT_KEY_DOWN;
-    key.key.scancode = SDL_SCANCODE_ESCAPE;
+    key.key.scancode = SDL_SCANCODE_BACKSPACE;
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 11);
     ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
