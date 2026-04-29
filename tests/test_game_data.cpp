@@ -3578,7 +3578,7 @@ return storage
     remove_test_dir(dir);
 }
 
-TEST(GameDataRuntime, PongPersistenceSkipsOptionsAndLoadsHighScoresFromUserStorage)
+TEST(GameDataRuntime, GenericPersistenceSavesOptionsAndPongLuaLoadsHighScores)
 {
     const std::filesystem::path dir = unique_test_dir("pong_persistence");
     const std::filesystem::path user_root = dir / "user";
@@ -3619,6 +3619,7 @@ TEST(GameDataRuntime, PongPersistenceSkipsOptionsAndLoadsHighScoresFromUserStora
         sdl3d_properties_set_bool(settings->props, "vibration", false);
         sdl3d_properties_set_int(settings->props, "sfx_volume", 4);
         sdl3d_properties_set_int(settings->props, "music_volume", 7);
+        sdl3d_properties_set_bool(settings->props, "options_persistence_enabled", true);
         emit(session, runtime, "signal.persistence.save_options");
 
         emit(session, runtime, "signal.match.player_won");
@@ -3632,11 +3633,13 @@ TEST(GameDataRuntime, PongPersistenceSkipsOptionsAndLoadsHighScoresFromUserStora
         sdl3d_game_session_destroy(session);
     }
 
-    EXPECT_FALSE(std::filesystem::exists(user_root / "settings" / "options.json"));
+    EXPECT_TRUE(std::filesystem::exists(user_root / "settings" / "options.json"));
     EXPECT_TRUE(std::filesystem::exists(user_root / "scores" / "pong_scores.json"));
-    write_text(
-        user_root / "settings" / "options.json",
-        R"json({"schema":"sdl3d.pong.options.v1","display_mode":"windowed","vsync":false,"renderer":"opengl","gamepad_icons":"playstation","vibration":false,"sfx_volume":4,"music_volume":7})json");
+    const std::string options_text = read_text(user_root / "settings" / "options.json");
+    EXPECT_NE(options_text.find("\"schema\": \"sdl3d.options.v1\""), std::string::npos);
+    EXPECT_NE(options_text.find("\"version\": 1"), std::string::npos);
+    EXPECT_NE(options_text.find("\"display_mode\": \"windowed\""), std::string::npos);
+    EXPECT_NE(options_text.find("\"gamepad_icons\": \"playstation\""), std::string::npos);
 
     sdl3d_game_config persisted_config{};
     char title[128]{};
@@ -3667,6 +3670,16 @@ TEST(GameDataRuntime, PongPersistenceSkipsOptionsAndLoadsHighScoresFromUserStora
         EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "gamepad_icons", ""), "xbox");
         EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vibration", false));
         EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
+        EXPECT_EQ(sdl3d_properties_get_int(settings->props, "music_volume", 0), 7);
+
+        sdl3d_properties_set_bool(settings->props, "options_persistence_enabled", true);
+        emit(session, runtime, "signal.persistence.load");
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
+        EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "vsync", true));
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "renderer", ""), "opengl");
+        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "gamepad_icons", ""), "playstation");
+        EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "vibration", true));
+        EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 4);
         EXPECT_EQ(sdl3d_properties_get_int(settings->props, "music_volume", 0), 7);
 
         sdl3d_registered_actor *scores = sdl3d_game_data_find_actor(runtime, "entity.high_scores");

@@ -6202,6 +6202,195 @@ static bool ensure_runtime_storage(sdl3d_game_data_runtime *runtime, char *error
     return sdl3d_storage_create(&runtime->storage_config, &runtime->storage, error_buffer, error_buffer_size);
 }
 
+static yyjson_val *find_persistence_entry(const sdl3d_game_data_runtime *runtime, const char *name)
+{
+    yyjson_val *entries = obj_get(obj_get(runtime_root(runtime), "persistence"), "entries");
+    for (size_t i = 0; name != NULL && yyjson_is_arr(entries) && i < yyjson_arr_size(entries); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(entries, i);
+        const char *entry_name = json_string(entry, "name", NULL);
+        if (entry_name != NULL && SDL_strcmp(entry_name, name) == 0)
+            return entry;
+    }
+    return NULL;
+}
+
+static const char *action_persistence_entry_name(yyjson_val *action)
+{
+    const char *entry = json_string(action, "entry", NULL);
+    return entry != NULL ? entry : json_string(action, "name", NULL);
+}
+
+static bool persistence_entry_is_enabled(sdl3d_game_data_runtime *runtime, yyjson_val *entry)
+{
+    yyjson_val *condition = obj_get(entry, "enabled_if");
+    return condition == NULL || eval_data_condition(runtime, condition, NULL);
+}
+
+static const char *persistence_property_key(yyjson_val *property)
+{
+    if (yyjson_is_str(property))
+        return yyjson_get_str(property);
+    return json_string(property, "key", NULL);
+}
+
+static bool json_add_property_value(yyjson_mut_doc *doc, yyjson_mut_val *object, const char *key,
+                                    const sdl3d_value *value)
+{
+    if (doc == NULL || object == NULL || key == NULL || value == NULL)
+        return false;
+
+    switch (value->type)
+    {
+    case SDL3D_VALUE_INT:
+        return yyjson_mut_obj_add_int(doc, object, key, value->as_int);
+    case SDL3D_VALUE_FLOAT:
+        return yyjson_mut_obj_add_real(doc, object, key, value->as_float);
+    case SDL3D_VALUE_BOOL:
+        return yyjson_mut_obj_add_bool(doc, object, key, value->as_bool);
+    case SDL3D_VALUE_STRING:
+        return yyjson_mut_obj_add_strcpy(doc, object, key, value->as_string != NULL ? value->as_string : "");
+    case SDL3D_VALUE_VEC3: {
+        yyjson_mut_val *arr = yyjson_mut_arr(doc);
+        return arr != NULL && yyjson_mut_arr_add_real(doc, arr, value->as_vec3.x) &&
+               yyjson_mut_arr_add_real(doc, arr, value->as_vec3.y) &&
+               yyjson_mut_arr_add_real(doc, arr, value->as_vec3.z) && yyjson_mut_obj_add_val(doc, object, key, arr);
+    }
+    case SDL3D_VALUE_COLOR: {
+        yyjson_mut_val *arr = yyjson_mut_arr(doc);
+        return arr != NULL && yyjson_mut_arr_add_int(doc, arr, value->as_color.r) &&
+               yyjson_mut_arr_add_int(doc, arr, value->as_color.g) &&
+               yyjson_mut_arr_add_int(doc, arr, value->as_color.b) &&
+               yyjson_mut_arr_add_int(doc, arr, value->as_color.a) && yyjson_mut_obj_add_val(doc, object, key, arr);
+    }
+    }
+    return false;
+}
+
+static bool execute_persistence_save(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *entry = find_persistence_entry(runtime, action_persistence_entry_name(action));
+    const char *path = json_string(entry, "path", NULL);
+    const char *target = json_string(entry, "target", NULL);
+    yyjson_val *properties = obj_get(entry, "properties");
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, target);
+    if (entry == NULL || path == NULL || actor == NULL || !yyjson_is_arr(properties))
+        return false;
+    if (!persistence_entry_is_enabled(runtime, entry))
+        return true;
+
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = doc != NULL ? yyjson_mut_obj(doc) : NULL;
+    if (root == NULL)
+    {
+        yyjson_mut_doc_free(doc);
+        return false;
+    }
+    yyjson_mut_doc_set_root(doc, root);
+
+    const char *schema = json_string(entry, "schema", NULL);
+    if (schema != NULL && !yyjson_mut_obj_add_strcpy(doc, root, "schema", schema))
+    {
+        yyjson_mut_doc_free(doc);
+        return false;
+    }
+    yyjson_val *version = obj_get(entry, "version");
+    if (yyjson_is_int(version) && !yyjson_mut_obj_add_int(doc, root, "version", (int)yyjson_get_int(version)))
+    {
+        yyjson_mut_doc_free(doc);
+        return false;
+    }
+
+    for (size_t i = 0; i < yyjson_arr_size(properties); ++i)
+    {
+        const char *key = persistence_property_key(yyjson_arr_get(properties, i));
+        if (key == NULL || key[0] == '\0')
+            continue;
+        const sdl3d_value *value = sdl3d_properties_get_value(actor->props, key);
+        if (value != NULL && !json_add_property_value(doc, root, key, value))
+        {
+            yyjson_mut_doc_free(doc);
+            return false;
+        }
+    }
+
+    size_t size = 0u;
+    char *json = yyjson_mut_write(doc, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &size);
+    yyjson_mut_doc_free(doc);
+    if (json == NULL)
+        return false;
+
+    char storage_error[256];
+    const bool ok =
+        ensure_runtime_storage(runtime, storage_error, (int)sizeof(storage_error)) &&
+        sdl3d_storage_write_file(runtime->storage, path, json, size, storage_error, (int)sizeof(storage_error));
+    free(json);
+    if (!ok)
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D persistence save failed: %s", storage_error);
+    return ok;
+}
+
+static bool execute_persistence_load(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *entry = find_persistence_entry(runtime, action_persistence_entry_name(action));
+    const char *path = json_string(entry, "path", NULL);
+    const char *target = json_string(entry, "target", NULL);
+    yyjson_val *properties = obj_get(entry, "properties");
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, target);
+    if (entry == NULL || path == NULL || actor == NULL || !yyjson_is_arr(properties))
+        return false;
+    if (!persistence_entry_is_enabled(runtime, entry))
+        return true;
+
+    char storage_error[256];
+    if (!ensure_runtime_storage(runtime, storage_error, (int)sizeof(storage_error)))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D persistence storage unavailable: %s", storage_error);
+        return false;
+    }
+
+    sdl3d_storage_buffer buffer;
+    SDL_zero(buffer);
+    if (!sdl3d_storage_read_file(runtime->storage, path, &buffer, storage_error, (int)sizeof(storage_error)))
+        return true;
+
+    yyjson_doc *doc = yyjson_read_opts((char *)buffer.data, buffer.size, YYJSON_READ_NOFLAG, NULL, NULL);
+    yyjson_val *root = doc != NULL ? yyjson_doc_get_root(doc) : NULL;
+    const char *schema = json_string(entry, "schema", NULL);
+    yyjson_val *version = obj_get(entry, "version");
+    const bool schema_ok = schema == NULL || SDL_strcmp(json_string(root, "schema", ""), schema) == 0;
+    const bool version_ok =
+        !yyjson_is_int(version) || (yyjson_is_int(obj_get(root, "version")) &&
+                                    yyjson_get_int(obj_get(root, "version")) == yyjson_get_int(version));
+    if (yyjson_is_obj(root) && schema_ok && version_ok)
+    {
+        for (size_t i = 0; i < yyjson_arr_size(properties); ++i)
+        {
+            const char *key = persistence_property_key(yyjson_arr_get(properties, i));
+            yyjson_val *value = key != NULL ? obj_get(root, key) : NULL;
+            if (value != NULL)
+                set_actor_property_from_json(actor, key, value);
+        }
+    }
+    else
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D persistence ignored incompatible file: %s", path);
+    }
+
+    yyjson_doc_free(doc);
+    sdl3d_storage_buffer_free(&buffer);
+    return true;
+}
+
+static bool execute_persistence_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const char *type)
+{
+    if (SDL_strcmp(type, "persistence.save") == 0)
+        return execute_persistence_save(runtime, action);
+    if (SDL_strcmp(type, "persistence.load") == 0)
+        return execute_persistence_load(runtime, action);
+    return false;
+}
+
 static bool ensure_audio_cache_storage(sdl3d_game_data_runtime *runtime)
 {
     char storage_error[256];
@@ -6706,6 +6895,9 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
 
     if (SDL_strncmp(type, "audio.", 6) == 0)
         return execute_audio_action(runtime, action, type);
+
+    if (SDL_strncmp(type, "persistence.", 12) == 0)
+        return execute_persistence_action(runtime, action, type);
 
     if (SDL_strcmp(type, "entity.set_active") == 0)
     {
