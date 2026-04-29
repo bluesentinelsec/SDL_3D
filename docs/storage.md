@@ -44,6 +44,11 @@ storage. The deterministic planner used by tests and tools follows this shape:
 If a profile is configured, SDL3D appends `profiles/<profile>`. The cache root
 then appends `cache`.
 
+Game-data audio actions materialize resolver-backed audio assets into
+`cache://audio`. Hosts that need to preload or inspect the resolved path can use
+`sdl3d_game_data_prepare_audio_file()`, which applies the same cache policy as
+`audio.play_sfx` and `audio.play_music`.
+
 ## Safety Rules
 
 Storage virtual paths are intentionally strict:

@@ -903,6 +903,24 @@ extern "C"
                                          sdl3d_game_data_music_asset *out_music);
 
     /**
+     * @brief Resolve an authored audio path to a filesystem path usable by audio backends.
+     *
+     * Resolver-backed assets such as `asset://audio/title.ogg` are materialized
+     * into the runtime's `cache://audio` storage root. Plain filesystem paths
+     * are resolved relative to the loaded game data file and returned without
+     * copying. The returned path is copied into @p out_path and remains valid
+     * independently of the runtime.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param path Authored audio path or asset URI.
+     * @param out_path Buffer that receives the filesystem path.
+     * @param out_path_size Size of @p out_path in bytes.
+     * @return true when the path was resolved and copied.
+     */
+    bool sdl3d_game_data_prepare_audio_file(sdl3d_game_data_runtime *runtime, const char *path, char *out_path,
+                                            int out_path_size);
+
+    /**
      * @brief Return the currently active authored camera name.
      *
      * The returned pointer is owned by the parsed JSON document and remains

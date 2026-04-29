@@ -2785,6 +2785,61 @@ TEST(GameDataRuntime, ValidatesAuthoredStorageConfig)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, MaterializesAudioAssetsThroughAuthoredCacheStorage)
+{
+    const std::filesystem::path dir = unique_test_dir("audio_cache_storage");
+    const std::filesystem::path user_root = dir / "user";
+    const std::filesystem::path cache_root = dir / "cache";
+    write_text(dir / "tone.wav", "audio bytes");
+
+    const std::string game_json = std::string(R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Audio Cache", "id": "test.audio_cache", "version": "0.1.0" },
+  "storage": {
+    "organization": "Blue Sentinel Security",
+    "application": "Audio Cache Test",
+    "user_root_override": ")json") +
+                                  user_root.generic_string() + R"json(",
+    "cache_root_override": ")json" +
+                                  cache_root.generic_string() + R"json("
+  },
+  "world": { "name": "world.audio_cache", "kind": "fixed_screen" },
+  "entities": []
+})json";
+    write_text(dir / "audio_cache.game.json", game_json.c_str());
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "audio_cache.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    char materialized_path[4096]{};
+    ASSERT_TRUE(
+        sdl3d_game_data_prepare_audio_file(runtime, "asset://tone.wav", materialized_path, sizeof(materialized_path)));
+    const std::filesystem::path materialized(materialized_path);
+    EXPECT_TRUE(std::filesystem::exists(materialized));
+    EXPECT_EQ(materialized.parent_path().filename().string(), "audio");
+
+    std::error_code ec;
+    EXPECT_TRUE(std::filesystem::equivalent(materialized.parent_path().parent_path(), cache_root, ec));
+
+    std::ifstream in(materialized, std::ios::binary);
+    const std::string contents((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    EXPECT_EQ(contents, "audio bytes");
+
+    char cached_path[4096]{};
+    ASSERT_TRUE(sdl3d_game_data_prepare_audio_file(runtime, "asset://tone.wav", cached_path, sizeof(cached_path)));
+    EXPECT_STREQ(cached_path, materialized_path);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, ValidationReportsWarningsWithoutFailingByDefault)
 {
     DiagnosticCapture capture;

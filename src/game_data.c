@@ -234,7 +234,7 @@ typedef struct sdl3d_game_data_runtime
     materialized_audio_file *audio_files;
     int audio_file_count;
     int audio_file_capacity;
-    char *audio_cache_dir;
+    sdl3d_storage *storage;
     const char *active_camera;
     scene_activity_state activity;
     float current_dt;
@@ -5106,34 +5106,42 @@ static char *make_safe_audio_filename(const char *path)
     return filename;
 }
 
-static bool ensure_audio_cache_dir(sdl3d_game_data_runtime *runtime)
+static bool ensure_audio_cache_storage(sdl3d_game_data_runtime *runtime)
 {
     if (runtime == NULL)
         return false;
-    if (runtime->audio_cache_dir != NULL)
-        return true;
 
-    char *pref = SDL_GetPrefPath("bluesentinelsec", "SDL3D");
-    if (pref == NULL)
-        return false;
-
-    runtime->audio_cache_dir = path_join(pref, "audio-cache");
-    SDL_free(pref);
-    if (runtime->audio_cache_dir == NULL)
-        return false;
-
-    if (SDL_CreateDirectory(runtime->audio_cache_dir))
+    char storage_error[256];
+    if (runtime->storage == NULL &&
+        !sdl3d_storage_create(&runtime->storage_config, &runtime->storage, storage_error, (int)sizeof(storage_error)))
     {
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio cache directory: %s", runtime->audio_cache_dir);
-        return true;
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio cache storage unavailable: %s", storage_error);
+        return false;
     }
 
-    SDL_PathInfo info;
-    SDL_zero(info);
-    const bool ok = SDL_GetPathInfo(runtime->audio_cache_dir, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
-    if (ok)
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio cache directory: %s", runtime->audio_cache_dir);
-    return ok;
+    if (!sdl3d_storage_create_directory(runtime->storage, "cache://audio", storage_error, (int)sizeof(storage_error)))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio cache directory unavailable: %s", storage_error);
+        return false;
+    }
+
+    char path[4096];
+    if (sdl3d_storage_resolve_path(runtime->storage, "cache://audio", path, sizeof(path)))
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio cache directory: %s", path);
+    return true;
+}
+
+static char *make_audio_cache_path(const sdl3d_game_data_runtime *runtime, const char *filename)
+{
+    char virtual_path[512];
+    char resolved[4096];
+    if (runtime == NULL || filename == NULL ||
+        SDL_snprintf(virtual_path, sizeof(virtual_path), "cache://audio/%s", filename) >= (int)sizeof(virtual_path) ||
+        !sdl3d_storage_resolve_path(runtime->storage, virtual_path, resolved, sizeof(resolved)))
+    {
+        return NULL;
+    }
+    return SDL_strdup(resolved);
 }
 
 static char *resolve_authored_audio_path(const sdl3d_game_data_runtime *runtime, const char *path)
@@ -5168,7 +5176,7 @@ static char *materialize_audio_asset(sdl3d_game_data_runtime *runtime, const cha
         return resolved;
     }
 
-    if (!ensure_audio_cache_dir(runtime))
+    if (!ensure_audio_cache_storage(runtime))
     {
         SDL_free(resolved);
         return NULL;
@@ -5185,7 +5193,11 @@ static char *materialize_audio_asset(sdl3d_game_data_runtime *runtime, const cha
     }
 
     char *filename = make_safe_audio_filename(resolved);
-    char *file_path = filename != NULL ? path_join(runtime->audio_cache_dir, filename) : NULL;
+    char virtual_path[512];
+    const bool has_virtual_path =
+        filename != NULL &&
+        SDL_snprintf(virtual_path, sizeof(virtual_path), "cache://audio/%s", filename) < (int)sizeof(virtual_path);
+    char *file_path = has_virtual_path ? make_audio_cache_path(runtime, filename) : NULL;
     SDL_free(filename);
     if (file_path == NULL)
     {
@@ -5194,14 +5206,14 @@ static char *materialize_audio_asset(sdl3d_game_data_runtime *runtime, const cha
         return NULL;
     }
 
-    SDL_IOStream *io = SDL_IOFromFile(file_path, "wb");
-    const bool wrote = io != NULL && SDL_WriteIO(io, buffer.data, buffer.size) == buffer.size;
-    if (io != NULL)
-        SDL_CloseIO(io);
+    char storage_error[256];
+    const bool wrote = sdl3d_storage_write_file(runtime->storage, virtual_path, buffer.data, buffer.size, storage_error,
+                                                (int)sizeof(storage_error));
     sdl3d_asset_buffer_free(&buffer);
     if (!wrote)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio asset materialization failed: %s", file_path);
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio asset materialization failed: %s: %s", file_path,
+                    storage_error);
         SDL_free(file_path);
         SDL_free(resolved);
         return NULL;
@@ -5228,6 +5240,26 @@ static char *materialize_audio_asset(sdl3d_game_data_runtime *runtime, const cha
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio asset materialized: %s -> %s", resolved, file_path);
     SDL_free(resolved);
     return file_path;
+}
+
+bool sdl3d_game_data_prepare_audio_file(sdl3d_game_data_runtime *runtime, const char *path, char *out_path,
+                                        int out_path_size)
+{
+    if (out_path != NULL && out_path_size > 0)
+        out_path[0] = '\0';
+    if (runtime == NULL || path == NULL || path[0] == '\0' || out_path == NULL || out_path_size <= 0)
+        return false;
+
+    char *file_path = materialize_audio_asset(runtime, path);
+    if (file_path == NULL)
+        return false;
+
+    const size_t len = SDL_strlen(file_path);
+    const bool ok = len < (size_t)out_path_size;
+    if (ok)
+        SDL_memcpy(out_path, file_path, len + 1u);
+    SDL_free(file_path);
+    return ok;
 }
 
 static bool execute_audio_play_sfx(sdl3d_game_data_runtime *runtime, yyjson_val *action)
@@ -5263,8 +5295,8 @@ static bool execute_audio_play_sfx(sdl3d_game_data_runtime *runtime, yyjson_val 
     desc.pan = json_float(action, "pan", desc.pan);
     desc.bus = parse_audio_bus(json_string(action, "bus", NULL), desc.bus);
 
-    char *file_path = materialize_audio_asset(runtime, path);
-    if (file_path == NULL)
+    char file_path[4096];
+    if (!sdl3d_game_data_prepare_audio_file(runtime, path, file_path, sizeof(file_path)))
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio.play_sfx failed to resolve: %s", path);
         return false;
@@ -5274,7 +5306,6 @@ static bool execute_audio_play_sfx(sdl3d_game_data_runtime *runtime, yyjson_val 
     const bool ok = sdl3d_audio_play_sound_file(audio, file_path, &desc);
     if (!ok)
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio.play_sfx failed: %s", SDL_GetError());
-    SDL_free(file_path);
     return ok;
 }
 
@@ -5303,8 +5334,8 @@ static bool execute_audio_play_music(sdl3d_game_data_runtime *runtime, yyjson_va
     const bool loop = json_bool(action, "loop", has_asset ? music.loop : true);
     const float fade = json_float(action, "fade", json_float(action, "fade_seconds", 0.0f));
 
-    char *file_path = materialize_audio_asset(runtime, path);
-    if (file_path == NULL)
+    char file_path[4096];
+    if (!sdl3d_game_data_prepare_audio_file(runtime, path, file_path, sizeof(file_path)))
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio.play_music failed to resolve: %s", path);
         return false;
@@ -5314,7 +5345,6 @@ static bool execute_audio_play_music(sdl3d_game_data_runtime *runtime, yyjson_va
     const bool ok = sdl3d_audio_play_music(audio, file_path, loop, volume, fade);
     if (!ok)
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio.play_music failed: %s", SDL_GetError());
-    SDL_free(file_path);
     return ok;
 }
 
@@ -6661,10 +6691,10 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
 
     sdl3d_script_engine_destroy(runtime->scripts);
     sdl3d_properties_destroy(runtime->scene_state);
+    sdl3d_storage_destroy(runtime->storage);
     if (runtime->owns_assets)
         sdl3d_asset_resolver_destroy(runtime->assets);
     SDL_free(runtime->base_dir);
-    SDL_free(runtime->audio_cache_dir);
     SDL_free(runtime->scenes);
     SDL_free(runtime->script_entries);
     SDL_free(runtime->signals);
