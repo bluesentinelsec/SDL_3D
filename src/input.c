@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_iostream.h>
+#include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
 #include <stdint.h>
@@ -212,6 +213,8 @@ static void sdl3d_input_close_gamepad(sdl3d_input_manager *input, sdl3d_input_ga
         return;
     }
 
+    const int slot_index = (int)(slot - input->gamepads);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D gamepad slot closing: slot=%d id=%d", slot_index, slot->id);
     if (slot->gamepad != NULL)
     {
         SDL_CloseGamepad(slot->gamepad);
@@ -264,6 +267,10 @@ static bool sdl3d_input_open_gamepad_slot(sdl3d_input_manager *input, SDL_Joysti
     {
         sdl3d_input_sync_gamepad_slot(slot);
     }
+    const char *name = slot->gamepad != NULL ? SDL_GetGamepadName(slot->gamepad) : NULL;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D gamepad slot open: slot=%d id=%d name=%s connected=%d",
+                (int)(slot - input->gamepads), joystick_id, name != NULL ? name : "<unopened>",
+                slot->gamepad != NULL ? 1 : 0);
     return true;
 }
 
@@ -1141,9 +1148,11 @@ void sdl3d_input_process_event(sdl3d_input_manager *input, const SDL_Event *even
         }
         break;
     case SDL_EVENT_GAMEPAD_ADDED:
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D gamepad added event: id=%d", event->gdevice.which);
         (void)sdl3d_input_open_gamepad_slot(input, event->gdevice.which);
         break;
     case SDL_EVENT_GAMEPAD_REMOVED: {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D gamepad removed event: id=%d", event->gdevice.which);
         sdl3d_input_gamepad_slot *slot = sdl3d_input_find_gamepad_slot(input, event->gdevice.which);
         if (slot != NULL)
         {
@@ -1172,6 +1181,9 @@ void sdl3d_input_process_event(sdl3d_input_manager *input, const SDL_Event *even
                 value = -1.0f;
             }
             slot->axis_value[event->gaxis.axis] = sdl3d_input_clampf(value, -1.0f, 1.0f);
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "SDL3D gamepad axis motion: id=%d axis=%d value=%d normalized=%.3f", event->gaxis.which,
+                        event->gaxis.axis, event->gaxis.value, slot->axis_value[event->gaxis.axis]);
         }
         break;
     }
@@ -1191,6 +1203,8 @@ void sdl3d_input_process_event(sdl3d_input_manager *input, const SDL_Event *even
         {
             slot->button_down[event->gbutton.button] = true;
             slot->button_pressed_this_frame[event->gbutton.button] = true;
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D gamepad button down: id=%d button=%d",
+                        event->gbutton.which, event->gbutton.button);
         }
         break;
     }
@@ -1210,6 +1224,8 @@ void sdl3d_input_process_event(sdl3d_input_manager *input, const SDL_Event *even
         {
             slot->button_down[event->gbutton.button] = false;
             slot->button_released_this_frame[event->gbutton.button] = true;
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D gamepad button up: id=%d button=%d", event->gbutton.which,
+                        event->gbutton.button);
         }
         break;
     }
@@ -1463,8 +1479,14 @@ bool sdl3d_input_rumble_gamepad(sdl3d_input_manager *input, int gamepad_index, f
         return false;
     }
 
-    return SDL_RumbleGamepad(slot->gamepad, sdl3d_input_rumble_scale(low_frequency_rumble),
-                             sdl3d_input_rumble_scale(high_frequency_rumble), duration_ms);
+    const bool ok = SDL_RumbleGamepad(slot->gamepad, sdl3d_input_rumble_scale(low_frequency_rumble),
+                                      sdl3d_input_rumble_scale(high_frequency_rumble), duration_ms);
+    const char *name = SDL_GetGamepadName(slot->gamepad);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "SDL3D gamepad rumble: slot=%d id=%d name=%s low=%.3f high=%.3f duration=%u result=%s error=%s",
+                gamepad_index, slot->id, name != NULL ? name : "<unknown>", low_frequency_rumble, high_frequency_rumble,
+                duration_ms, ok ? "ok" : "failed", ok ? "" : SDL_GetError());
+    return ok;
 }
 
 bool sdl3d_input_rumble_all_gamepads(sdl3d_input_manager *input, float low_frequency_rumble,
@@ -1482,8 +1504,10 @@ bool sdl3d_input_rumble_all_gamepads(sdl3d_input_manager *input, float low_frequ
         {
             continue;
         }
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D gamepad rumble request routed to slot=%d", i);
         any = sdl3d_input_rumble_gamepad(input, i, low_frequency_rumble, high_frequency_rumble, duration_ms) || any;
     }
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D gamepad rumble all result=%s", any ? "accepted" : "rejected");
     return any;
 }
 

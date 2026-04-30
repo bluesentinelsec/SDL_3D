@@ -50,8 +50,8 @@ static void on_gamepad_feedback(void *userdata, int signal_id, const sdl3d_prope
     {
         if (!sdl3d_input_rumble_all_gamepads(state->input, 0.30f, 0.70f, 100))
         {
-            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                         "Pong vibration feedback requested but no rumble-capable gamepad accepted it");
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "Pong vibration feedback requested but no rumble-capable gamepad accepted it");
         }
         return;
     }
@@ -66,8 +66,8 @@ static void on_gamepad_feedback(void *userdata, int signal_id, const sdl3d_prope
     {
         if (!sdl3d_input_rumble_all_gamepads(state->input, 0.45f, 0.75f, 120))
         {
-            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                         "Pong paddle hit rumble requested but no rumble-capable gamepad accepted it");
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "Pong paddle hit rumble requested but no rumble-capable gamepad accepted it");
         }
     }
 }
@@ -143,6 +143,13 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
     }
 
     state->input = sdl3d_game_session_get_input(ctx->session);
+    const int gamepad_count = state->input != NULL ? sdl3d_input_gamepad_count(state->input) : 0;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong gamepad count at init: %d", gamepad_count);
+    for (int i = 0; i < gamepad_count; ++i)
+    {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong gamepad slot: slot=%d id=%d connected=%d", i,
+                    sdl3d_input_gamepad_id_at(state->input, i), sdl3d_input_gamepad_is_connected(state->input, i));
+    }
     state->paddle_hit_connection = 0;
     state->vibration_connection = 0;
     state->ball_hit_signal_id = sdl3d_game_data_find_signal(state->data, "signal.ball.hit_paddle");
