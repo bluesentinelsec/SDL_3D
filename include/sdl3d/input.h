@@ -74,6 +74,7 @@ extern "C"
     {
         int action_id;             /**< Registered action ID. */
         sdl3d_input_source source; /**< Source device/control kind. */
+        int gamepad_index;         /**< Specific gamepad slot, or -1 for any connected slot. */
         int required_modifiers;    /**< sdl3d_input_modifier mask for keyboard bindings. */
         int excluded_modifiers;    /**< sdl3d_input_modifier mask that must be absent for keyboard bindings. */
         union {
@@ -185,6 +186,15 @@ extern "C"
     void sdl3d_input_bind_gamepad_button(sdl3d_input_manager *input, int action_id, SDL_GamepadButton button);
 
     /**
+     * @brief Bind a gamepad button to an action for one specific slot.
+     *
+     * Pass a slot in [0, SDL3D_INPUT_MAX_GAMEPADS) to require one controller,
+     * or -1 to match any connected controller.
+     */
+    void sdl3d_input_bind_gamepad_button_at(sdl3d_input_manager *input, int action_id, int gamepad_index,
+                                            SDL_GamepadButton button);
+
+    /**
      * @brief Bind a gamepad axis to an action.
      *
      * If the same physical axis is bound to another action with an opposite
@@ -192,6 +202,15 @@ extern "C"
      * directional actions such as move_forward/move_back on one stick axis.
      */
     void sdl3d_input_bind_gamepad_axis(sdl3d_input_manager *input, int action_id, SDL_GamepadAxis axis, float scale);
+
+    /**
+     * @brief Bind a gamepad axis to an action for one specific slot.
+     *
+     * Pass a slot in [0, SDL3D_INPUT_MAX_GAMEPADS) to require one controller,
+     * or -1 to match any connected controller.
+     */
+    void sdl3d_input_bind_gamepad_axis_at(sdl3d_input_manager *input, int action_id, int gamepad_index,
+                                          SDL_GamepadAxis axis, float scale);
 
     /** @brief Remove all bindings for an action. */
     void sdl3d_input_unbind_action(sdl3d_input_manager *input, int action_id);

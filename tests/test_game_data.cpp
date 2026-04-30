@@ -950,6 +950,8 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     EXPECT_NE(sdl3d_game_data_find_actor_with_tags(runtime, paddle_tags, 2), nullptr);
     EXPECT_GE(sdl3d_game_data_find_signal(runtime, "signal.ball.serve"), 0);
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.paddle.up"), 0);
+    EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.paddle.local.up"), 0);
+    EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.paddle.local.down"), 0);
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.scene.title"), 0);
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.scene.options"), 0);
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.scene.play"), 0);

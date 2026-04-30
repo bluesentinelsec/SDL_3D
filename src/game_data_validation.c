@@ -11,6 +11,7 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "game_data_standard_options.h"
+#include "sdl3d/input.h"
 
 #define PATH_BUFFER_SIZE 256
 
@@ -970,6 +971,10 @@ static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)
                 {
                     if (!is_non_empty_string(binding, "axis") && !is_non_empty_string(binding, "button"))
                         return validation_error(ctx, path, "gamepad binding requires an axis or button");
+                    yyjson_val *slot = obj_get(binding, "slot");
+                    if (slot != NULL && (!yyjson_is_num(slot) || yyjson_get_sint(slot) < -1 ||
+                                         yyjson_get_sint(slot) >= SDL3D_INPUT_MAX_GAMEPADS))
+                        return validation_error(ctx, path, "gamepad binding slot must be -1 or a valid slot index");
                 }
                 else if (SDL_strcmp(device != NULL ? device : "", "mouse") == 0)
                 {

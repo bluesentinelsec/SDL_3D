@@ -152,6 +152,11 @@ static bool sdl3d_input_binding_valid(const sdl3d_input_manager *input, int acti
            input->actions[action_id].registered;
 }
 
+static bool sdl3d_input_gamepad_index_valid(int gamepad_index)
+{
+    return gamepad_index >= 0 && gamepad_index < SDL3D_INPUT_MAX_GAMEPADS;
+}
+
 static void sdl3d_input_add_binding(sdl3d_input_manager *input, const sdl3d_input_binding *binding)
 {
     if (input == NULL || binding == NULL || !sdl3d_input_binding_valid(input, binding->action_id) ||
@@ -198,6 +203,8 @@ static sdl3d_input_gamepad_slot *sdl3d_input_find_free_gamepad_slot(sdl3d_input_
     }
     return NULL;
 }
+
+static const sdl3d_input_gamepad_slot *sdl3d_input_gamepad_slot_at(const sdl3d_input_manager *input, int gamepad_index);
 
 static bool sdl3d_input_slot_is_open(const sdl3d_input_gamepad_slot *slot)
 {
@@ -368,6 +375,17 @@ static float sdl3d_input_gamepad_axis_value(const sdl3d_input_manager *input, SD
     return value;
 }
 
+static float sdl3d_input_gamepad_axis_value_at(const sdl3d_input_manager *input, int gamepad_index,
+                                               SDL_GamepadAxis axis)
+{
+    const sdl3d_input_gamepad_slot *slot = sdl3d_input_gamepad_slot_at(input, gamepad_index);
+    if (slot == NULL)
+    {
+        return 0.0f;
+    }
+    return sdl3d_input_gamepad_slot_axis_value(slot, axis, input != NULL ? input->deadzone : SDL3D_INPUT_DEFAULT_DEADZONE);
+}
+
 static bool sdl3d_input_mouse_button_valid(Uint8 button)
 {
     return button < SDL3D_INPUT_MAX_MOUSE_BUTTONS;
@@ -444,6 +462,7 @@ static bool sdl3d_input_has_opposite_axis_binding(const sdl3d_input_manager *inp
             return true;
         }
         if (binding->source == SDL3D_INPUT_GAMEPAD_AXIS && other->gamepad_axis == binding->gamepad_axis &&
+            other->gamepad_index == binding->gamepad_index &&
             other->scale * binding->scale < 0.0f)
         {
             return true;
@@ -499,6 +518,10 @@ static float sdl3d_input_binding_value(const sdl3d_input_manager *input, const s
         }
         for (int i = 0; i < SDL3D_INPUT_MAX_GAMEPADS; ++i)
         {
+            if (binding->gamepad_index >= 0 && i != binding->gamepad_index)
+            {
+                continue;
+            }
             if (sdl3d_input_gamepad_slot_button_down(&input->gamepads[i], binding->gamepad_button))
             {
                 return binding->scale;
@@ -506,8 +529,11 @@ static float sdl3d_input_binding_value(const sdl3d_input_manager *input, const s
         }
         return 0.0f;
     case SDL3D_INPUT_GAMEPAD_AXIS:
-        return sdl3d_input_axis_binding_value(input, binding,
-                                              sdl3d_input_gamepad_axis_value(input, binding->gamepad_axis));
+        return sdl3d_input_axis_binding_value(
+            input, binding,
+            binding->gamepad_index >= 0 ? sdl3d_input_gamepad_axis_value_at(input, binding->gamepad_index,
+                                                                           binding->gamepad_axis)
+                                        : sdl3d_input_gamepad_axis_value(input, binding->gamepad_axis));
     default:
         return 0.0f;
     }
@@ -540,6 +566,10 @@ static bool sdl3d_input_binding_pressed(const sdl3d_input_manager *input, const 
         }
         for (int i = 0; i < SDL3D_INPUT_MAX_GAMEPADS; ++i)
         {
+            if (binding->gamepad_index >= 0 && i != binding->gamepad_index)
+            {
+                continue;
+            }
             if (sdl3d_input_gamepad_slot_button_pressed(&input->gamepads[i], binding->gamepad_button))
             {
                 return true;
@@ -575,6 +605,10 @@ static bool sdl3d_input_binding_released(const sdl3d_input_manager *input, const
         }
         for (int i = 0; i < SDL3D_INPUT_MAX_GAMEPADS; ++i)
         {
+            if (binding->gamepad_index >= 0 && i != binding->gamepad_index)
+            {
+                continue;
+            }
             if (sdl3d_input_gamepad_slot_button_released(&input->gamepads[i], binding->gamepad_button))
             {
                 return true;
@@ -1021,6 +1055,7 @@ void sdl3d_input_bind_key_mod_mask(sdl3d_input_manager *input, int action_id, SD
     SDL_zero(binding);
     binding.action_id = action_id;
     binding.source = SDL3D_INPUT_KEYBOARD;
+    binding.gamepad_index = -1;
     binding.required_modifiers = required_modifiers;
     binding.excluded_modifiers = excluded_modifiers;
     binding.scancode = key;
@@ -1034,6 +1069,7 @@ void sdl3d_input_bind_mouse_button(sdl3d_input_manager *input, int action_id, Ui
     SDL_zero(binding);
     binding.action_id = action_id;
     binding.source = SDL3D_INPUT_MOUSE_BUTTON;
+    binding.gamepad_index = -1;
     binding.mouse_button = button;
     binding.scale = 1.0f;
     sdl3d_input_add_binding(input, &binding);
@@ -1045,6 +1081,7 @@ void sdl3d_input_bind_mouse_axis(sdl3d_input_manager *input, int action_id, sdl3
     SDL_zero(binding);
     binding.action_id = action_id;
     binding.source = SDL3D_INPUT_MOUSE_AXIS;
+    binding.gamepad_index = -1;
     binding.mouse_axis = axis;
     binding.scale = scale;
     sdl3d_input_add_binding(input, &binding);
@@ -1052,10 +1089,17 @@ void sdl3d_input_bind_mouse_axis(sdl3d_input_manager *input, int action_id, sdl3
 
 void sdl3d_input_bind_gamepad_button(sdl3d_input_manager *input, int action_id, SDL_GamepadButton button)
 {
+    sdl3d_input_bind_gamepad_button_at(input, action_id, -1, button);
+}
+
+void sdl3d_input_bind_gamepad_button_at(sdl3d_input_manager *input, int action_id, int gamepad_index,
+                                        SDL_GamepadButton button)
+{
     sdl3d_input_binding binding;
     SDL_zero(binding);
     binding.action_id = action_id;
     binding.source = SDL3D_INPUT_GAMEPAD_BUTTON;
+    binding.gamepad_index = sdl3d_input_gamepad_index_valid(gamepad_index) ? gamepad_index : -1;
     binding.gamepad_button = button;
     binding.scale = 1.0f;
     sdl3d_input_add_binding(input, &binding);
@@ -1063,10 +1107,17 @@ void sdl3d_input_bind_gamepad_button(sdl3d_input_manager *input, int action_id, 
 
 void sdl3d_input_bind_gamepad_axis(sdl3d_input_manager *input, int action_id, SDL_GamepadAxis axis, float scale)
 {
+    sdl3d_input_bind_gamepad_axis_at(input, action_id, -1, axis, scale);
+}
+
+void sdl3d_input_bind_gamepad_axis_at(sdl3d_input_manager *input, int action_id, int gamepad_index,
+                                      SDL_GamepadAxis axis, float scale)
+{
     sdl3d_input_binding binding;
     SDL_zero(binding);
     binding.action_id = action_id;
     binding.source = SDL3D_INPUT_GAMEPAD_AXIS;
+    binding.gamepad_index = sdl3d_input_gamepad_index_valid(gamepad_index) ? gamepad_index : -1;
     binding.gamepad_axis = axis;
     binding.scale = scale;
     sdl3d_input_add_binding(input, &binding);
