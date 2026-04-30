@@ -807,6 +807,513 @@ static void sector_apply_runtime_geometry(sdl3d_sector *sector, const sdl3d_sect
     SDL_memcpy(sector->ceil_normal, geometry->ceil_normal, sizeof(sector->ceil_normal));
 }
 
+static void free_mesh_geometry(sdl3d_mesh *mesh)
+{
+    if (mesh == NULL)
+    {
+        return;
+    }
+
+    SDL_free(mesh->name);
+    SDL_free(mesh->positions);
+    SDL_free(mesh->normals);
+    SDL_free(mesh->uvs);
+    SDL_free(mesh->lightmap_uvs);
+    SDL_free(mesh->colors);
+    SDL_free(mesh->indices);
+    SDL_free(mesh->joint_indices);
+    SDL_free(mesh->joint_weights);
+    SDL_zero(*mesh);
+}
+
+static edge_info *build_level_edges(const sdl3d_sector *sectors, int sector_count, int *out_edge_count)
+{
+    int total_edges = 0;
+    edge_info *edges;
+    int ei = 0;
+
+    for (int i = 0; i < sector_count; i++)
+    {
+        total_edges += sectors[i].num_points;
+    }
+
+    edges = SDL_calloc((size_t)total_edges, sizeof(*edges));
+    if (edges == NULL)
+    {
+        SDL_OutOfMemory();
+        return NULL;
+    }
+
+    for (int s = 0; s < sector_count; s++)
+    {
+        const sdl3d_sector *sec = &sectors[s];
+        for (int e = 0; e < sec->num_points; e++)
+        {
+            int next = (e + 1) % sec->num_points;
+            edges[ei].ax = sec->points[e][0];
+            edges[ei].az = sec->points[e][1];
+            edges[ei].bx = sec->points[next][0];
+            edges[ei].bz = sec->points[next][1];
+            edges[ei].sector = s;
+            ei++;
+        }
+    }
+
+    *out_edge_count = total_edges;
+    return edges;
+}
+
+static bool append_portal(sdl3d_level_portal **portals, int *portal_count, int *portal_cap,
+                          const sdl3d_sector *sectors, int sector_a, int sector_b, float x0, float z0, float x1,
+                          float z1)
+{
+    const sdl3d_sector *a = &sectors[sector_a];
+    const sdl3d_sector *b = &sectors[sector_b];
+    float a_floor0 = sdl3d_sector_floor_at(a, x0, z0);
+    float a_floor1 = sdl3d_sector_floor_at(a, x1, z1);
+    float b_floor0 = sdl3d_sector_floor_at(b, x0, z0);
+    float b_floor1 = sdl3d_sector_floor_at(b, x1, z1);
+    float a_ceil0 = sdl3d_sector_ceil_at(a, x0, z0);
+    float a_ceil1 = sdl3d_sector_ceil_at(a, x1, z1);
+    float b_ceil0 = sdl3d_sector_ceil_at(b, x0, z0);
+    float b_ceil1 = sdl3d_sector_ceil_at(b, x1, z1);
+    float p_floor0 = a_floor0 > b_floor0 ? a_floor0 : b_floor0;
+    float p_floor1 = a_floor1 > b_floor1 ? a_floor1 : b_floor1;
+    float p_ceil0 = a_ceil0 < b_ceil0 ? a_ceil0 : b_ceil0;
+    float p_ceil1 = a_ceil1 < b_ceil1 ? a_ceil1 : b_ceil1;
+    sdl3d_level_portal *p;
+
+    if (*portal_count >= *portal_cap)
+    {
+        int new_cap = *portal_cap > 0 ? *portal_cap * 2 : 32;
+        sdl3d_level_portal *new_portals = SDL_realloc(*portals, (size_t)new_cap * sizeof(*new_portals));
+        if (new_portals == NULL)
+        {
+            return SDL_OutOfMemory();
+        }
+        *portals = new_portals;
+        *portal_cap = new_cap;
+    }
+
+    p = &(*portals)[(*portal_count)++];
+    p->sector_a = sector_a;
+    p->sector_b = sector_b;
+    p->min_x = x0 < x1 ? x0 : x1;
+    p->max_x = x0 > x1 ? x0 : x1;
+    p->min_z = z0 < z1 ? z0 : z1;
+    p->max_z = z0 > z1 ? z0 : z1;
+    p->floor_y = p_floor0 < p_floor1 ? p_floor0 : p_floor1;
+    p->ceil_y = p_ceil0 > p_ceil1 ? p_ceil0 : p_ceil1;
+    return true;
+}
+
+static bool rebuild_level_portals(const sdl3d_sector *sectors, const edge_info *edges, int edge_count,
+                                  sdl3d_level_portal **out_portals, int *out_portal_count)
+{
+    sdl3d_level_portal *portals = NULL;
+    int portal_count = 0;
+    int portal_cap = 0;
+
+    for (int i = 0; i < edge_count; ++i)
+    {
+        float ax = edges[i].ax;
+        float az = edges[i].az;
+        float bx = edges[i].bx;
+        float bz = edges[i].bz;
+
+        for (int j = i + 1; j < edge_count; ++j)
+        {
+            float t0;
+            float t1;
+            float px0;
+            float pz0;
+            float px1;
+            float pz1;
+
+            if (edges[j].sector == edges[i].sector)
+            {
+                continue;
+            }
+            if (edges[i].sector > edges[j].sector)
+            {
+                continue;
+            }
+            if (!edges_collinear(ax, az, bx, bz, edges[j].ax, edges[j].az, edges[j].bx, edges[j].bz))
+            {
+                continue;
+            }
+
+            t0 = project_onto_edge(edges[j].ax, edges[j].az, ax, az, bx, bz);
+            t1 = project_onto_edge(edges[j].bx, edges[j].bz, ax, az, bx, bz);
+            if (t0 > t1)
+            {
+                float tmp = t0;
+                t0 = t1;
+                t1 = tmp;
+            }
+            if (t0 < 0.0f)
+                t0 = 0.0f;
+            if (t1 > 1.0f)
+                t1 = 1.0f;
+            if (t1 - t0 <= 0.001f)
+            {
+                continue;
+            }
+
+            px0 = ax + (bx - ax) * t0;
+            pz0 = az + (bz - az) * t0;
+            px1 = ax + (bx - ax) * t1;
+            pz1 = az + (bz - az) * t1;
+            if (!append_portal(&portals, &portal_count, &portal_cap, sectors, edges[i].sector, edges[j].sector, px0,
+                               pz0, px1, pz1))
+            {
+                SDL_free(portals);
+                return false;
+            }
+        }
+    }
+
+    *out_portals = portals;
+    *out_portal_count = portal_count;
+    return true;
+}
+
+static bool mark_dirty_sector_neighbors(const edge_info *edges, int edge_count, int sector_index, bool *dirty)
+{
+    dirty[sector_index] = true;
+
+    for (int i = 0; i < edge_count; ++i)
+    {
+        float ax;
+        float az;
+        float bx;
+        float bz;
+
+        if (edges[i].sector != sector_index)
+        {
+            continue;
+        }
+
+        ax = edges[i].ax;
+        az = edges[i].az;
+        bx = edges[i].bx;
+        bz = edges[i].bz;
+        for (int j = 0; j < edge_count; ++j)
+        {
+            float t0;
+            float t1;
+
+            if (edges[j].sector == sector_index)
+            {
+                continue;
+            }
+            if (!edges_collinear(ax, az, bx, bz, edges[j].ax, edges[j].az, edges[j].bx, edges[j].bz))
+            {
+                continue;
+            }
+
+            t0 = project_onto_edge(edges[j].ax, edges[j].az, ax, az, bx, bz);
+            t1 = project_onto_edge(edges[j].bx, edges[j].bz, ax, az, bx, bz);
+            if (t0 > t1)
+            {
+                float tmp = t0;
+                t0 = t1;
+                t1 = tmp;
+            }
+            if (t0 < 0.0f)
+                t0 = 0.0f;
+            if (t1 > 1.0f)
+                t1 = 1.0f;
+            if (t1 - t0 > 0.001f)
+            {
+                dirty[edges[j].sector] = true;
+            }
+        }
+    }
+
+    return true;
+}
+
+static bool add_wall_runtime(macc *wall_acc, float x0, float z0, float x1, float z1, float bot0, float top0,
+                             float bot1, float top1, const sdl3d_level_material *material)
+{
+    return add_wall(wall_acc, x0, z0, x1, z1, bot0, top0, bot1, top1, material->albedo, material->tex_scale);
+}
+
+static bool build_dirty_sector_accs(const sdl3d_sector *sectors, int sector_count, const edge_info *edges,
+                                    int edge_count, const bool *dirty, const sdl3d_level_material *materials,
+                                    int material_count, macc *accs)
+{
+    (void)sector_count;
+
+    for (int s = 0; s < sector_count; s++)
+    {
+        const sdl3d_sector *sec;
+        int fi;
+        int ci;
+        int wi;
+        int wall_acc_index;
+        macc *wall_acc;
+
+        if (!dirty[s])
+        {
+            continue;
+        }
+
+        sec = &sectors[s];
+        fi = (sec->floor_material >= 0 && sec->floor_material < material_count) ? sec->floor_material : -1;
+        ci = (sec->ceil_material >= 0 && sec->ceil_material < material_count) ? sec->ceil_material : -1;
+        wi = sec->wall_material < material_count ? sec->wall_material : 0;
+        wall_acc_index = s * material_count + wi;
+        wall_acc = &accs[wall_acc_index];
+
+        if (fi >= 0)
+        {
+            macc *floor_acc = &accs[s * material_count + fi];
+            if (!add_floor_ceil(floor_acc, sec, true, materials[fi].albedo, materials[fi].tex_scale))
+            {
+                return false;
+            }
+        }
+        if (ci >= 0)
+        {
+            macc *ceil_acc = &accs[s * material_count + ci];
+            if (!add_floor_ceil(ceil_acc, sec, false, materials[ci].albedo, materials[ci].tex_scale))
+            {
+                return false;
+            }
+        }
+
+        for (int e = 0; e < edge_count; e++)
+        {
+            float ax;
+            float az;
+            float bx;
+            float bz;
+            overlap_t overlaps[32];
+            int novl = 0;
+
+            if (edges[e].sector != s)
+            {
+                continue;
+            }
+
+            ax = edges[e].ax;
+            az = edges[e].az;
+            bx = edges[e].bx;
+            bz = edges[e].bz;
+
+            for (int j = 0; j < edge_count && novl < 32; j++)
+            {
+                float t0;
+                float t1;
+
+                if (edges[j].sector == s)
+                {
+                    continue;
+                }
+                if (!edges_collinear(ax, az, bx, bz, edges[j].ax, edges[j].az, edges[j].bx, edges[j].bz))
+                {
+                    continue;
+                }
+                t0 = project_onto_edge(edges[j].ax, edges[j].az, ax, az, bx, bz);
+                t1 = project_onto_edge(edges[j].bx, edges[j].bz, ax, az, bx, bz);
+                if (t0 > t1)
+                {
+                    float tmp = t0;
+                    t0 = t1;
+                    t1 = tmp;
+                }
+                if (t0 < 0)
+                    t0 = 0;
+                if (t1 > 1)
+                    t1 = 1;
+                if (t1 - t0 > 0.001f)
+                {
+                    overlaps[novl].t0 = t0;
+                    overlaps[novl].t1 = t1;
+                    overlaps[novl].other_sector = edges[j].sector;
+                    novl++;
+                }
+            }
+
+            if (novl == 0)
+            {
+                if (!add_wall_runtime(wall_acc, ax, az, bx, bz, sdl3d_sector_floor_at(sec, ax, az),
+                                      sdl3d_sector_ceil_at(sec, ax, az), sdl3d_sector_floor_at(sec, bx, bz),
+                                      sdl3d_sector_ceil_at(sec, bx, bz), &materials[wi]))
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                for (int i = 0; i < novl - 1; i++)
+                    for (int j = i + 1; j < novl; j++)
+                        if (overlaps[j].t0 < overlaps[i].t0)
+                        {
+                            overlap_t tmp = overlaps[i];
+                            overlaps[i] = overlaps[j];
+                            overlaps[j] = tmp;
+                        }
+
+                float cursor = 0.0f;
+                for (int oi = 0; oi < novl; oi++)
+                {
+                    float ox0;
+                    float oz0;
+                    float ox1;
+                    float oz1;
+                    const sdl3d_sector *other;
+                    float sec_floor0;
+                    float sec_floor1;
+                    float other_floor0;
+                    float other_floor1;
+                    float sec_ceil0;
+                    float sec_ceil1;
+                    float other_ceil0;
+                    float other_ceil1;
+
+                    if (overlaps[oi].t0 > cursor + 0.001f)
+                    {
+                        float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
+                        float wx1 = ax + (bx - ax) * overlaps[oi].t0, wz1 = az + (bz - az) * overlaps[oi].t0;
+                        if (!add_wall_runtime(wall_acc, wx0, wz0, wx1, wz1, sdl3d_sector_floor_at(sec, wx0, wz0),
+                                              sdl3d_sector_ceil_at(sec, wx0, wz0),
+                                              sdl3d_sector_floor_at(sec, wx1, wz1),
+                                              sdl3d_sector_ceil_at(sec, wx1, wz1), &materials[wi]))
+                        {
+                            return false;
+                        }
+                    }
+
+                    ox0 = ax + (bx - ax) * overlaps[oi].t0;
+                    oz0 = az + (bz - az) * overlaps[oi].t0;
+                    ox1 = ax + (bx - ax) * overlaps[oi].t1;
+                    oz1 = az + (bz - az) * overlaps[oi].t1;
+                    other = &sectors[overlaps[oi].other_sector];
+                    sec_floor0 = sdl3d_sector_floor_at(sec, ox0, oz0);
+                    sec_floor1 = sdl3d_sector_floor_at(sec, ox1, oz1);
+                    other_floor0 = sdl3d_sector_floor_at(other, ox0, oz0);
+                    other_floor1 = sdl3d_sector_floor_at(other, ox1, oz1);
+                    sec_ceil0 = sdl3d_sector_ceil_at(sec, ox0, oz0);
+                    sec_ceil1 = sdl3d_sector_ceil_at(sec, ox1, oz1);
+                    other_ceil0 = sdl3d_sector_ceil_at(other, ox0, oz0);
+                    other_ceil1 = sdl3d_sector_ceil_at(other, ox1, oz1);
+                    if (sec_floor0 < other_floor0 - 0.001f || sec_floor1 < other_floor1 - 0.001f)
+                    {
+                        if (!add_wall_runtime(wall_acc, ox0, oz0, ox1, oz1, sec_floor0, other_floor0, sec_floor1,
+                                              other_floor1, &materials[wi]))
+                        {
+                            return false;
+                        }
+                    }
+                    if (sec_ceil0 > other_ceil0 + 0.001f || sec_ceil1 > other_ceil1 + 0.001f)
+                    {
+                        if (!add_wall_runtime(wall_acc, ox0, oz0, ox1, oz1, other_ceil0, sec_ceil0, other_ceil1,
+                                              sec_ceil1, &materials[wi]))
+                        {
+                            return false;
+                        }
+                    }
+                    cursor = overlaps[oi].t1;
+                }
+                if (cursor < 1.0f - 0.001f)
+                {
+                    float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
+                    if (!add_wall_runtime(wall_acc, wx0, wz0, bx, bz, sdl3d_sector_floor_at(sec, wx0, wz0),
+                                          sdl3d_sector_ceil_at(sec, wx0, wz0), sdl3d_sector_floor_at(sec, bx, bz),
+                                          sdl3d_sector_ceil_at(sec, bx, bz), &materials[wi]))
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+static void bake_vertex_lighting_for_accs(macc *accs, int acc_count, const sdl3d_level_light *lights, int light_count)
+{
+    if (lights == NULL || light_count <= 0)
+    {
+        return;
+    }
+
+    for (int ai = 0; ai < acc_count; ai++)
+    {
+        macc *a = &accs[ai];
+        for (int v = 0; v < a->vc; v++)
+        {
+            float px = a->pos[v * 3], py = a->pos[v * 3 + 1], pz = a->pos[v * 3 + 2];
+            float nx = a->nrm[v * 3], ny = a->nrm[v * 3 + 1], nz = a->nrm[v * 3 + 2];
+            float br = a->col[v * 4], bg = a->col[v * 4 + 1], bb = a->col[v * 4 + 2];
+            float lr = 0.2f * br, lg = 0.2f * bg, lb = 0.2f * bb;
+            for (int li = 0; li < light_count; li++)
+            {
+                float lx = lights[li].position[0] - px, ly = lights[li].position[1] - py,
+                      lz = lights[li].position[2] - pz;
+                float dist = SDL_sqrtf(lx * lx + ly * ly + lz * lz);
+                float inv;
+                float ndotl;
+                float r;
+                float atten;
+                float scale;
+
+                if (dist < 0.0001f || dist > lights[li].range)
+                    continue;
+                inv = 1.0f / dist;
+                lx *= inv;
+                ly *= inv;
+                lz *= inv;
+                ndotl = nx * lx + ny * ly + nz * lz;
+                if (ndotl <= 0.0f)
+                    continue;
+                r = dist / lights[li].range;
+                atten = (1.0f - r * r);
+                if (atten < 0)
+                    atten = 0;
+                atten *= atten;
+                scale = lights[li].intensity * atten * ndotl;
+                lr += br * lights[li].color[0] * scale;
+                lg += bg * lights[li].color[1] * scale;
+                lb += bb * lights[li].color[2] * scale;
+            }
+            a->col[v * 4] = lr > 1.0f ? 1.0f : lr;
+            a->col[v * 4 + 1] = lg > 1.0f ? 1.0f : lg;
+            a->col[v * 4 + 2] = lb > 1.0f ? 1.0f : lb;
+        }
+    }
+}
+
+static void move_acc_to_mesh(sdl3d_mesh *mesh, macc *acc, int material_index, bool baked_light)
+{
+    SDL_zero(*mesh);
+    mesh->vertex_count = acc->vc;
+    mesh->index_count = acc->ic;
+    mesh->positions = acc->pos;
+    mesh->normals = acc->nrm;
+    mesh->colors = acc->col;
+    mesh->colors_are_baked_light = baked_light;
+    mesh->uvs = acc->uvs;
+    mesh->lightmap_uvs = acc->lm_uvs;
+    mesh->indices = acc->idx;
+    mesh->material_index = material_index;
+    mesh->has_local_bounds = acc->has_bounds;
+    mesh->local_bounds = acc->bounds;
+    mesh->dynamic_geometry = true;
+    acc->pos = NULL;
+    acc->nrm = NULL;
+    acc->col = NULL;
+    acc->uvs = NULL;
+    acc->lm_uvs = NULL;
+    acc->idx = NULL;
+    acc->vc = 0;
+    acc->ic = 0;
+}
+
 bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3d_level_material *materials,
                        int material_count, const sdl3d_level_light *lights, int light_count, sdl3d_level *out)
 {
@@ -1206,6 +1713,7 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
     out->model.material_count = material_count;
     out->sector_count = sector_count;
     out->mesh_sector_ids = mesh_sector_ids;
+    out->material_count = material_count;
     out->portal_count = portal_count;
     out->portals = portals;
 
@@ -1235,7 +1743,18 @@ bool sdl3d_level_set_sector_geometry(sdl3d_level *level, sdl3d_sector *sectors, 
                                      int material_count, const sdl3d_level_light *lights, int light_count)
 {
     sdl3d_sector *candidate_sectors;
-    sdl3d_level rebuilt;
+    edge_info *edges;
+    int edge_count = 0;
+    bool *dirty;
+    macc *accs;
+    sdl3d_level_portal *new_portals = NULL;
+    int new_portal_count = 0;
+    sdl3d_mesh *new_meshes = NULL;
+    int *new_mesh_sector_ids = NULL;
+    int new_mesh_count = 0;
+    int acc_count;
+    int old_mesh_count;
+    bool baked_light;
 
     if (level == NULL)
     {
@@ -1257,6 +1776,10 @@ bool sdl3d_level_set_sector_geometry(sdl3d_level *level, sdl3d_sector *sectors, 
     {
         return SDL_SetError("sector_count must match the built level.");
     }
+    if (level->material_count != material_count || level->model.material_count != material_count)
+    {
+        return SDL_SetError("material_count must match the built level.");
+    }
     if (sector_index < 0 || sector_index >= sector_count)
     {
         return SDL_SetError("sector_index is out of range.");
@@ -1275,17 +1798,157 @@ bool sdl3d_level_set_sector_geometry(sdl3d_level *level, sdl3d_sector *sectors, 
     SDL_memcpy(candidate_sectors, sectors, (size_t)sector_count * sizeof(*candidate_sectors));
     sector_apply_runtime_geometry(&candidate_sectors[sector_index], geometry);
 
-    SDL_zero(rebuilt);
-    if (!sdl3d_build_level(candidate_sectors, sector_count, materials, material_count, lights, light_count, &rebuilt))
+    edges = build_level_edges(candidate_sectors, sector_count, &edge_count);
+    if (edges == NULL)
     {
         SDL_free(candidate_sectors);
         return false;
     }
 
+    dirty = SDL_calloc((size_t)sector_count, sizeof(*dirty));
+    acc_count = sector_count * material_count;
+    accs = SDL_calloc((size_t)acc_count, sizeof(*accs));
+    if (dirty == NULL || accs == NULL)
+    {
+        SDL_free(candidate_sectors);
+        SDL_free(edges);
+        SDL_free(dirty);
+        SDL_free(accs);
+        return SDL_OutOfMemory();
+    }
+
+    if (!mark_dirty_sector_neighbors(edges, edge_count, sector_index, dirty) ||
+        !build_dirty_sector_accs(candidate_sectors, sector_count, edges, edge_count, dirty, materials, material_count,
+                                 accs))
+    {
+        for (int ai = 0; ai < acc_count; ++ai)
+        {
+            macc_free(&accs[ai]);
+        }
+        SDL_free(accs);
+        SDL_free(dirty);
+        SDL_free(edges);
+        SDL_free(candidate_sectors);
+        return false;
+    }
+
+    bake_vertex_lighting_for_accs(accs, acc_count, lights, light_count);
+
+    if (!rebuild_level_portals(candidate_sectors, edges, edge_count, &new_portals, &new_portal_count))
+    {
+        for (int ai = 0; ai < acc_count; ++ai)
+        {
+            macc_free(&accs[ai]);
+        }
+        SDL_free(accs);
+        SDL_free(dirty);
+        SDL_free(edges);
+        SDL_free(candidate_sectors);
+        return false;
+    }
+
+    old_mesh_count = level->model.mesh_count;
+    for (int i = 0; i < old_mesh_count; ++i)
+    {
+        int sid = level->mesh_sector_ids[i];
+        if (sid < 0 || sid >= sector_count || !dirty[sid])
+        {
+            new_mesh_count++;
+        }
+    }
+    for (int s = 0; s < sector_count; ++s)
+    {
+        if (!dirty[s])
+        {
+            continue;
+        }
+        for (int m = 0; m < material_count; ++m)
+        {
+            if (accs[s * material_count + m].ic > 0)
+            {
+                new_mesh_count++;
+            }
+        }
+    }
+
+    new_meshes = SDL_calloc((size_t)new_mesh_count, sizeof(*new_meshes));
+    new_mesh_sector_ids = SDL_malloc((size_t)new_mesh_count * sizeof(*new_mesh_sector_ids));
+    if (new_meshes == NULL || new_mesh_sector_ids == NULL)
+    {
+        SDL_free(new_meshes);
+        SDL_free(new_mesh_sector_ids);
+        SDL_free(new_portals);
+        for (int ai = 0; ai < acc_count; ++ai)
+        {
+            macc_free(&accs[ai]);
+        }
+        SDL_free(accs);
+        SDL_free(dirty);
+        SDL_free(edges);
+        SDL_free(candidate_sectors);
+        return SDL_OutOfMemory();
+    }
+
+    new_mesh_count = 0;
+    for (int i = 0; i < old_mesh_count; ++i)
+    {
+        int sid = level->mesh_sector_ids[i];
+        if (sid >= 0 && sid < sector_count && dirty[sid])
+        {
+            continue;
+        }
+        new_meshes[new_mesh_count] = level->model.meshes[i];
+        new_mesh_sector_ids[new_mesh_count] = sid;
+        new_mesh_count++;
+    }
+
+    baked_light = lights != NULL && light_count > 0;
+    for (int s = 0; s < sector_count; ++s)
+    {
+        if (!dirty[s])
+        {
+            continue;
+        }
+        for (int m = 0; m < material_count; ++m)
+        {
+            macc *acc = &accs[s * material_count + m];
+            if (acc->ic == 0)
+            {
+                continue;
+            }
+            move_acc_to_mesh(&new_meshes[new_mesh_count], acc, m, baked_light);
+            new_mesh_sector_ids[new_mesh_count] = s;
+            new_mesh_count++;
+        }
+    }
+
+    for (int i = 0; i < old_mesh_count; ++i)
+    {
+        int sid = level->mesh_sector_ids[i];
+        if (sid >= 0 && sid < sector_count && dirty[sid])
+        {
+            free_mesh_geometry(&level->model.meshes[i]);
+        }
+    }
+
     sector_apply_runtime_geometry(&sectors[sector_index], geometry);
+    SDL_free(level->model.meshes);
+    SDL_free(level->mesh_sector_ids);
+    SDL_free(level->portals);
+    level->model.meshes = new_meshes;
+    level->model.mesh_count = new_mesh_count;
+    level->mesh_sector_ids = new_mesh_sector_ids;
+    level->portals = new_portals;
+    level->portal_count = new_portal_count;
+
+    for (int ai = 0; ai < acc_count; ++ai)
+    {
+        macc_free(&accs[ai]);
+    }
+    SDL_free(accs);
+    SDL_free(dirty);
+    SDL_free(edges);
     SDL_free(candidate_sectors);
-    sdl3d_free_level(level);
-    *level = rebuilt;
     return true;
 }
 
@@ -1303,6 +1966,7 @@ void sdl3d_free_level(sdl3d_level *level)
         level->lightmap_pixels = NULL;
         level->portal_count = 0;
         level->sector_count = 0;
+        level->material_count = 0;
         level->lightmap_width = 0;
         level->lightmap_height = 0;
     }

@@ -71,6 +71,7 @@ extern "C"
         int material_index;
         bool has_local_bounds;
         sdl3d_bounding_box local_bounds;
+        bool dynamic_geometry; /* true when vertex data is expected to mutate at runtime */
 
         /* Skinning attributes (NULL when no skeleton). Up to 4 joints
          * per vertex. joint_indices indexes into the model's skeleton
