@@ -457,6 +457,8 @@ window and audio examples.
 
 For a project-oriented adoption checklist and a minimal reference game file,
 see [docs/standard-options.md](standard-options.md).
+For a concise new-game checklist that mirrors the Pong template structure,
+see [docs/pong-template-checklist.md](pong-template-checklist.md).
 
 Standard display properties:
 
