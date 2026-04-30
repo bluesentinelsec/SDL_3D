@@ -292,7 +292,7 @@ UI descriptors can bind text to engine metrics or actor properties and can use g
 Supported UI binding sources are `metric` (`fps`, `frame`, `paused`), `property`,
 and `scene_state`.
 Supported UI conditions include `always`, `app.paused`, `camera.active`, `property.compare`,
-`property.bool`, `all`, `any`, and `not`.
+`property.bool`, `scene_state.compare`, `all`, `any`, and `not`.
 
 Scene UI can also declare data-driven menu presenters. A presenter turns a
 scene `menus[]` controller into a visible stack with authored alignment, colors,
@@ -317,6 +317,16 @@ selected styling, and cursor styling:
       }
     ]
   }
+}
+```
+
+Menu items can set scene state instead of changing scenes. This is useful for
+submenus that should share one scene, camera, background, and transition state:
+
+```json
+{
+  "label": "Display",
+  "scene_state": { "key": "options_menu", "value": "display" }
 }
 ```
 
@@ -501,6 +511,8 @@ colors, and player-facing input binding rows:
     "standard_options": {
       "settings": "entity.settings",
       "return_scene": "scene.title",
+      "single_scene": true,
+      "menu_state_key": "options_menu",
       "scenes": {
         "root": "scene.options",
         "display": "scene.options.display",
@@ -531,12 +543,21 @@ colors, and player-facing input binding rows:
         "title": "font.title",
         "menu": "font.hud"
       },
+      "background": {
+        "renders_world": true,
+        "camera": "camera.overhead",
+        "entities": [
+          "entity.options.background.base",
+          "entity.options.flow.magenta"
+        ]
+      },
       "theme": {
         "title_color": [242, 248, 255, 255],
         "menu_color": [225, 236, 255, 245],
         "selected_color": [255, 245, 208, 255],
         "cursor_color": [255, 222, 140, 255],
         "status_color": [255, 222, 140, 230],
+        "divider_color": [126, 168, 238, 170],
         "cursor": ">",
         "slider_left": "[",
         "slider_fill": "#",
@@ -548,15 +569,16 @@ colors, and player-facing input binding rows:
         "menu_x": 0.5,
         "status_x": 0.5,
         "status_y": 0.88,
-        "menu_align": "center",
-        "cursor_align": "center",
+        "menu_align": "left",
+        "cursor_align": "right",
         "selected_pulse_alpha": true,
-        "root": { "title_y": 0.18, "menu_y": 0.36, "gap": 0.078, "cursor_offset_x": -0.14 },
-        "display": { "title_y": 0.2, "menu_y": 0.38, "gap": 0.074, "cursor_offset_x": -0.18 },
-        "keyboard": { "title_y": 0.13, "menu_y": 0.25, "gap": 0.062, "cursor_offset_x": -0.18 },
-        "mouse": { "title_y": 0.13, "menu_y": 0.30, "gap": 0.062, "cursor_offset_x": -0.18 },
-        "gamepad": { "title_y": 0.12, "menu_y": 0.22, "gap": 0.052, "cursor_offset_x": -0.18 },
-        "audio": { "title_y": 0.18, "menu_y": 0.39, "gap": 0.078, "cursor_offset_x": -0.18 }
+        "title_divider": true,
+        "root": { "title_y": 0.18, "menu_x": 0.43, "menu_y": 0.36, "gap": 0.078, "cursor_offset_x": -0.035 },
+        "display": { "title_y": 0.2, "menu_x": 0.3, "menu_y": 0.38, "gap": 0.074, "cursor_offset_x": -0.035 },
+        "keyboard": { "title_y": 0.13, "menu_x": 0.36, "menu_y": 0.29, "gap": 0.062, "cursor_offset_x": -0.035 },
+        "mouse": { "title_y": 0.13, "menu_x": 0.4, "menu_y": 0.30, "gap": 0.062, "cursor_offset_x": -0.035 },
+        "gamepad": { "title_y": 0.105, "menu_x": 0.34, "menu_y": 0.24, "gap": 0.055, "cursor_offset_x": -0.035 },
+        "audio": { "title_y": 0.18, "menu_x": 0.34, "menu_y": 0.39, "gap": 0.078, "cursor_offset_x": -0.035 }
       },
       "bindings": {
         "keyboard": [
@@ -600,7 +622,13 @@ colors, cursor text, and slider glyphs. `layout` controls normalized title,
 menu, status, row gap, cursor offset, alignment, and selected-item pulse values
 for each generated scene. Games can omit `theme` or `layout` fields to use sane
 defaults, or author fully custom options scenes when they need a different
-structure.
+structure. `background` is optional; when present, generated options scenes
+render the listed entities with the named camera. This gives every standard
+options submenu the same authored backdrop while keeping gameplay actors out of
+the menu scene. `single_scene` makes root and child options menus live inside
+the root scene; child menu selections set `menu_state_key` in scene state
+instead of requesting scene transitions. Use it when a family of menus should
+feel like one screen.
 
 Audio bus volume can also be driven from actor properties so options menus can
 share one generic settings actor. Use `source.scale` when the authored setting
@@ -752,22 +780,35 @@ Render primitives may also author generic visual effects:
   "type": "render.sphere",
   "radius": 0.22,
   "color": [255, 184, 82, 255],
+  "lighting": true,
   "effects": [
     {
       "type": "pulse",
       "rate": 9.0,
       "color": [255, 245, 156, 255],
+      "radius_add": 0.06,
       "emissive_base": [0.75, 0.48, 0.08],
       "emissive_add": [0.65, 0.30, 0.0]
+    },
+    {
+      "type": "drift",
+      "offset": [0.4, 0.2, 0.0],
+      "rates": [0.7, 0.5, 0.0],
+      "phase": 1.2
     }
   ]
 }
 ```
 
+Set `lighting` to `false` on a render primitive for solid-color unlit geometry
+such as menu backplates, sky cards, debug overlays, and other presentation
+surfaces that should not be affected by world lights.
+
 Supported primitive effects are:
 
 - `flash`: reads a float property from a source entity and uses it to blend color, add size, and add emissive color.
-- `pulse`: uses presentation time to animate color and emissive color.
+- `pulse`: uses presentation time to animate color, emissive color, optional `size_add`, and optional `radius_add`.
+- `drift`: uses presentation time to offset primitive position with sinusoidal motion. Use `offset`, `rates`, and optional `phase`.
 - `emissive`: adds a constant emissive color.
 
 Particle emitters may include `draw_emissive` for host renderers that draw particles through emissive lighting.

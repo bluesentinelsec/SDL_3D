@@ -227,6 +227,15 @@ TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
     yyjson_val *options = required_object(scenes, "standard_options");
     EXPECT_EQ(required_string(options, "settings"), "entity.settings");
     EXPECT_EQ(required_string(options, "return_scene"), "scene.title");
+    EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(options, "single_scene")));
+    EXPECT_EQ(required_string(options, "menu_state_key"), "options_menu");
+    yyjson_val *background = required_object(options, "background");
+    EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(background, "renders_world")));
+    EXPECT_EQ(required_string(background, "camera"), "camera.overhead");
+    yyjson_val *background_entities = required_array(background, "entities");
+    ASSERT_GE(yyjson_arr_size(background_entities), 7u);
+    EXPECT_STREQ(yyjson_get_str(yyjson_arr_get(background_entities, 0)), "entity.options.background.base");
+    EXPECT_STREQ(yyjson_get_str(yyjson_arr_get(background_entities, 4)), "entity.options.flow.magenta");
     yyjson_val *theme = required_object(options, "theme");
     EXPECT_EQ(required_string(theme, "cursor"), ">");
     EXPECT_EQ(required_string(theme, "slider_fill"), "#");
@@ -234,8 +243,10 @@ TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
     yyjson_val *layout = required_object(options, "layout");
     EXPECT_TRUE(yyjson_is_num(yyjson_obj_get(layout, "title_x")));
     EXPECT_TRUE(yyjson_is_num(yyjson_obj_get(layout, "status_y")));
-    EXPECT_EQ(required_string(layout, "menu_align"), "center");
+    EXPECT_EQ(required_string(layout, "menu_align"), "left");
+    EXPECT_EQ(required_string(layout, "cursor_align"), "right");
     EXPECT_TRUE(yyjson_is_bool(yyjson_obj_get(layout, "selected_pulse_alpha")));
+    EXPECT_TRUE(yyjson_is_bool(yyjson_obj_get(layout, "title_divider")));
     EXPECT_TRUE(yyjson_is_num(yyjson_obj_get(required_object(layout, "root"), "menu_y")));
     EXPECT_TRUE(yyjson_is_num(yyjson_obj_get(required_object(layout, "audio"), "cursor_offset_x")));
     EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(required_object(options, "bindings"), "keyboard")));

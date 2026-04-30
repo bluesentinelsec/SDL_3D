@@ -358,6 +358,9 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
     if (context == NULL || context->renderer == NULL || primitive == NULL)
         return false;
 
+    const bool restore_lighting = sdl3d_is_lighting_enabled(context->renderer);
+    if (!primitive->lighting_enabled)
+        sdl3d_set_lighting_enabled(context->renderer, false);
     sdl3d_set_emissive(context->renderer, primitive->emissive_color.x, primitive->emissive_color.y,
                        primitive->emissive_color.z);
     if (primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
@@ -370,6 +373,8 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
                           primitive->rings, primitive->color);
     }
     sdl3d_set_emissive(context->renderer, 0.0f, 0.0f, 0.0f);
+    if (!primitive->lighting_enabled)
+        sdl3d_set_lighting_enabled(context->renderer, restore_lighting);
     return true;
 }
 
@@ -612,7 +617,7 @@ bool sdl3d_game_data_draw_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_
     context.pulse_phase = pulse_phase;
     context.ok = true;
 
-    return sdl3d_game_data_for_each_ui_text(runtime, draw_ui_text, &context) && context.ok;
+    return sdl3d_game_data_for_each_ui_text_for_metrics(runtime, metrics, draw_ui_text, &context) && context.ok;
 }
 
 bool sdl3d_game_data_draw_ui_images(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
@@ -823,6 +828,8 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
                 out_result->quit = false;
                 out_result->scene = NULL;
                 out_result->return_to = NULL;
+                out_result->scene_state_key = NULL;
+                out_result->scene_state_value = NULL;
                 out_result->return_scene = false;
                 out_result->pause_command = SDL3D_GAME_DATA_MENU_PAUSE_NONE;
                 out_result->has_return_paused = false;
@@ -840,6 +847,10 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
             out_result->quit = !control_adjust_input && !out_result->control_changed && item.quit;
             out_result->scene = !control_adjust_input && !out_result->control_changed ? item.scene : NULL;
             out_result->return_to = !control_adjust_input && !out_result->control_changed ? item.return_to : NULL;
+            out_result->scene_state_key =
+                !control_adjust_input && !out_result->control_changed ? item.scene_state_key : NULL;
+            out_result->scene_state_value =
+                !control_adjust_input && !out_result->control_changed ? item.scene_state_value : NULL;
             out_result->return_scene = !control_adjust_input && !out_result->control_changed && item.return_scene;
             out_result->signal_id = out_result->selected ? item.signal_id : -1;
             out_result->pause_command = !control_adjust_input && !out_result->control_changed
@@ -1188,6 +1199,8 @@ static bool app_flow_consume_menu(sdl3d_game_data_app_flow *flow, sdl3d_game_con
     sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
     if (result.return_to != NULL && scene_state != NULL)
         sdl3d_properties_set_string(scene_state, "return_scene", result.return_to);
+    if (result.scene_state_key != NULL && result.scene_state_value != NULL && scene_state != NULL)
+        sdl3d_properties_set_string(scene_state, result.scene_state_key, result.scene_state_value);
     if (result.has_return_paused && scene_state != NULL)
         sdl3d_properties_set_bool(scene_state, "return_paused", result.return_paused);
 
