@@ -113,14 +113,6 @@ static void strip_lightmap(sdl3d_level *level)
     }
 }
 
-static void apply_sector_geometry(sdl3d_sector *sector, const sdl3d_sector_geometry *geometry)
-{
-    sector->floor_y = geometry->floor_y;
-    sector->ceil_y = geometry->ceil_y;
-    SDL_memcpy(sector->floor_normal, geometry->floor_normal, sizeof(sector->floor_normal));
-    SDL_memcpy(sector->ceil_normal, geometry->ceil_normal, sizeof(sector->ceil_normal));
-}
-
 bool level_data_init(level_data *ld)
 {
     int mc = (int)SDL_arraysize(g_mats);
@@ -163,10 +155,6 @@ void level_data_free(level_data *ld)
 bool level_data_set_sector_geometry(level_data *ld, int sector_index, const sdl3d_sector_geometry *geometry)
 {
     const int mc = (int)SDL_arraysize(g_mats);
-    sdl3d_sector *candidate_sectors = NULL;
-    sdl3d_level lightmapped;
-    sdl3d_level vertex_baked;
-    sdl3d_level unlit;
 
     if (ld == NULL || geometry == NULL)
     {
@@ -181,43 +169,21 @@ bool level_data_set_sector_geometry(level_data *ld, int sector_index, const sdl3
         return SDL_SetError("sector ceiling must be above sector floor.");
     }
 
-    candidate_sectors = SDL_malloc(sizeof(g_sectors));
-    if (candidate_sectors == NULL)
+    if (!sdl3d_level_set_sector_geometry(&ld->lightmapped, g_sectors, g_sector_count, sector_index, geometry, g_mats,
+                                          mc, g_lights, g_light_count))
     {
-        return SDL_OutOfMemory();
-    }
-    SDL_memcpy(candidate_sectors, g_sectors, sizeof(g_sectors));
-    apply_sector_geometry(&candidate_sectors[sector_index], geometry);
-
-    SDL_zero(lightmapped);
-    SDL_zero(vertex_baked);
-    SDL_zero(unlit);
-    if (!sdl3d_build_level(candidate_sectors, g_sector_count, g_mats, mc, g_lights, g_light_count, &lightmapped))
-    {
-        SDL_free(candidate_sectors);
         return false;
     }
-    if (!sdl3d_build_level(candidate_sectors, g_sector_count, g_mats, mc, g_lights, g_light_count, &vertex_baked))
+    if (!sdl3d_level_set_sector_geometry(&ld->vertex_baked, g_sectors, g_sector_count, sector_index, geometry, g_mats,
+                                          mc, g_lights, g_light_count))
     {
-        sdl3d_free_level(&lightmapped);
-        SDL_free(candidate_sectors);
         return false;
     }
-    if (!sdl3d_build_level(candidate_sectors, g_sector_count, g_mats, mc, NULL, 0, &unlit))
+    if (!sdl3d_level_set_sector_geometry(&ld->unlit, g_sectors, g_sector_count, sector_index, geometry, g_mats, mc, NULL,
+                                          0))
     {
-        sdl3d_free_level(&lightmapped);
-        sdl3d_free_level(&vertex_baked);
-        SDL_free(candidate_sectors);
         return false;
     }
-
-    strip_lightmap(&vertex_baked);
-    SDL_memcpy(g_sectors, candidate_sectors, sizeof(g_sectors));
-    SDL_free(candidate_sectors);
-    level_data_free(ld);
-    ld->lightmapped = lightmapped;
-    ld->vertex_baked = vertex_baked;
-    ld->unlit = unlit;
     return true;
 }
 

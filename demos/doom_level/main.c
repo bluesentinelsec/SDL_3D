@@ -790,6 +790,19 @@ static void apply_doom_profile_actions(sdl3d_game_context *ctx, doom_state *stat
 
 static void update_dynamic_lift(doom_state *state, float dt)
 {
+    static bool checked_disable_lift = false;
+    static bool disable_lift = false;
+
+    if (!checked_disable_lift)
+    {
+        disable_lift = SDL_getenv("DOOM_DISABLE_DYNAMIC_LIFT") != NULL;
+        checked_disable_lift = true;
+    }
+    if (disable_lift)
+    {
+        return;
+    }
+
     if (state == NULL || !state->level_ready || state->logic == NULL)
     {
         return;
@@ -841,9 +854,105 @@ static void update_damage_feedback(doom_state *state, float dt)
     state->damage_feedback_target_strength = 0.0f;
 }
 
+typedef struct doom_tick_profile
+{
+    bool enabled;
+    Uint64 last_counter;
+    double actions_ms;
+    double transition_ms;
+    double lift_ms;
+    double doors_ms;
+    double particles_ms;
+    double entities_ms;
+    double player_ms;
+    double sensors_ms;
+    double frame_ms;
+    int ticks;
+} doom_tick_profile;
+
+static doom_tick_profile g_tick_profile;
+
+static bool doom_tick_profile_enabled(void)
+{
+    if (!g_tick_profile.enabled)
+    {
+        g_tick_profile.enabled = SDL_getenv("DOOM_PROFILE_TICK") != NULL;
+    }
+    return g_tick_profile.enabled;
+}
+
+static double doom_profile_elapsed_ms(Uint64 start, Uint64 end)
+{
+    return (double)(end - start) * 1000.0 / (double)SDL_GetPerformanceFrequency();
+}
+
+static void doom_tick_profile_record(double actions_ms, double transition_ms, double lift_ms, double doors_ms,
+                                     double particles_ms, double entities_ms, double player_ms, double sensors_ms,
+                                     double frame_ms)
+{
+    const Uint64 now = SDL_GetPerformanceCounter();
+    g_tick_profile.actions_ms += actions_ms;
+    g_tick_profile.transition_ms += transition_ms;
+    g_tick_profile.lift_ms += lift_ms;
+    g_tick_profile.doors_ms += doors_ms;
+    g_tick_profile.particles_ms += particles_ms;
+    g_tick_profile.entities_ms += entities_ms;
+    g_tick_profile.player_ms += player_ms;
+    g_tick_profile.sensors_ms += sensors_ms;
+    g_tick_profile.frame_ms += frame_ms;
+    g_tick_profile.ticks++;
+
+    if (g_tick_profile.last_counter == 0)
+    {
+        g_tick_profile.last_counter = now;
+        return;
+    }
+    if ((double)(now - g_tick_profile.last_counter) / (double)SDL_GetPerformanceFrequency() < 1.0)
+    {
+        return;
+    }
+
+    const double ticks = g_tick_profile.ticks > 0 ? (double)g_tick_profile.ticks : 1.0;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "Doom tick profile: tick=%.2fms actions=%.2f transition=%.2f lift=%.2f doors=%.2f particles=%.2f "
+                "entities=%.2f player=%.2f sensors=%.2f ticks=%d",
+                g_tick_profile.frame_ms / ticks, g_tick_profile.actions_ms / ticks,
+                g_tick_profile.transition_ms / ticks, g_tick_profile.lift_ms / ticks, g_tick_profile.doors_ms / ticks,
+                g_tick_profile.particles_ms / ticks, g_tick_profile.entities_ms / ticks, g_tick_profile.player_ms / ticks,
+                g_tick_profile.sensors_ms / ticks, g_tick_profile.ticks);
+    g_tick_profile.last_counter = now;
+    g_tick_profile.actions_ms = 0.0;
+    g_tick_profile.transition_ms = 0.0;
+    g_tick_profile.lift_ms = 0.0;
+    g_tick_profile.doors_ms = 0.0;
+    g_tick_profile.particles_ms = 0.0;
+    g_tick_profile.entities_ms = 0.0;
+    g_tick_profile.player_ms = 0.0;
+    g_tick_profile.sensors_ms = 0.0;
+    g_tick_profile.frame_ms = 0.0;
+    g_tick_profile.ticks = 0;
+}
+
 static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 {
     doom_state *state = (doom_state *)userdata;
+    const bool profile_tick = doom_tick_profile_enabled();
+    Uint64 tick_start = 0;
+    Uint64 section_start = 0;
+    double actions_ms = 0.0;
+    double transition_ms = 0.0;
+    double lift_ms = 0.0;
+    double doors_ms = 0.0;
+    double particles_ms = 0.0;
+    double entities_ms = 0.0;
+    double player_ms = 0.0;
+    double sensors_ms = 0.0;
+
+    if (profile_tick)
+    {
+        tick_start = SDL_GetPerformanceCounter();
+        section_start = tick_start;
+    }
 
     apply_doom_profile_actions(ctx, state);
 
@@ -864,18 +973,60 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     {
         stop_demo_playback(ctx, state);
     }
+    if (profile_tick)
+    {
+        Uint64 now = SDL_GetPerformanceCounter();
+        actions_ms = doom_profile_elapsed_ms(section_start, now);
+        section_start = now;
+    }
 
     sdl3d_transition_update(&state->transition, ctx_bus(ctx), dt);
+    if (profile_tick)
+    {
+        Uint64 now = SDL_GetPerformanceCounter();
+        transition_ms = doom_profile_elapsed_ms(section_start, now);
+        section_start = now;
+    }
     update_dynamic_lift(state, dt);
+    if (profile_tick)
+    {
+        Uint64 now = SDL_GetPerformanceCounter();
+        lift_ms = doom_profile_elapsed_ms(section_start, now);
+        section_start = now;
+    }
     doom_doors_update(&state->doors, dt);
+    if (profile_tick)
+    {
+        Uint64 now = SDL_GetPerformanceCounter();
+        doors_ms = doom_profile_elapsed_ms(section_start, now);
+        section_start = now;
+    }
     doom_hazard_particles_update(&state->hazards, dt);
+    if (profile_tick)
+    {
+        Uint64 now = SDL_GetPerformanceCounter();
+        particles_ms = doom_profile_elapsed_ms(section_start, now);
+        section_start = now;
+    }
     entities_update(&state->ent, &state->level.unlit, dt, state->player.mover.position);
+    if (profile_tick)
+    {
+        Uint64 now = SDL_GetPerformanceCounter();
+        entities_ms = doom_profile_elapsed_ms(section_start, now);
+        section_start = now;
+    }
     if (!player_update(&state->player, ctx_input(ctx), &state->level.unlit, g_sectors, dt))
     {
         start_quit_fade(ctx, state);
     }
     else
     {
+        if (profile_tick)
+        {
+            Uint64 now = SDL_GetPerformanceCounter();
+            player_ms = doom_profile_elapsed_ms(section_start, now);
+            section_start = now;
+        }
         doom_doors_resolve_player(&state->doors, &state->player.mover);
         sdl3d_logic_contact_sensor_update(&state->launcher_sensor, state->logic,
                                           sdl3d_vec3_make(state->player.mover.position.x,
@@ -888,6 +1039,12 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
                                                                 state->player.mover.position.z),
                                                 dt);
         update_damage_feedback(state, dt);
+        if (profile_tick)
+        {
+            Uint64 now = SDL_GetPerformanceCounter();
+            sensors_ms += doom_profile_elapsed_ms(section_start, now);
+            section_start = now;
+        }
     }
 
     if (state->ambient_feedback_timer > 0.0f)
@@ -930,6 +1087,13 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
                                                 state->player.mover.position.y - PLAYER_HEIGHT,
                                                 state->player.mover.position.z),
                                 ctx_bus(ctx));
+    if (profile_tick)
+    {
+        Uint64 now = SDL_GetPerformanceCounter();
+        sensors_ms += doom_profile_elapsed_ms(section_start, now);
+        doom_tick_profile_record(actions_ms, transition_ms, lift_ms, doors_ms, particles_ms, entities_ms, player_ms,
+                                 sensors_ms, doom_profile_elapsed_ms(tick_start, now));
+    }
 }
 
 static void game_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_dt)

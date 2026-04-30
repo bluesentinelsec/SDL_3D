@@ -694,7 +694,7 @@ static sdl3d_vec4 sdl3d_shade_point_retro(const sdl3d_lighting_params *lp, sdl3d
 static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_mesh *mesh,
                                      const sdl3d_texture2d *texture, const sdl3d_texture2d *lightmap_texture,
                                      sdl3d_vec4 base_modulate, const sdl3d_lighting_params *lighting,
-                                     const sdl3d_mat4 *joint_matrices)
+                                     const sdl3d_mat4 *joint_matrices, bool static_geometry)
 {
     bool indexed;
     int triangle_count;
@@ -882,6 +882,7 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         lp.vertex_snap = context->vertex_snap;
         lp.vertex_snap_precision = context->vertex_snap_precision;
         lp.texture_filter = (int)context->texture_filter;
+        lp.static_geometry = static_geometry && !skinned && !mesh->dynamic_geometry;
 
         if (lighting->shadow_enabled[0] && lighting->shadow_depth[0] != NULL)
         {
@@ -914,6 +915,7 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         up.tint[2] = base_modulate.z;
         up.tint[3] = base_modulate.w;
         up.texture_filter = (int)context->texture_filter;
+        up.static_geometry = static_geometry && !skinned && !mesh->dynamic_geometry;
 
         if (context->backend_iface.draw_mesh_unlit(context, &up))
         {
@@ -1440,10 +1442,10 @@ bool sdl3d_draw_billboard_ex(sdl3d_render_context *context, const sdl3d_texture2
         sdl3d_lighting_params lp;
         sdl3d_build_lighting_params(context, &lp);
         lp.roughness = 1.0f;
-        return sdl3d_draw_mesh_internal(context, &mesh, texture, NULL, sdl3d_color_to_modulate(tint), &lp, NULL);
+        return sdl3d_draw_mesh_internal(context, &mesh, texture, NULL, sdl3d_color_to_modulate(tint), &lp, NULL, false);
     }
 
-    return sdl3d_draw_mesh_internal(context, &mesh, texture, NULL, sdl3d_color_to_modulate(tint), NULL, NULL);
+    return sdl3d_draw_mesh_internal(context, &mesh, texture, NULL, sdl3d_color_to_modulate(tint), NULL, NULL, false);
 }
 
 bool sdl3d_draw_billboard(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 position,
@@ -1461,9 +1463,9 @@ bool sdl3d_draw_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, cons
         sdl3d_lighting_params lp;
         sdl3d_build_lighting_params(context, &lp);
         lp.roughness = 1.0f;
-        return sdl3d_draw_mesh_internal(context, mesh, texture, NULL, sdl3d_color_to_modulate(tint), &lp, NULL);
+        return sdl3d_draw_mesh_internal(context, mesh, texture, NULL, sdl3d_color_to_modulate(tint), &lp, NULL, false);
     }
-    return sdl3d_draw_mesh_internal(context, mesh, texture, NULL, sdl3d_color_to_modulate(tint), NULL, NULL);
+    return sdl3d_draw_mesh_internal(context, mesh, texture, NULL, sdl3d_color_to_modulate(tint), NULL, NULL, false);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1608,7 +1610,8 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_mod
             lp_ptr = &lp_storage;
         }
 
-        ok = sdl3d_draw_mesh_internal(context, mesh, texture, lightmap_texture, mesh_modulate, lp_ptr, joint_matrices);
+        ok = sdl3d_draw_mesh_internal(context, mesh, texture, lightmap_texture, mesh_modulate, lp_ptr, joint_matrices,
+                                      true);
     }
     return ok;
 }

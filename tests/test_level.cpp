@@ -438,6 +438,47 @@ TEST(SDL3DLevelRuntimeGeometry, SetSectorGeometryLeavesStateUnchangedOnInvalidUp
     sdl3d_free_level(&level);
 }
 
+TEST(SDL3DLevelRuntimeGeometry, DirtyRebuildKeepsUnchangedMeshesAndMarksRuntimeMeshesDynamic)
+{
+    const sdl3d_level_material materials[] = {MakeLevelMaterial(nullptr), MakeLevelMaterial(nullptr),
+                                              MakeLevelMaterial(nullptr)};
+    sdl3d_sector sectors[] = {MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f), MakeSquareSector(4.0f, 0.0f, 8.0f, 4.0f),
+                              MakeSquareSector(20.0f, 0.0f, 24.0f, 4.0f)};
+    const sdl3d_level_light light = {{2.0f, 2.0f, 2.0f}, {1.0f, 0.8f, 0.6f}, 3.0f, 8.0f};
+    sdl3d_level level{};
+
+    ASSERT_TRUE(sdl3d_build_level(sectors, 3, materials, 3, &light, 1, &level)) << SDL_GetError();
+
+    const sdl3d_mesh *old_unchanged = FindSectorMaterialMesh(level, 2, sectors[2].floor_material);
+    ASSERT_NE(old_unchanged, nullptr);
+    const float *old_unchanged_positions = old_unchanged->positions;
+    const float *old_unchanged_lightmap_uvs = old_unchanged->lightmap_uvs;
+    ASSERT_NE(old_unchanged_lightmap_uvs, nullptr);
+
+    sdl3d_sector_geometry geometry{};
+    geometry.floor_y = 1.0f;
+    geometry.ceil_y = 4.0f;
+    geometry.floor_normal[1] = 1.0f;
+    geometry.ceil_normal[1] = -1.0f;
+
+    ASSERT_TRUE(sdl3d_level_set_sector_geometry(&level, sectors, 3, 1, &geometry, materials, 3, &light, 1))
+        << SDL_GetError();
+
+    const sdl3d_mesh *new_unchanged = FindSectorMaterialMesh(level, 2, sectors[2].floor_material);
+    ASSERT_NE(new_unchanged, nullptr);
+    EXPECT_EQ(new_unchanged->positions, old_unchanged_positions);
+    EXPECT_EQ(new_unchanged->lightmap_uvs, old_unchanged_lightmap_uvs);
+    EXPECT_FALSE(new_unchanged->dynamic_geometry);
+
+    const sdl3d_mesh *dirty_floor = FindSectorMaterialMesh(level, 1, sectors[1].floor_material);
+    ASSERT_NE(dirty_floor, nullptr);
+    EXPECT_TRUE(dirty_floor->dynamic_geometry);
+    EXPECT_EQ(dirty_floor->lightmap_uvs, nullptr);
+    EXPECT_NEAR(dirty_floor->local_bounds.min.y, 1.0f, 1e-4f);
+
+    sdl3d_free_level(&level);
+}
+
 TEST(SDL3DLevelVisibility, FindSectorReturnsCorrectSector)
 {
     const sdl3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),

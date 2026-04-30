@@ -99,12 +99,12 @@ typedef struct sdl3d_overlay_entry
 
 typedef struct sdl3d_draw_entry
 {
-    float *positions;
-    float *normals;
-    float *uvs;
-    float *lightmap_uvs;
-    float *colors;
-    unsigned int *indices;
+    const float *positions;
+    const float *normals;
+    const float *uvs;
+    const float *lightmap_uvs;
+    const float *colors;
+    const unsigned int *indices;
     int vertex_count;
     int index_count;
     float model_matrix[16];
@@ -120,7 +120,35 @@ typedef struct sdl3d_draw_entry
     bool has_lightmap;
     GLenum primitive_mode;
     float mvp[16];
+    bool owns_arrays;
+    struct sdl3d_gl_mesh_cache_entry *mesh_cache;
 } sdl3d_draw_entry;
+
+typedef struct sdl3d_gl_mesh_cache_entry
+{
+    bool lit;
+    GLenum primitive_mode;
+    const float *positions;
+    const float *normals;
+    const float *uvs;
+    const float *lightmap_uvs;
+    const float *colors;
+    const unsigned int *indices;
+    int vertex_count;
+    int index_count;
+    bool has_lightmap_uvs;
+    GLuint vao;
+    GLuint position_vbo;
+    GLuint normal_vbo;
+    GLuint uv_vbo;
+    GLuint lightmap_uv_vbo;
+    GLuint color_vbo;
+    GLuint ebo;
+    GLuint shadow_vao;
+    GLuint shadow_position_vbo;
+    GLuint shadow_ebo;
+    struct sdl3d_gl_mesh_cache_entry *next;
+} sdl3d_gl_mesh_cache_entry;
 
 /* ------------------------------------------------------------------ */
 /* Context                                                             */
@@ -250,6 +278,7 @@ struct sdl3d_gl_context
     sdl3d_draw_entry *draw_list;
     int draw_count;
     int draw_capacity;
+    sdl3d_gl_mesh_cache_entry *mesh_cache;
 
     /* Overlay draw list — rendered after FBO blit, no post-processing */
     sdl3d_overlay_entry *overlay_list;
@@ -522,7 +551,7 @@ static const char k_pbr_frag_main[] =
     "        Lo += (diff + spec) * radiance * NdotL;\n"
     "    }\n";
 
-static const char k_pbr_frag_post[] =
+static const char k_pbr_frag_shadow_post[] =
     "\n"
     "    vec3 color;\n"
     "    if (uBakedLightMode != 0) {\n"
@@ -560,16 +589,28 @@ static const char k_pbr_frag_post[] =
     "            Lo *= (1.0 - shadow);\n"
     "        }\n"
     "\n"
-    "        /* Point light shadows. */\n"
-    "        for (int ps = 0; ps < uPointShadowCount && ps < 2; ps++) {\n"
-    "            vec3 fragToLight = vWorldPos - uPointShadowLightPos[ps];\n"
-    "            float closestDepth = texture(uPointShadowMap[ps], fragToLight).r * uPointShadowFar[ps];\n"
+    "        /* Point light shadows. Keep sampler indexes constant for GLSL drivers\n"
+    "         * that reject dynamic indexing into sampler arrays. */\n"
+    "        if (uPointShadowCount > 0) {\n"
+    "            vec3 fragToLight = vWorldPos - uPointShadowLightPos[0];\n"
+    "            float closestDepth = texture(uPointShadowMap[0], fragToLight).r * uPointShadowFar[0];\n"
     "            float currentDepth = length(fragToLight);\n"
     "            float pbias = 0.15;\n"
     "            if (currentDepth - pbias > closestDepth) {\n"
     "                Lo *= 0.5;\n"
     "            }\n"
     "        }\n"
+    "        if (uPointShadowCount > 1) {\n"
+    "            vec3 fragToLight = vWorldPos - uPointShadowLightPos[1];\n"
+    "            float closestDepth = texture(uPointShadowMap[1], fragToLight).r * uPointShadowFar[1];\n"
+    "            float currentDepth = length(fragToLight);\n"
+    "            float pbias = 0.15;\n"
+    "            if (currentDepth - pbias > closestDepth) {\n"
+    "                Lo *= 0.5;\n"
+    "            }\n"
+    "        }\n";
+
+static const char k_pbr_frag_light_post[] =
     "\n"
     "        /* Ambient: IBL when available, hemisphere fallback. */\n"
     "        vec3 ambient;\n"
@@ -1241,12 +1282,15 @@ static void free_draw_list(sdl3d_gl_context *ctx)
     for (int i = 0; i < ctx->draw_count; i++)
     {
         sdl3d_draw_entry *e = &ctx->draw_list[i];
-        SDL_free(e->positions);
-        SDL_free(e->normals);
-        SDL_free(e->uvs);
-        SDL_free(e->lightmap_uvs);
-        SDL_free(e->colors);
-        SDL_free(e->indices);
+        if (e->owns_arrays)
+        {
+            SDL_free((void *)e->positions);
+            SDL_free((void *)e->normals);
+            SDL_free((void *)e->uvs);
+            SDL_free((void *)e->lightmap_uvs);
+            SDL_free((void *)e->colors);
+            SDL_free((void *)e->indices);
+        }
     }
     ctx->draw_count = 0;
 }
@@ -1404,6 +1448,7 @@ bool sdl3d_gl_append_line(sdl3d_gl_context *ctx, const float *positions, const f
     e->colors = copy_floats(colors, 8);
     SDL_memcpy(e->mvp, mvp, 16 * sizeof(float));
     SDL_memcpy(e->tint, k_white_tint, sizeof(k_white_tint));
+    e->owns_arrays = true;
     return e->positions != NULL && e->uvs != NULL && e->colors != NULL;
 }
 
@@ -1544,6 +1589,125 @@ static unsigned int *copy_indices(const unsigned int *src, size_t count)
     if (dst)
         SDL_memcpy(dst, src, count * sizeof(unsigned int));
     return dst;
+}
+
+static bool mesh_cache_matches(const sdl3d_gl_mesh_cache_entry *entry, bool lit, GLenum primitive_mode,
+                               const float *positions, const float *normals, const float *uvs,
+                               const float *lightmap_uvs, const float *colors, const unsigned int *indices,
+                               int vertex_count, int index_count, bool has_lightmap_uvs)
+{
+    return entry->lit == lit && entry->primitive_mode == primitive_mode && entry->positions == positions &&
+           entry->normals == normals && entry->uvs == uvs && entry->lightmap_uvs == lightmap_uvs &&
+           entry->colors == colors && entry->indices == indices && entry->vertex_count == vertex_count &&
+           entry->index_count == index_count && entry->has_lightmap_uvs == has_lightmap_uvs;
+}
+
+static void mesh_cache_bind_float_attrib(sdl3d_gl_funcs *gl, GLuint *buffer, GLuint attrib, GLint components,
+                                         const float *data, size_t count)
+{
+    gl->GenBuffers(1, buffer);
+    gl->BindBuffer(GL_ARRAY_BUFFER, *buffer);
+    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(count * sizeof(float)), data, GL_STATIC_DRAW);
+    gl->EnableVertexAttribArray(attrib);
+    gl->VertexAttribPointer(attrib, components, GL_FLOAT, GL_FALSE, 0, NULL);
+}
+
+static sdl3d_gl_mesh_cache_entry *mesh_cache_lookup_or_create(sdl3d_gl_context *ctx, bool lit, GLenum primitive_mode,
+                                                              const float *positions, const float *normals,
+                                                              const float *uvs, const float *lightmap_uvs,
+                                                              const float *colors, const unsigned int *indices,
+                                                              int vertex_count, int index_count,
+                                                              bool has_lightmap_uvs)
+{
+    for (sdl3d_gl_mesh_cache_entry *entry = ctx->mesh_cache; entry != NULL; entry = entry->next)
+    {
+        if (mesh_cache_matches(entry, lit, primitive_mode, positions, normals, uvs, lightmap_uvs, colors, indices,
+                               vertex_count, index_count, has_lightmap_uvs))
+        {
+            return entry;
+        }
+    }
+
+    sdl3d_gl_mesh_cache_entry *entry = (sdl3d_gl_mesh_cache_entry *)SDL_calloc(1, sizeof(*entry));
+    if (entry == NULL)
+    {
+        SDL_OutOfMemory();
+        return NULL;
+    }
+
+    sdl3d_gl_funcs *gl = &ctx->gl;
+    entry->lit = lit;
+    entry->primitive_mode = primitive_mode;
+    entry->positions = positions;
+    entry->normals = normals;
+    entry->uvs = uvs;
+    entry->lightmap_uvs = lightmap_uvs;
+    entry->colors = colors;
+    entry->indices = indices;
+    entry->vertex_count = vertex_count;
+    entry->index_count = index_count;
+    entry->has_lightmap_uvs = has_lightmap_uvs;
+
+    gl->GenVertexArrays(1, &entry->vao);
+    gl->BindVertexArray(entry->vao);
+    mesh_cache_bind_float_attrib(gl, &entry->position_vbo, 0, 3, positions, (size_t)vertex_count * 3);
+    if (lit)
+    {
+        mesh_cache_bind_float_attrib(gl, &entry->normal_vbo, 1, 3, normals, (size_t)vertex_count * 3);
+        mesh_cache_bind_float_attrib(gl, &entry->uv_vbo, 2, 2, uvs, (size_t)vertex_count * 2);
+        mesh_cache_bind_float_attrib(gl, &entry->lightmap_uv_vbo, 4, 2, has_lightmap_uvs ? lightmap_uvs : uvs,
+                                     (size_t)vertex_count * 2);
+        mesh_cache_bind_float_attrib(gl, &entry->color_vbo, 3, 4, colors, (size_t)vertex_count * 4);
+    }
+    else
+    {
+        mesh_cache_bind_float_attrib(gl, &entry->uv_vbo, 1, 2, uvs, (size_t)vertex_count * 2);
+        mesh_cache_bind_float_attrib(gl, &entry->color_vbo, 2, 4, colors, (size_t)vertex_count * 4);
+    }
+    if (indices != NULL && index_count > 0)
+    {
+        gl->GenBuffers(1, &entry->ebo);
+        gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, entry->ebo);
+        gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)index_count * sizeof(unsigned int)), indices,
+                       GL_STATIC_DRAW);
+    }
+
+    gl->GenVertexArrays(1, &entry->shadow_vao);
+    gl->BindVertexArray(entry->shadow_vao);
+    mesh_cache_bind_float_attrib(gl, &entry->shadow_position_vbo, 0, 3, positions, (size_t)vertex_count * 3);
+    if (indices != NULL && index_count > 0)
+    {
+        gl->GenBuffers(1, &entry->shadow_ebo);
+        gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, entry->shadow_ebo);
+        gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)index_count * sizeof(unsigned int)), indices,
+                       GL_STATIC_DRAW);
+    }
+    gl->BindVertexArray(0);
+
+    entry->next = ctx->mesh_cache;
+    ctx->mesh_cache = entry;
+    return entry;
+}
+
+static void mesh_cache_free(sdl3d_gl_context *ctx)
+{
+    sdl3d_gl_funcs *gl = &ctx->gl;
+    sdl3d_gl_mesh_cache_entry *entry = ctx->mesh_cache;
+    while (entry != NULL)
+    {
+        sdl3d_gl_mesh_cache_entry *next = entry->next;
+        GLuint buffers[] = {entry->position_vbo,        entry->normal_vbo, entry->uv_vbo,       entry->lightmap_uv_vbo,
+                            entry->color_vbo,           entry->ebo,        entry->shadow_position_vbo,
+                            entry->shadow_ebo};
+        gl->DeleteBuffers(8, buffers);
+        if (entry->vao)
+            gl->DeleteVertexArrays(1, &entry->vao);
+        if (entry->shadow_vao)
+            gl->DeleteVertexArrays(1, &entry->shadow_vao);
+        SDL_free(entry);
+        entry = next;
+    }
+    ctx->mesh_cache = NULL;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1768,8 +1932,6 @@ static void replay_draw_list_shadow(sdl3d_gl_context *ctx)
 {
     sdl3d_gl_funcs *gl = &ctx->gl;
     gl->UseProgram(ctx->shadow_program);
-    gl->BindVertexArray(ctx->shadow_vao);
-
     /* lightVP uniform is set by the caller per cascade. */
 
     for (int i = 0; i < ctx->draw_count; i++)
@@ -1780,15 +1942,22 @@ static void replay_draw_list_shadow(sdl3d_gl_context *ctx)
 
         gl->UniformMatrix4fv(ctx->shadow_model_loc, 1, GL_FALSE, e->model_matrix);
 
-        gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
-        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->positions,
-                       GL_DYNAMIC_DRAW);
+        gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->shadow_vao : ctx->shadow_vao);
+        if (e->mesh_cache == NULL)
+        {
+            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
+            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->positions,
+                           GL_DYNAMIC_DRAW);
+        }
 
         if (e->indices && e->index_count > 0)
         {
-            gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->shadow_ebo);
-            gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
-                           e->indices, GL_DYNAMIC_DRAW);
+            if (e->mesh_cache == NULL)
+            {
+                gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->shadow_ebo);
+                gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
+                               e->indices, GL_DYNAMIC_DRAW);
+            }
             gl->DrawElements(GL_TRIANGLES, e->index_count, GL_UNSIGNED_INT, NULL);
         }
         else
@@ -1909,28 +2078,34 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
                 gl->ActiveTexture(GL_TEXTURE0);
             }
 
-            gl->BindVertexArray(ctx->lit_vao);
-            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_position_vbo);
-            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->positions,
-                           GL_DYNAMIC_DRAW);
-            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_normal_vbo);
-            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->normals,
-                           GL_DYNAMIC_DRAW);
-            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_uv_vbo);
-            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 2 * sizeof(float)), e->uvs,
-                           GL_DYNAMIC_DRAW);
-            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_lightmap_uv_vbo);
-            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 2 * sizeof(float)),
-                           e->has_lightmap ? e->lightmap_uvs : e->uvs, GL_DYNAMIC_DRAW);
-            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_color_vbo);
-            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 4 * sizeof(float)), e->colors,
-                           GL_DYNAMIC_DRAW);
+            gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->vao : ctx->lit_vao);
+            if (e->mesh_cache == NULL)
+            {
+                gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_position_vbo);
+                gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)),
+                               e->positions, GL_DYNAMIC_DRAW);
+                gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_normal_vbo);
+                gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->normals,
+                               GL_DYNAMIC_DRAW);
+                gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_uv_vbo);
+                gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 2 * sizeof(float)), e->uvs,
+                               GL_DYNAMIC_DRAW);
+                gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_lightmap_uv_vbo);
+                gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 2 * sizeof(float)),
+                               e->has_lightmap ? e->lightmap_uvs : e->uvs, GL_DYNAMIC_DRAW);
+                gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_color_vbo);
+                gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 4 * sizeof(float)), e->colors,
+                               GL_DYNAMIC_DRAW);
+            }
 
             if (e->indices && e->index_count > 0)
             {
-                gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->lit_ebo);
-                gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
-                               e->indices, GL_DYNAMIC_DRAW);
+                if (e->mesh_cache == NULL)
+                {
+                    gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->lit_ebo);
+                    gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
+                                   e->indices, GL_DYNAMIC_DRAW);
+                }
                 gl->DrawElements(e->primitive_mode, e->index_count, GL_UNSIGNED_INT, NULL);
             }
             else
@@ -1949,22 +2124,28 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
             gl->Uniform1i(ctx->unlit_texture_loc, 0);
             gl->Uniform1i(ctx->unlit_has_texture_loc, e->texture ? 1 : 0);
 
-            gl->BindVertexArray(ctx->unlit_vao);
-            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_position_vbo);
-            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->positions,
-                           GL_DYNAMIC_DRAW);
-            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_uv_vbo);
-            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 2 * sizeof(float)), e->uvs,
-                           GL_DYNAMIC_DRAW);
-            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_color_vbo);
-            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 4 * sizeof(float)), e->colors,
-                           GL_DYNAMIC_DRAW);
+            gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->vao : ctx->unlit_vao);
+            if (e->mesh_cache == NULL)
+            {
+                gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_position_vbo);
+                gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)),
+                               e->positions, GL_DYNAMIC_DRAW);
+                gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_uv_vbo);
+                gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 2 * sizeof(float)), e->uvs,
+                               GL_DYNAMIC_DRAW);
+                gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_color_vbo);
+                gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 4 * sizeof(float)), e->colors,
+                               GL_DYNAMIC_DRAW);
+            }
 
             if (e->indices && e->index_count > 0)
             {
-                gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->unlit_ebo);
-                gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
-                               e->indices, GL_DYNAMIC_DRAW);
+                if (e->mesh_cache == NULL)
+                {
+                    gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->unlit_ebo);
+                    gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
+                                   e->indices, GL_DYNAMIC_DRAW);
+                }
                 gl->DrawElements(e->primitive_mode, e->index_count, GL_UNSIGNED_INT, NULL);
             }
             else
@@ -2372,11 +2553,12 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     const char *version_prefix = ctx->is_es ? "#version 300 es\nprecision highp float;\n" : "#version 330\n";
 
     /* Compile shader programs. */
-    /* PBR frag is split into two arrays to stay under C99 string length limits. */
+    /* PBR frag is split into chunks to stay under C99 string length limits. */
     {
         GLuint vs = compile_shader(gl, GL_VERTEX_SHADER, version_prefix, k_pbr_vert);
-        const char *frag_srcs[4] = {version_prefix, k_pbr_frag_decl, k_pbr_frag_main, k_pbr_frag_post};
-        GLuint fs = vs ? compile_shader_multi(gl, GL_FRAGMENT_SHADER, 4, frag_srcs) : 0;
+        const char *frag_srcs[5] = {version_prefix, k_pbr_frag_decl, k_pbr_frag_main, k_pbr_frag_shadow_post,
+                                    k_pbr_frag_light_post};
+        GLuint fs = vs ? compile_shader_multi(gl, GL_FRAGMENT_SHADER, 5, frag_srcs) : 0;
         ctx->pbr_program = (vs && fs) ? link_program(gl, vs, fs) : 0;
         if (vs)
             gl->DeleteShader(vs);
@@ -2752,6 +2934,7 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
 
     free_draw_list(ctx);
     SDL_free(ctx->draw_list);
+    mesh_cache_free(ctx);
 
     free_overlay_list(ctx);
     SDL_free(ctx->overlay_list);
@@ -2906,15 +3089,27 @@ static bool gl_draw_mesh_unlit(sdl3d_render_context *context, const sdl3d_draw_p
     e->lit = false;
     e->vertex_count = params->vertex_count;
     e->index_count = (params->indices && params->index_count > 0) ? params->index_count : 0;
-    e->positions = copy_floats(params->positions, (size_t)params->vertex_count * 3);
-    e->uvs = copy_floats(params->uvs, (size_t)params->vertex_count * 2);
-    e->colors = copy_floats(colors, (size_t)params->vertex_count * 4);
-    e->indices = copy_indices(params->indices, (size_t)e->index_count);
     e->texture = params->texture;
     e->primitive_mode = GL_TRIANGLES;
     SDL_memcpy(e->mvp, params->mvp, 16 * sizeof(float));
     SDL_memcpy(e->tint, params->tint, 4 * sizeof(float));
+    e->owns_arrays = !params->static_geometry;
 
+    if (params->static_geometry)
+    {
+        e->positions = params->positions;
+        e->uvs = params->uvs;
+        e->colors = colors;
+        e->indices = params->indices;
+        e->mesh_cache = mesh_cache_lookup_or_create(ctx, false, e->primitive_mode, e->positions, NULL, e->uvs, NULL,
+                                                     e->colors, e->indices, e->vertex_count, e->index_count, false);
+        return e->mesh_cache != NULL;
+    }
+
+    e->positions = copy_floats(params->positions, (size_t)params->vertex_count * 3);
+    e->uvs = copy_floats(params->uvs, (size_t)params->vertex_count * 2);
+    e->colors = copy_floats(colors, (size_t)params->vertex_count * 4);
+    e->indices = copy_indices(params->indices, (size_t)e->index_count);
     return true;
 }
 
@@ -2931,12 +3126,6 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     e->lit = true;
     e->vertex_count = params->vertex_count;
     e->index_count = (params->indices && params->index_count > 0) ? params->index_count : 0;
-    e->positions = copy_floats(params->positions, (size_t)params->vertex_count * 3);
-    e->normals = copy_floats(params->normals, (size_t)params->vertex_count * 3);
-    e->uvs = copy_floats(params->uvs, (size_t)params->vertex_count * 2);
-    e->lightmap_uvs = copy_floats(params->lightmap_uvs, (size_t)params->vertex_count * 2);
-    e->colors = copy_floats(colors, (size_t)params->vertex_count * 4);
-    e->indices = copy_indices(params->indices, (size_t)e->index_count);
     e->texture = params->texture;
     e->lightmap_texture = params->lightmap;
     e->primitive_mode = GL_TRIANGLES;
@@ -2948,6 +3137,28 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     SDL_memcpy(e->emissive, params->emissive, 3 * sizeof(float));
     e->baked_light_mode = params->baked_light_mode;
     e->has_lightmap = params->lightmap_uvs != NULL && params->lightmap != NULL;
+    e->owns_arrays = !params->static_geometry;
+
+    if (params->static_geometry)
+    {
+        e->positions = params->positions;
+        e->normals = params->normals;
+        e->uvs = params->uvs;
+        e->lightmap_uvs = params->lightmap_uvs;
+        e->colors = colors;
+        e->indices = params->indices;
+        e->mesh_cache = mesh_cache_lookup_or_create(ctx, true, e->primitive_mode, e->positions, e->normals, e->uvs,
+                                                     e->lightmap_uvs, e->colors, e->indices, e->vertex_count,
+                                                     e->index_count, e->has_lightmap);
+        return e->mesh_cache != NULL;
+    }
+
+    e->positions = copy_floats(params->positions, (size_t)params->vertex_count * 3);
+    e->normals = copy_floats(params->normals, (size_t)params->vertex_count * 3);
+    e->uvs = copy_floats(params->uvs, (size_t)params->vertex_count * 2);
+    e->lightmap_uvs = copy_floats(params->lightmap_uvs, (size_t)params->vertex_count * 2);
+    e->colors = copy_floats(colors, (size_t)params->vertex_count * 4);
+    e->indices = copy_indices(params->indices, (size_t)e->index_count);
 
     /* check_z_fighting(ctx, e); — disabled: triggers on authored model geometry */
     (void)check_z_fighting;
@@ -3196,16 +3407,22 @@ static bool gl_present(sdl3d_render_context *context)
                     if (!e->lit)
                         continue;
                     gl->UniformMatrix4fv(ctx->point_shadow_model_loc, 1, GL_FALSE, e->model_matrix);
-                    gl->BindVertexArray(ctx->shadow_vao);
-                    gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
-                    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)),
-                                   e->positions, GL_DYNAMIC_DRAW);
+                    gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->shadow_vao : ctx->shadow_vao);
+                    if (e->mesh_cache == NULL)
+                    {
+                        gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
+                        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)),
+                                       e->positions, GL_DYNAMIC_DRAW);
+                    }
                     if (e->indices && e->index_count > 0)
                     {
-                        gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->shadow_ebo);
-                        gl->BufferData(GL_ELEMENT_ARRAY_BUFFER,
-                                       (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)), e->indices,
-                                       GL_DYNAMIC_DRAW);
+                        if (e->mesh_cache == NULL)
+                        {
+                            gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->shadow_ebo);
+                            gl->BufferData(GL_ELEMENT_ARRAY_BUFFER,
+                                           (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)), e->indices,
+                                           GL_DYNAMIC_DRAW);
+                        }
                         gl->DrawElements(GL_TRIANGLES, e->index_count, GL_UNSIGNED_INT, NULL);
                     }
                     else
@@ -3484,16 +3701,22 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
                             e->model_matrix[0] == 1.0f && e->model_matrix[5] == 1.0f && e->model_matrix[10] == 1.0f)
                             continue;
                         gl->UniformMatrix4fv(ctx->point_shadow_model_loc, 1, GL_FALSE, e->model_matrix);
-                        gl->BindVertexArray(ctx->shadow_vao);
-                        gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
-                        gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)),
-                                       e->positions, GL_DYNAMIC_DRAW);
+                        gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->shadow_vao : ctx->shadow_vao);
+                        if (e->mesh_cache == NULL)
+                        {
+                            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
+                            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)),
+                                           e->positions, GL_DYNAMIC_DRAW);
+                        }
                         if (e->indices && e->index_count > 0)
                         {
-                            gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->shadow_ebo);
-                            gl->BufferData(GL_ELEMENT_ARRAY_BUFFER,
-                                           (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)), e->indices,
-                                           GL_DYNAMIC_DRAW);
+                            if (e->mesh_cache == NULL)
+                            {
+                                gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->shadow_ebo);
+                                gl->BufferData(GL_ELEMENT_ARRAY_BUFFER,
+                                               (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)), e->indices,
+                                               GL_DYNAMIC_DRAW);
+                            }
                             gl->DrawElements(GL_TRIANGLES, e->index_count, GL_UNSIGNED_INT, NULL);
                         }
                         else

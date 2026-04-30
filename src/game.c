@@ -453,8 +453,18 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
     sdl3d_game_context ctx;
     const float fixed_dt = sdl3d_game_fixed_dt(config);
     const int max_ticks_per_frame = sdl3d_game_max_ticks_per_frame(config);
+    const bool profile_frames = SDL_getenv("SDL3D_PROFILE_FRAMES") != NULL;
     float accumulator = 0.0f;
     Uint64 last_counter = 0;
+    Uint64 profile_last_counter = 0;
+    double profile_poll_ms = 0.0;
+    double profile_tick_ms = 0.0;
+    double profile_render_ms = 0.0;
+    double profile_present_ms = 0.0;
+    double profile_frame_ms = 0.0;
+    int profile_frames_count = 0;
+    int profile_ticks_count = 0;
+    int profile_max_ticks = 0;
     int result = 0;
 
     SDL_zero(ctx);
@@ -485,6 +495,15 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
 
     while (!ctx.quit_requested)
     {
+        const Uint64 frame_start_counter = SDL_GetPerformanceCounter();
+        Uint64 poll_start_counter = frame_start_counter;
+        Uint64 poll_end_counter;
+        Uint64 tick_start_counter;
+        Uint64 tick_end_counter;
+        Uint64 render_start_counter;
+        Uint64 render_end_counter;
+        Uint64 present_start_counter;
+        Uint64 present_end_counter;
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
@@ -502,6 +521,7 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
                 break;
             }
         }
+        poll_end_counter = SDL_GetPerformanceCounter();
 
         if (ctx.quit_requested)
         {
@@ -519,14 +539,17 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
 
         if (ctx.paused)
         {
+            tick_start_counter = SDL_GetPerformanceCounter();
             sdl3d_game_session_update_input(ctx.session);
             if (callbacks != NULL && callbacks->pause_tick != NULL)
             {
                 callbacks->pause_tick(&ctx, userdata, frame_dt);
             }
+            tick_end_counter = SDL_GetPerformanceCounter();
         }
         else
         {
+            tick_start_counter = SDL_GetPerformanceCounter();
             accumulator += frame_dt;
 
             while (!ctx.quit_requested && !ctx.paused && accumulator >= fixed_dt &&
@@ -548,6 +571,7 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
             {
                 accumulator = SDL_fmodf(accumulator, fixed_dt);
             }
+            tick_end_counter = SDL_GetPerformanceCounter();
         }
 
         if (ctx.quit_requested)
@@ -562,14 +586,67 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
             {
                 alpha = 1.0f;
             }
+            render_start_counter = SDL_GetPerformanceCounter();
             callbacks->render(&ctx, userdata, alpha);
+            render_end_counter = SDL_GetPerformanceCounter();
+        }
+        else
+        {
+            render_start_counter = SDL_GetPerformanceCounter();
+            render_end_counter = render_start_counter;
         }
 
+        present_start_counter = SDL_GetPerformanceCounter();
         if (!sdl3d_present_render_context(ctx.renderer))
         {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D present failed: %s", SDL_GetError());
             result = 1;
             ctx.quit_requested = true;
+        }
+        present_end_counter = SDL_GetPerformanceCounter();
+
+        if (profile_frames)
+        {
+            const double inv_freq_ms = 1000.0 / (double)SDL_GetPerformanceFrequency();
+            profile_poll_ms += (double)(poll_end_counter - poll_start_counter) * inv_freq_ms;
+            profile_tick_ms += (double)(tick_end_counter - tick_start_counter) * inv_freq_ms;
+            profile_render_ms += (double)(render_end_counter - render_start_counter) * inv_freq_ms;
+            profile_present_ms += (double)(present_end_counter - present_start_counter) * inv_freq_ms;
+            profile_frame_ms += (double)(present_end_counter - frame_start_counter) * inv_freq_ms;
+            profile_frames_count++;
+            profile_ticks_count += ticks_this_frame;
+            if (ticks_this_frame > profile_max_ticks)
+            {
+                profile_max_ticks = ticks_this_frame;
+            }
+
+            if (profile_last_counter == 0)
+            {
+                profile_last_counter = present_end_counter;
+            }
+            else if ((double)(present_end_counter - profile_last_counter) /
+                         (double)SDL_GetPerformanceFrequency() >=
+                     1.0)
+            {
+                const double frames = profile_frames_count > 0 ? (double)profile_frames_count : 1.0;
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                            "SDL3D profile: fps=%.1f frame=%.2fms poll=%.2f tick=%.2f render=%.2f present=%.2f "
+                            "ticks/frame=%.2f max_ticks=%d",
+                            frames * (double)SDL_GetPerformanceFrequency() /
+                                (double)(present_end_counter - profile_last_counter),
+                            profile_frame_ms / frames, profile_poll_ms / frames, profile_tick_ms / frames,
+                            profile_render_ms / frames, profile_present_ms / frames,
+                            profile_ticks_count / frames, profile_max_ticks);
+                profile_last_counter = present_end_counter;
+                profile_poll_ms = 0.0;
+                profile_tick_ms = 0.0;
+                profile_render_ms = 0.0;
+                profile_present_ms = 0.0;
+                profile_frame_ms = 0.0;
+                profile_frames_count = 0;
+                profile_ticks_count = 0;
+                profile_max_ticks = 0;
+            }
         }
     }
 

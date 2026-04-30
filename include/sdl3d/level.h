@@ -90,6 +90,7 @@ extern "C"
         /* Per-mesh sector ownership: mesh_sector_ids[mesh_index] = sector index.
          * Length = model.mesh_count. */
         int *mesh_sector_ids;
+        int material_count;
 
         /* Portal adjacency graph. */
         int portal_count;
@@ -157,18 +158,21 @@ extern "C"
                            int material_count, const sdl3d_level_light *lights, int light_count, sdl3d_level *out);
 
     /**
-     * @brief Change one sector's runtime geometry and rebuild level data.
+     * @brief Change one sector's runtime geometry and rebuild dirty level meshes.
      *
      * The update is transactional for a single level: the function copies
-     * `sectors`, applies `geometry` to `sector_index`, rebuilds a temporary
-     * level, and swaps it into `level` only after the rebuild succeeds. On
-     * success, `sectors[sector_index]` is updated to match the committed
-     * geometry. On failure, the live level and caller-owned sector array are
-     * left unchanged and SDL_GetError() describes the problem.
+     * `sectors`, applies `geometry` to `sector_index`, rebuilds the edited
+     * sector plus directly adjacent sectors, and commits those meshes only
+     * after the dirty rebuild succeeds. On success, `sectors[sector_index]`
+     * is updated to match the committed geometry. On failure, the live level
+     * and caller-owned sector array are left unchanged and SDL_GetError()
+     * describes the problem.
      *
-     * Rebuilding the level refreshes generated floor, ceiling, wall, portal,
-     * visibility, vertex lighting, and lightmap data so adjacent step walls
-     * remain consistent when a floor or ceiling moves.
+     * Dirty rebuilding refreshes generated floor, ceiling, wall, portal, and
+     * visibility data so adjacent step walls remain consistent when a floor
+     * or ceiling moves. Existing baked lightmap atlas data is preserved for
+     * unchanged meshes; dirty runtime meshes are rendered without lightmap UVs
+     * until the level is fully rebuilt.
      *
      * @param level Built level to replace on success.
      * @param sectors Mutable sector definitions used by gameplay queries.
