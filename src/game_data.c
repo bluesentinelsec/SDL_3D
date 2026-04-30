@@ -5047,8 +5047,7 @@ static void bind_input_spec(sdl3d_input_manager *input, const input_binding_spec
         sdl3d_input_bind_gamepad_button_at(input, spec->action_id, spec->gamepad_index, spec->gamepad_button);
         break;
     case SDL3D_INPUT_GAMEPAD_AXIS:
-        sdl3d_input_bind_gamepad_axis_at(input, spec->action_id, spec->gamepad_index, spec->gamepad_axis,
-                                         spec->scale);
+        sdl3d_input_bind_gamepad_axis_at(input, spec->action_id, spec->gamepad_index, spec->gamepad_axis, spec->scale);
         break;
     }
 }
