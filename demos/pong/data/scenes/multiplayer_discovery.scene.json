@@ -2,7 +2,16 @@
   "schema": "sdl3d.scene.v0",
   "name": "scene.multiplayer.discovery",
   "updates_game": false,
-  "renders_world": false,
+  "renders_world": true,
+  "camera": "camera.overhead",
+  "entities": [
+    "entity.multiplayer.background.base",
+    "entity.multiplayer.background.core",
+    "entity.multiplayer.background.glow.cyan",
+    "entity.multiplayer.background.glow.violet",
+    "entity.multiplayer.background.stream",
+    "entity.multiplayer.discovery"
+  ],
   "input": {
     "actions": [
       "action.menu.up",
@@ -15,6 +24,27 @@
     "enter": "scene_in",
     "exit": "scene_out"
   },
+  "activity": {
+    "enabled": true,
+    "input": "any",
+    "reset_periodic_on_input": false,
+    "on_enter": [
+      { "type": "property.set", "target": "entity.multiplayer.discovery", "key": "status", "value": "Scanning for hosts..." },
+      { "type": "property.set", "target": "entity.multiplayer.discovery", "key": "session_0", "value": "No sessions discovered yet" },
+      { "type": "property.set", "target": "entity.multiplayer.discovery", "key": "session_1", "value": "" },
+      { "type": "property.set", "target": "entity.multiplayer.discovery", "key": "session_2", "value": "" },
+      { "type": "property.set", "target": "entity.multiplayer.discovery", "key": "session_3", "value": "" },
+      { "type": "signal.emit", "signal": "signal.multiplayer.discovery.refresh" }
+    ],
+    "periodic": [
+      {
+        "interval": 15.0,
+        "actions": [
+          { "type": "signal.emit", "signal": "signal.multiplayer.discovery.refresh" }
+        ]
+      }
+    ]
+  },
   "menus": [
     {
       "name": "menu.multiplayer.discovery",
@@ -26,7 +56,7 @@
       "select_signal": "signal.ui.menu.select",
       "selected": 0,
       "items": [
-        { "label": "Back", "scene": "scene.multiplayer.join" }
+        { "label": "Back", "scene": "scene.multiplayer.lan" }
       ]
     }
   ],
@@ -45,11 +75,66 @@
       {
         "name": "ui.multiplayer.discovery.status",
         "font": "font.hud",
-        "text": "SCAN THE LAN FOR HOSTS",
-        "x": 0.5,
-        "y": 0.34,
+        "format": "%s",
+        "bindings": [
+          { "type": "property", "entity": "entity.multiplayer.discovery", "key": "status" }
+        ],
+        "x": 0.30,
+        "y": 0.30,
         "normalized": true,
-        "centered": true,
+        "align": "left",
+        "color": [225, 236, 255, 245]
+      },
+      {
+        "name": "ui.multiplayer.discovery.session_0",
+        "font": "font.hud",
+        "format": "%s",
+        "bindings": [
+          { "type": "property", "entity": "entity.multiplayer.discovery", "key": "session_0" }
+        ],
+        "x": 0.30,
+        "y": 0.40,
+        "normalized": true,
+        "align": "left",
+        "color": [255, 245, 208, 255]
+      },
+      {
+        "name": "ui.multiplayer.discovery.session_1",
+        "font": "font.hud",
+        "format": "%s",
+        "bindings": [
+          { "type": "property", "entity": "entity.multiplayer.discovery", "key": "session_1" }
+        ],
+        "x": 0.30,
+        "y": 0.48,
+        "normalized": true,
+        "align": "left",
+        "color": [225, 236, 255, 245]
+      },
+      {
+        "name": "ui.multiplayer.discovery.session_2",
+        "font": "font.hud",
+        "format": "%s",
+        "bindings": [
+          { "type": "property", "entity": "entity.multiplayer.discovery", "key": "session_2" }
+        ],
+        "x": 0.30,
+        "y": 0.56,
+        "normalized": true,
+        "align": "left",
+        "color": [225, 236, 255, 245]
+      },
+      {
+        "name": "ui.multiplayer.discovery.session_3",
+        "font": "font.hud",
+        "format": "%s",
+        "bindings": [
+          { "type": "property", "entity": "entity.multiplayer.discovery", "key": "session_3" }
+        ],
+        "x": 0.30,
+        "y": 0.64,
+        "normalized": true,
+        "align": "left",
         "color": [225, 236, 255, 245]
       }
     ],
@@ -58,8 +143,8 @@
         "name": "ui.multiplayer.discovery.menu",
         "menu": "menu.multiplayer.discovery",
         "font": "font.hud",
-        "x": 0.45,
-        "y": 0.52,
+        "x": 0.30,
+        "y": 0.80,
         "gap": 0.09,
         "normalized": true,
         "align": "left",

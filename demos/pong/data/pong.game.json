@@ -1276,6 +1276,124 @@
           "random_seed": 19088743
         }
       ]
+    },
+    {
+      "name": "entity.multiplayer.background.base",
+      "active": true,
+      "tags": ["render", "multiplayer", "background"],
+      "transform": { "position": [0.0, 0.0, -0.70] },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [22.0, 13.0, 0.08],
+          "color": [4, 8, 20, 255],
+          "lighting": false
+        }
+      ]
+    },
+    {
+      "name": "entity.multiplayer.background.core",
+      "active": true,
+      "tags": ["render", "multiplayer", "background"],
+      "transform": { "position": [0.0, -0.6, -0.45] },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 2.45,
+          "rings": 18,
+          "slices": 28,
+          "color": [22, 54, 112, 56],
+          "emissive": true,
+          "effects": [
+            { "type": "drift", "offset": [0.55, 0.35, 0.0], "rates": [0.18, 0.12, 0.0], "phase": 0.4 },
+            { "type": "pulse", "rate": 0.90, "phase": 0.4, "radius_add": 0.42, "color": [54, 110, 224, 86], "emissive_base": [0.04, 0.06, 0.12], "emissive_add": [0.10, 0.18, 0.34] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.multiplayer.background.glow.cyan",
+      "active": true,
+      "tags": ["render", "multiplayer", "background"],
+      "transform": { "position": [-4.8, 1.8, -0.33] },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 1.12,
+          "rings": 16,
+          "slices": 24,
+          "color": [45, 204, 255, 118],
+          "emissive": true,
+          "effects": [
+            { "type": "drift", "offset": [0.90, 0.48, 0.0], "rates": [0.25, 0.19, 0.0], "phase": 1.2 },
+            { "type": "pulse", "rate": 1.10, "phase": 1.2, "radius_add": 0.28, "color": [108, 236, 255, 156], "emissive_base": [0.02, 0.12, 0.18], "emissive_add": [0.06, 0.28, 0.42] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.multiplayer.background.glow.violet",
+      "active": true,
+      "tags": ["render", "multiplayer", "background"],
+      "transform": { "position": [4.2, -1.5, -0.30] },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 1.02,
+          "rings": 16,
+          "slices": 24,
+          "color": [168, 92, 255, 102],
+          "emissive": true,
+          "effects": [
+            { "type": "drift", "offset": [0.88, 0.42, 0.0], "rates": [0.21, 0.26, 0.0], "phase": 2.0 },
+            { "type": "pulse", "rate": 1.05, "phase": 2.0, "radius_add": 0.30, "color": [206, 138, 255, 144], "emissive_base": [0.10, 0.03, 0.16], "emissive_add": [0.24, 0.07, 0.34] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.multiplayer.background.stream",
+      "active": true,
+      "tags": ["effect", "particles", "multiplayer"],
+      "transform": { "position": [0.0, -5.0, -0.16] },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [10.0, 0.34, 0.05],
+          "direction": [0.04, 1.0, 0.0],
+          "spread": 0.50,
+          "speed_min": 0.10,
+          "speed_max": 0.34,
+          "lifetime_min": 5.2,
+          "lifetime_max": 9.6,
+          "size_start": 0.022,
+          "size_end": 0.006,
+          "gravity": 0.0,
+          "max_particles": 110,
+          "emit_rate": 11.0,
+          "color_start": [54, 126, 255, 74],
+          "color_end": [148, 104, 255, 0],
+          "emissive_intensity": 1.55,
+          "camera_facing": true,
+          "depth_test": false,
+          "additive_blend": true,
+          "draw_emissive": [0.18, 0.46, 1.0],
+          "random_seed": 2917413
+        }
+      ]
+    },
+    {
+      "name": "entity.multiplayer.discovery",
+      "active": true,
+      "tags": ["state", "multiplayer", "discovery"],
+      "properties": {
+        "status": { "type": "string", "value": "Scanning for hosts..." },
+        "session_0": { "type": "string", "value": "No sessions discovered yet" },
+        "session_1": { "type": "string", "value": "" },
+        "session_2": { "type": "string", "value": "" },
+        "session_3": { "type": "string", "value": "" }
+      }
     }
   ],
   "signals": [
@@ -1305,6 +1423,7 @@
     "signal.settings.reset_mouse",
     "signal.settings.reset_gamepad",
     "signal.settings.reset_audio",
+    "signal.multiplayer.discovery.refresh",
     "signal.ui.menu.move",
     "signal.ui.menu.select",
     "signal.app.quit_fade_done"

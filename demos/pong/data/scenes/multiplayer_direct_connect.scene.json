@@ -2,7 +2,15 @@
   "schema": "sdl3d.scene.v0",
   "name": "scene.multiplayer.direct_connect",
   "updates_game": false,
-  "renders_world": false,
+  "renders_world": true,
+  "camera": "camera.overhead",
+  "entities": [
+    "entity.multiplayer.background.base",
+    "entity.multiplayer.background.core",
+    "entity.multiplayer.background.glow.cyan",
+    "entity.multiplayer.background.glow.violet",
+    "entity.multiplayer.background.stream"
+  ],
   "input": {
     "actions": [
       "action.menu.up",
@@ -26,7 +34,7 @@
       "select_signal": "signal.ui.menu.select",
       "selected": 0,
       "items": [
-        { "label": "Back", "scene": "scene.multiplayer.join" }
+        { "label": "Back", "scene": "scene.multiplayer.lan" }
       ]
     }
   ],

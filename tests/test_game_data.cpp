@@ -1406,6 +1406,20 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
     EXPECT_STREQ(item.label, "Join Match");
     EXPECT_STREQ(item.scene, "scene.multiplayer.join");
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer.join"));
+    EXPECT_TRUE(sdl3d_game_data_active_scene_renders_world(runtime));
+    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.multiplayer.discovery"));
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.multiplayer.join");
+    EXPECT_EQ(menu.item_count, 1);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Back");
+    EXPECT_STREQ(item.scene, "scene.multiplayer.lan");
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer.lan"));
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.multiplayer.lan");
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
     EXPECT_STREQ(item.label, "Direct Connect");
     EXPECT_STREQ(item.scene, "scene.multiplayer.direct_connect");
