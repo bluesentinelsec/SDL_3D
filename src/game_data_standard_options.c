@@ -10,6 +10,7 @@
 typedef struct standard_options_scene_layout
 {
     double title_y;
+    double menu_x;
     double menu_y;
     double gap;
     double cursor_offset_x;
@@ -103,11 +104,12 @@ static const char *section_string(yyjson_val *object, const char *section, const
     return json_string(obj_get(object, section), key, fallback);
 }
 
-static standard_options_scene_layout scene_layout_defaults(double title_y, double menu_y, double gap,
+static standard_options_scene_layout scene_layout_defaults(double title_y, double menu_x, double menu_y, double gap,
                                                            double cursor_offset_x)
 {
     return (standard_options_scene_layout){
         .title_y = title_y,
+        .menu_x = menu_x,
         .menu_y = menu_y,
         .gap = gap,
         .cursor_offset_x = cursor_offset_x,
@@ -119,6 +121,7 @@ static standard_options_scene_layout load_scene_layout(yyjson_val *layout, const
 {
     yyjson_val *scene = obj_get(layout, section);
     fallback.title_y = json_double(scene, "title_y", fallback.title_y);
+    fallback.menu_x = json_double(scene, "menu_x", json_double(layout, "menu_x", fallback.menu_x));
     fallback.menu_y = json_double(scene, "menu_y", fallback.menu_y);
     fallback.gap = json_double(scene, "gap", fallback.gap);
     fallback.cursor_offset_x =
@@ -133,15 +136,18 @@ static void load_layout(standard_options_config *config)
     config->layout.menu_x = json_double(layout, "menu_x", 0.5);
     config->layout.status_x = json_double(layout, "status_x", 0.5);
     config->layout.status_y = json_double(layout, "status_y", 0.88);
-    config->layout.menu_align = json_string(layout, "menu_align", "center");
-    config->layout.cursor_align = json_string(layout, "cursor_align", "center");
+    config->layout.menu_align = json_string(layout, "menu_align", "left");
+    config->layout.cursor_align = json_string(layout, "cursor_align", "right");
     config->layout.selected_pulse_alpha = json_bool(layout, "selected_pulse_alpha", true);
-    config->layout.root = load_scene_layout(layout, "root", scene_layout_defaults(0.18, 0.36, 0.078, -0.14));
-    config->layout.display = load_scene_layout(layout, "display", scene_layout_defaults(0.20, 0.38, 0.074, -0.18));
-    config->layout.keyboard = load_scene_layout(layout, "keyboard", scene_layout_defaults(0.13, 0.25, 0.062, -0.18));
-    config->layout.mouse = load_scene_layout(layout, "mouse", scene_layout_defaults(0.13, 0.30, 0.062, -0.18));
-    config->layout.gamepad = load_scene_layout(layout, "gamepad", scene_layout_defaults(0.12, 0.22, 0.052, -0.18));
-    config->layout.audio = load_scene_layout(layout, "audio", scene_layout_defaults(0.18, 0.39, 0.078, -0.18));
+    config->layout.root = load_scene_layout(layout, "root", scene_layout_defaults(0.18, 0.43, 0.36, 0.078, -0.035));
+    config->layout.display =
+        load_scene_layout(layout, "display", scene_layout_defaults(0.20, 0.30, 0.38, 0.074, -0.035));
+    config->layout.keyboard =
+        load_scene_layout(layout, "keyboard", scene_layout_defaults(0.13, 0.36, 0.25, 0.062, -0.035));
+    config->layout.mouse = load_scene_layout(layout, "mouse", scene_layout_defaults(0.13, 0.40, 0.30, 0.062, -0.035));
+    config->layout.gamepad =
+        load_scene_layout(layout, "gamepad", scene_layout_defaults(0.105, 0.34, 0.15, 0.061, -0.035));
+    config->layout.audio = load_scene_layout(layout, "audio", scene_layout_defaults(0.18, 0.28, 0.39, 0.078, -0.035));
 }
 
 static void set_error(char *buffer, int buffer_size, const char *message)
@@ -416,15 +422,15 @@ static bool add_status_text(yyjson_mut_doc *doc, yyjson_mut_val *texts, const st
 }
 
 static bool add_menu_presenter(yyjson_mut_doc *doc, yyjson_mut_val *ui, const standard_options_config *config,
-                               const char *name, const char *menu_name, double y, double gap, double cursor_offset)
+                               const char *name, const char *menu_name, double x, double y, double gap,
+                               double cursor_offset)
 {
     yyjson_mut_val *menus = add_arr(doc, ui, "menus");
     yyjson_mut_val *presenter = yyjson_mut_obj(doc);
     yyjson_mut_val *cursor = NULL;
     return menus != NULL && presenter != NULL && yyjson_mut_arr_add_val(menus, presenter) &&
            add_str(doc, presenter, "name", name) && add_str(doc, presenter, "menu", menu_name) &&
-           add_str(doc, presenter, "font", config->menu_font) &&
-           yyjson_mut_obj_add_real(doc, presenter, "x", config->layout.menu_x) &&
+           add_str(doc, presenter, "font", config->menu_font) && yyjson_mut_obj_add_real(doc, presenter, "x", x) &&
            yyjson_mut_obj_add_real(doc, presenter, "y", y) && yyjson_mut_obj_add_real(doc, presenter, "gap", gap) &&
            yyjson_mut_obj_add_bool(doc, presenter, "normalized", true) &&
            add_str(doc, presenter, "align", config->layout.menu_align) &&
@@ -440,12 +446,12 @@ static bool add_menu_presenter(yyjson_mut_doc *doc, yyjson_mut_val *ui, const st
 
 static bool add_basic_ui(yyjson_mut_doc *doc, yyjson_mut_val *scene, const standard_options_config *config,
                          const char *title_name, const char *title, double title_y, const char *presenter_name,
-                         const char *menu_name, double menu_y, double gap, double cursor_offset)
+                         const char *menu_name, double menu_x, double menu_y, double gap, double cursor_offset)
 {
     yyjson_mut_val *ui = add_ui(doc, scene);
     yyjson_mut_val *texts = ui != NULL ? add_arr(doc, ui, "text") : NULL;
     return texts != NULL && add_title_text(doc, texts, config, title_name, title, title_y) &&
-           add_menu_presenter(doc, ui, config, presenter_name, menu_name, menu_y, gap, cursor_offset);
+           add_menu_presenter(doc, ui, config, presenter_name, menu_name, menu_x, menu_y, gap, cursor_offset);
 }
 
 static yyjson_doc *finish_scene_doc(yyjson_mut_doc *doc, yyjson_mut_val *scene)
@@ -471,8 +477,8 @@ static yyjson_doc *build_root_scene(const standard_options_config *config)
         !add_scene_item(doc, items, "Gamepad", config->gamepad_scene) ||
         !add_scene_item(doc, items, "Audio", config->audio_scene) || !add_back_item(doc, items, config, NULL) ||
         !add_basic_ui(doc, scene, config, "ui.options.title", "OPTIONS", config->layout.root.title_y, "ui.options.menu",
-                      config->root_menu, config->layout.root.menu_y, config->layout.root.gap,
-                      config->layout.root.cursor_offset_x))
+                      config->root_menu, config->layout.root.menu_x, config->layout.root.menu_y,
+                      config->layout.root.gap, config->layout.root.cursor_offset_x))
     {
         yyjson_mut_doc_free(doc);
         return NULL;
@@ -490,8 +496,9 @@ static yyjson_doc *build_display_scene(const standard_options_config *config)
         !add_renderer_item(doc, items, config) || !add_reset_item(doc, items, config->reset_display_signal) ||
         !add_back_item(doc, items, config, config->root_scene) ||
         !add_basic_ui(doc, scene, config, "ui.options.display.title", "DISPLAY", config->layout.display.title_y,
-                      "ui.options.display.menu", config->display_menu, config->layout.display.menu_y,
-                      config->layout.display.gap, config->layout.display.cursor_offset_x))
+                      "ui.options.display.menu", config->display_menu, config->layout.display.menu_x,
+                      config->layout.display.menu_y, config->layout.display.gap,
+                      config->layout.display.cursor_offset_x))
     {
         yyjson_mut_doc_free(doc);
         return NULL;
@@ -512,8 +519,8 @@ static yyjson_doc *build_audio_scene(const standard_options_config *config)
         !add_reset_item(doc, items, config->reset_audio_signal) ||
         !add_back_item(doc, items, config, config->root_scene) ||
         !add_basic_ui(doc, scene, config, "ui.options.audio.title", "AUDIO", config->layout.audio.title_y,
-                      "ui.options.audio.menu", config->audio_menu, config->layout.audio.menu_y,
-                      config->layout.audio.gap, config->layout.audio.cursor_offset_x))
+                      "ui.options.audio.menu", config->audio_menu, config->layout.audio.menu_x,
+                      config->layout.audio.menu_y, config->layout.audio.gap, config->layout.audio.cursor_offset_x))
     {
         yyjson_mut_doc_free(doc);
         return NULL;
@@ -540,7 +547,7 @@ static yyjson_doc *build_keyboard_scene(const standard_options_config *config)
     if (!add_status_text(doc, texts, config, "ui.options.keyboard.status", config->keyboard_status_key, 255, 222,
                          140) ||
         !add_menu_presenter(doc, ui, config, "ui.options.keyboard.menu", config->keyboard_menu,
-                            config->layout.keyboard.menu_y, config->layout.keyboard.gap,
+                            config->layout.keyboard.menu_x, config->layout.keyboard.menu_y, config->layout.keyboard.gap,
                             config->layout.keyboard.cursor_offset_x))
     {
         yyjson_mut_doc_free(doc);
@@ -566,8 +573,9 @@ static yyjson_doc *build_mouse_scene(const standard_options_config *config)
         return NULL;
     }
     if (!add_status_text(doc, texts, config, "ui.options.mouse.status", config->mouse_status_key, 255, 222, 140) ||
-        !add_menu_presenter(doc, ui, config, "ui.options.mouse.menu", config->mouse_menu, config->layout.mouse.menu_y,
-                            config->layout.mouse.gap, config->layout.mouse.cursor_offset_x))
+        !add_menu_presenter(doc, ui, config, "ui.options.mouse.menu", config->mouse_menu, config->layout.mouse.menu_x,
+                            config->layout.mouse.menu_y, config->layout.mouse.gap,
+                            config->layout.mouse.cursor_offset_x))
     {
         yyjson_mut_doc_free(doc);
         return NULL;
@@ -591,7 +599,7 @@ static yyjson_doc *build_gamepad_scene(const standard_options_config *config)
         !add_title_text(doc, texts, config, "ui.options.gamepad.title", "GAMEPAD", config->layout.gamepad.title_y) ||
         !add_status_text(doc, texts, config, "ui.options.gamepad.status", config->gamepad_status_key, 172, 206, 255) ||
         !add_menu_presenter(doc, ui, config, "ui.options.gamepad.menu", config->gamepad_menu,
-                            config->layout.gamepad.menu_y, config->layout.gamepad.gap,
+                            config->layout.gamepad.menu_x, config->layout.gamepad.menu_y, config->layout.gamepad.gap,
                             config->layout.gamepad.cursor_offset_x))
     {
         yyjson_mut_doc_free(doc);

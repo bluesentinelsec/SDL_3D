@@ -255,10 +255,10 @@ slider glyphs, alignment, and per-screen layout:
     "menu_x": 0.5,
     "status_x": 0.5,
     "status_y": 0.88,
-    "menu_align": "center",
-    "cursor_align": "center",
+    "menu_align": "left",
+    "cursor_align": "right",
     "selected_pulse_alpha": true,
-    "audio": { "title_y": 0.18, "menu_y": 0.39, "gap": 0.078, "cursor_offset_x": -0.18 }
+    "audio": { "title_y": 0.18, "menu_x": 0.28, "menu_y": 0.39, "gap": 0.078, "cursor_offset_x": -0.035 }
   }
 }
 ```

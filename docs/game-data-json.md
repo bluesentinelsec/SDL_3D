@@ -548,15 +548,15 @@ colors, and player-facing input binding rows:
         "menu_x": 0.5,
         "status_x": 0.5,
         "status_y": 0.88,
-        "menu_align": "center",
-        "cursor_align": "center",
+        "menu_align": "left",
+        "cursor_align": "right",
         "selected_pulse_alpha": true,
-        "root": { "title_y": 0.18, "menu_y": 0.36, "gap": 0.078, "cursor_offset_x": -0.14 },
-        "display": { "title_y": 0.2, "menu_y": 0.38, "gap": 0.074, "cursor_offset_x": -0.18 },
-        "keyboard": { "title_y": 0.13, "menu_y": 0.25, "gap": 0.062, "cursor_offset_x": -0.18 },
-        "mouse": { "title_y": 0.13, "menu_y": 0.30, "gap": 0.062, "cursor_offset_x": -0.18 },
-        "gamepad": { "title_y": 0.12, "menu_y": 0.22, "gap": 0.052, "cursor_offset_x": -0.18 },
-        "audio": { "title_y": 0.18, "menu_y": 0.39, "gap": 0.078, "cursor_offset_x": -0.18 }
+        "root": { "title_y": 0.18, "menu_x": 0.43, "menu_y": 0.36, "gap": 0.078, "cursor_offset_x": -0.035 },
+        "display": { "title_y": 0.2, "menu_x": 0.3, "menu_y": 0.38, "gap": 0.074, "cursor_offset_x": -0.035 },
+        "keyboard": { "title_y": 0.13, "menu_x": 0.36, "menu_y": 0.25, "gap": 0.062, "cursor_offset_x": -0.035 },
+        "mouse": { "title_y": 0.13, "menu_x": 0.4, "menu_y": 0.30, "gap": 0.062, "cursor_offset_x": -0.035 },
+        "gamepad": { "title_y": 0.105, "menu_x": 0.34, "menu_y": 0.15, "gap": 0.061, "cursor_offset_x": -0.035 },
+        "audio": { "title_y": 0.18, "menu_x": 0.28, "menu_y": 0.39, "gap": 0.078, "cursor_offset_x": -0.035 }
       },
       "bindings": {
         "keyboard": [

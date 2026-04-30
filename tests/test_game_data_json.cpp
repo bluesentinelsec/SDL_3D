@@ -234,7 +234,8 @@ TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
     yyjson_val *layout = required_object(options, "layout");
     EXPECT_TRUE(yyjson_is_num(yyjson_obj_get(layout, "title_x")));
     EXPECT_TRUE(yyjson_is_num(yyjson_obj_get(layout, "status_y")));
-    EXPECT_EQ(required_string(layout, "menu_align"), "center");
+    EXPECT_EQ(required_string(layout, "menu_align"), "left");
+    EXPECT_EQ(required_string(layout, "cursor_align"), "right");
     EXPECT_TRUE(yyjson_is_bool(yyjson_obj_get(layout, "selected_pulse_alpha")));
     EXPECT_TRUE(yyjson_is_num(yyjson_obj_get(required_object(layout, "root"), "menu_y")));
     EXPECT_TRUE(yyjson_is_num(yyjson_obj_get(required_object(layout, "audio"), "cursor_offset_x")));

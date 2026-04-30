@@ -1289,7 +1289,8 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
         if (name == "ui.title.menu" && value == "Exit")
         {
             *flags->second = true;
-            EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_CENTER);
+            EXPECT_FLOAT_EQ(text->x, 0.45f);
+            EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
             EXPECT_TRUE(text->pulse_alpha);
         }
         if (*flags->first && *flags->second)
@@ -1319,9 +1320,9 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
         if (name == "ui.options.menu" && value == "Display")
         {
             *saw = true;
-            EXPECT_FLOAT_EQ(text->x, 0.5f);
+            EXPECT_FLOAT_EQ(text->x, 0.43f);
             EXPECT_FLOAT_EQ(text->y, 0.36f);
-            EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_CENTER);
+            EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
             EXPECT_TRUE(text->pulse_alpha);
             return false;
         }
@@ -1386,6 +1387,8 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
         if (name == "ui.options.display.menu" && value == "Display Mode: Windowed")
         {
             *saw = true;
+            EXPECT_FLOAT_EQ(text->x, 0.3f);
+            EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
             return false;
         }
         return true;
@@ -1422,7 +1425,11 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
         const std::string name = text->name != nullptr ? text->name : "";
         const std::string value = text->text != nullptr ? text->text : "";
         if (name == "ui.options.audio.menu" && value == "Sound Effects  [########--] 8/10")
+        {
             *flags->first = true;
+            EXPECT_FLOAT_EQ(text->x, 0.28f);
+            EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
+        }
         if (name == "ui.options.audio.menu" && value == "Music  [#######---] 7/10")
             *flags->second = true;
         if (*flags->first && *flags->second)
@@ -2116,6 +2123,33 @@ TEST(GameDataRuntime, GamepadOptionsCaptureAndApplyAuthoredInputBindings)
     EXPECT_EQ(item.input_binding_count, 2);
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 10, &item));
     EXPECT_STREQ(item.label, "Reset Settings");
+
+    bool saw_button_icons = false;
+    bool saw_ball_camera = false;
+    auto find_gamepad_labels = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        auto *flags = static_cast<std::pair<bool *, bool *> *>(userdata);
+        const std::string name = text->name != nullptr ? text->name : "";
+        const std::string value = text->text != nullptr ? text->text : "";
+        if (name == "ui.options.gamepad.menu" && value == "Button Icons: Xbox")
+        {
+            *flags->first = true;
+            EXPECT_FLOAT_EQ(text->x, 0.34f);
+            EXPECT_FLOAT_EQ(text->y, 0.15f);
+            EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
+        }
+        if (name == "ui.options.gamepad.menu" && value.rfind("Ball Camera:", 0) == 0)
+        {
+            *flags->second = true;
+            EXPECT_FLOAT_EQ(text->x, 0.34f);
+            EXPECT_NEAR(text->y, 0.699f, 0.0001f);
+            EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
+        }
+        return !*flags->first || !*flags->second;
+    };
+    std::pair<bool *, bool *> gamepad_label_flags{&saw_button_icons, &saw_ball_camera};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_gamepad_labels, &gamepad_label_flags));
+    EXPECT_TRUE(saw_button_icons);
+    EXPECT_TRUE(saw_ball_camera);
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
