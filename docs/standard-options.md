@@ -244,6 +244,7 @@ slider glyphs, alignment, and per-screen layout:
     "selected_color": [255, 245, 208, 255],
     "cursor_color": [255, 222, 140, 255],
     "status_color": [255, 222, 140, 230],
+    "divider_color": [126, 168, 238, 170],
     "cursor": ">",
     "slider_left": "[",
     "slider_fill": "#",
@@ -258,7 +259,8 @@ slider glyphs, alignment, and per-screen layout:
     "menu_align": "left",
     "cursor_align": "right",
     "selected_pulse_alpha": true,
-    "audio": { "title_y": 0.18, "menu_x": 0.28, "menu_y": 0.39, "gap": 0.078, "cursor_offset_x": -0.035 }
+    "title_divider": true,
+    "audio": { "title_y": 0.18, "menu_x": 0.34, "menu_y": 0.39, "gap": 0.078, "cursor_offset_x": -0.035 }
   }
 }
 ```

@@ -25,6 +25,7 @@ typedef struct standard_options_layout
     const char *menu_align;
     const char *cursor_align;
     bool selected_pulse_alpha;
+    bool title_divider;
     standard_options_scene_layout root;
     standard_options_scene_layout display;
     standard_options_scene_layout keyboard;
@@ -139,15 +140,16 @@ static void load_layout(standard_options_config *config)
     config->layout.menu_align = json_string(layout, "menu_align", "left");
     config->layout.cursor_align = json_string(layout, "cursor_align", "right");
     config->layout.selected_pulse_alpha = json_bool(layout, "selected_pulse_alpha", true);
+    config->layout.title_divider = json_bool(layout, "title_divider", true);
     config->layout.root = load_scene_layout(layout, "root", scene_layout_defaults(0.18, 0.43, 0.36, 0.078, -0.035));
     config->layout.display =
         load_scene_layout(layout, "display", scene_layout_defaults(0.20, 0.30, 0.38, 0.074, -0.035));
     config->layout.keyboard =
-        load_scene_layout(layout, "keyboard", scene_layout_defaults(0.13, 0.36, 0.25, 0.062, -0.035));
+        load_scene_layout(layout, "keyboard", scene_layout_defaults(0.13, 0.36, 0.29, 0.062, -0.035));
     config->layout.mouse = load_scene_layout(layout, "mouse", scene_layout_defaults(0.13, 0.40, 0.30, 0.062, -0.035));
     config->layout.gamepad =
-        load_scene_layout(layout, "gamepad", scene_layout_defaults(0.105, 0.34, 0.15, 0.061, -0.035));
-    config->layout.audio = load_scene_layout(layout, "audio", scene_layout_defaults(0.18, 0.28, 0.39, 0.078, -0.035));
+        load_scene_layout(layout, "gamepad", scene_layout_defaults(0.105, 0.34, 0.24, 0.055, -0.035));
+    config->layout.audio = load_scene_layout(layout, "audio", scene_layout_defaults(0.18, 0.34, 0.39, 0.078, -0.035));
 }
 
 static void set_error(char *buffer, int buffer_size, const char *message)
@@ -403,6 +405,27 @@ static bool add_title_text(yyjson_mut_doc *doc, yyjson_mut_val *texts, const sta
            add_color(doc, title, "color", config->theme, "title_color", 242, 248, 255, 255);
 }
 
+static bool add_title_divider(yyjson_mut_doc *doc, yyjson_mut_val *texts, const standard_options_config *config,
+                              const char *name, double title_y)
+{
+    if (!config->layout.title_divider)
+        return true;
+
+    char divider_name[128];
+    SDL_snprintf(divider_name, sizeof(divider_name), "%s.divider", name != NULL ? name : "ui.options.title");
+
+    yyjson_mut_val *divider = yyjson_mut_obj(doc);
+    return texts != NULL && divider != NULL && yyjson_mut_arr_add_val(texts, divider) &&
+           add_str(doc, divider, "name", divider_name) && add_str(doc, divider, "font", config->menu_font) &&
+           add_str(doc, divider, "text", "----------------") &&
+           yyjson_mut_obj_add_real(doc, divider, "x", config->layout.title_x) &&
+           yyjson_mut_obj_add_real(doc, divider, "y", title_y + 0.095) &&
+           yyjson_mut_obj_add_bool(doc, divider, "normalized", true) &&
+           yyjson_mut_obj_add_bool(doc, divider, "centered", true) &&
+           yyjson_mut_obj_add_real(doc, divider, "scale", 0.55) &&
+           add_color(doc, divider, "color", config->theme, "divider_color", 126, 168, 238, 170);
+}
+
 static bool add_status_text(yyjson_mut_doc *doc, yyjson_mut_val *texts, const standard_options_config *config,
                             const char *name, const char *status_key, int r, int g, int b)
 {
@@ -451,6 +474,7 @@ static bool add_basic_ui(yyjson_mut_doc *doc, yyjson_mut_val *scene, const stand
     yyjson_mut_val *ui = add_ui(doc, scene);
     yyjson_mut_val *texts = ui != NULL ? add_arr(doc, ui, "text") : NULL;
     return texts != NULL && add_title_text(doc, texts, config, title_name, title, title_y) &&
+           add_title_divider(doc, texts, config, title_name, title_y) &&
            add_menu_presenter(doc, ui, config, presenter_name, menu_name, menu_x, menu_y, gap, cursor_offset);
 }
 
@@ -546,6 +570,7 @@ static yyjson_doc *build_keyboard_scene(const standard_options_config *config)
     }
     if (!add_status_text(doc, texts, config, "ui.options.keyboard.status", config->keyboard_status_key, 255, 222,
                          140) ||
+        !add_title_divider(doc, texts, config, "ui.options.keyboard.title", config->layout.keyboard.title_y) ||
         !add_menu_presenter(doc, ui, config, "ui.options.keyboard.menu", config->keyboard_menu,
                             config->layout.keyboard.menu_x, config->layout.keyboard.menu_y, config->layout.keyboard.gap,
                             config->layout.keyboard.cursor_offset_x))
@@ -573,6 +598,7 @@ static yyjson_doc *build_mouse_scene(const standard_options_config *config)
         return NULL;
     }
     if (!add_status_text(doc, texts, config, "ui.options.mouse.status", config->mouse_status_key, 255, 222, 140) ||
+        !add_title_divider(doc, texts, config, "ui.options.mouse.title", config->layout.mouse.title_y) ||
         !add_menu_presenter(doc, ui, config, "ui.options.mouse.menu", config->mouse_menu, config->layout.mouse.menu_x,
                             config->layout.mouse.menu_y, config->layout.mouse.gap,
                             config->layout.mouse.cursor_offset_x))
@@ -598,6 +624,7 @@ static yyjson_doc *build_gamepad_scene(const standard_options_config *config)
         (texts = add_arr(doc, ui, "text")) == NULL ||
         !add_title_text(doc, texts, config, "ui.options.gamepad.title", "GAMEPAD", config->layout.gamepad.title_y) ||
         !add_status_text(doc, texts, config, "ui.options.gamepad.status", config->gamepad_status_key, 172, 206, 255) ||
+        !add_title_divider(doc, texts, config, "ui.options.gamepad.title", config->layout.gamepad.title_y) ||
         !add_menu_presenter(doc, ui, config, "ui.options.gamepad.menu", config->gamepad_menu,
                             config->layout.gamepad.menu_x, config->layout.gamepad.menu_y, config->layout.gamepad.gap,
                             config->layout.gamepad.cursor_offset_x))

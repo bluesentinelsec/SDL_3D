@@ -1313,23 +1313,31 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_STREQ(item.label, "Mouse");
     EXPECT_STREQ(item.scene, "scene.options.mouse");
     bool saw_options_display = false;
+    bool saw_options_divider = false;
     auto find_options_display = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
-        auto *saw = static_cast<bool *>(userdata);
+        auto *flags = static_cast<std::pair<bool *, bool *> *>(userdata);
         const std::string name = text->name != nullptr ? text->name : "";
         const std::string value = text->text != nullptr ? text->text : "";
         if (name == "ui.options.menu" && value == "Display")
         {
-            *saw = true;
+            *flags->first = true;
             EXPECT_FLOAT_EQ(text->x, 0.43f);
             EXPECT_FLOAT_EQ(text->y, 0.36f);
             EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
             EXPECT_TRUE(text->pulse_alpha);
-            return false;
         }
-        return true;
+        if (name == "ui.options.title.divider" && value == "----------------")
+        {
+            *flags->second = true;
+            EXPECT_FLOAT_EQ(text->x, 0.5f);
+            EXPECT_FLOAT_EQ(text->y, 0.275f);
+        }
+        return !*flags->first || !*flags->second;
     };
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_options_display, &saw_options_display));
+    std::pair<bool *, bool *> options_display_flags{&saw_options_display, &saw_options_divider};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_options_display, &options_display_flags));
     EXPECT_TRUE(saw_options_display);
+    EXPECT_TRUE(saw_options_divider);
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.keyboard"));
     ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
@@ -1353,6 +1361,7 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
         if (name == "ui.options.keyboard.menu" && value == "Up: Up")
         {
             *saw->first = true;
+            EXPECT_FLOAT_EQ(text->y, 0.29f);
         }
         if (name == "ui.options.keyboard.menu" && value == "Cancel: Backspace")
         {
@@ -1427,7 +1436,7 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
         if (name == "ui.options.audio.menu" && value == "Sound Effects  [########--] 8/10")
         {
             *flags->first = true;
-            EXPECT_FLOAT_EQ(text->x, 0.28f);
+            EXPECT_FLOAT_EQ(text->x, 0.34f);
             EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
         }
         if (name == "ui.options.audio.menu" && value == "Music  [#######---] 7/10")
@@ -2134,14 +2143,14 @@ TEST(GameDataRuntime, GamepadOptionsCaptureAndApplyAuthoredInputBindings)
         {
             *flags->first = true;
             EXPECT_FLOAT_EQ(text->x, 0.34f);
-            EXPECT_FLOAT_EQ(text->y, 0.15f);
+            EXPECT_FLOAT_EQ(text->y, 0.24f);
             EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
         }
         if (name == "ui.options.gamepad.menu" && value.rfind("Ball Camera:", 0) == 0)
         {
             *flags->second = true;
             EXPECT_FLOAT_EQ(text->x, 0.34f);
-            EXPECT_NEAR(text->y, 0.699f, 0.0001f);
+            EXPECT_NEAR(text->y, 0.735f, 0.0001f);
             EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
         }
         return !*flags->first || !*flags->second;
