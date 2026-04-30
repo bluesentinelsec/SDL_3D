@@ -227,6 +227,13 @@ TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
     yyjson_val *options = required_object(scenes, "standard_options");
     EXPECT_EQ(required_string(options, "settings"), "entity.settings");
     EXPECT_EQ(required_string(options, "return_scene"), "scene.title");
+    yyjson_val *background = required_object(options, "background");
+    EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(background, "renders_world")));
+    EXPECT_EQ(required_string(background, "camera"), "camera.overhead");
+    yyjson_val *background_entities = required_array(background, "entities");
+    ASSERT_GE(yyjson_arr_size(background_entities), 7u);
+    EXPECT_STREQ(yyjson_get_str(yyjson_arr_get(background_entities, 0)), "entity.options.background.base");
+    EXPECT_STREQ(yyjson_get_str(yyjson_arr_get(background_entities, 4)), "entity.options.flow.magenta");
     yyjson_val *theme = required_object(options, "theme");
     EXPECT_EQ(required_string(theme, "cursor"), ">");
     EXPECT_EQ(required_string(theme, "slider_fill"), "#");

@@ -118,6 +118,14 @@ Configure the package under `scenes.standard_options`:
       "reset_mouse": "signal.settings.reset_mouse",
       "reset_gamepad": "signal.settings.reset_gamepad",
       "reset_audio": "signal.settings.reset_audio"
+    },
+    "background": {
+      "renders_world": true,
+      "camera": "camera.overhead",
+      "entities": [
+        "entity.options.background.base",
+        "entity.options.flow.magenta"
+      ]
     }
   }
 }
@@ -126,6 +134,14 @@ Configure the package under `scenes.standard_options`:
 Omitted names fall back to the values shown above. Games should still author the
 names explicitly once the project is more than a prototype; explicit IDs make
 large projects easier to search and review.
+
+## Backgrounds
+
+`background` is optional. If omitted, generated options scenes render no world
+entities. If present, every generated options scene uses the same `renders_world`
+value, camera, and entity filter. This is intended for reusable menu backdrops
+such as particles, animated logo geometry, or authored lighting effects while
+keeping unrelated gameplay entities out of options scenes.
 
 ## Rebindable Actions
 

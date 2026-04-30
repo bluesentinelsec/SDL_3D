@@ -75,6 +75,9 @@ typedef struct standard_options_config
     const char *gamepad_status_key;
     const char *enter_transition;
     const char *exit_transition;
+    yyjson_val *background;
+    const char *background_camera;
+    bool background_renders_world;
 } standard_options_config;
 
 static yyjson_val *obj_get(yyjson_val *object, const char *key)
@@ -222,18 +225,33 @@ static bool add_scene_transitions(yyjson_mut_doc *doc, yyjson_mut_val *scene, co
            add_str(doc, transitions, "exit", config->exit_transition);
 }
 
+static bool add_scene_entities(yyjson_mut_doc *doc, yyjson_mut_val *scene, const standard_options_config *config)
+{
+    yyjson_mut_val *entities = add_arr(doc, scene, "entities");
+    yyjson_val *authored_entities = obj_get(config->background, "entities");
+    if (entities == NULL)
+        return false;
+
+    for (size_t i = 0; yyjson_is_arr(authored_entities) && i < yyjson_arr_size(authored_entities); ++i)
+    {
+        const char *entity = yyjson_get_str(yyjson_arr_get(authored_entities, i));
+        if (entity != NULL && !add_arr_str(doc, entities, entity))
+            return false;
+    }
+    return true;
+}
+
 static yyjson_mut_val *create_scene(yyjson_mut_doc *doc, const standard_options_config *config, const char *name,
                                     bool include_lr)
 {
     yyjson_mut_val *scene = yyjson_mut_obj(doc);
-    yyjson_mut_val *entities = NULL;
     if (scene == NULL || !add_str(doc, scene, "schema", "sdl3d.scene.v0") || !add_str(doc, scene, "name", name) ||
         !yyjson_mut_obj_add_bool(doc, scene, "updates_game", false) ||
-        !yyjson_mut_obj_add_bool(doc, scene, "renders_world", false) ||
-        (entities = add_arr(doc, scene, "entities")) == NULL || !add_scene_input(doc, scene, config, include_lr) ||
+        !yyjson_mut_obj_add_bool(doc, scene, "renders_world", config->background_renders_world) ||
+        (config->background_camera != NULL && !add_str(doc, scene, "camera", config->background_camera)) ||
+        !add_scene_entities(doc, scene, config) || !add_scene_input(doc, scene, config, include_lr) ||
         !add_scene_transitions(doc, scene, config))
         return NULL;
-    (void)entities;
     return scene;
 }
 
@@ -655,6 +673,10 @@ static bool load_config(yyjson_val *game_root, const char *package_name, standar
     config->root = root;
     config->theme = obj_get(root, "theme");
     config->bindings = obj_get(root, "bindings");
+    config->background = obj_get(root, "background");
+    config->background_camera = json_string(config->background, "camera", NULL);
+    config->background_renders_world =
+        yyjson_is_obj(config->background) ? json_bool(config->background, "renders_world", true) : false;
     config->settings_actor = json_string(root, "settings", "entity.settings");
     config->return_scene = json_string(root, "return_scene", "scene.title");
     config->root_scene = section_string(root, "scenes", "root", "scene.options");

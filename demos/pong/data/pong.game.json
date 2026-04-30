@@ -153,6 +153,19 @@
         "enter": "scene_in",
         "exit": "scene_out"
       },
+      "background": {
+        "renders_world": true,
+        "camera": "camera.overhead",
+        "entities": [
+          "entity.options.background.base",
+          "entity.options.glow.magenta",
+          "entity.options.glow.cyan",
+          "entity.options.glow.gold",
+          "entity.options.flow.magenta",
+          "entity.options.flow.cyan",
+          "entity.options.flow.gold"
+        ]
+      },
       "theme": {
         "title_color": [242, 248, 255, 255],
         "menu_color": [225, 236, 255, 245],
@@ -1041,6 +1054,176 @@
         "matches_played": { "type": "int", "value": 0 },
         "latest_winner": { "type": "string", "value": "none" }
       }
+    },
+    {
+      "name": "entity.options.background.base",
+      "active": true,
+      "tags": ["render", "options", "background"],
+      "transform": { "position": [0.0, 0.0, -0.65] },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [22.0, 13.0, 0.08],
+          "color": [9, 10, 24, 255],
+          "emissive": true,
+          "effects": [
+            { "type": "pulse", "rate": 0.55, "phase": 0.4, "color": [22, 18, 48, 255], "emissive_base": [0.015, 0.010, 0.035], "emissive_add": [0.030, 0.010, 0.060] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.options.glow.magenta",
+      "active": true,
+      "tags": ["render", "options", "background"],
+      "transform": { "position": [-4.8, -1.8, -0.30] },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 1.35,
+          "rings": 16,
+          "slices": 24,
+          "color": [226, 52, 174, 118],
+          "emissive": true,
+          "effects": [
+            { "type": "pulse", "rate": 0.75, "phase": 0.3, "color": [255, 96, 208, 160], "emissive_base": [0.28, 0.04, 0.22], "emissive_add": [0.24, 0.02, 0.16] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.options.glow.cyan",
+      "active": true,
+      "tags": ["render", "options", "background"],
+      "transform": { "position": [3.9, 0.65, -0.28] },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 1.60,
+          "rings": 16,
+          "slices": 24,
+          "color": [52, 212, 231, 112],
+          "emissive": true,
+          "effects": [
+            { "type": "pulse", "rate": 0.62, "phase": 1.4, "color": [105, 242, 255, 152], "emissive_base": [0.04, 0.23, 0.28], "emissive_add": [0.02, 0.18, 0.22] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.options.glow.gold",
+      "active": true,
+      "tags": ["render", "options", "background"],
+      "transform": { "position": [0.9, -3.15, -0.22] },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 1.05,
+          "rings": 16,
+          "slices": 24,
+          "color": [255, 175, 64, 100],
+          "emissive": true,
+          "effects": [
+            { "type": "pulse", "rate": 0.90, "phase": 2.1, "color": [255, 214, 95, 145], "emissive_base": [0.25, 0.12, 0.02], "emissive_add": [0.20, 0.10, 0.03] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.options.flow.magenta",
+      "active": true,
+      "tags": ["effect", "particles", "options"],
+      "transform": { "position": [-3.8, -4.8, -0.10] },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [2.2, 0.35, 0.05],
+          "direction": [0.16, 1.0, 0.0],
+          "spread": 0.65,
+          "speed_min": 0.45,
+          "speed_max": 1.15,
+          "lifetime_min": 4.6,
+          "lifetime_max": 7.8,
+          "size_start": 0.16,
+          "size_end": 0.52,
+          "gravity": 0.0,
+          "max_particles": 140,
+          "emit_rate": 24.0,
+          "color_start": [245, 62, 195, 58],
+          "color_end": [255, 104, 223, 0],
+          "emissive_intensity": 1.9,
+          "camera_facing": true,
+          "depth_test": false,
+          "additive_blend": true,
+          "draw_emissive": [1.0, 0.15, 0.78],
+          "random_seed": 3093511
+        }
+      ]
+    },
+    {
+      "name": "entity.options.flow.cyan",
+      "active": true,
+      "tags": ["effect", "particles", "options"],
+      "transform": { "position": [3.2, -4.5, -0.08] },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [2.6, 0.35, 0.05],
+          "direction": [-0.12, 1.0, 0.0],
+          "spread": 0.72,
+          "speed_min": 0.36,
+          "speed_max": 1.0,
+          "lifetime_min": 5.0,
+          "lifetime_max": 8.2,
+          "size_start": 0.18,
+          "size_end": 0.58,
+          "gravity": 0.0,
+          "max_particles": 150,
+          "emit_rate": 24.0,
+          "color_start": [62, 222, 255, 54],
+          "color_end": [120, 245, 255, 0],
+          "emissive_intensity": 1.85,
+          "camera_facing": true,
+          "depth_test": false,
+          "additive_blend": true,
+          "draw_emissive": [0.18, 0.95, 1.0],
+          "random_seed": 742019
+        }
+      ]
+    },
+    {
+      "name": "entity.options.flow.gold",
+      "active": true,
+      "tags": ["effect", "particles", "options"],
+      "transform": { "position": [0.1, -5.0, -0.05] },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [1.8, 0.25, 0.05],
+          "direction": [0.05, 1.0, 0.0],
+          "spread": 0.55,
+          "speed_min": 0.28,
+          "speed_max": 0.78,
+          "lifetime_min": 4.2,
+          "lifetime_max": 7.2,
+          "size_start": 0.12,
+          "size_end": 0.42,
+          "gravity": 0.0,
+          "max_particles": 95,
+          "emit_rate": 16.0,
+          "color_start": [255, 178, 54, 48],
+          "color_end": [255, 225, 104, 0],
+          "emissive_intensity": 1.65,
+          "camera_facing": true,
+          "depth_test": false,
+          "additive_blend": true,
+          "draw_emissive": [1.0, 0.62, 0.12],
+          "random_seed": 919571
+        }
+      ]
     },
     {
       "name": "entity.effect.ambient_particles",

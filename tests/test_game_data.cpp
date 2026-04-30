@@ -51,6 +51,8 @@ struct RenderPrimitiveCapture
     int spheres = 0;
     bool saw_player_paddle = false;
     bool saw_ball = false;
+    bool saw_options_background = false;
+    bool saw_options_glow = false;
 };
 
 struct UiTextCapture
@@ -70,6 +72,7 @@ struct ParticleCapture
 {
     int count = 0;
     bool saw_ambient = false;
+    bool saw_options_flow = false;
 };
 
 struct EvaluatedPrimitiveCapture
@@ -793,6 +796,24 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         EXPECT_EQ(primitive->slices, 18);
         EXPECT_TRUE(primitive->emissive);
     }
+    if (std::string(primitive->entity_name) == "entity.options.background.base")
+    {
+        capture->saw_options_background = true;
+        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
+        EXPECT_NEAR(primitive->position.z, -0.65f, 0.0001f);
+        EXPECT_NEAR(primitive->size.x, 22.0f, 0.0001f);
+        EXPECT_EQ(primitive->color.r, 9);
+        EXPECT_EQ(primitive->color.g, 10);
+        EXPECT_EQ(primitive->color.b, 24);
+        EXPECT_TRUE(primitive->emissive);
+    }
+    if (std::string(primitive->entity_name) == "entity.options.glow.magenta")
+    {
+        capture->saw_options_glow = true;
+        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_SPHERE);
+        EXPECT_NEAR(primitive->radius, 1.35f, 0.0001f);
+        EXPECT_TRUE(primitive->emissive);
+    }
     return true;
 }
 
@@ -826,6 +847,14 @@ bool capture_particle(void *userdata, const sdl3d_game_data_particle_emitter *em
         capture->saw_ambient = true;
         EXPECT_EQ(emitter->config.max_particles, 360);
         EXPECT_NEAR(emitter->draw_emissive.x, 0.8f, 0.0001f);
+    }
+    if (std::string(emitter->entity_name) == "entity.options.flow.magenta")
+    {
+        capture->saw_options_flow = true;
+        EXPECT_EQ(emitter->config.max_particles, 140);
+        EXPECT_NEAR(emitter->draw_emissive.x, 1.0f, 0.0001f);
+        EXPECT_FALSE(emitter->config.depth_test);
+        EXPECT_TRUE(emitter->config.additive_blend);
     }
     return true;
 }
@@ -1303,6 +1332,37 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_TRUE(saw_title_exit);
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
+    EXPECT_FALSE(sdl3d_game_data_active_scene_updates_game(runtime));
+    EXPECT_TRUE(sdl3d_game_data_active_scene_renders_world(runtime));
+    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead");
+    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.options.background.base"));
+    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.options.flow.magenta"));
+    EXPECT_FALSE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.ball"));
+
+    RenderPrimitiveCapture options_render{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &options_render));
+    EXPECT_EQ(options_render.cubes, 1);
+    EXPECT_EQ(options_render.spheres, 3);
+    EXPECT_TRUE(options_render.saw_options_background);
+    EXPECT_TRUE(options_render.saw_options_glow);
+
+    ParticleCapture options_particles{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &options_particles));
+    EXPECT_EQ(options_particles.count, 3);
+    EXPECT_TRUE(options_particles.saw_options_flow);
+
+    const char *option_submenus[] = {"scene.options.display", "scene.options.keyboard", "scene.options.mouse",
+                                     "scene.options.gamepad", "scene.options.audio"};
+    for (const char *scene : option_submenus)
+    {
+        ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, scene));
+        EXPECT_TRUE(sdl3d_game_data_active_scene_renders_world(runtime)) << scene;
+        EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead") << scene;
+        EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.options.background.base")) << scene;
+        EXPECT_FALSE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.ball")) << scene;
+    }
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
+
     ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options");
     EXPECT_EQ(menu.item_count, 6);

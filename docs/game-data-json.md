@@ -531,6 +531,14 @@ colors, and player-facing input binding rows:
         "title": "font.title",
         "menu": "font.hud"
       },
+      "background": {
+        "renders_world": true,
+        "camera": "camera.overhead",
+        "entities": [
+          "entity.options.background.base",
+          "entity.options.flow.magenta"
+        ]
+      },
       "theme": {
         "title_color": [242, 248, 255, 255],
         "menu_color": [225, 236, 255, 245],
@@ -602,7 +610,10 @@ colors, cursor text, and slider glyphs. `layout` controls normalized title,
 menu, status, row gap, cursor offset, alignment, and selected-item pulse values
 for each generated scene. Games can omit `theme` or `layout` fields to use sane
 defaults, or author fully custom options scenes when they need a different
-structure.
+structure. `background` is optional; when present, generated options scenes
+render the listed entities with the named camera. This gives every standard
+options submenu the same authored backdrop while keeping gameplay actors out of
+the menu scene.
 
 Audio bus volume can also be driven from actor properties so options menus can
 share one generic settings actor. Use `source.scale` when the authored setting
