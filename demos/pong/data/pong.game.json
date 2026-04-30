@@ -105,6 +105,12 @@
     "files": [
       "scenes/splash.scene.json",
       "scenes/title.scene.json",
+      "scenes/multiplayer.scene.json",
+      "scenes/multiplayer_lan.scene.json",
+      "scenes/multiplayer_lobby.scene.json",
+      "scenes/multiplayer_join.scene.json",
+      "scenes/multiplayer_direct_connect.scene.json",
+      "scenes/multiplayer_discovery.scene.json",
       { "package": "standard_options" },
       "scenes/play.scene.json"
     ],

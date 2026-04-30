@@ -1,0 +1,79 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.multiplayer",
+  "updates_game": false,
+  "renders_world": false,
+  "input": {
+    "actions": [
+      "action.menu.up",
+      "action.menu.down",
+      "action.menu.select",
+      "action.menu.back"
+    ]
+  },
+  "transitions": {
+    "enter": "scene_in",
+    "exit": "scene_out"
+  },
+  "menus": [
+    {
+      "name": "menu.multiplayer",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "back_action": "action.menu.back",
+      "move_signal": "signal.ui.menu.move",
+      "select_signal": "signal.ui.menu.select",
+      "selected": 0,
+      "items": [
+        {
+          "label": "Local",
+          "scene": "scene.play",
+          "scene_state": { "key": "match_mode", "value": "local" }
+        },
+        {
+          "label": "LAN",
+          "scene": "scene.multiplayer.lan",
+          "scene_state": { "key": "match_mode", "value": "lan" }
+        },
+        { "label": "Back", "scene": "scene.title" }
+      ]
+    }
+  ],
+  "ui": {
+    "text": [
+      {
+        "name": "ui.multiplayer.title",
+        "font": "font.title",
+        "text": "MULTIPLAYER",
+        "x": 0.5,
+        "y": 0.18,
+        "normalized": true,
+        "centered": true,
+        "color": [242, 248, 255, 255]
+      }
+    ],
+    "menus": [
+      {
+        "name": "ui.multiplayer.menu",
+        "menu": "menu.multiplayer",
+        "font": "font.hud",
+        "x": 0.45,
+        "y": 0.38,
+        "gap": 0.09,
+        "normalized": true,
+        "align": "left",
+        "color": [225, 236, 255, 245],
+        "selected_color": [255, 245, 208, 255],
+        "selected_pulse_alpha": true,
+        "cursor": {
+          "text": ">",
+          "offset_x": -0.035,
+          "align": "right",
+          "color": [255, 222, 140, 255],
+          "pulse_alpha": true
+        }
+      }
+    ]
+  }
+}

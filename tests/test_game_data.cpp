@@ -955,18 +955,24 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.scene.play"), 0);
     EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead");
     EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.splash");
-    EXPECT_EQ(sdl3d_game_data_scene_count(runtime), 9);
+    EXPECT_EQ(sdl3d_game_data_scene_count(runtime), 15);
     EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 0), "scene.splash");
     EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 1), "scene.title");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 2), "scene.options");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 3), "scene.options.display");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 4), "scene.options.keyboard");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 5), "scene.options.mouse");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 6), "scene.options.gamepad");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 7), "scene.options.audio");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 8), "scene.play");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 2), "scene.multiplayer");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 3), "scene.multiplayer.lan");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 4), "scene.multiplayer.lobby");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 5), "scene.multiplayer.join");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 6), "scene.multiplayer.direct_connect");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 7), "scene.multiplayer.discovery");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 8), "scene.options");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 9), "scene.options.display");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 10), "scene.options.keyboard");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 11), "scene.options.mouse");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 12), "scene.options.gamepad");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 13), "scene.options.audio");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 14), "scene.play");
     EXPECT_EQ(sdl3d_game_data_scene_name_at(runtime, -1), nullptr);
-    EXPECT_EQ(sdl3d_game_data_scene_name_at(runtime, 9), nullptr);
+    EXPECT_EQ(sdl3d_game_data_scene_name_at(runtime, 15), nullptr);
     EXPECT_FALSE(sdl3d_game_data_active_scene_updates_game(runtime));
     EXPECT_FALSE(sdl3d_game_data_active_scene_renders_world(runtime));
     EXPECT_FALSE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.ball"));
@@ -1290,7 +1296,7 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     sdl3d_game_data_menu menu{};
     ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.title");
-    EXPECT_EQ(menu.item_count, 3);
+    EXPECT_EQ(menu.item_count, 4);
     EXPECT_EQ(menu.selected_index, 0);
     EXPECT_GE(menu.up_action_id, 0);
     EXPECT_GE(menu.down_action_id, 0);
@@ -1311,14 +1317,26 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_TRUE(sdl3d_game_data_active_menu_input_is_idle(runtime, input));
 
     sdl3d_game_data_menu_item item{};
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Single Player");
+    EXPECT_STREQ(item.scene, "scene.play");
+    EXPECT_STREQ(item.scene_state_key, "match_mode");
+    EXPECT_STREQ(item.scene_state_value, "single");
+
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    EXPECT_STREQ(item.label, "Multiplayer");
+    EXPECT_STREQ(item.scene, "scene.multiplayer");
+    EXPECT_STREQ(item.scene_state_key, "match_mode");
+    EXPECT_STREQ(item.scene_state_value, "multiplayer");
+
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
     EXPECT_STREQ(item.label, "Options");
     EXPECT_STREQ(item.scene, "scene.options");
     EXPECT_FALSE(item.quit);
 
     ASSERT_TRUE(sdl3d_game_data_menu_move(runtime, menu.name, -1));
     ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
-    EXPECT_EQ(menu.selected_index, 2);
+    EXPECT_EQ(menu.selected_index, 3);
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, menu.selected_index, &item));
     EXPECT_STREQ(item.label, "Exit");
     EXPECT_TRUE(item.quit);
@@ -1360,6 +1378,37 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_title_menu_ui, &title_menu_flags));
     EXPECT_TRUE(saw_title_cursor);
     EXPECT_TRUE(saw_title_exit);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer"));
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.multiplayer");
+    EXPECT_EQ(menu.item_count, 3);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Local");
+    EXPECT_STREQ(item.scene, "scene.play");
+    EXPECT_STREQ(item.scene_state_key, "match_mode");
+    EXPECT_STREQ(item.scene_state_value, "local");
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    EXPECT_STREQ(item.label, "LAN");
+    EXPECT_STREQ(item.scene, "scene.multiplayer.lan");
+    EXPECT_STREQ(item.scene_state_key, "match_mode");
+    EXPECT_STREQ(item.scene_state_value, "lan");
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer.lan"));
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.multiplayer.lan");
+    EXPECT_EQ(menu.item_count, 4);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Create Match");
+    EXPECT_STREQ(item.scene, "scene.multiplayer.lobby");
+    EXPECT_STREQ(item.scene_state_key, "network_flow");
+    EXPECT_STREQ(item.scene_state_value, "host");
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    EXPECT_STREQ(item.label, "Join Match");
+    EXPECT_STREQ(item.scene, "scene.multiplayer.join");
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
+    EXPECT_STREQ(item.label, "Direct Connect");
+    EXPECT_STREQ(item.scene, "scene.multiplayer.direct_connect");
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
     EXPECT_FALSE(sdl3d_game_data_active_scene_updates_game(runtime));
@@ -1801,7 +1850,7 @@ TEST(GameDataRuntime, MenuControllerConsumesAuthoredMenuInput)
     EXPECT_FALSE(result.quit);
     EXPECT_STREQ(result.menu, "menu.title");
     EXPECT_EQ(result.selected_index, 1);
-    EXPECT_STREQ(result.scene, "scene.options");
+    EXPECT_STREQ(result.scene, "scene.multiplayer");
     EXPECT_EQ(result.signal_id, -1);
     EXPECT_EQ(result.move_signal_id, -1);
     EXPECT_EQ(result.select_signal_id, menu_select_signal);

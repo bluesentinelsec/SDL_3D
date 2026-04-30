@@ -1,0 +1,77 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.multiplayer.direct_connect",
+  "updates_game": false,
+  "renders_world": false,
+  "input": {
+    "actions": [
+      "action.menu.up",
+      "action.menu.down",
+      "action.menu.select",
+      "action.menu.back"
+    ]
+  },
+  "transitions": {
+    "enter": "scene_in",
+    "exit": "scene_out"
+  },
+  "menus": [
+    {
+      "name": "menu.multiplayer.direct_connect",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "back_action": "action.menu.back",
+      "move_signal": "signal.ui.menu.move",
+      "select_signal": "signal.ui.menu.select",
+      "selected": 0,
+      "items": [
+        { "label": "Back", "scene": "scene.multiplayer.join" }
+      ]
+    }
+  ],
+  "ui": {
+    "text": [
+      {
+        "name": "ui.multiplayer.direct.title",
+        "font": "font.title",
+        "text": "DIRECT CONNECT",
+        "x": 0.5,
+        "y": 0.18,
+        "normalized": true,
+        "centered": true,
+        "color": [242, 248, 255, 255]
+      },
+      {
+        "name": "ui.multiplayer.direct.status",
+        "font": "font.hud",
+        "text": "ENTER HOST / IP AND PORT",
+        "x": 0.5,
+        "y": 0.34,
+        "normalized": true,
+        "centered": true,
+        "color": [225, 236, 255, 245]
+      }
+    ],
+    "menus": [
+      {
+        "name": "ui.multiplayer.direct.menu",
+        "menu": "menu.multiplayer.direct_connect",
+        "font": "font.hud",
+        "x": 0.45,
+        "y": 0.52,
+        "gap": 0.09,
+        "normalized": true,
+        "align": "left",
+        "color": [225, 236, 255, 245],
+        "selected_color": [255, 245, 208, 255],
+        "cursor": {
+          "text": ">",
+          "offset_x": -0.035,
+          "align": "right",
+          "color": [255, 222, 140, 255]
+        }
+      }
+    ]
+  }
+}
