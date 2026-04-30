@@ -24,6 +24,7 @@
 #include "sdl3d/logic.h"
 #include "sdl3d/math.h"
 #include "sdl3d/model.h"
+#include "sdl3d/network.h"
 #include "sdl3d/render_context.h"
 #include "sdl3d/scene.h"
 #include "sdl3d/script.h"

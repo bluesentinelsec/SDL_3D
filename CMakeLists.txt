@@ -20,14 +20,16 @@ find_package(Threads REQUIRED)
 if(PROJECT_IS_TOP_LEVEL)
     option(SDL3D_BUILD_TESTS "Build SDL3D tests" ${BUILD_TESTING})
 else()
-    option(SDL3D_BUILD_TESTS "Build SDL3D tests" OFF)
+option(SDL3D_BUILD_TESTS "Build SDL3D tests" OFF)
 endif()
 option(SDL3D_FETCH_SDL3 "Fetch SDL3 if it is not already available" ON)
+option(SDL3D_ENABLE_NETWORKING "Enable SDL3_net-based network transport" ON)
 option(SDL3D_ENABLE_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 option(SDL3D_BUILD_BENCHMARKS "Build SDL3D benchmarks" OFF)
 option(SDL3D_BUILD_DEMOS "Build SDL3D demo programs" OFF)
 
 set(SDL3D_USING_FETCHED_SDL3 OFF)
+set(SDL3D_USING_FETCHED_SDL3_NET OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(SDL3DCompilerWarnings)
@@ -66,11 +68,48 @@ if(NOT TARGET SDL3::SDL3 AND NOT TARGET SDL3::SDL3-static)
     message(FATAL_ERROR "SDL3 was not found. Provide SDL3 via a parent target, find_package(SDL3), or enable SDL3D_FETCH_SDL3.")
 endif()
 
+if(EMSCRIPTEN)
+    set(SDL3D_ENABLE_NETWORKING OFF CACHE BOOL "Enable SDL3_net-based network transport" FORCE)
+endif()
+
 set(SDL3D_SDL_TARGET SDL3::SDL3)
 if(NOT TARGET ${SDL3D_SDL_TARGET} AND TARGET SDL3::SDL3-static)
     set(SDL3D_SDL_TARGET SDL3::SDL3-static)
 elseif(IOS AND TARGET SDL3::SDL3-static)
     set(SDL3D_SDL_TARGET SDL3::SDL3-static)
+endif()
+
+if(SDL3D_ENABLE_NETWORKING)
+    if(NOT TARGET SDL3_net::SDL3_net AND NOT TARGET SDL3_net::SDL3_net-static)
+        find_package(SDL3_net 3.0 CONFIG QUIET)
+    endif()
+
+    if(NOT TARGET SDL3_net::SDL3_net AND NOT TARGET SDL3_net::SDL3_net-static)
+        FetchContent_Declare(
+            SDL3_net
+            GIT_REPOSITORY https://github.com/libsdl-org/SDL_net.git
+            GIT_TAG main
+            GIT_SHALLOW TRUE
+        )
+
+        set(_sdl3d_saved_build_shared_libs ${BUILD_SHARED_LIBS})
+        set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+        set(SDLNET_INSTALL OFF CACHE BOOL "" FORCE)
+        set(SDLNET_SAMPLES OFF CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(SDL3_net)
+        set(BUILD_SHARED_LIBS ${_sdl3d_saved_build_shared_libs} CACHE BOOL "" FORCE)
+        set(SDL3D_USING_FETCHED_SDL3_NET ON)
+    endif()
+
+    if(NOT TARGET SDL3_net::SDL3_net AND NOT TARGET SDL3_net::SDL3_net-static)
+        message(FATAL_ERROR
+            "SDL3_net was not found. Provide SDL3_net via a parent target, find_package(SDL3_net), or disable SDL3D_ENABLE_NETWORKING.")
+    endif()
+
+    set(SDL3D_SDLNET_TARGET SDL3_net::SDL3_net)
+    if(NOT TARGET ${SDL3D_SDLNET_TARGET} AND TARGET SDL3_net::SDL3_net-static)
+        set(SDL3D_SDLNET_TARGET SDL3_net::SDL3_net-static)
+    endif()
 endif()
 
 add_subdirectory(vendor)
@@ -111,6 +150,7 @@ target_sources(
         src/level.c
         src/model.c
         src/obj_loader.c
+        src/network.c
         src/properties.c
         src/rasterizer.c
         src/render_context.c
@@ -165,6 +205,10 @@ target_include_directories(
         $<TARGET_PROPERTY:sdl3d_lua,INCLUDE_DIRECTORIES>
 )
 
+if(SDL3D_ENABLE_NETWORKING)
+    target_include_directories(sdl3d PRIVATE $<TARGET_PROPERTY:${SDL3D_SDLNET_TARGET},INTERFACE_INCLUDE_DIRECTORIES>)
+endif()
+
 target_compile_definitions(
     sdl3d
     PRIVATE
@@ -177,12 +221,21 @@ target_compile_options(
         $<TARGET_PROPERTY:${SDL3D_SDL_TARGET},INTERFACE_COMPILE_OPTIONS>
 )
 
+if(SDL3D_ENABLE_NETWORKING)
+    target_compile_definitions(sdl3d PRIVATE SDL3D_NETWORKING_ENABLED=1)
+else()
+    target_compile_definitions(sdl3d PRIVATE SDL3D_NETWORKING_ENABLED=0)
+endif()
+
 set_property(TARGET sdl3d APPEND PROPERTY INTERFACE_LINK_LIBRARIES ${SDL3D_SDL_TARGET})
 if(TARGET Threads::Threads)
     set_property(TARGET sdl3d APPEND PROPERTY INTERFACE_LINK_LIBRARIES Threads::Threads)
 endif()
 if(CMAKE_DL_LIBS)
     set_property(TARGET sdl3d APPEND PROPERTY INTERFACE_LINK_LIBRARIES ${CMAKE_DL_LIBS})
+endif()
+if(SDL3D_ENABLE_NETWORKING)
+    set_property(TARGET sdl3d APPEND PROPERTY INTERFACE_LINK_LIBRARIES ${SDL3D_SDLNET_TARGET})
 endif()
 if(UNIX AND NOT EMSCRIPTEN)
     set_property(TARGET sdl3d APPEND PROPERTY INTERFACE_LINK_LIBRARIES m)
@@ -232,6 +285,8 @@ endif()
 
 if(SDL3D_USING_FETCHED_SDL3)
     message(STATUS "SDL3 was fetched for this build; SDL3D install/export packaging is disabled.")
+elseif(SDL3D_USING_FETCHED_SDL3_NET)
+    message(STATUS "SDL3_net was fetched for this build; SDL3D install/export packaging is disabled.")
 else()
     configure_package_config_file(
         cmake/SDL3DConfig.cmake.in
