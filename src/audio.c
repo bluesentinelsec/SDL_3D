@@ -116,27 +116,6 @@ static void music_slot_destroy(sdl3d_music_slot *slot)
     SDL_free(slot);
 }
 
-static bool grow_active_capacity(sdl3d_audio_engine *audio)
-{
-    int new_capacity = audio->active_capacity > 0 ? audio->active_capacity * 2 : SDL3D_AUDIO_INITIAL_ACTIVE_CAPACITY;
-    if (new_capacity > SDL3D_AUDIO_MAX_ACTIVE_SOUNDS)
-    {
-        new_capacity = SDL3D_AUDIO_MAX_ACTIVE_SOUNDS;
-    }
-    sdl3d_active_sound *active_sounds =
-        SDL_realloc(audio->active_sounds, (size_t)new_capacity * sizeof(*active_sounds));
-    if (active_sounds == NULL)
-    {
-        return SDL_OutOfMemory();
-    }
-
-    SDL_memset(active_sounds + audio->active_capacity, 0,
-               (size_t)(new_capacity - audio->active_capacity) * sizeof(*active_sounds));
-    audio->active_sounds = active_sounds;
-    audio->active_capacity = new_capacity;
-    return true;
-}
-
 static void cleanup_finished_sounds(sdl3d_audio_engine *audio)
 {
     for (int i = 0; i < audio->active_count; ++i)
@@ -167,8 +146,7 @@ static sdl3d_active_sound *reserve_active_sound(sdl3d_audio_engine *audio)
         }
     }
 
-    if (audio->active_count < audio->active_capacity ||
-        (audio->active_capacity < SDL3D_AUDIO_MAX_ACTIVE_SOUNDS && grow_active_capacity(audio)))
+    if (audio->active_count < audio->active_capacity)
     {
         sdl3d_active_sound *active = &audio->active_sounds[audio->active_count];
         SDL_zero(*active);
@@ -384,6 +362,14 @@ bool sdl3d_audio_create(sdl3d_audio_engine **out_audio)
     {
         audio->bus_volumes[i] = 1.0f;
     }
+    audio->active_sounds = SDL_calloc(SDL3D_AUDIO_MAX_ACTIVE_SOUNDS, sizeof(*audio->active_sounds));
+    if (audio->active_sounds == NULL)
+    {
+        ma_engine_uninit(&audio->engine);
+        SDL_free(audio);
+        return SDL_OutOfMemory();
+    }
+    audio->active_capacity = SDL3D_AUDIO_MAX_ACTIVE_SOUNDS;
     audio->current_ambient_id = -1;
     *out_audio = audio;
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio engine initialized");
