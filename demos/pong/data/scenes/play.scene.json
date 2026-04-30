@@ -40,6 +40,19 @@
     "enter": "scene_in",
     "exit": "scene_out"
   },
+  "update_phases": {
+    "simulation": {
+      "active_if": {
+        "type": "not",
+        "condition": {
+          "type": "scene_state.compare",
+          "key": "network_role",
+          "op": "==",
+          "value": "client"
+        }
+      }
+    }
+  },
   "menus": [
     {
       "name": "menu.match_over",

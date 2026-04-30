@@ -478,6 +478,7 @@ TEST_F(PongHeadlessMultiplayerTest, HostAppliesRemoteInputAndClientReceivesAutho
 
     const float initial_host_cpu_y = host_cpu->position.y;
     const float initial_client_cpu_y = client_cpu->position.y;
+    const sdl3d_vec3 initial_client_ball_position = sdl3d_game_data_find_actor(client_runtime, "entity.ball")->position;
 
     ASSERT_TRUE(sdl3d_game_session_tick(host_session, 0.25f));
     ASSERT_TRUE(sdl3d_game_data_update(host_runtime, 0.25f));
@@ -486,6 +487,10 @@ TEST_F(PongHeadlessMultiplayerTest, HostAppliesRemoteInputAndClientReceivesAutho
 
     EXPECT_FLOAT_EQ(host_cpu->position.y, initial_host_cpu_y);
     EXPECT_FLOAT_EQ(client_cpu->position.y, initial_client_cpu_y);
+    EXPECT_FLOAT_EQ(sdl3d_game_data_find_actor(client_runtime, "entity.ball")->position.x,
+                    initial_client_ball_position.x);
+    EXPECT_FLOAT_EQ(sdl3d_game_data_find_actor(client_runtime, "entity.ball")->position.y,
+                    initial_client_ball_position.y);
 
     sdl3d_input_set_action_override(sdl3d_game_session_get_input(client_session), p2_up, 1.0f);
     sdl3d_input_set_action_override(sdl3d_game_session_get_input(client_session), p2_down, 0.0f);

@@ -3701,12 +3701,19 @@ static bool update_phase_default(const sdl3d_game_data_runtime *runtime, const c
     return !paused;
 }
 
-static bool eval_update_phase_entry(yyjson_val *entry, bool paused, bool fallback)
+static bool eval_data_condition(const sdl3d_game_data_runtime *runtime, yyjson_val *condition,
+                                const sdl3d_game_data_ui_metrics *metrics);
+
+static bool eval_update_phase_entry(const sdl3d_game_data_runtime *runtime, yyjson_val *entry, bool paused,
+                                    bool fallback)
 {
     if (yyjson_is_bool(entry))
         return yyjson_get_bool(entry);
     if (!yyjson_is_obj(entry))
         return fallback;
+    yyjson_val *active_if = obj_get(entry, "active_if");
+    if (active_if != NULL && !eval_data_condition(runtime, active_if, NULL))
+        return false;
     if (!json_bool(entry, "active", true))
         return false;
     if (paused)
@@ -3723,10 +3730,10 @@ bool sdl3d_game_data_active_scene_update_phase(const sdl3d_game_data_runtime *ru
     const scene_entry *scene = active_scene_entry_const(runtime);
     yyjson_val *scene_entry_json = obj_get(obj_get(scene != NULL ? scene->root : NULL, "update_phases"), phase);
     if (scene_entry_json != NULL)
-        return eval_update_phase_entry(scene_entry_json, paused, fallback);
+        return eval_update_phase_entry(runtime, scene_entry_json, paused, fallback);
 
     yyjson_val *root_entry_json = obj_get(obj_get(runtime_root(runtime), "update_phases"), phase);
-    return eval_update_phase_entry(root_entry_json, paused, fallback);
+    return eval_update_phase_entry(runtime, root_entry_json, paused, fallback);
 }
 
 bool sdl3d_game_data_active_scene_renders_world(const sdl3d_game_data_runtime *runtime)

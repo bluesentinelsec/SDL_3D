@@ -1699,7 +1699,8 @@ static bool validate_app_refs(validation_context *ctx, yyjson_val *root, validat
     return true;
 }
 
-static bool validate_update_phases(validation_context *ctx, yyjson_val *phases, const char *json_path)
+static bool validate_update_phases(validation_context *ctx, yyjson_val *phases, const char *json_path,
+                                   validation_names *names)
 {
     if (phases == NULL)
         return true;
@@ -1716,6 +1717,13 @@ static bool validate_update_phases(validation_context *ctx, yyjson_val *phases, 
         format_path(path, sizeof(path), "%s.%s", json_path, yyjson_get_str(key));
         if (!yyjson_is_bool(entry) && !yyjson_is_obj(entry))
             return validation_error(ctx, path, "update phase must be a bool or object");
+        if (yyjson_is_obj(entry))
+        {
+            char condition_path[PATH_BUFFER_SIZE];
+            format_path(condition_path, sizeof(condition_path), "%s.active_if", path);
+            if (!validate_data_condition(ctx, obj_get(entry, "active_if"), condition_path, names))
+                return false;
+        }
     }
     return true;
 }
@@ -2282,7 +2290,7 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
 
     char phases_path[PATH_BUFFER_SIZE];
     format_path(phases_path, sizeof(phases_path), "%s.update_phases", json_path);
-    if (!validate_update_phases(ctx, obj_get(root, "update_phases"), phases_path))
+    if (!validate_update_phases(ctx, obj_get(root, "update_phases"), phases_path, names))
         return false;
 
     yyjson_val *timeline = obj_get(root, "timeline");
@@ -2644,7 +2652,7 @@ static bool validate_details(validation_context *ctx, yyjson_val *root, validati
 {
     return validate_storage(ctx, root) && validate_persistence(ctx, root, names) &&
            validate_input_bindings(ctx, root) && validate_components(ctx, root, names) &&
-           validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases") &&
+           validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases", names) &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
            validate_app_refs(ctx, root, names) && validate_cameras(ctx, root, names) && validate_ui(ctx, root, names) &&
            validate_presentation(ctx, root, names) && validate_render_effects(ctx, root, names) &&
