@@ -46,4 +46,4 @@ This file gives working guidance for AI agents maintaining SDL_3D.
 - Add focused tests for the changed behavior.
 - Run the relevant build/test targets before finishing.
 - Update documentation or sample data if the public behavior changed.
-
+- Run `clang-format` on all touched C and C++ files before submitting a PR.

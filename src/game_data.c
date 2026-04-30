@@ -107,6 +107,7 @@ typedef struct input_binding_spec
     const char *action;
     int action_id;
     sdl3d_input_source source;
+    int gamepad_index;
     int required_modifiers;
     int excluded_modifiers;
     union {
@@ -5043,10 +5044,10 @@ static void bind_input_spec(sdl3d_input_manager *input, const input_binding_spec
         sdl3d_input_bind_mouse_axis(input, spec->action_id, spec->mouse_axis, spec->scale);
         break;
     case SDL3D_INPUT_GAMEPAD_BUTTON:
-        sdl3d_input_bind_gamepad_button(input, spec->action_id, spec->gamepad_button);
+        sdl3d_input_bind_gamepad_button_at(input, spec->action_id, spec->gamepad_index, spec->gamepad_button);
         break;
     case SDL3D_INPUT_GAMEPAD_AXIS:
-        sdl3d_input_bind_gamepad_axis(input, spec->action_id, spec->gamepad_axis, spec->scale);
+        sdl3d_input_bind_gamepad_axis_at(input, spec->action_id, spec->gamepad_index, spec->gamepad_axis, spec->scale);
         break;
     }
 }
@@ -5090,6 +5091,7 @@ static bool set_action_keyboard_binding(sdl3d_game_data_runtime *runtime, const 
     spec.action = action;
     spec.action_id = action_id;
     spec.source = SDL3D_INPUT_KEYBOARD;
+    spec.gamepad_index = -1;
     spec.scancode = scancode;
     spec.scale = 1.0f;
     if (!append_input_binding_spec(runtime, &spec))
@@ -5123,6 +5125,7 @@ static bool set_action_mouse_button_binding(sdl3d_game_data_runtime *runtime, co
     spec.action = action;
     spec.action_id = action_id;
     spec.source = SDL3D_INPUT_MOUSE_BUTTON;
+    spec.gamepad_index = -1;
     spec.mouse_button = button;
     spec.scale = 1.0f;
     if (!append_input_binding_spec(runtime, &spec))
@@ -5157,6 +5160,7 @@ static bool set_action_gamepad_button_binding(sdl3d_game_data_runtime *runtime, 
     spec.action = action;
     spec.action_id = action_id;
     spec.source = SDL3D_INPUT_GAMEPAD_BUTTON;
+    spec.gamepad_index = -1;
     spec.gamepad_button = button;
     spec.scale = 1.0f;
     if (!append_input_binding_spec(runtime, &spec))
@@ -5216,6 +5220,7 @@ static bool load_input(sdl3d_game_data_runtime *runtime, yyjson_val *root, char 
                         spec.action = name;
                         spec.action_id = action_id;
                         spec.source = SDL3D_INPUT_KEYBOARD;
+                        spec.gamepad_index = -1;
                         spec.scancode = code;
                         spec.scale = 1.0f;
                         if (!append_input_binding_spec(runtime, &spec))
@@ -5238,6 +5243,7 @@ static bool load_input(sdl3d_game_data_runtime *runtime, yyjson_val *root, char 
                             spec.action = name;
                             spec.action_id = action_id;
                             spec.source = SDL3D_INPUT_MOUSE_AXIS;
+                            spec.gamepad_index = -1;
                             spec.mouse_axis = mouse_axis;
                             spec.scale = scale;
                             if (!append_input_binding_spec(runtime, &spec))
@@ -5255,6 +5261,7 @@ static bool load_input(sdl3d_game_data_runtime *runtime, yyjson_val *root, char 
                             spec.action = name;
                             spec.action_id = action_id;
                             spec.source = SDL3D_INPUT_MOUSE_BUTTON;
+                            spec.gamepad_index = -1;
                             spec.mouse_button = mouse_button;
                             spec.scale = 1.0f;
                             if (!append_input_binding_spec(runtime, &spec))
@@ -5277,6 +5284,7 @@ static bool load_input(sdl3d_game_data_runtime *runtime, yyjson_val *root, char 
                             spec.action = name;
                             spec.action_id = action_id;
                             spec.source = SDL3D_INPUT_GAMEPAD_AXIS;
+                            spec.gamepad_index = json_int(binding, "slot", -1);
                             spec.gamepad_axis = gamepad_axis;
                             spec.scale = scale;
                             if (!append_input_binding_spec(runtime, &spec))
@@ -5294,6 +5302,7 @@ static bool load_input(sdl3d_game_data_runtime *runtime, yyjson_val *root, char 
                             spec.action = name;
                             spec.action_id = action_id;
                             spec.source = SDL3D_INPUT_GAMEPAD_BUTTON;
+                            spec.gamepad_index = json_int(binding, "slot", -1);
                             spec.gamepad_button = gamepad_button;
                             spec.scale = 1.0f;
                             if (!append_input_binding_spec(runtime, &spec))

@@ -950,6 +950,8 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     EXPECT_NE(sdl3d_game_data_find_actor_with_tags(runtime, paddle_tags, 2), nullptr);
     EXPECT_GE(sdl3d_game_data_find_signal(runtime, "signal.ball.serve"), 0);
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.paddle.up"), 0);
+    EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.paddle.local.up"), 0);
+    EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.paddle.local.down"), 0);
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.scene.title"), 0);
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.scene.options"), 0);
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.scene.play"), 0);
@@ -1773,6 +1775,10 @@ TEST(GameDataRuntime, DataAuthoredInputPolicyUpdatePhasesAndPresentationClocks)
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
     EXPECT_TRUE(sdl3d_game_data_active_scene_allows_action(runtime, pause));
+    EXPECT_TRUE(sdl3d_game_data_active_scene_allows_action(
+        runtime, sdl3d_game_data_find_action(runtime, "action.paddle.local.up")));
+    EXPECT_TRUE(sdl3d_game_data_active_scene_allows_action(
+        runtime, sdl3d_game_data_find_action(runtime, "action.paddle.local.down")));
     EXPECT_TRUE(sdl3d_game_data_active_scene_update_phase(runtime, "presentation", true));
     EXPECT_FALSE(sdl3d_game_data_active_scene_update_phase(runtime, "simulation", true));
 

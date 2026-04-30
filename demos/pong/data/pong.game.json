@@ -545,6 +545,12 @@
             ]
           },
           {
+            "name": "action.paddle.local.up"
+          },
+          {
+            "name": "action.paddle.local.down"
+          },
+          {
             "name": "action.pause",
             "bindings": [
               { "device": "keyboard", "key": "RETURN" },
@@ -885,7 +891,8 @@
           ]
         },
         { "type": "collision.aabb", "half_extents": [0.18, 0.95, 0.14] },
-        { "type": "adapter.controller", "adapter": "adapter.pong.cpu_track_ball", "target": "entity.ball" }
+        { "type": "adapter.controller", "adapter": "adapter.pong.cpu_track_ball", "target": "entity.ball" },
+        { "type": "control.axis_1d", "axis": "y", "negative": "action.paddle.local.down", "positive": "action.paddle.local.up" }
       ]
     },
     {
@@ -1618,6 +1625,7 @@
       {
         "signal": "signal.game.start",
         "actions": [
+          { "type": "adapter.invoke", "adapter": "adapter.pong.configure_play_input" },
           { "type": "timer.start", "timer": "timer.round.serve" }
         ]
       },
@@ -1816,6 +1824,13 @@
       "script": "script.pong",
       "function": "cpu_track_ball",
       "description": "Move the CPU paddle toward the current ball position."
+    },
+    {
+      "name": "adapter.pong.configure_play_input",
+      "kind": "action",
+      "script": "script.pong",
+      "function": "configure_play_input",
+      "description": "Configure Pong paddle bindings for single-player or local multiplayer layouts."
     },
     {
       "name": "adapter.pong.load_persistence",

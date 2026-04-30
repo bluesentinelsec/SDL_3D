@@ -26,6 +26,8 @@
     "actions": [
       "action.paddle.up",
       "action.paddle.down",
+      "action.paddle.local.up",
+      "action.paddle.local.down",
       "action.pause",
       "action.restart",
       "action.camera.ball.toggle",

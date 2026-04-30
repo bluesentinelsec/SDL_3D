@@ -30,7 +30,134 @@ typedef struct pong_state
     int vibration_connection;
     int ball_hit_signal_id;
     int vibration_signal_id;
+    int local_input_gamepad_count;
 } pong_state;
+
+static bool is_local_match_mode(const pong_state *state)
+{
+    const sdl3d_properties *scene_state =
+        state != NULL && state->data != NULL ? sdl3d_game_data_scene_state(state->data) : NULL;
+    const char *match_mode = scene_state != NULL ? sdl3d_properties_get_string(scene_state, "match_mode", NULL) : NULL;
+    return match_mode != NULL && SDL_strcmp(match_mode, "local") == 0;
+}
+
+static void bind_local_play_controls(pong_state *state)
+{
+    if (state == NULL || state->data == NULL || state->input == NULL)
+    {
+        return;
+    }
+
+    const int gamepad_count = sdl3d_input_gamepad_count(state->input);
+    const int p1_up = sdl3d_game_data_find_action(state->data, "action.paddle.up");
+    const int p1_down = sdl3d_game_data_find_action(state->data, "action.paddle.down");
+    const int p2_up = sdl3d_game_data_find_action(state->data, "action.paddle.local.up");
+    const int p2_down = sdl3d_game_data_find_action(state->data, "action.paddle.local.down");
+
+    if (p1_up < 0 || p1_down < 0 || p2_up < 0 || p2_down < 0)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "Pong local input rebinding skipped: required paddle actions were not registered");
+        return;
+    }
+
+    sdl3d_input_unbind_action(state->input, p1_up);
+    sdl3d_input_unbind_action(state->input, p1_down);
+    sdl3d_input_unbind_action(state->input, p2_up);
+    sdl3d_input_unbind_action(state->input, p2_down);
+
+    sdl3d_input_bind_key(state->input, p1_up, SDL_SCANCODE_UP);
+    sdl3d_input_bind_key(state->input, p1_down, SDL_SCANCODE_DOWN);
+
+    if (gamepad_count >= 2)
+    {
+        sdl3d_input_bind_gamepad_button_at(state->input, p1_up, 0, SDL_GAMEPAD_BUTTON_DPAD_UP);
+        sdl3d_input_bind_gamepad_button_at(state->input, p1_down, 0, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+        sdl3d_input_bind_gamepad_axis_at(state->input, p1_up, 0, SDL_GAMEPAD_AXIS_LEFTY, -1.0f);
+        sdl3d_input_bind_gamepad_axis_at(state->input, p1_down, 0, SDL_GAMEPAD_AXIS_LEFTY, 1.0f);
+
+        sdl3d_input_bind_gamepad_button_at(state->input, p2_up, 1, SDL_GAMEPAD_BUTTON_DPAD_UP);
+        sdl3d_input_bind_gamepad_button_at(state->input, p2_down, 1, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+        sdl3d_input_bind_gamepad_axis_at(state->input, p2_up, 1, SDL_GAMEPAD_AXIS_LEFTY, -1.0f);
+        sdl3d_input_bind_gamepad_axis_at(state->input, p2_down, 1, SDL_GAMEPAD_AXIS_LEFTY, 1.0f);
+    }
+    else if (gamepad_count == 1)
+    {
+        sdl3d_input_bind_gamepad_button_at(state->input, p2_up, 0, SDL_GAMEPAD_BUTTON_DPAD_UP);
+        sdl3d_input_bind_gamepad_button_at(state->input, p2_down, 0, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+        sdl3d_input_bind_gamepad_axis_at(state->input, p2_up, 0, SDL_GAMEPAD_AXIS_LEFTY, -1.0f);
+        sdl3d_input_bind_gamepad_axis_at(state->input, p2_down, 0, SDL_GAMEPAD_AXIS_LEFTY, 1.0f);
+    }
+
+    state->local_input_gamepad_count = gamepad_count;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong local input configured: gamepads=%d", gamepad_count);
+}
+
+static bool configure_play_input(void *userdata, sdl3d_game_data_runtime *runtime, const char *adapter_name,
+                                 sdl3d_registered_actor *target, const sdl3d_properties *payload)
+{
+    pong_state *state = (pong_state *)userdata;
+    (void)runtime;
+    (void)adapter_name;
+    (void)target;
+    (void)payload;
+
+    if (state == NULL || state->data == NULL || state->input == NULL)
+    {
+        return false;
+    }
+
+    if (is_local_match_mode(state))
+    {
+        bind_local_play_controls(state);
+    }
+    else
+    {
+        const int p1_up = sdl3d_game_data_find_action(state->data, "action.paddle.up");
+        const int p1_down = sdl3d_game_data_find_action(state->data, "action.paddle.down");
+        if (p1_up < 0 || p1_down < 0)
+        {
+            return false;
+        }
+
+        sdl3d_input_unbind_action(state->input, p1_up);
+        sdl3d_input_unbind_action(state->input, p1_down);
+        sdl3d_input_bind_key(state->input, p1_up, SDL_SCANCODE_UP);
+        sdl3d_input_bind_key(state->input, p1_down, SDL_SCANCODE_DOWN);
+        sdl3d_input_bind_gamepad_button(state->input, p1_up, SDL_GAMEPAD_BUTTON_DPAD_UP);
+        sdl3d_input_bind_gamepad_button(state->input, p1_down, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+        sdl3d_input_bind_gamepad_axis(state->input, p1_up, SDL_GAMEPAD_AXIS_LEFTY, -1.0f);
+        sdl3d_input_bind_gamepad_axis(state->input, p1_down, SDL_GAMEPAD_AXIS_LEFTY, 1.0f);
+
+        const int p2_up = sdl3d_game_data_find_action(state->data, "action.paddle.local.up");
+        const int p2_down = sdl3d_game_data_find_action(state->data, "action.paddle.local.down");
+        if (p2_up >= 0)
+            sdl3d_input_unbind_action(state->input, p2_up);
+        if (p2_down >= 0)
+            sdl3d_input_unbind_action(state->input, p2_down);
+        state->local_input_gamepad_count = sdl3d_input_gamepad_count(state->input);
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong single-player input configured: gamepads=%d",
+                    state->local_input_gamepad_count);
+    }
+
+    return true;
+}
+
+static void refresh_local_play_input(pong_state *state)
+{
+    const char *active_scene = state != NULL && state->data != NULL ? sdl3d_game_data_active_scene(state->data) : NULL;
+    if (state == NULL || state->input == NULL || active_scene == NULL || SDL_strcmp(active_scene, "scene.play") != 0 ||
+        !is_local_match_mode(state))
+    {
+        return;
+    }
+
+    const int gamepad_count = sdl3d_input_gamepad_count(state->input);
+    if (gamepad_count != state->local_input_gamepad_count)
+    {
+        bind_local_play_controls(state);
+    }
+}
 
 static void on_gamepad_feedback(void *userdata, int signal_id, const sdl3d_properties *payload)
 {
@@ -62,7 +189,8 @@ static void on_gamepad_feedback(void *userdata, int signal_id, const sdl3d_prope
     }
 
     if (signal_id == state->ball_hit_signal_id && other_actor_name != NULL &&
-        SDL_strcmp(other_actor_name, "entity.paddle.player") == 0)
+        (SDL_strcmp(other_actor_name, "entity.paddle.player") == 0 ||
+         (is_local_match_mode(state) && SDL_strcmp(other_actor_name, "entity.paddle.cpu") == 0)))
     {
         if (!sdl3d_input_rumble_all_gamepads(state->input, 0.45f, 0.75f, 120))
         {
@@ -115,6 +243,17 @@ static bool init_game_data(sdl3d_game_context *ctx, pong_state *state)
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong data loaded: asset=%s active_scene=%s", SDL3D_PONG_DATA_ASSET_PATH,
                 sdl3d_game_data_active_scene(state->data) != NULL ? sdl3d_game_data_active_scene(state->data)
                                                                   : "<none>");
+
+    if (!sdl3d_game_data_register_adapter(state->data, "adapter.pong.configure_play_input", configure_play_input,
+                                          state))
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong play input adapter registration failed");
+        sdl3d_game_data_destroy(state->data);
+        state->data = NULL;
+        sdl3d_asset_resolver_destroy(state->assets);
+        state->assets = NULL;
+        return false;
+    }
     return true;
 }
 
@@ -154,6 +293,7 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
     state->vibration_connection = 0;
     state->ball_hit_signal_id = sdl3d_game_data_find_signal(state->data, "signal.ball.hit_paddle");
     state->vibration_signal_id = sdl3d_game_data_find_signal(state->data, "signal.settings.vibration");
+    state->local_input_gamepad_count = -1;
     if (state->input != NULL)
     {
         if (state->ball_hit_signal_id >= 0)
@@ -181,6 +321,7 @@ static bool pong_handle_event(sdl3d_game_context *ctx, void *userdata, const SDL
 static void pong_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 {
     pong_state *state = (pong_state *)userdata;
+    refresh_local_play_input(state);
 
     const sdl3d_game_data_update_frame_desc frame = {.ctx = ctx,
                                                      .runtime = state->data,
@@ -193,6 +334,7 @@ static void pong_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 static void pong_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_dt)
 {
     pong_state *state = (pong_state *)userdata;
+    refresh_local_play_input(state);
 
     const sdl3d_game_data_update_frame_desc frame = {.ctx = ctx,
                                                      .runtime = state->data,

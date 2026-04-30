@@ -318,6 +318,33 @@ TEST(Input, GamepadButtonPressAndRelease)
     EXPECT_EQ(sdl3d_input_get_pressed_gamepad_button(input.input), SDL_GAMEPAD_BUTTON_INVALID);
 }
 
+TEST(Input, GamepadBindingsCanTargetSpecificSlots)
+{
+    InputPtr input;
+    if (sdl3d_input_gamepad_count(input.input) != 0)
+    {
+        GTEST_SKIP() << "requires no pre-connected gamepads";
+    }
+
+    int player_one = sdl3d_input_register_action(input.input, "player_one");
+    int player_two = sdl3d_input_register_action(input.input, "player_two");
+    sdl3d_input_bind_gamepad_button_at(input.input, player_one, 0, SDL_GAMEPAD_BUTTON_SOUTH);
+    sdl3d_input_bind_gamepad_button_at(input.input, player_two, 1, SDL_GAMEPAD_BUTTON_SOUTH);
+
+    push_gamepad_device(input.input, SDL_EVENT_GAMEPAD_ADDED, 1101);
+    push_gamepad_device(input.input, SDL_EVENT_GAMEPAD_ADDED, 1102);
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_DOWN, 1101, SDL_GAMEPAD_BUTTON_SOUTH);
+    sdl3d_input_update(input.input, 1);
+    EXPECT_TRUE(sdl3d_input_is_held(input.input, player_one));
+    EXPECT_FALSE(sdl3d_input_is_held(input.input, player_two));
+
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_UP, 1101, SDL_GAMEPAD_BUTTON_SOUTH);
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_DOWN, 1102, SDL_GAMEPAD_BUTTON_SOUTH);
+    sdl3d_input_update(input.input, 2);
+    EXPECT_FALSE(sdl3d_input_is_held(input.input, player_one));
+    EXPECT_TRUE(sdl3d_input_is_held(input.input, player_two));
+}
+
 TEST(Input, GamepadAxisAndConvenienceQueries)
 {
     InputPtr input;
