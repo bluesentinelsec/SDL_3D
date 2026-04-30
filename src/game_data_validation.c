@@ -1042,6 +1042,12 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 if (json_string(component, "rate_property") == NULL && !yyjson_is_num(obj_get(component, "rate")))
                     return validation_error(ctx, path, "property.decay requires rate or rate_property");
             }
+            else if (SDL_strcmp(type, "render.cube") == 0 || SDL_strcmp(type, "render.sphere") == 0)
+            {
+                yyjson_val *lighting = obj_get(component, "lighting");
+                if (lighting != NULL && !yyjson_is_bool(lighting))
+                    return validation_error(ctx, path, "render primitive lighting must be a boolean");
+            }
         }
     }
     return true;

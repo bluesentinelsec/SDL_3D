@@ -358,6 +358,9 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
     if (context == NULL || context->renderer == NULL || primitive == NULL)
         return false;
 
+    const bool restore_lighting = sdl3d_is_lighting_enabled(context->renderer);
+    if (!primitive->lighting_enabled)
+        sdl3d_set_lighting_enabled(context->renderer, false);
     sdl3d_set_emissive(context->renderer, primitive->emissive_color.x, primitive->emissive_color.y,
                        primitive->emissive_color.z);
     if (primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
@@ -370,6 +373,8 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
                           primitive->rings, primitive->color);
     }
     sdl3d_set_emissive(context->renderer, 0.0f, 0.0f, 0.0f);
+    if (!primitive->lighting_enabled)
+        sdl3d_set_lighting_enabled(context->renderer, restore_lighting);
     return true;
 }
 

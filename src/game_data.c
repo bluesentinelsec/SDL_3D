@@ -2782,6 +2782,7 @@ static bool for_each_render_primitive_internal(const sdl3d_game_data_runtime *ru
             primitive.position.y += offset.y;
             primitive.position.z += offset.z;
             primitive.color = json_color(component, "color", (sdl3d_color){255, 255, 255, 255});
+            primitive.lighting_enabled = json_bool(component, "lighting", true);
             primitive.emissive = json_bool(component, "emissive", false);
             primitive.emissive_color =
                 primitive.emissive ? sdl3d_vec3_make(0.2f, 0.2f, 0.2f) : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);

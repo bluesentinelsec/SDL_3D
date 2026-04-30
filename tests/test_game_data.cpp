@@ -806,7 +806,9 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         EXPECT_EQ(primitive->color.r, 0);
         EXPECT_EQ(primitive->color.g, 0);
         EXPECT_EQ(primitive->color.b, 0);
-        EXPECT_TRUE(primitive->emissive);
+        EXPECT_FALSE(primitive->lighting_enabled);
+        EXPECT_FALSE(primitive->emissive);
+        EXPECT_NEAR(primitive->emissive_color.x, 0.0f, 0.0001f);
     }
     if (std::string(primitive->entity_name) == "entity.options.glow.magenta")
     {

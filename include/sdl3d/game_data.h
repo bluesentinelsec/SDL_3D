@@ -197,6 +197,8 @@ extern "C"
         int rings;
         /** @brief Authored tint color. */
         sdl3d_color color;
+        /** @brief True when the primitive should use scene lighting. */
+        bool lighting_enabled;
         /** @brief Whether the primitive should be treated as emissive by the caller. */
         bool emissive;
         /** @brief Evaluated emissive RGB contribution. */

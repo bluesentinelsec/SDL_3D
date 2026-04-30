@@ -780,6 +780,7 @@ Render primitives may also author generic visual effects:
   "type": "render.sphere",
   "radius": 0.22,
   "color": [255, 184, 82, 255],
+  "lighting": true,
   "effects": [
     {
       "type": "pulse",
@@ -798,6 +799,10 @@ Render primitives may also author generic visual effects:
   ]
 }
 ```
+
+Set `lighting` to `false` on a render primitive for solid-color unlit geometry
+such as menu backplates, sky cards, debug overlays, and other presentation
+surfaces that should not be affected by world lights.
 
 Supported primitive effects are:
 

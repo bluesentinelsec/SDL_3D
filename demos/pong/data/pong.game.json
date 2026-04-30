@@ -1067,10 +1067,7 @@
           "type": "render.cube",
           "size": [22.0, 13.0, 0.08],
           "color": [0, 0, 0, 255],
-          "emissive": true,
-          "effects": [
-            { "type": "emissive", "color": [0.005, 0.004, 0.010] }
-          ]
+          "lighting": false
         }
       ]
     },
