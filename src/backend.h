@@ -40,6 +40,7 @@ typedef struct sdl3d_draw_params_unlit
     const float *mvp;
     float tint[4];
     int texture_filter; /* 0=nearest, 1=bilinear */
+    bool static_geometry;
 } sdl3d_draw_params_unlit;
 
 typedef struct sdl3d_draw_params_lit
@@ -80,6 +81,7 @@ typedef struct sdl3d_draw_params_lit
     const float *shadow_depth_data; /* 512*512 floats, or NULL */
     const float *shadow_vp;         /* 16 floats (mat4), or NULL */
     float shadow_bias;
+    bool static_geometry;
 } sdl3d_draw_params_lit;
 
 /* ------------------------------------------------------------------ */
