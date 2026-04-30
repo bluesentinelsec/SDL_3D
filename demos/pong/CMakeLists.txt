@@ -8,6 +8,12 @@ set(SDL3D_PONG_ASSET_FILES
     ${SDL3D_PONG_AUDIO_FILES}
     images/splash-logo.jpg
     pong.game.json
+    scenes/multiplayer.scene.json
+    scenes/multiplayer_direct_connect.scene.json
+    scenes/multiplayer_discovery.scene.json
+    scenes/multiplayer_join.scene.json
+    scenes/multiplayer_lan.scene.json
+    scenes/multiplayer_lobby.scene.json
     scenes/play.scene.json
     scenes/splash.scene.json
     scenes/title.scene.json
