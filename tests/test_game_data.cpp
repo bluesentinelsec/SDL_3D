@@ -1206,6 +1206,25 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_pause_visible, &pause_args));
     EXPECT_TRUE(pause_visible);
 
+    struct PauseMenuTextArgs
+    {
+        bool saw_resume = false;
+        bool saw_options = false;
+    } pause_menu_text;
+    auto find_pause_menu_text = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        auto *args = static_cast<PauseMenuTextArgs *>(userdata);
+        if (std::string(text->name) != "ui.pause.menu")
+            return true;
+        const std::string value = text->text != nullptr ? text->text : "";
+        args->saw_resume = args->saw_resume || value == "Resume";
+        args->saw_options = args->saw_options || value == "Options";
+        return !(args->saw_resume && args->saw_options);
+    };
+    ASSERT_TRUE(
+        sdl3d_game_data_for_each_ui_text_for_metrics(runtime, &metrics, find_pause_menu_text, &pause_menu_text));
+    EXPECT_TRUE(pause_menu_text.saw_resume);
+    EXPECT_TRUE(pause_menu_text.saw_options);
+
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
     remove_test_dir(dir);

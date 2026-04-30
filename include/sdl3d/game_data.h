@@ -1324,9 +1324,28 @@ extern "C"
     bool sdl3d_game_data_active_menu_input_is_idle(const sdl3d_game_data_runtime *runtime,
                                                    const sdl3d_input_manager *input);
 
-    /** @brief Iterate authored UI text descriptors. */
+    /**
+     * @brief Iterate authored UI text descriptors.
+     *
+     * This is equivalent to sdl3d_game_data_for_each_ui_text_for_metrics()
+     * with a NULL metrics pointer. Use the metrics-aware iterator when menu
+     * presenters or authored visibility conditions depend on frame state such
+     * as pause, FPS, or active scene transition state.
+     */
     bool sdl3d_game_data_for_each_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_ui_text_fn callback,
                                           void *userdata);
+
+    /**
+     * @brief Iterate authored UI text descriptors using current frame metrics.
+     *
+     * Iteration includes global `ui.text`, active-scene `ui.text`, and menu
+     * presenters from global and active-scene `ui.menus`. Conditions on
+     * generated menu presenters are evaluated with `metrics`, so app-state
+     * dependent menus such as pause overlays can be rendered correctly.
+     */
+    bool sdl3d_game_data_for_each_ui_text_for_metrics(const sdl3d_game_data_runtime *runtime,
+                                                      const sdl3d_game_data_ui_metrics *metrics,
+                                                      sdl3d_game_data_ui_text_fn callback, void *userdata);
 
     /**
      * @brief Iterate authored UI images visible to the active scene.

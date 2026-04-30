@@ -617,7 +617,7 @@ bool sdl3d_game_data_draw_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_
     context.pulse_phase = pulse_phase;
     context.ok = true;
 
-    return sdl3d_game_data_for_each_ui_text(runtime, draw_ui_text, &context) && context.ok;
+    return sdl3d_game_data_for_each_ui_text_for_metrics(runtime, metrics, draw_ui_text, &context) && context.ok;
 }
 
 bool sdl3d_game_data_draw_ui_images(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,

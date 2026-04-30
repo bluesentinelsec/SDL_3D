@@ -4741,7 +4741,8 @@ static void format_menu_item_label(const sdl3d_game_data_runtime *runtime, yyjso
 }
 
 static bool for_each_ui_menu_presenter(const sdl3d_game_data_runtime *runtime, const scene_entry *scene,
-                                       yyjson_val *presenter, sdl3d_game_data_ui_text_fn callback, void *userdata)
+                                       const sdl3d_game_data_ui_metrics *metrics, yyjson_val *presenter,
+                                       sdl3d_game_data_ui_text_fn callback, void *userdata)
 {
     if (scene == NULL || presenter == NULL)
         return true;
@@ -4752,10 +4753,10 @@ static bool for_each_ui_menu_presenter(const sdl3d_game_data_runtime *runtime, c
         return true;
 
     yyjson_val *presenter_active_if = obj_get(presenter, "active_if");
-    if (presenter_active_if != NULL && !eval_data_condition(runtime, presenter_active_if, NULL))
+    if (presenter_active_if != NULL && !eval_data_condition(runtime, presenter_active_if, metrics))
         return true;
     yyjson_val *menu_active_if = obj_get(menu_state->menu, "active_if");
-    if (menu_active_if != NULL && !eval_data_condition(runtime, menu_active_if, NULL))
+    if (menu_active_if != NULL && !eval_data_condition(runtime, menu_active_if, metrics))
         return true;
 
     const float x = json_float(presenter, "x", 0.0f);
@@ -4798,20 +4799,22 @@ static bool for_each_ui_menu_presenter(const sdl3d_game_data_runtime *runtime, c
     return true;
 }
 
-static bool for_each_ui_menu_root(const sdl3d_game_data_runtime *runtime, const scene_entry *scene, yyjson_val *root,
+static bool for_each_ui_menu_root(const sdl3d_game_data_runtime *runtime, const scene_entry *scene,
+                                  const sdl3d_game_data_ui_metrics *metrics, yyjson_val *root,
                                   sdl3d_game_data_ui_text_fn callback, void *userdata)
 {
     yyjson_val *menus = obj_get(obj_get(root, "ui"), "menus");
     for (size_t i = 0; yyjson_is_arr(menus) && i < yyjson_arr_size(menus); ++i)
     {
-        if (!for_each_ui_menu_presenter(runtime, scene, yyjson_arr_get(menus, i), callback, userdata))
+        if (!for_each_ui_menu_presenter(runtime, scene, metrics, yyjson_arr_get(menus, i), callback, userdata))
             return false;
     }
     return true;
 }
 
-bool sdl3d_game_data_for_each_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_ui_text_fn callback,
-                                      void *userdata)
+bool sdl3d_game_data_for_each_ui_text_for_metrics(const sdl3d_game_data_runtime *runtime,
+                                                  const sdl3d_game_data_ui_metrics *metrics,
+                                                  sdl3d_game_data_ui_text_fn callback, void *userdata)
 {
     if (runtime == NULL || callback == NULL)
         return false;
@@ -4823,9 +4826,15 @@ bool sdl3d_game_data_for_each_ui_text(const sdl3d_game_data_runtime *runtime, sd
 
     for (int root_index = 0; root_index < 2; ++root_index)
         if (!for_each_authored_ui_text_root(roots[root_index], callback, userdata) ||
-            !for_each_ui_menu_root(runtime, scene, roots[root_index], callback, userdata))
+            !for_each_ui_menu_root(runtime, scene, metrics, roots[root_index], callback, userdata))
             return true;
     return true;
+}
+
+bool sdl3d_game_data_for_each_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_ui_text_fn callback,
+                                      void *userdata)
+{
+    return sdl3d_game_data_for_each_ui_text_for_metrics(runtime, NULL, callback, userdata);
 }
 
 static void ui_image_from_json(yyjson_val *item, sdl3d_game_data_ui_image *image)
