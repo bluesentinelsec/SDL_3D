@@ -81,11 +81,30 @@ void push_mouse_button(sdl3d_input_manager *input, SDL_EventType type, Uint8 but
     sdl3d_input_process_event(input, &event);
 }
 
-void push_gamepad_button(sdl3d_input_manager *input, SDL_EventType type, SDL_GamepadButton button)
+void push_gamepad_device(sdl3d_input_manager *input, SDL_EventType type, SDL_JoystickID which)
 {
     SDL_Event event{};
     event.type = type;
+    event.gdevice.which = which;
+    sdl3d_input_process_event(input, &event);
+}
+
+void push_gamepad_button(sdl3d_input_manager *input, SDL_EventType type, SDL_JoystickID which, SDL_GamepadButton button)
+{
+    SDL_Event event{};
+    event.type = type;
+    event.gbutton.which = which;
     event.gbutton.button = button;
+    sdl3d_input_process_event(input, &event);
+}
+
+void push_gamepad_axis(sdl3d_input_manager *input, SDL_JoystickID which, SDL_GamepadAxis axis, Sint16 value)
+{
+    SDL_Event event{};
+    event.type = SDL_EVENT_GAMEPAD_AXIS_MOTION;
+    event.gaxis.which = which;
+    event.gaxis.axis = static_cast<Uint8>(axis);
+    event.gaxis.value = value;
     sdl3d_input_process_event(input, &event);
 }
 
@@ -96,6 +115,18 @@ void push_mouse_motion(sdl3d_input_manager *input, float dx, float dy)
     event.motion.xrel = dx;
     event.motion.yrel = dy;
     sdl3d_input_process_event(input, &event);
+}
+
+int find_gamepad_slot(const sdl3d_input_manager *input, SDL_JoystickID which)
+{
+    for (int i = 0; i < SDL3D_INPUT_MAX_GAMEPADS; ++i)
+    {
+        if (sdl3d_input_gamepad_is_connected(input, i) && sdl3d_input_gamepad_id_at(input, i) == which)
+        {
+            return i;
+        }
+    }
+    return -1;
 }
 } // namespace
 
@@ -266,20 +297,146 @@ TEST(Input, MouseButtonPressAndRelease)
 TEST(Input, GamepadButtonPressAndRelease)
 {
     InputPtr input;
+    if (sdl3d_input_gamepad_count(input.input) >= SDL3D_INPUT_MAX_GAMEPADS)
+    {
+        GTEST_SKIP() << "requires an available gamepad slot";
+    }
     int pause = sdl3d_input_register_action(input.input, "pause");
     sdl3d_input_bind_gamepad_button(input.input, pause, SDL_GAMEPAD_BUTTON_START);
 
-    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_DOWN, SDL_GAMEPAD_BUTTON_START);
+    push_gamepad_device(input.input, SDL_EVENT_GAMEPAD_ADDED, 1001);
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_DOWN, 1001, SDL_GAMEPAD_BUTTON_START);
     sdl3d_input_update(input.input, 1);
     EXPECT_TRUE(sdl3d_input_is_held(input.input, pause));
     EXPECT_TRUE(sdl3d_input_is_pressed(input.input, pause));
     EXPECT_EQ(sdl3d_input_get_pressed_gamepad_button(input.input), SDL_GAMEPAD_BUTTON_START);
 
-    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_UP, SDL_GAMEPAD_BUTTON_START);
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_UP, 1001, SDL_GAMEPAD_BUTTON_START);
     sdl3d_input_update(input.input, 2);
     EXPECT_FALSE(sdl3d_input_is_held(input.input, pause));
     EXPECT_TRUE(sdl3d_input_is_released(input.input, pause));
     EXPECT_EQ(sdl3d_input_get_pressed_gamepad_button(input.input), SDL_GAMEPAD_BUTTON_INVALID);
+}
+
+TEST(Input, GamepadAxisAndConvenienceQueries)
+{
+    InputPtr input;
+    if (sdl3d_input_gamepad_count(input.input) != 0)
+    {
+        GTEST_SKIP() << "requires no pre-connected gamepads";
+    }
+    push_gamepad_device(input.input, SDL_EVENT_GAMEPAD_ADDED, 1007);
+    push_gamepad_axis(input.input, 1007, SDL_GAMEPAD_AXIS_LEFTX, 18000);
+    push_gamepad_axis(input.input, 1007, SDL_GAMEPAD_AXIS_LEFTY, -18000);
+    push_gamepad_axis(input.input, 1007, SDL_GAMEPAD_AXIS_RIGHTX, -22000);
+    push_gamepad_axis(input.input, 1007, SDL_GAMEPAD_AXIS_RIGHTY, 23000);
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_DOWN, 1007, SDL_GAMEPAD_BUTTON_LEFT_STICK);
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_DOWN, 1007, SDL_GAMEPAD_BUTTON_RIGHT_STICK);
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_DOWN, 1007, SDL_GAMEPAD_BUTTON_SOUTH);
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_DOWN, 1007, SDL_GAMEPAD_BUTTON_START);
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_DOWN, 1007, SDL_GAMEPAD_BUTTON_BACK);
+    sdl3d_input_update(input.input, 1);
+
+    EXPECT_GE(sdl3d_input_gamepad_count(input.input), 1);
+    const int slot = find_gamepad_slot(input.input, 1007);
+    ASSERT_GE(slot, 0);
+    EXPECT_TRUE(sdl3d_input_is_gamepad_left_stick_pressed(input.input, slot));
+    EXPECT_TRUE(sdl3d_input_is_gamepad_right_stick_pressed(input.input, slot));
+    EXPECT_TRUE(sdl3d_input_is_gamepad_face_button_pressed(input.input, slot));
+    EXPECT_TRUE(sdl3d_input_is_gamepad_start_pressed(input.input, slot));
+    EXPECT_TRUE(sdl3d_input_is_gamepad_select_pressed(input.input, slot));
+
+    sdl3d_vec2 left = sdl3d_input_get_gamepad_left_stick(input.input, slot);
+    sdl3d_vec2 right = sdl3d_input_get_gamepad_right_stick(input.input, slot);
+    EXPECT_GT(left.x, 0.0f);
+    EXPECT_LT(left.y, 0.0f);
+    EXPECT_LT(right.x, 0.0f);
+    EXPECT_GT(right.y, 0.0f);
+}
+
+TEST(Input, GamepadHotplugSupportsMultipleSlots)
+{
+    InputPtr input;
+    if (sdl3d_input_gamepad_count(input.input) != 0)
+    {
+        GTEST_SKIP() << "requires no pre-connected gamepads";
+    }
+    push_gamepad_device(input.input, SDL_EVENT_GAMEPAD_ADDED, 1011);
+    push_gamepad_device(input.input, SDL_EVENT_GAMEPAD_ADDED, 1012);
+    push_gamepad_device(input.input, SDL_EVENT_GAMEPAD_ADDED, 1013);
+    push_gamepad_device(input.input, SDL_EVENT_GAMEPAD_ADDED, 1014);
+    push_gamepad_device(input.input, SDL_EVENT_GAMEPAD_ADDED, 1015);
+    sdl3d_input_update(input.input, 1);
+
+    EXPECT_EQ(sdl3d_input_gamepad_count(input.input), 4);
+    EXPECT_TRUE(sdl3d_input_gamepad_is_connected(input.input, 0));
+    EXPECT_TRUE(sdl3d_input_gamepad_is_connected(input.input, 1));
+    EXPECT_TRUE(sdl3d_input_gamepad_is_connected(input.input, 2));
+    EXPECT_TRUE(sdl3d_input_gamepad_is_connected(input.input, 3));
+
+    push_gamepad_device(input.input, SDL_EVENT_GAMEPAD_REMOVED, 1012);
+    sdl3d_input_update(input.input, 2);
+    EXPECT_EQ(sdl3d_input_gamepad_count(input.input), 3);
+
+    push_gamepad_device(input.input, SDL_EVENT_GAMEPAD_ADDED, 1016);
+    sdl3d_input_update(input.input, 3);
+    EXPECT_EQ(sdl3d_input_gamepad_count(input.input), 4);
+}
+
+TEST(Input, UiDefaultsRespondToGamepadDirectionsAndBack)
+{
+    InputPtr input;
+    sdl3d_input_bind_ui_defaults(input.input);
+    int ui_left = sdl3d_input_find_action(input.input, "ui_left");
+    int ui_down = sdl3d_input_find_action(input.input, "ui_down");
+    int ui_back = sdl3d_input_find_action(input.input, "ui_back");
+    ASSERT_GE(ui_left, 0);
+    ASSERT_GE(ui_down, 0);
+    ASSERT_GE(ui_back, 0);
+
+    push_gamepad_device(input.input, SDL_EVENT_GAMEPAD_ADDED, 1021);
+    push_gamepad_axis(input.input, 1021, SDL_GAMEPAD_AXIS_LEFTX, -22000);
+    push_gamepad_axis(input.input, 1021, SDL_GAMEPAD_AXIS_LEFTY, 22000);
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_DOWN, 1021, SDL_GAMEPAD_BUTTON_EAST);
+    sdl3d_input_update(input.input, 1);
+
+    EXPECT_TRUE(sdl3d_input_is_pressed(input.input, ui_left));
+    EXPECT_TRUE(sdl3d_input_is_pressed(input.input, ui_down));
+    EXPECT_TRUE(sdl3d_input_is_pressed(input.input, ui_back));
+}
+
+TEST(Input, MultipleGamepadsCanHoldTheSameAction)
+{
+    InputPtr input;
+    if (sdl3d_input_gamepad_count(input.input) != 0)
+    {
+        GTEST_SKIP() << "requires no pre-connected gamepads";
+    }
+    sdl3d_input_bind_ui_defaults(input.input);
+    int accept = sdl3d_input_find_action(input.input, "ui_accept");
+    ASSERT_GE(accept, 0);
+
+    push_gamepad_device(input.input, SDL_EVENT_GAMEPAD_ADDED, 1031);
+    push_gamepad_device(input.input, SDL_EVENT_GAMEPAD_ADDED, 1032);
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_DOWN, 1031, SDL_GAMEPAD_BUTTON_SOUTH);
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_DOWN, 1032, SDL_GAMEPAD_BUTTON_SOUTH);
+    sdl3d_input_update(input.input, 1);
+    EXPECT_TRUE(sdl3d_input_is_held(input.input, accept));
+
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_UP, 1031, SDL_GAMEPAD_BUTTON_SOUTH);
+    sdl3d_input_update(input.input, 2);
+    EXPECT_TRUE(sdl3d_input_is_held(input.input, accept));
+
+    push_gamepad_button(input.input, SDL_EVENT_GAMEPAD_BUTTON_UP, 1032, SDL_GAMEPAD_BUTTON_SOUTH);
+    sdl3d_input_update(input.input, 3);
+    EXPECT_FALSE(sdl3d_input_is_held(input.input, accept));
+}
+
+TEST(Input, GamepadRumbleNoOpsWithoutConnectedDevices)
+{
+    InputPtr input;
+    EXPECT_FALSE(sdl3d_input_rumble_gamepad(input.input, 0, 0.5f, 0.5f, 50));
+    EXPECT_FALSE(sdl3d_input_rumble_all_gamepads(input.input, 0.5f, 0.5f, 50));
 }
 
 TEST(Input, MultipleBindingsSameAction)

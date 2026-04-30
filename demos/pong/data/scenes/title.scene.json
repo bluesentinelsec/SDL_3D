@@ -97,18 +97,18 @@
         "name": "ui.title.menu",
         "menu": "menu.title",
         "font": "font.hud",
-        "x": 0.5,
+        "x": 0.45,
         "y": 0.48,
         "gap": 0.09,
         "normalized": true,
-        "align": "center",
+        "align": "left",
         "color": [225, 236, 255, 245],
         "selected_color": [255, 245, 208, 255],
         "selected_pulse_alpha": true,
         "cursor": {
           "text": ">",
-          "offset_x": -0.12,
-          "align": "center",
+          "offset_x": -0.035,
+          "align": "right",
           "color": [255, 222, 140, 255],
           "pulse_alpha": true
         }

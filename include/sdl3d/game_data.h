@@ -197,6 +197,8 @@ extern "C"
         int rings;
         /** @brief Authored tint color. */
         sdl3d_color color;
+        /** @brief True when the primitive should use scene lighting. */
+        bool lighting_enabled;
         /** @brief Whether the primitive should be treated as emissive by the caller. */
         bool emissive;
         /** @brief Evaluated emissive RGB contribution. */
@@ -466,6 +468,8 @@ extern "C"
         int right_action_id;
         /** @brief Input action that activates the selected item, or -1. */
         int select_action_id;
+        /** @brief Input action that activates the menu's back item, or -1. */
+        int back_action_id;
         /** @brief Signal emitted after successful navigation, or -1. */
         int move_signal_id;
         /** @brief Signal emitted when the selected item is activated, or -1. */
@@ -535,6 +539,10 @@ extern "C"
         const char *scene;
         /** @brief Scene stored as the return target when this item changes scene, or NULL. */
         const char *return_to;
+        /** @brief Scene-state key to set when this item is selected, or NULL. */
+        const char *scene_state_key;
+        /** @brief String value assigned to scene_state_key when this item is selected, or NULL. */
+        const char *scene_state_value;
         /** @brief True when selecting this item requests the stored return scene. */
         bool return_scene;
         /** @brief True when selecting this item requests application quit. */
@@ -1318,9 +1326,28 @@ extern "C"
     bool sdl3d_game_data_active_menu_input_is_idle(const sdl3d_game_data_runtime *runtime,
                                                    const sdl3d_input_manager *input);
 
-    /** @brief Iterate authored UI text descriptors. */
+    /**
+     * @brief Iterate authored UI text descriptors.
+     *
+     * This is equivalent to sdl3d_game_data_for_each_ui_text_for_metrics()
+     * with a NULL metrics pointer. Use the metrics-aware iterator when menu
+     * presenters or authored visibility conditions depend on frame state such
+     * as pause, FPS, or active scene transition state.
+     */
     bool sdl3d_game_data_for_each_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_ui_text_fn callback,
                                           void *userdata);
+
+    /**
+     * @brief Iterate authored UI text descriptors using current frame metrics.
+     *
+     * Iteration includes global `ui.text`, active-scene `ui.text`, and menu
+     * presenters from global and active-scene `ui.menus`. Conditions on
+     * generated menu presenters are evaluated with `metrics`, so app-state
+     * dependent menus such as pause overlays can be rendered correctly.
+     */
+    bool sdl3d_game_data_for_each_ui_text_for_metrics(const sdl3d_game_data_runtime *runtime,
+                                                      const sdl3d_game_data_ui_metrics *metrics,
+                                                      sdl3d_game_data_ui_text_fn callback, void *userdata);
 
     /**
      * @brief Iterate authored UI images visible to the active scene.

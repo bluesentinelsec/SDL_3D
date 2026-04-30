@@ -4,11 +4,13 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include <stdbool.h>
+#include <string.h>
 
 #include "sdl3d/asset.h"
 #include "sdl3d/game.h"
 #include "sdl3d/game_data.h"
 #include "sdl3d/game_presentation.h"
+#include "sdl3d/properties.h"
 
 #if SDL3D_PONG_EMBEDDED_ASSETS
 #include "sdl3d_pong_assets.h"
@@ -23,7 +25,52 @@ typedef struct pong_state
     sdl3d_game_data_particle_cache particle_cache;
     sdl3d_game_data_app_flow app_flow;
     sdl3d_game_data_frame_state frame_state;
+    sdl3d_input_manager *input;
+    int paddle_hit_connection;
+    int vibration_connection;
+    int ball_hit_signal_id;
+    int vibration_signal_id;
 } pong_state;
+
+static void on_gamepad_feedback(void *userdata, int signal_id, const sdl3d_properties *payload)
+{
+    pong_state *state = (pong_state *)userdata;
+    const sdl3d_registered_actor *settings =
+        state != NULL ? sdl3d_game_data_find_actor(state->data, "entity.settings") : NULL;
+    const bool vibration_enabled = settings != NULL && sdl3d_properties_get_bool(settings->props, "vibration", false);
+    const char *other_actor_name =
+        payload != NULL ? sdl3d_properties_get_string(payload, "other_actor_name", NULL) : NULL;
+
+    if (state == NULL || state->input == NULL)
+    {
+        return;
+    }
+
+    if (signal_id == state->vibration_signal_id)
+    {
+        if (!sdl3d_input_rumble_all_gamepads(state->input, 0.30f, 0.70f, 100))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "Pong vibration feedback requested but no rumble-capable gamepad accepted it");
+        }
+        return;
+    }
+
+    if (!vibration_enabled)
+    {
+        return;
+    }
+
+    if (signal_id == state->ball_hit_signal_id && other_actor_name != NULL &&
+        SDL_strcmp(other_actor_name, "entity.paddle.player") == 0)
+    {
+        if (!sdl3d_input_rumble_all_gamepads(state->input, 0.45f, 0.75f, 120))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "Pong paddle hit rumble requested but no rumble-capable gamepad accepted it");
+        }
+    }
+}
 
 static bool mount_pong_assets(sdl3d_asset_resolver *assets, char *error, int error_size)
 {
@@ -94,6 +141,32 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
         state->assets = NULL;
         return false;
     }
+
+    state->input = sdl3d_game_session_get_input(ctx->session);
+    const int gamepad_count = state->input != NULL ? sdl3d_input_gamepad_count(state->input) : 0;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong gamepad count at init: %d", gamepad_count);
+    for (int i = 0; i < gamepad_count; ++i)
+    {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong gamepad slot: slot=%d id=%d connected=%d", i,
+                    sdl3d_input_gamepad_id_at(state->input, i), sdl3d_input_gamepad_is_connected(state->input, i));
+    }
+    state->paddle_hit_connection = 0;
+    state->vibration_connection = 0;
+    state->ball_hit_signal_id = sdl3d_game_data_find_signal(state->data, "signal.ball.hit_paddle");
+    state->vibration_signal_id = sdl3d_game_data_find_signal(state->data, "signal.settings.vibration");
+    if (state->input != NULL)
+    {
+        if (state->ball_hit_signal_id >= 0)
+        {
+            state->paddle_hit_connection = sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(ctx->session),
+                                                                state->ball_hit_signal_id, on_gamepad_feedback, state);
+        }
+        if (state->vibration_signal_id >= 0)
+        {
+            state->vibration_connection = sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(ctx->session),
+                                                               state->vibration_signal_id, on_gamepad_feedback, state);
+        }
+    }
     return true;
 }
 
@@ -158,6 +231,17 @@ static void pong_shutdown(sdl3d_game_context *ctx, void *userdata)
     sdl3d_game_data_particle_cache_free(&state->particle_cache);
     sdl3d_game_data_image_cache_free(&state->image_cache);
     sdl3d_game_data_font_cache_free(&state->font_cache);
+    if (state->paddle_hit_connection > 0)
+    {
+        sdl3d_signal_disconnect(sdl3d_game_session_get_signal_bus(ctx->session), state->paddle_hit_connection);
+        state->paddle_hit_connection = 0;
+    }
+    if (state->vibration_connection > 0)
+    {
+        sdl3d_signal_disconnect(sdl3d_game_session_get_signal_bus(ctx->session), state->vibration_connection);
+        state->vibration_connection = 0;
+    }
+    state->input = NULL;
     sdl3d_game_data_destroy(state->data);
     state->data = NULL;
     sdl3d_asset_resolver_destroy(state->assets);

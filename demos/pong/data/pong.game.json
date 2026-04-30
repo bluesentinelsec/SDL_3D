@@ -111,6 +111,8 @@
     "standard_options": {
       "settings": "entity.settings",
       "return_scene": "scene.title",
+      "single_scene": true,
+      "menu_state_key": "options_menu",
       "scenes": {
         "root": "scene.options",
         "display": "scene.options.display",
@@ -132,13 +134,15 @@
         "down": "action.menu.down",
         "left": "action.menu.left",
         "right": "action.menu.right",
-        "select": "action.menu.select"
+        "select": "action.menu.select",
+        "back": "action.menu.back"
       },
       "signals": {
         "move": "signal.ui.menu.move",
         "select": "signal.ui.menu.select",
         "apply": "signal.settings.apply",
         "apply_audio": "signal.settings.apply_audio",
+        "vibration": "signal.settings.vibration",
         "reset_display": "signal.settings.reset_display",
         "reset_keyboard": "signal.settings.reset_keyboard",
         "reset_mouse": "signal.settings.reset_mouse",
@@ -153,12 +157,26 @@
         "enter": "scene_in",
         "exit": "scene_out"
       },
+      "background": {
+        "renders_world": true,
+        "camera": "camera.overhead",
+        "entities": [
+          "entity.options.background.base",
+          "entity.options.glow.magenta",
+          "entity.options.glow.cyan",
+          "entity.options.glow.gold",
+          "entity.options.flow.magenta",
+          "entity.options.flow.cyan",
+          "entity.options.flow.gold"
+        ]
+      },
       "theme": {
         "title_color": [242, 248, 255, 255],
         "menu_color": [225, 236, 255, 245],
         "selected_color": [255, 245, 208, 255],
         "cursor_color": [255, 222, 140, 255],
         "status_color": [255, 222, 140, 230],
+        "divider_color": [126, 168, 238, 170],
         "cursor": ">",
         "slider_left": "[",
         "slider_fill": "#",
@@ -170,44 +188,51 @@
         "menu_x": 0.5,
         "status_x": 0.5,
         "status_y": 0.88,
-        "menu_align": "center",
-        "cursor_align": "center",
+        "menu_align": "left",
+        "cursor_align": "right",
         "selected_pulse_alpha": true,
+        "title_divider": true,
         "root": {
           "title_y": 0.18,
+          "menu_x": 0.43,
           "menu_y": 0.36,
           "gap": 0.078,
-          "cursor_offset_x": -0.14
+          "cursor_offset_x": -0.035
         },
         "display": {
           "title_y": 0.2,
+          "menu_x": 0.3,
           "menu_y": 0.38,
           "gap": 0.074,
-          "cursor_offset_x": -0.18
+          "cursor_offset_x": -0.035
         },
         "keyboard": {
           "title_y": 0.13,
-          "menu_y": 0.25,
+          "menu_x": 0.36,
+          "menu_y": 0.29,
           "gap": 0.062,
-          "cursor_offset_x": -0.18
+          "cursor_offset_x": -0.035
         },
         "mouse": {
           "title_y": 0.13,
+          "menu_x": 0.4,
           "menu_y": 0.30,
           "gap": 0.062,
-          "cursor_offset_x": -0.18
+          "cursor_offset_x": -0.035
         },
         "gamepad": {
-          "title_y": 0.12,
-          "menu_y": 0.22,
-          "gap": 0.052,
-          "cursor_offset_x": -0.18
+          "title_y": 0.105,
+          "menu_x": 0.34,
+          "menu_y": 0.24,
+          "gap": 0.055,
+          "cursor_offset_x": -0.035
         },
         "audio": {
           "title_y": 0.18,
+          "menu_x": 0.34,
           "menu_y": 0.39,
           "gap": 0.078,
-          "cursor_offset_x": -0.18
+          "cursor_offset_x": -0.035
         }
       },
       "bindings": {
@@ -546,14 +571,16 @@
             "name": "action.menu.up",
             "bindings": [
               { "device": "keyboard", "key": "UP" },
-              { "device": "gamepad", "button": "DPAD_UP" }
+              { "device": "gamepad", "button": "DPAD_UP" },
+              { "device": "gamepad", "axis": "left_y", "scale": -1.0 }
             ]
           },
           {
             "name": "action.menu.down",
             "bindings": [
               { "device": "keyboard", "key": "DOWN" },
-              { "device": "gamepad", "button": "DPAD_DOWN" }
+              { "device": "gamepad", "button": "DPAD_DOWN" },
+              { "device": "gamepad", "axis": "left_y", "scale": 1.0 }
             ]
           },
           {
@@ -561,7 +588,8 @@
             "bindings": [
               { "device": "keyboard", "key": "LEFT" },
               { "device": "keyboard", "key": "A" },
-              { "device": "gamepad", "button": "DPAD_LEFT" }
+              { "device": "gamepad", "button": "DPAD_LEFT" },
+              { "device": "gamepad", "axis": "left_x", "scale": -1.0 }
             ]
           },
           {
@@ -569,7 +597,15 @@
             "bindings": [
               { "device": "keyboard", "key": "RIGHT" },
               { "device": "keyboard", "key": "D" },
-              { "device": "gamepad", "button": "DPAD_RIGHT" }
+              { "device": "gamepad", "button": "DPAD_RIGHT" },
+              { "device": "gamepad", "axis": "left_x", "scale": 1.0 }
+            ]
+          },
+          {
+            "name": "action.menu.back",
+            "bindings": [
+              { "device": "keyboard", "key": "ESCAPE" },
+              { "device": "gamepad", "button": "EAST" }
             ]
           },
           {
@@ -1035,6 +1071,176 @@
       }
     },
     {
+      "name": "entity.options.background.base",
+      "active": true,
+      "tags": ["render", "options", "background"],
+      "transform": { "position": [0.0, 0.0, -0.65] },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [22.0, 13.0, 0.08],
+          "color": [0, 0, 0, 255],
+          "lighting": false
+        }
+      ]
+    },
+    {
+      "name": "entity.options.glow.magenta",
+      "active": true,
+      "tags": ["render", "options", "background"],
+      "transform": { "position": [-4.6, -1.9, -0.30] },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 1.05,
+          "rings": 16,
+          "slices": 24,
+          "color": [205, 42, 178, 118],
+          "emissive": true,
+          "effects": [
+            { "type": "drift", "offset": [0.95, 0.55, 0.0], "rates": [0.34, 0.27, 0.0], "phase": 0.3 },
+            { "type": "pulse", "rate": 1.25, "phase": 0.3, "radius_add": 0.28, "color": [255, 78, 212, 154], "emissive_base": [0.16, 0.02, 0.14], "emissive_add": [0.42, 0.05, 0.30] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.options.glow.cyan",
+      "active": true,
+      "tags": ["render", "options", "background"],
+      "transform": { "position": [3.9, 0.65, -0.28] },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 1.18,
+          "rings": 16,
+          "slices": 24,
+          "color": [38, 198, 220, 112],
+          "emissive": true,
+          "effects": [
+            { "type": "drift", "offset": [0.75, 0.70, 0.0], "rates": [0.22, 0.31, 0.0], "phase": 1.4 },
+            { "type": "pulse", "rate": 1.05, "phase": 1.4, "radius_add": 0.34, "color": [80, 236, 255, 146], "emissive_base": [0.03, 0.16, 0.19], "emissive_add": [0.05, 0.34, 0.42] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.options.glow.gold",
+      "active": true,
+      "tags": ["render", "options", "background"],
+      "transform": { "position": [0.7, -3.20, -0.22] },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.82,
+          "rings": 16,
+          "slices": 24,
+          "color": [255, 155, 42, 96],
+          "emissive": true,
+          "effects": [
+            { "type": "drift", "offset": [1.10, 0.45, 0.0], "rates": [0.29, 0.19, 0.0], "phase": 2.1 },
+            { "type": "pulse", "rate": 1.40, "phase": 2.1, "radius_add": 0.22, "color": [255, 206, 84, 138], "emissive_base": [0.15, 0.07, 0.01], "emissive_add": [0.34, 0.18, 0.04] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.options.flow.magenta",
+      "active": true,
+      "tags": ["effect", "particles", "options"],
+      "transform": { "position": [-3.8, -4.8, -0.10] },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [2.2, 0.35, 0.05],
+          "direction": [0.16, 1.0, 0.0],
+          "spread": 0.48,
+          "speed_min": 0.18,
+          "speed_max": 0.48,
+          "lifetime_min": 6.0,
+          "lifetime_max": 9.5,
+          "size_start": 0.035,
+          "size_end": 0.008,
+          "gravity": 0.0,
+          "max_particles": 130,
+          "emit_rate": 20.0,
+          "color_start": [245, 62, 195, 82],
+          "color_end": [255, 104, 223, 0],
+          "emissive_intensity": 1.45,
+          "camera_facing": true,
+          "depth_test": false,
+          "additive_blend": true,
+          "draw_emissive": [1.0, 0.15, 0.78],
+          "random_seed": 3093511
+        }
+      ]
+    },
+    {
+      "name": "entity.options.flow.cyan",
+      "active": true,
+      "tags": ["effect", "particles", "options"],
+      "transform": { "position": [3.2, -4.5, -0.08] },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [2.6, 0.35, 0.05],
+          "direction": [-0.12, 1.0, 0.0],
+          "spread": 0.52,
+          "speed_min": 0.16,
+          "speed_max": 0.42,
+          "lifetime_min": 6.4,
+          "lifetime_max": 10.0,
+          "size_start": 0.035,
+          "size_end": 0.008,
+          "gravity": 0.0,
+          "max_particles": 135,
+          "emit_rate": 20.0,
+          "color_start": [62, 222, 255, 78],
+          "color_end": [120, 245, 255, 0],
+          "emissive_intensity": 1.45,
+          "camera_facing": true,
+          "depth_test": false,
+          "additive_blend": true,
+          "draw_emissive": [0.18, 0.95, 1.0],
+          "random_seed": 742019
+        }
+      ]
+    },
+    {
+      "name": "entity.options.flow.gold",
+      "active": true,
+      "tags": ["effect", "particles", "options"],
+      "transform": { "position": [0.1, -5.0, -0.05] },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [1.8, 0.25, 0.05],
+          "direction": [0.05, 1.0, 0.0],
+          "spread": 0.38,
+          "speed_min": 0.12,
+          "speed_max": 0.36,
+          "lifetime_min": 5.8,
+          "lifetime_max": 9.0,
+          "size_start": 0.03,
+          "size_end": 0.007,
+          "gravity": 0.0,
+          "max_particles": 85,
+          "emit_rate": 12.0,
+          "color_start": [255, 178, 54, 72],
+          "color_end": [255, 225, 104, 0],
+          "emissive_intensity": 1.35,
+          "camera_facing": true,
+          "depth_test": false,
+          "additive_blend": true,
+          "draw_emissive": [1.0, 0.62, 0.12],
+          "random_seed": 919571
+        }
+      ]
+    },
+    {
       "name": "entity.effect.ambient_particles",
       "active": true,
       "tags": ["effect", "particles"],
@@ -1087,6 +1293,7 @@
     "signal.persistence.save_options",
     "signal.settings.apply",
     "signal.settings.apply_audio",
+    "signal.settings.vibration",
     "signal.settings.reset_display",
     "signal.settings.reset_keyboard",
     "signal.settings.reset_mouse",
@@ -1266,6 +1473,12 @@
         "actions": [
           { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["gamepad_icons", "vibration"] },
           { "type": "input.reset_bindings", "menu": "menu.options.gamepad" },
+          { "type": "signal.emit", "signal": "signal.persistence.save_options" }
+        ]
+      },
+      {
+        "signal": "signal.settings.vibration",
+        "actions": [
           { "type": "signal.emit", "signal": "signal.persistence.save_options" }
         ]
       },

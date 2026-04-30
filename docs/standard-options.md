@@ -85,6 +85,8 @@ Configure the package under `scenes.standard_options`:
   "standard_options": {
     "settings": "entity.settings",
     "return_scene": "scene.title",
+    "single_scene": true,
+    "menu_state_key": "options_menu",
     "scenes": {
       "root": "scene.options",
       "display": "scene.options.display",
@@ -118,6 +120,14 @@ Configure the package under `scenes.standard_options`:
       "reset_mouse": "signal.settings.reset_mouse",
       "reset_gamepad": "signal.settings.reset_gamepad",
       "reset_audio": "signal.settings.reset_audio"
+    },
+    "background": {
+      "renders_world": true,
+      "camera": "camera.overhead",
+      "entities": [
+        "entity.options.background.base",
+        "entity.options.flow.magenta"
+      ]
     }
   }
 }
@@ -126,6 +136,20 @@ Configure the package under `scenes.standard_options`:
 Omitted names fall back to the values shown above. Games should still author the
 names explicitly once the project is more than a prototype; explicit IDs make
 large projects easier to search and review.
+
+`single_scene` is optional and defaults to `false`. When enabled, the root
+options scene contains every standard options menu. Root menu items and child
+Back items set `menu_state_key` in scene state instead of changing scenes, so
+related submenus switch instantly and keep the same animated background,
+particles, and lighting.
+
+## Backgrounds
+
+`background` is optional. If omitted, generated options scenes render no world
+entities. If present, every generated options scene uses the same `renders_world`
+value, camera, and entity filter. This is intended for reusable menu backdrops
+such as particles, animated logo geometry, or authored lighting effects while
+keeping unrelated gameplay entities out of options scenes.
 
 ## Rebindable Actions
 
@@ -244,6 +268,7 @@ slider glyphs, alignment, and per-screen layout:
     "selected_color": [255, 245, 208, 255],
     "cursor_color": [255, 222, 140, 255],
     "status_color": [255, 222, 140, 230],
+    "divider_color": [126, 168, 238, 170],
     "cursor": ">",
     "slider_left": "[",
     "slider_fill": "#",
@@ -255,10 +280,11 @@ slider glyphs, alignment, and per-screen layout:
     "menu_x": 0.5,
     "status_x": 0.5,
     "status_y": 0.88,
-    "menu_align": "center",
-    "cursor_align": "center",
+    "menu_align": "left",
+    "cursor_align": "right",
     "selected_pulse_alpha": true,
-    "audio": { "title_y": 0.18, "menu_y": 0.39, "gap": 0.078, "cursor_offset_x": -0.18 }
+    "title_divider": true,
+    "audio": { "title_y": 0.18, "menu_x": 0.34, "menu_y": 0.39, "gap": 0.078, "cursor_offset_x": -0.035 }
   }
 }
 ```
