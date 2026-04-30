@@ -34,6 +34,7 @@
       "select_signal": "signal.ui.menu.select",
       "selected": 0,
       "items": [
+        { "label": "Start Game", "signal": "signal.multiplayer.lobby.start" },
         { "label": "Back", "scene": "scene.multiplayer.lan" }
       ]
     }
@@ -53,12 +54,38 @@
       {
         "name": "ui.multiplayer.lobby.status",
         "font": "font.hud",
-        "text": "WAITING FOR PLAYER 2",
+        "format": "%s",
+        "bindings": [
+          { "type": "scene_state", "key": "multiplayer_host_status" }
+        ],
         "x": 0.5,
         "y": 0.34,
         "normalized": true,
         "centered": true,
         "color": [225, 236, 255, 245]
+      },
+      {
+        "name": "ui.multiplayer.lobby.endpoint",
+        "font": "font.hud",
+        "format": "%s",
+        "bindings": [
+          { "type": "scene_state", "key": "multiplayer_host_endpoint" }
+        ],
+        "x": 0.5,
+        "y": 0.42,
+        "normalized": true,
+        "centered": true,
+        "color": [255, 245, 208, 255]
+      },
+      {
+        "name": "ui.multiplayer.lobby.hint",
+        "font": "font.hud",
+        "text": "Press Start Game after the client joins.",
+        "x": 0.5,
+        "y": 0.50,
+        "normalized": true,
+        "centered": true,
+        "color": [225, 236, 255, 230]
       }
     ],
     "menus": [
@@ -67,7 +94,7 @@
         "menu": "menu.multiplayer.lobby",
         "font": "font.hud",
         "x": 0.45,
-        "y": 0.52,
+        "y": 0.60,
         "gap": 0.09,
         "normalized": true,
         "align": "left",

@@ -949,6 +949,7 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     const char *paddle_tags[] = {"paddle", "player"};
     EXPECT_NE(sdl3d_game_data_find_actor_with_tags(runtime, paddle_tags, 2), nullptr);
     EXPECT_GE(sdl3d_game_data_find_signal(runtime, "signal.ball.serve"), 0);
+    EXPECT_GE(sdl3d_game_data_find_signal(runtime, "signal.multiplayer.lobby.start"), 0);
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.paddle.up"), 0);
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.paddle.local.up"), 0);
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.paddle.local.down"), 0);
@@ -1408,6 +1409,19 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
     EXPECT_STREQ(item.label, "Join Match");
     EXPECT_STREQ(item.scene, "scene.multiplayer.join");
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer.lobby"));
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.multiplayer.lobby");
+    EXPECT_EQ(menu.item_count, 2);
+    const int lobby_start_signal = sdl3d_game_data_find_signal(runtime, "signal.multiplayer.lobby.start");
+    ASSERT_GE(lobby_start_signal, 0);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Start Game");
+    EXPECT_EQ(item.signal_id, lobby_start_signal);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    EXPECT_STREQ(item.label, "Back");
+    EXPECT_STREQ(item.scene, "scene.multiplayer.lan");
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer.join"));
     EXPECT_TRUE(sdl3d_game_data_active_scene_renders_world(runtime));

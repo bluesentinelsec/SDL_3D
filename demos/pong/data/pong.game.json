@@ -1430,6 +1430,7 @@
     "signal.settings.reset_mouse",
     "signal.settings.reset_gamepad",
     "signal.settings.reset_audio",
+    "signal.multiplayer.lobby.start",
     "signal.multiplayer.discovery.refresh",
     "signal.ui.menu.move",
     "signal.ui.menu.select",
