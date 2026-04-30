@@ -477,6 +477,15 @@ TEST_F(PongHeadlessMultiplayerTest, HostAppliesRemoteInputAndClientReceivesAutho
     ASSERT_NE(client_cpu, nullptr);
 
     const float initial_host_cpu_y = host_cpu->position.y;
+    const float initial_client_cpu_y = client_cpu->position.y;
+
+    ASSERT_TRUE(sdl3d_game_session_tick(host_session, 0.25f));
+    ASSERT_TRUE(sdl3d_game_data_update(host_runtime, 0.25f));
+    ASSERT_TRUE(sdl3d_game_session_tick(client_session, 0.25f));
+    ASSERT_TRUE(sdl3d_game_data_update(client_runtime, 0.25f));
+
+    EXPECT_FLOAT_EQ(host_cpu->position.y, initial_host_cpu_y);
+    EXPECT_FLOAT_EQ(client_cpu->position.y, initial_client_cpu_y);
 
     sdl3d_input_set_action_override(sdl3d_game_session_get_input(client_session), p2_up, 1.0f);
     sdl3d_input_set_action_override(sdl3d_game_session_get_input(client_session), p2_down, 0.0f);

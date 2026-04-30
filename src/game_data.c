@@ -7909,6 +7909,11 @@ static void update_control_components(sdl3d_game_data_runtime *runtime, yyjson_v
         {
             yyjson_val *component = yyjson_arr_get(components, c);
             const char *type = json_string(component, "type", "");
+            yyjson_val *enabled_if = obj_get(component, "enabled_if");
+            if (enabled_if != NULL && !eval_data_condition(runtime, enabled_if, NULL))
+            {
+                continue;
+            }
             if (SDL_strcmp(type, "control.axis_1d") == 0 && input != NULL)
             {
                 const int negative = sdl3d_game_data_find_action(runtime, json_string(component, "negative", NULL));

@@ -891,7 +891,12 @@
           ]
         },
         { "type": "collision.aabb", "half_extents": [0.18, 0.95, 0.14] },
-        { "type": "adapter.controller", "adapter": "adapter.pong.cpu_track_ball", "target": "entity.ball" },
+        {
+          "type": "adapter.controller",
+          "adapter": "adapter.pong.cpu_track_ball",
+          "target": "entity.ball",
+          "enabled_if": { "type": "scene_state.compare", "key": "match_mode", "op": "==", "value": "single" }
+        },
         { "type": "control.axis_1d", "axis": "y", "negative": "action.paddle.local.down", "positive": "action.paddle.local.up" }
       ]
     },

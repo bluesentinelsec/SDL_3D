@@ -3438,8 +3438,12 @@ TEST(GameDataRuntime, LuaControllerMovesCpuPaddleTowardBall)
     cpu->position.y = 0.0f;
     sdl3d_properties_set_vec3(ball->props, "origin", ball->position);
     sdl3d_properties_set_vec3(cpu->props, "origin", cpu->position);
-
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
+    sdl3d_properties *payload = sdl3d_properties_create();
+    ASSERT_NE(payload, nullptr);
+    sdl3d_properties_set_string(payload, "match_mode", "single");
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene_with_payload(runtime, "scene.play", payload));
+    sdl3d_properties_destroy(payload);
+    sdl3d_properties_set_string(sdl3d_game_data_mutable_scene_state(runtime), "match_mode", "single");
     ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.1f));
 
     EXPECT_GT(cpu->position.y, 0.0f);
