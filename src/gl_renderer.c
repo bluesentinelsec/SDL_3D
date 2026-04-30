@@ -522,7 +522,7 @@ static const char k_pbr_frag_main[] =
     "        Lo += (diff + spec) * radiance * NdotL;\n"
     "    }\n";
 
-static const char k_pbr_frag_post[] =
+static const char k_pbr_frag_shadow_post[] =
     "\n"
     "    vec3 color;\n"
     "    if (uBakedLightMode != 0) {\n"
@@ -560,16 +560,28 @@ static const char k_pbr_frag_post[] =
     "            Lo *= (1.0 - shadow);\n"
     "        }\n"
     "\n"
-    "        /* Point light shadows. */\n"
-    "        for (int ps = 0; ps < uPointShadowCount && ps < 2; ps++) {\n"
-    "            vec3 fragToLight = vWorldPos - uPointShadowLightPos[ps];\n"
-    "            float closestDepth = texture(uPointShadowMap[ps], fragToLight).r * uPointShadowFar[ps];\n"
+    "        /* Point light shadows. Keep sampler indexes constant for GLSL drivers\n"
+    "         * that reject dynamic indexing into sampler arrays. */\n"
+    "        if (uPointShadowCount > 0) {\n"
+    "            vec3 fragToLight = vWorldPos - uPointShadowLightPos[0];\n"
+    "            float closestDepth = texture(uPointShadowMap[0], fragToLight).r * uPointShadowFar[0];\n"
     "            float currentDepth = length(fragToLight);\n"
     "            float pbias = 0.15;\n"
     "            if (currentDepth - pbias > closestDepth) {\n"
     "                Lo *= 0.5;\n"
     "            }\n"
     "        }\n"
+    "        if (uPointShadowCount > 1) {\n"
+    "            vec3 fragToLight = vWorldPos - uPointShadowLightPos[1];\n"
+    "            float closestDepth = texture(uPointShadowMap[1], fragToLight).r * uPointShadowFar[1];\n"
+    "            float currentDepth = length(fragToLight);\n"
+    "            float pbias = 0.15;\n"
+    "            if (currentDepth - pbias > closestDepth) {\n"
+    "                Lo *= 0.5;\n"
+    "            }\n"
+    "        }\n";
+
+static const char k_pbr_frag_light_post[] =
     "\n"
     "        /* Ambient: IBL when available, hemisphere fallback. */\n"
     "        vec3 ambient;\n"
@@ -2372,11 +2384,12 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     const char *version_prefix = ctx->is_es ? "#version 300 es\nprecision highp float;\n" : "#version 330\n";
 
     /* Compile shader programs. */
-    /* PBR frag is split into two arrays to stay under C99 string length limits. */
+    /* PBR frag is split into chunks to stay under C99 string length limits. */
     {
         GLuint vs = compile_shader(gl, GL_VERTEX_SHADER, version_prefix, k_pbr_vert);
-        const char *frag_srcs[4] = {version_prefix, k_pbr_frag_decl, k_pbr_frag_main, k_pbr_frag_post};
-        GLuint fs = vs ? compile_shader_multi(gl, GL_FRAGMENT_SHADER, 4, frag_srcs) : 0;
+        const char *frag_srcs[5] = {version_prefix, k_pbr_frag_decl, k_pbr_frag_main, k_pbr_frag_shadow_post,
+                                    k_pbr_frag_light_post};
+        GLuint fs = vs ? compile_shader_multi(gl, GL_FRAGMENT_SHADER, 5, frag_srcs) : 0;
         ctx->pbr_program = (vs && fs) ? link_program(gl, vs, fs) : 0;
         if (vs)
             gl->DeleteShader(vs);
