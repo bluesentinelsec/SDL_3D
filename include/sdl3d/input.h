@@ -215,6 +215,25 @@ extern "C"
     /** @brief Remove all bindings for an action. */
     void sdl3d_input_unbind_action(sdl3d_input_manager *input, int action_id);
 
+    /**
+     * @brief Override an action's runtime value for the next input update.
+     *
+     * When an override is active, the injected value replaces live bindings
+     * for that action until it is cleared. This is intended for gameplay
+     * systems that need to feed authored actions from non-physical sources
+     * such as network packets, scripted AI, or deterministic playback.
+     *
+     * Passing a value in [-1, 1] is recommended. Digital actions usually use
+     * 0 or 1.
+     */
+    void sdl3d_input_set_action_override(sdl3d_input_manager *input, int action_id, float value);
+
+    /** @brief Clear one action override and resume live bindings for that action. */
+    void sdl3d_input_clear_action_override(sdl3d_input_manager *input, int action_id);
+
+    /** @brief Clear all action overrides and resume live bindings. */
+    void sdl3d_input_clear_action_overrides(sdl3d_input_manager *input);
+
     /* ================================================================== */
     /* Gamepad state                                                      */
     /* ================================================================== */

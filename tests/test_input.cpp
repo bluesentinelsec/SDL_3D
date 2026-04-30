@@ -535,6 +535,33 @@ TEST(Input, UnbindActionRemovesBindings)
     EXPECT_FALSE(sdl3d_input_is_held(input.input, action));
 }
 
+TEST(Input, ActionOverrideReplacesLiveBindings)
+{
+    InputPtr input;
+    int action = sdl3d_input_register_action(input.input, "move");
+    sdl3d_input_bind_key(input.input, action, SDL_SCANCODE_W);
+
+    sdl3d_input_set_action_override(input.input, action, 1.0f);
+    sdl3d_input_update(input.input, 1);
+    EXPECT_TRUE(sdl3d_input_is_pressed(input.input, action));
+    EXPECT_TRUE(sdl3d_input_is_held(input.input, action));
+    EXPECT_FLOAT_EQ(1.0f, sdl3d_input_get_value(input.input, action));
+
+    sdl3d_input_clear_action_override(input.input, action);
+    sdl3d_input_update(input.input, 2);
+    EXPECT_FALSE(sdl3d_input_is_held(input.input, action));
+    EXPECT_FALSE(sdl3d_input_is_pressed(input.input, action));
+
+    sdl3d_input_set_action_override(input.input, action, -0.5f);
+    sdl3d_input_update(input.input, 3);
+    EXPECT_TRUE(sdl3d_input_is_held(input.input, action));
+    EXPECT_FLOAT_EQ(-0.5f, sdl3d_input_get_value(input.input, action));
+
+    sdl3d_input_clear_action_overrides(input.input);
+    sdl3d_input_update(input.input, 4);
+    EXPECT_FALSE(sdl3d_input_is_held(input.input, action));
+}
+
 TEST(Input, AnyPressedTracksUnboundAndBoundButtonLikeInput)
 {
     InputPtr input;
@@ -640,6 +667,9 @@ TEST(Input, NullSafety)
     EXPECT_EQ(nullptr, sdl3d_input_get_snapshot(nullptr));
     sdl3d_input_bind_fps_defaults(nullptr);
     sdl3d_input_bind_ui_defaults(nullptr);
+    sdl3d_input_set_action_override(nullptr, 0, 1.0f);
+    sdl3d_input_clear_action_override(nullptr, 0);
+    sdl3d_input_clear_action_overrides(nullptr);
     sdl3d_input_set_deadzone(nullptr, 0.2f);
 }
 
