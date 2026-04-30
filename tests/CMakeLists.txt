@@ -100,6 +100,7 @@ set(SDL3D_TEST_SOURCES
     test_audio.cpp
     test_effects.cpp
     test_game.cpp
+    test_pong_multiplayer.cpp
     test_game_session.cpp
     test_input.cpp
     test_transition.cpp
@@ -202,6 +203,12 @@ else()
     sdl3d_add_test(sdl3d_audio_test test_audio.cpp unit)
     sdl3d_add_test(sdl3d_effects_test test_effects.cpp unit)
     sdl3d_add_test(sdl3d_game_test test_game.cpp render)
+    sdl3d_add_test(sdl3d_pong_multiplayer_test test_pong_multiplayer.cpp unit)
+    target_compile_definitions(
+        sdl3d_pong_multiplayer_test
+        PRIVATE
+            SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
+    )
     sdl3d_add_test(sdl3d_game_session_test test_game_session.cpp unit)
     if(SDL3D_ENABLE_NETWORKING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         sdl3d_add_test(sdl3d_network_test test_network.cpp unit)
