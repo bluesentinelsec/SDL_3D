@@ -180,6 +180,7 @@ bool sdl3d_game_session_create(const sdl3d_game_session_desc *desc, sdl3d_game_s
             sdl3d_game_session_destroy(session);
             return false;
         }
+        sdl3d_input_bind_ui_defaults(session->input);
     }
 
     if (session_owns_service(effective, SDL3D_GAME_SESSION_SERVICE_AUDIO))

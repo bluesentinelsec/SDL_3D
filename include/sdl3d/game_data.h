@@ -468,6 +468,8 @@ extern "C"
         int right_action_id;
         /** @brief Input action that activates the selected item, or -1. */
         int select_action_id;
+        /** @brief Input action that activates the menu's back item, or -1. */
+        int back_action_id;
         /** @brief Signal emitted after successful navigation, or -1. */
         int move_signal_id;
         /** @brief Signal emitted when the selected item is activated, or -1. */

@@ -59,10 +59,12 @@ typedef struct standard_options_config
     const char *left_action;
     const char *right_action;
     const char *select_action;
+    const char *back_action;
     const char *move_signal;
     const char *select_signal;
     const char *apply_signal;
     const char *apply_audio_signal;
+    const char *vibration_signal;
     const char *reset_display_signal;
     const char *reset_keyboard_signal;
     const char *reset_mouse_signal;
@@ -242,7 +244,9 @@ static bool add_scene_input(yyjson_mut_doc *doc, yyjson_mut_val *scene, const st
     if (include_lr &&
         (!add_arr_str(doc, actions, config->left_action) || !add_arr_str(doc, actions, config->right_action)))
         return false;
-    return add_arr_str(doc, actions, config->select_action);
+    if (!add_arr_str(doc, actions, config->select_action))
+        return false;
+    return config->back_action == NULL || add_arr_str(doc, actions, config->back_action);
 }
 
 static bool add_scene_transitions(yyjson_mut_doc *doc, yyjson_mut_val *scene, const standard_options_config *config)
@@ -295,6 +299,7 @@ static yyjson_mut_val *add_menu(yyjson_mut_doc *doc, yyjson_mut_val *scene, cons
                        !add_str(doc, menu, "right_action", config->right_action)))
         return NULL;
     if (!add_str(doc, menu, "select_action", config->select_action) ||
+        (config->back_action != NULL && !add_str(doc, menu, "back_action", config->back_action)) ||
         !add_str(doc, menu, "move_signal", config->move_signal) ||
         !add_str(doc, menu, "select_signal", config->select_signal) ||
         !add_scene_state_condition(doc, menu, "active_if", config, active_state, default_active) ||
@@ -637,7 +642,7 @@ static bool add_gamepad_content(yyjson_mut_doc *doc, yyjson_mut_val *scene, cons
     yyjson_mut_val *ui = NULL;
     yyjson_mut_val *texts = NULL;
     return items != NULL && add_gamepad_icons_item(doc, items, config) &&
-           add_toggle_item(doc, items, "Vibration", NULL, config->settings_actor, "vibration") &&
+           add_toggle_item(doc, items, "Vibration", config->vibration_signal, config->settings_actor, "vibration") &&
            add_input_binding_items(doc, items, obj_get(config->bindings, "gamepad")) &&
            add_reset_item(doc, items, config->reset_gamepad_signal) &&
            (active_state != NULL ? add_menu_state_item(doc, items, config, "Back", "root")
@@ -691,9 +696,9 @@ static yyjson_doc *build_root_scene(const standard_options_config *config)
 static yyjson_doc *build_display_scene(const standard_options_config *config)
 {
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
-    yyjson_mut_val *scene = doc != NULL ? create_scene(doc, config, config->display_scene, false) : NULL;
+    yyjson_mut_val *scene = doc != NULL ? create_scene(doc, config, config->display_scene, true) : NULL;
     yyjson_mut_val *items =
-        scene != NULL ? add_menu(doc, scene, config, config->display_menu, false, NULL, false) : NULL;
+        scene != NULL ? add_menu(doc, scene, config, config->display_menu, true, NULL, false) : NULL;
     if (items == NULL || !add_display_mode_item(doc, items, config) ||
         !add_toggle_item(doc, items, "Vsync", config->apply_signal, config->settings_actor, "vsync") ||
         !add_renderer_item(doc, items, config) || !add_reset_item(doc, items, config->reset_display_signal) ||
@@ -869,10 +874,12 @@ static bool load_config(yyjson_val *game_root, const char *package_name, standar
     config->left_action = section_string(root, "actions", "left", "action.menu.left");
     config->right_action = section_string(root, "actions", "right", "action.menu.right");
     config->select_action = section_string(root, "actions", "select", "action.menu.select");
+    config->back_action = section_string(root, "actions", "back", NULL);
     config->move_signal = section_string(root, "signals", "move", "signal.ui.menu.move");
     config->select_signal = section_string(root, "signals", "select", "signal.ui.menu.select");
     config->apply_signal = section_string(root, "signals", "apply", "signal.settings.apply");
     config->apply_audio_signal = section_string(root, "signals", "apply_audio", "signal.settings.apply_audio");
+    config->vibration_signal = section_string(root, "signals", "vibration", "signal.settings.vibration");
     config->reset_display_signal = section_string(root, "signals", "reset_display", "signal.settings.reset_display");
     config->reset_keyboard_signal = section_string(root, "signals", "reset_keyboard", "signal.settings.reset_keyboard");
     config->reset_mouse_signal = section_string(root, "signals", "reset_mouse", "signal.settings.reset_mouse");

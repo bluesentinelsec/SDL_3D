@@ -2381,6 +2381,62 @@ TEST(GameDataRuntime, GamepadOptionsCaptureAndApplyAuthoredInputBindings)
     sdl3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, OptionsMenusUseGamepadAxesAndBack)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
+
+    sdl3d_game_data_menu menu{};
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_GE(menu.back_action_id, 0);
+
+    sdl3d_game_data_menu_item item{};
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_CHOICE);
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+
+    SDL_Event event{};
+    event.type = SDL_EVENT_GAMEPAD_ADDED;
+    event.gdevice.which = 2041;
+    sdl3d_input_process_event(input, &event);
+
+    event.type = SDL_EVENT_GAMEPAD_AXIS_MOTION;
+    event.gaxis.which = 2041;
+    event.gaxis.axis = SDL_GAMEPAD_AXIS_LEFTX;
+    event.gaxis.value = -30000;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 1);
+
+    bool armed = true;
+    sdl3d_game_data_menu_update_result result{};
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.control_changed);
+    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    ASSERT_NE(settings, nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "fullscreen_borderless");
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.which = 2041;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_EAST;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 2);
+
+    SDL_zero(result);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.return_scene);
+    EXPECT_STREQ(result.scene, "scene.options");
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, MouseOptionsCaptureAndApplyAuthoredInputBindings)
 {
     sdl3d_game_session *session = nullptr;
@@ -2544,6 +2600,7 @@ TEST(GameDataRuntime, PongStandardOptionsUseImmediateApplyContract)
     EXPECT_LT(sdl3d_game_data_find_signal(runtime, "signal.settings.cancel_display"), 0);
     EXPECT_LT(sdl3d_game_data_find_signal(runtime, "signal.settings.cancel_audio"), 0);
     EXPECT_LT(sdl3d_game_data_find_signal(runtime, "signal.settings.cancel_gamepad"), 0);
+    EXPECT_GE(sdl3d_game_data_find_signal(runtime, "signal.settings.vibration"), 0);
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
     sdl3d_game_data_menu_item display_mode{};

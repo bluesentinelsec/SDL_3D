@@ -134,13 +134,15 @@
         "down": "action.menu.down",
         "left": "action.menu.left",
         "right": "action.menu.right",
-        "select": "action.menu.select"
+        "select": "action.menu.select",
+        "back": "action.menu.back"
       },
       "signals": {
         "move": "signal.ui.menu.move",
         "select": "signal.ui.menu.select",
         "apply": "signal.settings.apply",
         "apply_audio": "signal.settings.apply_audio",
+        "vibration": "signal.settings.vibration",
         "reset_display": "signal.settings.reset_display",
         "reset_keyboard": "signal.settings.reset_keyboard",
         "reset_mouse": "signal.settings.reset_mouse",
@@ -569,14 +571,16 @@
             "name": "action.menu.up",
             "bindings": [
               { "device": "keyboard", "key": "UP" },
-              { "device": "gamepad", "button": "DPAD_UP" }
+              { "device": "gamepad", "button": "DPAD_UP" },
+              { "device": "gamepad", "axis": "left_y", "scale": -1.0 }
             ]
           },
           {
             "name": "action.menu.down",
             "bindings": [
               { "device": "keyboard", "key": "DOWN" },
-              { "device": "gamepad", "button": "DPAD_DOWN" }
+              { "device": "gamepad", "button": "DPAD_DOWN" },
+              { "device": "gamepad", "axis": "left_y", "scale": 1.0 }
             ]
           },
           {
@@ -584,7 +588,8 @@
             "bindings": [
               { "device": "keyboard", "key": "LEFT" },
               { "device": "keyboard", "key": "A" },
-              { "device": "gamepad", "button": "DPAD_LEFT" }
+              { "device": "gamepad", "button": "DPAD_LEFT" },
+              { "device": "gamepad", "axis": "left_x", "scale": -1.0 }
             ]
           },
           {
@@ -592,7 +597,15 @@
             "bindings": [
               { "device": "keyboard", "key": "RIGHT" },
               { "device": "keyboard", "key": "D" },
-              { "device": "gamepad", "button": "DPAD_RIGHT" }
+              { "device": "gamepad", "button": "DPAD_RIGHT" },
+              { "device": "gamepad", "axis": "left_x", "scale": 1.0 }
+            ]
+          },
+          {
+            "name": "action.menu.back",
+            "bindings": [
+              { "device": "keyboard", "key": "ESCAPE" },
+              { "device": "gamepad", "button": "EAST" }
             ]
           },
           {
@@ -1280,6 +1293,7 @@
     "signal.persistence.save_options",
     "signal.settings.apply",
     "signal.settings.apply_audio",
+    "signal.settings.vibration",
     "signal.settings.reset_display",
     "signal.settings.reset_keyboard",
     "signal.settings.reset_mouse",
@@ -1459,6 +1473,12 @@
         "actions": [
           { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["gamepad_icons", "vibration"] },
           { "type": "input.reset_bindings", "menu": "menu.options.gamepad" },
+          { "type": "signal.emit", "signal": "signal.persistence.save_options" }
+        ]
+      },
+      {
+        "signal": "signal.settings.vibration",
+        "actions": [
           { "type": "signal.emit", "signal": "signal.persistence.save_options" }
         ]
       },

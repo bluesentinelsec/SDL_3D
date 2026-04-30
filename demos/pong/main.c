@@ -27,21 +27,38 @@ typedef struct pong_state
     sdl3d_game_data_frame_state frame_state;
     sdl3d_input_manager *input;
     int paddle_hit_connection;
+    int vibration_connection;
+    int ball_hit_signal_id;
+    int vibration_signal_id;
 } pong_state;
 
-static void on_ball_hit_paddle(void *userdata, int signal_id, const sdl3d_properties *payload)
+static void on_gamepad_feedback(void *userdata, int signal_id, const sdl3d_properties *payload)
 {
     pong_state *state = (pong_state *)userdata;
+    const sdl3d_registered_actor *settings =
+        state != NULL ? sdl3d_game_data_find_actor(state->data, "entity.settings") : NULL;
+    const bool vibration_enabled = settings != NULL && sdl3d_properties_get_bool(settings->props, "vibration", false);
     const char *other_actor_name =
         payload != NULL ? sdl3d_properties_get_string(payload, "other_actor_name", NULL) : NULL;
-    (void)signal_id;
 
-    if (state == NULL || state->input == NULL || other_actor_name == NULL)
+    if (state == NULL || state->input == NULL)
     {
         return;
     }
 
-    if (SDL_strcmp(other_actor_name, "entity.paddle.player") == 0)
+    if (signal_id == state->vibration_signal_id)
+    {
+        (void)sdl3d_input_rumble_all_gamepads(state->input, 0.30f, 0.70f, 100);
+        return;
+    }
+
+    if (!vibration_enabled)
+    {
+        return;
+    }
+
+    if (signal_id == state->ball_hit_signal_id && other_actor_name != NULL &&
+        SDL_strcmp(other_actor_name, "entity.paddle.player") == 0)
     {
         (void)sdl3d_input_rumble_all_gamepads(state->input, 0.45f, 0.75f, 120);
     }
@@ -119,13 +136,20 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
 
     state->input = sdl3d_game_session_get_input(ctx->session);
     state->paddle_hit_connection = 0;
+    state->vibration_connection = 0;
+    state->ball_hit_signal_id = sdl3d_game_data_find_signal(state->data, "signal.ball.hit_paddle");
+    state->vibration_signal_id = sdl3d_game_data_find_signal(state->data, "signal.settings.vibration");
     if (state->input != NULL)
     {
-        const int signal_id = sdl3d_game_data_find_signal(state->data, "signal.ball.hit_paddle");
-        if (signal_id >= 0)
+        if (state->ball_hit_signal_id >= 0)
         {
             state->paddle_hit_connection = sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(ctx->session),
-                                                                signal_id, on_ball_hit_paddle, state);
+                                                                state->ball_hit_signal_id, on_gamepad_feedback, state);
+        }
+        if (state->vibration_signal_id >= 0)
+        {
+            state->vibration_connection = sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(ctx->session),
+                                                               state->vibration_signal_id, on_gamepad_feedback, state);
         }
     }
     return true;
@@ -196,6 +220,11 @@ static void pong_shutdown(sdl3d_game_context *ctx, void *userdata)
     {
         sdl3d_signal_disconnect(sdl3d_game_session_get_signal_bus(ctx->session), state->paddle_hit_connection);
         state->paddle_hit_connection = 0;
+    }
+    if (state->vibration_connection > 0)
+    {
+        sdl3d_signal_disconnect(sdl3d_game_session_get_signal_bus(ctx->session), state->vibration_connection);
+        state->vibration_connection = 0;
     }
     state->input = NULL;
     sdl3d_game_data_destroy(state->data);

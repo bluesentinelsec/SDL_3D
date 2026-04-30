@@ -154,6 +154,48 @@ static bool run_frame_hook(const sdl3d_game_data_frame_desc *frame, sdl3d_game_d
     return hook == NULL || hook(frame->userdata, frame);
 }
 
+static bool menu_action_pressed(const sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input, int action_id,
+                                const char *fallback_name)
+{
+    if (action_id >= 0 && sdl3d_game_data_active_scene_allows_action(runtime, action_id) &&
+        sdl3d_input_is_pressed(input, action_id))
+    {
+        return true;
+    }
+
+    if (fallback_name != NULL && input != NULL)
+    {
+        const int fallback_id = sdl3d_input_find_action(input, fallback_name);
+        if (fallback_id >= 0 && sdl3d_input_is_pressed(input, fallback_id))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool menu_action_held(const sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input, int action_id,
+                             const char *fallback_name)
+{
+    if (action_id >= 0 && sdl3d_game_data_active_scene_allows_action(runtime, action_id) &&
+        sdl3d_input_is_held(input, action_id))
+    {
+        return true;
+    }
+
+    if (fallback_name != NULL && input != NULL)
+    {
+        const int fallback_id = sdl3d_input_find_action(input, fallback_name);
+        if (fallback_id >= 0 && sdl3d_input_is_held(input, fallback_id))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static bool ensure_font_cache_capacity(sdl3d_game_data_font_cache *cache, int required)
 {
     if (cache == NULL || required <= cache->capacity)
@@ -703,17 +745,12 @@ static bool menu_input_is_idle(const sdl3d_game_data_runtime *runtime, const sdl
     if (input == NULL)
         return false;
 
-    return (menu->up_action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, menu->up_action_id) ||
-            !sdl3d_input_is_held(input, menu->up_action_id)) &&
-           (menu->down_action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, menu->down_action_id) ||
-            !sdl3d_input_is_held(input, menu->down_action_id)) &&
-           (menu->left_action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, menu->left_action_id) ||
-            !sdl3d_input_is_held(input, menu->left_action_id)) &&
-           (menu->right_action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, menu->right_action_id) ||
-            !sdl3d_input_is_held(input, menu->right_action_id)) &&
-           (menu->select_action_id < 0 ||
-            !sdl3d_game_data_active_scene_allows_action(runtime, menu->select_action_id) ||
-            !sdl3d_input_is_held(input, menu->select_action_id));
+    return !menu_action_held(runtime, input, menu->up_action_id, "ui_up") &&
+           !menu_action_held(runtime, input, menu->down_action_id, "ui_down") &&
+           !menu_action_held(runtime, input, menu->left_action_id, "ui_left") &&
+           !menu_action_held(runtime, input, menu->right_action_id, "ui_right") &&
+           !menu_action_held(runtime, input, menu->select_action_id, "ui_accept") &&
+           !menu_action_held(runtime, input, menu->back_action_id, "ui_back");
 }
 
 bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input,
@@ -764,16 +801,14 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
     }
 
     bool handled = false;
-    if (menu.up_action_id >= 0 && sdl3d_game_data_active_scene_allows_action(runtime, menu.up_action_id) &&
-        sdl3d_input_is_pressed(input, menu.up_action_id))
+    if (menu_action_pressed(runtime, input, menu.up_action_id, "ui_up"))
     {
         const bool moved = sdl3d_game_data_menu_move(runtime, menu.name, -1);
         handled = moved || handled;
         if (moved && out_result != NULL)
             out_result->move_signal_id = menu.move_signal_id;
     }
-    if (menu.down_action_id >= 0 && sdl3d_game_data_active_scene_allows_action(runtime, menu.down_action_id) &&
-        sdl3d_input_is_pressed(input, menu.down_action_id))
+    if (menu_action_pressed(runtime, input, menu.down_action_id, "ui_down"))
     {
         const bool moved = sdl3d_game_data_menu_move(runtime, menu.name, 1);
         handled = moved || handled;
@@ -782,26 +817,67 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
     }
     int control_direction = 0;
     bool control_adjust_input = false;
-    if (menu.left_action_id >= 0 && sdl3d_game_data_active_scene_allows_action(runtime, menu.left_action_id) &&
-        sdl3d_input_is_pressed(input, menu.left_action_id))
+    if (menu_action_pressed(runtime, input, menu.left_action_id, "ui_left"))
     {
         handled = true;
         control_direction = -1;
         control_adjust_input = true;
     }
-    if (menu.right_action_id >= 0 && sdl3d_game_data_active_scene_allows_action(runtime, menu.right_action_id) &&
-        sdl3d_input_is_pressed(input, menu.right_action_id))
+    if (menu_action_pressed(runtime, input, menu.right_action_id, "ui_right"))
     {
         handled = true;
         control_direction = 1;
         control_adjust_input = true;
     }
-    if (menu.select_action_id >= 0 && sdl3d_game_data_active_scene_allows_action(runtime, menu.select_action_id) &&
-        sdl3d_input_is_pressed(input, menu.select_action_id))
+    if (menu_action_pressed(runtime, input, menu.select_action_id, "ui_accept"))
     {
         handled = true;
         control_direction = 1;
         control_adjust_input = false;
+    }
+    if (menu_action_pressed(runtime, input, menu.back_action_id, "ui_back"))
+    {
+        handled = true;
+        sdl3d_game_data_menu refreshed;
+        if (!sdl3d_game_data_get_active_menu_for_metrics(runtime, metrics, &refreshed))
+            return true;
+
+        sdl3d_game_data_menu_item item;
+        bool found_back_item = false;
+        for (int i = 0; i < refreshed.item_count; ++i)
+        {
+            if (!sdl3d_game_data_get_menu_item(runtime, refreshed.name, i, &item))
+                continue;
+            if (!item.return_scene && !(item.label != NULL && SDL_strcasecmp(item.label, "Back") == 0))
+                continue;
+            found_back_item = true;
+            if (out_result != NULL)
+            {
+                out_result->menu = refreshed.name;
+                out_result->selected_index = i;
+                out_result->control_changed = false;
+                out_result->selected = true;
+                out_result->select_signal_id = refreshed.select_signal_id;
+                out_result->quit = item.quit;
+                out_result->scene = item.scene;
+                out_result->return_to = item.return_to != NULL ? item.return_to : item.scene;
+                out_result->scene_state_key = item.scene_state_key;
+                out_result->scene_state_value = item.scene_state_value;
+                out_result->return_scene = true;
+                out_result->signal_id = item.signal_id;
+                out_result->pause_command = item.pause_command;
+                out_result->has_return_paused = item.has_return_paused;
+                out_result->return_paused = item.return_paused;
+                out_result->handled_input = true;
+            }
+            break;
+        }
+        if (!found_back_item)
+        {
+            if (out_result != NULL)
+                out_result->handled_input = true;
+        }
+        return true;
     }
 
     if (control_direction != 0)

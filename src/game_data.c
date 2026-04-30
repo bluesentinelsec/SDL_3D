@@ -3831,6 +3831,7 @@ bool sdl3d_game_data_get_active_menu_for_metrics(const sdl3d_game_data_runtime *
         out_menu->left_action_id = -1;
         out_menu->right_action_id = -1;
         out_menu->select_action_id = -1;
+        out_menu->back_action_id = -1;
         out_menu->move_signal_id = -1;
         out_menu->select_signal_id = -1;
     }
@@ -3847,6 +3848,7 @@ bool sdl3d_game_data_get_active_menu_for_metrics(const sdl3d_game_data_runtime *
     out_menu->left_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "left_action", NULL));
     out_menu->right_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "right_action", NULL));
     out_menu->select_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "select_action", NULL));
+    out_menu->back_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "back_action", NULL));
     out_menu->move_signal_id = sdl3d_game_data_find_signal(runtime, json_string(menu, "move_signal", NULL));
     out_menu->select_signal_id = sdl3d_game_data_find_signal(runtime, json_string(menu, "select_signal", NULL));
     out_menu->selected_index = state->selected_index;
