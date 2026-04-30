@@ -860,10 +860,10 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
                 out_result->select_signal_id = refreshed.select_signal_id;
                 out_result->quit = item.quit;
                 out_result->scene = item.scene;
-                out_result->return_to = item.return_to != NULL ? item.return_to : item.scene;
+                out_result->return_to = item.return_to;
                 out_result->scene_state_key = item.scene_state_key;
                 out_result->scene_state_value = item.scene_state_value;
-                out_result->return_scene = true;
+                out_result->return_scene = item.return_scene;
                 out_result->signal_id = item.signal_id;
                 out_result->pause_command = item.pause_command;
                 out_result->has_return_paused = item.has_return_paused;

@@ -48,7 +48,11 @@ static void on_gamepad_feedback(void *userdata, int signal_id, const sdl3d_prope
 
     if (signal_id == state->vibration_signal_id)
     {
-        (void)sdl3d_input_rumble_all_gamepads(state->input, 0.30f, 0.70f, 100);
+        if (!sdl3d_input_rumble_all_gamepads(state->input, 0.30f, 0.70f, 100))
+        {
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                         "Pong vibration feedback requested but no rumble-capable gamepad accepted it");
+        }
         return;
     }
 
@@ -60,7 +64,11 @@ static void on_gamepad_feedback(void *userdata, int signal_id, const sdl3d_prope
     if (signal_id == state->ball_hit_signal_id && other_actor_name != NULL &&
         SDL_strcmp(other_actor_name, "entity.paddle.player") == 0)
     {
-        (void)sdl3d_input_rumble_all_gamepads(state->input, 0.45f, 0.75f, 120);
+        if (!sdl3d_input_rumble_all_gamepads(state->input, 0.45f, 0.75f, 120))
+        {
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                         "Pong paddle hit rumble requested but no rumble-capable gamepad accepted it");
+        }
     }
 }
 

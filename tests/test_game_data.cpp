@@ -2430,7 +2430,7 @@ TEST(GameDataRuntime, OptionsMenusUseGamepadAxesAndBack)
 
     SDL_zero(result);
     ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
-    EXPECT_TRUE(result.return_scene);
+    EXPECT_FALSE(result.return_scene);
     EXPECT_STREQ(result.scene, "scene.options");
 
     sdl3d_game_data_destroy(runtime);

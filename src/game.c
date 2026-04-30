@@ -460,7 +460,7 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
     SDL_zero(ctx);
     SDL_SetMainReady();
 
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC))
     {
         return 1;
     }
