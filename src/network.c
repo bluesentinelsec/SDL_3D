@@ -7,6 +7,13 @@
 
 #if SDL3D_NETWORKING_ENABLED
 #include <SDL3_net/SDL_net.h>
+#else
+typedef void NET_Address;
+typedef void NET_Datagram;
+typedef void NET_DatagramSocket;
+typedef int NET_Status;
+#define NET_SUCCESS 0
+#define NET_FAILURE (-1)
 #endif
 
 typedef enum sdl3d_network_packet_kind

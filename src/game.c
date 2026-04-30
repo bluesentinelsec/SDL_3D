@@ -624,8 +624,7 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
             {
                 profile_last_counter = present_end_counter;
             }
-            else if ((double)(present_end_counter - profile_last_counter) /
-                         (double)SDL_GetPerformanceFrequency() >=
+            else if ((double)(present_end_counter - profile_last_counter) / (double)SDL_GetPerformanceFrequency() >=
                      1.0)
             {
                 const double frames = profile_frames_count > 0 ? (double)profile_frames_count : 1.0;
@@ -635,8 +634,8 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
                             frames * (double)SDL_GetPerformanceFrequency() /
                                 (double)(present_end_counter - profile_last_counter),
                             profile_frame_ms / frames, profile_poll_ms / frames, profile_tick_ms / frames,
-                            profile_render_ms / frames, profile_present_ms / frames,
-                            profile_ticks_count / frames, profile_max_ticks);
+                            profile_render_ms / frames, profile_present_ms / frames, profile_ticks_count / frames,
+                            profile_max_ticks);
                 profile_last_counter = present_end_counter;
                 profile_poll_ms = 0.0;
                 profile_tick_ms = 0.0;

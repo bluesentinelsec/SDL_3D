@@ -170,17 +170,17 @@ bool level_data_set_sector_geometry(level_data *ld, int sector_index, const sdl3
     }
 
     if (!sdl3d_level_set_sector_geometry(&ld->lightmapped, g_sectors, g_sector_count, sector_index, geometry, g_mats,
-                                          mc, g_lights, g_light_count))
+                                         mc, g_lights, g_light_count))
     {
         return false;
     }
     if (!sdl3d_level_set_sector_geometry(&ld->vertex_baked, g_sectors, g_sector_count, sector_index, geometry, g_mats,
-                                          mc, g_lights, g_light_count))
+                                         mc, g_lights, g_light_count))
     {
         return false;
     }
-    if (!sdl3d_level_set_sector_geometry(&ld->unlit, g_sectors, g_sector_count, sector_index, geometry, g_mats, mc, NULL,
-                                          0))
+    if (!sdl3d_level_set_sector_geometry(&ld->unlit, g_sectors, g_sector_count, sector_index, geometry, g_mats, mc,
+                                         NULL, 0))
     {
         return false;
     }

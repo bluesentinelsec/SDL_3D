@@ -863,9 +863,8 @@ static edge_info *build_level_edges(const sdl3d_sector *sectors, int sector_coun
     return edges;
 }
 
-static bool append_portal(sdl3d_level_portal **portals, int *portal_count, int *portal_cap,
-                          const sdl3d_sector *sectors, int sector_a, int sector_b, float x0, float z0, float x1,
-                          float z1)
+static bool append_portal(sdl3d_level_portal **portals, int *portal_count, int *portal_cap, const sdl3d_sector *sectors,
+                          int sector_a, int sector_b, float x0, float z0, float x1, float z1)
 {
     const sdl3d_sector *a = &sectors[sector_a];
     const sdl3d_sector *b = &sectors[sector_b];
@@ -1034,8 +1033,8 @@ static bool mark_dirty_sector_neighbors(const edge_info *edges, int edge_count, 
     return true;
 }
 
-static bool add_wall_runtime(macc *wall_acc, float x0, float z0, float x1, float z1, float bot0, float top0,
-                             float bot1, float top1, const sdl3d_level_material *material)
+static bool add_wall_runtime(macc *wall_acc, float x0, float z0, float x1, float z1, float bot0, float top0, float bot1,
+                             float top1, const sdl3d_level_material *material)
 {
     return add_wall(wall_acc, x0, z0, x1, z1, bot0, top0, bot1, top1, material->albedo, material->tex_scale);
 }
@@ -1179,8 +1178,7 @@ static bool build_dirty_sector_accs(const sdl3d_sector *sectors, int sector_coun
                         float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
                         float wx1 = ax + (bx - ax) * overlaps[oi].t0, wz1 = az + (bz - az) * overlaps[oi].t0;
                         if (!add_wall_runtime(wall_acc, wx0, wz0, wx1, wz1, sdl3d_sector_floor_at(sec, wx0, wz0),
-                                              sdl3d_sector_ceil_at(sec, wx0, wz0),
-                                              sdl3d_sector_floor_at(sec, wx1, wz1),
+                                              sdl3d_sector_ceil_at(sec, wx0, wz0), sdl3d_sector_floor_at(sec, wx1, wz1),
                                               sdl3d_sector_ceil_at(sec, wx1, wz1), &materials[wi]))
                         {
                             return false;

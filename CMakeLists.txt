@@ -110,6 +110,12 @@ if(SDL3D_ENABLE_NETWORKING)
     if(NOT TARGET ${SDL3D_SDLNET_TARGET} AND TARGET SDL3_net::SDL3_net-static)
         set(SDL3D_SDLNET_TARGET SDL3_net::SDL3_net-static)
     endif()
+
+    if(TARGET SDL3_net-static)
+        target_link_libraries(SDL3_net-static INTERFACE ${SDL3D_SDL_TARGET})
+    elseif(TARGET SDL3_net-shared)
+        target_link_libraries(SDL3_net-shared INTERFACE ${SDL3D_SDL_TARGET})
+    endif()
 endif()
 
 add_subdirectory(vendor)
