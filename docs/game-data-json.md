@@ -445,6 +445,9 @@ actor and bind option controls to that actor. The actor name is game-defined,
 but `entity.settings` is the recommended default because it matches the app
 window and audio examples.
 
+For a project-oriented adoption checklist and a minimal reference game file,
+see [docs/standard-options.md](standard-options.md).
+
 Standard display properties:
 
 | Property | Type | Expected values |

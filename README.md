@@ -18,6 +18,9 @@ Unit tests use GoogleTest. CMake will use an installed `GTest` package when avai
 Testing and renderer-loop policy are documented in [docs/testing.md](docs/testing.md).
 Error propagation conventions are documented in [docs/error-handling.md](docs/error-handling.md).
 Logging conventions are documented in [docs/logging.md](docs/logging.md).
+The data-driven game model and reusable options package are documented in
+[docs/game-data-json.md](docs/game-data-json.md) and
+[docs/standard-options.md](docs/standard-options.md).
 
 ## Dependencies
 
