@@ -3486,6 +3486,69 @@ TEST(GameDataRuntime, ValidatesPongDataWithoutDiagnostics)
     EXPECT_EQ(error[0], '\0');
 }
 
+TEST(GameDataRuntime, StandardOptionsAdoptionFixtureLoadsReusablePackage)
+{
+    const std::string path = fixture_path("standard_options_minimal.game.json");
+    char error[512]{};
+    ASSERT_TRUE(sdl3d_game_data_validate_file(path.c_str(), nullptr, error, sizeof(error))) << error;
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(path.c_str(), session, &runtime, error, sizeof(error))) << error;
+
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
+    EXPECT_EQ(sdl3d_game_data_scene_count(runtime), 7);
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 0), "scene.title");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 1), "scene.options");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 2), "scene.options.display");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 3), "scene.options.keyboard");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 4), "scene.options.mouse");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 5), "scene.options.gamepad");
+    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 6), "scene.options.audio");
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
+    sdl3d_game_data_menu menu{};
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.options");
+    EXPECT_EQ(menu.item_count, 6);
+
+    sdl3d_game_data_menu_item item{};
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Display");
+    EXPECT_STREQ(item.scene, "scene.options.display");
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
+    EXPECT_STREQ(item.label, "Mouse");
+    EXPECT_STREQ(item.scene, "scene.options.mouse");
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.keyboard"));
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.options.keyboard");
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Up");
+    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING);
+    EXPECT_EQ(item.input_binding_count, 2);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.audio"));
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.options.audio");
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Sound Effects");
+    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_RANGE);
+    EXPECT_STREQ(item.control_target, "entity.settings");
+    EXPECT_STREQ(item.control_key, "sfx_volume");
+
+    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    ASSERT_NE(settings, nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
+    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
+    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "music_volume", 0), 7);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, ValidationReportsJsonPathAndMissingReference)
 {
     DiagnosticCapture capture;

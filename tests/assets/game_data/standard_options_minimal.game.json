@@ -1,0 +1,310 @@
+{
+  "schema": "sdl3d.game.v0",
+  "metadata": {
+    "name": "Standard Options Minimal",
+    "id": "test.standard_options_minimal",
+    "version": "0.1.0"
+  },
+  "app": {
+    "title": "Standard Options Minimal",
+    "logical_width": 1280,
+    "logical_height": 720,
+    "window": {
+      "display_mode": "windowed",
+      "maximized": true,
+      "resizable": true,
+      "vsync": true,
+      "renderer": "opengl",
+      "apply_signal": "signal.settings.apply",
+      "apply_signals": ["signal.settings.apply", "signal.settings.reset_display"],
+      "settings": {
+        "target": "entity.settings",
+        "display_mode": "display_mode",
+        "vsync": "vsync",
+        "renderer": "renderer"
+      }
+    }
+  },
+  "scenes": {
+    "initial": "scene.title",
+    "files": [
+      "scenes/standard_options_title.scene.json",
+      { "package": "standard_options" }
+    ],
+    "standard_options": {
+      "settings": "entity.settings",
+      "return_scene": "scene.title",
+      "scenes": {
+        "root": "scene.options",
+        "display": "scene.options.display",
+        "keyboard": "scene.options.keyboard",
+        "mouse": "scene.options.mouse",
+        "gamepad": "scene.options.gamepad",
+        "audio": "scene.options.audio"
+      },
+      "menus": {
+        "root": "menu.options",
+        "display": "menu.options.display",
+        "keyboard": "menu.options.keyboard",
+        "mouse": "menu.options.mouse",
+        "gamepad": "menu.options.gamepad",
+        "audio": "menu.options.audio"
+      },
+      "actions": {
+        "up": "action.menu.up",
+        "down": "action.menu.down",
+        "left": "action.menu.left",
+        "right": "action.menu.right",
+        "select": "action.menu.select"
+      },
+      "signals": {
+        "move": "signal.ui.menu.move",
+        "select": "signal.ui.menu.select",
+        "apply": "signal.settings.apply",
+        "apply_audio": "signal.settings.apply_audio",
+        "reset_display": "signal.settings.reset_display",
+        "reset_keyboard": "signal.settings.reset_keyboard",
+        "reset_mouse": "signal.settings.reset_mouse",
+        "reset_gamepad": "signal.settings.reset_gamepad",
+        "reset_audio": "signal.settings.reset_audio"
+      },
+      "bindings": {
+        "keyboard": [
+          {
+            "label": "Up",
+            "default": "UP",
+            "bindings": [
+              { "action": "action.player.up", "device": "keyboard" },
+              { "action": "action.menu.up", "device": "keyboard" }
+            ]
+          },
+          {
+            "label": "Down",
+            "default": "DOWN",
+            "bindings": [
+              { "action": "action.player.down", "device": "keyboard" },
+              { "action": "action.menu.down", "device": "keyboard" }
+            ]
+          },
+          {
+            "label": "Accept",
+            "default": "RETURN",
+            "bindings": [
+              { "action": "action.menu.select", "device": "keyboard" }
+            ]
+          },
+          {
+            "label": "Cancel",
+            "default": "BACKSPACE",
+            "bindings": [
+              { "action": "action.cancel", "device": "keyboard" }
+            ]
+          }
+        ],
+        "mouse": [
+          {
+            "label": "Accept",
+            "default": "LEFT",
+            "bindings": [
+              { "action": "action.menu.select", "device": "mouse" }
+            ]
+          }
+        ],
+        "gamepad": [
+          {
+            "label": "Up",
+            "default": "DPAD_UP",
+            "bindings": [
+              { "action": "action.player.up", "device": "gamepad" },
+              { "action": "action.menu.up", "device": "gamepad" }
+            ]
+          },
+          {
+            "label": "Down",
+            "default": "DPAD_DOWN",
+            "bindings": [
+              { "action": "action.player.down", "device": "gamepad" },
+              { "action": "action.menu.down", "device": "gamepad" }
+            ]
+          },
+          {
+            "label": "Accept",
+            "default": "SOUTH",
+            "bindings": [
+              { "action": "action.menu.select", "device": "gamepad" }
+            ]
+          },
+          {
+            "label": "Cancel",
+            "default": "EAST",
+            "bindings": [
+              { "action": "action.cancel", "device": "gamepad" }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "assets": {
+    "fonts": [
+      { "id": "font.title", "builtin": "Inter", "size": 96 },
+      { "id": "font.hud", "builtin": "Inter", "size": 34 }
+    ]
+  },
+  "transitions": {
+    "scene_out": {
+      "type": "fade",
+      "direction": "out",
+      "color": [0, 0, 0, 255],
+      "duration": 0.2
+    },
+    "scene_in": {
+      "type": "fade",
+      "direction": "in",
+      "color": [0, 0, 0, 255],
+      "duration": 0.2
+    }
+  },
+  "entities": [
+    {
+      "name": "entity.settings",
+      "active": true,
+      "tags": ["state", "settings"],
+      "properties": {
+        "display_mode": { "type": "string", "value": "windowed" },
+        "vsync": { "type": "bool", "value": true },
+        "renderer": { "type": "string", "value": "opengl" },
+        "gamepad_icons": { "type": "string", "value": "xbox" },
+        "vibration": { "type": "bool", "value": true },
+        "sfx_volume": { "type": "int", "value": 8 },
+        "music_volume": { "type": "int", "value": 7 }
+      }
+    }
+  ],
+  "signals": [
+    "signal.settings.apply",
+    "signal.settings.apply_audio",
+    "signal.settings.reset_display",
+    "signal.settings.reset_keyboard",
+    "signal.settings.reset_mouse",
+    "signal.settings.reset_gamepad",
+    "signal.settings.reset_audio",
+    "signal.ui.menu.move",
+    "signal.ui.menu.select"
+  ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.settings.apply",
+        "actions": [
+          { "type": "signal.emit", "signal": "signal.settings.apply_audio" }
+        ]
+      },
+      {
+        "signal": "signal.settings.apply_audio",
+        "actions": [
+          { "type": "audio.set_bus_volume", "bus": "sfx", "source": { "target": "entity.settings", "key": "sfx_volume", "scale": 0.1 } },
+          { "type": "audio.set_bus_volume", "bus": "music", "source": { "target": "entity.settings", "key": "music_volume", "scale": 0.1 } }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_display",
+        "actions": [
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["display_mode", "vsync", "renderer"] }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_keyboard",
+        "actions": [
+          { "type": "input.reset_bindings", "menu": "menu.options.keyboard" }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_mouse",
+        "actions": [
+          { "type": "input.reset_bindings", "menu": "menu.options.mouse" }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_gamepad",
+        "actions": [
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["gamepad_icons", "vibration"] },
+          { "type": "input.reset_bindings", "menu": "menu.options.gamepad" }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_audio",
+        "actions": [
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["sfx_volume", "music_volume"] },
+          { "type": "signal.emit", "signal": "signal.settings.apply_audio" }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.default",
+        "actions": [
+          {
+            "name": "action.menu.up",
+            "bindings": [
+              { "device": "keyboard", "key": "UP" },
+              { "device": "gamepad", "button": "DPAD_UP" }
+            ]
+          },
+          {
+            "name": "action.menu.down",
+            "bindings": [
+              { "device": "keyboard", "key": "DOWN" },
+              { "device": "gamepad", "button": "DPAD_DOWN" }
+            ]
+          },
+          {
+            "name": "action.menu.left",
+            "bindings": [
+              { "device": "keyboard", "key": "LEFT" },
+              { "device": "gamepad", "button": "DPAD_LEFT" }
+            ]
+          },
+          {
+            "name": "action.menu.right",
+            "bindings": [
+              { "device": "keyboard", "key": "RIGHT" },
+              { "device": "gamepad", "button": "DPAD_RIGHT" }
+            ]
+          },
+          {
+            "name": "action.menu.select",
+            "bindings": [
+              { "device": "keyboard", "key": "RETURN" },
+              { "device": "mouse", "button": "LEFT" },
+              { "device": "gamepad", "button": "SOUTH" }
+            ]
+          },
+          {
+            "name": "action.cancel",
+            "bindings": [
+              { "device": "keyboard", "key": "BACKSPACE" },
+              { "device": "gamepad", "button": "EAST" }
+            ]
+          },
+          {
+            "name": "action.player.up",
+            "bindings": [
+              { "device": "keyboard", "key": "W" },
+              { "device": "gamepad", "axis": "left_y", "scale": -1.0 }
+            ]
+          },
+          {
+            "name": "action.player.down",
+            "bindings": [
+              { "device": "keyboard", "key": "S" },
+              { "device": "gamepad", "axis": "left_y", "scale": 1.0 }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

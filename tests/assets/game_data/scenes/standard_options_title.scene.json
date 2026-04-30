@@ -1,0 +1,38 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.title",
+  "updates_game": false,
+  "renders_world": false,
+  "entities": [],
+  "input": {
+    "actions": [
+      "action.menu.up",
+      "action.menu.down",
+      "action.menu.select"
+    ]
+  },
+  "menus": [
+    {
+      "name": "menu.title",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "items": [
+        { "label": "Options", "scene": "scene.options" }
+      ]
+    }
+  ],
+  "ui": {
+    "text": [
+      {
+        "name": "ui.title",
+        "font": "font.title",
+        "text": "OPTIONS FIXTURE",
+        "x": 0.5,
+        "y": 0.2,
+        "normalized": true,
+        "centered": true
+      }
+    ]
+  }
+}
