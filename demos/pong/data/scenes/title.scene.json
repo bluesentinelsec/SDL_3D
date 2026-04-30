@@ -73,7 +73,16 @@
       "select_signal": "signal.ui.menu.select",
       "selected": 0,
       "items": [
-        { "label": "Play", "scene": "scene.play" },
+        {
+          "label": "Single Player",
+          "scene": "scene.play",
+          "scene_state": { "key": "match_mode", "value": "single" }
+        },
+        {
+          "label": "Multiplayer",
+          "scene": "scene.multiplayer",
+          "scene_state": { "key": "match_mode", "value": "multiplayer" }
+        },
         { "label": "Options", "scene": "scene.options", "return_to": "scene.title", "return_paused": false },
         { "label": "Exit", "quit": true }
       ]
