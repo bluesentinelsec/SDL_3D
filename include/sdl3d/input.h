@@ -30,6 +30,7 @@ extern "C"
 #define SDL3D_INPUT_MAX_ACTIONS 64
 #define SDL3D_INPUT_MAX_BINDINGS 128
 #define SDL3D_INPUT_ACTION_NAME_MAX 32
+#define SDL3D_INPUT_MAX_GAMEPADS 4
 
     /**
      * @brief Physical input source kind for an action binding.
@@ -196,6 +197,85 @@ extern "C"
     void sdl3d_input_unbind_action(sdl3d_input_manager *input, int action_id);
 
     /* ================================================================== */
+    /* Gamepad state                                                      */
+    /* ================================================================== */
+
+    /**
+     * @brief Return the number of connected gamepad slots.
+     *
+     * SDL3D tracks up to four simultaneous gamepads. Slots remain stable for
+     * the lifetime of a connected controller and are reused when controllers
+     * disconnect and new ones are added.
+     */
+    int sdl3d_input_gamepad_count(const sdl3d_input_manager *input);
+
+    /**
+     * @brief Return true if a gamepad slot is connected.
+     *
+     * @param gamepad_index Slot index in [0, SDL3D_INPUT_MAX_GAMEPADS).
+     */
+    bool sdl3d_input_gamepad_is_connected(const sdl3d_input_manager *input, int gamepad_index);
+
+    /**
+     * @brief Return the SDL joystick instance id for a gamepad slot.
+     *
+     * Returns 0 when the slot is invalid or disconnected.
+     */
+    SDL_JoystickID sdl3d_input_gamepad_id_at(const sdl3d_input_manager *input, int gamepad_index);
+
+    /**
+     * @brief Return true when a gamepad button is held for a given slot.
+     *
+     * This is a direct state query, separate from the action system's
+     * pressed/released edge tracking.
+     */
+    bool sdl3d_input_is_gamepad_button_held(const sdl3d_input_manager *input, int gamepad_index,
+                                            SDL_GamepadButton button);
+
+    /** @brief Return the normalized axis value for one gamepad slot. */
+    float sdl3d_input_get_gamepad_axis(const sdl3d_input_manager *input, int gamepad_index, SDL_GamepadAxis axis);
+
+    /** @brief Return the left stick vector for one gamepad slot. */
+    sdl3d_vec2 sdl3d_input_get_gamepad_left_stick(const sdl3d_input_manager *input, int gamepad_index);
+
+    /** @brief Return the right stick vector for one gamepad slot. */
+    sdl3d_vec2 sdl3d_input_get_gamepad_right_stick(const sdl3d_input_manager *input, int gamepad_index);
+
+    /** @brief Return true when the left stick press is held for one gamepad slot. */
+    bool sdl3d_input_is_gamepad_left_stick_pressed(const sdl3d_input_manager *input, int gamepad_index);
+
+    /** @brief Return true when the right stick press is held for one gamepad slot. */
+    bool sdl3d_input_is_gamepad_right_stick_pressed(const sdl3d_input_manager *input, int gamepad_index);
+
+    /** @brief Return true when any face button is held for one gamepad slot. */
+    bool sdl3d_input_is_gamepad_face_button_pressed(const sdl3d_input_manager *input, int gamepad_index);
+
+    /** @brief Return true when Start is held for one gamepad slot. */
+    bool sdl3d_input_is_gamepad_start_pressed(const sdl3d_input_manager *input, int gamepad_index);
+
+    /** @brief Return true when Select/Back is held for one gamepad slot. */
+    bool sdl3d_input_is_gamepad_select_pressed(const sdl3d_input_manager *input, int gamepad_index);
+
+    /**
+     * @brief Start rumble on one connected gamepad slot.
+     *
+     * The strength values are normalized in [0, 1]. Returns false when the
+     * slot is invalid, disconnected, or rumble is unavailable.
+     */
+    bool sdl3d_input_rumble_gamepad(sdl3d_input_manager *input, int gamepad_index, float low_frequency_rumble,
+                                    float high_frequency_rumble, Uint32 duration_ms);
+
+    /**
+     * @brief Start rumble on every connected gamepad slot.
+     *
+     * Returns true when at least one controller accepted rumble. If no
+     * controllers are connected, or none support rumble, the call returns
+     * false.
+     */
+    bool sdl3d_input_rumble_all_gamepads(sdl3d_input_manager *input, float low_frequency_rumble,
+                                         float high_frequency_rumble, Uint32 duration_ms);
+
+    /* ================================================================== */
     /* Per-frame processing                                                */
     /* ================================================================== */
 
@@ -203,7 +283,8 @@ extern "C"
      * @brief Process one SDL event.
      *
      * Call this before gameplay event handling so the input manager can track
-     * key/button edges, mouse deltas, wheel deltas, and gamepad hotplug.
+     * key/button edges, mouse deltas, wheel deltas, and hot-plugged gamepad
+     * slots.
      */
     void sdl3d_input_process_event(sdl3d_input_manager *input, const SDL_Event *event);
 

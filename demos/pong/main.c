@@ -4,11 +4,13 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include <stdbool.h>
+#include <string.h>
 
 #include "sdl3d/asset.h"
 #include "sdl3d/game.h"
 #include "sdl3d/game_data.h"
 #include "sdl3d/game_presentation.h"
+#include "sdl3d/properties.h"
 
 #if SDL3D_PONG_EMBEDDED_ASSETS
 #include "sdl3d_pong_assets.h"
@@ -23,7 +25,27 @@ typedef struct pong_state
     sdl3d_game_data_particle_cache particle_cache;
     sdl3d_game_data_app_flow app_flow;
     sdl3d_game_data_frame_state frame_state;
+    sdl3d_input_manager *input;
+    int paddle_hit_connection;
 } pong_state;
+
+static void on_ball_hit_paddle(void *userdata, int signal_id, const sdl3d_properties *payload)
+{
+    pong_state *state = (pong_state *)userdata;
+    const char *other_actor_name =
+        payload != NULL ? sdl3d_properties_get_string(payload, "other_actor_name", NULL) : NULL;
+    (void)signal_id;
+
+    if (state == NULL || state->input == NULL || other_actor_name == NULL)
+    {
+        return;
+    }
+
+    if (SDL_strcmp(other_actor_name, "entity.paddle.player") == 0)
+    {
+        (void)sdl3d_input_rumble_all_gamepads(state->input, 0.45f, 0.75f, 120);
+    }
+}
 
 static bool mount_pong_assets(sdl3d_asset_resolver *assets, char *error, int error_size)
 {
@@ -94,6 +116,18 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
         state->assets = NULL;
         return false;
     }
+
+    state->input = sdl3d_game_session_get_input(ctx->session);
+    state->paddle_hit_connection = 0;
+    if (state->input != NULL)
+    {
+        const int signal_id = sdl3d_game_data_find_signal(state->data, "signal.ball.hit_paddle");
+        if (signal_id >= 0)
+        {
+            state->paddle_hit_connection = sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(ctx->session),
+                                                                signal_id, on_ball_hit_paddle, state);
+        }
+    }
     return true;
 }
 
@@ -158,6 +192,12 @@ static void pong_shutdown(sdl3d_game_context *ctx, void *userdata)
     sdl3d_game_data_particle_cache_free(&state->particle_cache);
     sdl3d_game_data_image_cache_free(&state->image_cache);
     sdl3d_game_data_font_cache_free(&state->font_cache);
+    if (state->paddle_hit_connection > 0)
+    {
+        sdl3d_signal_disconnect(sdl3d_game_session_get_signal_bus(ctx->session), state->paddle_hit_connection);
+        state->paddle_hit_connection = 0;
+    }
+    state->input = NULL;
     sdl3d_game_data_destroy(state->data);
     state->data = NULL;
     sdl3d_asset_resolver_destroy(state->assets);
