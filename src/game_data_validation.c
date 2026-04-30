@@ -1806,6 +1806,17 @@ static bool validate_data_condition(validation_context *ctx, yyjson_val *conditi
             return validation_error(ctx, path, "property.compare condition requires a value");
         return true;
     }
+    if (SDL_strcmp(type != NULL ? type : "", "scene_state.compare") == 0)
+    {
+        if (!is_non_empty_string(condition, "key"))
+            return validation_error(ctx, path, "scene_state.compare condition requires a non-empty key");
+        if (!is_compare_op(json_string(condition, "op")))
+            return validation_error(ctx, path,
+                                    "scene_state.compare condition requires a supported comparison operator");
+        if (obj_get(condition, "value") == NULL)
+            return validation_error(ctx, path, "scene_state.compare condition requires a value");
+        return true;
+    }
     if (SDL_strcmp(type != NULL ? type : "", "not") == 0)
     {
         char child_path[PATH_BUFFER_SIZE];
@@ -1949,6 +1960,7 @@ static bool validate_render_effects(validation_context *ctx, yyjson_val *root, v
                         return validation_error(ctx, path, "flash effect requires a non-empty property");
                 }
                 else if (SDL_strcmp(type != NULL ? type : "", "pulse") != 0 &&
+                         SDL_strcmp(type != NULL ? type : "", "drift") != 0 &&
                          SDL_strcmp(type != NULL ? type : "", "emissive") != 0)
                 {
                     return validation_error(ctx, path, "unsupported render effect type '%s'",
@@ -2403,6 +2415,15 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
             const char *signal = json_string(item, "signal");
             if (signal != NULL && !require_ref(ctx, &names->signals, "signal", signal, item_path))
                 return false;
+            yyjson_val *scene_state = obj_get(item, "scene_state");
+            if (scene_state != NULL)
+            {
+                if (!yyjson_is_obj(scene_state))
+                    return validation_error(ctx, item_path, "scene menu item scene_state must be an object");
+                if (!is_non_empty_string(scene_state, "key") || !is_non_empty_string(scene_state, "value"))
+                    return validation_error(ctx, item_path,
+                                            "scene menu item scene_state requires non-empty key and value");
+            }
             yyjson_val *return_scene = obj_get(item, "return_scene");
             if (return_scene != NULL && !yyjson_is_bool(return_scene))
                 return validation_error(ctx, item_path, "scene menu item return_scene must be a boolean");
@@ -2450,6 +2471,9 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
         char condition_path[PATH_BUFFER_SIZE];
         format_path(condition_path, sizeof(condition_path), "%s.visible_if", menu_path);
         if (!validate_scene_ui_condition(ctx, obj_get(presenter, "visible_if"), condition_path, names))
+            return false;
+        format_path(condition_path, sizeof(condition_path), "%s.active_if", menu_path);
+        if (!validate_scene_ui_condition(ctx, obj_get(presenter, "active_if"), condition_path, names))
             return false;
     }
 

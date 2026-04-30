@@ -85,6 +85,8 @@ Configure the package under `scenes.standard_options`:
   "standard_options": {
     "settings": "entity.settings",
     "return_scene": "scene.title",
+    "single_scene": true,
+    "menu_state_key": "options_menu",
     "scenes": {
       "root": "scene.options",
       "display": "scene.options.display",
@@ -134,6 +136,12 @@ Configure the package under `scenes.standard_options`:
 Omitted names fall back to the values shown above. Games should still author the
 names explicitly once the project is more than a prototype; explicit IDs make
 large projects easier to search and review.
+
+`single_scene` is optional and defaults to `false`. When enabled, the root
+options scene contains every standard options menu. Root menu items and child
+Back items set `menu_state_key` in scene state instead of changing scenes, so
+related submenus switch instantly and keep the same animated background,
+particles, and lighting.
 
 ## Backgrounds
 

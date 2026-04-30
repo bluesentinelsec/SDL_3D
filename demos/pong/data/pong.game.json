@@ -111,6 +111,8 @@
     "standard_options": {
       "settings": "entity.settings",
       "return_scene": "scene.title",
+      "single_scene": true,
+      "menu_state_key": "options_menu",
       "scenes": {
         "root": "scene.options",
         "display": "scene.options.display",
@@ -1064,10 +1066,10 @@
         {
           "type": "render.cube",
           "size": [22.0, 13.0, 0.08],
-          "color": [9, 10, 24, 255],
+          "color": [0, 0, 0, 255],
           "emissive": true,
           "effects": [
-            { "type": "pulse", "rate": 0.55, "phase": 0.4, "color": [22, 18, 48, 255], "emissive_base": [0.015, 0.010, 0.035], "emissive_add": [0.030, 0.010, 0.060] }
+            { "type": "emissive", "color": [0.005, 0.004, 0.010] }
           ]
         }
       ]
@@ -1076,17 +1078,18 @@
       "name": "entity.options.glow.magenta",
       "active": true,
       "tags": ["render", "options", "background"],
-      "transform": { "position": [-4.8, -1.8, -0.30] },
+      "transform": { "position": [-4.6, -1.9, -0.30] },
       "components": [
         {
           "type": "render.sphere",
-          "radius": 1.35,
+          "radius": 1.05,
           "rings": 16,
           "slices": 24,
-          "color": [226, 52, 174, 118],
+          "color": [205, 42, 178, 118],
           "emissive": true,
           "effects": [
-            { "type": "pulse", "rate": 0.75, "phase": 0.3, "color": [255, 96, 208, 160], "emissive_base": [0.28, 0.04, 0.22], "emissive_add": [0.24, 0.02, 0.16] }
+            { "type": "drift", "offset": [0.95, 0.55, 0.0], "rates": [0.34, 0.27, 0.0], "phase": 0.3 },
+            { "type": "pulse", "rate": 1.25, "phase": 0.3, "radius_add": 0.28, "color": [255, 78, 212, 154], "emissive_base": [0.16, 0.02, 0.14], "emissive_add": [0.42, 0.05, 0.30] }
           ]
         }
       ]
@@ -1099,13 +1102,14 @@
       "components": [
         {
           "type": "render.sphere",
-          "radius": 1.60,
+          "radius": 1.18,
           "rings": 16,
           "slices": 24,
-          "color": [52, 212, 231, 112],
+          "color": [38, 198, 220, 112],
           "emissive": true,
           "effects": [
-            { "type": "pulse", "rate": 0.62, "phase": 1.4, "color": [105, 242, 255, 152], "emissive_base": [0.04, 0.23, 0.28], "emissive_add": [0.02, 0.18, 0.22] }
+            { "type": "drift", "offset": [0.75, 0.70, 0.0], "rates": [0.22, 0.31, 0.0], "phase": 1.4 },
+            { "type": "pulse", "rate": 1.05, "phase": 1.4, "radius_add": 0.34, "color": [80, 236, 255, 146], "emissive_base": [0.03, 0.16, 0.19], "emissive_add": [0.05, 0.34, 0.42] }
           ]
         }
       ]
@@ -1114,17 +1118,18 @@
       "name": "entity.options.glow.gold",
       "active": true,
       "tags": ["render", "options", "background"],
-      "transform": { "position": [0.9, -3.15, -0.22] },
+      "transform": { "position": [0.7, -3.20, -0.22] },
       "components": [
         {
           "type": "render.sphere",
-          "radius": 1.05,
+          "radius": 0.82,
           "rings": 16,
           "slices": 24,
-          "color": [255, 175, 64, 100],
+          "color": [255, 155, 42, 96],
           "emissive": true,
           "effects": [
-            { "type": "pulse", "rate": 0.90, "phase": 2.1, "color": [255, 214, 95, 145], "emissive_base": [0.25, 0.12, 0.02], "emissive_add": [0.20, 0.10, 0.03] }
+            { "type": "drift", "offset": [1.10, 0.45, 0.0], "rates": [0.29, 0.19, 0.0], "phase": 2.1 },
+            { "type": "pulse", "rate": 1.40, "phase": 2.1, "radius_add": 0.22, "color": [255, 206, 84, 138], "emissive_base": [0.15, 0.07, 0.01], "emissive_add": [0.34, 0.18, 0.04] }
           ]
         }
       ]
@@ -1140,19 +1145,19 @@
           "shape": "box",
           "extents": [2.2, 0.35, 0.05],
           "direction": [0.16, 1.0, 0.0],
-          "spread": 0.65,
-          "speed_min": 0.45,
-          "speed_max": 1.15,
-          "lifetime_min": 4.6,
-          "lifetime_max": 7.8,
-          "size_start": 0.16,
-          "size_end": 0.52,
+          "spread": 0.48,
+          "speed_min": 0.18,
+          "speed_max": 0.48,
+          "lifetime_min": 6.0,
+          "lifetime_max": 9.5,
+          "size_start": 0.035,
+          "size_end": 0.008,
           "gravity": 0.0,
-          "max_particles": 140,
-          "emit_rate": 24.0,
-          "color_start": [245, 62, 195, 58],
+          "max_particles": 130,
+          "emit_rate": 20.0,
+          "color_start": [245, 62, 195, 82],
           "color_end": [255, 104, 223, 0],
-          "emissive_intensity": 1.9,
+          "emissive_intensity": 1.45,
           "camera_facing": true,
           "depth_test": false,
           "additive_blend": true,
@@ -1172,19 +1177,19 @@
           "shape": "box",
           "extents": [2.6, 0.35, 0.05],
           "direction": [-0.12, 1.0, 0.0],
-          "spread": 0.72,
-          "speed_min": 0.36,
-          "speed_max": 1.0,
-          "lifetime_min": 5.0,
-          "lifetime_max": 8.2,
-          "size_start": 0.18,
-          "size_end": 0.58,
+          "spread": 0.52,
+          "speed_min": 0.16,
+          "speed_max": 0.42,
+          "lifetime_min": 6.4,
+          "lifetime_max": 10.0,
+          "size_start": 0.035,
+          "size_end": 0.008,
           "gravity": 0.0,
-          "max_particles": 150,
-          "emit_rate": 24.0,
-          "color_start": [62, 222, 255, 54],
+          "max_particles": 135,
+          "emit_rate": 20.0,
+          "color_start": [62, 222, 255, 78],
           "color_end": [120, 245, 255, 0],
-          "emissive_intensity": 1.85,
+          "emissive_intensity": 1.45,
           "camera_facing": true,
           "depth_test": false,
           "additive_blend": true,
@@ -1204,19 +1209,19 @@
           "shape": "box",
           "extents": [1.8, 0.25, 0.05],
           "direction": [0.05, 1.0, 0.0],
-          "spread": 0.55,
-          "speed_min": 0.28,
-          "speed_max": 0.78,
-          "lifetime_min": 4.2,
-          "lifetime_max": 7.2,
-          "size_start": 0.12,
-          "size_end": 0.42,
+          "spread": 0.38,
+          "speed_min": 0.12,
+          "speed_max": 0.36,
+          "lifetime_min": 5.8,
+          "lifetime_max": 9.0,
+          "size_start": 0.03,
+          "size_end": 0.007,
           "gravity": 0.0,
-          "max_particles": 95,
-          "emit_rate": 16.0,
-          "color_start": [255, 178, 54, 48],
+          "max_particles": 85,
+          "emit_rate": 12.0,
+          "color_start": [255, 178, 54, 72],
           "color_end": [255, 225, 104, 0],
-          "emissive_intensity": 1.65,
+          "emissive_intensity": 1.35,
           "camera_facing": true,
           "depth_test": false,
           "additive_blend": true,

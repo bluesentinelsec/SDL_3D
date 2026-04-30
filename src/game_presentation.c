@@ -823,6 +823,8 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
                 out_result->quit = false;
                 out_result->scene = NULL;
                 out_result->return_to = NULL;
+                out_result->scene_state_key = NULL;
+                out_result->scene_state_value = NULL;
                 out_result->return_scene = false;
                 out_result->pause_command = SDL3D_GAME_DATA_MENU_PAUSE_NONE;
                 out_result->has_return_paused = false;
@@ -840,6 +842,10 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
             out_result->quit = !control_adjust_input && !out_result->control_changed && item.quit;
             out_result->scene = !control_adjust_input && !out_result->control_changed ? item.scene : NULL;
             out_result->return_to = !control_adjust_input && !out_result->control_changed ? item.return_to : NULL;
+            out_result->scene_state_key =
+                !control_adjust_input && !out_result->control_changed ? item.scene_state_key : NULL;
+            out_result->scene_state_value =
+                !control_adjust_input && !out_result->control_changed ? item.scene_state_value : NULL;
             out_result->return_scene = !control_adjust_input && !out_result->control_changed && item.return_scene;
             out_result->signal_id = out_result->selected ? item.signal_id : -1;
             out_result->pause_command = !control_adjust_input && !out_result->control_changed
@@ -1188,6 +1194,8 @@ static bool app_flow_consume_menu(sdl3d_game_data_app_flow *flow, sdl3d_game_con
     sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
     if (result.return_to != NULL && scene_state != NULL)
         sdl3d_properties_set_string(scene_state, "return_scene", result.return_to);
+    if (result.scene_state_key != NULL && result.scene_state_value != NULL && scene_state != NULL)
+        sdl3d_properties_set_string(scene_state, result.scene_state_key, result.scene_state_value);
     if (result.has_return_paused && scene_state != NULL)
         sdl3d_properties_set_bool(scene_state, "return_paused", result.return_paused);
 

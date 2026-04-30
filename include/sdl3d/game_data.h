@@ -535,6 +535,10 @@ extern "C"
         const char *scene;
         /** @brief Scene stored as the return target when this item changes scene, or NULL. */
         const char *return_to;
+        /** @brief Scene-state key to set when this item is selected, or NULL. */
+        const char *scene_state_key;
+        /** @brief String value assigned to scene_state_key when this item is selected, or NULL. */
+        const char *scene_state_value;
         /** @brief True when selecting this item requests the stored return scene. */
         bool return_scene;
         /** @brief True when selecting this item requests application quit. */

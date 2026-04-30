@@ -79,6 +79,7 @@ struct EvaluatedPrimitiveCapture
 {
     bool saw_border = false;
     bool saw_ball = false;
+    bool saw_options_drift = false;
 };
 
 struct ScenePayloadCapture
@@ -802,16 +803,16 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
         EXPECT_NEAR(primitive->position.z, -0.65f, 0.0001f);
         EXPECT_NEAR(primitive->size.x, 22.0f, 0.0001f);
-        EXPECT_EQ(primitive->color.r, 9);
-        EXPECT_EQ(primitive->color.g, 10);
-        EXPECT_EQ(primitive->color.b, 24);
+        EXPECT_EQ(primitive->color.r, 0);
+        EXPECT_EQ(primitive->color.g, 0);
+        EXPECT_EQ(primitive->color.b, 0);
         EXPECT_TRUE(primitive->emissive);
     }
     if (std::string(primitive->entity_name) == "entity.options.glow.magenta")
     {
         capture->saw_options_glow = true;
         EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_SPHERE);
-        EXPECT_NEAR(primitive->radius, 1.35f, 0.0001f);
+        EXPECT_NEAR(primitive->radius, 1.05f, 0.0001f);
         EXPECT_TRUE(primitive->emissive);
     }
     return true;
@@ -851,10 +852,11 @@ bool capture_particle(void *userdata, const sdl3d_game_data_particle_emitter *em
     if (std::string(emitter->entity_name) == "entity.options.flow.magenta")
     {
         capture->saw_options_flow = true;
-        EXPECT_EQ(emitter->config.max_particles, 140);
+        EXPECT_EQ(emitter->config.max_particles, 130);
         EXPECT_NEAR(emitter->draw_emissive.x, 1.0f, 0.0001f);
         EXPECT_FALSE(emitter->config.depth_test);
         EXPECT_TRUE(emitter->config.additive_blend);
+        EXPECT_LT(emitter->config.size_start, 0.04f);
     }
     return true;
 }
@@ -873,6 +875,13 @@ bool capture_evaluated_primitive(void *userdata, const sdl3d_game_data_render_pr
     {
         capture->saw_ball = true;
         EXPECT_GT(primitive->emissive_color.x, 0.7f);
+    }
+    if (std::string(primitive->entity_name) == "entity.options.glow.magenta")
+    {
+        capture->saw_options_drift = true;
+        EXPECT_NE(primitive->position.x, -4.6f);
+        EXPECT_GT(primitive->radius, 1.05f);
+        EXPECT_GT(primitive->emissive_color.x, 0.2f);
     }
     return true;
 }
@@ -1161,7 +1170,7 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
 
     UiTextCapture ui{};
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui_text, &ui));
-    EXPECT_EQ(ui.count, 14);
+    EXPECT_EQ(ui.count, 7);
     EXPECT_TRUE(ui.saw_score);
     EXPECT_TRUE(ui.saw_pause);
 
@@ -1351,6 +1360,13 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_EQ(options_particles.count, 3);
     EXPECT_TRUE(options_particles.saw_options_flow);
 
+    sdl3d_game_data_render_eval options_eval{};
+    options_eval.time = 1.0f;
+    EvaluatedPrimitiveCapture options_evaluated{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive_evaluated(runtime, &options_eval, capture_evaluated_primitive,
+                                                                    &options_evaluated));
+    EXPECT_TRUE(options_evaluated.saw_options_drift);
+
     const char *option_submenus[] = {"scene.options.display", "scene.options.keyboard", "scene.options.mouse",
                                      "scene.options.gamepad", "scene.options.audio"};
     for (const char *scene : option_submenus)
@@ -1368,10 +1384,14 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_EQ(menu.item_count, 6);
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Display");
-    EXPECT_STREQ(item.scene, "scene.options.display");
+    EXPECT_EQ(item.scene, nullptr);
+    EXPECT_STREQ(item.scene_state_key, "options_menu");
+    EXPECT_STREQ(item.scene_state_value, "display");
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
     EXPECT_STREQ(item.label, "Mouse");
-    EXPECT_STREQ(item.scene, "scene.options.mouse");
+    EXPECT_EQ(item.scene, nullptr);
+    EXPECT_STREQ(item.scene_state_key, "options_menu");
+    EXPECT_STREQ(item.scene_state_value, "mouse");
     bool saw_options_display = false;
     bool saw_options_divider = false;
     auto find_options_display = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
@@ -1904,16 +1924,25 @@ TEST(GameDataRuntime, OptionsSubmenusDoNotOverwriteCallerReturnScene)
     sdl3d_game_data_menu_item item{};
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options", 0, &item));
     EXPECT_STREQ(item.label, "Display");
-    EXPECT_STREQ(item.scene, "scene.options.display");
+    EXPECT_EQ(item.scene, nullptr);
+    EXPECT_STREQ(item.scene_state_key, "options_menu");
+    EXPECT_STREQ(item.scene_state_value, "display");
     EXPECT_EQ(item.return_to, nullptr);
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
+    sdl3d_properties_set_string(scene_state, "options_menu", "display");
+    sdl3d_game_data_menu menu{};
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.options.display");
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options.display", 4, &item));
     EXPECT_STREQ(item.label, "Back");
-    EXPECT_STREQ(item.scene, "scene.options");
+    EXPECT_EQ(item.scene, nullptr);
+    EXPECT_STREQ(item.scene_state_key, "options_menu");
+    EXPECT_STREQ(item.scene_state_value, "root");
     EXPECT_FALSE(item.return_scene);
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
+    sdl3d_properties_set_string(scene_state, "options_menu", "root");
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.options");
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options", 5, &item));
     EXPECT_STREQ(item.label, "Back");
     EXPECT_TRUE(item.return_scene);

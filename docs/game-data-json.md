@@ -292,7 +292,7 @@ UI descriptors can bind text to engine metrics or actor properties and can use g
 Supported UI binding sources are `metric` (`fps`, `frame`, `paused`), `property`,
 and `scene_state`.
 Supported UI conditions include `always`, `app.paused`, `camera.active`, `property.compare`,
-`property.bool`, `all`, `any`, and `not`.
+`property.bool`, `scene_state.compare`, `all`, `any`, and `not`.
 
 Scene UI can also declare data-driven menu presenters. A presenter turns a
 scene `menus[]` controller into a visible stack with authored alignment, colors,
@@ -317,6 +317,16 @@ selected styling, and cursor styling:
       }
     ]
   }
+}
+```
+
+Menu items can set scene state instead of changing scenes. This is useful for
+submenus that should share one scene, camera, background, and transition state:
+
+```json
+{
+  "label": "Display",
+  "scene_state": { "key": "options_menu", "value": "display" }
 }
 ```
 
@@ -501,6 +511,8 @@ colors, and player-facing input binding rows:
     "standard_options": {
       "settings": "entity.settings",
       "return_scene": "scene.title",
+      "single_scene": true,
+      "menu_state_key": "options_menu",
       "scenes": {
         "root": "scene.options",
         "display": "scene.options.display",
@@ -613,7 +625,10 @@ defaults, or author fully custom options scenes when they need a different
 structure. `background` is optional; when present, generated options scenes
 render the listed entities with the named camera. This gives every standard
 options submenu the same authored backdrop while keeping gameplay actors out of
-the menu scene.
+the menu scene. `single_scene` makes root and child options menus live inside
+the root scene; child menu selections set `menu_state_key` in scene state
+instead of requesting scene transitions. Use it when a family of menus should
+feel like one screen.
 
 Audio bus volume can also be driven from actor properties so options menus can
 share one generic settings actor. Use `source.scale` when the authored setting
@@ -770,8 +785,15 @@ Render primitives may also author generic visual effects:
       "type": "pulse",
       "rate": 9.0,
       "color": [255, 245, 156, 255],
+      "radius_add": 0.06,
       "emissive_base": [0.75, 0.48, 0.08],
       "emissive_add": [0.65, 0.30, 0.0]
+    },
+    {
+      "type": "drift",
+      "offset": [0.4, 0.2, 0.0],
+      "rates": [0.7, 0.5, 0.0],
+      "phase": 1.2
     }
   ]
 }
@@ -780,7 +802,8 @@ Render primitives may also author generic visual effects:
 Supported primitive effects are:
 
 - `flash`: reads a float property from a source entity and uses it to blend color, add size, and add emissive color.
-- `pulse`: uses presentation time to animate color and emissive color.
+- `pulse`: uses presentation time to animate color, emissive color, optional `size_add`, and optional `radius_add`.
+- `drift`: uses presentation time to offset primitive position with sinusoidal motion. Use `offset`, `rates`, and optional `phase`.
 - `emissive`: adds a constant emissive color.
 
 Particle emitters may include `draw_emissive` for host renderers that draw particles through emissive lighting.

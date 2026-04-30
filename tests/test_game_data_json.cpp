@@ -227,6 +227,8 @@ TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
     yyjson_val *options = required_object(scenes, "standard_options");
     EXPECT_EQ(required_string(options, "settings"), "entity.settings");
     EXPECT_EQ(required_string(options, "return_scene"), "scene.title");
+    EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(options, "single_scene")));
+    EXPECT_EQ(required_string(options, "menu_state_key"), "options_menu");
     yyjson_val *background = required_object(options, "background");
     EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(background, "renders_world")));
     EXPECT_EQ(required_string(background, "camera"), "camera.overhead");
