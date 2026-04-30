@@ -26,94 +26,32 @@ typedef struct NET_DatagramSocket
 typedef int NET_Status;
 #define NET_SUCCESS 0
 #define NET_FAILURE (-1)
-
-static bool NET_Init(void)
-{
-    return false;
-}
-
-static void NET_Quit(void)
-{
-}
-
-static NET_DatagramSocket *NET_CreateDatagramSocket(const char *interface, Uint16 port)
-{
-    (void)interface;
-    (void)port;
-    return NULL;
-}
-
-static void NET_DestroyDatagramSocket(NET_DatagramSocket *socket)
-{
-    (void)socket;
-}
-
-static NET_Address *NET_ResolveHostname(const char *host)
-{
-    (void)host;
-    return NULL;
-}
-
-static int NET_GetAddressStatus(const NET_Address *addr)
-{
-    (void)addr;
-    return NET_FAILURE;
-}
-
-static NET_Address *NET_RefAddress(const NET_Address *addr)
-{
-    return (NET_Address *)addr;
-}
-
-static void NET_UnrefAddress(NET_Address *addr)
-{
-    (void)addr;
-}
-
-static const char *NET_GetAddressString(const NET_Address *addr)
-{
-    (void)addr;
-    return NULL;
-}
-
-static int NET_CompareAddresses(const NET_Address *a, const NET_Address *b)
-{
-    return a == b ? 0 : 1;
-}
-
-static bool NET_SendDatagram(NET_DatagramSocket *socket, const NET_Address *addr, Uint16 port, const void *buf,
-                             int buflen)
-{
-    (void)socket;
-    (void)addr;
-    (void)port;
-    (void)buf;
-    (void)buflen;
-    return false;
-}
-
-static int NET_WaitUntilInputAvailable(void **sockets, int num_sockets, int timeout)
-{
-    (void)sockets;
-    (void)num_sockets;
-    (void)timeout;
-    return 0;
-}
-
-static bool NET_ReceiveDatagram(NET_DatagramSocket *socket, NET_Datagram **out_datagram)
-{
-    (void)socket;
-    if (out_datagram != NULL)
-    {
-        *out_datagram = NULL;
-    }
-    return true;
-}
-
-static void NET_DestroyDatagram(NET_Datagram *dgram)
-{
-    (void)dgram;
-}
+#define NET_Init() false
+#define NET_Quit()                                                                                                     \
+    do                                                                                                                 \
+    {                                                                                                                  \
+    } while (0)
+#define NET_CreateDatagramSocket(interface, port) ((NET_DatagramSocket *)NULL)
+#define NET_DestroyDatagramSocket(socket)                                                                              \
+    do                                                                                                                 \
+    {                                                                                                                  \
+    } while (0)
+#define NET_ResolveHostname(host) ((NET_Address *)NULL)
+#define NET_GetAddressStatus(addr) NET_FAILURE
+#define NET_RefAddress(addr) ((NET_Address *)(addr))
+#define NET_UnrefAddress(addr)                                                                                         \
+    do                                                                                                                 \
+    {                                                                                                                  \
+    } while (0)
+#define NET_GetAddressString(addr) ((const char *)NULL)
+#define NET_CompareAddresses(a, b) (((a) == (b)) ? 0 : 1)
+#define NET_SendDatagram(socket, addr, port, buf, buflen) false
+#define NET_WaitUntilInputAvailable(sockets, num_sockets, timeout) 0
+#define NET_ReceiveDatagram(socket, out_datagram) false
+#define NET_DestroyDatagram(dgram)                                                                                     \
+    do                                                                                                                 \
+    {                                                                                                                  \
+    } while (0)
 #endif
 
 typedef enum sdl3d_network_packet_kind
@@ -219,6 +157,7 @@ static void sdl3d_network_destroy_remote_address(sdl3d_network_session *session)
     }
 }
 
+#if SDL3D_NETWORKING_ENABLED
 static void sdl3d_network_queue_packet(sdl3d_network_session *session, const Uint8 *data, int size)
 {
     if (session == NULL || data == NULL || size <= 0 || size > SDL3D_NETWORK_MAX_PACKET_SIZE ||
@@ -235,22 +174,16 @@ static void sdl3d_network_queue_packet(sdl3d_network_session *session, const Uin
 
 static bool sdl3d_network_library_acquire(void)
 {
-#if SDL3D_NETWORKING_ENABLED
     if (sdl3d_network_library_refs == 0 && !NET_Init())
     {
         return false;
     }
     sdl3d_network_library_refs++;
     return true;
-#else
-    SDL_SetError("SDL3D networking is disabled at build time.");
-    return false;
-#endif
 }
 
 static void sdl3d_network_library_release(void)
 {
-#if SDL3D_NETWORKING_ENABLED
     if (sdl3d_network_library_refs > 0)
     {
         sdl3d_network_library_refs--;
@@ -259,8 +192,18 @@ static void sdl3d_network_library_release(void)
             NET_Quit();
         }
     }
-#endif
 }
+#else
+static bool sdl3d_network_library_acquire(void)
+{
+    SDL_SetError("SDL3D networking is disabled at build time.");
+    return false;
+}
+
+static void sdl3d_network_library_release(void)
+{
+}
+#endif
 
 static void sdl3d_network_write_u16(Uint8 *dst, Uint16 value)
 {
@@ -288,6 +231,7 @@ static Uint32 sdl3d_network_read_u32(const Uint8 *src)
     return SDL_Swap32LE(value);
 }
 
+#if SDL3D_NETWORKING_ENABLED
 static int sdl3d_network_encode_packet(Uint8 *buffer, int buffer_size, sdl3d_network_packet_kind kind,
                                        const void *payload, int payload_size)
 {
@@ -344,25 +288,16 @@ static bool sdl3d_network_decode_packet(const Uint8 *buffer, int size, sdl3d_net
 
 static bool sdl3d_network_address_matches(const NET_Address *a, Uint16 port_a, const NET_Address *b, Uint16 port_b)
 {
-#if SDL3D_NETWORKING_ENABLED
     if (a == NULL || b == NULL)
     {
         return false;
     }
     return NET_CompareAddresses(a, b) == 0 && port_a == port_b;
-#else
-    (void)a;
-    (void)port_a;
-    (void)b;
-    (void)port_b;
-    return false;
-#endif
 }
 
 static bool sdl3d_network_send_packet_to(sdl3d_network_session *session, NET_Address *address, Uint16 port,
                                          sdl3d_network_packet_kind kind, const void *payload, int payload_size)
 {
-#if SDL3D_NETWORKING_ENABLED
     if (session == NULL || session->socket == NULL || address == NULL || port == 0)
     {
         return false;
@@ -375,21 +310,11 @@ static bool sdl3d_network_send_packet_to(sdl3d_network_session *session, NET_Add
         return false;
     }
     return NET_SendDatagram(session->socket, address, port, packet, size);
-#else
-    (void)session;
-    (void)address;
-    (void)port;
-    (void)kind;
-    (void)payload;
-    (void)payload_size;
-    return false;
-#endif
 }
 
 static bool sdl3d_network_send_control(sdl3d_network_session *session, sdl3d_network_packet_kind kind,
                                        const void *payload, int payload_size)
 {
-#if SDL3D_NETWORKING_ENABLED
     if (session == NULL || session->socket == NULL)
     {
         return false;
@@ -408,13 +333,6 @@ static bool sdl3d_network_send_control(sdl3d_network_session *session, sdl3d_net
     }
 
     return false;
-#else
-    (void)session;
-    (void)kind;
-    (void)payload;
-    (void)payload_size;
-    return false;
-#endif
 }
 
 static void sdl3d_network_update_connected_activity(sdl3d_network_session *session, float dt)
@@ -551,6 +469,7 @@ static void sdl3d_network_process_datagram(sdl3d_network_session *session, const
         break;
     }
 }
+#endif
 
 void sdl3d_network_session_desc_init(sdl3d_network_session_desc *desc)
 {
