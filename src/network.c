@@ -8,12 +8,112 @@
 #if SDL3D_NETWORKING_ENABLED
 #include <SDL3_net/SDL_net.h>
 #else
-typedef void NET_Address;
-typedef void NET_Datagram;
-typedef void NET_DatagramSocket;
+typedef struct NET_Address
+{
+    int unused;
+} NET_Address;
+typedef struct NET_Datagram
+{
+    const Uint8 *buf;
+    int buflen;
+    NET_Address *addr;
+    Uint16 port;
+} NET_Datagram;
+typedef struct NET_DatagramSocket
+{
+    int unused;
+} NET_DatagramSocket;
 typedef int NET_Status;
 #define NET_SUCCESS 0
 #define NET_FAILURE (-1)
+
+static bool NET_Init(void)
+{
+    return false;
+}
+
+static void NET_Quit(void)
+{
+}
+
+static NET_DatagramSocket *NET_CreateDatagramSocket(const char *interface, Uint16 port)
+{
+    (void)interface;
+    (void)port;
+    return NULL;
+}
+
+static void NET_DestroyDatagramSocket(NET_DatagramSocket *socket)
+{
+    (void)socket;
+}
+
+static NET_Address *NET_ResolveHostname(const char *host)
+{
+    (void)host;
+    return NULL;
+}
+
+static int NET_GetAddressStatus(const NET_Address *addr)
+{
+    (void)addr;
+    return NET_FAILURE;
+}
+
+static NET_Address *NET_RefAddress(const NET_Address *addr)
+{
+    return (NET_Address *)addr;
+}
+
+static void NET_UnrefAddress(NET_Address *addr)
+{
+    (void)addr;
+}
+
+static const char *NET_GetAddressString(const NET_Address *addr)
+{
+    (void)addr;
+    return NULL;
+}
+
+static int NET_CompareAddresses(const NET_Address *a, const NET_Address *b)
+{
+    return a == b ? 0 : 1;
+}
+
+static bool NET_SendDatagram(NET_DatagramSocket *socket, const NET_Address *addr, Uint16 port, const void *buf,
+                             int buflen)
+{
+    (void)socket;
+    (void)addr;
+    (void)port;
+    (void)buf;
+    (void)buflen;
+    return false;
+}
+
+static int NET_WaitUntilInputAvailable(void **sockets, int num_sockets, int timeout)
+{
+    (void)sockets;
+    (void)num_sockets;
+    (void)timeout;
+    return 0;
+}
+
+static bool NET_ReceiveDatagram(NET_DatagramSocket *socket, NET_Datagram **out_datagram)
+{
+    (void)socket;
+    if (out_datagram != NULL)
+    {
+        *out_datagram = NULL;
+    }
+    return true;
+}
+
+static void NET_DestroyDatagram(NET_Datagram *dgram)
+{
+    (void)dgram;
+}
 #endif
 
 typedef enum sdl3d_network_packet_kind
