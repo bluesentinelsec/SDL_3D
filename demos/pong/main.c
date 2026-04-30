@@ -238,6 +238,52 @@ static bool is_network_role_client(const pong_state *state)
     return SDL_strcmp(network_role_name(state), "client") == 0;
 }
 
+static const char *scene_payload_string(const sdl3d_properties *payload, const char *key)
+{
+    return payload != NULL ? sdl3d_properties_get_string(payload, key, NULL) : NULL;
+}
+
+static const char *scene_context_string(const sdl3d_properties *payload, const sdl3d_properties *scene_state,
+                                        const char *key, const char *fallback)
+{
+    const char *value = scene_payload_string(payload, key);
+    if (value != NULL)
+    {
+        return value;
+    }
+    return scene_state != NULL ? sdl3d_properties_get_string(scene_state, key, fallback) : fallback;
+}
+
+static bool enter_multiplayer_play_scene(pong_state *state, const char *match_mode, const char *network_role)
+{
+    sdl3d_properties *payload = NULL;
+    bool ok = false;
+
+    if (state == NULL || state->data == NULL)
+    {
+        return false;
+    }
+
+    payload = sdl3d_properties_create();
+    if (payload == NULL)
+    {
+        return false;
+    }
+
+    if (match_mode != NULL)
+    {
+        sdl3d_properties_set_string(payload, "match_mode", match_mode);
+    }
+    if (network_role != NULL)
+    {
+        sdl3d_properties_set_string(payload, "network_role", network_role);
+    }
+
+    ok = sdl3d_game_data_set_active_scene_with_payload(state->data, "scene.play", payload);
+    sdl3d_properties_destroy(payload);
+    return ok;
+}
+
 static void clear_network_action_overrides(pong_state *state)
 {
     if (state == NULL || state->input == NULL || state->data == NULL)
@@ -417,19 +463,35 @@ static bool configure_play_input(void *userdata, sdl3d_game_data_runtime *runtim
     (void)runtime;
     (void)adapter_name;
     (void)target;
-    (void)payload;
 
     if (state == NULL || state->data == NULL || state->input == NULL)
     {
         return false;
     }
 
+    const sdl3d_properties *scene_state = sdl3d_game_data_scene_state(state->data);
+    sdl3d_properties *mutable_scene_state = sdl3d_game_data_mutable_scene_state(state->data);
+    const char *match_mode = scene_context_string(payload, scene_state, "match_mode", "single");
+    const char *network_role = scene_context_string(payload, scene_state, "network_role", "none");
+    const char *network_flow = scene_context_string(payload, scene_state, "network_flow", "none");
+
     clear_network_action_overrides(state);
-    if (is_local_match_mode(state))
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong play input context: match_mode=%s network_role=%s network_flow=%s",
+                match_mode != NULL ? match_mode : "none", network_role != NULL ? network_role : "none",
+                network_flow != NULL ? network_flow : "none");
+
+    if (mutable_scene_state != NULL)
+    {
+        sdl3d_properties_set_string(mutable_scene_state, "match_mode", match_mode != NULL ? match_mode : "single");
+        sdl3d_properties_set_string(mutable_scene_state, "network_role", network_role != NULL ? network_role : "none");
+        sdl3d_properties_set_string(mutable_scene_state, "network_flow", network_flow != NULL ? network_flow : "none");
+    }
+
+    if (SDL_strcmp(match_mode != NULL ? match_mode : "single", "local") == 0)
     {
         bind_local_play_controls(state);
     }
-    else if (is_network_role_host(state))
+    else if (SDL_strcmp(network_role != NULL ? network_role : "none", "host") == 0)
     {
         bind_network_play_controls(state, "action.paddle.up", "action.paddle.down");
         const int p2_up = sdl3d_game_data_find_action(state->data, "action.paddle.local.up");
@@ -443,7 +505,7 @@ static bool configure_play_input(void *userdata, sdl3d_game_data_runtime *runtim
             sdl3d_input_unbind_action(state->input, p2_down);
         }
     }
-    else if (is_network_role_client(state))
+    else if (SDL_strcmp(network_role != NULL ? network_role : "none", "client") == 0)
     {
         const int p1_up = sdl3d_game_data_find_action(state->data, "action.paddle.up");
         const int p1_down = sdl3d_game_data_find_action(state->data, "action.paddle.down");
@@ -890,17 +952,12 @@ static void update_direct_connect_session_status(pong_state *state)
             if (packet_size >= 1 && packet[0] == (Uint8)PONG_NETWORK_MESSAGE_START_GAME)
             {
                 SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong client received multiplayer start request");
-                if (state->data != NULL)
-                {
-                    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(state->data);
-                    if (scene_state != NULL)
-                    {
-                        sdl3d_properties_set_string(scene_state, "match_mode", "lan");
-                        sdl3d_properties_set_string(scene_state, "network_role", "client");
-                    }
-                }
                 clear_network_action_overrides(state);
-                (void)sdl3d_game_data_set_active_scene(state->data, "scene.play");
+                if (!enter_multiplayer_play_scene(state, "lan", "client"))
+                {
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong client failed to enter multiplayer play scene: %s",
+                                SDL_GetError());
+                }
                 break;
             }
             if (is_multiplayer_play_scene(state) && packet_size >= 12)
@@ -1150,19 +1207,8 @@ static void on_multiplayer_lobby_signal(void *userdata, int signal_id, const sdl
         return;
     }
 
-    if (state->data != NULL)
-    {
-        sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(state->data);
-        if (scene_state != NULL)
-        {
-            sdl3d_properties_set_string(scene_state, "match_mode", "lan");
-            sdl3d_properties_set_string(scene_state, "network_role", "host");
-        }
-    }
-
     clear_network_action_overrides(state);
-
-    if (!sdl3d_game_data_set_active_scene(state->data, "scene.play"))
+    if (!enter_multiplayer_play_scene(state, "lan", "host"))
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong host failed to enter multiplayer play scene: %s",
                     SDL_GetError());
