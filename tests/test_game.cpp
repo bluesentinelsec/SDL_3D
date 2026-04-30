@@ -187,6 +187,17 @@ bool event_returns_false(sdl3d_game_context *ctx, void *userdata, const SDL_Even
     return true;
 }
 
+bool consume_key_event_in_callback(sdl3d_game_context *ctx, void *userdata, const SDL_Event *event)
+{
+    auto *state = static_cast<GameTestState *>(userdata);
+    if (event->type == SDL_EVENT_KEY_DOWN)
+    {
+        ctx->input_event_consumed = true;
+        state->event_called = true;
+    }
+    return true;
+}
+
 void quit_in_render(sdl3d_game_context *ctx, void *userdata, float alpha)
 {
     auto *state = static_cast<GameTestState *>(userdata);
@@ -593,6 +604,21 @@ TEST(ManagedGameLoop, InputManagerProcessesEventsBeforeTick)
     EXPECT_EQ(0, run_test_game(&callbacks, &state));
     EXPECT_GE(state.tick_count, 1);
     EXPECT_TRUE(state.saw_input_action_in_tick);
+}
+
+TEST(ManagedGameLoop, EventCallbackCanConsumeInputBeforeSnapshot)
+{
+    GameTestState state;
+    sdl3d_game_callbacks callbacks{};
+    callbacks.init = bind_and_push_input_in_init;
+    callbacks.event = consume_key_event_in_callback;
+    callbacks.tick = quit_after_input_tick;
+    callbacks.render = stop_after_many_null_frames;
+
+    EXPECT_EQ(0, run_test_game(&callbacks, &state));
+    EXPECT_GE(state.tick_count, 1);
+    EXPECT_TRUE(state.event_called);
+    EXPECT_FALSE(state.saw_input_action_in_tick);
 }
 
 TEST(ManagedGameLoop, InputPressedEdgeIsNotRepeatedAcrossCatchUpTicks)

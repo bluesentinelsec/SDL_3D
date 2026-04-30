@@ -1334,7 +1334,17 @@ static bool pong_handle_event(sdl3d_game_context *ctx, void *userdata, const SDL
     pong_state *state = (pong_state *)userdata;
     if (state != NULL && is_direct_connect_scene(state) && state->direct_connect_ui != NULL && event != NULL)
     {
+        const bool mouse_event = event->type == SDL_EVENT_MOUSE_MOTION || event->type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                                 event->type == SDL_EVENT_MOUSE_BUTTON_UP || event->type == SDL_EVENT_MOUSE_WHEEL;
+        const bool key_event =
+            event->type == SDL_EVENT_KEY_DOWN || event->type == SDL_EVENT_KEY_UP || event->type == SDL_EVENT_TEXT_INPUT;
+
         (void)sdl3d_ui_process_event(state->direct_connect_ui, event);
+
+        if (mouse_event || key_event)
+        {
+            ctx->input_event_consumed = true;
+        }
     }
     (void)ctx;
     return true;

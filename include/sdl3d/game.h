@@ -221,6 +221,7 @@ extern "C"
         sdl3d_render_context *renderer; /**< SDL3D render context owned by the managed loop. */
         float real_time;                /**< Wall-clock time accumulated by rendered frames. */
         bool paused;                    /**< When true, fixed ticks and timer pools are frozen. */
+        bool input_event_consumed;      /**< Set true by the event callback to skip raw input delivery for one event. */
         bool quit_requested;            /**< Set true from any callback to leave the loop. */
     } sdl3d_game_context;
 
@@ -247,8 +248,10 @@ extern "C"
          * @brief Called for each non-quit SDL event.
          *
          * SDL_EVENT_QUIT is handled by the managed loop and always requests
-         * shutdown. Return false from this callback to request shutdown for
-         * game-specific events such as Escape.
+         * shutdown. Set ctx->input_event_consumed to true to prevent the raw
+         * event from reaching the session input manager. Return false from
+         * this callback to request shutdown for game-specific events such as
+         * Escape.
          *
          * @param ctx      Managed-loop context.
          * @param userdata Caller-owned pointer passed to sdl3d_run_game.
