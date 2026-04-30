@@ -1616,8 +1616,7 @@ static sdl3d_gl_mesh_cache_entry *mesh_cache_lookup_or_create(sdl3d_gl_context *
                                                               const float *positions, const float *normals,
                                                               const float *uvs, const float *lightmap_uvs,
                                                               const float *colors, const unsigned int *indices,
-                                                              int vertex_count, int index_count,
-                                                              bool has_lightmap_uvs)
+                                                              int vertex_count, int index_count, bool has_lightmap_uvs)
 {
     for (sdl3d_gl_mesh_cache_entry *entry = ctx->mesh_cache; entry != NULL; entry = entry->next)
     {
@@ -1696,9 +1695,9 @@ static void mesh_cache_free(sdl3d_gl_context *ctx)
     while (entry != NULL)
     {
         sdl3d_gl_mesh_cache_entry *next = entry->next;
-        GLuint buffers[] = {entry->position_vbo,        entry->normal_vbo, entry->uv_vbo,       entry->lightmap_uv_vbo,
-                            entry->color_vbo,           entry->ebo,        entry->shadow_position_vbo,
-                            entry->shadow_ebo};
+        GLuint buffers[] = {entry->position_vbo,        entry->normal_vbo, entry->uv_vbo,
+                            entry->lightmap_uv_vbo,     entry->color_vbo,  entry->ebo,
+                            entry->shadow_position_vbo, entry->shadow_ebo};
         gl->DeleteBuffers(8, buffers);
         if (entry->vao)
             gl->DeleteVertexArrays(1, &entry->vao);
@@ -2082,8 +2081,8 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
             if (e->mesh_cache == NULL)
             {
                 gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_position_vbo);
-                gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)),
-                               e->positions, GL_DYNAMIC_DRAW);
+                gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->positions,
+                               GL_DYNAMIC_DRAW);
                 gl->BindBuffer(GL_ARRAY_BUFFER, ctx->lit_normal_vbo);
                 gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->normals,
                                GL_DYNAMIC_DRAW);
@@ -2128,8 +2127,8 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
             if (e->mesh_cache == NULL)
             {
                 gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_position_vbo);
-                gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)),
-                               e->positions, GL_DYNAMIC_DRAW);
+                gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->positions,
+                               GL_DYNAMIC_DRAW);
                 gl->BindBuffer(GL_ARRAY_BUFFER, ctx->unlit_uv_vbo);
                 gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 2 * sizeof(float)), e->uvs,
                                GL_DYNAMIC_DRAW);
@@ -3102,7 +3101,7 @@ static bool gl_draw_mesh_unlit(sdl3d_render_context *context, const sdl3d_draw_p
         e->colors = colors;
         e->indices = params->indices;
         e->mesh_cache = mesh_cache_lookup_or_create(ctx, false, e->primitive_mode, e->positions, NULL, e->uvs, NULL,
-                                                     e->colors, e->indices, e->vertex_count, e->index_count, false);
+                                                    e->colors, e->indices, e->vertex_count, e->index_count, false);
         return e->mesh_cache != NULL;
     }
 
@@ -3147,9 +3146,9 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
         e->lightmap_uvs = params->lightmap_uvs;
         e->colors = colors;
         e->indices = params->indices;
-        e->mesh_cache = mesh_cache_lookup_or_create(ctx, true, e->primitive_mode, e->positions, e->normals, e->uvs,
-                                                     e->lightmap_uvs, e->colors, e->indices, e->vertex_count,
-                                                     e->index_count, e->has_lightmap);
+        e->mesh_cache =
+            mesh_cache_lookup_or_create(ctx, true, e->primitive_mode, e->positions, e->normals, e->uvs, e->lightmap_uvs,
+                                        e->colors, e->indices, e->vertex_count, e->index_count, e->has_lightmap);
         return e->mesh_cache != NULL;
     }
 

@@ -918,8 +918,8 @@ static void doom_tick_profile_record(double actions_ms, double transition_ms, do
                 "entities=%.2f player=%.2f sensors=%.2f ticks=%d",
                 g_tick_profile.frame_ms / ticks, g_tick_profile.actions_ms / ticks,
                 g_tick_profile.transition_ms / ticks, g_tick_profile.lift_ms / ticks, g_tick_profile.doors_ms / ticks,
-                g_tick_profile.particles_ms / ticks, g_tick_profile.entities_ms / ticks, g_tick_profile.player_ms / ticks,
-                g_tick_profile.sensors_ms / ticks, g_tick_profile.ticks);
+                g_tick_profile.particles_ms / ticks, g_tick_profile.entities_ms / ticks,
+                g_tick_profile.player_ms / ticks, g_tick_profile.sensors_ms / ticks, g_tick_profile.ticks);
     g_tick_profile.last_counter = now;
     g_tick_profile.actions_ms = 0.0;
     g_tick_profile.transition_ms = 0.0;
