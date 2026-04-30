@@ -205,6 +205,7 @@ static void sdl3d_network_library_release(void)
 }
 #endif
 
+#if SDL3D_NETWORKING_ENABLED
 static void sdl3d_network_write_u16(Uint8 *dst, Uint16 value)
 {
     Uint16 encoded = SDL_Swap16LE(value);
@@ -230,6 +231,7 @@ static Uint32 sdl3d_network_read_u32(const Uint8 *src)
     SDL_memcpy(&value, src, sizeof(value));
     return SDL_Swap32LE(value);
 }
+#endif
 
 #if SDL3D_NETWORKING_ENABLED
 static int sdl3d_network_encode_packet(Uint8 *buffer, int buffer_size, sdl3d_network_packet_kind kind,
