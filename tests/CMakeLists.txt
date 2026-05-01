@@ -141,6 +141,11 @@ if(ANDROID)
 
     target_compile_features(main PRIVATE cxx_std_17)
     target_include_directories(main PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_compile_definitions(
+        main
+        PRIVATE
+            SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
+    )
     sdl3d_enable_sanitizers(main)
 elseif(IOS)
     # iOS apps must be bundled as .app directories and cannot launch bare
@@ -160,6 +165,11 @@ elseif(IOS)
 
     target_compile_features(sdl3d_ios_tests PRIVATE cxx_std_17)
     target_include_directories(sdl3d_ios_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_compile_definitions(
+        sdl3d_ios_tests
+        PRIVATE
+            SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
+    )
     sdl3d_enable_sanitizers(sdl3d_ios_tests)
 
     set_target_properties(
@@ -204,11 +214,21 @@ else()
     sdl3d_add_test(sdl3d_effects_test test_effects.cpp unit)
     sdl3d_add_test(sdl3d_game_test test_game.cpp render)
     sdl3d_add_test(sdl3d_pong_multiplayer_test test_pong_multiplayer.cpp unit)
-    target_compile_definitions(
-        sdl3d_pong_multiplayer_test
-        PRIVATE
-            SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
-    )
+    if(EMSCRIPTEN)
+        target_compile_definitions(
+            sdl3d_pong_multiplayer_test
+            PRIVATE
+                SDL3D_PONG_DATA_PATH="/pong/pong.game.json"
+        )
+        sdl3d_target_preload_asset_directory(sdl3d_pong_multiplayer_test "${CMAKE_SOURCE_DIR}/demos/pong/data"
+                                             "/pong")
+    else()
+        target_compile_definitions(
+            sdl3d_pong_multiplayer_test
+            PRIVATE
+                SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
+        )
+    endif()
     sdl3d_add_test(sdl3d_game_session_test test_game_session.cpp unit)
     if(SDL3D_ENABLE_NETWORKING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         sdl3d_add_test(sdl3d_network_test test_network.cpp unit)
