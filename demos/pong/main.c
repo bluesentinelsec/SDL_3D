@@ -2,6 +2,7 @@
 #include <SDL3/SDL_keyboard.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_main.h>
+#include <SDL3/SDL_timer.h>
 #include <SDL3/SDL_stdinc.h>
 
 #include <stdbool.h>
@@ -57,6 +58,58 @@ typedef enum pong_network_message_kind
 
 static const Uint32 PONG_NETWORK_PACKET_MAGIC = 0x474E4F50u; /* "PONG" little-endian */
 static const Uint8 PONG_NETWORK_PACKET_VERSION = 1U;
+
+static Uint64 pong_log_timestamp_ms(void)
+{
+    return SDL_GetTicks();
+}
+
+static void pong_log_multiplayer_state(const char *prefix, const pong_state *state, Uint32 packet_tick,
+                                       const char *extra)
+{
+    const sdl3d_properties *scene_state =
+        state != NULL && state->data != NULL ? sdl3d_game_data_scene_state(state->data) : NULL;
+    const sdl3d_registered_actor *player =
+        state != NULL && state->data != NULL ? sdl3d_game_data_find_actor(state->data, "entity.paddle.player") : NULL;
+    const sdl3d_registered_actor *cpu =
+        state != NULL && state->data != NULL ? sdl3d_game_data_find_actor(state->data, "entity.paddle.cpu") : NULL;
+    const sdl3d_registered_actor *ball =
+        state != NULL && state->data != NULL ? sdl3d_game_data_find_actor(state->data, "entity.ball") : NULL;
+    const sdl3d_registered_actor *match =
+        state != NULL && state->data != NULL ? sdl3d_game_data_find_actor(state->data, "entity.match") : NULL;
+    const sdl3d_registered_actor *score_player_actor =
+        state != NULL && state->data != NULL ? sdl3d_game_data_find_actor(state->data, "entity.score.player") : NULL;
+    const sdl3d_registered_actor *score_cpu_actor =
+        state != NULL && state->data != NULL ? sdl3d_game_data_find_actor(state->data, "entity.score.cpu") : NULL;
+    const sdl3d_vec3 player_position = player != NULL ? player->position : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const sdl3d_vec3 cpu_position = cpu != NULL ? cpu->position : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const sdl3d_vec3 ball_position = ball != NULL ? ball->position : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const sdl3d_vec3 ball_velocity = ball != NULL
+                                         ? sdl3d_properties_get_vec3(ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f))
+                                         : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const int score_player = score_player_actor != NULL ? sdl3d_properties_get_int(score_player_actor->props, "value", 0) : 0;
+    const int score_cpu = score_cpu_actor != NULL ? sdl3d_properties_get_int(score_cpu_actor->props, "value", 0) : 0;
+    const bool finished = match != NULL && sdl3d_properties_get_bool(match->props, "finished", false);
+    const char *winner = match != NULL ? sdl3d_properties_get_string(match->props, "winner", "none") : "none";
+    const char *match_mode = scene_state != NULL ? sdl3d_properties_get_string(scene_state, "match_mode", "none") : "none";
+    const char *network_role = scene_state != NULL ? sdl3d_properties_get_string(scene_state, "network_role", "none") : "none";
+    const char *network_flow = scene_state != NULL ? sdl3d_properties_get_string(scene_state, "network_flow", "none") : "none";
+
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "[%llu ms] Pong %s tick=%u scene=%s match_mode=%s network_role=%s network_flow=%s "
+                "scores=%d:%d finished=%d winner=%s player=(%.2f,%.2f,%.2f) cpu=(%.2f,%.2f,%.2f) "
+                "ball=(%.2f,%.2f,%.2f) vel=(%.2f,%.2f)%s%s",
+                (unsigned long long)pong_log_timestamp_ms(), prefix != NULL ? prefix : "state", (unsigned int)packet_tick,
+                state != NULL && state->data != NULL && sdl3d_game_data_active_scene(state->data) != NULL
+                    ? sdl3d_game_data_active_scene(state->data)
+                    : "<none>",
+                match_mode != NULL ? match_mode : "none", network_role != NULL ? network_role : "none",
+                network_flow != NULL ? network_flow : "none", score_player, score_cpu, finished ? 1 : 0,
+                winner != NULL ? winner : "none", player_position.x, player_position.y, player_position.z,
+                cpu_position.x, cpu_position.y, cpu_position.z, ball_position.x, ball_position.y, ball_position.z,
+                ball_velocity.x, ball_velocity.y, extra != NULL && extra[0] != '\0' ? " " : "",
+                extra != NULL ? extra : "");
+}
 
 static bool pong_network_write_u8(Uint8 **cursor, Uint8 *end, Uint8 value)
 {
@@ -673,10 +726,18 @@ static bool send_client_input_packet(pong_state *state)
         return false;
     }
 
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "[%llu ms] Pong client->host input tick=%u up=%.3f down=%.3f scene=%s",
+                (unsigned long long)pong_log_timestamp_ms(), snapshot != NULL ? (unsigned int)SDL_max(snapshot->tick, 0)
+                                                                               : 0U,
+                up_value, down_value,
+                state != NULL && state->data != NULL && sdl3d_game_data_active_scene(state->data) != NULL
+                    ? sdl3d_game_data_active_scene(state->data)
+                    : "<none>");
     return true;
 }
 
-static bool apply_play_state_snapshot(pong_state *state, const Uint8 **cursor, const Uint8 *end)
+static bool apply_play_state_snapshot(pong_state *state, Uint32 packet_tick, const Uint8 **cursor, const Uint8 *end)
 {
     sdl3d_registered_actor *player = NULL;
     sdl3d_registered_actor *cpu = NULL;
@@ -742,6 +803,7 @@ static bool apply_play_state_snapshot(pong_state *state, const Uint8 **cursor, c
     sdl3d_properties_set_string(match->props, "winner", winner == 1 ? "player" : winner == 2 ? "cpu" : "none");
     sdl3d_properties_set_float(presentation->props, "border_flash", border_flash);
     sdl3d_properties_set_float(presentation->props, "paddle_flash", paddle_flash);
+    pong_log_multiplayer_state("client<-host state", state, packet_tick, "applied");
     return true;
 }
 
@@ -774,6 +836,12 @@ static bool process_host_input_packet(pong_state *state, const Uint8 *packet, in
     (void)tick;
     set_network_action_override(state, "action.paddle.local.up", up_value);
     set_network_action_override(state, "action.paddle.local.down", down_value);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "[%llu ms] Pong host<-client input tick=%u up=%.3f down=%.3f scene=%s",
+                (unsigned long long)pong_log_timestamp_ms(), (unsigned int)tick, up_value, down_value,
+                state != NULL && state->data != NULL && sdl3d_game_data_active_scene(state->data) != NULL
+                    ? sdl3d_game_data_active_scene(state->data)
+                    : "<none>");
     return true;
 }
 
@@ -806,8 +874,7 @@ static bool process_client_state_packet(pong_state *state, const Uint8 *packet, 
 
     set_network_action_override(state, "action.paddle.up", p1_up);
     set_network_action_override(state, "action.paddle.down", p1_down);
-    ok = apply_play_state_snapshot(state, &cursor, end);
-    (void)tick;
+    ok = apply_play_state_snapshot(state, tick, &cursor, end);
     return ok;
 }
 
@@ -888,6 +955,8 @@ static bool send_host_state_packet(pong_state *state)
         return false;
     }
 
+    pong_log_multiplayer_state("host->client state", state, snapshot != NULL ? (Uint32)SDL_max(snapshot->tick, 0) : 0U,
+                               "sent");
     return true;
 }
 
