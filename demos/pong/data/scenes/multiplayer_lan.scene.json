@@ -44,11 +44,6 @@
           "scene": "scene.multiplayer.join",
           "scene_state": { "key": "network_flow", "value": "join" }
         },
-        {
-          "label": "Direct Connect",
-          "scene": "scene.multiplayer.direct_connect",
-          "scene_state": { "key": "network_flow", "value": "direct" }
-        },
         { "label": "Back", "scene": "scene.multiplayer" }
       ]
     }

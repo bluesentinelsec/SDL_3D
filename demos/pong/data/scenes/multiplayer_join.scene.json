@@ -56,6 +56,16 @@
       "select_signal": "signal.ui.menu.select",
       "selected": 0,
       "items": [
+        {
+          "label": "Search for local matches",
+          "scene": "scene.multiplayer.discovery",
+          "scene_state": { "key": "network_flow", "value": "lan_discovery" }
+        },
+        {
+          "label": "Join match with IP address or hostname",
+          "scene": "scene.multiplayer.direct_connect",
+          "scene_state": { "key": "network_flow", "value": "direct" }
+        },
         { "label": "Back", "scene": "scene.multiplayer.lan" }
       ]
     }
@@ -75,7 +85,7 @@
       {
         "name": "ui.multiplayer.join.status",
         "font": "font.hud",
-        "text": "AUTOMATIC LAN DISCOVERY",
+        "text": "CHOOSE HOW TO JOIN",
         "x": 0.5,
         "y": 0.30,
         "normalized": true,
