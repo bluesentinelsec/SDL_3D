@@ -108,6 +108,32 @@ bool serve_adapter(void *userdata, sdl3d_game_data_runtime *runtime, const char 
     return true;
 }
 
+bool configure_play_input_adapter(void *, sdl3d_game_data_runtime *runtime, const char *adapter_name,
+                                  sdl3d_registered_actor *, const sdl3d_properties *payload)
+{
+    EXPECT_STREQ(adapter_name, "adapter.pong.configure_play_input");
+    EXPECT_NE(runtime, nullptr);
+    if (payload != nullptr)
+    {
+        const char *match_mode = sdl3d_properties_get_string(payload, "match_mode", nullptr);
+        const char *network_role = sdl3d_properties_get_string(payload, "network_role", nullptr);
+        const char *network_flow = sdl3d_properties_get_string(payload, "network_flow", nullptr);
+        if (match_mode != nullptr)
+        {
+            sdl3d_properties_set_string(sdl3d_game_data_mutable_scene_state(runtime), "match_mode", match_mode);
+        }
+        if (network_role != nullptr)
+        {
+            sdl3d_properties_set_string(sdl3d_game_data_mutable_scene_state(runtime), "network_role", network_role);
+        }
+        if (network_flow != nullptr)
+        {
+            sdl3d_properties_set_string(sdl3d_game_data_mutable_scene_state(runtime), "network_flow", network_flow);
+        }
+    }
+    return true;
+}
+
 bool reload_native_adapter(void *userdata, sdl3d_game_data_runtime *runtime, const char *adapter_name,
                            sdl3d_registered_actor *target, const sdl3d_properties *payload)
 {
@@ -3448,6 +3474,32 @@ TEST(GameDataRuntime, LuaControllerMovesCpuPaddleTowardBall)
 
     EXPECT_GT(cpu->position.y, 0.0f);
     EXPECT_LE(cpu->position.y, 0.55f);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, PongClientDoesNotStartServeTimer)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_register_adapter(runtime, "adapter.pong.configure_play_input",
+                                                 configure_play_input_adapter, nullptr));
+
+    sdl3d_properties *payload = sdl3d_properties_create();
+    ASSERT_NE(payload, nullptr);
+    sdl3d_properties_set_string(payload, "match_mode", "lan");
+    sdl3d_properties_set_string(payload, "network_role", "client");
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene_with_payload(runtime, "scene.play", payload));
+    sdl3d_properties_destroy(payload);
+
+    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "network_role", ""), "client");
+    EXPECT_FALSE(sdl3d_game_data_active_scene_update_phase(runtime, "simulation", false));
+    EXPECT_EQ(sdl3d_timer_pool_active_count(sdl3d_game_session_get_timer_pool(session)), 0);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);

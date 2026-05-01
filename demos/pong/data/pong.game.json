@@ -1632,7 +1632,22 @@
         "signal": "signal.game.start",
         "actions": [
           { "type": "adapter.invoke", "adapter": "adapter.pong.configure_play_input" },
-          { "type": "timer.start", "timer": "timer.round.serve" }
+          {
+            "type": "branch",
+            "if": {
+              "type": "not",
+              "condition": {
+                "type": "scene_state.compare",
+                "key": "network_role",
+                "op": "==",
+                "value": "client"
+              }
+            },
+            "then": [
+              { "type": "timer.start", "timer": "timer.round.serve" }
+            ],
+            "else": []
+          }
         ]
       },
       {

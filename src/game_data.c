@@ -7332,12 +7332,7 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
     if (SDL_strcmp(type, "branch") == 0)
     {
         yyjson_val *condition = obj_get(action, "if");
-        sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, json_string(condition, "target", NULL));
-        const char *key = json_string(condition, "key", NULL);
-        const char *op = json_string(condition, "op", NULL);
-        const bool passed =
-            target != NULL && key != NULL &&
-            compare_value(sdl3d_properties_get_value(target->props, key), op, obj_get(condition, "value"));
+        const bool passed = eval_data_condition(runtime, condition, NULL);
         return execute_action_array(runtime, obj_get(action, passed ? "then" : "else"), payload);
     }
 

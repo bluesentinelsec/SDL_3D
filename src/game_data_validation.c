@@ -1316,17 +1316,10 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *condition = obj_get(action, "if");
         if (!yyjson_is_obj(condition))
             return validation_error(ctx, json_path, "branch requires an object 'if' condition");
-        if (SDL_strcmp(json_string(condition, "type") != NULL ? json_string(condition, "type") : "",
-                       "property.compare") != 0)
-            return validation_error(ctx, json_path, "branch currently supports only property.compare conditions");
-        if (!require_ref(ctx, &names->entities, "entity", json_string(condition, "target"), json_path))
+        char condition_path[PATH_BUFFER_SIZE];
+        format_path(condition_path, sizeof(condition_path), "%s.if", json_path);
+        if (!validate_data_condition(ctx, condition, condition_path, names))
             return false;
-        if (!is_non_empty_string(condition, "key"))
-            return validation_error(ctx, json_path, "property.compare requires a non-empty key");
-        if (!is_compare_op(json_string(condition, "op")))
-            return validation_error(ctx, json_path, "property.compare requires a supported comparison operator");
-        if (obj_get(condition, "value") == NULL)
-            return validation_error(ctx, json_path, "property.compare requires a value");
         char then_path[PATH_BUFFER_SIZE];
         char else_path[PATH_BUFFER_SIZE];
         format_path(then_path, sizeof(then_path), "%s.then", json_path);
