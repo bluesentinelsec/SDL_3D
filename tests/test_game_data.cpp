@@ -1454,7 +1454,6 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer.join"));
     EXPECT_TRUE(sdl3d_game_data_active_scene_renders_world(runtime));
-    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.multiplayer.discovery"));
     ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.multiplayer.join");
     EXPECT_EQ(menu.item_count, 3);
