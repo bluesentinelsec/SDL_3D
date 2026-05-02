@@ -1471,12 +1471,7 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_FALSE(sdl3d_game_data_get_active_menu(runtime, &menu));
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer.discovery"));
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
-    EXPECT_STREQ(menu.name, "menu.multiplayer.discovery");
-    EXPECT_EQ(menu.item_count, 1);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
-    EXPECT_STREQ(item.label, "Back");
-    EXPECT_STREQ(item.scene, "scene.multiplayer.join");
+    EXPECT_FALSE(sdl3d_game_data_get_active_menu(runtime, &menu));
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
     EXPECT_FALSE(sdl3d_game_data_active_scene_updates_game(runtime));

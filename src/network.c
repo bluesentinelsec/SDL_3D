@@ -61,6 +61,8 @@ typedef enum sdl3d_network_packet_kind
     SDL3D_NETWORK_PACKET_REJECT = 3,
     SDL3D_NETWORK_PACKET_KEEPALIVE = 4,
     SDL3D_NETWORK_PACKET_USER = 5,
+    SDL3D_NETWORK_PACKET_DISCOVERY_QUERY = 6,
+    SDL3D_NETWORK_PACKET_DISCOVERY_REPLY = 7,
 } sdl3d_network_packet_kind;
 
 typedef struct sdl3d_network_packet_entry
@@ -73,6 +75,7 @@ struct sdl3d_network_session
 {
     sdl3d_network_session_desc desc;
     char host[SDL3D_NETWORK_MAX_HOST_LENGTH];
+    char session_name[SDL3D_NETWORK_MAX_HOST_LENGTH];
     char status[SDL3D_NETWORK_MAX_STATUS_LENGTH];
     sdl3d_network_state state;
     float handshake_elapsed;
@@ -89,6 +92,21 @@ struct sdl3d_network_session
     sdl3d_network_packet_entry queue[SDL3D_NETWORK_MAX_QUEUE_SIZE];
     int queue_head;
     int queue_count;
+};
+
+struct sdl3d_network_discovery_session
+{
+    sdl3d_network_discovery_session_desc desc;
+    char status[SDL3D_NETWORK_MAX_STATUS_LENGTH];
+    NET_DatagramSocket *socket;
+    NET_Address *target_address;
+    char target_host[SDL3D_NETWORK_MAX_HOST_LENGTH];
+    Uint16 target_port;
+    sdl3d_network_discovery_result results[SDL3D_NETWORK_MAX_DISCOVERY_RESULTS];
+    int result_count;
+    float elapsed;
+    float refresh_elapsed;
+    bool scanning;
 };
 
 #if SDL3D_NETWORKING_ENABLED
@@ -157,7 +175,30 @@ static void sdl3d_network_destroy_remote_address(sdl3d_network_session *session)
     }
 }
 
+static void sdl3d_network_discovery_destroy_target_address(sdl3d_network_discovery_session *session)
+{
+    if (session == NULL)
+    {
+        return;
+    }
+
+    if (session->target_address != NULL)
+    {
+        NET_UnrefAddress(session->target_address);
+        session->target_address = NULL;
+    }
+}
+
 #if SDL3D_NETWORKING_ENABLED
+static int sdl3d_network_encode_packet(Uint8 *buffer, int buffer_size, sdl3d_network_packet_kind kind,
+                                       const void *payload, int payload_size);
+static bool sdl3d_network_decode_packet(const Uint8 *buffer, int size, sdl3d_network_packet_kind *out_kind,
+                                        const Uint8 **out_payload, int *out_payload_size);
+static void sdl3d_network_write_u16(Uint8 *dst, Uint16 value);
+static Uint16 sdl3d_network_read_u16(const Uint8 *src);
+static bool sdl3d_network_send_packet_to(sdl3d_network_session *session, NET_Address *address, Uint16 port,
+                                         sdl3d_network_packet_kind kind, const void *payload, int payload_size);
+
 static void sdl3d_network_queue_packet(sdl3d_network_session *session, const Uint8 *data, int size)
 {
     if (session == NULL || data == NULL || size <= 0 || size > SDL3D_NETWORK_MAX_PACKET_SIZE ||
@@ -192,6 +233,190 @@ static void sdl3d_network_library_release(void)
             NET_Quit();
         }
     }
+}
+
+static const char *sdl3d_network_session_advertised_name(const sdl3d_network_session *session)
+{
+    if (session == NULL || session->session_name[0] == '\0')
+    {
+        return "SDL3D Session";
+    }
+    return session->session_name;
+}
+
+static void sdl3d_network_discovery_clear_results(sdl3d_network_discovery_session *session)
+{
+    if (session == NULL)
+    {
+        return;
+    }
+
+    SDL_zeroa(session->results);
+    session->result_count = 0;
+}
+
+static bool sdl3d_network_discovery_add_result(sdl3d_network_discovery_session *session, const char *session_name,
+                                               const char *host, Uint16 port, const char *status)
+{
+    if (session == NULL || host == NULL || host[0] == '\0' || port == 0)
+    {
+        return false;
+    }
+
+    for (int i = 0; i < session->result_count; ++i)
+    {
+        sdl3d_network_discovery_result *result = &session->results[i];
+        if (SDL_strcmp(result->host, host) == 0 && result->port == port)
+        {
+            SDL_snprintf(result->session_name, sizeof(result->session_name), "%s",
+                         session_name != NULL && session_name[0] != '\0' ? session_name : "SDL3D Session");
+            SDL_snprintf(result->status, sizeof(result->status), "%s", status != NULL ? status : "");
+            result->last_seen_ms = SDL_GetTicks();
+            return true;
+        }
+    }
+
+    if (session->result_count >= SDL3D_NETWORK_MAX_DISCOVERY_RESULTS)
+    {
+        return false;
+    }
+
+    sdl3d_network_discovery_result *result = &session->results[session->result_count++];
+    SDL_snprintf(result->session_name, sizeof(result->session_name), "%s",
+                 session_name != NULL && session_name[0] != '\0' ? session_name : "SDL3D Session");
+    SDL_snprintf(result->host, sizeof(result->host), "%s", host);
+    SDL_snprintf(result->status, sizeof(result->status), "%s", status != NULL ? status : "");
+    result->port = port;
+    result->last_seen_ms = SDL_GetTicks();
+    return true;
+}
+
+static void sdl3d_network_discovery_destroy_socket(sdl3d_network_discovery_session *session)
+{
+    if (session == NULL)
+    {
+        return;
+    }
+
+    if (session->socket != NULL)
+    {
+        NET_DestroyDatagramSocket(session->socket);
+        session->socket = NULL;
+    }
+}
+
+static bool sdl3d_network_discovery_send_packet_to(sdl3d_network_discovery_session *session, NET_Address *address,
+                                                   Uint16 port, sdl3d_network_packet_kind kind, const void *payload,
+                                                   int payload_size)
+{
+    Uint8 packet[SDL3D_NETWORK_MAX_PACKET_SIZE];
+    const int size = sdl3d_network_encode_packet(packet, (int)sizeof(packet), kind, payload, payload_size);
+    if (session == NULL || session->socket == NULL || address == NULL || port == 0 || size < 0)
+    {
+        return false;
+    }
+    return NET_SendDatagram(session->socket, address, port, packet, size);
+}
+
+static bool sdl3d_network_discovery_send_probe(sdl3d_network_discovery_session *session)
+{
+    if (session == NULL || session->socket == NULL)
+    {
+        return false;
+    }
+
+    if (session->target_address == NULL)
+    {
+        return false;
+    }
+
+    SDL_snprintf(session->status, sizeof(session->status), "Scanning for local matches");
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery probe send: target=%s port=%u",
+                session->target_host[0] != '\0' ? session->target_host : "<unknown>",
+                (unsigned int)session->target_port);
+    return sdl3d_network_discovery_send_packet_to(session, session->target_address, session->target_port,
+                                                  SDL3D_NETWORK_PACKET_DISCOVERY_QUERY, NULL, 0);
+}
+
+typedef struct sdl3d_network_discovery_reply_payload
+{
+    Uint8 port[2];
+    char session_name[SDL3D_NETWORK_MAX_HOST_LENGTH];
+    char status[SDL3D_NETWORK_MAX_STATUS_LENGTH];
+} sdl3d_network_discovery_reply_payload;
+
+static void sdl3d_network_discovery_process_datagram(sdl3d_network_discovery_session *session,
+                                                     const NET_Datagram *dgram)
+{
+    if (session == NULL || dgram == NULL || dgram->buf == NULL || dgram->buflen <= 0)
+    {
+        return;
+    }
+
+    sdl3d_network_packet_kind kind;
+    const Uint8 *payload = NULL;
+    int payload_size = 0;
+    if (!sdl3d_network_decode_packet(dgram->buf, dgram->buflen, &kind, &payload, &payload_size))
+    {
+        return;
+    }
+
+    if (kind != SDL3D_NETWORK_PACKET_DISCOVERY_REPLY ||
+        payload_size != (int)sizeof(sdl3d_network_discovery_reply_payload))
+    {
+        return;
+    }
+
+    const sdl3d_network_discovery_reply_payload *reply = (const sdl3d_network_discovery_reply_payload *)payload;
+    char host_string[SDL3D_NETWORK_MAX_HOST_LENGTH];
+    const Uint16 announced_port = sdl3d_network_read_u16(reply->port);
+
+    SDL_snprintf(host_string, sizeof(host_string), "%s",
+                 NET_GetAddressString(dgram->addr) != NULL ? NET_GetAddressString(dgram->addr) : "");
+
+    if (host_string[0] == '\0')
+    {
+        return;
+    }
+
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery reply received: host=%s port=%u", host_string,
+                (unsigned int)announced_port);
+    if (!sdl3d_network_discovery_add_result(session, reply->session_name, host_string, announced_port, reply->status))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery result dropped: list full");
+    }
+    else
+    {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery result added: session=%s host=%s port=%u status=%s",
+                    reply->session_name, host_string, (unsigned int)announced_port, reply->status);
+    }
+}
+
+static void sdl3d_network_discovery_process_query(sdl3d_network_session *session, const NET_Datagram *dgram)
+{
+    if (session == NULL || dgram == NULL || session->state != SDL3D_NETWORK_STATE_WAITING || dgram->addr == NULL ||
+        dgram->port == 0)
+    {
+        return;
+    }
+
+    sdl3d_network_discovery_reply_payload payload;
+    const char *session_name = sdl3d_network_session_advertised_name(session);
+    const char *status = session->status[0] != '\0' ? session->status : "Awaiting client";
+    SDL_zero(payload);
+    SDL_snprintf(payload.session_name, sizeof(payload.session_name), "%s", session_name);
+    SDL_snprintf(payload.status, sizeof(payload.status), "%s", status);
+    sdl3d_network_write_u16(payload.port,
+                            session->local_bound_port != 0 ? session->local_bound_port : session->desc.port);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery query received: host=%s port=%u session=%s status=%s",
+                NET_GetAddressString(dgram->addr) != NULL ? NET_GetAddressString(dgram->addr) : "<unknown>",
+                (unsigned int)dgram->port, session_name, status);
+    SDL_LogInfo(
+        SDL_LOG_CATEGORY_APPLICATION, "SDL3D network discovery reply: session=%s host=%s port=%u status=%s",
+        session_name, NET_GetAddressString(dgram->addr) != NULL ? NET_GetAddressString(dgram->addr) : "<unknown>",
+        (unsigned int)(session->local_bound_port != 0 ? session->local_bound_port : session->desc.port), status);
+    (void)sdl3d_network_send_packet_to(session, dgram->addr, dgram->port, SDL3D_NETWORK_PACKET_DISCOVERY_REPLY,
+                                       &payload, (int)sizeof(payload));
 }
 #else
 static bool sdl3d_network_library_acquire(void)
@@ -337,6 +562,8 @@ static bool sdl3d_network_send_control(sdl3d_network_session *session, sdl3d_net
     return false;
 }
 
+static void sdl3d_network_discovery_process_query(sdl3d_network_session *session, const NET_Datagram *dgram);
+
 static void sdl3d_network_update_connected_activity(sdl3d_network_session *session, float dt)
 {
     if (session == NULL || session->state != SDL3D_NETWORK_STATE_CONNECTED)
@@ -391,6 +618,14 @@ static void sdl3d_network_process_datagram(sdl3d_network_session *session, const
 
     switch (kind)
     {
+    case SDL3D_NETWORK_PACKET_DISCOVERY_QUERY:
+        if (session->desc.role == SDL3D_NETWORK_ROLE_HOST)
+        {
+            sdl3d_network_discovery_process_query(session, dgram);
+        }
+        break;
+    case SDL3D_NETWORK_PACKET_DISCOVERY_REPLY:
+        break;
     case SDL3D_NETWORK_PACKET_HELLO:
         if (session->desc.role == SDL3D_NETWORK_ROLE_HOST && session->state == SDL3D_NETWORK_STATE_WAITING)
         {
@@ -521,10 +756,15 @@ bool sdl3d_network_session_create(const sdl3d_network_session_desc *desc, sdl3d_
 
     session->desc = *effective;
     SDL_zero(session->host);
+    SDL_zero(session->session_name);
     SDL_zero(session->status);
     if (effective->host != NULL)
     {
         SDL_snprintf(session->host, sizeof(session->host), "%s", effective->host);
+    }
+    if (effective->session_name != NULL)
+    {
+        SDL_snprintf(session->session_name, sizeof(session->session_name), "%s", effective->session_name);
     }
 
     if (!sdl3d_network_library_acquire())
@@ -808,4 +1048,235 @@ bool sdl3d_network_session_get_peer_endpoint(const sdl3d_network_session *sessio
     (void)out_port;
     return false;
 #endif
+}
+
+void sdl3d_network_discovery_session_desc_init(sdl3d_network_discovery_session_desc *desc)
+{
+    if (desc == NULL)
+    {
+        return;
+    }
+
+    SDL_zero(*desc);
+    desc->port = SDL3D_NETWORK_DEFAULT_PORT;
+    desc->local_port = 0;
+}
+
+bool sdl3d_network_discovery_session_create(const sdl3d_network_discovery_session_desc *desc,
+                                            sdl3d_network_discovery_session **out_session)
+{
+    sdl3d_network_discovery_session_desc defaults;
+    const sdl3d_network_discovery_session_desc *effective = desc;
+    sdl3d_network_discovery_session *session = NULL;
+
+    if (out_session == NULL)
+    {
+        return false;
+    }
+    *out_session = NULL;
+
+    if (effective == NULL)
+    {
+        sdl3d_network_discovery_session_desc_init(&defaults);
+        effective = &defaults;
+    }
+
+    if (effective->port == 0)
+    {
+        SDL_SetError("Discovery session requires a non-zero port.");
+        return false;
+    }
+
+    session = (sdl3d_network_discovery_session *)SDL_calloc(1, sizeof(*session));
+    if (session == NULL)
+    {
+        SDL_OutOfMemory();
+        return false;
+    }
+
+    session->desc = *effective;
+    session->target_port = effective->port;
+    SDL_zero(session->status);
+    SDL_zero(session->target_host);
+
+    if (!sdl3d_network_library_acquire())
+    {
+        sdl3d_network_discovery_session_destroy(session);
+        return false;
+    }
+
+#if SDL3D_NETWORKING_ENABLED
+    session->socket = NET_CreateDatagramSocket(NULL, effective->local_port != 0 ? effective->local_port : 0);
+    if (session->socket == NULL)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery socket create failed: %s", SDL_GetError());
+        sdl3d_network_discovery_session_destroy(session);
+        return false;
+    }
+
+    if (effective->host != NULL && effective->host[0] != '\0')
+    {
+        SDL_snprintf(session->target_host, sizeof(session->target_host), "%s", effective->host);
+    }
+    else
+    {
+        SDL_snprintf(session->target_host, sizeof(session->target_host), "%s", "255.255.255.255");
+    }
+
+    session->target_address = NET_ResolveHostname(session->target_host);
+    if (session->target_address == NULL)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery hostname resolution failed: %s", SDL_GetError());
+        sdl3d_network_discovery_session_destroy(session);
+        return false;
+    }
+
+    SDL_snprintf(session->status, sizeof(session->status), "Ready to scan");
+#else
+    sdl3d_network_discovery_session_destroy(session);
+    SDL_SetError("Networking disabled.");
+    return false;
+#endif
+
+    *out_session = session;
+    return true;
+}
+
+void sdl3d_network_discovery_session_destroy(sdl3d_network_discovery_session *session)
+{
+    if (session == NULL)
+    {
+        return;
+    }
+
+    sdl3d_network_discovery_destroy_socket(session);
+    sdl3d_network_discovery_destroy_target_address(session);
+    sdl3d_network_library_release();
+    SDL_free(session);
+}
+
+bool sdl3d_network_discovery_session_refresh(sdl3d_network_discovery_session *session)
+{
+    if (session == NULL || session->socket == NULL)
+    {
+        return false;
+    }
+
+    sdl3d_network_discovery_clear_results(session);
+    session->elapsed = 0.0f;
+    session->refresh_elapsed = 0.0f;
+    session->scanning = true;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery refresh: target=%s port=%u",
+                session->target_host[0] != '\0' ? session->target_host : "<unknown>",
+                (unsigned int)session->target_port);
+
+#if SDL3D_NETWORKING_ENABLED
+    if (session->target_address != NULL)
+    {
+        NET_Status target_status = NET_GetAddressStatus(session->target_address);
+        if (target_status != NET_SUCCESS)
+        {
+            (void)NET_WaitUntilResolved(session->target_address, 0);
+            target_status = NET_GetAddressStatus(session->target_address);
+        }
+        if (target_status == NET_FAILURE)
+        {
+            SDL_snprintf(session->status, sizeof(session->status), "Discovery target resolution failed");
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery target resolution failed: %s", SDL_GetError());
+            return false;
+        }
+        if (target_status != NET_SUCCESS)
+        {
+            SDL_snprintf(session->status, sizeof(session->status), "Resolving discovery target");
+            return true;
+        }
+    }
+#endif
+    return sdl3d_network_discovery_send_probe(session);
+}
+
+bool sdl3d_network_discovery_session_update(sdl3d_network_discovery_session *session, float dt)
+{
+    if (session == NULL)
+    {
+        return false;
+    }
+
+    if (session->socket == NULL)
+    {
+        return true;
+    }
+
+#if SDL3D_NETWORKING_ENABLED
+    session->elapsed += SDL_max(dt, 0.0f);
+    session->refresh_elapsed += SDL_max(dt, 0.0f);
+
+    const int input_count = NET_WaitUntilInputAvailable((void **)&session->socket, 1, 0);
+    if (input_count < 0)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery poll failed: %s", SDL_GetError());
+        SDL_snprintf(session->status, sizeof(session->status), "Discovery poll failed");
+        return true;
+    }
+
+    if (input_count > 0)
+    {
+        for (;;)
+        {
+            NET_Datagram *dgram = NULL;
+            if (!NET_ReceiveDatagram(session->socket, &dgram))
+            {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery receive failed: %s", SDL_GetError());
+                SDL_snprintf(session->status, sizeof(session->status), "Discovery receive failed");
+                return true;
+            }
+
+            if (dgram == NULL)
+            {
+                break;
+            }
+
+            sdl3d_network_discovery_process_datagram(session, dgram);
+            NET_DestroyDatagram(dgram);
+        }
+    }
+
+    if (session->scanning && session->result_count == 0)
+    {
+        SDL_snprintf(session->status, sizeof(session->status), "Searching for local matches");
+    }
+    else if (session->result_count > 0)
+    {
+        SDL_snprintf(session->status, sizeof(session->status), "%d local match%s found", session->result_count,
+                     session->result_count == 1 ? "" : "es");
+        session->scanning = false;
+    }
+
+    return true;
+#else
+    (void)dt;
+    return false;
+#endif
+}
+
+int sdl3d_network_discovery_session_result_count(const sdl3d_network_discovery_session *session)
+{
+    return session != NULL ? session->result_count : 0;
+}
+
+bool sdl3d_network_discovery_session_get_result(const sdl3d_network_discovery_session *session, int index,
+                                                sdl3d_network_discovery_result *out_result)
+{
+    if (session == NULL || out_result == NULL || index < 0 || index >= session->result_count)
+    {
+        return false;
+    }
+
+    *out_result = session->results[index];
+    return true;
+}
+
+const char *sdl3d_network_discovery_session_status(const sdl3d_network_discovery_session *session)
+{
+    return session != NULL ? session->status : NULL;
 }

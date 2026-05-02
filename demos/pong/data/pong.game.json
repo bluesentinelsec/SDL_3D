@@ -1400,11 +1400,15 @@
       "active": true,
       "tags": ["state", "multiplayer", "discovery"],
       "properties": {
-        "status": { "type": "string", "value": "Scanning for hosts..." },
-        "session_0": { "type": "string", "value": "No sessions discovered yet" },
+        "status": { "type": "string", "value": "" },
+        "session_0": { "type": "string", "value": "" },
         "session_1": { "type": "string", "value": "" },
         "session_2": { "type": "string", "value": "" },
-        "session_3": { "type": "string", "value": "" }
+        "session_3": { "type": "string", "value": "" },
+        "session_4": { "type": "string", "value": "" },
+        "session_5": { "type": "string", "value": "" },
+        "session_6": { "type": "string", "value": "" },
+        "session_7": { "type": "string", "value": "" }
       }
     }
   ],
