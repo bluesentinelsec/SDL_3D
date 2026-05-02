@@ -162,6 +162,7 @@ static void sdl3d_network_destroy_socket(sdl3d_network_session *session)
     }
 }
 
+#if SDL3D_NETWORKING_ENABLED
 static void sdl3d_network_discovery_clear_results(sdl3d_network_discovery_session *session);
 static void sdl3d_network_discovery_destroy_socket(sdl3d_network_discovery_session *session);
 static void sdl3d_network_discovery_destroy_target_address(sdl3d_network_discovery_session *session);
@@ -1306,3 +1307,78 @@ const char *sdl3d_network_discovery_session_status(const sdl3d_network_discovery
 {
     return session != NULL ? session->status : NULL;
 }
+#else
+static bool sdl3d_network_library_acquire(void)
+{
+    SDL_SetError("SDL3D networking is disabled at build time.");
+    return false;
+}
+
+static void sdl3d_network_library_release(void)
+{
+}
+
+void sdl3d_network_discovery_session_desc_init(sdl3d_network_discovery_session_desc *desc)
+{
+    if (desc == NULL)
+    {
+        return;
+    }
+
+    SDL_zero(*desc);
+    desc->port = SDL3D_NETWORK_DEFAULT_PORT;
+    desc->local_port = 0;
+}
+
+bool sdl3d_network_discovery_session_create(const sdl3d_network_discovery_session_desc *desc,
+                                            sdl3d_network_discovery_session **out_session)
+{
+    (void)desc;
+    if (out_session != NULL)
+    {
+        *out_session = NULL;
+    }
+    SDL_SetError("SDL3D networking is disabled at build time.");
+    return false;
+}
+
+void sdl3d_network_discovery_session_destroy(sdl3d_network_discovery_session *session)
+{
+    (void)session;
+}
+
+bool sdl3d_network_discovery_session_refresh(sdl3d_network_discovery_session *session)
+{
+    (void)session;
+    SDL_SetError("SDL3D networking is disabled at build time.");
+    return false;
+}
+
+bool sdl3d_network_discovery_session_update(sdl3d_network_discovery_session *session, float dt)
+{
+    (void)session;
+    (void)dt;
+    return false;
+}
+
+int sdl3d_network_discovery_session_result_count(const sdl3d_network_discovery_session *session)
+{
+    (void)session;
+    return 0;
+}
+
+bool sdl3d_network_discovery_session_get_result(const sdl3d_network_discovery_session *session, int index,
+                                                sdl3d_network_discovery_result *out_result)
+{
+    (void)session;
+    (void)index;
+    (void)out_result;
+    return false;
+}
+
+const char *sdl3d_network_discovery_session_status(const sdl3d_network_discovery_session *session)
+{
+    (void)session;
+    return "Networking disabled";
+}
+#endif
