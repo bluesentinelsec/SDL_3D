@@ -107,6 +107,7 @@ struct sdl3d_network_discovery_session
     float elapsed;
     float refresh_elapsed;
     bool scanning;
+    bool probe_sent;
 };
 
 #if SDL3D_NETWORKING_ENABLED
@@ -334,8 +335,13 @@ static bool sdl3d_network_discovery_send_probe(sdl3d_network_discovery_session *
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery probe send: target=%s port=%u",
                 session->target_host[0] != '\0' ? session->target_host : "<unknown>",
                 (unsigned int)session->target_port);
-    return sdl3d_network_discovery_send_packet_to(session, session->target_address, session->target_port,
-                                                  SDL3D_NETWORK_PACKET_DISCOVERY_QUERY, NULL, 0);
+    if (!sdl3d_network_discovery_send_packet_to(session, session->target_address, session->target_port,
+                                                SDL3D_NETWORK_PACKET_DISCOVERY_QUERY, NULL, 0))
+    {
+        return false;
+    }
+    session->probe_sent = true;
+    return true;
 }
 
 typedef struct sdl3d_network_discovery_reply_payload
@@ -1098,6 +1104,7 @@ bool sdl3d_network_discovery_session_create(const sdl3d_network_discovery_sessio
     session->target_port = effective->port;
     SDL_zero(session->status);
     SDL_zero(session->target_host);
+    session->probe_sent = false;
 
     if (!sdl3d_network_library_acquire())
     {
@@ -1166,6 +1173,7 @@ bool sdl3d_network_discovery_session_refresh(sdl3d_network_discovery_session *se
     session->elapsed = 0.0f;
     session->refresh_elapsed = 0.0f;
     session->scanning = true;
+    session->probe_sent = false;
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery refresh: target=%s port=%u",
                 session->target_host[0] != '\0' ? session->target_host : "<unknown>",
                 (unsigned int)session->target_port);
@@ -1210,6 +1218,19 @@ bool sdl3d_network_discovery_session_update(sdl3d_network_discovery_session *ses
 #if SDL3D_NETWORKING_ENABLED
     session->elapsed += SDL_max(dt, 0.0f);
     session->refresh_elapsed += SDL_max(dt, 0.0f);
+
+    if (session->scanning && session->target_address != NULL)
+    {
+        const NET_Status target_status = NET_GetAddressStatus(session->target_address);
+        if (target_status != NET_SUCCESS)
+        {
+            (void)NET_WaitUntilResolved(session->target_address, 0);
+        }
+        if (NET_GetAddressStatus(session->target_address) == NET_SUCCESS && !session->probe_sent)
+        {
+            (void)sdl3d_network_discovery_send_probe(session);
+        }
+    }
 
     const int input_count = NET_WaitUntilInputAvailable((void **)&session->socket, 1, 0);
     if (input_count < 0)
