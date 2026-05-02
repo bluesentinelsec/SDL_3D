@@ -4029,6 +4029,12 @@ function storage.roundtrip(_, _, ctx)
         return false
     end
 
+    local ghost = { _name = "entity.missing" }
+    local gx, gy, gz = sdl3d.get_vec3(ghost, "velocity")
+    if gx ~= nil or gy ~= nil or gz ~= nil then
+        return false
+    end
+
     local ok = ctx.storage.write("user://settings/options.json", "{\"difficulty\":\"hard\"}")
     if not ok or not ctx.storage.exists("user://settings/options.json") then
         return false

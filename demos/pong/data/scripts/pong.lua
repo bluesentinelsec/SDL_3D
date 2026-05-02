@@ -2,6 +2,12 @@ local pong = {}
 
 local scores_path = "user://scores/pong_scores.json"
 
+-- Exported adapters:
+--   serve_random(ball, _, ctx): choose a constrained serve vector.
+--   reflect_from_paddle(ball, payload, ctx): deflect the ball from a paddle hit.
+--   cpu_track_ball(paddle, payload, ctx): steer the CPU paddle in single-player only.
+-- Persistence helpers below use the shared storage + JSON bridge.
+
 local function random_signed_angle(ctx, min_angle, max_angle)
     if max_angle <= 0.0 then
         return 0.0

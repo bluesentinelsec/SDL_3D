@@ -57,6 +57,8 @@ local text, read_err = sdl3d.storage.read("user://settings/options.json")
 local exists = sdl3d.storage.exists("cache://generated/status.txt")
 ```
 
+See [docs/game-data-lua.md](game-data-lua.md) for the full Lua helper reference, including the storage return contract and error behavior.
+
 Scripts can pair storage with the gameplay JSON helpers when persisting
 structured settings, saves, scores, or generated cache metadata:
 
