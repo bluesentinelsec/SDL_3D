@@ -27,6 +27,7 @@ extern "C"
 #define SDL3D_NETWORK_MAX_STATUS_LENGTH 128
 #define SDL3D_NETWORK_MAX_PACKET_SIZE 1024
 #define SDL3D_NETWORK_MAX_QUEUE_SIZE 8
+#define SDL3D_NETWORK_MAX_DISCOVERY_RESULTS 8
 #define SDL3D_NETWORK_DEFAULT_PORT 27183
 
     /** @brief Operating role for a direct-connect network session. */
@@ -58,13 +59,49 @@ extern "C"
      */
     typedef struct sdl3d_network_session_desc
     {
-        sdl3d_network_role role; /**< Host or client. */
-        const char *host;        /**< Remote host name or IP for client sessions. */
-        Uint16 port;             /**< Host listen port or client remote port. */
-        Uint16 local_port;       /**< Optional local bind port, or 0 for ephemeral. */
-        float handshake_timeout; /**< Client handshake timeout in seconds. */
-        float idle_timeout;      /**< Connected-session inactivity timeout in seconds. */
+        sdl3d_network_role role;  /**< Host or client. */
+        const char *host;         /**< Remote host name or IP for client sessions. */
+        Uint16 port;              /**< Host listen port or client remote port. */
+        Uint16 local_port;        /**< Optional local bind port, or 0 for ephemeral. */
+        float handshake_timeout;  /**< Client handshake timeout in seconds. */
+        float idle_timeout;       /**< Connected-session inactivity timeout in seconds. */
+        const char *session_name; /**< Optional host session name advertised to discovery clients. */
     } sdl3d_network_session_desc;
+
+    /** @brief Session discovery announcement returned by LAN scans. */
+    typedef struct sdl3d_network_discovery_result
+    {
+        /** @brief Advertised session name. */
+        char session_name[SDL3D_NETWORK_MAX_HOST_LENGTH];
+        /** @brief Advertised host or IP address. */
+        char host[SDL3D_NETWORK_MAX_HOST_LENGTH];
+        /** @brief Advertised UDP port. */
+        Uint16 port;
+        /** @brief Human-readable status string. */
+        char status[SDL3D_NETWORK_MAX_STATUS_LENGTH];
+        /** @brief Last time this session was seen, in SDL ticks. */
+        Uint64 last_seen_ms;
+    } sdl3d_network_discovery_result;
+
+    /**
+     * @brief Creation descriptor for a LAN discovery scanner.
+     *
+     * When @p host is NULL, discovery probes are broadcast to the local
+     * network. Otherwise the scanner probes the named host directly, which is
+     * useful for tests or manual overrides.
+     */
+    typedef struct sdl3d_network_discovery_session_desc
+    {
+        /** @brief Optional probe host or broadcast address, or NULL. */
+        const char *host;
+        /** @brief Probe target port. */
+        Uint16 port;
+        /** @brief Optional local bind port, or 0 for ephemeral. */
+        Uint16 local_port;
+    } sdl3d_network_discovery_session_desc;
+
+    /** @brief Opaque LAN discovery scanner. */
+    typedef struct sdl3d_network_discovery_session sdl3d_network_discovery_session;
 
     /** @brief Opaque direct-connect UDP session. */
     typedef struct sdl3d_network_session sdl3d_network_session;
@@ -81,6 +118,16 @@ extern "C"
      * - idle_timeout: 10 seconds
      */
     void sdl3d_network_session_desc_init(sdl3d_network_session_desc *desc);
+
+    /**
+     * @brief Initialize a discovery session descriptor with sane defaults.
+     *
+     * Defaults:
+     * - host: NULL, meaning broadcast discovery
+     * - port: SDL3D_NETWORK_DEFAULT_PORT
+     * - local_port: 0
+     */
+    void sdl3d_network_discovery_session_desc_init(sdl3d_network_discovery_session_desc *desc);
 
     /**
      * @brief Create a direct-connect network session.
@@ -156,6 +203,46 @@ extern "C"
      */
     bool sdl3d_network_session_get_peer_endpoint(const sdl3d_network_session *session, char *host_buffer,
                                                  int host_buffer_size, Uint16 *out_port);
+
+    /**
+     * @brief Create a LAN discovery scanner.
+     *
+     * The scanner sends discovery probes and collects session announcements
+     * from host sessions that are waiting for clients.
+     */
+    bool sdl3d_network_discovery_session_create(const sdl3d_network_discovery_session_desc *desc,
+                                                sdl3d_network_discovery_session **out_session);
+
+    /** @brief Destroy a discovery scanner. Safe to call with NULL. */
+    void sdl3d_network_discovery_session_destroy(sdl3d_network_discovery_session *session);
+
+    /**
+     * @brief Send a discovery probe and clear stale results.
+     *
+     * Call this when a scan should begin or restart.
+     */
+    bool sdl3d_network_discovery_session_refresh(sdl3d_network_discovery_session *session);
+
+    /**
+     * @brief Advance discovery polling and collect new announcements.
+     *
+     * Call once per frame or tick while discovery is active.
+     */
+    bool sdl3d_network_discovery_session_update(sdl3d_network_discovery_session *session, float dt);
+
+    /** @brief Return the number of discovered sessions. */
+    int sdl3d_network_discovery_session_result_count(const sdl3d_network_discovery_session *session);
+
+    /**
+     * @brief Copy one discovered session into @p out_result.
+     *
+     * @return true when @p index refers to a valid discovered session.
+     */
+    bool sdl3d_network_discovery_session_get_result(const sdl3d_network_discovery_session *session, int index,
+                                                    sdl3d_network_discovery_result *out_result);
+
+    /** @brief Return the current discovery status string, or NULL. */
+    const char *sdl3d_network_discovery_session_status(const sdl3d_network_discovery_session *session);
 
 #ifdef __cplusplus
 }

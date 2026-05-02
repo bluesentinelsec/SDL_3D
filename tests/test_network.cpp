@@ -21,6 +21,13 @@ struct NetworkPair
     Uint16 port = 0;
 };
 
+struct DiscoveryPair
+{
+    sdl3d_network_session *host = nullptr;
+    sdl3d_network_discovery_session *scanner = nullptr;
+    Uint16 port = 0;
+};
+
 void destroy_pair(NetworkPair *pair)
 {
     if (pair == nullptr)
@@ -50,6 +57,7 @@ bool create_host_client_pair(NetworkPair *pair)
         host_desc.port = port;
         host_desc.handshake_timeout = 2.0f;
         host_desc.idle_timeout = 2.0f;
+        host_desc.session_name = "SDL3D Test Host";
 
         if (!sdl3d_network_session_create(&host_desc, &pair->host))
         {
@@ -97,6 +105,85 @@ bool pump_until_connected(NetworkPair *pair)
     }
     return false;
 }
+
+void destroy_discovery_pair(DiscoveryPair *pair)
+{
+    if (pair == nullptr)
+    {
+        return;
+    }
+
+    sdl3d_network_discovery_session_destroy(pair->scanner);
+    sdl3d_network_session_destroy(pair->host);
+    pair->scanner = nullptr;
+    pair->host = nullptr;
+    pair->port = 0;
+}
+
+bool create_discovery_pair(DiscoveryPair *pair)
+{
+    if (pair == nullptr)
+    {
+        return false;
+    }
+
+    for (Uint16 port = kBasePort; port < (Uint16)(kBasePort + 64); ++port)
+    {
+        sdl3d_network_session_desc host_desc{};
+        sdl3d_network_session_desc_init(&host_desc);
+        host_desc.role = SDL3D_NETWORK_ROLE_HOST;
+        host_desc.port = port;
+        host_desc.session_name = "SDL3D Discovery Host";
+        host_desc.handshake_timeout = 2.0f;
+        host_desc.idle_timeout = 2.0f;
+
+        if (!sdl3d_network_session_create(&host_desc, &pair->host))
+        {
+            continue;
+        }
+
+        sdl3d_network_discovery_session_desc scanner_desc{};
+        sdl3d_network_discovery_session_desc_init(&scanner_desc);
+        scanner_desc.host = "127.0.0.1";
+        scanner_desc.port = port;
+
+        if (!sdl3d_network_discovery_session_create(&scanner_desc, &pair->scanner))
+        {
+            sdl3d_network_session_destroy(pair->host);
+            pair->host = nullptr;
+            continue;
+        }
+
+        pair->port = port;
+        return true;
+    }
+
+    return false;
+}
+
+bool pump_until_discovered(DiscoveryPair *pair, sdl3d_network_discovery_result *out_result)
+{
+    if (pair == nullptr)
+    {
+        return false;
+    }
+
+    EXPECT_TRUE(sdl3d_network_discovery_session_refresh(pair->scanner));
+    for (int i = 0; i < kPumpLimit; ++i)
+    {
+        EXPECT_TRUE(sdl3d_network_session_update(pair->host, 0.016f));
+        EXPECT_TRUE(sdl3d_network_discovery_session_update(pair->scanner, 0.016f));
+        if (sdl3d_network_discovery_session_result_count(pair->scanner) > 0)
+        {
+            if (out_result != nullptr)
+            {
+                EXPECT_TRUE(sdl3d_network_discovery_session_get_result(pair->scanner, 0, out_result));
+            }
+            return true;
+        }
+    }
+    return false;
+}
 } // namespace
 
 TEST(NetworkSession, HostAndClientCanHandshakeAndExchangePackets)
@@ -131,6 +218,21 @@ TEST(NetworkSession, HostAndClientCanHandshakeAndExchangePackets)
     EXPECT_EQ(std::memcmp(recv_buffer, payload, sizeof(payload)), 0);
 
     destroy_pair(&pair);
+}
+
+TEST(NetworkSession, LanDiscoveryFindsWaitingHost)
+{
+    DiscoveryPair pair{};
+    ASSERT_TRUE(create_discovery_pair(&pair));
+
+    sdl3d_network_discovery_result result{};
+    ASSERT_TRUE(pump_until_discovered(&pair, &result));
+    EXPECT_STREQ(result.session_name, "SDL3D Discovery Host");
+    EXPECT_EQ(result.port, pair.port);
+    EXPECT_STREQ(result.status, "Awaiting client");
+    EXPECT_STRNE(result.host, "");
+
+    destroy_discovery_pair(&pair);
 }
 
 TEST(NetworkSession, HostRejectsSecondClient)
