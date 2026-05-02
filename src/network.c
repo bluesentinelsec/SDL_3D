@@ -162,6 +162,11 @@ static void sdl3d_network_destroy_socket(sdl3d_network_session *session)
     }
 }
 
+static void sdl3d_network_discovery_clear_results(sdl3d_network_discovery_session *session);
+static void sdl3d_network_discovery_destroy_socket(sdl3d_network_discovery_session *session);
+static void sdl3d_network_discovery_destroy_target_address(sdl3d_network_discovery_session *session);
+static bool sdl3d_network_discovery_send_probe(sdl3d_network_discovery_session *session);
+
 static void sdl3d_network_destroy_remote_address(sdl3d_network_session *session)
 {
     if (session == NULL)
