@@ -56,7 +56,7 @@
       "select_signal": "signal.ui.menu.select",
       "selected": 0,
       "items": [
-        { "label": "Back", "scene": "scene.multiplayer.lan" }
+        { "label": "Back", "scene": "scene.multiplayer.join" }
       ]
     }
   ],

@@ -507,7 +507,7 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
-            sdl3d_input_process_event(sdl3d_game_session_get_input(ctx.session), &event);
+            ctx.input_event_consumed = false;
 
             if (event.type == SDL_EVENT_QUIT)
             {
@@ -519,6 +519,11 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
             {
                 ctx.quit_requested = true;
                 break;
+            }
+
+            if (!ctx.input_event_consumed)
+            {
+                sdl3d_input_process_event(sdl3d_game_session_get_input(ctx.session), &event);
             }
         }
         poll_end_counter = SDL_GetPerformanceCounter();

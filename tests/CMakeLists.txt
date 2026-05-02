@@ -140,6 +140,11 @@ if(ANDROID)
 
     target_compile_features(main PRIVATE cxx_std_17)
     target_include_directories(main PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_compile_definitions(
+        main
+        PRIVATE
+            SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
+    )
     sdl3d_enable_sanitizers(main)
 elseif(IOS)
     # iOS apps must be bundled as .app directories and cannot launch bare
@@ -159,6 +164,11 @@ elseif(IOS)
 
     target_compile_features(sdl3d_ios_tests PRIVATE cxx_std_17)
     target_include_directories(sdl3d_ios_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_compile_definitions(
+        sdl3d_ios_tests
+        PRIVATE
+            SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
+    )
     sdl3d_enable_sanitizers(sdl3d_ios_tests)
 
     set_target_properties(
@@ -235,6 +245,14 @@ else()
     sdl3d_add_test(sdl3d_trigger_test test_trigger.cpp unit)
     sdl3d_add_test(sdl3d_timer_pool_test test_timer_pool.cpp unit)
     sdl3d_add_test(sdl3d_fps_mover_test test_fps_mover.cpp unit)
+    if(NOT EMSCRIPTEN)
+        sdl3d_add_test(sdl3d_pong_multiplayer_test test_pong_multiplayer.cpp unit)
+        target_compile_definitions(
+            sdl3d_pong_multiplayer_test
+            PRIVATE
+                SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
+        )
+    endif()
     sdl3d_add_test(doom_backend_test test_doom_backend.cpp unit)
     target_sources(doom_backend_test PRIVATE ${CMAKE_SOURCE_DIR}/demos/doom_level/backend.c)
     target_include_directories(doom_backend_test PRIVATE ${CMAKE_SOURCE_DIR}/demos/doom_level)

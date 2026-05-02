@@ -9,8 +9,7 @@
     "entity.multiplayer.background.core",
     "entity.multiplayer.background.glow.cyan",
     "entity.multiplayer.background.glow.violet",
-    "entity.multiplayer.background.stream",
-    "entity.multiplayer.discovery"
+    "entity.multiplayer.background.stream"
   ],
   "input": {
     "actions": [
@@ -24,27 +23,6 @@
     "enter": "scene_in",
     "exit": "scene_out"
   },
-  "activity": {
-    "enabled": true,
-    "input": "any",
-    "reset_periodic_on_input": false,
-    "on_enter": [
-      { "type": "property.set", "target": "entity.multiplayer.discovery", "key": "status", "value": "Scanning for hosts..." },
-      { "type": "property.set", "target": "entity.multiplayer.discovery", "key": "session_0", "value": "No sessions discovered yet" },
-      { "type": "property.set", "target": "entity.multiplayer.discovery", "key": "session_1", "value": "" },
-      { "type": "property.set", "target": "entity.multiplayer.discovery", "key": "session_2", "value": "" },
-      { "type": "property.set", "target": "entity.multiplayer.discovery", "key": "session_3", "value": "" },
-      { "type": "signal.emit", "signal": "signal.multiplayer.discovery.refresh" }
-    ],
-    "periodic": [
-      {
-        "interval": 15.0,
-        "actions": [
-          { "type": "signal.emit", "signal": "signal.multiplayer.discovery.refresh" }
-        ]
-      }
-    ]
-  },
   "menus": [
     {
       "name": "menu.multiplayer.join",
@@ -56,6 +34,16 @@
       "select_signal": "signal.ui.menu.select",
       "selected": 0,
       "items": [
+        {
+          "label": "Search for local matches",
+          "scene": "scene.multiplayer.discovery",
+          "scene_state": { "key": "network_flow", "value": "lan_discovery" }
+        },
+        {
+          "label": "Join match with IP address or hostname",
+          "scene": "scene.multiplayer.direct_connect",
+          "scene_state": { "key": "network_flow", "value": "direct" }
+        },
         { "label": "Back", "scene": "scene.multiplayer.lan" }
       ]
     }
@@ -75,76 +63,11 @@
       {
         "name": "ui.multiplayer.join.status",
         "font": "font.hud",
-        "text": "AUTOMATIC LAN DISCOVERY",
+        "text": "CHOOSE HOW TO JOIN",
         "x": 0.5,
         "y": 0.30,
         "normalized": true,
         "centered": true,
-        "color": [225, 236, 255, 245]
-      },
-      {
-        "name": "ui.multiplayer.join.discovery.status",
-        "font": "font.hud",
-        "format": "%s",
-        "bindings": [
-          { "type": "property", "entity": "entity.multiplayer.discovery", "key": "status" }
-        ],
-        "x": 0.30,
-        "y": 0.42,
-        "normalized": true,
-        "align": "left",
-        "color": [225, 236, 255, 245]
-      },
-      {
-        "name": "ui.multiplayer.join.discovery.session_0",
-        "font": "font.hud",
-        "format": "%s",
-        "bindings": [
-          { "type": "property", "entity": "entity.multiplayer.discovery", "key": "session_0" }
-        ],
-        "x": 0.30,
-        "y": 0.50,
-        "normalized": true,
-        "align": "left",
-        "color": [255, 245, 208, 255]
-      },
-      {
-        "name": "ui.multiplayer.join.discovery.session_1",
-        "font": "font.hud",
-        "format": "%s",
-        "bindings": [
-          { "type": "property", "entity": "entity.multiplayer.discovery", "key": "session_1" }
-        ],
-        "x": 0.30,
-        "y": 0.58,
-        "normalized": true,
-        "align": "left",
-        "color": [225, 236, 255, 245]
-      },
-      {
-        "name": "ui.multiplayer.join.discovery.session_2",
-        "font": "font.hud",
-        "format": "%s",
-        "bindings": [
-          { "type": "property", "entity": "entity.multiplayer.discovery", "key": "session_2" }
-        ],
-        "x": 0.30,
-        "y": 0.66,
-        "normalized": true,
-        "align": "left",
-        "color": [225, 236, 255, 245]
-      },
-      {
-        "name": "ui.multiplayer.join.discovery.session_3",
-        "font": "font.hud",
-        "format": "%s",
-        "bindings": [
-          { "type": "property", "entity": "entity.multiplayer.discovery", "key": "session_3" }
-        ],
-        "x": 0.30,
-        "y": 0.74,
-        "normalized": true,
-        "align": "left",
         "color": [225, 236, 255, 245]
       }
     ],
@@ -154,8 +77,8 @@
         "menu": "menu.multiplayer.join",
         "font": "font.hud",
         "x": 0.30,
-        "y": 0.82,
-        "gap": 0.085,
+        "y": 0.40,
+        "gap": 0.10,
         "normalized": true,
         "align": "left",
         "color": [225, 236, 255, 245],

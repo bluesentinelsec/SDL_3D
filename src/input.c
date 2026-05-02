@@ -84,6 +84,9 @@ struct sdl3d_input_manager
 
     float deadzone;
 
+    bool action_override_active[SDL3D_INPUT_MAX_ACTIONS];
+    float action_override_value[SDL3D_INPUT_MAX_ACTIONS];
+
     sdl3d_demo_recorder *recorder;
     sdl3d_demo_player *demo_player;
 };
@@ -1144,6 +1147,40 @@ void sdl3d_input_unbind_action(sdl3d_input_manager *input, int action_id)
     }
 }
 
+void sdl3d_input_set_action_override(sdl3d_input_manager *input, int action_id, float value)
+{
+    if (input == NULL || !sdl3d_input_action_id_valid(action_id) || action_id >= input->action_count ||
+        !input->actions[action_id].registered)
+    {
+        return;
+    }
+
+    input->action_override_active[action_id] = true;
+    input->action_override_value[action_id] = sdl3d_input_clampf(value, -1.0f, 1.0f);
+}
+
+void sdl3d_input_clear_action_override(sdl3d_input_manager *input, int action_id)
+{
+    if (input == NULL || !sdl3d_input_action_id_valid(action_id))
+    {
+        return;
+    }
+
+    input->action_override_active[action_id] = false;
+    input->action_override_value[action_id] = 0.0f;
+}
+
+void sdl3d_input_clear_action_overrides(sdl3d_input_manager *input)
+{
+    if (input == NULL)
+    {
+        return;
+    }
+
+    SDL_memset(input->action_override_active, 0, sizeof(input->action_override_active));
+    SDL_memset(input->action_override_value, 0, sizeof(input->action_override_value));
+}
+
 void sdl3d_input_process_event(sdl3d_input_manager *input, const SDL_Event *event)
 {
     if (input == NULL || event == NULL)
@@ -1332,6 +1369,7 @@ const sdl3d_input_snapshot *sdl3d_input_update(sdl3d_input_manager *input, int t
         bool explicit_released = false;
         bool was_held = input->prev_held[action_id];
         float value = 0.0f;
+        const bool override_active = input->action_override_active[action_id];
 
         for (int i = 0; i < input->binding_count; ++i)
         {
@@ -1344,6 +1382,13 @@ const sdl3d_input_snapshot *sdl3d_input_update(sdl3d_input_manager *input, int t
             value = sdl3d_input_signed_max_magnitude(value, sdl3d_input_binding_value(input, binding));
             explicit_pressed = explicit_pressed || sdl3d_input_binding_pressed(input, binding);
             explicit_released = explicit_released || sdl3d_input_binding_released(input, binding);
+        }
+
+        if (override_active)
+        {
+            value = input->action_override_value[action_id];
+            explicit_pressed = value > 0.0001f;
+            explicit_released = value <= 0.0001f && was_held;
         }
 
         value = sdl3d_input_clampf(value, -1.0f, 1.0f);
