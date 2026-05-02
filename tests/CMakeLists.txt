@@ -245,12 +245,14 @@ else()
     sdl3d_add_test(sdl3d_trigger_test test_trigger.cpp unit)
     sdl3d_add_test(sdl3d_timer_pool_test test_timer_pool.cpp unit)
     sdl3d_add_test(sdl3d_fps_mover_test test_fps_mover.cpp unit)
-    sdl3d_add_test(sdl3d_pong_multiplayer_test test_pong_multiplayer.cpp unit)
-    target_compile_definitions(
-        sdl3d_pong_multiplayer_test
-        PRIVATE
-            SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
-    )
+    if(NOT EMSCRIPTEN)
+        sdl3d_add_test(sdl3d_pong_multiplayer_test test_pong_multiplayer.cpp unit)
+        target_compile_definitions(
+            sdl3d_pong_multiplayer_test
+            PRIVATE
+                SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
+        )
+    endif()
     sdl3d_add_test(doom_backend_test test_doom_backend.cpp unit)
     target_sources(doom_backend_test PRIVATE ${CMAKE_SOURCE_DIR}/demos/doom_level/backend.c)
     target_include_directories(doom_backend_test PRIVATE ${CMAKE_SOURCE_DIR}/demos/doom_level)
