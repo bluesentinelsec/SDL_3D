@@ -114,6 +114,7 @@ struct sdl3d_network_discovery_session
 static int sdl3d_network_library_refs = 0;
 #endif
 
+#if SDL3D_NETWORKING_ENABLED
 static void sdl3d_network_set_status(sdl3d_network_session *session, sdl3d_network_state state, const char *status)
 {
     if (session == NULL)
@@ -161,6 +162,7 @@ static void sdl3d_network_destroy_socket(sdl3d_network_session *session)
         session->socket = NULL;
     }
 }
+#endif
 
 #if SDL3D_NETWORKING_ENABLED
 static void sdl3d_network_discovery_clear_results(sdl3d_network_discovery_session *session);
