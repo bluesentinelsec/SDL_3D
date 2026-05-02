@@ -432,18 +432,7 @@ static void sdl3d_network_discovery_process_query(sdl3d_network_session *session
     (void)sdl3d_network_send_packet_to(session, dgram->addr, dgram->port, SDL3D_NETWORK_PACKET_DISCOVERY_REPLY,
                                        &payload, (int)sizeof(payload));
 }
-#else
-static bool sdl3d_network_library_acquire(void)
-{
-    SDL_SetError("SDL3D networking is disabled at build time.");
-    return false;
-}
-
-static void sdl3d_network_library_release(void)
-{
-}
 #endif
-
 #if SDL3D_NETWORKING_ENABLED
 static void sdl3d_network_write_u16(Uint8 *dst, Uint16 value)
 {
@@ -1310,16 +1299,6 @@ const char *sdl3d_network_discovery_session_status(const sdl3d_network_discovery
     return session != NULL ? session->status : NULL;
 }
 #else
-static bool sdl3d_network_library_acquire(void)
-{
-    SDL_SetError("SDL3D networking is disabled at build time.");
-    return false;
-}
-
-static void sdl3d_network_library_release(void)
-{
-}
-
 void sdl3d_network_discovery_session_desc_init(sdl3d_network_discovery_session_desc *desc)
 {
     if (desc == NULL)
