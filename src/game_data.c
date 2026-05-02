@@ -538,9 +538,12 @@ static int lua_get_vec3(lua_State *lua)
     sdl3d_game_data_runtime *runtime = lua_runtime(lua);
     sdl3d_registered_actor *actor = lua_actor_arg(lua, runtime, 1);
     const char *key = luaL_checkstring(lua, 2);
-    const sdl3d_vec3 value = actor != NULL
-                                 ? sdl3d_properties_get_vec3(actor->props, key, sdl3d_vec3_make(0.0f, 0.0f, 0.0f))
-                                 : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    if (actor == NULL)
+    {
+        lua_pushnil(lua);
+        return 1;
+    }
+    const sdl3d_vec3 value = sdl3d_properties_get_vec3(actor->props, key, sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
     lua_pushnumber(lua, value.x);
     lua_pushnumber(lua, value.y);
     lua_pushnumber(lua, value.z);

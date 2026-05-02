@@ -2,7 +2,7 @@
 
 This document defines the first JSON-family authoring format for SDL3D game data. It is intentionally small, explicit, and module-oriented so it can express Pong without assuming sectors, while still leaving room for Doom's FPS/sector modules.
 
-The format is data-first: game rules should primarily be expressed as entities, components, sensors, signals, timers, conditions, and actions. Game-specific code should appear as named adapters only where a rule is not genuinely reusable.
+The format is data-first: game rules should primarily be expressed as entities, components, sensors, signals, timers, conditions, and actions. Game-specific code should appear as named adapters only where a rule is not genuinely reusable. For a function-level Lua reference, see [docs/game-data-lua.md](game-data-lua.md).
 
 ## Format Goals
 
@@ -1007,6 +1007,8 @@ Lua adapters receive `(target, payload, ctx)`:
   `ctx:state_set(key, value)`, `ctx:random()`, `ctx:log(message)`, and
   `ctx.storage` safe access to `user://` and `cache://` paths.
 
+Use exact actor names when they are stable. `ctx:actor_with_tags(...)` performs a registry scan and is best reserved for authored role lookup, scene setup, and other non-hot-path rules.
+
 The preferred Lua API is intentionally game-script oriented. Scripts can check `sdl3d.api`, currently `sdl3d.lua.v1`, when they need to guard version-specific behavior:
 
 ```lua
@@ -1015,12 +1017,15 @@ ball.position = Vec3(0, 0, 0.12)
 ball.velocity = Vec3.normalize(ball.velocity) * speed
 ```
 
-Actor wrappers expose property helpers (`get_float`, `set_float`, `get_int`, `set_int`, `get_bool`, `set_bool`, `get_string`, `set_string`, `get_vec3`, `set_vec3`) plus `position` and `velocity` convenience fields. `Vec3` provides `new`, `length`, `normalize`, `clamp`, and arithmetic operators. `math.clamp` and `math.lerp` are also available. The lower-level `sdl3d.get_*` and `sdl3d.set_*` functions remain available as implementation primitives, but gameplay scripts should prefer the wrapper API.
+Actor wrappers expose property helpers (`get_float`, `set_float`, `get_int`, `set_int`, `get_bool`, `set_bool`, `get_string`, `set_string`, `get_vec3`, `set_vec3`) plus `position` and `velocity` convenience fields. Missing actor names return `nil` from `sdl3d.actor(name)` and from `get_position()` / `get_vec3()`. `Vec3` provides `new`, `length`, `normalize`, `clamp`, and arithmetic operators. `math.clamp` and `math.lerp` are also available. The lower-level `sdl3d.get_*` and `sdl3d.set_*` functions remain available as implementation primitives, but gameplay scripts should prefer the wrapper API.
 
 Scripts can persist structured data through `sdl3d.json.decode(text)` and
 `sdl3d.json.encode(value)`. The JSON bridge accepts Lua booleans, numbers,
 strings, nil, array-like tables, and string-keyed object tables. It is intended
-for save files, settings, high scores, and other small gameplay data blobs:
+for save files, settings, high scores, and other small gameplay data blobs.
+Decode returns `nil, error_message` on invalid JSON. Encode returns
+`nil, error_message` when a table is cyclic, too deeply nested, or uses
+non-string object keys:
 
 ```lua
 local scores = sdl3d.json.decode(ctx.storage.read("user://scores/pong.json") or "{}")
@@ -1029,6 +1034,8 @@ ctx.storage.write("user://scores/pong.json", sdl3d.json.encode(scores))
 ```
 
 Native C registration remains available for host applications that need engine-facing integrations or highly optimized behavior; re-registering an adapter name overrides the authored Lua binding.
+
+Lua and JSON helpers are intentionally not frame-hot APIs. Use them for startup, scene setup, adapter callbacks, persistence, and reload flows. For repeated per-frame entity access, prefer caching the actor wrapper or using exact names over repeated tag scans.
 
 ### Script Hot Reload
 
@@ -1058,7 +1065,8 @@ Good Pong adapters:
 - `adapter.pong.cpu_track_ball`: move the CPU paddle toward the ball.
 
 Lua scripts should prefer `ctx:actor_with_tags("role", "qualifier")` for role lookups when exact entity names
-are not part of the rule. This keeps data free to rename actors while preserving their authored tags.
+are not part of the rule. This keeps data free to rename actors while preserving their authored tags. On hot paths,
+prefer exact names and cached references because tag-based resolution scans the actor registry.
 
 Bad Pong adapters:
 
@@ -1109,7 +1117,7 @@ The JSON decides when those adapters run and handles the ordinary composition ar
 
 ## Loader Acceptance Criteria
 
-The first runtime loader should:
+The runtime loader should:
 
 - parse `schema` and reject unsupported versions
 - reject duplicate entity, signal, timer, sensor, and binding names
