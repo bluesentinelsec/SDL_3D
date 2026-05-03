@@ -17,6 +17,17 @@ if(NOT sdl3d_lua_source_POPULATED)
     FetchContent_Populate(sdl3d_lua_source)
 endif()
 
+FetchContent_Declare(
+    sdl3d_miniz_source
+    GIT_REPOSITORY https://github.com/richgel999/miniz.git
+    GIT_TAG 3.1.0
+    GIT_SHALLOW TRUE
+)
+FetchContent_GetProperties(sdl3d_miniz_source)
+if(NOT sdl3d_miniz_source_POPULATED)
+    FetchContent_Populate(sdl3d_miniz_source)
+endif()
+
 set(SDL3D_LUA_ROOT "${sdl3d_lua_source_SOURCE_DIR}/lua-5.4.7")
 add_library(
     sdl3d_lua
@@ -107,4 +118,19 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(sdl3d_yyjson PRIVATE -w)
 elseif(MSVC)
     target_compile_options(sdl3d_yyjson PRIVATE /w)
+endif()
+
+add_library(sdl3d_miniz OBJECT "${sdl3d_miniz_source_SOURCE_DIR}/miniz.c")
+target_include_directories(
+    sdl3d_miniz
+    PUBLIC
+        ${sdl3d_miniz_source_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/miniz
+)
+set_target_properties(sdl3d_miniz PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_definitions(sdl3d_miniz PRIVATE MINIZ_NO_ARCHIVE_APIS MINIZ_NO_STDIO MINIZ_NO_TIME)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    target_compile_options(sdl3d_miniz PRIVATE -w)
+elseif(MSVC)
+    target_compile_options(sdl3d_miniz PRIVATE /w)
 endif()

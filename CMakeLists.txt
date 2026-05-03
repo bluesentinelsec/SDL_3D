@@ -182,6 +182,7 @@ target_sources(
         $<TARGET_OBJECTS:sdl3d_stb>
         $<TARGET_OBJECTS:sdl3d_miniaudio>
         $<TARGET_OBJECTS:sdl3d_yyjson>
+        $<TARGET_OBJECTS:sdl3d_miniz>
         $<TARGET_OBJECTS:sdl3d_lua>
 )
 
@@ -208,6 +209,7 @@ target_include_directories(
         $<TARGET_PROPERTY:sdl3d_stb,INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:sdl3d_miniaudio,INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:sdl3d_yyjson,INCLUDE_DIRECTORIES>
+        $<TARGET_PROPERTY:sdl3d_miniz,INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:sdl3d_lua,INCLUDE_DIRECTORIES>
 )
 
