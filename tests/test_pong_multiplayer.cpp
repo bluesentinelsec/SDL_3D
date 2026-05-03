@@ -618,6 +618,17 @@ TEST_F(PongHeadlessMultiplayerTest, ControlPacketsCarryPauseResumeAndDisconnect)
     ASSERT_GT(received, 0);
     ASSERT_TRUE(read_control_packet(packet.data(), received, PONG_NETWORK_MESSAGE_RESUME_REQUEST));
 
+    ASSERT_TRUE(send_control_packet(client_network, PONG_NETWORK_MESSAGE_DISCONNECT));
+    received = 0;
+    for (int i = 0; i < 120 && received <= 0; ++i)
+    {
+        EXPECT_TRUE(sdl3d_network_session_update(host_network, 0.01f));
+        EXPECT_TRUE(sdl3d_network_session_update(client_network, 0.01f));
+        received = sdl3d_network_session_receive(host_network, packet.data(), (int)packet.size());
+    }
+    ASSERT_GT(received, 0);
+    ASSERT_TRUE(read_control_packet(packet.data(), received, PONG_NETWORK_MESSAGE_DISCONNECT));
+
     ASSERT_TRUE(send_control_packet(host_network, PONG_NETWORK_MESSAGE_DISCONNECT));
     received = 0;
     for (int i = 0; i < 120 && received <= 0; ++i)
@@ -628,6 +639,30 @@ TEST_F(PongHeadlessMultiplayerTest, ControlPacketsCarryPauseResumeAndDisconnect)
     }
     ASSERT_GT(received, 0);
     ASSERT_TRUE(read_control_packet(packet.data(), received, PONG_NETWORK_MESSAGE_DISCONNECT));
+}
+
+TEST_F(PongHeadlessMultiplayerTest, NetworkPauseMenuOmitsOptions)
+{
+    sdl3d_game_data_ui_metrics metrics{};
+    metrics.paused = true;
+
+    sdl3d_game_data_menu menu{};
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu_for_metrics(host_runtime, &metrics, &menu));
+    ASSERT_STREQ(menu.name, "menu.pause.network");
+    ASSERT_EQ(menu.item_count, 2);
+
+    sdl3d_game_data_menu_item item{};
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(host_runtime, menu.name, 0, &item));
+    ASSERT_STREQ(item.label, "Resume");
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(host_runtime, menu.name, 1, &item));
+    ASSERT_STREQ(item.label, "Title");
+
+    set_multiplayer_scene_state(host_runtime, "single", "none", "none");
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu_for_metrics(host_runtime, &metrics, &menu));
+    ASSERT_STREQ(menu.name, "menu.pause");
+    ASSERT_EQ(menu.item_count, 3);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(host_runtime, menu.name, 1, &item));
+    ASSERT_STREQ(item.label, "Options");
 }
 
 } // namespace

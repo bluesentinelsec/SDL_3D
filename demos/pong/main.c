@@ -76,6 +76,8 @@ static const size_t PONG_NETWORK_STATE_PACKET_SIZE = 112U;
 
 static bool send_network_control_packet(sdl3d_network_session *session, pong_network_message_kind kind,
                                         const char *label);
+static bool send_network_control_packet_repeated(sdl3d_network_session *session, pong_network_message_kind kind,
+                                                 const char *label, int count);
 
 static Uint64 pong_log_timestamp_ms(void)
 {
@@ -466,7 +468,8 @@ static void destroy_host_session_internal(pong_state *state, bool notify_peer)
     {
         if (notify_peer)
         {
-            (void)send_network_control_packet(state->host_session, PONG_NETWORK_MESSAGE_DISCONNECT, "host disconnect");
+            (void)send_network_control_packet_repeated(state->host_session, PONG_NETWORK_MESSAGE_DISCONNECT,
+                                                       "host disconnect", 5);
         }
         sdl3d_network_session_destroy(state->host_session);
         state->host_session = NULL;
@@ -673,8 +676,8 @@ static void destroy_direct_connect_session_internal(pong_state *state, bool noti
     {
         if (notify_peer)
         {
-            (void)send_network_control_packet(state->direct_connect_session, PONG_NETWORK_MESSAGE_DISCONNECT,
-                                              "client disconnect");
+            (void)send_network_control_packet_repeated(state->direct_connect_session, PONG_NETWORK_MESSAGE_DISCONNECT,
+                                                       "client disconnect", 5);
         }
         sdl3d_network_session_destroy(state->direct_connect_session);
         state->direct_connect_session = NULL;
@@ -775,6 +778,27 @@ static bool send_network_control_packet(sdl3d_network_session *session, pong_net
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[%llu ms] Pong sent network control: %s kind=%u",
                 (unsigned long long)pong_log_timestamp_ms(), label != NULL ? label : "control", (unsigned int)kind);
     return true;
+}
+
+static bool send_network_control_packet_repeated(sdl3d_network_session *session, pong_network_message_kind kind,
+                                                 const char *label, int count)
+{
+    bool sent_any = false;
+    const int attempts = SDL_max(count, 1);
+
+    for (int i = 0; i < attempts; ++i)
+    {
+        if (send_network_control_packet(session, kind, label))
+        {
+            sent_any = true;
+        }
+        if (session != NULL)
+        {
+            (void)sdl3d_network_session_update(session, 0.0f);
+        }
+    }
+
+    return sent_any;
 }
 
 static bool read_network_control_packet(const Uint8 *packet, int packet_size, pong_network_message_kind expected,
@@ -1137,7 +1161,7 @@ static void begin_network_match_termination(sdl3d_game_context *ctx, pong_state 
 
     SDL_snprintf(state->network_match_termination_reason, sizeof(state->network_match_termination_reason), "%s",
                  reason != NULL && reason[0] != '\0' ? reason : "Peer disconnected");
-    state->network_match_termination_timer = 2.0f;
+    state->network_match_termination_timer = 0.0f;
     state->network_match_termination_active = true;
 
     if (local_host)
@@ -1406,7 +1430,7 @@ static void update_direct_connect_session_status(sdl3d_game_context *ctx, pong_s
                 {
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[%llu ms] Pong client received host disconnect tick=%u",
                                 (unsigned long long)pong_log_timestamp_ms(), (unsigned int)tick);
-                    return_to_multiplayer_after_disconnect(ctx, state, false, "Host disconnected");
+                    return_to_multiplayer_after_disconnect(ctx, state, false, "Host exited");
                 }
                 break;
             }
@@ -1460,13 +1484,21 @@ static void update_direct_connect_session_status(sdl3d_game_context *ctx, pong_s
 
 static void update_network_match_termination(pong_state *state, float dt)
 {
+    const int select_action =
+        state != NULL && state->data != NULL ? sdl3d_game_data_find_action(state->data, "action.menu.select") : -1;
+
     if (state == NULL || !state->network_match_termination_active)
     {
         return;
     }
 
-    state->network_match_termination_timer -= SDL_max(dt, 0.0f);
-    if (state->network_match_termination_timer > 0.0f)
+    state->network_match_termination_timer += SDL_max(dt, 0.0f);
+    if (state->network_match_termination_timer < 0.25f)
+    {
+        return;
+    }
+
+    if (state->input == NULL || select_action < 0 || !sdl3d_input_is_pressed(state->input, select_action))
     {
         return;
     }
@@ -1766,7 +1798,7 @@ static void update_host_session_status(sdl3d_game_context *ctx, pong_state *stat
                 {
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[%llu ms] Pong host received client disconnect tick=%u",
                                 (unsigned long long)pong_log_timestamp_ms(), (unsigned int)tick);
-                    return_to_multiplayer_after_disconnect(ctx, state, true, "Client disconnected");
+                    return_to_multiplayer_after_disconnect(ctx, state, true, "Client exited");
                 }
                 break;
             }
@@ -1977,7 +2009,7 @@ static void draw_network_match_termination_overlay(sdl3d_game_context *ctx, pong
         return;
     }
 
-    SDL_snprintf(message, sizeof(message), "Match terminated: %s - Returning to title screen.",
+    SDL_snprintf(message, sizeof(message), "Match terminated: %s - Press Enter to return to title screen.",
                  state->network_match_termination_reason[0] != '\0' ? state->network_match_termination_reason
                                                                     : "Peer disconnected");
 

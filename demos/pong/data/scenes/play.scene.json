@@ -69,11 +69,34 @@
       ]
     },
     {
+      "name": "menu.pause.network",
+      "active_if": {
+        "type": "all",
+        "conditions": [
+          { "type": "app.paused", "equals": true },
+          { "type": "not", "condition": { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "none" } },
+          { "type": "not", "condition": { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "" } },
+          { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": false }
+        ]
+      },
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "move_signal": "signal.ui.menu.move",
+      "select_signal": "signal.ui.menu.select",
+      "selected": 0,
+      "items": [
+        { "label": "Resume", "pause": "resume" },
+        { "label": "Title", "pause": "resume", "signal": "signal.match.reset", "scene": "scene.title" }
+      ]
+    },
+    {
       "name": "menu.pause",
       "active_if": {
         "type": "all",
         "conditions": [
           { "type": "app.paused", "equals": true },
+          { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "none" },
           { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": false }
         ]
       },
@@ -221,12 +244,42 @@
         }
       },
       {
+        "name": "ui.pause.menu.network",
+        "menu": "menu.pause.network",
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "app.paused", "equals": true },
+            { "type": "not", "condition": { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "none" } },
+            { "type": "not", "condition": { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "" } },
+            { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": false }
+          ]
+        },
+        "font": "font.hud",
+        "x": 0.5,
+        "y": 0.45,
+        "gap": 0.075,
+        "normalized": true,
+        "align": "center",
+        "color": [225, 236, 255, 245],
+        "selected_color": [255, 245, 208, 255],
+        "selected_pulse_alpha": true,
+        "cursor": {
+          "text": ">",
+          "offset_x": -0.12,
+          "align": "center",
+          "color": [255, 222, 140, 255],
+          "pulse_alpha": true
+        }
+      },
+      {
         "name": "ui.pause.menu",
         "menu": "menu.pause",
         "visible_if": {
           "type": "all",
           "conditions": [
             { "type": "app.paused", "equals": true },
+            { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "none" },
             { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": false }
           ]
         },
