@@ -87,7 +87,8 @@ static bool sprite_asset_load_texture_slice(const sdl3d_image *source, int x, in
         return false;
 
     const bool ok = sdl3d_create_texture_from_image(&slice, out_texture);
-    sdl3d_free_image(&slice);
+    SDL_free(slice.pixels);
+    SDL_zero(slice);
     return ok;
 }
 
