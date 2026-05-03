@@ -53,6 +53,9 @@ typedef struct pong_state
     int discovery_refresh_signal_id;
     int discovery_refresh_connection;
     int local_input_gamepad_count;
+    bool network_match_termination_active;
+    float network_match_termination_timer;
+    char network_match_termination_reason[96];
 } pong_state;
 
 typedef enum pong_network_message_kind
@@ -1118,11 +1121,53 @@ static bool process_client_state_packet(sdl3d_game_context *ctx, pong_state *sta
     return ok;
 }
 
+static void begin_network_match_termination(sdl3d_game_context *ctx, pong_state *state, bool local_host,
+                                            const char *reason)
+{
+    if (state == NULL || state->data == NULL)
+    {
+        return;
+    }
+
+    clear_network_action_overrides(state);
+    if (ctx != NULL)
+    {
+        ctx->paused = false;
+    }
+
+    SDL_snprintf(state->network_match_termination_reason, sizeof(state->network_match_termination_reason), "%s",
+                 reason != NULL && reason[0] != '\0' ? reason : "Peer disconnected");
+    state->network_match_termination_timer = 2.0f;
+    state->network_match_termination_active = true;
+
+    if (local_host)
+    {
+        destroy_host_session_internal(state, false);
+        SDL_snprintf(state->host_status, sizeof(state->host_status), "%s",
+                     reason != NULL && reason[0] != '\0' ? reason : "Client disconnected");
+        update_host_session_scene_state(state);
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong host match terminated: %s", state->host_status);
+    }
+    else
+    {
+        SDL_snprintf(state->direct_connect_status, sizeof(state->direct_connect_status), "%s",
+                     reason != NULL && reason[0] != '\0' ? reason : "Host disconnected");
+        destroy_direct_connect_session_internal(state, false);
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong client match terminated: %s", state->direct_connect_status);
+    }
+}
+
 static void return_to_multiplayer_after_disconnect(sdl3d_game_context *ctx, pong_state *state, bool local_host,
                                                    const char *reason)
 {
     if (state == NULL || state->data == NULL)
     {
+        return;
+    }
+
+    if (is_multiplayer_play_scene(state))
+    {
+        begin_network_match_termination(ctx, state, local_host, reason);
         return;
     }
 
@@ -1138,7 +1183,6 @@ static void return_to_multiplayer_after_disconnect(sdl3d_game_context *ctx, pong
                      reason != NULL && reason[0] != '\0' ? reason : "Client disconnected");
         destroy_host_session_internal(state, false);
         update_host_session_scene_state(state);
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong host peer disconnected: %s", state->host_status);
         (void)sdl3d_game_data_set_active_scene(state->data, "scene.multiplayer.lobby");
     }
     else
@@ -1146,7 +1190,6 @@ static void return_to_multiplayer_after_disconnect(sdl3d_game_context *ctx, pong
         SDL_snprintf(state->direct_connect_status, sizeof(state->direct_connect_status), "%s",
                      reason != NULL && reason[0] != '\0' ? reason : "Host disconnected");
         destroy_direct_connect_session_internal(state, false);
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong client peer disconnected: %s", state->direct_connect_status);
         (void)sdl3d_game_data_set_active_scene(state->data, "scene.multiplayer.join");
     }
 }
@@ -1412,6 +1455,28 @@ static void update_direct_connect_session_status(sdl3d_game_context *ctx, pong_s
                 destroy_direct_connect_session_internal(state, false);
             }
         }
+    }
+}
+
+static void update_network_match_termination(pong_state *state, float dt)
+{
+    if (state == NULL || !state->network_match_termination_active)
+    {
+        return;
+    }
+
+    state->network_match_termination_timer -= SDL_max(dt, 0.0f);
+    if (state->network_match_termination_timer > 0.0f)
+    {
+        return;
+    }
+
+    state->network_match_termination_active = false;
+    state->network_match_termination_timer = 0.0f;
+    state->network_match_termination_reason[0] = '\0';
+    if (state->data != NULL)
+    {
+        (void)sdl3d_game_data_set_active_scene(state->data, "scene.title");
     }
 }
 
@@ -1739,14 +1804,7 @@ static void update_host_session_status(sdl3d_game_context *ctx, pong_state *stat
         else if (is_multiplayer_play_scene(state) && state->host_session != NULL &&
                  sdl3d_network_session_state(state->host_session) != SDL3D_NETWORK_STATE_CONNECTED)
         {
-            clear_network_action_overrides(state);
-            if (ctx != NULL)
-            {
-                ctx->paused = false;
-            }
-            SDL_snprintf(state->host_status, sizeof(state->host_status), "Client timed out");
-            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong host client timed out, returning to lobby");
-            (void)sdl3d_game_data_set_active_scene(state->data, "scene.multiplayer.lobby");
+            begin_network_match_termination(ctx, state, true, "Client timed out");
         }
         return;
     }
@@ -1797,19 +1855,20 @@ static void update_multiplayer_sessions(sdl3d_game_context *ctx, pong_state *sta
 
     if (state->direct_connect_session != NULL)
     {
+        const bool keep_direct_connect_session =
+            is_direct_connect_scene(state) || is_multiplayer_discovery_scene(state) || is_multiplayer_play_scene(state);
+        if (!keep_direct_connect_session)
+        {
+            destroy_direct_connect_session(state);
+            return;
+        }
+
         if (!sdl3d_network_session_update(state->direct_connect_session, dt))
         {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong direct-connect session update failed: %s", SDL_GetError());
         }
 
         update_direct_connect_session_status(ctx, state);
-
-        const bool keep_direct_connect_session =
-            is_direct_connect_scene(state) || is_multiplayer_discovery_scene(state) || is_multiplayer_play_scene(state);
-        if (!keep_direct_connect_session)
-        {
-            destroy_direct_connect_session(state);
-        }
     }
 
     if (state->direct_connect_session != NULL && is_multiplayer_play_scene(state) && is_network_role_client(state))
@@ -1901,6 +1960,35 @@ static void draw_direct_connect_overlay(sdl3d_game_context *ctx, pong_state *sta
     sdl3d_ui_layout_label(state->direct_connect_ui, "Status");
     sdl3d_ui_layout_label(state->direct_connect_ui, state->direct_connect_status);
 
+    sdl3d_ui_end_vbox(state->direct_connect_ui);
+    sdl3d_ui_end_panel(state->direct_connect_ui);
+}
+
+static void draw_network_match_termination_overlay(sdl3d_game_context *ctx, pong_state *state)
+{
+    char message[192];
+    float panel_w;
+    float panel_h;
+    float panel_x;
+    float panel_y;
+
+    if (ctx == NULL || state == NULL || state->direct_connect_ui == NULL || !state->network_match_termination_active)
+    {
+        return;
+    }
+
+    SDL_snprintf(message, sizeof(message), "Match terminated: %s - Returning to title screen.",
+                 state->network_match_termination_reason[0] != '\0' ? state->network_match_termination_reason
+                                                                    : "Peer disconnected");
+
+    panel_w = 880.0f;
+    panel_h = 150.0f;
+    panel_x = ((float)sdl3d_get_render_context_width(ctx->renderer) - panel_w) * 0.5f;
+    panel_y = ((float)sdl3d_get_render_context_height(ctx->renderer) - panel_h) * 0.5f;
+
+    sdl3d_ui_begin_panel(state->direct_connect_ui, panel_x, panel_y, panel_w, panel_h);
+    sdl3d_ui_begin_vbox(state->direct_connect_ui, panel_x + 28.0f, panel_y + 34.0f, panel_w - 56.0f, panel_h - 68.0f);
+    sdl3d_ui_layout_label(state->direct_connect_ui, message);
     sdl3d_ui_end_vbox(state->direct_connect_ui);
     sdl3d_ui_end_panel(state->direct_connect_ui);
 }
@@ -2222,6 +2310,7 @@ static void pong_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 {
     pong_state *state = (pong_state *)userdata;
     refresh_local_play_input(state);
+    update_network_match_termination(state, dt);
     update_multiplayer_sessions(ctx, state, dt);
     update_discovery_controls(ctx, state);
     update_network_client_input_sensors(ctx, state);
@@ -2239,6 +2328,7 @@ static void pong_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_
 {
     pong_state *state = (pong_state *)userdata;
     refresh_local_play_input(state);
+    update_network_match_termination(state, real_dt);
     update_multiplayer_sessions(ctx, state, real_dt);
     update_discovery_controls(ctx, state);
     update_network_client_input_sensors(ctx, state);
@@ -2280,6 +2370,7 @@ static void pong_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     {
         draw_discovery_overlay(ctx, state);
     }
+    draw_network_match_termination_overlay(ctx, state);
     if (state->direct_connect_ui != NULL)
     {
         sdl3d_ui_end_frame(state->direct_connect_ui);
