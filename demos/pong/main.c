@@ -35,7 +35,6 @@ typedef struct pong_state
     sdl3d_font direct_connect_font;
     sdl3d_ui_context *direct_connect_ui;
     sdl3d_ui_context *discovery_ui;
-    sdl3d_ui_context *lobby_ui;
     sdl3d_network_session *host_session;
     sdl3d_network_session *direct_connect_session;
     sdl3d_network_discovery_session *discovery_session;
@@ -428,20 +427,27 @@ static void update_host_session_scene_state(pong_state *state)
     char client_label[SDL3D_NETWORK_MAX_HOST_LENGTH + 48];
     char peer_host[SDL3D_NETWORK_MAX_HOST_LENGTH];
     Uint16 peer_port = 0;
+    const bool client_connected =
+        state->host_session != NULL && sdl3d_network_session_is_connected(state->host_session);
     SDL_snprintf(state->host_status, sizeof(state->host_status), "%s",
                  status != NULL && status[0] != '\0' ? status : "Not hosting");
     SDL_snprintf(state->host_endpoint, sizeof(state->host_endpoint), "UDP %u", (unsigned int)port);
     SDL_snprintf(client_label, sizeof(client_label), "Waiting for client");
     SDL_zero(peer_host);
-    if (state->host_session != NULL &&
+    if (client_connected &&
         sdl3d_network_session_get_peer_endpoint(state->host_session, peer_host, (int)sizeof(peer_host), &peer_port))
     {
         SDL_snprintf(client_label, sizeof(client_label), "Client 1 - %s:%u", peer_host, (unsigned int)peer_port);
+    }
+    else if (client_connected)
+    {
+        SDL_snprintf(client_label, sizeof(client_label), "Client 1 - Connected");
     }
 
     sdl3d_properties_set_string(scene_state, "multiplayer_host_status", state->host_status);
     sdl3d_properties_set_string(scene_state, "multiplayer_host_endpoint", state->host_endpoint);
     sdl3d_properties_set_string(scene_state, "multiplayer_host_client", client_label);
+    sdl3d_properties_set_bool(scene_state, "multiplayer_host_connected", client_connected);
 }
 
 static void destroy_host_session(pong_state *state)
@@ -1402,54 +1408,6 @@ static void draw_discovery_overlay(sdl3d_game_context *ctx, pong_state *state)
     sdl3d_ui_end_panel(state->discovery_ui);
 }
 
-static void draw_lobby_overlay(sdl3d_game_context *ctx, pong_state *state)
-{
-    if (ctx == NULL || state == NULL || state->lobby_ui == NULL)
-    {
-        return;
-    }
-
-    const int screen_w = sdl3d_get_render_context_width(ctx->renderer);
-    const int screen_h = sdl3d_get_render_context_height(ctx->renderer);
-    const float panel_w = 620.0f;
-    const float panel_h = 190.0f;
-    const float panel_x = ((float)screen_w - panel_w) * 0.5f;
-    const float panel_y = (float)screen_h * 0.45f;
-    const bool client_connected =
-        state->host_session != NULL && sdl3d_network_session_is_connected(state->host_session);
-    char client_label[SDL3D_NETWORK_MAX_HOST_LENGTH + 64];
-    char peer_host[SDL3D_NETWORK_MAX_HOST_LENGTH];
-    Uint16 peer_port = 0;
-
-    SDL_snprintf(client_label, sizeof(client_label), "Client 1 - Connected");
-    SDL_zero(peer_host);
-    if (state->host_session != NULL &&
-        sdl3d_network_session_get_peer_endpoint(state->host_session, peer_host, (int)sizeof(peer_host), &peer_port))
-    {
-        SDL_snprintf(client_label, sizeof(client_label), "Client 1 - %s:%u", peer_host, (unsigned int)peer_port);
-    }
-
-    sdl3d_ui_begin_panel(state->lobby_ui, panel_x, panel_y, panel_w, panel_h);
-    sdl3d_ui_begin_vbox(state->lobby_ui, panel_x + 28.0f, panel_y + 22.0f, panel_w - 56.0f, panel_h - 44.0f);
-    sdl3d_ui_layout_label(state->lobby_ui, "AVAILABLE CLIENTS");
-    sdl3d_ui_separator(state->lobby_ui);
-
-    if (client_connected)
-    {
-        if (sdl3d_ui_layout_button(state->lobby_ui, client_label))
-        {
-            (void)start_selected_lobby_match(state);
-        }
-    }
-    else
-    {
-        sdl3d_ui_layout_label(state->lobby_ui, "Waiting for client...");
-    }
-
-    sdl3d_ui_end_vbox(state->lobby_ui);
-    sdl3d_ui_end_panel(state->lobby_ui);
-}
-
 static void update_host_session_status(pong_state *state, float dt)
 {
     if (state == NULL)
@@ -1827,20 +1785,6 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
         state->assets = NULL;
         return false;
     }
-    if (!sdl3d_ui_create(&state->direct_connect_font, &state->lobby_ui))
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong lobby UI create failed: %s", SDL_GetError());
-        sdl3d_ui_destroy(state->discovery_ui);
-        state->discovery_ui = NULL;
-        sdl3d_ui_destroy(state->direct_connect_ui);
-        state->direct_connect_ui = NULL;
-        sdl3d_free_font(&state->direct_connect_font);
-        sdl3d_game_data_destroy(state->data);
-        state->data = NULL;
-        sdl3d_asset_resolver_destroy(state->assets);
-        state->assets = NULL;
-        return false;
-    }
     reset_direct_connect_defaults(state);
     if (ctx != NULL && ctx->window != NULL)
     {
@@ -1854,19 +1798,10 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
     {
         sdl3d_ui_begin_frame_ex(state->discovery_ui, ctx->renderer, ctx->window);
     }
-    if (state->lobby_ui != NULL && ctx != NULL && ctx->renderer != NULL && ctx->window != NULL)
-    {
-        sdl3d_ui_begin_frame_ex(state->lobby_ui, ctx->renderer, ctx->window);
-    }
     sdl3d_game_data_image_cache_init(&state->image_cache, state->assets);
     if (!sdl3d_game_data_app_flow_start(&state->app_flow, state->data))
     {
         sdl3d_game_data_image_cache_free(&state->image_cache);
-        if (state->lobby_ui != NULL)
-        {
-            sdl3d_ui_destroy(state->lobby_ui);
-            state->lobby_ui = NULL;
-        }
         if (state->discovery_ui != NULL)
         {
             sdl3d_ui_destroy(state->discovery_ui);
@@ -1975,17 +1910,6 @@ static bool pong_handle_event(sdl3d_game_context *ctx, void *userdata, const SDL
             ctx->input_event_consumed = true;
         }
     }
-    if (state != NULL && is_multiplayer_lobby_scene(state) && state->lobby_ui != NULL && event != NULL)
-    {
-        const bool mouse_event = event->type == SDL_EVENT_MOUSE_MOTION || event->type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
-                                 event->type == SDL_EVENT_MOUSE_BUTTON_UP || event->type == SDL_EVENT_MOUSE_WHEEL;
-
-        if (mouse_event)
-        {
-            (void)sdl3d_ui_process_event(state->lobby_ui, event);
-            ctx->input_event_consumed = true;
-        }
-    }
     (void)ctx;
     return true;
 }
@@ -2050,11 +1974,6 @@ static void pong_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     {
         draw_discovery_overlay(ctx, state);
     }
-    if (is_multiplayer_lobby_scene(state))
-    {
-        draw_lobby_overlay(ctx, state);
-    }
-
     if (state->direct_connect_ui != NULL)
     {
         sdl3d_ui_end_frame(state->direct_connect_ui);
@@ -2066,12 +1985,6 @@ static void pong_render(sdl3d_game_context *ctx, void *userdata, float alpha)
         sdl3d_ui_end_frame(state->discovery_ui);
         sdl3d_ui_render(state->discovery_ui, ctx->renderer);
         sdl3d_ui_begin_frame_ex(state->discovery_ui, ctx->renderer, ctx->window);
-    }
-    if (state->lobby_ui != NULL)
-    {
-        sdl3d_ui_end_frame(state->lobby_ui);
-        sdl3d_ui_render(state->lobby_ui, ctx->renderer);
-        sdl3d_ui_begin_frame_ex(state->lobby_ui, ctx->renderer, ctx->window);
     }
 }
 
@@ -2108,11 +2021,6 @@ static void pong_shutdown(sdl3d_game_context *ctx, void *userdata)
     {
         sdl3d_ui_destroy(state->discovery_ui);
         state->discovery_ui = NULL;
-    }
-    if (state->lobby_ui != NULL)
-    {
-        sdl3d_ui_destroy(state->lobby_ui);
-        state->lobby_ui = NULL;
     }
     if (state->direct_connect_ui != NULL)
     {

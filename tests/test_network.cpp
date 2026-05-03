@@ -235,6 +235,51 @@ TEST(NetworkSession, LanDiscoveryFindsWaitingHost)
     destroy_discovery_pair(&pair);
 }
 
+TEST(NetworkSession, ClientCanConnectToDiscoveredHost)
+{
+    DiscoveryPair pair{};
+    ASSERT_TRUE(create_discovery_pair(&pair));
+
+    sdl3d_network_discovery_result result{};
+    ASSERT_TRUE(pump_until_discovered(&pair, &result));
+
+    sdl3d_network_session_desc client_desc{};
+    sdl3d_network_session_desc_init(&client_desc);
+    client_desc.role = SDL3D_NETWORK_ROLE_CLIENT;
+    client_desc.host = result.host;
+    client_desc.port = result.port;
+    client_desc.handshake_timeout = 2.0f;
+    client_desc.idle_timeout = 2.0f;
+
+    sdl3d_network_session *client = nullptr;
+    ASSERT_TRUE(sdl3d_network_session_create(&client_desc, &client));
+
+    bool connected = false;
+    for (int i = 0; i < kPumpLimit; ++i)
+    {
+        EXPECT_TRUE(sdl3d_network_session_update(pair.host, 0.016f));
+        EXPECT_TRUE(sdl3d_network_session_update(client, 0.016f));
+        if (sdl3d_network_session_is_connected(pair.host) && sdl3d_network_session_is_connected(client))
+        {
+            connected = true;
+            break;
+        }
+        if (sdl3d_network_session_state(client) == SDL3D_NETWORK_STATE_REJECTED ||
+            sdl3d_network_session_state(client) == SDL3D_NETWORK_STATE_TIMED_OUT ||
+            sdl3d_network_session_state(client) == SDL3D_NETWORK_STATE_ERROR)
+        {
+            break;
+        }
+    }
+
+    EXPECT_TRUE(connected);
+    EXPECT_TRUE(sdl3d_network_session_is_connected(pair.host));
+    EXPECT_TRUE(sdl3d_network_session_is_connected(client));
+
+    sdl3d_network_session_destroy(client);
+    destroy_discovery_pair(&pair);
+}
+
 TEST(NetworkSession, HostRejectsSecondClient)
 {
     NetworkPair pair{};

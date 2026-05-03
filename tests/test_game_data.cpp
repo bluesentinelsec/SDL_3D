@@ -1492,12 +1492,19 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer.lobby"));
     ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
-    EXPECT_STREQ(menu.name, "menu.multiplayer.lobby");
-    EXPECT_EQ(menu.item_count, 2);
+    EXPECT_STREQ(menu.name, "menu.multiplayer.lobby.waiting");
+    EXPECT_EQ(menu.item_count, 1);
     const int lobby_start_signal = sdl3d_game_data_find_signal(runtime, "signal.multiplayer.lobby.start");
     ASSERT_GE(lobby_start_signal, 0);
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
-    EXPECT_STREQ(item.label, "Start Selected Match");
+    EXPECT_STREQ(item.label, "Back");
+    EXPECT_STREQ(item.scene, "scene.multiplayer.lan");
+    sdl3d_properties_set_bool(sdl3d_game_data_mutable_scene_state(runtime), "multiplayer_host_connected", true);
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.multiplayer.lobby.connected");
+    EXPECT_EQ(menu.item_count, 2);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Client 1");
     EXPECT_EQ(item.signal_id, lobby_start_signal);
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
     EXPECT_STREQ(item.label, "Back");
