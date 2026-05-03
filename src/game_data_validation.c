@@ -2730,6 +2730,7 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->cameras);
     name_table_destroy(&names->fonts);
     name_table_destroy(&names->images);
+    name_table_destroy(&names->sprites);
     name_table_destroy(&names->sounds);
     name_table_destroy(&names->music);
     name_table_destroy(&names->scenes);
