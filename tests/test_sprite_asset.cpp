@@ -8,7 +8,9 @@
 
 extern "C"
 {
+#include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_stdinc.h>
+#include <SDL3/SDL_timer.h>
 
 #include "sdl3d/asset.h"
 #include "sdl3d/game.h"
@@ -22,25 +24,38 @@ namespace
 
 std::filesystem::path make_temp_dir(const char *leaf)
 {
-    const std::filesystem::path root = std::filesystem::temp_directory_path();
-    const auto unique =
-        std::to_string((long long)std::filesystem::file_time_type::clock::now().time_since_epoch().count());
+    std::filesystem::path root;
+    char *pref_path = SDL_GetPrefPath("bluesentinelsec", "SDL3DTests");
+    if (pref_path != nullptr)
+    {
+        root = pref_path;
+        SDL_free(pref_path);
+    }
+    else
+    {
+        SDL_ClearError();
+        root = std::filesystem::temp_directory_path();
+    }
+
+    const auto unique = std::to_string((unsigned long long)SDL_GetTicksNS());
     const std::filesystem::path dir = root / (std::string(leaf) + "_" + unique);
     std::filesystem::create_directories(dir);
     return dir;
 }
 
-void write_text(const std::filesystem::path &path, const std::string &text)
+bool write_text(const std::filesystem::path &path, const std::string &text)
 {
     std::filesystem::create_directories(path.parent_path());
     std::ofstream out(path, std::ios::binary);
     out << text;
+    return out.good();
 }
 
-void write_png(const std::filesystem::path &path, const sdl3d_image &image)
+bool write_png(const std::filesystem::path &path, const sdl3d_image &image)
 {
     std::filesystem::create_directories(path.parent_path());
-    ASSERT_TRUE(sdl3d_save_image_png(&image, path.string().c_str())) << SDL_GetError();
+    const std::string path_text = path.string();
+    return sdl3d_save_image_png(&image, path_text.c_str());
 }
 
 std::vector<Uint8> make_rgba_sheet_pixels(int cell_width, int cell_height, int columns, int rows,
@@ -101,7 +116,7 @@ TEST(SpriteAsset, LoadsSheetAndSlicesFrames)
     image.pixels = pixels.data();
     image.width = cell_width * columns;
     image.height = cell_height * rows;
-    write_png(png_path, image);
+    ASSERT_TRUE(write_png(png_path, image)) << SDL_GetError();
 
     sdl3d_sprite_asset_source source{};
     source.kind = SDL3D_SPRITE_ASSET_SOURCE_SHEET;
@@ -178,7 +193,7 @@ TEST(SpriteAsset, LoadsExplicitFileListSources)
         image.pixels = pixels.data();
         image.width = 1;
         image.height = 1;
-        write_png(paths[i], image);
+        ASSERT_TRUE(write_png(paths[i], image)) << SDL_GetError();
         path_strings[i] = paths[i].string();
     }
 
@@ -233,10 +248,10 @@ TEST(SpriteAsset, LoadsThroughGameDataSpriteBridge)
     image.pixels = pixels.data();
     image.width = cell_width * columns;
     image.height = cell_height * rows;
-    write_png(image_path, image);
+    ASSERT_TRUE(write_png(image_path, image)) << SDL_GetError();
 
-    write_text(json_path,
-               R"json({
+    ASSERT_TRUE(write_text(json_path,
+                           R"json({
   "schema": "sdl3d.game.v0",
   "metadata": { "name": "Sprite Bridge", "id": "test.sprite_bridge", "version": "0.1.0" },
   "world": { "name": "world.sprite_bridge", "kind": "fixed_screen" },
@@ -260,7 +275,7 @@ TEST(SpriteAsset, LoadsThroughGameDataSpriteBridge)
     ]
   },
   "entities": []
-})json");
+})json"));
 
     sdl3d_game_session *session = nullptr;
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
