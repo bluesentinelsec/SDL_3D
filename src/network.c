@@ -11,7 +11,11 @@
 #if (defined(__APPLE__) || defined(__linux__)) && !defined(__ANDROID__)
 #include <arpa/inet.h>
 #include <ifaddrs.h>
+#if defined(__linux__)
+#include <linux/if.h>
+#else
 #include <net/if.h>
+#endif
 #include <netinet/in.h>
 #define SDL3D_NETWORK_CAN_ENUMERATE_BROADCAST_TARGETS 1
 #else
@@ -323,6 +327,7 @@ static bool sdl3d_network_discovery_add_target(sdl3d_network_discovery_session *
     return true;
 }
 
+#if SDL3D_NETWORK_CAN_ENUMERATE_BROADCAST_TARGETS
 static bool sdl3d_network_discovery_host_list_contains(char hosts[][SDL3D_NETWORK_MAX_HOST_LENGTH], int count,
                                                        const char *host)
 {
@@ -355,7 +360,6 @@ static bool sdl3d_network_discovery_add_host_to_list(char hosts[][SDL3D_NETWORK_
     return true;
 }
 
-#if SDL3D_NETWORK_CAN_ENUMERATE_BROADCAST_TARGETS
 static int sdl3d_network_collect_directed_broadcast_hosts(char hosts[][SDL3D_NETWORK_MAX_HOST_LENGTH], int max)
 {
     struct ifaddrs *interfaces = NULL;
