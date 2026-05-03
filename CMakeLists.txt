@@ -25,7 +25,9 @@ endif()
 option(SDL3D_FETCH_SDL3 "Fetch SDL3 if it is not already available" ON)
 option(SDL3D_ENABLE_NETWORKING "Enable SDL3_net-based network transport" ON)
 option(SDL3D_COMPRESS_PACKS "Compress SDL3D asset packs by default" ON)
-set(SDL3D_PACK_PASSWORD "" CACHE STRING "Password used to obfuscate SDL3D asset packs (empty disables obfuscation)")
+set(SDL3D_PACK_PASSWORD
+    "password"
+    CACHE STRING "Password used to obfuscate SDL3D asset packs (set to an empty string to disable obfuscation)")
 option(SDL3D_ENABLE_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 option(SDL3D_BUILD_BENCHMARKS "Build SDL3D benchmarks" OFF)
 option(SDL3D_BUILD_DEMOS "Build SDL3D demo programs" OFF)
