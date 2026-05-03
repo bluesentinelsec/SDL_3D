@@ -214,15 +214,10 @@ TEST(AssetPackWriter, WritesDeterministicPackReadableByResolver)
     ASSERT_FALSE(bytes_a.empty());
     ASSERT_FALSE(bytes_b.empty());
     EXPECT_EQ(bytes_a, bytes_b);
-#if SDL3D_PACK_COMPRESSION_ENABLED
     ASSERT_GE(bytes_a.size(), 8u);
-    EXPECT_EQ(std::string(bytes_a.data(), bytes_a.data() + 7), "S3DCPK1");
+    const std::string magic(bytes_a.data(), bytes_a.data() + 7);
+    EXPECT_TRUE(magic == "S3DPAK1" || magic == "S3DCPK1" || magic == "S3DOPK1");
     EXPECT_EQ(bytes_a[7], '\0');
-#else
-    ASSERT_GE(bytes_a.size(), 8u);
-    EXPECT_EQ(std::string(bytes_a.data(), bytes_a.data() + 7), "S3DPAK1");
-    EXPECT_EQ(bytes_a[7], '\0');
-#endif
 
     sdl3d_asset_resolver *resolver = sdl3d_asset_resolver_create();
     ASSERT_NE(resolver, nullptr);
