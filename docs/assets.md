@@ -30,8 +30,11 @@ decompresses them on mount. The raw pack layout is still accepted for
 compatibility.
 
 Compression is controlled by the `SDL3D_COMPRESS_PACKS` CMake option. Set it
-`OFF` if you need raw packs for debugging or tooling. Encryption and patch
-metadata remain out of scope for now.
+`OFF` if you need raw packs for debugging or tooling. If you set the
+`SDL3D_PACK_PASSWORD` CMake cache string to a non-empty value, the pack writer
+adds a lightweight obfuscation wrapper after compression and the resolver
+unwraps it on mount. This is intended to keep casual observers from pulling
+assets out of a released pack, not to provide hardened security.
 
 ## CMake Workflow
 

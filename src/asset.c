@@ -13,6 +13,7 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "miniz.h"
+#include "sdl3d_crypto.h"
 
 #define SDL3D_PACK_MAGIC "S3DPAK1"
 #define SDL3D_PACK_MAGIC_SIZE 8u
@@ -22,6 +23,8 @@
 #define SDL3D_PACK_COMPRESSED_MAGIC "S3DCPK1"
 #define SDL3D_PACK_COMPRESSED_HEADER_SIZE 32u
 #define SDL3D_PACK_COMPRESSION_LEVEL MZ_DEFAULT_LEVEL
+#define SDL3D_PACK_OBFUSCATED_MAGIC "S3DOPK1"
+#define SDL3D_PACK_OBFUSCATED_HEADER_SIZE 76u
 
 typedef enum asset_mount_type
 {
@@ -368,6 +371,110 @@ static bool build_compressed_pack_bytes(const uint8_t *raw_data, size_t raw_size
     return true;
 }
 
+static void derive_pack_salt(const uint8_t *data, size_t size, uint8_t salt[SDL3D_CRYPTO_SALT_SIZE])
+{
+    uint8_t digest[SDL3D_CRYPTO_HASH_SIZE];
+    sdl3d_crypto_hash32(data, size, digest);
+    SDL_memcpy(salt, digest, SDL3D_CRYPTO_SALT_SIZE);
+}
+
+static void derive_pack_nonce(const uint8_t *data, size_t size, uint8_t nonce[SDL3D_CRYPTO_NONCE_SIZE])
+{
+    static const char label[] = "SDL3D pack nonce";
+    sdl3d_crypto_hash32_state state;
+    uint8_t digest[SDL3D_CRYPTO_HASH_SIZE];
+
+    sdl3d_crypto_hash32_init(&state);
+    sdl3d_crypto_hash32_update(&state, label, sizeof(label) - 1u);
+    sdl3d_crypto_hash32_update(&state, data, size);
+    sdl3d_crypto_hash32_final(&state, digest);
+    SDL_memcpy(nonce, digest, SDL3D_CRYPTO_NONCE_SIZE);
+}
+
+static void derive_pack_key(const char *password, const uint8_t salt[SDL3D_CRYPTO_SALT_SIZE],
+                            uint8_t key[SDL3D_CRYPTO_HASH_SIZE])
+{
+    sdl3d_crypto_hash32_state state;
+    sdl3d_crypto_hash32_init(&state);
+    if (password != NULL && password[0] != '\0')
+        sdl3d_crypto_hash32_update(&state, password, SDL_strlen(password));
+    sdl3d_crypto_hash32_update(&state, salt, SDL3D_CRYPTO_SALT_SIZE);
+    sdl3d_crypto_hash32_final(&state, key);
+}
+
+static void derive_pack_tag(const uint8_t key[SDL3D_CRYPTO_HASH_SIZE], const uint8_t *header, size_t header_size,
+                            const uint8_t *payload, size_t payload_size, uint8_t tag[SDL3D_CRYPTO_TAG_SIZE])
+{
+    sdl3d_crypto_hash32_state state;
+    uint8_t digest[SDL3D_CRYPTO_HASH_SIZE];
+
+    sdl3d_crypto_hash32_init_keyed(&state, key, SDL3D_CRYPTO_HASH_SIZE);
+    sdl3d_crypto_hash32_update(&state, header, header_size);
+    sdl3d_crypto_hash32_update(&state, payload, payload_size);
+    sdl3d_crypto_hash32_final(&state, digest);
+    SDL_memcpy(tag, digest, SDL3D_CRYPTO_TAG_SIZE);
+}
+
+static bool build_obfuscated_pack_bytes(const uint8_t *plain_data, size_t plain_size, uint8_t **out_data,
+                                        size_t *out_size, char *error_buffer, int error_buffer_size)
+{
+    if (out_data != NULL)
+        *out_data = NULL;
+    if (out_size != NULL)
+        *out_size = 0u;
+    if (plain_data == NULL || plain_size == 0u || out_data == NULL || out_size == NULL)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "invalid pack obfuscation arguments");
+        return false;
+    }
+
+    if (plain_size > (size_t)ULONG_MAX)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "asset pack is too large to obfuscate");
+        return false;
+    }
+
+    uint8_t salt[SDL3D_CRYPTO_SALT_SIZE];
+    uint8_t nonce[SDL3D_CRYPTO_NONCE_SIZE];
+    uint8_t key[SDL3D_CRYPTO_HASH_SIZE];
+    derive_pack_salt(plain_data, plain_size, salt);
+    derive_pack_nonce(plain_data, plain_size, nonce);
+    derive_pack_key(SDL3D_PACK_PASSWORD, salt, key);
+
+    if (SDL3D_PACK_OBFUSCATED_HEADER_SIZE > (size_t)(SIZE_MAX - plain_size))
+    {
+        set_asset_error(error_buffer, error_buffer_size, "asset pack is too large");
+        return false;
+    }
+
+    uint8_t *data = (uint8_t *)SDL_malloc(SDL3D_PACK_OBFUSCATED_HEADER_SIZE + plain_size);
+    if (data == NULL)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "failed to allocate obfuscated asset pack");
+        return false;
+    }
+
+    SDL_memcpy(data + SDL3D_PACK_OBFUSCATED_HEADER_SIZE, plain_data, plain_size);
+
+    SDL_memcpy(data, SDL3D_PACK_OBFUSCATED_MAGIC, SDL3D_PACK_MAGIC_SIZE - 1u);
+    data[SDL3D_PACK_MAGIC_SIZE - 1u] = '\0';
+    write_u32le(data + 8, SDL3D_PACK_VERSION);
+    write_u64le(data + 12, (uint64_t)plain_size);
+    write_u64le(data + 20, (uint64_t)plain_size);
+    SDL_memcpy(data + 28, salt, SDL3D_CRYPTO_SALT_SIZE);
+    SDL_memcpy(data + 44, nonce, SDL3D_CRYPTO_NONCE_SIZE);
+
+    sdl3d_crypto_xor_stream(data + SDL3D_PACK_OBFUSCATED_HEADER_SIZE, plain_size, key, nonce);
+
+    uint8_t tag[SDL3D_CRYPTO_TAG_SIZE];
+    derive_pack_tag(key, data, 60u, data + SDL3D_PACK_OBFUSCATED_HEADER_SIZE, plain_size, tag);
+    SDL_memcpy(data + 60, tag, SDL3D_CRYPTO_TAG_SIZE);
+
+    *out_data = data;
+    *out_size = SDL3D_PACK_OBFUSCATED_HEADER_SIZE + plain_size;
+    return true;
+}
+
 static bool normalize_pack_blob(uint8_t **data_ptr, size_t *size_ptr, const char *debug_name, char *error_buffer,
                                 int error_buffer_size)
 {
@@ -382,8 +489,64 @@ static bool normalize_pack_blob(uint8_t **data_ptr, size_t *size_ptr, const char
 
     if (*size_ptr < SDL3D_PACK_COMPRESSED_HEADER_SIZE || !pack_magic_matches(*data_ptr, SDL3D_PACK_COMPRESSED_MAGIC))
     {
-        set_asset_error(error_buffer, error_buffer_size, "pack has invalid magic");
-        return false;
+        if (*size_ptr < SDL3D_PACK_OBFUSCATED_HEADER_SIZE ||
+            !pack_magic_matches(*data_ptr, SDL3D_PACK_OBFUSCATED_MAGIC))
+        {
+            set_asset_error(error_buffer, error_buffer_size, "pack has invalid magic");
+            return false;
+        }
+
+        const uint32_t version = read_u32le(*data_ptr + 8);
+        const uint64_t plain_size = read_u64le(*data_ptr + 12);
+        const uint64_t payload_size = read_u64le(*data_ptr + 20);
+        if (version != SDL3D_PACK_VERSION)
+        {
+            set_asset_error(error_buffer, error_buffer_size, "unsupported obfuscated pack version");
+            return false;
+        }
+        if (plain_size == 0u || payload_size == 0u || plain_size > (uint64_t)SIZE_MAX ||
+            payload_size > (uint64_t)SIZE_MAX || SDL3D_PACK_OBFUSCATED_HEADER_SIZE + payload_size != *size_ptr)
+        {
+            set_asset_error(error_buffer, error_buffer_size, "obfuscated pack header is invalid");
+            return false;
+        }
+        if (SDL3D_PACK_PASSWORD[0] == '\0')
+        {
+            set_asset_error(error_buffer, error_buffer_size, "obfuscated pack requires a password");
+            return false;
+        }
+
+        uint8_t salt[SDL3D_CRYPTO_SALT_SIZE];
+        uint8_t nonce[SDL3D_CRYPTO_NONCE_SIZE];
+        uint8_t key[SDL3D_CRYPTO_HASH_SIZE];
+        uint8_t expected_tag[SDL3D_CRYPTO_TAG_SIZE];
+        uint8_t actual_tag[SDL3D_CRYPTO_TAG_SIZE];
+        SDL_memcpy(salt, *data_ptr + 28, SDL3D_CRYPTO_SALT_SIZE);
+        SDL_memcpy(nonce, *data_ptr + 44, SDL3D_CRYPTO_NONCE_SIZE);
+        SDL_memcpy(actual_tag, *data_ptr + 60, SDL3D_CRYPTO_TAG_SIZE);
+        derive_pack_key(SDL3D_PACK_PASSWORD, salt, key);
+        derive_pack_tag(key, *data_ptr, 60u, *data_ptr + SDL3D_PACK_OBFUSCATED_HEADER_SIZE, (size_t)payload_size,
+                        expected_tag);
+        if (SDL_memcmp(actual_tag, expected_tag, SDL3D_CRYPTO_TAG_SIZE) != 0)
+        {
+            set_asset_error(error_buffer, error_buffer_size, "obfuscated pack password or tag is invalid");
+            return false;
+        }
+
+        uint8_t *payload = (uint8_t *)SDL_malloc((size_t)payload_size);
+        if (payload == NULL)
+        {
+            set_asset_error(error_buffer, error_buffer_size, "failed to allocate decrypted pack");
+            return false;
+        }
+
+        SDL_memcpy(payload, *data_ptr + SDL3D_PACK_OBFUSCATED_HEADER_SIZE, (size_t)payload_size);
+        sdl3d_crypto_xor_stream(payload, (size_t)payload_size, key, nonce);
+
+        SDL_free(*data_ptr);
+        *data_ptr = payload;
+        *size_ptr = (size_t)payload_size;
+        return normalize_pack_blob(data_ptr, size_ptr, debug_name, error_buffer, error_buffer_size);
     }
 
     const uint32_t version = read_u32le(*data_ptr + 8);
@@ -879,6 +1042,7 @@ bool sdl3d_asset_pack_write_file(const char *pack_path, const sdl3d_asset_pack_s
     uint8_t *output_data = raw_data;
     size_t output_size = raw_size;
     uint8_t *compressed_data = NULL;
+    uint8_t *obfuscated_data = NULL;
     if (ok)
     {
 #if SDL3D_PACK_COMPRESSION_ENABLED
@@ -892,6 +1056,14 @@ bool sdl3d_asset_pack_write_file(const char *pack_path, const sdl3d_asset_pack_s
                 output_data = compressed_data;
         }
 #endif
+    }
+
+    if (ok && SDL3D_PACK_PASSWORD[0] != '\0')
+    {
+        ok = build_obfuscated_pack_bytes(output_data, output_size, &obfuscated_data, &output_size, error_buffer,
+                                         error_buffer_size);
+        if (ok)
+            output_data = obfuscated_data;
     }
 
     SDL_IOStream *io = NULL;
@@ -917,6 +1089,7 @@ bool sdl3d_asset_pack_write_file(const char *pack_path, const sdl3d_asset_pack_s
 
     SDL_free(raw_data);
     SDL_free(compressed_data);
+    SDL_free(obfuscated_data);
     destroy_write_entries(write_entries, entry_count);
     return ok;
 }

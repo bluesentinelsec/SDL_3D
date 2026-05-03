@@ -275,6 +275,8 @@ else()
     sdl3d_add_test(sdl3d_teleporter_test test_teleporter.cpp unit)
     sdl3d_add_test(sdl3d_ui_test test_ui.cpp unit)
     sdl3d_add_test(sdl3d_parity_test test_parity.cpp render)
+    sdl3d_add_test(sdl3d_crypto_test test_crypto.cpp unit)
+    target_include_directories(sdl3d_crypto_test PRIVATE ${CMAKE_SOURCE_DIR}/vendor/crypto)
 
     if(NOT EMSCRIPTEN)
         sdl3d_add_test(sdl3d_asset_test test_asset.cpp unit)
