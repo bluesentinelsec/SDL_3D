@@ -24,6 +24,7 @@ option(SDL3D_BUILD_TESTS "Build SDL3D tests" OFF)
 endif()
 option(SDL3D_FETCH_SDL3 "Fetch SDL3 if it is not already available" ON)
 option(SDL3D_ENABLE_NETWORKING "Enable SDL3_net-based network transport" ON)
+option(SDL3D_COMPRESS_PACKS "Compress SDL3D asset packs by default" ON)
 option(SDL3D_ENABLE_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 option(SDL3D_BUILD_BENCHMARKS "Build SDL3D benchmarks" OFF)
 option(SDL3D_BUILD_DEMOS "Build SDL3D demo programs" OFF)
@@ -182,6 +183,7 @@ target_sources(
         $<TARGET_OBJECTS:sdl3d_stb>
         $<TARGET_OBJECTS:sdl3d_miniaudio>
         $<TARGET_OBJECTS:sdl3d_yyjson>
+        $<TARGET_OBJECTS:sdl3d_miniz>
         $<TARGET_OBJECTS:sdl3d_lua>
 )
 
@@ -208,6 +210,7 @@ target_include_directories(
         $<TARGET_PROPERTY:sdl3d_stb,INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:sdl3d_miniaudio,INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:sdl3d_yyjson,INCLUDE_DIRECTORIES>
+        $<TARGET_PROPERTY:sdl3d_miniz,INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:sdl3d_lua,INCLUDE_DIRECTORIES>
 )
 
@@ -232,6 +235,12 @@ if(SDL3D_ENABLE_NETWORKING)
 else()
     target_compile_definitions(sdl3d PRIVATE SDL3D_NETWORKING_ENABLED=0)
 endif()
+if(SDL3D_COMPRESS_PACKS)
+    target_compile_definitions(sdl3d PUBLIC SDL3D_PACK_COMPRESSION_ENABLED=1)
+else()
+    target_compile_definitions(sdl3d PUBLIC SDL3D_PACK_COMPRESSION_ENABLED=0)
+endif()
+target_compile_definitions(sdl3d PRIVATE MINIZ_NO_ZLIB_COMPATIBLE_NAMES)
 
 set_property(TARGET sdl3d APPEND PROPERTY INTERFACE_LINK_LIBRARIES ${SDL3D_SDL_TARGET})
 if(TARGET Threads::Threads)

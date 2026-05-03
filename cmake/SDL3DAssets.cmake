@@ -44,25 +44,36 @@ function(sdl3d_add_embedded_asset_pack target_name)
         set(SDL3D_EMBED_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/${target_name}_generated")
     endif()
 
+    set(_embed_pack "${SDL3D_EMBED_OUTPUT_DIR}/${SDL3D_EMBED_SYMBOL}.sdl3dpak")
     set(_embed_c "${SDL3D_EMBED_OUTPUT_DIR}/${SDL3D_EMBED_SYMBOL}.c")
     set(_embed_h "${SDL3D_EMBED_OUTPUT_DIR}/${SDL3D_EMBED_SYMBOL}.h")
+    set(_embed_args)
     set(_embed_deps)
     foreach(_file IN LISTS SDL3D_EMBED_FILES)
+        list(APPEND _embed_args --file "${_file}")
         list(APPEND _embed_deps "${SDL3D_EMBED_ROOT}/${_file}")
     endforeach()
-    string(REPLACE ";" "|" _embed_files_arg "${SDL3D_EMBED_FILES}")
+
+    add_custom_command(
+        OUTPUT "${_embed_pack}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${SDL3D_EMBED_OUTPUT_DIR}"
+        COMMAND $<TARGET_FILE:sdl3d_pack> --output "${_embed_pack}" --root "${SDL3D_EMBED_ROOT}" ${_embed_args}
+        DEPENDS sdl3d_pack ${_embed_deps}
+        COMMAND_EXPAND_LISTS
+        VERBATIM
+        COMMENT "Packing SDL3D embedded assets: ${SDL3D_EMBED_SYMBOL}"
+    )
 
     add_custom_command(
         OUTPUT "${_embed_c}" "${_embed_h}"
         COMMAND
             ${CMAKE_COMMAND}
+            "-DINPUT_PACK=${_embed_pack}"
             "-DOUTPUT_C=${_embed_c}"
             "-DOUTPUT_H=${_embed_h}"
             "-DSYMBOL=${SDL3D_EMBED_SYMBOL}"
-            "-DROOT=${SDL3D_EMBED_ROOT}"
-            "-DFILES=${_embed_files_arg}"
             -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/SDL3DEmbedAssetPack.cmake"
-        DEPENDS ${_embed_deps} "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/SDL3DEmbedAssetPack.cmake"
+        DEPENDS "${_embed_pack}" "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/SDL3DEmbedAssetPack.cmake"
         VERBATIM
         COMMENT "Embedding SDL3D assets: ${SDL3D_EMBED_SYMBOL}"
     )
