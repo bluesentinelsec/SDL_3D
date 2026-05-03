@@ -230,11 +230,124 @@ TEST(SpriteAsset, LoadsExplicitFileListSources)
     sdl3d_sprite_asset_free(&runtime);
 }
 
+TEST(SpriteAsset, LoadsFromSpriteManifestFile)
+{
+    const std::filesystem::path dir = make_temp_dir("sprite_manifest");
+    const std::filesystem::path manifest_path = dir / "robot.sprite.json";
+    const std::filesystem::path shader_dir = dir / "media" / "shaders";
+    const std::filesystem::path vertex_path = shader_dir / "robot.vert.glsl";
+    const std::filesystem::path fragment_path = shader_dir / "robot.frag.glsl";
+
+    const std::array<std::array<Uint8, 4>, 6> colors = {{{15, 25, 35, 255},
+                                                         {45, 55, 65, 255},
+                                                         {75, 85, 95, 255},
+                                                         {105, 115, 125, 255},
+                                                         {135, 145, 155, 255},
+                                                         {165, 175, 185, 255}}};
+    std::array<std::filesystem::path, 6> paths = {
+        dir / "media" / "sprites" / "base_south.png",   dir / "media" / "sprites" / "base_east.png",
+        dir / "media" / "sprites" / "walk_0_south.png", dir / "media" / "sprites" / "walk_0_east.png",
+        dir / "media" / "sprites" / "walk_1_south.png", dir / "media" / "sprites" / "walk_1_east.png",
+    };
+
+    for (size_t i = 0; i < paths.size(); ++i)
+    {
+        std::vector<Uint8> pixels = {colors[i][0], colors[i][1], colors[i][2], colors[i][3]};
+        sdl3d_image image{};
+        image.pixels = pixels.data();
+        image.width = 1;
+        image.height = 1;
+        ASSERT_TRUE(write_png(paths[i], image)) << SDL_GetError();
+    }
+
+    ASSERT_TRUE(write_text(vertex_path,
+                           R"glsl(
+layout(location = 0) in vec3 aPosition;
+layout(location = 1) in vec2 aTexCoord;
+layout(location = 2) in vec4 aColor;
+uniform mat4 uMVP;
+out vec2 vTexCoord;
+out vec4 vColor;
+void main() {
+  vTexCoord = aTexCoord;
+  vColor = aColor;
+  gl_Position = uMVP * vec4(aPosition, 1.0);
+}
+)glsl")) << SDL_GetError();
+    ASSERT_TRUE(write_text(fragment_path,
+                           R"glsl(
+in vec2 vTexCoord;
+in vec4 vColor;
+uniform sampler2D uTexture;
+uniform int uHasTexture;
+uniform vec4 uTint;
+out vec4 fragColor;
+void main() {
+  vec4 texel = (uHasTexture != 0) ? texture(uTexture, vTexCoord) : vec4(1.0);
+  fragColor = texel * vColor * uTint;
+}
+)glsl")) << SDL_GetError();
+
+    ASSERT_TRUE(write_text(manifest_path,
+                           R"json({
+  "kind": "files",
+  "asset_roots": [
+    "media"
+  ],
+  "base_paths": [
+    "sprites/base_south.png",
+    "sprites/base_east.png"
+  ],
+  "frame_paths": [
+    "sprites/walk_0_south.png",
+    "sprites/walk_0_east.png",
+    "sprites/walk_1_south.png",
+    "sprites/walk_1_east.png"
+  ],
+  "frame_count": 2,
+  "direction_count": 2,
+  "fps": 9.0,
+  "loop": false,
+  "lighting": false,
+  "emissive": true,
+  "visual_ground_offset": 0.5,
+  "shader_vertex_path": "shaders/robot.vert.glsl",
+  "shader_fragment_path": "shaders/robot.frag.glsl"
+})json"))
+        << SDL_GetError();
+
+    sdl3d_sprite_asset_runtime runtime{};
+    char error[256]{};
+    ASSERT_TRUE(sdl3d_sprite_asset_load_file(manifest_path.string().c_str(), &runtime, error, sizeof(error))) << error;
+
+    ASSERT_EQ(runtime.base_texture_count, 2);
+    ASSERT_EQ(runtime.animation_frame_count, 2);
+    expect_texture_color(&runtime.base_textures[0], 15, 25, 35, 255);
+    expect_texture_color(&runtime.base_textures[1], 45, 55, 65, 255);
+    expect_texture_color(runtime.animation_frames[0].frames[0], 75, 85, 95, 255);
+    expect_texture_color(runtime.animation_frames[0].frames[1], 105, 115, 125, 255);
+    expect_texture_color(runtime.animation_frames[1].frames[0], 135, 145, 155, 255);
+    expect_texture_color(runtime.animation_frames[1].frames[1], 165, 175, 185, 255);
+    EXPECT_FLOAT_EQ(runtime.fps, 9.0f);
+    EXPECT_FALSE(runtime.loop);
+    EXPECT_FALSE(runtime.lighting);
+    EXPECT_TRUE(runtime.emissive);
+    EXPECT_FLOAT_EQ(runtime.visual_ground_offset, 0.5f);
+    EXPECT_NE(runtime.shader_vertex_source, nullptr);
+    EXPECT_NE(runtime.shader_fragment_source, nullptr);
+    EXPECT_NE(std::string(runtime.shader_vertex_source).find("aPosition"), std::string::npos);
+    EXPECT_NE(std::string(runtime.shader_fragment_source).find("fragColor"), std::string::npos);
+
+    sdl3d_sprite_asset_free(&runtime);
+}
+
 TEST(SpriteAsset, LoadsThroughGameDataSpriteBridge)
 {
     const std::filesystem::path dir = make_temp_dir("sprite_bridge");
     const std::filesystem::path json_path = dir / "sprite.game.json";
     const std::filesystem::path image_path = dir / "sprites" / "robot" / "walk.png";
+    const std::filesystem::path shader_dir = dir / "sprites" / "robot";
+    const std::filesystem::path fragment_path = shader_dir / "melt.frag.glsl";
 
     const int cell_width = 2;
     const int cell_height = 2;
@@ -249,6 +362,19 @@ TEST(SpriteAsset, LoadsThroughGameDataSpriteBridge)
     image.width = cell_width * columns;
     image.height = cell_height * rows;
     ASSERT_TRUE(write_png(image_path, image)) << SDL_GetError();
+    ASSERT_TRUE(write_text(fragment_path,
+                           R"glsl(
+in vec2 vTexCoord;
+in vec4 vColor;
+uniform sampler2D uTexture;
+uniform int uHasTexture;
+uniform vec4 uTint;
+out vec4 fragColor;
+void main() {
+  vec4 texel = (uHasTexture != 0) ? texture(uTexture, vTexCoord) : vec4(1.0);
+  fragColor = texel * vColor * uTint;
+}
+)glsl")) << SDL_GetError();
 
     ASSERT_TRUE(write_text(json_path,
                            R"json({
@@ -270,7 +396,11 @@ TEST(SpriteAsset, LoadsThroughGameDataSpriteBridge)
         "loop": true,
         "lighting": true,
         "emissive": false,
-        "visual_ground_offset": 0.25
+        "visual_ground_offset": 0.25,
+        "effect": "melt",
+        "effect_delay": 0.5,
+        "effect_duration": 1.5,
+        "shader_fragment_path": "asset://sprites/robot/melt.frag.glsl"
       }
     ]
   },
@@ -298,6 +428,12 @@ TEST(SpriteAsset, LoadsThroughGameDataSpriteBridge)
     expect_texture_color(sprite.animation_frames[1].frames[0], 70, 80, 90, 255);
     expect_texture_color(sprite.animation_frames[1].frames[1], 100, 110, 120, 255);
     EXPECT_FLOAT_EQ(sprite.visual_ground_offset, 0.25f);
+    EXPECT_STREQ(sprite.effect, "melt");
+    EXPECT_FLOAT_EQ(sprite.effect_delay, 0.5f);
+    EXPECT_FLOAT_EQ(sprite.effect_duration, 1.5f);
+    EXPECT_EQ(sprite.shader_vertex_source, nullptr);
+    ASSERT_NE(sprite.shader_fragment_source, nullptr);
+    EXPECT_NE(std::string(sprite.shader_fragment_source).find("fragColor"), std::string::npos);
 
     sdl3d_sprite_asset_free(&sprite);
     sdl3d_game_data_destroy(runtime);

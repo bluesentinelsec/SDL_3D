@@ -84,8 +84,10 @@ extern "C"
     {
         /** @brief Stable asset id, such as `image.logo`. */
         const char *id;
-        /** @brief Virtual or filesystem path to the image bytes. */
+        /** @brief Virtual or filesystem path to the image bytes, or NULL. */
         const char *path;
+        /** @brief Optional sprite asset id when the image is sprite-backed. */
+        const char *sprite;
     } sdl3d_game_data_image_asset;
 
     /** @brief Authored sound-effect asset descriptor. */
@@ -125,6 +127,10 @@ extern "C"
         const char *id;
         /** @brief Virtual or filesystem path to the sprite source image. */
         const char *path;
+        /** @brief Optional vertex shader source path for a sprite-specific GPU program. */
+        const char *shader_vertex_path;
+        /** @brief Optional fragment shader source path for a sprite-specific GPU program. */
+        const char *shader_fragment_path;
         /** @brief Frame width in pixels for a grid or atlas source. */
         int frame_width;
         /** @brief Frame height in pixels for a grid or atlas source. */
@@ -147,6 +153,12 @@ extern "C"
         bool emissive;
         /** @brief Offset from logical feet/contact point to visible feet. */
         float visual_ground_offset;
+        /** @brief Optional sprite overlay effect id, such as `melt`. */
+        const char *effect;
+        /** @brief Delay before the effect begins, in presentation seconds. */
+        float effect_delay;
+        /** @brief Duration of the effect ramp, in seconds. */
+        float effect_duration;
     } sdl3d_game_data_sprite_asset;
 
     /**
@@ -337,6 +349,10 @@ extern "C"
         float scale;
         /** @brief Image tint color. */
         sdl3d_color color;
+        /** @brief Optional UI image effect id, such as `melt`. */
+        const char *effect;
+        /** @brief Effect progression speed in effect-seconds per second. */
+        float effect_speed;
     } sdl3d_game_data_ui_image;
 
     /** @brief Bit flags indicating which runtime UI state fields override authored descriptor values. */

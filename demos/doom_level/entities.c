@@ -16,20 +16,6 @@
 #define DOOM_SIGNAL_ROBOT_IDLE_STARTED 6203
 #define DOOM_SIGNAL_ROBOT_WALK_STARTED 6204
 
-static const char *const ROBOT_BASE_DIRECTION_NAMES[SDL3D_SPRITE_ROTATION_COUNT] = {
-    "south", "south-east", "east", "north-east", "north", "north-west", "west", "south-west",
-};
-
-static const char *const ROBOT_WALK_DIRECTION_NAMES[SDL3D_SPRITE_ROTATION_COUNT] = {
-    "south", "south-east", "east", "north-east", "north", "north-west", "west", "south-west",
-};
-
-static char robot_base_paths[SDL3D_SPRITE_ROTATION_COUNT][512];
-static char robot_walk_paths[DOOM_ROBOT_WALK_FRAME_COUNT * SDL3D_SPRITE_ROTATION_COUNT][512];
-static const char *robot_base_path_ptrs[SDL3D_SPRITE_ROTATION_COUNT];
-static const char *robot_walk_path_ptrs[DOOM_ROBOT_WALK_FRAME_COUNT * SDL3D_SPRITE_ROTATION_COUNT];
-static bool robot_paths_initialized = false;
-
 static void configure_sprite_texture(sdl3d_texture2d *texture)
 {
     sdl3d_set_texture_filter(texture, SDL3D_TEXTURE_FILTER_NEAREST);
@@ -44,33 +30,6 @@ static void configure_sprite_asset_textures(sdl3d_sprite_asset_runtime *asset)
         configure_sprite_texture(&asset->base_textures[i]);
     for (int i = 0; i < asset->animation_texture_count; ++i)
         configure_sprite_texture(&asset->animation_textures[i]);
-}
-
-static void init_robot_sprite_paths(void)
-{
-    if (robot_paths_initialized)
-        return;
-
-    for (int dir = 0; dir < SDL3D_SPRITE_ROTATION_COUNT; ++dir)
-    {
-        SDL_snprintf(robot_base_paths[dir], sizeof(robot_base_paths[dir]),
-                     SDL3D_MEDIA_DIR "/sprites/skeletal_robot/%s.png", ROBOT_BASE_DIRECTION_NAMES[dir]);
-        robot_base_path_ptrs[dir] = robot_base_paths[dir];
-    }
-
-    for (int frame = 0; frame < DOOM_ROBOT_WALK_FRAME_COUNT; ++frame)
-    {
-        for (int dir = 0; dir < SDL3D_SPRITE_ROTATION_COUNT; ++dir)
-        {
-            const int index = frame * SDL3D_SPRITE_ROTATION_COUNT + dir;
-            SDL_snprintf(robot_walk_paths[index], sizeof(robot_walk_paths[index]),
-                         SDL3D_MEDIA_DIR "/sprites/skeletal_robot/walking_frames/%s_%02d.png",
-                         ROBOT_WALK_DIRECTION_NAMES[dir], frame);
-            robot_walk_path_ptrs[index] = robot_walk_paths[index];
-        }
-    }
-
-    robot_paths_initialized = true;
 }
 
 static void robot_set_floor_position(sdl3d_sprite_actor *actor, const sdl3d_level *level)
@@ -209,22 +168,9 @@ bool entities_init(entities *e, const sdl3d_level *level, sdl3d_actor_registry *
     e->registry = registry;
     e->bus = bus;
 
-    init_robot_sprite_paths();
-
-    sdl3d_sprite_asset_source robot_source = {
-        .kind = SDL3D_SPRITE_ASSET_SOURCE_FILES,
-        .base_paths = robot_base_path_ptrs,
-        .frame_paths = robot_walk_path_ptrs,
-        .frame_count = DOOM_ROBOT_WALK_FRAME_COUNT,
-        .direction_count = SDL3D_SPRITE_ROTATION_COUNT,
-        .fps = 8.0f,
-        .loop = true,
-        .lighting = true,
-        .emissive = false,
-        .visual_ground_offset = 0.0f,
-    };
     char robot_error[256];
-    if (!sdl3d_sprite_asset_load(NULL, &robot_source, &e->robot_sprite, robot_error, (int)sizeof(robot_error)))
+    if (!sdl3d_sprite_asset_load_file(SDL3D_DOOM_LEVEL_DATA_DIR "/robot.sprite.json", &e->robot_sprite, robot_error,
+                                      (int)sizeof(robot_error)))
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Robot sprite load failed: %s", robot_error);
         return false;

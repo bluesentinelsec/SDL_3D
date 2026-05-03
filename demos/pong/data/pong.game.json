@@ -75,7 +75,6 @@
         "value": false
       }
     },
-    "startup_transition": "startup",
     "quit": {
       "action": "action.exit",
       "transition": "quit",
@@ -466,10 +465,31 @@
         "size": 96
       }
     ],
+    "sprites": [
+      {
+        "id": "sprite.splash.logo",
+        "path": "asset://images/splash-logo.jpg",
+        "frame_width": 784,
+        "frame_height": 1168,
+        "columns": 1,
+        "rows": 1,
+        "frame_count": 1,
+        "direction_count": 1,
+        "fps": 1.0,
+        "loop": false,
+        "lighting": false,
+        "emissive": false,
+        "visual_ground_offset": 0.0,
+        "effect": "melt",
+        "effect_delay": 1.0,
+        "effect_duration": 1.0,
+        "shader_fragment_path": "asset://shaders/splash_logo_melt.frag.glsl"
+      }
+    ],
     "images": [
       {
         "id": "image.splash.logo",
-        "path": "asset://images/splash-logo.jpg"
+        "sprite": "sprite.splash.logo"
       }
     ],
     "sounds": [

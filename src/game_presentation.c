@@ -34,8 +34,31 @@ typedef struct ui_image_draw_context
     sdl3d_render_context *renderer;
     sdl3d_game_data_image_cache *image_cache;
     const sdl3d_game_data_ui_metrics *metrics;
+    const sdl3d_game_data_render_eval *render_eval;
     bool ok;
 } ui_image_draw_context;
+
+static Uint32 ui_image_hash_string(const char *s)
+{
+    Uint32 h = 2166136261u;
+    if (s == NULL)
+        return h;
+    for (const unsigned char *p = (const unsigned char *)s; *p != '\0'; ++p)
+    {
+        h ^= (Uint32)(*p);
+        h *= 16777619u;
+    }
+    return h != 0u ? h : 1u;
+}
+
+static sdl3d_overlay_effect ui_image_effect_from_name(const char *effect)
+{
+    if (effect == NULL)
+        return SDL3D_OVERLAY_EFFECT_NONE;
+    if (SDL_strcasecmp(effect, "melt") == 0)
+        return SDL3D_OVERLAY_EFFECT_MELT;
+    return SDL3D_OVERLAY_EFFECT_NONE;
+}
 
 typedef struct particle_update_context
 {
@@ -341,8 +364,9 @@ static sdl3d_font *find_or_load_font(const sdl3d_game_data_runtime *runtime, sdl
     return slot;
 }
 
-static sdl3d_texture2d *find_or_load_image(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_image_cache *cache,
-                                           const char *image_id)
+static sdl3d_game_data_image_cache_entry *find_or_load_image_entry(const sdl3d_game_data_runtime *runtime,
+                                                                   sdl3d_game_data_image_cache *cache,
+                                                                   const char *image_id)
 {
     if (runtime == NULL || cache == NULL || cache->assets == NULL || image_id == NULL)
         return NULL;
@@ -350,14 +374,79 @@ static sdl3d_texture2d *find_or_load_image(const sdl3d_game_data_runtime *runtim
     for (int i = 0; i < cache->count; ++i)
     {
         if (cache->entries[i].image_id != NULL && SDL_strcmp(cache->entries[i].image_id, image_id) == 0)
-            return cache->entries[i].loaded ? &cache->entries[i].texture : NULL;
+            return cache->entries[i].loaded ? &cache->entries[i] : NULL;
     }
 
     if (!ensure_image_cache_capacity(cache, cache->count + 1))
         return NULL;
 
     sdl3d_game_data_image_asset asset;
-    if (!sdl3d_game_data_get_image_asset(runtime, image_id, &asset) || asset.path == NULL)
+    if (!sdl3d_game_data_get_image_asset(runtime, image_id, &asset))
+        return NULL;
+
+    if (asset.sprite != NULL)
+    {
+        sdl3d_sprite_asset_runtime sprite;
+        SDL_zero(sprite);
+        char error[256];
+        if (!sdl3d_game_data_load_sprite_asset(runtime, asset.sprite, &sprite, error, (int)sizeof(error)))
+        {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load sprite-backed UI image %s: %s", asset.sprite,
+                         error);
+            return NULL;
+        }
+
+        if (sprite.base_texture_count <= 0 || sprite.base_textures == NULL || sprite.base_textures[0].pixels == NULL ||
+            sprite.base_textures[0].width <= 0 || sprite.base_textures[0].height <= 0)
+        {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Sprite-backed UI image %s has no base texture", asset.sprite);
+            sdl3d_sprite_asset_free(&sprite);
+            return NULL;
+        }
+
+        sdl3d_image image;
+        SDL_zero(image);
+        image.pixels = sprite.base_textures[0].pixels;
+        image.width = sprite.base_textures[0].width;
+        image.height = sprite.base_textures[0].height;
+
+        sdl3d_game_data_image_cache_entry *entry = &cache->entries[cache->count];
+        SDL_zero(*entry);
+        entry->image_id = asset.id;
+        entry->effect = sprite.effect;
+        entry->effect_delay = sprite.effect_delay;
+        entry->effect_duration = sprite.effect_duration;
+        if (sprite.shader_vertex_source != NULL)
+            entry->shader_vertex_source = SDL_strdup(sprite.shader_vertex_source);
+        if (sprite.shader_fragment_source != NULL)
+            entry->shader_fragment_source = SDL_strdup(sprite.shader_fragment_source);
+        if ((sprite.shader_vertex_source != NULL && entry->shader_vertex_source == NULL) ||
+            (sprite.shader_fragment_source != NULL && entry->shader_fragment_source == NULL))
+        {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to copy sprite-backed UI image shader source %s",
+                         asset.sprite);
+            SDL_free(entry->shader_vertex_source);
+            SDL_free(entry->shader_fragment_source);
+            sdl3d_sprite_asset_free(&sprite);
+            return NULL;
+        }
+        entry->loaded = sdl3d_create_texture_from_image(&image, &entry->texture);
+        sdl3d_sprite_asset_free(&sprite);
+        if (!entry->loaded)
+        {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create texture for sprite-backed UI image %s",
+                         asset.sprite);
+            SDL_free(entry->shader_vertex_source);
+            SDL_free(entry->shader_fragment_source);
+            SDL_zero(*entry);
+            return NULL;
+        }
+
+        ++cache->count;
+        return entry;
+    }
+
+    if (asset.path == NULL)
         return NULL;
 
     sdl3d_asset_buffer buffer;
@@ -382,6 +471,11 @@ static sdl3d_texture2d *find_or_load_image(const sdl3d_game_data_runtime *runtim
     sdl3d_game_data_image_cache_entry *entry = &cache->entries[cache->count];
     SDL_zero(*entry);
     entry->image_id = asset.id;
+    entry->effect = NULL;
+    entry->effect_delay = 0.0f;
+    entry->effect_duration = 1.0f;
+    entry->shader_vertex_source = NULL;
+    entry->shader_fragment_source = NULL;
     entry->loaded = sdl3d_create_texture_from_image(&image, &entry->texture);
     sdl3d_free_image(&image);
     if (!entry->loaded)
@@ -391,7 +485,7 @@ static sdl3d_texture2d *find_or_load_image(const sdl3d_game_data_runtime *runtim
     }
 
     ++cache->count;
-    return &entry->texture;
+    return entry;
 }
 
 static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitive *primitive)
@@ -544,12 +638,14 @@ static bool draw_ui_image(void *userdata, const sdl3d_game_data_ui_image *image)
     if (!visible)
         return true;
 
-    sdl3d_texture2d *texture = find_or_load_image(draw->runtime, draw->image_cache, resolved.image);
-    if (texture == NULL)
+    sdl3d_game_data_image_cache_entry *entry =
+        find_or_load_image_entry(draw->runtime, draw->image_cache, resolved.image);
+    if (entry == NULL)
     {
         draw->ok = false;
         return true;
     }
+    sdl3d_texture2d *texture = &entry->texture;
 
     const int width = sdl3d_get_render_context_width(draw->renderer);
     const int height = sdl3d_get_render_context_height(draw->renderer);
@@ -558,7 +654,23 @@ static bool draw_ui_image(void *userdata, const sdl3d_game_data_ui_image *image)
     float w = 0.0f;
     float h = 0.0f;
     resolve_ui_image_rect(&resolved, texture, width, height, &x, &y, &w, &h);
-    if (!sdl3d_draw_texture_overlay(draw->renderer, texture, x, y, w, h, resolved.color))
+    const char *effect_name = resolved.effect != NULL ? resolved.effect : entry->effect;
+    const sdl3d_overlay_effect effect = ui_image_effect_from_name(effect_name);
+    const float effect_progress =
+        effect != SDL3D_OVERLAY_EFFECT_NONE && draw->render_eval != NULL
+            ? SDL_clamp((draw->render_eval->time - entry->effect_delay) / SDL_max(entry->effect_duration, 0.0001f),
+                        0.0f, 1.0f)
+            : 0.0f;
+    const Uint32 effect_seed = ui_image_hash_string(resolved.name);
+    const bool has_custom_shader = (entry->shader_vertex_source != NULL && entry->shader_vertex_source[0] != '\0') ||
+                                   (entry->shader_fragment_source != NULL && entry->shader_fragment_source[0] != '\0');
+    const bool drawn = has_custom_shader
+                           ? sdl3d_draw_texture_overlay_shader(
+                                 draw->renderer, texture, x, y, w, h, resolved.color, effect, effect_progress,
+                                 effect_seed, entry->shader_vertex_source, entry->shader_fragment_source)
+                           : sdl3d_draw_texture_overlay(draw->renderer, texture, x, y, w, h, resolved.color, effect,
+                                                        effect_progress, effect_seed);
+    if (!drawn)
         draw->ok = false;
     return true;
 }
@@ -622,6 +734,8 @@ void sdl3d_game_data_image_cache_free(sdl3d_game_data_image_cache *cache)
     {
         if (cache->entries[i].loaded)
             sdl3d_free_texture(&cache->entries[i].texture);
+        SDL_free(cache->entries[i].shader_vertex_source);
+        SDL_free(cache->entries[i].shader_fragment_source);
     }
     SDL_free(cache->entries);
     SDL_zero(*cache);
@@ -663,7 +777,8 @@ bool sdl3d_game_data_draw_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_
 }
 
 bool sdl3d_game_data_draw_ui_images(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
-                                    sdl3d_game_data_image_cache *image_cache, const sdl3d_game_data_ui_metrics *metrics)
+                                    sdl3d_game_data_image_cache *image_cache, const sdl3d_game_data_ui_metrics *metrics,
+                                    const sdl3d_game_data_render_eval *render_eval)
 {
     if (runtime == NULL || renderer == NULL || image_cache == NULL)
         return false;
@@ -674,6 +789,7 @@ bool sdl3d_game_data_draw_ui_images(const sdl3d_game_data_runtime *runtime, sdl3
     context.renderer = renderer;
     context.image_cache = image_cache;
     context.metrics = metrics;
+    context.render_eval = render_eval;
     context.ok = true;
 
     return sdl3d_game_data_for_each_ui_image(runtime, draw_ui_image, &context) && context.ok;
@@ -1610,7 +1726,9 @@ bool sdl3d_game_data_draw_frame(const sdl3d_game_data_frame_desc *frame)
 
     ok = run_frame_hook(frame, frame->before_ui) && ok;
     if (frame->image_cache != NULL)
-        ok = sdl3d_game_data_draw_ui_images(frame->runtime, frame->renderer, frame->image_cache, frame->metrics) && ok;
+        ok = sdl3d_game_data_draw_ui_images(frame->runtime, frame->renderer, frame->image_cache, frame->metrics,
+                                            frame->render_eval) &&
+             ok;
     if (frame->font_cache != NULL)
     {
         ok = sdl3d_game_data_draw_ui_text(frame->runtime, frame->renderer, frame->font_cache, frame->metrics,

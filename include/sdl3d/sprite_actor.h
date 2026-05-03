@@ -70,6 +70,10 @@ extern "C"
         float animation_fps;                               /**< Animation playback rate in frames per second. */
         bool animation_loop;                               /**< True to wrap after the last frame. */
         float animation_time;                              /**< Current animation playback time in seconds. */
+        bool lighting;                      /**< True when the sprite participates in dynamic lighting. */
+        bool emissive;                      /**< True when the sprite is emissive. */
+        const char *shader_vertex_source;   /**< Optional custom sprite shader vertex source. */
+        const char *shader_fragment_source; /**< Optional custom sprite shader fragment source. */
         sdl3d_color tint;
         bool visible;
         int sector_id;              /**< Portal culling sector, or -1 when unassigned. */

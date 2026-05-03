@@ -50,9 +50,14 @@ extern "C"
     /** @brief One cached texture referenced by authored UI image data. */
     typedef struct sdl3d_game_data_image_cache_entry
     {
-        sdl3d_texture2d texture; /**< Loaded texture. */
-        const char *image_id;    /**< Runtime-owned image asset id. */
-        bool loaded;             /**< True once the texture owns valid pixels. */
+        sdl3d_texture2d texture;      /**< Loaded texture. */
+        const char *image_id;         /**< Runtime-owned image asset id. */
+        const char *effect;           /**< Optional sprite-backed effect id. */
+        float effect_delay;           /**< Seconds to wait before effect starts. */
+        float effect_duration;        /**< Seconds used to ramp the effect. */
+        char *shader_vertex_source;   /**< Optional owned sprite shader vertex source. */
+        char *shader_fragment_source; /**< Optional owned sprite shader fragment source. */
+        bool loaded;                  /**< True once the texture owns valid pixels. */
     } sdl3d_game_data_image_cache_entry;
 
     /**
@@ -290,11 +295,13 @@ extern "C"
      * @brief Draw authored UI images for the active scene.
      *
      * Images are loaded lazily through @p image_cache and drawn on SDL3D's
-     * overlay path after world rendering.
+     * overlay path after world rendering. @p render_eval supplies the current
+     * presentation time for authored image effects such as `melt`.
      */
     bool sdl3d_game_data_draw_ui_images(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
                                         sdl3d_game_data_image_cache *image_cache,
-                                        const sdl3d_game_data_ui_metrics *metrics);
+                                        const sdl3d_game_data_ui_metrics *metrics,
+                                        const sdl3d_game_data_render_eval *render_eval);
 
     /**
      * @brief Initialize a particle emitter cache.

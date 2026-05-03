@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 #include "sdl3d/asset.h"
+#include "sdl3d/effects.h"
 #include "sdl3d/sprite_actor.h"
 
 #ifdef __cplusplus
@@ -31,6 +32,8 @@ extern "C"
         const char *sheet_path;
         const char *const *base_paths;
         const char *const *frame_paths;
+        const char *shader_vertex_path;
+        const char *shader_fragment_path;
         int frame_width;
         int frame_height;
         int columns;
@@ -42,6 +45,9 @@ extern "C"
         bool lighting;
         bool emissive;
         float visual_ground_offset;
+        const char *effect;
+        float effect_delay;
+        float effect_duration;
     } sdl3d_sprite_asset_source;
 
     /**
@@ -65,6 +71,11 @@ extern "C"
         bool lighting;
         bool emissive;
         float visual_ground_offset;
+        const char *effect;
+        float effect_delay;
+        float effect_duration;
+        char *shader_vertex_source;
+        char *shader_fragment_source;
     } sdl3d_sprite_asset_runtime;
 
     /**
@@ -84,6 +95,20 @@ extern "C"
      */
     bool sdl3d_sprite_asset_load(const sdl3d_asset_resolver *assets, const sdl3d_sprite_asset_source *source,
                                  sdl3d_sprite_asset_runtime *out_sprite, char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Load a sprite asset from a JSON manifest on disk.
+     *
+     * The manifest format is a small, standalone variant of the authored
+     * sprite description model used by the game-data runtime. It is intended
+     * for demos or tools that want data-authored sprite loading without
+     * instantiating a full game-data runtime. Relative paths are resolved
+     * against the manifest directory, and optional `asset_roots` entries can
+     * mount additional filesystem roots for shared art without using `..`
+     * traversal in the authored sprite paths.
+     */
+    bool sdl3d_sprite_asset_load_file(const char *path, sdl3d_sprite_asset_runtime *out_sprite, char *error_buffer,
+                                      int error_buffer_size);
 
     /**
      * @brief Release textures and rotation sets owned by a sprite runtime.

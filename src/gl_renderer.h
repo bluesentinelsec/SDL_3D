@@ -8,6 +8,7 @@
 #include <SDL3/SDL.h>
 
 #include "backend.h"
+#include "sdl3d/drawing3d.h"
 #include "sdl3d/transition.h"
 
 typedef struct sdl3d_gl_context sdl3d_gl_context;
@@ -35,7 +36,8 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path);
  * also copied so the caller can free/reload the texture before present. */
 bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, const float *uvs, int vertex_count,
                              const float *mvp, const float *tint, const sdl3d_texture2d *texture, bool scissor_enabled,
-                             const SDL_Rect *scissor_rect);
+                             const SDL_Rect *scissor_rect, sdl3d_overlay_effect effect, float effect_progress,
+                             Uint32 effect_seed, const char *shader_vertex_source, const char *shader_fragment_source);
 
 bool sdl3d_gl_append_line(sdl3d_gl_context *ctx, const float *positions, const float *colors, const float *mvp);
 

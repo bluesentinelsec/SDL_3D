@@ -1700,6 +1700,15 @@ static sdl3d_game_data_ui_valign parse_ui_valign(const char *value, sdl3d_game_d
     return fallback;
 }
 
+static const char *parse_ui_image_effect(const char *value)
+{
+    if (value == NULL || value[0] == '\0')
+        return NULL;
+    if (SDL_strcasecmp(value, "melt") == 0)
+        return "melt";
+    return value;
+}
+
 static int axis_index(const char *axis)
 {
     if (axis == NULL)
@@ -2364,7 +2373,8 @@ bool sdl3d_game_data_get_image_asset(const sdl3d_game_data_runtime *runtime, con
 
     out_image->id = json_string(image, "id", NULL);
     out_image->path = json_string(image, "path", NULL);
-    return out_image->id != NULL && out_image->path != NULL;
+    out_image->sprite = json_string(image, "sprite", NULL);
+    return out_image->id != NULL && (out_image->path != NULL || out_image->sprite != NULL);
 }
 
 bool sdl3d_game_data_get_sound_asset(const sdl3d_game_data_runtime *runtime, const char *id,
@@ -2438,6 +2448,8 @@ bool sdl3d_game_data_get_sprite_asset(const sdl3d_game_data_runtime *runtime, co
 
     out_sprite->id = json_string(sprite, "id", NULL);
     out_sprite->path = json_string(sprite, "path", NULL);
+    out_sprite->shader_vertex_path = json_string(sprite, "shader_vertex_path", NULL);
+    out_sprite->shader_fragment_path = json_string(sprite, "shader_fragment_path", NULL);
     out_sprite->frame_width = json_int(sprite, "frame_width", out_sprite->frame_width);
     out_sprite->frame_height = json_int(sprite, "frame_height", out_sprite->frame_height);
     out_sprite->columns = json_int(sprite, "columns", out_sprite->columns);
@@ -2449,6 +2461,9 @@ bool sdl3d_game_data_get_sprite_asset(const sdl3d_game_data_runtime *runtime, co
     out_sprite->lighting = json_bool(sprite, "lighting", out_sprite->lighting);
     out_sprite->emissive = json_bool(sprite, "emissive", out_sprite->emissive);
     out_sprite->visual_ground_offset = json_float(sprite, "visual_ground_offset", out_sprite->visual_ground_offset);
+    out_sprite->effect = parse_ui_image_effect(json_string(sprite, "effect", NULL));
+    out_sprite->effect_delay = json_float(sprite, "effect_delay", 0.0f);
+    out_sprite->effect_duration = json_float(sprite, "effect_duration", 1.0f);
 
     if (out_sprite->id == NULL || out_sprite->path == NULL || out_sprite->frame_width <= 0 ||
         out_sprite->frame_height <= 0 || out_sprite->columns <= 0 || out_sprite->rows <= 0 ||
@@ -2481,6 +2496,8 @@ bool sdl3d_game_data_load_sprite_asset(const sdl3d_game_data_runtime *runtime, c
     SDL_zero(source);
     source.kind = SDL3D_SPRITE_ASSET_SOURCE_SHEET;
     source.sheet_path = sprite.path;
+    source.shader_vertex_path = sprite.shader_vertex_path;
+    source.shader_fragment_path = sprite.shader_fragment_path;
     source.frame_width = sprite.frame_width;
     source.frame_height = sprite.frame_height;
     source.columns = sprite.columns;
@@ -2492,6 +2509,9 @@ bool sdl3d_game_data_load_sprite_asset(const sdl3d_game_data_runtime *runtime, c
     source.lighting = sprite.lighting;
     source.emissive = sprite.emissive;
     source.visual_ground_offset = sprite.visual_ground_offset;
+    source.effect = sprite.effect;
+    source.effect_delay = sprite.effect_delay;
+    source.effect_duration = sprite.effect_duration;
 
     if (!sdl3d_sprite_asset_load(runtime->assets, &source, out_sprite, error_buffer, error_buffer_size))
         return false;
@@ -4963,6 +4983,8 @@ static void ui_image_from_json(yyjson_val *item, sdl3d_game_data_ui_image *image
     image->valign = parse_ui_valign(json_string(item, "valign", NULL), SDL3D_GAME_DATA_UI_VALIGN_TOP);
     image->scale = json_float(item, "scale", 1.0f);
     image->color = json_color(item, "color", (sdl3d_color){255, 255, 255, 255});
+    image->effect = parse_ui_image_effect(json_string(item, "effect", NULL));
+    image->effect_speed = json_float(item, "effect_speed", 1.0f);
 }
 
 static bool for_each_authored_ui_image_root(yyjson_val *root, sdl3d_game_data_ui_image_fn callback, void *userdata)

@@ -24,6 +24,8 @@
 /* Texture cache                                                       */
 /* ------------------------------------------------------------------ */
 
+#define SDL3D_MAX_POINT_SHADOWS 2
+
 typedef struct sdl3d_gl_tex_entry
 {
     const sdl3d_texture2d *key;
@@ -92,6 +94,12 @@ typedef struct sdl3d_overlay_entry
     int vertex_count;
     float mvp[16];
     float tint[4];
+    sdl3d_overlay_effect effect;
+    float effect_progress;
+    float effect_seed;
+    float effect_columns;
+    const char *shader_vertex_source;
+    const char *shader_fragment_source;
     bool scissor_enabled;
     SDL_Rect scissor_rect;
     int atlas_index; /* index into overlay_atlases */
@@ -119,10 +127,56 @@ typedef struct sdl3d_draw_entry
     bool baked_light_mode;
     bool has_lightmap;
     GLenum primitive_mode;
+    const char *shader_vertex_source;
+    const char *shader_fragment_source;
     float mvp[16];
     bool owns_arrays;
     struct sdl3d_gl_mesh_cache_entry *mesh_cache;
 } sdl3d_draw_entry;
+
+typedef struct sdl3d_custom_shader_cache_entry
+{
+    bool lit;
+    char *vertex_source;
+    char *fragment_source;
+    GLuint program;
+    GLint mvp_loc;
+    GLint texture_loc;
+    GLint has_texture_loc;
+    GLint tint_loc;
+    GLint model_loc;
+    GLint normal_matrix_loc;
+    GLint metallic_loc;
+    GLint roughness_loc;
+    GLint emissive_loc;
+    GLint baked_light_mode_loc;
+    GLint pbr_texture_loc;
+    GLint pbr_has_texture_loc;
+    GLint pbr_lightmap_loc;
+    GLint pbr_has_lightmap_loc;
+    GLint pbr_shadow_map_loc;
+    GLint pbr_shadow_vp_loc;
+    GLint pbr_shadow_enabled_loc;
+    GLint pbr_shadow_bias_loc;
+    GLint pbr_csm_vp_loc[4];
+    GLint pbr_csm_splits_loc;
+    GLint pbr_csm_enabled_loc;
+    GLint pbr_view_matrix_loc;
+    GLint pbr_point_shadow_map_loc[SDL3D_MAX_POINT_SHADOWS];
+    GLint pbr_point_shadow_light_pos_loc[SDL3D_MAX_POINT_SHADOWS];
+    GLint pbr_point_shadow_far_loc[SDL3D_MAX_POINT_SHADOWS];
+    GLint pbr_point_shadow_count_loc;
+    GLint pbr_irradiance_map_loc;
+    GLint pbr_prefilter_map_loc;
+    GLint pbr_brdf_lut_loc;
+    GLint pbr_ibl_enabled_loc;
+    GLint pbr_max_reflection_lod_loc;
+    GLint overlay_effect_loc;
+    GLint overlay_effect_progress_loc;
+    GLint overlay_effect_seed_loc;
+    GLint overlay_effect_columns_loc;
+    struct sdl3d_custom_shader_cache_entry *next;
+} sdl3d_custom_shader_cache_entry;
 
 typedef struct sdl3d_gl_mesh_cache_entry
 {
@@ -169,6 +223,7 @@ struct sdl3d_gl_context
     GLuint pbr_program;
     GLuint unlit_program;
     GLuint copy_program;
+    sdl3d_custom_shader_cache_entry *custom_shader_cache;
 
     /* PBR uniform locations */
     GLint pbr_model_loc;
@@ -188,6 +243,10 @@ struct sdl3d_gl_context
     GLint unlit_texture_loc;
     GLint unlit_has_texture_loc;
     GLint unlit_tint_loc;
+    GLint unlit_overlay_effect_loc;
+    GLint unlit_overlay_effect_progress_loc;
+    GLint unlit_overlay_effect_seed_loc;
+    GLint unlit_overlay_effect_columns_loc;
 
     /* Copy uniform locations */
     GLint copy_texture_loc;
@@ -679,11 +738,30 @@ static const char k_unlit_frag[] = "in vec2 vTexCoord;\n"
                                    "uniform sampler2D uTexture;\n"
                                    "uniform int uHasTexture;\n"
                                    "uniform vec4 uTint;\n"
+                                   "uniform int uOverlayEffect;\n"
+                                   "uniform float uOverlayEffectProgress;\n"
+                                   "uniform float uOverlayEffectSeed;\n"
+                                   "uniform float uOverlayEffectColumns;\n"
                                    "\n"
                                    "out vec4 fragColor;\n"
                                    "\n"
+                                   "float overlayHash(float n) {\n"
+                                   "    return fract(sin(n) * 43758.5453123);\n"
+                                   "}\n"
+                                   "\n"
                                    "void main() {\n"
                                    "    vec2 uv = vTexCoord;\n"
+                                   "    if (uOverlayEffect == 1) {\n"
+                                   "        float columns = max(uOverlayEffectColumns, 1.0);\n"
+                                   "        float column = floor(clamp(uv.x, 0.0, 0.999999) * columns);\n"
+                                   "        float rnd = overlayHash(column + uOverlayEffectSeed);\n"
+                                   "        float delay = rnd * 0.45;\n"
+                                   "        float melt = clamp((uOverlayEffectProgress - delay) / 0.55, 0.0, 1.0);\n"
+                                   "        float wobble = (rnd - 0.5) * 0.025 * melt;\n"
+                                   "        float yShift = melt * (1.05 + rnd * 0.6);\n"
+                                   "        uv = vec2(uv.x + wobble, uv.y - yShift);\n"
+                                   "        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) discard;\n"
+                                   "    }\n"
                                    "    vec4 texel = (uHasTexture != 0) ? texture(uTexture, uv) : vec4(1.0);\n"
                                    "    fragColor = texel * vColor * uTint;\n"
                                    "    if (fragColor.a <= 0.0) discard;\n"
@@ -1183,6 +1261,87 @@ static GLuint build_program(sdl3d_gl_funcs *gl, const char *version, const char 
     return prog;
 }
 
+static const char *gl_version_prefix_for_context(const sdl3d_gl_context *ctx)
+{
+    return (ctx != NULL && ctx->is_es) ? "#version 300 es\nprecision highp float;\n" : "#version 330\n";
+}
+
+static bool shader_source_has_version_prefix(const char *source)
+{
+    if (source == NULL)
+        return false;
+    while (*source != '\0' && (*source == ' ' || *source == '\t' || *source == '\r' || *source == '\n'))
+        ++source;
+    return SDL_strncmp(source, "#version", 8) == 0;
+}
+
+static GLuint compile_shader_source(sdl3d_gl_funcs *gl, GLenum type, const char *version, const char *source)
+{
+    GLuint shader;
+    const char *srcs[2];
+    int count = 0;
+
+    if (source == NULL || source[0] == '\0')
+        return 0;
+
+    shader = gl->CreateShader(type);
+    if (!shader)
+        return 0;
+
+    if (shader_source_has_version_prefix(source))
+    {
+        srcs[0] = source;
+        count = 1;
+    }
+    else if (version != NULL)
+    {
+        srcs[0] = version;
+        srcs[1] = source;
+        count = 2;
+    }
+    else
+    {
+        srcs[0] = source;
+        count = 1;
+    }
+
+    gl->ShaderSource(shader, count, srcs, NULL);
+    gl->CompileShader(shader);
+
+    GLint compiled = 0;
+    gl->GetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
+    if (!compiled)
+    {
+        char buf[1024];
+        GLsizei len = 0;
+        gl->GetShaderInfoLog(shader, (GLsizei)sizeof(buf), &len, buf);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL shader compile error: %s", buf);
+        gl->DeleteShader(shader);
+        return 0;
+    }
+    return shader;
+}
+
+static GLuint build_program_from_sources(sdl3d_gl_funcs *gl, const char *version, const char *default_vert_source,
+                                         const char *vertex_source, const char *fragment_source)
+{
+    GLuint vs = compile_shader_source(gl, GL_VERTEX_SHADER, version,
+                                      (vertex_source != NULL && vertex_source[0] != '\0') ? vertex_source
+                                                                                          : default_vert_source);
+    if (!vs)
+        return 0;
+    GLuint fs = compile_shader_source(gl, GL_FRAGMENT_SHADER, version, fragment_source);
+    if (!fs)
+    {
+        gl->DeleteShader(vs);
+        return 0;
+    }
+    GLuint prog = link_program(gl, vs, fs);
+    gl->DeleteShader(vs);
+    gl->DeleteShader(fs);
+    return prog;
+}
+
 /* ------------------------------------------------------------------ */
 /* Texture cache                                                       */
 /* ------------------------------------------------------------------ */
@@ -1347,7 +1506,8 @@ static float *copy_floats(const float *src, size_t count);
 
 bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, const float *uvs, int vertex_count,
                              const float *mvp, const float *tint, const sdl3d_texture2d *texture, bool scissor_enabled,
-                             const SDL_Rect *scissor_rect)
+                             const SDL_Rect *scissor_rect, sdl3d_overlay_effect effect, float effect_progress,
+                             Uint32 effect_seed, const char *shader_vertex_source, const char *shader_fragment_source)
 {
     sdl3d_gl_funcs *gl = &ctx->gl;
 
@@ -1423,6 +1583,12 @@ bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, cons
     e->scissor_enabled = scissor_enabled;
     e->scissor_rect = scissor_rect ? *scissor_rect : (SDL_Rect){0, 0, 0, 0};
     e->atlas_index = atlas_idx;
+    e->effect = effect;
+    e->effect_progress = effect_progress;
+    e->effect_seed = (float)effect_seed * (1.0f / 4294967295.0f);
+    e->effect_columns = texture != NULL ? (float)SDL_max(24, texture->width / 16) : 1.0f;
+    e->shader_vertex_source = shader_vertex_source;
+    e->shader_fragment_source = shader_fragment_source;
     return true;
 }
 
@@ -1709,6 +1875,140 @@ static void mesh_cache_free(sdl3d_gl_context *ctx)
     ctx->mesh_cache = NULL;
 }
 
+static void custom_shader_cache_free(sdl3d_gl_context *ctx)
+{
+    sdl3d_custom_shader_cache_entry *entry = ctx->custom_shader_cache;
+    sdl3d_gl_funcs *gl = &ctx->gl;
+    while (entry != NULL)
+    {
+        sdl3d_custom_shader_cache_entry *next = entry->next;
+        if (entry->program)
+            gl->DeleteProgram(entry->program);
+        SDL_free(entry->vertex_source);
+        SDL_free(entry->fragment_source);
+        SDL_free(entry);
+        entry = next;
+    }
+    ctx->custom_shader_cache = NULL;
+}
+
+static bool shader_source_matches_cache(const char *a, const char *b)
+{
+    if (a == NULL || a[0] == '\0')
+        return b == NULL || b[0] == '\0';
+    if (b == NULL || b[0] == '\0')
+        return false;
+    return SDL_strcmp(a, b) == 0;
+}
+
+static sdl3d_custom_shader_cache_entry *custom_shader_lookup_or_create(sdl3d_gl_context *ctx, bool lit,
+                                                                       const char *vertex_source,
+                                                                       const char *fragment_source)
+{
+    sdl3d_gl_funcs *gl = &ctx->gl;
+    const char *version = gl_version_prefix_for_context(ctx);
+    const char *default_vertex = lit ? k_pbr_vert : k_unlit_vert;
+
+    if (fragment_source == NULL || fragment_source[0] == '\0')
+        return NULL;
+
+    for (sdl3d_custom_shader_cache_entry *entry = ctx->custom_shader_cache; entry != NULL; entry = entry->next)
+    {
+        if (entry->lit != lit)
+            continue;
+        if (shader_source_matches_cache(entry->vertex_source, vertex_source) &&
+            shader_source_matches_cache(entry->fragment_source, fragment_source))
+            return entry;
+    }
+
+    sdl3d_custom_shader_cache_entry *entry =
+        (sdl3d_custom_shader_cache_entry *)SDL_calloc(1, sizeof(sdl3d_custom_shader_cache_entry));
+    if (entry == NULL)
+        return NULL;
+
+    if (vertex_source != NULL && vertex_source[0] != '\0')
+    {
+        entry->vertex_source = SDL_strdup(vertex_source);
+        if (entry->vertex_source == NULL)
+        {
+            SDL_free(entry);
+            return NULL;
+        }
+    }
+    if (fragment_source != NULL && fragment_source[0] != '\0')
+    {
+        entry->fragment_source = SDL_strdup(fragment_source);
+        if (entry->fragment_source == NULL)
+        {
+            SDL_free(entry->vertex_source);
+            SDL_free(entry);
+            return NULL;
+        }
+    }
+    entry->lit = lit;
+    entry->program =
+        build_program_from_sources(gl, version, default_vertex, entry->vertex_source, entry->fragment_source);
+    if (entry->program == 0)
+    {
+        SDL_free(entry->vertex_source);
+        SDL_free(entry->fragment_source);
+        SDL_free(entry);
+        return NULL;
+    }
+
+    entry->mvp_loc = gl->GetUniformLocation(entry->program, "uMVP");
+    entry->texture_loc = gl->GetUniformLocation(entry->program, "uTexture");
+    entry->has_texture_loc = gl->GetUniformLocation(entry->program, "uHasTexture");
+    entry->tint_loc = gl->GetUniformLocation(entry->program, "uTint");
+    entry->model_loc = gl->GetUniformLocation(entry->program, "uModel");
+    entry->normal_matrix_loc = gl->GetUniformLocation(entry->program, "uNormalMatrix");
+    entry->metallic_loc = gl->GetUniformLocation(entry->program, "uMetallic");
+    entry->roughness_loc = gl->GetUniformLocation(entry->program, "uRoughness");
+    entry->emissive_loc = gl->GetUniformLocation(entry->program, "uEmissive");
+    entry->baked_light_mode_loc = gl->GetUniformLocation(entry->program, "uBakedLightMode");
+    entry->pbr_texture_loc = gl->GetUniformLocation(entry->program, "uTexture");
+    entry->pbr_has_texture_loc = gl->GetUniformLocation(entry->program, "uHasTexture");
+    entry->pbr_lightmap_loc = gl->GetUniformLocation(entry->program, "uLightmap");
+    entry->pbr_has_lightmap_loc = gl->GetUniformLocation(entry->program, "uHasLightmap");
+    entry->pbr_shadow_map_loc = gl->GetUniformLocation(entry->program, "uShadowMap");
+    entry->pbr_shadow_vp_loc = gl->GetUniformLocation(entry->program, "uShadowVP");
+    entry->pbr_shadow_enabled_loc = gl->GetUniformLocation(entry->program, "uShadowEnabled");
+    entry->pbr_shadow_bias_loc = gl->GetUniformLocation(entry->program, "uShadowBias");
+    entry->pbr_csm_splits_loc = gl->GetUniformLocation(entry->program, "uCSMSplits");
+    entry->pbr_csm_enabled_loc = gl->GetUniformLocation(entry->program, "uCSMEnabled");
+    entry->pbr_view_matrix_loc = gl->GetUniformLocation(entry->program, "uViewMatrix");
+    for (int c = 0; c < 4; c++)
+    {
+        char name[32];
+        SDL_snprintf(name, sizeof(name), "uCSMVP[%d]", c);
+        entry->pbr_csm_vp_loc[c] = gl->GetUniformLocation(entry->program, name);
+    }
+    for (int ps = 0; ps < SDL3D_MAX_POINT_SHADOWS; ps++)
+    {
+        char name[32];
+        SDL_snprintf(name, sizeof(name), "uPointShadowMap[%d]", ps);
+        entry->pbr_point_shadow_map_loc[ps] = gl->GetUniformLocation(entry->program, name);
+        SDL_snprintf(name, sizeof(name), "uPointShadowLightPos[%d]", ps);
+        entry->pbr_point_shadow_light_pos_loc[ps] = gl->GetUniformLocation(entry->program, name);
+        SDL_snprintf(name, sizeof(name), "uPointShadowFar[%d]", ps);
+        entry->pbr_point_shadow_far_loc[ps] = gl->GetUniformLocation(entry->program, name);
+    }
+    entry->pbr_point_shadow_count_loc = gl->GetUniformLocation(entry->program, "uPointShadowCount");
+    entry->pbr_irradiance_map_loc = gl->GetUniformLocation(entry->program, "uIrradianceMap");
+    entry->pbr_prefilter_map_loc = gl->GetUniformLocation(entry->program, "uPrefilterMap");
+    entry->pbr_brdf_lut_loc = gl->GetUniformLocation(entry->program, "uBrdfLUT");
+    entry->pbr_ibl_enabled_loc = gl->GetUniformLocation(entry->program, "uIBLEnabled");
+    entry->pbr_max_reflection_lod_loc = gl->GetUniformLocation(entry->program, "uMaxReflectionLod");
+    entry->overlay_effect_loc = gl->GetUniformLocation(entry->program, "uOverlayEffect");
+    entry->overlay_effect_progress_loc = gl->GetUniformLocation(entry->program, "uOverlayEffectProgress");
+    entry->overlay_effect_seed_loc = gl->GetUniformLocation(entry->program, "uOverlayEffectSeed");
+    entry->overlay_effect_columns_loc = gl->GetUniformLocation(entry->program, "uOverlayEffectColumns");
+
+    entry->next = ctx->custom_shader_cache;
+    ctx->custom_shader_cache = entry;
+    return entry;
+}
+
 /* ------------------------------------------------------------------ */
 /* 4x4 matrix inverse (Cramer's rule, column-major float[16])          */
 /* ------------------------------------------------------------------ */
@@ -1978,103 +2278,238 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
 
         if (e->lit)
         {
-            gl->UseProgram(ctx->pbr_program);
-            gl->UniformMatrix4fv(ctx->pbr_model_loc, 1, GL_FALSE, e->model_matrix);
-            gl->UniformMatrix3fv(ctx->pbr_normal_matrix_loc, 1, GL_FALSE, e->normal_matrix);
-            gl->Uniform4f(ctx->pbr_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
-            gl->Uniform1f(ctx->pbr_metallic_loc, e->metallic);
-            gl->Uniform1f(ctx->pbr_roughness_loc, e->roughness);
-            gl->Uniform3f(ctx->pbr_emissive_loc, e->emissive[0], e->emissive[1], e->emissive[2]);
-            gl->Uniform1i(ctx->pbr_baked_light_mode_loc, e->baked_light_mode ? 1 : 0);
+            sdl3d_custom_shader_cache_entry *custom =
+                (e->shader_fragment_source != NULL && e->shader_fragment_source[0] != '\0')
+                    ? custom_shader_lookup_or_create(ctx, true, e->shader_vertex_source, e->shader_fragment_source)
+                    : NULL;
 
-            gl->ActiveTexture(GL_TEXTURE0);
-            gl->BindTexture(GL_TEXTURE_2D, tex);
-            gl->Uniform1i(ctx->pbr_texture_loc, 0);
-            gl->Uniform1i(ctx->pbr_has_texture_loc, e->texture ? 1 : 0);
-            gl->ActiveTexture(GL_TEXTURE0 + 7);
-            gl->BindTexture(GL_TEXTURE_2D,
-                            e->has_lightmap ? resolve_texture(ctx, e->lightmap_texture) : ctx->black_texture);
-            gl->Uniform1i(ctx->pbr_lightmap_loc, 7);
-            gl->Uniform1i(ctx->pbr_has_lightmap_loc, e->has_lightmap ? 1 : 0);
-            gl->ActiveTexture(GL_TEXTURE0);
-
-            /* Shadow uniforms — always bind the texture array to prevent
-             * undefined sampler behavior on some drivers. */
-            gl->ActiveTexture(GL_TEXTURE0 + 1);
-            gl->BindTexture(GL_TEXTURE_2D_ARRAY, ctx->shadow_depth_tex);
-            gl->Uniform1i(ctx->pbr_shadow_map_loc, 1);
-            if (ctx->shadow_depth_tex && ctx->shadow_bias > 0.0f)
+            if (custom != NULL)
             {
-                gl->UniformMatrix4fv(ctx->pbr_shadow_vp_loc, 1, GL_FALSE, ctx->shadow_light_vp);
-                gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 0); /* CSM disabled */
-                gl->Uniform1f(ctx->pbr_shadow_bias_loc, ctx->shadow_bias);
-                if (ctx->csm_fragment_enabled)
+                gl->UseProgram(custom->program);
+                if (custom->model_loc >= 0)
+                    gl->UniformMatrix4fv(custom->model_loc, 1, GL_FALSE, e->model_matrix);
+                if (custom->normal_matrix_loc >= 0)
+                    gl->UniformMatrix3fv(custom->normal_matrix_loc, 1, GL_FALSE, e->normal_matrix);
+                if (custom->tint_loc >= 0)
+                    gl->Uniform4f(custom->tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
+                if (custom->metallic_loc >= 0)
+                    gl->Uniform1f(custom->metallic_loc, e->metallic);
+                if (custom->roughness_loc >= 0)
+                    gl->Uniform1f(custom->roughness_loc, e->roughness);
+                if (custom->emissive_loc >= 0)
+                    gl->Uniform3f(custom->emissive_loc, e->emissive[0], e->emissive[1], e->emissive[2]);
+                if (custom->baked_light_mode_loc >= 0)
+                    gl->Uniform1i(custom->baked_light_mode_loc, e->baked_light_mode ? 1 : 0);
+
+                gl->ActiveTexture(GL_TEXTURE0);
+                gl->BindTexture(GL_TEXTURE_2D, tex);
+                if (custom->pbr_texture_loc >= 0)
+                    gl->Uniform1i(custom->pbr_texture_loc, 0);
+                if (custom->pbr_has_texture_loc >= 0)
+                    gl->Uniform1i(custom->pbr_has_texture_loc, e->texture ? 1 : 0);
+                gl->ActiveTexture(GL_TEXTURE0 + 7);
+                gl->BindTexture(GL_TEXTURE_2D,
+                                e->has_lightmap ? resolve_texture(ctx, e->lightmap_texture) : ctx->black_texture);
+                if (custom->pbr_lightmap_loc >= 0)
+                    gl->Uniform1i(custom->pbr_lightmap_loc, 7);
+                if (custom->pbr_has_lightmap_loc >= 0)
+                    gl->Uniform1i(custom->pbr_has_lightmap_loc, e->has_lightmap ? 1 : 0);
+                gl->ActiveTexture(GL_TEXTURE0);
+
+                gl->ActiveTexture(GL_TEXTURE0 + 1);
+                gl->BindTexture(GL_TEXTURE_2D_ARRAY, ctx->shadow_depth_tex);
+                if (custom->pbr_shadow_map_loc >= 0)
+                    gl->Uniform1i(custom->pbr_shadow_map_loc, 1);
+                if (ctx->shadow_depth_tex && ctx->shadow_bias > 0.0f)
                 {
-                    gl->UniformMatrix4fv(ctx->pbr_csm_vp_loc[0], 1, GL_FALSE, ctx->shadow_light_vp);
-                    for (int c = 1; c < 4; c++)
-                        gl->UniformMatrix4fv(ctx->pbr_csm_vp_loc[c], 1, GL_FALSE, ctx->csm_light_vp[c]);
-                    gl->Uniform1fv(ctx->pbr_csm_splits_loc, 4, ctx->csm_split_depths);
-                    gl->UniformMatrix4fv(ctx->pbr_view_matrix_loc, 1, GL_FALSE, ctx->current_ctx->view.m);
-                    gl->Uniform1i(ctx->pbr_csm_enabled_loc, 1);
+                    if (custom->pbr_shadow_vp_loc >= 0)
+                        gl->UniformMatrix4fv(custom->pbr_shadow_vp_loc, 1, GL_FALSE, ctx->shadow_light_vp);
+                    if (custom->pbr_shadow_enabled_loc >= 0)
+                        gl->Uniform1i(custom->pbr_shadow_enabled_loc, 0);
+                    if (custom->pbr_shadow_bias_loc >= 0)
+                        gl->Uniform1f(custom->pbr_shadow_bias_loc, ctx->shadow_bias);
+                    if (ctx->csm_fragment_enabled)
+                    {
+                        if (custom->pbr_csm_vp_loc[0] >= 0)
+                            gl->UniformMatrix4fv(custom->pbr_csm_vp_loc[0], 1, GL_FALSE, ctx->shadow_light_vp);
+                        for (int c = 1; c < 4; c++)
+                        {
+                            if (custom->pbr_csm_vp_loc[c] >= 0)
+                                gl->UniformMatrix4fv(custom->pbr_csm_vp_loc[c], 1, GL_FALSE, ctx->csm_light_vp[c]);
+                        }
+                        if (custom->pbr_csm_splits_loc >= 0)
+                            gl->Uniform1fv(custom->pbr_csm_splits_loc, 4, ctx->csm_split_depths);
+                        if (custom->pbr_view_matrix_loc >= 0)
+                            gl->UniformMatrix4fv(custom->pbr_view_matrix_loc, 1, GL_FALSE, ctx->current_ctx->view.m);
+                        if (custom->pbr_csm_enabled_loc >= 0)
+                            gl->Uniform1i(custom->pbr_csm_enabled_loc, 1);
+                    }
+                    else if (custom->pbr_csm_enabled_loc >= 0)
+                    {
+                        gl->Uniform1i(custom->pbr_csm_enabled_loc, 0);
+                    }
+                }
+                gl->ActiveTexture(GL_TEXTURE0);
+
+                for (int ps = 0; ps < SDL3D_MAX_POINT_SHADOWS; ps++)
+                {
+                    gl->ActiveTexture(GL_TEXTURE0 + 2 + (GLenum)ps);
+                    gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->point_shadow_cubemap[ps]);
+                    if (custom->pbr_point_shadow_map_loc[ps] >= 0)
+                        gl->Uniform1i(custom->pbr_point_shadow_map_loc[ps], 2 + ps);
+                    if (ps < ctx->point_shadow_count && ctx->current_ctx != NULL)
+                    {
+                        const sdl3d_light *pl = &ctx->current_ctx->lights[ctx->point_shadow_light_index[ps]];
+                        if (custom->pbr_point_shadow_light_pos_loc[ps] >= 0)
+                            gl->Uniform3f(custom->pbr_point_shadow_light_pos_loc[ps], pl->position.x, pl->position.y,
+                                          pl->position.z);
+                        if (custom->pbr_point_shadow_far_loc[ps] >= 0)
+                            gl->Uniform1f(custom->pbr_point_shadow_far_loc[ps], ctx->point_shadow_far_plane[ps]);
+                    }
+                }
+                if (custom->pbr_point_shadow_count_loc >= 0)
+                    gl->Uniform1i(custom->pbr_point_shadow_count_loc, ctx->point_shadow_count);
+                gl->ActiveTexture(GL_TEXTURE0);
+
+                if (ctx->ibl_ready)
+                {
+                    gl->ActiveTexture(GL_TEXTURE0 + 4);
+                    gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_irradiance_map);
+                    if (custom->pbr_irradiance_map_loc >= 0)
+                        gl->Uniform1i(custom->pbr_irradiance_map_loc, 4);
+                    gl->ActiveTexture(GL_TEXTURE0 + 5);
+                    gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_prefilter_map);
+                    if (custom->pbr_prefilter_map_loc >= 0)
+                        gl->Uniform1i(custom->pbr_prefilter_map_loc, 5);
+                    gl->ActiveTexture(GL_TEXTURE0 + 6);
+                    gl->BindTexture(GL_TEXTURE_2D, ctx->ibl_brdf_lut);
+                    if (custom->pbr_brdf_lut_loc >= 0)
+                        gl->Uniform1i(custom->pbr_brdf_lut_loc, 6);
+                    if (custom->pbr_ibl_enabled_loc >= 0)
+                        gl->Uniform1i(custom->pbr_ibl_enabled_loc, 1);
+                    if (custom->pbr_max_reflection_lod_loc >= 0)
+                        gl->Uniform1f(custom->pbr_max_reflection_lod_loc, 4.0f);
+                    gl->ActiveTexture(GL_TEXTURE0);
                 }
                 else
                 {
+                    gl->ActiveTexture(GL_TEXTURE0 + 4);
+                    gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->black_cubemap);
+                    if (custom->pbr_irradiance_map_loc >= 0)
+                        gl->Uniform1i(custom->pbr_irradiance_map_loc, 4);
+                    gl->ActiveTexture(GL_TEXTURE0 + 5);
+                    gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->black_cubemap);
+                    if (custom->pbr_prefilter_map_loc >= 0)
+                        gl->Uniform1i(custom->pbr_prefilter_map_loc, 5);
+                    gl->ActiveTexture(GL_TEXTURE0 + 6);
+                    gl->BindTexture(GL_TEXTURE_2D, ctx->black_texture);
+                    if (custom->pbr_brdf_lut_loc >= 0)
+                        gl->Uniform1i(custom->pbr_brdf_lut_loc, 6);
+                    if (custom->pbr_ibl_enabled_loc >= 0)
+                        gl->Uniform1i(custom->pbr_ibl_enabled_loc, 0);
+                    gl->ActiveTexture(GL_TEXTURE0);
+                }
+            }
+            else
+            {
+                gl->UseProgram(ctx->pbr_program);
+                gl->UniformMatrix4fv(ctx->pbr_model_loc, 1, GL_FALSE, e->model_matrix);
+                gl->UniformMatrix3fv(ctx->pbr_normal_matrix_loc, 1, GL_FALSE, e->normal_matrix);
+                gl->Uniform4f(ctx->pbr_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
+                gl->Uniform1f(ctx->pbr_metallic_loc, e->metallic);
+                gl->Uniform1f(ctx->pbr_roughness_loc, e->roughness);
+                gl->Uniform3f(ctx->pbr_emissive_loc, e->emissive[0], e->emissive[1], e->emissive[2]);
+                gl->Uniform1i(ctx->pbr_baked_light_mode_loc, e->baked_light_mode ? 1 : 0);
+
+                gl->ActiveTexture(GL_TEXTURE0);
+                gl->BindTexture(GL_TEXTURE_2D, tex);
+                gl->Uniform1i(ctx->pbr_texture_loc, 0);
+                gl->Uniform1i(ctx->pbr_has_texture_loc, e->texture ? 1 : 0);
+                gl->ActiveTexture(GL_TEXTURE0 + 7);
+                gl->BindTexture(GL_TEXTURE_2D,
+                                e->has_lightmap ? resolve_texture(ctx, e->lightmap_texture) : ctx->black_texture);
+                gl->Uniform1i(ctx->pbr_lightmap_loc, 7);
+                gl->Uniform1i(ctx->pbr_has_lightmap_loc, e->has_lightmap ? 1 : 0);
+                gl->ActiveTexture(GL_TEXTURE0);
+
+                /* Shadow uniforms — always bind the texture array to prevent
+                 * undefined sampler behavior on some drivers. */
+                gl->ActiveTexture(GL_TEXTURE0 + 1);
+                gl->BindTexture(GL_TEXTURE_2D_ARRAY, ctx->shadow_depth_tex);
+                gl->Uniform1i(ctx->pbr_shadow_map_loc, 1);
+                if (ctx->shadow_depth_tex && ctx->shadow_bias > 0.0f)
+                {
+                    gl->UniformMatrix4fv(ctx->pbr_shadow_vp_loc, 1, GL_FALSE, ctx->shadow_light_vp);
+                    gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 0); /* CSM disabled */
+                    gl->Uniform1f(ctx->pbr_shadow_bias_loc, ctx->shadow_bias);
+                    if (ctx->csm_fragment_enabled)
+                    {
+                        gl->UniformMatrix4fv(ctx->pbr_csm_vp_loc[0], 1, GL_FALSE, ctx->shadow_light_vp);
+                        for (int c = 1; c < 4; c++)
+                            gl->UniformMatrix4fv(ctx->pbr_csm_vp_loc[c], 1, GL_FALSE, ctx->csm_light_vp[c]);
+                        gl->Uniform1fv(ctx->pbr_csm_splits_loc, 4, ctx->csm_split_depths);
+                        gl->UniformMatrix4fv(ctx->pbr_view_matrix_loc, 1, GL_FALSE, ctx->current_ctx->view.m);
+                        gl->Uniform1i(ctx->pbr_csm_enabled_loc, 1);
+                    }
+                    else
+                    {
+                        gl->Uniform1i(ctx->pbr_csm_enabled_loc, 0);
+                    }
+                }
+                else
+                {
+                    gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 0);
                     gl->Uniform1i(ctx->pbr_csm_enabled_loc, 0);
                 }
-            }
-            else
-            {
-                gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 0);
-                gl->Uniform1i(ctx->pbr_csm_enabled_loc, 0);
-            }
-            gl->ActiveTexture(GL_TEXTURE0);
+                gl->ActiveTexture(GL_TEXTURE0);
 
-            /* Point shadow uniforms. */
-            for (int ps = 0; ps < SDL3D_MAX_POINT_SHADOWS; ps++)
-            {
-                gl->ActiveTexture(GL_TEXTURE0 + 2 + (GLenum)ps);
-                gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->point_shadow_cubemap[ps]);
-                gl->Uniform1i(ctx->pbr_point_shadow_map_loc[ps], 2 + ps);
-                if (ps < ctx->point_shadow_count)
+                /* Point shadow uniforms. */
+                for (int ps = 0; ps < SDL3D_MAX_POINT_SHADOWS; ps++)
                 {
-                    const sdl3d_light *pl = &ctx->current_ctx->lights[ctx->point_shadow_light_index[ps]];
-                    gl->Uniform3f(ctx->pbr_point_shadow_light_pos_loc[ps], pl->position.x, pl->position.y,
-                                  pl->position.z);
-                    gl->Uniform1f(ctx->pbr_point_shadow_far_loc[ps], ctx->point_shadow_far_plane[ps]);
+                    gl->ActiveTexture(GL_TEXTURE0 + 2 + (GLenum)ps);
+                    gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->point_shadow_cubemap[ps]);
+                    gl->Uniform1i(ctx->pbr_point_shadow_map_loc[ps], 2 + ps);
+                    if (ps < ctx->point_shadow_count)
+                    {
+                        const sdl3d_light *pl = &ctx->current_ctx->lights[ctx->point_shadow_light_index[ps]];
+                        gl->Uniform3f(ctx->pbr_point_shadow_light_pos_loc[ps], pl->position.x, pl->position.y,
+                                      pl->position.z);
+                        gl->Uniform1f(ctx->pbr_point_shadow_far_loc[ps], ctx->point_shadow_far_plane[ps]);
+                    }
                 }
-            }
-            gl->Uniform1i(ctx->pbr_point_shadow_count_loc, ctx->point_shadow_count);
-            gl->ActiveTexture(GL_TEXTURE0);
+                gl->Uniform1i(ctx->pbr_point_shadow_count_loc, ctx->point_shadow_count);
+                gl->ActiveTexture(GL_TEXTURE0);
 
-            /* IBL textures. */
-            if (ctx->ibl_ready)
-            {
-                gl->ActiveTexture(GL_TEXTURE0 + 4);
-                gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_irradiance_map);
-                gl->Uniform1i(ctx->pbr_irradiance_map_loc, 4);
-                gl->ActiveTexture(GL_TEXTURE0 + 5);
-                gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_prefilter_map);
-                gl->Uniform1i(ctx->pbr_prefilter_map_loc, 5);
-                gl->ActiveTexture(GL_TEXTURE0 + 6);
-                gl->BindTexture(GL_TEXTURE_2D, ctx->ibl_brdf_lut);
-                gl->Uniform1i(ctx->pbr_brdf_lut_loc, 6);
-                gl->Uniform1i(ctx->pbr_ibl_enabled_loc, 1);
-                gl->Uniform1f(ctx->pbr_max_reflection_lod_loc, 4.0f);
-                gl->ActiveTexture(GL_TEXTURE0);
-            }
-            else
-            {
-                gl->ActiveTexture(GL_TEXTURE0 + 4);
-                gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->black_cubemap);
-                gl->Uniform1i(ctx->pbr_irradiance_map_loc, 4);
-                gl->ActiveTexture(GL_TEXTURE0 + 5);
-                gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->black_cubemap);
-                gl->Uniform1i(ctx->pbr_prefilter_map_loc, 5);
-                gl->ActiveTexture(GL_TEXTURE0 + 6);
-                gl->BindTexture(GL_TEXTURE_2D, ctx->black_texture);
-                gl->Uniform1i(ctx->pbr_brdf_lut_loc, 6);
-                gl->Uniform1i(ctx->pbr_ibl_enabled_loc, 0);
-                gl->ActiveTexture(GL_TEXTURE0);
+                /* IBL textures. */
+                if (ctx->ibl_ready)
+                {
+                    gl->ActiveTexture(GL_TEXTURE0 + 4);
+                    gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_irradiance_map);
+                    gl->Uniform1i(ctx->pbr_irradiance_map_loc, 4);
+                    gl->ActiveTexture(GL_TEXTURE0 + 5);
+                    gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_prefilter_map);
+                    gl->Uniform1i(ctx->pbr_prefilter_map_loc, 5);
+                    gl->ActiveTexture(GL_TEXTURE0 + 6);
+                    gl->BindTexture(GL_TEXTURE_2D, ctx->ibl_brdf_lut);
+                    gl->Uniform1i(ctx->pbr_brdf_lut_loc, 6);
+                    gl->Uniform1i(ctx->pbr_ibl_enabled_loc, 1);
+                    gl->Uniform1f(ctx->pbr_max_reflection_lod_loc, 4.0f);
+                    gl->ActiveTexture(GL_TEXTURE0);
+                }
+                else
+                {
+                    gl->ActiveTexture(GL_TEXTURE0 + 4);
+                    gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->black_cubemap);
+                    gl->Uniform1i(ctx->pbr_irradiance_map_loc, 4);
+                    gl->ActiveTexture(GL_TEXTURE0 + 5);
+                    gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->black_cubemap);
+                    gl->Uniform1i(ctx->pbr_prefilter_map_loc, 5);
+                    gl->ActiveTexture(GL_TEXTURE0 + 6);
+                    gl->BindTexture(GL_TEXTURE_2D, ctx->black_texture);
+                    gl->Uniform1i(ctx->pbr_brdf_lut_loc, 6);
+                    gl->Uniform1i(ctx->pbr_ibl_enabled_loc, 0);
+                    gl->ActiveTexture(GL_TEXTURE0);
+                }
             }
 
             gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->vao : ctx->lit_vao);
@@ -2114,14 +2549,36 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
         }
         else
         {
-            gl->UseProgram(ctx->unlit_program);
-            gl->UniformMatrix4fv(ctx->unlit_mvp_loc, 1, GL_FALSE, e->mvp);
-            gl->Uniform4f(ctx->unlit_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
+            sdl3d_custom_shader_cache_entry *custom =
+                (e->shader_fragment_source != NULL && e->shader_fragment_source[0] != '\0')
+                    ? custom_shader_lookup_or_create(ctx, false, e->shader_vertex_source, e->shader_fragment_source)
+                    : NULL;
 
-            gl->ActiveTexture(GL_TEXTURE0);
-            gl->BindTexture(GL_TEXTURE_2D, tex);
-            gl->Uniform1i(ctx->unlit_texture_loc, 0);
-            gl->Uniform1i(ctx->unlit_has_texture_loc, e->texture ? 1 : 0);
+            if (custom != NULL)
+            {
+                gl->UseProgram(custom->program);
+                gl->UniformMatrix4fv(custom->mvp_loc, 1, GL_FALSE, e->mvp);
+                gl->Uniform4f(custom->tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
+                gl->ActiveTexture(GL_TEXTURE0);
+                gl->BindTexture(GL_TEXTURE_2D, tex);
+                if (custom->texture_loc >= 0)
+                    gl->Uniform1i(custom->texture_loc, 0);
+                if (custom->has_texture_loc >= 0)
+                    gl->Uniform1i(custom->has_texture_loc, e->texture ? 1 : 0);
+                if (custom->overlay_effect_loc >= 0)
+                    gl->Uniform1i(custom->overlay_effect_loc, 0);
+            }
+            else
+            {
+                gl->UseProgram(ctx->unlit_program);
+                gl->UniformMatrix4fv(ctx->unlit_mvp_loc, 1, GL_FALSE, e->mvp);
+                gl->Uniform4f(ctx->unlit_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
+
+                gl->ActiveTexture(GL_TEXTURE0);
+                gl->BindTexture(GL_TEXTURE_2D, tex);
+                gl->Uniform1i(ctx->unlit_texture_loc, 0);
+                gl->Uniform1i(ctx->unlit_has_texture_loc, e->texture ? 1 : 0);
+            }
 
             gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->vao : ctx->unlit_vao);
             if (e->mesh_cache == NULL)
@@ -2634,6 +3091,10 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->unlit_texture_loc = gl->GetUniformLocation(ctx->unlit_program, "uTexture");
     ctx->unlit_has_texture_loc = gl->GetUniformLocation(ctx->unlit_program, "uHasTexture");
     ctx->unlit_tint_loc = gl->GetUniformLocation(ctx->unlit_program, "uTint");
+    ctx->unlit_overlay_effect_loc = gl->GetUniformLocation(ctx->unlit_program, "uOverlayEffect");
+    ctx->unlit_overlay_effect_progress_loc = gl->GetUniformLocation(ctx->unlit_program, "uOverlayEffectProgress");
+    ctx->unlit_overlay_effect_seed_loc = gl->GetUniformLocation(ctx->unlit_program, "uOverlayEffectSeed");
+    ctx->unlit_overlay_effect_columns_loc = gl->GetUniformLocation(ctx->unlit_program, "uOverlayEffectColumns");
 
     /* Copy uniform locations. */
     ctx->copy_texture_loc = gl->GetUniformLocation(ctx->copy_program, "uScene");
@@ -2934,6 +3395,7 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
     free_draw_list(ctx);
     SDL_free(ctx->draw_list);
     mesh_cache_free(ctx);
+    custom_shader_cache_free(ctx);
 
     free_overlay_list(ctx);
     SDL_free(ctx->overlay_list);
@@ -3090,6 +3552,8 @@ static bool gl_draw_mesh_unlit(sdl3d_render_context *context, const sdl3d_draw_p
     e->index_count = (params->indices && params->index_count > 0) ? params->index_count : 0;
     e->texture = params->texture;
     e->primitive_mode = GL_TRIANGLES;
+    e->shader_vertex_source = params->shader_vertex_source;
+    e->shader_fragment_source = params->shader_fragment_source;
     SDL_memcpy(e->mvp, params->mvp, 16 * sizeof(float));
     SDL_memcpy(e->tint, params->tint, 4 * sizeof(float));
     e->owns_arrays = !params->static_geometry;
@@ -3128,6 +3592,8 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
     e->texture = params->texture;
     e->lightmap_texture = params->lightmap;
     e->primitive_mode = GL_TRIANGLES;
+    e->shader_vertex_source = params->shader_vertex_source;
+    e->shader_fragment_source = params->shader_fragment_source;
     SDL_memcpy(e->model_matrix, params->model_matrix, 16 * sizeof(float));
     SDL_memcpy(e->normal_matrix, params->normal_matrix, 9 * sizeof(float));
     SDL_memcpy(e->tint, params->tint, 4 * sizeof(float));
@@ -3236,20 +3702,66 @@ static void replay_overlay_list(sdl3d_gl_context *ctx, int vp_x, int vp_y, int v
             gl->Disable(GL_SCISSOR_TEST);
         }
 
-        gl->UseProgram(ctx->unlit_program);
-        gl->UniformMatrix4fv(ctx->unlit_mvp_loc, 1, GL_FALSE, e->mvp);
-        gl->Uniform4f(ctx->unlit_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
+        sdl3d_custom_shader_cache_entry *custom =
+            (e->shader_fragment_source != NULL && e->shader_fragment_source[0] != '\0')
+                ? custom_shader_lookup_or_create(ctx, false, e->shader_vertex_source, e->shader_fragment_source)
+                : NULL;
+
+        if (custom != NULL)
+        {
+            gl->UseProgram(custom->program);
+            if (custom->mvp_loc >= 0)
+                gl->UniformMatrix4fv(custom->mvp_loc, 1, GL_FALSE, e->mvp);
+            if (custom->tint_loc >= 0)
+                gl->Uniform4f(custom->tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
+            if (custom->overlay_effect_loc >= 0)
+                gl->Uniform1i(custom->overlay_effect_loc, (int)e->effect);
+            if (custom->overlay_effect_progress_loc >= 0)
+                gl->Uniform1f(custom->overlay_effect_progress_loc, e->effect_progress);
+            if (custom->overlay_effect_seed_loc >= 0)
+                gl->Uniform1f(custom->overlay_effect_seed_loc, e->effect_seed);
+            if (custom->overlay_effect_columns_loc >= 0)
+                gl->Uniform1f(custom->overlay_effect_columns_loc, e->effect_columns);
+        }
+        else
+        {
+            gl->UseProgram(ctx->unlit_program);
+            gl->UniformMatrix4fv(ctx->unlit_mvp_loc, 1, GL_FALSE, e->mvp);
+            gl->Uniform4f(ctx->unlit_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
+            gl->Uniform1i(ctx->unlit_overlay_effect_loc, (int)e->effect);
+            gl->Uniform1f(ctx->unlit_overlay_effect_progress_loc, e->effect_progress);
+            gl->Uniform1f(ctx->unlit_overlay_effect_seed_loc, e->effect_seed);
+            gl->Uniform1f(ctx->unlit_overlay_effect_columns_loc, e->effect_columns);
+        }
         if (e->atlas_index >= 0)
         {
             gl->ActiveTexture(GL_TEXTURE0);
             gl->BindTexture(GL_TEXTURE_2D, ctx->overlay_atlases[e->atlas_index].gl_tex);
-            gl->Uniform1i(ctx->unlit_texture_loc, 0);
-            gl->Uniform1i(ctx->unlit_has_texture_loc, 1);
+            if (custom != NULL)
+            {
+                if (custom->texture_loc >= 0)
+                    gl->Uniform1i(custom->texture_loc, 0);
+                if (custom->has_texture_loc >= 0)
+                    gl->Uniform1i(custom->has_texture_loc, 1);
+            }
+            else
+            {
+                gl->Uniform1i(ctx->unlit_texture_loc, 0);
+                gl->Uniform1i(ctx->unlit_has_texture_loc, 1);
+            }
         }
         else
         {
             gl->BindTexture(GL_TEXTURE_2D, ctx->white_texture);
-            gl->Uniform1i(ctx->unlit_has_texture_loc, 0);
+            if (custom != NULL)
+            {
+                if (custom->has_texture_loc >= 0)
+                    gl->Uniform1i(custom->has_texture_loc, 0);
+            }
+            else
+            {
+                gl->Uniform1i(ctx->unlit_has_texture_loc, 0);
+            }
         }
 
         gl->BindVertexArray(ctx->unlit_vao);

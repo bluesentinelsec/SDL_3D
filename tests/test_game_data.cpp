@@ -1111,7 +1111,7 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_EQ(app.start_signal_id, -1);
     EXPECT_GE(app.quit_action_id, 0);
     EXPECT_GE(app.pause_action_id, 0);
-    EXPECT_STREQ(app.startup_transition, "startup");
+    EXPECT_EQ(app.startup_transition, nullptr);
     EXPECT_STREQ(app.quit_transition, "quit");
     EXPECT_GE(app.quit_signal_id, 0);
     EXPECT_EQ(app.window_apply_signal_id, sdl3d_game_data_find_signal(runtime, "signal.settings.apply"));
@@ -1317,7 +1317,25 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
 
     sdl3d_game_data_image_asset image_asset{};
     ASSERT_TRUE(sdl3d_game_data_get_image_asset(runtime, "image.splash.logo", &image_asset));
-    EXPECT_STREQ(image_asset.path, "asset://images/splash-logo.jpg");
+    EXPECT_STREQ(image_asset.sprite, "sprite.splash.logo");
+    EXPECT_EQ(image_asset.path, nullptr);
+
+    sdl3d_game_data_sprite_asset sprite_asset{};
+    ASSERT_TRUE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.splash.logo", &sprite_asset));
+    EXPECT_STREQ(sprite_asset.path, "asset://images/splash-logo.jpg");
+    EXPECT_EQ(sprite_asset.frame_width, 784);
+    EXPECT_EQ(sprite_asset.frame_height, 1168);
+    EXPECT_EQ(sprite_asset.columns, 1);
+    EXPECT_EQ(sprite_asset.rows, 1);
+    EXPECT_EQ(sprite_asset.frame_count, 1);
+    EXPECT_EQ(sprite_asset.direction_count, 1);
+    EXPECT_FALSE(sprite_asset.loop);
+    EXPECT_FALSE(sprite_asset.lighting);
+    EXPECT_STREQ(sprite_asset.effect, "melt");
+    EXPECT_NEAR(sprite_asset.effect_delay, 1.0f, 0.0001f);
+    EXPECT_NEAR(sprite_asset.effect_duration, 1.0f, 0.0001f);
+    EXPECT_EQ(sprite_asset.shader_vertex_path, nullptr);
+    EXPECT_STREQ(sprite_asset.shader_fragment_path, "asset://shaders/splash_logo_melt.frag.glsl");
 
     sdl3d_game_data_sound_asset sound_asset{};
     ASSERT_TRUE(sdl3d_game_data_get_sound_asset(runtime, "sound.pong.hit", &sound_asset));
@@ -1749,6 +1767,8 @@ TEST(GameDataRuntime, ResolvesRuntimeUiStateForTextAndImages)
     std::pair<sdl3d_game_data_ui_image *, bool *> logo_args{&logo, &saw_logo};
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_image(runtime, find_logo, &logo_args));
     ASSERT_TRUE(saw_logo);
+    EXPECT_EQ(logo.effect, nullptr);
+    EXPECT_NEAR(logo.effect_speed, 1.0f, 0.0001f);
 
     sdl3d_game_data_ui_state image_state{};
     sdl3d_game_data_ui_state_init(&image_state);
@@ -1777,6 +1797,7 @@ TEST(GameDataRuntime, ResolvesRuntimeUiStateForTextAndImages)
     EXPECT_EQ(resolved_logo.color.g, 64);
     EXPECT_EQ(resolved_logo.color.b, 255);
     EXPECT_EQ(resolved_logo.color.a, 50);
+    EXPECT_EQ(resolved_logo.effect, nullptr);
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
 
@@ -2783,7 +2804,7 @@ TEST(GameDataRuntime, AppFlowConsumesAuthoredLifecycleAndSceneShortcutControls)
     sdl3d_game_data_app_flow flow{};
     sdl3d_game_data_app_flow_init(&flow);
     ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
-    EXPECT_TRUE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+    EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
 
     ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.8f));
     EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
