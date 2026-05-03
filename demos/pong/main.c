@@ -1156,7 +1156,7 @@ static void begin_network_match_termination(sdl3d_game_context *ctx, pong_state 
     clear_network_action_overrides(state);
     if (ctx != NULL)
     {
-        ctx->paused = false;
+        ctx->paused = true;
     }
 
     SDL_snprintf(state->network_match_termination_reason, sizeof(state->network_match_termination_reason), "%s",
@@ -1482,7 +1482,7 @@ static void update_direct_connect_session_status(sdl3d_game_context *ctx, pong_s
     }
 }
 
-static void update_network_match_termination(pong_state *state, float dt)
+static void update_network_match_termination(sdl3d_game_context *ctx, pong_state *state, float dt)
 {
     const int select_action =
         state != NULL && state->data != NULL ? sdl3d_game_data_find_action(state->data, "action.menu.select") : -1;
@@ -1490,6 +1490,11 @@ static void update_network_match_termination(pong_state *state, float dt)
     if (state == NULL || !state->network_match_termination_active)
     {
         return;
+    }
+
+    if (ctx != NULL)
+    {
+        ctx->paused = true;
     }
 
     state->network_match_termination_timer += SDL_max(dt, 0.0f);
@@ -1506,6 +1511,10 @@ static void update_network_match_termination(pong_state *state, float dt)
     state->network_match_termination_active = false;
     state->network_match_termination_timer = 0.0f;
     state->network_match_termination_reason[0] = '\0';
+    if (ctx != NULL)
+    {
+        ctx->paused = false;
+    }
     if (state->data != NULL)
     {
         (void)sdl3d_game_data_set_active_scene(state->data, "scene.title");
@@ -2342,7 +2351,7 @@ static void pong_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 {
     pong_state *state = (pong_state *)userdata;
     refresh_local_play_input(state);
-    update_network_match_termination(state, dt);
+    update_network_match_termination(ctx, state, dt);
     update_multiplayer_sessions(ctx, state, dt);
     update_discovery_controls(ctx, state);
     update_network_client_input_sensors(ctx, state);
@@ -2360,7 +2369,7 @@ static void pong_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_
 {
     pong_state *state = (pong_state *)userdata;
     refresh_local_play_input(state);
-    update_network_match_termination(state, real_dt);
+    update_network_match_termination(ctx, state, real_dt);
     update_multiplayer_sessions(ctx, state, real_dt);
     update_discovery_controls(ctx, state);
     update_network_client_input_sensors(ctx, state);
