@@ -149,3 +149,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
 elseif(MSVC)
     target_compile_options(sdl3d_miniz PRIVATE /w)
 endif()
+
+add_library(sdl3d_crypto OBJECT crypto/sdl3d_crypto.c)
+target_include_directories(sdl3d_crypto PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/crypto)
+set_target_properties(sdl3d_crypto PROPERTIES POSITION_INDEPENDENT_CODE ON)

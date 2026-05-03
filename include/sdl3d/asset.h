@@ -87,8 +87,10 @@ extern "C"
      *
      * The pack is loaded into memory and parsed immediately. Packs written by
      * the current build pipeline are compressed at rest by default and
-     * transparently decompressed on mount, but the resolver still accepts the
-     * original raw pack format for compatibility.
+     * transparently decompressed on mount. If SDL3D_PACK_PASSWORD is set at
+     * build time, the pack writer also emits a lightly obfuscated wrapper
+     * around the compressed bytes and the resolver unwraps it before parsing.
+     * The original raw pack format is still accepted for compatibility.
      *
      * @return true when the pack was read and mounted.
      */
@@ -101,8 +103,9 @@ extern "C"
      * The resolver copies @p data, so callers may release their source memory
      * after this call succeeds. Packs may be stored compressed or raw; the
      * resolver normalizes either form to the same in-memory pack layout before
-     * parsing. This is the preferred entry point for CMake-generated embedded
-     * packs.
+     * parsing. If SDL3D_PACK_PASSWORD is set at build time, obfuscated packs
+     * are also supported. This is the preferred entry point for CMake-generated
+     * embedded packs.
      *
      * @return true when the pack was copied, parsed, and mounted.
      */
@@ -144,7 +147,9 @@ extern "C"
      * The build defaults to compressing the resulting pack bytes before they
      * are written to disk, while still preserving the same resolver and asset
      * path model. Compression can be disabled at build time with the
-     * SDL3D_COMPRESS_PACKS CMake option.
+     * SDL3D_COMPRESS_PACKS CMake option. If SDL3D_PACK_PASSWORD is set at build
+     * time, the pack bytes are wrapped in a lightweight obfuscation layer after
+     * compression.
      *
      * @param pack_path Filesystem output path to create or replace.
      * @param entries Source files to include.

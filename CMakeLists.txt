@@ -25,6 +25,9 @@ endif()
 option(SDL3D_FETCH_SDL3 "Fetch SDL3 if it is not already available" ON)
 option(SDL3D_ENABLE_NETWORKING "Enable SDL3_net-based network transport" ON)
 option(SDL3D_COMPRESS_PACKS "Compress SDL3D asset packs by default" ON)
+set(SDL3D_PACK_PASSWORD
+    "password"
+    CACHE STRING "Password used to obfuscate SDL3D asset packs (set to an empty string to disable obfuscation)")
 option(SDL3D_ENABLE_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 option(SDL3D_BUILD_BENCHMARKS "Build SDL3D benchmarks" OFF)
 option(SDL3D_BUILD_DEMOS "Build SDL3D demo programs" OFF)
@@ -184,6 +187,7 @@ target_sources(
         $<TARGET_OBJECTS:sdl3d_miniaudio>
         $<TARGET_OBJECTS:sdl3d_yyjson>
         $<TARGET_OBJECTS:sdl3d_miniz>
+        $<TARGET_OBJECTS:sdl3d_crypto>
         $<TARGET_OBJECTS:sdl3d_lua>
 )
 
@@ -211,12 +215,20 @@ target_include_directories(
         $<TARGET_PROPERTY:sdl3d_miniaudio,INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:sdl3d_yyjson,INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:sdl3d_miniz,INCLUDE_DIRECTORIES>
+        $<TARGET_PROPERTY:sdl3d_crypto,INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:sdl3d_lua,INCLUDE_DIRECTORIES>
 )
 
 if(SDL3D_ENABLE_NETWORKING)
     target_include_directories(sdl3d PRIVATE $<TARGET_PROPERTY:${SDL3D_SDLNET_TARGET},INTERFACE_INCLUDE_DIRECTORIES>)
 endif()
+
+target_include_directories(sdl3d PRIVATE $<TARGET_PROPERTY:sdl3d_crypto,INCLUDE_DIRECTORIES>)
+
+string(REPLACE "\\" "\\\\" SDL3D_PACK_PASSWORD_ESCAPED "${SDL3D_PACK_PASSWORD}")
+string(REPLACE "\"" "\\\"" SDL3D_PACK_PASSWORD_ESCAPED "${SDL3D_PACK_PASSWORD_ESCAPED}")
+string(REPLACE ";" "\\;" SDL3D_PACK_PASSWORD_ESCAPED "${SDL3D_PACK_PASSWORD_ESCAPED}")
+target_compile_definitions(sdl3d PRIVATE SDL3D_PACK_PASSWORD="${SDL3D_PACK_PASSWORD_ESCAPED}")
 
 target_compile_definitions(
     sdl3d
