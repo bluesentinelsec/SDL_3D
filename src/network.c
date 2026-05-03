@@ -913,6 +913,14 @@ bool sdl3d_network_session_update(sdl3d_network_session *session, float dt)
             NET_Datagram *dgram = NULL;
             if (!NET_ReceiveDatagram(session->socket, &dgram))
             {
+                if (session->desc.role == SDL3D_NETWORK_ROLE_CLIENT && session->state == SDL3D_NETWORK_STATE_CONNECTING)
+                {
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                "SDL3D network receive failed while connecting; continuing to wait: %s",
+                                SDL_GetError());
+                    break;
+                }
+
                 sdl3d_network_set_status(session, SDL3D_NETWORK_STATE_ERROR, "Failed to receive datagram");
                 SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D network receive failed: %s", SDL_GetError());
                 return true;

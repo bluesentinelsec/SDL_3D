@@ -28,6 +28,14 @@ if(NOT sdl3d_miniz_source_POPULATED)
     FetchContent_Populate(sdl3d_miniz_source)
 endif()
 
+set(SDL3D_MINIZ_HEADER "${sdl3d_miniz_source_SOURCE_DIR}/miniz.h")
+if(EXISTS "${SDL3D_MINIZ_HEADER}")
+    file(READ "${SDL3D_MINIZ_HEADER}" SDL3D_MINIZ_HEADER_CONTENTS)
+    if(NOT SDL3D_MINIZ_HEADER_CONTENTS MATCHES "\n$")
+        file(APPEND "${SDL3D_MINIZ_HEADER}" "\n")
+    endif()
+endif()
+
 set(SDL3D_LUA_ROOT "${sdl3d_lua_source_SOURCE_DIR}/lua-5.4.7")
 add_library(
     sdl3d_lua
