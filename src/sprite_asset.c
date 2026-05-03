@@ -59,6 +59,27 @@ static char *sprite_asset_path_basename(const char *path)
     return SDL_strdup(last_sep != NULL ? last_sep + 1 : path);
 }
 
+static char *sprite_asset_path_join(const char *root, const char *path)
+{
+    if (root == NULL || root[0] == '\0' || path == NULL || path[0] == '\0')
+        return NULL;
+
+    const size_t root_len = SDL_strlen(root);
+    const size_t path_len = SDL_strlen(path);
+    const bool needs_sep = root[root_len - 1] != '/' && root[root_len - 1] != '\\';
+    char *joined = (char *)SDL_malloc(root_len + (needs_sep ? 1u : 0u) + path_len + 1u);
+    if (joined == NULL)
+        return NULL;
+
+    SDL_memcpy(joined, root, root_len);
+    size_t offset = root_len;
+    if (needs_sep)
+        joined[offset++] = '/';
+    SDL_memcpy(joined + offset, path, path_len);
+    joined[offset + path_len] = '\0';
+    return joined;
+}
+
 static bool sprite_asset_path_uses_resolver(const char *path)
 {
     return path != NULL && SDL_strstr(path, "://") != NULL;
@@ -273,6 +294,8 @@ static bool sprite_asset_validate_source(const sdl3d_sprite_asset_source *source
 typedef struct sprite_asset_manifest
 {
     sdl3d_sprite_asset_source source;
+    const char **asset_roots;
+    int asset_root_count;
     const char **base_paths;
     int base_path_count;
     const char **frame_paths;
@@ -284,6 +307,7 @@ static void sprite_asset_manifest_free(sprite_asset_manifest *manifest)
     if (manifest == NULL)
         return;
 
+    SDL_free(manifest->asset_roots);
     SDL_free(manifest->base_paths);
     SDL_free(manifest->frame_paths);
     SDL_zero(*manifest);
@@ -399,7 +423,14 @@ static bool sprite_asset_manifest_parse(yyjson_val *root, sprite_asset_manifest 
     }
     else if (SDL_strcmp(kind, "files") == 0)
     {
+        yyjson_val *asset_roots = yyjson_obj_get(root, "asset_roots");
         manifest->source.kind = SDL3D_SPRITE_ASSET_SOURCE_FILES;
+        if (asset_roots != NULL)
+        {
+            if (!sprite_asset_manifest_read_string_array(asset_roots, &manifest->asset_roots,
+                                                         &manifest->asset_root_count, error_buffer, error_buffer_size))
+                return false;
+        }
         yyjson_val *base_paths = yyjson_obj_get(root, "base_paths");
         yyjson_val *frame_paths = yyjson_obj_get(root, "frame_paths");
         if (!sprite_asset_manifest_read_string_array(base_paths, &manifest->base_paths, &manifest->base_path_count,
@@ -565,6 +596,27 @@ bool sdl3d_sprite_asset_load_file(const char *path, sdl3d_sprite_asset_runtime *
 
     if (!sprite_asset_manifest_parse(yyjson_doc_get_root(doc), &manifest, error_buffer, error_buffer_size))
         goto done;
+
+    for (int i = 0; i < manifest.asset_root_count; ++i)
+    {
+        char *resolved_root = NULL;
+        const char *asset_root = manifest.asset_roots[i];
+        if (sprite_asset_path_is_absolute(asset_root))
+            resolved_root = SDL_strdup(asset_root);
+        else
+            resolved_root = sprite_asset_path_join(base_dir, asset_root);
+        if (resolved_root == NULL)
+        {
+            sprite_asset_set_error(error_buffer, error_buffer_size, "failed to resolve sprite manifest asset root");
+            goto done;
+        }
+        if (!sdl3d_asset_resolver_mount_directory(assets, resolved_root, error_buffer, error_buffer_size))
+        {
+            SDL_free(resolved_root);
+            goto done;
+        }
+        SDL_free(resolved_root);
+    }
 
     ok = sdl3d_sprite_asset_load(assets, &manifest.source, out_sprite, error_buffer, error_buffer_size);
     sprite_asset_manifest_free(&manifest);

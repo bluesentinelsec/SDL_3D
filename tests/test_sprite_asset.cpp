@@ -242,8 +242,9 @@ TEST(SpriteAsset, LoadsFromSpriteManifestFile)
                                                          {135, 145, 155, 255},
                                                          {165, 175, 185, 255}}};
     std::array<std::filesystem::path, 6> paths = {
-        dir / "sprites" / "base_south.png",  dir / "sprites" / "base_east.png",    dir / "sprites" / "walk_0_south.png",
-        dir / "sprites" / "walk_0_east.png", dir / "sprites" / "walk_1_south.png", dir / "sprites" / "walk_1_east.png",
+        dir / "media" / "sprites" / "base_south.png",   dir / "media" / "sprites" / "base_east.png",
+        dir / "media" / "sprites" / "walk_0_south.png", dir / "media" / "sprites" / "walk_0_east.png",
+        dir / "media" / "sprites" / "walk_1_south.png", dir / "media" / "sprites" / "walk_1_east.png",
     };
 
     for (size_t i = 0; i < paths.size(); ++i)
@@ -259,6 +260,9 @@ TEST(SpriteAsset, LoadsFromSpriteManifestFile)
     ASSERT_TRUE(write_text(manifest_path,
                            R"json({
   "kind": "files",
+  "asset_roots": [
+    "media"
+  ],
   "base_paths": [
     "sprites/base_south.png",
     "sprites/base_east.png"

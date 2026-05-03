@@ -92,7 +92,9 @@ extern "C"
      * sprite description model used by the game-data runtime. It is intended
      * for demos or tools that want data-authored sprite loading without
      * instantiating a full game-data runtime. Relative paths are resolved
-     * against the manifest directory.
+     * against the manifest directory, and optional `asset_roots` entries can
+     * mount additional filesystem roots for shared art without using `..`
+     * traversal in the authored sprite paths.
      */
     bool sdl3d_sprite_asset_load_file(const char *path, sdl3d_sprite_asset_runtime *out_sprite, char *error_buffer,
                                       int error_buffer_size);

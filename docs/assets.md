@@ -91,4 +91,7 @@ Standalone demo code can also load a small JSON manifest with
 `sdl3d_sprite_asset_load_file()`. That path uses the same runtime loader but
 keeps the sprite description outside the game-data runtime for demos that have
 not yet adopted a full `game.json` package. Relative asset paths in the
-manifest are resolved against the manifest directory.
+manifest are resolved against the manifest directory. If a manifest needs to
+reach shared art outside that directory, it may list additional filesystem
+roots in `asset_roots`; those roots are mounted before the sprite paths are
+resolved, so the authored sprite paths still stay free of `..` traversal.
