@@ -95,3 +95,8 @@ manifest are resolved against the manifest directory. If a manifest needs to
 reach shared art outside that directory, it may list additional filesystem
 roots in `asset_roots`; those roots are mounted before the sprite paths are
 resolved, so the authored sprite paths still stay free of `..` traversal.
+
+UI image assets may also be backed by a sprite asset id. The presentation layer
+loads the sprite through the same runtime helper and then caches the resulting
+texture for UI drawing, which keeps splash logos and other 2D art on the shared
+sprite path without adding an image-only special case.

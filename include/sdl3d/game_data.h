@@ -84,8 +84,10 @@ extern "C"
     {
         /** @brief Stable asset id, such as `image.logo`. */
         const char *id;
-        /** @brief Virtual or filesystem path to the image bytes. */
+        /** @brief Virtual or filesystem path to the image bytes, or NULL. */
         const char *path;
+        /** @brief Optional sprite asset id when the image is sprite-backed. */
+        const char *sprite;
     } sdl3d_game_data_image_asset;
 
     /** @brief Authored sound-effect asset descriptor. */

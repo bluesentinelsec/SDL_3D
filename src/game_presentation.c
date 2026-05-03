@@ -357,7 +357,52 @@ static sdl3d_texture2d *find_or_load_image(const sdl3d_game_data_runtime *runtim
         return NULL;
 
     sdl3d_game_data_image_asset asset;
-    if (!sdl3d_game_data_get_image_asset(runtime, image_id, &asset) || asset.path == NULL)
+    if (!sdl3d_game_data_get_image_asset(runtime, image_id, &asset))
+        return NULL;
+
+    if (asset.sprite != NULL)
+    {
+        sdl3d_sprite_asset_runtime sprite;
+        SDL_zero(sprite);
+        char error[256];
+        if (!sdl3d_game_data_load_sprite_asset(runtime, asset.sprite, &sprite, error, (int)sizeof(error)))
+        {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load sprite-backed UI image %s: %s", asset.sprite,
+                         error);
+            return NULL;
+        }
+
+        if (sprite.base_texture_count <= 0 || sprite.base_textures == NULL || sprite.base_textures[0].pixels == NULL ||
+            sprite.base_textures[0].width <= 0 || sprite.base_textures[0].height <= 0)
+        {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Sprite-backed UI image %s has no base texture", asset.sprite);
+            sdl3d_sprite_asset_free(&sprite);
+            return NULL;
+        }
+
+        sdl3d_image image;
+        SDL_zero(image);
+        image.pixels = sprite.base_textures[0].pixels;
+        image.width = sprite.base_textures[0].width;
+        image.height = sprite.base_textures[0].height;
+
+        sdl3d_game_data_image_cache_entry *entry = &cache->entries[cache->count];
+        SDL_zero(*entry);
+        entry->image_id = asset.id;
+        entry->loaded = sdl3d_create_texture_from_image(&image, &entry->texture);
+        sdl3d_sprite_asset_free(&sprite);
+        if (!entry->loaded)
+        {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create texture for sprite-backed UI image %s",
+                         asset.sprite);
+            return NULL;
+        }
+
+        ++cache->count;
+        return &entry->texture;
+    }
+
+    if (asset.path == NULL)
         return NULL;
 
     sdl3d_asset_buffer buffer;

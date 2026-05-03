@@ -678,6 +678,11 @@ directional animation sets without changing the authored JSON shape. The load
 path decodes the source once and keeps the runtime-owned textures alive until
 `sdl3d_sprite_asset_free()`.
 
+Image assets under `assets.images` may also point at a sprite asset through a
+`sprite` field. The UI presentation layer will realize that sprite into a
+cached texture and reuse the same sprite runtime path instead of a separate
+image-only loader.
+
 Performance note: sprite sheets are decoded and sliced during load, not per
 frame. For large sprite families, prefer a single authored sheet over many tiny
 source files so the loader does one decode and one texture allocation pass

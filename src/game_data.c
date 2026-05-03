@@ -2364,7 +2364,8 @@ bool sdl3d_game_data_get_image_asset(const sdl3d_game_data_runtime *runtime, con
 
     out_image->id = json_string(image, "id", NULL);
     out_image->path = json_string(image, "path", NULL);
-    return out_image->id != NULL && out_image->path != NULL;
+    out_image->sprite = json_string(image, "sprite", NULL);
+    return out_image->id != NULL && (out_image->path != NULL || out_image->sprite != NULL);
 }
 
 bool sdl3d_game_data_get_sound_asset(const sdl3d_game_data_runtime *runtime, const char *id,

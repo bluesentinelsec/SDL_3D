@@ -57,6 +57,7 @@ typedef struct validation_names
     name_table cameras;
     name_table fonts;
     name_table images;
+    name_table sprites;
     name_table sounds;
     name_table music;
     name_table scenes;
@@ -75,6 +76,8 @@ static bool require_unique_name(validation_context *ctx, name_table *table, cons
                                 const char *json_path);
 static bool require_ref(validation_context *ctx, const name_table *table, const char *kind, const char *name,
                         const char *json_path);
+static bool asset_path_exists(validation_context *ctx, const char *asset_path, const char *json_path,
+                              const char *asset_kind);
 static void format_path(char *buffer, size_t buffer_size, const char *format, ...);
 
 static yyjson_val *obj_get(yyjson_val *object, const char *key)
@@ -657,6 +660,31 @@ static bool collect_fonts(validation_context *ctx, yyjson_val *root, validation_
     return true;
 }
 
+static bool collect_sprite_assets(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *sprites = obj_get(obj_get(root, "assets"), "sprites");
+    if (sprites == NULL)
+        return true;
+    if (!yyjson_is_arr(sprites))
+        return validation_error(ctx, "$.assets.sprites", "sprite assets must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(sprites); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.assets.sprites[%zu]", i);
+        yyjson_val *sprite = yyjson_arr_get(sprites, i);
+        if (!yyjson_is_obj(sprite))
+            return validation_error(ctx, path, "sprite asset entries must be objects");
+        if (!require_unique_name(ctx, &names->sprites, "sprite asset", json_string(sprite, "id"), path))
+            return false;
+        if (!is_non_empty_string(sprite, "path"))
+            return validation_error(ctx, path, "sprite asset requires a non-empty path");
+        if (!asset_path_exists(ctx, json_string(sprite, "path"), path, "sprite"))
+            return false;
+    }
+    return true;
+}
+
 static bool collect_images(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *images = obj_get(obj_get(root, "assets"), "images");
@@ -674,12 +702,16 @@ static bool collect_images(validation_context *ctx, yyjson_val *root, validation
             return validation_error(ctx, path, "image asset entries must be objects");
         if (!require_unique_name(ctx, &names->images, "image asset", json_string(image, "id"), path))
             return false;
-        if (!is_non_empty_string(image, "path"))
-            return validation_error(ctx, path, "image asset requires a non-empty path");
+        const char *image_path = json_string(image, "path");
+        const char *sprite_id = json_string(image, "sprite");
+        if (!is_non_empty_string(image, "path") && !is_non_empty_string(image, "sprite"))
+            return validation_error(ctx, path, "image asset requires path or sprite");
 
-        if (ctx->assets != NULL)
+        if (sprite_id != NULL && !require_ref(ctx, &names->sprites, "sprite asset", sprite_id, path))
+            return false;
+
+        if (ctx->assets != NULL && image_path != NULL)
         {
-            const char *image_path = json_string(image, "path");
             char *resolved = image_path != NULL && SDL_strncmp(image_path, "asset://", 8) == 0
                                  ? SDL_strdup(image_path)
                                  : path_join(ctx->base_dir, image_path);
@@ -932,9 +964,9 @@ static bool collect_names(validation_context *ctx, yyjson_val *root, validation_
     return collect_signals(ctx, root, names) && collect_entities(ctx, root, names) &&
            collect_scripts(ctx, root, names) && collect_adapters(ctx, root, names) &&
            collect_input_actions(ctx, root, names) && collect_cameras(ctx, root, names) &&
-           collect_fonts(ctx, root, names) && collect_images(ctx, root, names) &&
-           collect_audio_assets(ctx, root, names) && collect_timers(ctx, root, names) &&
-           collect_sensors(ctx, root, names);
+           collect_fonts(ctx, root, names) && collect_sprite_assets(ctx, root, names) &&
+           collect_images(ctx, root, names) && collect_audio_assets(ctx, root, names) &&
+           collect_timers(ctx, root, names) && collect_sensors(ctx, root, names);
 }
 
 static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)

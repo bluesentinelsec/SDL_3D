@@ -1317,7 +1317,20 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
 
     sdl3d_game_data_image_asset image_asset{};
     ASSERT_TRUE(sdl3d_game_data_get_image_asset(runtime, "image.splash.logo", &image_asset));
-    EXPECT_STREQ(image_asset.path, "asset://images/splash-logo.jpg");
+    EXPECT_STREQ(image_asset.sprite, "sprite.splash.logo");
+    EXPECT_EQ(image_asset.path, nullptr);
+
+    sdl3d_game_data_sprite_asset sprite_asset{};
+    ASSERT_TRUE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.splash.logo", &sprite_asset));
+    EXPECT_STREQ(sprite_asset.path, "asset://images/splash-logo.jpg");
+    EXPECT_EQ(sprite_asset.frame_width, 784);
+    EXPECT_EQ(sprite_asset.frame_height, 1168);
+    EXPECT_EQ(sprite_asset.columns, 1);
+    EXPECT_EQ(sprite_asset.rows, 1);
+    EXPECT_EQ(sprite_asset.frame_count, 1);
+    EXPECT_EQ(sprite_asset.direction_count, 1);
+    EXPECT_FALSE(sprite_asset.loop);
+    EXPECT_FALSE(sprite_asset.lighting);
 
     sdl3d_game_data_sound_asset sound_asset{};
     ASSERT_TRUE(sdl3d_game_data_get_sound_asset(runtime, "sound.pong.hit", &sound_asset));

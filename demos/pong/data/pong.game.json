@@ -466,10 +466,27 @@
         "size": 96
       }
     ],
+    "sprites": [
+      {
+        "id": "sprite.splash.logo",
+        "path": "asset://images/splash-logo.jpg",
+        "frame_width": 784,
+        "frame_height": 1168,
+        "columns": 1,
+        "rows": 1,
+        "frame_count": 1,
+        "direction_count": 1,
+        "fps": 1.0,
+        "loop": false,
+        "lighting": false,
+        "emissive": false,
+        "visual_ground_offset": 0.0
+      }
+    ],
     "images": [
       {
         "id": "image.splash.logo",
-        "path": "asset://images/splash-logo.jpg"
+        "sprite": "sprite.splash.logo"
       }
     ],
     "sounds": [
