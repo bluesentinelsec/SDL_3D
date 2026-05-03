@@ -332,6 +332,12 @@ submenus that should share one scene, camera, background, and transition state:
 
 This keeps title/options/menu screens data-authored: the input menu defines
 choices and actions, while the UI presenter defines how the choices are laid out.
+Scene UI images may also author a generic `effect` and `effect_speed`. The
+first supported effect is `melt`, which is applied during overlay rendering on
+both software and GL backends. `effect_speed` controls how quickly the effect
+advances in presentation time. Because the effect is driven by the reusable
+overlay pipeline, it works for any authored UI image, including sprite-backed
+logos and menu art.
 Menu items can also author generic settings controls and emit data-authored signals when a value changes:
 
 ```json

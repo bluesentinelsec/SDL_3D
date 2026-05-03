@@ -68,7 +68,9 @@
         "preserve_aspect": true,
         "align": "center",
         "valign": "center",
-        "color": [255, 255, 255, 255]
+        "color": [255, 255, 255, 255],
+        "effect": "melt",
+        "effect_speed": 0.85
       }
     ],
     "text": []

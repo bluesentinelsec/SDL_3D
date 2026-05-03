@@ -77,6 +77,12 @@ extern "C"
         SDL3D_BILLBOARD_SPHERICAL = 1
     } sdl3d_billboard_mode;
 
+    typedef enum sdl3d_overlay_effect
+    {
+        SDL3D_OVERLAY_EFFECT_NONE = 0,
+        SDL3D_OVERLAY_EFFECT_MELT = 1
+    } sdl3d_overlay_effect;
+
     /*
      * Draw a textured camera-facing quad. `position` is the billboard pivot
      * in world space, `size` is width/height in world units, and `anchor`
@@ -154,7 +160,9 @@ extern "C"
      *
      * Coordinates are in logical render-context pixels with (0, 0) at the
      * top-left. The texture is sampled across the full rectangle and modulated
-     * by @p tint. The current scissor rect, when enabled, is honored.
+     * by @p tint. @p effect, when not SDL3D_OVERLAY_EFFECT_NONE, applies a
+     * reusable screen-space image effect before sampling. The current scissor
+     * rect, when enabled, is honored.
      *
      * @param context Render context receiving the overlay draw.
      * @param texture RGBA texture to draw.
@@ -163,10 +171,14 @@ extern "C"
      * @param w Width in render-context pixels.
      * @param h Height in render-context pixels.
      * @param tint Color multiplier and alpha applied to the texture.
+     * @param effect Optional overlay effect.
+     * @param effect_progress Normalized effect progression in [0, 1].
+     * @param effect_seed Deterministic seed used by the effect shader.
      * @return true on success.
      */
     bool sdl3d_draw_texture_overlay(sdl3d_render_context *context, const sdl3d_texture2d *texture, float x, float y,
-                                    float w, float h, sdl3d_color tint);
+                                    float w, float h, sdl3d_color tint, sdl3d_overlay_effect effect,
+                                    float effect_progress, Uint32 effect_seed);
 
     /*
      * Read a single pixel from the color backbuffer. Returns false if x or y

@@ -290,11 +290,13 @@ extern "C"
      * @brief Draw authored UI images for the active scene.
      *
      * Images are loaded lazily through @p image_cache and drawn on SDL3D's
-     * overlay path after world rendering.
+     * overlay path after world rendering. @p render_eval supplies the current
+     * presentation time for authored UI image effects such as `melt`.
      */
     bool sdl3d_game_data_draw_ui_images(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
                                         sdl3d_game_data_image_cache *image_cache,
-                                        const sdl3d_game_data_ui_metrics *metrics);
+                                        const sdl3d_game_data_ui_metrics *metrics,
+                                        const sdl3d_game_data_render_eval *render_eval);
 
     /**
      * @brief Initialize a particle emitter cache.

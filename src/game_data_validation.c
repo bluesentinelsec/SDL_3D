@@ -2532,6 +2532,12 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
             return validation_error(ctx, image_path, "scene UI image requires a non-empty name");
         if (!require_ref(ctx, &names->images, "image asset", json_string(image, "image"), image_path))
             return false;
+        const char *effect = json_string(image, "effect");
+        if (effect != NULL && effect[0] != '\0' && SDL_strcasecmp(effect, "melt") != 0)
+            return validation_error(ctx, image_path, "unsupported scene UI image effect '%s'", effect);
+        yyjson_val *effect_speed = obj_get(image, "effect_speed");
+        if (yyjson_is_num(effect_speed) && (float)yyjson_get_real(effect_speed) < 0.0f)
+            return validation_error(ctx, image_path, "scene UI image effect_speed must be non-negative");
         char condition_path[PATH_BUFFER_SIZE];
         format_path(condition_path, sizeof(condition_path), "%s.visible_if", image_path);
         if (!validate_scene_ui_condition(ctx, obj_get(image, "visible_if"), condition_path, names))

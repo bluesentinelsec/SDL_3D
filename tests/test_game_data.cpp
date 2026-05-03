@@ -1762,6 +1762,8 @@ TEST(GameDataRuntime, ResolvesRuntimeUiStateForTextAndImages)
     std::pair<sdl3d_game_data_ui_image *, bool *> logo_args{&logo, &saw_logo};
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_image(runtime, find_logo, &logo_args));
     ASSERT_TRUE(saw_logo);
+    EXPECT_STREQ(logo.effect, "melt");
+    EXPECT_NEAR(logo.effect_speed, 0.85f, 0.0001f);
 
     sdl3d_game_data_ui_state image_state{};
     sdl3d_game_data_ui_state_init(&image_state);
@@ -1790,6 +1792,8 @@ TEST(GameDataRuntime, ResolvesRuntimeUiStateForTextAndImages)
     EXPECT_EQ(resolved_logo.color.g, 64);
     EXPECT_EQ(resolved_logo.color.b, 255);
     EXPECT_EQ(resolved_logo.color.a, 50);
+    EXPECT_STREQ(resolved_logo.effect, "melt");
+    EXPECT_NEAR(resolved_logo.effect_speed, 0.85f, 0.0001f);
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
 

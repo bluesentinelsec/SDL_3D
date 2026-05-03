@@ -706,7 +706,7 @@ bool sdl3d_draw_text_overlay_scaled(struct sdl3d_render_context *context, const 
     }
 
     bool ok = sdl3d_gl_append_overlay(context->gl, positions, uvs, vi, mvp, tint, &font->atlas_texture, scissor_enabled,
-                                      scissor_enabled ? &scissor_rect : NULL);
+                                      scissor_enabled ? &scissor_rect : NULL, SDL3D_OVERLAY_EFFECT_NONE, 0.0f, 0u);
     SDL_free(positions);
     SDL_free(uvs);
     return ok;

@@ -34,8 +34,31 @@ typedef struct ui_image_draw_context
     sdl3d_render_context *renderer;
     sdl3d_game_data_image_cache *image_cache;
     const sdl3d_game_data_ui_metrics *metrics;
+    const sdl3d_game_data_render_eval *render_eval;
     bool ok;
 } ui_image_draw_context;
+
+static Uint32 ui_image_hash_string(const char *s)
+{
+    Uint32 h = 2166136261u;
+    if (s == NULL)
+        return h;
+    for (const unsigned char *p = (const unsigned char *)s; *p != '\0'; ++p)
+    {
+        h ^= (Uint32)(*p);
+        h *= 16777619u;
+    }
+    return h != 0u ? h : 1u;
+}
+
+static sdl3d_overlay_effect ui_image_effect_from_name(const char *effect)
+{
+    if (effect == NULL)
+        return SDL3D_OVERLAY_EFFECT_NONE;
+    if (SDL_strcasecmp(effect, "melt") == 0)
+        return SDL3D_OVERLAY_EFFECT_MELT;
+    return SDL3D_OVERLAY_EFFECT_NONE;
+}
 
 typedef struct particle_update_context
 {
@@ -603,7 +626,13 @@ static bool draw_ui_image(void *userdata, const sdl3d_game_data_ui_image *image)
     float w = 0.0f;
     float h = 0.0f;
     resolve_ui_image_rect(&resolved, texture, width, height, &x, &y, &w, &h);
-    if (!sdl3d_draw_texture_overlay(draw->renderer, texture, x, y, w, h, resolved.color))
+    const sdl3d_overlay_effect effect = ui_image_effect_from_name(resolved.effect);
+    const float effect_progress = effect != SDL3D_OVERLAY_EFFECT_NONE && draw->render_eval != NULL
+                                      ? SDL_clamp(draw->render_eval->time * resolved.effect_speed, 0.0f, 1.0f)
+                                      : 0.0f;
+    const Uint32 effect_seed = ui_image_hash_string(resolved.name);
+    if (!sdl3d_draw_texture_overlay(draw->renderer, texture, x, y, w, h, resolved.color, effect, effect_progress,
+                                    effect_seed))
         draw->ok = false;
     return true;
 }
@@ -708,7 +737,8 @@ bool sdl3d_game_data_draw_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_
 }
 
 bool sdl3d_game_data_draw_ui_images(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
-                                    sdl3d_game_data_image_cache *image_cache, const sdl3d_game_data_ui_metrics *metrics)
+                                    sdl3d_game_data_image_cache *image_cache, const sdl3d_game_data_ui_metrics *metrics,
+                                    const sdl3d_game_data_render_eval *render_eval)
 {
     if (runtime == NULL || renderer == NULL || image_cache == NULL)
         return false;
@@ -719,6 +749,7 @@ bool sdl3d_game_data_draw_ui_images(const sdl3d_game_data_runtime *runtime, sdl3
     context.renderer = renderer;
     context.image_cache = image_cache;
     context.metrics = metrics;
+    context.render_eval = render_eval;
     context.ok = true;
 
     return sdl3d_game_data_for_each_ui_image(runtime, draw_ui_image, &context) && context.ok;
@@ -1655,7 +1686,9 @@ bool sdl3d_game_data_draw_frame(const sdl3d_game_data_frame_desc *frame)
 
     ok = run_frame_hook(frame, frame->before_ui) && ok;
     if (frame->image_cache != NULL)
-        ok = sdl3d_game_data_draw_ui_images(frame->runtime, frame->renderer, frame->image_cache, frame->metrics) && ok;
+        ok = sdl3d_game_data_draw_ui_images(frame->runtime, frame->renderer, frame->image_cache, frame->metrics,
+                                            frame->render_eval) &&
+             ok;
     if (frame->font_cache != NULL)
     {
         ok = sdl3d_game_data_draw_ui_text(frame->runtime, frame->renderer, frame->font_cache, frame->metrics,

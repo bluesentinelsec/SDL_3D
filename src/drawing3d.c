@@ -39,6 +39,41 @@ static Uint8 sdl3d_color_channel_clamp(float value)
     return (Uint8)(value + 0.5f);
 }
 
+static float sdl3d_overlay_melt_column_random(Uint32 seed, int column)
+{
+    Uint32 x = seed ^ (Uint32)column * 0x9E3779B9u;
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return (float)x / 4294967295.0f;
+}
+
+static bool sdl3d_overlay_melt_sample(float u, float v, float progress, Uint32 seed, int columns, float *out_u,
+                                      float *out_v)
+{
+    if (out_u == NULL || out_v == NULL)
+    {
+        return false;
+    }
+    if (columns <= 0)
+    {
+        columns = 1;
+    }
+
+    const int column = SDL_clamp((int)(u * (float)columns), 0, columns - 1);
+    const float rnd = sdl3d_overlay_melt_column_random(seed, column);
+    const float delay = rnd * 0.45f;
+    const float melt = sdl3d_clamp01((progress - delay) / 0.55f);
+    const float wobble = (rnd - 0.5f) * 0.025f * melt;
+    const float y_shift = melt * (1.05f + rnd * 0.6f);
+
+    *out_u = u + wobble;
+    *out_v = v - y_shift;
+    return true;
+}
+
 static sdl3d_vec4 sdl3d_color_to_modulate(sdl3d_color color)
 {
     sdl3d_vec4 out;
@@ -1859,7 +1894,7 @@ bool sdl3d_draw_rect_overlay(sdl3d_render_context *context, float x, float y, fl
     mvp[15] = 1.0f;
 
     return sdl3d_gl_append_overlay(context->gl, positions, uvs, 6, mvp, tint, NULL, scissor_enabled,
-                                   scissor_enabled ? &scissor_rect : NULL);
+                                   scissor_enabled ? &scissor_rect : NULL, SDL3D_OVERLAY_EFFECT_NONE, 0.0f, 0u);
 }
 
 static Uint8 overlay_to_u8(float value)
@@ -1905,7 +1940,8 @@ static void overlay_blend_pixel(Uint8 *pixel, sdl3d_color color)
 
 static bool draw_texture_overlay_software(sdl3d_render_context *context, const sdl3d_texture2d *texture, float x,
                                           float y, float w, float h, sdl3d_color tint, bool scissor_enabled,
-                                          const SDL_Rect *scissor_rect)
+                                          const SDL_Rect *scissor_rect, sdl3d_overlay_effect effect,
+                                          float effect_progress, Uint32 effect_seed)
 {
     SDL_Rect rect = {(int)x, (int)y, (int)w, (int)h};
     rect = sdl3d_rect_overlay_intersect_scissor(rect, scissor_enabled, scissor_rect);
@@ -1916,6 +1952,7 @@ static bool draw_texture_overlay_software(sdl3d_render_context *context, const s
 
     const float inv_w = 1.0f / w;
     const float inv_h = 1.0f / h;
+    const int columns = SDL_max(24, texture->width / 16);
     for (int py = rect.y; py < rect.y + rect.h; ++py)
     {
         for (int px = rect.x; px < rect.x + rect.w; ++px)
@@ -1924,8 +1961,23 @@ static bool draw_texture_overlay_software(sdl3d_render_context *context, const s
             float g = 0.0f;
             float b = 0.0f;
             float a = 0.0f;
-            const float u = ((float)px + 0.5f - x) * inv_w;
-            const float v = ((float)py + 0.5f - y) * inv_h;
+            float u = ((float)px + 0.5f - x) * inv_w;
+            float v = ((float)py + 0.5f - y) * inv_h;
+            if (effect == SDL3D_OVERLAY_EFFECT_MELT)
+            {
+                float melt_u = u;
+                float melt_v = v;
+                if (!sdl3d_overlay_melt_sample(u, v, effect_progress, effect_seed, columns, &melt_u, &melt_v))
+                {
+                    continue;
+                }
+                u = melt_u;
+                v = melt_v;
+                if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f)
+                {
+                    continue;
+                }
+            }
             sdl3d_texture_sample_rgba(texture, u, v, 0.0f, &r, &g, &b, &a);
             const sdl3d_color color = {
                 overlay_to_u8(r * ((float)tint.r / 255.0f)),
@@ -1940,7 +1992,8 @@ static bool draw_texture_overlay_software(sdl3d_render_context *context, const s
 }
 
 bool sdl3d_draw_texture_overlay(sdl3d_render_context *context, const sdl3d_texture2d *texture, float x, float y,
-                                float w, float h, sdl3d_color tint)
+                                float w, float h, sdl3d_color tint, sdl3d_overlay_effect effect, float effect_progress,
+                                Uint32 effect_seed)
 {
     SDL_Rect scissor_rect = {0, 0, 0, 0};
     bool scissor_enabled = false;
@@ -1969,7 +2022,8 @@ bool sdl3d_draw_texture_overlay(sdl3d_render_context *context, const sdl3d_textu
 
     if (!context->gl)
     {
-        return draw_texture_overlay_software(context, texture, x, y, w, h, tint, scissor_enabled, &scissor_rect);
+        return draw_texture_overlay_software(context, texture, x, y, w, h, tint, scissor_enabled, &scissor_rect, effect,
+                                             effect_progress, effect_seed);
     }
 
     const int ctx_w = sdl3d_get_render_context_width(context);
@@ -2001,7 +2055,7 @@ bool sdl3d_draw_texture_overlay(sdl3d_render_context *context, const sdl3d_textu
     mvp[15] = 1.0f;
 
     return sdl3d_gl_append_overlay(context->gl, positions, uvs, 6, mvp, gl_tint, texture, scissor_enabled,
-                                   scissor_enabled ? &scissor_rect : NULL);
+                                   scissor_enabled ? &scissor_rect : NULL, effect, effect_progress, effect_seed);
 }
 
 bool sdl3d_get_framebuffer_pixel(const sdl3d_render_context *context, int x, int y, sdl3d_color *out_color)

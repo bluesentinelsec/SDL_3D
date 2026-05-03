@@ -92,6 +92,10 @@ typedef struct sdl3d_overlay_entry
     int vertex_count;
     float mvp[16];
     float tint[4];
+    sdl3d_overlay_effect effect;
+    float effect_progress;
+    float effect_seed;
+    float effect_columns;
     bool scissor_enabled;
     SDL_Rect scissor_rect;
     int atlas_index; /* index into overlay_atlases */
@@ -188,6 +192,10 @@ struct sdl3d_gl_context
     GLint unlit_texture_loc;
     GLint unlit_has_texture_loc;
     GLint unlit_tint_loc;
+    GLint unlit_overlay_effect_loc;
+    GLint unlit_overlay_effect_progress_loc;
+    GLint unlit_overlay_effect_seed_loc;
+    GLint unlit_overlay_effect_columns_loc;
 
     /* Copy uniform locations */
     GLint copy_texture_loc;
@@ -679,11 +687,30 @@ static const char k_unlit_frag[] = "in vec2 vTexCoord;\n"
                                    "uniform sampler2D uTexture;\n"
                                    "uniform int uHasTexture;\n"
                                    "uniform vec4 uTint;\n"
+                                   "uniform int uOverlayEffect;\n"
+                                   "uniform float uOverlayEffectProgress;\n"
+                                   "uniform float uOverlayEffectSeed;\n"
+                                   "uniform float uOverlayEffectColumns;\n"
                                    "\n"
                                    "out vec4 fragColor;\n"
                                    "\n"
+                                   "float overlayHash(float n) {\n"
+                                   "    return fract(sin(n) * 43758.5453123);\n"
+                                   "}\n"
+                                   "\n"
                                    "void main() {\n"
                                    "    vec2 uv = vTexCoord;\n"
+                                   "    if (uOverlayEffect == 1) {\n"
+                                   "        float columns = max(uOverlayEffectColumns, 1.0);\n"
+                                   "        float column = floor(clamp(uv.x, 0.0, 0.999999) * columns);\n"
+                                   "        float rnd = overlayHash(column + uOverlayEffectSeed);\n"
+                                   "        float delay = rnd * 0.45;\n"
+                                   "        float melt = clamp((uOverlayEffectProgress - delay) / 0.55, 0.0, 1.0);\n"
+                                   "        float wobble = (rnd - 0.5) * 0.025 * melt;\n"
+                                   "        float yShift = melt * (1.05 + rnd * 0.6);\n"
+                                   "        uv = vec2(uv.x + wobble, uv.y - yShift);\n"
+                                   "        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) discard;\n"
+                                   "    }\n"
                                    "    vec4 texel = (uHasTexture != 0) ? texture(uTexture, uv) : vec4(1.0);\n"
                                    "    fragColor = texel * vColor * uTint;\n"
                                    "    if (fragColor.a <= 0.0) discard;\n"
@@ -1347,7 +1374,8 @@ static float *copy_floats(const float *src, size_t count);
 
 bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, const float *uvs, int vertex_count,
                              const float *mvp, const float *tint, const sdl3d_texture2d *texture, bool scissor_enabled,
-                             const SDL_Rect *scissor_rect)
+                             const SDL_Rect *scissor_rect, sdl3d_overlay_effect effect, float effect_progress,
+                             Uint32 effect_seed)
 {
     sdl3d_gl_funcs *gl = &ctx->gl;
 
@@ -1423,6 +1451,10 @@ bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, cons
     e->scissor_enabled = scissor_enabled;
     e->scissor_rect = scissor_rect ? *scissor_rect : (SDL_Rect){0, 0, 0, 0};
     e->atlas_index = atlas_idx;
+    e->effect = effect;
+    e->effect_progress = effect_progress;
+    e->effect_seed = (float)effect_seed * (1.0f / 4294967295.0f);
+    e->effect_columns = texture != NULL ? (float)SDL_max(24, texture->width / 16) : 1.0f;
     return true;
 }
 
@@ -2634,6 +2666,10 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->unlit_texture_loc = gl->GetUniformLocation(ctx->unlit_program, "uTexture");
     ctx->unlit_has_texture_loc = gl->GetUniformLocation(ctx->unlit_program, "uHasTexture");
     ctx->unlit_tint_loc = gl->GetUniformLocation(ctx->unlit_program, "uTint");
+    ctx->unlit_overlay_effect_loc = gl->GetUniformLocation(ctx->unlit_program, "uOverlayEffect");
+    ctx->unlit_overlay_effect_progress_loc = gl->GetUniformLocation(ctx->unlit_program, "uOverlayEffectProgress");
+    ctx->unlit_overlay_effect_seed_loc = gl->GetUniformLocation(ctx->unlit_program, "uOverlayEffectSeed");
+    ctx->unlit_overlay_effect_columns_loc = gl->GetUniformLocation(ctx->unlit_program, "uOverlayEffectColumns");
 
     /* Copy uniform locations. */
     ctx->copy_texture_loc = gl->GetUniformLocation(ctx->copy_program, "uScene");
@@ -3239,6 +3275,10 @@ static void replay_overlay_list(sdl3d_gl_context *ctx, int vp_x, int vp_y, int v
         gl->UseProgram(ctx->unlit_program);
         gl->UniformMatrix4fv(ctx->unlit_mvp_loc, 1, GL_FALSE, e->mvp);
         gl->Uniform4f(ctx->unlit_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
+        gl->Uniform1i(ctx->unlit_overlay_effect_loc, (int)e->effect);
+        gl->Uniform1f(ctx->unlit_overlay_effect_progress_loc, e->effect_progress);
+        gl->Uniform1f(ctx->unlit_overlay_effect_seed_loc, e->effect_seed);
+        gl->Uniform1f(ctx->unlit_overlay_effect_columns_loc, e->effect_columns);
         if (e->atlas_index >= 0)
         {
             gl->ActiveTexture(GL_TEXTURE0);

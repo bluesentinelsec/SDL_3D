@@ -339,6 +339,10 @@ extern "C"
         float scale;
         /** @brief Image tint color. */
         sdl3d_color color;
+        /** @brief Optional UI image effect id, such as `melt`. */
+        const char *effect;
+        /** @brief Effect progression speed in effect-seconds per second. */
+        float effect_speed;
     } sdl3d_game_data_ui_image;
 
     /** @brief Bit flags indicating which runtime UI state fields override authored descriptor values. */

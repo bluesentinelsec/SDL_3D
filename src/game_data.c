@@ -1700,6 +1700,15 @@ static sdl3d_game_data_ui_valign parse_ui_valign(const char *value, sdl3d_game_d
     return fallback;
 }
 
+static const char *parse_ui_image_effect(const char *value)
+{
+    if (value == NULL || value[0] == '\0')
+        return NULL;
+    if (SDL_strcasecmp(value, "melt") == 0)
+        return "melt";
+    return value;
+}
+
 static int axis_index(const char *axis)
 {
     if (axis == NULL)
@@ -4964,6 +4973,8 @@ static void ui_image_from_json(yyjson_val *item, sdl3d_game_data_ui_image *image
     image->valign = parse_ui_valign(json_string(item, "valign", NULL), SDL3D_GAME_DATA_UI_VALIGN_TOP);
     image->scale = json_float(item, "scale", 1.0f);
     image->color = json_color(item, "color", (sdl3d_color){255, 255, 255, 255});
+    image->effect = parse_ui_image_effect(json_string(item, "effect", NULL));
+    image->effect_speed = json_float(item, "effect_speed", 1.0f);
 }
 
 static bool for_each_authored_ui_image_root(yyjson_val *root, sdl3d_game_data_ui_image_fn callback, void *userdata)
