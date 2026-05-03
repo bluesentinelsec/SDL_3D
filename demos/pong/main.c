@@ -53,7 +53,6 @@ typedef struct pong_state
     int discovery_refresh_signal_id;
     int discovery_refresh_connection;
     int local_input_gamepad_count;
-    int discovery_selected_index;
 } pong_state;
 
 typedef enum pong_network_message_kind
@@ -1203,7 +1202,6 @@ static bool start_discovery_session(pong_state *state)
 
     if (state->discovery_session != NULL)
     {
-        state->discovery_selected_index = 0;
         return sdl3d_network_discovery_session_refresh(state->discovery_session);
     }
 
@@ -1220,7 +1218,6 @@ static bool start_discovery_session(pong_state *state)
 
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong LAN discovery scanner ready for UDP %u",
                 (unsigned int)SDL3D_NETWORK_DEFAULT_PORT);
-    state->discovery_selected_index = 0;
     return sdl3d_network_discovery_session_refresh(state->discovery_session);
 }
 
@@ -1243,7 +1240,6 @@ static void update_discovery_scene_state(pong_state *state)
     }
 
     sdl3d_properties_set_int(scene_state, "multiplayer_discovery_count", result_count);
-    sdl3d_properties_set_int(scene_state, "multiplayer_discovery_selected", state->discovery_selected_index);
     sdl3d_properties_set_string(
         scene_state, "multiplayer_discovery_status",
         state->discovery_session != NULL ? sdl3d_network_discovery_session_status(state->discovery_session) : "Idle");
@@ -1316,33 +1312,35 @@ static bool refresh_discovery_session(pong_state *state)
     return true;
 }
 
-static void handle_discovery_result_selection(pong_state *state, int index)
+static bool start_discovered_match_connection(pong_state *state, int index)
 {
     sdl3d_network_discovery_result result;
     char port_buffer[16];
 
     if (state == NULL || state->discovery_session == NULL)
     {
-        return;
+        return false;
     }
 
     SDL_zero(result);
     if (!sdl3d_network_discovery_session_get_result(state->discovery_session, index, &result))
     {
-        return;
+        return false;
     }
 
     SDL_strlcpy(state->direct_connect_host, result.host, sizeof(state->direct_connect_host));
     SDL_snprintf(port_buffer, sizeof(port_buffer), "%u", (unsigned int)result.port);
     SDL_strlcpy(state->direct_connect_port, port_buffer, sizeof(state->direct_connect_port));
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong LAN discovery selected result %d: %s:%u session=%s", index,
-                result.host, (unsigned int)result.port,
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong LAN discovery auto-connecting to result %d: %s:%u session=%s",
+                index, result.host, (unsigned int)result.port,
                 result.session_name[0] != '\0' ? result.session_name : "SDL3D Session");
     destroy_discovery_session(state);
-    if (start_direct_connect_session(state))
+    if (!start_direct_connect_session(state))
     {
-        (void)sdl3d_game_data_set_active_scene(state->data, "scene.multiplayer.direct_connect");
+        return false;
     }
+    SDL_snprintf(state->direct_connect_status, sizeof(state->direct_connect_status), "Match found. Connecting...");
+    return true;
 }
 
 static void emit_pong_signal_by_name(sdl3d_game_context *ctx, pong_state *state, const char *signal_name)
@@ -1364,42 +1362,13 @@ static void update_discovery_controls(sdl3d_game_context *ctx, pong_state *state
         return;
     }
 
-    const int result_count =
-        state->discovery_session != NULL ? sdl3d_network_discovery_session_result_count(state->discovery_session) : 0;
-    if (result_count <= 0)
-    {
-        state->discovery_selected_index = 0;
-    }
-    else
-    {
-        state->discovery_selected_index = SDL_clamp(state->discovery_selected_index, 0, result_count - 1);
-    }
-
-    const int up_action = sdl3d_game_data_find_action(state->data, "action.menu.up");
-    const int down_action = sdl3d_game_data_find_action(state->data, "action.menu.down");
-    const int select_action = sdl3d_game_data_find_action(state->data, "action.menu.select");
     const int back_action = sdl3d_game_data_find_action(state->data, "action.menu.back");
 
-    if (result_count > 1 && up_action >= 0 && sdl3d_input_is_pressed(state->input, up_action))
-    {
-        state->discovery_selected_index = (state->discovery_selected_index + result_count - 1) % result_count;
-        emit_pong_signal_by_name(ctx, state, "signal.ui.menu.move");
-    }
-    if (result_count > 1 && down_action >= 0 && sdl3d_input_is_pressed(state->input, down_action))
-    {
-        state->discovery_selected_index = (state->discovery_selected_index + 1) % result_count;
-        emit_pong_signal_by_name(ctx, state, "signal.ui.menu.move");
-    }
-    if (result_count > 0 && select_action >= 0 && sdl3d_input_is_pressed(state->input, select_action))
-    {
-        emit_pong_signal_by_name(ctx, state, "signal.ui.menu.select");
-        handle_discovery_result_selection(state, state->discovery_selected_index);
-        return;
-    }
     if (back_action >= 0 && sdl3d_input_is_pressed(state->input, back_action))
     {
         emit_pong_signal_by_name(ctx, state, "signal.ui.menu.select");
         destroy_discovery_session(state);
+        destroy_direct_connect_session(state);
         (void)sdl3d_game_data_set_active_scene(state->data, "scene.multiplayer.join");
     }
 }
@@ -1437,43 +1406,36 @@ static void draw_discovery_overlay(sdl3d_game_context *ctx, pong_state *state)
             sdl3d_ui_layout_label(state->discovery_ui, status);
         }
     }
-
-    for (int i = 0; i < result_count; ++i)
+    else if (state->direct_connect_session != NULL)
     {
-        sdl3d_network_discovery_result result;
-        char label[SDL3D_NETWORK_MAX_STATUS_LENGTH + SDL3D_NETWORK_MAX_HOST_LENGTH + 32];
-        char button_label[sizeof(label) + 32];
-        if (!sdl3d_network_discovery_session_get_result(state->discovery_session, i, &result))
+        if (sdl3d_network_session_is_connected(state->direct_connect_session))
         {
-            continue;
+            sdl3d_ui_layout_label(state->discovery_ui, "Connected. Waiting for host to start...");
         }
-
-        SDL_snprintf(label, sizeof(label), "%s  %s:%u%s%s",
-                     result.session_name[0] != '\0' ? result.session_name : "SDL3D Session", result.host,
-                     (unsigned int)result.port, result.status[0] != '\0' ? "  " : "",
-                     result.status[0] != '\0' ? result.status : "");
-        SDL_snprintf(button_label, sizeof(button_label), "%s%s##discovery_%d",
-                     i == state->discovery_selected_index ? "> " : "  ", label, i);
-        if (sdl3d_ui_layout_button(state->discovery_ui, button_label))
+        else
         {
-            handle_discovery_result_selection(state, i);
-            break;
+            sdl3d_ui_layout_label(state->discovery_ui, state->direct_connect_status);
         }
     }
 
-    if (result_count == 0)
+    if (state->direct_connect_session != NULL)
+    {
+        sdl3d_ui_layout_label(state->discovery_ui, "The host will start the match.");
+    }
+    else if (result_count == 0)
     {
         sdl3d_ui_layout_label(state->discovery_ui, "Searching local network...");
     }
     else
     {
-        sdl3d_ui_layout_label(state->discovery_ui, "Press Enter / A to join the selected match.");
+        sdl3d_ui_layout_label(state->discovery_ui, "Match found. Connecting...");
     }
 
     sdl3d_ui_separator(state->discovery_ui);
     if (sdl3d_ui_layout_button(state->discovery_ui, "Back"))
     {
         destroy_discovery_session(state);
+        destroy_direct_connect_session(state);
         (void)sdl3d_game_data_set_active_scene(state->data, "scene.multiplayer.join");
     }
 
@@ -1546,7 +1508,7 @@ static void update_multiplayer_sessions(pong_state *state, float dt)
         update_host_session_scene_state(state);
     }
 
-    if (is_multiplayer_discovery_scene(state))
+    if (is_multiplayer_discovery_scene(state) && state->direct_connect_session == NULL)
     {
         if (state->discovery_session == NULL)
         {
@@ -1559,6 +1521,10 @@ static void update_multiplayer_sessions(pong_state *state, float dt)
                 SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong LAN discovery update failed: %s", SDL_GetError());
             }
             update_discovery_scene_state(state);
+            if (sdl3d_network_discovery_session_result_count(state->discovery_session) > 0)
+            {
+                (void)start_discovered_match_connection(state, 0);
+            }
         }
     }
     else if (state->discovery_session != NULL)
@@ -1575,7 +1541,8 @@ static void update_multiplayer_sessions(pong_state *state, float dt)
 
         update_direct_connect_session_status(state);
 
-        const bool keep_direct_connect_session = is_direct_connect_scene(state) || is_multiplayer_play_scene(state);
+        const bool keep_direct_connect_session =
+            is_direct_connect_scene(state) || is_multiplayer_discovery_scene(state) || is_multiplayer_play_scene(state);
         if (!keep_direct_connect_session)
         {
             destroy_direct_connect_session(state);
@@ -1754,7 +1721,10 @@ static void on_multiplayer_discovery_signal(void *userdata, int signal_id, const
         return;
     }
 
-    (void)refresh_discovery_session(state);
+    if (state->direct_connect_session == NULL)
+    {
+        (void)refresh_discovery_session(state);
+    }
 }
 
 static bool mount_pong_assets(sdl3d_asset_resolver *assets, char *error, int error_size)
