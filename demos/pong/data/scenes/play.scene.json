@@ -45,10 +45,11 @@
       "active_if": {
         "type": "not",
         "condition": {
-          "type": "scene_state.compare",
-          "key": "network_role",
-          "op": "==",
-          "value": "client"
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "match_mode", "op": "==", "value": "lan" },
+            { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "client" }
+          ]
         }
       }
     }
@@ -74,8 +75,14 @@
         "type": "all",
         "conditions": [
           { "type": "app.paused", "equals": true },
-          { "type": "not", "condition": { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "none" } },
-          { "type": "not", "condition": { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "" } },
+          { "type": "scene_state.compare", "key": "match_mode", "op": "==", "value": "lan" },
+          {
+            "type": "any",
+            "conditions": [
+              { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "host" },
+              { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "client" }
+            ]
+          },
           { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": false }
         ]
       },
@@ -96,7 +103,22 @@
         "type": "all",
         "conditions": [
           { "type": "app.paused", "equals": true },
-          { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "none" },
+          {
+            "type": "not",
+            "condition": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "match_mode", "op": "==", "value": "lan" },
+                {
+                  "type": "any",
+                  "conditions": [
+                    { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "host" },
+                    { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "client" }
+                  ]
+                }
+              ]
+            }
+          },
           { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": false }
         ]
       },
@@ -250,8 +272,14 @@
           "type": "all",
           "conditions": [
             { "type": "app.paused", "equals": true },
-            { "type": "not", "condition": { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "none" } },
-            { "type": "not", "condition": { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "" } },
+            { "type": "scene_state.compare", "key": "match_mode", "op": "==", "value": "lan" },
+            {
+              "type": "any",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "host" },
+                { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "client" }
+              ]
+            },
             { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": false }
           ]
         },
@@ -279,7 +307,22 @@
           "type": "all",
           "conditions": [
             { "type": "app.paused", "equals": true },
-            { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "none" },
+            {
+              "type": "not",
+              "condition": {
+                "type": "all",
+                "conditions": [
+                  { "type": "scene_state.compare", "key": "match_mode", "op": "==", "value": "lan" },
+                  {
+                    "type": "any",
+                    "conditions": [
+                      { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "host" },
+                      { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "client" }
+                    ]
+                  }
+                ]
+              }
+            },
             { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": false }
           ]
         },

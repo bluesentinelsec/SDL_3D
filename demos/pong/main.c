@@ -286,6 +286,14 @@ static bool is_local_match_mode(const pong_state *state)
     return match_mode != NULL && SDL_strcmp(match_mode, "local") == 0;
 }
 
+static bool is_network_match_mode(const pong_state *state)
+{
+    const sdl3d_properties *scene_state =
+        state != NULL && state->data != NULL ? sdl3d_game_data_scene_state(state->data) : NULL;
+    const char *match_mode = scene_state != NULL ? sdl3d_properties_get_string(scene_state, "match_mode", NULL) : NULL;
+    return match_mode != NULL && SDL_strcmp(match_mode, "lan") == 0;
+}
+
 static bool is_network_flow_host(const pong_state *state)
 {
     const sdl3d_properties *scene_state =
@@ -313,12 +321,12 @@ static const char *network_role_name(const pong_state *state)
 
 static bool is_network_role_host(const pong_state *state)
 {
-    return SDL_strcmp(network_role_name(state), "host") == 0;
+    return is_network_match_mode(state) && SDL_strcmp(network_role_name(state), "host") == 0;
 }
 
 static bool is_network_role_client(const pong_state *state)
 {
-    return SDL_strcmp(network_role_name(state), "client") == 0;
+    return is_network_match_mode(state) && SDL_strcmp(network_role_name(state), "client") == 0;
 }
 
 static bool pong_network_packet_is_kind(const Uint8 *packet, int packet_size, pong_network_message_kind kind)
@@ -589,14 +597,24 @@ static bool configure_play_input(void *userdata, sdl3d_game_data_runtime *runtim
 
     const sdl3d_properties *scene_state = sdl3d_game_data_scene_state(state->data);
     sdl3d_properties *mutable_scene_state = sdl3d_game_data_mutable_scene_state(state->data);
-    const char *match_mode = scene_context_string(payload, scene_state, "match_mode", "single");
-    const char *network_role = scene_context_string(payload, scene_state, "network_role", "none");
-    const char *network_flow = scene_context_string(payload, scene_state, "network_flow", "none");
+    const char *requested_match_mode = scene_context_string(payload, scene_state, "match_mode", "single");
+    const bool requested_lan = requested_match_mode != NULL && SDL_strcmp(requested_match_mode, "lan") == 0;
+    const char *requested_network_role =
+        requested_lan ? scene_context_string(payload, scene_state, "network_role", "none") : "none";
+    const char *requested_network_flow =
+        requested_lan ? scene_context_string(payload, scene_state, "network_flow", "none") : "none";
+    const bool valid_network_role =
+        requested_network_role != NULL &&
+        (SDL_strcmp(requested_network_role, "host") == 0 || SDL_strcmp(requested_network_role, "client") == 0);
+    const char *match_mode = requested_lan && !valid_network_role ? "single" : requested_match_mode;
+    const char *network_role = requested_lan && valid_network_role ? requested_network_role : "none";
+    const char *network_flow = requested_lan && valid_network_role ? requested_network_flow : "none";
 
     clear_network_action_overrides(state);
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong play input context: match_mode=%s network_role=%s network_flow=%s",
-                match_mode != NULL ? match_mode : "none", network_role != NULL ? network_role : "none",
-                network_flow != NULL ? network_flow : "none");
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "Pong play input context: requested_match_mode=%s match_mode=%s network_role=%s network_flow=%s",
+                requested_match_mode != NULL ? requested_match_mode : "none", match_mode != NULL ? match_mode : "none",
+                network_role != NULL ? network_role : "none", network_flow != NULL ? network_flow : "none");
 
     if (mutable_scene_state != NULL)
     {
@@ -1838,7 +1856,9 @@ static void update_host_session_status(sdl3d_game_context *ctx, pong_state *stat
         update_host_session_scene_state(state);
 
         const char *active_scene = active_scene_name(state);
-        if (active_scene == NULL || (!is_multiplayer_lobby_scene(state) && !is_multiplayer_play_scene(state)))
+        const bool keep_host_session =
+            is_multiplayer_lobby_scene(state) || (is_multiplayer_play_scene(state) && is_network_role_host(state));
+        if (active_scene == NULL || !keep_host_session)
         {
             destroy_host_session(state);
         }
@@ -1896,8 +1916,9 @@ static void update_multiplayer_sessions(sdl3d_game_context *ctx, pong_state *sta
 
     if (state->direct_connect_session != NULL)
     {
-        const bool keep_direct_connect_session =
-            is_direct_connect_scene(state) || is_multiplayer_discovery_scene(state) || is_multiplayer_play_scene(state);
+        const bool keep_direct_connect_session = is_direct_connect_scene(state) ||
+                                                 is_multiplayer_discovery_scene(state) ||
+                                                 (is_multiplayer_play_scene(state) && is_network_role_client(state));
         if (!keep_direct_connect_session)
         {
             destroy_direct_connect_session(state);

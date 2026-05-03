@@ -647,11 +647,27 @@ TEST_F(PongHeadlessMultiplayerTest, NetworkPauseMenuOmitsOptions)
     metrics.paused = true;
 
     sdl3d_game_data_menu menu{};
+    sdl3d_game_data_menu_item item{};
+
+    set_multiplayer_scene_state(host_runtime, "single", "client", "direct");
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu_for_metrics(host_runtime, &metrics, &menu));
+    ASSERT_STREQ(menu.name, "menu.pause");
+    ASSERT_EQ(menu.item_count, 3);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(host_runtime, menu.name, 1, &item));
+    ASSERT_STREQ(item.label, "Options");
+
+    set_multiplayer_scene_state(host_runtime, "local", "host", "host");
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu_for_metrics(host_runtime, &metrics, &menu));
+    ASSERT_STREQ(menu.name, "menu.pause");
+    ASSERT_EQ(menu.item_count, 3);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(host_runtime, menu.name, 1, &item));
+    ASSERT_STREQ(item.label, "Options");
+
+    set_multiplayer_scene_state(host_runtime, "lan", "host", "host");
     ASSERT_TRUE(sdl3d_game_data_get_active_menu_for_metrics(host_runtime, &metrics, &menu));
     ASSERT_STREQ(menu.name, "menu.pause.network");
     ASSERT_EQ(menu.item_count, 2);
 
-    sdl3d_game_data_menu_item item{};
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(host_runtime, menu.name, 0, &item));
     ASSERT_STREQ(item.label, "Resume");
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(host_runtime, menu.name, 1, &item));
@@ -663,6 +679,21 @@ TEST_F(PongHeadlessMultiplayerTest, NetworkPauseMenuOmitsOptions)
     ASSERT_EQ(menu.item_count, 3);
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(host_runtime, menu.name, 1, &item));
     ASSERT_STREQ(item.label, "Options");
+}
+
+TEST_F(PongHeadlessMultiplayerTest, OnlyLanClientDisablesLocalSimulation)
+{
+    set_multiplayer_scene_state(host_runtime, "single", "client", "direct");
+    EXPECT_TRUE(sdl3d_game_data_active_scene_update_phase(host_runtime, "simulation", false));
+
+    set_multiplayer_scene_state(host_runtime, "local", "client", "direct");
+    EXPECT_TRUE(sdl3d_game_data_active_scene_update_phase(host_runtime, "simulation", false));
+
+    set_multiplayer_scene_state(host_runtime, "lan", "host", "host");
+    EXPECT_TRUE(sdl3d_game_data_active_scene_update_phase(host_runtime, "simulation", false));
+
+    set_multiplayer_scene_state(host_runtime, "lan", "client", "direct");
+    EXPECT_FALSE(sdl3d_game_data_active_scene_update_phase(host_runtime, "simulation", false));
 }
 
 } // namespace
