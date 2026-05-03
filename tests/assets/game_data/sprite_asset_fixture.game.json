@@ -1,0 +1,32 @@
+{
+  "schema": "sdl3d.game.v0",
+  "metadata": {
+    "name": "Sprite Asset Fixture",
+    "id": "test.sprite_asset_fixture",
+    "version": "0.1.0"
+  },
+  "world": {
+    "name": "world.fixture",
+    "kind": "fixed_screen"
+  },
+  "assets": {
+    "sprites": [
+      {
+        "id": "sprite.robot.walk",
+        "path": "asset://sprites/robot/walk.png",
+        "frame_width": 32,
+        "frame_height": 48,
+        "columns": 8,
+        "rows": 6,
+        "frame_count": 6,
+        "direction_count": 8,
+        "fps": 8.0,
+        "loop": true,
+        "lighting": true,
+        "emissive": false,
+        "visual_ground_offset": 0.125
+      }
+    ]
+  },
+  "entities": []
+}

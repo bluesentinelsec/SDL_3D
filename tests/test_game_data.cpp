@@ -1011,6 +1011,39 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     sdl3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, ReadsSpriteAssetMetadata)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(fixture_path("sprite_asset_fixture.game.json").c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+
+    sdl3d_game_data_sprite_asset sprite{};
+    ASSERT_TRUE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.robot.walk", &sprite));
+    EXPECT_STREQ(sprite.id, "sprite.robot.walk");
+    EXPECT_STREQ(sprite.path, "asset://sprites/robot/walk.png");
+    EXPECT_EQ(sprite.frame_width, 32);
+    EXPECT_EQ(sprite.frame_height, 48);
+    EXPECT_EQ(sprite.columns, 8);
+    EXPECT_EQ(sprite.rows, 6);
+    EXPECT_EQ(sprite.frame_count, 6);
+    EXPECT_EQ(sprite.direction_count, 8);
+    EXPECT_FLOAT_EQ(sprite.fps, 8.0f);
+    EXPECT_TRUE(sprite.loop);
+    EXPECT_TRUE(sprite.lighting);
+    EXPECT_FALSE(sprite.emissive);
+    EXPECT_FLOAT_EQ(sprite.visual_ground_offset, 0.125f);
+
+    EXPECT_FALSE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.missing", &sprite));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
 {
     const std::filesystem::path dir = unique_test_dir("pong_presentation");

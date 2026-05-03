@@ -644,6 +644,38 @@ uses player-facing integer units rather than normalized engine volume:
 }
 ```
 
+Sprite assets can be authored under `assets.sprites`:
+
+```json
+{
+  "assets": {
+    "sprites": [
+      {
+        "id": "sprite.robot.walk",
+        "path": "asset://sprites/robot/walk.png",
+        "frame_width": 32,
+        "frame_height": 48,
+        "columns": 8,
+        "rows": 6,
+        "frame_count": 6,
+        "direction_count": 8,
+        "fps": 8.0,
+        "loop": true,
+        "lighting": true,
+        "emissive": false,
+        "visual_ground_offset": 0.125
+      }
+    ]
+  }
+}
+```
+
+The current sprite metadata API records the image source, atlas/grid layout,
+animation timing, directional frame count, and lighting participation. It does
+not load GPU resources on its own; callers can use the descriptor to build
+billboard sprites, 2D-in-3D sheets, or directional animation sets without
+changing the authored JSON shape.
+
 ## Scenes
 
 Games can split authored content across many scene files. The top-level game
