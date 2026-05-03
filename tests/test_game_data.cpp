@@ -1497,7 +1497,7 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     const int lobby_start_signal = sdl3d_game_data_find_signal(runtime, "signal.multiplayer.lobby.start");
     ASSERT_GE(lobby_start_signal, 0);
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
-    EXPECT_STREQ(item.label, "Start Game");
+    EXPECT_STREQ(item.label, "Start Selected Match");
     EXPECT_EQ(item.signal_id, lobby_start_signal);
     ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
     EXPECT_STREQ(item.label, "Back");
