@@ -25,6 +25,7 @@
 #include "sdl3d/game.h"
 #include "sdl3d/lighting.h"
 #include "sdl3d/properties.h"
+#include "sdl3d/sprite_asset.h"
 #include "sdl3d/storage.h"
 #include "sdl3d/transition.h"
 
@@ -987,6 +988,17 @@ extern "C"
     /** @brief Read a sprite asset descriptor by id from `assets.sprites`. */
     bool sdl3d_game_data_get_sprite_asset(const sdl3d_game_data_runtime *runtime, const char *id,
                                           sdl3d_game_data_sprite_asset *out_sprite);
+
+    /**
+     * @brief Load a sprite asset by id from `assets.sprites`.
+     *
+     * The runtime looks up the authored sprite descriptor, resolves the
+     * source image through the game's asset resolver, and builds billboard
+     * textures plus rotation sets ready for sprite actors.
+     */
+    bool sdl3d_game_data_load_sprite_asset(const sdl3d_game_data_runtime *runtime, const char *id,
+                                           sdl3d_sprite_asset_runtime *out_sprite, char *error_buffer,
+                                           int error_buffer_size);
 
     /**
      * @brief Resolve an authored audio path to a filesystem path usable by audio backends.

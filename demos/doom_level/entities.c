@@ -16,10 +16,61 @@
 #define DOOM_SIGNAL_ROBOT_IDLE_STARTED 6203
 #define DOOM_SIGNAL_ROBOT_WALK_STARTED 6204
 
+static const char *const ROBOT_BASE_DIRECTION_NAMES[SDL3D_SPRITE_ROTATION_COUNT] = {
+    "south", "south-east", "east", "north-east", "north", "north-west", "west", "south-west",
+};
+
+static const char *const ROBOT_WALK_DIRECTION_NAMES[SDL3D_SPRITE_ROTATION_COUNT] = {
+    "south", "south-east", "east", "north-east", "north", "north-west", "west", "south-west",
+};
+
+static char robot_base_paths[SDL3D_SPRITE_ROTATION_COUNT][512];
+static char robot_walk_paths[DOOM_ROBOT_WALK_FRAME_COUNT * SDL3D_SPRITE_ROTATION_COUNT][512];
+static const char *robot_base_path_ptrs[SDL3D_SPRITE_ROTATION_COUNT];
+static const char *robot_walk_path_ptrs[DOOM_ROBOT_WALK_FRAME_COUNT * SDL3D_SPRITE_ROTATION_COUNT];
+static bool robot_paths_initialized = false;
+
 static void configure_sprite_texture(sdl3d_texture2d *texture)
 {
     sdl3d_set_texture_filter(texture, SDL3D_TEXTURE_FILTER_NEAREST);
     sdl3d_set_texture_wrap(texture, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP);
+}
+
+static void configure_sprite_asset_textures(sdl3d_sprite_asset_runtime *asset)
+{
+    if (asset == NULL)
+        return;
+    for (int i = 0; i < asset->base_texture_count; ++i)
+        configure_sprite_texture(&asset->base_textures[i]);
+    for (int i = 0; i < asset->animation_texture_count; ++i)
+        configure_sprite_texture(&asset->animation_textures[i]);
+}
+
+static void init_robot_sprite_paths(void)
+{
+    if (robot_paths_initialized)
+        return;
+
+    for (int dir = 0; dir < SDL3D_SPRITE_ROTATION_COUNT; ++dir)
+    {
+        SDL_snprintf(robot_base_paths[dir], sizeof(robot_base_paths[dir]),
+                     SDL3D_MEDIA_DIR "/sprites/skeletal_robot/%s.png", ROBOT_BASE_DIRECTION_NAMES[dir]);
+        robot_base_path_ptrs[dir] = robot_base_paths[dir];
+    }
+
+    for (int frame = 0; frame < DOOM_ROBOT_WALK_FRAME_COUNT; ++frame)
+    {
+        for (int dir = 0; dir < SDL3D_SPRITE_ROTATION_COUNT; ++dir)
+        {
+            const int index = frame * SDL3D_SPRITE_ROTATION_COUNT + dir;
+            SDL_snprintf(robot_walk_paths[index], sizeof(robot_walk_paths[index]),
+                         SDL3D_MEDIA_DIR "/sprites/skeletal_robot/walking_frames/%s_%02d.png",
+                         ROBOT_WALK_DIRECTION_NAMES[dir], frame);
+            robot_walk_path_ptrs[index] = robot_walk_paths[index];
+        }
+    }
+
+    robot_paths_initialized = true;
 }
 
 static void robot_set_floor_position(sdl3d_sprite_actor *actor, const sdl3d_level *level)
@@ -158,41 +209,29 @@ bool entities_init(entities *e, const sdl3d_level *level, sdl3d_actor_registry *
     e->registry = registry;
     e->bus = bus;
 
-    /* Load enemy rotation sprites. */
-    const char *rot_paths[SDL3D_SPRITE_ROTATION_COUNT] = {
-        SDL3D_MEDIA_DIR "/sprites/skeletal_robot/south.png", SDL3D_MEDIA_DIR "/sprites/skeletal_robot/south-east.png",
-        SDL3D_MEDIA_DIR "/sprites/skeletal_robot/east.png",  SDL3D_MEDIA_DIR "/sprites/skeletal_robot/north-east.png",
-        SDL3D_MEDIA_DIR "/sprites/skeletal_robot/north.png", SDL3D_MEDIA_DIR "/sprites/skeletal_robot/north-west.png",
-        SDL3D_MEDIA_DIR "/sprites/skeletal_robot/west.png",  SDL3D_MEDIA_DIR "/sprites/skeletal_robot/south-west.png",
-    };
-    for (int i = 0; i < SDL3D_SPRITE_ROTATION_COUNT; ++i)
-    {
-        if (!sdl3d_load_texture_from_file(rot_paths[i], &e->enemy_rot_tex[i]))
-        {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Sprite load failed: %s", SDL_GetError());
-            return false;
-        }
-        configure_sprite_texture(&e->enemy_rot_tex[i]);
-    }
+    init_robot_sprite_paths();
 
-    const char *rot_names[SDL3D_SPRITE_ROTATION_COUNT] = {
-        "south", "south-east", "east", "north-east", "north", "north-west", "west", "south-west",
+    sdl3d_sprite_asset_source robot_source = {
+        .kind = SDL3D_SPRITE_ASSET_SOURCE_FILES,
+        .base_paths = robot_base_path_ptrs,
+        .frame_paths = robot_walk_path_ptrs,
+        .frame_count = DOOM_ROBOT_WALK_FRAME_COUNT,
+        .direction_count = SDL3D_SPRITE_ROTATION_COUNT,
+        .fps = 8.0f,
+        .loop = true,
+        .lighting = true,
+        .emissive = false,
+        .visual_ground_offset = 0.0f,
     };
-    for (int frame = 0; frame < DOOM_ROBOT_WALK_FRAME_COUNT; ++frame)
+    char robot_error[256];
+    if (!sdl3d_sprite_asset_load(NULL, &robot_source, &e->robot_sprite, robot_error, (int)sizeof(robot_error)))
     {
-        for (int dir = 0; dir < SDL3D_SPRITE_ROTATION_COUNT; ++dir)
-        {
-            char path[512];
-            SDL_snprintf(path, sizeof(path), SDL3D_MEDIA_DIR "/sprites/skeletal_robot/walking_frames/%s_%02d.png",
-                         rot_names[dir], frame);
-            if (!sdl3d_load_texture_from_file(path, &e->enemy_walk_tex[frame][dir]))
-            {
-                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Robot walk sprite load failed: %s", SDL_GetError());
-                return false;
-            }
-            configure_sprite_texture(&e->enemy_walk_tex[frame][dir]);
-        }
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Robot sprite load failed: %s", robot_error);
+        return false;
     }
+    configure_sprite_asset_textures(&e->robot_sprite);
+    e->enemy_rotations = sdl3d_sprite_asset_base_rotations(&e->robot_sprite);
+    e->enemy_walk_rotations = sdl3d_sprite_asset_animation_frames(&e->robot_sprite);
 
     if (!sdl3d_load_texture_from_file(SDL3D_MEDIA_DIR "/sprites/health-pack.png", &e->health_tex))
     {
@@ -220,15 +259,6 @@ bool entities_init(entities *e, const sdl3d_level *level, sdl3d_actor_registry *
         sdl3d_set_texture_wrap(&e->sky[i], SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP);
     }
 
-    /* Rotation set */
-    for (int i = 0; i < SDL3D_SPRITE_ROTATION_COUNT; ++i)
-        e->enemy_rotations.frames[i] = &e->enemy_rot_tex[i];
-    for (int frame = 0; frame < DOOM_ROBOT_WALK_FRAME_COUNT; ++frame)
-    {
-        for (int dir = 0; dir < SDL3D_SPRITE_ROTATION_COUNT; ++dir)
-            e->enemy_walk_rotations[frame].frames[dir] = &e->enemy_walk_tex[frame][dir];
-    }
-
     /* Sprite scene */
     sdl3d_sprite_scene_init(&e->sprites);
     struct
@@ -239,15 +269,15 @@ bool entities_init(entities *e, const sdl3d_level *level, sdl3d_actor_registry *
         bool robot;
         float walk_x, walk_z, patrol_distance, speed, idle_duration;
     } defs[] = {
-        {NULL, &e->enemy_rotations, 5.8f, 0.0f, 6.8f, 3.4f, 5.2f, 0.0f, 0.0f, true, 1.0f, 0.0f, 2.4f, 0.75f, 1.4f},
+        {NULL, e->enemy_rotations, 5.8f, 0.0f, 6.8f, 3.4f, 5.2f, 0.0f, 0.0f, true, 1.0f, 0.0f, 2.4f, 0.75f, 1.4f},
         {&e->health_tex, NULL, 5.0f, 0.25f, 10.8f, 1.0f, 1.0f, 0.12f, 1.8f, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
-        {NULL, &e->enemy_rotations, 4.2f, 0.0f, 21.5f, 3.2f, 4.8f, 0.0f, 0.0f, true, 1.0f, 0.0f, 3.0f, 0.65f, 1.8f},
+        {NULL, e->enemy_rotations, 4.2f, 0.0f, 21.5f, 3.2f, 4.8f, 0.0f, 0.0f, true, 1.0f, 0.0f, 3.0f, 0.65f, 1.8f},
         {&e->health_tex, NULL, 24.0f, 0.25f, 4.5f, 1.0f, 1.0f, 0.15f, 1.5f, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
-        {NULL, &e->enemy_rotations, 24.0f, 0.0f, 19.0f, 3.6f, 5.6f, 0.0f, 0.0f, true, 0.0f, 1.0f, 4.0f, 0.8f, 1.2f},
+        {NULL, e->enemy_rotations, 24.0f, 0.0f, 19.0f, 3.6f, 5.6f, 0.0f, 0.0f, true, 0.0f, 1.0f, 4.0f, 0.8f, 1.2f},
         {&e->health_tex, NULL, 24.0f, 0.25f, 28.5f, 1.0f, 1.0f, 0.12f, 2.1f, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
-        {NULL, &e->enemy_rotations, 24.0f, 0.0f, 37.5f, 3.4f, 5.2f, 0.0f, 0.0f, true, 0.0f, 1.0f, 4.0f, 0.7f, 1.6f},
+        {NULL, e->enemy_rotations, 24.0f, 0.0f, 37.5f, 3.4f, 5.2f, 0.0f, 0.0f, true, 0.0f, 1.0f, 4.0f, 0.7f, 1.6f},
         {&e->health_tex, NULL, 35.5f, 0.25f, 27.0f, 1.0f, 1.0f, 0.1f, 1.7f, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
-        {NULL, &e->enemy_rotations, 24.0f, 0.0f, 72.0f, 3.6f, 5.6f, 0.0f, 0.0f, true, 1.0f, 0.0f, 8.0f, 1.0f, 1.5f},
+        {NULL, e->enemy_rotations, 24.0f, 0.0f, 72.0f, 3.6f, 5.6f, 0.0f, 0.0f, true, 1.0f, 0.0f, 8.0f, 1.0f, 1.5f},
         {&e->health_tex, NULL, 10.0f, 0.25f, 84.0f, 1.0f, 1.0f, 0.14f, 1.6f, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
     };
     for (int i = 0; i < (int)SDL_arraysize(defs); ++i)
@@ -260,7 +290,7 @@ bool entities_init(entities *e, const sdl3d_level *level, sdl3d_actor_registry *
         }
         a->position = sdl3d_vec3_make(defs[i].x, defs[i].y, defs[i].z);
         a->size = (sdl3d_vec2){defs[i].w, defs[i].h};
-        a->texture = defs[i].tex ? defs[i].tex : e->enemy_rotations.frames[0];
+        a->texture = defs[i].tex ? defs[i].tex : (e->enemy_rotations != NULL ? e->enemy_rotations->frames[0] : NULL);
         a->rotations = defs[i].rot;
         a->bob_amplitude = defs[i].amp;
         a->bob_speed = defs[i].spd;
@@ -351,16 +381,10 @@ void entities_free(entities *e)
     if (e == NULL)
         return;
     sdl3d_sprite_scene_free(&e->sprites);
+    sdl3d_sprite_asset_free(&e->robot_sprite);
     sdl3d_destroy_scene(e->scene);
     if (e->has_dragon)
         sdl3d_free_model(&e->dragon_model);
-    for (int i = 0; i < SDL3D_SPRITE_ROTATION_COUNT; ++i)
-        sdl3d_free_texture(&e->enemy_rot_tex[i]);
-    for (int frame = 0; frame < DOOM_ROBOT_WALK_FRAME_COUNT; ++frame)
-    {
-        for (int dir = 0; dir < SDL3D_SPRITE_ROTATION_COUNT; ++dir)
-            sdl3d_free_texture(&e->enemy_walk_tex[frame][dir]);
-    }
     sdl3d_free_texture(&e->health_tex);
     sdl3d_free_texture(&e->crate_tex);
     for (int i = 0; i < 6; ++i)

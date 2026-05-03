@@ -73,3 +73,16 @@ For Emscripten tests or demos that still use loose source directories:
 ```cmake
 sdl3d_target_preload_asset_directory(my_target "${CMAKE_CURRENT_SOURCE_DIR}/data" "/data")
 ```
+
+## Sprite Runtime Loading
+
+`sdl3d_game_data_load_sprite_asset()` turns an authored sprite descriptor into
+runtime-owned billboard textures and rotation sets. The loader accepts either a
+sprite sheet description from `assets.sprites` or a file-list source used by
+generalized game code, then decodes the source once and keeps the resulting
+textures until `sdl3d_sprite_asset_free()`.
+
+Prefer a sheet when many frames share the same metadata. The loader slices a
+sheet in memory after one decode, which is cheaper than reading many tiny
+files. Use the file-list source only when the authored asset layout genuinely
+does not fit a sheet.

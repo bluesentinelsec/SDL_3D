@@ -159,7 +159,8 @@ Useful reusable modules:
 
 - transform/state
 - renderable sprite, billboard, model, mesh, tile, debug primitive
-- authored sprite asset metadata for sheets, directional frames, and lighting-aware 2D-in-3D sprites
+- authored sprite asset metadata for sheets, directional frames, and lighting-aware 2D-in-3D sprites that can be
+  loaded through a shared runtime bridge
 - collider or trigger volume
 - movement controller
 - input controller
