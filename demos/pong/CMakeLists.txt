@@ -17,6 +17,7 @@ set(SDL3D_PONG_ASSET_FILES
     scenes/play.scene.json
     scenes/splash.scene.json
     scenes/title.scene.json
+    shaders/splash_logo_melt.frag.glsl
     scripts/pong.lua)
 
 sdl3d_add_embedded_asset_pack(pong_assets
