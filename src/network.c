@@ -68,7 +68,9 @@ typedef int NET_Status;
     } while (0)
 #endif
 
-#define SDL3D_NETWORK_MAX_DISCOVERY_TARGETS 16
+#define SDL3D_NETWORK_MAX_DISCOVERY_TARGETS 320
+#define SDL3D_NETWORK_DISCOVERY_BATCH_SIZE 10
+#define SDL3D_NETWORK_DISCOVERY_BATCH_INTERVAL 0.02f
 #define SDL3D_NETWORK_GLOBAL_BROADCAST "255.255.255.255"
 
 typedef enum sdl3d_network_packet_kind
@@ -120,11 +122,13 @@ struct sdl3d_network_discovery_session
     char target_hosts[SDL3D_NETWORK_MAX_DISCOVERY_TARGETS][SDL3D_NETWORK_MAX_HOST_LENGTH];
     bool target_probe_sent[SDL3D_NETWORK_MAX_DISCOVERY_TARGETS];
     int target_count;
+    int next_probe_index;
     Uint16 target_port;
     sdl3d_network_discovery_result results[SDL3D_NETWORK_MAX_DISCOVERY_RESULTS];
     int result_count;
     float elapsed;
     float refresh_elapsed;
+    float probe_batch_elapsed;
     bool scanning;
 };
 
@@ -220,6 +224,7 @@ static void sdl3d_network_discovery_destroy_target_address(sdl3d_network_discove
         session->target_probe_sent[i] = false;
     }
     session->target_count = 0;
+    session->next_probe_index = 0;
 }
 
 #if SDL3D_NETWORKING_ENABLED
@@ -420,8 +425,68 @@ static int sdl3d_network_collect_directed_broadcast_hosts(char hosts[][SDL3D_NET
     freeifaddrs(interfaces);
     return count;
 }
+
+static int sdl3d_network_collect_lan_unicast_hosts(char hosts[][SDL3D_NETWORK_MAX_HOST_LENGTH], int max)
+{
+    struct ifaddrs *interfaces = NULL;
+    int count = 0;
+
+    if (hosts == NULL || max <= 0)
+    {
+        return 0;
+    }
+
+    if (getifaddrs(&interfaces) != 0)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery interface enumeration failed");
+        return 0;
+    }
+
+    for (const struct ifaddrs *iface = interfaces; iface != NULL && count < max; iface = iface->ifa_next)
+    {
+        if (iface->ifa_addr == NULL || iface->ifa_addr->sa_family != AF_INET || (iface->ifa_flags & IFF_UP) == 0 ||
+            (iface->ifa_flags & IFF_LOOPBACK) != 0)
+        {
+            continue;
+        }
+
+        const struct sockaddr_in *addr = (const struct sockaddr_in *)iface->ifa_addr;
+        const Uint32 address_ipv4 = ntohl(addr->sin_addr.s_addr);
+        const Uint32 network24 = address_ipv4 & 0xFFFFFF00u;
+
+        for (Uint32 host_octet = 1; host_octet <= 254u && count < max; ++host_octet)
+        {
+            const Uint32 target_ipv4 = network24 | host_octet;
+            struct in_addr target_addr;
+            char host[INET_ADDRSTRLEN];
+
+            if (target_ipv4 == address_ipv4)
+            {
+                continue;
+            }
+
+            target_addr.s_addr = htonl(target_ipv4);
+            if (inet_ntop(AF_INET, &target_addr, host, sizeof(host)) == NULL)
+            {
+                continue;
+            }
+
+            (void)sdl3d_network_discovery_add_host_to_list(hosts, &count, max, host);
+        }
+    }
+
+    freeifaddrs(interfaces);
+    return count;
+}
 #else
 static int sdl3d_network_collect_directed_broadcast_hosts(char hosts[][SDL3D_NETWORK_MAX_HOST_LENGTH], int max)
+{
+    (void)hosts;
+    (void)max;
+    return 0;
+}
+
+static int sdl3d_network_collect_lan_unicast_hosts(char hosts[][SDL3D_NETWORK_MAX_HOST_LENGTH], int max)
 {
     (void)hosts;
     (void)max;
@@ -446,6 +511,12 @@ static void sdl3d_network_discovery_add_default_targets(sdl3d_network_discovery_
     }
 
     (void)sdl3d_network_discovery_add_target(session, SDL3D_NETWORK_GLOBAL_BROADCAST);
+
+    host_count = sdl3d_network_collect_lan_unicast_hosts(hosts, SDL3D_NETWORK_MAX_DISCOVERY_TARGETS);
+    for (int i = 0; i < host_count; ++i)
+    {
+        (void)sdl3d_network_discovery_add_target(session, hosts[i]);
+    }
 }
 
 static void sdl3d_network_discovery_clear_results(sdl3d_network_discovery_session *session)
@@ -526,6 +597,7 @@ static bool sdl3d_network_discovery_send_probe(sdl3d_network_discovery_session *
 {
     bool any_sent = false;
     bool any_pending = false;
+    int processed = 0;
 
     if (session == NULL || session->socket == NULL)
     {
@@ -538,11 +610,13 @@ static bool sdl3d_network_discovery_send_probe(sdl3d_network_discovery_session *
     }
 
     SDL_snprintf(session->status, sizeof(session->status), "Scanning for local matches");
-    for (int i = 0; i < session->target_count; ++i)
+    for (int i = session->next_probe_index; i < session->target_count && processed < SDL3D_NETWORK_DISCOVERY_BATCH_SIZE;
+         ++i)
     {
         NET_Status target_status;
         if (session->target_addresses[i] == NULL || session->target_probe_sent[i])
         {
+            session->next_probe_index = i + 1;
             continue;
         }
 
@@ -557,17 +631,22 @@ static bool sdl3d_network_discovery_send_probe(sdl3d_network_discovery_session *
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery target resolution failed: target=%s error=%s",
                         session->target_hosts[i], SDL_GetError());
             session->target_probe_sent[i] = true;
+            session->next_probe_index = i + 1;
+            processed++;
             continue;
         }
         if (target_status != NET_SUCCESS)
         {
             any_pending = true;
-            continue;
+            break;
         }
 
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery probe send: target=%s port=%u",
-                    session->target_hosts[i][0] != '\0' ? session->target_hosts[i] : "<unknown>",
-                    (unsigned int)session->target_port);
+        if (session->target_count <= 16)
+        {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery probe send: target=%s port=%u",
+                        session->target_hosts[i][0] != '\0' ? session->target_hosts[i] : "<unknown>",
+                        (unsigned int)session->target_port);
+        }
         if (sdl3d_network_discovery_send_packet_to(session, session->target_addresses[i], session->target_port,
                                                    SDL3D_NETWORK_PACKET_DISCOVERY_QUERY, NULL, 0))
         {
@@ -579,6 +658,8 @@ static bool sdl3d_network_discovery_send_probe(sdl3d_network_discovery_session *
                         session->target_hosts[i], SDL_GetError());
         }
         session->target_probe_sent[i] = true;
+        session->next_probe_index = i + 1;
+        processed++;
     }
 
     if (any_pending)
@@ -1414,7 +1495,9 @@ bool sdl3d_network_discovery_session_refresh(sdl3d_network_discovery_session *se
     sdl3d_network_discovery_clear_results(session);
     session->elapsed = 0.0f;
     session->refresh_elapsed = 0.0f;
+    session->probe_batch_elapsed = 0.0f;
     session->scanning = true;
+    session->next_probe_index = 0;
     for (int i = 0; i < session->target_count; ++i)
     {
         session->target_probe_sent[i] = false;
@@ -1443,7 +1526,7 @@ bool sdl3d_network_discovery_session_update(sdl3d_network_discovery_session *ses
     if (session->scanning)
     {
         bool has_pending_probe = false;
-        for (int i = 0; i < session->target_count; ++i)
+        for (int i = session->next_probe_index; i < session->target_count; ++i)
         {
             if (!session->target_probe_sent[i])
             {
@@ -1453,7 +1536,12 @@ bool sdl3d_network_discovery_session_update(sdl3d_network_discovery_session *ses
         }
         if (has_pending_probe)
         {
-            (void)sdl3d_network_discovery_send_probe(session);
+            session->probe_batch_elapsed += SDL_max(dt, 0.0f);
+            if (session->probe_batch_elapsed >= SDL3D_NETWORK_DISCOVERY_BATCH_INTERVAL)
+            {
+                session->probe_batch_elapsed = 0.0f;
+                (void)sdl3d_network_discovery_send_probe(session);
+            }
         }
     }
 

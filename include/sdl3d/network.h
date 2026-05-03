@@ -88,8 +88,9 @@ extern "C"
      *
      * When @p host is NULL, discovery probes are sent to all enumerated
      * subnet-directed IPv4 broadcast addresses, then to 255.255.255.255 as a
-     * fallback. Otherwise the scanner probes the named host directly, which is
-     * useful for tests or manual overrides.
+     * fallback, then to same-/24 IPv4 unicast targets in rate-limited batches.
+     * Otherwise the scanner probes the named host directly, which is useful
+     * for tests or manual overrides.
      */
     typedef struct sdl3d_network_discovery_session_desc
     {
@@ -125,7 +126,7 @@ extern "C"
      *
      * Defaults:
      * - host: NULL, meaning subnet broadcast discovery with global broadcast
-     *   fallback
+     *   fallback and same-/24 unicast discovery sweep
      * - port: SDL3D_NETWORK_DEFAULT_PORT
      * - local_port: 0
      */
