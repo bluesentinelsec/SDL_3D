@@ -671,10 +671,17 @@ Sprite assets can be authored under `assets.sprites`:
 ```
 
 The current sprite metadata API records the image source, atlas/grid layout,
-animation timing, directional frame count, and lighting participation. It does
-not load GPU resources on its own; callers can use the descriptor to build
-billboard sprites, 2D-in-3D sheets, or directional animation sets without
-changing the authored JSON shape.
+animation timing, directional frame count, and lighting participation. Callers
+can use `sdl3d_game_data_load_sprite_asset()` to resolve the asset through the
+runtime's resolver and build billboard sprites, 2D-in-3D sheets, or
+directional animation sets without changing the authored JSON shape. The load
+path decodes the source once and keeps the runtime-owned textures alive until
+`sdl3d_sprite_asset_free()`.
+
+Performance note: sprite sheets are decoded and sliced during load, not per
+frame. For large sprite families, prefer a single authored sheet over many tiny
+source files so the loader does one decode and one texture allocation pass
+instead of repeated file-system reads.
 
 ## Scenes
 

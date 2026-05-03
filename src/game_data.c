@@ -2460,6 +2460,44 @@ bool sdl3d_game_data_get_sprite_asset(const sdl3d_game_data_runtime *runtime, co
     return true;
 }
 
+bool sdl3d_game_data_load_sprite_asset(const sdl3d_game_data_runtime *runtime, const char *id,
+                                       sdl3d_sprite_asset_runtime *out_sprite, char *error_buffer,
+                                       int error_buffer_size)
+{
+    sdl3d_game_data_sprite_asset sprite;
+    sdl3d_sprite_asset_source source;
+
+    if (out_sprite != NULL)
+        SDL_zero(*out_sprite);
+    if (runtime == NULL || id == NULL || out_sprite == NULL)
+        return false;
+
+    if (!sdl3d_game_data_get_sprite_asset(runtime, id, &sprite))
+    {
+        set_error(error_buffer, error_buffer_size, "sprite asset not found");
+        return false;
+    }
+
+    SDL_zero(source);
+    source.kind = SDL3D_SPRITE_ASSET_SOURCE_SHEET;
+    source.sheet_path = sprite.path;
+    source.frame_width = sprite.frame_width;
+    source.frame_height = sprite.frame_height;
+    source.columns = sprite.columns;
+    source.rows = sprite.rows;
+    source.frame_count = sprite.frame_count;
+    source.direction_count = sprite.direction_count;
+    source.fps = sprite.fps;
+    source.loop = sprite.loop;
+    source.lighting = sprite.lighting;
+    source.emissive = sprite.emissive;
+    source.visual_ground_offset = sprite.visual_ground_offset;
+
+    if (!sdl3d_sprite_asset_load(runtime->assets, &source, out_sprite, error_buffer, error_buffer_size))
+        return false;
+    return true;
+}
+
 const char *sdl3d_game_data_active_camera(const sdl3d_game_data_runtime *runtime)
 {
     return runtime != NULL ? runtime->active_camera : NULL;

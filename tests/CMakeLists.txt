@@ -245,6 +245,7 @@ else()
     sdl3d_add_test(sdl3d_trigger_test test_trigger.cpp unit)
     sdl3d_add_test(sdl3d_timer_pool_test test_timer_pool.cpp unit)
     sdl3d_add_test(sdl3d_fps_mover_test test_fps_mover.cpp unit)
+    sdl3d_add_test(sdl3d_sprite_asset_test test_sprite_asset.cpp unit)
     if(NOT EMSCRIPTEN)
         sdl3d_add_test(sdl3d_pong_multiplayer_test test_pong_multiplayer.cpp unit)
         target_compile_definitions(

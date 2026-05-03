@@ -8,7 +8,7 @@
 #include "sdl3d/scene.h"
 #include "sdl3d/signal_bus.h"
 #include "sdl3d/sprite_actor.h"
-#include "sdl3d/texture.h"
+#include "sdl3d/sprite_asset.h"
 
 #include "level_data.h"
 
@@ -28,13 +28,12 @@ typedef struct doom_robot_npc
 typedef struct entities
 {
     /* Textures */
-    sdl3d_texture2d enemy_rot_tex[SDL3D_SPRITE_ROTATION_COUNT];
-    sdl3d_texture2d enemy_walk_tex[DOOM_ROBOT_WALK_FRAME_COUNT][SDL3D_SPRITE_ROTATION_COUNT];
+    sdl3d_sprite_asset_runtime robot_sprite;
     sdl3d_texture2d health_tex;
     sdl3d_texture2d crate_tex;
     sdl3d_texture2d sky[6]; /* px, nx, py, ny, pz, nz */
-    sdl3d_sprite_rotation_set enemy_rotations;
-    sdl3d_sprite_rotation_set enemy_walk_rotations[DOOM_ROBOT_WALK_FRAME_COUNT];
+    const sdl3d_sprite_rotation_set *enemy_rotations;
+    const sdl3d_sprite_rotation_set *enemy_walk_rotations;
 
     /* Sprites */
     sdl3d_sprite_scene sprites;

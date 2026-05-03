@@ -168,6 +168,7 @@ target_sources(
         src/script.c
         src/signal_bus.c
         src/trigger.c
+        src/sprite_asset.c
         src/sprite_actor.c
         src/sdl3d.c
         src/shading.c
