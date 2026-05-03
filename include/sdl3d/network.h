@@ -86,8 +86,9 @@ extern "C"
     /**
      * @brief Creation descriptor for a LAN discovery scanner.
      *
-     * When @p host is NULL, discovery probes are broadcast to the local
-     * network. Otherwise the scanner probes the named host directly, which is
+     * When @p host is NULL, discovery probes are sent to all enumerated
+     * subnet-directed IPv4 broadcast addresses, then to 255.255.255.255 as a
+     * fallback. Otherwise the scanner probes the named host directly, which is
      * useful for tests or manual overrides.
      */
     typedef struct sdl3d_network_discovery_session_desc
@@ -123,7 +124,8 @@ extern "C"
      * @brief Initialize a discovery session descriptor with sane defaults.
      *
      * Defaults:
-     * - host: NULL, meaning broadcast discovery
+     * - host: NULL, meaning subnet broadcast discovery with global broadcast
+     *   fallback
      * - port: SDL3D_NETWORK_DEFAULT_PORT
      * - local_port: 0
      */
