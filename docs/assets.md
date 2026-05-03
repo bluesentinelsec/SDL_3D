@@ -86,3 +86,9 @@ Prefer a sheet when many frames share the same metadata. The loader slices a
 sheet in memory after one decode, which is cheaper than reading many tiny
 files. Use the file-list source only when the authored asset layout genuinely
 does not fit a sheet.
+
+Standalone demo code can also load a small JSON manifest with
+`sdl3d_sprite_asset_load_file()`. That path uses the same runtime loader but
+keeps the sprite description outside the game-data runtime for demos that have
+not yet adopted a full `game.json` package. Relative asset paths in the
+manifest are resolved against the manifest directory.

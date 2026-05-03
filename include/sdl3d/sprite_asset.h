@@ -86,6 +86,18 @@ extern "C"
                                  sdl3d_sprite_asset_runtime *out_sprite, char *error_buffer, int error_buffer_size);
 
     /**
+     * @brief Load a sprite asset from a JSON manifest on disk.
+     *
+     * The manifest format is a small, standalone variant of the authored
+     * sprite description model used by the game-data runtime. It is intended
+     * for demos or tools that want data-authored sprite loading without
+     * instantiating a full game-data runtime. Relative paths are resolved
+     * against the manifest directory.
+     */
+    bool sdl3d_sprite_asset_load_file(const char *path, sdl3d_sprite_asset_runtime *out_sprite, char *error_buffer,
+                                      int error_buffer_size);
+
+    /**
      * @brief Release textures and rotation sets owned by a sprite runtime.
      */
     void sdl3d_sprite_asset_free(sdl3d_sprite_asset_runtime *sprite);

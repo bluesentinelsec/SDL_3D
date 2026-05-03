@@ -230,6 +230,76 @@ TEST(SpriteAsset, LoadsExplicitFileListSources)
     sdl3d_sprite_asset_free(&runtime);
 }
 
+TEST(SpriteAsset, LoadsFromSpriteManifestFile)
+{
+    const std::filesystem::path dir = make_temp_dir("sprite_manifest");
+    const std::filesystem::path manifest_path = dir / "robot.sprite.json";
+
+    const std::array<std::array<Uint8, 4>, 6> colors = {{{15, 25, 35, 255},
+                                                         {45, 55, 65, 255},
+                                                         {75, 85, 95, 255},
+                                                         {105, 115, 125, 255},
+                                                         {135, 145, 155, 255},
+                                                         {165, 175, 185, 255}}};
+    std::array<std::filesystem::path, 6> paths = {
+        dir / "sprites" / "base_south.png",  dir / "sprites" / "base_east.png",    dir / "sprites" / "walk_0_south.png",
+        dir / "sprites" / "walk_0_east.png", dir / "sprites" / "walk_1_south.png", dir / "sprites" / "walk_1_east.png",
+    };
+
+    for (size_t i = 0; i < paths.size(); ++i)
+    {
+        std::vector<Uint8> pixels = {colors[i][0], colors[i][1], colors[i][2], colors[i][3]};
+        sdl3d_image image{};
+        image.pixels = pixels.data();
+        image.width = 1;
+        image.height = 1;
+        ASSERT_TRUE(write_png(paths[i], image)) << SDL_GetError();
+    }
+
+    ASSERT_TRUE(write_text(manifest_path,
+                           R"json({
+  "kind": "files",
+  "base_paths": [
+    "sprites/base_south.png",
+    "sprites/base_east.png"
+  ],
+  "frame_paths": [
+    "sprites/walk_0_south.png",
+    "sprites/walk_0_east.png",
+    "sprites/walk_1_south.png",
+    "sprites/walk_1_east.png"
+  ],
+  "frame_count": 2,
+  "direction_count": 2,
+  "fps": 9.0,
+  "loop": false,
+  "lighting": false,
+  "emissive": true,
+  "visual_ground_offset": 0.5
+})json"))
+        << SDL_GetError();
+
+    sdl3d_sprite_asset_runtime runtime{};
+    char error[256]{};
+    ASSERT_TRUE(sdl3d_sprite_asset_load_file(manifest_path.string().c_str(), &runtime, error, sizeof(error))) << error;
+
+    ASSERT_EQ(runtime.base_texture_count, 2);
+    ASSERT_EQ(runtime.animation_frame_count, 2);
+    expect_texture_color(&runtime.base_textures[0], 15, 25, 35, 255);
+    expect_texture_color(&runtime.base_textures[1], 45, 55, 65, 255);
+    expect_texture_color(runtime.animation_frames[0].frames[0], 75, 85, 95, 255);
+    expect_texture_color(runtime.animation_frames[0].frames[1], 105, 115, 125, 255);
+    expect_texture_color(runtime.animation_frames[1].frames[0], 135, 145, 155, 255);
+    expect_texture_color(runtime.animation_frames[1].frames[1], 165, 175, 185, 255);
+    EXPECT_FLOAT_EQ(runtime.fps, 9.0f);
+    EXPECT_FALSE(runtime.loop);
+    EXPECT_FALSE(runtime.lighting);
+    EXPECT_TRUE(runtime.emissive);
+    EXPECT_FLOAT_EQ(runtime.visual_ground_offset, 0.5f);
+
+    sdl3d_sprite_asset_free(&runtime);
+}
+
 TEST(SpriteAsset, LoadsThroughGameDataSpriteBridge)
 {
     const std::filesystem::path dir = make_temp_dir("sprite_bridge");
