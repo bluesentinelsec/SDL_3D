@@ -21,12 +21,17 @@ namespace
 constexpr Uint32 kPongNetworkPacketMagic = 0x474E4F50u;
 constexpr Uint8 kPongNetworkPacketVersion = 1U;
 constexpr size_t kPongNetworkInputPacketSize = 20U;
-constexpr size_t kPongNetworkStatePacketSize = 108U;
+constexpr size_t kPongNetworkControlPacketSize = 12U;
+constexpr size_t kPongNetworkStatePacketSize = 112U;
 
 enum PongNetworkMessageKind : Uint8
 {
     PONG_NETWORK_MESSAGE_INPUT = 1,
     PONG_NETWORK_MESSAGE_STATE = 2,
+    PONG_NETWORK_MESSAGE_START_GAME = 3,
+    PONG_NETWORK_MESSAGE_PAUSE_REQUEST = 4,
+    PONG_NETWORK_MESSAGE_RESUME_REQUEST = 5,
+    PONG_NETWORK_MESSAGE_DISCONNECT = 6,
 };
 
 static bool write_u8(Uint8 **cursor, Uint8 *end, Uint8 value)
@@ -274,8 +279,37 @@ static bool process_host_input_packet(sdl3d_game_data_runtime *runtime, sdl3d_ga
     return true;
 }
 
+static bool send_control_packet(sdl3d_network_session *net_session, PongNetworkMessageKind kind)
+{
+    Uint8 packet[32];
+    Uint8 *cursor = packet;
+    Uint8 *end = packet + sizeof(packet);
+
+    return write_u32(&cursor, end, kPongNetworkPacketMagic) && write_u8(&cursor, end, kPongNetworkPacketVersion) &&
+           write_u8(&cursor, end, kind) && write_u8(&cursor, end, 0U) && write_u8(&cursor, end, 0U) &&
+           write_u32(&cursor, end, 1234U) && (size_t)(cursor - packet) == kPongNetworkControlPacketSize &&
+           sdl3d_network_session_send(net_session, packet, (int)(cursor - packet));
+}
+
+static bool read_control_packet(const Uint8 *packet, int packet_size, PongNetworkMessageKind expected)
+{
+    const Uint8 *cursor = packet;
+    const Uint8 *end = packet + packet_size;
+    Uint32 magic = 0U;
+    Uint8 version = 0U;
+    Uint8 kind = 0U;
+    Uint8 reserved = 0U;
+    Uint32 tick = 0U;
+
+    return packet != nullptr && (size_t)packet_size == kPongNetworkControlPacketSize &&
+           read_u32(&cursor, end, &magic) && magic == kPongNetworkPacketMagic && read_u8(&cursor, end, &version) &&
+           version == kPongNetworkPacketVersion && read_u8(&cursor, end, &kind) && kind == (Uint8)expected &&
+           read_u8(&cursor, end, &reserved) && read_u8(&cursor, end, &reserved) && read_u32(&cursor, end, &tick) &&
+           tick == 1234U && cursor == end;
+}
+
 static bool send_host_state_packet(sdl3d_game_data_runtime *runtime, sdl3d_game_session *session,
-                                   sdl3d_network_session *net_session)
+                                   sdl3d_network_session *net_session, bool paused)
 {
     const sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.paddle.player");
     const sdl3d_registered_actor *cpu = sdl3d_game_data_find_actor(runtime, "entity.paddle.cpu");
@@ -312,6 +346,7 @@ static bool send_host_state_packet(sdl3d_game_data_runtime *runtime, sdl3d_game_
            write_f32(&cursor, end, sdl3d_properties_get_float(presentation->props, "paddle_flash", 0.0f)) &&
            write_i32(&cursor, end, sdl3d_properties_get_int(score_player_actor->props, "value", 0)) &&
            write_i32(&cursor, end, sdl3d_properties_get_int(score_cpu_actor->props, "value", 0)) &&
+           write_i32(&cursor, end, paused ? 1 : 0) &&
            write_i32(&cursor, end, sdl3d_properties_get_bool(match->props, "finished", false) ? 1 : 0) &&
            write_i32(&cursor, end,
                      SDL_strcmp(sdl3d_properties_get_string(match->props, "winner", "none"), "player") == 0 ? 1
@@ -325,7 +360,8 @@ static bool send_host_state_packet(sdl3d_game_data_runtime *runtime, sdl3d_game_
            sdl3d_network_session_send(net_session, packet, (int)(cursor - packet));
 }
 
-static bool process_client_state_packet(sdl3d_game_data_runtime *runtime, const Uint8 *packet, int packet_size)
+static bool process_client_state_packet(sdl3d_game_data_runtime *runtime, const Uint8 *packet, int packet_size,
+                                        bool *out_paused)
 {
     const Uint8 *cursor = packet;
     const Uint8 *end = packet + packet_size;
@@ -344,6 +380,7 @@ static bool process_client_state_packet(sdl3d_game_data_runtime *runtime, const 
     float paddle_flash = 0.0f;
     int score_player = 0;
     int score_cpu = 0;
+    int paused = 0;
     int finished = 0;
     int winner = 0;
     int active_motion = 0;
@@ -371,9 +408,10 @@ static bool process_client_state_packet(sdl3d_game_data_runtime *runtime, const 
         !read_vec3(&cursor, end, &cpu_position) || !read_vec3(&cursor, end, &ball_position) ||
         !read_vec3(&cursor, end, &ball_velocity) || !read_f32(&cursor, end, &border_flash) ||
         !read_f32(&cursor, end, &paddle_flash) || !read_i32(&cursor, end, &score_player) ||
-        !read_i32(&cursor, end, &score_cpu) || !read_i32(&cursor, end, &finished) || !read_i32(&cursor, end, &winner) ||
-        !read_i32(&cursor, end, &active_motion) || !read_i32(&cursor, end, &has_last_reflect_y) ||
-        !read_f32(&cursor, end, &last_reflect_y) || !read_i32(&cursor, end, &stagnant_reflect_count))
+        !read_i32(&cursor, end, &score_cpu) || !read_i32(&cursor, end, &paused) || !read_i32(&cursor, end, &finished) ||
+        !read_i32(&cursor, end, &winner) || !read_i32(&cursor, end, &active_motion) ||
+        !read_i32(&cursor, end, &has_last_reflect_y) || !read_f32(&cursor, end, &last_reflect_y) ||
+        !read_i32(&cursor, end, &stagnant_reflect_count))
     {
         return false;
     }
@@ -408,6 +446,10 @@ static bool process_client_state_packet(sdl3d_game_data_runtime *runtime, const 
     sdl3d_properties_set_int(ball->props, "stagnant_reflect_count", stagnant_reflect_count);
     sdl3d_properties_set_int(score_player_actor->props, "value", score_player);
     sdl3d_properties_set_int(score_cpu_actor->props, "value", score_cpu);
+    if (out_paused != nullptr)
+    {
+        *out_paused = paused != 0;
+    }
     sdl3d_properties_set_bool(match->props, "finished", finished != 0);
     sdl3d_properties_set_string(match->props, "winner", winner == 1 ? "player" : winner == 2 ? "cpu" : "none");
     sdl3d_properties_set_float(presentation->props, "border_flash", border_flash);
@@ -530,7 +572,7 @@ TEST_F(PongHeadlessMultiplayerTest, HostAppliesRemoteInputAndClientReceivesAutho
 
     EXPECT_NE(host_cpu->position.y, initial_host_cpu_y);
 
-    ASSERT_TRUE(send_host_state_packet(host_runtime, host_session, host_network));
+    ASSERT_TRUE(send_host_state_packet(host_runtime, host_session, host_network, true));
     received = 0;
     for (int i = 0; i < 120 && received <= 0; ++i)
     {
@@ -539,13 +581,119 @@ TEST_F(PongHeadlessMultiplayerTest, HostAppliesRemoteInputAndClientReceivesAutho
         received = sdl3d_network_session_receive(client_network, packet.data(), (int)packet.size());
     }
     ASSERT_GT(received, 0);
-    ASSERT_TRUE(process_client_state_packet(client_runtime, packet.data(), received));
+    bool client_paused = false;
+    ASSERT_TRUE(process_client_state_packet(client_runtime, packet.data(), received, &client_paused));
 
     EXPECT_NEAR(client_cpu->position.y, host_cpu->position.y, 0.0001f);
+    EXPECT_TRUE(client_paused);
     EXPECT_STREQ(
         sdl3d_properties_get_string(sdl3d_game_data_find_actor(client_runtime, "entity.match")->props, "winner",
                                     "none"),
         sdl3d_properties_get_string(sdl3d_game_data_find_actor(host_runtime, "entity.match")->props, "winner", "none"));
+}
+
+TEST_F(PongHeadlessMultiplayerTest, ControlPacketsCarryPauseResumeAndDisconnect)
+{
+    std::array<Uint8, SDL3D_NETWORK_MAX_PACKET_SIZE> packet{};
+
+    ASSERT_TRUE(send_control_packet(client_network, PONG_NETWORK_MESSAGE_PAUSE_REQUEST));
+    int received = 0;
+    for (int i = 0; i < 120 && received <= 0; ++i)
+    {
+        EXPECT_TRUE(sdl3d_network_session_update(host_network, 0.01f));
+        EXPECT_TRUE(sdl3d_network_session_update(client_network, 0.01f));
+        received = sdl3d_network_session_receive(host_network, packet.data(), (int)packet.size());
+    }
+    ASSERT_GT(received, 0);
+    ASSERT_TRUE(read_control_packet(packet.data(), received, PONG_NETWORK_MESSAGE_PAUSE_REQUEST));
+
+    ASSERT_TRUE(send_control_packet(host_network, PONG_NETWORK_MESSAGE_RESUME_REQUEST));
+    received = 0;
+    for (int i = 0; i < 120 && received <= 0; ++i)
+    {
+        EXPECT_TRUE(sdl3d_network_session_update(host_network, 0.01f));
+        EXPECT_TRUE(sdl3d_network_session_update(client_network, 0.01f));
+        received = sdl3d_network_session_receive(client_network, packet.data(), (int)packet.size());
+    }
+    ASSERT_GT(received, 0);
+    ASSERT_TRUE(read_control_packet(packet.data(), received, PONG_NETWORK_MESSAGE_RESUME_REQUEST));
+
+    ASSERT_TRUE(send_control_packet(client_network, PONG_NETWORK_MESSAGE_DISCONNECT));
+    received = 0;
+    for (int i = 0; i < 120 && received <= 0; ++i)
+    {
+        EXPECT_TRUE(sdl3d_network_session_update(host_network, 0.01f));
+        EXPECT_TRUE(sdl3d_network_session_update(client_network, 0.01f));
+        received = sdl3d_network_session_receive(host_network, packet.data(), (int)packet.size());
+    }
+    ASSERT_GT(received, 0);
+    ASSERT_TRUE(read_control_packet(packet.data(), received, PONG_NETWORK_MESSAGE_DISCONNECT));
+
+    ASSERT_TRUE(send_control_packet(host_network, PONG_NETWORK_MESSAGE_DISCONNECT));
+    received = 0;
+    for (int i = 0; i < 120 && received <= 0; ++i)
+    {
+        EXPECT_TRUE(sdl3d_network_session_update(host_network, 0.01f));
+        EXPECT_TRUE(sdl3d_network_session_update(client_network, 0.01f));
+        received = sdl3d_network_session_receive(client_network, packet.data(), (int)packet.size());
+    }
+    ASSERT_GT(received, 0);
+    ASSERT_TRUE(read_control_packet(packet.data(), received, PONG_NETWORK_MESSAGE_DISCONNECT));
+}
+
+TEST_F(PongHeadlessMultiplayerTest, NetworkPauseMenuOmitsOptions)
+{
+    sdl3d_game_data_ui_metrics metrics{};
+    metrics.paused = true;
+
+    sdl3d_game_data_menu menu{};
+    sdl3d_game_data_menu_item item{};
+
+    set_multiplayer_scene_state(host_runtime, "single", "client", "direct");
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu_for_metrics(host_runtime, &metrics, &menu));
+    ASSERT_STREQ(menu.name, "menu.pause");
+    ASSERT_EQ(menu.item_count, 3);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(host_runtime, menu.name, 1, &item));
+    ASSERT_STREQ(item.label, "Options");
+
+    set_multiplayer_scene_state(host_runtime, "local", "host", "host");
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu_for_metrics(host_runtime, &metrics, &menu));
+    ASSERT_STREQ(menu.name, "menu.pause");
+    ASSERT_EQ(menu.item_count, 3);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(host_runtime, menu.name, 1, &item));
+    ASSERT_STREQ(item.label, "Options");
+
+    set_multiplayer_scene_state(host_runtime, "lan", "host", "host");
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu_for_metrics(host_runtime, &metrics, &menu));
+    ASSERT_STREQ(menu.name, "menu.pause.network");
+    ASSERT_EQ(menu.item_count, 2);
+
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(host_runtime, menu.name, 0, &item));
+    ASSERT_STREQ(item.label, "Resume");
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(host_runtime, menu.name, 1, &item));
+    ASSERT_STREQ(item.label, "Title");
+
+    set_multiplayer_scene_state(host_runtime, "single", "none", "none");
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu_for_metrics(host_runtime, &metrics, &menu));
+    ASSERT_STREQ(menu.name, "menu.pause");
+    ASSERT_EQ(menu.item_count, 3);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(host_runtime, menu.name, 1, &item));
+    ASSERT_STREQ(item.label, "Options");
+}
+
+TEST_F(PongHeadlessMultiplayerTest, OnlyLanClientDisablesLocalSimulation)
+{
+    set_multiplayer_scene_state(host_runtime, "single", "client", "direct");
+    EXPECT_TRUE(sdl3d_game_data_active_scene_update_phase(host_runtime, "simulation", false));
+
+    set_multiplayer_scene_state(host_runtime, "local", "client", "direct");
+    EXPECT_TRUE(sdl3d_game_data_active_scene_update_phase(host_runtime, "simulation", false));
+
+    set_multiplayer_scene_state(host_runtime, "lan", "host", "host");
+    EXPECT_TRUE(sdl3d_game_data_active_scene_update_phase(host_runtime, "simulation", false));
+
+    set_multiplayer_scene_state(host_runtime, "lan", "client", "direct");
+    EXPECT_FALSE(sdl3d_game_data_active_scene_update_phase(host_runtime, "simulation", false));
 }
 
 } // namespace

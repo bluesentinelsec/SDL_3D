@@ -15,6 +15,7 @@
 #include "sdl3d/game_presentation.h"
 #include "sdl3d/network.h"
 #include "sdl3d/properties.h"
+#include "sdl3d/signal_bus.h"
 #include "sdl3d/ui.h"
 
 #if SDL3D_PONG_EMBEDDED_ASSETS
@@ -46,11 +47,15 @@ typedef struct pong_state
     int vibration_connection;
     int lobby_start_connection;
     int host_start_signal_id;
+    int camera_toggle_signal_id;
     int ball_hit_signal_id;
     int vibration_signal_id;
     int discovery_refresh_signal_id;
     int discovery_refresh_connection;
     int local_input_gamepad_count;
+    bool network_match_termination_active;
+    float network_match_termination_timer;
+    char network_match_termination_reason[96];
 } pong_state;
 
 typedef enum pong_network_message_kind
@@ -58,12 +63,21 @@ typedef enum pong_network_message_kind
     PONG_NETWORK_MESSAGE_INPUT = 1,
     PONG_NETWORK_MESSAGE_STATE = 2,
     PONG_NETWORK_MESSAGE_START_GAME = 3,
+    PONG_NETWORK_MESSAGE_PAUSE_REQUEST = 4,
+    PONG_NETWORK_MESSAGE_RESUME_REQUEST = 5,
+    PONG_NETWORK_MESSAGE_DISCONNECT = 6,
 } pong_network_message_kind;
 
 static const Uint32 PONG_NETWORK_PACKET_MAGIC = 0x474E4F50u; /* "PONG" little-endian */
 static const Uint8 PONG_NETWORK_PACKET_VERSION = 1U;
 static const size_t PONG_NETWORK_INPUT_PACKET_SIZE = 20U;
-static const size_t PONG_NETWORK_STATE_PACKET_SIZE = 108U;
+static const size_t PONG_NETWORK_CONTROL_PACKET_SIZE = 12U;
+static const size_t PONG_NETWORK_STATE_PACKET_SIZE = 112U;
+
+static bool send_network_control_packet(sdl3d_network_session *session, pong_network_message_kind kind,
+                                        const char *label);
+static bool send_network_control_packet_repeated(sdl3d_network_session *session, pong_network_message_kind kind,
+                                                 const char *label, int count);
 
 static Uint64 pong_log_timestamp_ms(void)
 {
@@ -272,6 +286,14 @@ static bool is_local_match_mode(const pong_state *state)
     return match_mode != NULL && SDL_strcmp(match_mode, "local") == 0;
 }
 
+static bool is_network_match_mode(const pong_state *state)
+{
+    const sdl3d_properties *scene_state =
+        state != NULL && state->data != NULL ? sdl3d_game_data_scene_state(state->data) : NULL;
+    const char *match_mode = scene_state != NULL ? sdl3d_properties_get_string(scene_state, "match_mode", NULL) : NULL;
+    return match_mode != NULL && SDL_strcmp(match_mode, "lan") == 0;
+}
+
 static bool is_network_flow_host(const pong_state *state)
 {
     const sdl3d_properties *scene_state =
@@ -299,12 +321,18 @@ static const char *network_role_name(const pong_state *state)
 
 static bool is_network_role_host(const pong_state *state)
 {
-    return SDL_strcmp(network_role_name(state), "host") == 0;
+    return is_network_match_mode(state) && SDL_strcmp(network_role_name(state), "host") == 0;
 }
 
 static bool is_network_role_client(const pong_state *state)
 {
-    return SDL_strcmp(network_role_name(state), "client") == 0;
+    return is_network_match_mode(state) && SDL_strcmp(network_role_name(state), "client") == 0;
+}
+
+static bool pong_network_packet_is_kind(const Uint8 *packet, int packet_size, pong_network_message_kind kind)
+{
+    return packet != NULL && packet_size >= 6 && packet[0] == 'P' && packet[1] == 'O' && packet[2] == 'N' &&
+           packet[3] == 'G' && packet[4] == PONG_NETWORK_PACKET_VERSION && packet[5] == (Uint8)kind;
 }
 
 static const char *scene_payload_string(const sdl3d_properties *payload, const char *key)
@@ -323,7 +351,8 @@ static const char *scene_context_string(const sdl3d_properties *payload, const s
     return scene_state != NULL ? sdl3d_properties_get_string(scene_state, key, fallback) : fallback;
 }
 
-static bool enter_multiplayer_play_scene(pong_state *state, const char *match_mode, const char *network_role)
+static bool enter_multiplayer_play_scene(pong_state *state, const char *match_mode, const char *network_role,
+                                         const char *network_flow)
 {
     sdl3d_properties *payload = NULL;
     bool ok = false;
@@ -346,6 +375,10 @@ static bool enter_multiplayer_play_scene(pong_state *state, const char *match_mo
     if (network_role != NULL)
     {
         sdl3d_properties_set_string(payload, "network_role", network_role);
+    }
+    if (network_flow != NULL)
+    {
+        sdl3d_properties_set_string(payload, "network_flow", network_flow);
     }
 
     ok = sdl3d_game_data_set_active_scene_with_payload(state->data, "scene.play", payload);
@@ -411,22 +444,41 @@ static void update_host_session_scene_state(pong_state *state)
         state->host_session != NULL ? sdl3d_network_session_status(state->host_session) : state->host_status;
     const Uint16 port =
         state->host_session != NULL ? sdl3d_network_session_port(state->host_session) : SDL3D_NETWORK_DEFAULT_PORT;
+    char client_label[SDL3D_NETWORK_MAX_HOST_LENGTH + 48];
+    char peer_host[SDL3D_NETWORK_MAX_HOST_LENGTH];
+    Uint16 peer_port = 0;
+    const bool client_connected =
+        state->host_session != NULL && sdl3d_network_session_is_connected(state->host_session);
     SDL_snprintf(state->host_status, sizeof(state->host_status), "%s",
                  status != NULL && status[0] != '\0' ? status : "Not hosting");
     SDL_snprintf(state->host_endpoint, sizeof(state->host_endpoint), "UDP %u", (unsigned int)port);
+    SDL_snprintf(client_label, sizeof(client_label), "Waiting for client");
+    SDL_zero(peer_host);
+    if (client_connected &&
+        sdl3d_network_session_get_peer_endpoint(state->host_session, peer_host, (int)sizeof(peer_host), &peer_port))
+    {
+        SDL_snprintf(client_label, sizeof(client_label), "Client 1 - %s:%u", peer_host, (unsigned int)peer_port);
+    }
+    else if (client_connected)
+    {
+        SDL_snprintf(client_label, sizeof(client_label), "Client 1 - Connected");
+    }
 
     sdl3d_properties_set_string(scene_state, "multiplayer_host_status", state->host_status);
     sdl3d_properties_set_string(scene_state, "multiplayer_host_endpoint", state->host_endpoint);
-    sdl3d_properties_set_string(scene_state, "multiplayer_host_client",
-                                state->host_session != NULL && sdl3d_network_session_is_connected(state->host_session)
-                                    ? "Client connected"
-                                    : "Waiting for client");
+    sdl3d_properties_set_string(scene_state, "multiplayer_host_client", client_label);
+    sdl3d_properties_set_bool(scene_state, "multiplayer_host_connected", client_connected);
 }
 
-static void destroy_host_session(pong_state *state)
+static void destroy_host_session_internal(pong_state *state, bool notify_peer)
 {
     if (state != NULL && state->host_session != NULL)
     {
+        if (notify_peer)
+        {
+            (void)send_network_control_packet_repeated(state->host_session, PONG_NETWORK_MESSAGE_DISCONNECT,
+                                                       "host disconnect", 5);
+        }
         sdl3d_network_session_destroy(state->host_session);
         state->host_session = NULL;
     }
@@ -438,6 +490,11 @@ static void destroy_host_session(pong_state *state)
                      (unsigned int)SDL3D_NETWORK_DEFAULT_PORT);
         update_host_session_scene_state(state);
     }
+}
+
+static void destroy_host_session(pong_state *state)
+{
+    destroy_host_session_internal(state, true);
 }
 
 static void bind_local_play_controls(pong_state *state)
@@ -540,14 +597,24 @@ static bool configure_play_input(void *userdata, sdl3d_game_data_runtime *runtim
 
     const sdl3d_properties *scene_state = sdl3d_game_data_scene_state(state->data);
     sdl3d_properties *mutable_scene_state = sdl3d_game_data_mutable_scene_state(state->data);
-    const char *match_mode = scene_context_string(payload, scene_state, "match_mode", "single");
-    const char *network_role = scene_context_string(payload, scene_state, "network_role", "none");
-    const char *network_flow = scene_context_string(payload, scene_state, "network_flow", "none");
+    const char *requested_match_mode = scene_context_string(payload, scene_state, "match_mode", "single");
+    const bool requested_lan = requested_match_mode != NULL && SDL_strcmp(requested_match_mode, "lan") == 0;
+    const char *requested_network_role =
+        requested_lan ? scene_context_string(payload, scene_state, "network_role", "none") : "none";
+    const char *requested_network_flow =
+        requested_lan ? scene_context_string(payload, scene_state, "network_flow", "none") : "none";
+    const bool valid_network_role =
+        requested_network_role != NULL &&
+        (SDL_strcmp(requested_network_role, "host") == 0 || SDL_strcmp(requested_network_role, "client") == 0);
+    const char *match_mode = requested_lan && !valid_network_role ? "single" : requested_match_mode;
+    const char *network_role = requested_lan && valid_network_role ? requested_network_role : "none";
+    const char *network_flow = requested_lan && valid_network_role ? requested_network_flow : "none";
 
     clear_network_action_overrides(state);
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong play input context: match_mode=%s network_role=%s network_flow=%s",
-                match_mode != NULL ? match_mode : "none", network_role != NULL ? network_role : "none",
-                network_flow != NULL ? network_flow : "none");
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "Pong play input context: requested_match_mode=%s match_mode=%s network_role=%s network_flow=%s",
+                requested_match_mode != NULL ? requested_match_mode : "none", match_mode != NULL ? match_mode : "none",
+                network_role != NULL ? network_role : "none", network_flow != NULL ? network_flow : "none");
 
     if (mutable_scene_state != NULL)
     {
@@ -621,13 +688,23 @@ static bool configure_play_input(void *userdata, sdl3d_game_data_runtime *runtim
     return true;
 }
 
-static void destroy_direct_connect_session(pong_state *state)
+static void destroy_direct_connect_session_internal(pong_state *state, bool notify_peer)
 {
     if (state != NULL && state->direct_connect_session != NULL)
     {
+        if (notify_peer)
+        {
+            (void)send_network_control_packet_repeated(state->direct_connect_session, PONG_NETWORK_MESSAGE_DISCONNECT,
+                                                       "client disconnect", 5);
+        }
         sdl3d_network_session_destroy(state->direct_connect_session);
         state->direct_connect_session = NULL;
     }
+}
+
+static void destroy_direct_connect_session(pong_state *state)
+{
+    destroy_direct_connect_session_internal(state, true);
 }
 
 static bool start_host_session(pong_state *state)
@@ -680,10 +757,102 @@ static void reset_direct_connect_defaults(pong_state *state)
     SDL_snprintf(state->direct_connect_status, sizeof(state->direct_connect_status), "Ready to connect");
 }
 
+static bool send_network_control_packet(sdl3d_network_session *session, pong_network_message_kind kind,
+                                        const char *label)
+{
+    Uint8 packet[32];
+    Uint8 *cursor = packet;
+    Uint8 *end = packet + sizeof(packet);
+    const Uint32 tick = (Uint32)SDL_GetTicks();
+
+    if (session == NULL || !sdl3d_network_session_is_connected(session))
+    {
+        return false;
+    }
+
+    if (!pong_network_write_u32(&cursor, end, PONG_NETWORK_PACKET_MAGIC) ||
+        !pong_network_write_u8(&cursor, end, PONG_NETWORK_PACKET_VERSION) ||
+        !pong_network_write_u8(&cursor, end, (Uint8)kind) || !pong_network_write_u8(&cursor, end, 0U) ||
+        !pong_network_write_u8(&cursor, end, 0U) || !pong_network_write_u32(&cursor, end, tick))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network control packet encode failed: kind=%u",
+                    (unsigned int)kind);
+        return false;
+    }
+
+    if ((size_t)(cursor - packet) != PONG_NETWORK_CONTROL_PACKET_SIZE)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network control packet size mismatch: expected=%zu actual=%zu",
+                    PONG_NETWORK_CONTROL_PACKET_SIZE, (size_t)(cursor - packet));
+        return false;
+    }
+
+    if (!sdl3d_network_session_send(session, packet, (int)(cursor - packet)))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network control packet send failed: %s", SDL_GetError());
+        return false;
+    }
+
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[%llu ms] Pong sent network control: %s kind=%u",
+                (unsigned long long)pong_log_timestamp_ms(), label != NULL ? label : "control", (unsigned int)kind);
+    return true;
+}
+
+static bool send_network_control_packet_repeated(sdl3d_network_session *session, pong_network_message_kind kind,
+                                                 const char *label, int count)
+{
+    bool sent_any = false;
+    const int attempts = SDL_max(count, 1);
+
+    for (int i = 0; i < attempts; ++i)
+    {
+        if (send_network_control_packet(session, kind, label))
+        {
+            sent_any = true;
+        }
+        if (session != NULL)
+        {
+            (void)sdl3d_network_session_update(session, 0.0f);
+        }
+    }
+
+    return sent_any;
+}
+
+static bool read_network_control_packet(const Uint8 *packet, int packet_size, pong_network_message_kind expected,
+                                        Uint32 *out_tick)
+{
+    const Uint8 *cursor = packet;
+    const Uint8 *end = packet + packet_size;
+    Uint32 magic = 0U;
+    Uint8 version = 0U;
+    Uint8 kind = 0U;
+    Uint8 reserved = 0U;
+    Uint32 tick = 0U;
+
+    if (packet == NULL || (size_t)packet_size != PONG_NETWORK_CONTROL_PACKET_SIZE)
+    {
+        return false;
+    }
+
+    if (!pong_network_read_u32(&cursor, end, &magic) || magic != PONG_NETWORK_PACKET_MAGIC ||
+        !pong_network_read_u8(&cursor, end, &version) || version != PONG_NETWORK_PACKET_VERSION ||
+        !pong_network_read_u8(&cursor, end, &kind) || kind != (Uint8)expected ||
+        !pong_network_read_u8(&cursor, end, &reserved) || !pong_network_read_u8(&cursor, end, &reserved) ||
+        !pong_network_read_u32(&cursor, end, &tick) || cursor != end)
+    {
+        return false;
+    }
+
+    if (out_tick != NULL)
+    {
+        *out_tick = tick;
+    }
+    return true;
+}
+
 static bool send_host_start_packet(pong_state *state)
 {
-    Uint8 command = (Uint8)PONG_NETWORK_MESSAGE_START_GAME;
-
     if (state == NULL)
     {
         return false;
@@ -696,15 +865,44 @@ static bool send_host_start_packet(pong_state *state)
         return false;
     }
 
-    if (!sdl3d_network_session_send(state->host_session, &command, 1))
+    if (!send_network_control_packet(state->host_session, PONG_NETWORK_MESSAGE_START_GAME, "start game"))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong host start packet send failed: %s", SDL_GetError());
         SDL_snprintf(state->host_status, sizeof(state->host_status), "%s", SDL_GetError());
         update_host_session_scene_state(state);
         return false;
     }
 
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong host requested multiplayer start");
+    return true;
+}
+
+static bool start_selected_lobby_match(pong_state *state)
+{
+    if (state == NULL)
+    {
+        return false;
+    }
+
+    if (state->host_session == NULL || !sdl3d_network_session_is_connected(state->host_session))
+    {
+        SDL_snprintf(state->host_status, sizeof(state->host_status), "Waiting for client");
+        update_host_session_scene_state(state);
+        return false;
+    }
+
+    if (!send_host_start_packet(state))
+    {
+        return false;
+    }
+
+    clear_network_action_overrides(state);
+    if (!enter_multiplayer_play_scene(state, "lan", "host", "host"))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong host failed to enter multiplayer play scene: %s",
+                    SDL_GetError());
+        return false;
+    }
+
     return true;
 }
 
@@ -766,7 +964,28 @@ static bool send_client_input_packet(pong_state *state)
     return true;
 }
 
-static bool apply_play_state_snapshot(pong_state *state, Uint32 packet_tick, const Uint8 **cursor, const Uint8 *end)
+static void send_client_pause_request_if_pressed(sdl3d_game_context *ctx, pong_state *state)
+{
+    const int pause_action =
+        state != NULL && state->data != NULL ? sdl3d_game_data_find_action(state->data, "action.pause") : -1;
+    pong_network_message_kind request_kind;
+
+    if (ctx == NULL || state == NULL || state->input == NULL || state->direct_connect_session == NULL ||
+        pause_action < 0 || !is_multiplayer_play_scene(state) || !is_network_role_client(state) ||
+        !sdl3d_network_session_is_connected(state->direct_connect_session) ||
+        !sdl3d_input_is_pressed(state->input, pause_action))
+    {
+        return;
+    }
+
+    request_kind = ctx->paused ? PONG_NETWORK_MESSAGE_RESUME_REQUEST : PONG_NETWORK_MESSAGE_PAUSE_REQUEST;
+    (void)send_network_control_packet(state->direct_connect_session, request_kind,
+                                      request_kind == PONG_NETWORK_MESSAGE_PAUSE_REQUEST ? "pause request"
+                                                                                         : "resume request");
+}
+
+static bool apply_play_state_snapshot(sdl3d_game_context *ctx, pong_state *state, Uint32 packet_tick,
+                                      const Uint8 **cursor, const Uint8 *end)
 {
     const Uint8 *packet_begin = cursor != NULL ? *cursor : NULL;
     sdl3d_registered_actor *player = NULL;
@@ -785,6 +1004,7 @@ static bool apply_play_state_snapshot(pong_state *state, Uint32 packet_tick, con
     float last_reflect_y = 0.0f;
     int score_player = 0;
     int score_cpu = 0;
+    int paused = 0;
     int finished = 0;
     int winner = 0;
     int active_motion = 0;
@@ -809,8 +1029,8 @@ static bool apply_play_state_snapshot(pong_state *state, Uint32 packet_tick, con
         !pong_network_read_vec3(cursor, end, &ball_position) || !pong_network_read_vec3(cursor, end, &ball_velocity) ||
         !pong_network_read_f32(cursor, end, &border_flash) || !pong_network_read_f32(cursor, end, &paddle_flash) ||
         !pong_network_read_i32(cursor, end, &score_player) || !pong_network_read_i32(cursor, end, &score_cpu) ||
-        !pong_network_read_i32(cursor, end, &finished) || !pong_network_read_i32(cursor, end, &winner) ||
-        !pong_network_read_i32(cursor, end, &active_motion) ||
+        !pong_network_read_i32(cursor, end, &paused) || !pong_network_read_i32(cursor, end, &finished) ||
+        !pong_network_read_i32(cursor, end, &winner) || !pong_network_read_i32(cursor, end, &active_motion) ||
         !pong_network_read_i32(cursor, end, &has_last_reflect_y) ||
         !pong_network_read_f32(cursor, end, &last_reflect_y) ||
         !pong_network_read_i32(cursor, end, &stagnant_reflect_count))
@@ -836,6 +1056,12 @@ static bool apply_play_state_snapshot(pong_state *state, Uint32 packet_tick, con
 
     sdl3d_properties_set_int(score_player_actor->props, "value", score_player);
     sdl3d_properties_set_int(score_cpu_actor->props, "value", score_cpu);
+    if (ctx != NULL && ctx->paused != (paused != 0))
+    {
+        ctx->paused = paused != 0;
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[%llu ms] Pong client mirrored host pause state: paused=%d",
+                    (unsigned long long)pong_log_timestamp_ms(), ctx->paused ? 1 : 0);
+    }
     sdl3d_properties_set_bool(match->props, "finished", finished != 0);
     sdl3d_properties_set_string(match->props, "winner", winner == 1 ? "player" : winner == 2 ? "cpu" : "none");
     sdl3d_properties_set_float(presentation->props, "border_flash", border_flash);
@@ -892,7 +1118,8 @@ static bool process_host_input_packet(pong_state *state, const Uint8 *packet, in
     return true;
 }
 
-static bool process_client_state_packet(pong_state *state, const Uint8 *packet, int packet_size)
+static bool process_client_state_packet(sdl3d_game_context *ctx, pong_state *state, const Uint8 *packet,
+                                        int packet_size)
 {
     const Uint8 *cursor = packet;
     const Uint8 *end = packet + packet_size;
@@ -932,11 +1159,119 @@ static bool process_client_state_packet(pong_state *state, const Uint8 *packet, 
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                 "[%llu ms] Pong client received state packet tick=%u p1_up=%.3f p1_down=%.3f",
                 (unsigned long long)pong_log_timestamp_ms(), (unsigned int)tick, p1_up, p1_down);
-    ok = apply_play_state_snapshot(state, tick, &cursor, end);
+    ok = apply_play_state_snapshot(ctx, state, tick, &cursor, end);
     return ok;
 }
 
-static bool send_host_state_packet(pong_state *state)
+static void begin_network_match_termination(sdl3d_game_context *ctx, pong_state *state, bool local_host,
+                                            const char *reason)
+{
+    if (state == NULL || state->data == NULL)
+    {
+        return;
+    }
+
+    clear_network_action_overrides(state);
+    if (ctx != NULL)
+    {
+        ctx->paused = true;
+    }
+
+    SDL_snprintf(state->network_match_termination_reason, sizeof(state->network_match_termination_reason), "%s",
+                 reason != NULL && reason[0] != '\0' ? reason : "Peer disconnected");
+    state->network_match_termination_timer = 0.0f;
+    state->network_match_termination_active = true;
+
+    if (local_host)
+    {
+        destroy_host_session_internal(state, false);
+        SDL_snprintf(state->host_status, sizeof(state->host_status), "%s",
+                     reason != NULL && reason[0] != '\0' ? reason : "Client disconnected");
+        update_host_session_scene_state(state);
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong host match terminated: %s", state->host_status);
+    }
+    else
+    {
+        SDL_snprintf(state->direct_connect_status, sizeof(state->direct_connect_status), "%s",
+                     reason != NULL && reason[0] != '\0' ? reason : "Host disconnected");
+        destroy_direct_connect_session_internal(state, false);
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong client match terminated: %s", state->direct_connect_status);
+    }
+}
+
+static void return_to_multiplayer_after_disconnect(sdl3d_game_context *ctx, pong_state *state, bool local_host,
+                                                   const char *reason)
+{
+    if (state == NULL || state->data == NULL)
+    {
+        return;
+    }
+
+    if (is_multiplayer_play_scene(state))
+    {
+        begin_network_match_termination(ctx, state, local_host, reason);
+        return;
+    }
+
+    clear_network_action_overrides(state);
+    if (ctx != NULL)
+    {
+        ctx->paused = false;
+    }
+
+    if (local_host)
+    {
+        SDL_snprintf(state->host_status, sizeof(state->host_status), "%s",
+                     reason != NULL && reason[0] != '\0' ? reason : "Client disconnected");
+        destroy_host_session_internal(state, false);
+        update_host_session_scene_state(state);
+        (void)sdl3d_game_data_set_active_scene(state->data, "scene.multiplayer.lobby");
+    }
+    else
+    {
+        SDL_snprintf(state->direct_connect_status, sizeof(state->direct_connect_status), "%s",
+                     reason != NULL && reason[0] != '\0' ? reason : "Host disconnected");
+        destroy_direct_connect_session_internal(state, false);
+        (void)sdl3d_game_data_set_active_scene(state->data, "scene.multiplayer.join");
+    }
+}
+
+static bool process_network_control_packet(sdl3d_game_context *ctx, pong_state *state, const Uint8 *packet,
+                                           int packet_size, pong_network_message_kind kind)
+{
+    Uint32 tick = 0U;
+    if (!read_network_control_packet(packet, packet_size, kind, &tick))
+    {
+        return false;
+    }
+
+    switch (kind)
+    {
+    case PONG_NETWORK_MESSAGE_PAUSE_REQUEST:
+        if (ctx != NULL && is_network_role_host(state))
+        {
+            ctx->paused = true;
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[%llu ms] Pong host accepted peer pause request tick=%u",
+                        (unsigned long long)pong_log_timestamp_ms(), (unsigned int)tick);
+        }
+        return true;
+    case PONG_NETWORK_MESSAGE_RESUME_REQUEST:
+        if (ctx != NULL && is_network_role_host(state))
+        {
+            ctx->paused = false;
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[%llu ms] Pong host accepted peer resume request tick=%u",
+                        (unsigned long long)pong_log_timestamp_ms(), (unsigned int)tick);
+        }
+        return true;
+    case PONG_NETWORK_MESSAGE_DISCONNECT:
+        return_to_multiplayer_after_disconnect(ctx, state, is_network_role_host(state), "Peer disconnected");
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool send_host_state_packet(sdl3d_game_context *ctx, pong_state *state)
 {
     Uint8 packet[160];
     Uint8 *cursor = packet;
@@ -991,6 +1326,7 @@ static bool send_host_state_packet(pong_state *state)
         !pong_network_write_f32(&cursor, end, sdl3d_properties_get_float(presentation->props, "paddle_flash", 0.0f)) ||
         !pong_network_write_i32(&cursor, end, sdl3d_properties_get_int(score_player_actor->props, "value", 0)) ||
         !pong_network_write_i32(&cursor, end, sdl3d_properties_get_int(score_cpu_actor->props, "value", 0)) ||
+        !pong_network_write_i32(&cursor, end, ctx != NULL && ctx->paused ? 1 : 0) ||
         !pong_network_write_i32(&cursor, end, sdl3d_properties_get_bool(match->props, "finished", false) ? 1 : 0) ||
         !pong_network_write_i32(
             &cursor, end,
@@ -1065,7 +1401,7 @@ static bool start_direct_connect_session(pong_state *state)
     return true;
 }
 
-static void update_direct_connect_session_status(pong_state *state)
+static void update_direct_connect_session_status(sdl3d_game_context *ctx, pong_state *state)
 {
     if (state == NULL)
     {
@@ -1087,28 +1423,119 @@ static void update_direct_connect_session_status(pong_state *state)
             {
                 SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong client received multiplayer start request");
                 clear_network_action_overrides(state);
-                if (!enter_multiplayer_play_scene(state, "lan", "client"))
+                if (!enter_multiplayer_play_scene(state, "lan", "client", "direct"))
                 {
                     SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong client failed to enter multiplayer play scene: %s",
                                 SDL_GetError());
                 }
+                continue;
+            }
+            if (pong_network_packet_is_kind(packet, packet_size, PONG_NETWORK_MESSAGE_START_GAME))
+            {
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong client received multiplayer start request");
+                clear_network_action_overrides(state);
+                if (!enter_multiplayer_play_scene(state, "lan", "client", "direct"))
+                {
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong client failed to enter multiplayer play scene: %s",
+                                SDL_GetError());
+                }
+                continue;
+            }
+            if (pong_network_packet_is_kind(packet, packet_size, PONG_NETWORK_MESSAGE_DISCONNECT))
+            {
+                Uint32 tick = 0U;
+                if (read_network_control_packet(packet, packet_size, PONG_NETWORK_MESSAGE_DISCONNECT, &tick))
+                {
+                    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[%llu ms] Pong client received host disconnect tick=%u",
+                                (unsigned long long)pong_log_timestamp_ms(), (unsigned int)tick);
+                    return_to_multiplayer_after_disconnect(ctx, state, false, "Host exited");
+                }
                 break;
             }
-            if (is_multiplayer_play_scene(state) && packet_size >= 12)
+            if (pong_network_packet_is_kind(packet, packet_size, PONG_NETWORK_MESSAGE_STATE))
             {
-                if (process_client_state_packet(state, packet, packet_size))
+                if (!is_multiplayer_play_scene(state))
+                {
+                    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                                "Pong client received authoritative state before start command; entering play scene");
+                    clear_network_action_overrides(state);
+                    if (!enter_multiplayer_play_scene(state, "lan", "client", "direct"))
+                    {
+                        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                    "Pong client failed to enter multiplayer play scene from state packet: %s",
+                                    SDL_GetError());
+                        continue;
+                    }
+                }
+                if (process_client_state_packet(ctx, state, packet, packet_size))
                 {
                     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Pong client applied authoritative state packet");
                 }
             }
         }
 
+        if (state->direct_connect_session == NULL)
+        {
+            return;
+        }
+
         const sdl3d_network_state session_state = sdl3d_network_session_state(state->direct_connect_session);
         if (session_state == SDL3D_NETWORK_STATE_REJECTED || session_state == SDL3D_NETWORK_STATE_TIMED_OUT ||
             session_state == SDL3D_NETWORK_STATE_ERROR)
         {
-            destroy_direct_connect_session(state);
+            const bool was_playing = is_multiplayer_play_scene(state);
+            const char *reason = session_state == SDL3D_NETWORK_STATE_TIMED_OUT  ? "Host timed out"
+                                 : session_state == SDL3D_NETWORK_STATE_REJECTED ? "Host rejected connection"
+                                                                                 : "Host connection error";
+            if (was_playing)
+            {
+                return_to_multiplayer_after_disconnect(ctx, state, false, reason);
+            }
+            else
+            {
+                SDL_snprintf(state->direct_connect_status, sizeof(state->direct_connect_status), "%s", reason);
+                destroy_direct_connect_session_internal(state, false);
+            }
         }
+    }
+}
+
+static void update_network_match_termination(sdl3d_game_context *ctx, pong_state *state, float dt)
+{
+    const int select_action =
+        state != NULL && state->data != NULL ? sdl3d_game_data_find_action(state->data, "action.menu.select") : -1;
+
+    if (state == NULL || !state->network_match_termination_active)
+    {
+        return;
+    }
+
+    if (ctx != NULL)
+    {
+        ctx->paused = true;
+    }
+
+    state->network_match_termination_timer += SDL_max(dt, 0.0f);
+    if (state->network_match_termination_timer < 0.25f)
+    {
+        return;
+    }
+
+    if (state->input == NULL || select_action < 0 || !sdl3d_input_is_pressed(state->input, select_action))
+    {
+        return;
+    }
+
+    state->network_match_termination_active = false;
+    state->network_match_termination_timer = 0.0f;
+    state->network_match_termination_reason[0] = '\0';
+    if (ctx != NULL)
+    {
+        ctx->paused = false;
+    }
+    if (state->data != NULL)
+    {
+        (void)sdl3d_game_data_set_active_scene(state->data, "scene.title");
     }
 }
 
@@ -1242,29 +1669,64 @@ static bool refresh_discovery_session(pong_state *state)
     return true;
 }
 
-static void handle_discovery_result_selection(pong_state *state, int index)
+static bool start_discovered_match_connection(pong_state *state, int index)
 {
     sdl3d_network_discovery_result result;
     char port_buffer[16];
 
     if (state == NULL || state->discovery_session == NULL)
     {
-        return;
+        return false;
     }
 
     SDL_zero(result);
     if (!sdl3d_network_discovery_session_get_result(state->discovery_session, index, &result))
     {
-        return;
+        return false;
     }
 
     SDL_strlcpy(state->direct_connect_host, result.host, sizeof(state->direct_connect_host));
     SDL_snprintf(port_buffer, sizeof(port_buffer), "%u", (unsigned int)result.port);
     SDL_strlcpy(state->direct_connect_port, port_buffer, sizeof(state->direct_connect_port));
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong LAN discovery auto-connecting to result %d: %s:%u session=%s",
+                index, result.host, (unsigned int)result.port,
+                result.session_name[0] != '\0' ? result.session_name : "SDL3D Session");
     destroy_discovery_session(state);
-    if (start_direct_connect_session(state))
+    if (!start_direct_connect_session(state))
     {
-        (void)sdl3d_game_data_set_active_scene(state->data, "scene.multiplayer.direct_connect");
+        return false;
+    }
+    SDL_snprintf(state->direct_connect_status, sizeof(state->direct_connect_status), "Match found. Connecting...");
+    return true;
+}
+
+static void emit_pong_signal_by_name(sdl3d_game_context *ctx, pong_state *state, const char *signal_name)
+{
+    const int signal_id =
+        state != NULL && state->data != NULL ? sdl3d_game_data_find_signal(state->data, signal_name) : -1;
+    if (ctx == NULL || state == NULL || signal_id < 0)
+    {
+        return;
+    }
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(ctx->session), signal_id, NULL);
+}
+
+static void update_discovery_controls(sdl3d_game_context *ctx, pong_state *state)
+{
+    if (ctx == NULL || state == NULL || state->data == NULL || state->input == NULL ||
+        !is_multiplayer_discovery_scene(state))
+    {
+        return;
+    }
+
+    const int back_action = sdl3d_game_data_find_action(state->data, "action.menu.back");
+
+    if (back_action >= 0 && sdl3d_input_is_pressed(state->input, back_action))
+    {
+        emit_pong_signal_by_name(ctx, state, "signal.ui.menu.select");
+        destroy_discovery_session(state);
+        destroy_direct_connect_session(state);
+        (void)sdl3d_game_data_set_active_scene(state->data, "scene.multiplayer.join");
     }
 }
 
@@ -1301,36 +1763,36 @@ static void draw_discovery_overlay(sdl3d_game_context *ctx, pong_state *state)
             sdl3d_ui_layout_label(state->discovery_ui, status);
         }
     }
-
-    for (int i = 0; i < result_count; ++i)
+    else if (state->direct_connect_session != NULL)
     {
-        sdl3d_network_discovery_result result;
-        char label[SDL3D_NETWORK_MAX_STATUS_LENGTH + SDL3D_NETWORK_MAX_HOST_LENGTH + 32];
-        if (!sdl3d_network_discovery_session_get_result(state->discovery_session, i, &result))
+        if (sdl3d_network_session_is_connected(state->direct_connect_session))
         {
-            continue;
+            sdl3d_ui_layout_label(state->discovery_ui, "Connected. Waiting for host to start...");
         }
-
-        SDL_snprintf(label, sizeof(label), "%s  %s:%u%s%s",
-                     result.session_name[0] != '\0' ? result.session_name : "SDL3D Session", result.host,
-                     (unsigned int)result.port, result.status[0] != '\0' ? "  " : "",
-                     result.status[0] != '\0' ? result.status : "");
-        if (sdl3d_ui_layout_button(state->discovery_ui, label))
+        else
         {
-            handle_discovery_result_selection(state, i);
-            break;
+            sdl3d_ui_layout_label(state->discovery_ui, state->direct_connect_status);
         }
     }
 
-    if (result_count == 0)
+    if (state->direct_connect_session != NULL)
+    {
+        sdl3d_ui_layout_label(state->discovery_ui, "The host will start the match.");
+    }
+    else if (result_count == 0)
     {
         sdl3d_ui_layout_label(state->discovery_ui, "Searching local network...");
+    }
+    else
+    {
+        sdl3d_ui_layout_label(state->discovery_ui, "Match found. Connecting...");
     }
 
     sdl3d_ui_separator(state->discovery_ui);
     if (sdl3d_ui_layout_button(state->discovery_ui, "Back"))
     {
         destroy_discovery_session(state);
+        destroy_direct_connect_session(state);
         (void)sdl3d_game_data_set_active_scene(state->data, "scene.multiplayer.join");
     }
 
@@ -1338,7 +1800,7 @@ static void draw_discovery_overlay(sdl3d_game_context *ctx, pong_state *state)
     sdl3d_ui_end_panel(state->discovery_ui);
 }
 
-static void update_host_session_status(pong_state *state, float dt)
+static void update_host_session_status(sdl3d_game_context *ctx, pong_state *state, float dt)
 {
     if (state == NULL)
     {
@@ -1356,8 +1818,33 @@ static void update_host_session_status(pong_state *state, float dt)
         int packet_size = 0;
         while ((packet_size = sdl3d_network_session_receive(state->host_session, packet, (int)sizeof(packet))) > 0)
         {
-            if (packet_size >= 12 && is_multiplayer_play_scene(state) && packet[0] == 'P' && packet[1] == 'O' &&
-                packet[2] == 'N' && packet[3] == 'G')
+            if (pong_network_packet_is_kind(packet, packet_size, PONG_NETWORK_MESSAGE_DISCONNECT))
+            {
+                Uint32 tick = 0U;
+                if (read_network_control_packet(packet, packet_size, PONG_NETWORK_MESSAGE_DISCONNECT, &tick))
+                {
+                    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[%llu ms] Pong host received client disconnect tick=%u",
+                                (unsigned long long)pong_log_timestamp_ms(), (unsigned int)tick);
+                    return_to_multiplayer_after_disconnect(ctx, state, true, "Client exited");
+                }
+                break;
+            }
+            if (is_multiplayer_play_scene(state) &&
+                pong_network_packet_is_kind(packet, packet_size, PONG_NETWORK_MESSAGE_PAUSE_REQUEST))
+            {
+                (void)process_network_control_packet(ctx, state, packet, packet_size,
+                                                     PONG_NETWORK_MESSAGE_PAUSE_REQUEST);
+                continue;
+            }
+            if (is_multiplayer_play_scene(state) &&
+                pong_network_packet_is_kind(packet, packet_size, PONG_NETWORK_MESSAGE_RESUME_REQUEST))
+            {
+                (void)process_network_control_packet(ctx, state, packet, packet_size,
+                                                     PONG_NETWORK_MESSAGE_RESUME_REQUEST);
+                continue;
+            }
+            if (is_multiplayer_play_scene(state) &&
+                pong_network_packet_is_kind(packet, packet_size, PONG_NETWORK_MESSAGE_INPUT))
             {
                 if (process_host_input_packet(state, packet, packet_size))
                 {
@@ -1369,16 +1856,16 @@ static void update_host_session_status(pong_state *state, float dt)
         update_host_session_scene_state(state);
 
         const char *active_scene = active_scene_name(state);
-        if (active_scene == NULL || (!is_multiplayer_lobby_scene(state) && !is_multiplayer_play_scene(state)))
+        const bool keep_host_session =
+            is_multiplayer_lobby_scene(state) || (is_multiplayer_play_scene(state) && is_network_role_host(state));
+        if (active_scene == NULL || !keep_host_session)
         {
             destroy_host_session(state);
         }
         else if (is_multiplayer_play_scene(state) && state->host_session != NULL &&
                  sdl3d_network_session_state(state->host_session) != SDL3D_NETWORK_STATE_CONNECTED)
         {
-            clear_network_action_overrides(state);
-            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong host client disconnected, returning to lobby");
-            (void)sdl3d_game_data_set_active_scene(state->data, "scene.multiplayer.lobby");
+            begin_network_match_termination(ctx, state, true, "Client timed out");
         }
         return;
     }
@@ -1389,21 +1876,21 @@ static void update_host_session_status(pong_state *state, float dt)
     }
 }
 
-static void update_multiplayer_sessions(pong_state *state, float dt)
+static void update_multiplayer_sessions(sdl3d_game_context *ctx, pong_state *state, float dt)
 {
     if (state == NULL)
     {
         return;
     }
 
-    update_host_session_status(state, dt);
+    update_host_session_status(ctx, state, dt);
 
     if (state->host_session != NULL)
     {
         update_host_session_scene_state(state);
     }
 
-    if (is_multiplayer_discovery_scene(state))
+    if (is_multiplayer_discovery_scene(state) && state->direct_connect_session == NULL)
     {
         if (state->discovery_session == NULL)
         {
@@ -1416,6 +1903,10 @@ static void update_multiplayer_sessions(pong_state *state, float dt)
                 SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong LAN discovery update failed: %s", SDL_GetError());
             }
             update_discovery_scene_state(state);
+            if (sdl3d_network_discovery_session_result_count(state->discovery_session) > 0)
+            {
+                (void)start_discovered_match_connection(state, 0);
+            }
         }
     }
     else if (state->discovery_session != NULL)
@@ -1425,27 +1916,31 @@ static void update_multiplayer_sessions(pong_state *state, float dt)
 
     if (state->direct_connect_session != NULL)
     {
+        const bool keep_direct_connect_session = is_direct_connect_scene(state) ||
+                                                 is_multiplayer_discovery_scene(state) ||
+                                                 (is_multiplayer_play_scene(state) && is_network_role_client(state));
+        if (!keep_direct_connect_session)
+        {
+            destroy_direct_connect_session(state);
+            return;
+        }
+
         if (!sdl3d_network_session_update(state->direct_connect_session, dt))
         {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong direct-connect session update failed: %s", SDL_GetError());
         }
 
-        update_direct_connect_session_status(state);
-
-        const bool keep_direct_connect_session = is_direct_connect_scene(state) || is_multiplayer_play_scene(state);
-        if (!keep_direct_connect_session)
-        {
-            destroy_direct_connect_session(state);
-        }
+        update_direct_connect_session_status(ctx, state);
     }
 
     if (state->direct_connect_session != NULL && is_multiplayer_play_scene(state) && is_network_role_client(state))
     {
+        send_client_pause_request_if_pressed(ctx, state);
         (void)send_client_input_packet(state);
     }
 }
 
-static void publish_multiplayer_state(pong_state *state)
+static void publish_multiplayer_state(sdl3d_game_context *ctx, pong_state *state)
 {
     if (state == NULL || state->host_session == NULL || !is_multiplayer_play_scene(state) ||
         !is_network_role_host(state))
@@ -1453,52 +1948,28 @@ static void publish_multiplayer_state(pong_state *state)
         return;
     }
 
-    if (!send_host_state_packet(state))
+    if (!send_host_state_packet(ctx, state))
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong host failed to publish multiplayer state");
     }
 }
 
-static void predict_client_paddle_motion(pong_state *state, float dt)
+static void update_network_client_input_sensors(sdl3d_game_context *ctx, pong_state *state)
 {
-    sdl3d_registered_actor *cpu = NULL;
-    const sdl3d_input_snapshot *snapshot = NULL;
-    const int p2_up = sdl3d_game_data_find_action(state != NULL ? state->data : NULL, "action.paddle.local.up");
-    const int p2_down = sdl3d_game_data_find_action(state != NULL ? state->data : NULL, "action.paddle.local.down");
+    const int camera_toggle_action =
+        sdl3d_game_data_find_action(state != NULL ? state->data : NULL, "action.camera.ball.toggle");
 
-    if (state == NULL || state->input == NULL || state->data == NULL || !is_multiplayer_play_scene(state) ||
-        !is_network_role_client(state) || p2_up < 0 || p2_down < 0)
+    if (ctx == NULL || state == NULL || state->input == NULL || state->data == NULL ||
+        state->camera_toggle_signal_id < 0 || camera_toggle_action < 0 || !is_multiplayer_play_scene(state) ||
+        !is_network_role_client(state))
     {
         return;
     }
 
-    cpu = sdl3d_game_data_find_actor(state->data, "entity.paddle.cpu");
-    snapshot = sdl3d_input_get_snapshot(state->input);
-    if (cpu == NULL || snapshot == NULL)
+    if (sdl3d_input_is_pressed(state->input, camera_toggle_action))
     {
-        return;
+        sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(ctx->session), state->camera_toggle_signal_id, NULL);
     }
-
-    const float up_value = snapshot->actions[p2_up].value;
-    const float down_value = snapshot->actions[p2_down].value;
-    const float input_value = SDL_clamp(up_value - down_value, -1.0f, 1.0f);
-    if (SDL_fabsf(input_value) <= 0.0001f)
-    {
-        return;
-    }
-
-    const float speed = sdl3d_properties_get_float(cpu->props, "speed", 0.0f);
-    const float half_height = sdl3d_properties_get_float(cpu->props, "half_height", 0.0f);
-    const float lo = -4.78f + half_height;
-    const float hi = 4.78f - half_height;
-    sdl3d_vec3 position = cpu->position;
-    const float old_y = position.y;
-    position.y = SDL_clamp(position.y + input_value * speed * dt, lo, hi);
-    cpu->position = position;
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "[%llu ms] Pong client predicted paddle2 motion: input=%.3f dt=%.3f y=%.3f->%.3f scene=%s",
-                (unsigned long long)pong_log_timestamp_ms(), input_value, dt, old_y, position.y,
-                active_scene_name(state) != NULL ? active_scene_name(state) : "<none>");
 }
 
 static void draw_direct_connect_overlay(sdl3d_game_context *ctx, pong_state *state)
@@ -1518,7 +1989,7 @@ static void draw_direct_connect_overlay(sdl3d_game_context *ctx, pong_state *sta
     sdl3d_ui_begin_panel(state->direct_connect_ui, panel_x, panel_y, panel_w, panel_h);
     sdl3d_ui_begin_vbox(state->direct_connect_ui, panel_x + 28.0f, panel_y + 24.0f, panel_w - 56.0f, panel_h - 48.0f);
 
-    sdl3d_ui_layout_label(state->direct_connect_ui, "DIRECT CONNECT");
+    sdl3d_ui_layout_label(state->direct_connect_ui, "JOIN MATCH");
     sdl3d_ui_layout_label(state->direct_connect_ui, "Host");
     (void)sdl3d_ui_layout_text_field(state->direct_connect_ui, state->direct_connect_host,
                                      (int)sizeof(state->direct_connect_host));
@@ -1551,6 +2022,35 @@ static void draw_direct_connect_overlay(sdl3d_game_context *ctx, pong_state *sta
     sdl3d_ui_layout_label(state->direct_connect_ui, "Status");
     sdl3d_ui_layout_label(state->direct_connect_ui, state->direct_connect_status);
 
+    sdl3d_ui_end_vbox(state->direct_connect_ui);
+    sdl3d_ui_end_panel(state->direct_connect_ui);
+}
+
+static void draw_network_match_termination_overlay(sdl3d_game_context *ctx, pong_state *state)
+{
+    char message[192];
+    float panel_w;
+    float panel_h;
+    float panel_x;
+    float panel_y;
+
+    if (ctx == NULL || state == NULL || state->direct_connect_ui == NULL || !state->network_match_termination_active)
+    {
+        return;
+    }
+
+    SDL_snprintf(message, sizeof(message), "Match terminated: %s - Press Enter to return to title screen.",
+                 state->network_match_termination_reason[0] != '\0' ? state->network_match_termination_reason
+                                                                    : "Peer disconnected");
+
+    panel_w = 880.0f;
+    panel_h = 150.0f;
+    panel_x = ((float)sdl3d_get_render_context_width(ctx->renderer) - panel_w) * 0.5f;
+    panel_y = ((float)sdl3d_get_render_context_height(ctx->renderer) - panel_h) * 0.5f;
+
+    sdl3d_ui_begin_panel(state->direct_connect_ui, panel_x, panel_y, panel_w, panel_h);
+    sdl3d_ui_begin_vbox(state->direct_connect_ui, panel_x + 28.0f, panel_y + 34.0f, panel_w - 56.0f, panel_h - 68.0f);
+    sdl3d_ui_layout_label(state->direct_connect_ui, message);
     sdl3d_ui_end_vbox(state->direct_connect_ui);
     sdl3d_ui_end_panel(state->direct_connect_ui);
 }
@@ -1622,24 +2122,7 @@ static void on_multiplayer_lobby_signal(void *userdata, int signal_id, const sdl
         return;
     }
 
-    if (state->host_session == NULL || !sdl3d_network_session_is_connected(state->host_session))
-    {
-        SDL_snprintf(state->host_status, sizeof(state->host_status), "Waiting for client");
-        update_host_session_scene_state(state);
-        return;
-    }
-
-    if (!send_host_start_packet(state))
-    {
-        return;
-    }
-
-    clear_network_action_overrides(state);
-    if (!enter_multiplayer_play_scene(state, "lan", "host"))
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong host failed to enter multiplayer play scene: %s",
-                    SDL_GetError());
-    }
+    (void)start_selected_lobby_match(state);
 }
 
 static void on_multiplayer_discovery_signal(void *userdata, int signal_id, const sdl3d_properties *payload)
@@ -1652,7 +2135,10 @@ static void on_multiplayer_discovery_signal(void *userdata, int signal_id, const
         return;
     }
 
-    (void)refresh_discovery_session(state);
+    if (state->direct_connect_session == NULL)
+    {
+        (void)refresh_discovery_session(state);
+    }
 }
 
 static bool mount_pong_assets(sdl3d_asset_resolver *assets, char *error, int error_size)
@@ -1808,6 +2294,7 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
     state->lobby_start_connection = 0;
     state->discovery_refresh_connection = 0;
     state->host_start_signal_id = sdl3d_game_data_find_signal(state->data, "signal.multiplayer.lobby.start");
+    state->camera_toggle_signal_id = sdl3d_game_data_find_signal(state->data, "signal.camera.ball.toggle");
     state->ball_hit_signal_id = sdl3d_game_data_find_signal(state->data, "signal.ball.hit_paddle");
     state->vibration_signal_id = sdl3d_game_data_find_signal(state->data, "signal.settings.vibration");
     state->discovery_refresh_signal_id =
@@ -1870,13 +2357,10 @@ static bool pong_handle_event(sdl3d_game_context *ctx, void *userdata, const SDL
     {
         const bool mouse_event = event->type == SDL_EVENT_MOUSE_MOTION || event->type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
                                  event->type == SDL_EVENT_MOUSE_BUTTON_UP || event->type == SDL_EVENT_MOUSE_WHEEL;
-        const bool key_event =
-            event->type == SDL_EVENT_KEY_DOWN || event->type == SDL_EVENT_KEY_UP || event->type == SDL_EVENT_TEXT_INPUT;
 
-        (void)sdl3d_ui_process_event(state->discovery_ui, event);
-
-        if (mouse_event || key_event)
+        if (mouse_event)
         {
+            (void)sdl3d_ui_process_event(state->discovery_ui, event);
             ctx->input_event_consumed = true;
         }
     }
@@ -1888,8 +2372,10 @@ static void pong_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 {
     pong_state *state = (pong_state *)userdata;
     refresh_local_play_input(state);
-    update_multiplayer_sessions(state, dt);
-    predict_client_paddle_motion(state, dt);
+    update_network_match_termination(ctx, state, dt);
+    update_multiplayer_sessions(ctx, state, dt);
+    update_discovery_controls(ctx, state);
+    update_network_client_input_sensors(ctx, state);
 
     const sdl3d_game_data_update_frame_desc frame = {.ctx = ctx,
                                                      .runtime = state->data,
@@ -1897,15 +2383,17 @@ static void pong_tick(sdl3d_game_context *ctx, void *userdata, float dt)
                                                      .particle_cache = &state->particle_cache,
                                                      .dt = dt};
     (void)sdl3d_game_data_update_frame(&state->frame_state, &frame);
-    publish_multiplayer_state(state);
+    publish_multiplayer_state(ctx, state);
 }
 
 static void pong_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_dt)
 {
     pong_state *state = (pong_state *)userdata;
     refresh_local_play_input(state);
-    update_multiplayer_sessions(state, real_dt);
-    predict_client_paddle_motion(state, real_dt);
+    update_network_match_termination(ctx, state, real_dt);
+    update_multiplayer_sessions(ctx, state, real_dt);
+    update_discovery_controls(ctx, state);
+    update_network_client_input_sensors(ctx, state);
 
     const sdl3d_game_data_update_frame_desc frame = {.ctx = ctx,
                                                      .runtime = state->data,
@@ -1913,7 +2401,7 @@ static void pong_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_
                                                      .particle_cache = &state->particle_cache,
                                                      .dt = real_dt};
     (void)sdl3d_game_data_update_frame(&state->frame_state, &frame);
-    publish_multiplayer_state(state);
+    publish_multiplayer_state(ctx, state);
 }
 
 static void pong_render(sdl3d_game_context *ctx, void *userdata, float alpha)
@@ -1944,7 +2432,7 @@ static void pong_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     {
         draw_discovery_overlay(ctx, state);
     }
-
+    draw_network_match_termination_overlay(ctx, state);
     if (state->direct_connect_ui != NULL)
     {
         sdl3d_ui_end_frame(state->direct_connect_ui);

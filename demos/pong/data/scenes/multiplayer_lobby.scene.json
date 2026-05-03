@@ -25,7 +25,14 @@
   },
   "menus": [
     {
-      "name": "menu.multiplayer.lobby",
+      "name": "menu.multiplayer.lobby.connected",
+      "active_if": {
+        "type": "scene_state.compare",
+        "key": "multiplayer_host_connected",
+        "op": "==",
+        "value": true,
+        "default": false
+      },
       "up_action": "action.menu.up",
       "down_action": "action.menu.down",
       "select_action": "action.menu.select",
@@ -34,7 +41,27 @@
       "select_signal": "signal.ui.menu.select",
       "selected": 0,
       "items": [
-        { "label": "Start Game", "signal": "signal.multiplayer.lobby.start" },
+        { "label": "Client 1", "signal": "signal.multiplayer.lobby.start" },
+        { "label": "Back", "scene": "scene.multiplayer.lan" }
+      ]
+    },
+    {
+      "name": "menu.multiplayer.lobby.waiting",
+      "active_if": {
+        "type": "scene_state.compare",
+        "key": "multiplayer_host_connected",
+        "op": "==",
+        "value": false,
+        "default": false
+      },
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "back_action": "action.menu.back",
+      "move_signal": "signal.ui.menu.move",
+      "select_signal": "signal.ui.menu.select",
+      "selected": 0,
+      "items": [
         { "label": "Back", "scene": "scene.multiplayer.lan" }
       ]
     }
@@ -59,7 +86,7 @@
           { "type": "scene_state", "key": "multiplayer_host_status" }
         ],
         "x": 0.5,
-        "y": 0.34,
+        "y": 0.30,
         "normalized": true,
         "centered": true,
         "color": [225, 236, 255, 245]
@@ -72,29 +99,74 @@
           { "type": "scene_state", "key": "multiplayer_host_endpoint" }
         ],
         "x": 0.5,
-        "y": 0.42,
+        "y": 0.37,
         "normalized": true,
         "centered": true,
         "color": [255, 245, 208, 255]
       },
       {
-        "name": "ui.multiplayer.lobby.hint",
+        "name": "ui.multiplayer.lobby.clients_title",
         "font": "font.hud",
-        "text": "Press Start Game after the client joins.",
+        "text": "AVAILABLE CLIENTS",
         "x": 0.5,
-        "y": 0.50,
+        "y": 0.44,
         "normalized": true,
         "centered": true,
         "color": [225, 236, 255, 230]
+      },
+      {
+        "name": "ui.multiplayer.lobby.client_status",
+        "font": "font.hud",
+        "format": "%s",
+        "bindings": [
+          { "type": "scene_state", "key": "multiplayer_host_client" }
+        ],
+        "x": 0.5,
+        "y": 0.51,
+        "normalized": true,
+        "centered": true,
+        "color": [170, 190, 220, 230]
       }
     ],
     "menus": [
       {
-        "name": "ui.multiplayer.lobby.menu",
-        "menu": "menu.multiplayer.lobby",
+        "name": "ui.multiplayer.lobby.menu.connected",
+        "menu": "menu.multiplayer.lobby.connected",
+        "active_if": {
+          "type": "scene_state.compare",
+          "key": "multiplayer_host_connected",
+          "op": "==",
+          "value": true,
+          "default": false
+        },
         "font": "font.hud",
         "x": 0.45,
-        "y": 0.60,
+        "y": 0.58,
+        "gap": 0.09,
+        "normalized": true,
+        "align": "left",
+        "color": [225, 236, 255, 245],
+        "selected_color": [255, 245, 208, 255],
+        "cursor": {
+          "text": ">",
+          "offset_x": -0.035,
+          "align": "right",
+          "color": [255, 222, 140, 255]
+        }
+      },
+      {
+        "name": "ui.multiplayer.lobby.menu.waiting",
+        "menu": "menu.multiplayer.lobby.waiting",
+        "active_if": {
+          "type": "scene_state.compare",
+          "key": "multiplayer_host_connected",
+          "op": "==",
+          "value": false,
+          "default": false
+        },
+        "font": "font.hud",
+        "x": 0.45,
+        "y": 0.63,
         "gap": 0.09,
         "normalized": true,
         "align": "left",
