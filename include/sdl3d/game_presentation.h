@@ -50,12 +50,14 @@ extern "C"
     /** @brief One cached texture referenced by authored UI image data. */
     typedef struct sdl3d_game_data_image_cache_entry
     {
-        sdl3d_texture2d texture; /**< Loaded texture. */
-        const char *image_id;    /**< Runtime-owned image asset id. */
-        const char *effect;      /**< Optional sprite-backed effect id. */
-        float effect_delay;      /**< Seconds to wait before effect starts. */
-        float effect_duration;   /**< Seconds used to ramp the effect. */
-        bool loaded;             /**< True once the texture owns valid pixels. */
+        sdl3d_texture2d texture;      /**< Loaded texture. */
+        const char *image_id;         /**< Runtime-owned image asset id. */
+        const char *effect;           /**< Optional sprite-backed effect id. */
+        float effect_delay;           /**< Seconds to wait before effect starts. */
+        float effect_duration;        /**< Seconds used to ramp the effect. */
+        char *shader_vertex_source;   /**< Optional owned sprite shader vertex source. */
+        char *shader_fragment_source; /**< Optional owned sprite shader fragment source. */
+        bool loaded;                  /**< True once the texture owns valid pixels. */
     } sdl3d_game_data_image_cache_entry;
 
     /**

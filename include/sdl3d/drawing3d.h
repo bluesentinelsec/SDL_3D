@@ -98,6 +98,22 @@ extern "C"
     bool sdl3d_draw_billboard_ex(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 position,
                                  sdl3d_vec2 size, sdl3d_vec2 anchor, sdl3d_billboard_mode mode, sdl3d_color tint);
 
+    /**
+     * @brief Draw a billboard with an authored custom sprite shader.
+     *
+     * The shader sources use the same textured-quad vertex contract as the
+     * built-in unlit path. The fragment source is required; the vertex source
+     * is optional and falls back to the engine's default billboard vertex
+     * shader when NULL. When @p lighting is true, the custom shader is routed
+     * through the lit billboard path and receives the standard lighting
+     * uniforms used by the built-in lit renderer. Software rendering ignores
+     * the custom shader and falls back to the built-in billboard draw path.
+     */
+    bool sdl3d_draw_billboard_shader_ex(sdl3d_render_context *context, const sdl3d_texture2d *texture,
+                                        sdl3d_vec3 position, sdl3d_vec2 size, sdl3d_vec2 anchor,
+                                        sdl3d_billboard_mode mode, sdl3d_color tint, bool lighting,
+                                        const char *shader_vertex_source, const char *shader_fragment_source);
+
     /*
      * Convenience wrapper for FPS-style sprites: upright billboard with a
      * bottom-center pivot.
@@ -179,6 +195,20 @@ extern "C"
     bool sdl3d_draw_texture_overlay(sdl3d_render_context *context, const sdl3d_texture2d *texture, float x, float y,
                                     float w, float h, sdl3d_color tint, sdl3d_overlay_effect effect,
                                     float effect_progress, Uint32 effect_seed);
+
+    /**
+     * @brief Draw a textured overlay quad with an authored custom sprite shader.
+     *
+     * The shader sources use the same textured-quad vertex contract as the
+     * built-in unlit overlay path. The fragment source is required; the
+     * vertex source is optional and falls back to the engine's default
+     * overlay vertex shader when NULL. When a custom shader is authored,
+     * software rendering falls back to the built-in overlay effect path.
+     */
+    bool sdl3d_draw_texture_overlay_shader(sdl3d_render_context *context, const sdl3d_texture2d *texture, float x,
+                                           float y, float w, float h, sdl3d_color tint, sdl3d_overlay_effect effect,
+                                           float effect_progress, Uint32 effect_seed, const char *shader_vertex_source,
+                                           const char *shader_fragment_source);
 
     /*
      * Read a single pixel from the color backbuffer. Returns false if x or y

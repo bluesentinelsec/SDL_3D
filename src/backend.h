@@ -33,6 +33,8 @@ typedef struct sdl3d_draw_params_unlit
     const float *positions;
     const float *uvs;
     const float *colors;
+    const char *shader_vertex_source;
+    const char *shader_fragment_source;
     const unsigned int *indices;
     int vertex_count;
     int index_count;
@@ -50,6 +52,8 @@ typedef struct sdl3d_draw_params_lit
     const float *uvs;
     const float *lightmap_uvs;
     const float *colors;
+    const char *shader_vertex_source;
+    const char *shader_fragment_source;
     const unsigned int *indices;
     int vertex_count;
     int index_count;

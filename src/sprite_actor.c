@@ -310,7 +310,19 @@ void sdl3d_sprite_scene_draw(sdl3d_sprite_scene *scene, sdl3d_render_context *co
 
     for (int i = 0; i < draw_count; ++i)
     {
-        sdl3d_draw_billboard(context, draws[i].texture, draws[i].position, draws[i].actor->size, draws[i].actor->tint);
+        const sdl3d_sprite_actor *actor = draws[i].actor;
+        if ((actor->shader_vertex_source != NULL && actor->shader_vertex_source[0] != '\0') ||
+            (actor->shader_fragment_source != NULL && actor->shader_fragment_source[0] != '\0'))
+        {
+            sdl3d_draw_billboard_shader_ex(context, draws[i].texture, draws[i].position, draws[i].actor->size,
+                                           (sdl3d_vec2){0.5f, 0.0f}, SDL3D_BILLBOARD_UPRIGHT, draws[i].actor->tint,
+                                           actor->lighting, actor->shader_vertex_source, actor->shader_fragment_source);
+        }
+        else
+        {
+            sdl3d_draw_billboard(context, draws[i].texture, draws[i].position, draws[i].actor->size,
+                                 draws[i].actor->tint);
+        }
     }
 
     SDL_free(draws);

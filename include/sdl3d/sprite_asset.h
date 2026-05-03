@@ -32,6 +32,8 @@ extern "C"
         const char *sheet_path;
         const char *const *base_paths;
         const char *const *frame_paths;
+        const char *shader_vertex_path;
+        const char *shader_fragment_path;
         int frame_width;
         int frame_height;
         int columns;
@@ -72,6 +74,8 @@ extern "C"
         const char *effect;
         float effect_delay;
         float effect_duration;
+        char *shader_vertex_source;
+        char *shader_fragment_source;
     } sdl3d_sprite_asset_runtime;
 
     /**

@@ -2448,6 +2448,8 @@ bool sdl3d_game_data_get_sprite_asset(const sdl3d_game_data_runtime *runtime, co
 
     out_sprite->id = json_string(sprite, "id", NULL);
     out_sprite->path = json_string(sprite, "path", NULL);
+    out_sprite->shader_vertex_path = json_string(sprite, "shader_vertex_path", NULL);
+    out_sprite->shader_fragment_path = json_string(sprite, "shader_fragment_path", NULL);
     out_sprite->frame_width = json_int(sprite, "frame_width", out_sprite->frame_width);
     out_sprite->frame_height = json_int(sprite, "frame_height", out_sprite->frame_height);
     out_sprite->columns = json_int(sprite, "columns", out_sprite->columns);
@@ -2494,6 +2496,8 @@ bool sdl3d_game_data_load_sprite_asset(const sdl3d_game_data_runtime *runtime, c
     SDL_zero(source);
     source.kind = SDL3D_SPRITE_ASSET_SOURCE_SHEET;
     source.sheet_path = sprite.path;
+    source.shader_vertex_path = sprite.shader_vertex_path;
+    source.shader_fragment_path = sprite.shader_fragment_path;
     source.frame_width = sprite.frame_width;
     source.frame_height = sprite.frame_height;
     source.columns = sprite.columns;

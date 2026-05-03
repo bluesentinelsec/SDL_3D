@@ -234,6 +234,9 @@ TEST(SpriteAsset, LoadsFromSpriteManifestFile)
 {
     const std::filesystem::path dir = make_temp_dir("sprite_manifest");
     const std::filesystem::path manifest_path = dir / "robot.sprite.json";
+    const std::filesystem::path shader_dir = dir / "media" / "shaders";
+    const std::filesystem::path vertex_path = shader_dir / "robot.vert.glsl";
+    const std::filesystem::path fragment_path = shader_dir / "robot.frag.glsl";
 
     const std::array<std::array<Uint8, 4>, 6> colors = {{{15, 25, 35, 255},
                                                          {45, 55, 65, 255},
@@ -257,6 +260,34 @@ TEST(SpriteAsset, LoadsFromSpriteManifestFile)
         ASSERT_TRUE(write_png(paths[i], image)) << SDL_GetError();
     }
 
+    ASSERT_TRUE(write_text(vertex_path,
+                           R"glsl(
+layout(location = 0) in vec3 aPosition;
+layout(location = 1) in vec2 aTexCoord;
+layout(location = 2) in vec4 aColor;
+uniform mat4 uMVP;
+out vec2 vTexCoord;
+out vec4 vColor;
+void main() {
+  vTexCoord = aTexCoord;
+  vColor = aColor;
+  gl_Position = uMVP * vec4(aPosition, 1.0);
+}
+)glsl")) << SDL_GetError();
+    ASSERT_TRUE(write_text(fragment_path,
+                           R"glsl(
+in vec2 vTexCoord;
+in vec4 vColor;
+uniform sampler2D uTexture;
+uniform int uHasTexture;
+uniform vec4 uTint;
+out vec4 fragColor;
+void main() {
+  vec4 texel = (uHasTexture != 0) ? texture(uTexture, vTexCoord) : vec4(1.0);
+  fragColor = texel * vColor * uTint;
+}
+)glsl")) << SDL_GetError();
+
     ASSERT_TRUE(write_text(manifest_path,
                            R"json({
   "kind": "files",
@@ -279,7 +310,9 @@ TEST(SpriteAsset, LoadsFromSpriteManifestFile)
   "loop": false,
   "lighting": false,
   "emissive": true,
-  "visual_ground_offset": 0.5
+  "visual_ground_offset": 0.5,
+  "shader_vertex_path": "shaders/robot.vert.glsl",
+  "shader_fragment_path": "shaders/robot.frag.glsl"
 })json"))
         << SDL_GetError();
 
@@ -300,6 +333,10 @@ TEST(SpriteAsset, LoadsFromSpriteManifestFile)
     EXPECT_FALSE(runtime.lighting);
     EXPECT_TRUE(runtime.emissive);
     EXPECT_FLOAT_EQ(runtime.visual_ground_offset, 0.5f);
+    EXPECT_NE(runtime.shader_vertex_source, nullptr);
+    EXPECT_NE(runtime.shader_fragment_source, nullptr);
+    EXPECT_NE(std::string(runtime.shader_vertex_source).find("aPosition"), std::string::npos);
+    EXPECT_NE(std::string(runtime.shader_fragment_source).find("fragColor"), std::string::npos);
 
     sdl3d_sprite_asset_free(&runtime);
 }
@@ -309,6 +346,8 @@ TEST(SpriteAsset, LoadsThroughGameDataSpriteBridge)
     const std::filesystem::path dir = make_temp_dir("sprite_bridge");
     const std::filesystem::path json_path = dir / "sprite.game.json";
     const std::filesystem::path image_path = dir / "sprites" / "robot" / "walk.png";
+    const std::filesystem::path shader_dir = dir / "sprites" / "robot";
+    const std::filesystem::path fragment_path = shader_dir / "melt.frag.glsl";
 
     const int cell_width = 2;
     const int cell_height = 2;
@@ -323,6 +362,19 @@ TEST(SpriteAsset, LoadsThroughGameDataSpriteBridge)
     image.width = cell_width * columns;
     image.height = cell_height * rows;
     ASSERT_TRUE(write_png(image_path, image)) << SDL_GetError();
+    ASSERT_TRUE(write_text(fragment_path,
+                           R"glsl(
+in vec2 vTexCoord;
+in vec4 vColor;
+uniform sampler2D uTexture;
+uniform int uHasTexture;
+uniform vec4 uTint;
+out vec4 fragColor;
+void main() {
+  vec4 texel = (uHasTexture != 0) ? texture(uTexture, vTexCoord) : vec4(1.0);
+  fragColor = texel * vColor * uTint;
+}
+)glsl")) << SDL_GetError();
 
     ASSERT_TRUE(write_text(json_path,
                            R"json({
@@ -347,7 +399,8 @@ TEST(SpriteAsset, LoadsThroughGameDataSpriteBridge)
         "visual_ground_offset": 0.25,
         "effect": "melt",
         "effect_delay": 0.5,
-        "effect_duration": 1.5
+        "effect_duration": 1.5,
+        "shader_fragment_path": "asset://sprites/robot/melt.frag.glsl"
       }
     ]
   },
@@ -378,6 +431,9 @@ TEST(SpriteAsset, LoadsThroughGameDataSpriteBridge)
     EXPECT_STREQ(sprite.effect, "melt");
     EXPECT_FLOAT_EQ(sprite.effect_delay, 0.5f);
     EXPECT_FLOAT_EQ(sprite.effect_duration, 1.5f);
+    EXPECT_EQ(sprite.shader_vertex_source, nullptr);
+    ASSERT_NE(sprite.shader_fragment_source, nullptr);
+    EXPECT_NE(std::string(sprite.shader_fragment_source).find("fragColor"), std::string::npos);
 
     sdl3d_sprite_asset_free(&sprite);
     sdl3d_game_data_destroy(runtime);

@@ -87,6 +87,13 @@ fields that tell the presentation layer when the effect starts and how long it
 runs. When a sprite asset is used to back a UI image, the shared overlay path
 applies the effect generically without adding a separate image-only renderer.
 
+Sprite assets can also author optional `shader_vertex_path` and
+`shader_fragment_path` entries. The loader reads the shader text once and keeps
+it with the runtime sprite. The GL backend compiles each distinct shader source
+pair on first use and reuses the resulting program for later draws. The software
+backend ignores authored shader source and renders through the normal sprite or
+overlay path.
+
 Prefer a sheet when many frames share the same metadata. The loader slices a
 sheet in memory after one decode, which is cheaper than reading many tiny
 files. Use the file-list source only when the authored asset layout genuinely
@@ -104,4 +111,5 @@ resolved, so the authored sprite paths still stay free of `..` traversal.
 UI image assets may also be backed by a sprite asset id. The presentation layer
 loads the sprite through the same runtime helper and then caches the resulting
 texture for UI drawing, which keeps splash logos and other 2D art on the shared
-sprite path without adding an image-only special case.
+sprite path without adding an image-only special case. If the sprite authors a
+shader source pair, the UI image inherits that shader metadata too.

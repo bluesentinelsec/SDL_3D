@@ -681,6 +681,17 @@ static bool collect_sprite_assets(validation_context *ctx, yyjson_val *root, val
             return validation_error(ctx, path, "sprite asset requires a non-empty path");
         if (!asset_path_exists(ctx, json_string(sprite, "path"), path, "sprite"))
             return false;
+        const char *shader_vertex_path = json_string(sprite, "shader_vertex_path");
+        const char *shader_fragment_path = json_string(sprite, "shader_fragment_path");
+        if (shader_vertex_path != NULL && shader_vertex_path[0] != '\0' &&
+            (shader_fragment_path == NULL || shader_fragment_path[0] == '\0'))
+            return validation_error(ctx, path, "sprite shader_vertex_path requires shader_fragment_path");
+        if (shader_vertex_path != NULL && shader_vertex_path[0] != '\0' &&
+            !asset_path_exists(ctx, shader_vertex_path, path, "sprite shader"))
+            return false;
+        if (shader_fragment_path != NULL && shader_fragment_path[0] != '\0' &&
+            !asset_path_exists(ctx, shader_fragment_path, path, "sprite shader"))
+            return false;
         const char *effect = json_string(sprite, "effect");
         if (effect != NULL && effect[0] != '\0' && SDL_strcasecmp(effect, "melt") != 0)
             return validation_error(ctx, path, "unsupported sprite asset effect '%s'", effect);

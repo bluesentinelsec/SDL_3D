@@ -729,7 +729,8 @@ static sdl3d_vec4 sdl3d_shade_point_retro(const sdl3d_lighting_params *lp, sdl3d
 static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_mesh *mesh,
                                      const sdl3d_texture2d *texture, const sdl3d_texture2d *lightmap_texture,
                                      sdl3d_vec4 base_modulate, const sdl3d_lighting_params *lighting,
-                                     const sdl3d_mat4 *joint_matrices, bool static_geometry)
+                                     const sdl3d_mat4 *joint_matrices, bool static_geometry,
+                                     const char *shader_vertex_source, const char *shader_fragment_source)
 {
     bool indexed;
     int triangle_count;
@@ -837,6 +838,8 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         lp.uvs = mesh->uvs;
         lp.lightmap_uvs = mesh->lightmap_uvs;
         lp.colors = mesh->colors;
+        lp.shader_vertex_source = shader_vertex_source;
+        lp.shader_fragment_source = shader_fragment_source;
         lp.indices = mesh->indices;
         lp.vertex_count = mesh->vertex_count;
         lp.index_count = mesh->index_count;
@@ -940,6 +943,8 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         up.positions = (skinned_positions != NULL) ? skinned_positions : mesh->positions;
         up.uvs = mesh->uvs;
         up.colors = mesh->colors;
+        up.shader_vertex_source = shader_vertex_source;
+        up.shader_fragment_source = shader_fragment_source;
         up.indices = mesh->indices;
         up.vertex_count = mesh->vertex_count;
         up.index_count = mesh->index_count;
@@ -1477,10 +1482,115 @@ bool sdl3d_draw_billboard_ex(sdl3d_render_context *context, const sdl3d_texture2
         sdl3d_lighting_params lp;
         sdl3d_build_lighting_params(context, &lp);
         lp.roughness = 1.0f;
-        return sdl3d_draw_mesh_internal(context, &mesh, texture, NULL, sdl3d_color_to_modulate(tint), &lp, NULL, false);
+        return sdl3d_draw_mesh_internal(context, &mesh, texture, NULL, sdl3d_color_to_modulate(tint), &lp, NULL, false,
+                                        NULL, NULL);
     }
 
-    return sdl3d_draw_mesh_internal(context, &mesh, texture, NULL, sdl3d_color_to_modulate(tint), NULL, NULL, false);
+    return sdl3d_draw_mesh_internal(context, &mesh, texture, NULL, sdl3d_color_to_modulate(tint), NULL, NULL, false,
+                                    NULL, NULL);
+}
+
+bool sdl3d_draw_billboard_shader_ex(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 position,
+                                    sdl3d_vec2 size, sdl3d_vec2 anchor, sdl3d_billboard_mode mode, sdl3d_color tint,
+                                    bool lighting, const char *shader_vertex_source, const char *shader_fragment_source)
+{
+    sdl3d_vec3 right;
+    sdl3d_vec3 up;
+    sdl3d_vec3 normal;
+    sdl3d_lighting_params lp;
+    const float left = -anchor.x * size.x;
+    const float bottom = -anchor.y * size.y;
+    const float sprite_right = left + size.x;
+    const float sprite_top = bottom + size.y;
+    sdl3d_mesh mesh;
+    float positions[12];
+    float normals[12];
+    float uvs[8];
+    unsigned int indices[12] = {0, 1, 2, 2, 1, 3, 2, 1, 0, 3, 1, 2};
+
+    if (shader_fragment_source == NULL || shader_fragment_source[0] == '\0')
+        return sdl3d_draw_billboard_ex(context, texture, position, size, anchor, mode, tint);
+    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_billboard_shader_ex"))
+        return false;
+    if (texture == NULL)
+        return SDL_InvalidParamError("texture");
+    if (size.x <= 0.0f)
+        return SDL_SetError("Billboard size.x must be positive.");
+    if (size.y <= 0.0f)
+        return SDL_SetError("Billboard size.y must be positive.");
+    if (anchor.x < 0.0f || anchor.x > 1.0f || anchor.y < 0.0f || anchor.y > 1.0f)
+        return SDL_SetError("Billboard anchor must be in [0, 1] for both axes.");
+
+    right = sdl3d_view_camera_right(context);
+    if (mode == SDL3D_BILLBOARD_SPHERICAL)
+    {
+        up = sdl3d_view_camera_up(context);
+    }
+    else
+    {
+        const sdl3d_vec3 world_up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+        sdl3d_vec3 forward = sdl3d_view_camera_forward(context);
+        forward.y = 0.0f;
+        if (sdl3d_vec3_length_squared(forward) <= 0.000001f)
+            forward = sdl3d_vec3_make(0.0f, 0.0f, -1.0f);
+        else
+            forward = sdl3d_vec3_normalize(forward);
+        right = sdl3d_vec3_normalize(sdl3d_vec3_cross(forward, world_up));
+        if (sdl3d_vec3_length_squared(right) <= 0.000001f)
+            right = sdl3d_vec3_make(1.0f, 0.0f, 0.0f);
+        up = world_up;
+    }
+    normal = sdl3d_vec3_normalize(sdl3d_vec3_cross(right, up));
+
+    {
+        const sdl3d_vec3 bl =
+            sdl3d_vec3_add(position, sdl3d_vec3_add(sdl3d_vec3_scale(right, left), sdl3d_vec3_scale(up, bottom)));
+        const sdl3d_vec3 tl =
+            sdl3d_vec3_add(position, sdl3d_vec3_add(sdl3d_vec3_scale(right, left), sdl3d_vec3_scale(up, sprite_top)));
+        const sdl3d_vec3 br = sdl3d_vec3_add(
+            position, sdl3d_vec3_add(sdl3d_vec3_scale(right, sprite_right), sdl3d_vec3_scale(up, bottom)));
+        const sdl3d_vec3 tr = sdl3d_vec3_add(
+            position, sdl3d_vec3_add(sdl3d_vec3_scale(right, sprite_right), sdl3d_vec3_scale(up, sprite_top)));
+        const sdl3d_vec3 verts[4] = {bl, tl, br, tr};
+
+        for (int i = 0; i < 4; ++i)
+        {
+            positions[i * 3 + 0] = verts[i].x;
+            positions[i * 3 + 1] = verts[i].y;
+            positions[i * 3 + 2] = verts[i].z;
+            normals[i * 3 + 0] = normal.x;
+            normals[i * 3 + 1] = normal.y;
+            normals[i * 3 + 2] = normal.z;
+        }
+    }
+
+    uvs[0] = 0.0f;
+    uvs[1] = 1.0f;
+    uvs[2] = 0.0f;
+    uvs[3] = 0.0f;
+    uvs[4] = 1.0f;
+    uvs[5] = 1.0f;
+    uvs[6] = 1.0f;
+    uvs[7] = 0.0f;
+
+    SDL_zero(mesh);
+    mesh.positions = positions;
+    mesh.normals = lighting ? normals : NULL;
+    mesh.uvs = uvs;
+    mesh.vertex_count = 4;
+    mesh.indices = indices;
+    mesh.index_count = 12;
+
+    if (lighting)
+    {
+        sdl3d_build_lighting_params(context, &lp);
+        lp.roughness = 1.0f;
+        return sdl3d_draw_mesh_internal(context, &mesh, texture, NULL, sdl3d_color_to_modulate(tint), &lp, NULL, false,
+                                        shader_vertex_source, shader_fragment_source);
+    }
+
+    return sdl3d_draw_mesh_internal(context, &mesh, texture, NULL, sdl3d_color_to_modulate(tint), NULL, NULL, false,
+                                    shader_vertex_source, shader_fragment_source);
 }
 
 bool sdl3d_draw_billboard(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 position,
@@ -1498,9 +1608,11 @@ bool sdl3d_draw_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, cons
         sdl3d_lighting_params lp;
         sdl3d_build_lighting_params(context, &lp);
         lp.roughness = 1.0f;
-        return sdl3d_draw_mesh_internal(context, mesh, texture, NULL, sdl3d_color_to_modulate(tint), &lp, NULL, false);
+        return sdl3d_draw_mesh_internal(context, mesh, texture, NULL, sdl3d_color_to_modulate(tint), &lp, NULL, false,
+                                        NULL, NULL);
     }
-    return sdl3d_draw_mesh_internal(context, mesh, texture, NULL, sdl3d_color_to_modulate(tint), NULL, NULL, false);
+    return sdl3d_draw_mesh_internal(context, mesh, texture, NULL, sdl3d_color_to_modulate(tint), NULL, NULL, false,
+                                    NULL, NULL);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1646,7 +1758,7 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_mod
         }
 
         ok = sdl3d_draw_mesh_internal(context, mesh, texture, lightmap_texture, mesh_modulate, lp_ptr, joint_matrices,
-                                      true);
+                                      true, NULL, NULL);
     }
     return ok;
 }
@@ -1894,7 +2006,8 @@ bool sdl3d_draw_rect_overlay(sdl3d_render_context *context, float x, float y, fl
     mvp[15] = 1.0f;
 
     return sdl3d_gl_append_overlay(context->gl, positions, uvs, 6, mvp, tint, NULL, scissor_enabled,
-                                   scissor_enabled ? &scissor_rect : NULL, SDL3D_OVERLAY_EFFECT_NONE, 0.0f, 0u);
+                                   scissor_enabled ? &scissor_rect : NULL, SDL3D_OVERLAY_EFFECT_NONE, 0.0f, 0u, NULL,
+                                   NULL);
 }
 
 static Uint8 overlay_to_u8(float value)
@@ -1995,6 +2108,15 @@ bool sdl3d_draw_texture_overlay(sdl3d_render_context *context, const sdl3d_textu
                                 float w, float h, sdl3d_color tint, sdl3d_overlay_effect effect, float effect_progress,
                                 Uint32 effect_seed)
 {
+    return sdl3d_draw_texture_overlay_shader(context, texture, x, y, w, h, tint, effect, effect_progress, effect_seed,
+                                             NULL, NULL);
+}
+
+bool sdl3d_draw_texture_overlay_shader(sdl3d_render_context *context, const sdl3d_texture2d *texture, float x, float y,
+                                       float w, float h, sdl3d_color tint, sdl3d_overlay_effect effect,
+                                       float effect_progress, Uint32 effect_seed, const char *shader_vertex_source,
+                                       const char *shader_fragment_source)
+{
     SDL_Rect scissor_rect = {0, 0, 0, 0};
     bool scissor_enabled = false;
 
@@ -2055,7 +2177,8 @@ bool sdl3d_draw_texture_overlay(sdl3d_render_context *context, const sdl3d_textu
     mvp[15] = 1.0f;
 
     return sdl3d_gl_append_overlay(context->gl, positions, uvs, 6, mvp, gl_tint, texture, scissor_enabled,
-                                   scissor_enabled ? &scissor_rect : NULL, effect, effect_progress, effect_seed);
+                                   scissor_enabled ? &scissor_rect : NULL, effect, effect_progress, effect_seed,
+                                   shader_vertex_source, shader_fragment_source);
 }
 
 bool sdl3d_get_framebuffer_pixel(const sdl3d_render_context *context, int x, int y, sdl3d_color *out_color)

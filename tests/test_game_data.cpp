@@ -1334,6 +1334,8 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_STREQ(sprite_asset.effect, "melt");
     EXPECT_NEAR(sprite_asset.effect_delay, 1.0f, 0.0001f);
     EXPECT_NEAR(sprite_asset.effect_duration, 1.0f, 0.0001f);
+    EXPECT_EQ(sprite_asset.shader_vertex_path, nullptr);
+    EXPECT_STREQ(sprite_asset.shader_fragment_path, "asset://shaders/splash_logo_melt.frag.glsl");
 
     sdl3d_game_data_sound_asset sound_asset{};
     ASSERT_TRUE(sdl3d_game_data_get_sound_asset(runtime, "sound.pong.hit", &sound_asset));

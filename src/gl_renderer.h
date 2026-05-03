@@ -37,7 +37,7 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path);
 bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, const float *uvs, int vertex_count,
                              const float *mvp, const float *tint, const sdl3d_texture2d *texture, bool scissor_enabled,
                              const SDL_Rect *scissor_rect, sdl3d_overlay_effect effect, float effect_progress,
-                             Uint32 effect_seed);
+                             Uint32 effect_seed, const char *shader_vertex_source, const char *shader_fragment_source);
 
 bool sdl3d_gl_append_line(sdl3d_gl_context *ctx, const float *positions, const float *colors, const float *mvp);
 

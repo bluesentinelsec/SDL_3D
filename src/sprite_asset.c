@@ -118,6 +118,45 @@ static bool sprite_asset_load_image(const sdl3d_asset_resolver *assets, const ch
     return sdl3d_load_image_from_file(path, out_image);
 }
 
+static bool sprite_asset_load_text_source(const sdl3d_asset_resolver *assets, const char *path, char **out_text,
+                                          char *error_buffer, int error_buffer_size)
+{
+    sdl3d_asset_buffer buffer;
+    char *copy;
+
+    if (out_text != NULL)
+        *out_text = NULL;
+    if (path == NULL || path[0] == '\0')
+        return true;
+    if (assets == NULL)
+    {
+        sprite_asset_set_error(error_buffer, error_buffer_size, "sprite shader source requires an asset resolver");
+        return SDL_InvalidParamError("assets");
+    }
+
+    SDL_zero(buffer);
+    if (!sdl3d_asset_resolver_read_file(assets, path, &buffer, error_buffer, error_buffer_size))
+        return false;
+
+    copy = (char *)SDL_malloc(buffer.size + 1u);
+    if (copy == NULL)
+    {
+        sdl3d_asset_buffer_free(&buffer);
+        sprite_asset_set_error(error_buffer, error_buffer_size, "failed to allocate sprite shader source");
+        return SDL_OutOfMemory();
+    }
+    if (buffer.size > 0u)
+        SDL_memcpy(copy, buffer.data, buffer.size);
+    copy[buffer.size] = '\0';
+    sdl3d_asset_buffer_free(&buffer);
+
+    if (out_text != NULL)
+        *out_text = copy;
+    else
+        SDL_free(copy);
+    return true;
+}
+
 static void sprite_asset_free_textures(sdl3d_texture2d *textures, int count)
 {
     if (textures == NULL || count <= 0)
@@ -268,6 +307,13 @@ static bool sprite_asset_validate_source(const sdl3d_sprite_asset_source *source
     {
         sprite_asset_set_error(error_buffer, error_buffer_size, "sprite asset effect_duration must be positive");
         return SDL_SetError("sprite asset effect_duration must be positive");
+    }
+    if (source->shader_vertex_path != NULL && source->shader_vertex_path[0] != '\0' &&
+        (source->shader_fragment_path == NULL || source->shader_fragment_path[0] == '\0'))
+    {
+        sprite_asset_set_error(error_buffer, error_buffer_size,
+                               "sprite asset shader_vertex_path requires shader_fragment_path");
+        return SDL_SetError("sprite asset shader_vertex_path requires shader_fragment_path");
     }
     if (source->direction_count <= 0 || source->direction_count > SDL3D_SPRITE_ROTATION_COUNT)
     {
@@ -476,6 +522,8 @@ static bool sprite_asset_manifest_parse(yyjson_val *root, sprite_asset_manifest 
     manifest->source.effect = sprite_asset_manifest_get_string(root, "effect", NULL);
     manifest->source.effect_delay = sprite_asset_manifest_get_float(root, "effect_delay", 0.0f);
     manifest->source.effect_duration = sprite_asset_manifest_get_float(root, "effect_duration", 1.0f);
+    manifest->source.shader_vertex_path = sprite_asset_manifest_get_string(root, "shader_vertex_path", NULL);
+    manifest->source.shader_fragment_path = sprite_asset_manifest_get_string(root, "shader_fragment_path", NULL);
 
     return true;
 }
@@ -502,6 +550,12 @@ bool sdl3d_sprite_asset_load(const sdl3d_asset_resolver *assets, const sdl3d_spr
     out_sprite->effect = source->effect;
     out_sprite->effect_delay = source->effect_delay;
     out_sprite->effect_duration = source->effect_duration;
+    if (!sprite_asset_load_text_source(assets, source->shader_vertex_path, &out_sprite->shader_vertex_source,
+                                       error_buffer, error_buffer_size))
+        goto fail;
+    if (!sprite_asset_load_text_source(assets, source->shader_fragment_path, &out_sprite->shader_fragment_source,
+                                       error_buffer, error_buffer_size))
+        goto fail;
 
     if (source->kind == SDL3D_SPRITE_ASSET_SOURCE_SHEET)
     {
@@ -662,6 +716,8 @@ void sdl3d_sprite_asset_free(sdl3d_sprite_asset_runtime *sprite)
         sprite_asset_free_textures(sprite->base_textures, sprite->base_texture_count);
     if (sprite->animation_textures != NULL)
         sprite_asset_free_textures(sprite->animation_textures, sprite->animation_texture_count);
+    SDL_free(sprite->shader_vertex_source);
+    SDL_free(sprite->shader_fragment_source);
     SDL_free(sprite->animation_frames);
     SDL_zero(*sprite);
 }
@@ -692,5 +748,9 @@ void sdl3d_sprite_asset_apply_actor(sdl3d_sprite_actor *actor, const sdl3d_sprit
     actor->animation_frame_count = sdl3d_sprite_asset_animation_frame_count(sprite);
     actor->animation_fps = sprite->fps;
     actor->animation_loop = sprite->loop;
+    actor->lighting = sprite->lighting;
+    actor->emissive = sprite->emissive;
     actor->visual_ground_offset = sprite->visual_ground_offset;
+    actor->shader_vertex_source = sprite->shader_vertex_source;
+    actor->shader_fragment_source = sprite->shader_fragment_source;
 }

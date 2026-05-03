@@ -659,30 +659,27 @@ child menu selections set `menu_state_key` in scene state instead of requesting 
 
     The current sprite metadata API records the image source,
     atlas / grid layout, animation timing, directional frame count, lighting participation,
-    and an optional overlay effect plus timing window
-            .Callers can use
-`sdl3d_game_data_load_sprite_asset()` to resolve the asset through the
-        runtime's resolver and build billboard sprites, 2D-in-3D sheets, or directional animation sets without changing
-        the authored JSON shape.The load path decodes the source once and keeps the runtime
-        -
-        owned textures alive until
-`sdl3d_sprite_asset_free()`
-            .
+    an optional overlay effect plus timing window, and optional sprite shader source paths for the GL backend.
+    Callers can use `sdl3d_game_data_load_sprite_asset()` to resolve the asset through the runtime's resolver and
+    build billboard sprites, 2D-in-3D sheets, or directional animation sets without changing the authored JSON shape.
+    If `shader_vertex_path` and `shader_fragment_path` are provided, the runtime loads the shader source text once,
+    caches it with the sprite, and the GL renderer compiles it the first time that source pair is drawn. The software
+    renderer ignores authored shader sources and falls back to the normal sprite or overlay path.
 
-        Image assets under `assets.images` may also point at a sprite asset through a
-`sprite` field.The UI presentation layer will realize that sprite into a cached texture and reuse the same sprite
-        runtime path instead of a separate image
-        - only loader.If the sprite asset authors an overlay effect such as
-`melt`,
-    the UI image inherits that effect timing from the sprite metadata.
+    The load path decodes the source once and keeps the runtime-owned textures alive until `sdl3d_sprite_asset_free()`.
 
-    Performance note : sprite sheets are decoded and sliced during load,
-    not per frame.For large sprite families,
+    Image assets under `assets.images` may also point at a sprite asset through a `sprite` field. The UI presentation
+    layer will realize that sprite into a cached texture and reuse the same sprite runtime path instead of a separate
+    image-only loader. If the sprite asset authors an overlay effect such as `melt`, the UI image inherits that effect
+    timing from the sprite metadata. Authored sprite shader sources follow the same rule: the UI image inherits the
+    sprite's GL shader sources when present, and the renderer compiles each distinct source pair once and reuses the
+    program for later draws.
+
+    Performance note: sprite sheets are decoded and sliced during load, not per frame. For large sprite families,
     prefer a single authored sheet over many tiny source files so the loader does one decode and one texture
-        allocation pass instead of repeated file
-        -
-        system reads
-            .
+    allocation pass instead of repeated file-system reads. Shader source files are also loaded once per sprite asset
+    and compiled lazily on first draw in the GL backend. Reuse shared shader files across sprites when you can, so the
+    engine pays the compile cost only once per distinct source pair.
 
         ##Scenes
 

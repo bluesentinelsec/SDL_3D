@@ -127,6 +127,10 @@ extern "C"
         const char *id;
         /** @brief Virtual or filesystem path to the sprite source image. */
         const char *path;
+        /** @brief Optional vertex shader source path for a sprite-specific GPU program. */
+        const char *shader_vertex_path;
+        /** @brief Optional fragment shader source path for a sprite-specific GPU program. */
+        const char *shader_fragment_path;
         /** @brief Frame width in pixels for a grid or atlas source. */
         int frame_width;
         /** @brief Frame height in pixels for a grid or atlas source. */
