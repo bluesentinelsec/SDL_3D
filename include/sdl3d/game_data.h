@@ -117,6 +117,37 @@ extern "C"
         bool loop;
     } sdl3d_game_data_music_asset;
 
+    /** @brief Authored sprite asset descriptor. */
+    typedef struct sdl3d_game_data_sprite_asset
+    {
+        /** @brief Stable asset id, such as `sprite.robot.walk`. */
+        const char *id;
+        /** @brief Virtual or filesystem path to the sprite source image. */
+        const char *path;
+        /** @brief Frame width in pixels for a grid or atlas source. */
+        int frame_width;
+        /** @brief Frame height in pixels for a grid or atlas source. */
+        int frame_height;
+        /** @brief Number of frames across the source image. */
+        int columns;
+        /** @brief Number of rows across the source image. */
+        int rows;
+        /** @brief Number of animation frames in the authored source. */
+        int frame_count;
+        /** @brief Number of directional frames per animation frame. */
+        int direction_count;
+        /** @brief Playback rate in frames per second. */
+        float fps;
+        /** @brief Whether playback wraps after the last frame. */
+        bool loop;
+        /** @brief Whether the sprite participates in dynamic lighting. */
+        bool lighting;
+        /** @brief Whether the sprite is emissive. */
+        bool emissive;
+        /** @brief Offset from logical feet/contact point to visible feet. */
+        float visual_ground_offset;
+    } sdl3d_game_data_sprite_asset;
+
     /**
      * @brief Runtime metrics used when evaluating data-authored UI bindings.
      *
@@ -952,6 +983,10 @@ extern "C"
     /** @brief Read a music asset descriptor by id from `assets.music`. */
     bool sdl3d_game_data_get_music_asset(const sdl3d_game_data_runtime *runtime, const char *id,
                                          sdl3d_game_data_music_asset *out_music);
+
+    /** @brief Read a sprite asset descriptor by id from `assets.sprites`. */
+    bool sdl3d_game_data_get_sprite_asset(const sdl3d_game_data_runtime *runtime, const char *id,
+                                          sdl3d_game_data_sprite_asset *out_sprite);
 
     /**
      * @brief Resolve an authored audio path to a filesystem path usable by audio backends.

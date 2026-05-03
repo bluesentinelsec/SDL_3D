@@ -1556,6 +1556,19 @@ static yyjson_val *find_music_json(const sdl3d_game_data_runtime *runtime, const
     return NULL;
 }
 
+static yyjson_val *find_sprite_json(const sdl3d_game_data_runtime *runtime, const char *id)
+{
+    yyjson_val *sprites = obj_get(obj_get(runtime_root(runtime), "assets"), "sprites");
+    for (size_t i = 0; id != NULL && yyjson_is_arr(sprites) && i < yyjson_arr_size(sprites); ++i)
+    {
+        yyjson_val *sprite = yyjson_arr_get(sprites, i);
+        const char *sprite_id = json_string(sprite, "id", NULL);
+        if (sprite_id != NULL && SDL_strcmp(sprite_id, id) == 0)
+            return sprite;
+    }
+    return NULL;
+}
+
 static sdl3d_audio_bus parse_audio_bus(const char *bus, sdl3d_audio_bus fallback)
 {
     if (bus == NULL)
@@ -2401,6 +2414,50 @@ bool sdl3d_game_data_get_music_asset(const sdl3d_game_data_runtime *runtime, con
     out_music->volume = json_float(music, "volume", out_music->volume);
     out_music->loop = json_bool(music, "loop", out_music->loop);
     return out_music->id != NULL && out_music->path != NULL;
+}
+
+bool sdl3d_game_data_get_sprite_asset(const sdl3d_game_data_runtime *runtime, const char *id,
+                                      sdl3d_game_data_sprite_asset *out_sprite)
+{
+    if (out_sprite != NULL)
+    {
+        SDL_zero(*out_sprite);
+        out_sprite->columns = 1;
+        out_sprite->rows = 1;
+        out_sprite->frame_count = 1;
+        out_sprite->direction_count = 1;
+        out_sprite->loop = true;
+        out_sprite->lighting = true;
+    }
+    if (runtime == NULL || id == NULL || out_sprite == NULL)
+        return false;
+
+    yyjson_val *sprite = find_sprite_json(runtime, id);
+    if (!yyjson_is_obj(sprite))
+        return false;
+
+    out_sprite->id = json_string(sprite, "id", NULL);
+    out_sprite->path = json_string(sprite, "path", NULL);
+    out_sprite->frame_width = json_int(sprite, "frame_width", out_sprite->frame_width);
+    out_sprite->frame_height = json_int(sprite, "frame_height", out_sprite->frame_height);
+    out_sprite->columns = json_int(sprite, "columns", out_sprite->columns);
+    out_sprite->rows = json_int(sprite, "rows", out_sprite->rows);
+    out_sprite->frame_count = json_int(sprite, "frame_count", out_sprite->frame_count);
+    out_sprite->direction_count = json_int(sprite, "direction_count", out_sprite->direction_count);
+    out_sprite->fps = json_float(sprite, "fps", out_sprite->fps);
+    out_sprite->loop = json_bool(sprite, "loop", out_sprite->loop);
+    out_sprite->lighting = json_bool(sprite, "lighting", out_sprite->lighting);
+    out_sprite->emissive = json_bool(sprite, "emissive", out_sprite->emissive);
+    out_sprite->visual_ground_offset = json_float(sprite, "visual_ground_offset", out_sprite->visual_ground_offset);
+
+    if (out_sprite->id == NULL || out_sprite->path == NULL || out_sprite->frame_width <= 0 ||
+        out_sprite->frame_height <= 0 || out_sprite->columns <= 0 || out_sprite->rows <= 0 ||
+        out_sprite->frame_count <= 0 || out_sprite->direction_count <= 0)
+    {
+        SDL_zero(*out_sprite);
+        return false;
+    }
+    return true;
 }
 
 const char *sdl3d_game_data_active_camera(const sdl3d_game_data_runtime *runtime)
