@@ -23,12 +23,15 @@ future patch or mod overlays without changing authored asset paths.
 
 ## Pack Files
 
-`sdl3d_asset_pack_write_file()` writes deterministic uncompressed packs from an
-explicit list of files. It normalizes and sorts asset paths, rejects duplicates,
-and writes explicit little-endian metadata instead of raw C structs.
+`sdl3d_asset_pack_write_file()` writes deterministic packs from an explicit
+list of files. The current build defaults to compressing pack bytes at rest so
+disk and embedded packs stay smaller, but the resolver transparently
+decompresses them on mount. The raw pack layout is still accepted for
+compatibility.
 
-The format currently defers compression, encryption, and patch metadata. Those
-features should be added behind the pack writer/resolver boundary.
+Compression is controlled by the `SDL3D_COMPRESS_PACKS` CMake option. Set it
+`OFF` if you need raw packs for debugging or tooling. Encryption and patch
+metadata remain out of scope for now.
 
 ## CMake Workflow
 
@@ -47,6 +50,8 @@ target_link_libraries(my_demo PRIVATE my_assets)
 
 This creates a generated object library containing `my_game_assets` and
 `my_game_assets_size`, suitable for `sdl3d_asset_resolver_mount_memory_pack()`.
+The embedded bytes are generated from the same pack writer as the on-disk
+`.sdl3dpak` output, so they inherit the same compression setting.
 
 For native build-time `.sdl3dpak` files:
 

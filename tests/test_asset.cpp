@@ -214,6 +214,15 @@ TEST(AssetPackWriter, WritesDeterministicPackReadableByResolver)
     ASSERT_FALSE(bytes_a.empty());
     ASSERT_FALSE(bytes_b.empty());
     EXPECT_EQ(bytes_a, bytes_b);
+#if SDL3D_PACK_COMPRESSION_ENABLED
+    ASSERT_GE(bytes_a.size(), 8u);
+    EXPECT_EQ(std::string(bytes_a.data(), bytes_a.data() + 7), "S3DCPK1");
+    EXPECT_EQ(bytes_a[7], '\0');
+#else
+    ASSERT_GE(bytes_a.size(), 8u);
+    EXPECT_EQ(std::string(bytes_a.data(), bytes_a.data() + 7), "S3DPAK1");
+    EXPECT_EQ(bytes_a[7], '\0');
+#endif
 
     sdl3d_asset_resolver *resolver = sdl3d_asset_resolver_create();
     ASSERT_NE(resolver, nullptr);
@@ -222,6 +231,17 @@ TEST(AssetPackWriter, WritesDeterministicPackReadableByResolver)
     sdl3d_asset_buffer buffer{};
     ASSERT_TRUE(sdl3d_asset_resolver_read_file(resolver, "asset://text/a.txt", &buffer, error, sizeof(error))) << error;
     EXPECT_EQ(buffer_string(buffer), "alpha");
+    sdl3d_asset_buffer_free(&buffer);
+
+    sdl3d_asset_resolver_destroy(resolver);
+
+    resolver = sdl3d_asset_resolver_create();
+    ASSERT_NE(resolver, nullptr);
+    ASSERT_TRUE(sdl3d_asset_resolver_mount_memory_pack(resolver, bytes_a.data(), bytes_a.size(), "embedded", error,
+                                                       sizeof(error)))
+        << error;
+    ASSERT_TRUE(sdl3d_asset_resolver_read_file(resolver, "asset://text/b.txt", &buffer, error, sizeof(error))) << error;
+    EXPECT_EQ(buffer_string(buffer), "bravo");
     sdl3d_asset_buffer_free(&buffer);
 
     sdl3d_asset_resolver_destroy(resolver);

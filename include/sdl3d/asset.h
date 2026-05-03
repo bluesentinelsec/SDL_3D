@@ -85,9 +85,10 @@ extern "C"
     /**
      * @brief Mount an SDL3D pack file from disk.
      *
-     * The pack is loaded into memory and parsed immediately. The current pack
-     * format is intentionally small and uncompressed; compression, encryption,
-     * and patch layering can be added behind the same resolver API later.
+     * The pack is loaded into memory and parsed immediately. Packs written by
+     * the current build pipeline are compressed at rest by default and
+     * transparently decompressed on mount, but the resolver still accepts the
+     * original raw pack format for compatibility.
      *
      * @return true when the pack was read and mounted.
      */
@@ -98,8 +99,10 @@ extern "C"
      * @brief Mount an SDL3D pack already present in memory.
      *
      * The resolver copies @p data, so callers may release their source memory
-     * after this call succeeds. This is the preferred entry point for
-     * CMake-generated embedded packs.
+     * after this call succeeds. Packs may be stored compressed or raw; the
+     * resolver normalizes either form to the same in-memory pack layout before
+     * parsing. This is the preferred entry point for CMake-generated embedded
+     * packs.
      *
      * @return true when the pack was copied, parsed, and mounted.
      */
@@ -138,9 +141,10 @@ extern "C"
      *
      * Entries are normalized, sorted by asset path for deterministic output,
      * checked for duplicates, and written with explicit little-endian integers.
-     * The format is currently uncompressed and unencrypted by design; future
-     * compression, encryption, and patch metadata can be added while preserving
-     * this API shape and the resolver abstraction.
+     * The build defaults to compressing the resulting pack bytes before they
+     * are written to disk, while still preserving the same resolver and asset
+     * path model. Compression can be disabled at build time with the
+     * SDL3D_COMPRESS_PACKS CMake option.
      *
      * @param pack_path Filesystem output path to create or replace.
      * @param entries Source files to include.

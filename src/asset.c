@@ -5,17 +5,23 @@
 
 #include "sdl3d/asset.h"
 
+#include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
 
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include "miniz.h"
+
 #define SDL3D_PACK_MAGIC "S3DPAK1"
 #define SDL3D_PACK_MAGIC_SIZE 8u
 #define SDL3D_PACK_VERSION 1u
 #define SDL3D_PACK_HEADER_SIZE 24u
 #define SDL3D_PACK_ENTRY_FIXED_SIZE 18u
+#define SDL3D_PACK_COMPRESSED_MAGIC "S3DCPK1"
+#define SDL3D_PACK_COMPRESSED_HEADER_SIZE 32u
+#define SDL3D_PACK_COMPRESSION_LEVEL MZ_DEFAULT_LEVEL
 
 typedef enum asset_mount_type
 {
@@ -100,6 +106,12 @@ static void write_u64le(uint8_t *data, uint64_t value)
 {
     write_u32le(data, (uint32_t)(value & UINT32_MAX));
     write_u32le(data + 4, (uint32_t)(value >> 32u));
+}
+
+static bool pack_magic_matches(const uint8_t *data, const char *magic)
+{
+    return data != NULL && magic != NULL && SDL_memcmp(data, magic, SDL3D_PACK_MAGIC_SIZE - 1u) == 0 &&
+           data[SDL3D_PACK_MAGIC_SIZE - 1u] == '\0';
 }
 
 static bool has_uri_scheme(const char *path)
@@ -216,6 +228,202 @@ static int compare_write_entries(const void *a, const void *b)
     const asset_pack_write_entry *left = (const asset_pack_write_entry *)a;
     const asset_pack_write_entry *right = (const asset_pack_write_entry *)b;
     return SDL_strcmp(left->asset_path, right->asset_path);
+}
+
+static bool build_raw_pack_bytes(const asset_pack_write_entry *entries, int entry_count, uint8_t **out_data,
+                                 size_t *out_size, char *error_buffer, int error_buffer_size)
+{
+    if (out_data != NULL)
+        *out_data = NULL;
+    if (out_size != NULL)
+        *out_size = 0u;
+    if (entries == NULL || entry_count <= 0 || out_data == NULL || out_size == NULL)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "invalid pack build arguments");
+        return false;
+    }
+
+    uint64_t table_size = 0u;
+    for (int i = 0; i < entry_count; ++i)
+    {
+        const size_t path_len = SDL_strlen(entries[i].asset_path);
+        if (path_len == 0u || path_len > UINT16_MAX)
+        {
+            set_asset_error(error_buffer, error_buffer_size, "asset pack entry path is too long");
+            return false;
+        }
+        if (table_size > UINT64_MAX - (uint64_t)SDL3D_PACK_ENTRY_FIXED_SIZE - (uint64_t)path_len)
+        {
+            set_asset_error(error_buffer, error_buffer_size, "asset pack table is too large");
+            return false;
+        }
+        table_size += (uint64_t)SDL3D_PACK_ENTRY_FIXED_SIZE + (uint64_t)path_len;
+    }
+
+    uint64_t data_offset = SDL3D_PACK_HEADER_SIZE + table_size;
+    if (data_offset > (uint64_t)SIZE_MAX)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "asset pack is too large");
+        return false;
+    }
+
+    for (int i = 0; i < entry_count; ++i)
+    {
+        if (data_offset > UINT64_MAX - (uint64_t)entries[i].size)
+        {
+            set_asset_error(error_buffer, error_buffer_size, "asset pack is too large");
+            return false;
+        }
+        data_offset += (uint64_t)entries[i].size;
+    }
+
+    uint8_t *data = (uint8_t *)SDL_calloc(1u, (size_t)data_offset);
+    if (data == NULL)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "failed to allocate asset pack bytes");
+        return false;
+    }
+
+    uint64_t cursor = SDL3D_PACK_HEADER_SIZE;
+    SDL_memcpy(data, SDL3D_PACK_MAGIC, SDL3D_PACK_MAGIC_SIZE - 1u);
+    data[SDL3D_PACK_MAGIC_SIZE - 1u] = '\0';
+    write_u32le(data + 8, SDL3D_PACK_VERSION);
+    write_u32le(data + 12, (uint32_t)entry_count);
+    write_u64le(data + 16, SDL3D_PACK_HEADER_SIZE);
+
+    uint64_t data_cursor = SDL3D_PACK_HEADER_SIZE + table_size;
+    for (int i = 0; i < entry_count; ++i)
+    {
+        const size_t path_len = SDL_strlen(entries[i].asset_path);
+        write_u16le(data + (size_t)cursor, (uint16_t)path_len);
+        write_u64le(data + (size_t)cursor + 2u, data_cursor);
+        write_u64le(data + (size_t)cursor + 10u, (uint64_t)entries[i].size);
+        cursor += SDL3D_PACK_ENTRY_FIXED_SIZE;
+
+        SDL_memcpy(data + (size_t)cursor, entries[i].asset_path, path_len);
+        cursor += (uint64_t)path_len;
+
+        if (entries[i].size > 0u)
+            SDL_memcpy(data + (size_t)data_cursor, entries[i].data, entries[i].size);
+        data_cursor += (uint64_t)entries[i].size;
+    }
+
+    *out_data = data;
+    *out_size = (size_t)data_offset;
+    return true;
+}
+
+static bool build_compressed_pack_bytes(const uint8_t *raw_data, size_t raw_size, uint8_t **out_data, size_t *out_size,
+                                        char *error_buffer, int error_buffer_size)
+{
+    if (out_data != NULL)
+        *out_data = NULL;
+    if (out_size != NULL)
+        *out_size = 0u;
+    if (raw_data == NULL || raw_size == 0u || out_data == NULL || out_size == NULL)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "invalid pack compression arguments");
+        return false;
+    }
+
+    if (raw_size > (size_t)ULONG_MAX)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "asset pack is too large to compress");
+        return false;
+    }
+
+    const mz_ulong compressed_bound = mz_compressBound((mz_ulong)raw_size);
+    if (compressed_bound > (mz_ulong)(SIZE_MAX - SDL3D_PACK_COMPRESSED_HEADER_SIZE))
+    {
+        set_asset_error(error_buffer, error_buffer_size, "asset pack is too large");
+        return false;
+    }
+
+    uint8_t *data = (uint8_t *)SDL_malloc(SDL3D_PACK_COMPRESSED_HEADER_SIZE + (size_t)compressed_bound);
+    if (data == NULL)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "failed to allocate compressed asset pack");
+        return false;
+    }
+
+    mz_ulong compressed_size = compressed_bound;
+    const int status = mz_compress2(data + SDL3D_PACK_COMPRESSED_HEADER_SIZE, &compressed_size, raw_data,
+                                    (mz_ulong)raw_size, SDL3D_PACK_COMPRESSION_LEVEL);
+    if (status != MZ_OK)
+    {
+        SDL_free(data);
+        set_asset_error(error_buffer, error_buffer_size, "failed to compress asset pack");
+        return false;
+    }
+
+    SDL_memcpy(data, SDL3D_PACK_COMPRESSED_MAGIC, SDL3D_PACK_MAGIC_SIZE - 1u);
+    data[SDL3D_PACK_MAGIC_SIZE - 1u] = '\0';
+    write_u32le(data + 8, SDL3D_PACK_VERSION);
+    write_u32le(data + 12, 0u);
+    write_u64le(data + 16, (uint64_t)raw_size);
+    write_u64le(data + 24, (uint64_t)compressed_size);
+
+    *out_data = data;
+    *out_size = SDL3D_PACK_COMPRESSED_HEADER_SIZE + (size_t)compressed_size;
+    return true;
+}
+
+static bool normalize_pack_blob(uint8_t **data_ptr, size_t *size_ptr, const char *debug_name, char *error_buffer,
+                                int error_buffer_size)
+{
+    if (data_ptr == NULL || size_ptr == NULL || *data_ptr == NULL || *size_ptr == 0u)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "invalid pack blob");
+        return false;
+    }
+
+    if (*size_ptr >= SDL3D_PACK_HEADER_SIZE && pack_magic_matches(*data_ptr, SDL3D_PACK_MAGIC))
+        return true;
+
+    if (*size_ptr < SDL3D_PACK_COMPRESSED_HEADER_SIZE || !pack_magic_matches(*data_ptr, SDL3D_PACK_COMPRESSED_MAGIC))
+    {
+        set_asset_error(error_buffer, error_buffer_size, "pack has invalid magic");
+        return false;
+    }
+
+    const uint32_t version = read_u32le(*data_ptr + 8);
+    const uint64_t uncompressed_size = read_u64le(*data_ptr + 16);
+    const uint64_t compressed_size = read_u64le(*data_ptr + 24);
+    if (version != SDL3D_PACK_VERSION)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "unsupported compressed pack version");
+        return false;
+    }
+    if (uncompressed_size == 0u || compressed_size == 0u || uncompressed_size > (uint64_t)SIZE_MAX ||
+        compressed_size > (uint64_t)SIZE_MAX || SDL3D_PACK_COMPRESSED_HEADER_SIZE + compressed_size != *size_ptr ||
+        uncompressed_size > (uint64_t)ULONG_MAX || compressed_size > (uint64_t)ULONG_MAX)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "compressed pack header is invalid");
+        return false;
+    }
+
+    uint8_t *raw = (uint8_t *)SDL_malloc((size_t)uncompressed_size);
+    if (raw == NULL)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "failed to allocate decompressed pack");
+        return false;
+    }
+
+    mz_ulong raw_size = (mz_ulong)uncompressed_size;
+    const int status =
+        mz_uncompress(raw, &raw_size, *data_ptr + SDL3D_PACK_COMPRESSED_HEADER_SIZE, (mz_ulong)compressed_size);
+    if (status != MZ_OK || raw_size != (mz_ulong)uncompressed_size)
+    {
+        SDL_free(raw);
+        set_asset_error(error_buffer, error_buffer_size, "failed to decompress pack");
+        return false;
+    }
+
+    SDL_free(*data_ptr);
+    *data_ptr = raw;
+    *size_ptr = (size_t)raw_size;
+    (void)debug_name;
+    return true;
 }
 
 static bool append_mount(sdl3d_asset_resolver *resolver, asset_mount **out_mount)
@@ -466,6 +674,11 @@ bool sdl3d_asset_resolver_mount_pack_file(sdl3d_asset_resolver *resolver, const 
         set_asset_error(error_buffer, error_buffer_size, SDL_GetError());
         return false;
     }
+    if (!normalize_pack_blob(&data, &bytes, pack_path, error_buffer, error_buffer_size))
+    {
+        SDL_free(data);
+        return false;
+    }
     return mount_owned_pack(resolver, data, bytes, pack_path, error_buffer, error_buffer_size);
 }
 
@@ -485,6 +698,11 @@ bool sdl3d_asset_resolver_mount_memory_pack(sdl3d_asset_resolver *resolver, cons
         return false;
     }
     SDL_memcpy(copy, data, size);
+    if (!normalize_pack_blob(&copy, &size, debug_name, error_buffer, error_buffer_size))
+    {
+        SDL_free(copy);
+        return false;
+    }
     return mount_owned_pack(resolver, copy, size, debug_name, error_buffer, error_buffer_size);
 }
 
@@ -596,7 +814,6 @@ bool sdl3d_asset_pack_write_file(const char *pack_path, const sdl3d_asset_pack_s
     }
 
     bool ok = true;
-    uint64_t table_size = 0u;
     for (int i = 0; i < entry_count && ok; ++i)
     {
         if (entries[i].asset_path == NULL || entries[i].source_path == NULL || entries[i].source_path[0] == '\0')
@@ -636,7 +853,6 @@ bool sdl3d_asset_pack_write_file(const char *pack_path, const sdl3d_asset_pack_s
             break;
         }
         write_entries[i].size = bytes;
-        table_size += SDL3D_PACK_ENTRY_FIXED_SIZE + path_len;
     }
 
     if (ok)
@@ -653,17 +869,29 @@ bool sdl3d_asset_pack_write_file(const char *pack_path, const sdl3d_asset_pack_s
         }
     }
 
-    uint64_t data_offset = SDL3D_PACK_HEADER_SIZE + table_size;
-    for (int i = 0; i < entry_count && ok; ++i)
+    uint8_t *raw_data = NULL;
+    size_t raw_size = 0u;
+    if (ok)
     {
-        if (data_offset > UINT64_MAX - (uint64_t)write_entries[i].size)
+        ok = build_raw_pack_bytes(write_entries, entry_count, &raw_data, &raw_size, error_buffer, error_buffer_size);
+    }
+
+    uint8_t *output_data = raw_data;
+    size_t output_size = raw_size;
+    uint8_t *compressed_data = NULL;
+    if (ok)
+    {
+#if SDL3D_PACK_COMPRESSION_ENABLED
+        if (raw_size <= (size_t)ULONG_MAX)
         {
-            set_asset_error(error_buffer, error_buffer_size, "asset pack is too large");
-            ok = false;
-            break;
+            ok = build_compressed_pack_bytes(raw_data, raw_size, &compressed_data, &output_size, error_buffer,
+                                             error_buffer_size);
+            SDL_free(raw_data);
+            raw_data = NULL;
+            if (ok)
+                output_data = compressed_data;
         }
-        write_entries[i].offset = data_offset;
-        data_offset += (uint64_t)write_entries[i].size;
+#endif
     }
 
     SDL_IOStream *io = NULL;
@@ -679,33 +907,16 @@ bool sdl3d_asset_pack_write_file(const char *pack_path, const sdl3d_asset_pack_s
 
     if (ok)
     {
-        uint8_t header[SDL3D_PACK_HEADER_SIZE];
-        SDL_zeroa(header);
-        SDL_memcpy(header, SDL3D_PACK_MAGIC, SDL3D_PACK_MAGIC_SIZE - 1u);
-        write_u32le(header + 8, SDL3D_PACK_VERSION);
-        write_u32le(header + 12, (uint32_t)entry_count);
-        write_u64le(header + 16, SDL3D_PACK_HEADER_SIZE);
-        ok = write_all(io, header, sizeof(header));
+        ok = write_all(io, output_data, output_size);
     }
-
-    for (int i = 0; i < entry_count && ok; ++i)
-    {
-        const size_t path_len = SDL_strlen(write_entries[i].asset_path);
-        uint8_t entry_header[SDL3D_PACK_ENTRY_FIXED_SIZE];
-        write_u16le(entry_header, (uint16_t)path_len);
-        write_u64le(entry_header + 2, write_entries[i].offset);
-        write_u64le(entry_header + 10, (uint64_t)write_entries[i].size);
-        ok = write_all(io, entry_header, sizeof(entry_header)) && write_all(io, write_entries[i].asset_path, path_len);
-    }
-
-    for (int i = 0; i < entry_count && ok; ++i)
-        ok = write_all(io, write_entries[i].data, write_entries[i].size);
 
     if (io != NULL && !SDL_CloseIO(io))
         ok = false;
     if (!ok && error_buffer != NULL && error_buffer_size > 0 && error_buffer[0] == '\0')
         SDL_snprintf(error_buffer, (size_t)error_buffer_size, "failed to write asset pack '%s'", pack_path);
 
+    SDL_free(raw_data);
+    SDL_free(compressed_data);
     destroy_write_entries(write_entries, entry_count);
     return ok;
 }

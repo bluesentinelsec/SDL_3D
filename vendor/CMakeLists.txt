@@ -120,7 +120,13 @@ elseif(MSVC)
     target_compile_options(sdl3d_yyjson PRIVATE /w)
 endif()
 
-add_library(sdl3d_miniz OBJECT "${sdl3d_miniz_source_SOURCE_DIR}/miniz.c")
+add_library(
+    sdl3d_miniz
+    OBJECT
+        "${sdl3d_miniz_source_SOURCE_DIR}/miniz.c"
+        "${sdl3d_miniz_source_SOURCE_DIR}/miniz_tdef.c"
+        "${sdl3d_miniz_source_SOURCE_DIR}/miniz_tinfl.c"
+)
 target_include_directories(
     sdl3d_miniz
     PUBLIC
@@ -128,7 +134,8 @@ target_include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/miniz
 )
 set_target_properties(sdl3d_miniz PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_compile_definitions(sdl3d_miniz PRIVATE MINIZ_NO_ARCHIVE_APIS MINIZ_NO_STDIO MINIZ_NO_TIME)
+target_compile_definitions(sdl3d_miniz PRIVATE MINIZ_NO_ARCHIVE_APIS MINIZ_NO_STDIO MINIZ_NO_TIME
+                                                MINIZ_NO_ZLIB_COMPATIBLE_NAMES)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(sdl3d_miniz PRIVATE -w)
 elseif(MSVC)
