@@ -149,6 +149,12 @@ extern "C"
         bool emissive;
         /** @brief Offset from logical feet/contact point to visible feet. */
         float visual_ground_offset;
+        /** @brief Optional sprite overlay effect id, such as `melt`. */
+        const char *effect;
+        /** @brief Delay before the effect begins, in presentation seconds. */
+        float effect_delay;
+        /** @brief Duration of the effect ramp, in seconds. */
+        float effect_duration;
     } sdl3d_game_data_sprite_asset;
 
     /**

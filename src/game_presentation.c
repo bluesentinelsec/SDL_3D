@@ -364,8 +364,9 @@ static sdl3d_font *find_or_load_font(const sdl3d_game_data_runtime *runtime, sdl
     return slot;
 }
 
-static sdl3d_texture2d *find_or_load_image(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_image_cache *cache,
-                                           const char *image_id)
+static sdl3d_game_data_image_cache_entry *find_or_load_image_entry(const sdl3d_game_data_runtime *runtime,
+                                                                   sdl3d_game_data_image_cache *cache,
+                                                                   const char *image_id)
 {
     if (runtime == NULL || cache == NULL || cache->assets == NULL || image_id == NULL)
         return NULL;
@@ -373,7 +374,7 @@ static sdl3d_texture2d *find_or_load_image(const sdl3d_game_data_runtime *runtim
     for (int i = 0; i < cache->count; ++i)
     {
         if (cache->entries[i].image_id != NULL && SDL_strcmp(cache->entries[i].image_id, image_id) == 0)
-            return cache->entries[i].loaded ? &cache->entries[i].texture : NULL;
+            return cache->entries[i].loaded ? &cache->entries[i] : NULL;
     }
 
     if (!ensure_image_cache_capacity(cache, cache->count + 1))
@@ -412,6 +413,9 @@ static sdl3d_texture2d *find_or_load_image(const sdl3d_game_data_runtime *runtim
         sdl3d_game_data_image_cache_entry *entry = &cache->entries[cache->count];
         SDL_zero(*entry);
         entry->image_id = asset.id;
+        entry->effect = sprite.effect;
+        entry->effect_delay = sprite.effect_delay;
+        entry->effect_duration = sprite.effect_duration;
         entry->loaded = sdl3d_create_texture_from_image(&image, &entry->texture);
         sdl3d_sprite_asset_free(&sprite);
         if (!entry->loaded)
@@ -422,7 +426,7 @@ static sdl3d_texture2d *find_or_load_image(const sdl3d_game_data_runtime *runtim
         }
 
         ++cache->count;
-        return &entry->texture;
+        return entry;
     }
 
     if (asset.path == NULL)
@@ -450,6 +454,9 @@ static sdl3d_texture2d *find_or_load_image(const sdl3d_game_data_runtime *runtim
     sdl3d_game_data_image_cache_entry *entry = &cache->entries[cache->count];
     SDL_zero(*entry);
     entry->image_id = asset.id;
+    entry->effect = NULL;
+    entry->effect_delay = 0.0f;
+    entry->effect_duration = 1.0f;
     entry->loaded = sdl3d_create_texture_from_image(&image, &entry->texture);
     sdl3d_free_image(&image);
     if (!entry->loaded)
@@ -459,7 +466,7 @@ static sdl3d_texture2d *find_or_load_image(const sdl3d_game_data_runtime *runtim
     }
 
     ++cache->count;
-    return &entry->texture;
+    return entry;
 }
 
 static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitive *primitive)
@@ -612,12 +619,14 @@ static bool draw_ui_image(void *userdata, const sdl3d_game_data_ui_image *image)
     if (!visible)
         return true;
 
-    sdl3d_texture2d *texture = find_or_load_image(draw->runtime, draw->image_cache, resolved.image);
-    if (texture == NULL)
+    sdl3d_game_data_image_cache_entry *entry =
+        find_or_load_image_entry(draw->runtime, draw->image_cache, resolved.image);
+    if (entry == NULL)
     {
         draw->ok = false;
         return true;
     }
+    sdl3d_texture2d *texture = &entry->texture;
 
     const int width = sdl3d_get_render_context_width(draw->renderer);
     const int height = sdl3d_get_render_context_height(draw->renderer);
@@ -626,10 +635,13 @@ static bool draw_ui_image(void *userdata, const sdl3d_game_data_ui_image *image)
     float w = 0.0f;
     float h = 0.0f;
     resolve_ui_image_rect(&resolved, texture, width, height, &x, &y, &w, &h);
-    const sdl3d_overlay_effect effect = ui_image_effect_from_name(resolved.effect);
-    const float effect_progress = effect != SDL3D_OVERLAY_EFFECT_NONE && draw->render_eval != NULL
-                                      ? SDL_clamp(draw->render_eval->time * resolved.effect_speed, 0.0f, 1.0f)
-                                      : 0.0f;
+    const char *effect_name = resolved.effect != NULL ? resolved.effect : entry->effect;
+    const sdl3d_overlay_effect effect = ui_image_effect_from_name(effect_name);
+    const float effect_progress =
+        effect != SDL3D_OVERLAY_EFFECT_NONE && draw->render_eval != NULL
+            ? SDL_clamp((draw->render_eval->time - entry->effect_delay) / SDL_max(entry->effect_duration, 0.0001f),
+                        0.0f, 1.0f)
+            : 0.0f;
     const Uint32 effect_seed = ui_image_hash_string(resolved.name);
     if (!sdl3d_draw_texture_overlay(draw->renderer, texture, x, y, w, h, resolved.color, effect, effect_progress,
                                     effect_seed))

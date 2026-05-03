@@ -52,6 +52,9 @@ extern "C"
     {
         sdl3d_texture2d texture; /**< Loaded texture. */
         const char *image_id;    /**< Runtime-owned image asset id. */
+        const char *effect;      /**< Optional sprite-backed effect id. */
+        float effect_delay;      /**< Seconds to wait before effect starts. */
+        float effect_duration;   /**< Seconds used to ramp the effect. */
         bool loaded;             /**< True once the texture owns valid pixels. */
     } sdl3d_game_data_image_cache_entry;
 
@@ -291,7 +294,7 @@ extern "C"
      *
      * Images are loaded lazily through @p image_cache and drawn on SDL3D's
      * overlay path after world rendering. @p render_eval supplies the current
-     * presentation time for authored UI image effects such as `melt`.
+     * presentation time for authored image effects such as `melt`.
      */
     bool sdl3d_game_data_draw_ui_images(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
                                         sdl3d_game_data_image_cache *image_cache,

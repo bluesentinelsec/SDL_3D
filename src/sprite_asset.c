@@ -254,6 +254,21 @@ static bool sprite_asset_validate_source(const sdl3d_sprite_asset_source *source
         sprite_asset_set_error(error_buffer, error_buffer_size, "sprite asset source is required");
         return SDL_InvalidParamError("source");
     }
+    if (source->effect != NULL && source->effect[0] != '\0' && SDL_strcasecmp(source->effect, "melt") != 0)
+    {
+        sprite_asset_set_error(error_buffer, error_buffer_size, "unsupported sprite asset effect");
+        return SDL_SetError("unsupported sprite asset effect");
+    }
+    if (source->effect_delay < 0.0f)
+    {
+        sprite_asset_set_error(error_buffer, error_buffer_size, "sprite asset effect_delay must be non-negative");
+        return SDL_SetError("sprite asset effect_delay must be non-negative");
+    }
+    if (source->effect != NULL && source->effect[0] != '\0' && source->effect_duration <= 0.0f)
+    {
+        sprite_asset_set_error(error_buffer, error_buffer_size, "sprite asset effect_duration must be positive");
+        return SDL_SetError("sprite asset effect_duration must be positive");
+    }
     if (source->direction_count <= 0 || source->direction_count > SDL3D_SPRITE_ROTATION_COUNT)
     {
         sprite_asset_set_error(error_buffer, error_buffer_size, "sprite direction count must be between 1 and 8");
@@ -458,6 +473,9 @@ static bool sprite_asset_manifest_parse(yyjson_val *root, sprite_asset_manifest 
     manifest->source.lighting = sprite_asset_manifest_get_bool(root, "lighting", true);
     manifest->source.emissive = sprite_asset_manifest_get_bool(root, "emissive", false);
     manifest->source.visual_ground_offset = sprite_asset_manifest_get_float(root, "visual_ground_offset", 0.0f);
+    manifest->source.effect = sprite_asset_manifest_get_string(root, "effect", NULL);
+    manifest->source.effect_delay = sprite_asset_manifest_get_float(root, "effect_delay", 0.0f);
+    manifest->source.effect_duration = sprite_asset_manifest_get_float(root, "effect_duration", 1.0f);
 
     return true;
 }
@@ -481,6 +499,9 @@ bool sdl3d_sprite_asset_load(const sdl3d_asset_resolver *assets, const sdl3d_spr
     out_sprite->lighting = source->lighting;
     out_sprite->emissive = source->emissive;
     out_sprite->visual_ground_offset = source->visual_ground_offset;
+    out_sprite->effect = source->effect;
+    out_sprite->effect_delay = source->effect_delay;
+    out_sprite->effect_duration = source->effect_duration;
 
     if (source->kind == SDL3D_SPRITE_ASSET_SOURCE_SHEET)
     {

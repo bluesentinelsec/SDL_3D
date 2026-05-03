@@ -681,6 +681,15 @@ static bool collect_sprite_assets(validation_context *ctx, yyjson_val *root, val
             return validation_error(ctx, path, "sprite asset requires a non-empty path");
         if (!asset_path_exists(ctx, json_string(sprite, "path"), path, "sprite"))
             return false;
+        const char *effect = json_string(sprite, "effect");
+        if (effect != NULL && effect[0] != '\0' && SDL_strcasecmp(effect, "melt") != 0)
+            return validation_error(ctx, path, "unsupported sprite asset effect '%s'", effect);
+        yyjson_val *effect_delay = obj_get(sprite, "effect_delay");
+        yyjson_val *effect_duration = obj_get(sprite, "effect_duration");
+        if (yyjson_is_num(effect_delay) && (float)yyjson_get_real(effect_delay) < 0.0f)
+            return validation_error(ctx, path, "sprite asset effect_delay must be non-negative");
+        if (yyjson_is_num(effect_duration) && (float)yyjson_get_real(effect_duration) <= 0.0f)
+            return validation_error(ctx, path, "sprite asset effect_duration must be positive");
     }
     return true;
 }

@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 #include "sdl3d/asset.h"
+#include "sdl3d/effects.h"
 #include "sdl3d/sprite_actor.h"
 
 #ifdef __cplusplus
@@ -42,6 +43,9 @@ extern "C"
         bool lighting;
         bool emissive;
         float visual_ground_offset;
+        const char *effect;
+        float effect_delay;
+        float effect_duration;
     } sdl3d_sprite_asset_source;
 
     /**
@@ -65,6 +69,9 @@ extern "C"
         bool lighting;
         bool emissive;
         float visual_ground_offset;
+        const char *effect;
+        float effect_delay;
+        float effect_duration;
     } sdl3d_sprite_asset_runtime;
 
     /**

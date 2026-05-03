@@ -1,4 +1,4 @@
-# SDL3D Game Data JSON Format
+#SDL3D Game Data JSON Format
 
 This document defines the first JSON-family authoring format for SDL3D game data. It is intentionally small, explicit, and module-oriented so it can express Pong without assuming sectors, while still leaving room for Doom's FPS/sector modules.
 
@@ -57,11 +57,7 @@ The optional `storage` block declares the platform-stable identity used by
 
 ```json
 {
-  "storage": {
-    "organization": "Blue Sentinel Security",
-    "application": "SDL3D Pong",
-    "profile": "default"
-  }
+    "storage" : {"organization" : "Blue Sentinel Security", "application" : "SDL3D Pong", "profile" : "default"}
 }
 ```
 
@@ -79,59 +75,54 @@ one actor. Logic can load or save the entry without game-specific Lua:
 
 ```json
 {
-  "persistence": {
-    "entries": [
-      {
-        "name": "persistence.options",
-        "path": "user://settings/options.json",
-        "schema": "sdl3d.options.v1",
-        "version": 1,
-        "target": "entity.settings",
-        "enabled_if": {
-          "type": "property.bool",
-          "target": "entity.settings",
-          "key": "options_persistence_enabled",
-          "equals": true
-        },
-        "properties": [
-          "display_mode",
-          "vsync",
-          "renderer",
-          "sfx_volume",
-          "music_volume"
-        ]
-      }
-    ]
-  }
+    "persistence":
+    {
+        "entries" : [ {
+            "name" : "persistence.options",
+            "path" : "user://settings/options.json",
+            "schema" : "sdl3d.options.v1",
+            "version" : 1,
+            "target" : "entity.settings",
+            "enabled_if" : {
+                "type" : "property.bool",
+                "target" : "entity.settings",
+                "key" : "options_persistence_enabled",
+                "equals" : true
+            },
+            "properties" : [ "display_mode", "vsync", "renderer", "sfx_volume", "music_volume" ]
+        } ]
+    }
 }
 ```
 
-The generated JSON stores `schema` and `version` when authored, then writes the
-allowlisted properties at the top level. Load ignores missing files and
-incompatible schema/version files, which lets games reset defaults or migrate
-old data explicitly. `enabled_if` uses the same condition language as UI and
-logic, so games can disable persistence during development or per profile.
+    The generated JSON stores `schema` and `version` when authored,
+    then writes the allowlisted properties at the top level.Load ignores missing files and incompatible schema /
+        version files,
+    which lets games reset defaults or
+        migrate old data explicitly. `enabled_if` uses the same condition language as UI and logic,
+    so games can disable persistence during development or per profile
+                                                               .
 
-Persistence actions are regular logic actions:
+                                                           Persistence actions are regular logic actions :
 
-```json
-{ "type": "persistence.load", "entry": "persistence.options" }
-{ "type": "persistence.save", "entry": "persistence.options" }
+```
+    json{"type" : "persistence.load",
+         "entry" : "persistence.options"} {"type" : "persistence.save", "entry" : "persistence.options"}
 ```
 
-## World
+    ##World
 
-The world object declares one spatial context. It does not imply a sector map.
+        The world object declares one spatial context.It does not imply a sector map.
 
 ```json
 {
-  "name": "world.pong",
-  "kind": "fixed_screen",
-  "units": "world_units",
-  "axes": { "horizontal": "x", "vertical": "y", "depth": "z" },
-  "bounds": { "min": [-9.0, -5.0, -1.0], "max": [9.0, 5.0, 2.0] },
-  "cameras": [],
-  "lights": []
+    "name" : "world.pong",
+             "kind" : "fixed_screen",
+                      "units" : "world_units",
+                                "axes" : {"horizontal" : "x", "vertical" : "y", "depth" : "z"},
+                                         "bounds" : {"min" : [ -9.0, -5.0, -1.0 ], "max" : [ 9.0, 5.0, 2.0 ]},
+                                                    "cameras" : [],
+                                                                "lights" : []
 }
 ```
 
@@ -143,8 +134,9 @@ The optional `app` object lets a managed-loop game declare startup settings befo
 
 ```json
 {
-  "app": {
-    "title": "SDL3D Pong",
+    "app":
+    {
+        "title": "SDL3D Pong",
     "logical_width": 1280,
     "logical_height": 720,
     "backend": "software",
@@ -193,12 +185,11 @@ The optional `app` object lets a managed-loop game declare startup settings befo
     "input_policy": {
       "global_actions": ["action.exit", "action.scene.title", "action.scene.play"]
     },
-    "scene_transition_policy": {
-      "allow_same_scene": false,
-      "allow_interrupt": false,
-      "reset_menu_input_on_request": true
+    "scene_transition_policy":
+        {
+            "allow_same_scene" : false, "allow_interrupt" : false, "reset_menu_input_on_request" : true
+        }
     }
-  }
 }
 ```
 
@@ -229,63 +220,65 @@ hosts use generic frame orchestration:
 
 ```json
 {
-  "update_phases": {
-    "app_flow": { "active": true, "when_paused": true },
-    "presentation": { "active": true, "when_paused": true },
-    "property_effects": { "active": true, "when_paused": true },
-    "particles": { "active": true, "when_paused": true },
-    "simulation": { "active": true, "when_paused": false }
-  },
-  "presentation": {
-    "metrics": { "fps_sample_seconds": 0.25 },
-    "ui_pulse_clock": "clock.pause_flash",
-    "clocks": [
-      {
-        "name": "clock.pause_flash",
-        "target": "entity.presentation",
-        "key": "pause_flash",
-        "speed_property": { "target": "entity.presentation", "key": "pause_flash_speed" },
-        "wrap": 1.0,
-        "reset_on_pause_enter": true,
-        "active_if": { "type": "app.paused", "equals": true }
-      }
-    ]
-  }
+    "update_phases" : {
+        "app_flow" : {"active" : true, "when_paused" : true},
+        "presentation" : {"active" : true, "when_paused" : true},
+        "property_effects" : {"active" : true, "when_paused" : true},
+        "particles" : {"active" : true, "when_paused" : true},
+        "simulation" : {"active" : true, "when_paused" : false}
+    },
+                      "presentation":
+    {
+        "metrics" : {"fps_sample_seconds" : 0.25}, "ui_pulse_clock" : "clock.pause_flash", "clocks" : [ {
+            "name" : "clock.pause_flash",
+            "target" : "entity.presentation",
+            "key" : "pause_flash",
+            "speed_property" : {"target" : "entity.presentation", "key" : "pause_flash_speed"},
+            "wrap" : 1.0,
+            "reset_on_pause_enter" : true,
+            "active_if" : {"type" : "app.paused", "equals" : true}
+        } ]
+    }
 }
 ```
 
 `sdl3d_game_data_update_frame()` uses these phases to advance app flow,
-presentation clocks, property effects, particles, and simulation. Presentation
-clocks are reusable oscillators/counters that can write into actor properties;
-UI, lights, scripts, and render helpers can all read the resulting value.
+    presentation clocks, property effects, particles,
+    and simulation.Presentation clocks are reusable oscillators / counters that can write into actor properties;
+UI, lights, scripts,
+    and render helpers can all read the resulting value
+            .
 
-Font assets can be authored under `assets.fonts`:
+        Font assets can be authored under `assets.fonts`:
 
 ```json
 {
-  "assets": {
-    "fonts": [
-      { "id": "font.hud", "builtin": "Inter", "size": 34 }
-    ]
-  }
+    "assets":
+    {
+        "fonts" : [ {"id" : "font.hud", "builtin" : "Inter", "size" : 34} ]
+    }
 }
 ```
 
-UI descriptors can bind text to engine metrics or actor properties and can use generic visibility conditions:
+    UI descriptors can bind text to engine metrics or
+    actor properties and can use generic visibility conditions :
 
 ```json
 {
-  "name": "ui.score",
+    "name": "ui.score",
   "font": "font.hud",
   "format": "%02d   %02d",
   "bindings": [
     { "type": "property", "entity": "entity.score.player", "key": "value" },
     { "type": "property", "entity": "entity.score.cpu", "key": "value" }
   ],
-  "visible_if": {
-    "type": "not",
-    "condition": { "type": "app.paused", "equals": true }
-  }
+  "visible_if":
+    {
+        "type" : "not", "condition":
+        {
+            "type" : "app.paused", "equals" : true
+        }
+    }
 }
 ```
 
@@ -300,23 +293,22 @@ selected styling, and cursor styling:
 
 ```json
 {
-  "ui": {
-    "menus": [
-      {
-        "name": "ui.title.menu",
-        "menu": "menu.title",
-        "font": "font.hud",
-        "x": 0.5,
-        "y": 0.48,
-        "gap": 0.09,
-        "normalized": true,
-        "align": "center",
-        "color": [225, 236, 255, 245],
-        "selected_color": [255, 245, 208, 255],
-        "cursor": { "text": ">", "offset_x": -0.12, "color": [255, 222, 140, 255] }
-      }
-    ]
-  }
+    "ui":
+    {
+        "menus" : [ {
+            "name" : "ui.title.menu",
+            "menu" : "menu.title",
+            "font" : "font.hud",
+            "x" : 0.5,
+            "y" : 0.48,
+            "gap" : 0.09,
+            "normalized" : true,
+            "align" : "center",
+            "color" : [ 225, 236, 255, 245 ],
+            "selected_color" : [ 255, 245, 208, 255 ],
+            "cursor" : {"text" : ">", "offset_x" : -0.12, "color" : [ 255, 222, 140, 255 ]}
+        } ]
+    }
 }
 ```
 
@@ -325,8 +317,7 @@ submenus that should share one scene, camera, background, and transition state:
 
 ```json
 {
-  "label": "Display",
-  "scene_state": { "key": "options_menu", "value": "display" }
+    "label" : "Display", "scene_state" : {"key" : "options_menu", "value" : "display"}
 }
 ```
 
@@ -342,18 +333,13 @@ Menu items can also author generic settings controls and emit data-authored sign
 
 ```json
 {
-  "label": "Difficulty",
-  "signal": "signal.settings.apply",
-  "control": {
-    "type": "choice",
-    "target": "entity.settings",
-    "key": "difficulty",
-    "choices": [
-      { "label": "Easy", "value": "easy" },
-      { "label": "Normal", "value": "normal" },
-      { "label": "Hard", "value": "hard" }
-    ]
-  }
+    "label" : "Difficulty", "signal" : "signal.settings.apply", "control":
+    {
+        "type" : "choice", "target" : "entity.settings", "key" : "difficulty", "choices" : [
+            {"label" : "Easy", "value" : "easy"}, {"label" : "Normal", "value" : "normal"},
+            {"label" : "Hard", "value" : "hard"}
+        ]
+    }
 }
 ```
 
@@ -365,34 +351,33 @@ adjusted without activating navigation items:
 
 ```json
 {
-  "name": "menu.options.audio",
-  "up_action": "action.menu.up",
-  "down_action": "action.menu.down",
-  "left_action": "action.menu.left",
-  "right_action": "action.menu.right",
-  "select_action": "action.menu.select",
-  "items": [
-    {
-      "label": "Music",
-      "signal": "signal.settings.apply_audio",
-      "control": {
-        "type": "range",
-        "target": "entity.settings",
-        "key": "music_volume",
-        "value_type": "int",
-        "display": "slider",
-        "min": 0,
-        "max": 10,
-        "step": 1,
-        "default": 7
-      }
-    }
-  ]
+    "name" : "menu.options.audio",
+             "up_action" : "action.menu.up",
+                           "down_action" : "action.menu.down",
+                                           "left_action" : "action.menu.left",
+                                                           "right_action" : "action.menu.right",
+                                                                            "select_action" : "action.menu.select",
+                                                                                              "items"
+        : [ {
+            "label" : "Music",
+            "signal" : "signal.settings.apply_audio",
+            "control" : {
+                "type" : "range",
+                "target" : "entity.settings",
+                "key" : "music_volume",
+                "value_type" : "int",
+                "display" : "slider",
+                "min" : 0,
+                "max" : 10,
+                "step" : 1,
+                "default" : 7
+            }
+        } ]
 }
 ```
 
-Range controls clamp to their authored min/max. Adding `"value_type": "int"`
-stores the result as an integer property; adding `"display": "slider"` renders
+    Range controls clamp to their authored min /
+    max.Adding `"value_type" : "int"` stores the result as an integer property; adding `"display": "slider"` renders
 the menu value as a compact slider label.
 
 `input_binding` controls capture the next keyboard key, mouse button, or
@@ -402,55 +387,49 @@ menu actions:
 
 ```json
 {
-  "label": "Up",
-  "control": {
-    "type": "input_binding",
-    "default": "UP",
-    "bindings": [
-      { "action": "action.paddle.up", "device": "keyboard" },
-      { "action": "action.menu.up", "device": "keyboard" }
-    ]
-  }
+    "label" : "Up", "control":
+    {
+        "type" : "input_binding", "default" : "UP", "bindings" : [
+            {"action" : "action.paddle.up", "device" : "keyboard"}, {"action" : "action.menu.up", "device" : "keyboard"}
+        ]
+    }
 }
 ```
 
-For gamepads, use the same control shape with `"device": "gamepad"` and a
-button name such as `"SOUTH"` or `"DPAD_UP"`. Duplicate inputs within the same
-menu are rejected during capture. Pressing the capture cancel key, Escape by
-default, cancels capture. Resetting authored binding controls is a logic action:
+    For gamepads,
+    use the same control shape with `"device"
+    : "gamepad"` and a button name such
+          as `"SOUTH"` or `"DPAD_UP"`.Duplicate inputs within the same menu are rejected during capture.Pressing the
+                              capture cancel key,
+    Escape by default,
+    cancels capture.Resetting authored binding controls is a logic action :
 
-```json
-{ "type": "input.reset_bindings", "menu": "menu.options.keyboard" }
+```json{"type" : "input.reset_bindings", "menu" : "menu.options.keyboard"}
 ```
 
-Settings menus that need Apply/Cancel behavior can still snapshot the edited
-properties when a scene opens, let controls stage values in those actor
-properties, then either persist the staged values or restore the snapshot:
+    Settings menus that need Apply /
+        Cancel behavior can still snapshot the edited properties when a scene opens,
+    let controls stage values in those actor properties,
+    then either persist the staged values or restore the snapshot :
 
 ```json
 {
-  "type": "property.snapshot",
-  "name": "options.display",
-  "target": "entity.settings",
-  "keys": ["display_mode", "vsync", "renderer"]
+    "type" : "property.snapshot",
+             "name" : "options.display",
+                      "target" : "entity.settings",
+                                 "keys" : [ "display_mode", "vsync", "renderer" ]
 }
 ```
 
-```json
-{
-  "type": "property.restore_snapshot",
-  "name": "options.display",
-  "target": "entity.settings"
-}
+```json{"type" : "property.restore_snapshot", "name" : "options.display", "target" : "entity.settings"}
 ```
 
-Settings screens can reset authored defaults without game-specific code:
+    Settings screens can reset authored defaults without game -
+    specific code :
 
 ```json
 {
-  "type": "property.reset_defaults",
-  "target": "entity.settings",
-  "keys": ["display_mode", "vsync", "renderer"]
+    "type" : "property.reset_defaults", "target" : "entity.settings", "keys" : [ "display_mode", "vsync", "renderer" ]
 }
 ```
 
@@ -510,245 +489,252 @@ colors, and player-facing input binding rows:
 
 ```json
 {
-  "scenes": {
-    "files": [
-      "scenes/title.scene.json",
-      { "package": "standard_options" },
-      "scenes/play.scene.json"
-    ],
-    "standard_options": {
-      "settings": "entity.settings",
-      "return_scene": "scene.title",
-      "single_scene": true,
-      "menu_state_key": "options_menu",
-      "scenes": {
-        "root": "scene.options",
-        "display": "scene.options.display",
-        "keyboard": "scene.options.keyboard",
-        "mouse": "scene.options.mouse",
-        "gamepad": "scene.options.gamepad",
-        "audio": "scene.options.audio"
-      },
-      "actions": {
-        "up": "action.menu.up",
-        "down": "action.menu.down",
-        "left": "action.menu.left",
-        "right": "action.menu.right",
-        "select": "action.menu.select"
-      },
-      "signals": {
-        "move": "signal.ui.menu.move",
-        "select": "signal.ui.menu.select",
-        "apply": "signal.settings.apply",
-        "apply_audio": "signal.settings.apply_audio",
-        "reset_display": "signal.settings.reset_display",
-        "reset_keyboard": "signal.settings.reset_keyboard",
-        "reset_mouse": "signal.settings.reset_mouse",
-        "reset_gamepad": "signal.settings.reset_gamepad",
-        "reset_audio": "signal.settings.reset_audio"
-      },
-      "fonts": {
-        "title": "font.title",
-        "menu": "font.hud"
-      },
-      "background": {
-        "renders_world": true,
-        "camera": "camera.overhead",
-        "entities": [
-          "entity.options.background.base",
-          "entity.options.flow.magenta"
-        ]
-      },
-      "theme": {
-        "title_color": [242, 248, 255, 255],
-        "menu_color": [225, 236, 255, 245],
-        "selected_color": [255, 245, 208, 255],
-        "cursor_color": [255, 222, 140, 255],
-        "status_color": [255, 222, 140, 230],
-        "divider_color": [126, 168, 238, 170],
-        "cursor": ">",
-        "slider_left": "[",
-        "slider_fill": "#",
-        "slider_empty": "-",
-        "slider_right": "]"
-      },
-      "layout": {
-        "title_x": 0.5,
-        "menu_x": 0.5,
-        "status_x": 0.5,
-        "status_y": 0.88,
-        "menu_align": "left",
-        "cursor_align": "right",
-        "selected_pulse_alpha": true,
-        "title_divider": true,
-        "root": { "title_y": 0.18, "menu_x": 0.43, "menu_y": 0.36, "gap": 0.078, "cursor_offset_x": -0.035 },
-        "display": { "title_y": 0.2, "menu_x": 0.3, "menu_y": 0.38, "gap": 0.074, "cursor_offset_x": -0.035 },
-        "keyboard": { "title_y": 0.13, "menu_x": 0.36, "menu_y": 0.29, "gap": 0.062, "cursor_offset_x": -0.035 },
-        "mouse": { "title_y": 0.13, "menu_x": 0.4, "menu_y": 0.30, "gap": 0.062, "cursor_offset_x": -0.035 },
-        "gamepad": { "title_y": 0.105, "menu_x": 0.34, "menu_y": 0.24, "gap": 0.055, "cursor_offset_x": -0.035 },
-        "audio": { "title_y": 0.18, "menu_x": 0.34, "menu_y": 0.39, "gap": 0.078, "cursor_offset_x": -0.035 }
-      },
-      "bindings": {
-        "keyboard": [
-          {
-            "label": "Up",
-            "default": "UP",
-            "bindings": [
-              { "action": "action.player.up", "device": "keyboard" },
-              { "action": "action.menu.up", "device": "keyboard" }
-            ]
-          }
-        ],
-        "mouse": [
-          {
-            "label": "Accept",
-            "default": "LEFT",
-            "bindings": [
-              { "action": "action.menu.select", "device": "mouse" }
-            ]
-          }
-        ],
-        "gamepad": [
-          {
-            "label": "Up",
-            "default": "DPAD_UP",
-            "bindings": [
-              { "action": "action.player.up", "device": "gamepad" },
-              { "action": "action.menu.up", "device": "gamepad" }
-            ]
-          }
-        ]
-      }
+    "scenes":
+    {
+        "files" : [ "scenes/title.scene.json", {"package" : "standard_options"}, "scenes/play.scene.json" ],
+                  "standard_options":
+        {
+            "settings" : "entity.settings",
+                         "return_scene" : "scene.title",
+                                          "single_scene" : true,
+                                                           "menu_state_key" : "options_menu",
+                                                                              "scenes" : {
+                                                                                  "root" : "scene.options",
+                                                                                  "display" : "scene.options.display",
+                                                                                  "keyboard" : "scene.options.keyboard",
+                                                                                  "mouse" : "scene.options.mouse",
+                                                                                  "gamepad" : "scene.options.gamepad",
+                                                                                  "audio" : "scene.options.audio"
+                                                                              },
+                                                                                         "actions"
+                : {
+                    "up" : "action.menu.up",
+                    "down" : "action.menu.down",
+                    "left" : "action.menu.left",
+                    "right" : "action.menu.right",
+                    "select" : "action.menu.select"
+                },
+                  "signals" : {
+                      "move" : "signal.ui.menu.move",
+                      "select" : "signal.ui.menu.select",
+                      "apply" : "signal.settings.apply",
+                      "apply_audio" : "signal.settings.apply_audio",
+                      "reset_display" : "signal.settings.reset_display",
+                      "reset_keyboard" : "signal.settings.reset_keyboard",
+                      "reset_mouse" : "signal.settings.reset_mouse",
+                      "reset_gamepad" : "signal.settings.reset_gamepad",
+                      "reset_audio" : "signal.settings.reset_audio"
+                  },
+                              "fonts" : {"title" : "font.title", "menu" : "font.hud"},
+                                        "background"
+                : {
+                    "renders_world" : true,
+                    "camera" : "camera.overhead",
+                    "entities" : [ "entity.options.background.base", "entity.options.flow.magenta" ]
+                },
+                  "theme" : {
+                      "title_color" : [ 242, 248, 255, 255 ],
+                      "menu_color" : [ 225, 236, 255, 245 ],
+                      "selected_color" : [ 255, 245, 208, 255 ],
+                      "cursor_color" : [ 255, 222, 140, 255 ],
+                      "status_color" : [ 255, 222, 140, 230 ],
+                      "divider_color" : [ 126, 168, 238, 170 ],
+                      "cursor" : ">",
+                      "slider_left" : "[",
+                      "slider_fill" : "#",
+                      "slider_empty" : "-",
+                      "slider_right" : "]"
+                  },
+                            "layout"
+                : {
+                    "title_x" : 0.5,
+                    "menu_x" : 0.5,
+                    "status_x" : 0.5,
+                    "status_y" : 0.88,
+                    "menu_align" : "left",
+                    "cursor_align" : "right",
+                    "selected_pulse_alpha" : true,
+                    "title_divider" : true,
+                    "root" :
+                        {"title_y" : 0.18, "menu_x" : 0.43, "menu_y" : 0.36, "gap" : 0.078, "cursor_offset_x" : -0.035},
+                    "display" :
+                        {"title_y" : 0.2, "menu_x" : 0.3, "menu_y" : 0.38, "gap" : 0.074, "cursor_offset_x" : -0.035},
+                    "keyboard" :
+                        {"title_y" : 0.13, "menu_x" : 0.36, "menu_y" : 0.29, "gap" : 0.062, "cursor_offset_x" : -0.035},
+                    "mouse" :
+                        {"title_y" : 0.13, "menu_x" : 0.4, "menu_y" : 0.30, "gap" : 0.062, "cursor_offset_x" : -0.035},
+                    "gamepad" : {
+                        "title_y" : 0.105,
+                        "menu_x" : 0.34,
+                        "menu_y" : 0.24,
+                        "gap" : 0.055,
+                        "cursor_offset_x" : -0.035
+                    },
+                    "audio" :
+                        {"title_y" : 0.18, "menu_x" : 0.34, "menu_y" : 0.39, "gap" : 0.078, "cursor_offset_x" : -0.035}
+                },
+                  "bindings":
+            {
+                "keyboard" : [ {
+                    "label" : "Up",
+                    "default" : "UP",
+                    "bindings" : [
+                        {"action" : "action.player.up", "device" : "keyboard"},
+                        {"action" : "action.menu.up", "device" : "keyboard"}
+                    ]
+                } ],
+                             "mouse" : [ {
+                                 "label" : "Accept",
+                                 "default" : "LEFT",
+                                 "bindings" : [ {"action" : "action.menu.select", "device" : "mouse"} ]
+                             } ],
+                                       "gamepad" : [ {
+                                           "label" : "Up",
+                                           "default" : "DPAD_UP",
+                                           "bindings" : [
+                                               {"action" : "action.player.up", "device" : "gamepad"},
+                                               {"action" : "action.menu.up", "device" : "gamepad"}
+                                           ]
+                                       } ]
+            }
+        }
     }
-  }
 }
 ```
 
-The package owns common menu composition and standard setting controls; the game
+    The package owns common menu composition and standard setting controls; the game
 owns the bindings and names that make sense for its rules. `theme` controls
 colors, cursor text, and slider glyphs. `layout` controls normalized title,
 menu, status, row gap, cursor offset, alignment, and selected-item pulse values
 for each generated scene. Games can omit `theme` or `layout` fields to use sane
 defaults, or author fully custom options scenes when they need a different
-structure. `background` is optional; when present, generated options scenes
-render the listed entities with the named camera. This gives every standard
-options submenu the same authored backdrop while keeping gameplay actors out of
-the menu scene. `single_scene` makes root and child options menus live inside
-the root scene; child menu selections set `menu_state_key` in scene state
-instead of requesting scene transitions. Use it when a family of menus should
-feel like one screen.
+structure. `background` is optional;
+when present,
+    generated options scenes render the listed entities with the named camera
+        .This gives every standard options submenu the same authored backdrop while keeping gameplay actors out of the
+            menu scene. `single_scene` makes root and child options menus live inside the root scene;
+child menu selections set `menu_state_key` in scene state instead of requesting scene
+        transitions.Use it when a family of menus should feel like one screen
+            .
 
-Audio bus volume can also be driven from actor properties so options menus can
-share one generic settings actor. Use `source.scale` when the authored setting
-uses player-facing integer units rather than normalized engine volume:
-
-```json
-{
-  "type": "audio.set_bus_volume",
-  "bus": "music",
-  "source": { "target": "entity.settings", "key": "music_volume", "scale": 0.1 }
-}
-```
-
-Sprite assets can be authored under `assets.sprites`:
+    Audio bus volume can also be driven from actor properties so options menus can share one generic settings
+        actor.Use `source.scale` when the authored setting uses player -
+    facing integer units rather than normalized engine volume :
 
 ```json
 {
-  "assets": {
-    "sprites": [
-      {
-        "id": "sprite.robot.walk",
-        "path": "asset://sprites/robot/walk.png",
-        "frame_width": 32,
-        "frame_height": 48,
-        "columns": 8,
-        "rows": 6,
-        "frame_count": 6,
-        "direction_count": 8,
-        "fps": 8.0,
-        "loop": true,
-        "lighting": true,
-        "emissive": false,
-        "visual_ground_offset": 0.125
-      }
-    ]
-  }
+    "type" : "audio.set_bus_volume",
+             "bus" : "music",
+                     "source" : {"target" : "entity.settings", "key" : "music_volume", "scale" : 0.1}
 }
 ```
 
-The current sprite metadata API records the image source, atlas/grid layout,
-animation timing, directional frame count, and lighting participation. Callers
-can use `sdl3d_game_data_load_sprite_asset()` to resolve the asset through the
-runtime's resolver and build billboard sprites, 2D-in-3D sheets, or
-directional animation sets without changing the authored JSON shape. The load
-path decodes the source once and keeps the runtime-owned textures alive until
-`sdl3d_sprite_asset_free()`.
-
-Image assets under `assets.images` may also point at a sprite asset through a
-`sprite` field. The UI presentation layer will realize that sprite into a
-cached texture and reuse the same sprite runtime path instead of a separate
-image-only loader.
-
-Performance note: sprite sheets are decoded and sliced during load, not per
-frame. For large sprite families, prefer a single authored sheet over many tiny
-source files so the loader does one decode and one texture allocation pass
-instead of repeated file-system reads.
-
-## Scenes
-
-Games can split authored content across many scene files. The top-level game
-file declares the initial scene and the scene files to load:
+    Sprite assets can be authored under `assets.sprites`:
 
 ```json
 {
-  "scenes": {
-    "initial": "scene.title",
-    "files": [
-      "scenes/title.scene.json",
-      "scenes/level_001.scene.json"
-    ]
-  }
+    "assets":
+    {
+        "sprites" : [ {
+            "id" : "sprite.robot.walk",
+            "path" : "asset://sprites/robot/walk.png",
+            "frame_width" : 32,
+            "frame_height" : 48,
+            "columns" : 8,
+            "rows" : 6,
+            "frame_count" : 6,
+            "direction_count" : 8,
+            "fps" : 8.0,
+            "loop" : true,
+            "lighting" : true,
+            "emissive" : false,
+            "visual_ground_offset" : 0.125,
+            "effect" : "melt",
+            "effect_delay" : 1.0,
+            "effect_duration" : 1.0
+        } ]
+    }
 }
 ```
 
-Entries in `scenes.files` are normally scene-file paths. A game may also insert
-an engine-provided scene package at a specific point in the scene order:
+    The current sprite metadata API records the image source,
+    atlas / grid layout, animation timing, directional frame count, lighting participation,
+    and an optional overlay effect plus timing window
+            .Callers can use
+`sdl3d_game_data_load_sprite_asset()` to resolve the asset through the
+        runtime's resolver and build billboard sprites, 2D-in-3D sheets, or directional animation sets without changing
+        the authored JSON shape.The load path decodes the source once and keeps the runtime
+        -
+        owned textures alive until
+`sdl3d_sprite_asset_free()`
+            .
+
+        Image assets under `assets.images` may also point at a sprite asset through a
+`sprite` field.The UI presentation layer will realize that sprite into a cached texture and reuse the same sprite
+        runtime path instead of a separate image
+        - only loader.If the sprite asset authors an overlay effect such as
+`melt`,
+    the UI image inherits that effect timing from the sprite metadata.
+
+    Performance note : sprite sheets are decoded and sliced during load,
+    not per frame.For large sprite families,
+    prefer a single authored sheet over many tiny source files so the loader does one decode and one texture
+        allocation pass instead of repeated file
+        -
+        system reads
+            .
+
+        ##Scenes
+
+        Games can split authored content across many scene files.The top
+        -
+        level game file declares the initial scene and the scene files to load :
 
 ```json
 {
-  "scenes": {
-    "initial": "scene.title",
-    "files": [
-      "scenes/title.scene.json",
-      { "package": "standard_options" },
-      "scenes/play.scene.json"
-    ]
-  }
+    "scenes":
+    {
+        "initial" : "scene.title", "files" : [ "scenes/title.scene.json", "scenes/level_001.scene.json" ]
+    }
 }
 ```
 
-Each scene file is a JSON object with schema `sdl3d.scene.v0`. Scene files may
-declare whether gameplay updates, whether the authored world renders, which
-entities belong to the scene, which camera becomes active on entry, scene
-enter/exit transitions, menus, and scene-local UI:
+    Entries in `scenes.files` are normally scene -
+    file paths.A game may also insert an engine -
+    provided scene package at a specific point in the scene order :
 
 ```json
 {
-  "schema": "sdl3d.scene.v0",
-  "name": "scene.level_001",
-  "updates_game": true,
-  "renders_world": true,
-  "camera": "camera.main",
-  "on_enter_signal": "signal.level.enter",
-  "entities": ["entity.player", "entity.goal"],
-  "input": {
-    "actions": ["action.move.left", "action.move.right", "action.pause"]
-  },
-  "transitions": { "enter": "scene_in", "exit": "scene_out" }
+    "scenes":
+    {
+        "initial" : "scene.title",
+                    "files" : [ "scenes/title.scene.json", {"package" : "standard_options"}, "scenes/play.scene.json" ]
+    }
 }
 ```
 
-Scenes that omit `entities` include all top-level entities; scenes with an empty
+    Each scene file is a JSON object with schema `sdl3d.scene.v0`.Scene files may declare whether gameplay updates,
+    whether the authored world renders, which entities belong to the scene, which camera becomes active on entry,
+    scene enter / exit transitions, menus,
+    and scene - local UI :
+
+```json
+{
+    "schema" : "sdl3d.scene.v0",
+               "name" : "scene.level_001",
+                        "updates_game" : true,
+                                         "renders_world" : true,
+                                                           "camera" : "camera.main",
+                                                                      "on_enter_signal" : "signal.level.enter",
+                                                                                          "entities"
+        : [ "entity.player", "entity.goal" ],
+          "input" : {"actions" : [ "action.move.left", "action.move.right", "action.pause" ]},
+                    "transitions" : {"enter" : "scene_in", "exit" : "scene_out"}
+}
+```
+
+    Scenes that omit `entities` include all top -
+    level entities; scenes with an empty
 `entities` array include none. This keeps small demos terse while letting large
 games isolate title screens, menus, levels, dungeons, and cutscenes.
 Scenes that omit `input.actions` accept every action except where app-level
@@ -797,31 +783,32 @@ Entities are the data form of actor registry entries plus optional component own
 
 ```json
 {
-  "name": "entity.ball",
-  "active": true,
-  "tags": ["ball", "dynamic"],
-  "transform": { "position": [0, 0, 0.12] },
-  "properties": {
-    "velocity": { "type": "vec2", "value": [0, 0] }
-  },
-  "components": [
-    { "type": "render.sphere", "radius": 0.22 },
-    { "type": "collision.circle", "radius": 0.22 }
-  ]
+    "name" : "entity.ball",
+             "active" : true,
+                        "tags" : [ "ball", "dynamic" ],
+                                 "transform" : {"position" : [ 0, 0, 0.12 ]},
+                                               "properties" : {"velocity" : {"type" : "vec2", "value" : [ 0, 0 ]}},
+                                                              "components"
+        : [ {"type" : "render.sphere", "radius" : 0.22}, {"type" : "collision.circle", "radius" : 0.22} ]
 }
 ```
 
-Core fields are generic. Components are module-owned and may be ignored by runtimes that do not load that module.
+    Core fields are generic.Components are module -
+    owned and may be ignored by runtimes that do not load that module
+        .
 
-### Presentation Components
+    ## #Presentation Components
 
-The first generic presentation components are deliberately simple descriptors:
+        The first generic presentation components are deliberately simple descriptors :
 
-- `render.cube` describes an axis-aligned box with `size`, optional `offset`, `color`, and `emissive`.
-- `render.sphere` describes a sphere with `radius`, `rings`, `slices`, `color`, and `emissive`.
-- `particles.emitter` describes an emitter config that can be passed to the particle system.
+    - `render.cube` describes an axis -
+    aligned box with `size`,
+    optional `offset`, `color`,
+    and `emissive`.- `render.sphere` describes a sphere with `radius`, `rings`, `slices`, `color`,
+    and `emissive`.- `particles.emitter` describes an emitter config that can be passed to the particle system.
 
-The game data runtime exposes these as read-only descriptors. It does not issue draw calls itself; each game or
+                     The game data runtime exposes these as read -
+        only descriptors.It does not issue draw calls itself; each game or
 renderer decides how to render, sort, tint, or override them. The optional `game_presentation` helpers provide
 a default implementation for simple demos and tools.
 
@@ -829,26 +816,17 @@ Render primitives may also author generic visual effects:
 
 ```json
 {
-  "type": "render.sphere",
-  "radius": 0.22,
-  "color": [255, 184, 82, 255],
-  "lighting": true,
-  "effects": [
-    {
-      "type": "pulse",
-      "rate": 9.0,
-      "color": [255, 245, 156, 255],
-      "radius_add": 0.06,
-      "emissive_base": [0.75, 0.48, 0.08],
-      "emissive_add": [0.65, 0.30, 0.0]
-    },
-    {
-      "type": "drift",
-      "offset": [0.4, 0.2, 0.0],
-      "rates": [0.7, 0.5, 0.0],
-      "phase": 1.2
-    }
-  ]
+    "type" : "render.sphere", "radius" : 0.22, "color" : [ 255, 184, 82, 255 ], "lighting" : true, "effects" : [
+        {
+            "type" : "pulse",
+            "rate" : 9.0,
+            "color" : [ 255, 245, 156, 255 ],
+            "radius_add" : 0.06,
+            "emissive_base" : [ 0.75, 0.48, 0.08 ],
+            "emissive_add" : [ 0.65, 0.30, 0.0 ]
+        },
+        {"type" : "drift", "offset" : [ 0.4, 0.2, 0.0 ], "rates" : [ 0.7, 0.5, 0.0 ], "phase" : 1.2}
+    ]
 }
 ```
 
@@ -866,138 +844,154 @@ Supported primitive effects are:
 Particle emitters may include `draw_emissive` for host renderers that draw particles through emissive lighting.
 
 World lights may also declare `effects`. `pulse` effects can blend color and
-add intensity/range over time; `flash` effects read a float actor property and
-use it as the effect weight. This lets data tune glows, brightness, color shifts,
-and transient flashes without host code.
+add intensity/range over time;
+`flash` effects read a float actor property and use it as the effect weight.This lets data tune glows, brightness,
+    color shifts,
+    and transient flashes without host code.
 
 ```json
 {
-  "name": "light.ball",
-  "type": "point",
-  "target_entity": "entity.ball",
-  "color": [1.0, 0.86, 0.34],
-  "intensity": 3.1,
-  "range": 5.0,
-  "effects": [
-    { "type": "pulse", "rate": 9.0, "color": [1.0, 0.96, 0.54], "intensity_add": 0.9 },
-    { "type": "flash", "source": "entity.presentation", "property": "paddle_flash", "intensity_add": 1.5 }
-  ]
+    "name" : "light.ball",
+             "type" : "point",
+                      "target_entity" : "entity.ball",
+                                        "color" : [ 1.0, 0.86, 0.34 ],
+                                                  "intensity" : 3.1,
+                                                  "range" : 5.0,
+                                                  "effects"
+        : [
+            {"type" : "pulse", "rate" : 9.0, "color" : [ 1.0, 0.96, 0.54 ], "intensity_add" : 0.9},
+            {"type" : "flash", "source" : "entity.presentation", "property" : "paddle_flash", "intensity_add" : 1.5}
+        ]
 }
 ```
 
-### Cameras
+        ## #Cameras
 
-Cameras can be static perspective/orthographic descriptors or generic behavior descriptors. `type: "chase"`
-follows an entity using its velocity property, authored distance, height, lookahead, and offsets:
+        Cameras can be static perspective /
+        orthographic descriptors or
+    generic behavior descriptors. `type : "chase"` follows an entity using its velocity property,
+    authored distance, height, lookahead,
+    and offsets :
 
-```json
-{
-  "name": "camera.ball_chase",
-  "type": "chase",
-  "target_entity": "entity.ball",
-  "velocity_property": "velocity",
-  "chase_distance": 2.6,
-  "height": 1.57,
-  "lookahead": 4.4,
-  "target_offset": [0.0, 0.0, 0.22],
-  "fovy": 68.0
-}
-```
-
-## Logic
-
-Logic is event composition:
-
-- **Sensors** observe world/entity state and emit signals.
-- **Timers** emit signals later or repeatedly.
-- **Bindings** attach ordered actions to signals.
-- **Conditions** gate actions.
-- **Actions** mutate generic state, emit signals, start timers, or invoke adapters.
-
-### Sensors
-
-Example:
-
-```json
-{
-  "name": "logic.goal.cpu",
-  "type": "sensor.bounds_exit",
-  "entity": "entity.ball",
-  "axis": "x",
-  "side": "min",
-  "threshold": -9.22,
-  "on_enter": "signal.goal.cpu"
-}
-```
-
-Sensors should be reusable and non-sector unless their type explicitly names a sector module, such as `sensor.sector_enter`.
-
-### Actions
-
-Generic action types should cover common wiring:
-
-- `property.set`
-- `property.add`
-- `property.toggle`
-- `property.snapshot`
-- `property.restore_snapshot`
-- `entity.set_active` with `target` and boolean `active`, used to include or exclude an entity from generic updates and rendering
-- `transform.set_position`
-- `motion.set_velocity`
-- `signal.emit`
-- `timer.start`
-- `timer.cancel`
-- `camera.set_active`
-- `effect.set_active`
-- `audio.play_sound`
-- `audio.crossfade_ambient`
-- `adapter.invoke`
-
-Actions run in array order. Conditions may be embedded per action.
-
-```json
-{
-  "signal": "signal.score.player",
-  "actions": [
-    { "type": "property.add", "target": "entity.score.player", "key": "value", "value": 1 },
-    { "type": "transform.set_position", "target": "entity.ball", "position": [0, 0, 0.12] },
-    { "type": "timer.start", "timer": "timer.round.serve", "delay": 1.0, "signal": "signal.ball.serve" }
-  ]
-}
-```
-
-Presentation state that changes continuously can be expressed with components
-instead of host code. `property.decay` moves an integer or float actor property
-toward a target value at an authored rate:
-
-```json
-{
-  "name": "entity.presentation",
-  "properties": {
-    "border_flash": { "type": "float", "value": 0.0 },
-    "border_flash_decay": { "type": "float", "value": 2.8 }
-  },
-  "components": [
-    {
-      "type": "property.decay",
-      "property": "border_flash",
-      "rate_property": "border_flash_decay",
-      "target": 0.0,
-      "min": 0.0,
-      "max": 1.0
+```json{
+        "name" : "camera.ball_chase",
+        "type" : "chase",
+        "target_entity" : "entity.ball",
+        "velocity_property" : "velocity",
+        "chase_distance" : 2.6,
+        "height" : 1.57,
+        "lookahead" : 4.4,
+        "target_offset" : [ 0.0, 0.0, 0.22 ],
+        "fovy" : 68.0
     }
-  ]
-}
 ```
 
-### Conditions
+    ##Logic
 
-Conditions should be generic comparisons over properties, signal payloads, tags, and entity active state.
+        Logic is event composition :
+
+    -**Sensors **observe world /
+                entity state and emit signals.-
+            **Timers **emit signals later or
+        repeatedly.- **Bindings **attach ordered actions to signals.- **Conditions **gate actions.-
+            **Actions **mutate generic state,
+    emit signals, start timers, or invoke adapters.
+
+                                        ## #Sensors
+
+                                        Example :
+
+```json{
+            "name" : "logic.goal.cpu",
+            "type" : "sensor.bounds_exit",
+            "entity" : "entity.ball",
+            "axis" : "x",
+            "side" : "min",
+            "threshold" : -9.22,
+            "on_enter" : "signal.goal.cpu"
+                                        }
+```
+
+    Sensors should be reusable and non - sector unless their type explicitly names a sector module,
+    such as `sensor.sector_enter`
+            .
+
+        ## #Actions
+
+        Generic action types should cover common wiring :
+
+    - `property
+            .set` - `property
+                        .add` - `property
+                                    .toggle` - `property
+                                                   .snapshot` - `property
+                                                                    .restore_snapshot` - `entity
+                                                                                             .set_active` with `target`
+                                                                                                 and boolean `active`,
+    used to include or
+        exclude an entity from generic updates and
+                rendering - `transform
+                                .set_position` - `motion
+                                                     .set_velocity` - `signal
+                                                                          .emit` - `timer
+                                                                                       .start` - `timer
+                                                                                                     .cancel` - `camera
+                                                                                                                    .set_active` - `effect
+                                                                                                                                       .set_active` - `audio
+                                                                                                                                                          .play_sound` - `audio
+                                                                                                                                                                             .crossfade_ambient` - `adapter
+                                                                                                                                                                                                       .invoke`
+
+                                                                                                                                                                                                   Actions run
+                                                                                                                                                                                                       in array
+                                                                                                                                                                                                           order
+                                                                                                                                                                                                       .Conditions may
+                                                                                                                                                                                                           be embedded
+                                                                                                                                                                                                               per action
+                                                                                                                                                                                                       .
 
 ```json
 {
-  "if": { "type": "property.compare", "target": "entity.score.player", "key": "value", "op": ">=", "value": 10 },
-  "then": [{ "type": "signal.emit", "signal": "signal.match.player_won" }]
+    "signal" : "signal.score.player", "actions" : [
+        {"type" : "property.add", "target" : "entity.score.player", "key" : "value", "value" : 1},
+        {"type" : "transform.set_position", "target" : "entity.ball", "position" : [ 0, 0, 0.12 ]},
+        {"type" : "timer.start", "timer" : "timer.round.serve", "delay" : 1.0, "signal" : "signal.ball.serve"}
+    ]
+}
+```
+
+    Presentation state that changes continuously can be expressed with components instead of host
+        code. `property.decay` moves an integer or
+    float actor property toward a target value at an authored rate :
+
+```json
+{
+    "name" : "entity.presentation",
+             "properties" : {
+                 "border_flash" : {"type" : "float", "value" : 0.0},
+                 "border_flash_decay" : {"type" : "float", "value" : 2.8}
+             },
+                            "components" : [ {
+                                "type" : "property.decay",
+                                "property" : "border_flash",
+                                "rate_property" : "border_flash_decay",
+                                "target" : 0.0,
+                                "min" : 0.0,
+                                "max" : 1.0
+                            } ]
+}
+```
+
+    ## #Conditions
+
+    Conditions should be generic comparisons over properties,
+    signal payloads, tags,
+    and entity active state.
+
+```json
+{
+    "if" : {"type" : "property.compare", "target" : "entity.score.player", "key" : "value", "op" : ">=", "value" : 10},
+           "then" : [ {"type" : "signal.emit", "signal" : "signal.match.player_won"} ]
 }
 ```
 

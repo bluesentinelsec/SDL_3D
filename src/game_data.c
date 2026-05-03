@@ -2459,6 +2459,9 @@ bool sdl3d_game_data_get_sprite_asset(const sdl3d_game_data_runtime *runtime, co
     out_sprite->lighting = json_bool(sprite, "lighting", out_sprite->lighting);
     out_sprite->emissive = json_bool(sprite, "emissive", out_sprite->emissive);
     out_sprite->visual_ground_offset = json_float(sprite, "visual_ground_offset", out_sprite->visual_ground_offset);
+    out_sprite->effect = parse_ui_image_effect(json_string(sprite, "effect", NULL));
+    out_sprite->effect_delay = json_float(sprite, "effect_delay", 0.0f);
+    out_sprite->effect_duration = json_float(sprite, "effect_duration", 1.0f);
 
     if (out_sprite->id == NULL || out_sprite->path == NULL || out_sprite->frame_width <= 0 ||
         out_sprite->frame_height <= 0 || out_sprite->columns <= 0 || out_sprite->rows <= 0 ||
@@ -2502,6 +2505,9 @@ bool sdl3d_game_data_load_sprite_asset(const sdl3d_game_data_runtime *runtime, c
     source.lighting = sprite.lighting;
     source.emissive = sprite.emissive;
     source.visual_ground_offset = sprite.visual_ground_offset;
+    source.effect = sprite.effect;
+    source.effect_delay = sprite.effect_delay;
+    source.effect_duration = sprite.effect_duration;
 
     if (!sdl3d_sprite_asset_load(runtime->assets, &source, out_sprite, error_buffer, error_buffer_size))
         return false;

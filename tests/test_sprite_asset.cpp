@@ -344,7 +344,10 @@ TEST(SpriteAsset, LoadsThroughGameDataSpriteBridge)
         "loop": true,
         "lighting": true,
         "emissive": false,
-        "visual_ground_offset": 0.25
+        "visual_ground_offset": 0.25,
+        "effect": "melt",
+        "effect_delay": 0.5,
+        "effect_duration": 1.5
       }
     ]
   },
@@ -372,6 +375,9 @@ TEST(SpriteAsset, LoadsThroughGameDataSpriteBridge)
     expect_texture_color(sprite.animation_frames[1].frames[0], 70, 80, 90, 255);
     expect_texture_color(sprite.animation_frames[1].frames[1], 100, 110, 120, 255);
     EXPECT_FLOAT_EQ(sprite.visual_ground_offset, 0.25f);
+    EXPECT_STREQ(sprite.effect, "melt");
+    EXPECT_FLOAT_EQ(sprite.effect_delay, 0.5f);
+    EXPECT_FLOAT_EQ(sprite.effect_duration, 1.5f);
 
     sdl3d_sprite_asset_free(&sprite);
     sdl3d_game_data_destroy(runtime);

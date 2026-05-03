@@ -75,7 +75,6 @@
         "value": false
       }
     },
-    "startup_transition": "startup",
     "quit": {
       "action": "action.exit",
       "transition": "quit",
@@ -480,7 +479,10 @@
         "loop": false,
         "lighting": false,
         "emissive": false,
-        "visual_ground_offset": 0.0
+        "visual_ground_offset": 0.0,
+        "effect": "melt",
+        "effect_delay": 1.0,
+        "effect_duration": 1.0
       }
     ],
     "images": [

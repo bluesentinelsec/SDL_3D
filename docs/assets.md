@@ -1,18 +1,18 @@
-# SDL3D Assets
+#SDL3D Assets
 
 SDL3D game data should use stable virtual paths such as `asset://scripts/pong.lua`.
 At runtime, `sdl3d_asset_resolver` maps those paths to mounted source
 directories, `.sdl3dpak` files, or embedded memory packs.
 
-The resolver is intentionally read-only. Build-time tools create packs; runtime
-code mounts and reads them.
+The resolver is intentionally read-only. Build-time tools create packs;
+runtime code mounts and reads them.
 
-## Runtime Loading
+    ##Runtime Loading
 
-Use a resolver when loading data-driven games:
+        Use a resolver when loading data -
+    driven games :
 
-```c
-sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+```c sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
 sdl3d_asset_resolver_mount_pack_file(assets, "game.sdl3dpak", error, sizeof(error));
 sdl3d_game_data_load_asset(assets, "asset://pong.game.json", session, &runtime, error, sizeof(error));
 sdl3d_asset_resolver_destroy(assets);
@@ -81,6 +81,11 @@ runtime-owned billboard textures and rotation sets. The loader accepts either a
 sprite sheet description from `assets.sprites` or a file-list source used by
 generalized game code, then decodes the source once and keeps the resulting
 textures until `sdl3d_sprite_asset_free()`.
+
+Sprite assets may also author an overlay effect, currently `melt`, plus timing
+fields that tell the presentation layer when the effect starts and how long it
+runs. When a sprite asset is used to back a UI image, the shared overlay path
+applies the effect generically without adding a separate image-only renderer.
 
 Prefer a sheet when many frames share the same metadata. The loader slices a
 sheet in memory after one decode, which is cheaper than reading many tiny

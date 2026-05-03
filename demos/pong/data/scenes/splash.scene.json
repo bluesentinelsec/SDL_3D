@@ -46,13 +46,12 @@
         "action": { "type": "audio.play_sfx", "sound": "sound.ui.splash" }
       },
       {
-        "time": 1.7,
+        "time": 2.0,
         "action": { "type": "scene.request", "scene": "scene.title" }
       }
     ]
   },
   "transitions": {
-    "enter": "scene_in",
     "exit": "scene_out"
   },
   "ui": {
@@ -68,9 +67,7 @@
         "preserve_aspect": true,
         "align": "center",
         "valign": "center",
-        "color": [255, 255, 255, 255],
-        "effect": "melt",
-        "effect_speed": 0.85
+        "color": [255, 255, 255, 255]
       }
     ],
     "text": []

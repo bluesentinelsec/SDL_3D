@@ -1331,6 +1331,9 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_EQ(sprite_asset.direction_count, 1);
     EXPECT_FALSE(sprite_asset.loop);
     EXPECT_FALSE(sprite_asset.lighting);
+    EXPECT_STREQ(sprite_asset.effect, "melt");
+    EXPECT_NEAR(sprite_asset.effect_delay, 1.0f, 0.0001f);
+    EXPECT_NEAR(sprite_asset.effect_duration, 1.0f, 0.0001f);
 
     sdl3d_game_data_sound_asset sound_asset{};
     ASSERT_TRUE(sdl3d_game_data_get_sound_asset(runtime, "sound.pong.hit", &sound_asset));
@@ -1762,8 +1765,8 @@ TEST(GameDataRuntime, ResolvesRuntimeUiStateForTextAndImages)
     std::pair<sdl3d_game_data_ui_image *, bool *> logo_args{&logo, &saw_logo};
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_image(runtime, find_logo, &logo_args));
     ASSERT_TRUE(saw_logo);
-    EXPECT_STREQ(logo.effect, "melt");
-    EXPECT_NEAR(logo.effect_speed, 0.85f, 0.0001f);
+    EXPECT_EQ(logo.effect, nullptr);
+    EXPECT_NEAR(logo.effect_speed, 1.0f, 0.0001f);
 
     sdl3d_game_data_ui_state image_state{};
     sdl3d_game_data_ui_state_init(&image_state);
@@ -1792,8 +1795,7 @@ TEST(GameDataRuntime, ResolvesRuntimeUiStateForTextAndImages)
     EXPECT_EQ(resolved_logo.color.g, 64);
     EXPECT_EQ(resolved_logo.color.b, 255);
     EXPECT_EQ(resolved_logo.color.a, 50);
-    EXPECT_STREQ(resolved_logo.effect, "melt");
-    EXPECT_NEAR(resolved_logo.effect_speed, 0.85f, 0.0001f);
+    EXPECT_EQ(resolved_logo.effect, nullptr);
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
 
