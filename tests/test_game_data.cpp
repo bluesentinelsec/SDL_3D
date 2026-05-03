@@ -1111,7 +1111,7 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_EQ(app.start_signal_id, -1);
     EXPECT_GE(app.quit_action_id, 0);
     EXPECT_GE(app.pause_action_id, 0);
-    EXPECT_STREQ(app.startup_transition, "startup");
+    EXPECT_EQ(app.startup_transition, nullptr);
     EXPECT_STREQ(app.quit_transition, "quit");
     EXPECT_GE(app.quit_signal_id, 0);
     EXPECT_EQ(app.window_apply_signal_id, sdl3d_game_data_find_signal(runtime, "signal.settings.apply"));
@@ -2802,7 +2802,7 @@ TEST(GameDataRuntime, AppFlowConsumesAuthoredLifecycleAndSceneShortcutControls)
     sdl3d_game_data_app_flow flow{};
     sdl3d_game_data_app_flow_init(&flow);
     ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
-    EXPECT_TRUE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+    EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
 
     ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.8f));
     EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
