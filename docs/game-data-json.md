@@ -1164,6 +1164,88 @@ Bad Pong adapters:
 
 Those are generic actions and should remain data.
 
+## Network Replication
+
+Games that support network play can author a top-level `network` block. The
+block is optional; local-only games can omit it entirely and no networking
+schema hash is produced.
+
+The current schema validation slice supports protocol metadata, host/client
+replication channels, typed actor fields, replicated input actions, and control
+messages:
+
+```json
+{
+  "network": {
+    "protocol": {
+      "id": "sdl3d.pong.v1",
+      "version": 1,
+      "transport": "udp",
+      "tick_rate": 60
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": [
+              "position",
+              { "path": "properties.velocity", "type": "vec3" },
+              { "path": "properties.active_motion", "type": "bool" }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "client_input",
+        "direction": "client_to_host",
+        "rate": 60,
+        "inputs": [
+          { "action": "action.paddle.remote.up" },
+          { "action": "action.paddle.remote.down" }
+        ]
+      }
+    ],
+    "control_messages": [
+      { "name": "pause", "direction": "bidirectional", "signal": "signal.network.pause" }
+    ]
+  }
+}
+```
+
+`protocol.id` must be a non-empty string. `protocol.version` and
+`protocol.tick_rate` must be positive integers. `protocol.transport` currently
+supports `udp`.
+
+Replication channel directions are `host_to_client` or `client_to_host`, and
+`rate` must be a positive integer.
+Host-to-client channels author `actors`; each actor must reference an existing
+entity and declare a non-empty `fields` array. Field strings are allowed for
+built-in transform fields with known types (`position`, `rotation`, `scale`,
+all encoded as `vec3`). Property fields should use object form with an explicit
+`path` and `type`. Supported field types are `bool`, `int32`, `float32`,
+`enum_id`, `vec2`, and `vec3`; aliases `boolean`, `int`, `float`, and
+`string_id` are accepted where obvious. Duplicate actor entries and duplicate
+fields within an actor are rejected.
+
+Client-to-host channels author `inputs`; each input must reference an existing
+input action. Duplicate input actions within a channel are rejected.
+
+Control message directions are `host_to_client`, `client_to_host`, or
+`bidirectional`. Each control message must have a unique `name` and reference
+an existing `signal`.
+
+When a runtime loads game data with a valid `network` block, it computes a
+deterministic schema hash over protocol, replication, input, and control-message
+shape. Runtime callers can query it with
+`sdl3d_game_data_has_network_schema()` and
+`sdl3d_game_data_get_network_schema_hash()`. The hash intentionally ignores
+unrelated metadata and presentation data. Later network handshakes should use
+it to reject clients with incompatible authored schemas before gameplay starts.
+
 ## Validation
 
 Game data is validated before runtime state is instantiated. Host tools can call `sdl3d_game_data_validate_file()` directly to collect diagnostics without creating actors, input bindings, timers, or signal handlers. `sdl3d_game_data_load_file()` runs the same validation pass before loading scripts and wiring logic.
@@ -1174,6 +1256,7 @@ Diagnostics are designed for authored content. Errors include the source file, a
 - duplicate names within entity, signal, script, adapter, input action, timer, camera, font, and sensor namespaces
 - script ids, modules, dependencies, dependency cycles, and script file existence
 - input binding structure
+- network protocol, replication directions, actor/property/action/signal references, supported field types, duplicate network fields, and schema hash shape
 - app lifecycle, UI, render effect, sensor, timer, binding, action, component, adapter, light, and camera references
 - supported generic logic action types and required action payloads
 - warnings for suspicious data such as unused adapters, unused scripts, or unsupported component types

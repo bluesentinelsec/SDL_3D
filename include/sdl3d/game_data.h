@@ -24,6 +24,7 @@
 #include "sdl3d/font.h"
 #include "sdl3d/game.h"
 #include "sdl3d/lighting.h"
+#include "sdl3d/network_replication.h"
 #include "sdl3d/properties.h"
 #include "sdl3d/sprite_asset.h"
 #include "sdl3d/storage.h"
@@ -800,6 +801,27 @@ extern "C"
      * @return true when @p out_config was filled.
      */
     bool sdl3d_game_data_get_storage_config(const sdl3d_game_data_runtime *runtime, sdl3d_storage_config *out_config);
+
+    /**
+     * @brief Return whether the game data authored a network replication schema.
+     *
+     * Local-only games can omit the `network` block entirely. In that case
+     * there is no schema hash to exchange during multiplayer handshakes.
+     */
+    bool sdl3d_game_data_has_network_schema(const sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Copy the deterministic network replication schema hash.
+     *
+     * The hash covers the authored protocol, replication channels, fields,
+     * inputs, and control messages, but ignores unrelated game data. It is
+     * intended for host/client compatibility checks before gameplay begins.
+     *
+     * @return true when @p runtime has an authored network schema and
+     * @p out_hash was filled with SDL3D_REPLICATION_SCHEMA_HASH_SIZE bytes.
+     */
+    bool sdl3d_game_data_get_network_schema_hash(const sdl3d_game_data_runtime *runtime,
+                                                 Uint8 out_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE]);
 
     /**
      * @brief Validate a JSON game data file without instantiating runtime state.
