@@ -1298,6 +1298,26 @@ typed actor fields, replicated input actions, and control messages:
         "connected": "multiplayer_host_connected"
       }
     },
+    "session_flow": {
+      "scenes": {
+        "play": "scene.play",
+        "host_lobby": "scene.multiplayer.lobby",
+        "join": "scene.multiplayer.join",
+        "direct_connect": "scene.multiplayer.direct_connect",
+        "discovery": "scene.multiplayer.discovery",
+        "title": "scene.title"
+      },
+      "state_keys": {
+        "match_mode": "match_mode",
+        "network_role": "network_role",
+        "network_flow": "network_flow"
+      },
+      "state_values": {
+        "match_mode": { "network": "lan" },
+        "network_role": { "host": "host", "client": "client" },
+        "network_flow": { "host": "host", "direct": "direct" }
+      }
+    },
     "replication": [
       {
         "name": "play_state",
@@ -1344,6 +1364,18 @@ used by lobby or connection scenes. All scopes and values must be objects of
 non-empty string keys to non-empty string scene-state property names. These keys
 are presentation/orchestration metadata and are intentionally not part of the
 network schema hash.
+
+`session_flow` is optional. It gives host integration code semantic names for
+network scene orchestration without baking a particular demo's scene ids or
+scene-state strings into C. `scenes` maps semantic names such as `play`,
+`host_lobby`, `join`, `direct_connect`, `discovery`, or `title` to validated
+scene ids. `state_keys` maps semantic state names to scene-state property keys.
+`state_values` maps semantic values inside each state group to concrete strings
+stored in scene state. Callers resolve these values with
+`sdl3d_game_data_get_network_session_scene()`,
+`sdl3d_game_data_get_network_session_state_key()`, and
+`sdl3d_game_data_get_network_session_state_value()`. Like `scene_state`, these
+orchestration maps are not part of the replication schema hash.
 
 Replication channel directions are `host_to_client` or `client_to_host`, and
 `rate` must be a positive integer.
@@ -1416,7 +1448,7 @@ Diagnostics are designed for authored content. Errors include the source file, a
 - duplicate names within entity, signal, script, adapter, input action, timer, camera, font, and sensor namespaces
 - script ids, modules, dependencies, dependency cycles, and script file existence
 - input binding structure
-- network protocol, replication directions, scene-state key maps, actor/property/action/signal references, supported field types, duplicate network fields, and schema hash shape
+- network protocol, replication directions, scene-state key maps, session-flow maps, actor/property/action/signal references, supported field types, duplicate network fields, and schema hash shape
 - app lifecycle, UI, render effect, sensor, timer, binding, action, component, adapter, light, and camera references
 - supported generic logic action types and required action payloads
 - warnings for suspicious data such as unused adapters, unused scripts, or unsupported component types

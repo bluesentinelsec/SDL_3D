@@ -648,6 +648,76 @@ static bool validate_network_scene_state(validation_context *ctx, yyjson_val *ne
     return true;
 }
 
+static bool validate_network_session_string_map(validation_context *ctx, yyjson_val *map, const char *json_path,
+                                                const char *label, const name_table *scene_names)
+{
+    if (map == NULL)
+        return true;
+    if (!yyjson_is_obj(map))
+        return validation_error(ctx, json_path, "network session_flow %s must be an object", label);
+
+    yyjson_val *key;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(map, &iter);
+    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+    {
+        const char *name = yyjson_get_str(key);
+        yyjson_val *value = yyjson_obj_iter_get_val(key);
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "%s.%s", json_path, name != NULL ? name : "<invalid>");
+        if (name == NULL || name[0] == '\0')
+            return validation_error(ctx, path, "network session_flow %s key must be non-empty", label);
+        if (!yyjson_is_str(value) || yyjson_get_len(value) == 0)
+            return validation_error(ctx, path, "network session_flow %s value must be a non-empty string", label);
+        if (scene_names != NULL && !require_ref(ctx, scene_names, "scene", yyjson_get_str(value), path))
+            return false;
+    }
+
+    return true;
+}
+
+static bool validate_network_session_flow(validation_context *ctx, yyjson_val *network, validation_names *names)
+{
+    yyjson_val *flow = obj_get(network, "session_flow");
+    if (flow == NULL)
+        return true;
+    if (!yyjson_is_obj(flow))
+        return validation_error(ctx, "$.network.session_flow", "network session_flow must be an object");
+
+    if (!validate_network_session_string_map(ctx, obj_get(flow, "scenes"), "$.network.session_flow.scenes", "scenes",
+                                             &names->scenes) ||
+        !validate_network_session_string_map(ctx, obj_get(flow, "state_keys"), "$.network.session_flow.state_keys",
+                                             "state_keys", NULL))
+    {
+        return false;
+    }
+
+    yyjson_val *state_values = obj_get(flow, "state_values");
+    if (state_values == NULL)
+        return true;
+    if (!yyjson_is_obj(state_values))
+        return validation_error(ctx, "$.network.session_flow.state_values",
+                                "network session_flow state_values must be an object");
+
+    yyjson_val *group_key;
+    yyjson_obj_iter group_iter;
+    yyjson_obj_iter_init(state_values, &group_iter);
+    while ((group_key = yyjson_obj_iter_next(&group_iter)) != NULL)
+    {
+        const char *group_name = yyjson_get_str(group_key);
+        yyjson_val *group = yyjson_obj_iter_get_val(group_key);
+        char group_path[PATH_BUFFER_SIZE];
+        format_path(group_path, sizeof(group_path), "$.network.session_flow.state_values.%s",
+                    group_name != NULL ? group_name : "<invalid>");
+        if (group_name == NULL || group_name[0] == '\0')
+            return validation_error(ctx, group_path, "network session_flow state_values group must be non-empty");
+        if (!validate_network_session_string_map(ctx, group, group_path, "state_values", NULL))
+            return false;
+    }
+
+    return true;
+}
+
 static bool validate_network(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *network = obj_get(root, "network");
@@ -673,6 +743,8 @@ static bool validate_network(validation_context *ctx, yyjson_val *root, validati
         return validation_error(ctx, "$.network.protocol.tick_rate",
                                 "network protocol tick_rate must be a positive integer");
     if (!validate_network_scene_state(ctx, network))
+        return false;
+    if (!validate_network_session_flow(ctx, network, names))
         return false;
 
     yyjson_val *replication = obj_get(network, "replication");

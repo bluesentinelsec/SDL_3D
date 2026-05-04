@@ -9749,6 +9749,61 @@ bool sdl3d_game_data_get_network_scene_state_key(const sdl3d_game_data_runtime *
     return true;
 }
 
+static yyjson_val *network_session_flow_json(const sdl3d_game_data_runtime *runtime)
+{
+    return obj_get(obj_get(runtime_root(runtime), "network"), "session_flow");
+}
+
+static bool game_data_get_network_session_string(const sdl3d_game_data_runtime *runtime, const char *section,
+                                                 const char *name, const char **out_value)
+{
+    if (out_value != NULL)
+        *out_value = NULL;
+    if (runtime == NULL || section == NULL || section[0] == '\0' || name == NULL || name[0] == '\0' ||
+        out_value == NULL)
+    {
+        return false;
+    }
+
+    const char *value = json_string(obj_get(network_session_flow_json(runtime), section), name, NULL);
+    if (value == NULL || value[0] == '\0')
+        return false;
+
+    *out_value = value;
+    return true;
+}
+
+bool sdl3d_game_data_get_network_session_scene(const sdl3d_game_data_runtime *runtime, const char *name,
+                                               const char **out_scene)
+{
+    return game_data_get_network_session_string(runtime, "scenes", name, out_scene);
+}
+
+bool sdl3d_game_data_get_network_session_state_key(const sdl3d_game_data_runtime *runtime, const char *name,
+                                                   const char **out_key)
+{
+    return game_data_get_network_session_string(runtime, "state_keys", name, out_key);
+}
+
+bool sdl3d_game_data_get_network_session_state_value(const sdl3d_game_data_runtime *runtime, const char *group,
+                                                     const char *name, const char **out_value)
+{
+    if (out_value != NULL)
+        *out_value = NULL;
+    if (runtime == NULL || group == NULL || group[0] == '\0' || name == NULL || name[0] == '\0' || out_value == NULL)
+    {
+        return false;
+    }
+
+    yyjson_val *groups = obj_get(network_session_flow_json(runtime), "state_values");
+    const char *value = json_string(obj_get(groups, group), name, NULL);
+    if (value == NULL || value[0] == '\0')
+        return false;
+
+    *out_value = value;
+    return true;
+}
+
 bool sdl3d_game_data_encode_network_snapshot(const sdl3d_game_data_runtime *runtime, const char *replication_name,
                                              Uint32 tick, void *buffer, size_t buffer_size, size_t *out_size,
                                              char *error_buffer, int error_buffer_size)

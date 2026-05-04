@@ -114,6 +114,37 @@
         "connected": "multiplayer_host_connected"
       }
     },
+    "session_flow": {
+      "scenes": {
+        "play": "scene.play",
+        "host_lobby": "scene.multiplayer.lobby",
+        "join": "scene.multiplayer.join",
+        "direct_connect": "scene.multiplayer.direct_connect",
+        "discovery": "scene.multiplayer.discovery",
+        "title": "scene.title"
+      },
+      "state_keys": {
+        "match_mode": "match_mode",
+        "network_role": "network_role",
+        "network_flow": "network_flow"
+      },
+      "state_values": {
+        "match_mode": {
+          "local": "local",
+          "network": "lan"
+        },
+        "network_role": {
+          "none": "none",
+          "host": "host",
+          "client": "client"
+        },
+        "network_flow": {
+          "none": "none",
+          "host": "host",
+          "direct": "direct"
+        }
+      }
+    },
     "replication": [
       {
         "name": "play_state",
