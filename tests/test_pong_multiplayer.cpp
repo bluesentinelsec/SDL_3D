@@ -3,6 +3,8 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <string>
 
 extern "C"
 {
@@ -20,7 +22,6 @@ namespace
 {
 constexpr Uint32 kPongNetworkPacketMagic = 0x474E4F50u;
 constexpr Uint8 kPongNetworkPacketVersion = 1U;
-constexpr size_t kPongNetworkControlPacketSize = 12U;
 constexpr size_t kPongNetworkStatePacketSize = 112U;
 
 enum PongNetworkMessageKind : Uint8
@@ -242,33 +243,47 @@ static bool process_host_input_packet(sdl3d_game_data_runtime *runtime, sdl3d_ga
                                                (size_t)packet_size, &tick, error, sizeof(error));
 }
 
-static bool send_control_packet(sdl3d_network_session *net_session, PongNetworkMessageKind kind)
+static const char *control_name_for_kind(PongNetworkMessageKind kind)
 {
-    Uint8 packet[32];
-    Uint8 *cursor = packet;
-    Uint8 *end = packet + sizeof(packet);
-
-    return write_u32(&cursor, end, kPongNetworkPacketMagic) && write_u8(&cursor, end, kPongNetworkPacketVersion) &&
-           write_u8(&cursor, end, kind) && write_u8(&cursor, end, 0U) && write_u8(&cursor, end, 0U) &&
-           write_u32(&cursor, end, 1234U) && (size_t)(cursor - packet) == kPongNetworkControlPacketSize &&
-           sdl3d_network_session_send(net_session, packet, (int)(cursor - packet));
+    switch (kind)
+    {
+    case PONG_NETWORK_MESSAGE_START_GAME:
+        return "start_game";
+    case PONG_NETWORK_MESSAGE_PAUSE_REQUEST:
+        return "pause_request";
+    case PONG_NETWORK_MESSAGE_RESUME_REQUEST:
+        return "resume_request";
+    case PONG_NETWORK_MESSAGE_DISCONNECT:
+        return "disconnect";
+    default:
+        return nullptr;
+    }
 }
 
-static bool read_control_packet(const Uint8 *packet, int packet_size, PongNetworkMessageKind expected)
+static bool send_control_packet(sdl3d_game_data_runtime *runtime, sdl3d_network_session *net_session,
+                                PongNetworkMessageKind kind)
 {
-    const Uint8 *cursor = packet;
-    const Uint8 *end = packet + packet_size;
-    Uint32 magic = 0U;
-    Uint8 version = 0U;
-    Uint8 kind = 0U;
-    Uint8 reserved = 0U;
-    Uint32 tick = 0U;
+    Uint8 packet[128];
+    size_t packet_size = 0U;
+    char error[160]{};
+    const char *control_name = control_name_for_kind(kind);
 
-    return packet != nullptr && (size_t)packet_size == kPongNetworkControlPacketSize &&
-           read_u32(&cursor, end, &magic) && magic == kPongNetworkPacketMagic && read_u8(&cursor, end, &version) &&
-           version == kPongNetworkPacketVersion && read_u8(&cursor, end, &kind) && kind == (Uint8)expected &&
-           read_u8(&cursor, end, &reserved) && read_u8(&cursor, end, &reserved) && read_u32(&cursor, end, &tick) &&
-           tick == 1234U && cursor == end;
+    return control_name != nullptr &&
+           sdl3d_game_data_encode_network_control(runtime, control_name, 1234U, packet, sizeof(packet), &packet_size,
+                                                  error, sizeof(error)) &&
+           sdl3d_network_session_send(net_session, packet, (int)packet_size);
+}
+
+static bool read_control_packet(sdl3d_game_data_runtime *runtime, const Uint8 *packet, int packet_size,
+                                PongNetworkMessageKind expected)
+{
+    sdl3d_game_data_network_control control{};
+    char error[160]{};
+
+    return runtime != nullptr && packet != nullptr &&
+           sdl3d_game_data_decode_network_control(runtime, packet, (size_t)packet_size, &control, error,
+                                                  sizeof(error)) &&
+           SDL_strcmp(control.name, control_name_for_kind(expected)) == 0 && control.tick == 1234U;
 }
 
 static bool send_host_state_packet(sdl3d_game_data_runtime *runtime, sdl3d_game_session *session,
@@ -439,10 +454,15 @@ class PongHeadlessMultiplayerTest : public ::testing::Test
         set_multiplayer_scene_state(host_runtime, "lan", "host", "host");
         set_multiplayer_scene_state(client_runtime, "lan", "client", "direct");
 
+        const ::testing::TestInfo *test_info = ::testing::UnitTest::GetInstance()->current_test_info();
+        const std::string test_name =
+            test_info != nullptr ? std::string(test_info->test_suite_name()) + "." + test_info->name() : "pong";
+        network_port = (Uint16)(30000U + (Uint32)(std::hash<std::string>{}(test_name) % 20000U));
+
         sdl3d_network_session_desc host_desc{};
         sdl3d_network_session_desc_init(&host_desc);
         host_desc.role = SDL3D_NETWORK_ROLE_HOST;
-        host_desc.port = SDL3D_NETWORK_DEFAULT_PORT;
+        host_desc.port = network_port;
         host_desc.handshake_timeout = 2.0f;
         host_desc.idle_timeout = 2.0f;
         ASSERT_TRUE(sdl3d_network_session_create(&host_desc, &host_network));
@@ -451,7 +471,7 @@ class PongHeadlessMultiplayerTest : public ::testing::Test
         sdl3d_network_session_desc_init(&client_desc);
         client_desc.role = SDL3D_NETWORK_ROLE_CLIENT;
         client_desc.host = "127.0.0.1";
-        client_desc.port = SDL3D_NETWORK_DEFAULT_PORT;
+        client_desc.port = network_port;
         client_desc.handshake_timeout = 2.0f;
         client_desc.idle_timeout = 2.0f;
         ASSERT_TRUE(sdl3d_network_session_create(&client_desc, &client_network));
@@ -484,6 +504,7 @@ class PongHeadlessMultiplayerTest : public ::testing::Test
     sdl3d_game_data_runtime *client_runtime = nullptr;
     sdl3d_network_session *host_network = nullptr;
     sdl3d_network_session *client_network = nullptr;
+    Uint16 network_port = SDL3D_NETWORK_DEFAULT_PORT;
     int p1_up = -1;
     int p1_down = -1;
     int p2_up = -1;
@@ -559,7 +580,7 @@ TEST_F(PongHeadlessMultiplayerTest, ControlPacketsCarryPauseResumeAndDisconnect)
 {
     std::array<Uint8, SDL3D_NETWORK_MAX_PACKET_SIZE> packet{};
 
-    ASSERT_TRUE(send_control_packet(client_network, PONG_NETWORK_MESSAGE_PAUSE_REQUEST));
+    ASSERT_TRUE(send_control_packet(client_runtime, client_network, PONG_NETWORK_MESSAGE_PAUSE_REQUEST));
     int received = 0;
     for (int i = 0; i < 120 && received <= 0; ++i)
     {
@@ -568,9 +589,9 @@ TEST_F(PongHeadlessMultiplayerTest, ControlPacketsCarryPauseResumeAndDisconnect)
         received = sdl3d_network_session_receive(host_network, packet.data(), (int)packet.size());
     }
     ASSERT_GT(received, 0);
-    ASSERT_TRUE(read_control_packet(packet.data(), received, PONG_NETWORK_MESSAGE_PAUSE_REQUEST));
+    ASSERT_TRUE(read_control_packet(host_runtime, packet.data(), received, PONG_NETWORK_MESSAGE_PAUSE_REQUEST));
 
-    ASSERT_TRUE(send_control_packet(host_network, PONG_NETWORK_MESSAGE_RESUME_REQUEST));
+    ASSERT_TRUE(send_control_packet(host_runtime, host_network, PONG_NETWORK_MESSAGE_RESUME_REQUEST));
     received = 0;
     for (int i = 0; i < 120 && received <= 0; ++i)
     {
@@ -579,9 +600,9 @@ TEST_F(PongHeadlessMultiplayerTest, ControlPacketsCarryPauseResumeAndDisconnect)
         received = sdl3d_network_session_receive(client_network, packet.data(), (int)packet.size());
     }
     ASSERT_GT(received, 0);
-    ASSERT_TRUE(read_control_packet(packet.data(), received, PONG_NETWORK_MESSAGE_RESUME_REQUEST));
+    ASSERT_TRUE(read_control_packet(client_runtime, packet.data(), received, PONG_NETWORK_MESSAGE_RESUME_REQUEST));
 
-    ASSERT_TRUE(send_control_packet(client_network, PONG_NETWORK_MESSAGE_DISCONNECT));
+    ASSERT_TRUE(send_control_packet(client_runtime, client_network, PONG_NETWORK_MESSAGE_DISCONNECT));
     received = 0;
     for (int i = 0; i < 120 && received <= 0; ++i)
     {
@@ -590,9 +611,9 @@ TEST_F(PongHeadlessMultiplayerTest, ControlPacketsCarryPauseResumeAndDisconnect)
         received = sdl3d_network_session_receive(host_network, packet.data(), (int)packet.size());
     }
     ASSERT_GT(received, 0);
-    ASSERT_TRUE(read_control_packet(packet.data(), received, PONG_NETWORK_MESSAGE_DISCONNECT));
+    ASSERT_TRUE(read_control_packet(host_runtime, packet.data(), received, PONG_NETWORK_MESSAGE_DISCONNECT));
 
-    ASSERT_TRUE(send_control_packet(host_network, PONG_NETWORK_MESSAGE_DISCONNECT));
+    ASSERT_TRUE(send_control_packet(host_runtime, host_network, PONG_NETWORK_MESSAGE_DISCONNECT));
     received = 0;
     for (int i = 0; i < 120 && received <= 0; ++i)
     {
@@ -601,7 +622,7 @@ TEST_F(PongHeadlessMultiplayerTest, ControlPacketsCarryPauseResumeAndDisconnect)
         received = sdl3d_network_session_receive(client_network, packet.data(), (int)packet.size());
     }
     ASSERT_GT(received, 0);
-    ASSERT_TRUE(read_control_packet(packet.data(), received, PONG_NETWORK_MESSAGE_DISCONNECT));
+    ASSERT_TRUE(read_control_packet(client_runtime, packet.data(), received, PONG_NETWORK_MESSAGE_DISCONNECT));
 }
 
 TEST_F(PongHeadlessMultiplayerTest, NetworkPauseMenuOmitsOptions)

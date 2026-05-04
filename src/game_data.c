@@ -34,6 +34,8 @@
 #define SDL3D_GAME_DATA_NETWORK_SNAPSHOT_VERSION 1u
 #define SDL3D_GAME_DATA_NETWORK_INPUT_MAGIC 0x49335253u /* "S3RI" */
 #define SDL3D_GAME_DATA_NETWORK_INPUT_VERSION 1u
+#define SDL3D_GAME_DATA_NETWORK_CONTROL_MAGIC 0x43335253u /* "S3RC" */
+#define SDL3D_GAME_DATA_NETWORK_CONTROL_VERSION 1u
 
 typedef enum game_data_sensor_type
 {
@@ -1906,6 +1908,70 @@ static const char *game_data_replication_input_action(yyjson_val *input)
 static int game_data_replication_action_id(const sdl3d_game_data_runtime *runtime, yyjson_val *input)
 {
     return sdl3d_game_data_find_action(runtime, game_data_replication_input_action(input));
+}
+
+static sdl3d_game_data_network_direction game_data_network_direction_from_string(const char *direction)
+{
+    if (direction == NULL)
+        return SDL3D_GAME_DATA_NETWORK_DIRECTION_INVALID;
+    if (SDL_strcmp(direction, "host_to_client") == 0)
+        return SDL3D_GAME_DATA_NETWORK_DIRECTION_HOST_TO_CLIENT;
+    if (SDL_strcmp(direction, "client_to_host") == 0)
+        return SDL3D_GAME_DATA_NETWORK_DIRECTION_CLIENT_TO_HOST;
+    if (SDL_strcmp(direction, "bidirectional") == 0)
+        return SDL3D_GAME_DATA_NETWORK_DIRECTION_BIDIRECTIONAL;
+    return SDL3D_GAME_DATA_NETWORK_DIRECTION_INVALID;
+}
+
+static const char *game_data_network_direction_name(sdl3d_game_data_network_direction direction)
+{
+    switch (direction)
+    {
+    case SDL3D_GAME_DATA_NETWORK_DIRECTION_HOST_TO_CLIENT:
+        return "host_to_client";
+    case SDL3D_GAME_DATA_NETWORK_DIRECTION_CLIENT_TO_HOST:
+        return "client_to_host";
+    case SDL3D_GAME_DATA_NETWORK_DIRECTION_BIDIRECTIONAL:
+        return "bidirectional";
+    default:
+        return "invalid";
+    }
+}
+
+static yyjson_val *game_data_find_network_control_by_name(const sdl3d_game_data_runtime *runtime,
+                                                          const char *control_name, int *out_index)
+{
+    yyjson_val *controls = obj_get(obj_get(runtime_root(runtime), "network"), "control_messages");
+    for (size_t i = 0; yyjson_is_arr(controls) && i < yyjson_arr_size(controls); ++i)
+    {
+        yyjson_val *control = yyjson_arr_get(controls, i);
+        if (SDL_strcmp(json_string(control, "name", ""), control_name != NULL ? control_name : "") == 0)
+        {
+            if (out_index != NULL)
+                *out_index = (int)i;
+            return control;
+        }
+    }
+    return NULL;
+}
+
+static yyjson_val *game_data_find_network_control_by_index(const sdl3d_game_data_runtime *runtime, Uint32 index)
+{
+    yyjson_val *controls = obj_get(obj_get(runtime_root(runtime), "network"), "control_messages");
+    return yyjson_is_arr(controls) && index < yyjson_arr_size(controls) ? yyjson_arr_get(controls, index) : NULL;
+}
+
+static bool game_data_network_control_packet_size(size_t *out_size)
+{
+    const size_t size = 4U + 4U + 4U + 4U + SDL3D_REPLICATION_SCHEMA_HASH_SIZE;
+    if (out_size != NULL)
+        *out_size = size;
+    return true;
+}
+
+static int game_data_network_control_signal_id(const sdl3d_game_data_runtime *runtime, yyjson_val *control)
+{
+    return sdl3d_game_data_find_signal(runtime, json_string(control, "signal", NULL));
 }
 
 static const char *game_data_replication_property_key(const char *path)
@@ -9705,6 +9771,173 @@ bool sdl3d_game_data_clear_network_input_overrides(const sdl3d_game_data_runtime
         sdl3d_input_clear_action_override(input, action_id);
     }
 
+    return true;
+}
+
+bool sdl3d_game_data_encode_network_control(const sdl3d_game_data_runtime *runtime, const char *control_name,
+                                            Uint32 tick, void *buffer, size_t buffer_size, size_t *out_size,
+                                            char *error_buffer, int error_buffer_size)
+{
+    if (out_size != NULL)
+        *out_size = 0U;
+    if (runtime == NULL || control_name == NULL || control_name[0] == '\0' || buffer == NULL || buffer_size == 0U)
+    {
+        set_error(error_buffer, error_buffer_size, "network control encode requires runtime, control, and buffer");
+        return false;
+    }
+    if (!runtime->has_network_schema)
+    {
+        set_error(error_buffer, error_buffer_size, "network control encode requires an authored network schema");
+        return false;
+    }
+
+    int control_index = -1;
+    yyjson_val *control = game_data_find_network_control_by_name(runtime, control_name, &control_index);
+    if (control == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network control message not found");
+        return false;
+    }
+    if (control_index < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "network control message index is invalid");
+        return false;
+    }
+
+    size_t required_size = 0U;
+    (void)game_data_network_control_packet_size(&required_size);
+    if (buffer_size < required_size)
+    {
+        set_errorf(error_buffer, error_buffer_size, "network control requires %zu bytes, buffer has %zu bytes",
+                   required_size, buffer_size);
+        return false;
+    }
+
+    sdl3d_replication_writer writer;
+    sdl3d_replication_writer_init(&writer, buffer, buffer_size);
+    if (!sdl3d_replication_write_uint32(&writer, SDL3D_GAME_DATA_NETWORK_CONTROL_MAGIC) ||
+        !sdl3d_replication_write_uint32(&writer, SDL3D_GAME_DATA_NETWORK_CONTROL_VERSION) ||
+        !sdl3d_replication_write_uint32(&writer, tick) ||
+        !sdl3d_replication_write_uint32(&writer, (Uint32)control_index) ||
+        !sdl3d_replication_write_bytes(&writer, runtime->network_schema_hash, SDL3D_REPLICATION_SCHEMA_HASH_SIZE))
+    {
+        set_error(error_buffer, error_buffer_size, "network control buffer is too small for packet");
+        return false;
+    }
+
+    if (out_size != NULL)
+        *out_size = sdl3d_replication_writer_offset(&writer);
+    return true;
+}
+
+bool sdl3d_game_data_decode_network_control(const sdl3d_game_data_runtime *runtime, const void *packet,
+                                            size_t packet_size, sdl3d_game_data_network_control *out_control,
+                                            char *error_buffer, int error_buffer_size)
+{
+    if (out_control != NULL)
+    {
+        out_control->name = NULL;
+        out_control->direction = SDL3D_GAME_DATA_NETWORK_DIRECTION_INVALID;
+        out_control->signal_id = -1;
+        out_control->tick = 0U;
+    }
+    if (runtime == NULL || packet == NULL || packet_size == 0U)
+    {
+        set_error(error_buffer, error_buffer_size, "network control decode requires runtime and packet");
+        return false;
+    }
+    if (!runtime->has_network_schema)
+    {
+        set_error(error_buffer, error_buffer_size, "network control decode requires an authored network schema");
+        return false;
+    }
+
+    size_t required_size = 0U;
+    (void)game_data_network_control_packet_size(&required_size);
+    if (packet_size != required_size)
+    {
+        set_errorf(error_buffer, error_buffer_size, "network control packet requires %zu bytes, packet has %zu bytes",
+                   required_size, packet_size);
+        return false;
+    }
+
+    sdl3d_replication_reader reader;
+    sdl3d_replication_reader_init(&reader, packet, packet_size);
+
+    Uint32 magic = 0U;
+    Uint32 version = 0U;
+    Uint32 tick = 0U;
+    Uint32 control_index = 0U;
+    Uint8 schema_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE];
+    if (!sdl3d_replication_read_uint32(&reader, &magic) || !sdl3d_replication_read_uint32(&reader, &version) ||
+        !sdl3d_replication_read_uint32(&reader, &tick) || !sdl3d_replication_read_uint32(&reader, &control_index) ||
+        !sdl3d_replication_read_bytes(&reader, schema_hash, sizeof(schema_hash)) ||
+        sdl3d_replication_reader_remaining(&reader) != 0U)
+    {
+        set_error(error_buffer, error_buffer_size, "network control packet is malformed");
+        return false;
+    }
+    if (magic != SDL3D_GAME_DATA_NETWORK_CONTROL_MAGIC || version != SDL3D_GAME_DATA_NETWORK_CONTROL_VERSION)
+    {
+        set_error(error_buffer, error_buffer_size, "network control packet has unsupported header");
+        return false;
+    }
+    if (SDL_memcmp(schema_hash, runtime->network_schema_hash, SDL3D_REPLICATION_SCHEMA_HASH_SIZE) != 0)
+    {
+        set_error(error_buffer, error_buffer_size, "network control schema hash does not match runtime");
+        return false;
+    }
+
+    yyjson_val *control = game_data_find_network_control_by_index(runtime, control_index);
+    if (control == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network control message index is invalid for this runtime");
+        return false;
+    }
+
+    const sdl3d_game_data_network_direction direction =
+        game_data_network_direction_from_string(json_string(control, "direction", NULL));
+    const int signal_id = game_data_network_control_signal_id(runtime, control);
+    if (direction == SDL3D_GAME_DATA_NETWORK_DIRECTION_INVALID || signal_id < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "network control message metadata is invalid for this runtime");
+        return false;
+    }
+
+    if (out_control != NULL)
+    {
+        out_control->name = json_string(control, "name", NULL);
+        out_control->direction = direction;
+        out_control->signal_id = signal_id;
+        out_control->tick = tick;
+    }
+    return true;
+}
+
+bool sdl3d_game_data_apply_network_control(sdl3d_game_data_runtime *runtime, const void *packet, size_t packet_size,
+                                           sdl3d_game_data_network_control *out_control, char *error_buffer,
+                                           int error_buffer_size)
+{
+    sdl3d_game_data_network_control control;
+    if (!sdl3d_game_data_decode_network_control(runtime, packet, packet_size, &control, error_buffer,
+                                                error_buffer_size))
+        return false;
+
+    sdl3d_properties *payload = sdl3d_properties_create();
+    if (payload == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network control failed to allocate signal payload");
+        return false;
+    }
+
+    sdl3d_properties_set_string(payload, "network_control", control.name != NULL ? control.name : "");
+    sdl3d_properties_set_string(payload, "network_direction", game_data_network_direction_name(control.direction));
+    sdl3d_properties_set_int(payload, "network_tick", (int)SDL_min(control.tick, (Uint32)SDL_MAX_SINT32));
+    sdl3d_signal_emit(runtime_bus(runtime), control.signal_id, payload);
+    sdl3d_properties_destroy(payload);
+
+    if (out_control != NULL)
+        *out_control = control;
     return true;
 }
 

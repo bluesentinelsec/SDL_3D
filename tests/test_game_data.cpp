@@ -46,6 +46,15 @@ struct DiagnosticCapture
     std::vector<CapturedDiagnostic> diagnostics;
 };
 
+struct NetworkSignalCapture
+{
+    int calls = 0;
+    int signal_id = -1;
+    std::string network_control;
+    std::string network_direction;
+    int network_tick = 0;
+};
+
 struct RenderPrimitiveCapture
 {
     int cubes = 0;
@@ -55,6 +64,21 @@ struct RenderPrimitiveCapture
     bool saw_options_background = false;
     bool saw_options_glow = false;
 };
+
+void capture_signal_payload(void *userdata, int signal_id, const sdl3d_properties *payload)
+{
+    auto *capture = static_cast<NetworkSignalCapture *>(userdata);
+    if (capture == nullptr)
+    {
+        return;
+    }
+
+    capture->calls++;
+    capture->signal_id = signal_id;
+    capture->network_control = sdl3d_properties_get_string(payload, "network_control", "");
+    capture->network_direction = sdl3d_properties_get_string(payload, "network_direction", "");
+    capture->network_tick = sdl3d_properties_get_int(payload, "network_tick", 0);
+}
 
 struct UiTextCapture
 {
@@ -4614,6 +4638,93 @@ TEST(GameDataRuntime, RejectsPongNetworkInputWithMismatchedSchemaOrTruncation)
 
     destroy_runtime_session(client_session, client);
     destroy_runtime_session(host_session, host);
+}
+
+TEST(GameDataRuntime, EncodesDecodesAndAppliesPongNetworkControlFromAuthoredSchema)
+{
+    sdl3d_game_session *sender_session = nullptr;
+    sdl3d_game_data_runtime *sender = nullptr;
+    load_pong_runtime(&sender_session, &sender);
+    ASSERT_TRUE(sdl3d_game_data_has_network_schema(sender));
+
+    sdl3d_game_session *receiver_session = nullptr;
+    sdl3d_game_data_runtime *receiver = nullptr;
+    load_pong_runtime(&receiver_session, &receiver);
+    ASSERT_TRUE(sdl3d_game_data_has_network_schema(receiver));
+
+    std::array<Uint8, 128> packet{};
+    size_t packet_size = 0U;
+    char error[512]{};
+    ASSERT_TRUE(sdl3d_game_data_encode_network_control(sender, "pause_request", 77U, packet.data(), packet.size(),
+                                                       &packet_size, error, sizeof(error)))
+        << error;
+    ASSERT_GT(packet_size, 0U);
+
+    sdl3d_game_data_network_control control{};
+    ASSERT_TRUE(
+        sdl3d_game_data_decode_network_control(receiver, packet.data(), packet_size, &control, error, sizeof(error)))
+        << error;
+    EXPECT_STREQ(control.name, "pause_request");
+    EXPECT_EQ(control.direction, SDL3D_GAME_DATA_NETWORK_DIRECTION_BIDIRECTIONAL);
+    EXPECT_EQ(control.signal_id, sdl3d_game_data_find_signal(receiver, "signal.network.pause_changed"));
+    EXPECT_EQ(control.tick, 77U);
+
+    NetworkSignalCapture capture;
+    const int connection = sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(receiver_session), control.signal_id,
+                                                capture_signal_payload, &capture);
+    ASSERT_GT(connection, 0);
+    sdl3d_game_data_network_control applied{};
+    ASSERT_TRUE(
+        sdl3d_game_data_apply_network_control(receiver, packet.data(), packet_size, &applied, error, sizeof(error)))
+        << error;
+    EXPECT_STREQ(applied.name, "pause_request");
+    EXPECT_EQ(capture.calls, 1);
+    EXPECT_EQ(capture.signal_id, control.signal_id);
+    EXPECT_EQ(capture.network_control, "pause_request");
+    EXPECT_EQ(capture.network_direction, "bidirectional");
+    EXPECT_EQ(capture.network_tick, 77);
+    sdl3d_signal_disconnect(sdl3d_game_session_get_signal_bus(receiver_session), connection);
+
+    destroy_runtime_session(sender_session, sender);
+    destroy_runtime_session(receiver_session, receiver);
+}
+
+TEST(GameDataRuntime, RejectsPongNetworkControlWithMismatchedSchemaOrBadSize)
+{
+    sdl3d_game_session *sender_session = nullptr;
+    sdl3d_game_data_runtime *sender = nullptr;
+    load_pong_runtime(&sender_session, &sender);
+    sdl3d_game_session *receiver_session = nullptr;
+    sdl3d_game_data_runtime *receiver = nullptr;
+    load_pong_runtime(&receiver_session, &receiver);
+
+    std::array<Uint8, 128> packet{};
+    size_t packet_size = 0U;
+    char error[512]{};
+    ASSERT_TRUE(sdl3d_game_data_encode_network_control(sender, "disconnect", 88U, packet.data(), packet.size(),
+                                                       &packet_size, error, sizeof(error)))
+        << error;
+    ASSERT_GT(packet_size, 24U);
+
+    std::array<Uint8, 8> too_small{};
+    size_t too_small_size = 0U;
+    EXPECT_FALSE(sdl3d_game_data_encode_network_control(sender, "disconnect", 88U, too_small.data(), too_small.size(),
+                                                        &too_small_size, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("requires"), std::string::npos) << error;
+    EXPECT_EQ(too_small_size, 0U);
+
+    std::array<Uint8, 128> corrupted = packet;
+    corrupted[16] ^= 0xffU;
+    EXPECT_FALSE(
+        sdl3d_game_data_decode_network_control(receiver, corrupted.data(), packet_size, nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("schema hash"), std::string::npos) << error;
+
+    EXPECT_FALSE(sdl3d_game_data_decode_network_control(receiver, packet.data(), packet_size - 1U, nullptr, error,
+                                                        sizeof(error)));
+    EXPECT_NE(std::string(error).find("requires"), std::string::npos) << error;
+
+    destroy_runtime_session(sender_session, sender);
+    destroy_runtime_session(receiver_session, receiver);
 }
 
 TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)

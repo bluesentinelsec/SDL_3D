@@ -65,6 +65,32 @@ extern "C"
         const char *window_vsync_key;
     } sdl3d_game_data_app_control;
 
+    /** @brief Direction for an authored network replication or control message. */
+    typedef enum sdl3d_game_data_network_direction
+    {
+        /** @brief Invalid or unknown network direction. */
+        SDL3D_GAME_DATA_NETWORK_DIRECTION_INVALID = 0,
+        /** @brief Message flows from the authoritative host to a client. */
+        SDL3D_GAME_DATA_NETWORK_DIRECTION_HOST_TO_CLIENT = 1,
+        /** @brief Message flows from a client to the authoritative host. */
+        SDL3D_GAME_DATA_NETWORK_DIRECTION_CLIENT_TO_HOST = 2,
+        /** @brief Message may flow in either direction. */
+        SDL3D_GAME_DATA_NETWORK_DIRECTION_BIDIRECTIONAL = 3,
+    } sdl3d_game_data_network_direction;
+
+    /** @brief Decoded authored network control message descriptor. */
+    typedef struct sdl3d_game_data_network_control
+    {
+        /** @brief Authored control message name, owned by the runtime. */
+        const char *name;
+        /** @brief Authored message direction. */
+        sdl3d_game_data_network_direction direction;
+        /** @brief Signal referenced by the control message, or -1. */
+        int signal_id;
+        /** @brief Tick carried by the control packet. */
+        Uint32 tick;
+    } sdl3d_game_data_network_control;
+
     /** @brief Authored font asset descriptor. */
     typedef struct sdl3d_game_data_font_asset
     {
@@ -929,6 +955,67 @@ extern "C"
     bool sdl3d_game_data_clear_network_input_overrides(const sdl3d_game_data_runtime *runtime,
                                                        const char *replication_name, sdl3d_input_manager *input,
                                                        char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Encode an authored network control message packet.
+     *
+     * The named control message must exist in the loaded `network`
+     * `control_messages` array. The packet includes a deterministic header,
+     * schema hash, control-message index, and tick. Callers provide the
+     * destination buffer; no allocation is performed.
+     *
+     * @param runtime Runtime containing the authored network schema.
+     * @param control_name Authored control message name.
+     * @param tick Simulation or wall-clock tick to include in the packet.
+     * @param buffer Destination packet buffer.
+     * @param buffer_size Destination buffer size in bytes.
+     * @param out_size Receives written packet size in bytes.
+     * @param error_buffer Optional buffer for the first failure reason.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when the control packet was encoded.
+     */
+    bool sdl3d_game_data_encode_network_control(const sdl3d_game_data_runtime *runtime, const char *control_name,
+                                                Uint32 tick, void *buffer, size_t buffer_size, size_t *out_size,
+                                                char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Decode an authored network control message packet.
+     *
+     * The packet must match the runtime schema hash and reference an authored
+     * control message in the loaded `network` schema. On success @p out_control
+     * receives runtime-owned descriptor strings and the packet tick.
+     *
+     * @param runtime Runtime containing the authored network schema.
+     * @param packet Source packet buffer.
+     * @param packet_size Source packet size in bytes.
+     * @param out_control Receives decoded control metadata.
+     * @param error_buffer Optional buffer for the first failure reason.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when the packet was decoded completely.
+     */
+    bool sdl3d_game_data_decode_network_control(const sdl3d_game_data_runtime *runtime, const void *packet,
+                                                size_t packet_size, sdl3d_game_data_network_control *out_control,
+                                                char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Decode and emit an authored network control message signal.
+     *
+     * This validates the packet with sdl3d_game_data_decode_network_control()
+     * and emits the control message's authored signal on the runtime session
+     * bus. The signal payload includes `network_control`, `network_direction`,
+     * and `network_tick` fields.
+     *
+     * @param runtime Runtime containing the authored network schema and session bus.
+     * @param packet Source packet buffer.
+     * @param packet_size Source packet size in bytes.
+     * @param out_control Receives decoded control metadata, if non-NULL.
+     * @param error_buffer Optional buffer for the first failure reason.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when the packet was decoded and the signal emitted.
+     */
+    bool sdl3d_game_data_apply_network_control(sdl3d_game_data_runtime *runtime, const void *packet, size_t packet_size,
+                                               sdl3d_game_data_network_control *out_control, char *error_buffer,
+                                               int error_buffer_size);
 
     /**
      * @brief Validate a JSON game data file without instantiating runtime state.
