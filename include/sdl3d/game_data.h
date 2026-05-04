@@ -1093,7 +1093,9 @@ extern "C"
     /**
      * @brief Read an authored world light by zero-based index.
      *
-     * The returned light is suitable for passing to sdl3d_add_light().
+     * The returned light is suitable for passing to sdl3d_add_light(). Lights
+     * may target one entity with `target_entity`, or the first active-scene
+     * entity in an ordered `target_entities` fallback list.
      */
     bool sdl3d_game_data_get_world_light(const sdl3d_game_data_runtime *runtime, int index, sdl3d_light *out_light);
 

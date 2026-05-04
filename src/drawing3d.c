@@ -665,8 +665,7 @@ static sdl3d_vec4 sdl3d_shade_point_retro(const sdl3d_lighting_params *lp, sdl3d
             if (light->range > 0.0f)
             {
                 float ratio = dist / light->range;
-                attenuation = SDL_max(1.0f - ratio * ratio, 0.0f);
-                attenuation *= attenuation;
+                attenuation = SDL_expf(-2.8f * ratio * ratio);
             }
             else
             {

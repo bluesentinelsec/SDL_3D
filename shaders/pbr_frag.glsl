@@ -88,8 +88,7 @@ void main() {
             L = toLight / max(dist, 0.0001);
             if (uLights[i].range > 0.0) {
                 float r = dist / uLights[i].range;
-                attenuation = max(1.0 - r * r, 0.0);
-                attenuation *= attenuation;
+                attenuation = exp(-2.8 * r * r);
             }
             if (uLights[i].type == 2) {
                 float cosA = dot(-L, normalize(uLights[i].direction));

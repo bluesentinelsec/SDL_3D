@@ -15,7 +15,6 @@
     "entity.paddle.player",
     "entity.paddle.cpu",
     "entity.ball",
-    "entity.light.lamp",
     "entity.score.player",
     "entity.score.cpu",
     "entity.match",

@@ -43,7 +43,8 @@ extern "C"
      * Unified light descriptor. Fields used depend on `type`:
      *
      * DIRECTIONAL: direction, color, intensity.
-     * POINT:       position, color, intensity, range.
+     * POINT:       position, color, intensity, range. Range is a soft falloff
+     *              scale, not a hard cutoff.
      * SPOT:        position, direction, color, intensity, range,
      *              inner_cutoff, outer_cutoff (cosines of half-angles).
      */

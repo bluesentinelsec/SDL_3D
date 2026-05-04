@@ -726,32 +726,54 @@
     ],
     "lights": [
       {
-        "name": "light.left_red",
+        "name": "light.left_red.top",
         "type": "point",
-        "position": [-5.7, 0.35, 2.4],
+        "position": [-5.7, 2.55, 2.4],
         "color": [1.0, 0.10, 0.08],
-        "intensity": 2.6,
-        "range": 5.8,
+        "intensity": 2.0,
+        "range": 4.8,
         "effects": [
           { "type": "pulse", "rate": 1.2, "phase": 0.5, "color": [1.0, 0.18, 0.12], "color_blend": 0.22, "intensity_add": 0.25, "range_add": 0.25 }
         ]
       },
       {
-        "name": "light.right_blue",
+        "name": "light.left_red.bottom",
         "type": "point",
-        "position": [5.7, 0.35, 2.4],
+        "position": [-5.7, -2.55, 2.4],
+        "color": [1.0, 0.10, 0.08],
+        "intensity": 2.0,
+        "range": 4.8,
+        "effects": [
+          { "type": "pulse", "rate": 1.2, "phase": 2.2, "color": [1.0, 0.18, 0.12], "color_blend": 0.22, "intensity_add": 0.25, "range_add": 0.25 }
+        ]
+      },
+      {
+        "name": "light.right_blue.top",
+        "type": "point",
+        "position": [5.7, 2.55, 2.4],
         "color": [0.12, 0.34, 1.0],
-        "intensity": 2.6,
-        "range": 5.8,
+        "intensity": 2.0,
+        "range": 4.8,
         "effects": [
           { "type": "pulse", "rate": 1.25, "phase": 2.0, "color": [0.28, 0.54, 1.0], "color_blend": 0.22, "intensity_add": 0.25, "range_add": 0.25 }
         ]
       },
       {
+        "name": "light.right_blue.bottom",
+        "type": "point",
+        "position": [5.7, -2.55, 2.4],
+        "color": [0.12, 0.34, 1.0],
+        "intensity": 2.0,
+        "range": 4.8,
+        "effects": [
+          { "type": "pulse", "rate": 1.25, "phase": 3.7, "color": [0.28, 0.54, 1.0], "color_blend": 0.22, "intensity_add": 0.25, "range_add": 0.25 }
+        ]
+      },
+      {
         "name": "light.gameplay_lamp",
         "type": "point",
-        "target_entity": "entity.light.lamp",
-        "offset": [0.0, 0.0, 2.8],
+        "target_entities": ["entity.ball", "entity.ball.attract"],
+        "offset": [0.0, 0.0, 2.4],
         "color": [1.0, 0.82, 0.42],
         "intensity": 3.0,
         "range": 6.4,
@@ -1035,19 +1057,6 @@
       "properties": {
         "value": { "type": "int", "value": 0 }
       }
-    },
-    {
-      "name": "entity.light.lamp",
-      "active": true,
-      "tags": ["light", "lamp", "presentation"],
-      "transform": { "position": [-6.8, 3.8, 0.34] },
-      "properties": {
-        "active_motion": { "type": "bool", "value": true },
-        "motion_time": { "type": "float", "value": 0.0 }
-      },
-      "components": [
-        { "type": "motion.oscillate", "origin": [0.0, 3.8, 0.34], "amplitude": [6.8, 0.0, 0.0], "rate": 0.45, "phase": -1.5707963 }
-      ]
     },
     {
       "name": "entity.score.cpu",

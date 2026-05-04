@@ -1200,23 +1200,31 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_NEAR(ambient[1], 0.018f, 0.0001f);
     EXPECT_NEAR(ambient[2], 0.026f, 0.0001f);
 
-    EXPECT_EQ(sdl3d_game_data_world_light_count(runtime), 3);
+    EXPECT_EQ(sdl3d_game_data_world_light_count(runtime), 5);
+    sdl3d_light red_light{};
+    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 0, &red_light));
+    EXPECT_EQ(red_light.type, SDL3D_LIGHT_POINT);
+    EXPECT_NEAR(red_light.position.x, -5.7f, 0.0001f);
+    EXPECT_NEAR(red_light.position.y, 2.55f, 0.0001f);
+    EXPECT_NEAR(red_light.color[0], 1.0f, 0.0001f);
+    EXPECT_NEAR(red_light.color[1], 0.10f, 0.0001f);
+
     sdl3d_light blue_light{};
-    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 1, &blue_light));
+    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 2, &blue_light));
     EXPECT_EQ(blue_light.type, SDL3D_LIGHT_POINT);
     EXPECT_NEAR(blue_light.position.x, 5.7f, 0.0001f);
-    EXPECT_NEAR(blue_light.position.y, 0.35f, 0.0001f);
+    EXPECT_NEAR(blue_light.position.y, 2.55f, 0.0001f);
     EXPECT_NEAR(blue_light.position.z, 2.4f, 0.0001f);
     EXPECT_NEAR(blue_light.color[0], 0.12f, 0.0001f);
     EXPECT_NEAR(blue_light.color[1], 0.34f, 0.0001f);
     EXPECT_NEAR(blue_light.color[2], 1.0f, 0.0001f);
 
     sdl3d_light lamp_light{};
-    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 2, &lamp_light));
+    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 4, &lamp_light));
     EXPECT_EQ(lamp_light.type, SDL3D_LIGHT_POINT);
-    EXPECT_NEAR(lamp_light.position.x, -6.8f, 0.0001f);
-    EXPECT_NEAR(lamp_light.position.y, 3.8f, 0.0001f);
-    EXPECT_NEAR(lamp_light.position.z, 3.14f, 0.0001f);
+    EXPECT_NEAR(lamp_light.position.x, 0.0f, 0.0001f);
+    EXPECT_NEAR(lamp_light.position.y, 0.0f, 0.0001f);
+    EXPECT_NEAR(lamp_light.position.z, 2.52f, 0.0001f);
     EXPECT_NEAR(lamp_light.range, 6.4f, 0.0001f);
 
     sdl3d_particle_config particles{};
@@ -1293,9 +1301,9 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
 
     sdl3d_light base_light{};
     sdl3d_light flashed_light{};
-    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 0, &base_light));
+    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 4, &base_light));
     sdl3d_game_data_render_eval light_eval{};
-    ASSERT_TRUE(sdl3d_game_data_get_world_light_evaluated(runtime, 0, &light_eval, &flashed_light));
+    ASSERT_TRUE(sdl3d_game_data_get_world_light_evaluated(runtime, 4, &light_eval, &flashed_light));
     EXPECT_GT(flashed_light.intensity, base_light.intensity);
     EXPECT_GT(flashed_light.range, base_light.range);
     sdl3d_game_data_render_eval render_eval{};

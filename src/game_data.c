@@ -2672,6 +2672,19 @@ bool sdl3d_game_data_get_world_light(const sdl3d_game_data_runtime *runtime, int
     out_light->position = json_vec3(light_json, "position", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
     const char *target_entity = json_string(light_json, "target_entity", NULL);
     sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, target_entity);
+    yyjson_val *target_entities = obj_get(light_json, "target_entities");
+    for (size_t i = 0; target == NULL && yyjson_is_arr(target_entities) && i < yyjson_arr_size(target_entities); ++i)
+    {
+        const char *candidate = yyjson_get_str(yyjson_arr_get(target_entities, i));
+        if (candidate != NULL && active_scene_has_entity_internal(runtime, candidate))
+            target = sdl3d_game_data_find_actor(runtime, candidate);
+    }
+    for (size_t i = 0; target == NULL && yyjson_is_arr(target_entities) && i < yyjson_arr_size(target_entities); ++i)
+    {
+        const char *candidate = yyjson_get_str(yyjson_arr_get(target_entities, i));
+        if (candidate != NULL)
+            target = sdl3d_game_data_find_actor(runtime, candidate);
+    }
     if (target != NULL)
     {
         const sdl3d_vec3 offset = json_vec3(light_json, "offset", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));

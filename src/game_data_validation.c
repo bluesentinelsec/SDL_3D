@@ -2076,6 +2076,18 @@ static bool validate_lights(validation_context *ctx, yyjson_val *root, validatio
         const char *target_entity = json_string(light, "target_entity");
         if (target_entity != NULL && !require_ref(ctx, &names->entities, "entity", target_entity, path))
             return false;
+        yyjson_val *target_entities = obj_get(light, "target_entities");
+        if (target_entities != NULL && !yyjson_is_arr(target_entities))
+            return validation_error(ctx, path, "light target_entities must be an array");
+        for (size_t target_index = 0; yyjson_is_arr(target_entities) && target_index < yyjson_arr_size(target_entities);
+             ++target_index)
+        {
+            yyjson_val *target = yyjson_arr_get(target_entities, target_index);
+            if (!yyjson_is_str(target))
+                return validation_error(ctx, path, "light target_entities entries must be entity names");
+            if (!require_ref(ctx, &names->entities, "entity", yyjson_get_str(target), path))
+                return false;
+        }
 
         yyjson_val *effects = obj_get(light, "effects");
         for (size_t e = 0; yyjson_is_arr(effects) && e < yyjson_arr_size(effects); ++e)

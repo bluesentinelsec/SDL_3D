@@ -14,7 +14,6 @@
     "entity.paddle.attract_left",
     "entity.paddle.attract_right",
     "entity.ball.attract",
-    "entity.light.lamp",
     "entity.presentation",
     "entity.effect.ambient_particles"
   ],

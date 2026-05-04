@@ -118,8 +118,7 @@ static bool sdl3d_compute_light_contribution(const sdl3d_light *light, float px,
         if (light->range > 0.0f)
         {
             float ratio = dist / light->range;
-            attenuation = sdl3d_maxf(1.0f - ratio * ratio, 0.0f);
-            attenuation *= attenuation;
+            attenuation = SDL_expf(-2.8f * ratio * ratio);
         }
         else
         {
