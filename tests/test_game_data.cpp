@@ -1199,6 +1199,19 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     EXPECT_STREQ(network_scene_state_key, "multiplayer_host_connected");
     EXPECT_FALSE(sdl3d_game_data_get_network_scene_state_key(runtime, "host", "missing", &network_scene_state_key));
     EXPECT_EQ(network_scene_state_key, nullptr);
+    const char *network_session_value = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_get_network_session_scene(runtime, "play", &network_session_value));
+    EXPECT_STREQ(network_session_value, "scene.play");
+    ASSERT_TRUE(sdl3d_game_data_get_network_session_scene(runtime, "join", &network_session_value));
+    EXPECT_STREQ(network_session_value, "scene.multiplayer.join");
+    ASSERT_TRUE(sdl3d_game_data_get_network_session_state_key(runtime, "match_mode", &network_session_value));
+    EXPECT_STREQ(network_session_value, "match_mode");
+    ASSERT_TRUE(
+        sdl3d_game_data_get_network_session_state_value(runtime, "match_mode", "network", &network_session_value));
+    EXPECT_STREQ(network_session_value, "lan");
+    ASSERT_TRUE(
+        sdl3d_game_data_get_network_session_state_value(runtime, "network_role", "client", &network_session_value));
+    EXPECT_STREQ(network_session_value, "client");
     EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead");
     EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.splash");
     EXPECT_EQ(sdl3d_game_data_scene_count(runtime), 15);
@@ -4905,9 +4918,25 @@ TEST(GameDataRuntime, ValidatesNetworkReplicationSchemaAndComputesStableHash)
 {
     const std::filesystem::path dir = unique_test_dir("network_schema");
     const std::string network_json = valid_network_schema_json();
+    std::string network_with_session_flow = network_json;
+    const size_t session_flow_insert = network_with_session_flow.rfind("\n  }");
+    ASSERT_NE(session_flow_insert, std::string::npos);
+    network_with_session_flow.insert(session_flow_insert, R"json(,
+    "session_flow": {
+      "state_keys": {
+        "match_mode": "match_mode"
+      },
+      "state_values": {
+        "match_mode": {
+          "network": "lan"
+        }
+      }
+    })json");
 
     write_text(dir / "network_a.game.json", network_schema_game_json(network_json, "Network Schema A").c_str());
     write_text(dir / "network_b.game.json", network_schema_game_json(network_json, "Different Metadata").c_str());
+    write_text(dir / "network_session_flow.game.json",
+               network_schema_game_json(network_with_session_flow, "Network Schema A").c_str());
     write_text(dir / "network_changed.game.json",
                network_schema_game_json(valid_network_schema_json("vec2"), "Network Schema A").c_str());
 
@@ -4918,9 +4947,11 @@ TEST(GameDataRuntime, ValidatesNetworkReplicationSchemaAndComputesStableHash)
 
     const auto hash_a = load_network_schema_hash(dir / "network_a.game.json");
     const auto hash_b = load_network_schema_hash(dir / "network_b.game.json");
+    const auto hash_with_session_flow = load_network_schema_hash(dir / "network_session_flow.game.json");
     const auto hash_changed = load_network_schema_hash(dir / "network_changed.game.json");
 
     EXPECT_EQ(hash_a, hash_b);
+    EXPECT_EQ(hash_a, hash_with_session_flow);
     EXPECT_NE(hash_a, hash_changed);
 
     remove_test_dir(dir);
@@ -5500,6 +5531,31 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
     ]
   })json",
             "network scene_state key value must be a non-empty string",
+        },
+        {
+            "bad_session_flow_state_key",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "session_flow": {
+      "state_keys": {
+        "match_mode": ""
+      }
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": ["position"]
+          }
+        ]
+      }
+    ]
+  })json",
+            "network session_flow state_keys value must be a non-empty string",
         },
     };
 

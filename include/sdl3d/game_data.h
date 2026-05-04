@@ -878,6 +878,51 @@ extern "C"
                                                      const char *name, const char **out_key);
 
     /**
+     * @brief Resolve an authored network session scene id.
+     *
+     * Games may author reusable scene ids under `network.session_flow.scenes`,
+     * such as `play`, `host_lobby`, `join`, `direct_connect`, or `title`.
+     * Host integration code can use this helper to avoid hard-coding scene ids
+     * while still owning transport/session objects.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param name Authored scene semantic name.
+     * @param out_scene Receives a scene id owned by @p runtime.
+     * @return true when the scene semantic exists and @p out_scene was filled.
+     */
+    bool sdl3d_game_data_get_network_session_scene(const sdl3d_game_data_runtime *runtime, const char *name,
+                                                   const char **out_scene);
+
+    /**
+     * @brief Resolve an authored network session scene-state key.
+     *
+     * Keys are authored under `network.session_flow.state_keys`, such as
+     * `match_mode`, `network_role`, or `network_flow`.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param name Authored key semantic name.
+     * @param out_key Receives a scene-state key owned by @p runtime.
+     * @return true when the key semantic exists and @p out_key was filled.
+     */
+    bool sdl3d_game_data_get_network_session_state_key(const sdl3d_game_data_runtime *runtime, const char *name,
+                                                       const char **out_key);
+
+    /**
+     * @brief Resolve an authored network session scene-state value.
+     *
+     * Values are authored under `network.session_flow.state_values.<group>`.
+     * For example, `state_values.network_role.host` may resolve to `host`.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param group Authored value group, usually a state key semantic.
+     * @param name Authored value semantic name.
+     * @param out_value Receives a value string owned by @p runtime.
+     * @return true when the value semantic exists and @p out_value was filled.
+     */
+    bool sdl3d_game_data_get_network_session_state_value(const sdl3d_game_data_runtime *runtime, const char *group,
+                                                         const char *name, const char **out_value);
+
+    /**
      * @brief Encode an authored host-to-client replication snapshot.
      *
      * The named replication channel must exist in the loaded `network`
