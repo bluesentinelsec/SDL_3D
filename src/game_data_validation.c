@@ -113,6 +113,55 @@ static bool is_virtual_storage_path(const char *value)
     return value != NULL && (SDL_strncmp(value, "user://", 7) == 0 || SDL_strncmp(value, "cache://", 8) == 0);
 }
 
+static bool validation_key_name_valid(const char *name)
+{
+    if (name == NULL || name[0] == '\0')
+        return false;
+    if (SDL_strcmp(name, "UP") == 0 || SDL_strcmp(name, "DOWN") == 0 || SDL_strcmp(name, "LEFT") == 0 ||
+        SDL_strcmp(name, "RIGHT") == 0 || SDL_strcmp(name, "RETURN") == 0 || SDL_strcmp(name, "ESCAPE") == 0 ||
+        SDL_strcmp(name, "BACKSPACE") == 0 || SDL_strcmp(name, "DELETE") == 0)
+    {
+        return true;
+    }
+    if (SDL_strlen(name) == 1)
+        return SDL_GetScancodeFromKey(SDL_GetKeyFromName(name), NULL) != SDL_SCANCODE_UNKNOWN;
+    return SDL_GetScancodeFromName(name) != SDL_SCANCODE_UNKNOWN;
+}
+
+static bool validation_mouse_button_name_valid(const char *name)
+{
+    return name != NULL &&
+           (SDL_strcmp(name, "LEFT") == 0 || SDL_strcmp(name, "MIDDLE") == 0 || SDL_strcmp(name, "RIGHT") == 0 ||
+            SDL_strcmp(name, "X1") == 0 || SDL_strcmp(name, "X2") == 0);
+}
+
+static bool validation_mouse_axis_name_valid(const char *name)
+{
+    return name != NULL && (SDL_strcmp(name, "x") == 0 || SDL_strcmp(name, "y") == 0 ||
+                            SDL_strcmp(name, "wheel") == 0 || SDL_strcmp(name, "wheel_x") == 0);
+}
+
+static bool validation_gamepad_axis_name_valid(const char *name)
+{
+    return name != NULL && (SDL_strcmp(name, "left_x") == 0 || SDL_strcmp(name, "left_y") == 0 ||
+                            SDL_strcmp(name, "right_x") == 0 || SDL_strcmp(name, "right_y") == 0 ||
+                            SDL_strcmp(name, "left_trigger") == 0 || SDL_strcmp(name, "right_trigger") == 0);
+}
+
+static bool validation_gamepad_button_name_valid(const char *name)
+{
+    static const char *const valid[] = {
+        "START",       "BACK",          "SOUTH",          "NORTH",        "EAST",          "WEST",         "LEFT_STICK",
+        "RIGHT_STICK", "LEFT_SHOULDER", "RIGHT_SHOULDER", "DPAD_UP",      "DPAD_DOWN",     "DPAD_LEFT",    "DPAD_RIGHT",
+        "GUIDE",       "MISC1",         "RIGHT_PADDLE1",  "LEFT_PADDLE1", "RIGHT_PADDLE2", "LEFT_PADDLE2", "TOUCHPAD"};
+    for (size_t i = 0; name != NULL && i < SDL_arraysize(valid); ++i)
+    {
+        if (SDL_strcmp(name, valid[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
 static void set_first_error(validation_context *ctx, const char *json_path, const char *message)
 {
     if (ctx->error_buffer == NULL || ctx->error_buffer_size <= 0 || ctx->error_buffer[0] != '\0')
@@ -1422,6 +1471,131 @@ static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)
         }
     }
     return true;
+}
+
+static bool validate_input_profile_binding(validation_context *ctx, yyjson_val *binding, const char *path,
+                                           validation_names *names)
+{
+    if (!yyjson_is_obj(binding))
+        return validation_error(ctx, path, "input profile bindings must be objects");
+    const char *action = json_string(binding, "action");
+    const char *device = json_string(binding, "device");
+    if (!require_ref(ctx, &names->actions, "input action", action, path))
+        return false;
+
+    if (SDL_strcmp(device != NULL ? device : "", "keyboard") == 0)
+    {
+        const char *key = json_string(binding, "key");
+        if (!validation_key_name_valid(key))
+            return validation_error(ctx, path, "keyboard input profile binding requires a valid key");
+    }
+    else if (SDL_strcmp(device != NULL ? device : "", "gamepad") == 0)
+    {
+        const char *axis = json_string(binding, "axis");
+        const char *button = json_string(binding, "button");
+        if (axis == NULL && button == NULL)
+            return validation_error(ctx, path, "gamepad input profile binding requires an axis or button");
+        if (axis != NULL && !validation_gamepad_axis_name_valid(axis))
+            return validation_error(ctx, path, "gamepad input profile binding requires a valid axis");
+        if (button != NULL && !validation_gamepad_button_name_valid(button))
+            return validation_error(ctx, path, "gamepad input profile binding requires a valid button");
+        yyjson_val *slot = obj_get(binding, "slot");
+        if (slot != NULL &&
+            (!yyjson_is_num(slot) || yyjson_get_sint(slot) < -1 || yyjson_get_sint(slot) >= SDL3D_INPUT_MAX_GAMEPADS))
+        {
+            return validation_error(ctx, path, "gamepad input profile binding slot must be -1 or a valid slot index");
+        }
+    }
+    else if (SDL_strcmp(device != NULL ? device : "", "mouse") == 0)
+    {
+        const char *axis = json_string(binding, "axis");
+        const char *button = json_string(binding, "button");
+        if (axis == NULL && button == NULL)
+            return validation_error(ctx, path, "mouse input profile binding requires an axis or button");
+        if (axis != NULL && !validation_mouse_axis_name_valid(axis))
+            return validation_error(ctx, path, "mouse input profile binding requires a valid axis");
+        if (button != NULL && !validation_mouse_button_name_valid(button))
+            return validation_error(ctx, path, "mouse input profile binding requires a valid button");
+    }
+    else
+    {
+        return validation_error(ctx, path, "unsupported input profile binding device '%s'",
+                                device != NULL ? device : "<missing>");
+    }
+    return true;
+}
+
+static bool validate_input_profiles(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *profiles = obj_get(obj_get(root, "input"), "profiles");
+    if (profiles == NULL)
+        return true;
+    if (!yyjson_is_arr(profiles))
+        return validation_error(ctx, "$.input.profiles", "input profiles must be an array");
+
+    name_table profile_names = {0};
+    bool ok = true;
+    for (size_t i = 0; ok && i < yyjson_arr_size(profiles); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        yyjson_val *profile = yyjson_arr_get(profiles, i);
+        format_path(path, sizeof(path), "$.input.profiles[%zu]", i);
+        if (!yyjson_is_obj(profile))
+        {
+            ok = validation_error(ctx, path, "input profiles must be objects");
+            break;
+        }
+        ok = require_unique_name(ctx, &profile_names, "input profile", json_string(profile, "name"), path);
+
+        yyjson_val *min_gamepads = obj_get(profile, "min_gamepads");
+        yyjson_val *max_gamepads = obj_get(profile, "max_gamepads");
+        if (ok && min_gamepads != NULL &&
+            (!yyjson_is_num(min_gamepads) || yyjson_get_sint(min_gamepads) < 0 ||
+             yyjson_get_sint(min_gamepads) > SDL3D_INPUT_MAX_GAMEPADS))
+        {
+            ok = validation_error(ctx, path, "input profile min_gamepads must be a valid gamepad count");
+        }
+        if (ok && max_gamepads != NULL &&
+            (!yyjson_is_num(max_gamepads) || yyjson_get_sint(max_gamepads) < 0 ||
+             yyjson_get_sint(max_gamepads) > SDL3D_INPUT_MAX_GAMEPADS))
+        {
+            ok = validation_error(ctx, path, "input profile max_gamepads must be a valid gamepad count");
+        }
+        if (ok && yyjson_is_num(min_gamepads) && yyjson_is_num(max_gamepads) &&
+            yyjson_get_sint(min_gamepads) > yyjson_get_sint(max_gamepads))
+        {
+            ok = validation_error(ctx, path, "input profile min_gamepads cannot exceed max_gamepads");
+        }
+        if (ok && obj_get(profile, "active_if") != NULL)
+        {
+            char condition_path[PATH_BUFFER_SIZE];
+            format_path(condition_path, sizeof(condition_path), "%s.active_if", path);
+            ok = validate_data_condition(ctx, obj_get(profile, "active_if"), condition_path, names);
+        }
+
+        yyjson_val *unbind = obj_get(profile, "unbind");
+        if (ok && unbind != NULL && !yyjson_is_arr(unbind))
+            ok = validation_error(ctx, path, "input profile unbind must be an array");
+        for (size_t u = 0; ok && yyjson_is_arr(unbind) && u < yyjson_arr_size(unbind); ++u)
+        {
+            char item_path[PATH_BUFFER_SIZE];
+            format_path(item_path, sizeof(item_path), "%s.unbind[%zu]", path, u);
+            ok =
+                require_ref(ctx, &names->actions, "input action", yyjson_get_str(yyjson_arr_get(unbind, u)), item_path);
+        }
+
+        yyjson_val *bindings = obj_get(profile, "bindings");
+        if (ok && bindings != NULL && !yyjson_is_arr(bindings))
+            ok = validation_error(ctx, path, "input profile bindings must be an array");
+        for (size_t b = 0; ok && yyjson_is_arr(bindings) && b < yyjson_arr_size(bindings); ++b)
+        {
+            char binding_path[PATH_BUFFER_SIZE];
+            format_path(binding_path, sizeof(binding_path), "%s.bindings[%zu]", path, b);
+            ok = validate_input_profile_binding(ctx, yyjson_arr_get(bindings, b), binding_path, names);
+        }
+    }
+    name_table_destroy(&profile_names);
+    return ok;
 }
 
 static bool validate_components(validation_context *ctx, yyjson_val *root, validation_names *names)
@@ -3129,7 +3303,8 @@ static bool warn_unused(validation_context *ctx, const name_table *declared, con
 static bool validate_details(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     return validate_storage(ctx, root) && validate_persistence(ctx, root, names) &&
-           validate_input_bindings(ctx, root) && validate_components(ctx, root, names) &&
+           validate_input_bindings(ctx, root) && validate_input_profiles(ctx, root, names) &&
+           validate_components(ctx, root, names) &&
            validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases", names) &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
            validate_network(ctx, root, names) && validate_app_refs(ctx, root, names) &&

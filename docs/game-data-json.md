@@ -286,6 +286,8 @@ Supported UI binding sources are `metric` (`fps`, `frame`, `paused`), `property`
 and `scene_state`.
 Supported UI conditions include `always`, `app.paused`, `camera.active`, `property.compare`,
 `property.bool`, `scene_state.compare`, `all`, `any`, and `not`.
+`scene_state.compare` may author `default` as a fallback scalar when the
+requested scene-state key has not been set yet.
 
 Scene UI can also declare data-driven menu presenters. A presenter turns a
 scene `menus[]` controller into a visible stack with authored alignment, colors,
@@ -477,6 +479,51 @@ movement and menu navigation.
 Gameplay input bindings may also use authored mouse axes and gamepad axes. The
 standard rebinding UI captures button-like inputs; analog axis rebinding needs
 game-specific policy for threshold, direction, and conflict behavior.
+
+Runtime input role/device policy can be authored under `input.profiles`.
+Profiles let a scene or adapter select a complete binding overlay without
+hard-coding device assignment in host C. Applying a profile first unbinds every
+action named in `unbind`, then applies each authored binding in order.
+
+```json
+{
+  "input": {
+    "profiles": [
+      {
+        "name": "profile.play.lan.client",
+        "active_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "match_mode", "op": "==", "value": "lan" },
+            { "type": "scene_state.compare", "key": "network_role", "op": "==", "value": "client" }
+          ]
+        },
+        "min_gamepads": 0,
+        "max_gamepads": 4,
+        "unbind": [
+          "action.player1.up",
+          "action.player2.up"
+        ],
+        "bindings": [
+          { "action": "action.player2.up", "device": "keyboard", "key": "UP" },
+          { "action": "action.player2.up", "device": "gamepad", "button": "DPAD_UP", "slot": 0 },
+          { "action": "action.player2.up", "device": "gamepad", "axis": "left_y", "scale": -1.0, "slot": 0 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+`active_if` uses the standard data condition language. If omitted, the profile
+matches any scene state and can act as an explicit fallback. `min_gamepads` and
+`max_gamepads` are optional gates evaluated against the live input manager; an
+omitted `max_gamepads` means no upper bound. Gamepad bindings may omit `slot` or
+use `-1` to accept any connected gamepad; otherwise `slot` pins the binding to a
+local player index. Authors should keep profile predicates mutually exclusive or
+order them from most specific to most general, because
+`sdl3d_game_data_apply_active_input_profile()` applies the first matching
+profile.
 
 Reusable options scenes should prefer immediate apply for settings where the
 player benefits from real-time feedback. Use Apply/Cancel snapshots only for
