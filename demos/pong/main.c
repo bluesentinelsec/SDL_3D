@@ -60,10 +60,10 @@ typedef struct pong_state
 
 typedef enum pong_network_message_kind
 {
-    PONG_NETWORK_MESSAGE_START_GAME = 3,
-    PONG_NETWORK_MESSAGE_PAUSE_REQUEST = 4,
-    PONG_NETWORK_MESSAGE_RESUME_REQUEST = 5,
-    PONG_NETWORK_MESSAGE_DISCONNECT = 6,
+    PONG_NETWORK_MESSAGE_START_GAME,
+    PONG_NETWORK_MESSAGE_PAUSE_REQUEST,
+    PONG_NETWORK_MESSAGE_RESUME_REQUEST,
+    PONG_NETWORK_MESSAGE_DISCONNECT,
 } pong_network_message_kind;
 
 static bool send_network_control_packet(pong_state *state, sdl3d_network_session *session,
