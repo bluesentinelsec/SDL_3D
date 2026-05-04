@@ -8215,6 +8215,20 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
         return true;
     }
 
+    if (SDL_strcmp(type, "input.clear_network_input_overrides") == 0)
+    {
+        char error[256] = {0};
+        sdl3d_input_manager *input = runtime_input(runtime);
+        const char *channel = json_string(action, "channel", NULL);
+        if (!sdl3d_game_data_clear_network_input_overrides(runtime, channel, input, error, (int)sizeof(error)))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "game data network input override clear failed: %s",
+                        error[0] != '\0' ? error : "unknown error");
+            return false;
+        }
+        return true;
+    }
+
     if (SDL_strcmp(type, "ui.animate") == 0)
         return start_ui_animation_from_json(runtime, action);
 

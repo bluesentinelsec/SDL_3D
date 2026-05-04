@@ -572,6 +572,10 @@ Logic bindings can apply profiles directly:
   authored conditions and gamepad gates match the current scene state.
 - `{ "type": "input.apply_profile", "profile": "profile.name" }` applies one
   named profile.
+- `{ "type": "input.clear_network_input_overrides", "channel":
+  "client_input" }` clears action overrides written by an authored
+  `client_to_host` network input channel, preventing stale remote input from
+  leaking into later local play.
 
 Use an adapter or data actions before `input.apply_active_profile` when a game
 needs to normalize scene-state values that choose the active profile.

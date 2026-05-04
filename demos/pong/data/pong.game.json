@@ -1912,6 +1912,7 @@
         "signal": "signal.game.start",
         "actions": [
           { "type": "adapter.invoke", "adapter": "adapter.pong.configure_play_input" },
+          { "type": "input.clear_network_input_overrides", "channel": "client_input" },
           { "type": "input.apply_active_profile" },
           {
             "type": "branch",

@@ -1975,8 +1975,17 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     ASSERT_NE(payload, nullptr);
     sdl3d_properties_set_string(payload, "from_scene", "scene.options");
     sdl3d_properties_set_string(payload, "selected_level", "level.test");
+    sdl3d_input_manager *play_input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(play_input, nullptr);
+    const int remote_up_action = sdl3d_game_data_find_action(runtime, "action.paddle.local.up");
+    ASSERT_GE(remote_up_action, 0);
+    sdl3d_input_set_action_override(play_input, remote_up_action, 1.0f);
+    ASSERT_NE(sdl3d_input_update(play_input, 10), nullptr);
+    EXPECT_NEAR(sdl3d_input_get_value(play_input, remote_up_action), 1.0f, 0.0001f);
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
     ASSERT_TRUE(sdl3d_game_data_set_active_scene_with_payload(runtime, "scene.play", payload));
+    ASSERT_NE(sdl3d_input_update(play_input, 11), nullptr);
+    EXPECT_NEAR(sdl3d_input_get_value(play_input, remote_up_action), 0.0f, 0.0001f);
     EXPECT_TRUE(payload_capture.called);
     EXPECT_EQ(payload_capture.from_scene, "scene.options");
     EXPECT_EQ(payload_capture.to_scene, "scene.play");

@@ -118,9 +118,11 @@ function pong.cpu_track_ball(paddle, payload, ctx)
 end
 
 local function context_string(payload, ctx, key, fallback)
-    local value = payload ~= nil and payload[key] or nil
-    if value ~= nil and value ~= "" then
-        return value
+    if payload ~= nil then
+        local value = payload[key]
+        if type(value) == "string" and value ~= "" then
+            return value
+        end
     end
     return ctx:state_get(key, fallback)
 end
