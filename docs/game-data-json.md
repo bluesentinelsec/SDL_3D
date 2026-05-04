@@ -1209,7 +1209,8 @@ typed actor fields, replicated input actions, and control messages:
       }
     ],
     "control_messages": [
-      { "name": "pause", "direction": "bidirectional", "signal": "signal.network.pause" }
+      { "name": "pause_request", "direction": "client_to_host", "signal": "signal.network.pause" },
+      { "name": "disconnect", "direction": "bidirectional", "signal": "signal.network.disconnect" }
     ]
   }
 }
@@ -1260,6 +1261,16 @@ normal action snapshot APIs. Malformed packets are rejected before any override
 is changed. When a peer disconnects or a network scene exits, callers should
 use `sdl3d_game_data_clear_network_input_overrides()` for the same channel so
 remote input cannot leak into later local play.
+
+Control messages can be encoded with
+`sdl3d_game_data_encode_network_control()`, decoded with
+`sdl3d_game_data_decode_network_control()`, and emitted through the runtime
+signal bus with `sdl3d_game_data_apply_network_control()`. Control packets
+carry the schema hash, authored control-message index, and tick; decoders
+reject unsupported versions, mismatched schema hashes, invalid control indexes,
+truncation, and trailing bytes. Applying a valid control message emits the
+authored signal with a payload containing `network_control`,
+`network_direction`, and `network_tick`.
 
 When a runtime loads game data with a valid `network` block, it computes a
 deterministic schema hash over protocol, replication, input, and control-message

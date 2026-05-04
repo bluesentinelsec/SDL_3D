@@ -170,8 +170,9 @@
     ],
     "control_messages": [
       { "name": "start_game", "direction": "host_to_client", "signal": "signal.network.start_game" },
-      { "name": "terminate_match", "direction": "bidirectional", "signal": "signal.network.terminate_match" },
-      { "name": "pause_changed", "direction": "bidirectional", "signal": "signal.network.pause_changed" }
+      { "name": "pause_request", "direction": "bidirectional", "signal": "signal.network.pause_changed" },
+      { "name": "resume_request", "direction": "bidirectional", "signal": "signal.network.pause_changed" },
+      { "name": "disconnect", "direction": "bidirectional", "signal": "signal.network.terminate_match" }
     ]
   },
   "scenes": {

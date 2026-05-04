@@ -70,13 +70,12 @@ typedef enum pong_network_message_kind
 
 static const Uint32 PONG_NETWORK_PACKET_MAGIC = 0x474E4F50u; /* "PONG" little-endian */
 static const Uint8 PONG_NETWORK_PACKET_VERSION = 1U;
-static const size_t PONG_NETWORK_CONTROL_PACKET_SIZE = 12U;
 static const size_t PONG_NETWORK_STATE_PACKET_SIZE = 112U;
 
-static bool send_network_control_packet(sdl3d_network_session *session, pong_network_message_kind kind,
-                                        const char *label);
-static bool send_network_control_packet_repeated(sdl3d_network_session *session, pong_network_message_kind kind,
-                                                 const char *label, int count);
+static bool send_network_control_packet(pong_state *state, sdl3d_network_session *session,
+                                        pong_network_message_kind kind, const char *label);
+static bool send_network_control_packet_repeated(pong_state *state, sdl3d_network_session *session,
+                                                 pong_network_message_kind kind, const char *label, int count);
 
 static Uint64 pong_log_timestamp_ms(void)
 {
@@ -480,7 +479,7 @@ static void destroy_host_session_internal(pong_state *state, bool notify_peer)
     {
         if (notify_peer)
         {
-            (void)send_network_control_packet_repeated(state->host_session, PONG_NETWORK_MESSAGE_DISCONNECT,
+            (void)send_network_control_packet_repeated(state, state->host_session, PONG_NETWORK_MESSAGE_DISCONNECT,
                                                        "host disconnect", 5);
         }
         sdl3d_network_session_destroy(state->host_session);
@@ -698,8 +697,8 @@ static void destroy_direct_connect_session_internal(pong_state *state, bool noti
     {
         if (notify_peer)
         {
-            (void)send_network_control_packet_repeated(state->direct_connect_session, PONG_NETWORK_MESSAGE_DISCONNECT,
-                                                       "client disconnect", 5);
+            (void)send_network_control_packet_repeated(state, state->direct_connect_session,
+                                                       PONG_NETWORK_MESSAGE_DISCONNECT, "client disconnect", 5);
         }
         sdl3d_network_session_destroy(state->direct_connect_session);
         state->direct_connect_session = NULL;
@@ -761,37 +760,79 @@ static void reset_direct_connect_defaults(pong_state *state)
     SDL_snprintf(state->direct_connect_status, sizeof(state->direct_connect_status), "Ready to connect");
 }
 
-static bool send_network_control_packet(sdl3d_network_session *session, pong_network_message_kind kind,
-                                        const char *label)
+static const char *network_control_name_for_kind(pong_network_message_kind kind)
+{
+    switch (kind)
+    {
+    case PONG_NETWORK_MESSAGE_START_GAME:
+        return "start_game";
+    case PONG_NETWORK_MESSAGE_PAUSE_REQUEST:
+        return "pause_request";
+    case PONG_NETWORK_MESSAGE_RESUME_REQUEST:
+        return "resume_request";
+    case PONG_NETWORK_MESSAGE_DISCONNECT:
+        return "disconnect";
+    default:
+        return NULL;
+    }
+}
+
+static bool network_control_kind_from_name(const char *name, pong_network_message_kind *out_kind)
+{
+    if (name == NULL)
+    {
+        return false;
+    }
+    if (SDL_strcmp(name, "start_game") == 0)
+    {
+        if (out_kind != NULL)
+            *out_kind = PONG_NETWORK_MESSAGE_START_GAME;
+        return true;
+    }
+    if (SDL_strcmp(name, "pause_request") == 0)
+    {
+        if (out_kind != NULL)
+            *out_kind = PONG_NETWORK_MESSAGE_PAUSE_REQUEST;
+        return true;
+    }
+    if (SDL_strcmp(name, "resume_request") == 0)
+    {
+        if (out_kind != NULL)
+            *out_kind = PONG_NETWORK_MESSAGE_RESUME_REQUEST;
+        return true;
+    }
+    if (SDL_strcmp(name, "disconnect") == 0)
+    {
+        if (out_kind != NULL)
+            *out_kind = PONG_NETWORK_MESSAGE_DISCONNECT;
+        return true;
+    }
+    return false;
+}
+
+static bool send_network_control_packet(pong_state *state, sdl3d_network_session *session,
+                                        pong_network_message_kind kind, const char *label)
 {
     Uint8 packet[32];
-    Uint8 *cursor = packet;
-    Uint8 *end = packet + sizeof(packet);
+    size_t packet_size = 0U;
+    char error[160] = {0};
     const Uint32 tick = (Uint32)SDL_GetTicks();
+    const char *control_name = network_control_name_for_kind(kind);
 
-    if (session == NULL || !sdl3d_network_session_is_connected(session))
+    if (state == NULL || state->data == NULL || session == NULL || !sdl3d_network_session_is_connected(session) ||
+        control_name == NULL)
     {
         return false;
     }
 
-    if (!pong_network_write_u32(&cursor, end, PONG_NETWORK_PACKET_MAGIC) ||
-        !pong_network_write_u8(&cursor, end, PONG_NETWORK_PACKET_VERSION) ||
-        !pong_network_write_u8(&cursor, end, (Uint8)kind) || !pong_network_write_u8(&cursor, end, 0U) ||
-        !pong_network_write_u8(&cursor, end, 0U) || !pong_network_write_u32(&cursor, end, tick))
+    if (!sdl3d_game_data_encode_network_control(state->data, control_name, tick, packet, sizeof(packet), &packet_size,
+                                                error, (int)sizeof(error)))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network control packet encode failed: kind=%u",
-                    (unsigned int)kind);
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network control packet encode failed: %s", error);
         return false;
     }
 
-    if ((size_t)(cursor - packet) != PONG_NETWORK_CONTROL_PACKET_SIZE)
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network control packet size mismatch: expected=%zu actual=%zu",
-                    PONG_NETWORK_CONTROL_PACKET_SIZE, (size_t)(cursor - packet));
-        return false;
-    }
-
-    if (!sdl3d_network_session_send(session, packet, (int)(cursor - packet)))
+    if (!sdl3d_network_session_send(session, packet, (int)packet_size))
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network control packet send failed: %s", SDL_GetError());
         return false;
@@ -802,15 +843,15 @@ static bool send_network_control_packet(sdl3d_network_session *session, pong_net
     return true;
 }
 
-static bool send_network_control_packet_repeated(sdl3d_network_session *session, pong_network_message_kind kind,
-                                                 const char *label, int count)
+static bool send_network_control_packet_repeated(pong_state *state, sdl3d_network_session *session,
+                                                 pong_network_message_kind kind, const char *label, int count)
 {
     bool sent_any = false;
     const int attempts = SDL_max(count, 1);
 
     for (int i = 0; i < attempts; ++i)
     {
-        if (send_network_control_packet(session, kind, label))
+        if (send_network_control_packet(state, session, kind, label))
         {
             sent_any = true;
         }
@@ -823,34 +864,28 @@ static bool send_network_control_packet_repeated(sdl3d_network_session *session,
     return sent_any;
 }
 
-static bool read_network_control_packet(const Uint8 *packet, int packet_size, pong_network_message_kind expected,
-                                        Uint32 *out_tick)
+static bool read_network_control_packet(pong_state *state, const Uint8 *packet, int packet_size,
+                                        pong_network_message_kind expected, Uint32 *out_tick)
 {
-    const Uint8 *cursor = packet;
-    const Uint8 *end = packet + packet_size;
-    Uint32 magic = 0U;
-    Uint8 version = 0U;
-    Uint8 kind = 0U;
-    Uint8 reserved = 0U;
-    Uint32 tick = 0U;
+    sdl3d_game_data_network_control control;
+    pong_network_message_kind actual = 0;
+    char error[160] = {0};
 
-    if (packet == NULL || (size_t)packet_size != PONG_NETWORK_CONTROL_PACKET_SIZE)
+    if (state == NULL || state->data == NULL || packet == NULL || packet_size <= 0)
     {
         return false;
     }
 
-    if (!pong_network_read_u32(&cursor, end, &magic) || magic != PONG_NETWORK_PACKET_MAGIC ||
-        !pong_network_read_u8(&cursor, end, &version) || version != PONG_NETWORK_PACKET_VERSION ||
-        !pong_network_read_u8(&cursor, end, &kind) || kind != (Uint8)expected ||
-        !pong_network_read_u8(&cursor, end, &reserved) || !pong_network_read_u8(&cursor, end, &reserved) ||
-        !pong_network_read_u32(&cursor, end, &tick) || cursor != end)
+    if (!sdl3d_game_data_decode_network_control(state->data, packet, (size_t)packet_size, &control, error,
+                                                (int)sizeof(error)) ||
+        !network_control_kind_from_name(control.name, &actual) || actual != expected)
     {
         return false;
     }
 
     if (out_tick != NULL)
     {
-        *out_tick = tick;
+        *out_tick = control.tick;
     }
     return true;
 }
@@ -869,7 +904,7 @@ static bool send_host_start_packet(pong_state *state)
         return false;
     }
 
-    if (!send_network_control_packet(state->host_session, PONG_NETWORK_MESSAGE_START_GAME, "start game"))
+    if (!send_network_control_packet(state, state->host_session, PONG_NETWORK_MESSAGE_START_GAME, "start game"))
     {
         SDL_snprintf(state->host_status, sizeof(state->host_status), "%s", SDL_GetError());
         update_host_session_scene_state(state);
@@ -972,7 +1007,7 @@ static void send_client_pause_request_if_pressed(sdl3d_game_context *ctx, pong_s
     }
 
     request_kind = ctx->paused ? PONG_NETWORK_MESSAGE_RESUME_REQUEST : PONG_NETWORK_MESSAGE_PAUSE_REQUEST;
-    (void)send_network_control_packet(state->direct_connect_session, request_kind,
+    (void)send_network_control_packet(state, state->direct_connect_session, request_kind,
                                       request_kind == PONG_NETWORK_MESSAGE_PAUSE_REQUEST ? "pause request"
                                                                                          : "resume request");
 }
@@ -1212,7 +1247,7 @@ static bool process_network_control_packet(sdl3d_game_context *ctx, pong_state *
                                            int packet_size, pong_network_message_kind kind)
 {
     Uint32 tick = 0U;
-    if (!read_network_control_packet(packet, packet_size, kind, &tick))
+    if (!read_network_control_packet(state, packet, packet_size, kind, &tick))
     {
         return false;
     }
@@ -1391,7 +1426,7 @@ static void update_direct_connect_session_status(sdl3d_game_context *ctx, pong_s
         while ((packet_size =
                     sdl3d_network_session_receive(state->direct_connect_session, packet, (int)sizeof(packet))) > 0)
         {
-            if (packet_size >= 1 && packet[0] == (Uint8)PONG_NETWORK_MESSAGE_START_GAME)
+            if (read_network_control_packet(state, packet, packet_size, PONG_NETWORK_MESSAGE_START_GAME, NULL))
             {
                 SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong client received multiplayer start request");
                 clear_network_action_overrides(state);
@@ -1402,21 +1437,10 @@ static void update_direct_connect_session_status(sdl3d_game_context *ctx, pong_s
                 }
                 continue;
             }
-            if (pong_network_packet_is_kind(packet, packet_size, PONG_NETWORK_MESSAGE_START_GAME))
-            {
-                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong client received multiplayer start request");
-                clear_network_action_overrides(state);
-                if (!enter_multiplayer_play_scene(state, "lan", "client", "direct"))
-                {
-                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong client failed to enter multiplayer play scene: %s",
-                                SDL_GetError());
-                }
-                continue;
-            }
-            if (pong_network_packet_is_kind(packet, packet_size, PONG_NETWORK_MESSAGE_DISCONNECT))
+            if (read_network_control_packet(state, packet, packet_size, PONG_NETWORK_MESSAGE_DISCONNECT, NULL))
             {
                 Uint32 tick = 0U;
-                if (read_network_control_packet(packet, packet_size, PONG_NETWORK_MESSAGE_DISCONNECT, &tick))
+                if (read_network_control_packet(state, packet, packet_size, PONG_NETWORK_MESSAGE_DISCONNECT, &tick))
                 {
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[%llu ms] Pong client received host disconnect tick=%u",
                                 (unsigned long long)pong_log_timestamp_ms(), (unsigned int)tick);
@@ -1790,10 +1814,10 @@ static void update_host_session_status(sdl3d_game_context *ctx, pong_state *stat
         int packet_size = 0;
         while ((packet_size = sdl3d_network_session_receive(state->host_session, packet, (int)sizeof(packet))) > 0)
         {
-            if (pong_network_packet_is_kind(packet, packet_size, PONG_NETWORK_MESSAGE_DISCONNECT))
+            if (read_network_control_packet(state, packet, packet_size, PONG_NETWORK_MESSAGE_DISCONNECT, NULL))
             {
                 Uint32 tick = 0U;
-                if (read_network_control_packet(packet, packet_size, PONG_NETWORK_MESSAGE_DISCONNECT, &tick))
+                if (read_network_control_packet(state, packet, packet_size, PONG_NETWORK_MESSAGE_DISCONNECT, &tick))
                 {
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[%llu ms] Pong host received client disconnect tick=%u",
                                 (unsigned long long)pong_log_timestamp_ms(), (unsigned int)tick);
@@ -1802,14 +1826,14 @@ static void update_host_session_status(sdl3d_game_context *ctx, pong_state *stat
                 break;
             }
             if (is_multiplayer_play_scene(state) &&
-                pong_network_packet_is_kind(packet, packet_size, PONG_NETWORK_MESSAGE_PAUSE_REQUEST))
+                read_network_control_packet(state, packet, packet_size, PONG_NETWORK_MESSAGE_PAUSE_REQUEST, NULL))
             {
                 (void)process_network_control_packet(ctx, state, packet, packet_size,
                                                      PONG_NETWORK_MESSAGE_PAUSE_REQUEST);
                 continue;
             }
             if (is_multiplayer_play_scene(state) &&
-                pong_network_packet_is_kind(packet, packet_size, PONG_NETWORK_MESSAGE_RESUME_REQUEST))
+                read_network_control_packet(state, packet, packet_size, PONG_NETWORK_MESSAGE_RESUME_REQUEST, NULL))
             {
                 (void)process_network_control_packet(ctx, state, packet, packet_size,
                                                      PONG_NETWORK_MESSAGE_RESUME_REQUEST);
