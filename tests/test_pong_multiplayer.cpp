@@ -156,7 +156,7 @@ static const char *control_name_for_kind(PongNetworkMessageKind kind)
 static bool send_control_packet(sdl3d_game_data_runtime *runtime, sdl3d_network_session *net_session,
                                 PongNetworkMessageKind kind)
 {
-    Uint8 packet[128];
+    Uint8 packet[SDL3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE];
     size_t packet_size = 0U;
     char error[160]{};
     const char *control_name = control_name_for_kind(kind);

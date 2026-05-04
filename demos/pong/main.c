@@ -675,7 +675,7 @@ static bool network_control_kind_from_name(const char *name, pong_network_messag
 static bool send_network_control_packet(pong_state *state, sdl3d_network_session *session,
                                         pong_network_message_kind kind, const char *label)
 {
-    Uint8 packet[32];
+    Uint8 packet[SDL3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE];
     size_t packet_size = 0U;
     char error[160] = {0};
     const Uint32 tick = (Uint32)SDL_GetTicks();

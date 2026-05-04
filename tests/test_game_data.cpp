@@ -4708,7 +4708,8 @@ TEST(GameDataRuntime, RejectsPongNetworkControlWithMismatchedSchemaOrBadSize)
     ASSERT_TRUE(sdl3d_game_data_encode_network_control(sender, "disconnect", 88U, packet.data(), packet.size(),
                                                        &packet_size, error, sizeof(error)))
         << error;
-    ASSERT_GT(packet_size, 24U);
+    ASSERT_EQ(packet_size, SDL3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE);
+    ASSERT_GT(packet_size, 32U);
 
     std::array<Uint8, 8> too_small{};
     size_t too_small_size = 0U;
