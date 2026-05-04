@@ -2,10 +2,13 @@
 
 #include <string.h>
 
+_Static_assert(sizeof(Sint32) == sizeof(Uint32), "SDL3D replication requires 32-bit signed integers");
+_Static_assert(sizeof(float) == sizeof(Uint32), "SDL3D replication requires 32-bit floats");
+
 static bool sdl3d_replication_field_type_is_valid(sdl3d_replication_field_type type)
 {
     return type == SDL3D_REPLICATION_FIELD_BOOL || type == SDL3D_REPLICATION_FIELD_INT32 ||
-           type == SDL3D_REPLICATION_FIELD_FLOAT32 || type == SDL3D_REPLICATION_FIELD_ENUM ||
+           type == SDL3D_REPLICATION_FIELD_FLOAT32 || type == SDL3D_REPLICATION_FIELD_ENUM_ID ||
            type == SDL3D_REPLICATION_FIELD_VEC2 || type == SDL3D_REPLICATION_FIELD_VEC3;
 }
 
@@ -106,6 +109,25 @@ size_t sdl3d_replication_writer_remaining(const sdl3d_replication_writer *writer
     return writer->capacity - writer->offset;
 }
 
+size_t sdl3d_replication_field_wire_size(sdl3d_replication_field_type type)
+{
+    switch (type)
+    {
+    case SDL3D_REPLICATION_FIELD_BOOL:
+        return 1U;
+    case SDL3D_REPLICATION_FIELD_INT32:
+    case SDL3D_REPLICATION_FIELD_FLOAT32:
+    case SDL3D_REPLICATION_FIELD_ENUM_ID:
+        return 4U;
+    case SDL3D_REPLICATION_FIELD_VEC2:
+        return 8U;
+    case SDL3D_REPLICATION_FIELD_VEC3:
+        return 12U;
+    default:
+        return 0U;
+    }
+}
+
 bool sdl3d_replication_write_field_type(sdl3d_replication_writer *writer, sdl3d_replication_field_type type)
 {
     if (!sdl3d_replication_field_type_is_valid(type))
@@ -122,11 +144,6 @@ bool sdl3d_replication_write_bool(sdl3d_replication_writer *writer, bool value)
 
 bool sdl3d_replication_write_int32(sdl3d_replication_writer *writer, Sint32 value)
 {
-    if (sizeof(value) != sizeof(Uint32))
-    {
-        return false;
-    }
-
     Uint32 bits = 0U;
     memcpy(&bits, &value, sizeof(bits));
     return sdl3d_replication_write_u32(writer, bits);
@@ -134,17 +151,12 @@ bool sdl3d_replication_write_int32(sdl3d_replication_writer *writer, Sint32 valu
 
 bool sdl3d_replication_write_float32(sdl3d_replication_writer *writer, float value)
 {
-    if (sizeof(value) != sizeof(Uint32))
-    {
-        return false;
-    }
-
     Uint32 bits = 0U;
     memcpy(&bits, &value, sizeof(bits));
     return sdl3d_replication_write_u32(writer, bits);
 }
 
-bool sdl3d_replication_write_enum(sdl3d_replication_writer *writer, Sint32 value)
+bool sdl3d_replication_write_enum_id(sdl3d_replication_writer *writer, Sint32 value)
 {
     return sdl3d_replication_write_int32(writer, value);
 }
@@ -260,10 +272,6 @@ bool sdl3d_replication_read_int32(sdl3d_replication_reader *reader, Sint32 *out_
     {
         return false;
     }
-    if (sizeof(*out_value) != sizeof(Uint32))
-    {
-        return false;
-    }
 
     Uint32 value = 0U;
     if (!sdl3d_replication_read_u32(reader, &value))
@@ -281,10 +289,6 @@ bool sdl3d_replication_read_float32(sdl3d_replication_reader *reader, float *out
     {
         return false;
     }
-    if (sizeof(*out_value) != sizeof(Uint32))
-    {
-        return false;
-    }
 
     Uint32 bits = 0U;
     if (!sdl3d_replication_read_u32(reader, &bits))
@@ -296,7 +300,7 @@ bool sdl3d_replication_read_float32(sdl3d_replication_reader *reader, float *out
     return true;
 }
 
-bool sdl3d_replication_read_enum(sdl3d_replication_reader *reader, Sint32 *out_value)
+bool sdl3d_replication_read_enum_id(sdl3d_replication_reader *reader, Sint32 *out_value)
 {
     return sdl3d_replication_read_int32(reader, out_value);
 }

@@ -29,7 +29,7 @@ extern "C"
         SDL3D_REPLICATION_FIELD_BOOL = 1,    /**< One-byte boolean, only 0 or 1 are valid. */
         SDL3D_REPLICATION_FIELD_INT32 = 2,   /**< Signed 32-bit integer. */
         SDL3D_REPLICATION_FIELD_FLOAT32 = 3, /**< IEEE-754 32-bit float. */
-        SDL3D_REPLICATION_FIELD_ENUM = 4,    /**< Signed 32-bit enum or stable string-id value. */
+        SDL3D_REPLICATION_FIELD_ENUM_ID = 4, /**< Signed 32-bit enum or stable string-id value. */
         SDL3D_REPLICATION_FIELD_VEC2 = 5,    /**< Two float32 values: x, y. */
         SDL3D_REPLICATION_FIELD_VEC3 = 6,    /**< Three float32 values: x, y, z. */
     } sdl3d_replication_field_type;
@@ -63,6 +63,13 @@ extern "C"
     /** @brief Return remaining writer capacity in bytes, or zero for NULL/invalid state. */
     size_t sdl3d_replication_writer_remaining(const sdl3d_replication_writer *writer);
 
+    /**
+     * @brief Return the wire size in bytes for a supported field type.
+     *
+     * Returns zero for invalid or unknown field types.
+     */
+    size_t sdl3d_replication_field_wire_size(sdl3d_replication_field_type type);
+
     /** @brief Write a one-byte replication field type tag. */
     bool sdl3d_replication_write_field_type(sdl3d_replication_writer *writer, sdl3d_replication_field_type type);
 
@@ -76,7 +83,7 @@ extern "C"
     bool sdl3d_replication_write_float32(sdl3d_replication_writer *writer, float value);
 
     /** @brief Write a signed 32-bit enum or stable string-id value. */
-    bool sdl3d_replication_write_enum(sdl3d_replication_writer *writer, Sint32 value);
+    bool sdl3d_replication_write_enum_id(sdl3d_replication_writer *writer, Sint32 value);
 
     /** @brief Write a vec2 as two 32-bit floats. */
     bool sdl3d_replication_write_vec2(sdl3d_replication_writer *writer, sdl3d_vec2 value);
@@ -114,7 +121,7 @@ extern "C"
     bool sdl3d_replication_read_float32(sdl3d_replication_reader *reader, float *out_value);
 
     /** @brief Read a signed 32-bit enum or stable string-id value. */
-    bool sdl3d_replication_read_enum(sdl3d_replication_reader *reader, Sint32 *out_value);
+    bool sdl3d_replication_read_enum_id(sdl3d_replication_reader *reader, Sint32 *out_value);
 
     /** @brief Read a vec2 encoded as two 32-bit floats. */
     bool sdl3d_replication_read_vec2(sdl3d_replication_reader *reader, sdl3d_vec2 *out_value);
