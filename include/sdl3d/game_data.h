@@ -923,6 +923,29 @@ extern "C"
                                                          const char *name, const char **out_value);
 
     /**
+     * @brief Format a diagnostic summary for an authored network snapshot channel.
+     *
+     * The helper walks the named host-to-client replication channel in authored
+     * schema order and appends every replicated actor field to @p buffer. It
+     * also includes the active scene and authored `network.session_flow`
+     * scene-state key values when present. This is intended for lightweight
+     * host/client diagnostics without hard-coding game actor ids or property
+     * paths in the host program.
+     *
+     * @param runtime Runtime whose current state should be described.
+     * @param replication_name Authored host-to-client replication channel name.
+     * @param tick Simulation or packet tick to include in the description.
+     * @param buffer Destination text buffer.
+     * @param buffer_size Destination text buffer size in bytes.
+     * @param error_buffer Optional buffer for the first failure reason.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when @p buffer contains a complete, null-terminated summary.
+     */
+    bool sdl3d_game_data_describe_network_snapshot(const sdl3d_game_data_runtime *runtime, const char *replication_name,
+                                                   Uint32 tick, char *buffer, size_t buffer_size, char *error_buffer,
+                                                   int error_buffer_size);
+
+    /**
      * @brief Encode an authored host-to-client replication snapshot.
      *
      * The named replication channel must exist in the loaded `network`

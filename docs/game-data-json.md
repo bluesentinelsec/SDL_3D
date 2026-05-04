@@ -1406,6 +1406,11 @@ mismatched schema hashes, wrong field counts, wrong field tags, truncation, and
 trailing bytes. Built-in `position` fields update the actor transform; object
 paths under `properties.` update actor properties. `vec2` property replication
 is stored in SDL3D's existing vec3 property bag by updating x/y and preserving z.
+Callers that need diagnostic logging can use
+`sdl3d_game_data_describe_network_snapshot()` to format the active scene,
+authored `session_flow` state values, and every replicated actor field in schema
+order. This keeps debug output tied to the authored replication channel instead
+of hard-coding game actor ids or property paths in host C.
 
 Client-to-host input channels can be encoded with
 `sdl3d_game_data_encode_network_input()` and applied with
