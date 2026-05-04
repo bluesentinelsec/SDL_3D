@@ -734,7 +734,10 @@
         "intensity": 12.5,
         "range": 8.4,
         "inner_cutoff": 0.86,
-        "outer_cutoff": 0.48
+        "outer_cutoff": 0.48,
+        "effects": [
+          { "type": "pulse", "rate": 0.45, "phase": 0.4, "color": [1.0, 0.34, 0.08], "color_blend": 0.55, "intensity_add": 0.35, "range_add": 0.25 }
+        ]
       },
       {
         "name": "light.gold_ball_spot",
@@ -762,7 +765,10 @@
         "intensity": 12.5,
         "range": 8.4,
         "inner_cutoff": 0.86,
-        "outer_cutoff": 0.48
+        "outer_cutoff": 0.48,
+        "effects": [
+          { "type": "pulse", "rate": 0.50, "phase": 1.7, "color": [0.12, 0.72, 1.0], "color_blend": 0.55, "intensity_add": 0.35, "range_add": 0.25 }
+        ]
       }
     ]
   },

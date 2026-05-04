@@ -1210,6 +1210,11 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_NEAR(red_light.direction.z, -1.0f, 0.0001f);
     EXPECT_NEAR(red_light.color[0], 1.0f, 0.0001f);
     EXPECT_NEAR(red_light.color[1], 0.06f, 0.0001f);
+    sdl3d_light red_eval{};
+    sdl3d_game_data_render_eval red_light_eval{};
+    red_light_eval.time = 1.0f;
+    ASSERT_TRUE(sdl3d_game_data_get_world_light_evaluated(runtime, 0, &red_light_eval, &red_eval));
+    EXPECT_GT(red_eval.color[1], red_light.color[1]);
 
     sdl3d_light blue_light{};
     ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 2, &blue_light));
@@ -1222,6 +1227,11 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_NEAR(blue_light.color[0], 0.08f, 0.0001f);
     EXPECT_NEAR(blue_light.color[1], 0.28f, 0.0001f);
     EXPECT_NEAR(blue_light.color[2], 1.0f, 0.0001f);
+    sdl3d_light blue_eval{};
+    sdl3d_game_data_render_eval blue_light_eval{};
+    blue_light_eval.time = 1.0f;
+    ASSERT_TRUE(sdl3d_game_data_get_world_light_evaluated(runtime, 2, &blue_light_eval, &blue_eval));
+    EXPECT_GT(blue_eval.color[1], blue_light.color[1]);
 
     sdl3d_light lamp_light{};
     ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 1, &lamp_light));
