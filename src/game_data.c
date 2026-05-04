@@ -7546,6 +7546,34 @@ static bool activity_input_matches(const sdl3d_game_data_runtime *runtime, yyjso
     return sdl3d_input_any_pressed(input);
 }
 
+bool sdl3d_game_data_scene_activity_consumes_wake_input(const sdl3d_game_data_runtime *runtime,
+                                                        const sdl3d_input_manager *input, bool *out_block_menus,
+                                                        bool *out_block_scene_shortcuts)
+{
+    if (out_block_menus != NULL)
+        *out_block_menus = false;
+    if (out_block_scene_shortcuts != NULL)
+        *out_block_scene_shortcuts = false;
+    if (runtime == NULL || input == NULL)
+        return false;
+
+    yyjson_val *activity = active_scene_activity_json(runtime);
+    const char *active_scene = sdl3d_game_data_active_scene(runtime);
+    const scene_activity_state *state = &runtime->activity;
+    if (activity == NULL || state->scene != active_scene || !state->idle ||
+        !activity_input_matches(runtime, activity, input))
+    {
+        return false;
+    }
+
+    const bool consume = json_bool(activity, "consume_wake_input", false);
+    if (out_block_menus != NULL)
+        *out_block_menus = json_bool(activity, "block_menus_on_wake", consume);
+    if (out_block_scene_shortcuts != NULL)
+        *out_block_scene_shortcuts = json_bool(activity, "block_scene_shortcuts_on_wake", consume);
+    return consume;
+}
+
 bool sdl3d_game_data_update_scene_activity(sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input, float dt)
 {
     if (runtime == NULL)
@@ -8090,16 +8118,34 @@ static void update_motion_components(sdl3d_game_data_runtime *runtime, yyjson_va
         for (size_t c = 0; c < yyjson_arr_size(components); ++c)
         {
             yyjson_val *component = yyjson_arr_get(components, c);
-            if (SDL_strcmp(json_string(component, "type", ""), "motion.velocity_2d") != 0 ||
-                !sdl3d_properties_get_bool(actor->props, "active_motion", true))
+            const char *type = json_string(component, "type", "");
+            if (!sdl3d_properties_get_bool(actor->props, "active_motion", true))
             {
                 continue;
             }
 
-            const char *property = json_string(component, "property", "velocity");
-            const sdl3d_vec3 velocity = actor_vec_property(actor, property);
-            actor_set_position(actor, sdl3d_vec3_make(actor->position.x + velocity.x * dt,
-                                                      actor->position.y + velocity.y * dt, actor->position.z));
+            if (SDL_strcmp(type, "motion.velocity_2d") == 0)
+            {
+                const char *property = json_string(component, "property", "velocity");
+                const sdl3d_vec3 velocity = actor_vec_property(actor, property);
+                actor_set_position(actor, sdl3d_vec3_make(actor->position.x + velocity.x * dt,
+                                                          actor->position.y + velocity.y * dt, actor->position.z));
+            }
+            else if (SDL_strcmp(type, "motion.oscillate") == 0)
+            {
+                const char *time_property = json_string(component, "time_property", "motion_time");
+                const float time = sdl3d_properties_get_float(actor->props, time_property, 0.0f) + dt;
+                sdl3d_properties_set_float(actor->props, time_property, time);
+
+                const sdl3d_vec3 origin = json_vec3_value(obj_get(component, "origin"), actor->position);
+                const sdl3d_vec3 amplitude =
+                    json_vec3_value(obj_get(component, "amplitude"), sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+                const float rate = json_float(component, "rate", 1.0f);
+                const float phase = json_float(component, "phase", 0.0f);
+                const float wave = SDL_sinf(time * rate + phase);
+                actor_set_position(actor, sdl3d_vec3_make(origin.x + amplitude.x * wave, origin.y + amplitude.y * wave,
+                                                          origin.z + amplitude.z * wave));
+            }
         }
     }
 }

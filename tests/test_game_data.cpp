@@ -569,6 +569,33 @@ void write_scene_activity_json(const std::filesystem::path &dir)
                R"json({
   "schema": "sdl3d.game.v0",
   "metadata": { "name": "Activity", "id": "test.activity", "version": "0.1.0" },
+  "input": {
+    "contexts": [
+      {
+        "name": "menu",
+        "actions": [
+          {
+            "name": "action.menu.select",
+            "bindings": [
+              { "device": "keyboard", "key": "RETURN" }
+            ]
+          },
+          {
+            "name": "action.menu.up",
+            "bindings": [
+              { "device": "keyboard", "key": "UP" }
+            ]
+          },
+          {
+            "name": "action.menu.down",
+            "bindings": [
+              { "device": "keyboard", "key": "DOWN" }
+            ]
+          }
+        ]
+      }
+    ]
+  },
   "world": {
     "cameras": [
       {
@@ -600,11 +627,19 @@ void write_scene_activity_json(const std::filesystem::path &dir)
         "idle": { "type": "bool", "value": false },
         "periodic": { "type": "int", "value": 0 }
       }
+    },
+    {
+      "name": "entity.lamp",
+      "active": true,
+      "transform": { "position": [2.0, 0.0, 0.0] },
+      "components": [
+        { "type": "motion.oscillate", "origin": [2.0, 0.0, 0.0], "amplitude": [3.0, 0.0, 0.0], "rate": 1.0 }
+      ]
     }
   ],
   "scenes": {
     "initial": "scene.title",
-    "files": ["scenes/title.scene.json"]
+    "files": ["scenes/title.scene.json", "scenes/play.scene.json"]
   }
 })json");
     write_text(dir / "scenes" / "title.scene.json",
@@ -614,10 +649,14 @@ void write_scene_activity_json(const std::filesystem::path &dir)
   "updates_game": false,
   "renders_world": false,
   "camera": "camera.overhead",
-  "entities": ["entity.state"],
+  "entities": ["entity.state", "entity.lamp"],
+  "input": { "actions": ["action.menu.select", "action.menu.up", "action.menu.down"] },
   "activity": {
     "enabled": true,
     "input": "any",
+    "consume_wake_input": true,
+    "block_menus_on_wake": true,
+    "block_scene_shortcuts_on_wake": true,
     "idle_after": 1.0,
     "on_enter": [
       { "type": "property.set", "target": "entity.state", "key": "entered", "value": true },
@@ -639,7 +678,26 @@ void write_scene_activity_json(const std::filesystem::path &dir)
         ]
       }
     ]
-  }
+  },
+  "menus": [
+    {
+      "name": "menu.title",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "items": [
+        { "label": "Play", "scene": "scene.play" }
+      ]
+    }
+  ]
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "renders_world": false,
+  "entities": []
 })json");
 }
 
@@ -1142,13 +1200,14 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_NEAR(ambient[1], 0.018f, 0.0001f);
     EXPECT_NEAR(ambient[2], 0.026f, 0.0001f);
 
-    EXPECT_EQ(sdl3d_game_data_world_light_count(runtime), 4);
-    sdl3d_light ball_light{};
-    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 3, &ball_light));
-    EXPECT_EQ(ball_light.type, SDL3D_LIGHT_POINT);
-    EXPECT_NEAR(ball_light.position.x, 0.0f, 0.0001f);
-    EXPECT_NEAR(ball_light.position.y, 0.0f, 0.0001f);
-    EXPECT_NEAR(ball_light.position.z, 1.32f, 0.0001f);
+    EXPECT_EQ(sdl3d_game_data_world_light_count(runtime), 1);
+    sdl3d_light lamp_light{};
+    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 0, &lamp_light));
+    EXPECT_EQ(lamp_light.type, SDL3D_LIGHT_POINT);
+    EXPECT_NEAR(lamp_light.position.x, -6.8f, 0.0001f);
+    EXPECT_NEAR(lamp_light.position.y, 3.8f, 0.0001f);
+    EXPECT_NEAR(lamp_light.position.z, 3.14f, 0.0001f);
+    EXPECT_NEAR(lamp_light.range, 6.4f, 0.0001f);
 
     sdl3d_particle_config particles{};
     ASSERT_TRUE(sdl3d_game_data_get_particle_emitter(runtime, "entity.effect.ambient_particles", &particles));
@@ -1210,7 +1269,7 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     RenderPrimitiveCapture capture{};
     ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &capture));
     EXPECT_EQ(capture.cubes, 16);
-    EXPECT_EQ(capture.spheres, 1);
+    EXPECT_EQ(capture.spheres, 2);
     EXPECT_TRUE(capture.saw_player_paddle);
     EXPECT_TRUE(capture.saw_ball);
 
@@ -3215,6 +3274,11 @@ TEST(GameDataRuntime, SceneActivityDrivesIdleWakeAndPeriodicActions)
     key.key.scancode = SDL_SCANCODE_SPACE;
     sdl3d_input_process_event(input, &key);
     sdl3d_input_update(input, 1);
+    bool block_menus = false;
+    bool block_shortcuts = false;
+    EXPECT_TRUE(sdl3d_game_data_scene_activity_consumes_wake_input(runtime, input, &block_menus, &block_shortcuts));
+    EXPECT_TRUE(block_menus);
+    EXPECT_TRUE(block_shortcuts);
     ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 0.0f));
     EXPECT_FALSE(sdl3d_properties_get_bool(state->props, "idle", true));
 
@@ -3227,6 +3291,97 @@ TEST(GameDataRuntime, SceneActivityDrivesIdleWakeAndPeriodicActions)
 
     ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 1.1f));
     EXPECT_TRUE(sdl3d_properties_get_bool(state->props, "idle", false));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, AppFlowConsumesActivityWakeInputBeforeMenus)
+{
+    const std::filesystem::path dir = unique_test_dir("scene_activity_app_flow");
+    write_scene_activity_json(dir);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "activity.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    sdl3d_game_context ctx{};
+    ctx.session = session;
+    sdl3d_game_data_app_flow flow{};
+    sdl3d_game_data_app_flow_init(&flow);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    sdl3d_registered_actor *state = sdl3d_game_data_find_actor(runtime, "entity.state");
+    ASSERT_NE(state, nullptr);
+
+    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 0.0f));
+    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 1.1f));
+    ASSERT_TRUE(sdl3d_properties_get_bool(state->props, "idle", false));
+
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_RETURN;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 1);
+
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
+    EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+
+    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 0.0f));
+    EXPECT_FALSE(sdl3d_properties_get_bool(state->props, "idle", true));
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 2);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
+
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_RETURN;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 3);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.play");
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, MotionOscillateMovesActiveSceneActors)
+{
+    const std::filesystem::path dir = unique_test_dir("motion_oscillate");
+    write_scene_activity_json(dir);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "activity.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    sdl3d_registered_actor *lamp = sdl3d_game_data_find_actor(runtime, "entity.lamp");
+    ASSERT_NE(lamp, nullptr);
+    EXPECT_NEAR(lamp->position.x, 2.0f, 0.0001f);
+
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f));
+    EXPECT_NEAR(lamp->position.x, 2.0f + 3.0f * SDL_sinf(1.0f), 0.0001f);
+    EXPECT_NEAR(lamp->position.y, 0.0f, 0.0001f);
+    EXPECT_NEAR(lamp->position.z, 0.0f, 0.0001f);
+
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f));
+    EXPECT_NEAR(lamp->position.x, 2.0f + 3.0f * SDL_sinf(2.0f), 0.0001f);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);

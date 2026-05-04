@@ -774,6 +774,31 @@ selected-item resolution, then returns a data command for the host or app-flow
 controller to apply. This keeps title screens, options screens, and simple scene
 menus from growing bespoke per-game input code.
 
+Scenes may author an `activity` block for attract-mode and kiosk-style
+behavior. The activity controller emits `on_enter`, `on_idle`, `on_active`, and
+`periodic` action arrays. Set `consume_wake_input` to `true` when the first
+input after an idle fade should only reveal the UI instead of also activating
+menus, scene shortcuts, or pause:
+
+```json
+{
+    "activity": {
+        "enabled": true,
+        "input": "any",
+        "idle_after": 5.0,
+        "consume_wake_input": true,
+        "block_menus_on_wake": true,
+        "block_scene_shortcuts_on_wake": true,
+        "on_idle": [
+            {"type": "ui.animate", "target": "ui.title.menu", "property": "alpha", "to": 0.0, "duration": 0.65}
+        ],
+        "on_active": [
+            {"type": "ui.animate", "target": "ui.title.menu", "property": "alpha", "to": 1.0, "duration": 0.20}
+        ]
+    }
+}
+```
+
 ## Entities
 
 Entities are the data form of actor registry entries plus optional component ownership.
@@ -978,6 +1003,25 @@ add intensity/range over time;
                             } ]
 }
 ```
+
+`motion.velocity_2d` integrates an actor's vec2/vec3 velocity property into
+its transform each update. `motion.oscillate` moves an actor along an authored
+sinusoid and is useful for data-authored lamps, platforms, attract-mode props,
+and other looping presentation motion:
+
+```json
+{
+    "type": "motion.oscillate",
+    "origin": [0.0, 3.8, 0.34],
+    "amplitude": [6.8, 0.0, 0.0],
+    "rate": 0.45,
+    "phase": -1.5707963
+}
+```
+
+The runtime stores oscillator time on the actor property named by
+`time_property`, defaulting to `motion_time`. Set the actor's `active_motion`
+property to `false` to pause generic motion components.
 
     ## #Conditions
 

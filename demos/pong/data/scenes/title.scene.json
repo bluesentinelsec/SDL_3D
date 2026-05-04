@@ -14,6 +14,7 @@
     "entity.paddle.attract_left",
     "entity.paddle.attract_right",
     "entity.ball.attract",
+    "entity.light.lamp",
     "entity.presentation",
     "entity.effect.ambient_particles"
   ],
@@ -31,6 +32,9 @@
   "activity": {
     "enabled": true,
     "input": "any",
+    "consume_wake_input": true,
+    "block_menus_on_wake": true,
+    "block_scene_shortcuts_on_wake": true,
     "idle_after": 5.0,
     "on_enter": [
       { "type": "camera.set", "camera": "camera.overhead" },

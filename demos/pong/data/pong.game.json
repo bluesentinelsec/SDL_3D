@@ -726,49 +726,17 @@
     ],
     "lights": [
       {
-        "name": "light.red",
+        "name": "light.gameplay_lamp",
         "type": "point",
-        "position": [-7.0, 4.4, 3.2],
-        "color": [1.0, 0.1, 0.08],
-        "intensity": 2.8,
-        "range": 12.0,
+        "target_entity": "entity.light.lamp",
+        "offset": [0.0, 0.0, 2.8],
+        "color": [1.0, 0.82, 0.42],
+        "intensity": 3.0,
+        "range": 6.4,
         "effects": [
-          { "type": "flash", "source": "entity.presentation", "property": "border_flash", "color": [0.65, 0.78, 1.0], "color_blend": 0.55, "intensity_add": 1.6, "range_add": 1.8 }
-        ]
-      },
-      {
-        "name": "light.green",
-        "type": "point",
-        "position": [7.0, 4.4, 3.2],
-        "color": [0.08, 1.0, 0.18],
-        "intensity": 2.7,
-        "range": 12.0,
-        "effects": [
-          { "type": "pulse", "rate": 3.8, "color": [0.18, 1.0, 0.50], "color_blend": 0.20, "intensity_add": 0.45, "range_add": 0.8 }
-        ]
-      },
-      {
-        "name": "light.blue",
-        "type": "point",
-        "position": [0.0, -4.2, 3.5],
-        "color": [0.14, 0.34, 1.0],
-        "intensity": 2.9,
-        "range": 12.0,
-        "effects": [
-          { "type": "pulse", "rate": 2.5, "phase": 1.2, "color": [0.28, 0.48, 1.0], "color_blend": 0.20, "intensity_add": 0.35, "range_add": 0.7 }
-        ]
-      },
-      {
-        "name": "light.ball",
-        "type": "point",
-        "target_entity": "entity.ball",
-        "offset": [0.0, 0.0, 1.2],
-        "color": [1.0, 0.86, 0.34],
-        "intensity": 3.1,
-        "range": 5.0,
-        "effects": [
-          { "type": "pulse", "rate": 9.0, "color": [1.0, 0.96, 0.54], "color_blend": 0.35, "intensity_add": 0.9, "range_add": 0.6 },
-          { "type": "flash", "source": "entity.presentation", "property": "paddle_flash", "color": [1.0, 1.0, 1.0], "color_blend": 0.45, "intensity_add": 1.5, "range_add": 1.1 }
+          { "type": "pulse", "rate": 1.7, "color": [1.0, 0.92, 0.58], "color_blend": 0.22, "intensity_add": 0.35, "range_add": 0.35 },
+          { "type": "flash", "source": "entity.presentation", "property": "border_flash", "color": [0.65, 0.78, 1.0], "color_blend": 0.45, "intensity_add": 1.3, "range_add": 1.0 },
+          { "type": "flash", "source": "entity.presentation", "property": "paddle_flash", "color": [1.0, 1.0, 1.0], "color_blend": 0.35, "intensity_add": 1.1, "range_add": 0.8 }
         ]
       }
     ]
@@ -1045,6 +1013,30 @@
       "properties": {
         "value": { "type": "int", "value": 0 }
       }
+    },
+    {
+      "name": "entity.light.lamp",
+      "active": true,
+      "tags": ["light", "lamp", "presentation"],
+      "transform": { "position": [-6.8, 3.8, 0.34] },
+      "properties": {
+        "active_motion": { "type": "bool", "value": true },
+        "motion_time": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.11,
+          "rings": 10,
+          "slices": 14,
+          "color": [255, 218, 122, 255],
+          "emissive": true,
+          "effects": [
+            { "type": "pulse", "rate": 1.7, "color": [255, 238, 164, 255], "emissive_base": [0.55, 0.32, 0.05], "emissive_add": [0.35, 0.22, 0.05] }
+          ]
+        },
+        { "type": "motion.oscillate", "origin": [0.0, 3.8, 0.34], "amplitude": [6.8, 0.0, 0.0], "rate": 0.45, "phase": -1.5707963 }
+      ]
     },
     {
       "name": "entity.score.cpu",

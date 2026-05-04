@@ -973,6 +973,24 @@ extern "C"
                                                float dt);
 
     /**
+     * @brief Return whether the active scene activity should consume wake input.
+     *
+     * This is a query-only helper for app-flow/menu controllers. When a scene
+     * has entered its authored idle state and matching input is pressed, data
+     * may request that the current input be used only to wake the scene's
+     * activity controller. The next scene-activity update will run `on_active`.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param input Current input manager.
+     * @param out_block_menus Optional output set when menu input should be blocked.
+     * @param out_block_scene_shortcuts Optional output set when scene shortcuts should be blocked.
+     * @return true when the matching wake input should be consumed for this frame.
+     */
+    bool sdl3d_game_data_scene_activity_consumes_wake_input(const sdl3d_game_data_runtime *runtime,
+                                                            const sdl3d_input_manager *input, bool *out_block_menus,
+                                                            bool *out_block_scene_shortcuts);
+
+    /**
      * @brief Read the authored UI pulse phase.
      *
      * Returns @p fallback when no `presentation.ui_pulse_clock` is authored or

@@ -514,8 +514,8 @@ static bool is_vec_array(yyjson_val *value, size_t min_count)
 static bool is_supported_component_type(const char *type)
 {
     const char *known[] = {
-        "adapter.controller", "collision.aabb", "collision.circle", "control.axis_1d", "motion.velocity_2d",
-        "particles.emitter",  "property.decay", "render.cube",      "render.sphere",
+        "adapter.controller", "collision.aabb",    "collision.circle", "control.axis_1d", "motion.oscillate",
+        "motion.velocity_2d", "particles.emitter", "property.decay",   "render.cube",     "render.sphere",
     };
 
     if (type == NULL)
@@ -1099,6 +1099,21 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 if (json_string(component, "rate_property") == NULL && !yyjson_is_num(obj_get(component, "rate")))
                     return validation_error(ctx, path, "property.decay requires rate or rate_property");
             }
+            else if (SDL_strcmp(type, "motion.oscillate") == 0)
+            {
+                yyjson_val *origin = obj_get(component, "origin");
+                yyjson_val *amplitude = obj_get(component, "amplitude");
+                yyjson_val *rate = obj_get(component, "rate");
+                yyjson_val *phase = obj_get(component, "phase");
+                if (origin != NULL && !is_vec_array(origin, 3))
+                    return validation_error(ctx, path, "motion.oscillate origin must be a vec3");
+                if (amplitude != NULL && !is_vec_array(amplitude, 3))
+                    return validation_error(ctx, path, "motion.oscillate amplitude must be a vec3");
+                if (rate != NULL && !yyjson_is_num(rate))
+                    return validation_error(ctx, path, "motion.oscillate rate must be a number");
+                if (phase != NULL && !yyjson_is_num(phase))
+                    return validation_error(ctx, path, "motion.oscillate phase must be a number");
+            }
             else if (SDL_strcmp(type, "render.cube") == 0 || SDL_strcmp(type, "render.sphere") == 0)
             {
                 yyjson_val *lighting = obj_get(component, "lighting");
@@ -1482,6 +1497,15 @@ static bool validate_scene_activity(validation_context *ctx, yyjson_val *activit
     yyjson_val *reset_periodic = obj_get(activity, "reset_periodic_on_input");
     if (reset_periodic != NULL && !yyjson_is_bool(reset_periodic))
         return validation_error(ctx, json_path, "scene activity reset_periodic_on_input must be a boolean");
+    yyjson_val *consume_wake = obj_get(activity, "consume_wake_input");
+    if (consume_wake != NULL && !yyjson_is_bool(consume_wake))
+        return validation_error(ctx, json_path, "scene activity consume_wake_input must be a boolean");
+    yyjson_val *block_menus = obj_get(activity, "block_menus_on_wake");
+    if (block_menus != NULL && !yyjson_is_bool(block_menus))
+        return validation_error(ctx, json_path, "scene activity block_menus_on_wake must be a boolean");
+    yyjson_val *block_shortcuts = obj_get(activity, "block_scene_shortcuts_on_wake");
+    if (block_shortcuts != NULL && !yyjson_is_bool(block_shortcuts))
+        return validation_error(ctx, json_path, "scene activity block_scene_shortcuts_on_wake must be a boolean");
 
     const char *input = json_string(activity, "input");
     if (input != NULL && SDL_strcmp(input, "any") != 0 && SDL_strcmp(input, "action") != 0 &&
