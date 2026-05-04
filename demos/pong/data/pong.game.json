@@ -728,13 +728,13 @@
       {
         "name": "light.left_red_spot",
         "type": "spot",
-        "position": [-6.2, 0.0, 3.2],
-        "direction": [1.0, 0.0, -0.46],
+        "position": [-8.15, 0.0, 3.35],
+        "direction": [0.0, 0.0, -1.0],
         "color": [1.0, 0.06, 0.04],
-        "intensity": 9.5,
-        "range": 7.2,
-        "inner_cutoff": 0.90,
-        "outer_cutoff": 0.54
+        "intensity": 11.0,
+        "range": 6.2,
+        "inner_cutoff": 0.86,
+        "outer_cutoff": 0.48
       },
       {
         "name": "light.gold_ball_spot",
@@ -756,13 +756,13 @@
       {
         "name": "light.right_blue_spot",
         "type": "spot",
-        "position": [6.2, 0.0, 3.2],
-        "direction": [-1.0, 0.0, -0.46],
+        "position": [8.15, 0.0, 3.35],
+        "direction": [0.0, 0.0, -1.0],
         "color": [0.08, 0.28, 1.0],
-        "intensity": 9.5,
-        "range": 7.2,
-        "inner_cutoff": 0.90,
-        "outer_cutoff": 0.54
+        "intensity": 11.0,
+        "range": 6.2,
+        "inner_cutoff": 0.86,
+        "outer_cutoff": 0.48
       }
     ]
   },
