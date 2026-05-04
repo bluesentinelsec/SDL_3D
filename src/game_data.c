@@ -6244,6 +6244,49 @@ bool sdl3d_game_data_apply_active_input_profile(sdl3d_game_data_runtime *runtime
     return false;
 }
 
+void sdl3d_game_data_input_profile_refresh_state_init(sdl3d_game_data_input_profile_refresh_state *state)
+{
+    if (state == NULL)
+        return;
+
+    state->gamepad_count = -1;
+    state->initialized = false;
+}
+
+bool sdl3d_game_data_apply_active_input_profile_on_device_change(sdl3d_game_data_runtime *runtime,
+                                                                 sdl3d_input_manager *input,
+                                                                 sdl3d_game_data_input_profile_refresh_state *state,
+                                                                 const char **out_profile_name, bool *out_applied,
+                                                                 char *error_buffer, int error_buffer_size)
+{
+    if (out_profile_name != NULL)
+        *out_profile_name = NULL;
+    if (out_applied != NULL)
+        *out_applied = false;
+    if (runtime == NULL || input == NULL || state == NULL)
+    {
+        set_error(error_buffer, error_buffer_size,
+                  "active input profile device refresh requires runtime, input, and refresh state");
+        return false;
+    }
+
+    const int gamepad_count = sdl3d_input_gamepad_count(input);
+    if (state->initialized && state->gamepad_count == gamepad_count)
+        return true;
+
+    const char *profile_name = NULL;
+    if (!sdl3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error_buffer, error_buffer_size))
+        return false;
+
+    state->gamepad_count = gamepad_count;
+    state->initialized = true;
+    if (out_profile_name != NULL)
+        *out_profile_name = profile_name;
+    if (out_applied != NULL)
+        *out_applied = true;
+    return true;
+}
+
 static bool load_timers(sdl3d_game_data_runtime *runtime, yyjson_val *logic, char *error_buffer, int error_buffer_size)
 {
     yyjson_val *timers = obj_get(logic, "timers");

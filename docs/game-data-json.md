@@ -579,6 +579,12 @@ Logic bindings can apply profiles directly:
 
 Use an adapter or data actions before `input.apply_active_profile` when a game
 needs to normalize scene-state values that choose the active profile.
+For hotplug support, hosts can keep a
+`sdl3d_game_data_input_profile_refresh_state` and call
+`sdl3d_game_data_apply_active_input_profile_on_device_change()` from their
+frame loop while a profile-managed scene is active. The helper applies the
+active profile on first use and after the connected gamepad count changes,
+leaving scene-entry profile application in authored data actions.
 
 Reusable options scenes should prefer immediate apply for settings where the
 player benefits from real-time feedback. Use Apply/Cancel snapshots only for

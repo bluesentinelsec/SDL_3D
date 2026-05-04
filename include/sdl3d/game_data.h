@@ -1626,6 +1626,26 @@ extern "C"
     bool sdl3d_game_data_reset_menu_input_bindings(sdl3d_game_data_runtime *runtime, const char *menu_name);
 
     /**
+     * @brief Device-count state for active input profile refresh.
+     *
+     * Initialize with sdl3d_game_data_input_profile_refresh_state_init() before
+     * the first refresh. Callers may reset the state when entering a new scene
+     * if they want to force one active-profile application on the next frame.
+     */
+    typedef struct sdl3d_game_data_input_profile_refresh_state
+    {
+        /** @brief Last observed gamepad count. */
+        int gamepad_count;
+        /** @brief Whether gamepad_count has been sampled at least once. */
+        bool initialized;
+    } sdl3d_game_data_input_profile_refresh_state;
+
+    /**
+     * @brief Initialize active input profile refresh state.
+     */
+    void sdl3d_game_data_input_profile_refresh_state_init(sdl3d_game_data_input_profile_refresh_state *state);
+
+    /**
      * @brief Apply one authored input profile to an input manager.
      *
      * Profiles are authored under `input.profiles`. Applying a profile first
@@ -1660,6 +1680,30 @@ extern "C"
     bool sdl3d_game_data_apply_active_input_profile(sdl3d_game_data_runtime *runtime, sdl3d_input_manager *input,
                                                     const char **out_profile_name, char *error_buffer,
                                                     int error_buffer_size);
+
+    /**
+     * @brief Apply the active input profile when connected gamepad count changes.
+     *
+     * This helper centralizes the common hotplug policy for data-authored input
+     * profiles. It applies the active profile on first use, then applies again
+     * only when sdl3d_input_gamepad_count() changes. Scene changes that should
+     * always rebind controls should still use authored `input.apply_active_profile`
+     * actions on scene entry.
+     *
+     * @param runtime Runtime containing authored profile data and action ids.
+     * @param input Input manager to inspect and mutate.
+     * @param state Persistent refresh state owned by the caller.
+     * @param out_profile_name Receives the applied runtime-owned profile name, if non-NULL and applied.
+     * @param out_applied Receives whether a profile was applied this call, if non-NULL.
+     * @param error_buffer Optional buffer for the first failure reason.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when no refresh was needed or the matching profile was applied.
+     */
+    bool sdl3d_game_data_apply_active_input_profile_on_device_change(sdl3d_game_data_runtime *runtime,
+                                                                     sdl3d_input_manager *input,
+                                                                     sdl3d_game_data_input_profile_refresh_state *state,
+                                                                     const char **out_profile_name, bool *out_applied,
+                                                                     char *error_buffer, int error_buffer_size);
 
     /**
      * @brief Return the number of scene shortcuts authored under `app.scene_shortcuts`.

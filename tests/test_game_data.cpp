@@ -2361,6 +2361,77 @@ TEST(GameDataRuntime, AppliesAuthoredPongGamepadAssignmentPolicies)
     sdl3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, RefreshesActiveInputProfileWhenGamepadCountChanges)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    if (sdl3d_input_gamepad_count(input) != 0)
+    {
+        sdl3d_game_data_destroy(runtime);
+        sdl3d_game_session_destroy(session);
+        GTEST_SKIP() << "requires no pre-connected gamepads";
+    }
+
+    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    sdl3d_properties_set_string(scene_state, "match_mode", "local");
+    sdl3d_properties_set_string(scene_state, "network_role", "none");
+    sdl3d_properties_set_string(scene_state, "network_flow", "none");
+
+    sdl3d_game_data_input_profile_refresh_state refresh{};
+    sdl3d_game_data_input_profile_refresh_state_init(&refresh);
+
+    const char *profile_name = nullptr;
+    bool applied = false;
+    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile_on_device_change(runtime, input, &refresh, &profile_name,
+                                                                            &applied, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(applied);
+    EXPECT_STREQ(profile_name, "profile.pong.play.local.keyboard_only");
+    EXPECT_EQ(refresh.gamepad_count, 0);
+
+    profile_name = "unchanged";
+    applied = true;
+    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile_on_device_change(runtime, input, &refresh, &profile_name,
+                                                                            &applied, error, sizeof(error)))
+        << error;
+    EXPECT_FALSE(applied);
+    EXPECT_EQ(profile_name, nullptr);
+
+    SDL_Event event{};
+    event.type = SDL_EVENT_GAMEPAD_ADDED;
+    event.gdevice.which = 7201;
+    sdl3d_input_process_event(input, &event);
+
+    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile_on_device_change(runtime, input, &refresh, &profile_name,
+                                                                            &applied, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(applied);
+    EXPECT_STREQ(profile_name, "profile.pong.play.local.one_gamepad");
+    EXPECT_EQ(refresh.gamepad_count, 1);
+
+    event.type = SDL_EVENT_GAMEPAD_ADDED;
+    event.gdevice.which = 7202;
+    sdl3d_input_process_event(input, &event);
+
+    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile_on_device_change(runtime, input, &refresh, &profile_name,
+                                                                            &applied, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(applied);
+    EXPECT_STREQ(profile_name, "profile.pong.play.local.two_gamepads");
+    EXPECT_EQ(refresh.gamepad_count, 2);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, AppliesFallbackAndMouseInputProfiles)
 {
     const std::filesystem::path dir = unique_test_dir("input_profile_mouse");

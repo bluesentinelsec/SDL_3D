@@ -52,7 +52,7 @@ typedef struct pong_state
     int vibration_signal_id;
     int discovery_refresh_signal_id;
     int discovery_refresh_connection;
-    int local_input_gamepad_count;
+    sdl3d_game_data_input_profile_refresh_state input_profile_refresh;
     bool network_match_termination_active;
     float network_match_termination_timer;
     char network_match_termination_reason[96];
@@ -344,30 +344,6 @@ static void destroy_host_session_internal(pong_state *state, bool notify_peer)
 static void destroy_host_session(pong_state *state)
 {
     destroy_host_session_internal(state, true);
-}
-
-static bool apply_active_play_input_profile(pong_state *state)
-{
-    char error[256];
-    const char *profile_name = NULL;
-    if (state == NULL || state->data == NULL || state->input == NULL)
-    {
-        return false;
-    }
-
-    error[0] = '\0';
-    if (!sdl3d_game_data_apply_active_input_profile(state->data, state->input, &profile_name, error, sizeof(error)))
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong input profile apply failed: %s",
-                    error[0] != '\0' ? error : "unknown error");
-        return false;
-    }
-
-    state->local_input_gamepad_count = sdl3d_input_gamepad_count(state->input);
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong input profile applied: profile=%s role=%s gamepads=%d",
-                profile_name != NULL ? profile_name : "<none>", network_role_name(state),
-                state->local_input_gamepad_count);
-    return true;
 }
 
 static void destroy_direct_connect_session_internal(pong_state *state, bool notify_peer)
@@ -1587,13 +1563,20 @@ static void refresh_local_play_input(pong_state *state)
         return;
     }
 
-    const int gamepad_count = sdl3d_input_gamepad_count(state->input);
-    if (gamepad_count != state->local_input_gamepad_count)
+    char error[256] = {0};
+    const char *profile_name = NULL;
+    bool applied = false;
+    if (!sdl3d_game_data_apply_active_input_profile_on_device_change(
+            state->data, state->input, &state->input_profile_refresh, &profile_name, &applied, error, sizeof(error)))
     {
-        if (!apply_active_play_input_profile(state))
-        {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong input profile hotplug refresh failed");
-        }
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong input profile hotplug refresh failed: %s",
+                    error[0] != '\0' ? error : "unknown error");
+    }
+    else if (applied)
+    {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong input profile refreshed: profile=%s role=%s gamepads=%d",
+                    profile_name != NULL ? profile_name : "<none>", network_role_name(state),
+                    state->input_profile_refresh.gamepad_count);
     }
 }
 
@@ -1815,7 +1798,7 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
     state->vibration_signal_id = sdl3d_game_data_find_signal(state->data, "signal.settings.vibration");
     state->discovery_refresh_signal_id =
         sdl3d_game_data_find_signal(state->data, "signal.multiplayer.discovery.refresh");
-    state->local_input_gamepad_count = -1;
+    sdl3d_game_data_input_profile_refresh_state_init(&state->input_profile_refresh);
     SDL_snprintf(state->host_status, sizeof(state->host_status), "Not hosting");
     SDL_snprintf(state->host_endpoint, sizeof(state->host_endpoint), "UDP %u",
                  (unsigned int)SDL3D_NETWORK_DEFAULT_PORT);
