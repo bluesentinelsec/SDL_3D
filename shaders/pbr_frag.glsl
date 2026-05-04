@@ -93,7 +93,8 @@ void main() {
             if (uLights[i].type == 2) {
                 float cosA = dot(-L, normalize(uLights[i].direction));
                 float eps = uLights[i].innerCutoff - uLights[i].outerCutoff;
-                attenuation *= clamp((cosA - uLights[i].outerCutoff) / max(eps, 0.0001), 0.0, 1.0);
+                float spotIntensity = clamp((cosA - uLights[i].outerCutoff) / max(eps, 0.0001), 0.0, 1.0);
+                attenuation *= spotIntensity * spotIntensity * (3.0 - 2.0 * spotIntensity);
             }
         }
 

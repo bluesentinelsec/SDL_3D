@@ -294,6 +294,23 @@ TEST(SDL3DPBRShading, SpotLightInsideConeProducesLight)
     EXPECT_GT(r, 0.05f);
 }
 
+TEST(SDL3DPBRShading, SpotLightConeEdgeFallsOffSmoothly)
+{
+    sdl3d_light sl = make_spot(0.0f, 2.0f, 0.0f, 0.0f, -1.0f, 0.0f, 1.0f, 10.0f, cosf(0.3f), cosf(0.8f));
+    sdl3d_lighting_params p = make_params(0.0f, 1.0f);
+    p.lights = &sl;
+    p.light_count = 1;
+
+    float center_r, center_g, center_b;
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &center_r, &center_g, &center_b);
+
+    float edge_r, edge_g, edge_b;
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, &edge_r, &edge_g, &edge_b);
+
+    EXPECT_GT(edge_r, 0.0f);
+    EXPECT_LT(edge_r, center_r);
+}
+
 TEST(SDL3DPBRShading, SpotLightOutsideConeProducesNoLight)
 {
     /* Spot at y=2 pointing down, fragment far to the side. */

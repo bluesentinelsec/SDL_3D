@@ -46,7 +46,8 @@ extern "C"
      * POINT:       position, color, intensity, range. Range is a soft falloff
      *              scale, not a hard cutoff.
      * SPOT:        position, direction, color, intensity, range,
-     *              inner_cutoff, outer_cutoff (cosines of half-angles).
+     *              inner_cutoff, outer_cutoff (cosines of half-angles). The
+     *              cone edge is smoothly blended between the cutoffs.
      */
     typedef struct sdl3d_light
     {

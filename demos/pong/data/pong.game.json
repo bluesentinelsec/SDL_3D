@@ -726,62 +726,43 @@
     ],
     "lights": [
       {
-        "name": "light.left_red.top",
-        "type": "point",
-        "position": [-5.7, 2.55, 2.4],
-        "color": [1.0, 0.10, 0.08],
-        "intensity": 2.0,
-        "range": 4.8,
-        "effects": [
-          { "type": "pulse", "rate": 1.2, "phase": 0.5, "color": [1.0, 0.18, 0.12], "color_blend": 0.22, "intensity_add": 0.25, "range_add": 0.25 }
-        ]
+        "name": "light.left_red_spot",
+        "type": "spot",
+        "position": [-6.2, 0.0, 3.2],
+        "direction": [1.0, 0.0, -0.46],
+        "color": [1.0, 0.06, 0.04],
+        "intensity": 9.5,
+        "range": 7.2,
+        "inner_cutoff": 0.90,
+        "outer_cutoff": 0.54
       },
       {
-        "name": "light.left_red.bottom",
-        "type": "point",
-        "position": [-5.7, -2.55, 2.4],
-        "color": [1.0, 0.10, 0.08],
-        "intensity": 2.0,
-        "range": 4.8,
-        "effects": [
-          { "type": "pulse", "rate": 1.2, "phase": 2.2, "color": [1.0, 0.18, 0.12], "color_blend": 0.22, "intensity_add": 0.25, "range_add": 0.25 }
-        ]
-      },
-      {
-        "name": "light.right_blue.top",
-        "type": "point",
-        "position": [5.7, 2.55, 2.4],
-        "color": [0.12, 0.34, 1.0],
-        "intensity": 2.0,
-        "range": 4.8,
-        "effects": [
-          { "type": "pulse", "rate": 1.25, "phase": 2.0, "color": [0.28, 0.54, 1.0], "color_blend": 0.22, "intensity_add": 0.25, "range_add": 0.25 }
-        ]
-      },
-      {
-        "name": "light.right_blue.bottom",
-        "type": "point",
-        "position": [5.7, -2.55, 2.4],
-        "color": [0.12, 0.34, 1.0],
-        "intensity": 2.0,
-        "range": 4.8,
-        "effects": [
-          { "type": "pulse", "rate": 1.25, "phase": 3.7, "color": [0.28, 0.54, 1.0], "color_blend": 0.22, "intensity_add": 0.25, "range_add": 0.25 }
-        ]
-      },
-      {
-        "name": "light.gameplay_lamp",
-        "type": "point",
+        "name": "light.gold_ball_spot",
+        "type": "spot",
         "target_entities": ["entity.ball", "entity.ball.attract"],
-        "offset": [0.0, 0.0, 2.4],
+        "offset": [0.0, 0.0, 2.8],
+        "direction": [0.0, 0.0, -1.0],
         "color": [1.0, 0.82, 0.42],
-        "intensity": 3.0,
-        "range": 6.4,
+        "intensity": 8.0,
+        "range": 5.8,
+        "inner_cutoff": 0.92,
+        "outer_cutoff": 0.58,
         "effects": [
-          { "type": "pulse", "rate": 1.7, "color": [1.0, 0.92, 0.58], "color_blend": 0.22, "intensity_add": 0.35, "range_add": 0.35 },
+          { "type": "pulse", "rate": 1.7, "color": [1.0, 0.92, 0.58], "color_blend": 0.22, "intensity_add": 0.55, "range_add": 0.35 },
           { "type": "flash", "source": "entity.presentation", "property": "border_flash", "color": [0.65, 0.78, 1.0], "color_blend": 0.45, "intensity_add": 1.3, "range_add": 1.0 },
           { "type": "flash", "source": "entity.presentation", "property": "paddle_flash", "color": [1.0, 1.0, 1.0], "color_blend": 0.35, "intensity_add": 1.1, "range_add": 0.8 }
         ]
+      },
+      {
+        "name": "light.right_blue_spot",
+        "type": "spot",
+        "position": [6.2, 0.0, 3.2],
+        "direction": [-1.0, 0.0, -0.46],
+        "color": [0.08, 0.28, 1.0],
+        "intensity": 9.5,
+        "range": 7.2,
+        "inner_cutoff": 0.90,
+        "outer_cutoff": 0.54
       }
     ]
   },

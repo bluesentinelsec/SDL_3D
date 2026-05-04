@@ -146,6 +146,7 @@ static bool sdl3d_compute_light_contribution(const sdl3d_light *light, float px,
             else
             {
                 float spot_intensity = sdl3d_clampf((cos_angle - light->outer_cutoff) / epsilon, 0.0f, 1.0f);
+                spot_intensity = spot_intensity * spot_intensity * (3.0f - 2.0f * spot_intensity);
                 attenuation *= spot_intensity;
             }
         }
