@@ -1606,6 +1606,41 @@ extern "C"
     bool sdl3d_game_data_reset_menu_input_bindings(sdl3d_game_data_runtime *runtime, const char *menu_name);
 
     /**
+     * @brief Apply one authored input profile to an input manager.
+     *
+     * Profiles are authored under `input.profiles`. Applying a profile first
+     * unbinds every action listed in its `unbind` array, then applies each
+     * authored keyboard, mouse, or gamepad binding in profile order.
+     *
+     * @param runtime Runtime containing authored profile data and action ids.
+     * @param input Input manager to mutate.
+     * @param profile_name Authored profile name.
+     * @param error_buffer Optional buffer for the first failure reason.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when the profile exists and all authored bindings were applied.
+     */
+    bool sdl3d_game_data_apply_input_profile(sdl3d_game_data_runtime *runtime, sdl3d_input_manager *input,
+                                             const char *profile_name, char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Apply the first input profile whose authored conditions match.
+     *
+     * Profiles are evaluated in authored order. `active_if` uses the same
+     * condition language as scene UI/menu rules, and optional `min_gamepads`
+     * / `max_gamepads` gates use the current input manager device count.
+     *
+     * @param runtime Runtime containing authored profile data and action ids.
+     * @param input Input manager to mutate.
+     * @param out_profile_name Receives the applied runtime-owned profile name, if non-NULL.
+     * @param error_buffer Optional buffer for the first failure reason.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when a matching profile was found and applied.
+     */
+    bool sdl3d_game_data_apply_active_input_profile(sdl3d_game_data_runtime *runtime, sdl3d_input_manager *input,
+                                                    const char **out_profile_name, char *error_buffer,
+                                                    int error_buffer_size);
+
+    /**
      * @brief Return the number of scene shortcuts authored under `app.scene_shortcuts`.
      */
     int sdl3d_game_data_scene_shortcut_count(const sdl3d_game_data_runtime *runtime);
