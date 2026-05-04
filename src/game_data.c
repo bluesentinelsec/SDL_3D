@@ -32,6 +32,8 @@
 #define SDL3D_GAME_DATA_SIGNAL_BASE 20000
 #define SDL3D_GAME_DATA_NETWORK_SNAPSHOT_MAGIC 0x53335253u /* "S3RS" */
 #define SDL3D_GAME_DATA_NETWORK_SNAPSHOT_VERSION 1u
+#define SDL3D_GAME_DATA_NETWORK_INPUT_MAGIC 0x49335253u /* "S3RI" */
+#define SDL3D_GAME_DATA_NETWORK_INPUT_VERSION 1u
 
 typedef enum game_data_sensor_type
 {
@@ -1789,6 +1791,12 @@ typedef struct game_data_snapshot_value
     } value;
 } game_data_snapshot_value;
 
+typedef struct game_data_input_value
+{
+    int action_id;
+    float value;
+} game_data_input_value;
+
 static yyjson_val *game_data_find_replication_channel_by_name(const sdl3d_game_data_runtime *runtime,
                                                               const char *replication_name, int *out_index)
 {
@@ -1816,6 +1824,11 @@ static yyjson_val *game_data_find_replication_channel_by_index(const sdl3d_game_
 static bool game_data_replication_channel_is_host_to_client(yyjson_val *channel)
 {
     return SDL_strcmp(json_string(channel, "direction", ""), "host_to_client") == 0;
+}
+
+static bool game_data_replication_channel_is_client_to_host(yyjson_val *channel)
+{
+    return SDL_strcmp(json_string(channel, "direction", ""), "client_to_host") == 0;
 }
 
 static size_t game_data_replication_channel_field_count(yyjson_val *channel)
@@ -1858,6 +1871,41 @@ static bool game_data_replication_channel_packet_size(yyjson_val *channel, size_
     if (out_size != NULL)
         *out_size = size;
     return true;
+}
+
+static size_t game_data_replication_channel_input_count(yyjson_val *channel)
+{
+    yyjson_val *inputs = obj_get(channel, "inputs");
+    return yyjson_is_arr(inputs) ? yyjson_arr_size(inputs) : 0U;
+}
+
+static bool game_data_replication_input_packet_size(yyjson_val *channel, size_t *out_size)
+{
+    if (out_size != NULL)
+        *out_size = 0U;
+    if (channel == NULL)
+        return false;
+
+    const size_t input_count = game_data_replication_channel_input_count(channel);
+    const size_t input_value_size = 1U + sdl3d_replication_field_wire_size(SDL3D_REPLICATION_FIELD_FLOAT32);
+    size_t size = 4U + 4U + 4U + 4U + SDL3D_REPLICATION_SCHEMA_HASH_SIZE + 4U;
+    if (input_value_size == 1U || input_count > (SIZE_MAX - size) / input_value_size)
+        return false;
+    size += input_count * input_value_size;
+
+    if (out_size != NULL)
+        *out_size = size;
+    return true;
+}
+
+static const char *game_data_replication_input_action(yyjson_val *input)
+{
+    return json_string(input, "action", NULL);
+}
+
+static int game_data_replication_action_id(const sdl3d_game_data_runtime *runtime, yyjson_val *input)
+{
+    return sdl3d_game_data_find_action(runtime, game_data_replication_input_action(input));
 }
 
 static const char *game_data_replication_property_key(const char *path)
@@ -9424,6 +9472,239 @@ bool sdl3d_game_data_apply_network_snapshot(sdl3d_game_data_runtime *runtime, co
     SDL_free(values);
     if (out_tick != NULL)
         *out_tick = tick;
+    return true;
+}
+
+bool sdl3d_game_data_encode_network_input(const sdl3d_game_data_runtime *runtime, const char *replication_name,
+                                          const sdl3d_input_manager *input, Uint32 tick, void *buffer,
+                                          size_t buffer_size, size_t *out_size, char *error_buffer,
+                                          int error_buffer_size)
+{
+    if (out_size != NULL)
+        *out_size = 0U;
+    if (runtime == NULL || replication_name == NULL || replication_name[0] == '\0' || input == NULL || buffer == NULL ||
+        buffer_size == 0U)
+    {
+        set_error(error_buffer, error_buffer_size, "network input encode requires runtime, channel, input, and buffer");
+        return false;
+    }
+    if (!runtime->has_network_schema)
+    {
+        set_error(error_buffer, error_buffer_size, "network input encode requires an authored network schema");
+        return false;
+    }
+
+    int channel_index = -1;
+    yyjson_val *channel = game_data_find_replication_channel_by_name(runtime, replication_name, &channel_index);
+    if (channel == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network input replication channel not found");
+        return false;
+    }
+    if (!game_data_replication_channel_is_client_to_host(channel))
+    {
+        set_error(error_buffer, error_buffer_size, "network input channel must be client_to_host");
+        return false;
+    }
+
+    const size_t input_count = game_data_replication_channel_input_count(channel);
+    if (input_count > SDL_MAX_UINT32 || channel_index < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "network input channel is too large");
+        return false;
+    }
+    size_t required_size = 0U;
+    if (!game_data_replication_input_packet_size(channel, &required_size))
+    {
+        set_error(error_buffer, error_buffer_size, "network input channel contains unsupported field data");
+        return false;
+    }
+    if (buffer_size < required_size)
+    {
+        set_errorf(error_buffer, error_buffer_size, "network input requires %zu bytes, buffer has %zu bytes",
+                   required_size, buffer_size);
+        return false;
+    }
+
+    sdl3d_replication_writer writer;
+    sdl3d_replication_writer_init(&writer, buffer, buffer_size);
+    if (!sdl3d_replication_write_uint32(&writer, SDL3D_GAME_DATA_NETWORK_INPUT_MAGIC) ||
+        !sdl3d_replication_write_uint32(&writer, SDL3D_GAME_DATA_NETWORK_INPUT_VERSION) ||
+        !sdl3d_replication_write_uint32(&writer, tick) ||
+        !sdl3d_replication_write_uint32(&writer, (Uint32)channel_index) ||
+        !sdl3d_replication_write_bytes(&writer, runtime->network_schema_hash, SDL3D_REPLICATION_SCHEMA_HASH_SIZE) ||
+        !sdl3d_replication_write_uint32(&writer, (Uint32)input_count))
+    {
+        set_error(error_buffer, error_buffer_size, "network input buffer is too small for header");
+        return false;
+    }
+
+    yyjson_val *inputs = obj_get(channel, "inputs");
+    for (size_t input_index = 0U; yyjson_is_arr(inputs) && input_index < yyjson_arr_size(inputs); ++input_index)
+    {
+        yyjson_val *input_schema = yyjson_arr_get(inputs, input_index);
+        const char *action_name = game_data_replication_input_action(input_schema);
+        const int action_id = game_data_replication_action_id(runtime, input_schema);
+        if (action_id < 0)
+        {
+            set_errorf(error_buffer, error_buffer_size, "network input action '%s' not found",
+                       action_name != NULL ? action_name : "<null>");
+            return false;
+        }
+
+        const float value = SDL_clamp(sdl3d_input_get_value(input, action_id), -1.0f, 1.0f);
+        if (!sdl3d_replication_write_field_type(&writer, SDL3D_REPLICATION_FIELD_FLOAT32) ||
+            !sdl3d_replication_write_float32(&writer, value))
+        {
+            set_error(error_buffer, error_buffer_size, "network input buffer is too small for action data");
+            return false;
+        }
+    }
+
+    if (out_size != NULL)
+        *out_size = sdl3d_replication_writer_offset(&writer);
+    return true;
+}
+
+bool sdl3d_game_data_apply_network_input(const sdl3d_game_data_runtime *runtime, sdl3d_input_manager *input,
+                                         const void *packet, size_t packet_size, Uint32 *out_tick, char *error_buffer,
+                                         int error_buffer_size)
+{
+    if (out_tick != NULL)
+        *out_tick = 0U;
+    if (runtime == NULL || input == NULL || packet == NULL || packet_size == 0U)
+    {
+        set_error(error_buffer, error_buffer_size, "network input apply requires runtime, input, and packet");
+        return false;
+    }
+    if (!runtime->has_network_schema)
+    {
+        set_error(error_buffer, error_buffer_size, "network input apply requires an authored network schema");
+        return false;
+    }
+
+    sdl3d_replication_reader reader;
+    sdl3d_replication_reader_init(&reader, packet, packet_size);
+
+    Uint32 magic = 0U;
+    Uint32 version = 0U;
+    Uint32 tick = 0U;
+    Uint32 channel_index = 0U;
+    Uint8 schema_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE];
+    Uint32 packet_input_count = 0U;
+    if (!sdl3d_replication_read_uint32(&reader, &magic) || !sdl3d_replication_read_uint32(&reader, &version) ||
+        !sdl3d_replication_read_uint32(&reader, &tick) || !sdl3d_replication_read_uint32(&reader, &channel_index) ||
+        !sdl3d_replication_read_bytes(&reader, schema_hash, sizeof(schema_hash)) ||
+        !sdl3d_replication_read_uint32(&reader, &packet_input_count))
+    {
+        set_error(error_buffer, error_buffer_size, "network input packet is too small for header");
+        return false;
+    }
+    if (magic != SDL3D_GAME_DATA_NETWORK_INPUT_MAGIC || version != SDL3D_GAME_DATA_NETWORK_INPUT_VERSION)
+    {
+        set_error(error_buffer, error_buffer_size, "network input packet has unsupported header");
+        return false;
+    }
+    if (SDL_memcmp(schema_hash, runtime->network_schema_hash, SDL3D_REPLICATION_SCHEMA_HASH_SIZE) != 0)
+    {
+        set_error(error_buffer, error_buffer_size, "network input schema hash does not match runtime");
+        return false;
+    }
+
+    yyjson_val *channel = game_data_find_replication_channel_by_index(runtime, channel_index);
+    if (channel == NULL || !game_data_replication_channel_is_client_to_host(channel))
+    {
+        set_error(error_buffer, error_buffer_size, "network input channel is invalid for this runtime");
+        return false;
+    }
+
+    const size_t input_count = game_data_replication_channel_input_count(channel);
+    if ((Uint32)input_count != packet_input_count)
+    {
+        set_error(error_buffer, error_buffer_size, "network input count does not match schema");
+        return false;
+    }
+
+    game_data_input_value *values =
+        input_count > 0U ? (game_data_input_value *)SDL_calloc(input_count, sizeof(*values)) : NULL;
+    if (values == NULL && input_count > 0U)
+    {
+        set_error(error_buffer, error_buffer_size, "network input failed to allocate decoded action storage");
+        return false;
+    }
+
+    bool ok = true;
+    yyjson_val *inputs = obj_get(channel, "inputs");
+    for (size_t input_index = 0U; ok && yyjson_is_arr(inputs) && input_index < yyjson_arr_size(inputs); ++input_index)
+    {
+        yyjson_val *input_schema = yyjson_arr_get(inputs, input_index);
+        sdl3d_replication_field_type type = SDL3D_REPLICATION_FIELD_BOOL;
+        values[input_index].action_id = game_data_replication_action_id(runtime, input_schema);
+        ok = values[input_index].action_id >= 0 && sdl3d_replication_read_field_type(&reader, &type) &&
+             type == SDL3D_REPLICATION_FIELD_FLOAT32 &&
+             sdl3d_replication_read_float32(&reader, &values[input_index].value);
+        values[input_index].value = SDL_clamp(values[input_index].value, -1.0f, 1.0f);
+    }
+    if (ok && sdl3d_replication_reader_remaining(&reader) != 0U)
+        ok = false;
+    if (!ok)
+    {
+        SDL_free(values);
+        set_error(error_buffer, error_buffer_size, "network input action data does not match schema");
+        return false;
+    }
+
+    for (size_t input_index = 0U; input_index < input_count; ++input_index)
+        sdl3d_input_set_action_override(input, values[input_index].action_id, values[input_index].value);
+
+    SDL_free(values);
+    if (out_tick != NULL)
+        *out_tick = tick;
+    return true;
+}
+
+bool sdl3d_game_data_clear_network_input_overrides(const sdl3d_game_data_runtime *runtime, const char *replication_name,
+                                                   sdl3d_input_manager *input, char *error_buffer,
+                                                   int error_buffer_size)
+{
+    if (runtime == NULL || replication_name == NULL || replication_name[0] == '\0' || input == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network input override clear requires runtime, channel, and input");
+        return false;
+    }
+    if (!runtime->has_network_schema)
+    {
+        set_error(error_buffer, error_buffer_size, "network input override clear requires an authored network schema");
+        return false;
+    }
+
+    yyjson_val *channel = game_data_find_replication_channel_by_name(runtime, replication_name, NULL);
+    if (channel == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network input replication channel not found");
+        return false;
+    }
+    if (!game_data_replication_channel_is_client_to_host(channel))
+    {
+        set_error(error_buffer, error_buffer_size, "network input channel must be client_to_host");
+        return false;
+    }
+
+    yyjson_val *inputs = obj_get(channel, "inputs");
+    for (size_t input_index = 0U; yyjson_is_arr(inputs) && input_index < yyjson_arr_size(inputs); ++input_index)
+    {
+        yyjson_val *input_schema = yyjson_arr_get(inputs, input_index);
+        const char *action_name = game_data_replication_input_action(input_schema);
+        const int action_id = game_data_replication_action_id(runtime, input_schema);
+        if (action_id < 0)
+        {
+            set_errorf(error_buffer, error_buffer_size, "network input action '%s' not found",
+                       action_name != NULL ? action_name : "<null>");
+            return false;
+        }
+        sdl3d_input_clear_action_override(input, action_id);
+    }
+
     return true;
 }
 

@@ -20,7 +20,6 @@ namespace
 {
 constexpr Uint32 kPongNetworkPacketMagic = 0x474E4F50u;
 constexpr Uint8 kPongNetworkPacketVersion = 1U;
-constexpr size_t kPongNetworkInputPacketSize = 20U;
 constexpr size_t kPongNetworkControlPacketSize = 12U;
 constexpr size_t kPongNetworkStatePacketSize = 112U;
 
@@ -213,70 +212,34 @@ static bool wait_for_network_pair(sdl3d_network_session *host, sdl3d_network_ses
     return false;
 }
 
-static bool send_client_input_packet(sdl3d_game_session *session, sdl3d_network_session *net_session, int p2_up,
-                                     int p2_down)
+static bool send_client_input_packet(sdl3d_game_data_runtime *runtime, sdl3d_game_session *session,
+                                     sdl3d_network_session *net_session)
 {
     const sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
     const sdl3d_input_snapshot *snapshot = sdl3d_input_get_snapshot(input);
-    const float up_value = snapshot != nullptr && p2_up >= 0 ? snapshot->actions[p2_up].value : 0.0f;
-    const float down_value = snapshot != nullptr && p2_down >= 0 ? snapshot->actions[p2_down].value : 0.0f;
-    Uint8 packet[32];
-    Uint8 *cursor = packet;
-    Uint8 *end = packet + sizeof(packet);
+    Uint8 packet[128];
+    size_t packet_size = 0U;
+    char error[160]{};
 
-    return write_u32(&cursor, end, kPongNetworkPacketMagic) && write_u8(&cursor, end, kPongNetworkPacketVersion) &&
-           write_u8(&cursor, end, PONG_NETWORK_MESSAGE_INPUT) && write_u8(&cursor, end, 0U) &&
-           write_u8(&cursor, end, 0U) &&
-           write_u32(&cursor, end, (Uint32)SDL_max(snapshot != nullptr ? snapshot->tick : 0, 0)) &&
-           write_f32(&cursor, end, up_value) && write_f32(&cursor, end, down_value) &&
-           (size_t)(cursor - packet) == kPongNetworkInputPacketSize &&
-           sdl3d_network_session_send(net_session, packet, (int)(cursor - packet));
+    return sdl3d_game_data_encode_network_input(runtime, "client_input", input,
+                                                (Uint32)SDL_max(snapshot != nullptr ? snapshot->tick : 0, 0), packet,
+                                                sizeof(packet), &packet_size, error, sizeof(error)) &&
+           sdl3d_network_session_send(net_session, packet, (int)packet_size);
 }
 
 static bool process_host_input_packet(sdl3d_game_data_runtime *runtime, sdl3d_game_session *session,
                                       const Uint8 *packet, int packet_size)
 {
-    const Uint8 *cursor = packet;
-    const Uint8 *end = packet + packet_size;
-    Uint32 magic = 0U;
-    Uint8 version = 0U;
-    Uint8 kind = 0U;
-    Uint8 reserved = 0U;
     Uint32 tick = 0U;
-    float up_value = 0.0f;
-    float down_value = 0.0f;
+    char error[160]{};
 
-    if (runtime == nullptr || packet == nullptr || packet_size < 12)
+    if (runtime == nullptr || session == nullptr || packet == nullptr || packet_size <= 0)
     {
         return false;
     }
 
-    if (!read_u32(&cursor, end, &magic) || magic != kPongNetworkPacketMagic || !read_u8(&cursor, end, &version) ||
-        version != kPongNetworkPacketVersion || !read_u8(&cursor, end, &kind) ||
-        kind != (Uint8)PONG_NETWORK_MESSAGE_INPUT || !read_u8(&cursor, end, &reserved) ||
-        !read_u8(&cursor, end, &reserved) || !read_u32(&cursor, end, &tick) || !read_f32(&cursor, end, &up_value) ||
-        !read_f32(&cursor, end, &down_value))
-    {
-        return false;
-    }
-
-    if ((size_t)packet_size != kPongNetworkInputPacketSize)
-    {
-        return false;
-    }
-
-    (void)tick;
-    const int p2_up = sdl3d_game_data_find_action(runtime, "action.paddle.local.up");
-    const int p2_down = sdl3d_game_data_find_action(runtime, "action.paddle.local.down");
-    if (p2_up >= 0)
-    {
-        sdl3d_input_set_action_override(sdl3d_game_session_get_input(session), p2_up, up_value);
-    }
-    if (p2_down >= 0)
-    {
-        sdl3d_input_set_action_override(sdl3d_game_session_get_input(session), p2_down, down_value);
-    }
-    return true;
+    return sdl3d_game_data_apply_network_input(runtime, sdl3d_game_session_get_input(session), packet,
+                                               (size_t)packet_size, &tick, error, sizeof(error));
 }
 
 static bool send_control_packet(sdl3d_network_session *net_session, PongNetworkMessageKind kind)
@@ -554,7 +517,7 @@ TEST_F(PongHeadlessMultiplayerTest, HostAppliesRemoteInputAndClientReceivesAutho
     sdl3d_input_set_action_override(sdl3d_game_session_get_input(client_session), p2_down, 0.0f);
     ASSERT_TRUE(sdl3d_game_session_tick(client_session, 0.016f));
 
-    ASSERT_TRUE(send_client_input_packet(client_session, client_network, p2_up, p2_down));
+    ASSERT_TRUE(send_client_input_packet(client_runtime, client_session, client_network));
 
     std::array<Uint8, SDL3D_NETWORK_MAX_PACKET_SIZE> packet{};
     int received = 0;
