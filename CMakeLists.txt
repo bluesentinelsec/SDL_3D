@@ -162,6 +162,7 @@ target_sources(
         src/obj_loader.c
         src/network.c
         src/network_replication.c
+        src/network_replication_schema.c
         src/properties.c
         src/rasterizer.c
         src/render_context.c

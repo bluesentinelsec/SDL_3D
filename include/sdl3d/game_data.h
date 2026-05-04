@@ -824,6 +824,50 @@ extern "C"
                                                  Uint8 out_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE]);
 
     /**
+     * @brief Encode an authored host-to-client replication snapshot.
+     *
+     * The named replication channel must exist in the loaded `network`
+     * schema and have `direction: "host_to_client"`. The packet includes a
+     * deterministic header, schema hash, channel index, tick, typed field
+     * tags, and field values in authored schema order. Callers provide the
+     * destination buffer; no allocation is performed.
+     *
+     * @param runtime Runtime whose actor state should be serialized.
+     * @param replication_name Authored replication channel name.
+     * @param tick Authoritative simulation tick to include in the snapshot.
+     * @param buffer Destination packet buffer.
+     * @param buffer_size Destination buffer size in bytes.
+     * @param out_size Receives written packet size in bytes.
+     * @param error_buffer Optional buffer for the first failure reason.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when the full snapshot was encoded.
+     */
+    bool sdl3d_game_data_encode_network_snapshot(const sdl3d_game_data_runtime *runtime, const char *replication_name,
+                                                 Uint32 tick, void *buffer, size_t buffer_size, size_t *out_size,
+                                                 char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Decode and apply an authored host-to-client replication snapshot.
+     *
+     * The packet must match the runtime schema hash and reference a
+     * host-to-client channel in the loaded `network` schema. Field tags and
+     * payload sizes are checked strictly. On failure, the function returns
+     * false and reports a best-effort error; callers should discard the
+     * packet. Successfully decoded values are applied directly to actors.
+     *
+     * @param runtime Runtime whose actor state should be updated.
+     * @param packet Source packet buffer.
+     * @param packet_size Source packet size in bytes.
+     * @param out_tick Receives the authoritative snapshot tick, if non-NULL.
+     * @param error_buffer Optional buffer for the first failure reason.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when the snapshot was decoded and applied completely.
+     */
+    bool sdl3d_game_data_apply_network_snapshot(sdl3d_game_data_runtime *runtime, const void *packet,
+                                                size_t packet_size, Uint32 *out_tick, char *error_buffer,
+                                                int error_buffer_size);
+
+    /**
      * @brief Validate a JSON game data file without instantiating runtime state.
      *
      * Validation checks schema, authored names, references, supported generic

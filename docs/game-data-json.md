@@ -1170,9 +1170,8 @@ Games that support network play can author a top-level `network` block. The
 block is optional; local-only games can omit it entirely and no networking
 schema hash is produced.
 
-The current schema validation slice supports protocol metadata, host/client
-replication channels, typed actor fields, replicated input actions, and control
-messages:
+The network schema supports protocol metadata, host/client replication channels,
+typed actor fields, replicated input actions, and control messages:
 
 ```json
 {
@@ -1193,7 +1192,7 @@ messages:
             "entity": "entity.ball",
             "fields": [
               "position",
-              { "path": "properties.velocity", "type": "vec3" },
+              { "path": "properties.velocity", "type": "vec2" },
               { "path": "properties.active_motion", "type": "bool" }
             ]
           }
@@ -1228,8 +1227,10 @@ built-in transform fields with known types (`position`, `rotation`, `scale`,
 all encoded as `vec3`). Property fields should use object form with an explicit
 `path` and `type`. Supported field types are `bool`, `int32`, `float32`,
 `enum_id`, `vec2`, and `vec3`; aliases `boolean`, `int`, `float`, and
-`string_id` are accepted where obvious. Duplicate actor entries and duplicate
-fields within an actor are rejected.
+`string_id` are accepted where obvious. The generic JSON type name `number` is
+not accepted for network fields; authors should choose `int32` or `float32`
+explicitly. Duplicate actor entries and duplicate fields within an actor are
+rejected.
 
 Client-to-host channels author `inputs`; each input must reference an existing
 input action. Duplicate input actions within a channel are rejected.
@@ -1238,13 +1239,24 @@ Control message directions are `host_to_client`, `client_to_host`, or
 `bidirectional`. Each control message must have a unique `name` and reference
 an existing `signal`.
 
+Host-to-client actor channels can be encoded into strict snapshot packets with
+`sdl3d_game_data_encode_network_snapshot()` and applied with
+`sdl3d_game_data_apply_network_snapshot()`. Snapshot packets include the schema
+hash, channel index, authoritative tick, field count, field type tags, and field
+values in authored order. Decoders reject unsupported packet versions,
+mismatched schema hashes, wrong field counts, wrong field tags, truncation, and
+trailing bytes. Built-in `position` fields update the actor transform; object
+paths under `properties.` update actor properties. `vec2` property replication
+is stored in SDL3D's existing vec3 property bag by updating x/y and preserving z.
+
 When a runtime loads game data with a valid `network` block, it computes a
 deterministic schema hash over protocol, replication, input, and control-message
 shape. Runtime callers can query it with
 `sdl3d_game_data_has_network_schema()` and
 `sdl3d_game_data_get_network_schema_hash()`. The hash intentionally ignores
-unrelated metadata and presentation data. Later network handshakes should use
-it to reject clients with incompatible authored schemas before gameplay starts.
+unrelated metadata and presentation data. Network handshakes should use it to
+reject clients with incompatible authored schemas before gameplay starts, and
+snapshot application enforces the same hash on every packet.
 
 ## Validation
 
