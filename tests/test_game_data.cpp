@@ -4452,6 +4452,8 @@ TEST(GameDataRuntime, EncodesAndAppliesPongNetworkSnapshotFromAuthoredSchema)
     sdl3d_properties_set_int(host_player_score->props, "value", 4);
     sdl3d_properties_set_int(host_cpu_score->props, "value", 6);
     sdl3d_properties_set_bool(host_match->props, "finished", true);
+    sdl3d_properties_set_int(host_match->props, "winner_id", 2);
+    sdl3d_properties_set_bool(host_match->props, "paused", true);
     sdl3d_properties_set_float(host_presentation->props, "border_flash", 0.75f);
     sdl3d_properties_set_float(host_presentation->props, "paddle_flash", 0.5f);
 
@@ -4489,6 +4491,8 @@ TEST(GameDataRuntime, EncodesAndAppliesPongNetworkSnapshotFromAuthoredSchema)
     EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_find_actor(client, "entity.score.cpu")->props, "value", 0), 6);
     EXPECT_TRUE(
         sdl3d_properties_get_bool(sdl3d_game_data_find_actor(client, "entity.match")->props, "finished", false));
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_find_actor(client, "entity.match")->props, "winner_id", 0), 2);
+    EXPECT_TRUE(sdl3d_properties_get_bool(sdl3d_game_data_find_actor(client, "entity.match")->props, "paused", false));
     EXPECT_NEAR(sdl3d_properties_get_float(sdl3d_game_data_find_actor(client, "entity.presentation")->props,
                                            "border_flash", 0.0f),
                 0.75f, 0.0001f);
