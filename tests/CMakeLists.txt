@@ -216,6 +216,7 @@ else()
     if(SDL3D_ENABLE_NETWORKING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         sdl3d_add_test(sdl3d_network_test test_network.cpp unit)
     endif()
+    sdl3d_add_test(sdl3d_network_replication_test test_network_replication.cpp unit)
     sdl3d_add_test(sdl3d_game_data_test test_game_data.cpp unit)
     if(EMSCRIPTEN)
         target_compile_definitions(
