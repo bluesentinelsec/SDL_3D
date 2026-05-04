@@ -1192,6 +1192,13 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.scene.title"), 0);
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.scene.options"), 0);
     EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.scene.play"), 0);
+    const char *network_scene_state_key = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_get_network_scene_state_key(runtime, "host", "status", &network_scene_state_key));
+    EXPECT_STREQ(network_scene_state_key, "multiplayer_host_status");
+    ASSERT_TRUE(sdl3d_game_data_get_network_scene_state_key(runtime, "host", "connected", &network_scene_state_key));
+    EXPECT_STREQ(network_scene_state_key, "multiplayer_host_connected");
+    EXPECT_FALSE(sdl3d_game_data_get_network_scene_state_key(runtime, "host", "missing", &network_scene_state_key));
+    EXPECT_EQ(network_scene_state_key, nullptr);
     EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead");
     EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.splash");
     EXPECT_EQ(sdl3d_game_data_scene_count(runtime), 15);
@@ -5397,6 +5404,31 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
     ]
   })json",
             "client_to_host network replication must declare inputs",
+        },
+        {
+            "bad_scene_state_key",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "scene_state": {
+      "host": {
+        "status": ""
+      }
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": ["position"]
+          }
+        ]
+      }
+    ]
+  })json",
+            "network scene_state key value must be a non-empty string",
         },
     };
 

@@ -606,6 +606,48 @@ static bool validate_network_inputs(validation_context *ctx, yyjson_val *inputs,
     return ok;
 }
 
+static bool validate_network_scene_state(validation_context *ctx, yyjson_val *network)
+{
+    yyjson_val *scene_state = obj_get(network, "scene_state");
+    if (scene_state == NULL)
+        return true;
+    if (!yyjson_is_obj(scene_state))
+        return validation_error(ctx, "$.network.scene_state", "network scene_state must be an object");
+
+    yyjson_val *scope_key;
+    yyjson_obj_iter scope_iter;
+    yyjson_obj_iter_init(scene_state, &scope_iter);
+    while ((scope_key = yyjson_obj_iter_next(&scope_iter)) != NULL)
+    {
+        const char *scope_name = yyjson_get_str(scope_key);
+        yyjson_val *scope = yyjson_obj_iter_get_val(scope_key);
+        char scope_path[PATH_BUFFER_SIZE];
+        format_path(scope_path, sizeof(scope_path), "$.network.scene_state.%s",
+                    scope_name != NULL ? scope_name : "<invalid>");
+        if (scope_name == NULL || scope_name[0] == '\0')
+            return validation_error(ctx, scope_path, "network scene_state scope must have a non-empty name");
+        if (!yyjson_is_obj(scope))
+            return validation_error(ctx, scope_path, "network scene_state scope must be an object");
+
+        yyjson_val *key;
+        yyjson_obj_iter key_iter;
+        yyjson_obj_iter_init(scope, &key_iter);
+        while ((key = yyjson_obj_iter_next(&key_iter)) != NULL)
+        {
+            const char *name = yyjson_get_str(key);
+            yyjson_val *value = yyjson_obj_iter_get_val(key);
+            char key_path[PATH_BUFFER_SIZE];
+            format_path(key_path, sizeof(key_path), "%s.%s", scope_path, name != NULL ? name : "<invalid>");
+            if (name == NULL || name[0] == '\0')
+                return validation_error(ctx, key_path, "network scene_state key name must be non-empty");
+            if (!yyjson_is_str(value) || yyjson_get_len(value) == 0)
+                return validation_error(ctx, key_path, "network scene_state key value must be a non-empty string");
+        }
+    }
+
+    return true;
+}
+
 static bool validate_network(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *network = obj_get(root, "network");
@@ -630,6 +672,8 @@ static bool validate_network(validation_context *ctx, yyjson_val *root, validati
     if (!yyjson_is_int(tick_rate) || yyjson_get_sint(tick_rate) <= 0)
         return validation_error(ctx, "$.network.protocol.tick_rate",
                                 "network protocol tick_rate must be a positive integer");
+    if (!validate_network_scene_state(ctx, network))
+        return false;
 
     yyjson_val *replication = obj_get(network, "replication");
     if (!yyjson_is_arr(replication) || yyjson_arr_size(replication) == 0)

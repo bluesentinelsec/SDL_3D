@@ -9685,6 +9685,27 @@ bool sdl3d_game_data_get_network_schema_hash(const sdl3d_game_data_runtime *runt
     return true;
 }
 
+bool sdl3d_game_data_get_network_scene_state_key(const sdl3d_game_data_runtime *runtime, const char *scope,
+                                                 const char *name, const char **out_key)
+{
+    if (out_key != NULL)
+        *out_key = NULL;
+    if (runtime == NULL || scope == NULL || scope[0] == '\0' || name == NULL || name[0] == '\0' || out_key == NULL)
+    {
+        return false;
+    }
+
+    yyjson_val *root = runtime_root(runtime);
+    yyjson_val *scene_state = obj_get(obj_get(root, "network"), "scene_state");
+    yyjson_val *group = obj_get(scene_state, scope);
+    const char *key = json_string(group, name, NULL);
+    if (key == NULL || key[0] == '\0')
+        return false;
+
+    *out_key = key;
+    return true;
+}
+
 bool sdl3d_game_data_encode_network_snapshot(const sdl3d_game_data_runtime *runtime, const char *replication_name,
                                              Uint32 tick, void *buffer, size_t buffer_size, size_t *out_size,
                                              char *error_buffer, int error_buffer_size)
