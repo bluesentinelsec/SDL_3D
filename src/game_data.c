@@ -2672,6 +2672,19 @@ bool sdl3d_game_data_get_world_light(const sdl3d_game_data_runtime *runtime, int
     out_light->position = json_vec3(light_json, "position", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
     const char *target_entity = json_string(light_json, "target_entity", NULL);
     sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, target_entity);
+    yyjson_val *target_entities = obj_get(light_json, "target_entities");
+    for (size_t i = 0; target == NULL && yyjson_is_arr(target_entities) && i < yyjson_arr_size(target_entities); ++i)
+    {
+        const char *candidate = yyjson_get_str(yyjson_arr_get(target_entities, i));
+        if (candidate != NULL && active_scene_has_entity_internal(runtime, candidate))
+            target = sdl3d_game_data_find_actor(runtime, candidate);
+    }
+    for (size_t i = 0; target == NULL && yyjson_is_arr(target_entities) && i < yyjson_arr_size(target_entities); ++i)
+    {
+        const char *candidate = yyjson_get_str(yyjson_arr_get(target_entities, i));
+        if (candidate != NULL)
+            target = sdl3d_game_data_find_actor(runtime, candidate);
+    }
     if (target != NULL)
     {
         const sdl3d_vec3 offset = json_vec3(light_json, "offset", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
@@ -2708,6 +2721,41 @@ static void light_color_lerp(float color[3], const sdl3d_vec3 target, float t)
     color[2] = color[2] + (target.z - color[2]) * t;
 }
 
+static bool light_effect_sample_color_cycle(yyjson_val *effect, float time, sdl3d_vec3 fallback, sdl3d_vec3 *out_color)
+{
+    yyjson_val *colors = obj_get(effect, "colors");
+    if (out_color == NULL || !yyjson_is_arr(colors) || yyjson_arr_size(colors) == 0)
+        return false;
+
+    const size_t count = yyjson_arr_size(colors);
+    if (count == 1)
+    {
+        *out_color = json_vec3_value(yyjson_arr_get(colors, 0), fallback);
+        return true;
+    }
+
+    const float duration = SDL_max(json_float(effect, "duration", 4.0f), 0.001f);
+    float phase = json_float(effect, "phase", 0.0f);
+    float cycle = SDL_fmodf(time / duration + phase, 1.0f);
+    if (cycle < 0.0f)
+        cycle += 1.0f;
+
+    const float scaled = cycle * (float)count;
+    size_t index = (size_t)SDL_floorf(scaled);
+    if (index >= count)
+        index = count - 1;
+    const size_t next_index = (index + 1U) % count;
+
+    float t = scaled - (float)index;
+    if (json_bool(effect, "smooth", true))
+        t = t * t * (3.0f - 2.0f * t);
+
+    const sdl3d_vec3 a = json_vec3_value(yyjson_arr_get(colors, index), fallback);
+    const sdl3d_vec3 b = json_vec3_value(yyjson_arr_get(colors, next_index), a);
+    *out_color = sdl3d_vec3_make(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t);
+    return true;
+}
+
 static void apply_light_effects(const sdl3d_game_data_runtime *runtime, yyjson_val *light_json,
                                 const sdl3d_game_data_render_eval *eval, sdl3d_light *light)
 {
@@ -2726,6 +2774,17 @@ static void apply_light_effects(const sdl3d_game_data_runtime *runtime, yyjson_v
             const float rate = json_float(effect, "rate", 1.0f);
             const float phase = json_float(effect, "phase", 0.0f);
             value = 0.5f + 0.5f * SDL_sinf(time * rate + phase);
+        }
+        else if (SDL_strcmp(type, "color_cycle") == 0)
+        {
+            const float time = eval != NULL ? eval->time : 0.0f;
+            sdl3d_vec3 target;
+            if (light_effect_sample_color_cycle(
+                    effect, time, sdl3d_vec3_make(light->color[0], light->color[1], light->color[2]), &target))
+            {
+                light_color_lerp(light->color, target, json_float(effect, "color_blend", 1.0f));
+            }
+            continue;
         }
         else if (SDL_strcmp(type, "flash") == 0)
         {
@@ -7546,6 +7605,34 @@ static bool activity_input_matches(const sdl3d_game_data_runtime *runtime, yyjso
     return sdl3d_input_any_pressed(input);
 }
 
+bool sdl3d_game_data_scene_activity_consumes_wake_input(const sdl3d_game_data_runtime *runtime,
+                                                        const sdl3d_input_manager *input, bool *out_block_menus,
+                                                        bool *out_block_scene_shortcuts)
+{
+    if (out_block_menus != NULL)
+        *out_block_menus = false;
+    if (out_block_scene_shortcuts != NULL)
+        *out_block_scene_shortcuts = false;
+    if (runtime == NULL || input == NULL)
+        return false;
+
+    yyjson_val *activity = active_scene_activity_json(runtime);
+    const char *active_scene = sdl3d_game_data_active_scene(runtime);
+    const scene_activity_state *state = &runtime->activity;
+    if (activity == NULL || state->scene != active_scene || !state->idle ||
+        !activity_input_matches(runtime, activity, input))
+    {
+        return false;
+    }
+
+    const bool consume = json_bool(activity, "consume_wake_input", false);
+    if (out_block_menus != NULL)
+        *out_block_menus = json_bool(activity, "block_menus_on_wake", consume);
+    if (out_block_scene_shortcuts != NULL)
+        *out_block_scene_shortcuts = json_bool(activity, "block_scene_shortcuts_on_wake", consume);
+    return consume;
+}
+
 bool sdl3d_game_data_update_scene_activity(sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input, float dt)
 {
     if (runtime == NULL)
@@ -8090,16 +8177,34 @@ static void update_motion_components(sdl3d_game_data_runtime *runtime, yyjson_va
         for (size_t c = 0; c < yyjson_arr_size(components); ++c)
         {
             yyjson_val *component = yyjson_arr_get(components, c);
-            if (SDL_strcmp(json_string(component, "type", ""), "motion.velocity_2d") != 0 ||
-                !sdl3d_properties_get_bool(actor->props, "active_motion", true))
+            const char *type = json_string(component, "type", "");
+            if (!sdl3d_properties_get_bool(actor->props, "active_motion", true))
             {
                 continue;
             }
 
-            const char *property = json_string(component, "property", "velocity");
-            const sdl3d_vec3 velocity = actor_vec_property(actor, property);
-            actor_set_position(actor, sdl3d_vec3_make(actor->position.x + velocity.x * dt,
-                                                      actor->position.y + velocity.y * dt, actor->position.z));
+            if (SDL_strcmp(type, "motion.velocity_2d") == 0)
+            {
+                const char *property = json_string(component, "property", "velocity");
+                const sdl3d_vec3 velocity = actor_vec_property(actor, property);
+                actor_set_position(actor, sdl3d_vec3_make(actor->position.x + velocity.x * dt,
+                                                          actor->position.y + velocity.y * dt, actor->position.z));
+            }
+            else if (SDL_strcmp(type, "motion.oscillate") == 0)
+            {
+                const char *time_property = json_string(component, "time_property", "motion_time");
+                const float time = sdl3d_properties_get_float(actor->props, time_property, 0.0f) + dt;
+                sdl3d_properties_set_float(actor->props, time_property, time);
+
+                const sdl3d_vec3 origin = json_vec3_value(obj_get(component, "origin"), actor->position);
+                const sdl3d_vec3 amplitude =
+                    json_vec3_value(obj_get(component, "amplitude"), sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+                const float rate = json_float(component, "rate", 1.0f);
+                const float phase = json_float(component, "phase", 0.0f);
+                const float wave = SDL_sinf(time * rate + phase);
+                actor_set_position(actor, sdl3d_vec3_make(origin.x + amplitude.x * wave, origin.y + amplitude.y * wave,
+                                                          origin.z + amplitude.z * wave));
+            }
         }
     }
 }

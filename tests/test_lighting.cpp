@@ -263,7 +263,7 @@ TEST(SDL3DPBRShading, PointLightAttenuatesWithDistance)
     EXPECT_GT(r_near, r_far);
 }
 
-TEST(SDL3DPBRShading, PointLightOutOfRangeProducesNoLight)
+TEST(SDL3DPBRShading, PointLightBeyondRangeFallsOffSmoothly)
 {
     sdl3d_light pl = make_point(0.0f, 2.0f, 0.0f, 1.0f, 1.0f);
     sdl3d_lighting_params p = make_params(0.0f, 1.0f);
@@ -271,9 +271,14 @@ TEST(SDL3DPBRShading, PointLightOutOfRangeProducesNoLight)
     p.light_count = 1;
 
     float r, g, b;
-    /* Fragment at origin, light at y=2, range=1 → distance > range. */
+    /* Fragment at origin, light at y=2, range=1: soft falloff should be nearly black, not hard-clamped. */
     sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r, &g, &b);
     EXPECT_NEAR(r, 0.0f, 0.01f);
+
+    float edge_r, edge_g, edge_b;
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, &edge_r, &edge_g, &edge_b);
+    EXPECT_GT(edge_r, 0.0f);
+    EXPECT_LT(edge_r, 0.1f);
 }
 
 TEST(SDL3DPBRShading, SpotLightInsideConeProducesLight)
@@ -287,6 +292,23 @@ TEST(SDL3DPBRShading, SpotLightInsideConeProducesLight)
     float r, g, b;
     sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &r, &g, &b);
     EXPECT_GT(r, 0.05f);
+}
+
+TEST(SDL3DPBRShading, SpotLightConeEdgeFallsOffSmoothly)
+{
+    sdl3d_light sl = make_spot(0.0f, 2.0f, 0.0f, 0.0f, -1.0f, 0.0f, 1.0f, 10.0f, cosf(0.3f), cosf(0.8f));
+    sdl3d_lighting_params p = make_params(0.0f, 1.0f);
+    p.lights = &sl;
+    p.light_count = 1;
+
+    float center_r, center_g, center_b;
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &center_r, &center_g, &center_b);
+
+    float edge_r, edge_g, edge_b;
+    sdl3d_shade_fragment_pbr(&p, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, &edge_r, &edge_g, &edge_b);
+
+    EXPECT_GT(edge_r, 0.0f);
+    EXPECT_LT(edge_r, center_r);
 }
 
 TEST(SDL3DPBRShading, SpotLightOutsideConeProducesNoLight)

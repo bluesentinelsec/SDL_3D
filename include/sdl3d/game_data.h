@@ -973,6 +973,24 @@ extern "C"
                                                float dt);
 
     /**
+     * @brief Return whether the active scene activity should consume wake input.
+     *
+     * This is a query-only helper for app-flow/menu controllers. When a scene
+     * has entered its authored idle state and matching input is pressed, data
+     * may request that the current input be used only to wake the scene's
+     * activity controller. The next scene-activity update will run `on_active`.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param input Current input manager.
+     * @param out_block_menus Optional output set when menu input should be blocked.
+     * @param out_block_scene_shortcuts Optional output set when scene shortcuts should be blocked.
+     * @return true when the matching wake input should be consumed for this frame.
+     */
+    bool sdl3d_game_data_scene_activity_consumes_wake_input(const sdl3d_game_data_runtime *runtime,
+                                                            const sdl3d_input_manager *input, bool *out_block_menus,
+                                                            bool *out_block_scene_shortcuts);
+
+    /**
      * @brief Read the authored UI pulse phase.
      *
      * Returns @p fallback when no `presentation.ui_pulse_clock` is authored or
@@ -1075,17 +1093,19 @@ extern "C"
     /**
      * @brief Read an authored world light by zero-based index.
      *
-     * The returned light is suitable for passing to sdl3d_add_light().
+     * The returned light is suitable for passing to sdl3d_add_light(). Lights
+     * may target one entity with `target_entity`, or the first active-scene
+     * entity in an ordered `target_entities` fallback list.
      */
     bool sdl3d_game_data_get_world_light(const sdl3d_game_data_runtime *runtime, int index, sdl3d_light *out_light);
 
     /**
      * @brief Read an authored world light with generic visual effects evaluated.
      *
-     * Supported light effects include `pulse` and `flash`, allowing data to
-     * drive color blends, intensity changes, and range changes over time or
-     * from actor properties. Passing NULL for @p eval uses a zeroed evaluation
-     * context.
+     * Supported light effects include `pulse`, `color_cycle`, and `flash`,
+     * allowing data to drive color blends, intensity changes, and range changes
+     * over time or from actor properties. Passing NULL for @p eval uses a zeroed
+     * evaluation context.
      */
     bool sdl3d_game_data_get_world_light_evaluated(const sdl3d_game_data_runtime *runtime, int index,
                                                    const sdl3d_game_data_render_eval *eval, sdl3d_light *out_light);

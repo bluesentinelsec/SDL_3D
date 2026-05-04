@@ -1644,17 +1644,22 @@ bool sdl3d_game_data_app_flow_update(sdl3d_game_data_app_flow *flow, sdl3d_game_
     bool timeline_blocks_scene_shortcuts = false;
     app_flow_timeline_blocks(flow, runtime, &timeline_blocks_menus, &timeline_blocks_scene_shortcuts);
 
-    if (!skip_consumed)
+    bool activity_blocks_menus = false;
+    bool activity_blocks_scene_shortcuts = false;
+    const bool activity_wake_consumed = sdl3d_game_data_scene_activity_consumes_wake_input(
+        runtime, input, &activity_blocks_menus, &activity_blocks_scene_shortcuts);
+
+    if (!skip_consumed && !activity_wake_consumed)
     {
         if (flow->app.quit_action_id >= 0 &&
             sdl3d_game_data_active_scene_allows_action(runtime, flow->app.quit_action_id) &&
             sdl3d_input_is_pressed(input, flow->app.quit_action_id))
             app_flow_request_quit(flow, ctx, runtime);
 
-        if (!skip_blocks_scene_shortcuts && !timeline_blocks_scene_shortcuts)
+        if (!skip_blocks_scene_shortcuts && !timeline_blocks_scene_shortcuts && !activity_blocks_scene_shortcuts)
             app_flow_consume_scene_shortcuts(flow, runtime, input);
         bool menu_consumed = false;
-        if (!skip_blocks_menus && !timeline_blocks_menus)
+        if (!skip_blocks_menus && !timeline_blocks_menus && !activity_blocks_menus)
             menu_consumed = app_flow_consume_menu(flow, ctx, runtime, input, bus);
 
         if (!menu_consumed && flow->app.pause_action_id >= 0 &&
