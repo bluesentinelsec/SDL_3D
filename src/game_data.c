@@ -2708,32 +2708,6 @@ static void light_color_lerp(float color[3], const sdl3d_vec3 target, float t)
     color[2] = color[2] + (target.z - color[2]) * t;
 }
 
-static bool light_effect_palette_color(yyjson_val *colors, float position, sdl3d_vec3 *out_color)
-{
-    const size_t count = yyjson_is_arr(colors) ? yyjson_arr_size(colors) : 0;
-    if (out_color == NULL || count == 0)
-        return false;
-
-    if (count == 1)
-    {
-        *out_color = json_vec3_value(yyjson_arr_get(colors, 0), sdl3d_vec3_make(1.0f, 1.0f, 1.0f));
-        return true;
-    }
-
-    const float wrapped = SDL_fmodf(position, (float)count);
-    const float index_float = wrapped < 0.0f ? wrapped + (float)count : wrapped;
-    const int index0 = (int)SDL_floorf(index_float);
-    const int index1 = (index0 + 1) % (int)count;
-    const float t = index_float - (float)index0;
-    const sdl3d_vec3 color0 =
-        json_vec3_value(yyjson_arr_get(colors, (size_t)index0), sdl3d_vec3_make(1.0f, 1.0f, 1.0f));
-    const sdl3d_vec3 color1 = json_vec3_value(yyjson_arr_get(colors, (size_t)index1), color0);
-
-    *out_color = sdl3d_vec3_make(color0.x + (color1.x - color0.x) * t, color0.y + (color1.y - color0.y) * t,
-                                 color0.z + (color1.z - color0.z) * t);
-    return true;
-}
-
 static void apply_light_effects(const sdl3d_game_data_runtime *runtime, yyjson_val *light_json,
                                 const sdl3d_game_data_render_eval *eval, sdl3d_light *light)
 {
@@ -2760,17 +2734,6 @@ static void apply_light_effects(const sdl3d_game_data_runtime *runtime, yyjson_v
             value =
                 source != NULL && property != NULL ? sdl3d_properties_get_float(source->props, property, 0.0f) : 0.0f;
             value = game_data_clampf(value, 0.0f, 1.0f);
-        }
-        else if (SDL_strcmp(type, "color_cycle") == 0)
-        {
-            const float time = eval != NULL ? eval->time : 0.0f;
-            const float rate = json_float(effect, "rate", 1.0f);
-            const float phase = json_float(effect, "phase", 0.0f);
-            sdl3d_vec3 target;
-            if (!light_effect_palette_color(obj_get(effect, "colors"), time * rate + phase, &target))
-                continue;
-            light_color_lerp(light->color, target, json_float(effect, "color_blend", 1.0f));
-            value = 1.0f;
         }
         else
         {

@@ -867,8 +867,7 @@ Particle emitters may include `draw_emissive` for host renderers that draw parti
 
 World lights may also declare `effects`. `pulse` effects can blend color and
 add intensity/range over time; `flash` effects read a float actor property and
-use it as the effect weight; `color_cycle` effects interpolate through an
-authored color palette over time. This lets data tune glows, brightness, color
+use it as the effect weight. This lets data tune glows, brightness, color
 shifts, and transient flashes without host code.
 
 ```json
@@ -882,7 +881,6 @@ shifts, and transient flashes without host code.
                                                   "effects"
         : [
             {"type" : "pulse", "rate" : 9.0, "color" : [ 1.0, 0.96, 0.54 ], "intensity_add" : 0.9},
-            {"type" : "color_cycle", "rate" : 0.6, "colors" : [ [1.0, 0.1, 0.1], [0.1, 1.0, 0.4], [0.2, 0.4, 1.0] ]},
             {"type" : "flash", "source" : "entity.presentation", "property" : "paddle_flash", "intensity_add" : 1.5}
         ]
 }

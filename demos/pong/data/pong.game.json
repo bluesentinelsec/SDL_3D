@@ -737,25 +737,14 @@
         ]
       },
       {
-        "name": "light.center_cycle",
-        "type": "point",
-        "position": [0.0, 0.0, 2.8],
-        "color": [0.18, 0.42, 1.0],
-        "intensity": 2.8,
-        "range": 6.2,
-        "effects": [
-          { "type": "color_cycle", "rate": 0.55, "colors": [[1.0, 0.18, 0.16], [1.0, 0.65, 0.12], [1.0, 0.95, 0.22], [0.18, 1.0, 0.36], [0.12, 0.90, 1.0], [0.36, 0.26, 1.0], [0.95, 0.18, 1.0]], "color_blend": 1.0, "intensity_add": 0.25, "range_add": 0.2 }
-        ]
-      },
-      {
-        "name": "light.right_green",
+        "name": "light.right_blue",
         "type": "point",
         "position": [5.7, 0.35, 2.4],
-        "color": [0.08, 1.0, 0.22],
+        "color": [0.12, 0.34, 1.0],
         "intensity": 2.6,
         "range": 5.8,
         "effects": [
-          { "type": "pulse", "rate": 1.25, "phase": 2.0, "color": [0.24, 1.0, 0.48], "color_blend": 0.22, "intensity_add": 0.25, "range_add": 0.25 }
+          { "type": "pulse", "rate": 1.25, "phase": 2.0, "color": [0.28, 0.54, 1.0], "color_blend": 0.22, "intensity_add": 0.25, "range_add": 0.25 }
         ]
       },
       {
@@ -1057,17 +1046,6 @@
         "motion_time": { "type": "float", "value": 0.0 }
       },
       "components": [
-        {
-          "type": "render.sphere",
-          "radius": 0.11,
-          "rings": 10,
-          "slices": 14,
-          "color": [255, 218, 122, 255],
-          "emissive": true,
-          "effects": [
-            { "type": "pulse", "rate": 1.7, "color": [255, 238, 164, 255], "emissive_base": [0.55, 0.32, 0.05], "emissive_add": [0.35, 0.22, 0.05] }
-          ]
-        },
         { "type": "motion.oscillate", "origin": [0.0, 3.8, 0.34], "amplitude": [6.8, 0.0, 0.0], "rate": 0.45, "phase": -1.5707963 }
       ]
     },
