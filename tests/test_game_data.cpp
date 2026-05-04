@@ -4493,6 +4493,13 @@ TEST(GameDataRuntime, RejectsPongNetworkSnapshotsWithMismatchedSchemaOrTruncatio
         << error;
     ASSERT_GT(packet_size, 24U);
 
+    std::array<Uint8, 8> too_small{};
+    size_t too_small_size = 0U;
+    EXPECT_FALSE(sdl3d_game_data_encode_network_snapshot(host, "play_state", 10U, too_small.data(), too_small.size(),
+                                                         &too_small_size, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("requires"), std::string::npos) << error;
+    EXPECT_EQ(too_small_size, 0U);
+
     std::array<Uint8, 512> corrupted = packet;
     corrupted[16] ^= 0xffU;
     EXPECT_FALSE(

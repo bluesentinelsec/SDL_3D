@@ -1227,8 +1227,10 @@ built-in transform fields with known types (`position`, `rotation`, `scale`,
 all encoded as `vec3`). Property fields should use object form with an explicit
 `path` and `type`. Supported field types are `bool`, `int32`, `float32`,
 `enum_id`, `vec2`, and `vec3`; aliases `boolean`, `int`, `float`, and
-`string_id` are accepted where obvious. Duplicate actor entries and duplicate
-fields within an actor are rejected.
+`string_id` are accepted where obvious. The generic JSON type name `number` is
+not accepted for network fields; authors should choose `int32` or `float32`
+explicitly. Duplicate actor entries and duplicate fields within an actor are
+rejected.
 
 Client-to-host channels author `inputs`; each input must reference an existing
 input action. Duplicate input actions within a channel are rejected.

@@ -15,6 +15,7 @@
 #include "game_data_validation.h"
 #include "lauxlib.h"
 #include "lua.h"
+#include "network_replication_schema.h"
 #include "script_internal.h"
 #include "sdl3d/asset.h"
 #include "sdl3d/input.h"
@@ -24,6 +25,8 @@
 #include "sdl3d/timer_pool.h"
 #include "yyjson.h"
 
+#include <stdarg.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 #define SDL3D_GAME_DATA_SIGNAL_BASE 20000
@@ -300,6 +303,17 @@ static void set_error(char *buffer, int buffer_size, const char *message)
     {
         SDL_snprintf(buffer, (size_t)buffer_size, "%s", message != NULL ? message : "unknown game data error");
     }
+}
+
+static void set_errorf(char *buffer, int buffer_size, const char *format, ...)
+{
+    if (buffer == NULL || buffer_size <= 0)
+        return;
+
+    va_list args;
+    va_start(args, format);
+    SDL_vsnprintf(buffer, (size_t)buffer_size, format != NULL ? format : "unknown game data error", args);
+    va_end(args);
 }
 
 static bool set_action_keyboard_binding(sdl3d_game_data_runtime *runtime, const char *action, SDL_Scancode scancode);
@@ -1763,12 +1777,6 @@ static void actor_set_position(sdl3d_registered_actor *actor, sdl3d_vec3 positio
     sdl3d_properties_set_vec3(actor->props, "origin", position);
 }
 
-typedef struct game_data_replication_field
-{
-    const char *path;
-    sdl3d_replication_field_type type;
-} game_data_replication_field;
-
 typedef struct game_data_snapshot_value
 {
     sdl3d_replication_field_type type;
@@ -1780,91 +1788,6 @@ typedef struct game_data_snapshot_value
         sdl3d_vec3 as_vec3;
     } value;
 } game_data_snapshot_value;
-
-static bool game_data_replication_field_type_from_string(const char *type, sdl3d_replication_field_type *out_type)
-{
-    if (type == NULL || type[0] == '\0')
-        return false;
-    if (SDL_strcmp(type, "bool") == 0 || SDL_strcmp(type, "boolean") == 0)
-    {
-        if (out_type != NULL)
-            *out_type = SDL3D_REPLICATION_FIELD_BOOL;
-        return true;
-    }
-    if (SDL_strcmp(type, "int32") == 0 || SDL_strcmp(type, "int") == 0)
-    {
-        if (out_type != NULL)
-            *out_type = SDL3D_REPLICATION_FIELD_INT32;
-        return true;
-    }
-    if (SDL_strcmp(type, "float32") == 0 || SDL_strcmp(type, "float") == 0)
-    {
-        if (out_type != NULL)
-            *out_type = SDL3D_REPLICATION_FIELD_FLOAT32;
-        return true;
-    }
-    if (SDL_strcmp(type, "enum_id") == 0 || SDL_strcmp(type, "string_id") == 0)
-    {
-        if (out_type != NULL)
-            *out_type = SDL3D_REPLICATION_FIELD_ENUM_ID;
-        return true;
-    }
-    if (SDL_strcmp(type, "vec2") == 0)
-    {
-        if (out_type != NULL)
-            *out_type = SDL3D_REPLICATION_FIELD_VEC2;
-        return true;
-    }
-    if (SDL_strcmp(type, "vec3") == 0)
-    {
-        if (out_type != NULL)
-            *out_type = SDL3D_REPLICATION_FIELD_VEC3;
-        return true;
-    }
-    return false;
-}
-
-static bool game_data_replication_field_descriptor(yyjson_val *field, game_data_replication_field *out_field)
-{
-    if (out_field != NULL)
-    {
-        out_field->path = NULL;
-        out_field->type = SDL3D_REPLICATION_FIELD_BOOL;
-    }
-    if (yyjson_is_str(field))
-    {
-        const char *path = yyjson_get_str(field);
-        if (path == NULL ||
-            (SDL_strcmp(path, "position") != 0 && SDL_strcmp(path, "rotation") != 0 && SDL_strcmp(path, "scale") != 0))
-        {
-            return false;
-        }
-        if (out_field != NULL)
-        {
-            out_field->path = path;
-            out_field->type = SDL3D_REPLICATION_FIELD_VEC3;
-        }
-        return true;
-    }
-    if (!yyjson_is_obj(field))
-        return false;
-
-    const char *path = json_string(field, "path", NULL);
-    if (path == NULL)
-        path = json_string(field, "field", NULL);
-    sdl3d_replication_field_type type = SDL3D_REPLICATION_FIELD_BOOL;
-    if (path == NULL || path[0] == '\0' ||
-        !game_data_replication_field_type_from_string(json_string(field, "type", NULL), &type))
-    {
-        return false;
-    }
-    if (out_field != NULL)
-    {
-        out_field->path = path;
-        out_field->type = type;
-    }
-    return true;
-}
 
 static yyjson_val *game_data_find_replication_channel_by_name(const sdl3d_game_data_runtime *runtime,
                                                               const char *replication_name, int *out_index)
@@ -1908,6 +1831,35 @@ static size_t game_data_replication_channel_field_count(yyjson_val *channel)
     return count;
 }
 
+static bool game_data_replication_channel_packet_size(yyjson_val *channel, size_t *out_size)
+{
+    if (out_size != NULL)
+        *out_size = 0U;
+    if (channel == NULL)
+        return false;
+
+    size_t size = 4U + 4U + 4U + 4U + SDL3D_REPLICATION_SCHEMA_HASH_SIZE + 4U;
+    yyjson_val *actors = obj_get(channel, "actors");
+    for (size_t actor_index = 0U; yyjson_is_arr(actors) && actor_index < yyjson_arr_size(actors); ++actor_index)
+    {
+        yyjson_val *fields = obj_get(yyjson_arr_get(actors, actor_index), "fields");
+        for (size_t field_index = 0U; yyjson_is_arr(fields) && field_index < yyjson_arr_size(fields); ++field_index)
+        {
+            sdl3d_replication_field_descriptor field;
+            if (!sdl3d_replication_field_descriptor_from_json(yyjson_arr_get(fields, field_index), &field))
+                return false;
+            const size_t field_size = sdl3d_replication_field_wire_size(field.type);
+            if (field_size == 0U || size > SIZE_MAX - 1U - field_size)
+                return false;
+            size += 1U + field_size;
+        }
+    }
+
+    if (out_size != NULL)
+        *out_size = size;
+    return true;
+}
+
 static const char *game_data_replication_property_key(const char *path)
 {
     static const char prefix[] = "properties.";
@@ -1916,7 +1868,7 @@ static const char *game_data_replication_property_key(const char *path)
 }
 
 static bool game_data_read_actor_replication_field(const sdl3d_registered_actor *actor,
-                                                   const game_data_replication_field *field,
+                                                   const sdl3d_replication_field_descriptor *field,
                                                    game_data_snapshot_value *out_value)
 {
     if (actor == NULL || field == NULL || out_value == NULL || field->path == NULL)
@@ -2032,7 +1984,7 @@ static bool game_data_read_snapshot_value(sdl3d_replication_reader *reader, sdl3
 }
 
 static bool game_data_apply_actor_replication_field(sdl3d_registered_actor *actor,
-                                                    const game_data_replication_field *field,
+                                                    const sdl3d_replication_field_descriptor *field,
                                                     const game_data_snapshot_value *value)
 {
     if (actor == NULL || field == NULL || value == NULL || field->path == NULL || field->type != value->type)
@@ -9261,6 +9213,18 @@ bool sdl3d_game_data_encode_network_snapshot(const sdl3d_game_data_runtime *runt
         set_error(error_buffer, error_buffer_size, "network snapshot channel is too large");
         return false;
     }
+    size_t required_size = 0U;
+    if (!game_data_replication_channel_packet_size(channel, &required_size))
+    {
+        set_error(error_buffer, error_buffer_size, "network snapshot channel contains unsupported field data");
+        return false;
+    }
+    if (buffer_size < required_size)
+    {
+        set_errorf(error_buffer, error_buffer_size, "network snapshot requires %zu bytes, buffer has %zu bytes",
+                   required_size, buffer_size);
+        return false;
+    }
 
     sdl3d_replication_writer writer;
     sdl3d_replication_writer_init(&writer, buffer, buffer_size);
@@ -9283,19 +9247,21 @@ bool sdl3d_game_data_encode_network_snapshot(const sdl3d_game_data_runtime *runt
         sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, entity_name);
         if (actor == NULL)
         {
-            set_error(error_buffer, error_buffer_size, "network snapshot actor not found");
+            set_errorf(error_buffer, error_buffer_size, "network snapshot actor '%s' not found",
+                       entity_name != NULL ? entity_name : "<null>");
             return false;
         }
 
         yyjson_val *fields = obj_get(actor_schema, "fields");
         for (size_t field_index = 0U; yyjson_is_arr(fields) && field_index < yyjson_arr_size(fields); ++field_index)
         {
-            game_data_replication_field field;
+            sdl3d_replication_field_descriptor field;
             game_data_snapshot_value value;
-            if (!game_data_replication_field_descriptor(yyjson_arr_get(fields, field_index), &field) ||
+            if (!sdl3d_replication_field_descriptor_from_json(yyjson_arr_get(fields, field_index), &field) ||
                 !game_data_read_actor_replication_field(actor, &field, &value))
             {
-                set_error(error_buffer, error_buffer_size, "network snapshot failed to read authored field");
+                set_errorf(error_buffer, error_buffer_size, "network snapshot failed to read field '%s' on actor '%s'",
+                           field.path != NULL ? field.path : "<invalid>", entity_name != NULL ? entity_name : "<null>");
                 return false;
             }
             if (!game_data_write_snapshot_value(&writer, &value))
@@ -9386,8 +9352,8 @@ bool sdl3d_game_data_apply_network_snapshot(sdl3d_game_data_runtime *runtime, co
         for (size_t field_index = 0U; ok && yyjson_is_arr(fields) && field_index < yyjson_arr_size(fields);
              ++field_index)
         {
-            game_data_replication_field field;
-            ok = game_data_replication_field_descriptor(yyjson_arr_get(fields, field_index), &field) &&
+            sdl3d_replication_field_descriptor field;
+            ok = sdl3d_replication_field_descriptor_from_json(yyjson_arr_get(fields, field_index), &field) &&
                  decoded_index < field_count &&
                  game_data_read_snapshot_value(&reader, field.type, &values[decoded_index]);
             ++decoded_index;
@@ -9404,38 +9370,57 @@ bool sdl3d_game_data_apply_network_snapshot(sdl3d_game_data_runtime *runtime, co
         return false;
     }
 
-    for (size_t actor_index = 0U; actor_index < yyjson_arr_size(actors); ++actor_index)
+    const size_t actor_count = yyjson_is_arr(actors) ? yyjson_arr_size(actors) : 0U;
+    sdl3d_registered_actor **resolved_actors =
+        actor_count > 0U ? (sdl3d_registered_actor **)SDL_calloc(actor_count, sizeof(*resolved_actors)) : NULL;
+    if (resolved_actors == NULL && actor_count > 0U)
+    {
+        SDL_free(values);
+        set_error(error_buffer, error_buffer_size, "network snapshot failed to allocate actor lookup storage");
+        return false;
+    }
+
+    /* Resolve every actor before applying any field so a malformed runtime cannot produce a partial snapshot apply. */
+    for (size_t actor_index = 0U; actor_index < actor_count; ++actor_index)
     {
         yyjson_val *actor_schema = yyjson_arr_get(actors, actor_index);
-        if (sdl3d_game_data_find_actor(runtime, json_string(actor_schema, "entity", NULL)) == NULL)
+        const char *entity_name = json_string(actor_schema, "entity", NULL);
+        resolved_actors[actor_index] = sdl3d_game_data_find_actor(runtime, entity_name);
+        if (resolved_actors[actor_index] == NULL)
         {
+            SDL_free(resolved_actors);
             SDL_free(values);
-            set_error(error_buffer, error_buffer_size, "network snapshot actor not found");
+            set_errorf(error_buffer, error_buffer_size, "network snapshot actor '%s' not found",
+                       entity_name != NULL ? entity_name : "<null>");
             return false;
         }
     }
 
     size_t apply_index = 0U;
-    for (size_t actor_index = 0U; actor_index < yyjson_arr_size(actors); ++actor_index)
+    for (size_t actor_index = 0U; actor_index < actor_count; ++actor_index)
     {
         yyjson_val *actor_schema = yyjson_arr_get(actors, actor_index);
-        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, json_string(actor_schema, "entity", NULL));
+        sdl3d_registered_actor *actor = resolved_actors[actor_index];
         yyjson_val *fields = obj_get(actor_schema, "fields");
         for (size_t field_index = 0U; yyjson_is_arr(fields) && field_index < yyjson_arr_size(fields); ++field_index)
         {
-            game_data_replication_field field;
-            if (actor == NULL || !game_data_replication_field_descriptor(yyjson_arr_get(fields, field_index), &field) ||
+            sdl3d_replication_field_descriptor field;
+            if (!sdl3d_replication_field_descriptor_from_json(yyjson_arr_get(fields, field_index), &field) ||
                 apply_index >= field_count ||
                 !game_data_apply_actor_replication_field(actor, &field, &values[apply_index]))
             {
+                SDL_free(resolved_actors);
                 SDL_free(values);
-                set_error(error_buffer, error_buffer_size, "network snapshot failed to apply authored field");
+                set_errorf(error_buffer, error_buffer_size, "network snapshot failed to apply field '%s' on actor '%s'",
+                           field.path != NULL ? field.path : "<invalid>",
+                           actor_schema != NULL ? json_string(actor_schema, "entity", "<null>") : "<null>");
                 return false;
             }
             ++apply_index;
         }
     }
 
+    SDL_free(resolved_actors);
     SDL_free(values);
     if (out_tick != NULL)
         *out_tick = tick;

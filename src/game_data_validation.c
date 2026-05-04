@@ -11,6 +11,7 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "game_data_standard_options.h"
+#include "network_replication_schema.h"
 #include "sdl3d/input.h"
 #include "sdl3d_crypto.h"
 
@@ -397,82 +398,6 @@ static bool is_replication_direction(const char *direction, bool allow_bidirecti
             (allow_bidirectional && SDL_strcmp(direction, "bidirectional") == 0));
 }
 
-static bool replication_field_type_from_string(const char *type, sdl3d_replication_field_type *out_type)
-{
-    if (type == NULL || type[0] == '\0')
-        return false;
-    if (SDL_strcmp(type, "bool") == 0 || SDL_strcmp(type, "boolean") == 0)
-    {
-        if (out_type != NULL)
-            *out_type = SDL3D_REPLICATION_FIELD_BOOL;
-        return true;
-    }
-    if (SDL_strcmp(type, "int32") == 0 || SDL_strcmp(type, "int") == 0)
-    {
-        if (out_type != NULL)
-            *out_type = SDL3D_REPLICATION_FIELD_INT32;
-        return true;
-    }
-    if (SDL_strcmp(type, "float32") == 0 || SDL_strcmp(type, "float") == 0)
-    {
-        if (out_type != NULL)
-            *out_type = SDL3D_REPLICATION_FIELD_FLOAT32;
-        return true;
-    }
-    if (SDL_strcmp(type, "enum_id") == 0 || SDL_strcmp(type, "string_id") == 0)
-    {
-        if (out_type != NULL)
-            *out_type = SDL3D_REPLICATION_FIELD_ENUM_ID;
-        return true;
-    }
-    if (SDL_strcmp(type, "vec2") == 0)
-    {
-        if (out_type != NULL)
-            *out_type = SDL3D_REPLICATION_FIELD_VEC2;
-        return true;
-    }
-    if (SDL_strcmp(type, "vec3") == 0)
-    {
-        if (out_type != NULL)
-            *out_type = SDL3D_REPLICATION_FIELD_VEC3;
-        return true;
-    }
-    return false;
-}
-
-static const char *replication_field_type_name(sdl3d_replication_field_type type)
-{
-    switch (type)
-    {
-    case SDL3D_REPLICATION_FIELD_BOOL:
-        return "bool";
-    case SDL3D_REPLICATION_FIELD_INT32:
-        return "int32";
-    case SDL3D_REPLICATION_FIELD_FLOAT32:
-        return "float32";
-    case SDL3D_REPLICATION_FIELD_ENUM_ID:
-        return "enum_id";
-    case SDL3D_REPLICATION_FIELD_VEC2:
-        return "vec2";
-    case SDL3D_REPLICATION_FIELD_VEC3:
-        return "vec3";
-    default:
-        return "invalid";
-    }
-}
-
-static bool replication_builtin_field_type(const char *field, sdl3d_replication_field_type *out_type)
-{
-    if (field != NULL &&
-        (SDL_strcmp(field, "position") == 0 || SDL_strcmp(field, "rotation") == 0 || SDL_strcmp(field, "scale") == 0))
-    {
-        if (out_type != NULL)
-            *out_type = SDL3D_REPLICATION_FIELD_VEC3;
-        return true;
-    }
-    return false;
-}
-
 static bool is_replication_property_path(const char *path)
 {
     if (path == NULL || path[0] == '\0' || path[0] == '.' || path[SDL_strlen(path) - 1u] == '.')
@@ -517,38 +442,6 @@ static void network_hash_update_int(sdl3d_crypto_hash32_state *state, const char
     network_hash_update(state, label, buffer);
 }
 
-static bool replication_field_descriptor(yyjson_val *field, const char **out_path,
-                                         sdl3d_replication_field_type *out_type)
-{
-    if (yyjson_is_str(field))
-    {
-        const char *path = yyjson_get_str(field);
-        sdl3d_replication_field_type type = SDL3D_REPLICATION_FIELD_VEC3;
-        if (!replication_builtin_field_type(path, &type))
-            return false;
-        if (out_path != NULL)
-            *out_path = path;
-        if (out_type != NULL)
-            *out_type = type;
-        return true;
-    }
-
-    if (!yyjson_is_obj(field))
-        return false;
-
-    const char *path = json_string(field, "path");
-    if (path == NULL)
-        path = json_string(field, "field");
-    sdl3d_replication_field_type type = SDL3D_REPLICATION_FIELD_BOOL;
-    if (!replication_field_type_from_string(json_string(field, "type"), &type))
-        return false;
-    if (out_path != NULL)
-        *out_path = path;
-    if (out_type != NULL)
-        *out_type = type;
-    return path != NULL && path[0] != '\0';
-}
-
 static bool validate_network_actor_fields(validation_context *ctx, yyjson_val *fields, const char *json_path)
 {
     if (!yyjson_is_arr(fields) || yyjson_arr_size(fields) == 0)
@@ -562,25 +455,24 @@ static bool validate_network_actor_fields(validation_context *ctx, yyjson_val *f
         char path[PATH_BUFFER_SIZE];
         format_path(path, sizeof(path), "%s[%zu]", json_path, i);
         yyjson_val *field = yyjson_arr_get(fields, i);
-        const char *field_path = NULL;
-        sdl3d_replication_field_type field_type = SDL3D_REPLICATION_FIELD_BOOL;
-        if (!replication_field_descriptor(field, &field_path, &field_type))
+        sdl3d_replication_field_descriptor descriptor;
+        if (!sdl3d_replication_field_descriptor_from_json(field, &descriptor))
         {
             ok = validation_error(ctx, path,
                                   "network actor field must be a built-in field string or object with path and type");
             break;
         }
-        if (!is_replication_property_path(field_path))
+        if (!is_replication_property_path(descriptor.path))
         {
-            ok = validation_error(ctx, path, "network actor field path '%s' is invalid", field_path);
+            ok = validation_error(ctx, path, "network actor field path '%s' is invalid", descriptor.path);
             break;
         }
-        if (sdl3d_replication_field_wire_size(field_type) == 0U)
+        if (sdl3d_replication_field_wire_size(descriptor.type) == 0U)
         {
             ok = validation_error(ctx, path, "unsupported network actor field type");
             break;
         }
-        if (!require_unique_name(ctx, &field_names, "network actor field", field_path, path))
+        if (!require_unique_name(ctx, &field_names, "network actor field", descriptor.path, path))
         {
             ok = false;
             break;
@@ -798,12 +690,11 @@ static void hash_network_actor_fields(sdl3d_crypto_hash32_state *state, yyjson_v
     network_hash_update_int(state, "field_count", (Sint64)yyjson_arr_size(fields));
     for (size_t i = 0; yyjson_is_arr(fields) && i < yyjson_arr_size(fields); ++i)
     {
-        const char *field_path = NULL;
-        sdl3d_replication_field_type field_type = SDL3D_REPLICATION_FIELD_BOOL;
-        if (replication_field_descriptor(yyjson_arr_get(fields, i), &field_path, &field_type))
+        sdl3d_replication_field_descriptor descriptor;
+        if (sdl3d_replication_field_descriptor_from_json(yyjson_arr_get(fields, i), &descriptor))
         {
-            network_hash_update(state, "field.path", field_path);
-            network_hash_update(state, "field.type", replication_field_type_name(field_type));
+            network_hash_update(state, "field.path", descriptor.path);
+            network_hash_update(state, "field.type", sdl3d_replication_field_type_name(descriptor.type));
         }
     }
 }
