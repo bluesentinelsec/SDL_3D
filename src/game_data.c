@@ -9690,13 +9690,12 @@ bool sdl3d_game_data_get_network_scene_state_key(const sdl3d_game_data_runtime *
 {
     if (out_key != NULL)
         *out_key = NULL;
-    if (runtime == NULL || runtime->doc == NULL || scope == NULL || scope[0] == '\0' || name == NULL ||
-        name[0] == '\0' || out_key == NULL)
+    if (runtime == NULL || scope == NULL || scope[0] == '\0' || name == NULL || name[0] == '\0' || out_key == NULL)
     {
         return false;
     }
 
-    yyjson_val *root = yyjson_doc_get_root(runtime->doc);
+    yyjson_val *root = runtime_root(runtime);
     yyjson_val *scene_state = obj_get(obj_get(root, "network"), "scene_state");
     yyjson_val *group = obj_get(scene_state, scope);
     const char *key = json_string(group, name, NULL);
