@@ -5999,14 +5999,156 @@ static bool input_profile_binding_to_spec(const sdl3d_game_data_runtime *runtime
     return false;
 }
 
+static bool input_assignment_binding_to_spec(const sdl3d_game_data_runtime *runtime, const char *device,
+                                             yyjson_val *binding, const char *action, int gamepad_slot,
+                                             input_binding_spec *out_spec, char *error_buffer, int error_buffer_size)
+{
+    const int action_id = sdl3d_game_data_find_action(runtime, action);
+    const float scale = json_float(binding, "scale", 1.0f);
+    if (runtime == NULL || binding == NULL || out_spec == NULL || action == NULL || action_id < 0)
+    {
+        set_errorf(error_buffer, error_buffer_size, "input assignment references unknown action '%s'",
+                   action != NULL ? action : "<missing>");
+        return false;
+    }
+
+    SDL_zero(*out_spec);
+    out_spec->action = action;
+    out_spec->action_id = action_id;
+    out_spec->gamepad_index = -1;
+    out_spec->scale = scale;
+
+    if (SDL_strcmp(device != NULL ? device : "", "keyboard") == 0)
+    {
+        const SDL_Scancode code = scancode_from_json(json_string(binding, "key", NULL));
+        if (code == SDL_SCANCODE_UNKNOWN)
+        {
+            set_error(error_buffer, error_buffer_size, "input assignment keyboard binding has an invalid key");
+            return false;
+        }
+        out_spec->source = SDL3D_INPUT_KEYBOARD;
+        out_spec->scancode = code;
+        out_spec->scale = 1.0f;
+        return true;
+    }
+
+    if (SDL_strcmp(device != NULL ? device : "", "mouse") == 0)
+    {
+        const char *axis = json_string(binding, "axis", NULL);
+        const char *button = json_string(binding, "button", NULL);
+        if (axis != NULL)
+        {
+            bool valid_axis = false;
+            out_spec->mouse_axis = mouse_axis_from_json(axis, &valid_axis);
+            if (!valid_axis)
+            {
+                set_error(error_buffer, error_buffer_size, "input assignment mouse binding has an invalid axis");
+                return false;
+            }
+            out_spec->source = SDL3D_INPUT_MOUSE_AXIS;
+            return true;
+        }
+        out_spec->mouse_button = mouse_button_from_json(button);
+        if (out_spec->mouse_button == 0)
+        {
+            set_error(error_buffer, error_buffer_size, "input assignment mouse binding has an invalid button");
+            return false;
+        }
+        out_spec->source = SDL3D_INPUT_MOUSE_BUTTON;
+        out_spec->scale = 1.0f;
+        return true;
+    }
+
+    if (SDL_strcmp(device != NULL ? device : "", "gamepad") == 0)
+    {
+        const char *axis = json_string(binding, "axis", NULL);
+        const char *button = json_string(binding, "button", NULL);
+        out_spec->gamepad_index = gamepad_slot;
+        if (axis != NULL)
+        {
+            out_spec->gamepad_axis = gamepad_axis_from_json(axis);
+            if (out_spec->gamepad_axis == SDL_GAMEPAD_AXIS_INVALID)
+            {
+                set_error(error_buffer, error_buffer_size, "input assignment gamepad binding has an invalid axis");
+                return false;
+            }
+            out_spec->source = SDL3D_INPUT_GAMEPAD_AXIS;
+            return true;
+        }
+        out_spec->gamepad_button = gamepad_button_from_json(button);
+        if (out_spec->gamepad_button == SDL_GAMEPAD_BUTTON_INVALID)
+        {
+            set_error(error_buffer, error_buffer_size, "input assignment gamepad binding has an invalid button");
+            return false;
+        }
+        out_spec->source = SDL3D_INPUT_GAMEPAD_BUTTON;
+        out_spec->scale = 1.0f;
+        return true;
+    }
+
+    set_errorf(error_buffer, error_buffer_size, "input assignment set uses unsupported device '%s'",
+               device != NULL ? device : "<missing>");
+    return false;
+}
+
+static bool apply_input_assignment_json(sdl3d_game_data_runtime *runtime, sdl3d_input_manager *input,
+                                        yyjson_val *assignment, char *error_buffer, int error_buffer_size)
+{
+    const char *set_name = json_string(assignment, "set", NULL);
+    yyjson_val *set = sdl3d_game_data_find_input_assignment_set_json(runtime_root(runtime), set_name);
+    yyjson_val *actions = obj_get(assignment, "actions");
+    yyjson_val *bindings = obj_get(set, "bindings");
+    const char *device = json_string(set, "device", NULL);
+    const int gamepad_slot = json_int(assignment, "slot", -1);
+    if (runtime == NULL || input == NULL || assignment == NULL || set == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "input assignment set '%s' was not found",
+                   set_name != NULL ? set_name : "<missing>");
+        return false;
+    }
+    if (!yyjson_is_obj(actions))
+    {
+        set_errorf(error_buffer, error_buffer_size, "input assignment '%s' requires an actions object",
+                   set_name != NULL ? set_name : "<missing>");
+        return false;
+    }
+
+    for (size_t i = 0; yyjson_is_arr(bindings) && i < yyjson_arr_size(bindings); ++i)
+    {
+        yyjson_val *binding = yyjson_arr_get(bindings, i);
+        const char *semantic = json_string(binding, "semantic", NULL);
+        const char *action = semantic != NULL ? json_string(actions, semantic, NULL) : NULL;
+        input_binding_spec spec;
+        if (semantic == NULL || action == NULL)
+        {
+            set_errorf(error_buffer, error_buffer_size, "input assignment '%s' is missing action for semantic '%s'",
+                       set_name != NULL ? set_name : "<missing>", semantic != NULL ? semantic : "<missing>");
+            return false;
+        }
+        if (!input_assignment_binding_to_spec(runtime, device, binding, action, gamepad_slot, &spec, error_buffer,
+                                              error_buffer_size))
+        {
+            return false;
+        }
+        bind_input_spec(input, &spec);
+    }
+    return true;
+}
+
 static bool apply_input_profile_json(sdl3d_game_data_runtime *runtime, sdl3d_input_manager *input, yyjson_val *profile,
                                      char *error_buffer, int error_buffer_size)
 {
     yyjson_val *unbind = obj_get(profile, "unbind");
     yyjson_val *bindings = obj_get(profile, "bindings");
+    yyjson_val *assignments = obj_get(profile, "assignments");
     if (runtime == NULL || input == NULL || profile == NULL)
     {
         set_error(error_buffer, error_buffer_size, "input profile apply requires runtime, input, and profile");
+        return false;
+    }
+    if (bindings != NULL && assignments != NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "input profile cannot mix bindings and assignments");
         return false;
     }
 
@@ -6032,6 +6174,15 @@ static bool apply_input_profile_json(sdl3d_game_data_runtime *runtime, sdl3d_inp
             return false;
         }
         bind_input_spec(input, &spec);
+    }
+
+    for (size_t i = 0; yyjson_is_arr(assignments) && i < yyjson_arr_size(assignments); ++i)
+    {
+        if (!apply_input_assignment_json(runtime, input, yyjson_arr_get(assignments, i), error_buffer,
+                                         error_buffer_size))
+        {
+            return false;
+        }
     }
     return true;
 }

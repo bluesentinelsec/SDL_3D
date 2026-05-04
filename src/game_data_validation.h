@@ -19,4 +19,6 @@ bool sdl3d_game_data_validate_document(yyjson_val *root, const char *source_path
 bool sdl3d_game_data_network_schema_hash(yyjson_val *root, Uint8 out_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE],
                                          bool *out_present);
 
+yyjson_val *sdl3d_game_data_find_input_assignment_set_json(yyjson_val *root, const char *set_name);
+
 #endif /* SDL3D_GAME_DATA_VALIDATION_H */
