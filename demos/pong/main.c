@@ -242,6 +242,18 @@ static bool enter_multiplayer_play_scene(pong_state *state, const char *match_mo
     return ok;
 }
 
+static const char *network_scene_state_key(const pong_state *state, const char *scope, const char *name,
+                                           const char *fallback)
+{
+    const char *key = NULL;
+    if (state != NULL && state->data != NULL &&
+        sdl3d_game_data_get_network_scene_state_key(state->data, scope, name, &key))
+    {
+        return key;
+    }
+    return fallback;
+}
+
 static void clear_network_action_overrides(pong_state *state)
 {
     char error[160] = {0};
@@ -295,10 +307,16 @@ static void update_host_session_scene_state(pong_state *state)
         SDL_snprintf(client_label, sizeof(client_label), "Client 1 - Connected");
     }
 
-    sdl3d_properties_set_string(scene_state, "multiplayer_host_status", state->host_status);
-    sdl3d_properties_set_string(scene_state, "multiplayer_host_endpoint", state->host_endpoint);
-    sdl3d_properties_set_string(scene_state, "multiplayer_host_client", client_label);
-    sdl3d_properties_set_bool(scene_state, "multiplayer_host_connected", client_connected);
+    sdl3d_properties_set_string(
+        scene_state, network_scene_state_key(state, "host", "status", "multiplayer_host_status"), state->host_status);
+    sdl3d_properties_set_string(scene_state,
+                                network_scene_state_key(state, "host", "endpoint", "multiplayer_host_endpoint"),
+                                state->host_endpoint);
+    sdl3d_properties_set_string(scene_state, network_scene_state_key(state, "host", "peer", "multiplayer_host_client"),
+                                client_label);
+    sdl3d_properties_set_bool(scene_state,
+                              network_scene_state_key(state, "host", "connected", "multiplayer_host_connected"),
+                              client_connected);
 }
 
 static void destroy_host_session_internal(pong_state *state, bool notify_peer)

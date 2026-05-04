@@ -106,6 +106,14 @@
       "transport": "udp",
       "tick_rate": 60
     },
+    "scene_state": {
+      "host": {
+        "status": "multiplayer_host_status",
+        "endpoint": "multiplayer_host_endpoint",
+        "peer": "multiplayer_host_client",
+        "connected": "multiplayer_host_connected"
+      }
+    },
     "replication": [
       {
         "name": "play_state",

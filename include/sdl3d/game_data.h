@@ -858,6 +858,26 @@ extern "C"
                                                  Uint8 out_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE]);
 
     /**
+     * @brief Resolve an authored scene-state key used by network UI/session flows.
+     *
+     * Games may place arbitrary string key maps under `network.scene_state`.
+     * Host integration code can use this helper to avoid hard-coding the
+     * `scene_state` property names that authored lobby, discovery, or direct
+     * connect scenes display.
+     *
+     * For example, `network.scene_state.host.status` can resolve to
+     * `multiplayer_host_status`.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param scope Authored scene-state group, such as `host`.
+     * @param name Authored key name within the group, such as `status`.
+     * @param out_key Receives a string owned by @p runtime.
+     * @return true when the key exists and @p out_key was filled.
+     */
+    bool sdl3d_game_data_get_network_scene_state_key(const sdl3d_game_data_runtime *runtime, const char *scope,
+                                                     const char *name, const char **out_key);
+
+    /**
      * @brief Encode an authored host-to-client replication snapshot.
      *
      * The named replication channel must exist in the loaded `network`

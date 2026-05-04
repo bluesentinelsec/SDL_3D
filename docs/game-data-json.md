@@ -1284,6 +1284,14 @@ typed actor fields, replicated input actions, and control messages:
       "transport": "udp",
       "tick_rate": 60
     },
+    "scene_state": {
+      "host": {
+        "status": "multiplayer_host_status",
+        "endpoint": "multiplayer_host_endpoint",
+        "peer": "multiplayer_host_client",
+        "connected": "multiplayer_host_connected"
+      }
+    },
     "replication": [
       {
         "name": "play_state",
@@ -1321,6 +1329,15 @@ typed actor fields, replicated input actions, and control messages:
 `protocol.id` must be a non-empty string. `protocol.version` and
 `protocol.tick_rate` must be positive integers. `protocol.transport` currently
 supports `udp`.
+
+`scene_state` is optional. It is a game-authored map of named network/session
+UI state keys, grouped by scope. Host integration code can resolve entries with
+`sdl3d_game_data_get_network_scene_state_key()` and write status values into
+`sdl3d_game_data_mutable_scene_state()` without hard-coding the property names
+used by lobby or connection scenes. All scopes and values must be objects of
+non-empty string keys to non-empty string scene-state property names. These keys
+are presentation/orchestration metadata and are intentionally not part of the
+network schema hash.
 
 Replication channel directions are `host_to_client` or `client_to_host`, and
 `rate` must be a positive integer.
@@ -1393,7 +1410,7 @@ Diagnostics are designed for authored content. Errors include the source file, a
 - duplicate names within entity, signal, script, adapter, input action, timer, camera, font, and sensor namespaces
 - script ids, modules, dependencies, dependency cycles, and script file existence
 - input binding structure
-- network protocol, replication directions, actor/property/action/signal references, supported field types, duplicate network fields, and schema hash shape
+- network protocol, replication directions, scene-state key maps, actor/property/action/signal references, supported field types, duplicate network fields, and schema hash shape
 - app lifecycle, UI, render effect, sensor, timer, binding, action, component, adapter, light, and camera references
 - supported generic logic action types and required action payloads
 - warnings for suspicious data such as unused adapters, unused scripts, or unsupported component types
