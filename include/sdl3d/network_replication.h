@@ -18,6 +18,8 @@
 
 #include "sdl3d/types.h"
 
+#define SDL3D_REPLICATION_SCHEMA_HASH_SIZE 32
+
 #ifdef __cplusplus
 extern "C"
 {

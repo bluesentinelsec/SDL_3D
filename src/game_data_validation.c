@@ -12,6 +12,7 @@
 
 #include "game_data_standard_options.h"
 #include "sdl3d/input.h"
+#include "sdl3d_crypto.h"
 
 #define PATH_BUFFER_SIZE 256
 
@@ -387,6 +388,477 @@ static bool note_name(name_table *table, const char *name, const char *json_path
     if (name == NULL || name[0] == '\0' || name_table_contains(table, name))
         return true;
     return name_table_add(table, name, json_path);
+}
+
+static bool is_replication_direction(const char *direction, bool allow_bidirectional)
+{
+    return direction != NULL &&
+           (SDL_strcmp(direction, "host_to_client") == 0 || SDL_strcmp(direction, "client_to_host") == 0 ||
+            (allow_bidirectional && SDL_strcmp(direction, "bidirectional") == 0));
+}
+
+static bool replication_field_type_from_string(const char *type, sdl3d_replication_field_type *out_type)
+{
+    if (type == NULL || type[0] == '\0')
+        return false;
+    if (SDL_strcmp(type, "bool") == 0 || SDL_strcmp(type, "boolean") == 0)
+    {
+        if (out_type != NULL)
+            *out_type = SDL3D_REPLICATION_FIELD_BOOL;
+        return true;
+    }
+    if (SDL_strcmp(type, "int32") == 0 || SDL_strcmp(type, "int") == 0)
+    {
+        if (out_type != NULL)
+            *out_type = SDL3D_REPLICATION_FIELD_INT32;
+        return true;
+    }
+    if (SDL_strcmp(type, "float32") == 0 || SDL_strcmp(type, "float") == 0 || SDL_strcmp(type, "number") == 0)
+    {
+        if (out_type != NULL)
+            *out_type = SDL3D_REPLICATION_FIELD_FLOAT32;
+        return true;
+    }
+    if (SDL_strcmp(type, "enum_id") == 0 || SDL_strcmp(type, "string_id") == 0)
+    {
+        if (out_type != NULL)
+            *out_type = SDL3D_REPLICATION_FIELD_ENUM_ID;
+        return true;
+    }
+    if (SDL_strcmp(type, "vec2") == 0)
+    {
+        if (out_type != NULL)
+            *out_type = SDL3D_REPLICATION_FIELD_VEC2;
+        return true;
+    }
+    if (SDL_strcmp(type, "vec3") == 0)
+    {
+        if (out_type != NULL)
+            *out_type = SDL3D_REPLICATION_FIELD_VEC3;
+        return true;
+    }
+    return false;
+}
+
+static const char *replication_field_type_name(sdl3d_replication_field_type type)
+{
+    switch (type)
+    {
+    case SDL3D_REPLICATION_FIELD_BOOL:
+        return "bool";
+    case SDL3D_REPLICATION_FIELD_INT32:
+        return "int32";
+    case SDL3D_REPLICATION_FIELD_FLOAT32:
+        return "float32";
+    case SDL3D_REPLICATION_FIELD_ENUM_ID:
+        return "enum_id";
+    case SDL3D_REPLICATION_FIELD_VEC2:
+        return "vec2";
+    case SDL3D_REPLICATION_FIELD_VEC3:
+        return "vec3";
+    default:
+        return "invalid";
+    }
+}
+
+static bool replication_builtin_field_type(const char *field, sdl3d_replication_field_type *out_type)
+{
+    if (field != NULL &&
+        (SDL_strcmp(field, "position") == 0 || SDL_strcmp(field, "rotation") == 0 || SDL_strcmp(field, "scale") == 0))
+    {
+        if (out_type != NULL)
+            *out_type = SDL3D_REPLICATION_FIELD_VEC3;
+        return true;
+    }
+    return false;
+}
+
+static bool is_replication_property_path(const char *path)
+{
+    if (path == NULL || path[0] == '\0' || path[0] == '.' || path[SDL_strlen(path) - 1u] == '.')
+        return false;
+
+    bool previous_dot = false;
+    for (const char *p = path; *p != '\0'; ++p)
+    {
+        const char c = *p;
+        const bool valid =
+            (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '.';
+        if (!valid)
+            return false;
+        if (c == '.' && previous_dot)
+            return false;
+        previous_dot = c == '.';
+    }
+    return true;
+}
+
+static void network_hash_update(sdl3d_crypto_hash32_state *state, const char *label, const char *value)
+{
+    static const char sep = '\0';
+    sdl3d_crypto_hash32_update(state, label, SDL_strlen(label));
+    sdl3d_crypto_hash32_update(state, &sep, 1u);
+    if (value != NULL)
+        sdl3d_crypto_hash32_update(state, value, SDL_strlen(value));
+    sdl3d_crypto_hash32_update(state, &sep, 1u);
+}
+
+static void network_hash_update_int(sdl3d_crypto_hash32_state *state, const char *label, Sint64 value)
+{
+    char buffer[32];
+    SDL_snprintf(buffer, sizeof(buffer), "%lld", (long long)value);
+    network_hash_update(state, label, buffer);
+}
+
+static bool replication_field_descriptor(yyjson_val *field, const char **out_path,
+                                         sdl3d_replication_field_type *out_type)
+{
+    if (yyjson_is_str(field))
+    {
+        const char *path = yyjson_get_str(field);
+        sdl3d_replication_field_type type = SDL3D_REPLICATION_FIELD_VEC3;
+        if (!replication_builtin_field_type(path, &type))
+            return false;
+        if (out_path != NULL)
+            *out_path = path;
+        if (out_type != NULL)
+            *out_type = type;
+        return true;
+    }
+
+    if (!yyjson_is_obj(field))
+        return false;
+
+    const char *path = json_string(field, "path");
+    if (path == NULL)
+        path = json_string(field, "field");
+    sdl3d_replication_field_type type = SDL3D_REPLICATION_FIELD_BOOL;
+    if (!replication_field_type_from_string(json_string(field, "type"), &type))
+        return false;
+    if (out_path != NULL)
+        *out_path = path;
+    if (out_type != NULL)
+        *out_type = type;
+    return path != NULL && path[0] != '\0';
+}
+
+static bool validate_network_actor_fields(validation_context *ctx, yyjson_val *fields, const char *json_path)
+{
+    if (!yyjson_is_arr(fields) || yyjson_arr_size(fields) == 0)
+        return validation_error(ctx, json_path, "network actor fields must be a non-empty array");
+
+    name_table field_names;
+    SDL_zero(field_names);
+    bool ok = true;
+    for (size_t i = 0; ok && i < yyjson_arr_size(fields); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "%s[%zu]", json_path, i);
+        yyjson_val *field = yyjson_arr_get(fields, i);
+        const char *field_path = NULL;
+        sdl3d_replication_field_type field_type = SDL3D_REPLICATION_FIELD_BOOL;
+        if (!replication_field_descriptor(field, &field_path, &field_type))
+        {
+            ok = validation_error(ctx, path,
+                                  "network actor field must be a built-in field string or object with path and type");
+            break;
+        }
+        if (!is_replication_property_path(field_path))
+        {
+            ok = validation_error(ctx, path, "network actor field path '%s' is invalid", field_path);
+            break;
+        }
+        if (sdl3d_replication_field_wire_size(field_type) == 0U)
+        {
+            ok = validation_error(ctx, path, "unsupported network actor field type");
+            break;
+        }
+        if (!require_unique_name(ctx, &field_names, "network actor field", field_path, path))
+        {
+            ok = false;
+            break;
+        }
+    }
+    name_table_destroy(&field_names);
+    return ok;
+}
+
+static bool validate_network_actors(validation_context *ctx, yyjson_val *actors, const char *json_path,
+                                    validation_names *names)
+{
+    if (!yyjson_is_arr(actors) || yyjson_arr_size(actors) == 0)
+        return validation_error(ctx, json_path, "network actors must be a non-empty array");
+
+    name_table actor_names;
+    SDL_zero(actor_names);
+    bool ok = true;
+    for (size_t i = 0; ok && i < yyjson_arr_size(actors); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "%s[%zu]", json_path, i);
+        yyjson_val *actor = yyjson_arr_get(actors, i);
+        if (!yyjson_is_obj(actor))
+        {
+            ok = validation_error(ctx, path, "network actor entry must be an object");
+            break;
+        }
+        const char *entity = json_string(actor, "entity");
+        if (!require_ref(ctx, &names->entities, "entity", entity, path) ||
+            !require_unique_name(ctx, &actor_names, "network actor", entity, path))
+        {
+            ok = false;
+            break;
+        }
+        char fields_path[PATH_BUFFER_SIZE];
+        format_path(fields_path, sizeof(fields_path), "%s.fields", path);
+        ok = validate_network_actor_fields(ctx, obj_get(actor, "fields"), fields_path);
+    }
+    name_table_destroy(&actor_names);
+    return ok;
+}
+
+static bool validate_network_inputs(validation_context *ctx, yyjson_val *inputs, const char *json_path,
+                                    validation_names *names)
+{
+    if (!yyjson_is_arr(inputs) || yyjson_arr_size(inputs) == 0)
+        return validation_error(ctx, json_path, "network inputs must be a non-empty array");
+
+    name_table input_names;
+    SDL_zero(input_names);
+    bool ok = true;
+    for (size_t i = 0; ok && i < yyjson_arr_size(inputs); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "%s[%zu]", json_path, i);
+        yyjson_val *input = yyjson_arr_get(inputs, i);
+        if (!yyjson_is_obj(input))
+        {
+            ok = validation_error(ctx, path, "network input entry must be an object");
+            break;
+        }
+        const char *action = json_string(input, "action");
+        if (!require_ref(ctx, &names->actions, "input action", action, path) ||
+            !require_unique_name(ctx, &input_names, "network input action", action, path))
+        {
+            ok = false;
+            break;
+        }
+    }
+    name_table_destroy(&input_names);
+    return ok;
+}
+
+static bool validate_network(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *network = obj_get(root, "network");
+    if (network == NULL)
+        return true;
+    if (!yyjson_is_obj(network))
+        return validation_error(ctx, "$.network", "network must be an object");
+
+    yyjson_val *protocol = obj_get(network, "protocol");
+    if (!yyjson_is_obj(protocol))
+        return validation_error(ctx, "$.network.protocol", "network protocol must be an object");
+    if (!is_non_empty_string(protocol, "id"))
+        return validation_error(ctx, "$.network.protocol.id", "network protocol id must be a non-empty string");
+    yyjson_val *version = obj_get(protocol, "version");
+    if (!yyjson_is_int(version) || yyjson_get_sint(version) < 1)
+        return validation_error(ctx, "$.network.protocol.version",
+                                "network protocol version must be a positive integer");
+    const char *transport = json_string(protocol, "transport");
+    if (transport == NULL || SDL_strcmp(transport, "udp") != 0)
+        return validation_error(ctx, "$.network.protocol.transport", "network protocol transport must be udp");
+    yyjson_val *tick_rate = obj_get(protocol, "tick_rate");
+    if (!yyjson_is_int(tick_rate) || yyjson_get_sint(tick_rate) <= 0)
+        return validation_error(ctx, "$.network.protocol.tick_rate",
+                                "network protocol tick_rate must be a positive integer");
+
+    yyjson_val *replication = obj_get(network, "replication");
+    if (!yyjson_is_arr(replication) || yyjson_arr_size(replication) == 0)
+        return validation_error(ctx, "$.network.replication", "network replication must be a non-empty array");
+
+    name_table replication_names;
+    SDL_zero(replication_names);
+    bool ok = true;
+    for (size_t i = 0; ok && i < yyjson_arr_size(replication); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.network.replication[%zu]", i);
+        yyjson_val *entry = yyjson_arr_get(replication, i);
+        if (!yyjson_is_obj(entry))
+        {
+            ok = validation_error(ctx, path, "network replication entry must be an object");
+            break;
+        }
+        if (!require_unique_name(ctx, &replication_names, "network replication", json_string(entry, "name"), path))
+        {
+            ok = false;
+            break;
+        }
+        const char *direction = json_string(entry, "direction");
+        if (!is_replication_direction(direction, false))
+        {
+            ok = validation_error(ctx, path, "network replication direction must be host_to_client or client_to_host");
+            break;
+        }
+        yyjson_val *rate = obj_get(entry, "rate");
+        if (!yyjson_is_int(rate) || yyjson_get_sint(rate) <= 0)
+        {
+            ok = validation_error(ctx, path, "network replication rate must be a positive integer");
+            break;
+        }
+        yyjson_val *actors = obj_get(entry, "actors");
+        yyjson_val *inputs = obj_get(entry, "inputs");
+        if (SDL_strcmp(direction, "host_to_client") == 0)
+        {
+            if (inputs != NULL)
+            {
+                ok = validation_error(ctx, path, "host_to_client network replication must not declare inputs");
+                break;
+            }
+            char actors_path[PATH_BUFFER_SIZE];
+            format_path(actors_path, sizeof(actors_path), "%s.actors", path);
+            ok = validate_network_actors(ctx, actors, actors_path, names);
+        }
+        else
+        {
+            if (actors != NULL)
+            {
+                ok = validation_error(ctx, path, "client_to_host network replication must not declare actors");
+                break;
+            }
+            char inputs_path[PATH_BUFFER_SIZE];
+            format_path(inputs_path, sizeof(inputs_path), "%s.inputs", path);
+            ok = validate_network_inputs(ctx, inputs, inputs_path, names);
+        }
+    }
+    name_table_destroy(&replication_names);
+    if (!ok)
+        return false;
+
+    yyjson_val *controls = obj_get(network, "control_messages");
+    if (controls == NULL)
+        return true;
+    if (!yyjson_is_arr(controls))
+        return validation_error(ctx, "$.network.control_messages", "network control_messages must be an array");
+
+    name_table control_names;
+    SDL_zero(control_names);
+    for (size_t i = 0; ok && i < yyjson_arr_size(controls); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.network.control_messages[%zu]", i);
+        yyjson_val *control = yyjson_arr_get(controls, i);
+        if (!yyjson_is_obj(control))
+        {
+            ok = validation_error(ctx, path, "network control message must be an object");
+            break;
+        }
+        if (!require_unique_name(ctx, &control_names, "network control message", json_string(control, "name"), path))
+        {
+            ok = false;
+            break;
+        }
+        if (!is_replication_direction(json_string(control, "direction"), true))
+        {
+            ok = validation_error(ctx, path,
+                                  "network control message direction must be host_to_client, client_to_host, or "
+                                  "bidirectional");
+            break;
+        }
+        if (!require_ref(ctx, &names->signals, "signal", json_string(control, "signal"), path))
+        {
+            ok = false;
+            break;
+        }
+    }
+    name_table_destroy(&control_names);
+    return ok;
+}
+
+static void hash_network_actor_fields(sdl3d_crypto_hash32_state *state, yyjson_val *fields)
+{
+    network_hash_update_int(state, "field_count", (Sint64)yyjson_arr_size(fields));
+    for (size_t i = 0; yyjson_is_arr(fields) && i < yyjson_arr_size(fields); ++i)
+    {
+        const char *field_path = NULL;
+        sdl3d_replication_field_type field_type = SDL3D_REPLICATION_FIELD_BOOL;
+        if (replication_field_descriptor(yyjson_arr_get(fields, i), &field_path, &field_type))
+        {
+            network_hash_update(state, "field.path", field_path);
+            network_hash_update(state, "field.type", replication_field_type_name(field_type));
+        }
+    }
+}
+
+bool sdl3d_game_data_network_schema_hash(yyjson_val *root, Uint8 out_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE],
+                                         bool *out_present)
+{
+    if (out_present != NULL)
+        *out_present = false;
+    if (out_hash != NULL)
+        SDL_memset(out_hash, 0, SDL3D_REPLICATION_SCHEMA_HASH_SIZE);
+    if (!yyjson_is_obj(root))
+        return false;
+
+    yyjson_val *network = obj_get(root, "network");
+    if (network == NULL)
+        return true;
+    if (!yyjson_is_obj(network) || out_hash == NULL)
+        return false;
+
+    if (out_present != NULL)
+        *out_present = true;
+
+    sdl3d_crypto_hash32_state state;
+    sdl3d_crypto_hash32_init(&state);
+    network_hash_update(&state, "schema", "sdl3d.network.replication.v0");
+
+    yyjson_val *protocol = obj_get(network, "protocol");
+    network_hash_update(&state, "protocol.id", json_string(protocol, "id"));
+    network_hash_update_int(&state, "protocol.version", yyjson_get_sint(obj_get(protocol, "version")));
+    network_hash_update(&state, "protocol.transport", json_string(protocol, "transport"));
+    network_hash_update_int(&state, "protocol.tick_rate", yyjson_get_sint(obj_get(protocol, "tick_rate")));
+
+    yyjson_val *replication = obj_get(network, "replication");
+    network_hash_update_int(&state, "replication_count", (Sint64)yyjson_arr_size(replication));
+    for (size_t i = 0; yyjson_is_arr(replication) && i < yyjson_arr_size(replication); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(replication, i);
+        network_hash_update(&state, "replication.name", json_string(entry, "name"));
+        network_hash_update(&state, "replication.direction", json_string(entry, "direction"));
+        network_hash_update_int(&state, "replication.rate", yyjson_get_sint(obj_get(entry, "rate")));
+
+        yyjson_val *actors = obj_get(entry, "actors");
+        network_hash_update_int(&state, "actor_count", (Sint64)yyjson_arr_size(actors));
+        for (size_t a = 0; yyjson_is_arr(actors) && a < yyjson_arr_size(actors); ++a)
+        {
+            yyjson_val *actor = yyjson_arr_get(actors, a);
+            network_hash_update(&state, "actor.entity", json_string(actor, "entity"));
+            hash_network_actor_fields(&state, obj_get(actor, "fields"));
+        }
+
+        yyjson_val *inputs = obj_get(entry, "inputs");
+        network_hash_update_int(&state, "input_count", (Sint64)yyjson_arr_size(inputs));
+        for (size_t input_index = 0; yyjson_is_arr(inputs) && input_index < yyjson_arr_size(inputs); ++input_index)
+        {
+            yyjson_val *input = yyjson_arr_get(inputs, input_index);
+            network_hash_update(&state, "input.action", json_string(input, "action"));
+        }
+    }
+
+    yyjson_val *controls = obj_get(network, "control_messages");
+    network_hash_update_int(&state, "control_count", (Sint64)yyjson_arr_size(controls));
+    for (size_t i = 0; yyjson_is_arr(controls) && i < yyjson_arr_size(controls); ++i)
+    {
+        yyjson_val *control = yyjson_arr_get(controls, i);
+        network_hash_update(&state, "control.name", json_string(control, "name"));
+        network_hash_update(&state, "control.direction", json_string(control, "direction"));
+        network_hash_update(&state, "control.signal", json_string(control, "signal"));
+    }
+
+    sdl3d_crypto_hash32_final(&state, out_hash);
+    return true;
 }
 
 static bool path_is_absolute(const char *path)
@@ -2752,7 +3224,8 @@ static bool validate_details(validation_context *ctx, yyjson_val *root, validati
            validate_input_bindings(ctx, root) && validate_components(ctx, root, names) &&
            validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases", names) &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
-           validate_app_refs(ctx, root, names) && validate_cameras(ctx, root, names) && validate_ui(ctx, root, names) &&
+           validate_network(ctx, root, names) && validate_app_refs(ctx, root, names) &&
+           validate_cameras(ctx, root, names) && validate_ui(ctx, root, names) &&
            validate_presentation(ctx, root, names) && validate_render_effects(ctx, root, names) &&
            validate_lights(ctx, root, names) && validate_logic(ctx, root, names) &&
            validate_adapters(ctx, root, names) &&

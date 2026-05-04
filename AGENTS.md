@@ -42,7 +42,7 @@ This file gives working guidance for AI agents maintaining SDL_3D.
 ## Suggested workflow
 
 - Read the existing code and docs before editing.
-- Make the smallest correct change that addresses the root cause.
+- Make the most architecturally correct change that addresses the root cause.
 - Add focused tests for the changed behavior.
 - Run the relevant build/test targets before finishing.
 - Update documentation or sample data if the public behavior changed.

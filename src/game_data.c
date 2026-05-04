@@ -284,6 +284,8 @@ typedef struct sdl3d_game_data_runtime
     int property_snapshot_count;
     int property_snapshot_capacity;
     sdl3d_storage *storage;
+    bool has_network_schema;
+    Uint8 network_schema_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE];
     const char *active_camera;
     scene_activity_state activity;
     float current_dt;
@@ -8773,6 +8775,12 @@ bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_
         sdl3d_game_data_destroy(runtime);
         return false;
     }
+    if (!sdl3d_game_data_network_schema_hash(root, runtime->network_schema_hash, &runtime->has_network_schema))
+    {
+        sdl3d_game_data_destroy(runtime);
+        set_error(error_buffer, error_buffer_size, "failed to compute network schema hash");
+        return false;
+    }
     load_storage_config(runtime, root);
 
     yyjson_val *logic = obj_get(root, "logic");
@@ -8876,6 +8884,21 @@ bool sdl3d_game_data_get_storage_config(const sdl3d_game_data_runtime *runtime, 
         return false;
 
     *out_config = runtime->storage_config;
+    return true;
+}
+
+bool sdl3d_game_data_has_network_schema(const sdl3d_game_data_runtime *runtime)
+{
+    return runtime != NULL && runtime->has_network_schema;
+}
+
+bool sdl3d_game_data_get_network_schema_hash(const sdl3d_game_data_runtime *runtime,
+                                             Uint8 out_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE])
+{
+    if (runtime == NULL || out_hash == NULL || !runtime->has_network_schema)
+        return false;
+
+    SDL_memcpy(out_hash, runtime->network_schema_hash, SDL3D_REPLICATION_SCHEMA_HASH_SIZE);
     return true;
 }
 

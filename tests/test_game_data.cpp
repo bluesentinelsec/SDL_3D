@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -216,6 +217,106 @@ void write_text(const std::filesystem::path &path, const char *text)
     std::filesystem::create_directories(path.parent_path());
     std::ofstream out(path, std::ios::binary);
     out << text;
+}
+
+std::string network_schema_game_json(const std::string &network_json, const char *metadata_name = "Network Schema")
+{
+    return std::string(R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": ")json") +
+           metadata_name + R"json(", "id": "test.network_schema", "version": "0.1.0" },
+  "world": { "name": "world.network_schema", "kind": "fixed_screen" },
+  "entities": [
+    { "name": "entity.paddle.player" },
+    { "name": "entity.ball" }
+  ],
+  "signals": [
+    "signal.network.start",
+    "signal.network.pause"
+  ],
+  "input": {
+    "contexts": [
+      {
+        "name": "gameplay",
+        "actions": [
+          { "name": "action.remote.up" },
+          { "name": "action.remote.down" }
+        ]
+      }
+    ]
+  },
+  "network": )json" +
+           network_json +
+           R"json(
+})json";
+}
+
+std::string valid_network_schema_json(const char *ball_velocity_type = "vec3")
+{
+    return std::string(R"json({
+    "protocol": {
+      "id": "sdl3d.test.network.v1",
+      "version": 1,
+      "transport": "udp",
+      "tick_rate": 60
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.paddle.player",
+            "fields": [
+              "position",
+              { "path": "properties.active", "type": "bool" }
+            ]
+          },
+          {
+            "entity": "entity.ball",
+            "fields": [
+              "position",
+              { "path": "properties.velocity", "type": ")json") +
+           ball_velocity_type + R"json(" }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "client_input",
+        "direction": "client_to_host",
+        "rate": 60,
+        "inputs": [
+          { "action": "action.remote.up" },
+          { "action": "action.remote.down" }
+        ]
+      }
+    ],
+    "control_messages": [
+      { "name": "start_game", "direction": "host_to_client", "signal": "signal.network.start" },
+      { "name": "pause", "direction": "bidirectional", "signal": "signal.network.pause" }
+    ]
+  })json";
+}
+
+std::array<Uint8, SDL3D_REPLICATION_SCHEMA_HASH_SIZE> load_network_schema_hash(const std::filesystem::path &path)
+{
+    sdl3d_game_session *session = nullptr;
+    EXPECT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    EXPECT_TRUE(sdl3d_game_data_load_file(path.string().c_str(), session, &runtime, error, sizeof(error))) << error;
+    EXPECT_NE(runtime, nullptr);
+    EXPECT_TRUE(sdl3d_game_data_has_network_schema(runtime));
+
+    std::array<Uint8, SDL3D_REPLICATION_SCHEMA_HASH_SIZE> hash{};
+    EXPECT_TRUE(sdl3d_game_data_get_network_schema_hash(runtime, hash.data()));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    return hash;
 }
 
 std::filesystem::path copy_pong_data_with_storage_overrides(const std::filesystem::path &dir,
@@ -4204,6 +4305,153 @@ TEST(GameDataRuntime, ValidatesAuthoredStorageConfig)
         sdl3d_game_data_validate_file((dir / "good_storage.game.json").string().c_str(), nullptr, error, sizeof(error)))
         << error;
     EXPECT_EQ(error[0], '\0');
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, ValidatesNetworkReplicationSchemaAndComputesStableHash)
+{
+    const std::filesystem::path dir = unique_test_dir("network_schema");
+    const std::string network_json = valid_network_schema_json();
+
+    write_text(dir / "network_a.game.json", network_schema_game_json(network_json, "Network Schema A").c_str());
+    write_text(dir / "network_b.game.json", network_schema_game_json(network_json, "Different Metadata").c_str());
+    write_text(dir / "network_changed.game.json",
+               network_schema_game_json(valid_network_schema_json("vec2"), "Network Schema A").c_str());
+
+    char error[512]{};
+    ASSERT_TRUE(
+        sdl3d_game_data_validate_file((dir / "network_a.game.json").string().c_str(), nullptr, error, sizeof(error)))
+        << error;
+
+    const auto hash_a = load_network_schema_hash(dir / "network_a.game.json");
+    const auto hash_b = load_network_schema_hash(dir / "network_b.game.json");
+    const auto hash_changed = load_network_schema_hash(dir / "network_changed.game.json");
+
+    EXPECT_EQ(hash_a, hash_b);
+    EXPECT_NE(hash_a, hash_changed);
+
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
+{
+    struct Case
+    {
+        const char *name;
+        std::string network_json;
+        const char *expected_error;
+    };
+
+    const Case cases[] = {
+        {
+            "unknown_entity",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          { "entity": "entity.missing", "fields": [ "position" ] }
+        ]
+      }
+    ]
+  })json",
+            "unknown entity reference",
+        },
+        {
+            "duplicate_field",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": [
+              { "path": "properties.velocity", "type": "vec3" },
+              { "path": "properties.velocity", "type": "vec3" }
+            ]
+          }
+        ]
+      }
+    ]
+  })json",
+            "duplicate network actor field",
+        },
+        {
+            "unsupported_field_type",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": [
+              { "path": "properties.transform", "type": "mat4" }
+            ]
+          }
+        ]
+      }
+    ]
+  })json",
+            "network actor field must",
+        },
+        {
+            "unknown_action",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "replication": [
+      {
+        "name": "client_input",
+        "direction": "client_to_host",
+        "rate": 60,
+        "inputs": [
+          { "action": "action.missing" }
+        ]
+      }
+    ]
+  })json",
+            "unknown input action reference",
+        },
+        {
+            "bad_direction",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "sideways",
+        "rate": 60,
+        "actors": [
+          { "entity": "entity.ball", "fields": [ "position" ] }
+        ]
+      }
+    ]
+  })json",
+            "network replication direction",
+        },
+    };
+
+    const std::filesystem::path dir = unique_test_dir("bad_network_schema");
+    for (const Case &test_case : cases)
+    {
+        const std::filesystem::path path = dir / (std::string(test_case.name) + ".game.json");
+        write_text(path, network_schema_game_json(test_case.network_json, test_case.name).c_str());
+        char error[512]{};
+        EXPECT_FALSE(sdl3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
+            << test_case.name << ": " << error;
+    }
     remove_test_dir(dir);
 }
 
