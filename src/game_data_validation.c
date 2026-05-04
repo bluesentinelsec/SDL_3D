@@ -55,6 +55,7 @@ typedef struct validation_names
     name_table script_modules;
     name_table adapters;
     name_table actions;
+    name_table input_assignment_sets;
     name_table timers;
     name_table cameras;
     name_table fonts;
@@ -160,6 +161,13 @@ static bool validation_gamepad_button_name_valid(const char *name)
             return true;
     }
     return false;
+}
+
+static bool input_device_name_valid(const char *device)
+{
+    return SDL_strcmp(device != NULL ? device : "", "keyboard") == 0 ||
+           SDL_strcmp(device != NULL ? device : "", "gamepad") == 0 ||
+           SDL_strcmp(device != NULL ? device : "", "mouse") == 0;
 }
 
 static void set_first_error(validation_context *ctx, const char *json_path, const char *message)
@@ -1408,14 +1416,40 @@ static bool collect_sensors(validation_context *ctx, yyjson_val *root, validatio
     return true;
 }
 
+static bool collect_input_assignment_sets(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *sets = obj_get(obj_get(root, "input"), "device_assignment_sets");
+    if (sets == NULL)
+        return true;
+    if (!yyjson_is_arr(sets))
+        return validation_error(ctx, "$.input.device_assignment_sets", "input device assignment sets must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(sets); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        yyjson_val *set = yyjson_arr_get(sets, i);
+        format_path(path, sizeof(path), "$.input.device_assignment_sets[%zu]", i);
+        if (!yyjson_is_obj(set))
+            return validation_error(ctx, path, "input device assignment sets must be objects");
+        const char *name = json_string(set, "name");
+        if (name != NULL && name[0] != '\0' &&
+            !require_unique_name(ctx, &names->input_assignment_sets, "input device assignment set", name, path))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool collect_names(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     return collect_signals(ctx, root, names) && collect_entities(ctx, root, names) &&
            collect_scripts(ctx, root, names) && collect_adapters(ctx, root, names) &&
-           collect_input_actions(ctx, root, names) && collect_cameras(ctx, root, names) &&
-           collect_fonts(ctx, root, names) && collect_sprite_assets(ctx, root, names) &&
-           collect_images(ctx, root, names) && collect_audio_assets(ctx, root, names) &&
-           collect_timers(ctx, root, names) && collect_sensors(ctx, root, names);
+           collect_input_actions(ctx, root, names) && collect_input_assignment_sets(ctx, root, names) &&
+           collect_cameras(ctx, root, names) && collect_fonts(ctx, root, names) &&
+           collect_sprite_assets(ctx, root, names) && collect_images(ctx, root, names) &&
+           collect_audio_assets(ctx, root, names) && collect_timers(ctx, root, names) &&
+           collect_sensors(ctx, root, names);
 }
 
 static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)
@@ -1525,6 +1559,133 @@ static bool validate_input_profile_binding(validation_context *ctx, yyjson_val *
     return true;
 }
 
+static yyjson_val *find_input_assignment_set_json(yyjson_val *root, const char *set_name)
+{
+    yyjson_val *sets = obj_get(obj_get(root, "input"), "device_assignment_sets");
+    for (size_t i = 0; set_name != NULL && yyjson_is_arr(sets) && i < yyjson_arr_size(sets); ++i)
+    {
+        yyjson_val *set = yyjson_arr_get(sets, i);
+        const char *name = json_string(set, "name");
+        if (name != NULL && SDL_strcmp(name, set_name) == 0)
+            return set;
+    }
+    return NULL;
+}
+
+static bool validate_input_assignment_set_binding(validation_context *ctx, yyjson_val *binding, const char *device,
+                                                  const char *path)
+{
+    if (!yyjson_is_obj(binding))
+        return validation_error(ctx, path, "input device assignment bindings must be objects");
+    if (!is_non_empty_string(binding, "semantic"))
+        return validation_error(ctx, path, "input device assignment binding requires a non-empty semantic");
+
+    if (SDL_strcmp(device != NULL ? device : "", "keyboard") == 0)
+    {
+        if (!validation_key_name_valid(json_string(binding, "key")))
+            return validation_error(ctx, path, "keyboard input device assignment binding requires a valid key");
+    }
+    else if (SDL_strcmp(device != NULL ? device : "", "gamepad") == 0)
+    {
+        const char *axis = json_string(binding, "axis");
+        const char *button = json_string(binding, "button");
+        if (axis == NULL && button == NULL)
+            return validation_error(ctx, path, "gamepad input device assignment binding requires an axis or button");
+        if (axis != NULL && !validation_gamepad_axis_name_valid(axis))
+            return validation_error(ctx, path, "gamepad input device assignment binding requires a valid axis");
+        if (button != NULL && !validation_gamepad_button_name_valid(button))
+            return validation_error(ctx, path, "gamepad input device assignment binding requires a valid button");
+    }
+    else if (SDL_strcmp(device != NULL ? device : "", "mouse") == 0)
+    {
+        const char *axis = json_string(binding, "axis");
+        const char *button = json_string(binding, "button");
+        if (axis == NULL && button == NULL)
+            return validation_error(ctx, path, "mouse input device assignment binding requires an axis or button");
+        if (axis != NULL && !validation_mouse_axis_name_valid(axis))
+            return validation_error(ctx, path, "mouse input device assignment binding requires a valid axis");
+        if (button != NULL && !validation_mouse_button_name_valid(button))
+            return validation_error(ctx, path, "mouse input device assignment binding requires a valid button");
+    }
+    else
+    {
+        return validation_error(ctx, path, "unsupported input device assignment device '%s'",
+                                device != NULL ? device : "<missing>");
+    }
+    return true;
+}
+
+static bool validate_input_assignment_sets(validation_context *ctx, yyjson_val *root)
+{
+    yyjson_val *sets = obj_get(obj_get(root, "input"), "device_assignment_sets");
+    if (sets == NULL)
+        return true;
+    if (!yyjson_is_arr(sets))
+        return validation_error(ctx, "$.input.device_assignment_sets", "input device assignment sets must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(sets); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        yyjson_val *set = yyjson_arr_get(sets, i);
+        format_path(path, sizeof(path), "$.input.device_assignment_sets[%zu]", i);
+        if (!yyjson_is_obj(set))
+            return validation_error(ctx, path, "input device assignment sets must be objects");
+        const char *device = json_string(set, "device");
+        if (!is_non_empty_string(set, "name"))
+            return validation_error(ctx, path, "input device assignment set requires a non-empty name");
+        if (!input_device_name_valid(device))
+            return validation_error(ctx, path, "input device assignment set has unsupported device '%s'",
+                                    device != NULL ? device : "<missing>");
+
+        yyjson_val *bindings = obj_get(set, "bindings");
+        if (!yyjson_is_arr(bindings) || yyjson_arr_size(bindings) == 0)
+            return validation_error(ctx, path, "input device assignment set requires non-empty bindings");
+        for (size_t b = 0; b < yyjson_arr_size(bindings); ++b)
+        {
+            char binding_path[PATH_BUFFER_SIZE];
+            format_path(binding_path, sizeof(binding_path), "%s.bindings[%zu]", path, b);
+            if (!validate_input_assignment_set_binding(ctx, yyjson_arr_get(bindings, b), device, binding_path))
+                return false;
+        }
+    }
+    return true;
+}
+
+static bool validate_input_profile_assignment(validation_context *ctx, yyjson_val *root, yyjson_val *assignment,
+                                              const char *path, validation_names *names)
+{
+    if (!yyjson_is_obj(assignment))
+        return validation_error(ctx, path, "input profile assignments must be objects");
+    const char *set_name = json_string(assignment, "set");
+    if (!require_ref(ctx, &names->input_assignment_sets, "input device assignment set", set_name, path))
+        return false;
+
+    yyjson_val *slot = obj_get(assignment, "slot");
+    if (slot != NULL &&
+        (!yyjson_is_num(slot) || yyjson_get_sint(slot) < -1 || yyjson_get_sint(slot) >= SDL3D_INPUT_MAX_GAMEPADS))
+    {
+        return validation_error(ctx, path, "input profile assignment slot must be -1 or a valid slot index");
+    }
+
+    yyjson_val *actions = obj_get(assignment, "actions");
+    if (!yyjson_is_obj(actions))
+        return validation_error(ctx, path, "input profile assignment requires an actions object");
+
+    yyjson_val *set = find_input_assignment_set_json(root, set_name);
+    yyjson_val *bindings = obj_get(set, "bindings");
+    for (size_t i = 0; yyjson_is_arr(bindings) && i < yyjson_arr_size(bindings); ++i)
+    {
+        char action_path[PATH_BUFFER_SIZE];
+        yyjson_val *binding = yyjson_arr_get(bindings, i);
+        const char *semantic = json_string(binding, "semantic");
+        const char *action = semantic != NULL ? json_string(actions, semantic) : NULL;
+        format_path(action_path, sizeof(action_path), "%s.actions.%s", path, semantic != NULL ? semantic : "<missing>");
+        if (!require_ref(ctx, &names->actions, "input action", action, action_path))
+            return false;
+    }
+    return true;
+}
+
 static bool validate_input_profiles(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *profiles = obj_get(obj_get(root, "input"), "profiles");
@@ -1592,6 +1753,16 @@ static bool validate_input_profiles(validation_context *ctx, yyjson_val *root, v
             char binding_path[PATH_BUFFER_SIZE];
             format_path(binding_path, sizeof(binding_path), "%s.bindings[%zu]", path, b);
             ok = validate_input_profile_binding(ctx, yyjson_arr_get(bindings, b), binding_path, names);
+        }
+
+        yyjson_val *assignments = obj_get(profile, "assignments");
+        if (ok && assignments != NULL && !yyjson_is_arr(assignments))
+            ok = validation_error(ctx, path, "input profile assignments must be an array");
+        for (size_t a = 0; ok && yyjson_is_arr(assignments) && a < yyjson_arr_size(assignments); ++a)
+        {
+            char assignment_path[PATH_BUFFER_SIZE];
+            format_path(assignment_path, sizeof(assignment_path), "%s.assignments[%zu]", path, a);
+            ok = validate_input_profile_assignment(ctx, root, yyjson_arr_get(assignments, a), assignment_path, names);
         }
     }
     name_table_destroy(&profile_names);
@@ -3303,8 +3474,8 @@ static bool warn_unused(validation_context *ctx, const name_table *declared, con
 static bool validate_details(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     return validate_storage(ctx, root) && validate_persistence(ctx, root, names) &&
-           validate_input_bindings(ctx, root) && validate_input_profiles(ctx, root, names) &&
-           validate_components(ctx, root, names) &&
+           validate_input_bindings(ctx, root) && validate_input_assignment_sets(ctx, root) &&
+           validate_input_profiles(ctx, root, names) && validate_components(ctx, root, names) &&
            validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases", names) &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
            validate_network(ctx, root, names) && validate_app_refs(ctx, root, names) &&
@@ -3329,6 +3500,7 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->script_modules);
     name_table_destroy(&names->adapters);
     name_table_destroy(&names->actions);
+    name_table_destroy(&names->input_assignment_sets);
     name_table_destroy(&names->timers);
     name_table_destroy(&names->cameras);
     name_table_destroy(&names->fonts);

@@ -2239,6 +2239,92 @@ TEST(GameDataRuntime, AppliesAuthoredPongPlayInputProfiles)
     EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p1_up), 1.0f);
     EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p2_up), 0.0f);
 
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 6);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, AppliesAuthoredPongGamepadAssignmentPolicies)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    if (sdl3d_input_gamepad_count(input) != 0)
+    {
+        sdl3d_game_data_destroy(runtime);
+        sdl3d_game_session_destroy(session);
+        GTEST_SKIP() << "requires no pre-connected gamepads";
+    }
+
+    const int p1_up = sdl3d_game_data_find_action(runtime, "action.paddle.up");
+    const int p2_up = sdl3d_game_data_find_action(runtime, "action.paddle.local.up");
+    ASSERT_GE(p1_up, 0);
+    ASSERT_GE(p2_up, 0);
+
+    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    sdl3d_properties_set_string(scene_state, "match_mode", "local");
+    sdl3d_properties_set_string(scene_state, "network_role", "none");
+    sdl3d_properties_set_string(scene_state, "network_flow", "none");
+
+    SDL_Event event{};
+    event.type = SDL_EVENT_GAMEPAD_ADDED;
+    event.gdevice.which = 7101;
+    sdl3d_input_process_event(input, &event);
+
+    const char *profile_name = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error, sizeof(error)))
+        << error;
+    EXPECT_STREQ(profile_name, "profile.pong.play.local.one_gamepad");
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.which = 7101;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_DPAD_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 1);
+    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p1_up), 0.0f);
+    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p2_up), 1.0f);
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 2);
+
+    event.type = SDL_EVENT_GAMEPAD_ADDED;
+    event.gdevice.which = 7102;
+    sdl3d_input_process_event(input, &event);
+    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error, sizeof(error)))
+        << error;
+    EXPECT_STREQ(profile_name, "profile.pong.play.local.two_gamepads");
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.which = 7101;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_DPAD_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 3);
+    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p1_up), 1.0f);
+    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p2_up), 0.0f);
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 4);
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.which = 7102;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_DPAD_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 5);
+    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p1_up), 0.0f);
+    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p2_up), 1.0f);
+
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
 }
@@ -4429,6 +4515,46 @@ TEST(GameDataRuntime, RejectsInvalidInputProfiles)
     EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_input_profile.game.json").string().c_str(), nullptr, error,
                                                sizeof(error)));
     EXPECT_NE(std::string(error).find("$.input.profiles[0]"), std::string::npos);
+
+    write_text(dir / "bad_input_assignment.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad Input Assignment", "id": "test.bad_input_assignment", "version": "0.1.0" },
+  "world": { "name": "world.bad_input_assignment", "kind": "fixed_screen" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.gameplay",
+        "actions": [
+          { "name": "action.up" }
+        ]
+      }
+    ],
+    "device_assignment_sets": [
+      {
+        "name": "assignment.bad",
+        "device": "gamepad",
+        "bindings": [
+          { "semantic": "up", "button": "NOT_A_BUTTON" }
+        ]
+      }
+    ],
+    "profiles": [
+      {
+        "name": "profile.bad",
+        "assignments": [
+          { "set": "assignment.bad", "actions": { "up": "action.up" } }
+        ]
+      }
+    ]
+  },
+  "entities": []
+})json");
+
+    error[0] = '\0';
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_input_assignment.game.json").string().c_str(), nullptr,
+                                               error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("$.input.device_assignment_sets[0].bindings[0]"), std::string::npos);
     remove_test_dir(dir);
 }
 

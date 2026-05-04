@@ -483,11 +483,32 @@ game-specific policy for threshold, direction, and conflict behavior.
 Runtime input role/device policy can be authored under `input.profiles`.
 Profiles let a scene or adapter select a complete binding overlay without
 hard-coding device assignment in host C. Applying a profile first unbinds every
-action named in `unbind`, then applies each authored binding in order.
+action named in `unbind`, then applies each authored binding and reusable device
+assignment in order.
 
 ```json
 {
   "input": {
+    "device_assignment_sets": [
+      {
+        "name": "assignment.keyboard.vertical_arrows",
+        "device": "keyboard",
+        "bindings": [
+          { "semantic": "up", "key": "UP" },
+          { "semantic": "down", "key": "DOWN" }
+        ]
+      },
+      {
+        "name": "assignment.gamepad.vertical_dpad_left_stick",
+        "device": "gamepad",
+        "bindings": [
+          { "semantic": "up", "button": "DPAD_UP" },
+          { "semantic": "down", "button": "DPAD_DOWN" },
+          { "semantic": "up", "axis": "left_y", "scale": -1.0 },
+          { "semantic": "down", "axis": "left_y", "scale": 1.0 }
+        ]
+      }
+    ],
     "profiles": [
       {
         "name": "profile.play.lan.client",
@@ -504,10 +525,16 @@ action named in `unbind`, then applies each authored binding in order.
           "action.player1.up",
           "action.player2.up"
         ],
-        "bindings": [
-          { "action": "action.player2.up", "device": "keyboard", "key": "UP" },
-          { "action": "action.player2.up", "device": "gamepad", "button": "DPAD_UP", "slot": 0 },
-          { "action": "action.player2.up", "device": "gamepad", "axis": "left_y", "scale": -1.0, "slot": 0 }
+        "assignments": [
+          {
+            "set": "assignment.keyboard.vertical_arrows",
+            "actions": { "up": "action.player2.up", "down": "action.player2.down" }
+          },
+          {
+            "set": "assignment.gamepad.vertical_dpad_left_stick",
+            "slot": 0,
+            "actions": { "up": "action.player2.up", "down": "action.player2.down" }
+          }
         ]
       }
     ]
@@ -524,6 +551,13 @@ local player index. Authors should keep profile predicates mutually exclusive or
 order them from most specific to most general, because
 `sdl3d_game_data_apply_active_input_profile()` applies the first matching
 profile.
+
+Device assignment sets define reusable device-specific bindings once, using
+semantic names such as `up`, `down`, `accept`, or `fire`. A profile assignment
+maps those semantics to concrete game actions and may pin gamepad bindings to a
+slot. This supports common policies like keyboard-as-player-1,
+first-gamepad-as-player-2, first-two-gamepads-as-player-1/player-2, and
+LAN-client controls without duplicating key/button/axis rows in every profile.
 
 Reusable options scenes should prefer immediate apply for settings where the
 player benefits from real-time feedback. Use Apply/Cancel snapshots only for

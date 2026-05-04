@@ -1610,7 +1610,8 @@ extern "C"
      *
      * Profiles are authored under `input.profiles`. Applying a profile first
      * unbinds every action listed in its `unbind` array, then applies each
-     * authored keyboard, mouse, or gamepad binding in profile order.
+     * authored keyboard, mouse, or gamepad binding and each reusable
+     * `input.device_assignment_sets` assignment in profile order.
      *
      * @param runtime Runtime containing authored profile data and action ids.
      * @param input Input manager to mutate.
