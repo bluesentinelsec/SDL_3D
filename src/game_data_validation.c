@@ -2103,6 +2103,17 @@ static bool validate_lights(validation_context *ctx, yyjson_val *root, validatio
                 if (!is_non_empty_string(effect, "property"))
                     return validation_error(ctx, effect_path, "light flash effect requires a non-empty property");
             }
+            else if (SDL_strcmp(type != NULL ? type : "", "color_cycle") == 0)
+            {
+                yyjson_val *colors = obj_get(effect, "colors");
+                if (!yyjson_is_arr(colors) || yyjson_arr_size(colors) < 2)
+                    return validation_error(ctx, effect_path, "light color_cycle effect requires at least two colors");
+                for (size_t color_index = 0; color_index < yyjson_arr_size(colors); ++color_index)
+                {
+                    if (!is_vec_array(yyjson_arr_get(colors, color_index), 3))
+                        return validation_error(ctx, effect_path, "light color_cycle colors must be vec3 arrays");
+                }
+            }
             else if (SDL_strcmp(type != NULL ? type : "", "pulse") != 0)
             {
                 return validation_error(ctx, effect_path, "unsupported light effect type '%s'",

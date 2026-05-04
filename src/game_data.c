@@ -2721,6 +2721,41 @@ static void light_color_lerp(float color[3], const sdl3d_vec3 target, float t)
     color[2] = color[2] + (target.z - color[2]) * t;
 }
 
+static bool light_effect_sample_color_cycle(yyjson_val *effect, float time, sdl3d_vec3 fallback, sdl3d_vec3 *out_color)
+{
+    yyjson_val *colors = obj_get(effect, "colors");
+    if (out_color == NULL || !yyjson_is_arr(colors) || yyjson_arr_size(colors) == 0)
+        return false;
+
+    const size_t count = yyjson_arr_size(colors);
+    if (count == 1)
+    {
+        *out_color = json_vec3_value(yyjson_arr_get(colors, 0), fallback);
+        return true;
+    }
+
+    const float duration = SDL_max(json_float(effect, "duration", 4.0f), 0.001f);
+    float phase = json_float(effect, "phase", 0.0f);
+    float cycle = SDL_fmodf(time / duration + phase, 1.0f);
+    if (cycle < 0.0f)
+        cycle += 1.0f;
+
+    const float scaled = cycle * (float)count;
+    size_t index = (size_t)SDL_floorf(scaled);
+    if (index >= count)
+        index = count - 1;
+    const size_t next_index = (index + 1U) % count;
+
+    float t = scaled - (float)index;
+    if (json_bool(effect, "smooth", true))
+        t = t * t * (3.0f - 2.0f * t);
+
+    const sdl3d_vec3 a = json_vec3_value(yyjson_arr_get(colors, index), fallback);
+    const sdl3d_vec3 b = json_vec3_value(yyjson_arr_get(colors, next_index), a);
+    *out_color = sdl3d_vec3_make(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t);
+    return true;
+}
+
 static void apply_light_effects(const sdl3d_game_data_runtime *runtime, yyjson_val *light_json,
                                 const sdl3d_game_data_render_eval *eval, sdl3d_light *light)
 {
@@ -2739,6 +2774,17 @@ static void apply_light_effects(const sdl3d_game_data_runtime *runtime, yyjson_v
             const float rate = json_float(effect, "rate", 1.0f);
             const float phase = json_float(effect, "phase", 0.0f);
             value = 0.5f + 0.5f * SDL_sinf(time * rate + phase);
+        }
+        else if (SDL_strcmp(type, "color_cycle") == 0)
+        {
+            const float time = eval != NULL ? eval->time : 0.0f;
+            sdl3d_vec3 target;
+            if (light_effect_sample_color_cycle(
+                    effect, time, sdl3d_vec3_make(light->color[0], light->color[1], light->color[2]), &target))
+            {
+                light_color_lerp(light->color, target, json_float(effect, "color_blend", 1.0f));
+            }
+            continue;
         }
         else if (SDL_strcmp(type, "flash") == 0)
         {

@@ -736,7 +736,7 @@
         "inner_cutoff": 0.86,
         "outer_cutoff": 0.48,
         "effects": [
-          { "type": "pulse", "rate": 0.45, "phase": 0.4, "color": [1.0, 0.34, 0.08], "color_blend": 0.55, "intensity_add": 0.35, "range_add": 0.25 }
+          { "type": "color_cycle", "duration": 8.0, "phase": 0.05, "colors": [[1.0, 0.06, 0.04], [1.0, 0.34, 0.08], [1.0, 0.12, 0.34]], "color_blend": 1.0 }
         ]
       },
       {
@@ -767,7 +767,7 @@
         "inner_cutoff": 0.86,
         "outer_cutoff": 0.48,
         "effects": [
-          { "type": "pulse", "rate": 0.50, "phase": 1.7, "color": [0.12, 0.72, 1.0], "color_blend": 0.55, "intensity_add": 0.35, "range_add": 0.25 }
+          { "type": "color_cycle", "duration": 8.5, "phase": 0.35, "colors": [[0.08, 0.28, 1.0], [0.12, 0.72, 1.0], [0.34, 0.18, 1.0]], "color_blend": 1.0 }
         ]
       }
     ]
