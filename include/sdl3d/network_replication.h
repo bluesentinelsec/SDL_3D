@@ -75,11 +75,24 @@ extern "C"
     /** @brief Write a one-byte replication field type tag. */
     bool sdl3d_replication_write_field_type(sdl3d_replication_writer *writer, sdl3d_replication_field_type type);
 
+    /**
+     * @brief Write raw bytes without transformation.
+     *
+     * This is intended for packet headers, hashes, and other schema-level
+     * payloads around typed field values. Passing NULL for @p bytes is valid
+     * only when @p byte_count is zero. On failure, the writer offset is
+     * unchanged.
+     */
+    bool sdl3d_replication_write_bytes(sdl3d_replication_writer *writer, const void *bytes, size_t byte_count);
+
     /** @brief Write a one-byte boolean. */
     bool sdl3d_replication_write_bool(sdl3d_replication_writer *writer, bool value);
 
     /** @brief Write a signed 32-bit integer. */
     bool sdl3d_replication_write_int32(sdl3d_replication_writer *writer, Sint32 value);
+
+    /** @brief Write an unsigned 32-bit integer. */
+    bool sdl3d_replication_write_uint32(sdl3d_replication_writer *writer, Uint32 value);
 
     /** @brief Write a 32-bit float. */
     bool sdl3d_replication_write_float32(sdl3d_replication_writer *writer, float value);
@@ -110,6 +123,16 @@ extern "C"
     bool sdl3d_replication_read_field_type(sdl3d_replication_reader *reader, sdl3d_replication_field_type *out_type);
 
     /**
+     * @brief Read raw bytes without transformation.
+     *
+     * This is intended for packet headers, hashes, and other schema-level
+     * payloads around typed field values. Passing NULL for @p out_bytes is
+     * valid only when @p byte_count is zero. On failure, the reader offset is
+     * unchanged.
+     */
+    bool sdl3d_replication_read_bytes(sdl3d_replication_reader *reader, void *out_bytes, size_t byte_count);
+
+    /**
      * @brief Read a one-byte boolean.
      *
      * Values other than 0 and 1 fail and leave the reader offset unchanged.
@@ -118,6 +141,9 @@ extern "C"
 
     /** @brief Read a signed 32-bit integer. */
     bool sdl3d_replication_read_int32(sdl3d_replication_reader *reader, Sint32 *out_value);
+
+    /** @brief Read an unsigned 32-bit integer. */
+    bool sdl3d_replication_read_uint32(sdl3d_replication_reader *reader, Uint32 *out_value);
 
     /** @brief Read a 32-bit float. */
     bool sdl3d_replication_read_float32(sdl3d_replication_reader *reader, float *out_value);

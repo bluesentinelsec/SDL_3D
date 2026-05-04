@@ -99,6 +99,72 @@
       "reset_menu_input_on_request": true
     }
   },
+  "network": {
+    "protocol": {
+      "id": "sdl3d.pong.v1",
+      "version": 1,
+      "transport": "udp",
+      "tick_rate": 60
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.paddle.player",
+            "fields": ["position"]
+          },
+          {
+            "entity": "entity.paddle.cpu",
+            "fields": ["position"]
+          },
+          {
+            "entity": "entity.ball",
+            "fields": [
+              "position",
+              { "path": "properties.velocity", "type": "vec2" },
+              { "path": "properties.active_motion", "type": "bool" },
+              { "path": "properties.has_last_reflect_y", "type": "bool" },
+              { "path": "properties.last_reflect_y", "type": "float32" },
+              { "path": "properties.stagnant_reflect_count", "type": "int32" }
+            ]
+          },
+          {
+            "entity": "entity.score.player",
+            "fields": [
+              { "path": "properties.value", "type": "int32" }
+            ]
+          },
+          {
+            "entity": "entity.score.cpu",
+            "fields": [
+              { "path": "properties.value", "type": "int32" }
+            ]
+          },
+          {
+            "entity": "entity.match",
+            "fields": [
+              { "path": "properties.finished", "type": "bool" }
+            ]
+          },
+          {
+            "entity": "entity.presentation",
+            "fields": [
+              { "path": "properties.border_flash", "type": "float32" },
+              { "path": "properties.paddle_flash", "type": "float32" }
+            ]
+          }
+        ]
+      }
+    ],
+    "control_messages": [
+      { "name": "start_game", "direction": "host_to_client", "signal": "signal.network.start_game" },
+      { "name": "terminate_match", "direction": "bidirectional", "signal": "signal.network.terminate_match" },
+      { "name": "pause_changed", "direction": "bidirectional", "signal": "signal.network.pause_changed" }
+    ]
+  },
   "scenes": {
     "initial": "scene.splash",
     "files": [
@@ -982,7 +1048,10 @@
         "stagnant_reflect_epsilon": { "type": "float", "value": 0.08 },
         "stagnant_reflect_limit": { "type": "int", "value": 2 },
         "reflect_jitter_angle": { "type": "float", "value": 0.24 },
-        "active_motion": { "type": "bool", "value": false }
+        "active_motion": { "type": "bool", "value": false },
+        "has_last_reflect_y": { "type": "bool", "value": false },
+        "last_reflect_y": { "type": "float", "value": 0.0 },
+        "stagnant_reflect_count": { "type": "int", "value": 0 }
       },
       "components": [
         {
@@ -1458,6 +1527,9 @@
     "signal.settings.reset_mouse",
     "signal.settings.reset_gamepad",
     "signal.settings.reset_audio",
+    "signal.network.start_game",
+    "signal.network.terminate_match",
+    "signal.network.pause_changed",
     "signal.multiplayer.lobby.start",
     "signal.multiplayer.discovery.refresh",
     "signal.ui.menu.move",

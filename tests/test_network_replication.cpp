@@ -73,6 +73,7 @@ TEST(SDL3DNetworkReplication, RoundTripsSupportedFieldValues)
     ASSERT_TRUE(sdl3d_replication_write_bool(&writer, true));
     ASSERT_TRUE(sdl3d_replication_write_bool(&writer, false));
     ASSERT_TRUE(sdl3d_replication_write_int32(&writer, -42));
+    ASSERT_TRUE(sdl3d_replication_write_uint32(&writer, 0xfedcba98U));
     ASSERT_TRUE(sdl3d_replication_write_float32(&writer, 3.5f));
     ASSERT_TRUE(sdl3d_replication_write_enum_id(&writer, 17));
     ASSERT_TRUE(sdl3d_replication_write_vec2(&writer, expected_vec2));
@@ -85,6 +86,7 @@ TEST(SDL3DNetworkReplication, RoundTripsSupportedFieldValues)
     bool bool_value = false;
     bool false_value = true;
     Sint32 int_value = 0;
+    Uint32 uint_value = 0U;
     float float_value = 0.0f;
     Sint32 enum_id_value = 0;
     sdl3d_vec2 vec2_value = {};
@@ -98,6 +100,8 @@ TEST(SDL3DNetworkReplication, RoundTripsSupportedFieldValues)
     EXPECT_FALSE(false_value);
     ASSERT_TRUE(sdl3d_replication_read_int32(&reader, &int_value));
     EXPECT_EQ(int_value, -42);
+    ASSERT_TRUE(sdl3d_replication_read_uint32(&reader, &uint_value));
+    EXPECT_EQ(uint_value, 0xfedcba98U);
     ASSERT_TRUE(sdl3d_replication_read_float32(&reader, &float_value));
     EXPECT_NEAR(float_value, 3.5f, kTolerance);
     ASSERT_TRUE(sdl3d_replication_read_enum_id(&reader, &enum_id_value));
@@ -181,16 +185,38 @@ TEST(SDL3DNetworkReplication, UsesDeterministicLittleEndianEncoding)
     sdl3d_replication_writer_init(&writer, buffer.data(), buffer.size());
 
     ASSERT_TRUE(sdl3d_replication_write_int32(&writer, 0x01020304));
-    ASSERT_TRUE(sdl3d_replication_write_float32(&writer, 1.0f));
+    ASSERT_TRUE(sdl3d_replication_write_uint32(&writer, 0x0a0b0c0dU));
 
     EXPECT_EQ(buffer[0], 0x04);
     EXPECT_EQ(buffer[1], 0x03);
     EXPECT_EQ(buffer[2], 0x02);
     EXPECT_EQ(buffer[3], 0x01);
-    EXPECT_EQ(buffer[4], 0x00);
-    EXPECT_EQ(buffer[5], 0x00);
-    EXPECT_EQ(buffer[6], 0x80);
-    EXPECT_EQ(buffer[7], 0x3f);
+    EXPECT_EQ(buffer[4], 0x0d);
+    EXPECT_EQ(buffer[5], 0x0c);
+    EXPECT_EQ(buffer[6], 0x0b);
+    EXPECT_EQ(buffer[7], 0x0a);
+}
+
+TEST(SDL3DNetworkReplication, RoundTripsRawBytes)
+{
+    std::array<Uint8, 8> buffer{};
+    constexpr std::array<Uint8, 4> expected{{0xde, 0xad, 0xbe, 0xef}};
+
+    sdl3d_replication_writer writer{};
+    sdl3d_replication_writer_init(&writer, buffer.data(), buffer.size());
+    ASSERT_TRUE(sdl3d_replication_write_bytes(&writer, expected.data(), expected.size()));
+    ASSERT_TRUE(sdl3d_replication_write_uint32(&writer, 0x01020304U));
+
+    std::array<Uint8, 4> actual{};
+    Uint32 marker = 0U;
+    sdl3d_replication_reader reader{};
+    sdl3d_replication_reader_init(&reader, buffer.data(), sdl3d_replication_writer_offset(&writer));
+    ASSERT_TRUE(sdl3d_replication_read_bytes(&reader, actual.data(), actual.size()));
+    ASSERT_TRUE(sdl3d_replication_read_uint32(&reader, &marker));
+
+    EXPECT_EQ(actual, expected);
+    EXPECT_EQ(marker, 0x01020304U);
+    EXPECT_EQ(sdl3d_replication_reader_remaining(&reader), 0U);
 }
 
 TEST(SDL3DNetworkReplication, RejectsTruncatedWritesWithoutAdvancing)
@@ -219,6 +245,7 @@ TEST(SDL3DNetworkReplication, RejectsZeroCapacityWrites)
     EXPECT_FALSE(sdl3d_replication_write_enum_id(&writer, 1));
     EXPECT_FALSE(sdl3d_replication_write_vec2(&writer, {1.0f, 2.0f}));
     EXPECT_FALSE(sdl3d_replication_write_vec3(&writer, {1.0f, 2.0f, 3.0f}));
+    EXPECT_FALSE(sdl3d_replication_write_bytes(&writer, "x", 1U));
     EXPECT_EQ(sdl3d_replication_writer_offset(&writer), 0U);
 }
 

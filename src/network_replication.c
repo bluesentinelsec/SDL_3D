@@ -137,6 +137,22 @@ bool sdl3d_replication_write_field_type(sdl3d_replication_writer *writer, sdl3d_
     return sdl3d_replication_write_u8(writer, (Uint8)type);
 }
 
+bool sdl3d_replication_write_bytes(sdl3d_replication_writer *writer, const void *bytes, size_t byte_count)
+{
+    if (byte_count == 0U)
+    {
+        return writer != NULL;
+    }
+    if (bytes == NULL || !sdl3d_replication_can_write(writer, byte_count))
+    {
+        return false;
+    }
+
+    memcpy(&writer->buffer[writer->offset], bytes, byte_count);
+    writer->offset += byte_count;
+    return true;
+}
+
 bool sdl3d_replication_write_bool(sdl3d_replication_writer *writer, bool value)
 {
     return sdl3d_replication_write_u8(writer, value ? 1U : 0U);
@@ -147,6 +163,11 @@ bool sdl3d_replication_write_int32(sdl3d_replication_writer *writer, Sint32 valu
     Uint32 bits = 0U;
     memcpy(&bits, &value, sizeof(bits));
     return sdl3d_replication_write_u32(writer, bits);
+}
+
+bool sdl3d_replication_write_uint32(sdl3d_replication_writer *writer, Uint32 value)
+{
+    return sdl3d_replication_write_u32(writer, value);
 }
 
 bool sdl3d_replication_write_float32(sdl3d_replication_writer *writer, float value)
@@ -243,6 +264,22 @@ bool sdl3d_replication_read_field_type(sdl3d_replication_reader *reader, sdl3d_r
     return true;
 }
 
+bool sdl3d_replication_read_bytes(sdl3d_replication_reader *reader, void *out_bytes, size_t byte_count)
+{
+    if (byte_count == 0U)
+    {
+        return reader != NULL;
+    }
+    if (out_bytes == NULL || !sdl3d_replication_can_read(reader, byte_count))
+    {
+        return false;
+    }
+
+    memcpy(out_bytes, &reader->buffer[reader->offset], byte_count);
+    reader->offset += byte_count;
+    return true;
+}
+
 bool sdl3d_replication_read_bool(sdl3d_replication_reader *reader, bool *out_value)
 {
     if (out_value == NULL || !sdl3d_replication_can_read(reader, 1U))
@@ -281,6 +318,11 @@ bool sdl3d_replication_read_int32(sdl3d_replication_reader *reader, Sint32 *out_
 
     memcpy(out_value, &value, sizeof(value));
     return true;
+}
+
+bool sdl3d_replication_read_uint32(sdl3d_replication_reader *reader, Uint32 *out_value)
+{
+    return sdl3d_replication_read_u32(reader, out_value);
 }
 
 bool sdl3d_replication_read_float32(sdl3d_replication_reader *reader, float *out_value)

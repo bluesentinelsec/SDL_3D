@@ -319,6 +319,33 @@ std::array<Uint8, SDL3D_REPLICATION_SCHEMA_HASH_SIZE> load_network_schema_hash(c
     return hash;
 }
 
+void load_pong_runtime(sdl3d_game_session **out_session, sdl3d_game_data_runtime **out_runtime)
+{
+    ASSERT_NE(out_session, nullptr);
+    ASSERT_NE(out_runtime, nullptr);
+    *out_session = nullptr;
+    *out_runtime = nullptr;
+
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, out_session));
+    char error[512]{};
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, *out_session, out_runtime, error, sizeof(error)))
+        << error;
+    ASSERT_NE(*out_runtime, nullptr);
+}
+
+void destroy_runtime_session(sdl3d_game_session *session, sdl3d_game_data_runtime *runtime)
+{
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+void expect_vec3_near(sdl3d_vec3 actual, sdl3d_vec3 expected, float tolerance = 0.0001f)
+{
+    EXPECT_NEAR(actual.x, expected.x, tolerance);
+    EXPECT_NEAR(actual.y, expected.y, tolerance);
+    EXPECT_NEAR(actual.z, expected.z, tolerance);
+}
+
 std::filesystem::path copy_pong_data_with_storage_overrides(const std::filesystem::path &dir,
                                                             const std::filesystem::path &user_root,
                                                             const std::filesystem::path &cache_root)
@@ -4361,6 +4388,123 @@ TEST(GameDataRuntime, LocalOnlyGameHasNoNetworkSchemaHash)
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
     remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, EncodesAndAppliesPongNetworkSnapshotFromAuthoredSchema)
+{
+    sdl3d_game_session *host_session = nullptr;
+    sdl3d_game_data_runtime *host = nullptr;
+    load_pong_runtime(&host_session, &host);
+    ASSERT_TRUE(sdl3d_game_data_has_network_schema(host));
+
+    sdl3d_game_session *client_session = nullptr;
+    sdl3d_game_data_runtime *client = nullptr;
+    load_pong_runtime(&client_session, &client);
+    ASSERT_TRUE(sdl3d_game_data_has_network_schema(client));
+
+    sdl3d_registered_actor *host_player = sdl3d_game_data_find_actor(host, "entity.paddle.player");
+    sdl3d_registered_actor *host_cpu = sdl3d_game_data_find_actor(host, "entity.paddle.cpu");
+    sdl3d_registered_actor *host_ball = sdl3d_game_data_find_actor(host, "entity.ball");
+    sdl3d_registered_actor *host_player_score = sdl3d_game_data_find_actor(host, "entity.score.player");
+    sdl3d_registered_actor *host_cpu_score = sdl3d_game_data_find_actor(host, "entity.score.cpu");
+    sdl3d_registered_actor *host_match = sdl3d_game_data_find_actor(host, "entity.match");
+    sdl3d_registered_actor *host_presentation = sdl3d_game_data_find_actor(host, "entity.presentation");
+    ASSERT_NE(host_player, nullptr);
+    ASSERT_NE(host_cpu, nullptr);
+    ASSERT_NE(host_ball, nullptr);
+    ASSERT_NE(host_player_score, nullptr);
+    ASSERT_NE(host_cpu_score, nullptr);
+    ASSERT_NE(host_match, nullptr);
+    ASSERT_NE(host_presentation, nullptr);
+
+    host_player->position = {-7.5f, 1.25f, 0.0f};
+    host_cpu->position = {7.5f, -2.0f, 0.0f};
+    host_ball->position = {1.5f, 2.5f, 0.12f};
+    sdl3d_properties_set_vec3(host_ball->props, "velocity", {3.25f, -1.75f, 9.0f});
+    sdl3d_properties_set_bool(host_ball->props, "active_motion", true);
+    sdl3d_properties_set_bool(host_ball->props, "has_last_reflect_y", true);
+    sdl3d_properties_set_float(host_ball->props, "last_reflect_y", 1.5f);
+    sdl3d_properties_set_int(host_ball->props, "stagnant_reflect_count", 2);
+    sdl3d_properties_set_int(host_player_score->props, "value", 4);
+    sdl3d_properties_set_int(host_cpu_score->props, "value", 6);
+    sdl3d_properties_set_bool(host_match->props, "finished", true);
+    sdl3d_properties_set_float(host_presentation->props, "border_flash", 0.75f);
+    sdl3d_properties_set_float(host_presentation->props, "paddle_flash", 0.5f);
+
+    sdl3d_registered_actor *client_ball = sdl3d_game_data_find_actor(client, "entity.ball");
+    ASSERT_NE(client_ball, nullptr);
+    sdl3d_properties_set_vec3(client_ball->props, "velocity", {0.0f, 0.0f, 42.0f});
+
+    std::array<Uint8, 512> packet{};
+    size_t packet_size = 0U;
+    char error[512]{};
+    ASSERT_TRUE(sdl3d_game_data_encode_network_snapshot(host, "play_state", 12345U, packet.data(), packet.size(),
+                                                        &packet_size, error, sizeof(error)))
+        << error;
+    ASSERT_GT(packet_size, 0U);
+
+    Uint32 tick = 0U;
+    ASSERT_TRUE(sdl3d_game_data_apply_network_snapshot(client, packet.data(), packet_size, &tick, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(tick, 12345U);
+
+    expect_vec3_near(sdl3d_game_data_find_actor(client, "entity.paddle.player")->position, host_player->position);
+    expect_vec3_near(sdl3d_game_data_find_actor(client, "entity.paddle.cpu")->position, host_cpu->position);
+    expect_vec3_near(client_ball->position, host_ball->position);
+    const sdl3d_vec3 client_velocity =
+        sdl3d_properties_get_vec3(client_ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(client_velocity.x, 3.25f, 0.0001f);
+    EXPECT_NEAR(client_velocity.y, -1.75f, 0.0001f);
+    EXPECT_NEAR(client_velocity.z, 42.0f, 0.0001f);
+    EXPECT_TRUE(sdl3d_properties_get_bool(client_ball->props, "active_motion", false));
+    EXPECT_TRUE(sdl3d_properties_get_bool(client_ball->props, "has_last_reflect_y", false));
+    EXPECT_NEAR(sdl3d_properties_get_float(client_ball->props, "last_reflect_y", 0.0f), 1.5f, 0.0001f);
+    EXPECT_EQ(sdl3d_properties_get_int(client_ball->props, "stagnant_reflect_count", 0), 2);
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_find_actor(client, "entity.score.player")->props, "value", 0),
+              4);
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_find_actor(client, "entity.score.cpu")->props, "value", 0), 6);
+    EXPECT_TRUE(
+        sdl3d_properties_get_bool(sdl3d_game_data_find_actor(client, "entity.match")->props, "finished", false));
+    EXPECT_NEAR(sdl3d_properties_get_float(sdl3d_game_data_find_actor(client, "entity.presentation")->props,
+                                           "border_flash", 0.0f),
+                0.75f, 0.0001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(sdl3d_game_data_find_actor(client, "entity.presentation")->props,
+                                           "paddle_flash", 0.0f),
+                0.5f, 0.0001f);
+
+    destroy_runtime_session(host_session, host);
+    destroy_runtime_session(client_session, client);
+}
+
+TEST(GameDataRuntime, RejectsPongNetworkSnapshotsWithMismatchedSchemaOrTruncation)
+{
+    sdl3d_game_session *host_session = nullptr;
+    sdl3d_game_data_runtime *host = nullptr;
+    load_pong_runtime(&host_session, &host);
+    sdl3d_game_session *client_session = nullptr;
+    sdl3d_game_data_runtime *client = nullptr;
+    load_pong_runtime(&client_session, &client);
+
+    std::array<Uint8, 512> packet{};
+    size_t packet_size = 0U;
+    char error[512]{};
+    ASSERT_TRUE(sdl3d_game_data_encode_network_snapshot(host, "play_state", 10U, packet.data(), packet.size(),
+                                                        &packet_size, error, sizeof(error)))
+        << error;
+    ASSERT_GT(packet_size, 24U);
+
+    std::array<Uint8, 512> corrupted = packet;
+    corrupted[16] ^= 0xffU;
+    EXPECT_FALSE(
+        sdl3d_game_data_apply_network_snapshot(client, corrupted.data(), packet_size, nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("schema hash"), std::string::npos) << error;
+
+    EXPECT_FALSE(
+        sdl3d_game_data_apply_network_snapshot(client, packet.data(), packet_size - 1U, nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("field data"), std::string::npos) << error;
+
+    destroy_runtime_session(host_session, host);
+    destroy_runtime_session(client_session, client);
 }
 
 TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
