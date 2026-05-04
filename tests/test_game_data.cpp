@@ -1200,9 +1200,16 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_NEAR(ambient[1], 0.018f, 0.0001f);
     EXPECT_NEAR(ambient[2], 0.026f, 0.0001f);
 
-    EXPECT_EQ(sdl3d_game_data_world_light_count(runtime), 1);
+    EXPECT_EQ(sdl3d_game_data_world_light_count(runtime), 4);
+    sdl3d_light center_light{};
+    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 1, &center_light));
+    EXPECT_EQ(center_light.type, SDL3D_LIGHT_POINT);
+    EXPECT_NEAR(center_light.position.x, 0.0f, 0.0001f);
+    EXPECT_NEAR(center_light.position.y, 0.0f, 0.0001f);
+    EXPECT_NEAR(center_light.position.z, 2.8f, 0.0001f);
+
     sdl3d_light lamp_light{};
-    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 0, &lamp_light));
+    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 3, &lamp_light));
     EXPECT_EQ(lamp_light.type, SDL3D_LIGHT_POINT);
     EXPECT_NEAR(lamp_light.position.x, -6.8f, 0.0001f);
     EXPECT_NEAR(lamp_light.position.y, 3.8f, 0.0001f);
@@ -1288,6 +1295,17 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     ASSERT_TRUE(sdl3d_game_data_get_world_light_evaluated(runtime, 0, &light_eval, &flashed_light));
     EXPECT_GT(flashed_light.intensity, base_light.intensity);
     EXPECT_GT(flashed_light.range, base_light.range);
+    sdl3d_light cycle_light_start{};
+    ASSERT_TRUE(sdl3d_game_data_get_world_light_evaluated(runtime, 1, &light_eval, &cycle_light_start));
+    EXPECT_NEAR(cycle_light_start.color[0], 1.0f, 0.0001f);
+    EXPECT_NEAR(cycle_light_start.color[1], 0.18f, 0.0001f);
+    EXPECT_NEAR(cycle_light_start.color[2], 0.16f, 0.0001f);
+    light_eval.time = 1.0f / 0.55f;
+    sdl3d_light cycle_light_next{};
+    ASSERT_TRUE(sdl3d_game_data_get_world_light_evaluated(runtime, 1, &light_eval, &cycle_light_next));
+    EXPECT_NEAR(cycle_light_next.color[0], 1.0f, 0.0001f);
+    EXPECT_NEAR(cycle_light_next.color[1], 0.65f, 0.0001f);
+    EXPECT_NEAR(cycle_light_next.color[2], 0.12f, 0.0001f);
 
     sdl3d_game_data_render_eval render_eval{};
     render_eval.time = 0.25f;

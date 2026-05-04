@@ -726,6 +726,39 @@
     ],
     "lights": [
       {
+        "name": "light.left_red",
+        "type": "point",
+        "position": [-5.7, 0.35, 2.4],
+        "color": [1.0, 0.10, 0.08],
+        "intensity": 2.6,
+        "range": 5.8,
+        "effects": [
+          { "type": "pulse", "rate": 1.2, "phase": 0.5, "color": [1.0, 0.18, 0.12], "color_blend": 0.22, "intensity_add": 0.25, "range_add": 0.25 }
+        ]
+      },
+      {
+        "name": "light.center_cycle",
+        "type": "point",
+        "position": [0.0, 0.0, 2.8],
+        "color": [0.18, 0.42, 1.0],
+        "intensity": 2.8,
+        "range": 6.2,
+        "effects": [
+          { "type": "color_cycle", "rate": 0.55, "colors": [[1.0, 0.18, 0.16], [1.0, 0.65, 0.12], [1.0, 0.95, 0.22], [0.18, 1.0, 0.36], [0.12, 0.90, 1.0], [0.36, 0.26, 1.0], [0.95, 0.18, 1.0]], "color_blend": 1.0, "intensity_add": 0.25, "range_add": 0.2 }
+        ]
+      },
+      {
+        "name": "light.right_green",
+        "type": "point",
+        "position": [5.7, 0.35, 2.4],
+        "color": [0.08, 1.0, 0.22],
+        "intensity": 2.6,
+        "range": 5.8,
+        "effects": [
+          { "type": "pulse", "rate": 1.25, "phase": 2.0, "color": [0.24, 1.0, 0.48], "color_blend": 0.22, "intensity_add": 0.25, "range_add": 0.25 }
+        ]
+      },
+      {
         "name": "light.gameplay_lamp",
         "type": "point",
         "target_entity": "entity.light.lamp",
