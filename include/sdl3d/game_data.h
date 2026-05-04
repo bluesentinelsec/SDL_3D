@@ -1609,9 +1609,9 @@ extern "C"
      * @brief Apply one authored input profile to an input manager.
      *
      * Profiles are authored under `input.profiles`. Applying a profile first
-     * unbinds every action listed in its `unbind` array, then applies each
-     * authored keyboard, mouse, or gamepad binding and each reusable
-     * `input.device_assignment_sets` assignment in profile order.
+     * unbinds every action listed in its `unbind` array, then applies either
+     * raw keyboard, mouse, or gamepad bindings or reusable
+     * `input.device_assignment_sets` assignments.
      *
      * @param runtime Runtime containing authored profile data and action ids.
      * @param input Input manager to mutate.

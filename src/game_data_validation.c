@@ -56,6 +56,8 @@ typedef struct validation_names
     name_table adapters;
     name_table actions;
     name_table input_assignment_sets;
+    name_table input_profiles;
+    name_table network_input_channels;
     name_table timers;
     name_table cameras;
     name_table fonts;
@@ -1441,11 +1443,67 @@ static bool collect_input_assignment_sets(validation_context *ctx, yyjson_val *r
     return true;
 }
 
+static bool collect_input_profiles(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *profiles = obj_get(obj_get(root, "input"), "profiles");
+    if (profiles == NULL)
+        return true;
+    if (!yyjson_is_arr(profiles))
+        return validation_error(ctx, "$.input.profiles", "input profiles must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(profiles); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        yyjson_val *profile = yyjson_arr_get(profiles, i);
+        format_path(path, sizeof(path), "$.input.profiles[%zu]", i);
+        if (!yyjson_is_obj(profile))
+            return validation_error(ctx, path, "input profiles must be objects");
+        const char *name = json_string(profile, "name");
+        if (name != NULL && name[0] != '\0' &&
+            !require_unique_name(ctx, &names->input_profiles, "input profile", name, path))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool collect_network_input_channels(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *replication = obj_get(obj_get(root, "network"), "replication");
+    if (replication == NULL)
+        return true;
+    if (!yyjson_is_arr(replication))
+        return validation_error(ctx, "$.network.replication", "network replication must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(replication); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        yyjson_val *entry = yyjson_arr_get(replication, i);
+        format_path(path, sizeof(path), "$.network.replication[%zu]", i);
+        if (!yyjson_is_obj(entry))
+            return validation_error(ctx, path, "network replication entries must be objects");
+        if (SDL_strcmp(json_string(entry, "direction") != NULL ? json_string(entry, "direction") : "",
+                       "client_to_host") != 0)
+        {
+            continue;
+        }
+        const char *name = json_string(entry, "name");
+        if (name != NULL && name[0] != '\0' &&
+            !require_unique_name(ctx, &names->network_input_channels, "network input channel", name, path))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool collect_names(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     return collect_signals(ctx, root, names) && collect_entities(ctx, root, names) &&
            collect_scripts(ctx, root, names) && collect_adapters(ctx, root, names) &&
            collect_input_actions(ctx, root, names) && collect_input_assignment_sets(ctx, root, names) &&
+           collect_input_profiles(ctx, root, names) && collect_network_input_channels(ctx, root, names) &&
            collect_cameras(ctx, root, names) && collect_fonts(ctx, root, names) &&
            collect_sprite_assets(ctx, root, names) && collect_images(ctx, root, names) &&
            collect_audio_assets(ctx, root, names) && collect_timers(ctx, root, names) &&
@@ -2080,6 +2138,22 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (!is_non_empty_string(action, "menu"))
             return validation_error(ctx, json_path, "input.reset_bindings requires a non-empty menu");
         return true;
+    }
+    if (SDL_strcmp(type, "input.apply_profile") == 0)
+    {
+        const char *profile = json_string(action, "profile");
+        return require_ref(ctx, &names->input_profiles, "input profile", profile, json_path);
+    }
+    if (SDL_strcmp(type, "input.apply_active_profile") == 0)
+    {
+        if (names->input_profiles.count <= 0)
+            return validation_error(ctx, json_path, "input.apply_active_profile requires at least one input profile");
+        return true;
+    }
+    if (SDL_strcmp(type, "input.clear_network_input_overrides") == 0)
+    {
+        return require_ref(ctx, &names->network_input_channels, "network input channel", json_string(action, "channel"),
+                           json_path);
     }
     if (SDL_strcmp(type, "ui.animate") == 0)
     {
@@ -3536,6 +3610,8 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->adapters);
     name_table_destroy(&names->actions);
     name_table_destroy(&names->input_assignment_sets);
+    name_table_destroy(&names->input_profiles);
+    name_table_destroy(&names->network_input_channels);
     name_table_destroy(&names->timers);
     name_table_destroy(&names->cameras);
     name_table_destroy(&names->fonts);

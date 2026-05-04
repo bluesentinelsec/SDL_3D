@@ -566,6 +566,20 @@ referenced set, and every semantic in the set must be mapped to an action.
 keyboard and mouse sets are global device policies and reject slot-specific
 assignments.
 
+Logic bindings can apply profiles directly:
+
+- `{ "type": "input.apply_active_profile" }` applies the first profile whose
+  authored conditions and gamepad gates match the current scene state.
+- `{ "type": "input.apply_profile", "profile": "profile.name" }` applies one
+  named profile.
+- `{ "type": "input.clear_network_input_overrides", "channel":
+  "client_input" }` clears action overrides written by an authored
+  `client_to_host` network input channel, preventing stale remote input from
+  leaking into later local play.
+
+Use an adapter or data actions before `input.apply_active_profile` when a game
+needs to normalize scene-state values that choose the active profile.
+
 Reusable options scenes should prefer immediate apply for settings where the
 player benefits from real-time feedback. Use Apply/Cancel snapshots only for
 screens that intentionally stage changes before committing them.
