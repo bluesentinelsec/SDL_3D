@@ -8185,6 +8185,36 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
     if (SDL_strcmp(type, "input.reset_bindings") == 0)
         return sdl3d_game_data_reset_menu_input_bindings(runtime, json_string(action, "menu", NULL));
 
+    if (SDL_strcmp(type, "input.apply_profile") == 0)
+    {
+        char error[256] = {0};
+        sdl3d_input_manager *input = runtime_input(runtime);
+        const char *profile = json_string(action, "profile", NULL);
+        if (!sdl3d_game_data_apply_input_profile(runtime, input, profile, error, (int)sizeof(error)))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "game data input profile apply failed: %s",
+                        error[0] != '\0' ? error : "unknown error");
+            return false;
+        }
+        return true;
+    }
+
+    if (SDL_strcmp(type, "input.apply_active_profile") == 0)
+    {
+        char error[256] = {0};
+        const char *profile = NULL;
+        sdl3d_input_manager *input = runtime_input(runtime);
+        if (!sdl3d_game_data_apply_active_input_profile(runtime, input, &profile, error, (int)sizeof(error)))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "game data active input profile apply failed: %s",
+                        error[0] != '\0' ? error : "unknown error");
+            return false;
+        }
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "game data active input profile applied: profile=%s",
+                    profile != NULL ? profile : "<none>");
+        return true;
+    }
+
     if (SDL_strcmp(type, "ui.animate") == 0)
         return start_ui_animation_from_json(runtime, action);
 

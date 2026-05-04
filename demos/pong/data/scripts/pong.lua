@@ -117,7 +117,33 @@ function pong.cpu_track_ball(paddle, payload, ctx)
     return true
 end
 
-function pong.configure_play_input(_, _, _)
+local function context_string(payload, ctx, key, fallback)
+    local value = payload ~= nil and payload[key] or nil
+    if value ~= nil and value ~= "" then
+        return value
+    end
+    return ctx:state_get(key, fallback)
+end
+
+function pong.configure_play_input(_, payload, ctx)
+    local requested_match_mode = context_string(payload, ctx, "match_mode", "single")
+    local requested_lan = requested_match_mode == "lan"
+    local requested_network_role = requested_lan and context_string(payload, ctx, "network_role", "none") or "none"
+    local requested_network_flow = requested_lan and context_string(payload, ctx, "network_flow", "none") or "none"
+    local valid_network_role = requested_network_role == "host" or requested_network_role == "client"
+    local match_mode = requested_lan and not valid_network_role and "single" or requested_match_mode
+    local network_role = requested_lan and valid_network_role and requested_network_role or "none"
+    local network_flow = requested_lan and valid_network_role and requested_network_flow or "none"
+
+    ctx:state_set("match_mode", match_mode or "single")
+    ctx:state_set("network_role", network_role or "none")
+    ctx:state_set("network_flow", network_flow or "none")
+    ctx:log(string.format(
+        "Pong play input context: requested_match_mode=%s match_mode=%s network_role=%s network_flow=%s",
+        requested_match_mode or "none",
+        match_mode or "none",
+        network_role or "none",
+        network_flow or "none"))
     return true
 end
 

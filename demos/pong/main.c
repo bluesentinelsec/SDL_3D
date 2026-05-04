@@ -207,22 +207,6 @@ static bool is_network_role_client(const pong_state *state)
     return is_network_match_mode(state) && SDL_strcmp(network_role_name(state), "client") == 0;
 }
 
-static const char *scene_payload_string(const sdl3d_properties *payload, const char *key)
-{
-    return payload != NULL ? sdl3d_properties_get_string(payload, key, NULL) : NULL;
-}
-
-static const char *scene_context_string(const sdl3d_properties *payload, const sdl3d_properties *scene_state,
-                                        const char *key, const char *fallback)
-{
-    const char *value = scene_payload_string(payload, key);
-    if (value != NULL)
-    {
-        return value;
-    }
-    return scene_state != NULL ? sdl3d_properties_get_string(scene_state, key, fallback) : fallback;
-}
-
 static bool enter_multiplayer_play_scene(pong_state *state, const char *match_mode, const char *network_role,
                                          const char *network_flow)
 {
@@ -260,35 +244,17 @@ static bool enter_multiplayer_play_scene(pong_state *state, const char *match_mo
 
 static void clear_network_action_overrides(pong_state *state)
 {
-    char error[128] = {0};
+    char error[160] = {0};
     if (state == NULL || state->input == NULL || state->data == NULL)
     {
         return;
     }
 
-    const int p1_up = sdl3d_game_data_find_action(state->data, "action.paddle.up");
-    const int p1_down = sdl3d_game_data_find_action(state->data, "action.paddle.down");
-    const int p2_up = sdl3d_game_data_find_action(state->data, "action.paddle.local.up");
-    const int p2_down = sdl3d_game_data_find_action(state->data, "action.paddle.local.down");
-    if (p1_up >= 0)
-    {
-        sdl3d_input_clear_action_override(state->input, p1_up);
-    }
-    if (p1_down >= 0)
-    {
-        sdl3d_input_clear_action_override(state->input, p1_down);
-    }
     if (!sdl3d_game_data_clear_network_input_overrides(state->data, "client_input", state->input, error,
                                                        (int)sizeof(error)))
     {
-        if (p2_up >= 0)
-        {
-            sdl3d_input_clear_action_override(state->input, p2_up);
-        }
-        if (p2_down >= 0)
-        {
-            sdl3d_input_clear_action_override(state->input, p2_down);
-        }
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network input override clear failed: %s",
+                    error[0] != '\0' ? error : "unknown error");
     }
 }
 
@@ -384,50 +350,6 @@ static bool apply_active_play_input_profile(pong_state *state)
                 profile_name != NULL ? profile_name : "<none>", network_role_name(state),
                 state->local_input_gamepad_count);
     return true;
-}
-
-static bool configure_play_input(void *userdata, sdl3d_game_data_runtime *runtime, const char *adapter_name,
-                                 sdl3d_registered_actor *target, const sdl3d_properties *payload)
-{
-    pong_state *state = (pong_state *)userdata;
-    (void)runtime;
-    (void)adapter_name;
-    (void)target;
-
-    if (state == NULL || state->data == NULL || state->input == NULL)
-    {
-        return false;
-    }
-
-    const sdl3d_properties *scene_state = sdl3d_game_data_scene_state(state->data);
-    sdl3d_properties *mutable_scene_state = sdl3d_game_data_mutable_scene_state(state->data);
-    const char *requested_match_mode = scene_context_string(payload, scene_state, "match_mode", "single");
-    const bool requested_lan = requested_match_mode != NULL && SDL_strcmp(requested_match_mode, "lan") == 0;
-    const char *requested_network_role =
-        requested_lan ? scene_context_string(payload, scene_state, "network_role", "none") : "none";
-    const char *requested_network_flow =
-        requested_lan ? scene_context_string(payload, scene_state, "network_flow", "none") : "none";
-    const bool valid_network_role =
-        requested_network_role != NULL &&
-        (SDL_strcmp(requested_network_role, "host") == 0 || SDL_strcmp(requested_network_role, "client") == 0);
-    const char *match_mode = requested_lan && !valid_network_role ? "single" : requested_match_mode;
-    const char *network_role = requested_lan && valid_network_role ? requested_network_role : "none";
-    const char *network_flow = requested_lan && valid_network_role ? requested_network_flow : "none";
-
-    clear_network_action_overrides(state);
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "Pong play input context: requested_match_mode=%s match_mode=%s network_role=%s network_flow=%s",
-                requested_match_mode != NULL ? requested_match_mode : "none", match_mode != NULL ? match_mode : "none",
-                network_role != NULL ? network_role : "none", network_flow != NULL ? network_flow : "none");
-
-    if (mutable_scene_state != NULL)
-    {
-        sdl3d_properties_set_string(mutable_scene_state, "match_mode", match_mode != NULL ? match_mode : "single");
-        sdl3d_properties_set_string(mutable_scene_state, "network_role", network_role != NULL ? network_role : "none");
-        sdl3d_properties_set_string(mutable_scene_state, "network_flow", network_flow != NULL ? network_flow : "none");
-    }
-
-    return apply_active_play_input_profile(state);
 }
 
 static void destroy_direct_connect_session_internal(pong_state *state, bool notify_peer)
@@ -1771,16 +1693,6 @@ static bool init_game_data(sdl3d_game_context *ctx, pong_state *state)
                 sdl3d_game_data_active_scene(state->data) != NULL ? sdl3d_game_data_active_scene(state->data)
                                                                   : "<none>");
 
-    if (!sdl3d_game_data_register_adapter(state->data, "adapter.pong.configure_play_input", configure_play_input,
-                                          state))
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong play input adapter registration failed");
-        sdl3d_game_data_destroy(state->data);
-        state->data = NULL;
-        sdl3d_asset_resolver_destroy(state->assets);
-        state->assets = NULL;
-        return false;
-    }
     return true;
 }
 

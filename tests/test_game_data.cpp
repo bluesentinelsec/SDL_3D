@@ -1985,6 +1985,22 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
 
     sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "match_mode", ""), "single");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "network_role", ""), "none");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "network_flow", ""), "none");
+
+    sdl3d_properties *lan_payload = sdl3d_properties_create();
+    ASSERT_NE(lan_payload, nullptr);
+    sdl3d_properties_set_string(lan_payload, "match_mode", "lan");
+    sdl3d_properties_set_string(lan_payload, "network_role", "client");
+    sdl3d_properties_set_string(lan_payload, "network_flow", "direct");
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene_with_payload(runtime, "scene.play", lan_payload));
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "match_mode", ""), "lan");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "network_role", ""), "client");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "network_flow", ""), "direct");
+    sdl3d_properties_destroy(lan_payload);
+
     sdl3d_properties_set_string(scene_state, "selected_level", "level.002");
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
     EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "selected_level", ""), "level.002");
