@@ -157,6 +157,15 @@
             ]
           }
         ]
+      },
+      {
+        "name": "client_input",
+        "direction": "client_to_host",
+        "rate": 60,
+        "inputs": [
+          { "action": "action.paddle.local.up" },
+          { "action": "action.paddle.local.down" }
+        ]
       }
     ],
     "control_messages": [

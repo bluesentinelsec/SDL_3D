@@ -1249,6 +1249,18 @@ trailing bytes. Built-in `position` fields update the actor transform; object
 paths under `properties.` update actor properties. `vec2` property replication
 is stored in SDL3D's existing vec3 property bag by updating x/y and preserving z.
 
+Client-to-host input channels can be encoded with
+`sdl3d_game_data_encode_network_input()` and applied with
+`sdl3d_game_data_apply_network_input()`. Input packets use the same strict
+schema-hash and channel-index checks as snapshots, then store each authored
+action value as a tagged `float32` in schema order. Applying a packet writes
+the decoded values into the destination `sdl3d_input_manager` as action
+overrides, so the next input update exposes the remote actions through the
+normal action snapshot APIs. Malformed packets are rejected before any override
+is changed. When a peer disconnects or a network scene exits, callers should
+use `sdl3d_game_data_clear_network_input_overrides()` for the same channel so
+remote input cannot leak into later local play.
+
 When a runtime loads game data with a valid `network` block, it computes a
 deterministic schema hash over protocol, replication, input, and control-message
 shape. Runtime callers can query it with

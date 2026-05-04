@@ -868,6 +868,69 @@ extern "C"
                                                 int error_buffer_size);
 
     /**
+     * @brief Encode an authored client-to-host input replication packet.
+     *
+     * The named replication channel must exist in the loaded `network`
+     * schema and have `direction: "client_to_host"`. Each authored input
+     * action is sampled from @p input as a float value and written in schema
+     * order with strict field type tags. Callers provide the destination
+     * buffer; no allocation is performed.
+     *
+     * @param runtime Runtime containing the authored network schema and actions.
+     * @param replication_name Authored replication channel name.
+     * @param input Input manager whose current snapshot should be serialized.
+     * @param tick Client simulation/input tick to include in the packet.
+     * @param buffer Destination packet buffer.
+     * @param buffer_size Destination buffer size in bytes.
+     * @param out_size Receives written packet size in bytes.
+     * @param error_buffer Optional buffer for the first failure reason.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when the full input packet was encoded.
+     */
+    bool sdl3d_game_data_encode_network_input(const sdl3d_game_data_runtime *runtime, const char *replication_name,
+                                              const sdl3d_input_manager *input, Uint32 tick, void *buffer,
+                                              size_t buffer_size, size_t *out_size, char *error_buffer,
+                                              int error_buffer_size);
+
+    /**
+     * @brief Decode and apply an authored client-to-host input packet.
+     *
+     * The packet must match the runtime schema hash and reference a
+     * client-to-host input channel in the loaded `network` schema. Decoded
+     * action values are applied to @p input as action overrides. On failure,
+     * no overrides are changed.
+     *
+     * @param runtime Runtime containing the authored network schema and actions.
+     * @param input Input manager that should receive replicated action overrides.
+     * @param packet Source packet buffer.
+     * @param packet_size Source packet size in bytes.
+     * @param out_tick Receives the client input tick, if non-NULL.
+     * @param error_buffer Optional buffer for the first failure reason.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when the packet was decoded and all action overrides were applied.
+     */
+    bool sdl3d_game_data_apply_network_input(const sdl3d_game_data_runtime *runtime, sdl3d_input_manager *input,
+                                             const void *packet, size_t packet_size, Uint32 *out_tick,
+                                             char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Clear action overrides declared by an authored input replication channel.
+     *
+     * This is useful when a peer disconnects or a networked scene exits so
+     * remote action overrides cannot leak into local play.
+     *
+     * @param runtime Runtime containing the authored network schema and actions.
+     * @param replication_name Authored client-to-host replication channel name.
+     * @param input Input manager whose replicated overrides should be cleared.
+     * @param error_buffer Optional buffer for the first failure reason.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when all authored input overrides were cleared.
+     */
+    bool sdl3d_game_data_clear_network_input_overrides(const sdl3d_game_data_runtime *runtime,
+                                                       const char *replication_name, sdl3d_input_manager *input,
+                                                       char *error_buffer, int error_buffer_size);
+
+    /**
      * @brief Validate a JSON game data file without instantiating runtime state.
      *
      * Validation checks schema, authored names, references, supported generic

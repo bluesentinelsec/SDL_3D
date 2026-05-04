@@ -70,7 +70,6 @@ typedef enum pong_network_message_kind
 
 static const Uint32 PONG_NETWORK_PACKET_MAGIC = 0x474E4F50u; /* "PONG" little-endian */
 static const Uint8 PONG_NETWORK_PACKET_VERSION = 1U;
-static const size_t PONG_NETWORK_INPUT_PACKET_SIZE = 20U;
 static const size_t PONG_NETWORK_CONTROL_PACKET_SIZE = 12U;
 static const size_t PONG_NETWORK_STATE_PACKET_SIZE = 112U;
 
@@ -388,6 +387,7 @@ static bool enter_multiplayer_play_scene(pong_state *state, const char *match_mo
 
 static void clear_network_action_overrides(pong_state *state)
 {
+    char error[128] = {0};
     if (state == NULL || state->input == NULL || state->data == NULL)
     {
         return;
@@ -405,13 +405,17 @@ static void clear_network_action_overrides(pong_state *state)
     {
         sdl3d_input_clear_action_override(state->input, p1_down);
     }
-    if (p2_up >= 0)
+    if (!sdl3d_game_data_clear_network_input_overrides(state->data, "client_input", state->input, error,
+                                                       (int)sizeof(error)))
     {
-        sdl3d_input_clear_action_override(state->input, p2_up);
-    }
-    if (p2_down >= 0)
-    {
-        sdl3d_input_clear_action_override(state->input, p2_down);
+        if (p2_up >= 0)
+        {
+            sdl3d_input_clear_action_override(state->input, p2_up);
+        }
+        if (p2_down >= 0)
+        {
+            sdl3d_input_clear_action_override(state->input, p2_down);
+        }
     }
 }
 
@@ -908,9 +912,9 @@ static bool start_selected_lobby_match(pong_state *state)
 
 static bool send_client_input_packet(pong_state *state)
 {
-    Uint8 packet[32];
-    Uint8 *cursor = packet;
-    Uint8 *end = packet + sizeof(packet);
+    Uint8 packet[128];
+    size_t packet_size = 0U;
+    char error[160] = {0};
     const int p2_up = sdl3d_game_data_find_action(state != NULL ? state->data : NULL, "action.paddle.local.up");
     const int p2_down = sdl3d_game_data_find_action(state != NULL ? state->data : NULL, "action.paddle.local.down");
 
@@ -923,34 +927,23 @@ static bool send_client_input_packet(pong_state *state)
     const sdl3d_input_snapshot *snapshot = sdl3d_input_get_snapshot(state->input);
     const float up_value = snapshot != NULL ? snapshot->actions[p2_up].value : 0.0f;
     const float down_value = snapshot != NULL ? snapshot->actions[p2_down].value : 0.0f;
+    const Uint32 tick = snapshot != NULL ? (Uint32)SDL_max(snapshot->tick, 0) : 0U;
 
-    if (!pong_network_write_u32(&cursor, end, PONG_NETWORK_PACKET_MAGIC) ||
-        !pong_network_write_u8(&cursor, end, PONG_NETWORK_PACKET_VERSION) ||
-        !pong_network_write_u8(&cursor, end, (Uint8)PONG_NETWORK_MESSAGE_INPUT) ||
-        !pong_network_write_u8(&cursor, end, 0U) || !pong_network_write_u8(&cursor, end, 0U) ||
-        !pong_network_write_u32(&cursor, end, snapshot != NULL ? (Uint32)SDL_max(snapshot->tick, 0) : 0U) ||
-        !pong_network_write_f32(&cursor, end, up_value) || !pong_network_write_f32(&cursor, end, down_value))
+    if (!sdl3d_game_data_encode_network_input(state->data, "client_input", state->input, tick, packet, sizeof(packet),
+                                              &packet_size, error, (int)sizeof(error)))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong client input packet encode failed");
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong client input packet encode failed: %s", error);
         return false;
     }
 
-    if ((size_t)(cursor - packet) != PONG_NETWORK_INPUT_PACKET_SIZE)
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong client input packet size mismatch: expected=%zu actual=%zu",
-                    PONG_NETWORK_INPUT_PACKET_SIZE, (size_t)(cursor - packet));
-        return false;
-    }
-
-    if (!sdl3d_network_session_send(state->direct_connect_session, packet, (int)(cursor - packet)))
+    if (!sdl3d_network_session_send(state->direct_connect_session, packet, (int)packet_size))
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong client input packet send failed: %s", SDL_GetError());
         return false;
     }
 
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[%llu ms] Pong client->host input tick=%u up=%.3f down=%.3f scene=%s",
-                (unsigned long long)pong_log_timestamp_ms(),
-                snapshot != NULL ? (unsigned int)SDL_max(snapshot->tick, 0) : 0U, up_value, down_value,
+                (unsigned long long)pong_log_timestamp_ms(), (unsigned int)tick, up_value, down_value,
                 state != NULL && state->data != NULL && sdl3d_game_data_active_scene(state->data) != NULL
                     ? sdl3d_game_data_active_scene(state->data)
                     : "<none>");
@@ -1072,49 +1065,28 @@ static bool apply_play_state_snapshot(sdl3d_game_context *ctx, pong_state *state
 
 static bool process_host_input_packet(pong_state *state, const Uint8 *packet, int packet_size)
 {
-    const Uint8 *cursor = packet;
-    const Uint8 *end = packet + packet_size;
-    Uint32 magic = 0U;
-    Uint8 version = 0U;
-    Uint8 kind = 0U;
-    Uint8 reserved = 0U;
     Uint32 tick = 0U;
-    float up_value = 0.0f;
-    float down_value = 0.0f;
+    char error[160] = {0};
 
-    if (state == NULL || packet == NULL || packet_size < 12)
+    if (state == NULL || state->data == NULL || state->input == NULL || packet == NULL || packet_size <= 0)
     {
         return false;
     }
 
-    if (!pong_network_read_u32(&cursor, end, &magic) || magic != PONG_NETWORK_PACKET_MAGIC ||
-        !pong_network_read_u8(&cursor, end, &version) || version != PONG_NETWORK_PACKET_VERSION ||
-        !pong_network_read_u8(&cursor, end, &kind) || kind != (Uint8)PONG_NETWORK_MESSAGE_INPUT ||
-        !pong_network_read_u8(&cursor, end, &reserved) || !pong_network_read_u8(&cursor, end, &reserved) ||
-        !pong_network_read_u32(&cursor, end, &tick) || !pong_network_read_f32(&cursor, end, &up_value) ||
-        !pong_network_read_f32(&cursor, end, &down_value))
+    if (!sdl3d_game_data_apply_network_input(state->data, state->input, packet, (size_t)packet_size, &tick, error,
+                                             (int)sizeof(error)))
     {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong host input packet apply failed: %s", error);
         return false;
     }
 
-    if ((size_t)packet_size != PONG_NETWORK_INPUT_PACKET_SIZE)
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong host input packet size mismatch: expected=%zu actual=%d",
-                    PONG_NETWORK_INPUT_PACKET_SIZE, packet_size);
-        return false;
-    }
-
-    (void)tick;
-    set_network_action_override(state, "action.paddle.local.up", up_value);
-    set_network_action_override(state, "action.paddle.local.down", down_value);
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[%llu ms] Pong host<-client input tick=%u up=%.3f down=%.3f scene=%s",
-                (unsigned long long)pong_log_timestamp_ms(), (unsigned int)tick, up_value, down_value,
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[%llu ms] Pong host<-client input tick=%u scene=%s",
+                (unsigned long long)pong_log_timestamp_ms(), (unsigned int)tick,
                 state != NULL && state->data != NULL && sdl3d_game_data_active_scene(state->data) != NULL
                     ? sdl3d_game_data_active_scene(state->data)
                     : "<none>");
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "[%llu ms] Pong host applied remote paddle input: p2_up=%.3f p2_down=%.3f",
-                (unsigned long long)pong_log_timestamp_ms(), up_value, down_value);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[%llu ms] Pong host queued remote paddle input overrides",
+                (unsigned long long)pong_log_timestamp_ms());
     return true;
 }
 
@@ -1843,8 +1815,7 @@ static void update_host_session_status(sdl3d_game_context *ctx, pong_state *stat
                                                      PONG_NETWORK_MESSAGE_RESUME_REQUEST);
                 continue;
             }
-            if (is_multiplayer_play_scene(state) &&
-                pong_network_packet_is_kind(packet, packet_size, PONG_NETWORK_MESSAGE_INPUT))
+            if (is_multiplayer_play_scene(state))
             {
                 if (process_host_input_packet(state, packet, packet_size))
                 {
