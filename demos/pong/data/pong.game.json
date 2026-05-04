@@ -836,6 +836,7 @@
       {
         "name": "profile.pong.play.local.two_gamepads",
         "min_gamepads": 2,
+        "max_gamepads": 4,
         "active_if": { "type": "scene_state.compare", "key": "match_mode", "op": "==", "value": "local" },
         "unbind": [
           "action.paddle.up",

@@ -286,6 +286,8 @@ Supported UI binding sources are `metric` (`fps`, `frame`, `paused`), `property`
 and `scene_state`.
 Supported UI conditions include `always`, `app.paused`, `camera.active`, `property.compare`,
 `property.bool`, `scene_state.compare`, `all`, `any`, and `not`.
+`scene_state.compare` may author `default` as a fallback scalar when the
+requested scene-state key has not been set yet.
 
 Scene UI can also declare data-driven menu presenters. A presenter turns a
 scene `menus[]` controller into a visible stack with authored alignment, colors,
@@ -513,13 +515,15 @@ action named in `unbind`, then applies each authored binding in order.
 }
 ```
 
-`active_if` uses the standard data condition language. `min_gamepads` and
-`max_gamepads` are optional gates evaluated against the live input manager.
-Gamepad bindings may omit `slot` or use `-1` to accept any connected gamepad;
-otherwise `slot` pins the binding to a local player index. Authors should keep
-profile predicates mutually exclusive or order them from most specific to most
-general, because `sdl3d_game_data_apply_active_input_profile()` applies the
-first matching profile.
+`active_if` uses the standard data condition language. If omitted, the profile
+matches any scene state and can act as an explicit fallback. `min_gamepads` and
+`max_gamepads` are optional gates evaluated against the live input manager; an
+omitted `max_gamepads` means no upper bound. Gamepad bindings may omit `slot` or
+use `-1` to accept any connected gamepad; otherwise `slot` pins the binding to a
+local player index. Authors should keep profile predicates mutually exclusive or
+order them from most specific to most general, because
+`sdl3d_game_data_apply_active_input_profile()` applies the first matching
+profile.
 
 Reusable options scenes should prefer immediate apply for settings where the
 player benefits from real-time feedback. Use Apply/Cancel snapshots only for

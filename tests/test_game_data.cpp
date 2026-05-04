@@ -2180,6 +2180,14 @@ TEST(GameDataRuntime, AppliesAuthoredPongPlayInputProfiles)
     ASSERT_GE(p1_up, 0);
     ASSERT_GE(p2_up, 0);
 
+    ASSERT_TRUE(sdl3d_game_data_apply_input_profile(runtime, input, "profile.pong.play.single", error, sizeof(error)))
+        << error;
+    error[0] = '\0';
+    EXPECT_FALSE(
+        sdl3d_game_data_apply_input_profile(runtime, input, "profile.pong.play.missing", error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("profile.pong.play.missing"), std::string::npos);
+    error[0] = '\0';
+
     const char *profile_name = nullptr;
     ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error, sizeof(error)))
         << error;
@@ -2233,6 +2241,79 @@ TEST(GameDataRuntime, AppliesAuthoredPongPlayInputProfiles)
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, AppliesFallbackAndMouseInputProfiles)
+{
+    const std::filesystem::path dir = unique_test_dir("input_profile_mouse");
+    write_text(dir / "mouse_profile.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Mouse Profile", "id": "test.mouse_profile", "version": "0.1.0" },
+  "world": { "name": "world.mouse_profile", "kind": "fixed_screen" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.gameplay",
+        "actions": [
+          { "name": "action.pointer.primary" }
+        ]
+      }
+    ],
+    "profiles": [
+      {
+        "name": "profile.requires_gamepad",
+        "min_gamepads": 1,
+        "bindings": [
+          { "action": "action.pointer.primary", "device": "keyboard", "key": "SPACE" }
+        ]
+      },
+      {
+        "name": "profile.fallback.mouse",
+        "unbind": [ "action.pointer.primary" ],
+        "bindings": [
+          { "action": "action.pointer.primary", "device": "mouse", "button": "LEFT" }
+        ]
+      }
+    ]
+  },
+  "entities": []
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "mouse_profile.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    const int action = sdl3d_game_data_find_action(runtime, "action.pointer.primary");
+    ASSERT_GE(action, 0);
+
+    const char *profile_name = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error, sizeof(error)))
+        << error;
+    EXPECT_STREQ(profile_name, "profile.fallback.mouse");
+
+    SDL_Event mouse{};
+    mouse.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    mouse.button.button = SDL_BUTTON_LEFT;
+    sdl3d_input_process_event(input, &mouse);
+    sdl3d_input_update(input, 1);
+    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, action), 1.0f);
+
+    mouse.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    sdl3d_input_process_event(input, &mouse);
+    sdl3d_input_update(input, 2);
+    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, action), 0.0f);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, MenuControllerConsumesAuthoredMenuInput)

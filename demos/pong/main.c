@@ -364,7 +364,7 @@ static void destroy_host_session(pong_state *state)
 
 static bool apply_active_play_input_profile(pong_state *state)
 {
-    char error[192];
+    char error[256];
     const char *profile_name = NULL;
     if (state == NULL || state->data == NULL || state->input == NULL)
     {
@@ -1650,7 +1650,10 @@ static void refresh_local_play_input(pong_state *state)
     const int gamepad_count = sdl3d_input_gamepad_count(state->input);
     if (gamepad_count != state->local_input_gamepad_count)
     {
-        (void)apply_active_play_input_profile(state);
+        if (!apply_active_play_input_profile(state))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong input profile hotplug refresh failed");
+        }
     }
 }
 
