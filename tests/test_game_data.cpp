@@ -4555,6 +4555,129 @@ TEST(GameDataRuntime, RejectsInvalidInputProfiles)
     EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_input_assignment.game.json").string().c_str(), nullptr,
                                                error, sizeof(error)));
     EXPECT_NE(std::string(error).find("$.input.device_assignment_sets[0].bindings[0]"), std::string::npos);
+
+    write_text(dir / "mixed_input_profile.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Mixed Input Profile", "id": "test.mixed_input_profile", "version": "0.1.0" },
+  "world": { "name": "world.mixed_input_profile", "kind": "fixed_screen" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.gameplay",
+        "actions": [
+          { "name": "action.up" }
+        ]
+      }
+    ],
+    "device_assignment_sets": [
+      {
+        "name": "assignment.keyboard",
+        "device": "keyboard",
+        "bindings": [
+          { "semantic": "up", "key": "UP" }
+        ]
+      }
+    ],
+    "profiles": [
+      {
+        "name": "profile.mixed",
+        "bindings": [
+          { "action": "action.up", "device": "keyboard", "key": "UP" }
+        ],
+        "assignments": [
+          { "set": "assignment.keyboard", "actions": { "up": "action.up" } }
+        ]
+      }
+    ]
+  },
+  "entities": []
+})json");
+
+    error[0] = '\0';
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "mixed_input_profile.game.json").string().c_str(), nullptr, error,
+                                               sizeof(error)));
+    EXPECT_NE(std::string(error).find("$.input.profiles[0]"), std::string::npos);
+
+    write_text(dir / "extra_assignment_semantic.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Extra Assignment Semantic", "id": "test.extra_assignment_semantic", "version": "0.1.0" },
+  "world": { "name": "world.extra_assignment_semantic", "kind": "fixed_screen" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.gameplay",
+        "actions": [
+          { "name": "action.up" }
+        ]
+      }
+    ],
+    "device_assignment_sets": [
+      {
+        "name": "assignment.keyboard",
+        "device": "keyboard",
+        "bindings": [
+          { "semantic": "up", "key": "UP" }
+        ]
+      }
+    ],
+    "profiles": [
+      {
+        "name": "profile.extra",
+        "assignments": [
+          { "set": "assignment.keyboard", "actions": { "up": "action.up", "fire": "action.up" } }
+        ]
+      }
+    ]
+  },
+  "entities": []
+})json");
+
+    error[0] = '\0';
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "extra_assignment_semantic.game.json").string().c_str(), nullptr,
+                                               error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("$.input.profiles[0].assignments[0].actions.fire"), std::string::npos);
+
+    write_text(dir / "nongamepad_assignment_slot.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Nongamepad Assignment Slot", "id": "test.nongamepad_assignment_slot", "version": "0.1.0" },
+  "world": { "name": "world.nongamepad_assignment_slot", "kind": "fixed_screen" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.gameplay",
+        "actions": [
+          { "name": "action.up" }
+        ]
+      }
+    ],
+    "device_assignment_sets": [
+      {
+        "name": "assignment.keyboard",
+        "device": "keyboard",
+        "bindings": [
+          { "semantic": "up", "key": "UP" }
+        ]
+      }
+    ],
+    "profiles": [
+      {
+        "name": "profile.slot",
+        "assignments": [
+          { "set": "assignment.keyboard", "slot": 0, "actions": { "up": "action.up" } }
+        ]
+      }
+    ]
+  },
+  "entities": []
+})json");
+
+    error[0] = '\0';
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "nongamepad_assignment_slot.game.json").string().c_str(), nullptr,
+                                               error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("$.input.profiles[0].assignments[0]"), std::string::npos);
     remove_test_dir(dir);
 }
 

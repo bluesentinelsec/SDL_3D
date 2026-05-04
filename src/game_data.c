@@ -5908,19 +5908,6 @@ static yyjson_val *find_input_profile_json(const sdl3d_game_data_runtime *runtim
     return NULL;
 }
 
-static yyjson_val *find_input_assignment_set_json(const sdl3d_game_data_runtime *runtime, const char *set_name)
-{
-    yyjson_val *sets = obj_get(obj_get(runtime_root(runtime), "input"), "device_assignment_sets");
-    for (size_t i = 0; set_name != NULL && yyjson_is_arr(sets) && i < yyjson_arr_size(sets); ++i)
-    {
-        yyjson_val *set = yyjson_arr_get(sets, i);
-        const char *name = json_string(set, "name", NULL);
-        if (name != NULL && SDL_strcmp(name, set_name) == 0)
-            return set;
-    }
-    return NULL;
-}
-
 static bool input_profile_binding_to_spec(const sdl3d_game_data_runtime *runtime, yyjson_val *binding,
                                           input_binding_spec *out_spec, char *error_buffer, int error_buffer_size)
 {
@@ -6108,7 +6095,7 @@ static bool apply_input_assignment_json(sdl3d_game_data_runtime *runtime, sdl3d_
                                         yyjson_val *assignment, char *error_buffer, int error_buffer_size)
 {
     const char *set_name = json_string(assignment, "set", NULL);
-    yyjson_val *set = find_input_assignment_set_json(runtime, set_name);
+    yyjson_val *set = sdl3d_game_data_find_input_assignment_set_json(runtime_root(runtime), set_name);
     yyjson_val *actions = obj_get(assignment, "actions");
     yyjson_val *bindings = obj_get(set, "bindings");
     const char *device = json_string(set, "device", NULL);
@@ -6157,6 +6144,11 @@ static bool apply_input_profile_json(sdl3d_game_data_runtime *runtime, sdl3d_inp
     if (runtime == NULL || input == NULL || profile == NULL)
     {
         set_error(error_buffer, error_buffer_size, "input profile apply requires runtime, input, and profile");
+        return false;
+    }
+    if (bindings != NULL && assignments != NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "input profile cannot mix bindings and assignments");
         return false;
     }
 

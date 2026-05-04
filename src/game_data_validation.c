@@ -1559,7 +1559,7 @@ static bool validate_input_profile_binding(validation_context *ctx, yyjson_val *
     return true;
 }
 
-static yyjson_val *find_input_assignment_set_json(yyjson_val *root, const char *set_name)
+yyjson_val *sdl3d_game_data_find_input_assignment_set_json(yyjson_val *root, const char *set_name)
 {
     yyjson_val *sets = obj_get(obj_get(root, "input"), "device_assignment_sets");
     for (size_t i = 0; set_name != NULL && yyjson_is_arr(sets) && i < yyjson_arr_size(sets); ++i)
@@ -1570,6 +1570,19 @@ static yyjson_val *find_input_assignment_set_json(yyjson_val *root, const char *
             return set;
     }
     return NULL;
+}
+
+static bool input_assignment_set_has_semantic(yyjson_val *set, const char *semantic)
+{
+    yyjson_val *bindings = obj_get(set, "bindings");
+    for (size_t i = 0; semantic != NULL && yyjson_is_arr(bindings) && i < yyjson_arr_size(bindings); ++i)
+    {
+        yyjson_val *binding = yyjson_arr_get(bindings, i);
+        const char *binding_semantic = json_string(binding, "semantic");
+        if (binding_semantic != NULL && SDL_strcmp(binding_semantic, semantic) == 0)
+            return true;
+    }
+    return false;
 }
 
 static bool validate_input_assignment_set_binding(validation_context *ctx, yyjson_val *binding, const char *device,
@@ -1660,7 +1673,13 @@ static bool validate_input_profile_assignment(validation_context *ctx, yyjson_va
     if (!require_ref(ctx, &names->input_assignment_sets, "input device assignment set", set_name, path))
         return false;
 
+    yyjson_val *set = sdl3d_game_data_find_input_assignment_set_json(root, set_name);
+    const char *device = json_string(set, "device");
     yyjson_val *slot = obj_get(assignment, "slot");
+    if (slot != NULL && SDL_strcmp(device != NULL ? device : "", "gamepad") != 0)
+    {
+        return validation_error(ctx, path, "input profile assignment slot is only valid for gamepad assignment sets");
+    }
     if (slot != NULL &&
         (!yyjson_is_num(slot) || yyjson_get_sint(slot) < -1 || yyjson_get_sint(slot) >= SDL3D_INPUT_MAX_GAMEPADS))
     {
@@ -1671,7 +1690,6 @@ static bool validate_input_profile_assignment(validation_context *ctx, yyjson_va
     if (!yyjson_is_obj(actions))
         return validation_error(ctx, path, "input profile assignment requires an actions object");
 
-    yyjson_val *set = find_input_assignment_set_json(root, set_name);
     yyjson_val *bindings = obj_get(set, "bindings");
     for (size_t i = 0; yyjson_is_arr(bindings) && i < yyjson_arr_size(bindings); ++i)
     {
@@ -1680,6 +1698,21 @@ static bool validate_input_profile_assignment(validation_context *ctx, yyjson_va
         const char *semantic = json_string(binding, "semantic");
         const char *action = semantic != NULL ? json_string(actions, semantic) : NULL;
         format_path(action_path, sizeof(action_path), "%s.actions.%s", path, semantic != NULL ? semantic : "<missing>");
+        if (!require_ref(ctx, &names->actions, "input action", action, action_path))
+            return false;
+    }
+    size_t idx, max;
+    yyjson_val *key;
+    yyjson_val *value;
+    yyjson_obj_foreach(actions, idx, max, key, value)
+    {
+        char action_path[PATH_BUFFER_SIZE];
+        const char *semantic = yyjson_is_str(key) ? yyjson_get_str(key) : NULL;
+        const char *action = yyjson_is_str(value) ? yyjson_get_str(value) : NULL;
+        format_path(action_path, sizeof(action_path), "%s.actions.%s", path, semantic != NULL ? semantic : "<invalid>");
+        if (!input_assignment_set_has_semantic(set, semantic))
+            return validation_error(ctx, action_path, "input profile assignment maps unknown semantic '%s'",
+                                    semantic != NULL ? semantic : "<invalid>");
         if (!require_ref(ctx, &names->actions, "input action", action, action_path))
             return false;
     }
@@ -1756,6 +1789,8 @@ static bool validate_input_profiles(validation_context *ctx, yyjson_val *root, v
         }
 
         yyjson_val *assignments = obj_get(profile, "assignments");
+        if (ok && bindings != NULL && assignments != NULL)
+            ok = validation_error(ctx, path, "input profile cannot mix bindings and assignments");
         if (ok && assignments != NULL && !yyjson_is_arr(assignments))
             ok = validation_error(ctx, path, "input profile assignments must be an array");
         for (size_t a = 0; ok && yyjson_is_arr(assignments) && a < yyjson_arr_size(assignments); ++a)

@@ -483,8 +483,10 @@ game-specific policy for threshold, direction, and conflict behavior.
 Runtime input role/device policy can be authored under `input.profiles`.
 Profiles let a scene or adapter select a complete binding overlay without
 hard-coding device assignment in host C. Applying a profile first unbinds every
-action named in `unbind`, then applies each authored binding and reusable device
-assignment in order.
+action named in `unbind`, then applies either raw authored bindings or reusable
+device assignments. A single profile may use `bindings` or `assignments`, but
+not both; keeping those styles separate avoids ambiguous ordering and keeps
+profiles easy to audit.
 
 ```json
 {
@@ -558,6 +560,11 @@ maps those semantics to concrete game actions and may pin gamepad bindings to a
 slot. This supports common policies like keyboard-as-player-1,
 first-gamepad-as-player-2, first-two-gamepads-as-player-1/player-2, and
 LAN-client controls without duplicating key/button/axis rows in every profile.
+Every key in an assignment `actions` map must match a semantic declared by the
+referenced set, and every semantic in the set must be mapped to an action.
+`slot` is valid only when the referenced assignment set has `"device": "gamepad"`;
+keyboard and mouse sets are global device policies and reject slot-specific
+assignments.
 
 Reusable options scenes should prefer immediate apply for settings where the
 player benefits from real-time feedback. Use Apply/Cancel snapshots only for
