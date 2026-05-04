@@ -5073,6 +5073,28 @@ TEST(GameDataRuntime, EncodesAndAppliesPongNetworkSnapshotFromAuthoredSchema)
                                            "paddle_flash", 0.0f),
                 0.5f, 0.0001f);
 
+    sdl3d_properties_set_string(sdl3d_game_data_mutable_scene_state(host), "match_mode", "lan");
+    sdl3d_properties_set_string(sdl3d_game_data_mutable_scene_state(host), "network_role", "host");
+    sdl3d_properties_set_string(sdl3d_game_data_mutable_scene_state(host), "network_flow", "direct");
+    char description[4096]{};
+    ASSERT_TRUE(sdl3d_game_data_describe_network_snapshot(host, "play_state", 12345U, description, sizeof(description),
+                                                          error, sizeof(error)))
+        << error;
+    const std::string text(description);
+    EXPECT_NE(text.find("tick=12345"), std::string::npos);
+    EXPECT_NE(text.find("scene=scene.splash"), std::string::npos);
+    EXPECT_NE(text.find("match_mode=lan"), std::string::npos);
+    EXPECT_NE(text.find("network_role=host"), std::string::npos);
+    EXPECT_NE(text.find("network_flow=direct"), std::string::npos);
+    EXPECT_NE(text.find("entity.paddle.player.position=(-7.500,1.250,0.000)"), std::string::npos);
+    EXPECT_NE(text.find("entity.ball.properties.velocity=(3.250,-1.750)"), std::string::npos);
+    EXPECT_NE(text.find("entity.match.properties.paused=true"), std::string::npos);
+
+    char tiny_description[16]{};
+    EXPECT_FALSE(sdl3d_game_data_describe_network_snapshot(host, "play_state", 12345U, tiny_description,
+                                                           sizeof(tiny_description), error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("buffer is too small"), std::string::npos);
+
     destroy_runtime_session(host_session, host);
     destroy_runtime_session(client_session, client);
 }
