@@ -731,8 +731,8 @@
         "position": [-8.15, 0.0, 3.35],
         "direction": [0.0, 0.0, -1.0],
         "color": [1.0, 0.06, 0.04],
-        "intensity": 11.0,
-        "range": 6.2,
+        "intensity": 12.5,
+        "range": 8.4,
         "inner_cutoff": 0.86,
         "outer_cutoff": 0.48
       },
@@ -759,8 +759,8 @@
         "position": [8.15, 0.0, 3.35],
         "direction": [0.0, 0.0, -1.0],
         "color": [0.08, 0.28, 1.0],
-        "intensity": 11.0,
-        "range": 6.2,
+        "intensity": 12.5,
+        "range": 8.4,
         "inner_cutoff": 0.86,
         "outer_cutoff": 0.48
       }
