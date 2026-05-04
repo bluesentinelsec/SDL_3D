@@ -4333,6 +4333,36 @@ TEST(GameDataRuntime, ValidatesNetworkReplicationSchemaAndComputesStableHash)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, LocalOnlyGameHasNoNetworkSchemaHash)
+{
+    const std::filesystem::path dir = unique_test_dir("no_network_schema");
+    write_text(dir / "local_only.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Local Only", "id": "test.local_only", "version": "0.1.0" },
+  "world": { "name": "world.local_only", "kind": "fixed_screen" },
+  "entities": []
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "local_only.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+    ASSERT_NE(runtime, nullptr);
+
+    std::array<Uint8, SDL3D_REPLICATION_SCHEMA_HASH_SIZE> hash{};
+    EXPECT_FALSE(sdl3d_game_data_has_network_schema(runtime));
+    EXPECT_FALSE(sdl3d_game_data_get_network_schema_hash(runtime, hash.data()));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
 {
     struct Case
@@ -4406,6 +4436,28 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
             "network actor field must",
         },
         {
+            "number_alias_is_not_a_network_field_type",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": [
+              { "path": "properties.speed", "type": "number" }
+            ]
+          }
+        ]
+      }
+    ]
+  })json",
+            "network actor field must",
+        },
+        {
             "unknown_action",
             R"json({
     "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
@@ -4438,6 +4490,80 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
     ]
   })json",
             "network replication direction",
+        },
+        {
+            "duplicate_replication_channel",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          { "entity": "entity.ball", "fields": [ "position" ] }
+        ]
+      },
+      {
+        "name": "play_state",
+        "direction": "client_to_host",
+        "rate": 60,
+        "inputs": [
+          { "action": "action.remote.up" }
+        ]
+      }
+    ]
+  })json",
+            "duplicate network replication",
+        },
+        {
+            "duplicate_control_message",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          { "entity": "entity.ball", "fields": [ "position" ] }
+        ]
+      }
+    ],
+    "control_messages": [
+      { "name": "pause", "direction": "bidirectional", "signal": "signal.network.pause" },
+      { "name": "pause", "direction": "host_to_client", "signal": "signal.network.start" }
+    ]
+  })json",
+            "duplicate network control message",
+        },
+        {
+            "host_to_client_missing_actors",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60
+      }
+    ]
+  })json",
+            "host_to_client network replication must declare actors",
+        },
+        {
+            "client_to_host_missing_inputs",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "replication": [
+      {
+        "name": "client_input",
+        "direction": "client_to_host",
+        "rate": 60
+      }
+    ]
+  })json",
+            "client_to_host network replication must declare inputs",
         },
     };
 

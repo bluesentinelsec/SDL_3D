@@ -413,7 +413,7 @@ static bool replication_field_type_from_string(const char *type, sdl3d_replicati
             *out_type = SDL3D_REPLICATION_FIELD_INT32;
         return true;
     }
-    if (SDL_strcmp(type, "float32") == 0 || SDL_strcmp(type, "float") == 0 || SDL_strcmp(type, "number") == 0)
+    if (SDL_strcmp(type, "float32") == 0 || SDL_strcmp(type, "float") == 0)
     {
         if (out_type != NULL)
             *out_type = SDL3D_REPLICATION_FIELD_FLOAT32;
@@ -496,10 +496,17 @@ static bool is_replication_property_path(const char *path)
 static void network_hash_update(sdl3d_crypto_hash32_state *state, const char *label, const char *value)
 {
     static const char sep = '\0';
+    static const char null_marker = '\1';
     sdl3d_crypto_hash32_update(state, label, SDL_strlen(label));
     sdl3d_crypto_hash32_update(state, &sep, 1u);
     if (value != NULL)
+    {
         sdl3d_crypto_hash32_update(state, value, SDL_strlen(value));
+    }
+    else
+    {
+        sdl3d_crypto_hash32_update(state, &null_marker, 1u);
+    }
     sdl3d_crypto_hash32_update(state, &sep, 1u);
 }
 
@@ -711,6 +718,11 @@ static bool validate_network(validation_context *ctx, yyjson_val *root, validati
         yyjson_val *inputs = obj_get(entry, "inputs");
         if (SDL_strcmp(direction, "host_to_client") == 0)
         {
+            if (actors == NULL)
+            {
+                ok = validation_error(ctx, path, "host_to_client network replication must declare actors");
+                break;
+            }
             if (inputs != NULL)
             {
                 ok = validation_error(ctx, path, "host_to_client network replication must not declare inputs");
@@ -722,6 +734,11 @@ static bool validate_network(validation_context *ctx, yyjson_val *root, validati
         }
         else
         {
+            if (inputs == NULL)
+            {
+                ok = validation_error(ctx, path, "client_to_host network replication must declare inputs");
+                break;
+            }
             if (actors != NULL)
             {
                 ok = validation_error(ctx, path, "client_to_host network replication must not declare actors");
