@@ -20,120 +20,13 @@ extern "C"
 
 namespace
 {
-constexpr Uint32 kPongNetworkPacketMagic = 0x474E4F50u;
-constexpr Uint8 kPongNetworkPacketVersion = 1U;
-constexpr size_t kPongNetworkStatePacketSize = 112U;
-
 enum PongNetworkMessageKind : Uint8
 {
-    PONG_NETWORK_MESSAGE_INPUT = 1,
-    PONG_NETWORK_MESSAGE_STATE = 2,
-    PONG_NETWORK_MESSAGE_START_GAME = 3,
-    PONG_NETWORK_MESSAGE_PAUSE_REQUEST = 4,
-    PONG_NETWORK_MESSAGE_RESUME_REQUEST = 5,
-    PONG_NETWORK_MESSAGE_DISCONNECT = 6,
+    PONG_NETWORK_MESSAGE_START_GAME,
+    PONG_NETWORK_MESSAGE_PAUSE_REQUEST,
+    PONG_NETWORK_MESSAGE_RESUME_REQUEST,
+    PONG_NETWORK_MESSAGE_DISCONNECT,
 };
-
-static bool write_u8(Uint8 **cursor, Uint8 *end, Uint8 value)
-{
-    if (cursor == nullptr || *cursor == nullptr || end == nullptr || *cursor >= end)
-    {
-        return false;
-    }
-    **cursor = value;
-    ++(*cursor);
-    return true;
-}
-
-static bool write_u32(Uint8 **cursor, Uint8 *end, Uint32 value)
-{
-    Uint8 bytes[4];
-    bytes[0] = (Uint8)(value & 0xffU);
-    bytes[1] = (Uint8)((value >> 8U) & 0xffU);
-    bytes[2] = (Uint8)((value >> 16U) & 0xffU);
-    bytes[3] = (Uint8)((value >> 24U) & 0xffU);
-    if (cursor == nullptr || *cursor == nullptr || end == nullptr || (size_t)(end - *cursor) < sizeof(bytes))
-    {
-        return false;
-    }
-    SDL_memcpy(*cursor, bytes, sizeof(bytes));
-    *cursor += sizeof(bytes);
-    return true;
-}
-
-static bool write_i32(Uint8 **cursor, Uint8 *end, int value)
-{
-    return write_u32(cursor, end, (Uint32)(Sint32)value);
-}
-
-static bool write_f32(Uint8 **cursor, Uint8 *end, float value)
-{
-    Uint32 bits = 0U;
-    SDL_memcpy(&bits, &value, sizeof(bits));
-    return write_u32(cursor, end, bits);
-}
-
-static bool write_vec2(Uint8 **cursor, Uint8 *end, sdl3d_vec2 value)
-{
-    return write_f32(cursor, end, value.x) && write_f32(cursor, end, value.y);
-}
-
-static bool write_vec3(Uint8 **cursor, Uint8 *end, sdl3d_vec3 value)
-{
-    return write_f32(cursor, end, value.x) && write_f32(cursor, end, value.y) && write_f32(cursor, end, value.z);
-}
-
-static bool read_u8(const Uint8 **cursor, const Uint8 *end, Uint8 *out_value)
-{
-    if (cursor == nullptr || *cursor == nullptr || out_value == nullptr || *cursor >= end)
-    {
-        return false;
-    }
-    *out_value = **cursor;
-    ++(*cursor);
-    return true;
-}
-
-static bool read_u32(const Uint8 **cursor, const Uint8 *end, Uint32 *out_value)
-{
-    if (cursor == nullptr || *cursor == nullptr || out_value == nullptr || (size_t)(end - *cursor) < 4)
-    {
-        return false;
-    }
-
-    const Uint8 *src = *cursor;
-    *out_value = (Uint32)src[0] | ((Uint32)src[1] << 8U) | ((Uint32)src[2] << 16U) | ((Uint32)src[3] << 24U);
-    *cursor += 4;
-    return true;
-}
-
-static bool read_i32(const Uint8 **cursor, const Uint8 *end, int *out_value)
-{
-    Uint32 value = 0U;
-    if (!read_u32(cursor, end, &value))
-    {
-        return false;
-    }
-    *out_value = (int)(Sint32)value;
-    return true;
-}
-
-static bool read_f32(const Uint8 **cursor, const Uint8 *end, float *out_value)
-{
-    Uint32 bits = 0U;
-    if (!read_u32(cursor, end, &bits))
-    {
-        return false;
-    }
-    SDL_memcpy(out_value, &bits, sizeof(bits));
-    return true;
-}
-
-static bool read_vec3(const Uint8 **cursor, const Uint8 *end, sdl3d_vec3 *out_value)
-{
-    return read_f32(cursor, end, &out_value->x) && read_f32(cursor, end, &out_value->y) &&
-           read_f32(cursor, end, &out_value->z);
-}
 
 static sdl3d_game_session *create_session(bool include_audio = false)
 {
@@ -263,7 +156,7 @@ static const char *control_name_for_kind(PongNetworkMessageKind kind)
 static bool send_control_packet(sdl3d_game_data_runtime *runtime, sdl3d_network_session *net_session,
                                 PongNetworkMessageKind kind)
 {
-    Uint8 packet[128];
+    Uint8 packet[SDL3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE];
     size_t packet_size = 0U;
     char error[160]{};
     const char *control_name = control_name_for_kind(kind);
@@ -289,149 +182,52 @@ static bool read_control_packet(sdl3d_game_data_runtime *runtime, const Uint8 *p
 static bool send_host_state_packet(sdl3d_game_data_runtime *runtime, sdl3d_game_session *session,
                                    sdl3d_network_session *net_session, bool paused)
 {
-    const sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.paddle.player");
-    const sdl3d_registered_actor *cpu = sdl3d_game_data_find_actor(runtime, "entity.paddle.cpu");
-    const sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
-    const sdl3d_registered_actor *match = sdl3d_game_data_find_actor(runtime, "entity.match");
-    const sdl3d_registered_actor *presentation = sdl3d_game_data_find_actor(runtime, "entity.presentation");
-    const sdl3d_registered_actor *score_player_actor = sdl3d_game_data_find_actor(runtime, "entity.score.player");
-    const sdl3d_registered_actor *score_cpu_actor = sdl3d_game_data_find_actor(runtime, "entity.score.cpu");
+    sdl3d_registered_actor *match = sdl3d_game_data_find_actor(runtime, "entity.match");
     const sdl3d_input_snapshot *snapshot = sdl3d_input_get_snapshot(sdl3d_game_session_get_input(session));
-    Uint8 packet[160];
-    Uint8 *cursor = packet;
-    Uint8 *end = packet + sizeof(packet);
-    const int p1_up = sdl3d_game_data_find_action(runtime, "action.paddle.up");
-    const int p1_down = sdl3d_game_data_find_action(runtime, "action.paddle.down");
-    const float p1_up_value = snapshot != nullptr && p1_up >= 0 ? snapshot->actions[p1_up].value : 0.0f;
-    const float p1_down_value = snapshot != nullptr && p1_down >= 0 ? snapshot->actions[p1_down].value : 0.0f;
+    Uint8 packet[SDL3D_NETWORK_MAX_PACKET_SIZE];
+    size_t packet_size = 0U;
+    char error[160]{};
 
-    if (player == nullptr || cpu == nullptr || ball == nullptr || match == nullptr || presentation == nullptr ||
-        score_player_actor == nullptr || score_cpu_actor == nullptr)
+    if (runtime == nullptr || session == nullptr || net_session == nullptr || match == nullptr)
     {
         return false;
     }
 
-    return write_u32(&cursor, end, kPongNetworkPacketMagic) && write_u8(&cursor, end, kPongNetworkPacketVersion) &&
-           write_u8(&cursor, end, PONG_NETWORK_MESSAGE_STATE) && write_u8(&cursor, end, 0U) &&
-           write_u8(&cursor, end, 0U) &&
-           write_u32(&cursor, end, (Uint32)SDL_max(snapshot != nullptr ? snapshot->tick : 0, 0)) &&
-           write_f32(&cursor, end, p1_up_value) && write_f32(&cursor, end, p1_down_value) &&
-           write_vec3(&cursor, end, player->position) && write_vec3(&cursor, end, cpu->position) &&
-           write_vec3(&cursor, end, ball->position) &&
-           write_vec3(&cursor, end,
-                      sdl3d_properties_get_vec3(ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f))) &&
-           write_f32(&cursor, end, sdl3d_properties_get_float(presentation->props, "border_flash", 0.0f)) &&
-           write_f32(&cursor, end, sdl3d_properties_get_float(presentation->props, "paddle_flash", 0.0f)) &&
-           write_i32(&cursor, end, sdl3d_properties_get_int(score_player_actor->props, "value", 0)) &&
-           write_i32(&cursor, end, sdl3d_properties_get_int(score_cpu_actor->props, "value", 0)) &&
-           write_i32(&cursor, end, paused ? 1 : 0) &&
-           write_i32(&cursor, end, sdl3d_properties_get_bool(match->props, "finished", false) ? 1 : 0) &&
-           write_i32(&cursor, end,
-                     SDL_strcmp(sdl3d_properties_get_string(match->props, "winner", "none"), "player") == 0 ? 1
-                     : SDL_strcmp(sdl3d_properties_get_string(match->props, "winner", "none"), "cpu") == 0  ? 2
-                                                                                                            : 0) &&
-           write_i32(&cursor, end, sdl3d_properties_get_bool(ball->props, "active_motion", false) ? 1 : 0) &&
-           write_i32(&cursor, end, sdl3d_properties_get_bool(ball->props, "has_last_reflect_y", false) ? 1 : 0) &&
-           write_f32(&cursor, end, sdl3d_properties_get_float(ball->props, "last_reflect_y", 0.0f)) &&
-           write_i32(&cursor, end, sdl3d_properties_get_int(ball->props, "stagnant_reflect_count", 0)) &&
-           (size_t)(cursor - packet) == kPongNetworkStatePacketSize &&
-           sdl3d_network_session_send(net_session, packet, (int)(cursor - packet));
+    sdl3d_properties_set_bool(match->props, "paused", paused);
+    return sdl3d_game_data_encode_network_snapshot(runtime, "play_state",
+                                                   (Uint32)SDL_max(snapshot != nullptr ? snapshot->tick : 0, 0), packet,
+                                                   sizeof(packet), &packet_size, error, sizeof(error)) &&
+           sdl3d_network_session_send(net_session, packet, (int)packet_size);
 }
 
 static bool process_client_state_packet(sdl3d_game_data_runtime *runtime, const Uint8 *packet, int packet_size,
                                         bool *out_paused)
 {
-    const Uint8 *cursor = packet;
-    const Uint8 *end = packet + packet_size;
-    Uint32 magic = 0U;
-    Uint8 version = 0U;
-    Uint8 kind = 0U;
-    Uint8 reserved = 0U;
     Uint32 tick = 0U;
-    float p1_up = 0.0f;
-    float p1_down = 0.0f;
-    sdl3d_vec3 player_position{};
-    sdl3d_vec3 cpu_position{};
-    sdl3d_vec3 ball_position{};
-    sdl3d_vec3 ball_velocity{};
-    float border_flash = 0.0f;
-    float paddle_flash = 0.0f;
-    int score_player = 0;
-    int score_cpu = 0;
-    int paused = 0;
-    int finished = 0;
-    int winner = 0;
-    int active_motion = 0;
-    int has_last_reflect_y = 0;
-    float last_reflect_y = 0.0f;
-    int stagnant_reflect_count = 0;
-    sdl3d_registered_actor *player = nullptr;
-    sdl3d_registered_actor *cpu = nullptr;
-    sdl3d_registered_actor *ball = nullptr;
     sdl3d_registered_actor *match = nullptr;
-    sdl3d_registered_actor *presentation = nullptr;
-    sdl3d_registered_actor *score_player_actor = nullptr;
-    sdl3d_registered_actor *score_cpu_actor = nullptr;
+    char error[160]{};
 
-    if (runtime == nullptr || packet == nullptr || packet_size < 12)
+    if (runtime == nullptr || packet == nullptr || packet_size <= 0)
     {
         return false;
     }
 
-    if (!read_u32(&cursor, end, &magic) || magic != kPongNetworkPacketMagic || !read_u8(&cursor, end, &version) ||
-        version != kPongNetworkPacketVersion || !read_u8(&cursor, end, &kind) ||
-        kind != (Uint8)PONG_NETWORK_MESSAGE_STATE || !read_u8(&cursor, end, &reserved) ||
-        !read_u8(&cursor, end, &reserved) || !read_u32(&cursor, end, &tick) || !read_f32(&cursor, end, &p1_up) ||
-        !read_f32(&cursor, end, &p1_down) || !read_vec3(&cursor, end, &player_position) ||
-        !read_vec3(&cursor, end, &cpu_position) || !read_vec3(&cursor, end, &ball_position) ||
-        !read_vec3(&cursor, end, &ball_velocity) || !read_f32(&cursor, end, &border_flash) ||
-        !read_f32(&cursor, end, &paddle_flash) || !read_i32(&cursor, end, &score_player) ||
-        !read_i32(&cursor, end, &score_cpu) || !read_i32(&cursor, end, &paused) || !read_i32(&cursor, end, &finished) ||
-        !read_i32(&cursor, end, &winner) || !read_i32(&cursor, end, &active_motion) ||
-        !read_i32(&cursor, end, &has_last_reflect_y) || !read_f32(&cursor, end, &last_reflect_y) ||
-        !read_i32(&cursor, end, &stagnant_reflect_count))
-    {
-        return false;
-    }
-
-    if ((size_t)packet_size != kPongNetworkStatePacketSize)
+    if (!sdl3d_game_data_apply_network_snapshot(runtime, packet, (size_t)packet_size, &tick, error, sizeof(error)))
     {
         return false;
     }
 
     (void)tick;
-    player = sdl3d_game_data_find_actor(runtime, "entity.paddle.player");
-    cpu = sdl3d_game_data_find_actor(runtime, "entity.paddle.cpu");
-    ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
     match = sdl3d_game_data_find_actor(runtime, "entity.match");
-    presentation = sdl3d_game_data_find_actor(runtime, "entity.presentation");
-    score_player_actor = sdl3d_game_data_find_actor(runtime, "entity.score.player");
-    score_cpu_actor = sdl3d_game_data_find_actor(runtime, "entity.score.cpu");
-
-    if (player == nullptr || cpu == nullptr || ball == nullptr || match == nullptr || presentation == nullptr ||
-        score_player_actor == nullptr || score_cpu_actor == nullptr)
+    if (match == nullptr)
     {
         return false;
     }
 
-    player->position = player_position;
-    cpu->position = cpu_position;
-    ball->position = ball_position;
-    sdl3d_properties_set_vec3(ball->props, "velocity", ball_velocity);
-    sdl3d_properties_set_bool(ball->props, "active_motion", active_motion != 0);
-    sdl3d_properties_set_bool(ball->props, "has_last_reflect_y", has_last_reflect_y != 0);
-    sdl3d_properties_set_float(ball->props, "last_reflect_y", last_reflect_y);
-    sdl3d_properties_set_int(ball->props, "stagnant_reflect_count", stagnant_reflect_count);
-    sdl3d_properties_set_int(score_player_actor->props, "value", score_player);
-    sdl3d_properties_set_int(score_cpu_actor->props, "value", score_cpu);
     if (out_paused != nullptr)
     {
-        *out_paused = paused != 0;
+        *out_paused = sdl3d_properties_get_bool(match->props, "paused", false);
     }
-    sdl3d_properties_set_bool(match->props, "finished", finished != 0);
-    sdl3d_properties_set_string(match->props, "winner", winner == 1 ? "player" : winner == 2 ? "cpu" : "none");
-    sdl3d_properties_set_float(presentation->props, "border_flash", border_flash);
-    sdl3d_properties_set_float(presentation->props, "paddle_flash", paddle_flash);
     return true;
 }
 
@@ -570,10 +366,9 @@ TEST_F(PongHeadlessMultiplayerTest, HostAppliesRemoteInputAndClientReceivesAutho
 
     EXPECT_NEAR(client_cpu->position.y, host_cpu->position.y, 0.0001f);
     EXPECT_TRUE(client_paused);
-    EXPECT_STREQ(
-        sdl3d_properties_get_string(sdl3d_game_data_find_actor(client_runtime, "entity.match")->props, "winner",
-                                    "none"),
-        sdl3d_properties_get_string(sdl3d_game_data_find_actor(host_runtime, "entity.match")->props, "winner", "none"));
+    EXPECT_EQ(
+        sdl3d_properties_get_int(sdl3d_game_data_find_actor(client_runtime, "entity.match")->props, "winner_id", -1),
+        sdl3d_properties_get_int(sdl3d_game_data_find_actor(host_runtime, "entity.match")->props, "winner_id", -2));
 }
 
 TEST_F(PongHeadlessMultiplayerTest, ControlPacketsCarryPauseResumeAndDisconnect)

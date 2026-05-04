@@ -179,7 +179,7 @@
           "type": "all",
           "conditions": [
             { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
-            { "type": "property.compare", "target": "entity.match", "key": "winner", "op": "==", "value": "player" }
+            { "type": "property.compare", "target": "entity.match", "key": "winner_id", "op": "==", "value": 1 }
           ]
         },
         "text": "You win! Play again?",
@@ -196,7 +196,7 @@
           "type": "all",
           "conditions": [
             { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true },
-            { "type": "property.compare", "target": "entity.match", "key": "winner", "op": "==", "value": "cpu" }
+            { "type": "property.compare", "target": "entity.match", "key": "winner_id", "op": "==", "value": 2 }
           ]
         },
         "text": "You lose! Play again?",

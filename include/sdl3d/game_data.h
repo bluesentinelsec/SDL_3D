@@ -35,6 +35,14 @@ extern "C"
 {
 #endif
 
+    /**
+     * @brief Exact byte size of an authored network control message packet.
+     *
+     * Control messages carry only fixed metadata: magic, version, tick,
+     * control-message index, and the schema hash.
+     */
+#define SDL3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE (16U + SDL3D_REPLICATION_SCHEMA_HASH_SIZE)
+
     /** @brief Opaque runtime created from one game JSON document. */
     typedef struct sdl3d_game_data_runtime sdl3d_game_data_runtime;
 

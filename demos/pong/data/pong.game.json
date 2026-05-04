@@ -146,7 +146,9 @@
           {
             "entity": "entity.match",
             "fields": [
-              { "path": "properties.finished", "type": "bool" }
+              { "path": "properties.finished", "type": "bool" },
+              { "path": "properties.winner_id", "type": "int32" },
+              { "path": "properties.paused", "type": "bool" }
             ]
           },
           {
@@ -1139,6 +1141,8 @@
       "properties": {
         "finished": { "type": "bool", "value": false },
         "winner": { "type": "string", "value": "none" },
+        "winner_id": { "type": "int", "value": 0 },
+        "paused": { "type": "bool", "value": false },
         "field_half_height": { "type": "float", "value": 5.0 }
       }
     },
@@ -1849,6 +1853,7 @@
         "actions": [
           { "type": "property.set", "target": "entity.match", "key": "finished", "value": true },
           { "type": "property.set", "target": "entity.match", "key": "winner", "value": "player" },
+          { "type": "property.set", "target": "entity.match", "key": "winner_id", "value": 1 },
           { "type": "adapter.invoke", "adapter": "adapter.pong.record_player_win" },
           { "type": "entity.set_active", "target": "entity.ball", "active": false }
         ]
@@ -1858,6 +1863,7 @@
         "actions": [
           { "type": "property.set", "target": "entity.match", "key": "finished", "value": true },
           { "type": "property.set", "target": "entity.match", "key": "winner", "value": "cpu" },
+          { "type": "property.set", "target": "entity.match", "key": "winner_id", "value": 2 },
           { "type": "adapter.invoke", "adapter": "adapter.pong.record_cpu_win" },
           { "type": "entity.set_active", "target": "entity.ball", "active": false }
         ]
@@ -1896,6 +1902,8 @@
           { "type": "property.set", "target": "entity.score.cpu", "key": "value", "value": 0 },
           { "type": "property.set", "target": "entity.match", "key": "finished", "value": false },
           { "type": "property.set", "target": "entity.match", "key": "winner", "value": "none" },
+          { "type": "property.set", "target": "entity.match", "key": "winner_id", "value": 0 },
+          { "type": "property.set", "target": "entity.match", "key": "paused", "value": false },
           { "type": "property.set", "target": "entity.presentation", "key": "border_flash", "value": 0.0 },
           { "type": "property.set", "target": "entity.presentation", "key": "paddle_flash", "value": 0.0 },
           { "type": "signal.emit", "signal": "signal.round.reset" }
