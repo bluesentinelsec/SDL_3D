@@ -1245,6 +1245,35 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     ASSERT_TRUE(sdl3d_game_data_get_network_runtime_pause_state(runtime, &network_paused, error, sizeof(error)))
         << error;
     EXPECT_TRUE(network_paused);
+    ASSERT_EQ(sdl3d_game_data_haptics_policy_count(runtime), 2);
+    sdl3d_game_data_haptics_policy haptics_policy{};
+    ASSERT_TRUE(sdl3d_game_data_get_haptics_policy_at(runtime, 0, &haptics_policy));
+    EXPECT_STREQ(haptics_policy.name, "haptics.gamepad.vibration_test");
+    EXPECT_EQ(haptics_policy.signal_id, sdl3d_game_data_find_signal(runtime, "signal.settings.vibration"));
+    EXPECT_FLOAT_EQ(haptics_policy.low_frequency, 0.30f);
+    EXPECT_FLOAT_EQ(haptics_policy.high_frequency, 0.70f);
+    EXPECT_EQ(haptics_policy.duration_ms, 100U);
+    ASSERT_TRUE(sdl3d_game_data_get_haptics_policy_at(runtime, 1, &haptics_policy));
+    EXPECT_STREQ(haptics_policy.name, "haptics.gamepad.paddle_hit");
+    EXPECT_EQ(haptics_policy.signal_id, sdl3d_game_data_find_signal(runtime, "signal.ball.hit_paddle"));
+
+    sdl3d_properties *haptics_payload = sdl3d_properties_create();
+    ASSERT_NE(haptics_payload, nullptr);
+    const int paddle_hit_signal = sdl3d_game_data_find_signal(runtime, "signal.ball.hit_paddle");
+    sdl3d_properties_set_string(haptics_payload, "other_actor_name", "entity.paddle.player");
+    EXPECT_TRUE(sdl3d_game_data_match_haptics_policy(runtime, 1, paddle_hit_signal, haptics_payload, &haptics_policy));
+    sdl3d_properties_set_string(haptics_payload, "other_actor_name", "entity.paddle.cpu");
+    EXPECT_FALSE(sdl3d_game_data_match_haptics_policy(runtime, 1, paddle_hit_signal, haptics_payload, &haptics_policy));
+    sdl3d_properties_set_string(sdl3d_game_data_mutable_scene_state(runtime), "match_mode", "local");
+    EXPECT_TRUE(sdl3d_game_data_match_haptics_policy(runtime, 1, paddle_hit_signal, haptics_payload, &haptics_policy));
+    sdl3d_properties_set_string(haptics_payload, "other_actor_name", "entity.paddle.attract_left");
+    EXPECT_FALSE(sdl3d_game_data_match_haptics_policy(runtime, 1, paddle_hit_signal, haptics_payload, &haptics_policy));
+    sdl3d_registered_actor *settings_for_haptics = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    ASSERT_NE(settings_for_haptics, nullptr);
+    sdl3d_properties_set_bool(settings_for_haptics->props, "vibration", false);
+    sdl3d_properties_set_string(haptics_payload, "other_actor_name", "entity.paddle.player");
+    EXPECT_FALSE(sdl3d_game_data_match_haptics_policy(runtime, 1, paddle_hit_signal, haptics_payload, &haptics_policy));
+    sdl3d_properties_destroy(haptics_payload);
     EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead");
     EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.splash");
     EXPECT_EQ(sdl3d_game_data_scene_count(runtime), 15);
@@ -4627,6 +4656,44 @@ TEST(GameDataRuntime, ValidatesPongDataWithoutDiagnostics)
     EXPECT_TRUE(sdl3d_game_data_validate_file(SDL3D_PONG_DATA_PATH, &options, error, sizeof(error))) << error;
     EXPECT_TRUE(capture.diagnostics.empty());
     EXPECT_EQ(error[0], '\0');
+}
+
+TEST(GameDataRuntime, RejectsInvalidHapticsPolicies)
+{
+    const std::filesystem::path dir = unique_test_dir("haptics_policy_validation");
+    write_text(dir / "bad_haptics.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad Haptics", "id": "test.bad_haptics", "version": "0.1.0" },
+  "world": { "name": "world.bad_haptics", "kind": "fixed_screen" },
+  "entities": [
+    { "name": "entity.player", "tags": ["player"] }
+  ],
+  "signals": [
+    "signal.hit"
+  ],
+  "haptics": {
+    "policies": [
+      {
+        "name": "haptics.bad",
+        "signal": "signal.hit",
+        "low_frequency": 1.5,
+        "high_frequency": 0.5,
+        "duration_ms": 100,
+        "payload_actor_filters": [
+          { "key": "other_actor_name", "tags": [] }
+        ]
+      }
+    ]
+  }
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(
+        sdl3d_game_data_validate_file((dir / "bad_haptics.game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("haptics low_frequency must be a number from 0 to 1"), std::string::npos)
+        << error;
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, RejectsInvalidInputProfiles)

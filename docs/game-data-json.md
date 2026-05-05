@@ -737,6 +737,47 @@ child menu selections set `menu_state_key` in scene state instead of requesting 
 }
 ```
 
+Haptics policies can be authored under `haptics.policies`. Each policy names the
+trigger signal, rumble intensity, and duration. Hosts can enumerate policies
+with `sdl3d_game_data_haptics_policy_count()` and
+`sdl3d_game_data_get_haptics_policy_at()`, subscribe to the referenced signals,
+then call `sdl3d_game_data_match_haptics_policy()` for each signal payload before
+starting rumble.
+
+```json
+{
+  "haptics": {
+    "policies": [
+      {
+        "name": "haptics.player_hit",
+        "signal": "signal.player.hit",
+        "enabled_if": {
+          "type": "property.compare",
+          "target": "entity.settings",
+          "key": "vibration",
+          "op": "==",
+          "value": true
+        },
+        "low_frequency": 0.45,
+        "high_frequency": 0.75,
+        "duration_ms": 120,
+        "payload_actor_filters": [
+          { "key": "other_actor_name", "tags": ["player"] }
+        ]
+      }
+    ]
+  }
+}
+```
+
+`enabled_if` is optional and uses the same condition syntax as UI visibility and
+profile activation. `payload_actor_filters` is optional; when present, at least
+one filter must match. A filter reads an actor name from the signal payload field
+named by `key`, then matches either a concrete `actor` reference or all authored
+`tags` on that actor. Filters may also have their own `active_if` condition.
+Intensities must be numbers from 0 to 1, and `duration_ms` must be a positive
+integer.
+
     Sprite assets can be authored under `assets.sprites`:
 
 ```json

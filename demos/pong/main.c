@@ -43,13 +43,12 @@ typedef struct pong_state
     char direct_connect_host[SDL3D_NETWORK_MAX_HOST_LENGTH];
     char direct_connect_port[16];
     char direct_connect_status[SDL3D_NETWORK_MAX_STATUS_LENGTH];
-    int paddle_hit_connection;
-    int vibration_connection;
+    int *haptics_signal_ids;
+    int *haptics_connections;
+    int haptics_connection_count;
     int lobby_start_connection;
     int host_start_signal_id;
     int camera_toggle_signal_id;
-    int ball_hit_signal_id;
-    int vibration_signal_id;
     int discovery_refresh_signal_id;
     int discovery_refresh_connection;
     sdl3d_game_data_input_profile_refresh_state input_profile_refresh;
@@ -1723,42 +1722,96 @@ static void refresh_local_play_input(pong_state *state)
 static void on_gamepad_feedback(void *userdata, int signal_id, const sdl3d_properties *payload)
 {
     pong_state *state = (pong_state *)userdata;
-    const sdl3d_registered_actor *settings =
-        state != NULL ? sdl3d_game_data_find_actor(state->data, "entity.settings") : NULL;
-    const bool vibration_enabled = settings != NULL && sdl3d_properties_get_bool(settings->props, "vibration", false);
-    const char *other_actor_name =
-        payload != NULL ? sdl3d_properties_get_string(payload, "other_actor_name", NULL) : NULL;
-
-    if (state == NULL || state->input == NULL)
+    if (state == NULL || state->data == NULL || state->input == NULL)
     {
         return;
     }
 
-    if (signal_id == state->vibration_signal_id)
+    const int policy_count = sdl3d_game_data_haptics_policy_count(state->data);
+    for (int i = 0; i < policy_count; ++i)
     {
-        if (!sdl3d_input_rumble_all_gamepads(state->input, 0.30f, 0.70f, 100))
+        sdl3d_game_data_haptics_policy policy;
+        if (!sdl3d_game_data_match_haptics_policy(state->data, i, signal_id, payload, &policy))
+            continue;
+        if (!sdl3d_input_rumble_all_gamepads(state->input, policy.low_frequency, policy.high_frequency,
+                                             policy.duration_ms))
         {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                        "Pong vibration feedback requested but no rumble-capable gamepad accepted it");
+                        "Pong haptics policy '%s' requested rumble but no gamepad accepted it",
+                        policy.name != NULL ? policy.name : "<unnamed>");
         }
+    }
+}
+
+static bool pong_haptics_signal_connected(const pong_state *state, int signal_id)
+{
+    if (state == NULL || signal_id < 0)
+        return true;
+    for (int i = 0; i < state->haptics_connection_count; ++i)
+    {
+        if (state->haptics_signal_ids != NULL && state->haptics_signal_ids[i] == signal_id)
+            return true;
+    }
+    return false;
+}
+
+static void connect_haptics_policies(sdl3d_game_context *ctx, pong_state *state)
+{
+    if (ctx == NULL || state == NULL || state->data == NULL || state->input == NULL)
+        return;
+
+    const int policy_count = sdl3d_game_data_haptics_policy_count(state->data);
+    if (policy_count <= 0)
+        return;
+
+    state->haptics_signal_ids = SDL_calloc((size_t)policy_count, sizeof(*state->haptics_signal_ids));
+    state->haptics_connections = SDL_calloc((size_t)policy_count, sizeof(*state->haptics_connections));
+    if (state->haptics_signal_ids == NULL || state->haptics_connections == NULL)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong failed to allocate haptics signal connections");
+        SDL_free(state->haptics_signal_ids);
+        SDL_free(state->haptics_connections);
+        state->haptics_signal_ids = NULL;
+        state->haptics_connections = NULL;
         return;
     }
 
-    if (!vibration_enabled)
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(ctx->session);
+    for (int i = 0; i < policy_count; ++i)
     {
-        return;
-    }
-
-    if (signal_id == state->ball_hit_signal_id && other_actor_name != NULL &&
-        (SDL_strcmp(other_actor_name, "entity.paddle.player") == 0 ||
-         (is_local_match_mode(state) && SDL_strcmp(other_actor_name, "entity.paddle.cpu") == 0)))
-    {
-        if (!sdl3d_input_rumble_all_gamepads(state->input, 0.45f, 0.75f, 120))
+        sdl3d_game_data_haptics_policy policy;
+        if (!sdl3d_game_data_get_haptics_policy_at(state->data, i, &policy) ||
+            pong_haptics_signal_connected(state, policy.signal_id))
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                        "Pong paddle hit rumble requested but no rumble-capable gamepad accepted it");
+            continue;
+        }
+
+        const int connection = sdl3d_signal_connect(bus, policy.signal_id, on_gamepad_feedback, state);
+        if (connection > 0)
+        {
+            state->haptics_signal_ids[state->haptics_connection_count] = policy.signal_id;
+            state->haptics_connections[state->haptics_connection_count] = connection;
+            ++state->haptics_connection_count;
         }
     }
+}
+
+static void disconnect_haptics_policies(sdl3d_game_context *ctx, pong_state *state)
+{
+    if (ctx == NULL || state == NULL)
+        return;
+
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(ctx->session);
+    for (int i = 0; i < state->haptics_connection_count; ++i)
+    {
+        if (state->haptics_connections != NULL && state->haptics_connections[i] > 0)
+            sdl3d_signal_disconnect(bus, state->haptics_connections[i]);
+    }
+    SDL_free(state->haptics_signal_ids);
+    SDL_free(state->haptics_connections);
+    state->haptics_signal_ids = NULL;
+    state->haptics_connections = NULL;
+    state->haptics_connection_count = 0;
 }
 
 static void on_multiplayer_lobby_signal(void *userdata, int signal_id, const sdl3d_properties *payload)
@@ -1928,14 +1981,11 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong gamepad slot: slot=%d id=%d connected=%d", i,
                     sdl3d_input_gamepad_id_at(state->input, i), sdl3d_input_gamepad_is_connected(state->input, i));
     }
-    state->paddle_hit_connection = 0;
-    state->vibration_connection = 0;
+    state->haptics_connection_count = 0;
     state->lobby_start_connection = 0;
     state->discovery_refresh_connection = 0;
     state->host_start_signal_id = sdl3d_game_data_find_signal(state->data, "signal.multiplayer.lobby.start");
     state->camera_toggle_signal_id = sdl3d_game_data_find_signal(state->data, "signal.camera.ball.toggle");
-    state->ball_hit_signal_id = sdl3d_game_data_find_signal(state->data, "signal.ball.hit_paddle");
-    state->vibration_signal_id = sdl3d_game_data_find_signal(state->data, "signal.settings.vibration");
     state->discovery_refresh_signal_id =
         sdl3d_game_data_find_signal(state->data, "signal.multiplayer.discovery.refresh");
     sdl3d_game_data_input_profile_refresh_state_init(&state->input_profile_refresh);
@@ -1945,16 +1995,7 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
     update_host_session_scene_state(state);
     if (state->input != NULL)
     {
-        if (state->ball_hit_signal_id >= 0)
-        {
-            state->paddle_hit_connection = sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(ctx->session),
-                                                                state->ball_hit_signal_id, on_gamepad_feedback, state);
-        }
-        if (state->vibration_signal_id >= 0)
-        {
-            state->vibration_connection = sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(ctx->session),
-                                                               state->vibration_signal_id, on_gamepad_feedback, state);
-        }
+        connect_haptics_policies(ctx, state);
         if (state->host_start_signal_id >= 0)
         {
             state->lobby_start_connection =
@@ -2094,16 +2135,7 @@ static void pong_shutdown(sdl3d_game_context *ctx, void *userdata)
     sdl3d_game_data_particle_cache_free(&state->particle_cache);
     sdl3d_game_data_image_cache_free(&state->image_cache);
     sdl3d_game_data_font_cache_free(&state->font_cache);
-    if (state->paddle_hit_connection > 0)
-    {
-        sdl3d_signal_disconnect(sdl3d_game_session_get_signal_bus(ctx->session), state->paddle_hit_connection);
-        state->paddle_hit_connection = 0;
-    }
-    if (state->vibration_connection > 0)
-    {
-        sdl3d_signal_disconnect(sdl3d_game_session_get_signal_bus(ctx->session), state->vibration_connection);
-        state->vibration_connection = 0;
-    }
+    disconnect_haptics_policies(ctx, state);
     if (state->lobby_start_connection > 0)
     {
         sdl3d_signal_disconnect(sdl3d_game_session_get_signal_bus(ctx->session), state->lobby_start_connection);

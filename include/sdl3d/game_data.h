@@ -99,6 +99,21 @@ extern "C"
         Uint32 tick;
     } sdl3d_game_data_network_control;
 
+    /** @brief Authored haptics/rumble policy selected by a signal payload. */
+    typedef struct sdl3d_game_data_haptics_policy
+    {
+        /** @brief Stable authored policy name, owned by the runtime. */
+        const char *name;
+        /** @brief Signal that triggers the policy, or -1. */
+        int signal_id;
+        /** @brief Low-frequency rumble intensity in the range [0, 1]. */
+        float low_frequency;
+        /** @brief High-frequency rumble intensity in the range [0, 1]. */
+        float high_frequency;
+        /** @brief Rumble duration in milliseconds. */
+        Uint32 duration_ms;
+    } sdl3d_game_data_haptics_policy;
+
     /** @brief Authored font asset descriptor. */
     typedef struct sdl3d_game_data_font_asset
     {
@@ -970,6 +985,50 @@ extern "C"
      */
     bool sdl3d_game_data_get_network_runtime_control(const sdl3d_game_data_runtime *runtime, const char *name,
                                                      const char **out_control);
+
+    /**
+     * @brief Return the number of authored haptics policies.
+     *
+     * Policies are authored under `haptics.policies`.
+     *
+     * @param runtime Loaded game data runtime.
+     * @return Number of authored policies, or 0 when none are authored.
+     */
+    int sdl3d_game_data_haptics_policy_count(const sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Read an authored haptics policy descriptor by index.
+     *
+     * This exposes the policy's signal and rumble parameters so hosts can
+     * subscribe to the necessary signals. Use
+     * `sdl3d_game_data_match_haptics_policy()` before playing rumble.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param index Zero-based policy index.
+     * @param out_policy Receives the policy descriptor.
+     * @return true when @p index exists and @p out_policy was filled.
+     */
+    bool sdl3d_game_data_get_haptics_policy_at(const sdl3d_game_data_runtime *runtime, int index,
+                                               sdl3d_game_data_haptics_policy *out_policy);
+
+    /**
+     * @brief Test whether an authored haptics policy matches a signal event.
+     *
+     * The helper checks the policy signal, optional `enabled_if` condition, and
+     * optional payload actor filters. Payload actor filters read actor names
+     * from the signal payload and may match by concrete actor name or authored
+     * entity tags.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param index Zero-based policy index.
+     * @param signal_id Emitted signal id.
+     * @param payload Optional signal payload.
+     * @param out_policy Receives the matching policy descriptor.
+     * @return true when the policy exists and matches this event.
+     */
+    bool sdl3d_game_data_match_haptics_policy(const sdl3d_game_data_runtime *runtime, int index, int signal_id,
+                                              const sdl3d_properties *payload,
+                                              sdl3d_game_data_haptics_policy *out_policy);
 
     /**
      * @brief Resolve the authored network pause input action id.
