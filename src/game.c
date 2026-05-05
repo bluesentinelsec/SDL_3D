@@ -481,7 +481,9 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
         SDL_Quit();
         return 1;
     }
+#if !defined(__ANDROID__)
     SDL_StartTextInput(ctx.window);
+#endif
 
     sdl3d_time_reset();
 
@@ -660,7 +662,9 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
         callbacks->shutdown(&ctx, userdata);
     }
 
+#if !defined(__ANDROID__)
     SDL_StopTextInput(ctx.window);
+#endif
     sdl3d_game_cleanup_context(&ctx);
     SDL_Quit();
     return result;
