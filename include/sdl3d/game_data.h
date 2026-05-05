@@ -24,6 +24,7 @@
 #include "sdl3d/font.h"
 #include "sdl3d/game.h"
 #include "sdl3d/lighting.h"
+#include "sdl3d/network.h"
 #include "sdl3d/network_replication.h"
 #include "sdl3d/properties.h"
 #include "sdl3d/sprite_asset.h"
@@ -1900,6 +1901,41 @@ extern "C"
     /** @brief Publish a boolean field on one runtime collection row. */
     bool sdl3d_game_data_runtime_collection_set_bool(sdl3d_game_data_runtime *runtime, const char *collection_name,
                                                      int row_index, const char *field_name, bool value);
+
+    /**
+     * @brief Start or replace a named runtime-owned UDP direct-connect client session.
+     *
+     * The session is owned by @p runtime and remains valid until canceled,
+     * replaced, or the runtime is destroyed. @p status_key, @p state_key, and
+     * @p connected_key are optional scene-state keys updated after creation.
+     */
+    bool sdl3d_game_data_network_direct_connect_start(sdl3d_game_data_runtime *runtime, const char *session_name,
+                                                      const char *host, int port, const char *status_key,
+                                                      const char *state_key, const char *connected_key);
+
+    /**
+     * @brief Cancel and destroy a named runtime-owned direct-connect session.
+     *
+     * Canceling an unknown session is a successful no-op.
+     */
+    bool sdl3d_game_data_network_direct_connect_cancel(sdl3d_game_data_runtime *runtime, const char *session_name,
+                                                       const char *status_key, const char *state_key,
+                                                       const char *connected_key, const char *status);
+
+    /**
+     * @brief Publish a named runtime-owned direct-connect session's status into scene state.
+     */
+    bool sdl3d_game_data_network_direct_connect_publish_status(sdl3d_game_data_runtime *runtime,
+                                                               const char *session_name, const char *status_key,
+                                                               const char *state_key, const char *connected_key);
+
+    /**
+     * @brief Return a runtime-owned direct-connect session, or NULL when absent.
+     *
+     * The caller must not destroy the returned pointer.
+     */
+    sdl3d_network_session *sdl3d_game_data_get_network_direct_connect_session(sdl3d_game_data_runtime *runtime,
+                                                                              const char *session_name);
 
     /**
      * @brief Read one item from an authored menu.

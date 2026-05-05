@@ -85,6 +85,7 @@ static bool require_ref(validation_context *ctx, const name_table *table, const 
 static bool asset_path_exists(validation_context *ctx, const char *asset_path, const char *json_path,
                               const char *asset_kind);
 static void format_path(char *buffer, size_t buffer_size, const char *format, ...);
+static bool validation_error(validation_context *ctx, const char *json_path, const char *format, ...);
 
 static yyjson_val *obj_get(yyjson_val *object, const char *key)
 {
@@ -115,6 +116,24 @@ static bool is_storage_path_segment(const char *value)
 static bool is_virtual_storage_path(const char *value)
 {
     return value != NULL && (SDL_strncmp(value, "user://", 7) == 0 || SDL_strncmp(value, "cache://", 8) == 0);
+}
+
+static bool validate_network_port_value(validation_context *ctx, yyjson_val *value, const char *json_path,
+                                        const char *label)
+{
+    if (value == NULL)
+        return true;
+    if (yyjson_is_int(value))
+    {
+        const int port = (int)yyjson_get_int(value);
+        if (port > 0 && port <= 65535)
+            return true;
+    }
+    else if (yyjson_is_str(value) && yyjson_get_str(value) != NULL && yyjson_get_str(value)[0] != '\0')
+    {
+        return true;
+    }
+    return validation_error(ctx, json_path, "%s must be a non-empty string or integer 1..65535", label);
 }
 
 static bool validation_key_name_valid(const char *name)
@@ -2517,6 +2536,34 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
     {
         return require_ref(ctx, &names->network_input_channels, "network input channel", json_string(action, "channel"),
                            json_path);
+    }
+    if (SDL_strcmp(type, "network.direct_connect.start") == 0)
+    {
+        if (!is_non_empty_string(action, "name"))
+            return validation_error(ctx, json_path, "network.direct_connect.start requires a non-empty name");
+        if (!is_non_empty_string(action, "host_key") && !is_non_empty_string(action, "host") &&
+            !is_non_empty_string(action, "default_host"))
+            return validation_error(ctx, json_path,
+                                    "network.direct_connect.start requires host_key, host, or default_host");
+        if (!is_non_empty_string(action, "port_key") && obj_get(action, "port") == NULL &&
+            obj_get(action, "default_port") == NULL)
+            return validation_error(ctx, json_path,
+                                    "network.direct_connect.start requires port_key, port, or default_port");
+        if (!validate_network_port_value(ctx, obj_get(action, "port"), json_path, "network.direct_connect.start port"))
+            return false;
+        yyjson_val *default_port = obj_get(action, "default_port");
+        if (default_port != NULL &&
+            (!yyjson_is_int(default_port) || yyjson_get_int(default_port) <= 0 || yyjson_get_int(default_port) > 65535))
+            return validation_error(ctx, json_path,
+                                    "network.direct_connect.start default_port must be integer 1..65535");
+        return true;
+    }
+    if (SDL_strcmp(type, "network.direct_connect.cancel") == 0 ||
+        SDL_strcmp(type, "network.direct_connect.observe") == 0)
+    {
+        if (!is_non_empty_string(action, "name"))
+            return validation_error(ctx, json_path, "%s requires a non-empty name", type);
+        return true;
     }
     if (SDL_strcmp(type, "ui.animate") == 0)
     {

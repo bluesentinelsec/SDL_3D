@@ -701,6 +701,42 @@ frame loop while a profile-managed scene is active. The helper applies the
 active profile on first use and after the connected gamepad count changes,
 leaving scene-entry profile application in authored data actions.
 
+Direct-connect multiplayer forms should use menu `text` controls for the host
+and port fields, then invoke data-authored network actions from menu signals:
+
+```json
+{
+    "signal" : "signal.multiplayer.direct.connect",
+    "actions" : [
+        {
+            "type" : "network.direct_connect.start",
+            "name" : "direct_connect",
+            "host_key" : "direct_connect_host",
+            "port_key" : "direct_connect_port",
+            "default_host" : "127.0.0.1",
+            "default_port" : 27183,
+            "status_key" : "direct_connect_status",
+            "state_key" : "direct_connect_state",
+            "connected_key" : "direct_connect_connected"
+        }
+    ]
+}
+```
+
+`network.direct_connect.start` creates or replaces a runtime-owned UDP client
+session. `name` identifies the session. `host_key` and `port_key` read editable
+scene-state strings; alternatively, authors can provide literal `host` and
+`port` values. `default_host` and `default_port` are used when scene-state
+values are absent. Ports must resolve to `1..65535`. `status_key`, `state_key`,
+and `connected_key` are optional scene-state outputs used by UI labels and
+conditions. `network.direct_connect.observe` republishes those outputs from an
+existing named session, which is useful from a scene `activity.periodic` list.
+`network.direct_connect.cancel` destroys the named session, treats unknown
+sessions as a successful no-op, and writes a disconnected status. The engine
+owns session lifetime; host code can inspect the runtime-owned pointer with
+`sdl3d_game_data_get_network_direct_connect_session()` when it needs to send or
+receive game packets.
+
 Reusable options scenes should prefer immediate apply for settings where the
 player benefits from real-time feedback. Use Apply/Cancel snapshots only for
 screens that intentionally stage changes before committing them.
