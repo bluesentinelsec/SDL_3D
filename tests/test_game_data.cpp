@@ -3197,6 +3197,9 @@ TEST(GameDataRuntime, DynamicListMenuReadsRuntimeCollections)
                                           error, sizeof(error)))
         << error;
 
+    EXPECT_FALSE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 2, "name", "Sparse"));
+    EXPECT_EQ(sdl3d_game_data_runtime_collection_count(runtime, "local_matches"), 0);
+
     sdl3d_game_data_menu menu{};
     ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_EQ(menu.item_count, 2);

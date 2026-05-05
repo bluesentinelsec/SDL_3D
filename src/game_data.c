@@ -4602,6 +4602,8 @@ static sdl3d_properties *runtime_collection_ensure_row(runtime_collection *colle
 {
     if (collection == NULL || row_index < 0)
         return NULL;
+    if (row_index > collection->row_count)
+        return NULL;
     if (row_index >= collection->row_capacity)
     {
         int next_capacity = collection->row_capacity > 0 ? collection->row_capacity : 4;
