@@ -9,14 +9,12 @@
 #include <string.h>
 
 #include "sdl3d/asset.h"
-#include "sdl3d/font.h"
 #include "sdl3d/game.h"
 #include "sdl3d/game_data.h"
 #include "sdl3d/game_presentation.h"
 #include "sdl3d/network.h"
 #include "sdl3d/properties.h"
 #include "sdl3d/signal_bus.h"
-#include "sdl3d/ui.h"
 
 #if SDL3D_PONG_EMBEDDED_ASSETS
 #include "sdl3d_pong_assets.h"
@@ -32,8 +30,6 @@ typedef struct pong_state
     sdl3d_game_data_app_flow app_flow;
     sdl3d_game_data_frame_state frame_state;
     sdl3d_input_manager *input;
-    sdl3d_font direct_connect_font;
-    sdl3d_ui_context *direct_connect_ui;
     sdl3d_network_session *host_session;
     sdl3d_network_session *direct_connect_session;
     char host_status[SDL3D_NETWORK_MAX_STATUS_LENGTH];
@@ -65,6 +61,7 @@ static bool send_network_control_packet(pong_state *state, sdl3d_network_session
                                         pong_network_message_kind kind, const char *label);
 static bool send_network_control_packet_repeated(pong_state *state, sdl3d_network_session *session,
                                                  pong_network_message_kind kind, const char *label, int count);
+static void publish_network_match_termination_scene_state(pong_state *state);
 
 static const char PONG_NETWORK_BINDING_STATE_SNAPSHOT[] = "state_snapshot";
 static const char PONG_NETWORK_BINDING_CLIENT_INPUT[] = "client_input";
@@ -898,6 +895,7 @@ static void begin_network_match_termination(sdl3d_game_context *ctx, pong_state 
                      : network_disconnect_reason(state, "peer_disconnected", "Peer disconnected"));
     state->network_match_termination_timer = 0.0f;
     state->network_match_termination_active = true;
+    publish_network_match_termination_scene_state(state);
 
     if (local_host)
     {
@@ -1193,6 +1191,7 @@ static void update_network_match_termination(sdl3d_game_context *ctx, pong_state
     state->network_match_termination_active = false;
     state->network_match_termination_timer = 0.0f;
     state->network_match_termination_reason[0] = '\0';
+    publish_network_match_termination_scene_state(state);
     if (ctx != NULL)
     {
         ctx->paused = false;
@@ -1373,16 +1372,25 @@ static void format_network_termination_prompt(const pong_state *state, char *buf
                  placeholder + SDL_strlen("{reason}"));
 }
 
-static void draw_network_match_termination_overlay(sdl3d_game_context *ctx, pong_state *state)
+static void publish_network_match_termination_scene_state(pong_state *state)
 {
     char message[192];
-    float panel_w;
-    float panel_h;
-    float panel_x;
-    float panel_y;
+    sdl3d_properties *scene_state =
+        state != NULL && state->data != NULL ? sdl3d_game_data_mutable_scene_state(state->data) : NULL;
 
-    if (ctx == NULL || state == NULL || state->direct_connect_ui == NULL || !state->network_match_termination_active)
+    if (scene_state == NULL)
     {
+        return;
+    }
+
+    sdl3d_properties_set_bool(
+        scene_state, network_session_state_key(state, "match_termination_active", "network_match_termination_active"),
+        state->network_match_termination_active);
+    if (!state->network_match_termination_active)
+    {
+        sdl3d_properties_set_string(
+            scene_state,
+            network_session_state_key(state, "match_termination_message", "network_match_termination_message"), "");
         return;
     }
 
@@ -1390,17 +1398,9 @@ static void draw_network_match_termination_overlay(sdl3d_game_context *ctx, pong
                                       state->network_match_termination_reason[0] != '\0'
                                           ? state->network_match_termination_reason
                                           : network_disconnect_reason(state, "peer_disconnected", "Peer disconnected"));
-
-    panel_w = 880.0f;
-    panel_h = 150.0f;
-    panel_x = ((float)sdl3d_get_render_context_width(ctx->renderer) - panel_w) * 0.5f;
-    panel_y = ((float)sdl3d_get_render_context_height(ctx->renderer) - panel_h) * 0.5f;
-
-    sdl3d_ui_begin_panel(state->direct_connect_ui, panel_x, panel_y, panel_w, panel_h);
-    sdl3d_ui_begin_vbox(state->direct_connect_ui, panel_x + 28.0f, panel_y + 34.0f, panel_w - 56.0f, panel_h - 68.0f);
-    sdl3d_ui_layout_label(state->direct_connect_ui, message);
-    sdl3d_ui_end_vbox(state->direct_connect_ui);
-    sdl3d_ui_end_panel(state->direct_connect_ui);
+    sdl3d_properties_set_string(
+        scene_state, network_session_state_key(state, "match_termination_message", "network_match_termination_message"),
+        message);
 }
 
 static void refresh_local_play_input(pong_state *state)
@@ -1597,44 +1597,16 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
     {
         return false;
     }
-    if (!sdl3d_load_builtin_font(SDL3D_MEDIA_DIR, SDL3D_BUILTIN_FONT_INTER, 16.0f, &state->direct_connect_font))
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong direct-connect font load failed: %s", SDL_GetError());
-        sdl3d_game_data_destroy(state->data);
-        state->data = NULL;
-        sdl3d_asset_resolver_destroy(state->assets);
-        state->assets = NULL;
-        return false;
-    }
-    if (!sdl3d_ui_create(&state->direct_connect_font, &state->direct_connect_ui))
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong direct-connect UI create failed: %s", SDL_GetError());
-        sdl3d_free_font(&state->direct_connect_font);
-        sdl3d_game_data_destroy(state->data);
-        state->data = NULL;
-        sdl3d_asset_resolver_destroy(state->assets);
-        state->assets = NULL;
-        return false;
-    }
     reset_direct_connect_defaults(state);
+    publish_network_match_termination_scene_state(state);
     if (ctx != NULL && ctx->window != NULL)
     {
         SDL_StartTextInput(ctx->window);
-    }
-    if (state->direct_connect_ui != NULL && ctx != NULL && ctx->renderer != NULL && ctx->window != NULL)
-    {
-        sdl3d_ui_begin_frame_ex(state->direct_connect_ui, ctx->renderer, ctx->window);
     }
     sdl3d_game_data_image_cache_init(&state->image_cache, state->assets);
     if (!sdl3d_game_data_app_flow_start(&state->app_flow, state->data))
     {
         sdl3d_game_data_image_cache_free(&state->image_cache);
-        if (state->direct_connect_ui != NULL)
-        {
-            sdl3d_ui_destroy(state->direct_connect_ui);
-            state->direct_connect_ui = NULL;
-        }
-        sdl3d_free_font(&state->direct_connect_font);
         if (ctx != NULL && ctx->window != NULL)
         {
             SDL_StopTextInput(ctx->window);
@@ -1729,14 +1701,6 @@ static void pong_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     frame.render_eval = &state->frame_state.render_eval;
     frame.pulse_phase = state->frame_state.ui_pulse_phase;
     sdl3d_game_data_draw_frame(&frame);
-
-    draw_network_match_termination_overlay(ctx, state);
-    if (state->direct_connect_ui != NULL)
-    {
-        sdl3d_ui_end_frame(state->direct_connect_ui);
-        sdl3d_ui_render(state->direct_connect_ui, ctx->renderer);
-        sdl3d_ui_begin_frame_ex(state->direct_connect_ui, ctx->renderer, ctx->window);
-    }
 }
 
 static void pong_shutdown(sdl3d_game_context *ctx, void *userdata)
@@ -1753,12 +1717,6 @@ static void pong_shutdown(sdl3d_game_context *ctx, void *userdata)
         sdl3d_signal_disconnect(sdl3d_game_session_get_signal_bus(ctx->session), state->lobby_start_connection);
         state->lobby_start_connection = 0;
     }
-    if (state->direct_connect_ui != NULL)
-    {
-        sdl3d_ui_destroy(state->direct_connect_ui);
-        state->direct_connect_ui = NULL;
-    }
-    sdl3d_free_font(&state->direct_connect_font);
     destroy_host_session(state);
     destroy_direct_connect_session(state);
     if (ctx != NULL && ctx->window != NULL)

@@ -75,6 +75,16 @@
         "type": "all",
         "conditions": [
           { "type": "app.paused", "equals": true },
+          {
+            "type": "not",
+            "condition": {
+              "type": "scene_state.compare",
+              "key": "network_match_termination_active",
+              "op": "==",
+              "value": true,
+              "default": false
+            }
+          },
           { "type": "scene_state.compare", "key": "match_mode", "op": "==", "value": "lan" },
           {
             "type": "any",
@@ -103,6 +113,16 @@
         "type": "all",
         "conditions": [
           { "type": "app.paused", "equals": true },
+          {
+            "type": "not",
+            "condition": {
+              "type": "scene_state.compare",
+              "key": "network_match_termination_active",
+              "op": "==",
+              "value": true,
+              "default": false
+            }
+          },
           {
             "type": "not",
             "condition": {
@@ -213,6 +233,16 @@
           "type": "all",
           "conditions": [
             { "type": "app.paused", "equals": true },
+            {
+              "type": "not",
+              "condition": {
+                "type": "scene_state.compare",
+                "key": "network_match_termination_active",
+                "op": "==",
+                "value": true,
+                "default": false
+              }
+            },
             { "type": "not", "condition": { "type": "property.compare", "target": "entity.match", "key": "finished", "op": "==", "value": true } }
           ]
         },
@@ -223,6 +253,26 @@
         "centered": true,
         "pulse_alpha": true,
         "color": [245, 248, 255, 255]
+      },
+      {
+        "name": "ui.network.match_terminated",
+        "font": "font.hud",
+        "visible_if": {
+          "type": "scene_state.compare",
+          "key": "network_match_termination_active",
+          "op": "==",
+          "value": true,
+          "default": false
+        },
+        "format": "%s",
+        "bindings": [
+          { "type": "scene_state", "key": "network_match_termination_message" }
+        ],
+        "x": 0.5,
+        "y": 0.44,
+        "normalized": true,
+        "centered": true,
+        "color": [255, 245, 218, 255]
       },
       {
         "name": "ui.ready",
@@ -272,6 +322,16 @@
           "type": "all",
           "conditions": [
             { "type": "app.paused", "equals": true },
+            {
+              "type": "not",
+              "condition": {
+                "type": "scene_state.compare",
+                "key": "network_match_termination_active",
+                "op": "==",
+                "value": true,
+                "default": false
+              }
+            },
             { "type": "scene_state.compare", "key": "match_mode", "op": "==", "value": "lan" },
             {
               "type": "any",
@@ -307,6 +367,16 @@
           "type": "all",
           "conditions": [
             { "type": "app.paused", "equals": true },
+            {
+              "type": "not",
+              "condition": {
+                "type": "scene_state.compare",
+                "key": "network_match_termination_active",
+                "op": "==",
+                "value": true,
+                "default": false
+              }
+            },
             {
               "type": "not",
               "condition": {
