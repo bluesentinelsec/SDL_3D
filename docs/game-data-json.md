@@ -1381,10 +1381,14 @@ scene-state strings into C. `scenes` maps semantic names such as `play`,
 `host_lobby`, `join`, `direct_connect`, `discovery`, or `title` to validated
 scene ids. `state_keys` maps semantic state names to scene-state property keys.
 `state_values` maps semantic values inside each state group to concrete strings
-stored in scene state. Callers resolve these values with
+stored in scene state. `messages` maps semantic text groups to non-empty strings
+for host-owned network UI flows, such as disconnect reasons or termination
+prompts. Prompt strings may use host-specific placeholders such as `{reason}`
+when the caller documents and substitutes them. Callers resolve these values with
 `sdl3d_game_data_get_network_session_scene()`,
 `sdl3d_game_data_get_network_session_state_key()`, and
-`sdl3d_game_data_get_network_session_state_value()`. Like `scene_state`, these
+`sdl3d_game_data_get_network_session_state_value()`, and
+`sdl3d_game_data_get_network_session_message()`. Like `scene_state`, these
 orchestration maps are not part of the replication schema hash.
 
 `runtime_bindings` is optional. It maps host integration semantics to concrete

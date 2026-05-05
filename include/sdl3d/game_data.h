@@ -923,6 +923,23 @@ extern "C"
                                                          const char *name, const char **out_value);
 
     /**
+     * @brief Resolve an authored network session message.
+     *
+     * Messages are authored under `network.session_flow.messages.<group>`.
+     * Host integration code can use this for player-facing network flow text
+     * such as disconnect reasons or termination prompts without hard-coding
+     * those strings in C.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param group Authored message group.
+     * @param name Authored message semantic name.
+     * @param out_message Receives a message string owned by @p runtime.
+     * @return true when the message semantic exists and @p out_message was filled.
+     */
+    bool sdl3d_game_data_get_network_session_message(const sdl3d_game_data_runtime *runtime, const char *group,
+                                                     const char *name, const char **out_message);
+
+    /**
      * @brief Resolve an authored network runtime replication channel binding.
      *
      * Runtime bindings are authored under `network.runtime_bindings.replication`

@@ -1214,6 +1214,15 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     ASSERT_TRUE(
         sdl3d_game_data_get_network_session_state_value(runtime, "network_role", "client", &network_session_value));
     EXPECT_STREQ(network_session_value, "client");
+    ASSERT_TRUE(sdl3d_game_data_get_network_session_message(runtime, "disconnect_reasons", "host_exited",
+                                                            &network_session_value));
+    EXPECT_STREQ(network_session_value, "Host exited");
+    ASSERT_TRUE(sdl3d_game_data_get_network_session_message(runtime, "disconnect_prompts", "match_terminated",
+                                                            &network_session_value));
+    EXPECT_STREQ(network_session_value, "Match terminated: {reason} - Press Enter to return to title screen.");
+    EXPECT_FALSE(
+        sdl3d_game_data_get_network_session_message(runtime, "disconnect_reasons", "missing", &network_session_value));
+    EXPECT_EQ(network_session_value, nullptr);
     const char *network_runtime_value = nullptr;
     ASSERT_TRUE(sdl3d_game_data_get_network_runtime_replication(runtime, "state_snapshot", &network_runtime_value));
     EXPECT_STREQ(network_runtime_value, "play_state");
@@ -4954,6 +4963,14 @@ TEST(GameDataRuntime, ValidatesNetworkReplicationSchemaAndComputesStableHash)
         "match_mode": {
           "network": "lan"
         }
+      },
+      "messages": {
+        "disconnect_reasons": {
+          "host_exited": "Host exited"
+        },
+        "disconnect_prompts": {
+          "match_terminated": "Match terminated: {reason}"
+        }
       }
     })json");
     std::string network_with_runtime_bindings = network_json;
@@ -5624,6 +5641,33 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
     ]
   })json",
             "network session_flow state_keys value must be a non-empty string",
+        },
+        {
+            "bad_session_flow_message",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "session_flow": {
+      "messages": {
+        "disconnect_reasons": {
+          "host_exited": ""
+        }
+      }
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": ["position"]
+          }
+        ]
+      }
+    ]
+  })json",
+            "network session_flow messages value must be a non-empty string",
         },
         {
             "bad_runtime_replication_binding",

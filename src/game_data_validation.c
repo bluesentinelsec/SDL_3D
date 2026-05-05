@@ -693,26 +693,41 @@ static bool validate_network_session_flow(validation_context *ctx, yyjson_val *n
     }
 
     yyjson_val *state_values = obj_get(flow, "state_values");
-    if (state_values == NULL)
-        return true;
-    if (!yyjson_is_obj(state_values))
-        return validation_error(ctx, "$.network.session_flow.state_values",
-                                "network session_flow state_values must be an object");
-
-    yyjson_val *group_key;
-    yyjson_obj_iter group_iter;
-    yyjson_obj_iter_init(state_values, &group_iter);
-    while ((group_key = yyjson_obj_iter_next(&group_iter)) != NULL)
+    yyjson_val *messages = obj_get(flow, "messages");
+    const struct
     {
-        const char *group_name = yyjson_get_str(group_key);
-        yyjson_val *group = yyjson_obj_iter_get_val(group_key);
-        char group_path[PATH_BUFFER_SIZE];
-        format_path(group_path, sizeof(group_path), "$.network.session_flow.state_values.%s",
-                    group_name != NULL ? group_name : "<invalid>");
-        if (group_name == NULL || group_name[0] == '\0')
-            return validation_error(ctx, group_path, "network session_flow state_values group must be non-empty");
-        if (!validate_network_session_string_map(ctx, group, group_path, "state_values", NULL))
-            return false;
+        yyjson_val *root;
+        const char *path;
+        const char *label;
+    } grouped_maps[] = {
+        {state_values, "$.network.session_flow.state_values", "state_values"},
+        {messages, "$.network.session_flow.messages", "messages"},
+    };
+
+    for (size_t map_index = 0; map_index < SDL_arraysize(grouped_maps); ++map_index)
+    {
+        if (grouped_maps[map_index].root == NULL)
+            continue;
+        if (!yyjson_is_obj(grouped_maps[map_index].root))
+            return validation_error(ctx, grouped_maps[map_index].path, "network session_flow %s must be an object",
+                                    grouped_maps[map_index].label);
+
+        yyjson_val *group_key;
+        yyjson_obj_iter group_iter;
+        yyjson_obj_iter_init(grouped_maps[map_index].root, &group_iter);
+        while ((group_key = yyjson_obj_iter_next(&group_iter)) != NULL)
+        {
+            const char *group_name = yyjson_get_str(group_key);
+            yyjson_val *group = yyjson_obj_iter_get_val(group_key);
+            char group_path[PATH_BUFFER_SIZE];
+            format_path(group_path, sizeof(group_path), "%s.%s", grouped_maps[map_index].path,
+                        group_name != NULL ? group_name : "<invalid>");
+            if (group_name == NULL || group_name[0] == '\0')
+                return validation_error(ctx, group_path, "network session_flow %s group must be non-empty",
+                                        grouped_maps[map_index].label);
+            if (!validate_network_session_string_map(ctx, group, group_path, grouped_maps[map_index].label, NULL))
+                return false;
+        }
     }
 
     return true;
