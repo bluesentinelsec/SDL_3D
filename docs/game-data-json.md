@@ -1419,7 +1419,9 @@ replicated game data:
 
 The `pause.action` value must reference an input action. `pause.state.actor`
 must reference an entity, and `pause.state.property` must name a bool property at
-runtime. Host code can resolve these bindings with
+runtime. The referenced property should be declared on the actor with a bool type
+and a sane default value, usually `false`, so network pause reads have a defined
+state before the first replicated snapshot. Host code can resolve these bindings with
 `sdl3d_game_data_get_network_runtime_pause_action()`,
 `sdl3d_game_data_get_network_runtime_pause_state()`, and
 `sdl3d_game_data_set_network_runtime_pause_state()`. These maps are runtime

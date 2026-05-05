@@ -704,10 +704,17 @@ static void send_client_pause_request_if_pressed(sdl3d_game_context *ctx, pong_s
     int pause_action = -1;
     pong_network_message_kind request_kind;
 
-    if (ctx == NULL || state == NULL || state->input == NULL || state->direct_connect_session == NULL ||
-        state->data == NULL || !sdl3d_game_data_get_network_runtime_pause_action(state->data, &pause_action) ||
-        pause_action < 0 || !is_multiplayer_play_scene(state) || !is_network_role_client(state) ||
-        !sdl3d_network_session_is_connected(state->direct_connect_session) ||
+    if (ctx == NULL || state == NULL || state->input == NULL || state->data == NULL ||
+        state->direct_connect_session == NULL)
+    {
+        return;
+    }
+    if (!is_multiplayer_play_scene(state) || !is_network_role_client(state) ||
+        !sdl3d_network_session_is_connected(state->direct_connect_session))
+    {
+        return;
+    }
+    if (!sdl3d_game_data_get_network_runtime_pause_action(state->data, &pause_action) ||
         !sdl3d_input_is_pressed(state->input, pause_action))
     {
         return;

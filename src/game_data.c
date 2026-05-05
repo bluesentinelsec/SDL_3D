@@ -9958,6 +9958,13 @@ bool sdl3d_game_data_set_network_runtime_pause_state(sdl3d_game_data_runtime *ru
     if (!network_runtime_pause_state_binding(runtime, &actor, &property, error_buffer, error_buffer_size))
         return false;
 
+    const sdl3d_value *existing = sdl3d_properties_get_value(actor->props, property);
+    if (existing != NULL && existing->type != SDL3D_VALUE_BOOL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "network pause property '%s' must be bool", property);
+        return false;
+    }
+
     sdl3d_properties_set_bool(actor->props, property, paused);
     return true;
 }
