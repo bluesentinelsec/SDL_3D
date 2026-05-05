@@ -505,8 +505,8 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
     }
     else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
     {
-        sdl3d_draw_sphere(context->renderer, primitive->position, primitive->radius, primitive->slices,
-                          primitive->rings, primitive->color);
+        sdl3d_draw_sphere(context->renderer, primitive->position, primitive->radius, primitive->rings,
+                          primitive->slices, primitive->color);
     }
     sdl3d_set_emissive(context->renderer, 0.0f, 0.0f, 0.0f);
     if (!primitive->lighting_enabled)

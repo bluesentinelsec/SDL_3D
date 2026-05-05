@@ -1340,13 +1340,10 @@
         {
           "type": "render.sphere",
           "radius": 0.22,
-          "rings": 12,
-          "slices": 18,
-          "color": [255, 184, 82, 255],
-          "emissive": true,
-          "effects": [
-            { "type": "pulse", "rate": 9.0, "color": [255, 245, 156, 255], "emissive_base": [0.75, 0.48, 0.08], "emissive_add": [0.65, 0.30, 0.0] }
-          ]
+          "rings": 24,
+          "slices": 32,
+          "color": [224, 128, 36, 255],
+          "emissive": false
         },
         { "type": "collision.circle", "radius": 0.22 },
         { "type": "motion.velocity_2d", "property": "velocity" }
@@ -1377,13 +1374,10 @@
         {
           "type": "render.sphere",
           "radius": 0.22,
-          "rings": 12,
-          "slices": 18,
-          "color": [255, 184, 82, 255],
-          "emissive": true,
-          "effects": [
-            { "type": "pulse", "rate": 9.0, "color": [255, 245, 156, 255], "emissive_base": [0.75, 0.48, 0.08], "emissive_add": [0.65, 0.30, 0.0] }
-          ]
+          "rings": 24,
+          "slices": 32,
+          "color": [224, 128, 36, 255],
+          "emissive": false
         },
         { "type": "collision.circle", "radius": 0.22 },
         { "type": "motion.velocity_2d", "property": "velocity" }
