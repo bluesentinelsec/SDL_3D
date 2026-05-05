@@ -252,7 +252,8 @@ std::string network_schema_game_json(const std::string &network_json, const char
   "world": { "name": "world.network_schema", "kind": "fixed_screen" },
   "entities": [
     { "name": "entity.paddle.player" },
-    { "name": "entity.ball" }
+    { "name": "entity.ball" },
+    { "name": "entity.match", "properties": { "paused": { "type": "bool", "value": false } } }
   ],
   "signals": [
     "signal.network.start",
@@ -264,7 +265,8 @@ std::string network_schema_game_json(const std::string &network_json, const char
         "name": "gameplay",
         "actions": [
           { "name": "action.remote.up" },
-          { "name": "action.remote.down" }
+          { "name": "action.remote.down" },
+          { "name": "action.pause" }
         ]
       }
     ]
@@ -1223,6 +1225,17 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     EXPECT_STREQ(network_runtime_value, "disconnect");
     EXPECT_FALSE(sdl3d_game_data_get_network_runtime_control(runtime, "missing", &network_runtime_value));
     EXPECT_EQ(network_runtime_value, nullptr);
+    int network_pause_action = -1;
+    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_pause_action(runtime, &network_pause_action));
+    EXPECT_EQ(network_pause_action, sdl3d_game_data_find_action(runtime, "action.pause"));
+    bool network_paused = true;
+    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_pause_state(runtime, &network_paused, error, sizeof(error)))
+        << error;
+    EXPECT_FALSE(network_paused);
+    ASSERT_TRUE(sdl3d_game_data_set_network_runtime_pause_state(runtime, true, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_pause_state(runtime, &network_paused, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(network_paused);
     EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead");
     EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.splash");
     EXPECT_EQ(sdl3d_game_data_scene_count(runtime), 15);
@@ -4955,6 +4968,10 @@ TEST(GameDataRuntime, ValidatesNetworkReplicationSchemaAndComputesStableHash)
       "controls": {
         "start_game": "start_game",
         "pause_request": "pause"
+      },
+      "pause": {
+        "action": "action.pause",
+        "state": { "actor": "entity.match", "property": "paused" }
       }
     })json");
 
@@ -5660,6 +5677,84 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
     ]
   })json",
             "unknown network control message reference",
+        },
+        {
+            "bad_runtime_pause_action_binding",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "runtime_bindings": {
+      "pause": {
+        "action": "action.missing.pause",
+        "state": { "actor": "entity.match", "property": "paused" }
+      }
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": ["position"]
+          }
+        ]
+      }
+    ]
+  })json",
+            "unknown input action reference",
+        },
+        {
+            "bad_runtime_pause_state_actor_binding",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "runtime_bindings": {
+      "pause": {
+        "action": "action.pause",
+        "state": { "actor": "entity.missing.match", "property": "paused" }
+      }
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": ["position"]
+          }
+        ]
+      }
+    ]
+  })json",
+            "unknown entity reference",
+        },
+        {
+            "bad_runtime_pause_state_property_binding",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "runtime_bindings": {
+      "pause": {
+        "action": "action.pause",
+        "state": { "actor": "entity.match", "property": "" }
+      }
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": ["position"]
+          }
+        ]
+      }
+    ]
+  })json",
+            "network runtime_bindings pause state property must be a non-empty string",
         },
     };
 

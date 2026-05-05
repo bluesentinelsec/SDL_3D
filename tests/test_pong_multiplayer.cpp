@@ -202,20 +202,22 @@ static bool read_control_packet(sdl3d_game_data_runtime *runtime, const Uint8 *p
 static bool send_host_state_packet(sdl3d_game_data_runtime *runtime, sdl3d_game_session *session,
                                    sdl3d_network_session *net_session, bool paused)
 {
-    sdl3d_registered_actor *match = sdl3d_game_data_find_actor(runtime, "entity.match");
     const sdl3d_input_snapshot *snapshot = sdl3d_input_get_snapshot(sdl3d_game_session_get_input(session));
     Uint8 packet[SDL3D_NETWORK_MAX_PACKET_SIZE];
     size_t packet_size = 0U;
     char error[160]{};
     const char *state_channel = nullptr;
 
-    if (runtime == nullptr || session == nullptr || net_session == nullptr || match == nullptr ||
+    if (runtime == nullptr || session == nullptr || net_session == nullptr ||
         !sdl3d_game_data_get_network_runtime_replication(runtime, PONG_NETWORK_BINDING_STATE_SNAPSHOT, &state_channel))
     {
         return false;
     }
 
-    sdl3d_properties_set_bool(match->props, "paused", paused);
+    if (!sdl3d_game_data_set_network_runtime_pause_state(runtime, paused, error, sizeof(error)))
+    {
+        return false;
+    }
     return sdl3d_game_data_encode_network_snapshot(runtime, state_channel,
                                                    (Uint32)SDL_max(snapshot != nullptr ? snapshot->tick : 0, 0), packet,
                                                    sizeof(packet), &packet_size, error, sizeof(error)) &&
@@ -226,7 +228,6 @@ static bool process_client_state_packet(sdl3d_game_data_runtime *runtime, const 
                                         bool *out_paused)
 {
     Uint32 tick = 0U;
-    sdl3d_registered_actor *match = nullptr;
     char error[160]{};
 
     if (runtime == nullptr || packet == nullptr || packet_size <= 0)
@@ -240,15 +241,9 @@ static bool process_client_state_packet(sdl3d_game_data_runtime *runtime, const 
     }
 
     (void)tick;
-    match = sdl3d_game_data_find_actor(runtime, "entity.match");
-    if (match == nullptr)
-    {
-        return false;
-    }
-
     if (out_paused != nullptr)
     {
-        *out_paused = sdl3d_properties_get_bool(match->props, "paused", false);
+        return sdl3d_game_data_get_network_runtime_pause_state(runtime, out_paused, error, sizeof(error));
     }
     return true;
 }

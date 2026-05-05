@@ -955,6 +955,52 @@ extern "C"
                                                      const char **out_control);
 
     /**
+     * @brief Resolve the authored network pause input action id.
+     *
+     * The pause binding is authored under `network.runtime_bindings.pause`.
+     * The `action` value references an input action that should request
+     * pause/resume in network play.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param out_action_id Receives the runtime input action id.
+     * @return true when the pause action binding exists and resolves.
+     */
+    bool sdl3d_game_data_get_network_runtime_pause_action(const sdl3d_game_data_runtime *runtime, int *out_action_id);
+
+    /**
+     * @brief Read the authored network pause state property.
+     *
+     * The pause state is authored under `network.runtime_bindings.pause.state`
+     * as an actor reference and bool property name. This lets host code mirror
+     * pause state into replicated game state without knowing concrete actor ids
+     * or property keys.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param out_paused Receives the current pause state.
+     * @param error_buffer Optional buffer for the first failure reason.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when the pause state binding exists and resolves to a bool.
+     */
+    bool sdl3d_game_data_get_network_runtime_pause_state(const sdl3d_game_data_runtime *runtime, bool *out_paused,
+                                                         char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Write the authored network pause state property.
+     *
+     * The pause state is authored under `network.runtime_bindings.pause.state`
+     * as an actor reference and bool property name. This helper sets that
+     * property to @p paused.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param paused New pause state.
+     * @param error_buffer Optional buffer for the first failure reason.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when the pause state binding exists and was written.
+     */
+    bool sdl3d_game_data_set_network_runtime_pause_state(sdl3d_game_data_runtime *runtime, bool paused,
+                                                         char *error_buffer, int error_buffer_size);
+
+    /**
      * @brief Format a diagnostic summary for an authored network snapshot channel.
      *
      * The helper walks the named host-to-client replication channel in authored

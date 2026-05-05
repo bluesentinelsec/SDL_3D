@@ -1393,7 +1393,38 @@ names into game host code. `replication` maps semantic names to entries in
 `network.replication`, and `controls` maps semantic names to entries in
 `network.control_messages`. Values are validated as references. Callers resolve
 them with `sdl3d_game_data_get_network_runtime_replication()` and
-`sdl3d_game_data_get_network_runtime_control()`. These maps are runtime
+`sdl3d_game_data_get_network_runtime_control()`. `pause` can additionally bind a
+network pause action and the bool actor property that mirrors pause state into
+replicated game data:
+
+```json
+"runtime_bindings": {
+  "replication": {
+    "state_snapshot": "play_state",
+    "client_input": "client_input"
+  },
+  "controls": {
+    "pause_request": "pause_request",
+    "resume_request": "resume_request"
+  },
+  "pause": {
+    "action": "action.pause",
+    "state": {
+      "actor": "entity.match",
+      "property": "paused"
+    }
+  }
+}
+```
+
+The `pause.action` value must reference an input action. `pause.state.actor`
+must reference an entity, and `pause.state.property` must name a bool property at
+runtime. The referenced property should be declared on the actor with a bool type
+and a sane default value, usually `false`, so network pause reads have a defined
+state before the first replicated snapshot. Host code can resolve these bindings with
+`sdl3d_game_data_get_network_runtime_pause_action()`,
+`sdl3d_game_data_get_network_runtime_pause_state()`, and
+`sdl3d_game_data_set_network_runtime_pause_state()`. These maps are runtime
 orchestration metadata and are not part of the replication schema hash.
 
 Replication channel directions are `host_to_client` or `client_to_host`, and

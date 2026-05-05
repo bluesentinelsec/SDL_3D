@@ -746,8 +746,39 @@ static bool validate_network_runtime_binding_map(validation_context *ctx, yyjson
     return true;
 }
 
+static bool validate_network_runtime_pause_binding(validation_context *ctx, yyjson_val *pause, validation_names *names)
+{
+    if (pause == NULL)
+        return true;
+    if (!yyjson_is_obj(pause))
+        return validation_error(ctx, "$.network.runtime_bindings.pause",
+                                "network runtime_bindings pause must be an object");
+
+    if (!require_ref(ctx, &names->actions, "input action", json_string(pause, "action"),
+                     "$.network.runtime_bindings.pause.action"))
+    {
+        return false;
+    }
+
+    yyjson_val *state = obj_get(pause, "state");
+    if (!yyjson_is_obj(state))
+        return validation_error(ctx, "$.network.runtime_bindings.pause.state",
+                                "network runtime_bindings pause state must be an object");
+    if (!require_ref(ctx, &names->entities, "entity", json_string(state, "actor"),
+                     "$.network.runtime_bindings.pause.state.actor"))
+    {
+        return false;
+    }
+    if (!is_non_empty_string(state, "property"))
+        return validation_error(ctx, "$.network.runtime_bindings.pause.state.property",
+                                "network runtime_bindings pause state property must be a non-empty string");
+
+    return true;
+}
+
 static bool validate_network_runtime_bindings(validation_context *ctx, yyjson_val *network,
-                                              const name_table *replication_names, const name_table *control_names)
+                                              const name_table *replication_names, const name_table *control_names,
+                                              validation_names *names)
 {
     yyjson_val *bindings = obj_get(network, "runtime_bindings");
     if (bindings == NULL)
@@ -760,7 +791,8 @@ static bool validate_network_runtime_bindings(validation_context *ctx, yyjson_va
                                                 replication_names) &&
            validate_network_runtime_binding_map(ctx, obj_get(bindings, "controls"),
                                                 "$.network.runtime_bindings.controls", "network control message",
-                                                control_names);
+                                                control_names) &&
+           validate_network_runtime_pause_binding(ctx, obj_get(bindings, "pause"), names);
 }
 
 static bool validate_network(validation_context *ctx, yyjson_val *root, validation_names *names)
@@ -905,7 +937,7 @@ static bool validate_network(validation_context *ctx, yyjson_val *root, validati
         }
     }
     if (ok)
-        ok = validate_network_runtime_bindings(ctx, network, &replication_names, &control_names);
+        ok = validate_network_runtime_bindings(ctx, network, &replication_names, &control_names, names);
     name_table_destroy(&control_names);
     name_table_destroy(&replication_names);
     return ok;

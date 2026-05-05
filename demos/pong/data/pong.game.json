@@ -155,6 +155,10 @@
         "pause_request": "pause_request",
         "resume_request": "resume_request",
         "disconnect": "disconnect"
+      },
+      "pause": {
+        "action": "action.pause",
+        "state": { "actor": "entity.match", "property": "paused" }
       }
     },
     "replication": [

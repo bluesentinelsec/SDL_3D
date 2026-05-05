@@ -9859,6 +9859,116 @@ bool sdl3d_game_data_get_network_runtime_control(const sdl3d_game_data_runtime *
     return game_data_get_network_runtime_binding(runtime, "controls", name, out_control);
 }
 
+static yyjson_val *network_runtime_pause_json(const sdl3d_game_data_runtime *runtime)
+{
+    return obj_get(network_runtime_bindings_json(runtime), "pause");
+}
+
+static bool network_runtime_pause_state_binding(const sdl3d_game_data_runtime *runtime,
+                                                sdl3d_registered_actor **out_actor, const char **out_property,
+                                                char *error_buffer, int error_buffer_size)
+{
+    if (out_actor != NULL)
+        *out_actor = NULL;
+    if (out_property != NULL)
+        *out_property = NULL;
+    if (runtime == NULL || out_actor == NULL || out_property == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network pause state requires a runtime");
+        return false;
+    }
+
+    yyjson_val *state = obj_get(network_runtime_pause_json(runtime), "state");
+    const char *actor_name = json_string(state, "actor", NULL);
+    const char *property = json_string(state, "property", NULL);
+    if (actor_name == NULL || actor_name[0] == '\0' || property == NULL || property[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "network pause state binding is not authored");
+        return false;
+    }
+
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, actor_name);
+    if (actor == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "network pause actor '%s' not found", actor_name);
+        return false;
+    }
+
+    *out_actor = actor;
+    *out_property = property;
+    return true;
+}
+
+bool sdl3d_game_data_get_network_runtime_pause_action(const sdl3d_game_data_runtime *runtime, int *out_action_id)
+{
+    if (out_action_id != NULL)
+        *out_action_id = -1;
+    if (runtime == NULL || out_action_id == NULL)
+        return false;
+
+    const char *action = json_string(network_runtime_pause_json(runtime), "action", NULL);
+    if (action == NULL || action[0] == '\0')
+        return false;
+
+    const int action_id = sdl3d_game_data_find_action(runtime, action);
+    if (action_id < 0)
+        return false;
+
+    *out_action_id = action_id;
+    return true;
+}
+
+bool sdl3d_game_data_get_network_runtime_pause_state(const sdl3d_game_data_runtime *runtime, bool *out_paused,
+                                                     char *error_buffer, int error_buffer_size)
+{
+    if (out_paused != NULL)
+        *out_paused = false;
+    if (out_paused == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network pause state output is required");
+        return false;
+    }
+
+    sdl3d_registered_actor *actor = NULL;
+    const char *property = NULL;
+    if (!network_runtime_pause_state_binding(runtime, &actor, &property, error_buffer, error_buffer_size))
+        return false;
+
+    const sdl3d_value *value = sdl3d_properties_get_value(actor->props, property);
+    if (value == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "network pause property '%s' not found", property);
+        return false;
+    }
+    if (value->type != SDL3D_VALUE_BOOL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "network pause property '%s' must be bool", property);
+        return false;
+    }
+
+    *out_paused = value->as_bool;
+    return true;
+}
+
+bool sdl3d_game_data_set_network_runtime_pause_state(sdl3d_game_data_runtime *runtime, bool paused, char *error_buffer,
+                                                     int error_buffer_size)
+{
+    sdl3d_registered_actor *actor = NULL;
+    const char *property = NULL;
+    if (!network_runtime_pause_state_binding(runtime, &actor, &property, error_buffer, error_buffer_size))
+        return false;
+
+    const sdl3d_value *existing = sdl3d_properties_get_value(actor->props, property);
+    if (existing != NULL && existing->type != SDL3D_VALUE_BOOL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "network pause property '%s' must be bool", property);
+        return false;
+    }
+
+    sdl3d_properties_set_bool(actor->props, property, paused);
+    return true;
+}
+
 static bool game_data_append_snapshot_value(char *buffer, size_t buffer_size, size_t *offset,
                                             const game_data_snapshot_value *value)
 {
