@@ -923,6 +923,38 @@ extern "C"
                                                          const char *name, const char **out_value);
 
     /**
+     * @brief Resolve an authored network runtime replication channel binding.
+     *
+     * Runtime bindings are authored under `network.runtime_bindings.replication`
+     * and map host integration semantics, such as `state_snapshot` or
+     * `client_input`, to concrete replication channel names declared in
+     * `network.replication`.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param name Authored binding semantic name.
+     * @param out_channel Receives a replication channel name owned by @p runtime.
+     * @return true when the binding exists and @p out_channel was filled.
+     */
+    bool sdl3d_game_data_get_network_runtime_replication(const sdl3d_game_data_runtime *runtime, const char *name,
+                                                         const char **out_channel);
+
+    /**
+     * @brief Resolve an authored network runtime control-message binding.
+     *
+     * Runtime bindings are authored under `network.runtime_bindings.controls`
+     * and map host integration semantics, such as `pause_request` or
+     * `disconnect`, to concrete control-message names declared in
+     * `network.control_messages`.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param name Authored binding semantic name.
+     * @param out_control Receives a control-message name owned by @p runtime.
+     * @return true when the binding exists and @p out_control was filled.
+     */
+    bool sdl3d_game_data_get_network_runtime_control(const sdl3d_game_data_runtime *runtime, const char *name,
+                                                     const char **out_control);
+
+    /**
      * @brief Format a diagnostic summary for an authored network snapshot channel.
      *
      * The helper walks the named host-to-client replication channel in authored

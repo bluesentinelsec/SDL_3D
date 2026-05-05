@@ -1212,6 +1212,17 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     ASSERT_TRUE(
         sdl3d_game_data_get_network_session_state_value(runtime, "network_role", "client", &network_session_value));
     EXPECT_STREQ(network_session_value, "client");
+    const char *network_runtime_value = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_replication(runtime, "state_snapshot", &network_runtime_value));
+    EXPECT_STREQ(network_runtime_value, "play_state");
+    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_replication(runtime, "client_input", &network_runtime_value));
+    EXPECT_STREQ(network_runtime_value, "client_input");
+    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_control(runtime, "pause_request", &network_runtime_value));
+    EXPECT_STREQ(network_runtime_value, "pause_request");
+    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_control(runtime, "disconnect", &network_runtime_value));
+    EXPECT_STREQ(network_runtime_value, "disconnect");
+    EXPECT_FALSE(sdl3d_game_data_get_network_runtime_control(runtime, "missing", &network_runtime_value));
+    EXPECT_EQ(network_runtime_value, nullptr);
     EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead");
     EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.splash");
     EXPECT_EQ(sdl3d_game_data_scene_count(runtime), 15);
@@ -4932,11 +4943,27 @@ TEST(GameDataRuntime, ValidatesNetworkReplicationSchemaAndComputesStableHash)
         }
       }
     })json");
+    std::string network_with_runtime_bindings = network_json;
+    const size_t runtime_bindings_insert = network_with_runtime_bindings.rfind("\n  }");
+    ASSERT_NE(runtime_bindings_insert, std::string::npos);
+    network_with_runtime_bindings.insert(runtime_bindings_insert, R"json(,
+    "runtime_bindings": {
+      "replication": {
+        "state_snapshot": "play_state",
+        "client_input": "client_input"
+      },
+      "controls": {
+        "start_game": "start_game",
+        "pause_request": "pause"
+      }
+    })json");
 
     write_text(dir / "network_a.game.json", network_schema_game_json(network_json, "Network Schema A").c_str());
     write_text(dir / "network_b.game.json", network_schema_game_json(network_json, "Different Metadata").c_str());
     write_text(dir / "network_session_flow.game.json",
                network_schema_game_json(network_with_session_flow, "Network Schema A").c_str());
+    write_text(dir / "network_runtime_bindings.game.json",
+               network_schema_game_json(network_with_runtime_bindings, "Network Schema A").c_str());
     write_text(dir / "network_changed.game.json",
                network_schema_game_json(valid_network_schema_json("vec2"), "Network Schema A").c_str());
 
@@ -4948,10 +4975,12 @@ TEST(GameDataRuntime, ValidatesNetworkReplicationSchemaAndComputesStableHash)
     const auto hash_a = load_network_schema_hash(dir / "network_a.game.json");
     const auto hash_b = load_network_schema_hash(dir / "network_b.game.json");
     const auto hash_with_session_flow = load_network_schema_hash(dir / "network_session_flow.game.json");
+    const auto hash_with_runtime_bindings = load_network_schema_hash(dir / "network_runtime_bindings.game.json");
     const auto hash_changed = load_network_schema_hash(dir / "network_changed.game.json");
 
     EXPECT_EQ(hash_a, hash_b);
     EXPECT_EQ(hash_a, hash_with_session_flow);
+    EXPECT_EQ(hash_a, hash_with_runtime_bindings);
     EXPECT_NE(hash_a, hash_changed);
 
     remove_test_dir(dir);
@@ -5578,6 +5607,59 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
     ]
   })json",
             "network session_flow state_keys value must be a non-empty string",
+        },
+        {
+            "bad_runtime_replication_binding",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "runtime_bindings": {
+      "replication": {
+        "state_snapshot": "missing_channel"
+      }
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": ["position"]
+          }
+        ]
+      }
+    ]
+  })json",
+            "unknown network replication reference",
+        },
+        {
+            "bad_runtime_control_binding",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "runtime_bindings": {
+      "controls": {
+        "pause_request": "missing_control"
+      }
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": ["position"]
+          }
+        ]
+      }
+    ],
+    "control_messages": [
+      { "name": "pause", "direction": "bidirectional", "signal": "signal.network.pause" }
+    ]
+  })json",
+            "unknown network control message reference",
         },
     };
 

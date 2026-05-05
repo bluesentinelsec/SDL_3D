@@ -9823,6 +9823,42 @@ bool sdl3d_game_data_get_network_session_state_value(const sdl3d_game_data_runti
     return true;
 }
 
+static yyjson_val *network_runtime_bindings_json(const sdl3d_game_data_runtime *runtime)
+{
+    return obj_get(obj_get(runtime_root(runtime), "network"), "runtime_bindings");
+}
+
+static bool game_data_get_network_runtime_binding(const sdl3d_game_data_runtime *runtime, const char *section,
+                                                  const char *name, const char **out_value)
+{
+    if (out_value != NULL)
+        *out_value = NULL;
+    if (runtime == NULL || section == NULL || section[0] == '\0' || name == NULL || name[0] == '\0' ||
+        out_value == NULL)
+    {
+        return false;
+    }
+
+    const char *value = json_string(obj_get(network_runtime_bindings_json(runtime), section), name, NULL);
+    if (value == NULL || value[0] == '\0')
+        return false;
+
+    *out_value = value;
+    return true;
+}
+
+bool sdl3d_game_data_get_network_runtime_replication(const sdl3d_game_data_runtime *runtime, const char *name,
+                                                     const char **out_channel)
+{
+    return game_data_get_network_runtime_binding(runtime, "replication", name, out_channel);
+}
+
+bool sdl3d_game_data_get_network_runtime_control(const sdl3d_game_data_runtime *runtime, const char *name,
+                                                 const char **out_control)
+{
+    return game_data_get_network_runtime_binding(runtime, "controls", name, out_control);
+}
+
 static bool game_data_append_snapshot_value(char *buffer, size_t buffer_size, size_t *offset,
                                             const game_data_snapshot_value *value)
 {
