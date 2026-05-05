@@ -64,6 +64,14 @@ void push_key(sdl3d_input_manager *input, SDL_EventType type, SDL_Scancode scanc
     sdl3d_input_process_event(input, &event);
 }
 
+void push_text(sdl3d_input_manager *input, const char *text)
+{
+    SDL_Event event{};
+    event.type = SDL_EVENT_TEXT_INPUT;
+    event.text.text = text;
+    sdl3d_input_process_event(input, &event);
+}
+
 void push_key_mod(sdl3d_input_manager *input, SDL_EventType type, SDL_Scancode scancode, SDL_Keymod modifiers)
 {
     SDL_Event event{};
@@ -803,4 +811,17 @@ TEST(InputDemo, PlaybackStopPreservesPendingLiveInput)
     EXPECT_TRUE(sdl3d_input_is_held(input.input, jump));
 
     sdl3d_demo_playback_free(player);
+}
+
+TEST(InputManager, CapturesTextInputForCurrentTick)
+{
+    InputPtr input;
+
+    push_text(input.input, "abc");
+    push_text(input.input, ".42");
+    ASSERT_NE(sdl3d_input_update(input.input, 1), nullptr);
+    EXPECT_STREQ(sdl3d_input_get_text_input(input.input), "abc.42");
+
+    ASSERT_NE(sdl3d_input_update(input.input, 2), nullptr);
+    EXPECT_STREQ(sdl3d_input_get_text_input(input.input), "");
 }

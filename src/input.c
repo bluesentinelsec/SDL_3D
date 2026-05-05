@@ -81,6 +81,8 @@ struct sdl3d_input_manager
     SDL_Scancode pressed_scancode;
     Uint8 pressed_mouse_button;
     SDL_GamepadButton pressed_gamepad_button;
+    char pending_text_input[SDL3D_INPUT_TEXT_MAX];
+    char current_text_input[SDL3D_INPUT_TEXT_MAX];
 
     float deadzone;
 
@@ -634,6 +636,7 @@ static void sdl3d_input_reset_transients(sdl3d_input_manager *input)
     input->mouse_dy_accum = 0.0f;
     input->mouse_wheel_x_accum = 0.0f;
     input->mouse_wheel_y_accum = 0.0f;
+    input->pending_text_input[0] = '\0';
     SDL_memset(input->key_pressed_this_frame, 0, sizeof(input->key_pressed_this_frame));
     SDL_memset(input->key_released_this_frame, 0, sizeof(input->key_released_this_frame));
     SDL_memset(input->key_pressed_modifiers_this_frame, 0, sizeof(input->key_pressed_modifiers_this_frame));
@@ -647,6 +650,21 @@ static void sdl3d_input_reset_transients(sdl3d_input_manager *input)
         SDL_memset(input->gamepads[i].button_released_this_frame, 0,
                    sizeof(input->gamepads[i].button_released_this_frame));
     }
+}
+
+static void sdl3d_input_append_text(sdl3d_input_manager *input, const char *text)
+{
+    if (input == NULL || text == NULL || text[0] == '\0')
+    {
+        return;
+    }
+
+    const size_t current = SDL_strlen(input->pending_text_input);
+    if (current + 1U >= sizeof(input->pending_text_input))
+    {
+        return;
+    }
+    SDL_strlcpy(input->pending_text_input + current, text, sizeof(input->pending_text_input) - current);
 }
 
 static bool sdl3d_input_physical_any_pressed(const sdl3d_input_manager *input)
@@ -1190,6 +1208,9 @@ void sdl3d_input_process_event(sdl3d_input_manager *input, const SDL_Event *even
 
     switch (event->type)
     {
+    case SDL_EVENT_TEXT_INPUT:
+        sdl3d_input_append_text(input, event->text.text);
+        break;
     case SDL_EVENT_KEY_DOWN:
         if (event->key.scancode >= 0 && event->key.scancode < SDL_SCANCODE_COUNT && !event->key.repeat)
         {
@@ -1338,6 +1359,7 @@ const sdl3d_input_snapshot *sdl3d_input_update(sdl3d_input_manager *input, int t
             input->pressed_scancode = SDL_SCANCODE_UNKNOWN;
             input->pressed_mouse_button = 0;
             input->pressed_gamepad_button = SDL_GAMEPAD_BUTTON_INVALID;
+            input->current_text_input[0] = '\0';
             SDL_memset(input->prev_held, 0, sizeof(input->prev_held));
             for (int i = 0; i < SDL3D_INPUT_MAX_ACTIONS; ++i)
             {
@@ -1362,6 +1384,7 @@ const sdl3d_input_snapshot *sdl3d_input_update(sdl3d_input_manager *input, int t
     input->pressed_scancode = sdl3d_input_first_pressed_scancode(input);
     input->pressed_mouse_button = sdl3d_input_first_pressed_mouse_button(input);
     input->pressed_gamepad_button = sdl3d_input_first_pressed_gamepad_button(input);
+    SDL_strlcpy(input->current_text_input, input->pending_text_input, sizeof(input->current_text_input));
 
     for (int action_id = 0; action_id < input->action_count; ++action_id)
     {
@@ -1610,6 +1633,11 @@ bool sdl3d_input_rumble_all_gamepads(sdl3d_input_manager *input, float low_frequ
 const sdl3d_input_snapshot *sdl3d_input_get_snapshot(const sdl3d_input_manager *input)
 {
     return input != NULL ? &input->snapshot : NULL;
+}
+
+const char *sdl3d_input_get_text_input(const sdl3d_input_manager *input)
+{
+    return input != NULL ? input->current_text_input : "";
 }
 
 static int sdl3d_input_ensure_action(sdl3d_input_manager *input, const char *name)

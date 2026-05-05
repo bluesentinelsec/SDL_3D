@@ -345,7 +345,8 @@ Menu items can also author generic settings controls and emit data-authored sign
 }
 ```
 
-Supported control types are `toggle`, `choice`, `range`, and `input_binding`.
+Supported control types are `toggle`, `choice`, `range`, `input_binding`, and
+`text`.
 The generic menu controller applies property controls directly to actor
 properties and the menu UI presenter displays the current value. A menu can
 author `left_action` and `right_action` so range and choice controls can be
@@ -381,6 +382,36 @@ adjusted without activating navigation items:
     Range controls clamp to their authored min /
     max.Adding `"value_type" : "int"` stores the result as an integer property; adding `"display": "slider"` renders
 the menu value as a compact slider label.
+
+`text` controls capture editable UTF-8 text and write it to scene state or an
+actor string property. While a text control is focused, text input, Backspace,
+Delete, Return, Escape, and the menu select/back actions are consumed by the
+text editor instead of leaking into parent menu navigation. This is the
+preferred primitive for forms such as direct-connect hostnames, save names,
+profile names, and chat-style short fields:
+
+```json
+{
+    "label" : "Host",
+    "control" : {
+        "type" : "text",
+        "target" : "scene_state",
+        "key" : "direct_connect_host",
+        "default" : "127.0.0.1",
+        "placeholder" : "Host / IP",
+        "charset" : "hostname",
+        "max_length" : 64
+    }
+}
+```
+
+Omit `target` or set it to `"scene_state"` to bind the value to persistent
+scene state. Set `target` to an entity id to bind an actor string property.
+Supported `charset` values are `text`, `utf8`, `ascii`, `integer`, `digits`,
+`numeric`, and `hostname`. `hostname` accepts letters, digits, `.`, `-`, `_`,
+and `:` so it can store hostnames, IPv4 addresses, IPv6-style text, and ports.
+Restricted charsets reject non-ASCII UTF-8 input. `max_length` is measured in
+UTF-8 bytes and must be 255 or fewer.
 
 `input_binding` controls capture the next keyboard key, mouse button, or
 gamepad button and immediately rebind all authored actions for that device. This is how games can

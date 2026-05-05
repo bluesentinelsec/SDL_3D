@@ -31,6 +31,7 @@ extern "C"
 #define SDL3D_INPUT_MAX_BINDINGS 128
 #define SDL3D_INPUT_ACTION_NAME_MAX 32
 #define SDL3D_INPUT_MAX_GAMEPADS 4
+#define SDL3D_INPUT_TEXT_MAX 128
 
     /**
      * @brief Physical input source kind for an action binding.
@@ -406,6 +407,16 @@ extern "C"
 
     /** @brief Return the current snapshot, or NULL for a NULL manager. */
     const sdl3d_input_snapshot *sdl3d_input_get_snapshot(const sdl3d_input_manager *input);
+
+    /**
+     * @brief Return UTF-8 text entered during the current input tick.
+     *
+     * This contains SDL text-input event payloads accumulated before the most
+     * recent sdl3d_input_update() call. The pointer is owned by @p input and
+     * remains valid until the next update. It is an empty string when no text
+     * was entered or during demo playback.
+     */
+    const char *sdl3d_input_get_text_input(const sdl3d_input_manager *input);
 
     /* ================================================================== */
     /* Default bindings                                                    */

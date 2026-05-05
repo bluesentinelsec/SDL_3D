@@ -36,6 +36,7 @@
 #define SDL3D_GAME_DATA_NETWORK_INPUT_VERSION 1u
 #define SDL3D_GAME_DATA_NETWORK_CONTROL_MAGIC 0x43335253u /* "S3RC" */
 #define SDL3D_GAME_DATA_NETWORK_CONTROL_VERSION 1u
+#define SDL3D_GAME_DATA_MENU_TEXT_MAX_BYTES 255
 
 typedef enum game_data_sensor_type
 {
@@ -135,6 +136,14 @@ typedef struct menu_input_binding_capture
     const char *menu;
     int item_index;
 } menu_input_binding_capture;
+
+typedef struct menu_text_entry_capture
+{
+    bool active;
+    const char *menu;
+    int item_index;
+    char *original;
+} menu_text_entry_capture;
 
 typedef enum menu_binding_device
 {
@@ -268,6 +277,7 @@ typedef struct sdl3d_game_data_runtime
     int input_binding_count;
     int input_binding_capacity;
     menu_input_binding_capture input_capture;
+    menu_text_entry_capture text_capture;
     sdl3d_script_engine *scripts;
     script_entry *script_entries;
     int script_count;
@@ -318,6 +328,18 @@ static void set_errorf(char *buffer, int buffer_size, const char *format, ...)
     va_start(args, format);
     SDL_vsnprintf(buffer, (size_t)buffer_size, format != NULL ? format : "unknown game data error", args);
     va_end(args);
+}
+
+static void clear_menu_text_entry_capture(sdl3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+
+    runtime->text_capture.active = false;
+    runtime->text_capture.menu = NULL;
+    runtime->text_capture.item_index = -1;
+    SDL_free(runtime->text_capture.original);
+    runtime->text_capture.original = NULL;
 }
 
 static bool append_format(char *buffer, size_t buffer_size, size_t *offset, const char *format, ...)
@@ -4284,6 +4306,7 @@ bool sdl3d_game_data_set_active_scene_with_payload(sdl3d_game_data_runtime *runt
     const char *previous = sdl3d_game_data_active_scene(runtime);
     runtime->active_scene_index = (int)(scene - runtime->scenes);
     runtime->input_capture.active = false;
+    clear_menu_text_entry_capture(runtime);
     apply_scene_camera(runtime, scene);
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D game data scene set: %s -> %s",
                  previous != NULL ? previous : "<none>", scene->name != NULL ? scene->name : "<none>");
@@ -4502,6 +4525,8 @@ static sdl3d_game_data_menu_control_type parse_menu_control_type(const char *typ
         return SDL3D_GAME_DATA_MENU_CONTROL_RANGE;
     if (SDL_strcmp(type, "input_binding") == 0)
         return SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING;
+    if (SDL_strcmp(type, "text") == 0)
+        return SDL3D_GAME_DATA_MENU_CONTROL_TEXT;
     return SDL3D_GAME_DATA_MENU_CONTROL_NONE;
 }
 
@@ -4999,6 +5024,254 @@ bool sdl3d_game_data_reset_menu_input_bindings(sdl3d_game_data_runtime *runtime,
     return changed;
 }
 
+static sdl3d_properties *menu_control_properties(sdl3d_game_data_runtime *runtime, yyjson_val *control)
+{
+    if (runtime == NULL || control == NULL)
+        return NULL;
+
+    const char *target = json_string(control, "target", NULL);
+    if (target == NULL || SDL_strcmp(target, "scene_state") == 0)
+        return runtime->scene_state;
+
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, target);
+    return actor != NULL ? actor->props : NULL;
+}
+
+static const sdl3d_properties *menu_control_properties_const(const sdl3d_game_data_runtime *runtime,
+                                                             yyjson_val *control)
+{
+    return menu_control_properties((sdl3d_game_data_runtime *)runtime, control);
+}
+
+static const char *menu_control_string_value(const sdl3d_game_data_runtime *runtime, yyjson_val *control)
+{
+    const char *key = json_string(control, "key", NULL);
+    const char *fallback = json_string(control, "default", "");
+    const sdl3d_properties *props = menu_control_properties_const(runtime, control);
+    return props != NULL && key != NULL ? sdl3d_properties_get_string(props, key, fallback) : fallback;
+}
+
+static bool menu_control_set_string_value(sdl3d_game_data_runtime *runtime, yyjson_val *control, const char *value)
+{
+    const char *key = json_string(control, "key", NULL);
+    sdl3d_properties *props = menu_control_properties(runtime, control);
+    if (props == NULL || key == NULL || value == NULL)
+        return false;
+    sdl3d_properties_set_string(props, key, value);
+    return true;
+}
+
+static bool menu_text_restricted_charset(const char *charset)
+{
+    return charset != NULL && SDL_strcmp(charset, "text") != 0 && SDL_strcmp(charset, "utf8") != 0;
+}
+
+static bool menu_text_allowed_ascii(const char *charset, unsigned char ch)
+{
+    if (ch < 0x20U || ch == 0x7fU)
+        return false;
+
+    if (charset == NULL || SDL_strcmp(charset, "text") == 0 || SDL_strcmp(charset, "utf8") == 0)
+        return true;
+    if (SDL_strcmp(charset, "ascii") == 0)
+        return ch < 0x80U;
+    if (SDL_strcmp(charset, "integer") == 0 || SDL_strcmp(charset, "digits") == 0)
+        return ch >= '0' && ch <= '9';
+    if (SDL_strcmp(charset, "numeric") == 0)
+        return (ch >= '0' && ch <= '9') || ch == '.' || ch == '-';
+    if (SDL_strcmp(charset, "hostname") == 0)
+    {
+        return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch == '.' ||
+               ch == '-' || ch == '_' || ch == ':';
+    }
+    return true;
+}
+
+static int menu_text_valid_utf8_sequence_bytes(const unsigned char *cursor, size_t remaining)
+{
+    if (cursor == NULL || remaining == 0U || cursor[0] == '\0')
+        return 0;
+
+    const unsigned char b0 = cursor[0];
+    if ((b0 & 0x80U) == 0U)
+        return 1;
+    if (remaining < 2U)
+        return 0;
+    if (b0 >= 0xc2U && b0 <= 0xdfU)
+        return (cursor[1] & 0xc0U) == 0x80U ? 2 : 0;
+    if (remaining < 3U)
+        return 0;
+    if (b0 == 0xe0U)
+        return (cursor[1] >= 0xa0U && cursor[1] <= 0xbfU && (cursor[2] & 0xc0U) == 0x80U) ? 3 : 0;
+    if ((b0 >= 0xe1U && b0 <= 0xecU) || (b0 >= 0xeeU && b0 <= 0xefU))
+        return ((cursor[1] & 0xc0U) == 0x80U && (cursor[2] & 0xc0U) == 0x80U) ? 3 : 0;
+    if (b0 == 0xedU)
+        return (cursor[1] >= 0x80U && cursor[1] <= 0x9fU && (cursor[2] & 0xc0U) == 0x80U) ? 3 : 0;
+    if (remaining < 4U)
+        return 0;
+    if (b0 == 0xf0U)
+        return (cursor[1] >= 0x90U && cursor[1] <= 0xbfU && (cursor[2] & 0xc0U) == 0x80U &&
+                (cursor[3] & 0xc0U) == 0x80U)
+                   ? 4
+                   : 0;
+    if (b0 >= 0xf1U && b0 <= 0xf3U)
+        return ((cursor[1] & 0xc0U) == 0x80U && (cursor[2] & 0xc0U) == 0x80U && (cursor[3] & 0xc0U) == 0x80U) ? 4 : 0;
+    if (b0 == 0xf4U)
+        return (cursor[1] >= 0x80U && cursor[1] <= 0x8fU && (cursor[2] & 0xc0U) == 0x80U &&
+                (cursor[3] & 0xc0U) == 0x80U)
+                   ? 4
+                   : 0;
+    return 0;
+}
+
+static bool menu_text_append_filtered(yyjson_val *control, char *buffer, size_t buffer_size, const char *text)
+{
+    if (control == NULL || buffer == NULL || buffer_size == 0U || text == NULL || text[0] == '\0')
+        return false;
+
+    bool changed = false;
+    size_t used = SDL_strlen(buffer);
+    const int max_length = SDL_clamp(json_int(control, "max_length", SDL3D_GAME_DATA_MENU_TEXT_MAX_BYTES), 0,
+                                     (int)SDL_min(buffer_size - 1U, (size_t)SDL3D_GAME_DATA_MENU_TEXT_MAX_BYTES));
+    const char *charset = json_string(control, "charset", json_string(control, "allow", "text"));
+    const unsigned char *cursor = (const unsigned char *)text;
+    size_t remaining = SDL_strlen(text);
+    while (remaining > 0U && *cursor != '\0' && used < (size_t)max_length)
+    {
+        int bytes = menu_text_valid_utf8_sequence_bytes(cursor, remaining);
+        if (bytes <= 0)
+        {
+            ++cursor;
+            --remaining;
+            continue;
+        }
+        if (bytes == 1)
+        {
+            if (!menu_text_allowed_ascii(charset, *cursor))
+            {
+                ++cursor;
+                --remaining;
+                continue;
+            }
+        }
+        else if (menu_text_restricted_charset(charset))
+        {
+            cursor += bytes;
+            remaining -= (size_t)bytes;
+            continue;
+        }
+
+        if (used + (size_t)bytes > (size_t)max_length || used + (size_t)bytes + 1U > buffer_size)
+            break;
+        for (int i = 0; i < bytes; ++i)
+            buffer[used++] = (char)*cursor++;
+        remaining -= (size_t)bytes;
+        buffer[used] = '\0';
+        changed = true;
+    }
+    return changed;
+}
+
+static bool menu_text_backspace(char *buffer)
+{
+    if (buffer == NULL || buffer[0] == '\0')
+        return false;
+
+    size_t len = SDL_strlen(buffer);
+    do
+    {
+        --len;
+    } while (len > 0U && (((unsigned char)buffer[len] & 0xc0U) == 0x80U));
+    buffer[len] = '\0';
+    return true;
+}
+
+bool sdl3d_game_data_start_menu_text_entry_capture(sdl3d_game_data_runtime *runtime, const char *menu_name,
+                                                   int item_index)
+{
+    yyjson_val *item = find_menu_item_at(runtime, menu_name, item_index);
+    yyjson_val *control = obj_get(item, "control");
+    if (runtime == NULL || menu_name == NULL ||
+        parse_menu_control_type(json_string(control, "type", NULL)) != SDL3D_GAME_DATA_MENU_CONTROL_TEXT)
+        return false;
+
+    clear_menu_text_entry_capture(runtime);
+    runtime->text_capture.active = true;
+    runtime->text_capture.menu = menu_name;
+    runtime->text_capture.item_index = item_index;
+    runtime->text_capture.original = SDL_strdup(menu_control_string_value(runtime, control));
+    if (runtime->text_capture.original == NULL)
+    {
+        clear_menu_text_entry_capture(runtime);
+        return false;
+    }
+    (void)menu_control_set_string_value(runtime, control, runtime->text_capture.original);
+    return true;
+}
+
+bool sdl3d_game_data_menu_text_entry_capture_active(const sdl3d_game_data_runtime *runtime)
+{
+    return runtime != NULL && runtime->text_capture.active;
+}
+
+sdl3d_game_data_text_entry_capture_status sdl3d_game_data_update_menu_text_entry_capture(
+    sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input)
+{
+    if (runtime == NULL || !runtime->text_capture.active)
+        return SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_NONE;
+
+    yyjson_val *item = find_menu_item_at(runtime, runtime->text_capture.menu, runtime->text_capture.item_index);
+    yyjson_val *control = obj_get(item, "control");
+    if (parse_menu_control_type(json_string(control, "type", NULL)) != SDL3D_GAME_DATA_MENU_CONTROL_TEXT)
+    {
+        clear_menu_text_entry_capture(runtime);
+        return SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_CANCELED;
+    }
+
+    const scene_menu_state *menu = find_scene_menu_const(active_scene_entry_const(runtime), runtime->text_capture.menu);
+    sdl3d_game_data_menu menu_desc;
+    SDL_zero(menu_desc);
+    menu_desc.select_action_id = -1;
+    menu_desc.back_action_id = -1;
+    if (menu != NULL)
+        (void)sdl3d_game_data_get_active_menu(runtime, &menu_desc);
+
+    const SDL_Scancode scancode = sdl3d_input_get_pressed_scancode(input);
+    const SDL_Scancode cancel_key = scancode_from_json(json_string(control, "cancel_key", "ESCAPE"));
+    const bool cancel_pressed =
+        (cancel_key != SDL_SCANCODE_UNKNOWN && scancode == cancel_key) ||
+        (menu_desc.back_action_id >= 0 && sdl3d_input_is_pressed(input, menu_desc.back_action_id));
+    if (cancel_pressed)
+    {
+        (void)menu_control_set_string_value(
+            runtime, control, runtime->text_capture.original != NULL ? runtime->text_capture.original : "");
+        clear_menu_text_entry_capture(runtime);
+        return SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_CANCELED;
+    }
+
+    const bool submit_pressed =
+        scancode == SDL_SCANCODE_RETURN || scancode == SDL_SCANCODE_KP_ENTER ||
+        (menu_desc.select_action_id >= 0 && sdl3d_input_is_pressed(input, menu_desc.select_action_id));
+    if (submit_pressed)
+    {
+        clear_menu_text_entry_capture(runtime);
+        return SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_SUBMITTED;
+    }
+
+    char value[256];
+    SDL_strlcpy(value, menu_control_string_value(runtime, control), sizeof(value));
+    bool changed = false;
+    if (scancode == SDL_SCANCODE_BACKSPACE || scancode == SDL_SCANCODE_DELETE)
+        changed = menu_text_backspace(value) || changed;
+    changed = menu_text_append_filtered(control, value, sizeof(value), sdl3d_input_get_text_input(input)) || changed;
+    if (changed)
+    {
+        (void)menu_control_set_string_value(runtime, control, value);
+        return SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_CHANGED;
+    }
+    return SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_WAITING;
+}
+
 static bool set_property_from_json(sdl3d_properties *props, const char *key, yyjson_val *value)
 {
     if (props == NULL || key == NULL || value == NULL)
@@ -5127,6 +5400,7 @@ bool sdl3d_game_data_adjust_menu_item_control(sdl3d_game_data_runtime *runtime, 
     }
     case SDL3D_GAME_DATA_MENU_CONTROL_NONE:
     case SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING:
+    case SDL3D_GAME_DATA_MENU_CONTROL_TEXT:
         return false;
     }
     return false;
@@ -5166,6 +5440,8 @@ bool sdl3d_game_data_scene_shortcut_at(const sdl3d_game_data_runtime *runtime, i
 bool sdl3d_game_data_active_menu_input_is_idle(const sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input)
 {
     if (sdl3d_game_data_menu_input_binding_capture_active(runtime))
+        return false;
+    if (sdl3d_game_data_menu_text_entry_capture_active(runtime))
         return false;
     sdl3d_game_data_menu menu;
     if (!sdl3d_game_data_get_active_menu(runtime, &menu))
@@ -5299,6 +5575,23 @@ static void format_menu_item_label(const sdl3d_game_data_runtime *runtime, yyjso
             SDL_snprintf(buffer, buffer_size, "%s: %s", label,
                          scancode_display_name(current_input_binding_control_scancode(runtime, control)));
         }
+        return;
+    }
+    if (type == SDL3D_GAME_DATA_MENU_CONTROL_TEXT)
+    {
+        char value[256];
+        SDL_strlcpy(value, menu_control_string_value(runtime, control), sizeof(value));
+        const bool active =
+            runtime != NULL && runtime->text_capture.active &&
+            item == find_menu_item_at(runtime, runtime->text_capture.menu, runtime->text_capture.item_index);
+        const char *placeholder = json_string(control, "placeholder", "");
+        const char *cursor = json_string(control, "cursor", "|");
+        if (value[0] == '\0' && placeholder != NULL && placeholder[0] != '\0' && !active)
+            SDL_snprintf(buffer, buffer_size, "%s: %s", label, placeholder);
+        else if (active)
+            SDL_snprintf(buffer, buffer_size, "%s: %s%s", label, value, cursor != NULL ? cursor : "|");
+        else
+            SDL_snprintf(buffer, buffer_size, "%s: %s", label, value);
         return;
     }
 
@@ -10974,6 +11267,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
         sdl3d_properties_destroy(runtime->property_snapshots[i].properties);
     }
 
+    clear_menu_text_entry_capture(runtime);
     sdl3d_script_engine_destroy(runtime->scripts);
     sdl3d_properties_destroy(runtime->scene_state);
     sdl3d_storage_destroy(runtime->storage);

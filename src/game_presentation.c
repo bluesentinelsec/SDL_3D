@@ -926,6 +926,22 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
         }
         return true;
     }
+    if (sdl3d_game_data_menu_text_entry_capture_active(runtime))
+    {
+        const sdl3d_game_data_text_entry_capture_status capture_status =
+            sdl3d_game_data_update_menu_text_entry_capture(runtime, input);
+        if (out_result != NULL)
+        {
+            out_result->handled_input = true;
+            out_result->text_entry_changed = capture_status == SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_CHANGED;
+            out_result->text_entry_submitted = capture_status == SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_SUBMITTED;
+            out_result->text_entry_canceled = capture_status == SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_CANCELED;
+            out_result->control_changed = out_result->text_entry_changed;
+            out_result->selected = out_result->text_entry_submitted;
+            out_result->select_signal_id = out_result->text_entry_submitted ? menu.select_signal_id : -1;
+        }
+        return true;
+    }
 
     if (!*input_armed)
     {
@@ -1048,8 +1064,29 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
                 out_result->handled_input = true;
                 return true;
             }
+            if (!control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_TEXT)
+            {
+                out_result->text_entry_capture_started =
+                    sdl3d_game_data_start_menu_text_entry_capture(runtime, refreshed.name, refreshed.selected_index);
+                out_result->selected = out_result->text_entry_capture_started;
+                out_result->select_signal_id = out_result->selected ? refreshed.select_signal_id : -1;
+                out_result->signal_id = -1;
+                out_result->quit = false;
+                out_result->scene = NULL;
+                out_result->return_to = NULL;
+                out_result->scene_state_key = NULL;
+                out_result->scene_state_value = NULL;
+                out_result->return_scene = false;
+                out_result->pause_command = SDL3D_GAME_DATA_MENU_PAUSE_NONE;
+                out_result->has_return_paused = false;
+                out_result->return_paused = false;
+                out_result->control_changed = false;
+                out_result->handled_input = true;
+                return true;
+            }
             out_result->control_changed =
-                control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING
+                control_adjust_input && (item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING ||
+                                         item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_TEXT)
                     ? false
                     : sdl3d_game_data_adjust_menu_item_control(runtime, &item, control_direction);
             out_result->selected = !control_adjust_input || out_result->control_changed;
@@ -1075,7 +1112,10 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
             if (!control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING)
                 (void)sdl3d_game_data_start_menu_input_binding_capture(runtime, refreshed.name,
                                                                        refreshed.selected_index);
-            else if (item.control_type != SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING)
+            else if (!control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_TEXT)
+                (void)sdl3d_game_data_start_menu_text_entry_capture(runtime, refreshed.name, refreshed.selected_index);
+            else if (item.control_type != SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING &&
+                     item.control_type != SDL3D_GAME_DATA_MENU_CONTROL_TEXT)
                 (void)sdl3d_game_data_adjust_menu_item_control(runtime, &item, control_direction);
         }
     }
