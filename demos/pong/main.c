@@ -76,6 +76,14 @@ static const char PONG_NETWORK_BINDING_START_GAME[] = "start_game";
 static const char PONG_NETWORK_BINDING_PAUSE_REQUEST[] = "pause_request";
 static const char PONG_NETWORK_BINDING_RESUME_REQUEST[] = "resume_request";
 static const char PONG_NETWORK_BINDING_DISCONNECT[] = "disconnect";
+static const char PONG_NETWORK_BINDING_CLIENT_UP[] = "client_up";
+static const char PONG_NETWORK_BINDING_CLIENT_DOWN[] = "client_down";
+static const char PONG_NETWORK_BINDING_MENU_SELECT[] = "menu_select";
+static const char PONG_NETWORK_BINDING_MENU_BACK[] = "menu_back";
+static const char PONG_NETWORK_BINDING_CAMERA_TOGGLE[] = "camera_toggle";
+static const char PONG_NETWORK_BINDING_LOBBY_START[] = "lobby_start";
+static const char PONG_NETWORK_BINDING_DISCOVERY_REFRESH[] = "discovery_refresh";
+static const char PONG_NETWORK_BINDING_UI_SELECT[] = "ui_select";
 
 typedef struct pong_network_control_binding
 {
@@ -164,6 +172,28 @@ static const char *network_session_message(const pong_state *state, const char *
         return message;
     }
     return fallback;
+}
+
+static int network_runtime_action_id(const pong_state *state, const char *name)
+{
+    int action_id = -1;
+    if (state != NULL && state->data != NULL &&
+        sdl3d_game_data_get_network_runtime_action(state->data, name, &action_id))
+    {
+        return action_id;
+    }
+    return -1;
+}
+
+static int network_runtime_signal_id(const pong_state *state, const char *name)
+{
+    int signal_id = -1;
+    if (state != NULL && state->data != NULL &&
+        sdl3d_game_data_get_network_runtime_signal(state->data, name, &signal_id))
+    {
+        return signal_id;
+    }
+    return -1;
 }
 
 static const char *network_disconnect_reason(const pong_state *state, const char *name, const char *fallback)
@@ -669,8 +699,8 @@ static bool send_client_input_packet(pong_state *state)
     size_t packet_size = 0U;
     char error[160] = {0};
     const char *client_input_channel = NULL;
-    const int p2_up = sdl3d_game_data_find_action(state != NULL ? state->data : NULL, "action.paddle.local.up");
-    const int p2_down = sdl3d_game_data_find_action(state != NULL ? state->data : NULL, "action.paddle.local.down");
+    const int p2_up = network_runtime_action_id(state, PONG_NETWORK_BINDING_CLIENT_UP);
+    const int p2_down = network_runtime_action_id(state, PONG_NETWORK_BINDING_CLIENT_DOWN);
 
     if (state == NULL || state->direct_connect_session == NULL || state->input == NULL || p2_up < 0 || p2_down < 0 ||
         !sdl3d_network_session_is_connected(state->direct_connect_session))
@@ -1115,8 +1145,7 @@ static void update_direct_connect_session_status(sdl3d_game_context *ctx, pong_s
 
 static void update_network_match_termination(sdl3d_game_context *ctx, pong_state *state, float dt)
 {
-    const int select_action =
-        state != NULL && state->data != NULL ? sdl3d_game_data_find_action(state->data, "action.menu.select") : -1;
+    const int select_action = network_runtime_action_id(state, PONG_NETWORK_BINDING_MENU_SELECT);
 
     if (state == NULL || !state->network_match_termination_active)
     {
@@ -1209,51 +1238,21 @@ static void update_discovery_scene_state(pong_state *state)
         return;
     }
 
-    sdl3d_properties_set_int(scene_state, "multiplayer_discovery_count", result_count);
+    sdl3d_properties_set_int(
+        scene_state, network_scene_state_key(state, "discovery", "count", "multiplayer_discovery_count"), result_count);
     sdl3d_properties_set_string(
-        scene_state, "multiplayer_discovery_status",
+        scene_state, network_scene_state_key(state, "discovery", "status", "multiplayer_discovery_status"),
         state->discovery_session != NULL ? sdl3d_network_discovery_session_status(state->discovery_session) : "Idle");
     for (int i = 0; i < SDL3D_NETWORK_MAX_DISCOVERY_RESULTS; ++i)
     {
-        const char *key = NULL;
+        char key_name[16];
+        char fallback_key[16];
         sdl3d_network_discovery_result result;
         char label[SDL3D_NETWORK_MAX_STATUS_LENGTH + SDL3D_NETWORK_MAX_HOST_LENGTH + 32];
         SDL_zero(result);
         label[0] = '\0';
-        switch (i)
-        {
-        case 0:
-            key = "session_0";
-            break;
-        case 1:
-            key = "session_1";
-            break;
-        case 2:
-            key = "session_2";
-            break;
-        case 3:
-            key = "session_3";
-            break;
-        case 4:
-            key = "session_4";
-            break;
-        case 5:
-            key = "session_5";
-            break;
-        case 6:
-            key = "session_6";
-            break;
-        case 7:
-            key = "session_7";
-            break;
-        default:
-            break;
-        }
-
-        if (key == NULL)
-        {
-            continue;
-        }
+        SDL_snprintf(key_name, sizeof(key_name), "result_%d", i);
+        SDL_snprintf(fallback_key, sizeof(fallback_key), "session_%d", i);
 
         if (i < result_count && sdl3d_network_discovery_session_get_result(state->discovery_session, i, &result))
         {
@@ -1262,7 +1261,8 @@ static void update_discovery_scene_state(pong_state *state)
                          (unsigned int)result.port, result.status[0] != '\0' ? "  " : "",
                          result.status[0] != '\0' ? result.status : "");
         }
-        sdl3d_properties_set_string(scene_state, key, label);
+        sdl3d_properties_set_string(scene_state, network_scene_state_key(state, "discovery", key_name, fallback_key),
+                                    label);
     }
 }
 
@@ -1313,10 +1313,9 @@ static bool start_discovered_match_connection(pong_state *state, int index)
     return true;
 }
 
-static void emit_pong_signal_by_name(sdl3d_game_context *ctx, pong_state *state, const char *signal_name)
+static void emit_network_runtime_signal(sdl3d_game_context *ctx, pong_state *state, const char *name)
 {
-    const int signal_id =
-        state != NULL && state->data != NULL ? sdl3d_game_data_find_signal(state->data, signal_name) : -1;
+    const int signal_id = network_runtime_signal_id(state, name);
     if (ctx == NULL || state == NULL || signal_id < 0)
     {
         return;
@@ -1332,11 +1331,11 @@ static void update_discovery_controls(sdl3d_game_context *ctx, pong_state *state
         return;
     }
 
-    const int back_action = sdl3d_game_data_find_action(state->data, "action.menu.back");
+    const int back_action = network_runtime_action_id(state, PONG_NETWORK_BINDING_MENU_BACK);
 
     if (back_action >= 0 && sdl3d_input_is_pressed(state->input, back_action))
     {
-        emit_pong_signal_by_name(ctx, state, "signal.ui.menu.select");
+        emit_network_runtime_signal(ctx, state, PONG_NETWORK_BINDING_UI_SELECT);
         destroy_discovery_session(state);
         destroy_direct_connect_session(state);
         (void)sdl3d_game_data_set_active_scene(state->data,
@@ -1567,8 +1566,7 @@ static void publish_multiplayer_state(sdl3d_game_context *ctx, pong_state *state
 
 static void update_network_client_input_sensors(sdl3d_game_context *ctx, pong_state *state)
 {
-    const int camera_toggle_action =
-        sdl3d_game_data_find_action(state != NULL ? state->data : NULL, "action.camera.ball.toggle");
+    const int camera_toggle_action = network_runtime_action_id(state, PONG_NETWORK_BINDING_CAMERA_TOGGLE);
 
     if (ctx == NULL || state == NULL || state->input == NULL || state->data == NULL ||
         state->camera_toggle_signal_id < 0 || camera_toggle_action < 0 || !is_multiplayer_play_scene(state) ||
@@ -1984,10 +1982,9 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
     state->haptics_connection_count = 0;
     state->lobby_start_connection = 0;
     state->discovery_refresh_connection = 0;
-    state->host_start_signal_id = sdl3d_game_data_find_signal(state->data, "signal.multiplayer.lobby.start");
-    state->camera_toggle_signal_id = sdl3d_game_data_find_signal(state->data, "signal.camera.ball.toggle");
-    state->discovery_refresh_signal_id =
-        sdl3d_game_data_find_signal(state->data, "signal.multiplayer.discovery.refresh");
+    state->host_start_signal_id = network_runtime_signal_id(state, PONG_NETWORK_BINDING_LOBBY_START);
+    state->camera_toggle_signal_id = network_runtime_signal_id(state, PONG_NETWORK_BINDING_CAMERA_TOGGLE);
+    state->discovery_refresh_signal_id = network_runtime_signal_id(state, PONG_NETWORK_BINDING_DISCOVERY_REFRESH);
     sdl3d_game_data_input_profile_refresh_state_init(&state->input_profile_refresh);
     SDL_snprintf(state->host_status, sizeof(state->host_status), "Not hosting");
     SDL_snprintf(state->host_endpoint, sizeof(state->host_endpoint), "UDP %u",

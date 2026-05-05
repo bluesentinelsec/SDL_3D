@@ -987,6 +987,36 @@ extern "C"
                                                      const char **out_control);
 
     /**
+     * @brief Resolve an authored network runtime input action binding.
+     *
+     * Runtime action bindings are authored under
+     * `network.runtime_bindings.actions` and map host integration semantics,
+     * such as `menu_back` or `camera_toggle`, to concrete input action names.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param name Authored binding semantic name.
+     * @param out_action Receives the resolved action id.
+     * @return true when the binding exists and resolves to an input action.
+     */
+    bool sdl3d_game_data_get_network_runtime_action(const sdl3d_game_data_runtime *runtime, const char *name,
+                                                    int *out_action);
+
+    /**
+     * @brief Resolve an authored network runtime signal binding.
+     *
+     * Runtime signal bindings are authored under
+     * `network.runtime_bindings.signals` and map host integration semantics,
+     * such as `lobby_start` or `ui_select`, to concrete signal names.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param name Authored binding semantic name.
+     * @param out_signal Receives the resolved signal id.
+     * @return true when the binding exists and resolves to a signal.
+     */
+    bool sdl3d_game_data_get_network_runtime_signal(const sdl3d_game_data_runtime *runtime, const char *name,
+                                                    int *out_signal);
+
+    /**
      * @brief Return the number of authored haptics policies.
      *
      * Policies are authored under `haptics.policies`.

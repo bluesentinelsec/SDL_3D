@@ -1436,10 +1436,13 @@ orchestration maps are not part of the replication schema hash.
 authored replication channels and control messages without baking those schema
 names into game host code. `replication` maps semantic names to entries in
 `network.replication`, and `controls` maps semantic names to entries in
-`network.control_messages`. Values are validated as references. Callers resolve
-them with `sdl3d_game_data_get_network_runtime_replication()` and
-`sdl3d_game_data_get_network_runtime_control()`. `pause` can additionally bind a
-network pause action and the bool actor property that mirrors pause state into
+`network.control_messages`. `actions` maps semantic names to input actions, and
+`signals` maps semantic names to signals. Values are validated as references.
+Callers resolve them with `sdl3d_game_data_get_network_runtime_replication()`,
+`sdl3d_game_data_get_network_runtime_control()`,
+`sdl3d_game_data_get_network_runtime_action()`, and
+`sdl3d_game_data_get_network_runtime_signal()`. `pause` can additionally bind
+a network pause action and the bool actor property that mirrors pause state into
 replicated game data:
 
 ```json
@@ -1451,6 +1454,14 @@ replicated game data:
   "controls": {
     "pause_request": "pause_request",
     "resume_request": "resume_request"
+  },
+  "actions": {
+    "menu_back": "action.menu.back",
+    "camera_toggle": "action.camera.ball.toggle"
+  },
+  "signals": {
+    "lobby_start": "signal.multiplayer.lobby.start",
+    "ui_select": "signal.ui.menu.select"
   },
   "pause": {
     "action": "action.pause",
@@ -1467,6 +1478,8 @@ must reference an entity, and `pause.state.property` must name a bool property a
 runtime. The referenced property should be declared on the actor with a bool type
 and a sane default value, usually `false`, so network pause reads have a defined
 state before the first replicated snapshot. Host code can resolve these bindings with
+`sdl3d_game_data_get_network_runtime_action()`,
+`sdl3d_game_data_get_network_runtime_signal()`,
 `sdl3d_game_data_get_network_runtime_pause_action()`,
 `sdl3d_game_data_get_network_runtime_pause_state()`, and
 `sdl3d_game_data_set_network_runtime_pause_state()`. These maps are runtime

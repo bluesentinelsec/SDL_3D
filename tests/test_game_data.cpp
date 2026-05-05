@@ -1199,6 +1199,11 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     EXPECT_STREQ(network_scene_state_key, "multiplayer_host_status");
     ASSERT_TRUE(sdl3d_game_data_get_network_scene_state_key(runtime, "host", "connected", &network_scene_state_key));
     EXPECT_STREQ(network_scene_state_key, "multiplayer_host_connected");
+    ASSERT_TRUE(sdl3d_game_data_get_network_scene_state_key(runtime, "discovery", "count", &network_scene_state_key));
+    EXPECT_STREQ(network_scene_state_key, "multiplayer_discovery_count");
+    ASSERT_TRUE(
+        sdl3d_game_data_get_network_scene_state_key(runtime, "discovery", "result_0", &network_scene_state_key));
+    EXPECT_STREQ(network_scene_state_key, "session_0");
     EXPECT_FALSE(sdl3d_game_data_get_network_scene_state_key(runtime, "host", "missing", &network_scene_state_key));
     EXPECT_EQ(network_scene_state_key, nullptr);
     const char *network_session_value = nullptr;
@@ -1234,6 +1239,15 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     EXPECT_STREQ(network_runtime_value, "disconnect");
     EXPECT_FALSE(sdl3d_game_data_get_network_runtime_control(runtime, "missing", &network_runtime_value));
     EXPECT_EQ(network_runtime_value, nullptr);
+    int network_runtime_id = -1;
+    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_action(runtime, "client_up", &network_runtime_id));
+    EXPECT_EQ(network_runtime_id, sdl3d_game_data_find_action(runtime, "action.paddle.local.up"));
+    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_action(runtime, "menu_back", &network_runtime_id));
+    EXPECT_EQ(network_runtime_id, sdl3d_game_data_find_action(runtime, "action.menu.back"));
+    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_signal(runtime, "lobby_start", &network_runtime_id));
+    EXPECT_EQ(network_runtime_id, sdl3d_game_data_find_signal(runtime, "signal.multiplayer.lobby.start"));
+    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_signal(runtime, "ui_select", &network_runtime_id));
+    EXPECT_EQ(network_runtime_id, sdl3d_game_data_find_signal(runtime, "signal.ui.menu.select"));
     int network_pause_action = -1;
     ASSERT_TRUE(sdl3d_game_data_get_network_runtime_pause_action(runtime, &network_pause_action));
     EXPECT_EQ(network_pause_action, sdl3d_game_data_find_action(runtime, "action.pause"));
@@ -5053,6 +5067,12 @@ TEST(GameDataRuntime, ValidatesNetworkReplicationSchemaAndComputesStableHash)
         "start_game": "start_game",
         "pause_request": "pause"
       },
+      "actions": {
+        "menu_select": "action.pause"
+      },
+      "signals": {
+        "pause_changed": "signal.network.pause"
+      },
       "pause": {
         "action": "action.pause",
         "state": { "actor": "entity.match", "property": "paused" }
@@ -5788,6 +5808,56 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
     ]
   })json",
             "unknown network control message reference",
+        },
+        {
+            "bad_runtime_action_binding",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "runtime_bindings": {
+      "actions": {
+        "menu_select": "action.missing"
+      }
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": ["position"]
+          }
+        ]
+      }
+    ]
+  })json",
+            "unknown input action reference",
+        },
+        {
+            "bad_runtime_signal_binding",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "runtime_bindings": {
+      "signals": {
+        "ui_select": "signal.missing"
+      }
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": ["position"]
+          }
+        ]
+      }
+    ]
+  })json",
+            "unknown signal reference",
         },
         {
             "bad_runtime_pause_action_binding",
