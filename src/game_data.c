@@ -9823,6 +9823,25 @@ bool sdl3d_game_data_get_network_session_state_value(const sdl3d_game_data_runti
     return true;
 }
 
+bool sdl3d_game_data_get_network_session_message(const sdl3d_game_data_runtime *runtime, const char *group,
+                                                 const char *name, const char **out_message)
+{
+    if (out_message != NULL)
+        *out_message = NULL;
+    if (runtime == NULL || group == NULL || group[0] == '\0' || name == NULL || name[0] == '\0' || out_message == NULL)
+    {
+        return false;
+    }
+
+    yyjson_val *groups = obj_get(network_session_flow_json(runtime), "messages");
+    const char *value = json_string(obj_get(groups, group), name, NULL);
+    if (value == NULL || value[0] == '\0')
+        return false;
+
+    *out_message = value;
+    return true;
+}
+
 static yyjson_val *network_runtime_bindings_json(const sdl3d_game_data_runtime *runtime)
 {
     return obj_get(obj_get(runtime_root(runtime), "network"), "runtime_bindings");

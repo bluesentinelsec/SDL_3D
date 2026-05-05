@@ -143,6 +143,26 @@
           "host": "host",
           "direct": "direct"
         }
+      },
+      "messages": {
+        "disconnect_reasons": {
+          "peer_disconnected": "Peer disconnected",
+          "client_disconnected": "Client disconnected",
+          "host_disconnected": "Host disconnected",
+          "client_exited": "Client exited",
+          "host_exited": "Host exited",
+          "client_timed_out": "Client timed out",
+          "host_timed_out": "Host timed out",
+          "host_rejected": "Host rejected connection",
+          "host_error": "Host connection error"
+        },
+        "disconnect_status": {
+          "disconnected": "Disconnected",
+          "returning_join": "Returning to Join Match"
+        },
+        "disconnect_prompts": {
+          "match_terminated": "Match terminated: {reason} - Press Enter to return to title screen."
+        }
       }
     },
     "runtime_bindings": {
