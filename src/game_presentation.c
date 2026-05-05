@@ -1037,6 +1037,8 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
             return true;
 
         sdl3d_game_data_menu_item item;
+        /* Selecting the initially highlighted dynamic-list row should publish its selected outputs. */
+        (void)sdl3d_game_data_menu_move(runtime, refreshed.name, 0);
         if (!sdl3d_game_data_get_menu_item(runtime, refreshed.name, refreshed.selected_index, &item))
             return true;
 

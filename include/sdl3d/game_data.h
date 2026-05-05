@@ -686,6 +686,14 @@ extern "C"
         int choice_count;
         /** @brief Number of action bindings affected by an input-binding control. */
         int input_binding_count;
+        /** @brief True when this item was expanded from an authored dynamic list. */
+        bool dynamic_list_item;
+        /** @brief Authored dynamic list name, or NULL for static menu items. */
+        const char *dynamic_list_name;
+        /** @brief Zero-based row index inside the dynamic list, or -1 for static/empty rows. */
+        int dynamic_list_index;
+        /** @brief Runtime-owned value associated with the dynamic row, or NULL. */
+        const char *dynamic_list_value;
     } sdl3d_game_data_menu_item;
 
     /** @brief Authored scene transition behavior policy. */
