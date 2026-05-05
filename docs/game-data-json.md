@@ -737,6 +737,86 @@ owns session lifetime; host code can inspect the runtime-owned pointer with
 `sdl3d_game_data_get_network_direct_connect_session()` when it needs to send or
 receive game packets.
 
+LAN discovery flows can also be authored with reusable network data actions and
+dynamic-list menus. A typical scene starts or refreshes discovery on enter,
+observes it periodically, and lets a runtime-collection-backed list connect the
+selected row through the same direct-connect session used by manual host/port
+entry:
+
+```json
+{
+    "activity" : {
+        "enabled" : true,
+        "on_enter" : [
+            {
+                "type" : "network.discovery.start",
+                "name" : "local_matches",
+                "collection" : "local_matches",
+                "default_port" : 27183,
+                "status_key" : "local_match_status",
+                "count_key" : "local_match_count"
+            }
+        ],
+        "periodic" : [
+            {
+                "interval" : 0.05,
+                "actions" : [
+                    {
+                        "type" : "network.discovery.observe",
+                        "name" : "local_matches",
+                        "collection" : "local_matches",
+                        "update_seconds" : 0.05,
+                        "status_key" : "local_match_status",
+                        "count_key" : "local_match_count"
+                    }
+                ]
+            }
+        ]
+    },
+    "menus" : [
+        {
+            "name" : "menu.discovery",
+            "items" : [
+                {
+                    "type" : "dynamic_list",
+                    "name" : "list.local_matches",
+                    "source" : {
+                        "type" : "runtime_collection",
+                        "collection" : "local_matches",
+                        "label_field" : "label",
+                        "value_field" : "endpoint"
+                    },
+                    "empty_label" : "Searching local network...",
+                    "selected_index_key" : "local_match_index",
+                    "selected_value_key" : "local_match_endpoint",
+                    "signal" : "signal.discovery.connect"
+                }
+            ]
+        }
+    ]
+}
+```
+
+`network.discovery.start` and `network.discovery.refresh` create or refresh a
+runtime-owned UDP discovery scanner. `name` identifies the scanner,
+`collection` names the runtime collection populated with results, and `port` or
+`default_port` selects the discovery target port. Optional `host` and
+`local_port` fields are forwarded to the network discovery layer; omit `host`
+for normal LAN discovery behavior. Each result row publishes `label`, `name`,
+`host`, `port`, `status`, and `endpoint` fields. `network.discovery.observe`
+advances an existing scanner by `dt` or `update_seconds`, republishes the
+collection, and writes optional status/count scene-state outputs.
+`network.discovery.cancel` destroys the named scanner and clears the collection.
+
+`network.discovery.connect_selected` bridges discovery to direct connect. It
+reads `selected_index_key` or a literal `selected_index`, fetches `host` and
+`port` from that runtime collection row, writes optional `host_key` and
+`port_key` scene-state values for UI visibility, cancels discovery, and starts
+the named direct-connect session from `direct_connect_name`. `status_key`,
+`state_key`, and `connected_key` are the same direct-connect outputs described
+above. If no row is selected, it writes a "No session selected" error and does
+not create a session.
+
 Reusable options scenes should prefer immediate apply for settings where the
 player benefits from real-time feedback. Use Apply/Cancel snapshots only for
 screens that intentionally stage changes before committing them.
