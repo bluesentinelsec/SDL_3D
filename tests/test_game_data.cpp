@@ -6462,6 +6462,49 @@ TEST(GameDataRuntime, AuthoredDirectConnectActionsUpdateSceneState)
     sdl3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, RuntimeOwnedHostSessionPublishesSceneState)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+
+    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+
+    const ::testing::TestInfo *test_info = ::testing::UnitTest::GetInstance()->current_test_info();
+    const std::string test_name =
+        test_info != nullptr ? std::string(test_info->test_suite_name()) + "." + test_info->name() : "host";
+    const int port = 30000 + (int)(std::hash<std::string>{}(test_name) % 20000U);
+    if (!sdl3d_game_data_network_host_start(runtime, "test_host", port, "SDL3D Test", "host_status", "host_endpoint",
+                                            "host_peer", "host_connected"))
+    {
+        sdl3d_game_data_destroy(runtime);
+        sdl3d_game_session_destroy(session);
+        GTEST_SKIP() << "network host session unavailable: " << SDL_GetError();
+    }
+
+    sdl3d_network_session *host = sdl3d_game_data_get_network_host_session(runtime, "test_host");
+    ASSERT_NE(host, nullptr);
+    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "host_connected", true));
+    EXPECT_NE(std::string(sdl3d_properties_get_string(scene_state, "host_endpoint", "")).find("UDP "),
+              std::string::npos);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "host_peer", ""), "Waiting for client");
+
+    ASSERT_TRUE(sdl3d_game_data_network_host_publish_status(runtime, "test_host", "host_status", "host_endpoint",
+                                                            "host_peer", "host_connected"));
+    ASSERT_TRUE(sdl3d_game_data_network_host_cancel(runtime, "test_host", "host_status", "host_endpoint", "host_peer",
+                                                    "host_connected", "Not hosting"));
+    EXPECT_EQ(sdl3d_game_data_get_network_host_session(runtime, "test_host"), nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "host_status", ""), "Not hosting");
+    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "host_connected", true));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, AuthoredDiscoveryConnectActionsUpdateSceneState)
 {
     sdl3d_game_session *session = nullptr;
@@ -6562,6 +6605,37 @@ TEST(GameDataRuntime, RejectsInvalidDirectConnectActions)
     EXPECT_NE(
         std::string(error).find("network.direct_connect.start port must be a non-empty string or integer 1..65535"),
         std::string::npos)
+        << error;
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidHostActions)
+{
+    const std::filesystem::path dir = unique_test_dir("bad_host_actions");
+    write_text(dir / "bad_host.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad Host", "id": "test.bad_host", "version": "0.1.0" },
+  "world": { "name": "world.bad_host", "kind": "fixed_screen" },
+  "entities": [],
+  "signals": ["signal.host"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.host",
+        "actions": [
+          { "type": "network.host.start", "name": "host", "port": 70000 }
+        ]
+      }
+    ]
+  }
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(
+        sdl3d_game_data_validate_file((dir / "bad_host.game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("network.host.start port must be a non-empty string or integer 1..65535"),
+              std::string::npos)
         << error;
     remove_test_dir(dir);
 }

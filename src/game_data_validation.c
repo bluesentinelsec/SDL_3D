@@ -2565,6 +2565,24 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             return validation_error(ctx, json_path, "%s requires a non-empty name", type);
         return true;
     }
+    if (SDL_strcmp(type, "network.host.start") == 0)
+    {
+        if (!is_non_empty_string(action, "name"))
+            return validation_error(ctx, json_path, "network.host.start requires a non-empty name");
+        if (!validate_network_port_value(ctx, obj_get(action, "port"), json_path, "network.host.start port"))
+            return false;
+        yyjson_val *default_port = obj_get(action, "default_port");
+        if (default_port != NULL &&
+            (!yyjson_is_int(default_port) || yyjson_get_int(default_port) <= 0 || yyjson_get_int(default_port) > 65535))
+            return validation_error(ctx, json_path, "network.host.start default_port must be integer 1..65535");
+        return true;
+    }
+    if (SDL_strcmp(type, "network.host.cancel") == 0 || SDL_strcmp(type, "network.host.observe") == 0)
+    {
+        if (!is_non_empty_string(action, "name"))
+            return validation_error(ctx, json_path, "%s requires a non-empty name", type);
+        return true;
+    }
     if (SDL_strcmp(type, "network.discovery.start") == 0 || SDL_strcmp(type, "network.discovery.refresh") == 0)
     {
         if (!is_non_empty_string(action, "name"))

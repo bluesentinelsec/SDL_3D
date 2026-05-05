@@ -19,6 +19,8 @@ The runtime currently owns:
 - authored frame render through `sdl3d_game_data_draw_frame`
 - haptics policy signal wiring
 - input-profile hotplug refresh state and automatic gamepad-count rebinding
+- runtime-owned direct-connect, host, and discovery session primitives exposed
+  through data actions
 - ordered cleanup
 
 The generic `sdl3d_runner` executable owns the outer SDL process loop for games
