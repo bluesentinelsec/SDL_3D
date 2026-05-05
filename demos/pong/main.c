@@ -78,6 +78,19 @@ static const char PONG_NETWORK_BINDING_PAUSE_REQUEST[] = "pause_request";
 static const char PONG_NETWORK_BINDING_RESUME_REQUEST[] = "resume_request";
 static const char PONG_NETWORK_BINDING_DISCONNECT[] = "disconnect";
 
+typedef struct pong_network_control_binding
+{
+    pong_network_message_kind kind;
+    const char *binding;
+} pong_network_control_binding;
+
+static const pong_network_control_binding PONG_NETWORK_CONTROL_BINDINGS[] = {
+    {PONG_NETWORK_MESSAGE_START_GAME, PONG_NETWORK_BINDING_START_GAME},
+    {PONG_NETWORK_MESSAGE_PAUSE_REQUEST, PONG_NETWORK_BINDING_PAUSE_REQUEST},
+    {PONG_NETWORK_MESSAGE_RESUME_REQUEST, PONG_NETWORK_BINDING_RESUME_REQUEST},
+    {PONG_NETWORK_MESSAGE_DISCONNECT, PONG_NETWORK_BINDING_DISCONNECT},
+};
+
 static Uint64 pong_log_timestamp_ms(void)
 {
     return SDL_GetTicks();
@@ -292,8 +305,13 @@ static void clear_network_action_overrides(pong_state *state)
     }
 
     if (!sdl3d_game_data_get_network_runtime_replication(state->data, PONG_NETWORK_BINDING_CLIENT_INPUT,
-                                                         &client_input_channel) ||
-        !sdl3d_game_data_clear_network_input_overrides(state->data, client_input_channel, state->input, error,
+                                                         &client_input_channel))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network binding missing: replication.%s",
+                    PONG_NETWORK_BINDING_CLIENT_INPUT);
+        return;
+    }
+    if (!sdl3d_game_data_clear_network_input_overrides(state->data, client_input_channel, state->input, error,
                                                        (int)sizeof(error)))
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network input override clear failed: %s",
@@ -448,19 +466,12 @@ static void reset_direct_connect_defaults(pong_state *state)
 
 static const char *network_control_binding_for_kind(pong_network_message_kind kind)
 {
-    switch (kind)
+    for (size_t i = 0; i < SDL_arraysize(PONG_NETWORK_CONTROL_BINDINGS); ++i)
     {
-    case PONG_NETWORK_MESSAGE_START_GAME:
-        return PONG_NETWORK_BINDING_START_GAME;
-    case PONG_NETWORK_MESSAGE_PAUSE_REQUEST:
-        return PONG_NETWORK_BINDING_PAUSE_REQUEST;
-    case PONG_NETWORK_MESSAGE_RESUME_REQUEST:
-        return PONG_NETWORK_BINDING_RESUME_REQUEST;
-    case PONG_NETWORK_MESSAGE_DISCONNECT:
-        return PONG_NETWORK_BINDING_DISCONNECT;
-    default:
-        return NULL;
+        if (PONG_NETWORK_CONTROL_BINDINGS[i].kind == kind)
+            return PONG_NETWORK_CONTROL_BINDINGS[i].binding;
     }
+    return NULL;
 }
 
 static const char *network_control_name_for_kind(const pong_state *state, pong_network_message_kind kind)
@@ -482,9 +493,9 @@ static bool network_control_kind_from_name(const pong_state *state, const char *
     {
         return false;
     }
-    for (pong_network_message_kind kind = PONG_NETWORK_MESSAGE_START_GAME; kind <= PONG_NETWORK_MESSAGE_DISCONNECT;
-         kind = (pong_network_message_kind)(kind + 1))
+    for (size_t i = 0; i < SDL_arraysize(PONG_NETWORK_CONTROL_BINDINGS); ++i)
     {
+        const pong_network_message_kind kind = PONG_NETWORK_CONTROL_BINDINGS[i].kind;
         const char *control_name = network_control_name_for_kind(state, kind);
         if (control_name != NULL && SDL_strcmp(name, control_name) == 0)
         {
@@ -503,11 +514,16 @@ static bool send_network_control_packet(pong_state *state, sdl3d_network_session
     size_t packet_size = 0U;
     char error[160] = {0};
     const Uint32 tick = (Uint32)SDL_GetTicks();
-    const char *control_name = network_control_name_for_kind(state, kind);
-
-    if (state == NULL || state->data == NULL || session == NULL || !sdl3d_network_session_is_connected(session) ||
-        control_name == NULL)
+    if (state == NULL || state->data == NULL || session == NULL || !sdl3d_network_session_is_connected(session))
     {
+        return false;
+    }
+    const char *control_name = network_control_name_for_kind(state, kind);
+    if (control_name == NULL)
+    {
+        const char *binding = network_control_binding_for_kind(kind);
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network binding missing: controls.%s",
+                    binding != NULL ? binding : "<unknown>");
         return false;
     }
 
@@ -641,10 +657,15 @@ static bool send_client_input_packet(pong_state *state)
     const int p2_down = sdl3d_game_data_find_action(state != NULL ? state->data : NULL, "action.paddle.local.down");
 
     if (state == NULL || state->direct_connect_session == NULL || state->input == NULL || p2_up < 0 || p2_down < 0 ||
-        !sdl3d_game_data_get_network_runtime_replication(state->data, PONG_NETWORK_BINDING_CLIENT_INPUT,
-                                                         &client_input_channel) ||
         !sdl3d_network_session_is_connected(state->direct_connect_session))
     {
+        return false;
+    }
+    if (!sdl3d_game_data_get_network_runtime_replication(state->data, PONG_NETWORK_BINDING_CLIENT_INPUT,
+                                                         &client_input_channel))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network binding missing: replication.%s",
+                    PONG_NETWORK_BINDING_CLIENT_INPUT);
         return false;
     }
 
@@ -893,10 +914,15 @@ static bool send_host_state_packet(sdl3d_game_context *ctx, pong_state *state)
     const char *state_channel = NULL;
 
     if (state == NULL || state->host_session == NULL || !sdl3d_network_session_is_connected(state->host_session) ||
-        state->data == NULL || state->input == NULL ||
-        !sdl3d_game_data_get_network_runtime_replication(state->data, PONG_NETWORK_BINDING_STATE_SNAPSHOT,
+        state->data == NULL || state->input == NULL)
+    {
+        return false;
+    }
+    if (!sdl3d_game_data_get_network_runtime_replication(state->data, PONG_NETWORK_BINDING_STATE_SNAPSHOT,
                                                          &state_channel))
     {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network binding missing: replication.%s",
+                    PONG_NETWORK_BINDING_STATE_SNAPSHOT);
         return false;
     }
 
