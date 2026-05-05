@@ -9,9 +9,9 @@
 #include <string.h>
 
 #include "sdl3d/asset.h"
+#include "sdl3d/data_game.h"
 #include "sdl3d/game.h"
 #include "sdl3d/game_data.h"
-#include "sdl3d/game_presentation.h"
 #include "sdl3d/network.h"
 #include "sdl3d/properties.h"
 #include "sdl3d/signal_bus.h"
@@ -22,13 +22,8 @@
 
 typedef struct pong_state
 {
-    sdl3d_asset_resolver *assets;
+    sdl3d_data_game_runtime *runtime;
     sdl3d_game_data_runtime *data;
-    sdl3d_game_data_font_cache font_cache;
-    sdl3d_game_data_image_cache image_cache;
-    sdl3d_game_data_particle_cache particle_cache;
-    sdl3d_game_data_app_flow app_flow;
-    sdl3d_game_data_frame_state frame_state;
     sdl3d_input_manager *input;
     sdl3d_network_session *host_session;
     sdl3d_network_session *direct_connect_session;
@@ -37,13 +32,9 @@ typedef struct pong_state
     char direct_connect_host[SDL3D_NETWORK_MAX_HOST_LENGTH];
     char direct_connect_port[16];
     char direct_connect_status[SDL3D_NETWORK_MAX_STATUS_LENGTH];
-    int *haptics_signal_ids;
-    int *haptics_connections;
-    int haptics_connection_count;
     int lobby_start_connection;
     int host_start_signal_id;
     int camera_toggle_signal_id;
-    sdl3d_game_data_input_profile_refresh_state input_profile_refresh;
     bool network_match_termination_active;
     float network_match_termination_timer;
     char network_match_termination_reason[96];
@@ -1415,113 +1406,17 @@ static void refresh_local_play_input(pong_state *state)
     char error[256] = {0};
     const char *profile_name = NULL;
     bool applied = false;
-    if (!sdl3d_game_data_apply_active_input_profile_on_device_change(
-            state->data, state->input, &state->input_profile_refresh, &profile_name, &applied, error, sizeof(error)))
+    if (!sdl3d_data_game_runtime_refresh_input_profile_on_device_change(state->runtime, state->input, &profile_name,
+                                                                        &applied, error, sizeof(error)))
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong input profile hotplug refresh failed: %s",
                     error[0] != '\0' ? error : "unknown error");
     }
     else if (applied)
     {
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong input profile refreshed: profile=%s role=%s gamepads=%d",
-                    profile_name != NULL ? profile_name : "<none>", network_role_name(state),
-                    state->input_profile_refresh.gamepad_count);
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong input profile refreshed: profile=%s role=%s",
+                    profile_name != NULL ? profile_name : "<none>", network_role_name(state));
     }
-}
-
-static void on_gamepad_feedback(void *userdata, int signal_id, const sdl3d_properties *payload)
-{
-    pong_state *state = (pong_state *)userdata;
-    if (state == NULL || state->data == NULL || state->input == NULL)
-    {
-        return;
-    }
-
-    const int policy_count = sdl3d_game_data_haptics_policy_count(state->data);
-    for (int i = 0; i < policy_count; ++i)
-    {
-        sdl3d_game_data_haptics_policy policy;
-        if (!sdl3d_game_data_match_haptics_policy(state->data, i, signal_id, payload, &policy))
-            continue;
-        if (!sdl3d_input_rumble_all_gamepads(state->input, policy.low_frequency, policy.high_frequency,
-                                             policy.duration_ms))
-        {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                        "Pong haptics policy '%s' requested rumble but no gamepad accepted it",
-                        policy.name != NULL ? policy.name : "<unnamed>");
-        }
-    }
-}
-
-static bool pong_haptics_signal_connected(const pong_state *state, int signal_id)
-{
-    if (state == NULL || signal_id < 0)
-        return true;
-    for (int i = 0; i < state->haptics_connection_count; ++i)
-    {
-        if (state->haptics_signal_ids != NULL && state->haptics_signal_ids[i] == signal_id)
-            return true;
-    }
-    return false;
-}
-
-static void connect_haptics_policies(sdl3d_game_context *ctx, pong_state *state)
-{
-    if (ctx == NULL || state == NULL || state->data == NULL || state->input == NULL)
-        return;
-
-    const int policy_count = sdl3d_game_data_haptics_policy_count(state->data);
-    if (policy_count <= 0)
-        return;
-
-    state->haptics_signal_ids = SDL_calloc((size_t)policy_count, sizeof(*state->haptics_signal_ids));
-    state->haptics_connections = SDL_calloc((size_t)policy_count, sizeof(*state->haptics_connections));
-    if (state->haptics_signal_ids == NULL || state->haptics_connections == NULL)
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong failed to allocate haptics signal connections");
-        SDL_free(state->haptics_signal_ids);
-        SDL_free(state->haptics_connections);
-        state->haptics_signal_ids = NULL;
-        state->haptics_connections = NULL;
-        return;
-    }
-
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(ctx->session);
-    for (int i = 0; i < policy_count; ++i)
-    {
-        sdl3d_game_data_haptics_policy policy;
-        if (!sdl3d_game_data_get_haptics_policy_at(state->data, i, &policy) ||
-            pong_haptics_signal_connected(state, policy.signal_id))
-        {
-            continue;
-        }
-
-        const int connection = sdl3d_signal_connect(bus, policy.signal_id, on_gamepad_feedback, state);
-        if (connection > 0)
-        {
-            state->haptics_signal_ids[state->haptics_connection_count] = policy.signal_id;
-            state->haptics_connections[state->haptics_connection_count] = connection;
-            ++state->haptics_connection_count;
-        }
-    }
-}
-
-static void disconnect_haptics_policies(sdl3d_game_context *ctx, pong_state *state)
-{
-    if (ctx == NULL || state == NULL)
-        return;
-
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(ctx->session);
-    for (int i = 0; i < state->haptics_connection_count; ++i)
-    {
-        if (state->haptics_connections != NULL && state->haptics_connections[i] > 0)
-            sdl3d_signal_disconnect(bus, state->haptics_connections[i]);
-    }
-    SDL_free(state->haptics_signal_ids);
-    SDL_free(state->haptics_connections);
-    state->haptics_signal_ids = NULL;
-    state->haptics_connections = NULL;
-    state->haptics_connection_count = 0;
 }
 
 static void on_multiplayer_lobby_signal(void *userdata, int signal_id, const sdl3d_properties *payload)
@@ -1549,34 +1444,35 @@ static bool mount_pong_assets(sdl3d_asset_resolver *assets, char *error, int err
 #endif
 }
 
+static bool mount_pong_assets_for_runtime(sdl3d_asset_resolver *assets, void *userdata, char *error, int error_size)
+{
+    (void)userdata;
+    return mount_pong_assets(assets, error, error_size);
+}
+
 static bool init_game_data(sdl3d_game_context *ctx, pong_state *state)
 {
-    state->assets = sdl3d_asset_resolver_create();
-    if (state->assets == NULL)
+    sdl3d_data_game_runtime_desc desc;
+    char error[512] = {0};
+
+    if (ctx == NULL || state == NULL)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong asset resolver allocation failed");
         return false;
     }
 
-    char error[512];
-    bool assets_ready = mount_pong_assets(state->assets, error, (int)sizeof(error));
-    if (!assets_ready)
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong asset mount failed: %s", error);
-        sdl3d_asset_resolver_destroy(state->assets);
-        state->assets = NULL;
-        return false;
-    }
+    sdl3d_data_game_runtime_desc_init(&desc);
+    desc.session = ctx->session;
+    desc.data_asset_path = SDL3D_PONG_DATA_ASSET_PATH;
+    desc.media_dir = SDL3D_MEDIA_DIR;
+    desc.mount_assets = mount_pong_assets_for_runtime;
 
-    if (!sdl3d_game_data_load_asset(state->assets, SDL3D_PONG_DATA_ASSET_PATH, ctx->session, &state->data, error,
-                                    (int)sizeof(error)))
+    if (!sdl3d_data_game_runtime_create(&desc, &state->runtime, error, (int)sizeof(error)))
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pong data load failed: %s", error);
-        sdl3d_asset_resolver_destroy(state->assets);
-        state->assets = NULL;
         return false;
     }
 
+    state->data = sdl3d_data_game_runtime_data(state->runtime);
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong data loaded: asset=%s active_scene=%s", SDL3D_PONG_DATA_ASSET_PATH,
                 sdl3d_game_data_active_scene(state->data) != NULL ? sdl3d_game_data_active_scene(state->data)
                                                                   : "<none>");
@@ -1588,10 +1484,6 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
 {
     pong_state *state = (pong_state *)userdata;
     SDL_zero(*state);
-    sdl3d_game_data_font_cache_init(&state->font_cache, SDL3D_MEDIA_DIR);
-    sdl3d_game_data_particle_cache_init(&state->particle_cache);
-    sdl3d_game_data_app_flow_init(&state->app_flow);
-    sdl3d_game_data_frame_state_init(&state->frame_state);
 
     if (!init_game_data(ctx, state))
     {
@@ -1599,24 +1491,6 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
     }
     reset_direct_connect_defaults(state);
     publish_network_match_termination_scene_state(state);
-    if (ctx != NULL && ctx->window != NULL)
-    {
-        SDL_StartTextInput(ctx->window);
-    }
-    sdl3d_game_data_image_cache_init(&state->image_cache, state->assets);
-    if (!sdl3d_game_data_app_flow_start(&state->app_flow, state->data))
-    {
-        sdl3d_game_data_image_cache_free(&state->image_cache);
-        if (ctx != NULL && ctx->window != NULL)
-        {
-            SDL_StopTextInput(ctx->window);
-        }
-        sdl3d_game_data_destroy(state->data);
-        state->data = NULL;
-        sdl3d_asset_resolver_destroy(state->assets);
-        state->assets = NULL;
-        return false;
-    }
 
     state->input = sdl3d_game_session_get_input(ctx->session);
     const int gamepad_count = state->input != NULL ? sdl3d_input_gamepad_count(state->input) : 0;
@@ -1626,18 +1500,15 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong gamepad slot: slot=%d id=%d connected=%d", i,
                     sdl3d_input_gamepad_id_at(state->input, i), sdl3d_input_gamepad_is_connected(state->input, i));
     }
-    state->haptics_connection_count = 0;
     state->lobby_start_connection = 0;
     state->host_start_signal_id = network_runtime_signal_id(state, PONG_NETWORK_BINDING_LOBBY_START);
     state->camera_toggle_signal_id = network_runtime_signal_id(state, PONG_NETWORK_BINDING_CAMERA_TOGGLE);
-    sdl3d_game_data_input_profile_refresh_state_init(&state->input_profile_refresh);
     SDL_snprintf(state->host_status, sizeof(state->host_status), "Not hosting");
     SDL_snprintf(state->host_endpoint, sizeof(state->host_endpoint), "UDP %u",
                  (unsigned int)SDL3D_NETWORK_DEFAULT_PORT);
     update_host_session_scene_state(state);
     if (state->input != NULL)
     {
-        connect_haptics_policies(ctx, state);
         if (state->host_start_signal_id >= 0)
         {
             state->lobby_start_connection =
@@ -1655,13 +1526,7 @@ static void pong_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     update_network_match_termination(ctx, state, dt);
     update_multiplayer_sessions(ctx, state, dt);
     update_network_client_input_sensors(ctx, state);
-
-    const sdl3d_game_data_update_frame_desc frame = {.ctx = ctx,
-                                                     .runtime = state->data,
-                                                     .app_flow = &state->app_flow,
-                                                     .particle_cache = &state->particle_cache,
-                                                     .dt = dt};
-    (void)sdl3d_game_data_update_frame(&state->frame_state, &frame);
+    (void)sdl3d_data_game_runtime_update_frame(state->runtime, ctx, dt);
     publish_multiplayer_state(ctx, state);
 }
 
@@ -1672,13 +1537,7 @@ static void pong_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_
     update_network_match_termination(ctx, state, real_dt);
     update_multiplayer_sessions(ctx, state, real_dt);
     update_network_client_input_sensors(ctx, state);
-
-    const sdl3d_game_data_update_frame_desc frame = {.ctx = ctx,
-                                                     .runtime = state->data,
-                                                     .app_flow = &state->app_flow,
-                                                     .particle_cache = &state->particle_cache,
-                                                     .dt = real_dt};
-    (void)sdl3d_game_data_update_frame(&state->frame_state, &frame);
+    (void)sdl3d_data_game_runtime_update_frame(state->runtime, ctx, real_dt);
     publish_multiplayer_state(ctx, state);
 }
 
@@ -1686,32 +1545,13 @@ static void pong_render(sdl3d_game_context *ctx, void *userdata, float alpha)
 {
     pong_state *state = (pong_state *)userdata;
     (void)alpha;
-
-    sdl3d_game_data_frame_state_record_render(&state->frame_state, ctx, state->data);
-
-    sdl3d_game_data_frame_desc frame;
-    SDL_zero(frame);
-    frame.runtime = state->data;
-    frame.renderer = ctx->renderer;
-    frame.font_cache = &state->font_cache;
-    frame.image_cache = &state->image_cache;
-    frame.particle_cache = &state->particle_cache;
-    frame.app_flow = &state->app_flow;
-    frame.metrics = &state->frame_state.metrics;
-    frame.render_eval = &state->frame_state.render_eval;
-    frame.pulse_phase = state->frame_state.ui_pulse_phase;
-    sdl3d_game_data_draw_frame(&frame);
+    sdl3d_data_game_runtime_render(state->runtime, ctx);
 }
 
 static void pong_shutdown(sdl3d_game_context *ctx, void *userdata)
 {
     pong_state *state = (pong_state *)userdata;
-    (void)ctx;
 
-    sdl3d_game_data_particle_cache_free(&state->particle_cache);
-    sdl3d_game_data_image_cache_free(&state->image_cache);
-    sdl3d_game_data_font_cache_free(&state->font_cache);
-    disconnect_haptics_policies(ctx, state);
     if (state->lobby_start_connection > 0)
     {
         sdl3d_signal_disconnect(sdl3d_game_session_get_signal_bus(ctx->session), state->lobby_start_connection);
@@ -1719,15 +1559,10 @@ static void pong_shutdown(sdl3d_game_context *ctx, void *userdata)
     }
     destroy_host_session(state);
     destroy_direct_connect_session(state);
-    if (ctx != NULL && ctx->window != NULL)
-    {
-        SDL_StopTextInput(ctx->window);
-    }
     state->input = NULL;
-    sdl3d_game_data_destroy(state->data);
+    sdl3d_data_game_runtime_destroy(state->runtime);
+    state->runtime = NULL;
     state->data = NULL;
-    sdl3d_asset_resolver_destroy(state->assets);
-    state->assets = NULL;
 }
 
 int main(int argc, char **argv)

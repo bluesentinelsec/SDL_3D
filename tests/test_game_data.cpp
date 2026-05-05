@@ -17,6 +17,7 @@ extern "C"
 #include <SDL3/SDL_stdinc.h>
 
 #include "sdl3d/asset.h"
+#include "sdl3d/data_game.h"
 #include "sdl3d/game.h"
 #include "sdl3d/game_data.h"
 #include "sdl3d/game_presentation.h"
@@ -1185,6 +1186,13 @@ std::vector<std::uint8_t> make_pack(const std::vector<std::pair<std::string, std
     return bytes;
 }
 
+bool mount_test_directory_assets(sdl3d_asset_resolver *assets, void *userdata, char *error_buffer,
+                                 int error_buffer_size)
+{
+    return sdl3d_asset_resolver_mount_directory(assets, static_cast<const char *>(userdata), error_buffer,
+                                                error_buffer_size);
+}
+
 } // namespace
 
 TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
@@ -1328,6 +1336,40 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     EXPECT_EQ(sdl3d_timer_pool_active_count(sdl3d_game_session_get_timer_pool(session)), 0);
 
     sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, DataGameRuntimeOwnsGenericPongLifecycle)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    const std::filesystem::path data_path = SDL3D_PONG_DATA_PATH;
+    const std::string root = data_path.parent_path().string();
+    const std::string asset_path = std::string("asset://") + data_path.filename().string();
+
+    sdl3d_data_game_runtime_desc desc{};
+    sdl3d_data_game_runtime_desc_init(&desc);
+    desc.session = session;
+    desc.media_dir = SDL3D_MEDIA_DIR;
+    desc.data_asset_path = asset_path.c_str();
+    desc.mount_assets = mount_test_directory_assets;
+    desc.mount_userdata = const_cast<char *>(root.c_str());
+
+    char error[512]{};
+    sdl3d_data_game_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error))) << error;
+    ASSERT_NE(runtime, nullptr);
+    ASSERT_NE(sdl3d_data_game_runtime_assets(runtime), nullptr);
+    sdl3d_game_data_runtime *data = sdl3d_data_game_runtime_data(runtime);
+    ASSERT_NE(data, nullptr);
+    EXPECT_STREQ(sdl3d_game_data_active_scene(data), "scene.splash");
+    EXPECT_NE(sdl3d_game_data_find_actor(data, "entity.ball"), nullptr);
+
+    sdl3d_game_context ctx{};
+    ctx.session = session;
+    EXPECT_TRUE(sdl3d_data_game_runtime_update_frame(runtime, &ctx, 0.016f));
+    sdl3d_data_game_runtime_destroy(runtime);
     sdl3d_game_session_destroy(session);
 }
 
