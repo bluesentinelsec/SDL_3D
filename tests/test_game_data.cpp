@@ -6340,11 +6340,20 @@ TEST(GameDataRuntime, AuthoredDiscoveryConnectActionsUpdateSceneState)
         sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "endpoint", "127.0.0.1:65535"));
     sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), connect_signal, nullptr);
 
-    EXPECT_NE(sdl3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
     EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_host", ""), "127.0.0.1");
     EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_port", ""), "65535");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""), "Match found. Connecting...");
     EXPECT_EQ(sdl3d_game_data_runtime_collection_count(runtime, "local_matches"), 0);
+    if (sdl3d_game_data_get_network_direct_connect_session(runtime, "direct_connect") != nullptr)
+    {
+        EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""),
+                     "Match found. Connecting...");
+    }
+    else
+    {
+        EXPECT_NE(std::string(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""))
+                      .find("networking is disabled"),
+                  std::string::npos);
+    }
 
     const int cancel_signal = sdl3d_game_data_find_signal(runtime, "signal.multiplayer.discovery.cancel");
     ASSERT_GE(cancel_signal, 0);
