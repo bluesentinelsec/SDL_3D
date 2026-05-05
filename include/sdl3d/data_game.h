@@ -111,6 +111,9 @@ extern "C"
      *
      * This does not update the outer SDL3D game session tick counters; callers
      * should invoke it from their managed-loop tick or pause_tick callback.
+     * The runtime also refreshes the active authored input profile when the
+     * connected gamepad count changes and the current scene state has a
+     * matching profile.
      */
     bool sdl3d_data_game_runtime_update_frame(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx, float dt);
 

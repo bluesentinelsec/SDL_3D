@@ -694,12 +694,15 @@ Logic bindings can apply profiles directly:
 
 Use an adapter or data actions before `input.apply_active_profile` when a game
 needs to normalize scene-state values that choose the active profile.
-For hotplug support, hosts can keep a
+For hotplug support, `sdl3d_data_game_runtime_update_frame()` automatically
+refreshes the active profile when the connected gamepad count changes. Custom
+hosts that do not use the data-game runtime can keep a
 `sdl3d_game_data_input_profile_refresh_state` and call
-`sdl3d_game_data_apply_active_input_profile_on_device_change()` from their
-frame loop while a profile-managed scene is active. The helper applies the
-active profile on first use and after the connected gamepad count changes,
-leaving scene-entry profile application in authored data actions.
+`sdl3d_game_data_apply_active_input_profile_on_device_change()` while a
+profile-managed scene is active. Use
+`sdl3d_game_data_get_active_input_profile_name()` first when polling
+automatically so scenes with no matching profile are treated as idle rather
+than as errors.
 
 Direct-connect multiplayer forms should use menu `text` controls for the host
 and port fields, then invoke data-authored network actions from menu signals:

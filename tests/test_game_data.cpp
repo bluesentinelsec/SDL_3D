@@ -1373,6 +1373,82 @@ TEST(GameDataRuntime, DataGameRuntimeOwnsGenericPongLifecycle)
     sdl3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, DataGameRuntimeRefreshesInputProfilesOnGamepadHotplug)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    if (sdl3d_input_gamepad_count(input) != 0)
+    {
+        sdl3d_game_session_destroy(session);
+        GTEST_SKIP() << "requires no pre-connected gamepads";
+    }
+
+    const std::filesystem::path data_path = SDL3D_PONG_DATA_PATH;
+    const std::string root = data_path.parent_path().string();
+    const std::string asset_path = std::string("asset://") + data_path.filename().string();
+
+    sdl3d_data_game_runtime_desc desc{};
+    sdl3d_data_game_runtime_desc_init(&desc);
+    desc.session = session;
+    desc.media_dir = SDL3D_MEDIA_DIR;
+    desc.data_asset_path = asset_path.c_str();
+    desc.mount_assets = mount_test_directory_assets;
+    desc.mount_userdata = const_cast<char *>(root.c_str());
+
+    char error[512]{};
+    sdl3d_data_game_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error))) << error;
+    sdl3d_game_data_runtime *data = sdl3d_data_game_runtime_data(runtime);
+    ASSERT_NE(data, nullptr);
+
+    const int p1_up = sdl3d_game_data_find_action(data, "action.paddle.up");
+    const int p2_up = sdl3d_game_data_find_action(data, "action.paddle.local.up");
+    ASSERT_GE(p1_up, 0);
+    ASSERT_GE(p2_up, 0);
+
+    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(data);
+    ASSERT_NE(scene_state, nullptr);
+    sdl3d_properties_set_string(scene_state, "match_mode", "local");
+    sdl3d_properties_set_string(scene_state, "network_role", "none");
+    sdl3d_properties_set_string(scene_state, "network_flow", "none");
+
+    sdl3d_game_context ctx{};
+    ctx.session = session;
+    ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(runtime, &ctx, 0.016f));
+
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 1);
+    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p1_up), 1.0f);
+    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p2_up), 0.0f);
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 2);
+
+    SDL_Event event{};
+    event.type = SDL_EVENT_GAMEPAD_ADDED;
+    event.gdevice.which = 7301;
+    sdl3d_input_process_event(input, &event);
+    ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(runtime, &ctx, 0.016f));
+
+    event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    event.gbutton.which = 7301;
+    event.gbutton.button = SDL_GAMEPAD_BUTTON_DPAD_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 3);
+    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p1_up), 0.0f);
+    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p2_up), 1.0f);
+
+    sdl3d_data_game_runtime_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, ReadsSpriteAssetMetadata)
 {
     sdl3d_game_session *session = nullptr;
