@@ -2123,6 +2123,22 @@ extern "C"
                                                     int error_buffer_size);
 
     /**
+     * @brief Return the first input profile whose authored conditions match.
+     *
+     * This is a side-effect-free query for hosts and generic runtimes that
+     * need to know whether automatic input-profile refresh is currently
+     * applicable. It uses the same authored-order, `active_if`, and gamepad
+     * gate rules as @ref sdl3d_game_data_apply_active_input_profile.
+     *
+     * @param runtime Runtime containing authored profile data.
+     * @param input Input manager used for live gamepad-count gates.
+     * @param out_profile_name Receives the matching runtime-owned profile name, if non-NULL.
+     * @return true when a profile currently matches.
+     */
+    bool sdl3d_game_data_get_active_input_profile_name(const sdl3d_game_data_runtime *runtime,
+                                                       const sdl3d_input_manager *input, const char **out_profile_name);
+
+    /**
      * @brief Apply the active input profile when connected gamepad count changes.
      *
      * This helper centralizes the common hotplug policy for data-authored input

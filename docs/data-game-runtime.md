@@ -18,13 +18,13 @@ The runtime currently owns:
 - authored app-flow startup and frame update
 - authored frame render through `sdl3d_game_data_draw_frame`
 - haptics policy signal wiring
-- input-profile hotplug refresh state
+- input-profile hotplug refresh state and automatic gamepad-count rebinding
 - ordered cleanup
 
-Hosts still own the outer SDL process loop through `sdl3d_run_game`. For now,
-Pong also still owns network session orchestration. Future slices should move
-that orchestration into a managed network runtime so Pong can run through a
-generic runner without a custom `main.c`.
+The generic `sdl3d_runner` executable owns the outer SDL process loop for games
+that only need the current data runtime surface. For now, Pong still keeps a
+compatibility host for full LAN networking because network session
+orchestration has not moved into the managed runtime yet.
 
 ## Startup Shape
 
@@ -57,9 +57,41 @@ During the managed loop:
 The outer loop still controls fixed timestep, SDL events, input snapshots,
 audio frame updates, and presentation.
 
+## Generic Runner
+
+`sdl3d_runner` launches a game data asset without game-specific C callbacks.
+It can mount either a development directory or a built `.sdl3dpak`, then reads
+the app/window/audio config from the root game JSON before entering the managed
+loop.
+
+Development directory example:
+
+```sh
+build/debug/sdl3d_runner --root demos/pong/data --data asset://pong.game.json
+```
+
+Pack-file example:
+
+```sh
+build/debug/sdl3d_runner --pack build/debug/demos/pong/pong.sdl3dpak --data asset://pong.game.json
+```
+
+Optional flags:
+
+- `--media <dir>` overrides the built-in media directory used for engine fonts
+  and shared media.
+- `--embedded` is available only when a build target defines
+  `SDL3D_RUNNER_EMBEDDED_ASSETS` and provides the generic
+  `sdl3d_runner_embedded_assets` pack blob symbols.
+
+The runner is game-agnostic: it does not reference Pong symbols, scene names,
+actions, actors, replication channels, or controls. Any remaining need for a
+custom host indicates engine runtime work that should move into reusable JSON
+or Lua-driven systems.
+
 ## Why This Matters
 
-This API is a stepping stone toward a generic SDL3D runner. Once network
-session orchestration is also managed by the engine runtime, a game package
+This API is a stepping stone toward fully data-only games. Once network session
+orchestration is also managed by the engine runtime, a package such as Pong
 should be able to ship as JSON, Lua, and assets rather than as a custom C
 program linked against SDL3D.

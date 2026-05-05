@@ -277,12 +277,43 @@ bool sdl3d_data_game_runtime_refresh_input_profile_on_device_change(sdl3d_data_g
         error_buffer_size);
 }
 
+static bool refresh_active_input_profile_if_available(sdl3d_data_game_runtime *runtime)
+{
+    sdl3d_input_manager *input =
+        runtime != NULL && runtime->session != NULL ? sdl3d_game_session_get_input(runtime->session) : NULL;
+    if (runtime == NULL || runtime->data == NULL || input == NULL)
+    {
+        return true;
+    }
+
+    if (!sdl3d_game_data_get_active_input_profile_name(runtime->data, input, NULL))
+    {
+        sdl3d_game_data_input_profile_refresh_state_init(&runtime->input_profile_refresh);
+        return true;
+    }
+
+    char error[256] = "";
+    const char *profile_name = NULL;
+    bool applied = false;
+    if (!sdl3d_data_game_runtime_refresh_input_profile_on_device_change(runtime, input, &profile_name, &applied, error,
+                                                                        (int)sizeof(error)))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D input profile hotplug refresh failed: %s",
+                    error[0] != '\0' ? error : "unknown error");
+        return false;
+    }
+    return true;
+}
+
 bool sdl3d_data_game_runtime_update_frame(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx, float dt)
 {
     if (runtime == NULL || runtime->data == NULL)
     {
         return false;
     }
+
+    if (!refresh_active_input_profile_if_available(runtime))
+        return false;
 
     const sdl3d_game_data_update_frame_desc frame = {.ctx = ctx,
                                                      .runtime = runtime->data,

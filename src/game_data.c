@@ -7560,6 +7560,22 @@ static bool input_profile_matches(const sdl3d_game_data_runtime *runtime, const 
     return eval_data_condition(runtime, obj_get(profile, "active_if"), NULL);
 }
 
+static yyjson_val *find_active_input_profile_json(const sdl3d_game_data_runtime *runtime,
+                                                  const sdl3d_input_manager *input)
+{
+    if (runtime == NULL || input == NULL)
+        return NULL;
+
+    yyjson_val *profiles = obj_get(obj_get(runtime_root(runtime), "input"), "profiles");
+    for (size_t i = 0; yyjson_is_arr(profiles) && i < yyjson_arr_size(profiles); ++i)
+    {
+        yyjson_val *profile = yyjson_arr_get(profiles, i);
+        if (input_profile_matches(runtime, input, profile))
+            return profile;
+    }
+    return NULL;
+}
+
 bool sdl3d_game_data_apply_input_profile(sdl3d_game_data_runtime *runtime, sdl3d_input_manager *input,
                                          const char *profile_name, char *error_buffer, int error_buffer_size)
 {
@@ -7585,23 +7601,34 @@ bool sdl3d_game_data_apply_active_input_profile(sdl3d_game_data_runtime *runtime
         return false;
     }
 
-    yyjson_val *profiles = obj_get(obj_get(runtime_root(runtime), "input"), "profiles");
-    for (size_t i = 0; yyjson_is_arr(profiles) && i < yyjson_arr_size(profiles); ++i)
+    yyjson_val *profile = find_active_input_profile_json(runtime, input);
+    if (profile != NULL)
     {
-        yyjson_val *profile = yyjson_arr_get(profiles, i);
-        if (input_profile_matches(runtime, input, profile))
-        {
-            const char *name = json_string(profile, "name", NULL);
-            if (!apply_input_profile_json(runtime, input, profile, error_buffer, error_buffer_size))
-                return false;
-            if (out_profile_name != NULL)
-                *out_profile_name = name;
-            return true;
-        }
+        const char *name = json_string(profile, "name", NULL);
+        if (!apply_input_profile_json(runtime, input, profile, error_buffer, error_buffer_size))
+            return false;
+        if (out_profile_name != NULL)
+            *out_profile_name = name;
+        return true;
     }
 
     set_error(error_buffer, error_buffer_size, "no authored input profile matched the current state");
     return false;
+}
+
+bool sdl3d_game_data_get_active_input_profile_name(const sdl3d_game_data_runtime *runtime,
+                                                   const sdl3d_input_manager *input, const char **out_profile_name)
+{
+    if (out_profile_name != NULL)
+        *out_profile_name = NULL;
+
+    yyjson_val *profile = find_active_input_profile_json(runtime, input);
+    if (profile == NULL)
+        return false;
+
+    if (out_profile_name != NULL)
+        *out_profile_name = json_string(profile, "name", NULL);
+    return true;
 }
 
 void sdl3d_game_data_input_profile_refresh_state_init(sdl3d_game_data_input_profile_refresh_state *state)
