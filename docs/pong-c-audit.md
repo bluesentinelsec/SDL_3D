@@ -1,37 +1,151 @@
 # Pong C Host Audit
 
-This audit tracks the remaining authored-data literals in `demos/pong/main.c`
-after the Pong data-driven migration. The demo host should own SDL process
-integration, native UI surfaces, and UDP session lifetime. Gameplay rules and
-reusable schema decisions should live in JSON or Lua.
+This audit records the state of `demos/pong/main.c` after the multiplayer UI
+migration. The long-term target is for Pong to be authored as JSON, Lua, and
+assets loaded by a generic SDL3D runner. In that model, a game does not need a
+custom `my_game/main.c`; it supplies data to the engine runtime.
 
-## Migrated in this pass
+## Current Status
 
-- Discovery overlay scene-state keys now resolve through
-  `network.scene_state.discovery`.
-- Network host actions now resolve through `network.runtime_bindings.actions`.
-- Network host signals now resolve through `network.runtime_bindings.signals`.
+Pong gameplay is now substantially data driven:
 
-## Remaining accepted host integration
+- match rules, scoring, win/loss prompts, restarts, serve behavior, ball jitter,
+  AI paddle movement, and presentation effects live in JSON/Lua
+- options, title, pause, direct-connect, LAN discovery, lobby, and termination
+  UI are authored scene/menu data
+- input bindings and device-assignment policy are authored profiles
+- host-to-client snapshots, client-to-host input, and control messages use the
+  generic authored network replication schema
+- direct-connect and LAN discovery forms/lists use generic text-entry,
+  dynamic-list, runtime-collection, and network data actions
+- no native UI context remains in `demos/pong/main.c`
 
-- `network.session_flow` semantic names such as `play`, `join`, `host_lobby`,
-  `match_mode`, and `network_role` are host orchestration concepts. The C host
-  passes semantic names to generic resolver APIs and uses authored fallbacks only
-  as defensive defaults.
-- `network.runtime_bindings` semantic names such as `state_snapshot`,
-  `client_input`, and `disconnect` are not game schema names. They are stable
-  host integration roles that resolve to authored replication channels and
-  control messages.
-- Direct-connect text entry and discovery panels are still native UI overlays.
-  They remain in C until the engine has data-authored text entry/list widgets
-  capable of replacing those temporary surfaces.
-- UDP socket/session lifecycle, timeout handling, and app shutdown remain C
-  responsibilities because they bridge platform/runtime services to game data.
+The remaining Pong C is no longer gameplay-rule code. It is mostly a custom
+runtime host that wires generic engine systems together for this one demo.
 
-## Follow-up Candidates
+## Remaining C Surface
 
-- Replace the native direct-connect and discovery overlays with generalized
-  data-authored UI widgets once editable text boxes and dynamic list controls
-  exist.
-- Consider caching resolved network/session binding strings if profiling ever
-  shows repeated JSON lookup overhead in host orchestration.
+`demos/pong/main.c` is still large because it owns several responsibilities that
+should move behind reusable engine/runtime APIs.
+
+### SDL Process And Asset Bootstrap
+
+The file still creates the SDL3D game config, mounts embedded/pack/directory
+assets, loads `asset://pong.game.json`, initializes caches, starts text input,
+and calls `sdl3d_game_run`.
+
+This is generic runner work. A reusable SDL3D runtime should accept a game data
+asset path or pack path, load app/window/audio settings from game data, mount
+assets, and run without game-specific C.
+
+### Generic Data Game Loop
+
+`pong_tick`, `pong_pause_tick`, `pong_render`, and `pong_shutdown` mostly call
+generic systems:
+
+- input profile hotplug refresh
+- game-data frame update
+- app-flow update
+- particle/image/font caches
+- presentation frame drawing
+- haptics policy signal wiring
+- cleanup for sessions and data runtime
+
+These should become a managed data-game loop in the engine runtime. A game
+package should opt into standard phases and policies from JSON instead of
+implementing per-game callbacks.
+
+### Managed Network Session Orchestration
+
+The largest remaining custom surface is multiplayer session orchestration:
+
+- host session creation/destruction and lobby state publishing
+- direct-connect session lifetime and status publishing
+- per-frame UDP session updates
+- packet receive/dispatch for control, input, and snapshots
+- transition to the network play scene
+- disconnect/timeout handling
+- pause/resume synchronization
+- authoritative host snapshot publishing
+- client input publishing
+
+Most packet content is already data driven. What remains is the transport
+session flow. This should become an engine-managed network session runner driven
+by authored `network.session_flow` and `network.runtime_bindings`.
+
+### Runtime State Publication
+
+Pong C still publishes scene-state values for host lobby status, direct-connect
+status, match termination messages, and network role/flow handoff.
+
+These are generic UI/runtime status concepts. The runner should provide data
+actions or managed bindings for session status, peer lists, selected peers,
+termination reasons, and return scenes.
+
+### Haptics Policy Wiring
+
+Pong still connects haptics policy signals in C. The policies themselves are
+data-authored and generic. The engine runtime can connect these automatically
+when a game data runtime is loaded.
+
+### Diagnostic Logging
+
+Snapshot diagnostics are schema-driven, but the host still decides when to log
+Pong multiplayer state. A generic runtime can expose an authored diagnostics
+policy for network sessions and replication channels.
+
+## Remaining Pong-Specific C Literals
+
+The remaining `PONG_*` constants are mostly semantic runtime binding names such
+as `state_snapshot`, `client_input`, `start_game`, `pause_request`, and
+`direct_connect`. They are not hard-coded actor/property packet schemas, but
+they still prove that the current binary is a Pong host rather than a generic
+runner.
+
+A runner should either:
+
+- use standard semantic binding names defined by the engine, or
+- read a small authored runtime profile that declares which session, action,
+  signal, replication, and control roles the standard network loop should use.
+
+## No Longer Blocking JSON/Lua Authorship
+
+The following concerns have been removed from Pong C and are now reusable data
+systems:
+
+- native direct-connect text entry
+- native LAN discovery result UI
+- native network termination overlay
+- hard-coded packet serialization for Pong actors
+- hard-coded local/gamepad input assignment policy
+- hard-coded play input setup adapter
+- hard-coded replication channel/control message schema names
+
+## Next Practical Step
+
+Deprecate the custom Pong host by adding a generic SDL3D runner/runtime.
+
+Recommended first runtime slice:
+
+1. Add an `sdl3d_data_game_runtime` API that owns asset mounting, data loading,
+   app-flow/frame state, caches, haptics policy wiring, input-profile refresh,
+   update, render, pause update, and shutdown.
+2. Add a small runner executable that launches a game data asset or pack through
+   that API.
+3. Convert `demos/pong/main.c` into either a thin compatibility wrapper around
+   the runner API or remove it from the normal path once the runner can launch
+   Pong.
+4. Keep multiplayer orchestration in Pong C only until the next slice moves it
+   into a managed network-session runtime.
+
+## Definition Of Done For Pong Without `main.c`
+
+Pong can be considered JSON/Lua-only when:
+
+- the same generic runner binary can launch Pong from a pack or directory
+- Pong has no custom C callback table
+- standard single-player, local multiplayer, direct connect, LAN discovery,
+  options, pause, haptics, audio, and rendering behavior still work
+- Pong-specific gameplay behavior remains in `demos/pong/data/scripts/pong.lua`
+  and authored JSON
+- reusable runtime behavior lives in engine modules, not demo host code
