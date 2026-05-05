@@ -9892,6 +9892,40 @@ bool sdl3d_game_data_get_network_runtime_control(const sdl3d_game_data_runtime *
     return game_data_get_network_runtime_binding(runtime, "controls", name, out_control);
 }
 
+bool sdl3d_game_data_get_network_runtime_action(const sdl3d_game_data_runtime *runtime, const char *name,
+                                                int *out_action)
+{
+    const char *action_name = NULL;
+    if (out_action != NULL)
+        *out_action = -1;
+    if (out_action == NULL || !game_data_get_network_runtime_binding(runtime, "actions", name, &action_name))
+        return false;
+
+    const int action_id = sdl3d_game_data_find_action(runtime, action_name);
+    if (action_id < 0)
+        return false;
+
+    *out_action = action_id;
+    return true;
+}
+
+bool sdl3d_game_data_get_network_runtime_signal(const sdl3d_game_data_runtime *runtime, const char *name,
+                                                int *out_signal)
+{
+    const char *signal_name = NULL;
+    if (out_signal != NULL)
+        *out_signal = -1;
+    if (out_signal == NULL || !game_data_get_network_runtime_binding(runtime, "signals", name, &signal_name))
+        return false;
+
+    const int signal_id = sdl3d_game_data_find_signal(runtime, signal_name);
+    if (signal_id < 0)
+        return false;
+
+    *out_signal = signal_id;
+    return true;
+}
+
 static yyjson_val *haptics_policies_json(const sdl3d_game_data_runtime *runtime)
 {
     return obj_get(obj_get(runtime_root(runtime), "haptics"), "policies");

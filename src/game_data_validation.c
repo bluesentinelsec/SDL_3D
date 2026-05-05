@@ -807,6 +807,10 @@ static bool validate_network_runtime_bindings(validation_context *ctx, yyjson_va
            validate_network_runtime_binding_map(ctx, obj_get(bindings, "controls"),
                                                 "$.network.runtime_bindings.controls", "network control message",
                                                 control_names) &&
+           validate_network_runtime_binding_map(ctx, obj_get(bindings, "actions"), "$.network.runtime_bindings.actions",
+                                                "input action", &names->actions) &&
+           validate_network_runtime_binding_map(ctx, obj_get(bindings, "signals"), "$.network.runtime_bindings.signals",
+                                                "signal", &names->signals) &&
            validate_network_runtime_pause_binding(ctx, obj_get(bindings, "pause"), names);
 }
 
