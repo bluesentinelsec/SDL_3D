@@ -20,6 +20,13 @@
 #define SDL3D_GAME_DEFAULT_WINDOW_MODE SDL3D_WINDOW_MODE_WINDOWED
 #endif
 
+#if defined(__ANDROID__) || defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__) ||                                 \
+    defined(__ENVIRONMENT_TV_OS_VERSION_MIN_REQUIRED__)
+#define SDL3D_GAME_ENABLE_GLOBAL_TEXT_INPUT 0
+#else
+#define SDL3D_GAME_ENABLE_GLOBAL_TEXT_INPUT 1
+#endif
+
 struct sdl3d_game_session
 {
     sdl3d_actor_registry *registry;
@@ -481,7 +488,7 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
         SDL_Quit();
         return 1;
     }
-#if !defined(__ANDROID__)
+#if SDL3D_GAME_ENABLE_GLOBAL_TEXT_INPUT
     SDL_StartTextInput(ctx.window);
 #endif
 
@@ -662,7 +669,7 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
         callbacks->shutdown(&ctx, userdata);
     }
 
-#if !defined(__ANDROID__)
+#if SDL3D_GAME_ENABLE_GLOBAL_TEXT_INPUT
     SDL_StopTextInput(ctx.window);
 #endif
     sdl3d_game_cleanup_context(&ctx);
