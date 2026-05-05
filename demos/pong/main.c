@@ -701,11 +701,11 @@ static bool send_client_input_packet(pong_state *state)
 
 static void send_client_pause_request_if_pressed(sdl3d_game_context *ctx, pong_state *state)
 {
-    const int pause_action =
-        state != NULL && state->data != NULL ? sdl3d_game_data_find_action(state->data, "action.pause") : -1;
+    int pause_action = -1;
     pong_network_message_kind request_kind;
 
     if (ctx == NULL || state == NULL || state->input == NULL || state->direct_connect_session == NULL ||
+        state->data == NULL || !sdl3d_game_data_get_network_runtime_pause_action(state->data, &pause_action) ||
         pause_action < 0 || !is_multiplayer_play_scene(state) || !is_network_role_client(state) ||
         !sdl3d_network_session_is_connected(state->direct_connect_session) ||
         !sdl3d_input_is_pressed(state->input, pause_action))
@@ -721,27 +721,34 @@ static void send_client_pause_request_if_pressed(sdl3d_game_context *ctx, pong_s
 
 static bool sync_match_pause_from_context(sdl3d_game_context *ctx, pong_state *state)
 {
-    sdl3d_registered_actor *match =
-        state != NULL && state->data != NULL ? sdl3d_game_data_find_actor(state->data, "entity.match") : NULL;
-    if (ctx == NULL || match == NULL)
+    char error[160] = {0};
+    if (ctx == NULL || state == NULL || state->data == NULL)
     {
         return false;
     }
 
-    sdl3d_properties_set_bool(match->props, "paused", ctx->paused);
+    if (!sdl3d_game_data_set_network_runtime_pause_state(state->data, ctx->paused, error, (int)sizeof(error)))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network pause state write failed: %s", error);
+        return false;
+    }
     return true;
 }
 
 static bool sync_context_pause_from_match(sdl3d_game_context *ctx, pong_state *state)
 {
-    const sdl3d_registered_actor *match =
-        state != NULL && state->data != NULL ? sdl3d_game_data_find_actor(state->data, "entity.match") : NULL;
-    const bool paused = match != NULL && sdl3d_properties_get_bool(match->props, "paused", false);
-    if (ctx == NULL || match == NULL)
+    bool paused = false;
+    char error[160] = {0};
+    if (ctx == NULL || state == NULL || state->data == NULL)
     {
         return false;
     }
 
+    if (!sdl3d_game_data_get_network_runtime_pause_state(state->data, &paused, error, (int)sizeof(error)))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network pause state read failed: %s", error);
+        return false;
+    }
     if (ctx->paused != paused)
     {
         ctx->paused = paused;
