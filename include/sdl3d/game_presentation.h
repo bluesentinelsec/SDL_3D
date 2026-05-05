@@ -126,10 +126,12 @@ extern "C"
         const char *return_to;         /**< Runtime-owned scene to store as return target, or NULL. */
         const char *scene_state_key;   /**< Runtime-owned scene-state key to set, or NULL. */
         const char *scene_state_value; /**< Runtime-owned scene-state string value to assign, or NULL. */
-        int selected_index;            /**< Selected item index after this update, or -1. */
-        int signal_id;                 /**< Selected item signal id, including data-bound controls, or -1. */
-        int move_signal_id;            /**< Menu navigation signal id emitted by the host, or -1. */
-        int select_signal_id;          /**< Menu activation signal id emitted by the host, or -1. */
+        /** @brief Storage backing scene_state_value when it is produced from a dynamic row. */
+        char scene_state_value_storage[SDL3D_GAME_DATA_MENU_DYNAMIC_TEXT_CAPACITY];
+        int selected_index;   /**< Selected item index after this update, or -1. */
+        int signal_id;        /**< Selected item signal id, including data-bound controls, or -1. */
+        int move_signal_id;   /**< Menu navigation signal id emitted by the host, or -1. */
+        int select_signal_id; /**< Menu activation signal id emitted by the host, or -1. */
         sdl3d_game_data_menu_pause_command pause_command; /**< Pause command requested by selected item. */
         bool handled_input;                               /**< True when a menu action was consumed. */
         bool selected;                                    /**< True when the selected item was activated. */

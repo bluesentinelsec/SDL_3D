@@ -43,6 +43,9 @@ extern "C"
      */
 #define SDL3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE (16U + SDL3D_REPLICATION_SCHEMA_HASH_SIZE)
 
+    /** @brief Maximum bytes stored for one dynamic menu row label or value, including room for terminator. */
+#define SDL3D_GAME_DATA_MENU_DYNAMIC_TEXT_CAPACITY 256U
+
     /** @brief Opaque runtime created from one game JSON document. */
     typedef struct sdl3d_game_data_runtime sdl3d_game_data_runtime;
 
@@ -694,6 +697,12 @@ extern "C"
         int dynamic_list_index;
         /** @brief Runtime-owned value associated with the dynamic row, or NULL. */
         const char *dynamic_list_value;
+        /** @brief Storage backing label for dynamic-list rows. */
+        char dynamic_list_label_storage[SDL3D_GAME_DATA_MENU_DYNAMIC_TEXT_CAPACITY];
+        /** @brief Storage backing scene_state_value for dynamic-list rows. */
+        char dynamic_list_scene_state_value_storage[SDL3D_GAME_DATA_MENU_DYNAMIC_TEXT_CAPACITY];
+        /** @brief Storage backing dynamic_list_value. */
+        char dynamic_list_value_storage[SDL3D_GAME_DATA_MENU_DYNAMIC_TEXT_CAPACITY];
     } sdl3d_game_data_menu_item;
 
     /** @brief Authored scene transition behavior policy. */
@@ -1846,9 +1855,20 @@ extern "C"
     bool sdl3d_game_data_menu_move(sdl3d_game_data_runtime *runtime, const char *menu_name, int delta);
 
     /**
+     * @brief Publish side effects for the currently selected menu item without moving selection.
+     *
+     * Dynamic-list rows may author selected-index or selected-value scene-state
+     * outputs. This helper refreshes those outputs for the current highlighted
+     * item. It does not emit signals, select the item, or change scenes.
+     */
+    bool sdl3d_game_data_publish_menu_selection(sdl3d_game_data_runtime *runtime, const char *menu_name);
+
+    /**
      * @brief Read one item from an authored menu.
      *
-     * @p index is zero based. The returned strings remain owned by the runtime.
+     * @p index is zero based. Static returned strings remain owned by the
+     * runtime. Dynamic-list label/value strings are copied into storage fields
+     * on @p out_item and remain valid until @p out_item is overwritten.
      */
     bool sdl3d_game_data_get_menu_item(const sdl3d_game_data_runtime *runtime, const char *menu_name, int index,
                                        sdl3d_game_data_menu_item *out_item);

@@ -3063,6 +3063,14 @@ TEST(GameDataRuntime, DynamicListMenuUsesIndexedSceneStateEntries)
     EXPECT_EQ(item.dynamic_list_index, 1);
     EXPECT_STREQ(item.dynamic_list_value, "10.0.0.2:27183");
     EXPECT_STREQ(item.label, "Join Beta");
+    sdl3d_game_data_menu_item first_dynamic_item{};
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &first_dynamic_item));
+    sdl3d_game_data_menu_item second_dynamic_item{};
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &second_dynamic_item));
+    EXPECT_STREQ(first_dynamic_item.label, "Join Alpha");
+    EXPECT_STREQ(second_dynamic_item.label, "Join Beta");
+    EXPECT_STREQ(first_dynamic_item.dynamic_list_value, "10.0.0.1:27183");
+    EXPECT_STREQ(second_dynamic_item.dynamic_list_value, "10.0.0.2:27183");
 
     struct MenuLabels
     {
@@ -3186,6 +3194,39 @@ TEST(GameDataRuntime, RejectsInvalidDynamicListMenuSchema)
     EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_value_from.game.json").string().c_str(), nullptr, error,
                                                sizeof(error)));
     EXPECT_NE(std::string(error).find("value_from must be value, label, or index"), std::string::npos) << error;
+
+    error[0] = '\0';
+    write_case("bad_label_format",
+               R"json({
+      "type": "dynamic_list",
+      "name": "list.sessions",
+      "source": {
+        "type": "scene_state_indexed",
+        "count_key": "session_count",
+        "label_key_format": "session_%s_label"
+      }
+    })json");
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_label_format.game.json").string().c_str(), nullptr, error,
+                                               sizeof(error)));
+    EXPECT_NE(std::string(error).find("label_key_format must contain exactly one %d token"), std::string::npos)
+        << error;
+
+    error[0] = '\0';
+    write_case("bad_value_format",
+               R"json({
+      "type": "dynamic_list",
+      "name": "list.sessions",
+      "source": {
+        "type": "scene_state_indexed",
+        "count_key": "session_count",
+        "label_key_format": "session_%d_label",
+        "value_key_format": "session_%d_%d_value"
+      }
+    })json");
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_value_format.game.json").string().c_str(), nullptr, error,
+                                               sizeof(error)));
+    EXPECT_NE(std::string(error).find("value_key_format must contain exactly one %d token"), std::string::npos)
+        << error;
 
     remove_test_dir(dir);
 }

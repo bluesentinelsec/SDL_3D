@@ -448,6 +448,19 @@ row moves. `scene_state.value_from` may be `value`, `label`, or `index` and is
 applied when a populated row is accepted. UI menu presenters may author
 `visible_count` to show a scrolling window around the selected row instead of
 rendering every row.
+`label_key_format` and `value_key_format` must each contain exactly one `%d`
+token and no other printf-style specifiers; the runtime replaces that token
+with the zero-based row index. `label_format` is not a printf string: use the
+literal `{label}` token where the row label should appear.
+
+Dynamic-list label and value pointers returned by
+`sdl3d_game_data_get_menu_item()` are copied into storage on the returned
+`sdl3d_game_data_menu_item`, so they remain valid until that struct is
+overwritten. Static menu item strings remain runtime-owned. If a dynamic list
+shrinks while selected, the highlighted flattened menu index is clamped to the
+new flattened item range; this can move selection from a removed row to a
+following static item such as `Back`. `visible_count` is likewise applied to
+the flattened menu, including both dynamic rows and static items.
 
 `input_binding` controls capture the next keyboard key, mouse button, or
 gamepad button and immediately rebind all authored actions for that device. This is how games can

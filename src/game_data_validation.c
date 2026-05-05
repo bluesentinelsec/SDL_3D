@@ -3565,6 +3565,28 @@ static bool validate_menu_item_control(validation_context *ctx, yyjson_val *cont
     return true;
 }
 
+static bool dynamic_list_key_format_valid(const char *format)
+{
+    if (format == NULL || format[0] == '\0')
+        return false;
+
+    const char *placeholder = SDL_strstr(format, "%d");
+    if (placeholder == NULL)
+        return false;
+    for (const char *scan = format; *scan != '\0'; ++scan)
+    {
+        if (*scan != '%')
+            continue;
+        if (scan == placeholder)
+        {
+            ++scan;
+            continue;
+        }
+        return false;
+    }
+    return SDL_strstr(placeholder + 2, "%d") == NULL;
+}
+
 static bool validate_dynamic_menu_list_source(validation_context *ctx, yyjson_val *source, const char *path)
 {
     if (!yyjson_is_obj(source))
@@ -3576,9 +3598,13 @@ static bool validate_dynamic_menu_list_source(validation_context *ctx, yyjson_va
         return validation_error(ctx, path, "dynamic_list source requires a non-empty count_key");
     if (!is_non_empty_string(source, "label_key_format"))
         return validation_error(ctx, path, "dynamic_list source requires a non-empty label_key_format");
+    if (!dynamic_list_key_format_valid(json_string(source, "label_key_format")))
+        return validation_error(ctx, path, "dynamic_list source label_key_format must contain exactly one %%d token");
     yyjson_val *value_format = obj_get(source, "value_key_format");
     if (value_format != NULL && (!yyjson_is_str(value_format) || yyjson_get_str(value_format)[0] == '\0'))
         return validation_error(ctx, path, "dynamic_list source value_key_format must be a non-empty string");
+    if (value_format != NULL && !dynamic_list_key_format_valid(yyjson_get_str(value_format)))
+        return validation_error(ctx, path, "dynamic_list source value_key_format must contain exactly one %%d token");
     return true;
 }
 
