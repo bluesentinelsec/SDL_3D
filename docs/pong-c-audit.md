@@ -40,16 +40,19 @@ assets, and run without game-specific C.
 
 ### Generic Data Game Loop
 
-`pong_tick`, `pong_pause_tick`, `pong_render`, and `pong_shutdown` mostly call
-generic systems:
+The first reusable runtime slice now lives in `sdl3d_data_game_runtime`. Pong no
+longer owns asset resolver creation, game-data loading, app-flow/frame state,
+presentation caches, haptics policy wiring, or authored frame rendering
+directly.
+
+`pong_tick`, `pong_pause_tick`, `pong_render`, and `pong_shutdown` still exist,
+but they are now compatibility callbacks around generic runtime calls plus
+Pong's remaining network orchestration:
 
 - input profile hotplug refresh
-- game-data frame update
-- app-flow update
-- particle/image/font caches
-- presentation frame drawing
-- haptics policy signal wiring
-- cleanup for sessions and data runtime
+- network session updates
+- game-data frame update/render
+- cleanup for remaining session state
 
 These should become a managed data-game loop in the engine runtime. A game
 package should opt into standard phases and policies from JSON instead of
@@ -81,12 +84,6 @@ status, match termination messages, and network role/flow handoff.
 These are generic UI/runtime status concepts. The runner should provide data
 actions or managed bindings for session status, peer lists, selected peers,
 termination reasons, and return scenes.
-
-### Haptics Policy Wiring
-
-Pong still connects haptics policy signals in C. The policies themselves are
-data-authored and generic. The engine runtime can connect these automatically
-when a game data runtime is loaded.
 
 ### Diagnostic Logging
 
@@ -127,15 +124,12 @@ Deprecate the custom Pong host by adding a generic SDL3D runner/runtime.
 
 Recommended first runtime slice:
 
-1. Add an `sdl3d_data_game_runtime` API that owns asset mounting, data loading,
-   app-flow/frame state, caches, haptics policy wiring, input-profile refresh,
-   update, render, pause update, and shutdown.
-2. Add a small runner executable that launches a game data asset or pack through
+1. Add a small runner executable that launches a game data asset or pack through
    that API.
-3. Convert `demos/pong/main.c` into either a thin compatibility wrapper around
+2. Convert `demos/pong/main.c` into either a thin compatibility wrapper around
    the runner API or remove it from the normal path once the runner can launch
    Pong.
-4. Keep multiplayer orchestration in Pong C only until the next slice moves it
+3. Keep multiplayer orchestration in Pong C only until the next slice moves it
    into a managed network-session runtime.
 
 ## Definition Of Done For Pong Without `main.c`
