@@ -300,6 +300,13 @@ if(NOT CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
     target_compile_features(sdl3d_pack PRIVATE c_std_17)
     sdl3d_enable_warnings(sdl3d_pack)
     sdl3d_enable_sanitizers(sdl3d_pack)
+
+    add_executable(sdl3d_runner tools/sdl3d_runner.c)
+    target_link_libraries(sdl3d_runner PRIVATE SDL3D::sdl3d)
+    target_compile_features(sdl3d_runner PRIVATE c_std_17)
+    target_compile_definitions(sdl3d_runner PRIVATE SDL3D_MEDIA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/media")
+    sdl3d_enable_warnings(sdl3d_runner)
+    sdl3d_enable_sanitizers(sdl3d_runner)
 endif()
 
 if(SDL3D_BUILD_TESTS)
