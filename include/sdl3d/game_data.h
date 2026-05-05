@@ -1864,6 +1864,44 @@ extern "C"
     bool sdl3d_game_data_publish_menu_selection(sdl3d_game_data_runtime *runtime, const char *menu_name);
 
     /**
+     * @brief Remove every row from a runtime collection.
+     *
+     * Runtime collections are named, host-populated row sets that authored UI
+     * can read through dynamic-list menu sources. Clearing an unknown
+     * collection is a successful no-op.
+     */
+    bool sdl3d_game_data_runtime_collection_clear(sdl3d_game_data_runtime *runtime, const char *collection_name);
+
+    /**
+     * @brief Return the number of rows currently published in a runtime collection.
+     *
+     * Unknown collections have a count of zero.
+     */
+    int sdl3d_game_data_runtime_collection_count(const sdl3d_game_data_runtime *runtime, const char *collection_name);
+
+    /**
+     * @brief Publish a string field on one runtime collection row.
+     *
+     * Rows are zero-based and created on demand. Host systems should publish
+     * contiguous rows and then clear the collection before republishing a
+     * shorter result set.
+     */
+    bool sdl3d_game_data_runtime_collection_set_string(sdl3d_game_data_runtime *runtime, const char *collection_name,
+                                                       int row_index, const char *field_name, const char *value);
+
+    /** @brief Publish an integer field on one runtime collection row. */
+    bool sdl3d_game_data_runtime_collection_set_int(sdl3d_game_data_runtime *runtime, const char *collection_name,
+                                                    int row_index, const char *field_name, int value);
+
+    /** @brief Publish a floating-point field on one runtime collection row. */
+    bool sdl3d_game_data_runtime_collection_set_float(sdl3d_game_data_runtime *runtime, const char *collection_name,
+                                                      int row_index, const char *field_name, float value);
+
+    /** @brief Publish a boolean field on one runtime collection row. */
+    bool sdl3d_game_data_runtime_collection_set_bool(sdl3d_game_data_runtime *runtime, const char *collection_name,
+                                                     int row_index, const char *field_name, bool value);
+
+    /**
      * @brief Read one item from an authored menu.
      *
      * @p index is zero based. Static returned strings remain owned by the

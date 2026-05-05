@@ -3130,6 +3130,145 @@ TEST(GameDataRuntime, DynamicListMenuUsesIndexedSceneStateEntries)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, DynamicListMenuReadsRuntimeCollections)
+{
+    const std::filesystem::path dir = unique_test_dir("menu_dynamic_runtime_collection");
+    write_text(dir / "dynamic_collection.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Dynamic Runtime Collection", "id": "test.dynamic_runtime_collection", "version": "0.1.0" },
+  "world": { "name": "world.dynamic_runtime_collection", "kind": "fixed_screen" },
+  "assets": { "fonts": [{ "id": "font.hud", "builtin": "Inter", "size": 18 }] },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.ui",
+        "actions": [
+          { "name": "action.menu.select", "bindings": [{ "device": "keyboard", "key": "RETURN" }] },
+          { "name": "action.menu.up", "bindings": [{ "device": "keyboard", "key": "UP" }] },
+          { "name": "action.menu.down", "bindings": [{ "device": "keyboard", "key": "DOWN" }] }
+        ]
+      }
+    ]
+  },
+  "signals": ["signal.session.inspect"],
+  "entities": [],
+  "scenes": { "initial": "scene.browser", "files": ["scenes/browser.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "browser.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.browser",
+  "input": { "actions": ["action.menu.select", "action.menu.up", "action.menu.down"] },
+  "menus": [
+    {
+      "name": "menu.sessions",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "items": [
+        {
+          "type": "dynamic_list",
+          "name": "list.sessions",
+          "source": {
+            "type": "runtime_collection",
+            "collection": "local_matches",
+            "label_field": "name",
+            "value_field": "latency_ms"
+          },
+          "empty_label": "No runtime rows",
+          "label_format": "{label}",
+          "selected_index_key": "selected_runtime_index",
+          "selected_value_key": "selected_runtime_latency",
+          "scene_state": { "key": "selected_runtime_latency_on_accept", "value_from": "value" },
+          "signal": "signal.session.inspect"
+        },
+        { "label": "Back", "return_scene": true }
+      ]
+    }
+  ]
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "dynamic_collection.game.json").string().c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+
+    EXPECT_FALSE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 2, "name", "Sparse"));
+    EXPECT_EQ(sdl3d_game_data_runtime_collection_count(runtime, "local_matches"), 0);
+
+    sdl3d_game_data_menu menu{};
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_EQ(menu.item_count, 2);
+
+    sdl3d_game_data_menu_item item{};
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_TRUE(item.dynamic_list_item);
+    EXPECT_EQ(item.dynamic_list_index, -1);
+    EXPECT_STREQ(item.label, "No runtime rows");
+
+    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "name", "Alpha"));
+    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_int(runtime, "local_matches", 0, "latency_ms", 42));
+    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 1, "name", "Beta"));
+    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_float(runtime, "local_matches", 1, "latency_ms", 19.5f));
+    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_bool(runtime, "local_matches", 1, "secure", true));
+    EXPECT_EQ(sdl3d_game_data_runtime_collection_count(runtime, "local_matches"), 2);
+
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_EQ(menu.item_count, 3);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Alpha");
+    EXPECT_STREQ(item.dynamic_list_value, "42");
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    EXPECT_STREQ(item.label, "Beta");
+    EXPECT_STREQ(item.dynamic_list_value, "19.500");
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    bool armed = true;
+    sdl3d_game_data_menu_update_result result{};
+    SDL_Event event{};
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.scancode = SDL_SCANCODE_DOWN;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 1);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_EQ(result.selected_index, 1);
+    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "selected_runtime_index", -1), 1);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "selected_runtime_latency", ""), "19.500");
+
+    event.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 2);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event = {};
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.scancode = SDL_SCANCODE_RETURN;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 3);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.selected);
+    EXPECT_STREQ(result.scene_state_key, "selected_runtime_latency_on_accept");
+    EXPECT_STREQ(result.scene_state_value, "19.500");
+
+    EXPECT_TRUE(sdl3d_game_data_runtime_collection_clear(runtime, "local_matches"));
+    EXPECT_EQ(sdl3d_game_data_runtime_collection_count(runtime, "local_matches"), 0);
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_EQ(menu.item_count, 2);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "No runtime rows");
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidDynamicListMenuSchema)
 {
     const std::filesystem::path dir = unique_test_dir("menu_dynamic_list_validation");
@@ -3226,6 +3365,36 @@ TEST(GameDataRuntime, RejectsInvalidDynamicListMenuSchema)
     EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_value_format.game.json").string().c_str(), nullptr, error,
                                                sizeof(error)));
     EXPECT_NE(std::string(error).find("value_key_format must contain exactly one %d token"), std::string::npos)
+        << error;
+
+    error[0] = '\0';
+    write_case("missing_runtime_collection",
+               R"json({
+      "type": "dynamic_list",
+      "name": "list.sessions",
+      "source": {
+        "type": "runtime_collection",
+        "label_field": "name"
+      }
+    })json");
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "missing_runtime_collection.game.json").string().c_str(), nullptr,
+                                               error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("runtime_collection source requires a non-empty collection"), std::string::npos)
+        << error;
+
+    error[0] = '\0';
+    write_case("missing_runtime_label_field",
+               R"json({
+      "type": "dynamic_list",
+      "name": "list.sessions",
+      "source": {
+        "type": "runtime_collection",
+        "collection": "local_matches"
+      }
+    })json");
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "missing_runtime_label_field.game.json").string().c_str(),
+                                               nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("runtime_collection source requires a non-empty label_field"), std::string::npos)
         << error;
 
     remove_test_dir(dir);
