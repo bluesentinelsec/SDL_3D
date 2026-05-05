@@ -413,6 +413,55 @@ and `:` so it can store hostnames, IPv4 addresses, IPv6-style text, and ports.
 Restricted charsets reject non-ASCII UTF-8 input. `max_length` is measured in
 UTF-8 bytes and must be 255 or fewer.
 
+Menus can also include a data-authored dynamic list item. A dynamic list expands
+one authored menu row into zero or more selectable rows at runtime. The first
+source type is `scene_state_indexed`, which reads a count and indexed label /
+value keys from scene state. This is useful for server browsers, save-slot
+lists, profile selectors, inventory rows, and similar UI where the row count is
+not known when the scene JSON is authored:
+
+```json
+{
+    "type" : "dynamic_list",
+    "name" : "list.local_matches",
+    "source" : {
+        "type" : "scene_state_indexed",
+        "count_key" : "local_match_count",
+        "label_key_format" : "local_match_%d_label",
+        "value_key_format" : "local_match_%d_endpoint"
+    },
+    "empty_label" : "No local matches found",
+    "label_format" : "Join {label}",
+    "selected_index_key" : "selected_local_match_index",
+    "selected_value_key" : "selected_local_match_endpoint",
+    "scene_state" : { "key" : "selected_local_match", "value_from" : "value" },
+    "signal" : "signal.multiplayer.join_selected"
+}
+```
+
+The menu controller treats expanded rows like normal menu items: Up/Down moves
+through them, Back still resolves the authored back item, and Accept selects the
+current row. If the source count is zero, `empty_label` renders one inert row
+with no signal, scene change, or scene-state mutation. `selected_index_key` and
+`selected_value_key` are optional scene-state outputs updated as the highlighted
+row moves. `scene_state.value_from` may be `value`, `label`, or `index` and is
+applied when a populated row is accepted. UI menu presenters may author
+`visible_count` to show a scrolling window around the selected row instead of
+rendering every row.
+`label_key_format` and `value_key_format` must each contain exactly one `%d`
+token and no other printf-style specifiers; the runtime replaces that token
+with the zero-based row index. `label_format` is not a printf string: use the
+literal `{label}` token where the row label should appear.
+
+Dynamic-list label and value pointers returned by
+`sdl3d_game_data_get_menu_item()` are copied into storage on the returned
+`sdl3d_game_data_menu_item`, so they remain valid until that struct is
+overwritten. Static menu item strings remain runtime-owned. If a dynamic list
+shrinks while selected, the highlighted flattened menu index is clamped to the
+new flattened item range; this can move selection from a removed row to a
+following static item such as `Back`. `visible_count` is likewise applied to
+the flattened menu, including both dynamic rows and static items.
+
 `input_binding` controls capture the next keyboard key, mouse button, or
 gamepad button and immediately rebind all authored actions for that device. This is how games can
 expose one player-facing input such as `Up` while updating both gameplay and

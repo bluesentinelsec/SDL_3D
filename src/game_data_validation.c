@@ -3565,6 +3565,115 @@ static bool validate_menu_item_control(validation_context *ctx, yyjson_val *cont
     return true;
 }
 
+static bool dynamic_list_key_format_valid(const char *format)
+{
+    if (format == NULL || format[0] == '\0')
+        return false;
+
+    const char *placeholder = SDL_strstr(format, "%d");
+    if (placeholder == NULL)
+        return false;
+    for (const char *scan = format; *scan != '\0'; ++scan)
+    {
+        if (*scan != '%')
+            continue;
+        if (scan == placeholder)
+        {
+            ++scan;
+            continue;
+        }
+        return false;
+    }
+    return SDL_strstr(placeholder + 2, "%d") == NULL;
+}
+
+static bool validate_dynamic_menu_list_source(validation_context *ctx, yyjson_val *source, const char *path)
+{
+    if (!yyjson_is_obj(source))
+        return validation_error(ctx, path, "dynamic_list menu item requires a source object");
+    const char *type = json_string(source, "type");
+    if (type == NULL || SDL_strcmp(type, "scene_state_indexed") != 0)
+        return validation_error(ctx, path, "dynamic_list source type must be scene_state_indexed");
+    if (!is_non_empty_string(source, "count_key"))
+        return validation_error(ctx, path, "dynamic_list source requires a non-empty count_key");
+    if (!is_non_empty_string(source, "label_key_format"))
+        return validation_error(ctx, path, "dynamic_list source requires a non-empty label_key_format");
+    if (!dynamic_list_key_format_valid(json_string(source, "label_key_format")))
+        return validation_error(ctx, path, "dynamic_list source label_key_format must contain exactly one %%d token");
+    yyjson_val *value_format = obj_get(source, "value_key_format");
+    if (value_format != NULL && (!yyjson_is_str(value_format) || yyjson_get_str(value_format)[0] == '\0'))
+        return validation_error(ctx, path, "dynamic_list source value_key_format must be a non-empty string");
+    if (value_format != NULL && !dynamic_list_key_format_valid(yyjson_get_str(value_format)))
+        return validation_error(ctx, path, "dynamic_list source value_key_format must contain exactly one %%d token");
+    return true;
+}
+
+static bool validate_dynamic_menu_list_item(validation_context *ctx, yyjson_val *item, const char *path,
+                                            validation_names *names)
+{
+    if (!is_non_empty_string(item, "name"))
+        return validation_error(ctx, path, "dynamic_list menu item requires a non-empty name");
+    char source_path[PATH_BUFFER_SIZE];
+    format_path(source_path, sizeof(source_path), "%s.source", path);
+    if (!validate_dynamic_menu_list_source(ctx, obj_get(item, "source"), source_path))
+        return false;
+
+    yyjson_val *empty_label = obj_get(item, "empty_label");
+    if (empty_label != NULL && !yyjson_is_str(empty_label))
+        return validation_error(ctx, path, "dynamic_list empty_label must be a string");
+    yyjson_val *label_format = obj_get(item, "label_format");
+    if (label_format != NULL && !yyjson_is_str(label_format))
+        return validation_error(ctx, path, "dynamic_list label_format must be a string");
+    yyjson_val *selected_index_key = obj_get(item, "selected_index_key");
+    if (selected_index_key != NULL &&
+        (!yyjson_is_str(selected_index_key) || yyjson_get_str(selected_index_key)[0] == '\0'))
+        return validation_error(ctx, path, "dynamic_list selected_index_key must be a non-empty string");
+    yyjson_val *selected_value_key = obj_get(item, "selected_value_key");
+    if (selected_value_key != NULL &&
+        (!yyjson_is_str(selected_value_key) || yyjson_get_str(selected_value_key)[0] == '\0'))
+        return validation_error(ctx, path, "dynamic_list selected_value_key must be a non-empty string");
+
+    const char *scene = json_string(item, "scene");
+    if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, path))
+        return false;
+    const char *return_to = json_string(item, "return_to");
+    if (return_to != NULL && !require_ref(ctx, &names->scenes, "scene", return_to, path))
+        return false;
+    const char *signal = json_string(item, "signal");
+    if (signal != NULL && !require_ref(ctx, &names->signals, "signal", signal, path))
+        return false;
+    yyjson_val *scene_state = obj_get(item, "scene_state");
+    if (scene_state != NULL)
+    {
+        if (!yyjson_is_obj(scene_state))
+            return validation_error(ctx, path, "dynamic_list scene_state must be an object");
+        if (!is_non_empty_string(scene_state, "key"))
+            return validation_error(ctx, path, "dynamic_list scene_state requires a non-empty key");
+        const char *value = json_string(scene_state, "value");
+        const char *value_from = json_string(scene_state, "value_from");
+        if (value != NULL && value_from != NULL)
+            return validation_error(ctx, path, "dynamic_list scene_state may use value or value_from, not both");
+        if (value == NULL && value_from == NULL)
+            return validation_error(ctx, path, "dynamic_list scene_state requires value or value_from");
+        if (value != NULL && value[0] == '\0')
+            return validation_error(ctx, path, "dynamic_list scene_state value must be non-empty");
+        if (value_from != NULL && SDL_strcmp(value_from, "value") != 0 && SDL_strcmp(value_from, "label") != 0 &&
+            SDL_strcmp(value_from, "index") != 0)
+            return validation_error(ctx, path, "dynamic_list scene_state value_from must be value, label, or index");
+    }
+    yyjson_val *return_scene = obj_get(item, "return_scene");
+    if (return_scene != NULL && !yyjson_is_bool(return_scene))
+        return validation_error(ctx, path, "dynamic_list return_scene must be a boolean");
+    yyjson_val *return_paused = obj_get(item, "return_paused");
+    if (return_paused != NULL && !yyjson_is_bool(return_paused))
+        return validation_error(ctx, path, "dynamic_list return_paused must be a boolean");
+    const char *pause = json_string(item, "pause");
+    if (pause != NULL && SDL_strcmp(pause, "pause") != 0 && SDL_strcmp(pause, "resume") != 0 &&
+        SDL_strcmp(pause, "unpause") != 0 && SDL_strcmp(pause, "toggle") != 0)
+        return validation_error(ctx, path, "dynamic_list pause must be pause, resume, unpause, or toggle");
+    return true;
+}
+
 static bool scene_has_menu_name(yyjson_val *scene_root, const char *name)
 {
     yyjson_val *menus = obj_get(scene_root, "menus");
@@ -3738,6 +3847,15 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
             char item_path[PATH_BUFFER_SIZE];
             format_path(item_path, sizeof(item_path), "%s.items[%zu]", menu_path, i);
             yyjson_val *item = yyjson_arr_get(items, i);
+            const char *item_type = json_string(item, "type");
+            if (item_type != NULL)
+            {
+                if (SDL_strcmp(item_type, "dynamic_list") != 0)
+                    return validation_error(ctx, item_path, "scene menu item type must be dynamic_list when present");
+                if (!validate_dynamic_menu_list_item(ctx, item, item_path, names))
+                    return false;
+                continue;
+            }
             if (!is_non_empty_string(item, "label"))
                 return validation_error(ctx, item_path, "scene menu item requires a label");
             const char *scene = json_string(item, "scene");
@@ -3796,6 +3914,9 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
         if (!scene_has_menu_name(root, menu_name))
             return validation_error(ctx, menu_path, "scene UI menu presenter references unknown menu '%s'",
                                     menu_name != NULL ? menu_name : "<missing>");
+        yyjson_val *visible_count = obj_get(presenter, "visible_count");
+        if (visible_count != NULL && (!yyjson_is_int(visible_count) || yyjson_get_sint(visible_count) <= 0))
+            return validation_error(ctx, menu_path, "scene UI menu presenter visible_count must be a positive integer");
         if (!require_ref(ctx, &names->fonts, "font asset", json_string(presenter, "font"), menu_path))
             return false;
         yyjson_val *cursor = obj_get(presenter, "cursor");

@@ -887,6 +887,21 @@ static bool menu_input_is_idle(const sdl3d_game_data_runtime *runtime, const sdl
            !menu_action_held(runtime, input, menu->back_action_id, "ui_back");
 }
 
+static void menu_result_set_scene_state(sdl3d_game_data_menu_update_result *result,
+                                        const sdl3d_game_data_menu_item *item)
+{
+    if (result == NULL || item == NULL)
+        return;
+    result->scene_state_key = item->scene_state_key;
+    result->scene_state_value = item->scene_state_value;
+    if (item->dynamic_list_item && item->scene_state_value != NULL)
+    {
+        SDL_strlcpy(result->scene_state_value_storage, item->scene_state_value,
+                    sizeof(result->scene_state_value_storage));
+        result->scene_state_value = result->scene_state_value_storage;
+    }
+}
+
 bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input,
                                               bool *input_armed, const sdl3d_game_data_ui_metrics *metrics,
                                               sdl3d_game_data_menu_update_result *out_result)
@@ -1011,8 +1026,7 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
                 out_result->quit = item.quit;
                 out_result->scene = item.scene;
                 out_result->return_to = item.return_to;
-                out_result->scene_state_key = item.scene_state_key;
-                out_result->scene_state_value = item.scene_state_value;
+                menu_result_set_scene_state(out_result, &item);
                 out_result->return_scene = item.return_scene;
                 out_result->signal_id = item.signal_id;
                 out_result->pause_command = item.pause_command;
@@ -1037,6 +1051,8 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
             return true;
 
         sdl3d_game_data_menu_item item;
+        /* Selecting the initially highlighted dynamic-list row should publish its selected outputs. */
+        (void)sdl3d_game_data_publish_menu_selection(runtime, refreshed.name);
         if (!sdl3d_game_data_get_menu_item(runtime, refreshed.name, refreshed.selected_index, &item))
             return true;
 
@@ -1094,10 +1110,13 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
             out_result->quit = !control_adjust_input && !out_result->control_changed && item.quit;
             out_result->scene = !control_adjust_input && !out_result->control_changed ? item.scene : NULL;
             out_result->return_to = !control_adjust_input && !out_result->control_changed ? item.return_to : NULL;
-            out_result->scene_state_key =
-                !control_adjust_input && !out_result->control_changed ? item.scene_state_key : NULL;
-            out_result->scene_state_value =
-                !control_adjust_input && !out_result->control_changed ? item.scene_state_value : NULL;
+            if (!control_adjust_input && !out_result->control_changed)
+                menu_result_set_scene_state(out_result, &item);
+            else
+            {
+                out_result->scene_state_key = NULL;
+                out_result->scene_state_value = NULL;
+            }
             out_result->return_scene = !control_adjust_input && !out_result->control_changed && item.return_scene;
             out_result->signal_id = out_result->selected ? item.signal_id : -1;
             out_result->pause_command = !control_adjust_input && !out_result->control_changed

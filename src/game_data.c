@@ -367,6 +367,8 @@ static bool set_action_gamepad_button_binding(sdl3d_game_data_runtime *runtime, 
                                               SDL_GamepadButton button);
 static bool eval_data_condition(const sdl3d_game_data_runtime *runtime, yyjson_val *condition,
                                 const sdl3d_game_data_ui_metrics *metrics);
+static int menu_runtime_item_count(const sdl3d_game_data_runtime *runtime, const scene_menu_state *menu);
+static void update_dynamic_list_selection_state(sdl3d_game_data_runtime *runtime, scene_menu_state *menu);
 
 static bool path_is_absolute(const char *path)
 {
@@ -4490,8 +4492,9 @@ bool sdl3d_game_data_get_active_menu_for_metrics(const sdl3d_game_data_runtime *
     out_menu->back_action_id = sdl3d_game_data_find_action(runtime, json_string(menu, "back_action", NULL));
     out_menu->move_signal_id = sdl3d_game_data_find_signal(runtime, json_string(menu, "move_signal", NULL));
     out_menu->select_signal_id = sdl3d_game_data_find_signal(runtime, json_string(menu, "select_signal", NULL));
-    out_menu->selected_index = state->selected_index;
-    out_menu->item_count = state->item_count;
+    out_menu->item_count = menu_runtime_item_count(runtime, state);
+    out_menu->selected_index =
+        out_menu->item_count > 0 ? SDL_clamp(state->selected_index, 0, out_menu->item_count - 1) : -1;
     return out_menu->name != NULL && out_menu->item_count > 0;
 }
 
@@ -4503,13 +4506,28 @@ bool sdl3d_game_data_get_active_menu(const sdl3d_game_data_runtime *runtime, sdl
 bool sdl3d_game_data_menu_move(sdl3d_game_data_runtime *runtime, const char *menu_name, int delta)
 {
     scene_menu_state *menu = find_scene_menu(active_scene_entry(runtime), menu_name);
-    if (menu == NULL || menu->item_count <= 0)
+    const int item_count = menu_runtime_item_count(runtime, menu);
+    if (menu == NULL || item_count <= 0)
         return false;
 
-    int next = (menu->selected_index + delta) % menu->item_count;
+    menu->selected_index = SDL_clamp(menu->selected_index, 0, item_count - 1);
+    int next = (menu->selected_index + delta) % item_count;
     if (next < 0)
-        next += menu->item_count;
+        next += item_count;
     menu->selected_index = next;
+    update_dynamic_list_selection_state(runtime, menu);
+    return true;
+}
+
+bool sdl3d_game_data_publish_menu_selection(sdl3d_game_data_runtime *runtime, const char *menu_name)
+{
+    scene_menu_state *menu = find_scene_menu(active_scene_entry(runtime), menu_name);
+    const int item_count = menu_runtime_item_count(runtime, menu);
+    if (menu == NULL || item_count <= 0)
+        return false;
+
+    menu->selected_index = SDL_clamp(menu->selected_index, 0, item_count - 1);
+    update_dynamic_list_selection_state(runtime, menu);
     return true;
 }
 
@@ -4528,6 +4546,263 @@ static sdl3d_game_data_menu_control_type parse_menu_control_type(const char *typ
     if (SDL_strcmp(type, "text") == 0)
         return SDL3D_GAME_DATA_MENU_CONTROL_TEXT;
     return SDL3D_GAME_DATA_MENU_CONTROL_NONE;
+}
+
+static bool menu_item_is_dynamic_list(yyjson_val *item)
+{
+    return yyjson_is_obj(item) && SDL_strcmp(json_string(item, "type", ""), "dynamic_list") == 0;
+}
+
+static yyjson_val *menu_dynamic_list_source(yyjson_val *item)
+{
+    return menu_item_is_dynamic_list(item) ? obj_get(item, "source") : NULL;
+}
+
+static int menu_dynamic_list_count(const sdl3d_game_data_runtime *runtime, yyjson_val *item)
+{
+    yyjson_val *source = menu_dynamic_list_source(item);
+    if (runtime == NULL || !yyjson_is_obj(source) ||
+        SDL_strcmp(json_string(source, "type", ""), "scene_state_indexed") != 0)
+        return 0;
+
+    const char *count_key = json_string(source, "count_key", NULL);
+    if (count_key == NULL)
+        return 0;
+    return SDL_max(0, sdl3d_properties_get_int(runtime->scene_state, count_key, 0));
+}
+
+static int menu_dynamic_list_row_count(const sdl3d_game_data_runtime *runtime, yyjson_val *item)
+{
+    const int count = menu_dynamic_list_count(runtime, item);
+    if (count > 0)
+        return count;
+    return json_string(item, "empty_label", NULL) != NULL ? 1 : 0;
+}
+
+static int menu_authored_item_row_count(const sdl3d_game_data_runtime *runtime, yyjson_val *item)
+{
+    return menu_item_is_dynamic_list(item) ? menu_dynamic_list_row_count(runtime, item) : 1;
+}
+
+static int menu_runtime_item_count(const sdl3d_game_data_runtime *runtime, const scene_menu_state *menu)
+{
+    yyjson_val *items = menu != NULL ? obj_get(menu->menu, "items") : NULL;
+    int count = 0;
+    for (size_t i = 0; yyjson_is_arr(items) && i < yyjson_arr_size(items); ++i)
+        count += menu_authored_item_row_count(runtime, yyjson_arr_get(items, i));
+    return count;
+}
+
+static bool resolve_menu_item_at(const sdl3d_game_data_runtime *runtime, const scene_menu_state *menu, int item_index,
+                                 yyjson_val **out_item, int *out_dynamic_index, bool *out_dynamic_empty)
+{
+    if (out_item != NULL)
+        *out_item = NULL;
+    if (out_dynamic_index != NULL)
+        *out_dynamic_index = -1;
+    if (out_dynamic_empty != NULL)
+        *out_dynamic_empty = false;
+    yyjson_val *items = menu != NULL ? obj_get(menu->menu, "items") : NULL;
+    if (!yyjson_is_arr(items) || item_index < 0)
+        return false;
+
+    int cursor = 0;
+    for (size_t i = 0; i < yyjson_arr_size(items); ++i)
+    {
+        yyjson_val *item = yyjson_arr_get(items, i);
+        const int rows = menu_authored_item_row_count(runtime, item);
+        if (item_index < cursor + rows)
+        {
+            if (out_item != NULL)
+                *out_item = item;
+            if (menu_item_is_dynamic_list(item))
+            {
+                const int source_count = menu_dynamic_list_count(runtime, item);
+                if (source_count > 0)
+                {
+                    if (out_dynamic_index != NULL)
+                        *out_dynamic_index = item_index - cursor;
+                }
+                else
+                {
+                    if (out_dynamic_empty != NULL)
+                        *out_dynamic_empty = true;
+                }
+            }
+            return true;
+        }
+        cursor += rows;
+    }
+    return false;
+}
+
+static bool menu_dynamic_list_format_key(yyjson_val *source, const char *field, int index, char *buffer,
+                                         size_t buffer_size)
+{
+    const char *format = json_string(source, field, NULL);
+    if (format == NULL || buffer == NULL || buffer_size == 0U)
+        return false;
+
+    const char *placeholder = SDL_strstr(format, "%d");
+    if (placeholder == NULL)
+        return false;
+    if (SDL_strstr(placeholder + 2, "%") != NULL)
+        return false;
+    for (const char *scan = format; scan < placeholder; ++scan)
+    {
+        if (*scan == '%')
+            return false;
+    }
+
+    char index_text[32];
+    SDL_snprintf(index_text, sizeof(index_text), "%d", index);
+    const size_t prefix_len = (size_t)(placeholder - format);
+    const size_t suffix_len = SDL_strlen(placeholder + 2);
+    const size_t required = prefix_len + SDL_strlen(index_text) + suffix_len + 1U;
+    if (required > buffer_size)
+        return false;
+    SDL_memcpy(buffer, format, prefix_len);
+    SDL_strlcpy(buffer + prefix_len, index_text, buffer_size - prefix_len);
+    SDL_strlcpy(buffer + prefix_len + SDL_strlen(index_text), placeholder + 2,
+                buffer_size - prefix_len - SDL_strlen(index_text));
+    return true;
+}
+
+static const char *menu_dynamic_list_entry_string(const sdl3d_game_data_runtime *runtime, yyjson_val *item,
+                                                  int dynamic_index, const char *format_field, char *buffer,
+                                                  size_t buffer_size)
+{
+    yyjson_val *source = menu_dynamic_list_source(item);
+    char key[128];
+    if (runtime == NULL || dynamic_index < 0 || buffer == NULL || buffer_size == 0U ||
+        !menu_dynamic_list_format_key(source, format_field, dynamic_index, key, sizeof(key)))
+        return NULL;
+    return sdl3d_properties_get_string(runtime->scene_state, key, NULL);
+}
+
+static void menu_dynamic_list_apply_label_template(const char *format, const char *label, char *buffer,
+                                                   size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return;
+    if (format == NULL)
+    {
+        SDL_strlcpy(buffer, label != NULL ? label : "", buffer_size);
+        return;
+    }
+
+    const char *cursor = format;
+    size_t offset = 0U;
+    buffer[0] = '\0';
+    while (*cursor != '\0' && offset + 1U < buffer_size)
+    {
+        const char *marker = SDL_strstr(cursor, "{label}");
+        if (marker == NULL)
+        {
+            SDL_strlcpy(buffer + offset, cursor, buffer_size - offset);
+            return;
+        }
+        const size_t prefix_len = (size_t)(marker - cursor);
+        const size_t writable_prefix = SDL_min(prefix_len, buffer_size - offset - 1U);
+        SDL_memcpy(buffer + offset, cursor, writable_prefix);
+        offset += writable_prefix;
+        buffer[offset] = '\0';
+        const char *value = label != NULL ? label : "";
+        const size_t value_len = SDL_strlen(value);
+        const size_t writable_value = SDL_min(value_len, buffer_size - offset - 1U);
+        SDL_memcpy(buffer + offset, value, writable_value);
+        offset += writable_value;
+        buffer[offset] = '\0';
+        cursor = marker + SDL_strlen("{label}");
+    }
+}
+
+static const char *menu_dynamic_list_label(const sdl3d_game_data_runtime *runtime, yyjson_val *item, int dynamic_index,
+                                           bool dynamic_empty, char *buffer, size_t buffer_size)
+{
+    if (runtime == NULL || item == NULL || buffer == NULL || buffer_size == 0U)
+        return NULL;
+    if (dynamic_empty)
+    {
+        SDL_strlcpy(buffer, json_string(item, "empty_label", "No entries"), buffer_size);
+        return buffer;
+    }
+
+    char raw_label[SDL3D_GAME_DATA_MENU_DYNAMIC_TEXT_CAPACITY];
+    const char *label =
+        menu_dynamic_list_entry_string(runtime, item, dynamic_index, "label_key_format", raw_label, sizeof(raw_label));
+    if (label == NULL)
+        label = menu_dynamic_list_entry_string(runtime, item, dynamic_index, "value_key_format", raw_label,
+                                               sizeof(raw_label));
+    if (label == NULL)
+        label = "";
+
+    const char *label_format = json_string(item, "label_format", NULL);
+    if (label_format != NULL)
+    {
+        menu_dynamic_list_apply_label_template(label_format, label, buffer, buffer_size);
+        return buffer;
+    }
+    SDL_strlcpy(buffer, label, buffer_size);
+    return buffer;
+}
+
+static const char *menu_dynamic_list_value(const sdl3d_game_data_runtime *runtime, yyjson_val *item, int dynamic_index,
+                                           char *buffer, size_t buffer_size)
+{
+    if (runtime == NULL || item == NULL || dynamic_index < 0 || buffer == NULL || buffer_size == 0U)
+        return NULL;
+
+    char raw_value[SDL3D_GAME_DATA_MENU_DYNAMIC_TEXT_CAPACITY];
+    const char *value =
+        menu_dynamic_list_entry_string(runtime, item, dynamic_index, "value_key_format", raw_value, sizeof(raw_value));
+    if (value == NULL)
+        value = menu_dynamic_list_entry_string(runtime, item, dynamic_index, "label_key_format", raw_value,
+                                               sizeof(raw_value));
+    if (value == NULL)
+        return NULL;
+
+    SDL_strlcpy(buffer, value, buffer_size);
+    return buffer;
+}
+
+static const char *menu_dynamic_scene_state_value(const sdl3d_game_data_runtime *runtime, yyjson_val *item,
+                                                  int dynamic_index, const char *value_from, char *buffer,
+                                                  size_t buffer_size)
+{
+    if (runtime == NULL || item == NULL || dynamic_index < 0 || buffer == NULL || buffer_size == 0U)
+        return NULL;
+    if (value_from == NULL || SDL_strcmp(value_from, "value") == 0)
+        return menu_dynamic_list_value(runtime, item, dynamic_index, buffer, buffer_size);
+    if (SDL_strcmp(value_from, "label") == 0)
+        return menu_dynamic_list_label(runtime, item, dynamic_index, false, buffer, buffer_size);
+    if (SDL_strcmp(value_from, "index") == 0)
+    {
+        SDL_snprintf(buffer, buffer_size, "%d", dynamic_index);
+        return buffer;
+    }
+    return NULL;
+}
+
+static void update_dynamic_list_selection_state(sdl3d_game_data_runtime *runtime, scene_menu_state *menu)
+{
+    yyjson_val *item = NULL;
+    int dynamic_index = -1;
+    bool dynamic_empty = false;
+    if (runtime == NULL || menu == NULL ||
+        !resolve_menu_item_at(runtime, menu, menu->selected_index, &item, &dynamic_index, &dynamic_empty) ||
+        !menu_item_is_dynamic_list(item) || dynamic_empty)
+        return;
+
+    const char *selected_index_key = json_string(item, "selected_index_key", NULL);
+    if (selected_index_key != NULL)
+        sdl3d_properties_set_int(runtime->scene_state, selected_index_key, dynamic_index);
+    const char *selected_value_key = json_string(item, "selected_value_key", NULL);
+    char selected_value_buffer[SDL3D_GAME_DATA_MENU_DYNAMIC_TEXT_CAPACITY];
+    const char *selected_value =
+        menu_dynamic_list_value(runtime, item, dynamic_index, selected_value_buffer, sizeof(selected_value_buffer));
+    if (selected_value_key != NULL && selected_value != NULL)
+        sdl3d_properties_set_string(runtime->scene_state, selected_value_key, selected_value);
 }
 
 static bool json_value_matches_property(yyjson_val *value, const sdl3d_value *property);
@@ -4553,10 +4828,54 @@ bool sdl3d_game_data_get_menu_item(const sdl3d_game_data_runtime *runtime, const
         out_item->signal_id = -1;
     }
     const scene_menu_state *menu = find_scene_menu_const(active_scene_entry_const(runtime), menu_name);
-    if (runtime == NULL || menu == NULL || out_item == NULL || index < 0 || index >= menu->item_count)
+    const int item_count = menu_runtime_item_count(runtime, menu);
+    if (runtime == NULL || menu == NULL || out_item == NULL || index < 0 || index >= item_count)
         return false;
 
-    yyjson_val *item = yyjson_arr_get(obj_get(menu->menu, "items"), (size_t)index);
+    yyjson_val *item = NULL;
+    int dynamic_index = -1;
+    bool dynamic_empty = false;
+    if (!resolve_menu_item_at(runtime, menu, index, &item, &dynamic_index, &dynamic_empty))
+        return false;
+
+    if (menu_item_is_dynamic_list(item))
+    {
+        out_item->label =
+            menu_dynamic_list_label(runtime, item, dynamic_index, dynamic_empty, out_item->dynamic_list_label_storage,
+                                    sizeof(out_item->dynamic_list_label_storage));
+        out_item->scene = dynamic_empty ? NULL : json_string(item, "scene", NULL);
+        out_item->return_to = dynamic_empty ? NULL : json_string(item, "return_to", NULL);
+        yyjson_val *scene_state = obj_get(item, "scene_state");
+        out_item->scene_state_key = dynamic_empty ? NULL : json_string(scene_state, "key", NULL);
+        if (!dynamic_empty && out_item->scene_state_key != NULL)
+        {
+            const char *static_scene_state_value = json_string(scene_state, "value", NULL);
+            out_item->scene_state_value =
+                static_scene_state_value != NULL
+                    ? static_scene_state_value
+                    : menu_dynamic_scene_state_value(runtime, item, dynamic_index,
+                                                     json_string(scene_state, "value_from", "value"),
+                                                     out_item->dynamic_list_scene_state_value_storage,
+                                                     sizeof(out_item->dynamic_list_scene_state_value_storage));
+        }
+        out_item->return_scene = !dynamic_empty && json_bool(item, "return_scene", false);
+        out_item->quit = !dynamic_empty && json_bool(item, "quit", false);
+        out_item->signal_id =
+            dynamic_empty ? -1 : sdl3d_game_data_find_signal(runtime, json_string(item, "signal", NULL));
+        out_item->pause_command = dynamic_empty ? SDL3D_GAME_DATA_MENU_PAUSE_NONE
+                                                : parse_menu_pause_command(json_string(item, "pause", NULL));
+        out_item->has_return_paused = !dynamic_empty && obj_get(item, "return_paused") != NULL;
+        out_item->return_paused = !dynamic_empty && json_bool(item, "return_paused", false);
+        out_item->dynamic_list_item = true;
+        out_item->dynamic_list_name = json_string(item, "name", NULL);
+        out_item->dynamic_list_index = dynamic_index;
+        out_item->dynamic_list_value =
+            dynamic_empty ? NULL
+                          : menu_dynamic_list_value(runtime, item, dynamic_index, out_item->dynamic_list_value_storage,
+                                                    sizeof(out_item->dynamic_list_value_storage));
+        return out_item->label != NULL;
+    }
+
     yyjson_val *control = obj_get(item, "control");
     out_item->label = json_string(item, "label", NULL);
     out_item->scene = json_string(item, "scene", NULL);
@@ -4577,6 +4896,7 @@ bool sdl3d_game_data_get_menu_item(const sdl3d_game_data_runtime *runtime, const
         yyjson_is_arr(obj_get(control, "choices")) ? (int)yyjson_arr_size(obj_get(control, "choices")) : 0;
     out_item->input_binding_count =
         yyjson_is_arr(obj_get(control, "bindings")) ? (int)yyjson_arr_size(obj_get(control, "bindings")) : 0;
+    out_item->dynamic_list_index = -1;
     return yyjson_is_obj(item) && out_item->label != NULL;
 }
 
@@ -5659,8 +5979,10 @@ static bool for_each_ui_menu_presenter(const sdl3d_game_data_runtime *runtime, c
         return true;
 
     const scene_menu_state *menu_state = find_scene_menu_const(scene, json_string(presenter, "menu", NULL));
-    yyjson_val *items = menu_state != NULL ? obj_get(menu_state->menu, "items") : NULL;
-    if (menu_state == NULL || !yyjson_is_arr(items))
+    if (menu_state == NULL)
+        return true;
+    const int item_count = menu_runtime_item_count(runtime, menu_state);
+    if (item_count <= 0)
         return true;
 
     yyjson_val *presenter_active_if = obj_get(presenter, "active_if");
@@ -5676,19 +5998,36 @@ static bool for_each_ui_menu_presenter(const sdl3d_game_data_runtime *runtime, c
     const bool normalized = json_bool(presenter, "normalized", false);
     const sdl3d_game_data_ui_align align =
         parse_ui_align(json_string(presenter, "align", NULL), SDL3D_GAME_DATA_UI_ALIGN_CENTER);
-
-    for (int i = 0; i < menu_state->item_count; ++i)
+    const int selected_index = SDL_clamp(menu_state->selected_index, 0, item_count - 1);
+    const int visible_count = json_int(presenter, "visible_count", item_count);
+    int first_index = 0;
+    int last_index = item_count;
+    if (visible_count > 0 && visible_count < item_count)
     {
-        yyjson_val *item = yyjson_arr_get(items, (size_t)i);
-        const bool selected = i == menu_state->selected_index;
-        const float row_y = y + gap * (float)i;
+        first_index = selected_index - visible_count / 2;
+        first_index = SDL_clamp(first_index, 0, item_count - visible_count);
+        last_index = first_index + visible_count;
+    }
+
+    for (int i = first_index; i < last_index; ++i)
+    {
+        yyjson_val *item = NULL;
+        int dynamic_index = -1;
+        bool dynamic_empty = false;
+        if (!resolve_menu_item_at(runtime, menu_state, i, &item, &dynamic_index, &dynamic_empty))
+            continue;
+        const bool selected = i == selected_index;
+        const float row_y = y + gap * (float)(i - first_index);
 
         if (selected && !emit_ui_menu_cursor(presenter, row_y, callback, userdata))
             return false;
 
         sdl3d_game_data_ui_text text;
         char label[128];
-        format_menu_item_label(runtime, item, label, sizeof(label));
+        if (menu_item_is_dynamic_list(item))
+            (void)menu_dynamic_list_label(runtime, item, dynamic_index, dynamic_empty, label, sizeof(label));
+        else
+            format_menu_item_label(runtime, item, label, sizeof(label));
         SDL_zero(text);
         text.name = json_string(presenter, "name", NULL);
         text.font = json_string(presenter, "font", NULL);

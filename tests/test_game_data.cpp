@@ -2946,6 +2946,291 @@ TEST(GameDataRuntime, RejectsInvalidMenuTextControlSchema)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, DynamicListMenuUsesIndexedSceneStateEntries)
+{
+    const std::filesystem::path dir = unique_test_dir("menu_dynamic_list");
+    write_text(dir / "dynamic_list.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Dynamic List", "id": "test.dynamic_list", "version": "0.1.0" },
+  "world": { "name": "world.dynamic_list", "kind": "fixed_screen" },
+  "assets": { "fonts": [{ "id": "font.hud", "builtin": "Inter", "size": 18 }] },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.ui",
+        "actions": [
+          { "name": "action.menu.select", "bindings": [{ "device": "keyboard", "key": "RETURN" }] },
+          { "name": "action.menu.back", "bindings": [{ "device": "keyboard", "key": "ESCAPE" }] },
+          { "name": "action.menu.up", "bindings": [{ "device": "keyboard", "key": "UP" }] },
+          { "name": "action.menu.down", "bindings": [{ "device": "keyboard", "key": "DOWN" }] }
+        ]
+      }
+    ]
+  },
+  "signals": ["signal.session.join"],
+  "entities": [],
+  "scenes": { "initial": "scene.browser", "files": ["scenes/browser.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "browser.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.browser",
+  "input": {
+    "actions": ["action.menu.select", "action.menu.back", "action.menu.up", "action.menu.down"]
+  },
+  "menus": [
+    {
+      "name": "menu.sessions",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "back_action": "action.menu.back",
+      "items": [
+        {
+          "type": "dynamic_list",
+          "name": "list.sessions",
+          "source": {
+            "type": "scene_state_indexed",
+            "count_key": "session_count",
+            "label_key_format": "session_%d_label",
+            "value_key_format": "session_%d_value"
+          },
+          "empty_label": "No sessions discovered",
+          "label_format": "Join {label}",
+          "selected_index_key": "selected_session_index",
+          "selected_value_key": "selected_session_live",
+          "scene_state": { "key": "selected_session", "value_from": "value" },
+          "signal": "signal.session.join"
+        },
+        { "label": "Back", "return_scene": true }
+      ]
+    }
+  ],
+  "ui": {
+    "menus": [
+      {
+        "name": "ui.sessions",
+        "menu": "menu.sessions",
+        "font": "font.hud",
+        "x": 0.5,
+        "y": 0.2,
+        "gap": 0.1,
+        "normalized": true,
+        "visible_count": 2
+      }
+    ]
+  }
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "dynamic_list.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    sdl3d_game_data_menu menu{};
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.sessions");
+    EXPECT_EQ(menu.item_count, 2);
+
+    sdl3d_game_data_menu_item item{};
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_TRUE(item.dynamic_list_item);
+    EXPECT_EQ(item.dynamic_list_index, -1);
+    EXPECT_STREQ(item.label, "No sessions discovered");
+    EXPECT_EQ(item.signal_id, -1);
+
+    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    sdl3d_properties_set_int(scene_state, "session_count", 4);
+    sdl3d_properties_set_string(scene_state, "session_0_label", "Alpha");
+    sdl3d_properties_set_string(scene_state, "session_0_value", "10.0.0.1:27183");
+    sdl3d_properties_set_string(scene_state, "session_1_label", "Beta");
+    sdl3d_properties_set_string(scene_state, "session_1_value", "10.0.0.2:27183");
+    sdl3d_properties_set_string(scene_state, "session_2_label", "Gamma");
+    sdl3d_properties_set_string(scene_state, "session_2_value", "10.0.0.3:27183");
+    sdl3d_properties_set_string(scene_state, "session_3_label", "Delta");
+    sdl3d_properties_set_string(scene_state, "session_3_value", "10.0.0.4:27183");
+
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_EQ(menu.item_count, 5);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    EXPECT_TRUE(item.dynamic_list_item);
+    EXPECT_STREQ(item.dynamic_list_name, "list.sessions");
+    EXPECT_EQ(item.dynamic_list_index, 1);
+    EXPECT_STREQ(item.dynamic_list_value, "10.0.0.2:27183");
+    EXPECT_STREQ(item.label, "Join Beta");
+    sdl3d_game_data_menu_item first_dynamic_item{};
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &first_dynamic_item));
+    sdl3d_game_data_menu_item second_dynamic_item{};
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &second_dynamic_item));
+    EXPECT_STREQ(first_dynamic_item.label, "Join Alpha");
+    EXPECT_STREQ(second_dynamic_item.label, "Join Beta");
+    EXPECT_STREQ(first_dynamic_item.dynamic_list_value, "10.0.0.1:27183");
+    EXPECT_STREQ(second_dynamic_item.dynamic_list_value, "10.0.0.2:27183");
+
+    struct MenuLabels
+    {
+        std::vector<std::string> labels;
+    } labels;
+    auto collect_menu_labels = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        auto *capture = static_cast<MenuLabels *>(userdata);
+        if (std::string(text->name) == "ui.sessions")
+            capture->labels.emplace_back(text->text);
+        return true;
+    };
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, collect_menu_labels, &labels));
+    ASSERT_EQ(labels.labels.size(), 2U);
+    EXPECT_EQ(labels.labels[0], "Join Alpha");
+    EXPECT_EQ(labels.labels[1], "Join Beta");
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    bool armed = true;
+    sdl3d_game_data_menu_update_result result{};
+    SDL_Event event{};
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.scancode = SDL_SCANCODE_DOWN;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 1);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.handled_input);
+    EXPECT_FALSE(result.selected);
+    EXPECT_EQ(result.selected_index, 1);
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "selected_session_index", -1), 1);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "selected_session_live", ""), "10.0.0.2:27183");
+
+    event.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 2);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event = {};
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.scancode = SDL_SCANCODE_RETURN;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 3);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.handled_input);
+    EXPECT_TRUE(result.selected);
+    EXPECT_EQ(result.signal_id, sdl3d_game_data_find_signal(runtime, "signal.session.join"));
+    EXPECT_STREQ(result.scene_state_key, "selected_session");
+    EXPECT_STREQ(result.scene_state_value, "10.0.0.2:27183");
+
+    sdl3d_properties_set_int(scene_state, "session_count", 1);
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_EQ(menu.item_count, 2);
+    EXPECT_EQ(menu.selected_index, 1);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidDynamicListMenuSchema)
+{
+    const std::filesystem::path dir = unique_test_dir("menu_dynamic_list_validation");
+    const auto write_case = [&](const char *name, const char *item_json) {
+        write_text(dir / (std::string(name) + ".game.json"),
+                   R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Dynamic List Validation", "id": "test.dynamic_list_validation", "version": "0.1.0" },
+  "world": { "name": "world.dynamic_list_validation", "kind": "fixed_screen" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.ui",
+        "actions": [
+          { "name": "action.menu.select", "bindings": [{ "device": "keyboard", "key": "RETURN" }] },
+          { "name": "action.menu.up", "bindings": [{ "device": "keyboard", "key": "UP" }] },
+          { "name": "action.menu.down", "bindings": [{ "device": "keyboard", "key": "DOWN" }] }
+        ]
+      }
+    ]
+  },
+  "signals": ["signal.session.join"],
+  "entities": [],
+  "scenes": { "initial": "scene.browser", "files": ["scenes/browser.scene.json"] }
+})json");
+        write_text(dir / "scenes" / "browser.scene.json", (std::string(R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.browser",
+  "input": { "actions": ["action.menu.select", "action.menu.up", "action.menu.down"] },
+  "menus": [
+    {
+      "name": "menu.browser",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "items": [)json") + item_json +
+                                                           R"json(]
+    }
+  ]
+})json")
+                                                              .c_str());
+    };
+
+    char error[512]{};
+    write_case("missing_source", R"json({ "type": "dynamic_list", "name": "list.sessions" })json");
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "missing_source.game.json").string().c_str(), nullptr, error,
+                                               sizeof(error)));
+    EXPECT_NE(std::string(error).find("requires a source object"), std::string::npos) << error;
+
+    error[0] = '\0';
+    write_case("bad_value_from",
+               R"json({
+      "type": "dynamic_list",
+      "name": "list.sessions",
+      "source": {
+        "type": "scene_state_indexed",
+        "count_key": "session_count",
+        "label_key_format": "session_%d_label"
+      },
+      "scene_state": { "key": "selected_session", "value_from": "endpoint" }
+    })json");
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_value_from.game.json").string().c_str(), nullptr, error,
+                                               sizeof(error)));
+    EXPECT_NE(std::string(error).find("value_from must be value, label, or index"), std::string::npos) << error;
+
+    error[0] = '\0';
+    write_case("bad_label_format",
+               R"json({
+      "type": "dynamic_list",
+      "name": "list.sessions",
+      "source": {
+        "type": "scene_state_indexed",
+        "count_key": "session_count",
+        "label_key_format": "session_%s_label"
+      }
+    })json");
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_label_format.game.json").string().c_str(), nullptr, error,
+                                               sizeof(error)));
+    EXPECT_NE(std::string(error).find("label_key_format must contain exactly one %d token"), std::string::npos)
+        << error;
+
+    error[0] = '\0';
+    write_case("bad_value_format",
+               R"json({
+      "type": "dynamic_list",
+      "name": "list.sessions",
+      "source": {
+        "type": "scene_state_indexed",
+        "count_key": "session_count",
+        "label_key_format": "session_%d_label",
+        "value_key_format": "session_%d_%d_value"
+      }
+    })json");
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_value_format.game.json").string().c_str(), nullptr, error,
+                                               sizeof(error)));
+    EXPECT_NE(std::string(error).find("value_key_format must contain exactly one %d token"), std::string::npos)
+        << error;
+
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, PlaySceneMenusAreSelectedByAuthoredConditions)
 {
     sdl3d_game_session *session = nullptr;
