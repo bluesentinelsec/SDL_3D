@@ -234,6 +234,14 @@ typedef struct property_snapshot
     sdl3d_properties *properties;
 } property_snapshot;
 
+typedef struct runtime_collection
+{
+    char *name;
+    sdl3d_properties **rows;
+    int row_count;
+    int row_capacity;
+} runtime_collection;
+
 typedef struct scene_activity_state
 {
     const char *scene;
@@ -302,6 +310,9 @@ typedef struct sdl3d_game_data_runtime
     property_snapshot *property_snapshots;
     int property_snapshot_count;
     int property_snapshot_capacity;
+    runtime_collection *collections;
+    int collection_count;
+    int collection_capacity;
     sdl3d_storage *storage;
     bool has_network_schema;
     Uint8 network_schema_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE];
@@ -4531,6 +4542,198 @@ bool sdl3d_game_data_publish_menu_selection(sdl3d_game_data_runtime *runtime, co
     return true;
 }
 
+static runtime_collection *find_runtime_collection(sdl3d_game_data_runtime *runtime, const char *collection_name)
+{
+    if (runtime == NULL || collection_name == NULL || collection_name[0] == '\0')
+        return NULL;
+    for (int i = 0; i < runtime->collection_count; ++i)
+    {
+        if (SDL_strcmp(runtime->collections[i].name, collection_name) == 0)
+            return &runtime->collections[i];
+    }
+    return NULL;
+}
+
+static const runtime_collection *find_runtime_collection_const(const sdl3d_game_data_runtime *runtime,
+                                                               const char *collection_name)
+{
+    if (runtime == NULL || collection_name == NULL || collection_name[0] == '\0')
+        return NULL;
+    for (int i = 0; i < runtime->collection_count; ++i)
+    {
+        if (SDL_strcmp(runtime->collections[i].name, collection_name) == 0)
+            return &runtime->collections[i];
+    }
+    return NULL;
+}
+
+static runtime_collection *get_or_create_runtime_collection(sdl3d_game_data_runtime *runtime,
+                                                            const char *collection_name)
+{
+    runtime_collection *existing = find_runtime_collection(runtime, collection_name);
+    if (existing != NULL)
+        return existing;
+    if (runtime == NULL || collection_name == NULL || collection_name[0] == '\0')
+        return NULL;
+
+    if (runtime->collection_count >= runtime->collection_capacity)
+    {
+        const int next_capacity = runtime->collection_capacity > 0 ? runtime->collection_capacity * 2 : 4;
+        runtime_collection *next = (runtime_collection *)SDL_realloc(
+            runtime->collections, (size_t)next_capacity * sizeof(*runtime->collections));
+        if (next == NULL)
+            return NULL;
+        SDL_memset(next + runtime->collection_capacity, 0,
+                   (size_t)(next_capacity - runtime->collection_capacity) * sizeof(*runtime->collections));
+        runtime->collections = next;
+        runtime->collection_capacity = next_capacity;
+    }
+
+    runtime_collection *collection = &runtime->collections[runtime->collection_count];
+    SDL_zero(*collection);
+    collection->name = SDL_strdup(collection_name);
+    if (collection->name == NULL)
+        return NULL;
+    ++runtime->collection_count;
+    return collection;
+}
+
+static sdl3d_properties *runtime_collection_ensure_row(runtime_collection *collection, int row_index)
+{
+    if (collection == NULL || row_index < 0)
+        return NULL;
+    if (row_index >= collection->row_capacity)
+    {
+        int next_capacity = collection->row_capacity > 0 ? collection->row_capacity : 4;
+        while (next_capacity <= row_index)
+            next_capacity *= 2;
+        sdl3d_properties **next =
+            (sdl3d_properties **)SDL_realloc(collection->rows, (size_t)next_capacity * sizeof(*collection->rows));
+        if (next == NULL)
+            return NULL;
+        SDL_memset(next + collection->row_capacity, 0,
+                   (size_t)(next_capacity - collection->row_capacity) * sizeof(*collection->rows));
+        collection->rows = next;
+        collection->row_capacity = next_capacity;
+    }
+    if (collection->rows[row_index] == NULL)
+    {
+        collection->rows[row_index] = sdl3d_properties_create();
+        if (collection->rows[row_index] == NULL)
+            return NULL;
+    }
+    if (row_index >= collection->row_count)
+        collection->row_count = row_index + 1;
+    return collection->rows[row_index];
+}
+
+static bool runtime_collection_field_to_string(const runtime_collection *collection, int row_index,
+                                               const char *field_name, char *buffer, size_t buffer_size)
+{
+    if (collection == NULL || row_index < 0 || row_index >= collection->row_count || field_name == NULL ||
+        field_name[0] == '\0' || buffer == NULL || buffer_size == 0U || collection->rows[row_index] == NULL)
+        return false;
+
+    const sdl3d_value *value = sdl3d_properties_get_value(collection->rows[row_index], field_name);
+    if (value == NULL)
+        return false;
+
+    switch (value->type)
+    {
+    case SDL3D_VALUE_INT:
+        SDL_snprintf(buffer, buffer_size, "%d", value->as_int);
+        return true;
+    case SDL3D_VALUE_FLOAT:
+        SDL_snprintf(buffer, buffer_size, "%.3f", (double)value->as_float);
+        return true;
+    case SDL3D_VALUE_BOOL:
+        SDL_strlcpy(buffer, value->as_bool ? "true" : "false", buffer_size);
+        return true;
+    case SDL3D_VALUE_STRING:
+        SDL_strlcpy(buffer, value->as_string != NULL ? value->as_string : "", buffer_size);
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool sdl3d_game_data_runtime_collection_clear(sdl3d_game_data_runtime *runtime, const char *collection_name)
+{
+    runtime_collection *collection = find_runtime_collection(runtime, collection_name);
+    if (collection == NULL)
+        return runtime != NULL && collection_name != NULL && collection_name[0] != '\0';
+
+    for (int i = 0; i < collection->row_count; ++i)
+    {
+        sdl3d_properties_destroy(collection->rows[i]);
+        collection->rows[i] = NULL;
+    }
+    collection->row_count = 0;
+    return true;
+}
+
+int sdl3d_game_data_runtime_collection_count(const sdl3d_game_data_runtime *runtime, const char *collection_name)
+{
+    const runtime_collection *collection = find_runtime_collection_const(runtime, collection_name);
+    return collection != NULL ? collection->row_count : 0;
+}
+
+bool sdl3d_game_data_runtime_collection_set_string(sdl3d_game_data_runtime *runtime, const char *collection_name,
+                                                   int row_index, const char *field_name, const char *value)
+{
+    if (runtime == NULL || collection_name == NULL || collection_name[0] == '\0' || row_index < 0 ||
+        field_name == NULL || field_name[0] == '\0')
+        return false;
+    runtime_collection *collection = get_or_create_runtime_collection(runtime, collection_name);
+    sdl3d_properties *row = runtime_collection_ensure_row(collection, row_index);
+    if (row == NULL)
+        return false;
+    sdl3d_properties_set_string(row, field_name, value != NULL ? value : "");
+    return true;
+}
+
+bool sdl3d_game_data_runtime_collection_set_int(sdl3d_game_data_runtime *runtime, const char *collection_name,
+                                                int row_index, const char *field_name, int value)
+{
+    if (runtime == NULL || collection_name == NULL || collection_name[0] == '\0' || row_index < 0 ||
+        field_name == NULL || field_name[0] == '\0')
+        return false;
+    runtime_collection *collection = get_or_create_runtime_collection(runtime, collection_name);
+    sdl3d_properties *row = runtime_collection_ensure_row(collection, row_index);
+    if (row == NULL)
+        return false;
+    sdl3d_properties_set_int(row, field_name, value);
+    return true;
+}
+
+bool sdl3d_game_data_runtime_collection_set_float(sdl3d_game_data_runtime *runtime, const char *collection_name,
+                                                  int row_index, const char *field_name, float value)
+{
+    if (runtime == NULL || collection_name == NULL || collection_name[0] == '\0' || row_index < 0 ||
+        field_name == NULL || field_name[0] == '\0')
+        return false;
+    runtime_collection *collection = get_or_create_runtime_collection(runtime, collection_name);
+    sdl3d_properties *row = runtime_collection_ensure_row(collection, row_index);
+    if (row == NULL)
+        return false;
+    sdl3d_properties_set_float(row, field_name, value);
+    return true;
+}
+
+bool sdl3d_game_data_runtime_collection_set_bool(sdl3d_game_data_runtime *runtime, const char *collection_name,
+                                                 int row_index, const char *field_name, bool value)
+{
+    if (runtime == NULL || collection_name == NULL || collection_name[0] == '\0' || row_index < 0 ||
+        field_name == NULL || field_name[0] == '\0')
+        return false;
+    runtime_collection *collection = get_or_create_runtime_collection(runtime, collection_name);
+    sdl3d_properties *row = runtime_collection_ensure_row(collection, row_index);
+    if (row == NULL)
+        return false;
+    sdl3d_properties_set_bool(row, field_name, value);
+    return true;
+}
+
 static sdl3d_game_data_menu_control_type parse_menu_control_type(const char *type)
 {
     if (type == NULL)
@@ -4561,14 +4764,20 @@ static yyjson_val *menu_dynamic_list_source(yyjson_val *item)
 static int menu_dynamic_list_count(const sdl3d_game_data_runtime *runtime, yyjson_val *item)
 {
     yyjson_val *source = menu_dynamic_list_source(item);
-    if (runtime == NULL || !yyjson_is_obj(source) ||
-        SDL_strcmp(json_string(source, "type", ""), "scene_state_indexed") != 0)
+    if (runtime == NULL || !yyjson_is_obj(source))
         return 0;
 
-    const char *count_key = json_string(source, "count_key", NULL);
-    if (count_key == NULL)
-        return 0;
-    return SDL_max(0, sdl3d_properties_get_int(runtime->scene_state, count_key, 0));
+    const char *type = json_string(source, "type", "");
+    if (SDL_strcmp(type, "scene_state_indexed") == 0)
+    {
+        const char *count_key = json_string(source, "count_key", NULL);
+        if (count_key == NULL)
+            return 0;
+        return SDL_max(0, sdl3d_properties_get_int(runtime->scene_state, count_key, 0));
+    }
+    if (SDL_strcmp(type, "runtime_collection") == 0)
+        return sdl3d_game_data_runtime_collection_count(runtime, json_string(source, "collection", NULL));
+    return 0;
 }
 
 static int menu_dynamic_list_row_count(const sdl3d_game_data_runtime *runtime, yyjson_val *item)
@@ -4673,11 +4882,33 @@ static const char *menu_dynamic_list_entry_string(const sdl3d_game_data_runtime 
                                                   size_t buffer_size)
 {
     yyjson_val *source = menu_dynamic_list_source(item);
-    char key[128];
-    if (runtime == NULL || dynamic_index < 0 || buffer == NULL || buffer_size == 0U ||
-        !menu_dynamic_list_format_key(source, format_field, dynamic_index, key, sizeof(key)))
+    if (runtime == NULL || !yyjson_is_obj(source) || dynamic_index < 0 || buffer == NULL || buffer_size == 0U)
         return NULL;
-    return sdl3d_properties_get_string(runtime->scene_state, key, NULL);
+
+    const char *type = json_string(source, "type", "");
+    if (SDL_strcmp(type, "scene_state_indexed") == 0)
+    {
+        char key[SDL3D_GAME_DATA_MENU_DYNAMIC_TEXT_CAPACITY];
+        if (!menu_dynamic_list_format_key(source, format_field, dynamic_index, key, sizeof(key)))
+            return NULL;
+        return sdl3d_properties_get_string(runtime->scene_state, key, NULL);
+    }
+    if (SDL_strcmp(type, "runtime_collection") == 0)
+    {
+        const char *field = NULL;
+        if (SDL_strcmp(format_field, "label_key_format") == 0)
+            field = json_string(source, "label_field", NULL);
+        else if (SDL_strcmp(format_field, "value_key_format") == 0)
+            field = json_string(source, "value_field", NULL);
+        if (field == NULL)
+            return NULL;
+
+        const runtime_collection *collection =
+            find_runtime_collection_const(runtime, json_string(source, "collection", NULL));
+        return runtime_collection_field_to_string(collection, dynamic_index, field, buffer, buffer_size) ? buffer
+                                                                                                         : NULL;
+    }
+    return NULL;
 }
 
 static void menu_dynamic_list_apply_label_template(const char *format, const char *label, char *buffer,
@@ -11605,6 +11836,13 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
         SDL_free(runtime->property_snapshots[i].target);
         sdl3d_properties_destroy(runtime->property_snapshots[i].properties);
     }
+    for (int i = 0; i < runtime->collection_count; ++i)
+    {
+        SDL_free(runtime->collections[i].name);
+        for (int row = 0; row < runtime->collections[i].row_count; ++row)
+            sdl3d_properties_destroy(runtime->collections[i].rows[row]);
+        SDL_free(runtime->collections[i].rows);
+    }
 
     clear_menu_text_entry_capture(runtime);
     sdl3d_script_engine_destroy(runtime->scripts);
@@ -11626,6 +11864,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->animations);
     SDL_free(runtime->audio_files);
     SDL_free(runtime->property_snapshots);
+    SDL_free(runtime->collections);
     SDL_free(runtime->activity.periodic_elapsed);
     yyjson_doc_free(runtime->doc);
     SDL_free(runtime);

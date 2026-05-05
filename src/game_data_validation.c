@@ -3592,20 +3592,37 @@ static bool validate_dynamic_menu_list_source(validation_context *ctx, yyjson_va
     if (!yyjson_is_obj(source))
         return validation_error(ctx, path, "dynamic_list menu item requires a source object");
     const char *type = json_string(source, "type");
-    if (type == NULL || SDL_strcmp(type, "scene_state_indexed") != 0)
-        return validation_error(ctx, path, "dynamic_list source type must be scene_state_indexed");
-    if (!is_non_empty_string(source, "count_key"))
-        return validation_error(ctx, path, "dynamic_list source requires a non-empty count_key");
-    if (!is_non_empty_string(source, "label_key_format"))
-        return validation_error(ctx, path, "dynamic_list source requires a non-empty label_key_format");
-    if (!dynamic_list_key_format_valid(json_string(source, "label_key_format")))
-        return validation_error(ctx, path, "dynamic_list source label_key_format must contain exactly one %%d token");
-    yyjson_val *value_format = obj_get(source, "value_key_format");
-    if (value_format != NULL && (!yyjson_is_str(value_format) || yyjson_get_str(value_format)[0] == '\0'))
-        return validation_error(ctx, path, "dynamic_list source value_key_format must be a non-empty string");
-    if (value_format != NULL && !dynamic_list_key_format_valid(yyjson_get_str(value_format)))
-        return validation_error(ctx, path, "dynamic_list source value_key_format must contain exactly one %%d token");
-    return true;
+    if (type != NULL && SDL_strcmp(type, "scene_state_indexed") == 0)
+    {
+        if (!is_non_empty_string(source, "count_key"))
+            return validation_error(ctx, path, "dynamic_list source requires a non-empty count_key");
+        if (!is_non_empty_string(source, "label_key_format"))
+            return validation_error(ctx, path, "dynamic_list source requires a non-empty label_key_format");
+        if (!dynamic_list_key_format_valid(json_string(source, "label_key_format")))
+            return validation_error(ctx, path,
+                                    "dynamic_list source label_key_format must contain exactly one %%d token");
+        yyjson_val *value_format = obj_get(source, "value_key_format");
+        if (value_format != NULL && (!yyjson_is_str(value_format) || yyjson_get_str(value_format)[0] == '\0'))
+            return validation_error(ctx, path, "dynamic_list source value_key_format must be a non-empty string");
+        if (value_format != NULL && !dynamic_list_key_format_valid(yyjson_get_str(value_format)))
+            return validation_error(ctx, path,
+                                    "dynamic_list source value_key_format must contain exactly one %%d token");
+        return true;
+    }
+    if (type != NULL && SDL_strcmp(type, "runtime_collection") == 0)
+    {
+        if (!is_non_empty_string(source, "collection"))
+            return validation_error(ctx, path,
+                                    "dynamic_list runtime_collection source requires a non-empty collection");
+        if (!is_non_empty_string(source, "label_field"))
+            return validation_error(ctx, path,
+                                    "dynamic_list runtime_collection source requires a non-empty label_field");
+        yyjson_val *value_field = obj_get(source, "value_field");
+        if (value_field != NULL && (!yyjson_is_str(value_field) || yyjson_get_str(value_field)[0] == '\0'))
+            return validation_error(ctx, path, "dynamic_list runtime_collection source value_field must be non-empty");
+        return true;
+    }
+    return validation_error(ctx, path, "dynamic_list source type must be scene_state_indexed or runtime_collection");
 }
 
 static bool validate_dynamic_menu_list_item(validation_context *ctx, yyjson_val *item, const char *path,

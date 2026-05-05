@@ -439,6 +439,41 @@ not known when the scene JSON is authored:
 }
 ```
 
+Dynamic lists can also read host-published runtime collections. This is the
+preferred source when an engine subsystem owns the rows, such as LAN discovery,
+save-game enumeration, profiles, rebindable devices, or downloadable content:
+
+```json
+{
+    "type" : "dynamic_list",
+    "name" : "list.local_matches",
+    "source" : {
+        "type" : "runtime_collection",
+        "collection" : "local_matches",
+        "label_field" : "name",
+        "value_field" : "endpoint"
+    },
+    "empty_label" : "No local matches found",
+    "label_format" : "Join {label}",
+    "selected_index_key" : "selected_local_match_index",
+    "selected_value_key" : "selected_local_match_endpoint",
+    "scene_state" : { "key" : "selected_local_match", "value_from" : "value" },
+    "signal" : "signal.multiplayer.join_selected"
+}
+```
+
+Host code publishes runtime collection rows through
+`sdl3d_game_data_runtime_collection_set_string()`,
+`sdl3d_game_data_runtime_collection_set_int()`,
+`sdl3d_game_data_runtime_collection_set_float()`, and
+`sdl3d_game_data_runtime_collection_set_bool()`. Collections are runtime-owned
+and read-only from UI; clear a collection before republishing a shorter result
+set. Dynamic-list labels and values are formatted from the authored
+`label_field` and optional `value_field`; string, integer, float, and boolean
+fields are supported. Floats are formatted with three fractional digits for
+stable UI output. If `value_field` is omitted, accepting a row can still use
+`value_from: "label"` or `value_from: "index"`.
+
 The menu controller treats expanded rows like normal menu items: Up/Down moves
 through them, Back still resolves the authored back item, and Accept selects the
 current row. If the source count is zero, `empty_label` renders one inert row
