@@ -20,6 +20,7 @@
 #include "sdl3d/asset.h"
 #include "sdl3d/input.h"
 #include "sdl3d/math.h"
+#include "sdl3d/network.h"
 #include "sdl3d/script.h"
 #include "sdl3d/signal_bus.h"
 #include "sdl3d/timer_pool.h"
@@ -242,6 +243,12 @@ typedef struct runtime_collection
     int row_capacity;
 } runtime_collection;
 
+typedef struct runtime_direct_connect_session
+{
+    char *name;
+    sdl3d_network_session *session;
+} runtime_direct_connect_session;
+
 typedef struct scene_activity_state
 {
     const char *scene;
@@ -313,6 +320,9 @@ typedef struct sdl3d_game_data_runtime
     runtime_collection *collections;
     int collection_count;
     int collection_capacity;
+    runtime_direct_connect_session *direct_connect_sessions;
+    int direct_connect_session_count;
+    int direct_connect_session_capacity;
     sdl3d_storage *storage;
     bool has_network_schema;
     Uint8 network_schema_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE];
@@ -1355,6 +1365,16 @@ static int json_int(yyjson_val *object, const char *key, int fallback)
 {
     yyjson_val *value = obj_get(object, key);
     return yyjson_is_int(value) ? (int)yyjson_get_int(value) : fallback;
+}
+
+static int json_int_or_string(yyjson_val *object, const char *key, int fallback)
+{
+    yyjson_val *value = obj_get(object, key);
+    if (yyjson_is_int(value))
+        return (int)yyjson_get_int(value);
+    if (yyjson_is_str(value))
+        return SDL_atoi(yyjson_get_str(value));
+    return fallback;
 }
 
 static sdl3d_vec3 json_vec3_value(yyjson_val *value, sdl3d_vec3 fallback)
@@ -4733,6 +4753,197 @@ bool sdl3d_game_data_runtime_collection_set_bool(sdl3d_game_data_runtime *runtim
     if (row == NULL)
         return false;
     sdl3d_properties_set_bool(row, field_name, value);
+    return true;
+}
+
+static const char *game_data_network_state_name(sdl3d_network_state state)
+{
+    switch (state)
+    {
+    case SDL3D_NETWORK_STATE_DISCONNECTED:
+        return "disconnected";
+    case SDL3D_NETWORK_STATE_CONNECTING:
+        return "connecting";
+    case SDL3D_NETWORK_STATE_WAITING:
+        return "waiting";
+    case SDL3D_NETWORK_STATE_CONNECTED:
+        return "connected";
+    case SDL3D_NETWORK_STATE_REJECTED:
+        return "rejected";
+    case SDL3D_NETWORK_STATE_TIMED_OUT:
+        return "timed_out";
+    case SDL3D_NETWORK_STATE_ERROR:
+        return "error";
+    default:
+        return "unknown";
+    }
+}
+
+static runtime_direct_connect_session *find_direct_connect_session(sdl3d_game_data_runtime *runtime,
+                                                                   const char *session_name)
+{
+    if (runtime == NULL || session_name == NULL || session_name[0] == '\0')
+        return NULL;
+    for (int i = 0; i < runtime->direct_connect_session_count; ++i)
+    {
+        if (SDL_strcmp(runtime->direct_connect_sessions[i].name, session_name) == 0)
+            return &runtime->direct_connect_sessions[i];
+    }
+    return NULL;
+}
+
+static runtime_direct_connect_session *get_or_create_direct_connect_session(sdl3d_game_data_runtime *runtime,
+                                                                            const char *session_name)
+{
+    runtime_direct_connect_session *existing = find_direct_connect_session(runtime, session_name);
+    if (existing != NULL)
+        return existing;
+    if (runtime == NULL || session_name == NULL || session_name[0] == '\0')
+        return NULL;
+
+    if (runtime->direct_connect_session_count >= runtime->direct_connect_session_capacity)
+    {
+        const int next_capacity =
+            runtime->direct_connect_session_capacity > 0 ? runtime->direct_connect_session_capacity * 2 : 2;
+        runtime_direct_connect_session *next = (runtime_direct_connect_session *)SDL_realloc(
+            runtime->direct_connect_sessions, (size_t)next_capacity * sizeof(*runtime->direct_connect_sessions));
+        if (next == NULL)
+            return NULL;
+        SDL_memset(next + runtime->direct_connect_session_capacity, 0,
+                   (size_t)(next_capacity - runtime->direct_connect_session_capacity) *
+                       sizeof(*runtime->direct_connect_sessions));
+        runtime->direct_connect_sessions = next;
+        runtime->direct_connect_session_capacity = next_capacity;
+    }
+
+    runtime_direct_connect_session *entry = &runtime->direct_connect_sessions[runtime->direct_connect_session_count];
+    SDL_zero(*entry);
+    entry->name = SDL_strdup(session_name);
+    if (entry->name == NULL)
+        return NULL;
+    ++runtime->direct_connect_session_count;
+    return entry;
+}
+
+static void direct_connect_publish_status_entry(sdl3d_game_data_runtime *runtime,
+                                                const runtime_direct_connect_session *entry, const char *status_key,
+                                                const char *state_key, const char *connected_key,
+                                                const char *fallback_status)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+
+    const sdl3d_network_state state = entry != NULL && entry->session != NULL
+                                          ? sdl3d_network_session_state(entry->session)
+                                          : SDL3D_NETWORK_STATE_DISCONNECTED;
+    const char *status = entry != NULL && entry->session != NULL ? sdl3d_network_session_status(entry->session) : NULL;
+    if (status == NULL || status[0] == '\0')
+        status = fallback_status != NULL ? fallback_status : game_data_network_state_name(state);
+
+    if (status_key != NULL && status_key[0] != '\0')
+        sdl3d_properties_set_string(runtime->scene_state, status_key, status);
+    if (state_key != NULL && state_key[0] != '\0')
+        sdl3d_properties_set_string(runtime->scene_state, state_key, game_data_network_state_name(state));
+    if (connected_key != NULL && connected_key[0] != '\0')
+        sdl3d_properties_set_bool(runtime->scene_state, connected_key, state == SDL3D_NETWORK_STATE_CONNECTED);
+}
+
+static void direct_connect_publish_manual_status(sdl3d_game_data_runtime *runtime, const char *status_key,
+                                                 const char *state_key, const char *connected_key, const char *status,
+                                                 const char *state, bool connected)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    if (status_key != NULL && status_key[0] != '\0')
+        sdl3d_properties_set_string(runtime->scene_state, status_key, status != NULL ? status : "");
+    if (state_key != NULL && state_key[0] != '\0')
+        sdl3d_properties_set_string(runtime->scene_state, state_key, state != NULL ? state : "unknown");
+    if (connected_key != NULL && connected_key[0] != '\0')
+        sdl3d_properties_set_bool(runtime->scene_state, connected_key, connected);
+}
+
+sdl3d_network_session *sdl3d_game_data_get_network_direct_connect_session(sdl3d_game_data_runtime *runtime,
+                                                                          const char *session_name)
+{
+    runtime_direct_connect_session *entry = find_direct_connect_session(runtime, session_name);
+    return entry != NULL ? entry->session : NULL;
+}
+
+bool sdl3d_game_data_network_direct_connect_publish_status(sdl3d_game_data_runtime *runtime, const char *session_name,
+                                                           const char *status_key, const char *state_key,
+                                                           const char *connected_key)
+{
+    if (runtime == NULL || session_name == NULL || session_name[0] == '\0')
+        return false;
+    direct_connect_publish_status_entry(runtime, find_direct_connect_session(runtime, session_name), status_key,
+                                        state_key, connected_key, "Disconnected");
+    return true;
+}
+
+bool sdl3d_game_data_network_direct_connect_cancel(sdl3d_game_data_runtime *runtime, const char *session_name,
+                                                   const char *status_key, const char *state_key,
+                                                   const char *connected_key, const char *status)
+{
+    if (runtime == NULL || session_name == NULL || session_name[0] == '\0')
+        return false;
+    runtime_direct_connect_session *entry = find_direct_connect_session(runtime, session_name);
+    if (entry != NULL && entry->session != NULL)
+    {
+        sdl3d_network_session_destroy(entry->session);
+        entry->session = NULL;
+    }
+    direct_connect_publish_status_entry(runtime, entry, status_key, state_key, connected_key,
+                                        status != NULL ? status : "Disconnected");
+    return true;
+}
+
+bool sdl3d_game_data_network_direct_connect_start(sdl3d_game_data_runtime *runtime, const char *session_name,
+                                                  const char *host, int port, const char *status_key,
+                                                  const char *state_key, const char *connected_key)
+{
+    if (runtime == NULL || session_name == NULL || session_name[0] == '\0')
+        return false;
+    runtime_direct_connect_session *entry = get_or_create_direct_connect_session(runtime, session_name);
+    if (entry == NULL)
+        return false;
+
+    if (host == NULL || host[0] == '\0')
+    {
+        direct_connect_publish_manual_status(runtime, status_key, state_key, connected_key, "Invalid host", "error",
+                                             false);
+        return false;
+    }
+
+    if (port <= 0 || port > 65535)
+    {
+        direct_connect_publish_manual_status(runtime, status_key, state_key, connected_key, "Invalid port", "error",
+                                             false);
+        return false;
+    }
+
+    if (entry->session != NULL)
+    {
+        sdl3d_network_session_destroy(entry->session);
+        entry->session = NULL;
+    }
+
+    sdl3d_network_session_desc desc;
+    sdl3d_network_session_desc_init(&desc);
+    desc.role = SDL3D_NETWORK_ROLE_CLIENT;
+    desc.host = host;
+    desc.port = (Uint16)port;
+    desc.local_port = 0;
+    desc.handshake_timeout = 5.0f;
+    desc.idle_timeout = 10.0f;
+
+    if (!sdl3d_network_session_create(&desc, &entry->session))
+    {
+        direct_connect_publish_manual_status(runtime, status_key, state_key, connected_key, SDL_GetError(), "error",
+                                             false);
+        return false;
+    }
+
+    direct_connect_publish_status_entry(runtime, entry, status_key, state_key, connected_key, "Connecting");
     return true;
 }
 
@@ -9176,6 +9387,40 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
         return true;
     }
 
+    if (SDL_strcmp(type, "network.direct_connect.start") == 0)
+    {
+        const char *name = json_string(action, "name", NULL);
+        const char *host_key = json_string(action, "host_key", NULL);
+        const char *port_key = json_string(action, "port_key", NULL);
+        const char *host = runtime != NULL && host_key != NULL
+                               ? sdl3d_properties_get_string(runtime->scene_state, host_key,
+                                                             json_string(action, "default_host", "127.0.0.1"))
+                               : json_string(action, "host", json_string(action, "default_host", "127.0.0.1"));
+        const int default_port = json_int(action, "default_port", SDL3D_NETWORK_DEFAULT_PORT);
+        const char *port_text = runtime != NULL && port_key != NULL
+                                    ? sdl3d_properties_get_string(runtime->scene_state, port_key, NULL)
+                                    : NULL;
+        const int port = port_text != NULL ? SDL_atoi(port_text) : json_int_or_string(action, "port", default_port);
+        return sdl3d_game_data_network_direct_connect_start(
+            runtime, name, host, port, json_string(action, "status_key", NULL), json_string(action, "state_key", NULL),
+            json_string(action, "connected_key", NULL));
+    }
+
+    if (SDL_strcmp(type, "network.direct_connect.cancel") == 0)
+    {
+        return sdl3d_game_data_network_direct_connect_cancel(
+            runtime, json_string(action, "name", NULL), json_string(action, "status_key", NULL),
+            json_string(action, "state_key", NULL), json_string(action, "connected_key", NULL),
+            json_string(action, "status", "Disconnected"));
+    }
+
+    if (SDL_strcmp(type, "network.direct_connect.observe") == 0)
+    {
+        return sdl3d_game_data_network_direct_connect_publish_status(
+            runtime, json_string(action, "name", NULL), json_string(action, "status_key", NULL),
+            json_string(action, "state_key", NULL), json_string(action, "connected_key", NULL));
+    }
+
     if (SDL_strcmp(type, "ui.animate") == 0)
         return start_ui_animation_from_json(runtime, action);
 
@@ -11845,6 +12090,11 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
             sdl3d_properties_destroy(runtime->collections[i].rows[row]);
         SDL_free(runtime->collections[i].rows);
     }
+    for (int i = 0; i < runtime->direct_connect_session_count; ++i)
+    {
+        SDL_free(runtime->direct_connect_sessions[i].name);
+        sdl3d_network_session_destroy(runtime->direct_connect_sessions[i].session);
+    }
 
     clear_menu_text_entry_capture(runtime);
     sdl3d_script_engine_destroy(runtime->scripts);
@@ -11867,6 +12117,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->audio_files);
     SDL_free(runtime->property_snapshots);
     SDL_free(runtime->collections);
+    SDL_free(runtime->direct_connect_sessions);
     SDL_free(runtime->activity.periodic_elapsed);
     yyjson_doc_free(runtime->doc);
     SDL_free(runtime);

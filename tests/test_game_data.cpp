@@ -1898,7 +1898,24 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_STREQ(item.scene, "scene.multiplayer.lan");
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer.direct_connect"));
-    EXPECT_FALSE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.multiplayer.direct");
+    EXPECT_EQ(menu.item_count, 5);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_STREQ(item.label, "Host");
+    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_TEXT);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    EXPECT_STREQ(item.label, "Port");
+    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_TEXT);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
+    EXPECT_STREQ(item.label, "Connect");
+    EXPECT_EQ(item.signal_id, sdl3d_game_data_find_signal(runtime, "signal.multiplayer.direct.connect"));
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 3, &item));
+    EXPECT_STREQ(item.label, "Disconnect");
+    EXPECT_EQ(item.signal_id, sdl3d_game_data_find_signal(runtime, "signal.multiplayer.direct.disconnect"));
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 4, &item));
+    EXPECT_STREQ(item.label, "Back");
+    EXPECT_STREQ(item.scene, "scene.multiplayer.join");
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer.discovery"));
     EXPECT_FALSE(sdl3d_game_data_get_active_menu(runtime, &menu));
@@ -6215,6 +6232,87 @@ TEST(GameDataRuntime, RejectsPongNetworkControlWithMismatchedSchemaOrBadSize)
 
     destroy_runtime_session(sender_session, sender);
     destroy_runtime_session(receiver_session, receiver);
+}
+
+TEST(GameDataRuntime, AuthoredDirectConnectActionsUpdateSceneState)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+
+    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    sdl3d_properties_set_string(scene_state, "direct_connect_host", "");
+    sdl3d_properties_set_string(scene_state, "direct_connect_port", "27183");
+    sdl3d_properties_set_string(scene_state, "direct_connect_status", "Ready");
+    sdl3d_properties_set_string(scene_state, "direct_connect_state", "disconnected");
+    sdl3d_properties_set_bool(scene_state, "direct_connect_connected", true);
+
+    const int connect_signal = sdl3d_game_data_find_signal(runtime, "signal.multiplayer.direct.connect");
+    ASSERT_GE(connect_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), connect_signal, nullptr);
+
+    EXPECT_EQ(sdl3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""), "Invalid host");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_state", ""), "error");
+    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "direct_connect_connected", true));
+
+    sdl3d_properties_set_string(scene_state, "direct_connect_host", "127.0.0.1");
+    sdl3d_properties_set_string(scene_state, "direct_connect_port", "0");
+    sdl3d_properties_set_bool(scene_state, "direct_connect_connected", true);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), connect_signal, nullptr);
+
+    EXPECT_EQ(sdl3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""), "Invalid port");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_state", ""), "error");
+    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "direct_connect_connected", true));
+
+    const int disconnect_signal = sdl3d_game_data_find_signal(runtime, "signal.multiplayer.direct.disconnect");
+    ASSERT_GE(disconnect_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), disconnect_signal, nullptr);
+
+    EXPECT_EQ(sdl3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""), "Disconnected");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_state", ""), "disconnected");
+    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "direct_connect_connected", true));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, RejectsInvalidDirectConnectActions)
+{
+    const std::filesystem::path dir = unique_test_dir("bad_direct_connect_actions");
+    write_text(dir / "bad_direct_connect.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad Direct Connect", "id": "test.bad_direct_connect", "version": "0.1.0" },
+  "world": { "name": "world.bad_direct_connect", "kind": "fixed_screen" },
+  "entities": [],
+  "signals": ["signal.connect"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.connect",
+        "actions": [
+          { "type": "network.direct_connect.start", "name": "direct", "host": "127.0.0.1", "port": 70000 }
+        ]
+      }
+    ]
+  }
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_direct_connect.game.json").string().c_str(), nullptr, error,
+                                               sizeof(error)));
+    EXPECT_NE(
+        std::string(error).find("network.direct_connect.start port must be a non-empty string or integer 1..65535"),
+        std::string::npos)
+        << error;
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)

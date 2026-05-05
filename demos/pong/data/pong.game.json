@@ -199,7 +199,9 @@
         "lobby_start": "signal.multiplayer.lobby.start",
         "camera_toggle": "signal.camera.ball.toggle",
         "discovery_refresh": "signal.multiplayer.discovery.refresh",
-        "ui_select": "signal.ui.menu.select"
+        "ui_select": "signal.ui.menu.select",
+        "direct_connect": "signal.multiplayer.direct.connect",
+        "direct_disconnect": "signal.multiplayer.direct.disconnect"
       },
       "pause": {
         "action": "action.pause",
@@ -1852,6 +1854,8 @@
     "signal.network.pause_changed",
     "signal.multiplayer.lobby.start",
     "signal.multiplayer.discovery.refresh",
+    "signal.multiplayer.direct.connect",
+    "signal.multiplayer.direct.disconnect",
     "signal.ui.menu.move",
     "signal.ui.menu.select",
     "signal.app.quit_fade_done"
@@ -1972,6 +1976,35 @@
         "signal": "signal.ui.menu.select",
         "actions": [
           { "type": "audio.play_sfx", "sound": "sound.ui.select" }
+        ]
+      },
+      {
+        "signal": "signal.multiplayer.direct.connect",
+        "actions": [
+          {
+            "type": "network.direct_connect.start",
+            "name": "direct_connect",
+            "host_key": "direct_connect_host",
+            "port_key": "direct_connect_port",
+            "default_host": "127.0.0.1",
+            "default_port": 27183,
+            "status_key": "direct_connect_status",
+            "state_key": "direct_connect_state",
+            "connected_key": "direct_connect_connected"
+          }
+        ]
+      },
+      {
+        "signal": "signal.multiplayer.direct.disconnect",
+        "actions": [
+          {
+            "type": "network.direct_connect.cancel",
+            "name": "direct_connect",
+            "status": "Disconnected",
+            "status_key": "direct_connect_status",
+            "state_key": "direct_connect_state",
+            "connected_key": "direct_connect_connected"
+          }
         ]
       },
       {

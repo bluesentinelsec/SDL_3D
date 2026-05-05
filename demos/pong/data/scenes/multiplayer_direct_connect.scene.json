@@ -23,7 +23,68 @@
     "enter": "scene_in",
     "exit": "scene_out"
   },
+  "activity": {
+    "enabled": true,
+    "reset_periodic_on_input": false,
+    "periodic": [
+      {
+        "interval": 0.1,
+        "actions": [
+          {
+            "type": "network.direct_connect.observe",
+            "name": "direct_connect",
+            "status_key": "direct_connect_status",
+            "state_key": "direct_connect_state",
+            "connected_key": "direct_connect_connected"
+          }
+        ]
+      }
+    ]
+  },
   "menus": [
+    {
+      "name": "menu.multiplayer.direct",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "back_action": "action.menu.back",
+      "move_signal": "signal.ui.menu.move",
+      "select_signal": "signal.ui.menu.select",
+      "items": [
+        {
+          "label": "Host",
+          "control": {
+            "type": "text",
+            "target": "scene_state",
+            "key": "direct_connect_host",
+            "default": "127.0.0.1",
+            "placeholder": "Host / IP",
+            "charset": "hostname",
+            "max_length": 96
+          }
+        },
+        {
+          "label": "Port",
+          "control": {
+            "type": "text",
+            "target": "scene_state",
+            "key": "direct_connect_port",
+            "default": "27183",
+            "placeholder": "Port",
+            "charset": "digits",
+            "max_length": 5
+          }
+        },
+        { "label": "Connect", "signal": "signal.multiplayer.direct.connect" },
+        { "label": "Disconnect", "signal": "signal.multiplayer.direct.disconnect" },
+        {
+          "label": "Back",
+          "signal": "signal.multiplayer.direct.disconnect",
+          "scene": "scene.multiplayer.join",
+          "scene_state": { "key": "network_flow", "value": "direct" }
+        }
+      ]
+    }
   ],
   "ui": {
     "text": [
@@ -36,8 +97,36 @@
         "normalized": true,
         "centered": true,
         "color": [242, 248, 255, 255]
+      },
+      {
+        "name": "ui.multiplayer.direct.status",
+        "font": "font.hud",
+        "text": [
+          "Status: ",
+          { "type": "scene_state", "key": "direct_connect_status" }
+        ],
+        "x": 0.5,
+        "y": 0.75,
+        "normalized": true,
+        "centered": true,
+        "color": [210, 232, 255, 255]
       }
     ],
-    "menus": []
+    "menus": [
+      {
+        "name": "ui.multiplayer.direct.menu",
+        "menu": "menu.multiplayer.direct",
+        "font": "font.hud",
+        "x": 0.43,
+        "y": 0.34,
+        "gap": 0.075,
+        "normalized": true,
+        "align": "left",
+        "selected_prefix": "> ",
+        "unselected_prefix": "  ",
+        "color": [222, 236, 255, 255],
+        "selected_color": [255, 232, 128, 255]
+      }
+    ]
   }
 }
