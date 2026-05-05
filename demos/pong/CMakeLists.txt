@@ -6,6 +6,7 @@ list(SORT SDL3D_PONG_AUDIO_FILES)
 
 set(SDL3D_PONG_ASSET_FILES
     ${SDL3D_PONG_AUDIO_FILES}
+    images/ball-texture.png
     images/splash-logo.jpg
     pong.game.json
     scenes/multiplayer.scene.json
