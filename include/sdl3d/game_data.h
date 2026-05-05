@@ -281,6 +281,10 @@ extern "C"
         sdl3d_game_data_render_primitive_type type;
         /** @brief Current world-space position from the owning actor plus optional component offset. */
         sdl3d_vec3 position;
+        /** @brief Axis used for primitive-local rotation by primitives that support rotation. */
+        sdl3d_vec3 rotation_axis;
+        /** @brief Primitive-local rotation angle in radians by primitives that support rotation. */
+        float rotation_angle;
         /** @brief Cube size for SDL3D_GAME_DATA_RENDER_CUBE. */
         sdl3d_vec3 size;
         /** @brief Sphere radius for SDL3D_GAME_DATA_RENDER_SPHERE. */
@@ -291,6 +295,8 @@ extern "C"
         int rings;
         /** @brief Authored tint color. */
         sdl3d_color color;
+        /** @brief Optional image asset id used as an albedo texture by primitives that support textures. */
+        const char *texture_image;
         /** @brief True when the primitive should use scene lighting. */
         bool lighting_enabled;
         /** @brief Whether the primitive should be treated as emissive by the caller. */

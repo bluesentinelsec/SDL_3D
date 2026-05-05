@@ -15,7 +15,9 @@
 
 typedef struct primitive_draw_context
 {
+    const sdl3d_game_data_runtime *runtime;
     sdl3d_render_context *renderer;
+    sdl3d_game_data_image_cache *image_cache;
 } primitive_draw_context;
 
 typedef struct ui_draw_context
@@ -505,8 +507,16 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
     }
     else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
     {
-        sdl3d_draw_sphere(context->renderer, primitive->position, primitive->radius, primitive->slices,
-                          primitive->rings, primitive->color);
+        const sdl3d_texture2d *texture = NULL;
+        if (primitive->texture_image != NULL && context->image_cache != NULL)
+        {
+            sdl3d_game_data_image_cache_entry *entry =
+                find_or_load_image_entry(context->runtime, context->image_cache, primitive->texture_image);
+            texture = entry != NULL ? &entry->texture : NULL;
+        }
+        sdl3d_draw_sphere_textured(context->renderer, primitive->position, primitive->radius, primitive->rings,
+                                   primitive->slices, primitive->rotation_axis, primitive->rotation_angle, texture,
+                                   primitive->color);
     }
     sdl3d_set_emissive(context->renderer, 0.0f, 0.0f, 0.0f);
     if (!primitive->lighting_enabled)
@@ -741,20 +751,28 @@ void sdl3d_game_data_image_cache_free(sdl3d_game_data_image_cache *cache)
     SDL_zero(*cache);
 }
 
+static bool draw_render_primitives_evaluated_with_cache(const sdl3d_game_data_runtime *runtime,
+                                                        sdl3d_render_context *renderer,
+                                                        const sdl3d_game_data_render_eval *eval,
+                                                        sdl3d_game_data_image_cache *image_cache)
+{
+    if (runtime == NULL || renderer == NULL)
+        return false;
+
+    primitive_draw_context context = {runtime, renderer, image_cache};
+    return sdl3d_game_data_for_each_render_primitive_evaluated(runtime, eval, draw_primitive, &context);
+}
+
 bool sdl3d_game_data_draw_render_primitives(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer)
 {
-    return sdl3d_game_data_draw_render_primitives_evaluated(runtime, renderer, NULL);
+    return draw_render_primitives_evaluated_with_cache(runtime, renderer, NULL, NULL);
 }
 
 bool sdl3d_game_data_draw_render_primitives_evaluated(const sdl3d_game_data_runtime *runtime,
                                                       sdl3d_render_context *renderer,
                                                       const sdl3d_game_data_render_eval *eval)
 {
-    if (runtime == NULL || renderer == NULL)
-        return false;
-
-    primitive_draw_context context = {renderer};
-    return sdl3d_game_data_for_each_render_primitive_evaluated(runtime, eval, draw_primitive, &context);
+    return draw_render_primitives_evaluated_with_cache(runtime, renderer, eval, NULL);
 }
 
 bool sdl3d_game_data_draw_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
@@ -1717,9 +1735,9 @@ bool sdl3d_game_data_draw_frame(const sdl3d_game_data_frame_desc *frame)
             ok = run_frame_hook(frame, frame->before_world_3d) && ok;
             if (frame->particle_cache != NULL)
                 ok = sdl3d_game_data_draw_particles(frame->runtime, frame->renderer, frame->particle_cache) && ok;
-            ok =
-                sdl3d_game_data_draw_render_primitives_evaluated(frame->runtime, frame->renderer, frame->render_eval) &&
-                ok;
+            ok = draw_render_primitives_evaluated_with_cache(frame->runtime, frame->renderer, frame->render_eval,
+                                                             frame->image_cache) &&
+                 ok;
             ok = run_frame_hook(frame, frame->after_world_3d) && ok;
             sdl3d_end_mode_3d(frame->renderer);
         }

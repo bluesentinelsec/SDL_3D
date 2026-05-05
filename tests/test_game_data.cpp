@@ -61,6 +61,7 @@ struct RenderPrimitiveCapture
     int spheres = 0;
     bool saw_player_paddle = false;
     bool saw_ball = false;
+    float ball_rotation_angle = 0.0f;
     bool saw_options_background = false;
     bool saw_options_glow = false;
 };
@@ -1029,11 +1030,16 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
     if (std::string(primitive->entity_name) == "entity.ball")
     {
         capture->saw_ball = true;
+        capture->ball_rotation_angle = primitive->rotation_angle;
         EXPECT_NEAR(primitive->position.z, 0.12f, 0.0001f);
         EXPECT_NEAR(primitive->radius, 0.22f, 0.0001f);
-        EXPECT_EQ(primitive->rings, 12);
-        EXPECT_EQ(primitive->slices, 18);
-        EXPECT_TRUE(primitive->emissive);
+        EXPECT_EQ(primitive->rings, 24);
+        EXPECT_EQ(primitive->slices, 32);
+        EXPECT_STREQ(primitive->texture_image, "image.ball.texture");
+        EXPECT_NEAR(primitive->rotation_axis.x, 0.0f, 0.0001f);
+        EXPECT_NEAR(primitive->rotation_axis.y, 0.0f, 0.0001f);
+        EXPECT_NEAR(primitive->rotation_axis.z, 1.0f, 0.0001f);
+        EXPECT_FALSE(primitive->emissive);
     }
     if (std::string(primitive->entity_name) == "entity.options.background.base")
     {
@@ -1114,7 +1120,8 @@ bool capture_evaluated_primitive(void *userdata, const sdl3d_game_data_render_pr
     if (std::string(primitive->entity_name) == "entity.ball")
     {
         capture->saw_ball = true;
-        EXPECT_GT(primitive->emissive_color.x, 0.7f);
+        EXPECT_STREQ(primitive->texture_image, "image.ball.texture");
+        EXPECT_FALSE(primitive->emissive);
     }
     if (std::string(primitive->entity_name) == "entity.options.glow.magenta")
     {
@@ -1553,6 +1560,27 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_EQ(capture.spheres, 1);
     EXPECT_TRUE(capture.saw_player_paddle);
     EXPECT_TRUE(capture.saw_ball);
+    EXPECT_NEAR(capture.ball_rotation_angle, 0.0f, 0.0001f);
+
+    sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
+    ASSERT_NE(ball, nullptr);
+    sdl3d_properties_set_bool(ball->props, "active_motion", true);
+    sdl3d_properties_set_float(ball->props, "spin_angle", 0.0f);
+    sdl3d_game_context spin_context{};
+    spin_context.session = session;
+    sdl3d_game_data_frame_state spin_frame_state{};
+    sdl3d_game_data_frame_state_init(&spin_frame_state);
+    sdl3d_game_data_update_frame_desc spin_update{};
+    spin_update.ctx = &spin_context;
+    spin_update.runtime = runtime;
+    spin_update.dt = 0.5f;
+    ASSERT_TRUE(sdl3d_game_data_update_frame(&spin_frame_state, &spin_update));
+    EXPECT_NEAR(sdl3d_properties_get_float(ball->props, "spin_angle", -1.0f), 2.7f, 0.0001f);
+
+    RenderPrimitiveCapture spun_capture{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &spun_capture));
+    EXPECT_TRUE(spun_capture.saw_ball);
+    EXPECT_NEAR(spun_capture.ball_rotation_angle, 2.7f, 0.0001f);
 
     sdl3d_registered_actor *presentation = sdl3d_game_data_find_actor(runtime, "entity.presentation");
     ASSERT_NE(presentation, nullptr);
@@ -1658,6 +1686,11 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     ASSERT_TRUE(sdl3d_game_data_get_image_asset(runtime, "image.splash.logo", &image_asset));
     EXPECT_STREQ(image_asset.sprite, "sprite.splash.logo");
     EXPECT_EQ(image_asset.path, nullptr);
+
+    sdl3d_game_data_image_asset ball_image_asset{};
+    ASSERT_TRUE(sdl3d_game_data_get_image_asset(runtime, "image.ball.texture", &ball_image_asset));
+    EXPECT_STREQ(ball_image_asset.path, "asset://images/ball-texture.png");
+    EXPECT_EQ(ball_image_asset.sprite, nullptr);
 
     sdl3d_game_data_sprite_asset sprite_asset{};
     ASSERT_TRUE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.splash.logo", &sprite_asset));

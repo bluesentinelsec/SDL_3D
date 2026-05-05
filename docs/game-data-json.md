@@ -964,24 +964,25 @@ Entities are the data form of actor registry entries plus optional component own
 }
 ```
 
-    Core fields are generic.Components are module -
-    owned and may be ignored by runtimes that do not load that module
-        .
+Core fields are generic. Components are module-owned and may be ignored by
+runtimes that do not load that module.
 
-    ## #Presentation Components
+### Presentation Components
 
-        The first generic presentation components are deliberately simple descriptors :
+The first generic presentation components are deliberately simple descriptors:
 
-    - `render.cube` describes an axis -
-    aligned box with `size`,
-    optional `offset`, `color`,
-    and `emissive`.- `render.sphere` describes a sphere with `radius`, `rings`, `slices`, `color`,
-    and `emissive`.- `particles.emitter` describes an emitter config that can be passed to the particle system.
+- `render.cube` describes an axis-aligned box with `size`, optional `offset`,
+  `color`, and `emissive`.
+- `render.sphere` describes a sphere with `radius`, `rings`, `slices`, `color`,
+  optional `texture`, `rotation_axis`, `rotation_angle`, `rotation_property`,
+  and `emissive`.
+- `particles.emitter` describes an emitter config that can be passed to the
+  particle system.
 
-                     The game data runtime exposes these as read -
-        only descriptors.It does not issue draw calls itself; each game or
-renderer decides how to render, sort, tint, or override them. The optional `game_presentation` helpers provide
-a default implementation for simple demos and tools.
+The game data runtime exposes these as read-only descriptors. It does not issue
+draw calls itself; each game or renderer decides how to render, sort, tint, or
+override them. The optional `game_presentation` helpers provide a default
+implementation for simple demos and tools.
 
 Render primitives may also author generic visual effects:
 
@@ -1004,6 +1005,13 @@ Render primitives may also author generic visual effects:
 Set `lighting` to `false` on a render primitive for solid-color unlit geometry
 such as menu backplates, sky cards, debug overlays, and other presentation
 surfaces that should not be affected by world lights.
+
+Sphere primitive `texture` values reference `assets.images` ids. The default
+presentation helper applies the texture as lit albedo when the sphere has
+lighting enabled. `rotation_axis` and `rotation_angle` rotate the sphere locally
+at draw time; `rotation_property` adds a float actor property to the authored
+angle, which lets data-authored motion components animate a textured sphere
+without game-specific C.
 
 Supported primitive effects are:
 
@@ -1155,9 +1163,11 @@ and transient flashes without host code.
 ```
 
 `motion.velocity_2d` integrates an actor's vec2/vec3 velocity property into
-its transform each update. `motion.oscillate` moves an actor along an authored
-sinusoid and is useful for data-authored lamps, platforms, attract-mode props,
-and other looping presentation motion:
+its transform each update. `motion.spin` increments a float actor property by
+`rate` radians per second, defaulting to the property `rotation_angle`. It is
+useful for driving render primitive `rotation_property` values. `motion.oscillate`
+moves an actor along an authored sinusoid and is useful for data-authored lamps,
+platforms, attract-mode props, and other looping presentation motion:
 
 ```json
 {
