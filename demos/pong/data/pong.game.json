@@ -1760,6 +1760,33 @@
       }
     }
   ],
+  "haptics": {
+    "policies": [
+      {
+        "name": "haptics.gamepad.vibration_test",
+        "signal": "signal.settings.vibration",
+        "low_frequency": 0.30,
+        "high_frequency": 0.70,
+        "duration_ms": 100
+      },
+      {
+        "name": "haptics.gamepad.paddle_hit",
+        "signal": "signal.ball.hit_paddle",
+        "enabled_if": { "type": "property.compare", "target": "entity.settings", "key": "vibration", "op": "==", "value": true },
+        "low_frequency": 0.45,
+        "high_frequency": 0.75,
+        "duration_ms": 120,
+        "payload_actor_filters": [
+          { "key": "other_actor_name", "tags": ["paddle", "player"] },
+          {
+            "key": "other_actor_name",
+            "tags": ["paddle", "cpu"],
+            "active_if": { "type": "scene_state.compare", "key": "match_mode", "op": "==", "value": "local" }
+          }
+        ]
+      }
+    ]
+  },
   "signals": [
     "signal.game.start",
     "signal.ball.serve",

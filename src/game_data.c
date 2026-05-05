@@ -1534,6 +1534,20 @@ static bool entity_json_has_tags(yyjson_val *entity, const char *const *tags, in
     return true;
 }
 
+static bool entity_json_has_all_tags_from_json(yyjson_val *entity, yyjson_val *tags)
+{
+    if (!yyjson_is_arr(tags) || yyjson_arr_size(tags) == 0)
+        return false;
+
+    for (size_t i = 0; i < yyjson_arr_size(tags); ++i)
+    {
+        yyjson_val *tag = yyjson_arr_get(tags, i);
+        if (!yyjson_is_str(tag) || !entity_json_has_tag(entity, yyjson_get_str(tag)))
+            return false;
+    }
+    return true;
+}
+
 static yyjson_val *find_component_json(yyjson_val *entity, const char *type)
 {
     yyjson_val *components = obj_get(entity, "components");
@@ -9876,6 +9890,109 @@ bool sdl3d_game_data_get_network_runtime_control(const sdl3d_game_data_runtime *
                                                  const char **out_control)
 {
     return game_data_get_network_runtime_binding(runtime, "controls", name, out_control);
+}
+
+static yyjson_val *haptics_policies_json(const sdl3d_game_data_runtime *runtime)
+{
+    return obj_get(obj_get(runtime_root(runtime), "haptics"), "policies");
+}
+
+static yyjson_val *haptics_policy_json(const sdl3d_game_data_runtime *runtime, int index)
+{
+    yyjson_val *policies = haptics_policies_json(runtime);
+    if (!yyjson_is_arr(policies) || index < 0 || (size_t)index >= yyjson_arr_size(policies))
+        return NULL;
+    return yyjson_arr_get(policies, (size_t)index);
+}
+
+int sdl3d_game_data_haptics_policy_count(const sdl3d_game_data_runtime *runtime)
+{
+    yyjson_val *policies = haptics_policies_json(runtime);
+    return yyjson_is_arr(policies) ? (int)yyjson_arr_size(policies) : 0;
+}
+
+bool sdl3d_game_data_get_haptics_policy_at(const sdl3d_game_data_runtime *runtime, int index,
+                                           sdl3d_game_data_haptics_policy *out_policy)
+{
+    if (out_policy != NULL)
+        SDL_zero(*out_policy);
+    if (runtime == NULL || out_policy == NULL)
+        return false;
+
+    yyjson_val *policy = haptics_policy_json(runtime, index);
+    if (!yyjson_is_obj(policy))
+        return false;
+
+    const char *signal = json_string(policy, "signal", NULL);
+    out_policy->name = json_string(policy, "name", NULL);
+    out_policy->signal_id = sdl3d_game_data_find_signal(runtime, signal);
+    out_policy->low_frequency = json_float(policy, "low_frequency", json_float(policy, "low", 0.0f));
+    out_policy->high_frequency = json_float(policy, "high_frequency", json_float(policy, "high", 0.0f));
+    out_policy->duration_ms = (Uint32)SDL_max(json_int(policy, "duration_ms", 0), 0);
+    return out_policy->name != NULL && out_policy->signal_id >= 0 && out_policy->duration_ms > 0U;
+}
+
+static bool haptics_payload_actor_filter_matches(const sdl3d_game_data_runtime *runtime, yyjson_val *filter,
+                                                 const sdl3d_properties *payload)
+{
+    if (runtime == NULL || !yyjson_is_obj(filter) || payload == NULL)
+        return false;
+    if (!eval_data_condition(runtime, obj_get(filter, "active_if"), NULL))
+        return false;
+
+    const char *key = json_string(filter, "key", NULL);
+    const char *payload_actor_name = key != NULL ? sdl3d_properties_get_string(payload, key, NULL) : NULL;
+    if (payload_actor_name == NULL || payload_actor_name[0] == '\0')
+        return false;
+
+    const char *actor_name = json_string(filter, "actor", NULL);
+    if (actor_name != NULL && SDL_strcmp(actor_name, payload_actor_name) == 0)
+        return true;
+
+    yyjson_val *tags = obj_get(filter, "tags");
+    if (yyjson_is_arr(tags))
+    {
+        yyjson_val *entity = find_entity_json(runtime, payload_actor_name);
+        return entity != NULL && entity_json_has_all_tags_from_json(entity, tags);
+    }
+
+    return false;
+}
+
+static bool haptics_policy_payload_matches(const sdl3d_game_data_runtime *runtime, yyjson_val *policy,
+                                           const sdl3d_properties *payload)
+{
+    yyjson_val *filters = obj_get(policy, "payload_actor_filters");
+    if (filters == NULL)
+        return true;
+    if (!yyjson_is_arr(filters) || yyjson_arr_size(filters) == 0)
+        return false;
+
+    for (size_t i = 0; i < yyjson_arr_size(filters); ++i)
+    {
+        if (haptics_payload_actor_filter_matches(runtime, yyjson_arr_get(filters, i), payload))
+            return true;
+    }
+    return false;
+}
+
+bool sdl3d_game_data_match_haptics_policy(const sdl3d_game_data_runtime *runtime, int index, int signal_id,
+                                          const sdl3d_properties *payload, sdl3d_game_data_haptics_policy *out_policy)
+{
+    yyjson_val *policy = haptics_policy_json(runtime, index);
+    sdl3d_game_data_haptics_policy candidate;
+    if (!sdl3d_game_data_get_haptics_policy_at(runtime, index, &candidate))
+        return false;
+    if (candidate.signal_id != signal_id)
+        return false;
+    if (!eval_data_condition(runtime, obj_get(policy, "enabled_if"), NULL))
+        return false;
+    if (!haptics_policy_payload_matches(runtime, policy, payload))
+        return false;
+
+    if (out_policy != NULL)
+        *out_policy = candidate;
+    return true;
 }
 
 static yyjson_val *network_runtime_pause_json(const sdl3d_game_data_runtime *runtime)
