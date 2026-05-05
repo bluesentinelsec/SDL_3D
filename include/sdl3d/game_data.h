@@ -597,6 +597,8 @@ extern "C"
         SDL3D_GAME_DATA_MENU_CONTROL_RANGE = 3,
         /** @brief Menu item captures a keyboard key or gamepad button and rebinds authored actions. */
         SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING = 4,
+        /** @brief Menu item captures editable text and writes it to scene state or an actor property. */
+        SDL3D_GAME_DATA_MENU_CONTROL_TEXT = 5,
     } sdl3d_game_data_menu_control_type;
 
     /** @brief App pause command authored on a menu item. */
@@ -626,6 +628,21 @@ extern "C"
         /** @brief The captured input was rejected because another binding uses it. */
         SDL3D_GAME_DATA_INPUT_BINDING_CAPTURE_CONFLICT = 4,
     } sdl3d_game_data_input_binding_capture_status;
+
+    /** @brief Result of advancing an active menu text-entry capture. */
+    typedef enum sdl3d_game_data_text_entry_capture_status
+    {
+        /** @brief No text-entry capture is active. */
+        SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_NONE = 0,
+        /** @brief Capture is active and waiting for more input. */
+        SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_WAITING = 1,
+        /** @brief Capture was canceled and the original value was restored. */
+        SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_CANCELED = 2,
+        /** @brief Capture is active and edited the bound value. */
+        SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_CHANGED = 3,
+        /** @brief Capture was submitted. */
+        SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_SUBMITTED = 4,
+    } sdl3d_game_data_text_entry_capture_status;
 
     /**
      * @brief Runtime descriptor for one authored menu item.
@@ -1882,6 +1899,30 @@ extern "C"
      * @brief Reset all binding controls in a menu to their authored defaults.
      */
     bool sdl3d_game_data_reset_menu_input_bindings(sdl3d_game_data_runtime *runtime, const char *menu_name);
+
+    /**
+     * @brief Start text capture for an authored menu text control.
+     *
+     * The menu item must author a `control` with `type: "text"`. While active,
+     * callers should call sdl3d_game_data_update_menu_text_entry_capture()
+     * before normal menu navigation so editing keys are consumed locally.
+     */
+    bool sdl3d_game_data_start_menu_text_entry_capture(sdl3d_game_data_runtime *runtime, const char *menu_name,
+                                                       int item_index);
+
+    /** @brief Return true while a menu text-entry capture is active. */
+    bool sdl3d_game_data_menu_text_entry_capture_active(const sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Advance active text-entry capture from current input.
+     *
+     * SDL text-input payloads append to the bound string. Backspace and Delete
+     * remove the previous UTF-8 codepoint. The menu's select action or Return
+     * submits; the menu's back action or the authored cancel key cancels and
+     * restores the original value.
+     */
+    sdl3d_game_data_text_entry_capture_status sdl3d_game_data_update_menu_text_entry_capture(
+        sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input);
 
     /**
      * @brief Device-count state for active input profile refresh.

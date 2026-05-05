@@ -481,6 +481,7 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
         SDL_Quit();
         return 1;
     }
+    SDL_StartTextInput(ctx.window);
 
     sdl3d_time_reset();
 
@@ -659,6 +660,7 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
         callbacks->shutdown(&ctx, userdata);
     }
 
+    SDL_StopTextInput(ctx.window);
     sdl3d_game_cleanup_context(&ctx);
     SDL_Quit();
     return result;

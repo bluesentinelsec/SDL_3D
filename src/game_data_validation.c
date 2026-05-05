@@ -3493,12 +3493,16 @@ static bool validate_menu_item_control(validation_context *ctx, yyjson_val *cont
 
     const char *type = json_string(control, "type");
     if (type == NULL || (SDL_strcmp(type, "toggle") != 0 && SDL_strcmp(type, "choice") != 0 &&
-                         SDL_strcmp(type, "range") != 0 && SDL_strcmp(type, "input_binding") != 0))
-        return validation_error(ctx, path, "menu item control requires type toggle, choice, range, or input_binding");
+                         SDL_strcmp(type, "range") != 0 && SDL_strcmp(type, "input_binding") != 0 &&
+                         SDL_strcmp(type, "text") != 0 && SDL_strcmp(type, "text_entry") != 0))
+        return validation_error(ctx, path,
+                                "menu item control requires type toggle, choice, range, input_binding, or text");
 
     if (SDL_strcmp(type, "input_binding") != 0)
     {
-        if (!require_ref(ctx, &names->entities, "entity", json_string(control, "target"), path))
+        const char *target = json_string(control, "target");
+        if (target != NULL && SDL_strcmp(target, "scene_state") != 0 &&
+            !require_ref(ctx, &names->entities, "entity", target, path))
             return false;
         if (!is_non_empty_string(control, "key"))
             return validation_error(ctx, path, "menu item control requires a non-empty key");
@@ -3534,6 +3538,26 @@ static bool validate_menu_item_control(validation_context *ctx, yyjson_val *cont
                 return validation_error(ctx, path,
                                         "input_binding controls support keyboard, mouse, or gamepad bindings");
         }
+    }
+    if (SDL_strcmp(type, "text") == 0 || SDL_strcmp(type, "text_entry") == 0)
+    {
+        yyjson_val *max_length = obj_get(control, "max_length");
+        if (max_length != NULL && (!yyjson_is_int(max_length) || yyjson_get_sint(max_length) < 0))
+            return validation_error(ctx, path, "text control max_length must be a non-negative integer");
+        if (obj_get(control, "default") != NULL && !yyjson_is_str(obj_get(control, "default")))
+            return validation_error(ctx, path, "text control default must be a string");
+        if (obj_get(control, "placeholder") != NULL && !yyjson_is_str(obj_get(control, "placeholder")))
+            return validation_error(ctx, path, "text control placeholder must be a string");
+        const char *charset = json_string(control, "charset");
+        if (charset == NULL)
+            charset = json_string(control, "allow");
+        if (charset != NULL && SDL_strcmp(charset, "text") != 0 && SDL_strcmp(charset, "utf8") != 0 &&
+            SDL_strcmp(charset, "ascii") != 0 && SDL_strcmp(charset, "integer") != 0 &&
+            SDL_strcmp(charset, "digits") != 0 && SDL_strcmp(charset, "numeric") != 0 &&
+            SDL_strcmp(charset, "hostname") != 0)
+            return validation_error(ctx, path,
+                                    "text control charset must be text, utf8, ascii, integer, digits, numeric, or "
+                                    "hostname");
     }
     return true;
 }

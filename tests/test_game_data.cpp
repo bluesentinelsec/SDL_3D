@@ -2693,6 +2693,194 @@ TEST(GameDataRuntime, MenuControllerConsumesAuthoredMenuInput)
     sdl3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, MenuTextEntryCapturesEditingInput)
+{
+    const std::filesystem::path dir = unique_test_dir("menu_text_entry");
+    write_text(dir / "text_entry.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Text Entry", "id": "test.text_entry", "version": "0.1.0" },
+  "world": { "name": "world.text_entry", "kind": "fixed_screen" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.ui",
+        "actions": [
+          { "name": "action.menu.select", "bindings": [{ "device": "keyboard", "key": "RETURN" }] },
+          { "name": "action.menu.back", "bindings": [{ "device": "keyboard", "key": "ESCAPE" }] },
+          { "name": "action.menu.up", "bindings": [{ "device": "keyboard", "key": "UP" }] },
+          { "name": "action.menu.down", "bindings": [{ "device": "keyboard", "key": "DOWN" }] }
+        ]
+      }
+    ]
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.form", "files": ["scenes/form.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "form.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.form",
+  "input": { "actions": ["action.menu.select", "action.menu.back", "action.menu.up", "action.menu.down"] },
+  "menus": [
+    {
+      "name": "menu.form",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "back_action": "action.menu.back",
+      "items": [
+        {
+          "label": "Host",
+          "control": {
+            "type": "text",
+            "target": "scene_state",
+            "key": "host",
+            "default": "",
+            "placeholder": "Host / IP",
+            "charset": "hostname",
+            "max_length": 32
+          }
+        },
+        { "label": "Back", "return_scene": true }
+      ]
+    }
+  ]
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "text_entry.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+
+    sdl3d_game_data_menu menu{};
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_STREQ(menu.name, "menu.form");
+    sdl3d_game_data_menu_item item{};
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_TEXT);
+
+    bool armed = true;
+    sdl3d_game_data_menu_update_result result{};
+    SDL_Event event{};
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.scancode = SDL_SCANCODE_RETURN;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 1);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.text_entry_capture_started);
+    EXPECT_TRUE(sdl3d_game_data_menu_text_entry_capture_active(runtime));
+
+    event.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 2);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event = {};
+    event.type = SDL_EVENT_TEXT_INPUT;
+    event.text.text = "host local@1";
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 3);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.text_entry_changed);
+    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "host", ""), "hostlocal1");
+
+    event = {};
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.scancode = SDL_SCANCODE_DOWN;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 4);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.handled_input);
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_EQ(menu.selected_index, 0);
+
+    event.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 5);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event = {};
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.scancode = SDL_SCANCODE_BACKSPACE;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 6);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "host", ""), "hostlocal");
+
+    event.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 7);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event = {};
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.scancode = SDL_SCANCODE_DELETE;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 8);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "host", ""), "hostloca");
+
+    event.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 9);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event = {};
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.scancode = SDL_SCANCODE_ESCAPE;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 10);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.text_entry_canceled);
+    EXPECT_FALSE(sdl3d_game_data_menu_text_entry_capture_active(runtime));
+    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "host", ""), "");
+
+    event.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 11);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event = {};
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.scancode = SDL_SCANCODE_RETURN;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 12);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.text_entry_capture_started);
+
+    event.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 13);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event = {};
+    event.type = SDL_EVENT_TEXT_INPUT;
+    event.text.text = "192.168.1.20:27183";
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 14);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+
+    event = {};
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.scancode = SDL_SCANCODE_RETURN;
+    sdl3d_input_process_event(input, &event);
+    sdl3d_input_update(input, 15);
+    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_TRUE(result.text_entry_submitted);
+    EXPECT_FALSE(sdl3d_game_data_menu_text_entry_capture_active(runtime));
+    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "host", ""), "192.168.1.20:27183");
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, PlaySceneMenusAreSelectedByAuthoredConditions)
 {
     sdl3d_game_session *session = nullptr;
