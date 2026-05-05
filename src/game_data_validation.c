@@ -16,6 +16,7 @@
 #include "sdl3d_crypto.h"
 
 #define PATH_BUFFER_SIZE 256
+#define GAME_DATA_MENU_TEXT_MAX_BYTES 255
 
 typedef struct name_table
 {
@@ -3492,9 +3493,9 @@ static bool validate_menu_item_control(validation_context *ctx, yyjson_val *cont
         return validation_error(ctx, path, "menu item control must be an object");
 
     const char *type = json_string(control, "type");
-    if (type == NULL || (SDL_strcmp(type, "toggle") != 0 && SDL_strcmp(type, "choice") != 0 &&
-                         SDL_strcmp(type, "range") != 0 && SDL_strcmp(type, "input_binding") != 0 &&
-                         SDL_strcmp(type, "text") != 0 && SDL_strcmp(type, "text_entry") != 0))
+    if (type == NULL ||
+        (SDL_strcmp(type, "toggle") != 0 && SDL_strcmp(type, "choice") != 0 && SDL_strcmp(type, "range") != 0 &&
+         SDL_strcmp(type, "input_binding") != 0 && SDL_strcmp(type, "text") != 0))
         return validation_error(ctx, path,
                                 "menu item control requires type toggle, choice, range, input_binding, or text");
 
@@ -3539,11 +3540,13 @@ static bool validate_menu_item_control(validation_context *ctx, yyjson_val *cont
                                         "input_binding controls support keyboard, mouse, or gamepad bindings");
         }
     }
-    if (SDL_strcmp(type, "text") == 0 || SDL_strcmp(type, "text_entry") == 0)
+    if (SDL_strcmp(type, "text") == 0)
     {
         yyjson_val *max_length = obj_get(control, "max_length");
         if (max_length != NULL && (!yyjson_is_int(max_length) || yyjson_get_sint(max_length) < 0))
             return validation_error(ctx, path, "text control max_length must be a non-negative integer");
+        if (max_length != NULL && yyjson_get_sint(max_length) > GAME_DATA_MENU_TEXT_MAX_BYTES)
+            return validation_error(ctx, path, "text control max_length must be 255 bytes or fewer");
         if (obj_get(control, "default") != NULL && !yyjson_is_str(obj_get(control, "default")))
             return validation_error(ctx, path, "text control default must be a string");
         if (obj_get(control, "placeholder") != NULL && !yyjson_is_str(obj_get(control, "placeholder")))

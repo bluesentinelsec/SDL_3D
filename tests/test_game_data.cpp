@@ -2783,7 +2783,13 @@ TEST(GameDataRuntime, MenuTextEntryCapturesEditingInput)
 
     event = {};
     event.type = SDL_EVENT_TEXT_INPUT;
-    event.text.text = "host local@1";
+    event.text.text = "host local@1"
+                      "\xC3"
+                      "\xA9"
+                      "\xF0"
+                      "\x9F"
+                      "\x98"
+                      "\x80";
     sdl3d_input_process_event(input, &event);
     sdl3d_input_update(input, 3);
     ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
@@ -2878,6 +2884,65 @@ TEST(GameDataRuntime, MenuTextEntryCapturesEditingInput)
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidMenuTextControlSchema)
+{
+    const std::filesystem::path dir = unique_test_dir("menu_text_entry_validation");
+    const auto write_case = [&](const char *name, const char *control_json) {
+        write_text(dir / (std::string(name) + ".game.json"),
+                   R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Text Entry Validation", "id": "test.text_entry_validation", "version": "0.1.0" },
+  "world": { "name": "world.text_entry_validation", "kind": "fixed_screen" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.ui",
+        "actions": [
+          { "name": "action.menu.select", "bindings": [{ "device": "keyboard", "key": "RETURN" }] },
+          { "name": "action.menu.up", "bindings": [{ "device": "keyboard", "key": "UP" }] },
+          { "name": "action.menu.down", "bindings": [{ "device": "keyboard", "key": "DOWN" }] }
+        ]
+      }
+    ]
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.form", "files": ["scenes/form.scene.json"] }
+})json");
+        write_text(dir / "scenes" / "form.scene.json", (std::string(R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.form",
+  "input": { "actions": ["action.menu.select", "action.menu.up", "action.menu.down"] },
+  "menus": [
+    {
+      "name": "menu.form",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "items": [
+        { "label": "Host", "control": )json") + control_json +
+                                                        R"json( }
+      ]
+    }
+  ]
+})json")
+                                                           .c_str());
+    };
+
+    char error[512]{};
+    write_case("alias", R"json({ "type": "text_entry", "target": "scene_state", "key": "host" })json");
+    EXPECT_FALSE(
+        sdl3d_game_data_validate_file((dir / "alias.game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("menu item control requires type"), std::string::npos) << error;
+
+    error[0] = '\0';
+    write_case("too_long", R"json({ "type": "text", "target": "scene_state", "key": "host", "max_length": 256 })json");
+    EXPECT_FALSE(
+        sdl3d_game_data_validate_file((dir / "too_long.game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("max_length must be 255 bytes or fewer"), std::string::npos) << error;
+
     remove_test_dir(dir);
 }
 

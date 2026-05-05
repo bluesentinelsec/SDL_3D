@@ -410,6 +410,8 @@ scene state. Set `target` to an entity id to bind an actor string property.
 Supported `charset` values are `text`, `utf8`, `ascii`, `integer`, `digits`,
 `numeric`, and `hostname`. `hostname` accepts letters, digits, `.`, `-`, `_`,
 and `:` so it can store hostnames, IPv4 addresses, IPv6-style text, and ports.
+Restricted charsets reject non-ASCII UTF-8 input. `max_length` is measured in
+UTF-8 bytes and must be 255 or fewer.
 
 `input_binding` controls capture the next keyboard key, mouse button, or
 gamepad button and immediately rebind all authored actions for that device. This is how games can
