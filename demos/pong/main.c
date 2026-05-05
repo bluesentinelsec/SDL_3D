@@ -1676,14 +1676,6 @@ static bool pong_init(sdl3d_game_context *ctx, void *userdata)
     return true;
 }
 
-static bool pong_handle_event(sdl3d_game_context *ctx, void *userdata, const SDL_Event *event)
-{
-    (void)userdata;
-    (void)event;
-    (void)ctx;
-    return true;
-}
-
 static void pong_tick(sdl3d_game_context *ctx, void *userdata, float dt)
 {
     pong_state *state = (pong_state *)userdata;
@@ -1804,7 +1796,6 @@ int main(int argc, char **argv)
     sdl3d_game_callbacks callbacks;
     SDL_zero(callbacks);
     callbacks.init = pong_init;
-    callbacks.event = pong_handle_event;
     callbacks.tick = pong_tick;
     callbacks.pause_tick = pong_pause_tick;
     callbacks.render = pong_render;

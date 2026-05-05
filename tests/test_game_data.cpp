@@ -6332,6 +6332,20 @@ TEST(GameDataRuntime, AuthoredDiscoveryConnectActionsUpdateSceneState)
     EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "direct_connect_connected", true));
     EXPECT_EQ(sdl3d_game_data_runtime_collection_count(runtime, "local_matches"), 0);
 
+    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "label", "Valid Pong Host"));
+    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "name", "Valid Pong Host"));
+    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "host", "127.0.0.1"));
+    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_int(runtime, "local_matches", 0, "port", 65535));
+    ASSERT_TRUE(
+        sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "endpoint", "127.0.0.1:65535"));
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), connect_signal, nullptr);
+
+    EXPECT_NE(sdl3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_host", ""), "127.0.0.1");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_port", ""), "65535");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""), "Match found. Connecting...");
+    EXPECT_EQ(sdl3d_game_data_runtime_collection_count(runtime, "local_matches"), 0);
+
     const int cancel_signal = sdl3d_game_data_find_signal(runtime, "signal.multiplayer.discovery.cancel");
     ASSERT_GE(cancel_signal, 0);
     sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), cancel_signal, nullptr);

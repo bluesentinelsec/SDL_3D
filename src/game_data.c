@@ -5162,14 +5162,16 @@ bool sdl3d_game_data_network_discovery_connect_selected(sdl3d_game_data_runtime 
     }
 
     const char *host = sdl3d_properties_get_string(collection->rows[selected_index], "host", NULL);
+    char host_copy[SDL3D_NETWORK_MAX_HOST_LENGTH];
     const sdl3d_value *port_value = sdl3d_properties_get_value(collection->rows[selected_index], "port");
     const int port = port_value != NULL && port_value->type == SDL3D_VALUE_INT
                          ? port_value->as_int
                          : SDL_atoi(sdl3d_properties_get_string(collection->rows[selected_index], "port", "0"));
+    SDL_strlcpy(host_copy, host != NULL ? host : "", sizeof(host_copy));
     if (runtime->scene_state != NULL)
     {
         if (host_key != NULL && host_key[0] != '\0')
-            sdl3d_properties_set_string(runtime->scene_state, host_key, host != NULL ? host : "");
+            sdl3d_properties_set_string(runtime->scene_state, host_key, host_copy);
         if (port_key != NULL && port_key[0] != '\0')
         {
             char port_text[16];
@@ -5180,8 +5182,8 @@ bool sdl3d_game_data_network_discovery_connect_selected(sdl3d_game_data_runtime 
 
     (void)sdl3d_game_data_network_discovery_cancel(runtime, discovery_name, collection_name, NULL, NULL,
                                                    "Discovery canceled");
-    const bool ok = sdl3d_game_data_network_direct_connect_start(runtime, direct_connect_name, host, port, status_key,
-                                                                 state_key, connected_key);
+    const bool ok = sdl3d_game_data_network_direct_connect_start(runtime, direct_connect_name, host_copy, port,
+                                                                 status_key, state_key, connected_key);
     if (ok && connecting_status != NULL && connecting_status[0] != '\0' && runtime->scene_state != NULL &&
         status_key != NULL && status_key[0] != '\0')
     {
