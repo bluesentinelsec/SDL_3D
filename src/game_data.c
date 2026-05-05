@@ -3384,7 +3384,13 @@ static bool for_each_render_primitive_internal(const sdl3d_game_data_runtime *ru
             primitive.position.x += offset.x;
             primitive.position.y += offset.y;
             primitive.position.z += offset.z;
+            primitive.rotation_axis = json_vec3(component, "rotation_axis", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+            primitive.rotation_angle = json_float(component, "rotation_angle", 0.0f);
+            const char *rotation_property = json_string(component, "rotation_property", NULL);
+            if (rotation_property != NULL)
+                primitive.rotation_angle += sdl3d_properties_get_float(actor->props, rotation_property, 0.0f);
             primitive.color = json_color(component, "color", (sdl3d_color){255, 255, 255, 255});
+            primitive.texture_image = json_string(component, "texture", NULL);
             primitive.lighting_enabled = json_bool(component, "lighting", true);
             primitive.emissive = json_bool(component, "emissive", false);
             primitive.emissive_color =
@@ -9065,6 +9071,16 @@ static void update_motion_components(sdl3d_game_data_runtime *runtime, yyjson_va
                 const float wave = SDL_sinf(time * rate + phase);
                 actor_set_position(actor, sdl3d_vec3_make(origin.x + amplitude.x * wave, origin.y + amplitude.y * wave,
                                                           origin.z + amplitude.z * wave));
+            }
+            else if (SDL_strcmp(type, "motion.spin") == 0)
+            {
+                const char *property = json_string(component, "property", "rotation_angle");
+                const float rate = json_float(component, "rate", 1.0f);
+                float angle = sdl3d_properties_get_float(actor->props, property, 0.0f) + rate * dt;
+                const float two_pi = 6.28318530717958647692f;
+                if (angle > two_pi || angle < -two_pi)
+                    angle = SDL_fmodf(angle, two_pi);
+                sdl3d_properties_set_float(actor->props, property, angle);
             }
         }
     }

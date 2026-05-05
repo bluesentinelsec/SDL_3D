@@ -418,6 +418,39 @@ TEST_F(SDL3DShapesFixture, SolidSphereHasOutwardFaces)
     }
 }
 
+TEST_F(SDL3DShapesFixture, TexturedSphereDrawsWithLocalRotation)
+{
+    WindowRenderer wr(96, 96);
+    ASSERT_TRUE(wr.ok());
+    ContextOwner c;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &c.ctx));
+
+    Uint8 pixels[] = {
+        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    };
+    sdl3d_image image{};
+    image.width = 2;
+    image.height = 2;
+    image.pixels = pixels;
+
+    sdl3d_texture2d texture{};
+    ASSERT_TRUE(sdl3d_create_texture_from_image(&image, &texture));
+
+    ASSERT_TRUE(sdl3d_clear_render_context(c.ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(c.ctx, MakeCamera()));
+    ASSERT_TRUE(sdl3d_draw_sphere_textured(c.ctx, sdl3d_vec3_make(0, 0, 0), 0.7f, 10, 18, sdl3d_vec3_make(0, 0, 1),
+                                           0.75f, &texture, kBlue));
+    ASSERT_TRUE(sdl3d_end_mode_3d(c.ctx));
+
+    const int cx = sdl3d_get_render_context_width(c.ctx) / 2;
+    const int cy = sdl3d_get_render_context_height(c.ctx) / 2;
+    sdl3d_color p{};
+    ASSERT_TRUE(sdl3d_get_framebuffer_pixel(c.ctx, cx, cy, &p));
+    EXPECT_FALSE(PixelEquals(p, kBlack));
+
+    sdl3d_free_texture(&texture);
+}
+
 TEST_F(SDL3DShapesFixture, SphereWiresDrawWithoutFilling)
 {
     WindowRenderer wr(96, 96);

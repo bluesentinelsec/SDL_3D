@@ -436,8 +436,9 @@ static sdl3d_vec3 sdl3d_sphere_point(sdl3d_vec3 center, float radius, float thet
                            center.z + radius * sin_t * sin_p);
 }
 
-bool sdl3d_draw_sphere(sdl3d_render_context *context, sdl3d_vec3 center, float radius, int rings, int slices,
-                       sdl3d_color color)
+bool sdl3d_draw_sphere_textured(sdl3d_render_context *context, sdl3d_vec3 center, float radius, int rings, int slices,
+                                sdl3d_vec3 rotation_axis, float rotation_angle, const sdl3d_texture2d *texture,
+                                sdl3d_color tint)
 {
     if (!sdl3d_shape_require_nonnegative(radius, "radius", "sdl3d_draw_sphere"))
     {
@@ -457,13 +458,24 @@ bool sdl3d_draw_sphere(sdl3d_render_context *context, sdl3d_vec3 center, float r
 
     float *positions = (float *)SDL_malloc((size_t)vert_count * 3 * sizeof(float));
     float *normals = (float *)SDL_malloc((size_t)vert_count * 3 * sizeof(float));
+    float *uvs = (float *)SDL_malloc((size_t)vert_count * 2 * sizeof(float));
     unsigned int *indices = (unsigned int *)SDL_malloc((size_t)idx_count * sizeof(unsigned int));
-    if (positions == NULL || normals == NULL || indices == NULL)
+    if (positions == NULL || normals == NULL || uvs == NULL || indices == NULL)
     {
         SDL_free(positions);
         SDL_free(normals);
+        SDL_free(uvs);
         SDL_free(indices);
         return SDL_OutOfMemory();
+    }
+
+    sdl3d_mat4 xform = sdl3d_mat4_translate(center);
+    float axis_len = SDL_sqrtf(rotation_axis.x * rotation_axis.x + rotation_axis.y * rotation_axis.y +
+                               rotation_axis.z * rotation_axis.z);
+    if (axis_len > 0.0001f && SDL_fabsf(rotation_angle) > 0.0001f)
+    {
+        sdl3d_mat4 rot = sdl3d_mat4_rotate(rotation_axis, rotation_angle);
+        xform = sdl3d_mat4_multiply(xform, rot);
     }
 
     for (int i = 0; i <= rings; ++i)
@@ -476,12 +488,18 @@ bool sdl3d_draw_sphere(sdl3d_render_context *context, sdl3d_vec3 center, float r
             float nx = SDL_sinf(theta) * SDL_cosf(phi);
             float ny = SDL_cosf(theta);
             float nz = SDL_sinf(theta) * SDL_sinf(phi);
-            positions[vi * 3 + 0] = center.x + radius * nx;
-            positions[vi * 3 + 1] = center.y + radius * ny;
-            positions[vi * 3 + 2] = center.z + radius * nz;
-            normals[vi * 3 + 0] = nx;
-            normals[vi * 3 + 1] = ny;
-            normals[vi * 3 + 2] = nz;
+            sdl3d_vec4 lp = {radius * nx, radius * ny, radius * nz, 1.0f};
+            sdl3d_vec4 wp = sdl3d_mat4_transform_vec4(xform, lp);
+            sdl3d_vec4 ln = {nx, ny, nz, 0.0f};
+            sdl3d_vec4 wn = sdl3d_mat4_transform_vec4(xform, ln);
+            positions[vi * 3 + 0] = wp.x;
+            positions[vi * 3 + 1] = wp.y;
+            positions[vi * 3 + 2] = wp.z;
+            normals[vi * 3 + 0] = wn.x;
+            normals[vi * 3 + 1] = wn.y;
+            normals[vi * 3 + 2] = wn.z;
+            uvs[vi * 2 + 0] = (float)j / (float)slices;
+            uvs[vi * 2 + 1] = 1.0f - (float)i / (float)rings;
         }
     }
 
@@ -507,16 +525,25 @@ bool sdl3d_draw_sphere(sdl3d_render_context *context, sdl3d_vec3 center, float r
     SDL_zerop(&mesh);
     mesh.positions = positions;
     mesh.normals = normals;
+    mesh.uvs = uvs;
     mesh.indices = indices;
     mesh.vertex_count = vert_count;
     mesh.index_count = idx_count;
 
-    bool result = sdl3d_draw_mesh(context, &mesh, NULL, color);
+    bool result = sdl3d_draw_mesh(context, &mesh, texture, tint);
 
     SDL_free(positions);
     SDL_free(normals);
+    SDL_free(uvs);
     SDL_free(indices);
     return result;
+}
+
+bool sdl3d_draw_sphere(sdl3d_render_context *context, sdl3d_vec3 center, float radius, int rings, int slices,
+                       sdl3d_color color)
+{
+    return sdl3d_draw_sphere_textured(context, center, radius, rings, slices, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), 0.0f,
+                                      NULL, color);
 }
 
 bool sdl3d_draw_sphere_wires(sdl3d_render_context *context, sdl3d_vec3 center, float radius, int rings, int slices,

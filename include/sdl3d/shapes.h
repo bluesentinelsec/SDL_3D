@@ -87,6 +87,16 @@ extern "C"
      */
     bool sdl3d_draw_sphere(sdl3d_render_context *context, sdl3d_vec3 center, float radius, int rings, int slices,
                            sdl3d_color color);
+    /**
+     * @brief Draw a solid sphere with optional albedo texture and local rotation.
+     *
+     * `rotation_axis` and `rotation_angle` rotate the sphere mesh before it is
+     * translated to `center`. Pass NULL for `texture` to draw an untextured
+     * tinted sphere.
+     */
+    bool sdl3d_draw_sphere_textured(sdl3d_render_context *context, sdl3d_vec3 center, float radius, int rings,
+                                    int slices, sdl3d_vec3 rotation_axis, float rotation_angle,
+                                    const sdl3d_texture2d *texture, sdl3d_color tint);
     bool sdl3d_draw_sphere_wires(sdl3d_render_context *context, sdl3d_vec3 center, float radius, int rings, int slices,
                                  sdl3d_color color);
 

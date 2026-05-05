@@ -1287,8 +1287,9 @@ static bool is_vec_array(yyjson_val *value, size_t min_count)
 static bool is_supported_component_type(const char *type)
 {
     const char *known[] = {
-        "adapter.controller", "collision.aabb",    "collision.circle", "control.axis_1d", "motion.oscillate",
-        "motion.velocity_2d", "particles.emitter", "property.decay",   "render.cube",     "render.sphere",
+        "adapter.controller", "collision.aabb", "collision.circle",   "control.axis_1d",
+        "motion.oscillate",   "motion.spin",    "motion.velocity_2d", "particles.emitter",
+        "property.decay",     "render.cube",    "render.sphere",
     };
 
     if (type == NULL)
@@ -2266,11 +2267,38 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 if (phase != NULL && !yyjson_is_num(phase))
                     return validation_error(ctx, path, "motion.oscillate phase must be a number");
             }
+            else if (SDL_strcmp(type, "motion.spin") == 0)
+            {
+                yyjson_val *property = obj_get(component, "property");
+                if (property != NULL && !is_non_empty_string(component, "property"))
+                    return validation_error(ctx, path, "motion.spin property must be non-empty");
+                yyjson_val *rate = obj_get(component, "rate");
+                if (rate != NULL && !yyjson_is_num(rate))
+                    return validation_error(ctx, path, "motion.spin rate must be a number");
+            }
             else if (SDL_strcmp(type, "render.cube") == 0 || SDL_strcmp(type, "render.sphere") == 0)
             {
                 yyjson_val *lighting = obj_get(component, "lighting");
                 if (lighting != NULL && !yyjson_is_bool(lighting))
                     return validation_error(ctx, path, "render primitive lighting must be a boolean");
+                if (SDL_strcmp(type, "render.sphere") == 0)
+                {
+                    yyjson_val *rotation_axis = obj_get(component, "rotation_axis");
+                    if (rotation_axis != NULL && !is_vec_array(rotation_axis, 3))
+                        return validation_error(ctx, path, "render.sphere rotation_axis must be a vec3");
+                    yyjson_val *rotation_angle = obj_get(component, "rotation_angle");
+                    if (rotation_angle != NULL && !yyjson_is_num(rotation_angle))
+                        return validation_error(ctx, path, "render.sphere rotation_angle must be a number");
+                    yyjson_val *rotation_property = obj_get(component, "rotation_property");
+                    if (rotation_property != NULL && !is_non_empty_string(component, "rotation_property"))
+                        return validation_error(ctx, path, "render.sphere rotation_property must be non-empty");
+                    yyjson_val *texture_value = obj_get(component, "texture");
+                    if (texture_value != NULL && !is_non_empty_string(component, "texture"))
+                        return validation_error(ctx, path, "render.sphere texture must be a non-empty image asset id");
+                    const char *texture = json_string(component, "texture");
+                    if (texture != NULL && !require_ref(ctx, &names->images, "image asset", texture, path))
+                        return false;
+                }
             }
         }
     }

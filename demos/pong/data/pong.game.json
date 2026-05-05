@@ -668,6 +668,10 @@
       {
         "id": "image.splash.logo",
         "sprite": "sprite.splash.logo"
+      },
+      {
+        "id": "image.ball.texture",
+        "path": "asset://images/ball-texture.png"
       }
     ],
     "sounds": [
@@ -1331,6 +1335,7 @@
         "stagnant_reflect_epsilon": { "type": "float", "value": 0.08 },
         "stagnant_reflect_limit": { "type": "int", "value": 2 },
         "reflect_jitter_angle": { "type": "float", "value": 0.24 },
+        "spin_angle": { "type": "float", "value": 0.0 },
         "active_motion": { "type": "bool", "value": false },
         "has_last_reflect_y": { "type": "bool", "value": false },
         "last_reflect_y": { "type": "float", "value": 0.0 },
@@ -1342,11 +1347,15 @@
           "radius": 0.22,
           "rings": 24,
           "slices": 32,
-          "color": [224, 128, 36, 255],
+          "texture": "image.ball.texture",
+          "rotation_axis": [0.0, 0.0, 1.0],
+          "rotation_property": "spin_angle",
+          "color": [255, 255, 255, 255],
           "emissive": false
         },
         { "type": "collision.circle", "radius": 0.22 },
-        { "type": "motion.velocity_2d", "property": "velocity" }
+        { "type": "motion.velocity_2d", "property": "velocity" },
+        { "type": "motion.spin", "property": "spin_angle", "rate": 5.4 }
       ]
     },
     {
@@ -1368,6 +1377,7 @@
         "reflect_jitter_angle": { "type": "float", "value": 0.28 },
         "reflect_random_min_angle": { "type": "float", "value": 0.10 },
         "reflect_random_angle": { "type": "float", "value": 0.34 },
+        "spin_angle": { "type": "float", "value": 0.0 },
         "active_motion": { "type": "bool", "value": false }
       },
       "components": [
@@ -1376,11 +1386,15 @@
           "radius": 0.22,
           "rings": 24,
           "slices": 32,
-          "color": [224, 128, 36, 255],
+          "texture": "image.ball.texture",
+          "rotation_axis": [0.0, 0.0, 1.0],
+          "rotation_property": "spin_angle",
+          "color": [255, 255, 255, 255],
           "emissive": false
         },
         { "type": "collision.circle", "radius": 0.22 },
-        { "type": "motion.velocity_2d", "property": "velocity" }
+        { "type": "motion.velocity_2d", "property": "velocity" },
+        { "type": "motion.spin", "property": "spin_angle", "rate": 5.4 }
       ]
     },
     {
