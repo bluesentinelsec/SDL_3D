@@ -86,6 +86,7 @@ struct UiTextCapture
     int count = 0;
     bool saw_score = false;
     bool saw_pause = false;
+    bool saw_network_match_terminated = false;
 };
 
 struct UiImageCapture
@@ -1082,6 +1083,12 @@ bool capture_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
         EXPECT_STREQ(text->text, "PAUSED");
         EXPECT_TRUE(text->pulse_alpha);
     }
+    if (std::string(text->name) == "ui.network.match_terminated")
+    {
+        capture->saw_network_match_terminated = true;
+        EXPECT_TRUE(text->centered);
+        EXPECT_TRUE(text->normalized);
+    }
     return true;
 }
 
@@ -1607,9 +1614,10 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
 
     UiTextCapture ui{};
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui_text, &ui));
-    EXPECT_EQ(ui.count, 7);
+    EXPECT_EQ(ui.count, 8);
     EXPECT_TRUE(ui.saw_score);
     EXPECT_TRUE(ui.saw_pause);
+    EXPECT_TRUE(ui.saw_network_match_terminated);
 
     sdl3d_game_data_ui_metrics metrics{};
     metrics.fps = 119.5f;
@@ -1640,6 +1648,37 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
                                                                                            &pause_visible};
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_pause_visible, &pause_args));
     EXPECT_TRUE(pause_visible);
+
+    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    sdl3d_properties_set_bool(scene_state, "network_match_termination_active", true);
+    sdl3d_properties_set_string(scene_state, "network_match_termination_message",
+                                "Match terminated: Client exited - Press Enter to return to title screen.");
+    bool termination_visible = false;
+    char termination_buffer[192]{};
+    auto find_termination_visible = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        if (std::string(text->name) != "ui.network.match_terminated")
+            return true;
+        auto *args = static_cast<std::tuple<sdl3d_game_data_runtime *, sdl3d_game_data_ui_metrics *, bool *, char *> *>(
+            userdata);
+        *std::get<2>(*args) = sdl3d_game_data_ui_text_is_visible(std::get<0>(*args), text, std::get<1>(*args));
+        EXPECT_TRUE(
+            sdl3d_game_data_format_ui_text(std::get<0>(*args), text, std::get<1>(*args), std::get<3>(*args), 192));
+        return false;
+    };
+    std::tuple<sdl3d_game_data_runtime *, sdl3d_game_data_ui_metrics *, bool *, char *> termination_args{
+        runtime, &metrics, &termination_visible, termination_buffer};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_termination_visible, &termination_args));
+    EXPECT_TRUE(termination_visible);
+    EXPECT_STREQ(termination_buffer, "Match terminated: Client exited - Press Enter to return to title screen.");
+
+    bool pause_hidden = true;
+    std::tuple<sdl3d_game_data_runtime *, sdl3d_game_data_ui_metrics *, bool *> pause_hidden_args{runtime, &metrics,
+                                                                                                  &pause_hidden};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_pause_visible, &pause_hidden_args));
+    EXPECT_FALSE(pause_hidden);
+
+    sdl3d_properties_set_bool(scene_state, "network_match_termination_active", false);
 
     struct PauseMenuTextArgs
     {
@@ -3445,6 +3484,18 @@ TEST(GameDataRuntime, PlaySceneMenusAreSelectedByAuthoredConditions)
     ASSERT_TRUE(sdl3d_game_data_get_active_menu_for_metrics(runtime, &metrics, &menu));
     EXPECT_STREQ(menu.name, "menu.pause");
     EXPECT_EQ(menu.item_count, 3);
+
+    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    sdl3d_properties_set_string(scene_state, "match_mode", "lan");
+    sdl3d_properties_set_string(scene_state, "network_role", "host");
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu_for_metrics(runtime, &metrics, &menu));
+    EXPECT_STREQ(menu.name, "menu.pause.network");
+    EXPECT_EQ(menu.item_count, 2);
+
+    sdl3d_properties_set_bool(scene_state, "network_match_termination_active", true);
+    EXPECT_FALSE(sdl3d_game_data_get_active_menu_for_metrics(runtime, &metrics, &menu));
+    sdl3d_properties_set_bool(scene_state, "network_match_termination_active", false);
 
     sdl3d_registered_actor *match = sdl3d_game_data_find_actor(runtime, "entity.match");
     ASSERT_NE(match, nullptr);

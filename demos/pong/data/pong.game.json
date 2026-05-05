@@ -138,7 +138,9 @@
       "state_keys": {
         "match_mode": "match_mode",
         "network_role": "network_role",
-        "network_flow": "network_flow"
+        "network_flow": "network_flow",
+        "match_termination_active": "network_match_termination_active",
+        "match_termination_message": "network_match_termination_message"
       },
       "state_values": {
         "match_mode": {
