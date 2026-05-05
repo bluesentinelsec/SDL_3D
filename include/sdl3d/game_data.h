@@ -1938,6 +1938,46 @@ extern "C"
                                                                               const char *session_name);
 
     /**
+     * @brief Start or refresh a named runtime-owned LAN discovery scanner.
+     *
+     * Results are published to @p collection_name when provided. Each row
+     * contains `label`, `name`, `host`, `port`, `status`, and `endpoint`
+     * fields. @p status_key and @p count_key are optional scene-state outputs.
+     */
+    bool sdl3d_game_data_network_discovery_start(sdl3d_game_data_runtime *runtime, const char *session_name,
+                                                 const char *host, int port, int local_port,
+                                                 const char *collection_name, const char *status_key,
+                                                 const char *count_key);
+
+    /**
+     * @brief Advance a named discovery scanner and republish results.
+     */
+    bool sdl3d_game_data_network_discovery_update(sdl3d_game_data_runtime *runtime, const char *session_name, float dt,
+                                                  const char *collection_name, const char *status_key,
+                                                  const char *count_key);
+
+    /**
+     * @brief Cancel and destroy a named discovery scanner.
+     *
+     * Canceling an unknown scanner is a successful no-op.
+     */
+    bool sdl3d_game_data_network_discovery_cancel(sdl3d_game_data_runtime *runtime, const char *session_name,
+                                                  const char *collection_name, const char *status_key,
+                                                  const char *count_key, const char *status);
+
+    /**
+     * @brief Connect a direct-connect session to one row from a discovery collection.
+     *
+     * The selected collection row must contain `host` and `port` fields.
+     */
+    bool sdl3d_game_data_network_discovery_connect_selected(sdl3d_game_data_runtime *runtime,
+                                                            const char *discovery_name, const char *collection_name,
+                                                            int selected_index, const char *direct_connect_name,
+                                                            const char *host_key, const char *port_key,
+                                                            const char *status_key, const char *state_key,
+                                                            const char *connected_key, const char *connecting_status);
+
+    /**
      * @brief Read one item from an authored menu.
      *
      * @p index is zero based. Static returned strings remain owned by the

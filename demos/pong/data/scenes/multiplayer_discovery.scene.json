@@ -28,8 +28,30 @@
     "enabled": true,
     "input": "any",
     "reset_periodic_on_input": false,
-    "on_enter": [{ "type": "signal.emit", "signal": "signal.multiplayer.discovery.refresh" }],
+    "on_enter": [
+      {
+        "type": "network.discovery.start",
+        "name": "local_matches",
+        "collection": "local_matches",
+        "default_port": 27183,
+        "status_key": "local_match_status",
+        "count_key": "local_match_count"
+      }
+    ],
     "periodic": [
+      {
+        "interval": 0.05,
+        "actions": [
+          {
+            "type": "network.discovery.observe",
+            "name": "local_matches",
+            "collection": "local_matches",
+            "update_seconds": 0.05,
+            "status_key": "local_match_status",
+            "count_key": "local_match_count"
+          }
+        ]
+      },
       {
         "interval": 15.0,
         "actions": [
@@ -38,6 +60,41 @@
       }
     ]
   },
+  "menus": [
+    {
+      "name": "menu.multiplayer.discovery",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "back_action": "action.menu.back",
+      "move_signal": "signal.ui.menu.move",
+      "select_signal": "signal.ui.menu.select",
+      "items": [
+        {
+          "type": "dynamic_list",
+          "name": "list.local_matches",
+          "source": {
+            "type": "runtime_collection",
+            "collection": "local_matches",
+            "label_field": "label",
+            "value_field": "endpoint"
+          },
+          "empty_label": "Searching local network...",
+          "label_format": "{label}",
+          "selected_index_key": "local_match_index",
+          "selected_value_key": "local_match_endpoint",
+          "visible_count": 5,
+          "signal": "signal.multiplayer.discovery.connect"
+        },
+        {
+          "label": "Back",
+          "signal": "signal.multiplayer.discovery.cancel",
+          "scene": "scene.multiplayer.join",
+          "scene_state": { "key": "network_flow", "value": "lan_discovery" }
+        }
+      ]
+    }
+  ],
   "ui": {
     "text": [
       {
@@ -49,8 +106,49 @@
         "normalized": true,
         "centered": true,
         "color": [242, 248, 255, 255]
+      },
+      {
+        "name": "ui.multiplayer.discovery.status",
+        "font": "font.hud",
+        "text": [
+          "Status: ",
+          { "type": "scene_state", "key": "local_match_status" }
+        ],
+        "x": 0.5,
+        "y": 0.70,
+        "normalized": true,
+        "centered": true,
+        "color": [210, 232, 255, 255]
+      },
+      {
+        "name": "ui.multiplayer.discovery.connection_status",
+        "font": "font.hud",
+        "text": [
+          "Connection: ",
+          { "type": "scene_state", "key": "direct_connect_status" }
+        ],
+        "x": 0.5,
+        "y": 0.76,
+        "normalized": true,
+        "centered": true,
+        "color": [190, 220, 250, 255]
       }
     ],
-    "menus": []
+    "menus": [
+      {
+        "name": "ui.multiplayer.discovery.menu",
+        "menu": "menu.multiplayer.discovery",
+        "font": "font.hud",
+        "x": 0.30,
+        "y": 0.32,
+        "gap": 0.07,
+        "normalized": true,
+        "align": "left",
+        "selected_prefix": "> ",
+        "unselected_prefix": "  ",
+        "color": [222, 236, 255, 255],
+        "selected_color": [255, 232, 128, 255]
+      }
+    ]
   }
 }

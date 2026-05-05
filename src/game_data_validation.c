@@ -2565,6 +2565,51 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             return validation_error(ctx, json_path, "%s requires a non-empty name", type);
         return true;
     }
+    if (SDL_strcmp(type, "network.discovery.start") == 0 || SDL_strcmp(type, "network.discovery.refresh") == 0)
+    {
+        if (!is_non_empty_string(action, "name"))
+            return validation_error(ctx, json_path, "%s requires a non-empty name", type);
+        if (!is_non_empty_string(action, "collection"))
+            return validation_error(ctx, json_path, "%s requires a non-empty collection", type);
+        if (!validate_network_port_value(ctx, obj_get(action, "port"), json_path, "network.discovery port"))
+            return false;
+        yyjson_val *default_port = obj_get(action, "default_port");
+        if (default_port != NULL &&
+            (!yyjson_is_int(default_port) || yyjson_get_int(default_port) <= 0 || yyjson_get_int(default_port) > 65535))
+            return validation_error(ctx, json_path, "network.discovery default_port must be integer 1..65535");
+        yyjson_val *local_port = obj_get(action, "local_port");
+        if (local_port != NULL &&
+            (!yyjson_is_int(local_port) || yyjson_get_int(local_port) < 0 || yyjson_get_int(local_port) > 65535))
+            return validation_error(ctx, json_path, "network.discovery local_port must be integer 0..65535");
+        return true;
+    }
+    if (SDL_strcmp(type, "network.discovery.observe") == 0 || SDL_strcmp(type, "network.discovery.cancel") == 0)
+    {
+        if (!is_non_empty_string(action, "name"))
+            return validation_error(ctx, json_path, "%s requires a non-empty name", type);
+        if (!is_non_empty_string(action, "collection"))
+            return validation_error(ctx, json_path, "%s requires a non-empty collection", type);
+        return true;
+    }
+    if (SDL_strcmp(type, "network.discovery.connect_selected") == 0)
+    {
+        if (!is_non_empty_string(action, "name"))
+            return validation_error(ctx, json_path, "network.discovery.connect_selected requires a non-empty name");
+        if (!is_non_empty_string(action, "collection"))
+            return validation_error(ctx, json_path,
+                                    "network.discovery.connect_selected requires a non-empty collection");
+        if (!is_non_empty_string(action, "selected_index_key") && obj_get(action, "selected_index") == NULL)
+            return validation_error(ctx, json_path,
+                                    "network.discovery.connect_selected requires selected_index_key or selected_index");
+        yyjson_val *selected_index = obj_get(action, "selected_index");
+        if (selected_index != NULL && (!yyjson_is_int(selected_index) || yyjson_get_int(selected_index) < 0))
+            return validation_error(ctx, json_path,
+                                    "network.discovery.connect_selected selected_index must be an integer >= 0");
+        if (!is_non_empty_string(action, "direct_connect_name"))
+            return validation_error(ctx, json_path,
+                                    "network.discovery.connect_selected requires a non-empty direct_connect_name");
+        return true;
+    }
     if (SDL_strcmp(type, "ui.animate") == 0)
     {
         if (!is_non_empty_string(action, "target") && !is_non_empty_string(action, "ui"))

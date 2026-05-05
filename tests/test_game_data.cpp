@@ -1918,7 +1918,17 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_STREQ(item.scene, "scene.multiplayer.join");
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer.discovery"));
-    EXPECT_FALSE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.multiplayer.discovery");
+    EXPECT_EQ(menu.item_count, 2);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_TRUE(item.dynamic_list_item);
+    EXPECT_EQ(item.dynamic_list_index, -1);
+    EXPECT_STREQ(item.label, "Searching local network...");
+    EXPECT_EQ(item.signal_id, -1);
+    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    EXPECT_STREQ(item.label, "Back");
+    EXPECT_STREQ(item.scene, "scene.multiplayer.join");
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
     EXPECT_FALSE(sdl3d_game_data_active_scene_updates_game(runtime));
@@ -6283,6 +6293,55 @@ TEST(GameDataRuntime, AuthoredDirectConnectActionsUpdateSceneState)
     sdl3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, AuthoredDiscoveryConnectActionsUpdateSceneState)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+
+    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    const int connect_signal = sdl3d_game_data_find_signal(runtime, "signal.multiplayer.discovery.connect");
+    ASSERT_GE(connect_signal, 0);
+
+    sdl3d_properties_set_int(scene_state, "local_match_index", 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), connect_signal, nullptr);
+
+    EXPECT_EQ(sdl3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""), "No session selected");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_state", ""), "error");
+    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "direct_connect_connected", true));
+
+    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "label", "Local Pong Host"));
+    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "name", "Local Pong Host"));
+    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "host", "127.0.0.1"));
+    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_int(runtime, "local_matches", 0, "port", 0));
+    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "endpoint", "127.0.0.1:0"));
+    EXPECT_EQ(sdl3d_game_data_runtime_collection_count(runtime, "local_matches"), 1);
+
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), connect_signal, nullptr);
+
+    EXPECT_EQ(sdl3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_host", ""), "127.0.0.1");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_port", ""), "0");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""), "Invalid port");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_state", ""), "error");
+    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "direct_connect_connected", true));
+    EXPECT_EQ(sdl3d_game_data_runtime_collection_count(runtime, "local_matches"), 0);
+
+    const int cancel_signal = sdl3d_game_data_find_signal(runtime, "signal.multiplayer.discovery.cancel");
+    ASSERT_GE(cancel_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), cancel_signal, nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "local_match_status", ""), "Discovery canceled");
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "local_match_count", -1), 0);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, RejectsInvalidDirectConnectActions)
 {
     const std::filesystem::path dir = unique_test_dir("bad_direct_connect_actions");
@@ -6312,6 +6371,67 @@ TEST(GameDataRuntime, RejectsInvalidDirectConnectActions)
         std::string(error).find("network.direct_connect.start port must be a non-empty string or integer 1..65535"),
         std::string::npos)
         << error;
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidDiscoveryActions)
+{
+    struct Case
+    {
+        const char *name;
+        const char *action_json;
+        const char *expected_error;
+    };
+
+    const Case cases[] = {
+        {
+            "bad_port",
+            R"json({ "type": "network.discovery.start", "name": "local", "collection": "matches", "port": 70000 })json",
+            "network.discovery port must be a non-empty string or integer 1..65535",
+        },
+        {
+            "missing_collection",
+            R"json({ "type": "network.discovery.observe", "name": "local" })json",
+            "network.discovery.observe requires a non-empty collection",
+        },
+        {
+            "missing_selection",
+            R"json({ "type": "network.discovery.connect_selected", "name": "local", "collection": "matches", "direct_connect_name": "direct" })json",
+            "network.discovery.connect_selected requires selected_index_key or selected_index",
+        },
+    };
+
+    const std::filesystem::path dir = unique_test_dir("bad_discovery_actions");
+    for (const Case &test_case : cases)
+    {
+        const std::string json = std::string(R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad Discovery", "id": "test.bad_discovery", "version": "0.1.0" },
+  "world": { "name": "world.bad_discovery", "kind": "fixed_screen" },
+  "entities": [],
+  "signals": ["signal.discovery"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.discovery",
+        "actions": [
+)json") + test_case.action_json +
+                                 R"json(
+        ]
+      }
+    ]
+  }
+})json";
+        write_text(dir / (std::string(test_case.name) + ".game.json"), json.c_str());
+
+        char error[512]{};
+        EXPECT_FALSE(sdl3d_game_data_validate_file(
+            (dir / (std::string(test_case.name) + ".game.json")).string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
+            << test_case.name << ": " << error;
+    }
+
     remove_test_dir(dir);
 }
 
