@@ -718,6 +718,51 @@ static bool validate_network_session_flow(validation_context *ctx, yyjson_val *n
     return true;
 }
 
+static bool validate_network_runtime_binding_map(validation_context *ctx, yyjson_val *map, const char *json_path,
+                                                 const char *label, const name_table *references)
+{
+    if (map == NULL)
+        return true;
+    if (!yyjson_is_obj(map))
+        return validation_error(ctx, json_path, "network runtime_bindings %s must be an object", label);
+
+    yyjson_val *key;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(map, &iter);
+    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+    {
+        const char *name = yyjson_get_str(key);
+        yyjson_val *value = yyjson_obj_iter_get_val(key);
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "%s.%s", json_path, name != NULL ? name : "<invalid>");
+        if (name == NULL || name[0] == '\0')
+            return validation_error(ctx, path, "network runtime_bindings %s key must be non-empty", label);
+        if (!yyjson_is_str(value) || yyjson_get_len(value) == 0)
+            return validation_error(ctx, path, "network runtime_bindings %s value must be a non-empty string", label);
+        if (!require_ref(ctx, references, label, yyjson_get_str(value), path))
+            return false;
+    }
+
+    return true;
+}
+
+static bool validate_network_runtime_bindings(validation_context *ctx, yyjson_val *network,
+                                              const name_table *replication_names, const name_table *control_names)
+{
+    yyjson_val *bindings = obj_get(network, "runtime_bindings");
+    if (bindings == NULL)
+        return true;
+    if (!yyjson_is_obj(bindings))
+        return validation_error(ctx, "$.network.runtime_bindings", "network runtime_bindings must be an object");
+
+    return validate_network_runtime_binding_map(ctx, obj_get(bindings, "replication"),
+                                                "$.network.runtime_bindings.replication", "network replication",
+                                                replication_names) &&
+           validate_network_runtime_binding_map(ctx, obj_get(bindings, "controls"),
+                                                "$.network.runtime_bindings.controls", "network control message",
+                                                control_names);
+}
+
 static bool validate_network(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *network = obj_get(root, "network");
@@ -816,19 +861,22 @@ static bool validate_network(validation_context *ctx, yyjson_val *root, validati
             ok = validate_network_inputs(ctx, inputs, inputs_path, names);
         }
     }
-    name_table_destroy(&replication_names);
     if (!ok)
+    {
+        name_table_destroy(&replication_names);
         return false;
+    }
 
     yyjson_val *controls = obj_get(network, "control_messages");
-    if (controls == NULL)
-        return true;
-    if (!yyjson_is_arr(controls))
+    if (controls != NULL && !yyjson_is_arr(controls))
+    {
+        name_table_destroy(&replication_names);
         return validation_error(ctx, "$.network.control_messages", "network control_messages must be an array");
+    }
 
     name_table control_names;
     SDL_zero(control_names);
-    for (size_t i = 0; ok && i < yyjson_arr_size(controls); ++i)
+    for (size_t i = 0; ok && yyjson_is_arr(controls) && i < yyjson_arr_size(controls); ++i)
     {
         char path[PATH_BUFFER_SIZE];
         format_path(path, sizeof(path), "$.network.control_messages[%zu]", i);
@@ -856,7 +904,10 @@ static bool validate_network(validation_context *ctx, yyjson_val *root, validati
             break;
         }
     }
+    if (ok)
+        ok = validate_network_runtime_bindings(ctx, network, &replication_names, &control_names);
     name_table_destroy(&control_names);
+    name_table_destroy(&replication_names);
     return ok;
 }
 

@@ -145,6 +145,18 @@
         }
       }
     },
+    "runtime_bindings": {
+      "replication": {
+        "state_snapshot": "play_state",
+        "client_input": "client_input"
+      },
+      "controls": {
+        "start_game": "start_game",
+        "pause_request": "pause_request",
+        "resume_request": "resume_request",
+        "disconnect": "disconnect"
+      }
+    },
     "replication": [
       {
         "name": "play_state",

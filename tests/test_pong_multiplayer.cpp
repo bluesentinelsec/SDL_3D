@@ -28,6 +28,13 @@ enum PongNetworkMessageKind : Uint8
     PONG_NETWORK_MESSAGE_DISCONNECT,
 };
 
+constexpr const char *PONG_NETWORK_BINDING_STATE_SNAPSHOT = "state_snapshot";
+constexpr const char *PONG_NETWORK_BINDING_CLIENT_INPUT = "client_input";
+constexpr const char *PONG_NETWORK_BINDING_START_GAME = "start_game";
+constexpr const char *PONG_NETWORK_BINDING_PAUSE_REQUEST = "pause_request";
+constexpr const char *PONG_NETWORK_BINDING_RESUME_REQUEST = "resume_request";
+constexpr const char *PONG_NETWORK_BINDING_DISCONNECT = "disconnect";
+
 static sdl3d_game_session *create_session(bool include_audio = false)
 {
     sdl3d_game_session_desc desc{};
@@ -114,8 +121,11 @@ static bool send_client_input_packet(sdl3d_game_data_runtime *runtime, sdl3d_gam
     Uint8 packet[128];
     size_t packet_size = 0U;
     char error[160]{};
+    const char *client_input_channel = nullptr;
 
-    return sdl3d_game_data_encode_network_input(runtime, "client_input", input,
+    return sdl3d_game_data_get_network_runtime_replication(runtime, PONG_NETWORK_BINDING_CLIENT_INPUT,
+                                                           &client_input_channel) &&
+           sdl3d_game_data_encode_network_input(runtime, client_input_channel, input,
                                                 (Uint32)SDL_max(snapshot != nullptr ? snapshot->tick : 0, 0), packet,
                                                 sizeof(packet), &packet_size, error, sizeof(error)) &&
            sdl3d_network_session_send(net_session, packet, (int)packet_size);
@@ -136,21 +146,30 @@ static bool process_host_input_packet(sdl3d_game_data_runtime *runtime, sdl3d_ga
                                                (size_t)packet_size, &tick, error, sizeof(error));
 }
 
-static const char *control_name_for_kind(PongNetworkMessageKind kind)
+static const char *control_binding_for_kind(PongNetworkMessageKind kind)
 {
     switch (kind)
     {
     case PONG_NETWORK_MESSAGE_START_GAME:
-        return "start_game";
+        return PONG_NETWORK_BINDING_START_GAME;
     case PONG_NETWORK_MESSAGE_PAUSE_REQUEST:
-        return "pause_request";
+        return PONG_NETWORK_BINDING_PAUSE_REQUEST;
     case PONG_NETWORK_MESSAGE_RESUME_REQUEST:
-        return "resume_request";
+        return PONG_NETWORK_BINDING_RESUME_REQUEST;
     case PONG_NETWORK_MESSAGE_DISCONNECT:
-        return "disconnect";
+        return PONG_NETWORK_BINDING_DISCONNECT;
     default:
         return nullptr;
     }
+}
+
+static const char *control_name_for_kind(sdl3d_game_data_runtime *runtime, PongNetworkMessageKind kind)
+{
+    const char *control_name = nullptr;
+    const char *binding = control_binding_for_kind(kind);
+    return binding != nullptr && sdl3d_game_data_get_network_runtime_control(runtime, binding, &control_name)
+               ? control_name
+               : nullptr;
 }
 
 static bool send_control_packet(sdl3d_game_data_runtime *runtime, sdl3d_network_session *net_session,
@@ -159,7 +178,7 @@ static bool send_control_packet(sdl3d_game_data_runtime *runtime, sdl3d_network_
     Uint8 packet[SDL3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE];
     size_t packet_size = 0U;
     char error[160]{};
-    const char *control_name = control_name_for_kind(kind);
+    const char *control_name = control_name_for_kind(runtime, kind);
 
     return control_name != nullptr &&
            sdl3d_game_data_encode_network_control(runtime, control_name, 1234U, packet, sizeof(packet), &packet_size,
@@ -172,11 +191,12 @@ static bool read_control_packet(sdl3d_game_data_runtime *runtime, const Uint8 *p
 {
     sdl3d_game_data_network_control control{};
     char error[160]{};
+    const char *expected_name = control_name_for_kind(runtime, expected);
 
-    return runtime != nullptr && packet != nullptr &&
+    return runtime != nullptr && packet != nullptr && expected_name != nullptr &&
            sdl3d_game_data_decode_network_control(runtime, packet, (size_t)packet_size, &control, error,
                                                   sizeof(error)) &&
-           SDL_strcmp(control.name, control_name_for_kind(expected)) == 0 && control.tick == 1234U;
+           SDL_strcmp(control.name, expected_name) == 0 && control.tick == 1234U;
 }
 
 static bool send_host_state_packet(sdl3d_game_data_runtime *runtime, sdl3d_game_session *session,
@@ -187,14 +207,16 @@ static bool send_host_state_packet(sdl3d_game_data_runtime *runtime, sdl3d_game_
     Uint8 packet[SDL3D_NETWORK_MAX_PACKET_SIZE];
     size_t packet_size = 0U;
     char error[160]{};
+    const char *state_channel = nullptr;
 
-    if (runtime == nullptr || session == nullptr || net_session == nullptr || match == nullptr)
+    if (runtime == nullptr || session == nullptr || net_session == nullptr || match == nullptr ||
+        !sdl3d_game_data_get_network_runtime_replication(runtime, PONG_NETWORK_BINDING_STATE_SNAPSHOT, &state_channel))
     {
         return false;
     }
 
     sdl3d_properties_set_bool(match->props, "paused", paused);
-    return sdl3d_game_data_encode_network_snapshot(runtime, "play_state",
+    return sdl3d_game_data_encode_network_snapshot(runtime, state_channel,
                                                    (Uint32)SDL_max(snapshot != nullptr ? snapshot->tick : 0, 0), packet,
                                                    sizeof(packet), &packet_size, error, sizeof(error)) &&
            sdl3d_network_session_send(net_session, packet, (int)packet_size);

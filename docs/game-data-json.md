@@ -1318,6 +1318,16 @@ typed actor fields, replicated input actions, and control messages:
         "network_flow": { "host": "host", "direct": "direct" }
       }
     },
+    "runtime_bindings": {
+      "replication": {
+        "state_snapshot": "play_state",
+        "client_input": "client_input"
+      },
+      "controls": {
+        "pause_request": "pause_request",
+        "disconnect": "disconnect"
+      }
+    },
     "replication": [
       {
         "name": "play_state",
@@ -1376,6 +1386,15 @@ stored in scene state. Callers resolve these values with
 `sdl3d_game_data_get_network_session_state_key()`, and
 `sdl3d_game_data_get_network_session_state_value()`. Like `scene_state`, these
 orchestration maps are not part of the replication schema hash.
+
+`runtime_bindings` is optional. It maps host integration semantics to concrete
+authored replication channels and control messages without baking those schema
+names into game host code. `replication` maps semantic names to entries in
+`network.replication`, and `controls` maps semantic names to entries in
+`network.control_messages`. Values are validated as references. Callers resolve
+them with `sdl3d_game_data_get_network_runtime_replication()` and
+`sdl3d_game_data_get_network_runtime_control()`. These maps are runtime
+orchestration metadata and are not part of the replication schema hash.
 
 Replication channel directions are `host_to_client` or `client_to_host`, and
 `rate` must be a positive integer.
@@ -1453,7 +1472,7 @@ Diagnostics are designed for authored content. Errors include the source file, a
 - duplicate names within entity, signal, script, adapter, input action, timer, camera, font, and sensor namespaces
 - script ids, modules, dependencies, dependency cycles, and script file existence
 - input binding structure
-- network protocol, replication directions, scene-state key maps, session-flow maps, actor/property/action/signal references, supported field types, duplicate network fields, and schema hash shape
+- network protocol, replication directions, scene-state key maps, session-flow maps, runtime binding maps, actor/property/action/signal references, supported field types, duplicate network fields, and schema hash shape
 - app lifecycle, UI, render effect, sensor, timer, binding, action, component, adapter, light, and camera references
 - supported generic logic action types and required action payloads
 - warnings for suspicious data such as unused adapters, unused scripts, or unsupported component types
