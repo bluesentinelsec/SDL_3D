@@ -7073,8 +7073,12 @@ static bool format_payload_string(const sdl3d_properties *payload, const char *f
         const char *close = SDL_strchr(open + 1, '}');
         if (close == NULL)
         {
-            cursor = open;
-            continue;
+            const size_t remaining = buffer_size - offset;
+            const size_t copied = SDL_strlcpy(buffer + offset, open, remaining);
+            offset += SDL_min(copied, remaining > 0U ? remaining - 1U : 0U);
+            if (copied < remaining)
+                cursor = open + copied;
+            break;
         }
 
         char key[64];

@@ -1688,6 +1688,53 @@ TEST(GameDataRuntime, AuthoredNetworkSessionFlowEventsDriveSceneTransitions)
     sdl3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, NetworkSessionFlowPlaceholderMalformedBraceIsLiteral)
+{
+    const std::filesystem::path dir = unique_test_dir("network_flow_malformed_placeholder");
+    const std::filesystem::path source = std::filesystem::path(SDL3D_PONG_DATA_PATH).parent_path();
+    const std::filesystem::path dest = dir / "pong_data";
+    std::filesystem::copy(source, dest,
+                          std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing);
+
+    const std::filesystem::path game_path = dest / "pong.game.json";
+    std::string game_json = read_text(game_path);
+    const std::string marker = R"json("events": {)json";
+    const size_t marker_pos = game_json.find(marker);
+    ASSERT_NE(marker_pos, std::string::npos);
+    game_json.insert(marker_pos + marker.size(), R"json(
+        "malformed_placeholder": {
+          "actions": [
+            {
+              "type": "scene_state.set",
+              "key": "malformed_placeholder_result",
+              "value": "literal {reason"
+            }
+          ]
+        },
+)json");
+    write_text(game_path, game_json.c_str());
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(game_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    ASSERT_NE(runtime, nullptr);
+
+    ASSERT_TRUE(sdl3d_game_data_run_network_session_flow_event(runtime, nullptr, "malformed_placeholder", nullptr,
+                                                               error, sizeof(error)))
+        << error;
+    const sdl3d_properties *scene_state = sdl3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "malformed_placeholder_result", ""), "literal {reason");
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, ReadsSpriteAssetMetadata)
 {
     sdl3d_game_session *session = nullptr;
