@@ -85,6 +85,15 @@ The helpers intentionally report events instead of hard-coding transitions.
 That keeps game-specific flow in JSON/Lua or a thin compatibility host until
 scene/session orchestration is fully authored.
 
+Network session-flow events close that gap for transition policy. Games can
+author `network.session_flow.events` entries and a host or runner can execute
+them with `sdl3d_game_data_run_network_session_flow_event()`. Each event may
+set pause state and run ordinary data actions, so policies such as “client
+received start game”, “peer disconnected during play”, or “acknowledge match
+termination” can live in JSON instead of C. The runtime passes optional payload
+properties, such as `reason`, into those actions; supported string fields may
+use `{reason}` placeholders.
+
 ## Generic Runner
 
 `sdl3d_runner` launches a game data asset without game-specific C callbacks.

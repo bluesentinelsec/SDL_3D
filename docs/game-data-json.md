@@ -1724,6 +1724,42 @@ when the caller documents and substitutes them. Callers resolve these values wit
 `sdl3d_game_data_get_network_session_message()`. Like `scene_state`, these
 orchestration maps are not part of the replication schema hash.
 
+`session_flow.events` maps semantic network events to data actions. Each event
+may be an action array or an object with optional `pause` and `actions` fields:
+
+```json
+"events": {
+  "client_start_game": {
+    "actions": [
+      { "type": "input.clear_network_input_overrides", "channel": "client_input" },
+      {
+        "type": "scene.set",
+        "scene": "scene.play",
+        "payload": { "match_mode": "lan", "network_role": "client" }
+      }
+    ]
+  },
+  "client_match_terminated": {
+    "pause": true,
+    "actions": [
+      { "type": "scene_state.set", "key": "network_match_termination_active", "value": true },
+      {
+        "type": "scene_state.set",
+        "key": "network_match_termination_message",
+        "value": "Match terminated: {reason}"
+      }
+    ]
+  }
+}
+```
+
+Hosts and generic runners execute these events with
+`sdl3d_game_data_run_network_session_flow_event()`. The optional event payload
+is passed to actions and can be referenced from supported string fields with
+`{field}` placeholders. `scene.set` may author a scalar `payload` object that is
+delivered to the target scene's enter signal; `scene_state.set` writes scalar
+scene-state values directly.
+
 `runtime_bindings` is optional. It maps host integration semantics to concrete
 authored replication channels and control messages without baking those schema
 names into game host code. `replication` maps semantic names to entries in

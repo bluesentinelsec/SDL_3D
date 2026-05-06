@@ -177,6 +177,118 @@
         "disconnect_prompts": {
           "match_terminated": "Match terminated: {reason} - Press Enter to return to title screen."
         }
+      },
+      "events": {
+        "host_start_game": {
+          "actions": [
+            { "type": "input.clear_network_input_overrides", "channel": "client_input" },
+            {
+              "type": "scene.set",
+              "scene": "scene.play",
+              "payload": { "match_mode": "lan", "network_role": "host", "network_flow": "host" }
+            }
+          ]
+        },
+        "client_start_game": {
+          "actions": [
+            { "type": "input.clear_network_input_overrides", "channel": "client_input" },
+            {
+              "type": "scene.set",
+              "scene": "scene.play",
+              "payload": { "match_mode": "lan", "network_role": "client", "network_flow": "direct" }
+            }
+          ]
+        },
+        "client_state_before_start": {
+          "actions": [
+            { "type": "input.clear_network_input_overrides", "channel": "client_input" },
+            {
+              "type": "scene.set",
+              "scene": "scene.play",
+              "payload": { "match_mode": "lan", "network_role": "client", "network_flow": "direct" }
+            }
+          ]
+        },
+        "host_match_terminated": {
+          "pause": true,
+          "actions": [
+            { "type": "input.clear_network_input_overrides", "channel": "client_input" },
+            { "type": "scene_state.set", "key": "network_match_termination_active", "value": true },
+            {
+              "type": "scene_state.set",
+              "key": "network_match_termination_message",
+              "value": "Match terminated: {reason} - Press Enter to return to title screen."
+            },
+            {
+              "type": "network.host.cancel",
+              "name": "host",
+              "status_key": "multiplayer_host_status",
+              "endpoint_key": "multiplayer_host_endpoint",
+              "peer_key": "multiplayer_host_client",
+              "connected_key": "multiplayer_host_connected",
+              "status": "{reason}"
+            }
+          ]
+        },
+        "client_match_terminated": {
+          "pause": true,
+          "actions": [
+            { "type": "input.clear_network_input_overrides", "channel": "client_input" },
+            { "type": "scene_state.set", "key": "network_match_termination_active", "value": true },
+            {
+              "type": "scene_state.set",
+              "key": "network_match_termination_message",
+              "value": "Match terminated: {reason} - Press Enter to return to title screen."
+            },
+            {
+              "type": "network.direct_connect.cancel",
+              "name": "direct_connect",
+              "status_key": "direct_connect_status",
+              "state_key": "direct_connect_state",
+              "connected_key": "direct_connect_connected",
+              "status": "{reason}"
+            }
+          ]
+        },
+        "host_client_disconnected": {
+          "pause": false,
+          "actions": [
+            { "type": "input.clear_network_input_overrides", "channel": "client_input" },
+            {
+              "type": "network.host.cancel",
+              "name": "host",
+              "status_key": "multiplayer_host_status",
+              "endpoint_key": "multiplayer_host_endpoint",
+              "peer_key": "multiplayer_host_client",
+              "connected_key": "multiplayer_host_connected",
+              "status": "{reason}"
+            },
+            { "type": "scene.set", "scene": "scene.multiplayer.lobby" }
+          ]
+        },
+        "client_connection_closed": {
+          "pause": false,
+          "actions": [
+            { "type": "input.clear_network_input_overrides", "channel": "client_input" },
+            {
+              "type": "network.direct_connect.cancel",
+              "name": "direct_connect",
+              "status_key": "direct_connect_status",
+              "state_key": "direct_connect_state",
+              "connected_key": "direct_connect_connected",
+              "status": "{reason}"
+            },
+            { "type": "scene.set", "scene": "scene.multiplayer.join" }
+          ]
+        },
+        "network_match_termination_ack": {
+          "pause": false,
+          "actions": [
+            { "type": "scene_state.set", "key": "network_match_termination_active", "value": false },
+            { "type": "scene_state.set", "key": "network_match_termination_message", "value": "" },
+            { "type": "scene.set", "scene": "scene.title" }
+          ]
+        }
       }
     },
     "runtime_bindings": {

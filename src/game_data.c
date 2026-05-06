@@ -7034,6 +7034,117 @@ static void set_actor_property_from_json(sdl3d_registered_actor *actor, const ch
         sdl3d_properties_set_vec3(actor->props, key, json_vec3_value(value, sdl3d_vec3_make(0.0f, 0.0f, 0.0f)));
 }
 
+static bool format_payload_string(const sdl3d_properties *payload, const char *format, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return false;
+    buffer[0] = '\0';
+    if (format == NULL)
+        return true;
+    if (payload == NULL || SDL_strchr(format, '{') == NULL)
+    {
+        SDL_strlcpy(buffer, format, buffer_size);
+        return SDL_strlen(format) < buffer_size;
+    }
+
+    size_t offset = 0U;
+    const char *cursor = format;
+    while (*cursor != '\0' && offset + 1U < buffer_size)
+    {
+        const char *open = SDL_strchr(cursor, '{');
+        if (open == NULL)
+        {
+            const size_t remaining = buffer_size - offset;
+            const size_t copied = SDL_strlcpy(buffer + offset, cursor, remaining);
+            offset += SDL_min(copied, remaining > 0U ? remaining - 1U : 0U);
+            if (copied < remaining)
+                cursor += copied;
+            break;
+        }
+
+        const size_t literal_len = (size_t)(open - cursor);
+        const size_t literal_copy = SDL_min(literal_len, buffer_size - offset - 1U);
+        SDL_memcpy(buffer + offset, cursor, literal_copy);
+        offset += literal_copy;
+        buffer[offset] = '\0';
+        if (literal_copy < literal_len)
+            break;
+
+        const char *close = SDL_strchr(open + 1, '}');
+        if (close == NULL)
+        {
+            const size_t remaining = buffer_size - offset;
+            const size_t copied = SDL_strlcpy(buffer + offset, open, remaining);
+            offset += SDL_min(copied, remaining > 0U ? remaining - 1U : 0U);
+            if (copied < remaining)
+                cursor = open + copied;
+            break;
+        }
+
+        char key[64];
+        const size_t key_len = (size_t)(close - open - 1);
+        if (key_len > 0U && key_len < sizeof(key))
+        {
+            SDL_memcpy(key, open + 1, key_len);
+            key[key_len] = '\0';
+            const char *replacement = sdl3d_properties_get_string(payload, key, "");
+            const size_t remaining = buffer_size - offset;
+            const size_t copied = SDL_strlcpy(buffer + offset, replacement, remaining);
+            offset += SDL_min(copied, remaining > 0U ? remaining - 1U : 0U);
+        }
+        cursor = close + 1;
+    }
+    buffer[buffer_size - 1U] = '\0';
+    return cursor[0] == '\0';
+}
+
+static bool set_property_from_json_with_payload(sdl3d_properties *props, const char *key, yyjson_val *value,
+                                                const sdl3d_properties *payload)
+{
+    if (props == NULL || key == NULL || value == NULL)
+        return false;
+    if (yyjson_is_str(value))
+    {
+        char formatted[256];
+        if (!format_payload_string(payload, yyjson_get_str(value), formatted, sizeof(formatted)))
+            return false;
+        sdl3d_properties_set_string(props, key, formatted);
+        return true;
+    }
+    return set_property_from_json(props, key, value);
+}
+
+static sdl3d_properties *properties_from_json_payload(yyjson_val *json, const sdl3d_properties *source_payload)
+{
+    sdl3d_properties *payload = sdl3d_properties_create();
+    if (payload == NULL)
+        return NULL;
+    if (json == NULL)
+        return payload;
+    if (!yyjson_is_obj(json))
+    {
+        sdl3d_properties_destroy(payload);
+        return NULL;
+    }
+
+    yyjson_val *key;
+    yyjson_val *value;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(json, &iter);
+    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+    {
+        const char *name = yyjson_get_str(key);
+        value = yyjson_obj_iter_get_val(key);
+        if (name == NULL || name[0] == '\0' ||
+            !set_property_from_json_with_payload(payload, name, value, source_payload))
+        {
+            sdl3d_properties_destroy(payload);
+            return NULL;
+        }
+    }
+    return payload;
+}
+
 static void load_actor_properties(sdl3d_registered_actor *actor, yyjson_val *properties)
 {
     if (actor == NULL || !yyjson_is_obj(properties))
@@ -9843,6 +9954,15 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
         return true;
     }
 
+    if (SDL_strcmp(type, "scene_state.set") == 0)
+    {
+        const char *key = json_string(action, "key", NULL);
+        yyjson_val *value = obj_get(action, "value");
+        if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0' || value == NULL)
+            return false;
+        return set_property_from_json_with_payload(runtime->scene_state, key, value, payload);
+    }
+
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
     {
         const char *name = json_string(action, "name", NULL);
@@ -9864,10 +9984,12 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
 
     if (SDL_strcmp(type, "network.direct_connect.cancel") == 0)
     {
+        char status[256];
+        const char *status_text = json_string(action, "status", "Disconnected");
+        (void)format_payload_string(payload, status_text, status, sizeof(status));
         return sdl3d_game_data_network_direct_connect_cancel(
             runtime, json_string(action, "name", NULL), json_string(action, "status_key", NULL),
-            json_string(action, "state_key", NULL), json_string(action, "connected_key", NULL),
-            json_string(action, "status", "Disconnected"));
+            json_string(action, "state_key", NULL), json_string(action, "connected_key", NULL), status);
     }
 
     if (SDL_strcmp(type, "network.direct_connect.observe") == 0)
@@ -9890,10 +10012,13 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
 
     if (SDL_strcmp(type, "network.host.cancel") == 0)
     {
+        char status[256];
+        const char *status_text = json_string(action, "status", "Not hosting");
+        (void)format_payload_string(payload, status_text, status, sizeof(status));
         return sdl3d_game_data_network_host_cancel(
             runtime, json_string(action, "name", NULL), json_string(action, "status_key", NULL),
             json_string(action, "endpoint_key", NULL), json_string(action, "peer_key", NULL),
-            json_string(action, "connected_key", NULL), json_string(action, "status", "Not hosting"));
+            json_string(action, "connected_key", NULL), status);
     }
 
     if (SDL_strcmp(type, "network.host.observe") == 0)
@@ -9996,7 +10121,19 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
     }
 
     if (SDL_strcmp(type, "scene.set") == 0)
-        return sdl3d_game_data_set_active_scene_with_payload(runtime, json_string(action, "scene", NULL), payload);
+    {
+        yyjson_val *authored_payload = obj_get(action, "payload");
+        if (authored_payload == NULL)
+            return sdl3d_game_data_set_active_scene_with_payload(runtime, json_string(action, "scene", NULL), payload);
+
+        sdl3d_properties *scene_payload = properties_from_json_payload(authored_payload, payload);
+        if (scene_payload == NULL)
+            return false;
+        const bool ok =
+            sdl3d_game_data_set_active_scene_with_payload(runtime, json_string(action, "scene", NULL), scene_payload);
+        sdl3d_properties_destroy(scene_payload);
+        return ok;
+    }
 
     if (SDL_strcmp(type, "adapter.invoke") == 0)
     {
@@ -11505,6 +11642,46 @@ bool sdl3d_game_data_get_network_session_message(const sdl3d_game_data_runtime *
         return false;
 
     *out_message = value;
+    return true;
+}
+
+bool sdl3d_game_data_run_network_session_flow_event(sdl3d_game_data_runtime *runtime, sdl3d_game_context *ctx,
+                                                    const char *name, const sdl3d_properties *payload,
+                                                    char *error_buffer, int error_buffer_size)
+{
+    if (runtime == NULL || name == NULL || name[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "network session flow event requires runtime and name");
+        return false;
+    }
+
+    yyjson_val *events = obj_get(network_session_flow_json(runtime), "events");
+    yyjson_val *event = obj_get(events, name);
+    if (event == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network session flow event not found");
+        return false;
+    }
+
+    yyjson_val *actions = event;
+    if (yyjson_is_obj(event))
+    {
+        yyjson_val *pause = obj_get(event, "pause");
+        if (pause != NULL && ctx == NULL)
+        {
+            set_error(error_buffer, error_buffer_size, "network session flow event pause requires a game context");
+            return false;
+        }
+        if (pause != NULL && yyjson_is_bool(pause))
+            ctx->paused = yyjson_get_bool(pause);
+        actions = obj_get(event, "actions");
+    }
+
+    if (!execute_optional_action_array(runtime, actions, payload))
+    {
+        set_error(error_buffer, error_buffer_size, "network session flow event action failed");
+        return false;
+    }
     return true;
 }
 

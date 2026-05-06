@@ -996,6 +996,28 @@ extern "C"
                                                      const char *name, const char **out_message);
 
     /**
+     * @brief Execute an authored network session-flow event.
+     *
+     * Events are authored under `network.session_flow.events.<name>`. An event
+     * may be either an action array or an object with optional `pause` and
+     * `actions` fields. The action array uses the same data action vocabulary
+     * as logic bindings and scene activity actions. String values in supported
+     * actions can reference string payload fields with `{field}` placeholders.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param ctx Optional game context; required only when the event authors a
+     * `pause` field.
+     * @param name Authored event semantic name.
+     * @param payload Optional payload passed to event actions.
+     * @param error_buffer Optional buffer for a failure reason.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when the event exists and all actions execute.
+     */
+    bool sdl3d_game_data_run_network_session_flow_event(sdl3d_game_data_runtime *runtime, sdl3d_game_context *ctx,
+                                                        const char *name, const sdl3d_properties *payload,
+                                                        char *error_buffer, int error_buffer_size);
+
+    /**
      * @brief Resolve an authored network runtime replication channel binding.
      *
      * Runtime bindings are authored under `network.runtime_bindings.replication`
