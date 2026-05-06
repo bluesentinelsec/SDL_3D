@@ -124,6 +124,13 @@
         "result_5": "session_5",
         "result_6": "session_6",
         "result_7": "session_7"
+      },
+      "direct_connect": {
+        "host": "direct_connect_host",
+        "port": "direct_connect_port",
+        "status": "direct_connect_status",
+        "state": "direct_connect_state",
+        "connected": "direct_connect_connected"
       }
     },
     "session_flow": {

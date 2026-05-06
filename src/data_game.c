@@ -23,7 +23,26 @@ struct sdl3d_data_game_runtime
     int *haptics_signal_ids;
     int *haptics_connections;
     int haptics_connection_count;
+    bool managed_network_enabled;
+    int managed_network_lobby_start_signal_id;
+    int managed_network_lobby_start_connection;
+    int managed_network_camera_toggle_signal_id;
+    bool managed_network_lobby_start_requested;
+    float managed_network_termination_timer;
 };
+
+static const char SDL3D_MANAGED_NETWORK_HOST_SESSION[] = "host";
+static const char SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION[] = "direct_connect";
+static const char SDL3D_MANAGED_NETWORK_BINDING_STATE_SNAPSHOT[] = "state_snapshot";
+static const char SDL3D_MANAGED_NETWORK_BINDING_CLIENT_INPUT[] = "client_input";
+static const char SDL3D_MANAGED_NETWORK_BINDING_START_GAME[] = "start_game";
+static const char SDL3D_MANAGED_NETWORK_BINDING_PAUSE_REQUEST[] = "pause_request";
+static const char SDL3D_MANAGED_NETWORK_BINDING_RESUME_REQUEST[] = "resume_request";
+static const char SDL3D_MANAGED_NETWORK_BINDING_DISCONNECT[] = "disconnect";
+static const char SDL3D_MANAGED_NETWORK_BINDING_MENU_SELECT[] = "menu_select";
+static const char SDL3D_MANAGED_NETWORK_BINDING_CAMERA_TOGGLE[] = "camera_toggle";
+static const char SDL3D_MANAGED_NETWORK_BINDING_LOBBY_START[] = "lobby_start";
+static const char SDL3D_MANAGED_NETWORK_DIAGNOSTIC_SNAPSHOT[] = "multiplayer_state";
 
 static void set_error(char *error_buffer, int error_buffer_size, const char *message)
 {
@@ -243,6 +262,590 @@ static void disconnect_haptics_policies(sdl3d_data_game_runtime *runtime)
     runtime->haptics_connection_count = 0;
 }
 
+static sdl3d_data_game_network_bindings managed_network_bindings(void)
+{
+    sdl3d_data_game_network_bindings bindings;
+    SDL_zero(bindings);
+    bindings.state_snapshot = SDL3D_MANAGED_NETWORK_BINDING_STATE_SNAPSHOT;
+    bindings.client_input = SDL3D_MANAGED_NETWORK_BINDING_CLIENT_INPUT;
+    bindings.start_game = SDL3D_MANAGED_NETWORK_BINDING_START_GAME;
+    bindings.pause_request = SDL3D_MANAGED_NETWORK_BINDING_PAUSE_REQUEST;
+    bindings.resume_request = SDL3D_MANAGED_NETWORK_BINDING_RESUME_REQUEST;
+    bindings.disconnect = SDL3D_MANAGED_NETWORK_BINDING_DISCONNECT;
+    return bindings;
+}
+
+static const char *managed_network_session_scene(const sdl3d_data_game_runtime *runtime, const char *name,
+                                                 const char *fallback)
+{
+    const char *scene = NULL;
+    if (runtime != NULL && runtime->data != NULL &&
+        sdl3d_game_data_get_network_session_scene(runtime->data, name, &scene))
+    {
+        return scene;
+    }
+    return fallback;
+}
+
+static const char *managed_network_session_state_key(const sdl3d_data_game_runtime *runtime, const char *name,
+                                                     const char *fallback)
+{
+    const char *key = NULL;
+    if (runtime != NULL && runtime->data != NULL &&
+        sdl3d_game_data_get_network_session_state_key(runtime->data, name, &key))
+    {
+        return key;
+    }
+    return fallback;
+}
+
+static const char *managed_network_session_state_value(const sdl3d_data_game_runtime *runtime, const char *group,
+                                                       const char *name, const char *fallback)
+{
+    const char *value = NULL;
+    if (runtime != NULL && runtime->data != NULL &&
+        sdl3d_game_data_get_network_session_state_value(runtime->data, group, name, &value))
+    {
+        return value;
+    }
+    return fallback;
+}
+
+static const char *managed_network_message(const sdl3d_data_game_runtime *runtime, const char *group, const char *name,
+                                           const char *fallback)
+{
+    const char *message = NULL;
+    if (runtime != NULL && runtime->data != NULL &&
+        sdl3d_game_data_get_network_session_message(runtime->data, group, name, &message))
+    {
+        return message;
+    }
+    return fallback;
+}
+
+static const char *managed_network_scene_state_key(const sdl3d_data_game_runtime *runtime, const char *scope,
+                                                   const char *name, const char *fallback)
+{
+    const char *key = NULL;
+    if (runtime != NULL && runtime->data != NULL &&
+        sdl3d_game_data_get_network_scene_state_key(runtime->data, scope, name, &key))
+    {
+        return key;
+    }
+    return fallback;
+}
+
+static const char *managed_network_scene_state_string(const sdl3d_data_game_runtime *runtime, const char *key_name,
+                                                      const char *fallback)
+{
+    const sdl3d_properties *scene_state =
+        runtime != NULL && runtime->data != NULL ? sdl3d_game_data_scene_state(runtime->data) : NULL;
+    const char *key = managed_network_session_state_key(runtime, key_name, key_name);
+    return scene_state != NULL ? sdl3d_properties_get_string(scene_state, key, fallback) : fallback;
+}
+
+static bool managed_network_active_scene_is(const sdl3d_data_game_runtime *runtime, const char *scene_name,
+                                            const char *fallback)
+{
+    const char *active_scene =
+        runtime != NULL && runtime->data != NULL ? sdl3d_game_data_active_scene(runtime->data) : NULL;
+    const char *expected_scene = managed_network_session_scene(runtime, scene_name, fallback);
+    return active_scene != NULL && expected_scene != NULL && SDL_strcmp(active_scene, expected_scene) == 0;
+}
+
+static bool managed_network_is_lobby_scene(const sdl3d_data_game_runtime *runtime)
+{
+    return managed_network_active_scene_is(runtime, "host_lobby", "scene.multiplayer.lobby");
+}
+
+static bool managed_network_is_direct_connect_scene(const sdl3d_data_game_runtime *runtime)
+{
+    return managed_network_active_scene_is(runtime, "direct_connect", "scene.multiplayer.direct_connect");
+}
+
+static bool managed_network_is_discovery_scene(const sdl3d_data_game_runtime *runtime)
+{
+    return managed_network_active_scene_is(runtime, "discovery", "scene.multiplayer.discovery");
+}
+
+static bool managed_network_is_play_scene(const sdl3d_data_game_runtime *runtime)
+{
+    return managed_network_active_scene_is(runtime, "play", "scene.play");
+}
+
+static bool managed_network_is_network_match(const sdl3d_data_game_runtime *runtime)
+{
+    const char *match_mode = managed_network_scene_state_string(runtime, "match_mode", NULL);
+    return match_mode != NULL &&
+           SDL_strcmp(match_mode, managed_network_session_state_value(runtime, "match_mode", "network", "lan")) == 0;
+}
+
+static bool managed_network_is_role_host(const sdl3d_data_game_runtime *runtime)
+{
+    const char *network_role = managed_network_scene_state_string(runtime, "network_role", "none");
+    return managed_network_is_network_match(runtime) &&
+           SDL_strcmp(network_role, managed_network_session_state_value(runtime, "network_role", "host", "host")) == 0;
+}
+
+static bool managed_network_is_role_client(const sdl3d_data_game_runtime *runtime)
+{
+    const char *network_role = managed_network_scene_state_string(runtime, "network_role", "none");
+    return managed_network_is_network_match(runtime) &&
+           SDL_strcmp(network_role, managed_network_session_state_value(runtime, "network_role", "client", "client")) ==
+               0;
+}
+
+static int managed_network_action_id(const sdl3d_data_game_runtime *runtime, const char *binding_name)
+{
+    int action_id = -1;
+    if (runtime != NULL && runtime->data != NULL &&
+        sdl3d_game_data_get_network_runtime_action(runtime->data, binding_name, &action_id))
+    {
+        return action_id;
+    }
+    return -1;
+}
+
+static bool managed_network_run_flow_event(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx,
+                                           const char *event_name, const char *reason)
+{
+    char error[192] = {0};
+    sdl3d_properties *payload = NULL;
+    bool ok = false;
+
+    if (runtime == NULL || runtime->data == NULL || event_name == NULL || event_name[0] == '\0')
+        return false;
+
+    payload = sdl3d_properties_create();
+    if (payload == NULL)
+        return false;
+    sdl3d_properties_set_string(payload, "event", event_name);
+    sdl3d_properties_set_string(payload, "reason", reason != NULL ? reason : "");
+
+    ok = sdl3d_game_data_run_network_session_flow_event(runtime->data, ctx, event_name, payload, error,
+                                                        (int)sizeof(error));
+    sdl3d_properties_destroy(payload);
+    if (!ok)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D managed network event '%s' failed: %s", event_name,
+                    error[0] != '\0' ? error : "unknown error");
+    }
+    return ok;
+}
+
+static bool managed_network_send_control(sdl3d_data_game_runtime *runtime, sdl3d_network_session *session,
+                                         const char *binding_name, const char *label)
+{
+    char error[160] = {0};
+    const Uint32 tick = data_game_input_tick(runtime);
+    if (!data_game_send_runtime_control(runtime, session, binding_name, tick, error, (int)sizeof(error)))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D managed network control send failed: %s",
+                    error[0] != '\0' ? error : "unknown error");
+        return false;
+    }
+
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D managed network sent control: %s binding=%s",
+                label != NULL ? label : "control", binding_name != NULL ? binding_name : "<null>");
+    return true;
+}
+
+static bool managed_network_send_control_repeated(sdl3d_data_game_runtime *runtime, sdl3d_network_session *session,
+                                                  const char *binding_name, const char *label, int count)
+{
+    bool sent_any = false;
+    const int attempts = SDL_max(count, 1);
+    for (int i = 0; i < attempts; ++i)
+    {
+        if (managed_network_send_control(runtime, session, binding_name, label))
+            sent_any = true;
+        if (session != NULL)
+            (void)sdl3d_network_session_update(session, 0.0f);
+    }
+    return sent_any;
+}
+
+static void managed_network_publish_host_status(sdl3d_data_game_runtime *runtime)
+{
+    if (runtime == NULL || runtime->data == NULL)
+        return;
+
+    (void)sdl3d_game_data_network_host_publish_status(
+        runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION,
+        managed_network_scene_state_key(runtime, "host", "status", "multiplayer_host_status"),
+        managed_network_scene_state_key(runtime, "host", "endpoint", "multiplayer_host_endpoint"),
+        managed_network_scene_state_key(runtime, "host", "peer", "multiplayer_host_client"),
+        managed_network_scene_state_key(runtime, "host", "connected", "multiplayer_host_connected"));
+}
+
+static void managed_network_cancel_host(sdl3d_data_game_runtime *runtime, bool notify_peer, const char *status)
+{
+    sdl3d_network_session *session =
+        runtime != NULL && runtime->data != NULL
+            ? sdl3d_game_data_get_network_host_session(runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION)
+            : NULL;
+    if (runtime == NULL || runtime->data == NULL)
+        return;
+    if (session != NULL && notify_peer)
+    {
+        (void)managed_network_send_control_repeated(runtime, session, SDL3D_MANAGED_NETWORK_BINDING_DISCONNECT,
+                                                    "host disconnect", 5);
+    }
+    (void)sdl3d_game_data_network_host_cancel(
+        runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION,
+        managed_network_scene_state_key(runtime, "host", "status", "multiplayer_host_status"),
+        managed_network_scene_state_key(runtime, "host", "endpoint", "multiplayer_host_endpoint"),
+        managed_network_scene_state_key(runtime, "host", "peer", "multiplayer_host_client"),
+        managed_network_scene_state_key(runtime, "host", "connected", "multiplayer_host_connected"),
+        status != NULL ? status : "Not hosting");
+}
+
+static void managed_network_publish_direct_connect_status(sdl3d_data_game_runtime *runtime)
+{
+    if (runtime == NULL || runtime->data == NULL)
+        return;
+
+    (void)sdl3d_game_data_network_direct_connect_publish_status(
+        runtime->data, SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION,
+        managed_network_scene_state_key(runtime, "direct_connect", "status", "direct_connect_status"),
+        managed_network_scene_state_key(runtime, "direct_connect", "state", "direct_connect_state"),
+        managed_network_scene_state_key(runtime, "direct_connect", "connected", "direct_connect_connected"));
+}
+
+static void managed_network_cancel_direct_connect(sdl3d_data_game_runtime *runtime, bool notify_peer,
+                                                  const char *status)
+{
+    sdl3d_network_session *session = runtime != NULL && runtime->data != NULL
+                                         ? sdl3d_game_data_get_network_direct_connect_session(
+                                               runtime->data, SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION)
+                                         : NULL;
+    if (runtime == NULL || runtime->data == NULL)
+        return;
+    if (session != NULL && notify_peer)
+    {
+        (void)managed_network_send_control_repeated(runtime, session, SDL3D_MANAGED_NETWORK_BINDING_DISCONNECT,
+                                                    "client disconnect", 5);
+    }
+    (void)sdl3d_game_data_network_direct_connect_cancel(
+        runtime->data, SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION,
+        managed_network_scene_state_key(runtime, "direct_connect", "status", "direct_connect_status"),
+        managed_network_scene_state_key(runtime, "direct_connect", "state", "direct_connect_state"),
+        managed_network_scene_state_key(runtime, "direct_connect", "connected", "direct_connect_connected"),
+        status != NULL ? status : "Disconnected");
+}
+
+static void managed_network_disconnect_flow(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx, bool local_host,
+                                            const char *reason)
+{
+    const char *event_name = NULL;
+    if (runtime == NULL || runtime->data == NULL)
+        return;
+
+    if (managed_network_is_play_scene(runtime))
+    {
+        runtime->managed_network_termination_timer = 0.0f;
+        event_name = local_host ? "host_match_terminated" : "client_match_terminated";
+    }
+    else
+    {
+        event_name = local_host ? "host_client_disconnected" : "client_connection_closed";
+    }
+
+    (void)managed_network_run_flow_event(
+        runtime, ctx, event_name,
+        reason != NULL && reason[0] != '\0'
+            ? reason
+            : managed_network_message(runtime, "disconnect_reasons", "peer_disconnected", "Peer disconnected"));
+}
+
+static void managed_network_lobby_signal(void *userdata, int signal_id, const sdl3d_properties *payload)
+{
+    sdl3d_data_game_runtime *runtime = (sdl3d_data_game_runtime *)userdata;
+    (void)payload;
+    if (runtime == NULL || signal_id != runtime->managed_network_lobby_start_signal_id)
+        return;
+    runtime->managed_network_lobby_start_requested = true;
+}
+
+static bool connect_managed_network(sdl3d_data_game_runtime *runtime)
+{
+    if (runtime == NULL || runtime->data == NULL || runtime->session == NULL || !runtime->managed_network_enabled)
+        return true;
+
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(runtime->session);
+    if (bus == NULL)
+        return true;
+
+    runtime->managed_network_lobby_start_signal_id = -1;
+    runtime->managed_network_camera_toggle_signal_id = -1;
+    (void)sdl3d_game_data_get_network_runtime_signal(runtime->data, SDL3D_MANAGED_NETWORK_BINDING_LOBBY_START,
+                                                     &runtime->managed_network_lobby_start_signal_id);
+    (void)sdl3d_game_data_get_network_runtime_signal(runtime->data, SDL3D_MANAGED_NETWORK_BINDING_CAMERA_TOGGLE,
+                                                     &runtime->managed_network_camera_toggle_signal_id);
+
+    if (runtime->managed_network_lobby_start_signal_id >= 0)
+    {
+        runtime->managed_network_lobby_start_connection = sdl3d_signal_connect(
+            bus, runtime->managed_network_lobby_start_signal_id, managed_network_lobby_signal, runtime);
+        if (runtime->managed_network_lobby_start_connection == 0)
+            return false;
+    }
+    return true;
+}
+
+static void disconnect_managed_network(sdl3d_data_game_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+
+    if (runtime->managed_network_enabled && runtime->data != NULL)
+    {
+        managed_network_cancel_host(runtime, true, "Not hosting");
+        managed_network_cancel_direct_connect(runtime, true, "Disconnected");
+    }
+
+    if (runtime->session != NULL && runtime->managed_network_lobby_start_connection > 0)
+    {
+        sdl3d_signal_disconnect(sdl3d_game_session_get_signal_bus(runtime->session),
+                                runtime->managed_network_lobby_start_connection);
+    }
+    runtime->managed_network_lobby_start_connection = 0;
+    runtime->managed_network_lobby_start_signal_id = -1;
+    runtime->managed_network_camera_toggle_signal_id = -1;
+    runtime->managed_network_lobby_start_requested = false;
+}
+
+static void managed_network_update_termination_ack(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx, float dt)
+{
+    const sdl3d_properties *scene_state =
+        runtime != NULL && runtime->data != NULL ? sdl3d_game_data_scene_state(runtime->data) : NULL;
+    const char *active_key =
+        managed_network_session_state_key(runtime, "match_termination_active", "network_match_termination_active");
+    const bool active = scene_state != NULL ? sdl3d_properties_get_bool(scene_state, active_key, false) : false;
+
+    if (runtime == NULL || !active)
+    {
+        if (runtime != NULL)
+            runtime->managed_network_termination_timer = 0.0f;
+        return;
+    }
+
+    if (ctx != NULL)
+        ctx->paused = true;
+
+    runtime->managed_network_termination_timer += SDL_max(dt, 0.0f);
+    if (runtime->managed_network_termination_timer < 0.25f)
+        return;
+
+    sdl3d_input_manager *input = runtime->session != NULL ? sdl3d_game_session_get_input(runtime->session) : NULL;
+    const int select_action = managed_network_action_id(runtime, SDL3D_MANAGED_NETWORK_BINDING_MENU_SELECT);
+    if (input == NULL || select_action < 0 || !sdl3d_input_is_pressed(input, select_action))
+        return;
+
+    runtime->managed_network_termination_timer = 0.0f;
+    (void)managed_network_run_flow_event(runtime, ctx, "network_match_termination_ack", NULL);
+}
+
+static void managed_network_process_lobby_start(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx)
+{
+    if (runtime == NULL || runtime->data == NULL || !runtime->managed_network_lobby_start_requested)
+        return;
+
+    runtime->managed_network_lobby_start_requested = false;
+    sdl3d_network_session *session =
+        sdl3d_game_data_get_network_host_session(runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION);
+    if (session == NULL || !sdl3d_network_session_is_connected(session))
+    {
+        managed_network_publish_host_status(runtime);
+        return;
+    }
+
+    if (managed_network_send_control(runtime, session, SDL3D_MANAGED_NETWORK_BINDING_START_GAME, "start game"))
+    {
+        (void)managed_network_run_flow_event(runtime, ctx, "host_start_game", NULL);
+    }
+}
+
+static void managed_network_update_host(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx, float dt)
+{
+    if (runtime == NULL || runtime->data == NULL)
+        return;
+
+    sdl3d_network_session *session =
+        sdl3d_game_data_get_network_host_session(runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION);
+    if (session == NULL)
+        return;
+
+    const sdl3d_data_game_network_bindings bindings = managed_network_bindings();
+    sdl3d_data_game_network_loop_result result;
+    char error[192] = {0};
+    if (!sdl3d_data_game_runtime_update_network_host_session(runtime, ctx, SDL3D_MANAGED_NETWORK_HOST_SESSION,
+                                                             &bindings, managed_network_is_play_scene(runtime), dt,
+                                                             &result, error, (int)sizeof(error)))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D managed host session update failed: %s",
+                    error[0] != '\0' ? error : SDL_GetError());
+    }
+
+    if (result.received_disconnect)
+    {
+        managed_network_disconnect_flow(
+            runtime, ctx, true,
+            managed_network_message(runtime, "disconnect_reasons", "client_exited", "Client exited"));
+    }
+    else if (managed_network_is_play_scene(runtime) && result.session_state != SDL3D_NETWORK_STATE_CONNECTED)
+    {
+        managed_network_disconnect_flow(
+            runtime, ctx, true,
+            managed_network_message(runtime, "disconnect_reasons", "client_timed_out", "Client timed out"));
+    }
+
+    managed_network_publish_host_status(runtime);
+
+    session = sdl3d_game_data_get_network_host_session(runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION);
+    if (session == NULL)
+        return;
+
+    const bool keep_host_session = managed_network_is_lobby_scene(runtime) ||
+                                   (managed_network_is_play_scene(runtime) && managed_network_is_role_host(runtime));
+    if (!keep_host_session)
+        managed_network_cancel_host(runtime, true, "Not hosting");
+}
+
+static void managed_network_update_direct_connect(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx, float dt)
+{
+    if (runtime == NULL || runtime->data == NULL)
+        return;
+
+    sdl3d_network_session *session =
+        sdl3d_game_data_get_network_direct_connect_session(runtime->data, SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION);
+    if (session == NULL)
+        return;
+
+    const bool was_playing = managed_network_is_play_scene(runtime);
+    const bool playing = was_playing && managed_network_is_role_client(runtime);
+    const bool keep_direct_connect_session =
+        managed_network_is_direct_connect_scene(runtime) || managed_network_is_discovery_scene(runtime) || playing;
+    if (!keep_direct_connect_session)
+    {
+        managed_network_cancel_direct_connect(runtime, true, "Disconnected");
+        return;
+    }
+
+    managed_network_publish_direct_connect_status(runtime);
+
+    const sdl3d_data_game_network_bindings bindings = managed_network_bindings();
+    sdl3d_data_game_network_loop_result result;
+    char error[192] = {0};
+    if (!sdl3d_data_game_runtime_update_network_client_session(runtime, ctx,
+                                                               SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION, &bindings,
+                                                               playing, true, dt, &result, error, (int)sizeof(error)))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D managed direct-connect update failed: %s",
+                    error[0] != '\0' ? error : "unknown error");
+    }
+
+    if (result.received_start_game)
+    {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D managed client received start-game control");
+        (void)managed_network_run_flow_event(runtime, ctx, "client_start_game", NULL);
+    }
+    if (result.received_disconnect)
+    {
+        managed_network_disconnect_flow(
+            runtime, ctx, false, managed_network_message(runtime, "disconnect_reasons", "host_exited", "Host exited"));
+        return;
+    }
+    if (result.applied_snapshot)
+    {
+        if (!was_playing)
+            (void)managed_network_run_flow_event(runtime, ctx, "client_state_before_start", NULL);
+        (void)sdl3d_game_data_log_network_snapshot_diagnostic(runtime->data, SDL3D_MANAGED_NETWORK_DIAGNOSTIC_SNAPSHOT,
+                                                              result.last_tick, "client_snapshot_applied", "applied",
+                                                              NULL, error, (int)sizeof(error));
+    }
+
+    session =
+        sdl3d_game_data_get_network_direct_connect_session(runtime->data, SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION);
+    if (session == NULL)
+        return;
+
+    const sdl3d_network_state state = result.session_state;
+    if (state == SDL3D_NETWORK_STATE_REJECTED || state == SDL3D_NETWORK_STATE_TIMED_OUT ||
+        state == SDL3D_NETWORK_STATE_ERROR)
+    {
+        const char *reason =
+            state == SDL3D_NETWORK_STATE_TIMED_OUT
+                ? managed_network_message(runtime, "disconnect_reasons", "host_timed_out", "Host timed out")
+            : state == SDL3D_NETWORK_STATE_REJECTED
+                ? managed_network_message(runtime, "disconnect_reasons", "host_rejected", "Host rejected connection")
+                : managed_network_message(runtime, "disconnect_reasons", "host_error", "Host connection error");
+        if (was_playing)
+            managed_network_disconnect_flow(runtime, ctx, false, reason);
+        else
+            (void)managed_network_run_flow_event(runtime, ctx, "client_connection_closed", reason);
+    }
+}
+
+static void managed_network_update_client_sensors(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx)
+{
+    if (runtime == NULL || runtime->data == NULL || ctx == NULL || !managed_network_is_play_scene(runtime) ||
+        !managed_network_is_role_client(runtime) || runtime->managed_network_camera_toggle_signal_id < 0)
+    {
+        return;
+    }
+
+    sdl3d_input_manager *input = runtime->session != NULL ? sdl3d_game_session_get_input(runtime->session) : NULL;
+    const int camera_toggle_action = managed_network_action_id(runtime, SDL3D_MANAGED_NETWORK_BINDING_CAMERA_TOGGLE);
+    if (input != NULL && camera_toggle_action >= 0 && sdl3d_input_is_pressed(input, camera_toggle_action))
+    {
+        sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(ctx->session),
+                          runtime->managed_network_camera_toggle_signal_id, NULL);
+    }
+}
+
+static void managed_network_update_before_frame(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx, float dt)
+{
+    if (runtime == NULL || !runtime->managed_network_enabled)
+        return;
+
+    managed_network_process_lobby_start(runtime, ctx);
+    managed_network_update_termination_ack(runtime, ctx, dt);
+    managed_network_update_host(runtime, ctx, dt);
+    managed_network_update_direct_connect(runtime, ctx, dt);
+    managed_network_update_client_sensors(runtime, ctx);
+}
+
+static void managed_network_update_after_frame(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx)
+{
+    if (runtime == NULL || runtime->data == NULL || !runtime->managed_network_enabled)
+        return;
+
+    managed_network_process_lobby_start(runtime, ctx);
+
+    sdl3d_network_session *session =
+        sdl3d_game_data_get_network_host_session(runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION);
+    if (session == NULL || !sdl3d_network_session_is_connected(session) || !managed_network_is_play_scene(runtime) ||
+        !managed_network_is_role_host(runtime))
+    {
+        return;
+    }
+
+    const sdl3d_data_game_network_bindings bindings = managed_network_bindings();
+    sdl3d_data_game_network_loop_result result;
+    char error[192] = {0};
+    if (!sdl3d_data_game_runtime_publish_network_host_snapshot(runtime, ctx, SDL3D_MANAGED_NETWORK_HOST_SESSION,
+                                                               &bindings, &result, error, (int)sizeof(error)))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D managed host snapshot publish failed: %s",
+                    error[0] != '\0' ? error : "unknown error");
+        return;
+    }
+    (void)sdl3d_game_data_log_network_snapshot_diagnostic(runtime->data, SDL3D_MANAGED_NETWORK_DIAGNOSTIC_SNAPSHOT,
+                                                          result.last_tick, "host_snapshot_sent", "sent", NULL, error,
+                                                          (int)sizeof(error));
+}
+
 void sdl3d_data_game_runtime_desc_init(sdl3d_data_game_runtime_desc *desc)
 {
     if (desc == NULL)
@@ -279,6 +882,9 @@ bool sdl3d_data_game_runtime_create(const sdl3d_data_game_runtime_desc *desc, sd
         return false;
     }
     runtime->session = desc->session;
+    runtime->managed_network_enabled = desc->enable_managed_network;
+    runtime->managed_network_lobby_start_signal_id = -1;
+    runtime->managed_network_camera_toggle_signal_id = -1;
     sdl3d_game_data_font_cache_init(&runtime->font_cache, desc->media_dir);
     sdl3d_game_data_particle_cache_init(&runtime->particle_cache);
     sdl3d_game_data_app_flow_init(&runtime->app_flow);
@@ -322,6 +928,12 @@ bool sdl3d_data_game_runtime_create(const sdl3d_data_game_runtime_desc *desc, sd
         sdl3d_data_game_runtime_destroy(runtime);
         return false;
     }
+    if (!connect_managed_network(runtime))
+    {
+        set_error(error_buffer, error_buffer_size, SDL_GetError());
+        sdl3d_data_game_runtime_destroy(runtime);
+        return false;
+    }
 
     *out_runtime = runtime;
     return true;
@@ -334,6 +946,7 @@ void sdl3d_data_game_runtime_destroy(sdl3d_data_game_runtime *runtime)
         return;
     }
 
+    disconnect_managed_network(runtime);
     disconnect_haptics_policies(runtime);
     sdl3d_game_data_particle_cache_free(&runtime->particle_cache);
     sdl3d_game_data_image_cache_free(&runtime->image_cache);
@@ -682,12 +1295,18 @@ bool sdl3d_data_game_runtime_update_frame(sdl3d_data_game_runtime *runtime, sdl3
     if (!refresh_active_input_profile_if_available(runtime))
         return false;
 
+    managed_network_update_before_frame(runtime, ctx, dt);
+
     const sdl3d_game_data_update_frame_desc frame = {.ctx = ctx,
                                                      .runtime = runtime->data,
                                                      .app_flow = &runtime->app_flow,
                                                      .particle_cache = &runtime->particle_cache,
                                                      .dt = dt};
-    return sdl3d_game_data_update_frame(&runtime->frame_state, &frame);
+    if (!sdl3d_game_data_update_frame(&runtime->frame_state, &frame))
+        return false;
+
+    managed_network_update_after_frame(runtime, ctx);
+    return true;
 }
 
 void sdl3d_data_game_runtime_render(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx)

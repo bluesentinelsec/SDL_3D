@@ -1706,7 +1706,10 @@ UI state keys, grouped by scope. Host integration code can resolve entries with
 used by lobby or connection scenes. All scopes and values must be objects of
 non-empty string keys to non-empty string scene-state property names. These keys
 are presentation/orchestration metadata and are intentionally not part of the
-network schema hash.
+network schema hash. The generic data-game runner recognizes the standard
+`host` scope keys `status`, `endpoint`, `peer`, and `connected`, plus the
+standard `direct_connect` scope keys `status`, `state`, and `connected`, when
+managed networking is enabled.
 
 `session_flow` is optional. It gives host integration code semantic names for
 network scene orchestration without baking a particular demo's scene ids or
@@ -1930,6 +1933,16 @@ Generic session loops should prefer the runtime-binding variants:
 loop can dispatch on semantic names like `start_game`, `pause_request`, and
 `disconnect` without knowing the concrete control-message names in the
 authored wire schema.
+
+When a game is launched through `sdl3d_runner`, the data-game runtime enables
+managed network orchestration. That managed loop expects the same standard
+semantic names used in the helper examples: host session `host`,
+direct-connect session `direct_connect`, replication bindings `state_snapshot`
+and `client_input`, controls `start_game`, `pause_request`, `resume_request`,
+and `disconnect`, actions `menu_select` and `camera_toggle`, and signals
+`lobby_start` and `camera_toggle`. The concrete ids remain data-authored
+through `network.session_flow`, `network.runtime_bindings`, and
+`network.scene_state`.
 
 When a runtime loads game data with a valid `network` block, it computes a
 deterministic schema hash over protocol, replication, input, and control-message

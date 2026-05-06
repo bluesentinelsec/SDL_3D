@@ -1658,6 +1658,134 @@ TEST(GameDataRuntime, DataGameRuntimeNetworkLoopReplicatesPongInputStateAndContr
     sdl3d_game_session_destroy(host_session);
 }
 
+TEST(GameDataRuntime, ManagedNetworkRuntimeStartsPongMatchAndReplicatesState)
+{
+    sdl3d_game_session *host_session = nullptr;
+    sdl3d_game_session *client_session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &host_session));
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &client_session));
+
+    const std::filesystem::path data_path = SDL3D_PONG_DATA_PATH;
+    const std::string root = data_path.parent_path().string();
+    const std::string asset_path = std::string("asset://") + data_path.filename().string();
+
+    sdl3d_data_game_runtime_desc host_desc{};
+    sdl3d_data_game_runtime_desc_init(&host_desc);
+    host_desc.session = host_session;
+    host_desc.media_dir = SDL3D_MEDIA_DIR;
+    host_desc.data_asset_path = asset_path.c_str();
+    host_desc.mount_assets = mount_test_directory_assets;
+    host_desc.mount_userdata = const_cast<char *>(root.c_str());
+    host_desc.enable_managed_network = true;
+
+    sdl3d_data_game_runtime_desc client_desc = host_desc;
+    client_desc.session = client_session;
+
+    char error[512]{};
+    sdl3d_data_game_runtime *host_runtime = nullptr;
+    sdl3d_data_game_runtime *client_runtime = nullptr;
+    ASSERT_TRUE(sdl3d_data_game_runtime_create(&host_desc, &host_runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_data_game_runtime_create(&client_desc, &client_runtime, error, sizeof(error))) << error;
+    sdl3d_game_data_runtime *host_data = sdl3d_data_game_runtime_data(host_runtime);
+    sdl3d_game_data_runtime *client_data = sdl3d_data_game_runtime_data(client_runtime);
+    ASSERT_NE(host_data, nullptr);
+    ASSERT_NE(client_data, nullptr);
+
+    auto enter_scene = [](sdl3d_game_data_runtime *runtime, const char *scene, const char *network_flow) {
+        sdl3d_properties *payload = sdl3d_properties_create();
+        if (payload == nullptr)
+            return false;
+        sdl3d_properties_set_string(payload, "network_flow", network_flow);
+        const bool ok = sdl3d_game_data_set_active_scene_with_payload(runtime, scene, payload);
+        sdl3d_properties_destroy(payload);
+        return ok;
+    };
+    ASSERT_TRUE(enter_scene(host_data, "scene.multiplayer.lobby", "host"));
+    ASSERT_TRUE(enter_scene(client_data, "scene.multiplayer.direct_connect", "direct"));
+
+    const ::testing::TestInfo *test_info = ::testing::UnitTest::GetInstance()->current_test_info();
+    const std::string test_name =
+        test_info != nullptr ? std::string(test_info->test_suite_name()) + "." + test_info->name() : "managed_net";
+    const int port = 30000 + (int)(std::hash<std::string>{}(test_name) % 20000U);
+    if (!sdl3d_game_data_network_host_start(host_data, "host", port, "SDL3D Test", "host_status", "host_endpoint",
+                                            "host_peer", "host_connected"))
+    {
+        sdl3d_data_game_runtime_destroy(client_runtime);
+        sdl3d_data_game_runtime_destroy(host_runtime);
+        sdl3d_game_session_destroy(client_session);
+        sdl3d_game_session_destroy(host_session);
+        GTEST_SKIP() << "network host unavailable: " << SDL_GetError();
+    }
+    ASSERT_TRUE(sdl3d_game_data_network_direct_connect_start(client_data, "direct_connect", "127.0.0.1", port,
+                                                             "direct_connect_status", "direct_connect_state",
+                                                             "direct_connect_connected"));
+
+    sdl3d_game_context host_ctx{};
+    host_ctx.session = host_session;
+    sdl3d_game_context client_ctx{};
+    client_ctx.session = client_session;
+
+    sdl3d_network_session *host_net = sdl3d_game_data_get_network_host_session(host_data, "host");
+    sdl3d_network_session *client_net =
+        sdl3d_game_data_get_network_direct_connect_session(client_data, "direct_connect");
+    ASSERT_NE(host_net, nullptr);
+    ASSERT_NE(client_net, nullptr);
+    bool connected = false;
+    for (int i = 0; i < 1200 && !connected; ++i)
+    {
+        ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(host_runtime, &host_ctx, 0.01f));
+        ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 0.01f));
+        connected = sdl3d_network_session_is_connected(host_net) && sdl3d_network_session_is_connected(client_net);
+    }
+    ASSERT_TRUE(connected);
+
+    int lobby_start_signal = -1;
+    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_signal(host_data, "lobby_start", &lobby_start_signal));
+    ASSERT_GE(lobby_start_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(host_session), lobby_start_signal, nullptr);
+
+    bool started = false;
+    for (int i = 0; i < 240 && !started; ++i)
+    {
+        ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(host_runtime, &host_ctx, 0.016f));
+        ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 0.016f));
+        started = SDL_strcmp(sdl3d_game_data_active_scene(host_data), "scene.play") == 0 &&
+                  SDL_strcmp(sdl3d_game_data_active_scene(client_data), "scene.play") == 0;
+    }
+    ASSERT_TRUE(started);
+    const sdl3d_properties *host_scene_state = sdl3d_game_data_scene_state(host_data);
+    const sdl3d_properties *client_scene_state = sdl3d_game_data_scene_state(client_data);
+    ASSERT_NE(host_scene_state, nullptr);
+    ASSERT_NE(client_scene_state, nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(host_scene_state, "match_mode", ""), "lan");
+    EXPECT_STREQ(sdl3d_properties_get_string(host_scene_state, "network_role", ""), "host");
+    EXPECT_STREQ(sdl3d_properties_get_string(client_scene_state, "match_mode", ""), "lan");
+    EXPECT_STREQ(sdl3d_properties_get_string(client_scene_state, "network_role", ""), "client");
+
+    sdl3d_registered_actor *host_ball = sdl3d_game_data_find_actor(host_data, "entity.ball");
+    sdl3d_registered_actor *client_ball = sdl3d_game_data_find_actor(client_data, "entity.ball");
+    ASSERT_NE(host_ball, nullptr);
+    ASSERT_NE(client_ball, nullptr);
+    host_ctx.paused = true;
+    client_ctx.paused = false;
+    host_ball->position = sdl3d_vec3_make(4.0f, 1.5f, 0.0f);
+    bool snapshot_applied = false;
+    for (int i = 0; i < 240 && !snapshot_applied; ++i)
+    {
+        ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(host_runtime, &host_ctx, 0.016f));
+        ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 0.016f));
+        snapshot_applied = SDL_fabsf(client_ball->position.x - host_ball->position.x) < 0.0001f &&
+                           SDL_fabsf(client_ball->position.y - host_ball->position.y) < 0.0001f;
+    }
+    EXPECT_TRUE(snapshot_applied);
+    EXPECT_TRUE(client_ctx.paused);
+
+    sdl3d_data_game_runtime_destroy(client_runtime);
+    sdl3d_data_game_runtime_destroy(host_runtime);
+    sdl3d_game_session_destroy(client_session);
+    sdl3d_game_session_destroy(host_session);
+}
+
 TEST(GameDataRuntime, AuthoredNetworkSessionFlowEventsDriveSceneTransitions)
 {
     sdl3d_game_session *session = nullptr;

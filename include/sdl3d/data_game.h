@@ -56,6 +56,17 @@ extern "C"
         sdl3d_data_game_mount_assets_fn mount_assets;
         /** @brief Userdata passed to @ref mount_assets. */
         void *mount_userdata;
+        /**
+         * @brief Enable authored host/direct-connect network orchestration.
+         *
+         * When true, the runtime consumes the standard authored network
+         * semantics from `network.session_flow`, `network.runtime_bindings`,
+         * and `network.scene_state` to keep host/direct-connect sessions
+         * updated, send/receive runtime-bound replication packets, handle
+         * start/pause/disconnect controls, publish status, and run authored
+         * session-flow events. Local-only games can leave this false.
+         */
+        bool enable_managed_network;
     } sdl3d_data_game_runtime_desc;
 
     /**
