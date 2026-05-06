@@ -53,6 +53,7 @@ typedef struct validation_names
     name_table entities;
     name_table actor_archetypes;
     name_table actor_pools;
+    name_table actor_pool_actors;
     name_table signals;
     name_table scripts;
     name_table script_modules;
@@ -1855,8 +1856,33 @@ static bool collect_actor_pools(validation_context *ctx, yyjson_val *root, valid
         yyjson_val *pool = yyjson_arr_get(pools, i);
         if (!yyjson_is_obj(pool))
             return validation_error(ctx, path, "actor pool entries must be objects");
-        if (!require_unique_name(ctx, &names->actor_pools, "actor pool", json_string(pool, "name"), path))
+        const char *pool_name = json_string(pool, "name");
+        if (!require_unique_name(ctx, &names->actor_pools, "actor pool", pool_name, path))
             return false;
+        yyjson_val *capacity_json = obj_get(pool, "capacity");
+        if (!yyjson_is_int(capacity_json))
+            continue;
+        const int capacity = yyjson_get_int(capacity_json);
+        if (capacity <= 0 || capacity > 4096)
+            continue;
+        for (int actor_index = 0; actor_index < capacity; ++actor_index)
+        {
+            char actor_name[256];
+            SDL_snprintf(actor_name, sizeof(actor_name), "%s.%d", pool_name, actor_index);
+            if (name_table_contains(&names->entities, actor_name))
+            {
+                return validation_error(ctx, path, "actor pool generated actor '%s' collides with entity at %s",
+                                        actor_name, name_table_path(&names->entities, actor_name));
+            }
+            if (name_table_contains(&names->actor_pool_actors, actor_name))
+            {
+                return validation_error(ctx, path,
+                                        "actor pool generated actor '%s' collides with generated actor at %s",
+                                        actor_name, name_table_path(&names->actor_pool_actors, actor_name));
+            }
+            if (!name_table_add(&names->actor_pool_actors, actor_name, path))
+                return validation_error(ctx, path, "failed to allocate validation name table for actor pool actor");
+        }
     }
     return true;
 }
@@ -3017,8 +3043,13 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (!require_ref(ctx, &names->actor_pools, "actor pool", json_string(action, "pool"), json_path))
             return false;
         const char *from = json_string(action, "from");
-        if (from != NULL && !require_ref(ctx, &names->entities, "entity", from, json_path))
-            return false;
+        if (from != NULL && from[0] == '\0')
+            return validation_error(ctx, json_path, "actor.spawn from requires a non-empty actor reference");
+        if (from != NULL && !name_table_contains(&names->entities, from) &&
+            !name_table_contains(&names->actor_pool_actors, from))
+        {
+            return validation_error(ctx, json_path, "unknown actor.spawn from actor reference '%s'", from);
+        }
         yyjson_val *properties = obj_get(action, "properties");
         if (properties != NULL && !yyjson_is_obj(properties))
             return validation_error(ctx, json_path, "actor.spawn properties must be an object");
@@ -3029,6 +3060,8 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         const char *target = json_string(action, "target");
         if (target == NULL || target[0] == '\0')
             return validation_error(ctx, json_path, "actor.despawn requires a non-empty target");
+        if (!name_table_contains(&names->entities, target) && !name_table_contains(&names->actor_pool_actors, target))
+            return validation_error(ctx, json_path, "unknown actor.despawn target '%s'", target);
         return true;
     }
     if (SDL_strcmp(type, "actor.despawn_by_tag") == 0)
@@ -4796,6 +4829,7 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->entities);
     name_table_destroy(&names->actor_archetypes);
     name_table_destroy(&names->actor_pools);
+    name_table_destroy(&names->actor_pool_actors);
     name_table_destroy(&names->signals);
     name_table_destroy(&names->scripts);
     name_table_destroy(&names->script_modules);

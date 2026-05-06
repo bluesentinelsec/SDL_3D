@@ -1496,7 +1496,8 @@ game-specific host code:
         "velocity": { "type": "vec2", "value": [0.0, 11.0] }
       },
       "output_actor_key": "last_spawned_actor",
-      "output_id_key": "last_spawned_pool_index"
+      "output_id_key": "last_spawned_actor_id",
+      "output_pool_index_key": "last_spawned_pool_index"
     }
   ]
 }
@@ -1506,7 +1507,10 @@ game-specific host code:
 `position` or derived from another actor with `from` plus optional `offset`.
 `properties` is optional and uses the same typed property shape as entity
 defaults. `output_actor_key` and `output_id_key` are optional scene-state
-outputs that receive the spawned actor name and pool index.
+outputs that receive the spawned actor name and actor registry id.
+`output_pool_index_key` receives the selected pool slot index when authored.
+Spawned pooled actors also receive `pool`, `pool_index`, and `pool_scene`
+properties for diagnostics and generic scene filtering.
 
 `actor.despawn` requires `target`. When the target is a pooled actor, the
 runtime resets it to the pool archetype and marks it inactive. Non-pooled
