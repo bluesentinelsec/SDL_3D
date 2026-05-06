@@ -52,6 +52,13 @@ The `ctx` table provides:
 - `ctx.dt`: delta time for this update
 - `ctx:actor(name)`: resolve an actor wrapper by exact name; returns `nil` when missing
 - `ctx:actor_with_tags(...)`: resolve the first actor matching one or more tags; returns `nil` when no actor matches
+- `ctx:active_actors_with_tags(...)`: return an array of active actor wrappers matching one or more tags
+- `ctx:spawn(pool, options)`: spawn one actor from an authored actor pool; returns `actor, actor_id, pool_index` or `nil, error`
+- `ctx:despawn(actor_or_name)`: despawn a pooled actor or deactivate a static actor; returns `true` or `false`
+- `ctx:despawn_by_tag(tag)`: despawn active pooled actors whose archetype has the tag; returns the despawn count
+- `ctx:pool_capacity(pool)`: return the authored pool capacity, or `0` for an unknown pool
+- `ctx:pool_active_count(pool)`: return the active actor count for a pool
+- `ctx:pool_available_count(pool)`: return the inactive actor count for a pool
 - `ctx:state_get(key, fallback)`: read persistent scene state
 - `ctx:state_set(key, value)`: write persistent scene state; passing `nil` removes the key
 - `ctx:random()`: deterministic per-runtime pseudo-random value in `[0, 1)`
@@ -62,6 +69,7 @@ The `ctx` table provides:
 
 - `ctx:actor(name)` is the cheapest way to reach a known entity name.
 - `ctx:actor_with_tags(...)` scans the actor registry and should be used for authored role discovery, not inner-loop per-frame work.
+- `ctx:active_actors_with_tags(...)` scans static entities and actor pools. It is useful for gameplay rules over small groups, but hot paths with many actors should use narrower engine sensors or future collection helpers.
 - `ctx.storage.*` performs filesystem I/O and should be used for saves, settings, caches, and similar infrequent tasks.
 - `ctx:random()` is deterministic within a runtime session, which makes it safe for gameplay logic that should replay or sync consistently.
 
@@ -94,6 +102,8 @@ Behavior notes:
 - Missing actor names return `nil` from `sdl3d.actor(name)`.
 - `get_position()` returns `nil` if the actor is missing.
 - `get_vec3()` returns `nil` if the actor is missing.
+- `active` and `is_active()` read the actor's current runtime active flag.
+- `despawn()` is shorthand for `sdl3d.despawn(actor)`.
 - Property getters fall back to authored defaults when the property is absent.
 - `position` and `velocity` are convenience fields backed by the same property accessors.
 
@@ -130,11 +140,68 @@ The runtime installs a small `sdl3d` table for low-level access and utility help
 - `sdl3d.state_set(key, value)`
 - `sdl3d.random()`
 - `sdl3d.actor_with_tags(...)`
+- `sdl3d.active_actors_with_tags(...)`
+- `sdl3d.spawn(pool, options)`
+- `sdl3d.despawn(actor_or_name)`
+- `sdl3d.despawn_by_tag(tag)`
+- `sdl3d.pool_capacity(pool)`
+- `sdl3d.pool_active_count(pool)`
+- `sdl3d.pool_available_count(pool)`
 - `sdl3d.log(message)`
 - `sdl3d.storage.*`
 - `sdl3d.json.*`
 
 The low-level `sdl3d.get_*` and `sdl3d.set_*` helpers are useful for compact scripts and host integration. Gameplay scripts should generally prefer the `Actor` wrapper for readability.
+
+## Actor Pools
+
+Lua can allocate from JSON-authored `actor_pools` without native game code:
+
+```lua
+local projectile, actor_id, pool_index = ctx:spawn("pool.player_shots", {
+  from = ctx:actor("entity.player"),
+  offset = Vec3(0, 0.5, 0),
+  properties = {
+    damage = 2,
+    owner = "player",
+    velocity = Vec3(0, 11, 0)
+  }
+})
+
+if projectile ~= nil then
+  ctx:log("spawned " .. projectile.name)
+end
+```
+
+`options` is optional. Supported keys:
+
+- `position`: `Vec3`, `{x,y,z}`, or `{x, y, z}` table for an explicit spawn position
+- `from`: actor wrapper or actor name whose current position should be copied
+- `offset`: vector added after `position` or `from`
+- `properties`: scalar or vector property overrides applied after archetype reset
+
+`spawn` resets the selected pooled actor to its archetype, activates it, applies
+the final position and property overrides, and returns the actor wrapper,
+registry id, and pool slot index. When the pool is missing or exhausted, it
+returns `nil, error_message`.
+
+`ctx:active_actors_with_tags(...)` returns only currently active actors. Static
+entities are matched by their authored tags; pooled actors are matched by their
+archetype tags:
+
+```lua
+for _, shot in ipairs(ctx:active_actors_with_tags("player_shot")) do
+  if shot.position.y > 6.0 then
+    shot:despawn()
+  end
+end
+```
+
+`ctx:despawn(actor_or_name)` resets pooled actors back to archetype defaults and
+marks them inactive. For non-pooled actors, it only clears the active flag.
+`ctx:despawn_by_tag(tag)` applies to pooled actors and returns the number of
+active actors it despawned. Pool count helpers report capacity, active count,
+and available inactive slots.
 
 ## `Vec3`
 
@@ -189,6 +256,8 @@ Paths must use `user://` or `cache://`. Absolute paths, `..`, empty segments, ba
 
 - Missing actor name: `ctx:actor()` returns `nil`.
 - Missing actor tags: `ctx:actor_with_tags()` returns `nil`.
+- Missing or exhausted actor pool: `ctx:spawn()` returns `nil, error_message`.
+- Missing despawn target: `ctx:despawn()` returns `false`.
 - Missing state key: `ctx:state_get()` returns the authored fallback.
 - Missing JSON data: `sdl3d.json.decode()` returns `nil, error`.
 - Unsupported JSON value: `sdl3d.json.encode()` returns `nil, error`.
