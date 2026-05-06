@@ -150,6 +150,14 @@ Pack-file example:
 build/debug/sdl3d_runner --pack build/debug/demos/pong/pong.sdl3dpak --data asset://pong.game.json
 ```
 
+Pong's normal demo target is now a game-specific build of this same runner
+source with embedded Pong assets and a default data asset. It can be launched
+without arguments:
+
+```sh
+build/debug/demos/pong/pong_demo
+```
+
 Optional flags:
 
 - `--media <dir>` overrides the built-in media directory used for engine fonts
@@ -158,10 +166,12 @@ Optional flags:
   `SDL3D_RUNNER_EMBEDDED_ASSETS` and provides the generic
   `sdl3d_runner_embedded_assets` pack blob symbols.
 
-The runner is game-agnostic: it does not reference Pong symbols, scene names,
-actions, actors, replication channels, or controls. Any remaining need for a
-custom host indicates engine runtime work that should move into reusable JSON
-or Lua-driven systems.
+The generic runner source is game-agnostic: it does not reference Pong scene
+names, actions, actors, replication channels, or controls. Demo-specific runner
+targets may supply build-time defaults such as an embedded asset symbol and a
+root data asset path, but gameplay and runtime behavior should remain authored
+in JSON and Lua. Any remaining need for a custom host indicates engine runtime
+work that should move into reusable data-driven systems.
 
 ## Why This Matters
 

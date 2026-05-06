@@ -1,9 +1,10 @@
 # Pong C Host Audit
 
-This audit records the state of `demos/pong/main.c` after the multiplayer UI
-migration. The long-term target is for Pong to be authored as JSON, Lua, and
-assets loaded by a generic SDL3D runner. In that model, a game does not need a
-custom `my_game/main.c`; it supplies data to the engine runtime.
+This audit records the state of Pong after the runner cutover. Pong's normal
+demo target now builds from the generic SDL3D runner source with embedded Pong
+assets and a default root data asset. The deprecated `demos/pong/main.c`
+compatibility host remains available only through the opt-in
+`SDL3D_BUILD_PONG_LEGACY_HOST` CMake option while parity is verified.
 
 ## Current Status
 
@@ -20,23 +21,24 @@ Pong gameplay is now substantially data driven:
   dynamic-list, runtime-collection, and network data actions
 - no native UI context remains in `demos/pong/main.c`
 
-The remaining Pong C is no longer gameplay-rule code. It is mostly a custom
-runtime host that wires generic engine systems together for this one demo.
+The remaining Pong C is no longer part of the normal demo path and is not
+gameplay-rule code. It is retained as a temporary compatibility host for
+comparison and debugging.
 
 ## Remaining C Surface
 
-`demos/pong/main.c` is still large because it owns several responsibilities that
-should move behind reusable engine/runtime APIs.
+`demos/pong/main.c` is still large because it preserves the old custom host.
+The normal `pong_demo` executable no longer compiles it.
 
 ### SDL Process And Asset Bootstrap
 
-The file still creates the SDL3D game config, mounts embedded/pack/directory
-assets, loads `asset://pong.game.json`, initializes caches, starts text input,
-and calls `sdl3d_game_run`.
+The compatibility host still creates the SDL3D game config, mounts
+embedded/pack/directory assets, loads `asset://pong.game.json`, initializes
+caches, starts text input, and calls `sdl3d_game_run`.
 
-This is generic runner work. A reusable SDL3D runtime should accept a game data
-asset path or pack path, load app/window/audio settings from game data, mount
-assets, and run without game-specific C.
+This work has moved to `sdl3d_runner` and `sdl3d_data_game_runtime`. The
+normal `pong_demo` target supplies only build-time defaults: embedded Pong
+assets and `asset://pong.game.json`.
 
 ### Generic Data Game Loop
 
@@ -45,24 +47,23 @@ longer owns asset resolver creation, game-data loading, app-flow/frame state,
 presentation caches, haptics policy wiring, or authored frame rendering
 directly.
 
-`pong_tick`, `pong_pause_tick`, `pong_render`, and `pong_shutdown` still exist,
-but they are now compatibility callbacks around generic runtime calls plus
-Pong's remaining network orchestration:
+`pong_tick`, `pong_pause_tick`, `pong_render`, and `pong_shutdown` still exist
+only in the deprecated compatibility host. The generic runner now owns the
+normal Pong loop through `sdl3d_data_game_runtime`.
 
 - input profile hotplug refresh
 - network session updates
 - game-data frame update/render
 - cleanup for remaining session state
 
-These should become a managed data-game loop in the engine runtime. A game
-package should opt into standard phases and policies from JSON instead of
-implementing per-game callbacks.
+Games opt into standard phases and policies from JSON instead of implementing
+per-game callbacks.
 
 ### Managed Network Session Orchestration
 
-Pong's legacy host still contains multiplayer session orchestration, but the
-generic data-game runtime now has an opt-in managed network path that covers
-this responsibility for `sdl3d_runner`:
+Pong's legacy host still contains old multiplayer session orchestration, but
+the generic data-game runtime now has an opt-in managed network path that
+covers this responsibility for `sdl3d_runner` and the normal `pong_demo`:
 
 - host session creation/destruction and lobby state publishing
 - direct-connect session lifetime and status publishing
@@ -82,12 +83,9 @@ by authored `network.session_flow`, `network.runtime_bindings`, and
 
 ### Runtime State Publication
 
-Pong C still publishes scene-state values for host lobby status, direct-connect
-status, match termination messages, and network role/flow handoff.
-
-These are generic UI/runtime status concepts. The runner should provide data
-actions or managed bindings for session status, peer lists, selected peers,
-termination reasons, and return scenes.
+Runtime state publication for host lobby status, direct-connect status, match
+termination messages, and network role/flow handoff now runs through authored
+data actions and managed runtime bindings in the normal runner path.
 
 ### Diagnostic Logging
 
@@ -98,15 +96,14 @@ log level, session-state inclusion, and message template.
 
 ## Remaining Pong-Specific C Literals
 
-The remaining `PONG_*` constants in the compatibility host are mostly semantic runtime binding names such
-as `state_snapshot`, `client_input`, `start_game`, `pause_request`, and
-`direct_connect`. They are not hard-coded actor/property packet schemas, but
-they still prove that the current binary is a Pong host rather than a generic
-runner.
+The remaining `PONG_*` constants in the compatibility host are mostly semantic
+runtime binding names such as `state_snapshot`, `client_input`, `start_game`,
+`pause_request`, and `direct_connect`. They are not hard-coded actor/property
+packet schemas, and they no longer affect the normal `pong_demo` binary.
 
 The generic runner now uses standard semantic binding names defined by the
-engine. The remaining task is replacing the demo binary path with the runner
-path and deleting the compatibility host when parity has been verified.
+engine. The remaining task is deleting the compatibility host when parity has
+been verified.
 
 ## No Longer Blocking JSON/Lua Authorship
 
@@ -123,16 +120,15 @@ systems:
 
 ## Next Practical Step
 
-Verify full Pong parity through `sdl3d_runner`, then convert `demos/pong` to
-launch through the generic runner or keep only a tiny build-time wrapper for
-asset defaults.
+Verify full Pong parity through the runner-backed `pong_demo`, then remove the
+deprecated custom host and its opt-in CMake target.
 
 ## Definition Of Done For Pong Without `main.c`
 
 Pong can be considered JSON/Lua-only when:
 
 - the same generic runner binary can launch Pong from a pack or directory
-- Pong has no custom C callback table
+- the normal Pong demo path has no custom C callback table
 - standard single-player, local multiplayer, direct connect, LAN discovery,
   options, pause, haptics, audio, and rendering behavior still work
 - Pong-specific gameplay behavior remains in `demos/pong/data/scripts/pong.lua`
