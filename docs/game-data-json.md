@@ -1303,9 +1303,9 @@ archetype, activates it, applies the requested position and property overrides,
 and writes `pool` and `pool_index` properties for diagnostics. Despawning a
 pooled actor resets it back to its archetype defaults and deactivates it.
 
-The first actor-pool slice supports JSON-authored lifecycle actions. Lua
-helpers, tag-targeted sensors, pooled component iteration in every subsystem,
-and network replication of pooled actor state are planned follow-up work.
+Actor pools support JSON-authored lifecycle actions and Lua lifecycle helpers.
+Tag-targeted sensors, pooled component iteration in every subsystem, and
+network replication of pooled actor state are planned follow-up work.
 
 ### Presentation Components
 

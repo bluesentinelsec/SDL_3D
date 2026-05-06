@@ -6274,6 +6274,181 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, LuaCanSpawnIterateAndDespawnPooledActors)
+{
+    const std::filesystem::path dir = unique_test_dir("lua_actor_pools");
+    write_text(dir / "scripts" / "rules.lua",
+               R"lua(
+local rules = {}
+
+function rules.spawn_projectile(_, _, ctx)
+  local player = ctx:actor("entity.player")
+  local shot, actor_id, pool_index = ctx:spawn("pool.projectiles", {
+    from = player,
+    offset = Vec3(0.25, 0.5, 0.0),
+    properties = {
+      damage = 5,
+      critical = true,
+      owner = "player",
+      velocity = Vec3(1.0, 2.0, 0.0)
+    }
+  })
+
+  ctx:state_set("spawn_name", shot and shot.name or "")
+  ctx:state_set("spawn_actor_id", actor_id or -1)
+  ctx:state_set("spawn_pool_index", pool_index or -1)
+  ctx:state_set("spawn_active", shot and shot.active or false)
+  ctx:state_set("pool_capacity", ctx:pool_capacity("pool.projectiles"))
+  ctx:state_set("pool_active", ctx:pool_active_count("pool.projectiles"))
+  ctx:state_set("pool_available", ctx:pool_available_count("pool.projectiles"))
+
+  local active = ctx:active_actors_with_tags("projectile")
+  ctx:state_set("active_projectiles", #active)
+  if active[1] ~= nil then
+    active[1]:set_int("touched", 1)
+  end
+  return true
+end
+
+function rules.despawn_first(_, _, ctx)
+  local active = ctx:active_actors_with_tags({ "projectile" })
+  ctx:state_set("before_despawn", #active)
+  if active[1] ~= nil then
+    ctx:despawn(active[1])
+  end
+  ctx:state_set("after_despawn", #ctx:active_actors_with_tags("projectile"))
+  return true
+end
+
+function rules.despawn_all(_, _, ctx)
+  ctx:spawn("pool.projectiles", { position = Vec3(4.0, 5.0, 6.0) })
+  ctx:state_set("despawned_count", ctx:despawn_by_tag("projectile"))
+  return true
+end
+
+return rules
+)lua");
+    write_text(dir / "lua_actor_pools.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Lua Actor Pools", "id": "test.lua_actor_pools", "version": "0.1.0" },
+  "world": { "name": "world.lua_actor_pools", "kind": "fixed_screen" },
+  "scripts": [
+    { "id": "script.rules", "path": "scripts/rules.lua", "module": "test.actor_pools" }
+  ],
+  "entities": [
+    { "name": "entity.player", "transform": { "position": [1.0, 2.0, 3.0] } }
+  ],
+  "actor_archetypes": [
+    {
+      "name": "archetype.projectile",
+      "tags": ["projectile", "player_projectile"],
+      "transform": { "position": [0.0, 0.0, 0.25] },
+      "properties": {
+        "damage": { "type": "int", "value": 1 },
+        "critical": { "type": "bool", "value": false },
+        "owner": { "type": "string", "value": "none" },
+        "velocity": { "type": "vec2", "value": [0.0, 10.0] },
+        "touched": { "type": "int", "value": 0 }
+      }
+    }
+  ],
+  "actor_pools": [
+    {
+      "name": "pool.projectiles",
+      "archetype": "archetype.projectile",
+      "capacity": 2,
+      "scene": "scene.play"
+    }
+  ],
+  "signals": [
+    "signal.spawn",
+    "signal.despawn.first",
+    "signal.despawn.all"
+  ],
+  "adapters": [
+    { "name": "adapter.spawn_projectile", "kind": "action", "script": "script.rules", "function": "spawn_projectile" },
+    { "name": "adapter.despawn_first", "kind": "action", "script": "script.rules", "function": "despawn_first" },
+    { "name": "adapter.despawn_all", "kind": "action", "script": "script.rules", "function": "despawn_all" }
+  ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.spawn",
+        "actions": [
+          { "type": "adapter.invoke", "adapter": "adapter.spawn_projectile" }
+        ]
+      },
+      {
+        "signal": "signal.despawn.first",
+        "actions": [
+          { "type": "adapter.invoke", "adapter": "adapter.despawn_first" }
+        ]
+      },
+      {
+        "signal": "signal.despawn.all",
+        "actions": [
+          { "type": "adapter.invoke", "adapter": "adapter.despawn_all" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play"
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "lua_actor_pools.game.json").string().c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn"), nullptr);
+
+    sdl3d_registered_actor *shot0 = sdl3d_game_data_find_actor(runtime, "pool.projectiles.0");
+    ASSERT_NE(shot0, nullptr);
+    EXPECT_TRUE(shot0->active);
+    expect_vec3_near(shot0->position, sdl3d_vec3_make(1.25f, 2.5f, 3.0f));
+    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 5);
+    EXPECT_TRUE(sdl3d_properties_get_bool(shot0->props, "critical", false));
+    EXPECT_STREQ(sdl3d_properties_get_string(shot0->props, "owner", ""), "player");
+    expect_vec3_near(sdl3d_properties_get_vec3(shot0->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)),
+                     sdl3d_vec3_make(1.0f, 2.0f, 0.0f));
+    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "touched", 0), 1);
+    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "spawn_name", ""),
+                 "pool.projectiles.0");
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "spawn_actor_id", -1), shot0->id);
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "spawn_pool_index", -1), 0);
+    EXPECT_TRUE(sdl3d_properties_get_bool(sdl3d_game_data_scene_state(runtime), "spawn_active", false));
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "pool_capacity", -1), 2);
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "pool_active", -1), 1);
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "pool_available", -1), 1);
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "active_projectiles", -1), 1);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.despawn.first"), nullptr);
+    EXPECT_FALSE(shot0->active);
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "before_despawn", -1), 1);
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "after_despawn", -1), 0);
+    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 1);
+    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "touched", -1), 0);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.despawn.all"), nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "despawned_count", -1), 1);
+    EXPECT_FALSE(shot0->active);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, LoadsLuaBackedGameDataFromMemoryPack)
 {
     const std::string game_json = read_fixture_file("module_success.game.json");

@@ -543,6 +543,16 @@ static sdl3d_input_manager *runtime_input(const sdl3d_game_data_runtime *runtime
 static void actor_set_position(sdl3d_registered_actor *actor, sdl3d_vec3 position);
 static void lua_push_actor_wrapper(lua_State *lua, const sdl3d_registered_actor *actor);
 static void copy_property_value(sdl3d_properties *target, const char *key, const sdl3d_value *value);
+static yyjson_val *obj_get(yyjson_val *object, const char *key);
+static const char *json_string(yyjson_val *object, const char *key, const char *fallback);
+static yyjson_val *runtime_root(const sdl3d_game_data_runtime *runtime);
+static actor_pool_runtime *find_actor_pool(sdl3d_game_data_runtime *runtime, const char *name);
+static actor_pool_runtime *find_actor_pool_for_actor(sdl3d_game_data_runtime *runtime, const char *actor_name,
+                                                     int *out_index);
+static sdl3d_registered_actor *actor_pool_allocate(sdl3d_game_data_runtime *runtime, actor_pool_runtime *pool,
+                                                   int *out_index);
+static bool initialize_pooled_actor(actor_pool_runtime *pool, sdl3d_registered_actor *actor, int index, bool active);
+static bool entity_json_has_tags(yyjson_val *entity, const char *const *tags, int tag_count);
 
 static sdl3d_game_data_runtime *lua_runtime(lua_State *lua)
 {
@@ -702,6 +712,14 @@ static int lua_set_vec3(lua_State *lua)
     return 0;
 }
 
+static int lua_actor_active(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    sdl3d_registered_actor *actor = lua_actor_arg(lua, runtime, 1);
+    lua_pushboolean(lua, actor != NULL && actor->active);
+    return 1;
+}
+
 static int lua_get_dt(lua_State *lua)
 {
     lua_pushnumber(lua, sdl3d_game_data_delta_time(lua_runtime(lua)));
@@ -842,6 +860,307 @@ static int lua_actor_with_tags(lua_State *lua)
     }
 
     lua_push_actor_wrapper(lua, sdl3d_game_data_find_actor_with_tags(runtime, tags, tag_count));
+    return 1;
+}
+
+static int lua_collect_tags(lua_State *lua, int start_index, const char **tags, int max_tags)
+{
+    const int arg_count = lua_gettop(lua);
+    int tag_count = 0;
+    if (lua_istable(lua, start_index))
+    {
+        const lua_Integer count = luaL_len(lua, start_index);
+        for (lua_Integer i = 1; i <= count && tag_count < max_tags; ++i)
+        {
+            lua_geti(lua, start_index, i);
+            const char *tag = lua_tostring(lua, -1);
+            if (tag != NULL && tag[0] != '\0')
+                tags[tag_count++] = tag;
+            lua_pop(lua, 1);
+        }
+        return tag_count;
+    }
+
+    for (int i = start_index; i <= arg_count && tag_count < max_tags; ++i)
+    {
+        const char *tag = lua_tostring(lua, i);
+        if (tag != NULL && tag[0] != '\0')
+            tags[tag_count++] = tag;
+    }
+    return tag_count;
+}
+
+static bool lua_read_vec3_value(lua_State *lua, int index, sdl3d_vec3 fallback, sdl3d_vec3 *out_value)
+{
+    if (out_value != NULL)
+        *out_value = fallback;
+    if (!lua_istable(lua, index))
+        return false;
+
+    index = lua_absindex(lua, index);
+    lua_getfield(lua, index, "x");
+    lua_getfield(lua, index, "y");
+    lua_getfield(lua, index, "z");
+    bool has_xy = lua_isnumber(lua, -3) && lua_isnumber(lua, -2);
+    sdl3d_vec3 value = sdl3d_vec3_make(has_xy ? (float)lua_tonumber(lua, -3) : fallback.x,
+                                       has_xy ? (float)lua_tonumber(lua, -2) : fallback.y,
+                                       lua_isnumber(lua, -1) ? (float)lua_tonumber(lua, -1) : fallback.z);
+    lua_pop(lua, 3);
+
+    if (!has_xy)
+    {
+        lua_geti(lua, index, 1);
+        lua_geti(lua, index, 2);
+        lua_geti(lua, index, 3);
+        has_xy = lua_isnumber(lua, -3) && lua_isnumber(lua, -2);
+        value = sdl3d_vec3_make(has_xy ? (float)lua_tonumber(lua, -3) : fallback.x,
+                                has_xy ? (float)lua_tonumber(lua, -2) : fallback.y,
+                                lua_isnumber(lua, -1) ? (float)lua_tonumber(lua, -1) : fallback.z);
+        lua_pop(lua, 3);
+    }
+
+    if (!has_xy)
+        return false;
+    if (out_value != NULL)
+        *out_value = value;
+    return true;
+}
+
+static bool lua_read_vec3_field(lua_State *lua, int table_index, const char *field, sdl3d_vec3 fallback,
+                                sdl3d_vec3 *out_value)
+{
+    if (!lua_istable(lua, table_index) || field == NULL)
+        return false;
+    table_index = lua_absindex(lua, table_index);
+    lua_getfield(lua, table_index, field);
+    const bool ok = lua_read_vec3_value(lua, -1, fallback, out_value);
+    lua_pop(lua, 1);
+    return ok;
+}
+
+static void lua_set_actor_property_from_value(lua_State *lua, sdl3d_registered_actor *actor, const char *key, int index)
+{
+    if (actor == NULL || key == NULL)
+        return;
+    index = lua_absindex(lua, index);
+    if (lua_isboolean(lua, index))
+        sdl3d_properties_set_bool(actor->props, key, lua_toboolean(lua, index));
+    else if (lua_isinteger(lua, index))
+        sdl3d_properties_set_int(actor->props, key, (int)lua_tointeger(lua, index));
+    else if (lua_isnumber(lua, index))
+        sdl3d_properties_set_float(actor->props, key, (float)lua_tonumber(lua, index));
+    else if (lua_isstring(lua, index))
+        sdl3d_properties_set_string(actor->props, key, lua_tostring(lua, index));
+    else if (lua_istable(lua, index))
+    {
+        sdl3d_vec3 value;
+        if (lua_read_vec3_value(lua, index, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), &value))
+            sdl3d_properties_set_vec3(actor->props, key, value);
+    }
+}
+
+static sdl3d_registered_actor *lua_actor_from_value(lua_State *lua, sdl3d_game_data_runtime *runtime, int index)
+{
+    if (lua_isnoneornil(lua, index))
+        return NULL;
+    if (lua_istable(lua, index))
+    {
+        lua_getfield(lua, index, "_name");
+        const char *name = lua_tostring(lua, -1);
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, name);
+        lua_pop(lua, 1);
+        return actor;
+    }
+    if (lua_isstring(lua, index))
+        return sdl3d_game_data_find_actor(runtime, lua_tostring(lua, index));
+    return NULL;
+}
+
+static int lua_spawn_actor(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    actor_pool_runtime *pool = find_actor_pool(runtime, luaL_checkstring(lua, 1));
+    int actor_index = -1;
+    sdl3d_registered_actor *actor = actor_pool_allocate(runtime, pool, &actor_index);
+    if (pool == NULL || actor == NULL || actor_index < 0)
+    {
+        lua_pushnil(lua);
+        lua_pushstring(lua, "actor pool exhausted or missing");
+        return 2;
+    }
+
+    if (!initialize_pooled_actor(pool, actor, actor_index, true))
+    {
+        lua_pushnil(lua);
+        lua_pushstring(lua, "failed to initialize pooled actor");
+        return 2;
+    }
+
+    if (pool->spawn_generations != NULL)
+    {
+        pool->spawn_generations[actor_index] = ++pool->spawn_generation_counter;
+        sdl3d_properties_set_int(actor->props, "pool_spawn_generation",
+                                 (int)SDL_min(pool->spawn_generations[actor_index], (Uint64)SDL_MAX_SINT32));
+    }
+
+    sdl3d_vec3 position = actor->position;
+    if (lua_istable(lua, 2))
+    {
+        lua_read_vec3_field(lua, 2, "position", position, &position);
+        lua_getfield(lua, 2, "from");
+        sdl3d_registered_actor *from_actor = lua_actor_from_value(lua, runtime, -1);
+        lua_pop(lua, 1);
+        if (from_actor != NULL)
+            position = from_actor->position;
+
+        sdl3d_vec3 offset = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+        if (lua_read_vec3_field(lua, 2, "offset", offset, &offset))
+        {
+            position.x += offset.x;
+            position.y += offset.y;
+            position.z += offset.z;
+        }
+
+        lua_getfield(lua, 2, "properties");
+        if (lua_istable(lua, -1))
+        {
+            lua_pushnil(lua);
+            while (lua_next(lua, -2) != 0)
+            {
+                const char *key = lua_tostring(lua, -2);
+                if (key != NULL && key[0] != '\0')
+                    lua_set_actor_property_from_value(lua, actor, key, -1);
+                lua_pop(lua, 1);
+            }
+        }
+        lua_pop(lua, 1);
+    }
+
+    actor_set_position(actor, position);
+    lua_push_actor_wrapper(lua, actor);
+    lua_pushinteger(lua, actor->id);
+    lua_pushinteger(lua, actor_index);
+    return 3;
+}
+
+static int lua_despawn_actor(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    sdl3d_registered_actor *actor = lua_actor_from_value(lua, runtime, 1);
+    if (actor == NULL)
+    {
+        lua_pushboolean(lua, false);
+        return 1;
+    }
+
+    int actor_index = -1;
+    actor_pool_runtime *pool = find_actor_pool_for_actor(runtime, actor->name, &actor_index);
+    const bool ok = pool != NULL && actor_index >= 0 ? initialize_pooled_actor(pool, actor, actor_index, false)
+                                                     : (actor->active = false, true);
+    lua_pushboolean(lua, ok);
+    return 1;
+}
+
+static int lua_despawn_actors_by_tag(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    const char *tag = luaL_checkstring(lua, 1);
+    int despawned = 0;
+    if (runtime != NULL && tag != NULL && tag[0] != '\0')
+    {
+        for (int pool_index = 0; pool_index < runtime->actor_pool_count; ++pool_index)
+        {
+            actor_pool_runtime *pool = &runtime->actor_pools[pool_index];
+            if (!entity_json_has_tags(pool->archetype_json, &tag, 1))
+                continue;
+            for (int actor_index = 0; actor_index < pool->capacity; ++actor_index)
+            {
+                sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[actor_index]);
+                if (actor != NULL && actor->active && initialize_pooled_actor(pool, actor, actor_index, false))
+                    ++despawned;
+            }
+        }
+    }
+    lua_pushinteger(lua, despawned);
+    return 1;
+}
+
+static int lua_pool_capacity(lua_State *lua)
+{
+    actor_pool_runtime *pool = find_actor_pool(lua_runtime(lua), luaL_checkstring(lua, 1));
+    lua_pushinteger(lua, pool != NULL ? pool->capacity : 0);
+    return 1;
+}
+
+static int lua_pool_active_count(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    actor_pool_runtime *pool = find_actor_pool(runtime, luaL_checkstring(lua, 1));
+    int count = 0;
+    for (int i = 0; pool != NULL && i < pool->capacity; ++i)
+    {
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[i]);
+        if (actor != NULL && actor->active)
+            ++count;
+    }
+    lua_pushinteger(lua, count);
+    return 1;
+}
+
+static int lua_pool_available_count(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    actor_pool_runtime *pool = find_actor_pool(runtime, luaL_checkstring(lua, 1));
+    int count = 0;
+    for (int i = 0; pool != NULL && i < pool->capacity; ++i)
+    {
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[i]);
+        if (actor != NULL && !actor->active)
+            ++count;
+    }
+    lua_pushinteger(lua, count);
+    return 1;
+}
+
+static int lua_active_actors_with_tags(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    const char *tags[16];
+    const int tag_count = lua_collect_tags(lua, 1, tags, (int)SDL_arraysize(tags));
+    lua_newtable(lua);
+    if (runtime == NULL || tag_count <= 0)
+        return 1;
+
+    int out_index = 1;
+    yyjson_val *entities = obj_get(runtime_root(runtime), "entities");
+    for (size_t i = 0; yyjson_is_arr(entities) && i < yyjson_arr_size(entities); ++i)
+    {
+        yyjson_val *entity = yyjson_arr_get(entities, i);
+        if (!entity_json_has_tags(entity, tags, tag_count))
+            continue;
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, json_string(entity, "name", NULL));
+        if (actor != NULL && actor->active)
+        {
+            lua_push_actor_wrapper(lua, actor);
+            lua_seti(lua, -2, out_index++);
+        }
+    }
+
+    for (int pool_index = 0; pool_index < runtime->actor_pool_count; ++pool_index)
+    {
+        actor_pool_runtime *pool = &runtime->actor_pools[pool_index];
+        if (!entity_json_has_tags(pool->archetype_json, tags, tag_count))
+            continue;
+        for (int actor_index = 0; actor_index < pool->capacity; ++actor_index)
+        {
+            sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[actor_index]);
+            if (actor != NULL && actor->active)
+            {
+                lua_push_actor_wrapper(lua, actor);
+                lua_seti(lua, -2, out_index++);
+            }
+        }
+    }
     return 1;
 }
 
@@ -1237,6 +1556,7 @@ static void install_lua_helpers(lua_State *lua)
         "end\n"
         "Actor.__index = function(self, key)\n"
         "    if key == 'name' then return rawget(self, '_name') end\n"
+        "    if key == 'active' then return sdl3d.actor_active(self) end\n"
         "    if key == 'position' then return Actor.get_position(self) end\n"
         "    if key == 'velocity' then return Actor.get_vec3(self, 'velocity', Vec3(0, 0, 0)) end\n"
         "    return Actor[key]\n"
@@ -1245,24 +1565,60 @@ static void install_lua_helpers(lua_State *lua)
         "    if key == 'position' then Actor.set_position(self, value); return end\n"
         "    if key == 'velocity' then Actor.set_vec3(self, 'velocity', value); return end\n"
         "    rawset(self, key, value)\n"
-        "end\n"
+        "end\n",
         "function sdl3d.actor(name)\n"
         "    if name == nil or name == '' then return nil end\n"
         "    return setmetatable({ _name = name }, Actor)\n"
         "end\n"
+        "function Actor:is_active() return sdl3d.actor_active(self) end\n"
+        "function Actor:despawn() return sdl3d.despawn(self) end\n"
         "function sdl3d._context(adapter, dt)\n"
         "    return {\n"
         "        adapter = adapter,\n"
         "        name = adapter,\n"
         "        dt = dt or 0,\n"
         "        actor = function(self_or_name, maybe_name) return sdl3d.actor(maybe_name or self_or_name) end,\n"
+        "        spawn = function(self_or_pool, maybe_pool, maybe_options)\n"
+        "            if type(self_or_pool) == 'table' and self_or_pool.adapter ~= nil then\n"
+        "                return sdl3d.spawn(maybe_pool, maybe_options)\n"
+        "            end\n"
+        "            return sdl3d.spawn(self_or_pool, maybe_pool)\n"
+        "        end,\n"
+        "        despawn = function(self_or_actor, maybe_actor)\n"
+        "            if type(self_or_actor) == 'table' and self_or_actor.adapter ~= nil then\n"
+        "                return sdl3d.despawn(maybe_actor)\n"
+        "            end\n"
+        "            return sdl3d.despawn(self_or_actor)\n"
+        "        end,\n"
+        "        despawn_by_tag = function(self_or_tag, maybe_tag)\n"
+        "            if type(self_or_tag) == 'table' and self_or_tag.adapter ~= nil then\n"
+        "                return sdl3d.despawn_by_tag(maybe_tag)\n"
+        "            end\n"
+        "            return sdl3d.despawn_by_tag(self_or_tag)\n"
+        "        end,\n"
         "        actor_with_tags = function(self_or_tag, maybe_tag, ...)\n"
         "            if type(self_or_tag) == 'table' and self_or_tag.adapter ~= nil then\n"
         "                return sdl3d.actor_with_tags(maybe_tag, ...)\n"
         "            end\n"
         "            if type(self_or_tag) == 'table' then return sdl3d.actor_with_tags(self_or_tag) end\n"
         "            return sdl3d.actor_with_tags(self_or_tag, maybe_tag, ...)\n"
+        "        end,\n",
+        "        active_actors_with_tags = function(self_or_tag, maybe_tag, ...)\n"
+        "            if type(self_or_tag) == 'table' and self_or_tag.adapter ~= nil then\n"
+        "                return sdl3d.active_actors_with_tags(maybe_tag, ...)\n"
+        "            end\n"
+        "            if type(self_or_tag) == 'table' then return sdl3d.active_actors_with_tags(self_or_tag) end\n"
+        "            return sdl3d.active_actors_with_tags(self_or_tag, maybe_tag, ...)\n"
         "        end,\n"
+        "        pool_capacity = function(self_or_pool, maybe_pool)\n"
+        "            return sdl3d.pool_capacity(maybe_pool or self_or_pool)\n"
+        "        end,\n"
+        "        pool_active_count = function(self_or_pool, maybe_pool)\n"
+        "            return sdl3d.pool_active_count(maybe_pool or self_or_pool)\n"
+        "        end,\n"
+        "        pool_available_count = function(self_or_pool, maybe_pool)\n"
+        "            return sdl3d.pool_available_count(maybe_pool or self_or_pool)\n"
+        "        end,\n",
         "        state_get = function(self_or_key, maybe_key, fallback)\n"
         "            if type(self_or_key) == 'table' and self_or_key.adapter ~= nil then\n"
         "                return sdl3d.state_get(maybe_key, fallback)\n"
@@ -1354,11 +1710,19 @@ static void register_lua_api(sdl3d_game_data_runtime *runtime, sdl3d_script_engi
     SDL3D_LUA_BIND("set_string", lua_set_string);
     SDL3D_LUA_BIND("get_vec3", lua_get_vec3);
     SDL3D_LUA_BIND("set_vec3", lua_set_vec3);
+    SDL3D_LUA_BIND("actor_active", lua_actor_active);
     SDL3D_LUA_BIND("dt", lua_get_dt);
     SDL3D_LUA_BIND("state_get", lua_state_get);
     SDL3D_LUA_BIND("state_set", lua_state_set);
     SDL3D_LUA_BIND("random", lua_random);
     SDL3D_LUA_BIND("actor_with_tags", lua_actor_with_tags);
+    SDL3D_LUA_BIND("active_actors_with_tags", lua_active_actors_with_tags);
+    SDL3D_LUA_BIND("spawn", lua_spawn_actor);
+    SDL3D_LUA_BIND("despawn", lua_despawn_actor);
+    SDL3D_LUA_BIND("despawn_by_tag", lua_despawn_actors_by_tag);
+    SDL3D_LUA_BIND("pool_capacity", lua_pool_capacity);
+    SDL3D_LUA_BIND("pool_active_count", lua_pool_active_count);
+    SDL3D_LUA_BIND("pool_available_count", lua_pool_available_count);
     SDL3D_LUA_BIND("log", lua_log);
     SDL3D_LUA_BIND("storage_read", lua_storage_read);
     SDL3D_LUA_BIND("storage_write", lua_storage_write);
