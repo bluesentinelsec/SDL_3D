@@ -996,6 +996,48 @@ extern "C"
                                                      const char *name, const char **out_message);
 
     /**
+     * @brief Return whether authored managed network orchestration is enabled.
+     *
+     * Managed networking is enabled by `network.session_flow.managed_runtime.enabled`.
+     * Hosts may still choose not to run it; this helper only reports the
+     * authored game-data policy.
+     *
+     * @param runtime Loaded game data runtime.
+     * @return true when the game authors managed runtime networking as enabled.
+     */
+    bool sdl3d_game_data_network_managed_runtime_enabled(const sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Resolve the authored delay before acknowledging a terminated network match.
+     *
+     * The value is authored at
+     * `network.session_flow.managed_runtime.termination_ack_delay_seconds`.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param out_seconds Receives the non-negative delay in seconds.
+     * @return true when the delay is authored and @p out_seconds was filled.
+     */
+    bool sdl3d_game_data_get_network_managed_termination_ack_delay(const sdl3d_game_data_runtime *runtime,
+                                                                   float *out_seconds);
+
+    /**
+     * @brief Test whether a scene keeps a managed network session alive.
+     *
+     * Scene semantics are authored under
+     * `network.session_flow.managed_runtime.keep_alive_scenes.<session>`.
+     * Each entry references a semantic from `network.session_flow.scenes`; this
+     * helper resolves those semantics and compares them with @p scene_name.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param session_name Managed session semantic, such as `host` or
+     * `direct_connect`.
+     * @param scene_name Concrete active scene id to test.
+     * @return true when the session should stay alive in the scene.
+     */
+    bool sdl3d_game_data_network_managed_keep_alive_scene_matches(const sdl3d_game_data_runtime *runtime,
+                                                                  const char *session_name, const char *scene_name);
+
+    /**
      * @brief Execute an authored network session-flow event.
      *
      * Events are authored under `network.session_flow.events.<name>`. An event

@@ -1288,6 +1288,16 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
     EXPECT_FALSE(
         sdl3d_game_data_get_network_session_message(runtime, "disconnect_reasons", "missing", &network_session_value));
     EXPECT_EQ(network_session_value, nullptr);
+    EXPECT_TRUE(sdl3d_game_data_network_managed_runtime_enabled(runtime));
+    float managed_ack_delay = 0.0f;
+    ASSERT_TRUE(sdl3d_game_data_get_network_managed_termination_ack_delay(runtime, &managed_ack_delay));
+    EXPECT_FLOAT_EQ(managed_ack_delay, 3.0f);
+    EXPECT_TRUE(sdl3d_game_data_network_managed_keep_alive_scene_matches(runtime, "host", "scene.multiplayer.lobby"));
+    EXPECT_TRUE(sdl3d_game_data_network_managed_keep_alive_scene_matches(runtime, "host", "scene.play"));
+    EXPECT_FALSE(sdl3d_game_data_network_managed_keep_alive_scene_matches(runtime, "host", "scene.title"));
+    EXPECT_TRUE(sdl3d_game_data_network_managed_keep_alive_scene_matches(runtime, "direct_connect",
+                                                                         "scene.multiplayer.discovery"));
+    EXPECT_TRUE(sdl3d_game_data_network_managed_keep_alive_scene_matches(runtime, "direct_connect", "scene.play"));
     const char *network_runtime_value = nullptr;
     ASSERT_TRUE(sdl3d_game_data_get_network_runtime_replication(runtime, "state_snapshot", &network_runtime_value));
     EXPECT_STREQ(network_runtime_value, "play_state");
@@ -1779,6 +1789,43 @@ TEST(GameDataRuntime, ManagedNetworkRuntimeStartsPongMatchAndReplicatesState)
     }
     EXPECT_TRUE(snapshot_applied);
     EXPECT_TRUE(client_ctx.paused);
+
+    sdl3d_properties *termination_payload = sdl3d_properties_create();
+    ASSERT_NE(termination_payload, nullptr);
+    sdl3d_properties_set_string(termination_payload, "reason", "Test disconnect");
+    ASSERT_TRUE(sdl3d_game_data_run_network_session_flow_event(client_data, &client_ctx, "client_match_terminated",
+                                                               termination_payload, error, sizeof(error)))
+        << error;
+    sdl3d_properties_destroy(termination_payload);
+    client_scene_state = sdl3d_game_data_scene_state(client_data);
+    ASSERT_NE(client_scene_state, nullptr);
+    EXPECT_TRUE(sdl3d_properties_get_bool(client_scene_state, "network_match_termination_active", false));
+
+    int select_action = -1;
+    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_action(client_data, "menu_select", &select_action));
+    sdl3d_input_manager *client_input = sdl3d_game_session_get_input(client_session);
+    ASSERT_NE(client_input, nullptr);
+    sdl3d_input_set_action_override(client_input, select_action, 1.0f);
+    ASSERT_NE(sdl3d_input_update(client_input, 5000), nullptr);
+    ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 0.25f));
+    client_scene_state = sdl3d_game_data_scene_state(client_data);
+    ASSERT_NE(client_scene_state, nullptr);
+    EXPECT_TRUE(sdl3d_properties_get_bool(client_scene_state, "network_match_termination_active", false));
+    EXPECT_STREQ(sdl3d_game_data_active_scene(client_data), "scene.play");
+
+    sdl3d_input_set_action_override(client_input, select_action, 0.0f);
+    ASSERT_NE(sdl3d_input_update(client_input, 5001), nullptr);
+    ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 2.74f));
+    EXPECT_TRUE(sdl3d_properties_get_bool(client_scene_state, "network_match_termination_active", false));
+
+    sdl3d_input_set_action_override(client_input, select_action, 1.0f);
+    ASSERT_NE(sdl3d_input_update(client_input, 5002), nullptr);
+    ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 0.02f));
+    client_scene_state = sdl3d_game_data_scene_state(client_data);
+    ASSERT_NE(client_scene_state, nullptr);
+    EXPECT_FALSE(sdl3d_properties_get_bool(client_scene_state, "network_match_termination_active", true));
+    EXPECT_FALSE(client_ctx.paused);
+    EXPECT_STREQ(sdl3d_game_data_active_scene(client_data), "scene.title");
 
     sdl3d_data_game_runtime_destroy(client_runtime);
     sdl3d_data_game_runtime_destroy(host_runtime);
@@ -7635,6 +7682,60 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
     ]
   })json",
             "scene_state.set requires a non-empty key",
+        },
+        {
+            "bad_managed_network_missing_scene_semantic",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "session_flow": {
+      "managed_runtime": {
+        "enabled": true,
+        "termination_ack_delay_seconds": 3.0
+      }
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": ["position"]
+          }
+        ]
+      }
+    ]
+  })json",
+            "managed network requires session scene 'play'",
+        },
+        {
+            "bad_managed_network_keep_alive_scene",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "session_flow": {
+      "managed_runtime": {
+        "enabled": false,
+        "keep_alive_scenes": {
+          "host": ["missing"]
+        }
+      }
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": ["position"]
+          }
+        ]
+      }
+    ]
+  })json",
+            "managed network keep-alive scene must reference session_flow.scenes",
         },
         {
             "bad_runtime_replication_binding",

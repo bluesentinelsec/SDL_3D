@@ -353,24 +353,17 @@ static bool managed_network_active_scene_is(const sdl3d_data_game_runtime *runti
     return active_scene != NULL && expected_scene != NULL && SDL_strcmp(active_scene, expected_scene) == 0;
 }
 
-static bool managed_network_is_lobby_scene(const sdl3d_data_game_runtime *runtime)
-{
-    return managed_network_active_scene_is(runtime, "host_lobby", "scene.multiplayer.lobby");
-}
-
-static bool managed_network_is_direct_connect_scene(const sdl3d_data_game_runtime *runtime)
-{
-    return managed_network_active_scene_is(runtime, "direct_connect", "scene.multiplayer.direct_connect");
-}
-
-static bool managed_network_is_discovery_scene(const sdl3d_data_game_runtime *runtime)
-{
-    return managed_network_active_scene_is(runtime, "discovery", "scene.multiplayer.discovery");
-}
-
 static bool managed_network_is_play_scene(const sdl3d_data_game_runtime *runtime)
 {
     return managed_network_active_scene_is(runtime, "play", "scene.play");
+}
+
+static bool managed_network_keep_alive_scene_matches(const sdl3d_data_game_runtime *runtime, const char *session_name)
+{
+    const char *active_scene =
+        runtime != NULL && runtime->data != NULL ? sdl3d_game_data_active_scene(runtime->data) : NULL;
+    return sdl3d_game_data_network_managed_keep_alive_scene_matches(runtime != NULL ? runtime->data : NULL,
+                                                                    session_name, active_scene);
 }
 
 static bool managed_network_is_network_match(const sdl3d_data_game_runtime *runtime)
@@ -600,8 +593,13 @@ static void disconnect_managed_network(sdl3d_data_game_runtime *runtime)
 
     if (runtime->managed_network_enabled && runtime->data != NULL)
     {
-        managed_network_cancel_host(runtime, true, "Not hosting");
-        managed_network_cancel_direct_connect(runtime, true, "Disconnected");
+        if (sdl3d_game_data_get_network_host_session(runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION) != NULL)
+            managed_network_cancel_host(runtime, true, "Not hosting");
+        if (sdl3d_game_data_get_network_direct_connect_session(runtime->data,
+                                                               SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION) != NULL)
+        {
+            managed_network_cancel_direct_connect(runtime, true, "Disconnected");
+        }
     }
 
     if (runtime->session != NULL && runtime->managed_network_lobby_start_connection > 0)
@@ -634,7 +632,9 @@ static void managed_network_update_termination_ack(sdl3d_data_game_runtime *runt
         ctx->paused = true;
 
     runtime->managed_network_termination_timer += SDL_max(dt, 0.0f);
-    if (runtime->managed_network_termination_timer < 0.25f)
+    float acknowledge_delay = 3.0f;
+    (void)sdl3d_game_data_get_network_managed_termination_ack_delay(runtime->data, &acknowledge_delay);
+    if (runtime->managed_network_termination_timer < acknowledge_delay)
         return;
 
     sdl3d_input_manager *input = runtime->session != NULL ? sdl3d_game_session_get_input(runtime->session) : NULL;
@@ -706,8 +706,9 @@ static void managed_network_update_host(sdl3d_data_game_runtime *runtime, sdl3d_
     if (session == NULL)
         return;
 
-    const bool keep_host_session = managed_network_is_lobby_scene(runtime) ||
-                                   (managed_network_is_play_scene(runtime) && managed_network_is_role_host(runtime));
+    const bool keep_host_session =
+        managed_network_keep_alive_scene_matches(runtime, SDL3D_MANAGED_NETWORK_HOST_SESSION) &&
+        (!managed_network_is_play_scene(runtime) || managed_network_is_role_host(runtime));
     if (!keep_host_session)
         managed_network_cancel_host(runtime, true, "Not hosting");
 }
@@ -725,7 +726,8 @@ static void managed_network_update_direct_connect(sdl3d_data_game_runtime *runti
     const bool was_playing = managed_network_is_play_scene(runtime);
     const bool playing = was_playing && managed_network_is_role_client(runtime);
     const bool keep_direct_connect_session =
-        managed_network_is_direct_connect_scene(runtime) || managed_network_is_discovery_scene(runtime) || playing;
+        managed_network_keep_alive_scene_matches(runtime, SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION) &&
+        (!managed_network_is_play_scene(runtime) || managed_network_is_role_client(runtime));
     if (!keep_direct_connect_session)
     {
         managed_network_cancel_direct_connect(runtime, true, "Disconnected");
@@ -821,8 +823,6 @@ static void managed_network_update_after_frame(sdl3d_data_game_runtime *runtime,
     if (runtime == NULL || runtime->data == NULL || !runtime->managed_network_enabled)
         return;
 
-    managed_network_process_lobby_start(runtime, ctx);
-
     sdl3d_network_session *session =
         sdl3d_game_data_get_network_host_session(runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION);
     if (session == NULL || !sdl3d_network_session_is_connected(session) || !managed_network_is_play_scene(runtime) ||
@@ -914,6 +914,8 @@ bool sdl3d_data_game_runtime_create(const sdl3d_data_game_runtime_desc *desc, sd
         sdl3d_data_game_runtime_destroy(runtime);
         return false;
     }
+    runtime->managed_network_enabled =
+        runtime->managed_network_enabled && sdl3d_game_data_network_managed_runtime_enabled(runtime->data);
 
     sdl3d_game_data_image_cache_init(&runtime->image_cache, runtime->assets);
     if (!sdl3d_game_data_app_flow_start(&runtime->app_flow, runtime->data))

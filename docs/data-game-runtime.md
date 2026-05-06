@@ -104,12 +104,17 @@ For data-only games launched by `sdl3d_runner`, prefer
   `client_state_before_start`, `host_match_terminated`,
   `client_match_terminated`, `host_client_disconnected`,
   `client_connection_closed`, and `network_match_termination_ack`
+- managed policy: `network.session_flow.managed_runtime.enabled`,
+  `termination_ack_delay_seconds`, and `keep_alive_scenes`
 
 Games can map those semantics to their own concrete scene ids, signal names,
 action names, replication channels, and control-message names with
 `network.session_flow`, `network.runtime_bindings`, and `network.scene_state`.
-Local-only games can omit networking entirely or leave managed networking
-disabled.
+The runner enables the engine-side managed path, but the game data must also
+author `managed_runtime.enabled: true`; local-only games can omit networking
+entirely or leave managed networking disabled. Keep-alive scene policy is
+authored so a game can move through loading, rematch, or lobby-adjacent scenes
+without dropping an otherwise healthy network session.
 
 Network session-flow events close that gap for transition policy. Games can
 author `network.session_flow.events` entries and a host or runner can execute

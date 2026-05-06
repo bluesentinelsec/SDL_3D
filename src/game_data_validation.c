@@ -82,6 +82,8 @@ static bool require_unique_name(validation_context *ctx, name_table *table, cons
                                 const char *json_path);
 static bool require_ref(validation_context *ctx, const name_table *table, const char *kind, const char *name,
                         const char *json_path);
+static bool require_network_string_entry(validation_context *ctx, yyjson_val *map, const char *path, const char *label,
+                                         const char *name);
 static bool asset_path_exists(validation_context *ctx, const char *asset_path, const char *json_path,
                               const char *asset_kind);
 static void format_path(char *buffer, size_t buffer_size, const char *format, ...);
@@ -668,6 +670,43 @@ static bool validate_network_scene_state(validation_context *ctx, yyjson_val *ne
     return true;
 }
 
+static bool network_managed_runtime_enabled_json(yyjson_val *network)
+{
+    yyjson_val *enabled = obj_get(obj_get(obj_get(network, "session_flow"), "managed_runtime"), "enabled");
+    return yyjson_is_bool(enabled) && yyjson_get_bool(enabled);
+}
+
+static bool validate_managed_network_scene_state(validation_context *ctx, yyjson_val *network)
+{
+    if (!network_managed_runtime_enabled_json(network))
+        return true;
+
+    yyjson_val *scene_state = obj_get(network, "scene_state");
+    yyjson_val *host = obj_get(scene_state, "host");
+    yyjson_val *direct_connect = obj_get(scene_state, "direct_connect");
+    const char *host_keys[] = {"status", "endpoint", "peer", "connected"};
+    const char *direct_connect_keys[] = {"status", "state", "connected"};
+
+    for (size_t i = 0U; i < SDL_arraysize(host_keys); ++i)
+    {
+        if (!require_network_string_entry(ctx, host, "$.network.scene_state.host", "scene_state host key",
+                                          host_keys[i]))
+        {
+            return false;
+        }
+    }
+    for (size_t i = 0U; i < SDL_arraysize(direct_connect_keys); ++i)
+    {
+        if (!require_network_string_entry(ctx, direct_connect, "$.network.scene_state.direct_connect",
+                                          "scene_state direct_connect key", direct_connect_keys[i]))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 static bool validate_action_array(validation_context *ctx, yyjson_val *actions, const char *json_path,
                                   validation_names *names);
 
@@ -694,6 +733,159 @@ static bool validate_network_session_string_map(validation_context *ctx, yyjson_
             return validation_error(ctx, path, "network session_flow %s value must be a non-empty string", label);
         if (scene_names != NULL && !require_ref(ctx, scene_names, "scene", yyjson_get_str(value), path))
             return false;
+    }
+
+    return true;
+}
+
+static bool require_network_string_entry(validation_context *ctx, yyjson_val *map, const char *path, const char *label,
+                                         const char *name)
+{
+    char entry_path[PATH_BUFFER_SIZE];
+    format_path(entry_path, sizeof(entry_path), "%s.%s", path, name);
+    if (map == NULL || !yyjson_is_obj(map) || !is_non_empty_string(map, name))
+        return validation_error(ctx, entry_path, "managed network requires %s '%s'", label, name);
+    return true;
+}
+
+static bool require_network_group_string_entry(validation_context *ctx, yyjson_val *groups, const char *path,
+                                               const char *label, const char *group_name, const char *name)
+{
+    yyjson_val *group = obj_get(groups, group_name);
+    char entry_path[PATH_BUFFER_SIZE];
+    format_path(entry_path, sizeof(entry_path), "%s.%s.%s", path, group_name, name);
+    if (group == NULL || !yyjson_is_obj(group) || !is_non_empty_string(group, name))
+        return validation_error(ctx, entry_path, "managed network requires %s '%s.%s'", label, group_name, name);
+    return true;
+}
+
+static bool validate_network_managed_keep_alive_scenes(validation_context *ctx, yyjson_val *managed, yyjson_val *scenes)
+{
+    yyjson_val *keep_alive = obj_get(managed, "keep_alive_scenes");
+    if (keep_alive == NULL)
+        return true;
+    if (!yyjson_is_obj(keep_alive))
+        return validation_error(ctx, "$.network.session_flow.managed_runtime.keep_alive_scenes",
+                                "managed network keep_alive_scenes must be an object");
+
+    yyjson_val *session_key;
+    yyjson_obj_iter session_iter;
+    yyjson_obj_iter_init(keep_alive, &session_iter);
+    while ((session_key = yyjson_obj_iter_next(&session_iter)) != NULL)
+    {
+        const char *session_name = yyjson_get_str(session_key);
+        yyjson_val *list = yyjson_obj_iter_get_val(session_key);
+        char session_path[PATH_BUFFER_SIZE];
+        format_path(session_path, sizeof(session_path), "$.network.session_flow.managed_runtime.keep_alive_scenes.%s",
+                    session_name != NULL ? session_name : "<invalid>");
+        if (session_name == NULL || session_name[0] == '\0')
+            return validation_error(ctx, session_path, "managed network keep-alive session name must be non-empty");
+        if (!yyjson_is_arr(list) || yyjson_arr_size(list) == 0)
+            return validation_error(ctx, session_path, "managed network keep-alive scenes must be a non-empty array");
+
+        for (size_t i = 0U; i < yyjson_arr_size(list); ++i)
+        {
+            yyjson_val *entry = yyjson_arr_get(list, i);
+            const char *scene_semantic = yyjson_is_str(entry) ? yyjson_get_str(entry) : NULL;
+            char entry_path[PATH_BUFFER_SIZE];
+            format_path(entry_path, sizeof(entry_path), "%s[%zu]", session_path, i);
+            if (scene_semantic == NULL || scene_semantic[0] == '\0')
+                return validation_error(ctx, entry_path, "managed network keep-alive scene must be a non-empty string");
+            if (!is_non_empty_string(scenes, scene_semantic))
+                return validation_error(ctx, entry_path,
+                                        "managed network keep-alive scene must reference session_flow.scenes");
+        }
+    }
+
+    return true;
+}
+
+static bool validate_network_managed_runtime(validation_context *ctx, yyjson_val *flow)
+{
+    yyjson_val *managed = obj_get(flow, "managed_runtime");
+    if (managed == NULL)
+        return true;
+    if (!yyjson_is_obj(managed))
+        return validation_error(ctx, "$.network.session_flow.managed_runtime",
+                                "managed network runtime must be an object");
+
+    yyjson_val *enabled = obj_get(managed, "enabled");
+    if (enabled != NULL && !yyjson_is_bool(enabled))
+        return validation_error(ctx, "$.network.session_flow.managed_runtime.enabled",
+                                "managed network enabled must be boolean");
+
+    yyjson_val *ack_delay = obj_get(managed, "termination_ack_delay_seconds");
+    if (ack_delay != NULL && (!yyjson_is_num(ack_delay) || yyjson_get_real(ack_delay) < 0.0))
+    {
+        return validation_error(ctx, "$.network.session_flow.managed_runtime.termination_ack_delay_seconds",
+                                "managed network termination_ack_delay_seconds must be a non-negative number");
+    }
+
+    yyjson_val *scenes = obj_get(flow, "scenes");
+    if (!validate_network_managed_keep_alive_scenes(ctx, managed, scenes))
+        return false;
+
+    if (enabled == NULL || !yyjson_get_bool(enabled))
+        return true;
+
+    yyjson_val *state_keys = obj_get(flow, "state_keys");
+    yyjson_val *state_values = obj_get(flow, "state_values");
+    yyjson_val *events = obj_get(flow, "events");
+    const char *required_scenes[] = {"play", "host_lobby", "direct_connect", "discovery"};
+    const char *required_state_keys[] = {"match_mode", "network_role", "network_flow", "match_termination_active"};
+    const char *required_events[] = {"host_start_game",           "client_start_game",
+                                     "client_state_before_start", "host_match_terminated",
+                                     "client_match_terminated",   "host_client_disconnected",
+                                     "client_connection_closed",  "network_match_termination_ack"};
+
+    for (size_t i = 0U; i < SDL_arraysize(required_scenes); ++i)
+    {
+        if (!require_network_string_entry(ctx, scenes, "$.network.session_flow.scenes", "session scene",
+                                          required_scenes[i]))
+        {
+            return false;
+        }
+    }
+    for (size_t i = 0U; i < SDL_arraysize(required_state_keys); ++i)
+    {
+        if (!require_network_string_entry(ctx, state_keys, "$.network.session_flow.state_keys", "session state key",
+                                          required_state_keys[i]))
+        {
+            return false;
+        }
+    }
+
+    if (!require_network_group_string_entry(ctx, state_values, "$.network.session_flow.state_values",
+                                            "session state value", "match_mode", "network") ||
+        !require_network_group_string_entry(ctx, state_values, "$.network.session_flow.state_values",
+                                            "session state value", "network_role", "host") ||
+        !require_network_group_string_entry(ctx, state_values, "$.network.session_flow.state_values",
+                                            "session state value", "network_role", "client") ||
+        !require_network_group_string_entry(ctx, state_values, "$.network.session_flow.state_values",
+                                            "session state value", "network_flow", "host") ||
+        !require_network_group_string_entry(ctx, state_values, "$.network.session_flow.state_values",
+                                            "session state value", "network_flow", "direct"))
+    {
+        return false;
+    }
+
+    for (size_t i = 0U; i < SDL_arraysize(required_events); ++i)
+    {
+        char event_path[PATH_BUFFER_SIZE];
+        format_path(event_path, sizeof(event_path), "$.network.session_flow.events.%s", required_events[i]);
+        if (events == NULL || !yyjson_is_obj(events) || obj_get(events, required_events[i]) == NULL)
+            return validation_error(ctx, event_path, "managed network requires session flow event '%s'",
+                                    required_events[i]);
+    }
+    if (obj_get(managed, "keep_alive_scenes") == NULL)
+    {
+        return validation_error(ctx, "$.network.session_flow.managed_runtime.keep_alive_scenes",
+                                "managed network requires keep_alive_scenes");
+    }
+    if (ack_delay == NULL)
+    {
+        return validation_error(ctx, "$.network.session_flow.managed_runtime.termination_ack_delay_seconds",
+                                "managed network requires termination_ack_delay_seconds");
     }
 
     return true;
@@ -798,7 +990,7 @@ static bool validate_network_session_flow(validation_context *ctx, yyjson_val *n
         }
     }
 
-    return true;
+    return validate_network_managed_runtime(ctx, flow);
 }
 
 static bool validate_network_runtime_binding_map(validation_context *ctx, yyjson_val *map, const char *json_path,
@@ -874,27 +1066,96 @@ static bool validate_network_runtime_pause_binding(validation_context *ctx, yyjs
     return true;
 }
 
+static bool require_network_runtime_binding(validation_context *ctx, yyjson_val *bindings, const char *section,
+                                            const char *name, const char *label, const name_table *references)
+{
+    yyjson_val *map = obj_get(bindings, section);
+    char path[PATH_BUFFER_SIZE];
+    format_path(path, sizeof(path), "$.network.runtime_bindings.%s.%s", section, name);
+    const char *value = json_string(map, name);
+    if (value == NULL || value[0] == '\0')
+        return validation_error(ctx, path, "managed network requires runtime binding '%s.%s'", section, name);
+    return require_ref(ctx, references, label, value, path);
+}
+
+static bool validate_managed_network_runtime_bindings(validation_context *ctx, yyjson_val *bindings,
+                                                      const name_table *replication_names,
+                                                      const name_table *control_names, validation_names *names)
+{
+    const char *replication_bindings[] = {"state_snapshot", "client_input"};
+    const char *control_bindings[] = {"start_game", "pause_request", "resume_request", "disconnect"};
+    const char *action_bindings[] = {"menu_select", "camera_toggle"};
+    const char *signal_bindings[] = {"lobby_start", "camera_toggle"};
+
+    for (size_t i = 0U; i < SDL_arraysize(replication_bindings); ++i)
+    {
+        if (!require_network_runtime_binding(ctx, bindings, "replication", replication_bindings[i],
+                                             "network replication", replication_names))
+        {
+            return false;
+        }
+    }
+    for (size_t i = 0U; i < SDL_arraysize(control_bindings); ++i)
+    {
+        if (!require_network_runtime_binding(ctx, bindings, "controls", control_bindings[i], "network control message",
+                                             control_names))
+        {
+            return false;
+        }
+    }
+    for (size_t i = 0U; i < SDL_arraysize(action_bindings); ++i)
+    {
+        if (!require_network_runtime_binding(ctx, bindings, "actions", action_bindings[i], "input action",
+                                             &names->actions))
+        {
+            return false;
+        }
+    }
+    for (size_t i = 0U; i < SDL_arraysize(signal_bindings); ++i)
+    {
+        if (!require_network_runtime_binding(ctx, bindings, "signals", signal_bindings[i], "signal", &names->signals))
+            return false;
+    }
+    if (obj_get(bindings, "pause") == NULL)
+    {
+        return validation_error(ctx, "$.network.runtime_bindings.pause",
+                                "managed network requires runtime_bindings.pause");
+    }
+
+    return true;
+}
+
 static bool validate_network_runtime_bindings(validation_context *ctx, yyjson_val *network,
                                               const name_table *replication_names, const name_table *control_names,
                                               validation_names *names)
 {
     yyjson_val *bindings = obj_get(network, "runtime_bindings");
+    const bool managed_required = network_managed_runtime_enabled_json(network);
     if (bindings == NULL)
+    {
+        if (managed_required)
+            return validation_error(ctx, "$.network.runtime_bindings", "managed network requires runtime_bindings");
         return true;
+    }
     if (!yyjson_is_obj(bindings))
         return validation_error(ctx, "$.network.runtime_bindings", "network runtime_bindings must be an object");
 
-    return validate_network_runtime_binding_map(ctx, obj_get(bindings, "replication"),
-                                                "$.network.runtime_bindings.replication", "network replication",
-                                                replication_names, false) &&
-           validate_network_runtime_binding_map(ctx, obj_get(bindings, "controls"),
-                                                "$.network.runtime_bindings.controls", "network control message",
-                                                control_names, true) &&
-           validate_network_runtime_binding_map(ctx, obj_get(bindings, "actions"), "$.network.runtime_bindings.actions",
-                                                "input action", &names->actions, false) &&
-           validate_network_runtime_binding_map(ctx, obj_get(bindings, "signals"), "$.network.runtime_bindings.signals",
-                                                "signal", &names->signals, false) &&
-           validate_network_runtime_pause_binding(ctx, obj_get(bindings, "pause"), names);
+    if (!validate_network_runtime_binding_map(ctx, obj_get(bindings, "replication"),
+                                              "$.network.runtime_bindings.replication", "network replication",
+                                              replication_names, false) ||
+        !validate_network_runtime_binding_map(ctx, obj_get(bindings, "controls"), "$.network.runtime_bindings.controls",
+                                              "network control message", control_names, true) ||
+        !validate_network_runtime_binding_map(ctx, obj_get(bindings, "actions"), "$.network.runtime_bindings.actions",
+                                              "input action", &names->actions, false) ||
+        !validate_network_runtime_binding_map(ctx, obj_get(bindings, "signals"), "$.network.runtime_bindings.signals",
+                                              "signal", &names->signals, false) ||
+        !validate_network_runtime_pause_binding(ctx, obj_get(bindings, "pause"), names))
+    {
+        return false;
+    }
+
+    return !managed_required ||
+           validate_managed_network_runtime_bindings(ctx, bindings, replication_names, control_names, names);
 }
 
 static bool is_network_diagnostic_level(const char *level)
@@ -1002,6 +1263,8 @@ static bool validate_network(validation_context *ctx, yyjson_val *root, validati
     if (!validate_network_scene_state(ctx, network))
         return false;
     if (!validate_network_session_flow(ctx, network, names))
+        return false;
+    if (!validate_managed_network_scene_state(ctx, network))
         return false;
 
     yyjson_val *replication = obj_get(network, "replication");

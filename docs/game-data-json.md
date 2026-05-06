@@ -1727,6 +1727,37 @@ when the caller documents and substitutes them. Callers resolve these values wit
 `sdl3d_game_data_get_network_session_message()`. Like `scene_state`, these
 orchestration maps are not part of the replication schema hash.
 
+`session_flow.managed_runtime` opts a game into the generic managed network
+orchestrator used by `sdl3d_runner`:
+
+```json
+"managed_runtime": {
+  "enabled": true,
+  "termination_ack_delay_seconds": 3.0,
+  "keep_alive_scenes": {
+    "host": ["host_lobby", "play"],
+    "direct_connect": ["direct_connect", "discovery", "play"]
+  }
+}
+```
+
+`termination_ack_delay_seconds` controls how long the managed termination
+message must stay visible before the select action can acknowledge it.
+`keep_alive_scenes` lists session-flow scene semantics where each managed
+session remains alive; this lets games author intermediate loading, rematch, or
+briefing scenes without the runtime tearing down a host/client session simply
+because the active scene is not the lobby or gameplay scene. Entries reference
+keys in `session_flow.scenes`, not raw scene ids.
+
+When `managed_runtime.enabled` is true, validation requires the standard
+managed network semantics used by the runner: host and direct-connect
+scene-state outputs, `state_snapshot` and `client_input` replication bindings,
+`start_game`, `pause_request`, `resume_request`, and `disconnect` control
+bindings, `menu_select` and `camera_toggle` action bindings, `lobby_start` and
+`camera_toggle` signal bindings, required session-flow scenes/state keys/state
+values, all managed session-flow events, `termination_ack_delay_seconds`, and
+`keep_alive_scenes`.
+
 `session_flow.events` maps semantic network events to data actions. Each event
 may be an action array or an object with optional `pause` and `actions` fields:
 

@@ -185,6 +185,14 @@
           "match_terminated": "Match terminated: {reason} - Press Enter to return to title screen."
         }
       },
+      "managed_runtime": {
+        "enabled": true,
+        "termination_ack_delay_seconds": 3.0,
+        "keep_alive_scenes": {
+          "host": ["host_lobby", "play"],
+          "direct_connect": ["direct_connect", "discovery", "play"]
+        }
+      },
       "events": {
         "host_start_game": {
           "actions": [
