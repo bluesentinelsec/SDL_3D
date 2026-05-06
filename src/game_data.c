@@ -10,6 +10,7 @@
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_scancode.h>
 #include <SDL3/SDL_stdinc.h>
+#include <SDL3/SDL_timer.h>
 
 #include "game_data_standard_options.h"
 #include "game_data_validation.h"
@@ -261,6 +262,13 @@ typedef struct runtime_discovery_session
     sdl3d_network_discovery_session *session;
 } runtime_discovery_session;
 
+typedef struct network_diagnostic_runtime_state
+{
+    char *name;
+    Uint64 last_log_ms;
+    bool logged;
+} network_diagnostic_runtime_state;
+
 typedef struct scene_activity_state
 {
     const char *scene;
@@ -341,6 +349,9 @@ typedef struct sdl3d_game_data_runtime
     runtime_discovery_session *discovery_sessions;
     int discovery_session_count;
     int discovery_session_capacity;
+    network_diagnostic_runtime_state *network_diagnostics;
+    int network_diagnostic_count;
+    int network_diagnostic_capacity;
     sdl3d_storage *storage;
     bool has_network_schema;
     Uint8 network_schema_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE];
@@ -12034,9 +12045,9 @@ static bool game_data_append_snapshot_value(char *buffer, size_t buffer_size, si
     }
 }
 
-bool sdl3d_game_data_describe_network_snapshot(const sdl3d_game_data_runtime *runtime, const char *replication_name,
-                                               Uint32 tick, char *buffer, size_t buffer_size, char *error_buffer,
-                                               int error_buffer_size)
+static bool game_data_describe_network_snapshot_ex(const sdl3d_game_data_runtime *runtime, const char *replication_name,
+                                                   Uint32 tick, bool include_session_state, char *buffer,
+                                                   size_t buffer_size, char *error_buffer, int error_buffer_size)
 {
     if (buffer != NULL && buffer_size > 0U)
         buffer[0] = '\0';
@@ -12074,7 +12085,7 @@ bool sdl3d_game_data_describe_network_snapshot(const sdl3d_game_data_runtime *ru
     }
 
     yyjson_val *state_keys = obj_get(network_session_flow_json(runtime), "state_keys");
-    if (yyjson_is_obj(state_keys))
+    if (include_session_state && yyjson_is_obj(state_keys))
     {
         yyjson_val *state_key = NULL;
         yyjson_val *state_value_key = NULL;
@@ -12130,6 +12141,189 @@ bool sdl3d_game_data_describe_network_snapshot(const sdl3d_game_data_runtime *ru
         }
     }
 
+    return true;
+}
+
+bool sdl3d_game_data_describe_network_snapshot(const sdl3d_game_data_runtime *runtime, const char *replication_name,
+                                               Uint32 tick, char *buffer, size_t buffer_size, char *error_buffer,
+                                               int error_buffer_size)
+{
+    return game_data_describe_network_snapshot_ex(runtime, replication_name, tick, true, buffer, buffer_size,
+                                                  error_buffer, error_buffer_size);
+}
+
+static yyjson_val *network_diagnostics_json(const sdl3d_game_data_runtime *runtime)
+{
+    return obj_get(obj_get(runtime_root(runtime), "network"), "diagnostics");
+}
+
+static yyjson_val *find_network_snapshot_diagnostic_json(const sdl3d_game_data_runtime *runtime, const char *name)
+{
+    yyjson_val *snapshots = obj_get(network_diagnostics_json(runtime), "snapshots");
+    if (name == NULL || name[0] == '\0' || !yyjson_is_arr(snapshots))
+        return NULL;
+
+    for (size_t i = 0U; i < yyjson_arr_size(snapshots); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(snapshots, i);
+        const char *entry_name = json_string(entry, "name", NULL);
+        if (entry_name != NULL && SDL_strcmp(entry_name, name) == 0)
+            return entry;
+    }
+    return NULL;
+}
+
+static SDL_LogPriority network_diagnostic_log_priority(const char *level)
+{
+    if (level == NULL || level[0] == '\0' || SDL_strcmp(level, "info") == 0)
+        return SDL_LOG_PRIORITY_INFO;
+    if (SDL_strcmp(level, "debug") == 0)
+        return SDL_LOG_PRIORITY_DEBUG;
+    if (SDL_strcmp(level, "warn") == 0 || SDL_strcmp(level, "warning") == 0)
+        return SDL_LOG_PRIORITY_WARN;
+    if (SDL_strcmp(level, "error") == 0)
+        return SDL_LOG_PRIORITY_ERROR;
+    if (SDL_strcmp(level, "critical") == 0)
+        return SDL_LOG_PRIORITY_CRITICAL;
+    return SDL_LOG_PRIORITY_INFO;
+}
+
+static network_diagnostic_runtime_state *find_network_diagnostic_state(sdl3d_game_data_runtime *runtime,
+                                                                       const char *name)
+{
+    if (runtime == NULL || name == NULL || name[0] == '\0')
+        return NULL;
+    for (int i = 0; i < runtime->network_diagnostic_count; ++i)
+    {
+        if (runtime->network_diagnostics[i].name != NULL && SDL_strcmp(runtime->network_diagnostics[i].name, name) == 0)
+        {
+            return &runtime->network_diagnostics[i];
+        }
+    }
+    return NULL;
+}
+
+static bool ensure_network_diagnostic_state_capacity(sdl3d_game_data_runtime *runtime, int required)
+{
+    if (runtime == NULL)
+        return false;
+    if (required <= runtime->network_diagnostic_capacity)
+        return true;
+
+    int next_capacity = runtime->network_diagnostic_capacity < 4 ? 4 : runtime->network_diagnostic_capacity * 2;
+    while (next_capacity < required)
+        next_capacity *= 2;
+
+    network_diagnostic_runtime_state *states = (network_diagnostic_runtime_state *)SDL_realloc(
+        runtime->network_diagnostics, (size_t)next_capacity * sizeof(*states));
+    if (states == NULL)
+        return false;
+
+    SDL_memset(states + runtime->network_diagnostic_capacity, 0,
+               (size_t)(next_capacity - runtime->network_diagnostic_capacity) * sizeof(*states));
+    runtime->network_diagnostics = states;
+    runtime->network_diagnostic_capacity = next_capacity;
+    return true;
+}
+
+static network_diagnostic_runtime_state *ensure_network_diagnostic_state(sdl3d_game_data_runtime *runtime,
+                                                                         const char *name)
+{
+    network_diagnostic_runtime_state *state = find_network_diagnostic_state(runtime, name);
+    if (state != NULL)
+        return state;
+    if (runtime == NULL || name == NULL || name[0] == '\0' ||
+        !ensure_network_diagnostic_state_capacity(runtime, runtime->network_diagnostic_count + 1))
+    {
+        return NULL;
+    }
+
+    state = &runtime->network_diagnostics[runtime->network_diagnostic_count];
+    state->name = SDL_strdup(name);
+    if (state->name == NULL)
+        return NULL;
+    state->last_log_ms = 0U;
+    state->logged = false;
+    runtime->network_diagnostic_count++;
+    return state;
+}
+
+bool sdl3d_game_data_log_network_snapshot_diagnostic(sdl3d_game_data_runtime *runtime, const char *diagnostic_name,
+                                                     Uint32 tick, const char *event, const char *extra,
+                                                     bool *out_logged, char *error_buffer, int error_buffer_size)
+{
+    if (out_logged != NULL)
+        *out_logged = false;
+    if (runtime == NULL || diagnostic_name == NULL || diagnostic_name[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "network snapshot diagnostic requires runtime and name");
+        return false;
+    }
+
+    yyjson_val *diagnostic = find_network_snapshot_diagnostic_json(runtime, diagnostic_name);
+    if (diagnostic == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network snapshot diagnostic not found");
+        return false;
+    }
+    if (!json_bool(diagnostic, "enabled", true))
+        return true;
+
+    network_diagnostic_runtime_state *state = ensure_network_diagnostic_state(runtime, diagnostic_name);
+    if (state == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network snapshot diagnostic state allocation failed");
+        return false;
+    }
+
+    const float cadence_seconds = SDL_max(json_float(diagnostic, "cadence_seconds", 0.0f), 0.0f);
+    const Uint64 now = SDL_GetTicks();
+    if (state->logged && cadence_seconds > 0.0f &&
+        (double)(now - state->last_log_ms) < (double)cadence_seconds * 1000.0)
+    {
+        return true;
+    }
+
+    const char *replication_name = json_string(diagnostic, "replication", NULL);
+    char description[4096] = {0};
+    if (!game_data_describe_network_snapshot_ex(runtime, replication_name, tick,
+                                                json_bool(diagnostic, "include_session_state", true), description,
+                                                sizeof(description), error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+
+    char tick_text[32];
+    SDL_snprintf(tick_text, sizeof(tick_text), "%u", (unsigned int)tick);
+
+    sdl3d_properties *payload = sdl3d_properties_create();
+    if (payload == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network snapshot diagnostic payload allocation failed");
+        return false;
+    }
+    sdl3d_properties_set_string(payload, "name", diagnostic_name);
+    sdl3d_properties_set_string(payload, "event", event != NULL ? event : "");
+    sdl3d_properties_set_string(payload, "extra", extra != NULL ? extra : "");
+    sdl3d_properties_set_string(payload, "tick", tick_text);
+    sdl3d_properties_set_string(payload, "description", description);
+
+    char message[4096] = {0};
+    const char *message_template = json_string(diagnostic, "message", "{event} {description} {extra}");
+    const bool formatted = format_payload_string(payload, message_template, message, sizeof(message));
+    sdl3d_properties_destroy(payload);
+    if (!formatted)
+    {
+        set_error(error_buffer, error_buffer_size, "network snapshot diagnostic message is too long");
+        return false;
+    }
+
+    SDL_LogMessage(SDL_LOG_CATEGORY_APPLICATION,
+                   network_diagnostic_log_priority(json_string(diagnostic, "level", NULL)), "%s", message);
+    state->last_log_ms = now;
+    state->logged = true;
+    if (out_logged != NULL)
+        *out_logged = true;
     return true;
 }
 
@@ -13111,6 +13305,8 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
         SDL_free(runtime->discovery_sessions[i].name);
         sdl3d_network_discovery_session_destroy(runtime->discovery_sessions[i].session);
     }
+    for (int i = 0; i < runtime->network_diagnostic_count; ++i)
+        SDL_free(runtime->network_diagnostics[i].name);
 
     clear_menu_text_entry_capture(runtime);
     sdl3d_script_engine_destroy(runtime->scripts);
@@ -13136,6 +13332,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->direct_connect_sessions);
     SDL_free(runtime->host_sessions);
     SDL_free(runtime->discovery_sessions);
+    SDL_free(runtime->network_diagnostics);
     SDL_free(runtime->activity.periodic_elapsed);
     yyjson_doc_free(runtime->doc);
     SDL_free(runtime);

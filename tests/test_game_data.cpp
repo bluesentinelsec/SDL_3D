@@ -15,6 +15,7 @@
 
 extern "C"
 {
+#include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
 #include "sdl3d/asset.h"
@@ -46,6 +47,42 @@ struct CapturedDiagnostic
 struct DiagnosticCapture
 {
     std::vector<CapturedDiagnostic> diagnostics;
+};
+
+struct CapturedLogMessage
+{
+    int category = -1;
+    SDL_LogPriority priority = SDL_LOG_PRIORITY_INVALID;
+    std::string message;
+};
+
+void SDLCALL capture_log_output(void *userdata, int category, SDL_LogPriority priority, const char *message)
+{
+    auto *capture = static_cast<CapturedLogMessage *>(userdata);
+    capture->category = category;
+    capture->priority = priority;
+    capture->message = message != nullptr ? message : "";
+}
+
+class SDLLogOutputGuard
+{
+  public:
+    SDLLogOutputGuard()
+    {
+        SDL_GetLogOutputFunction(&callback_, &userdata_);
+        priority_ = SDL_GetLogPriority(SDL_LOG_CATEGORY_APPLICATION);
+    }
+
+    ~SDLLogOutputGuard()
+    {
+        SDL_SetLogOutputFunction(callback_, userdata_);
+        SDL_SetLogPriority(SDL_LOG_CATEGORY_APPLICATION, priority_);
+    }
+
+  private:
+    SDL_LogOutputFunction callback_ = nullptr;
+    void *userdata_ = nullptr;
+    SDL_LogPriority priority_ = SDL_LOG_PRIORITY_INFO;
 };
 
 struct NetworkSignalCapture
@@ -6300,6 +6337,23 @@ TEST(GameDataRuntime, ValidatesNetworkReplicationSchemaAndComputesStableHash)
         "state": { "actor": "entity.match", "property": "paused" }
       }
     })json");
+    std::string network_with_diagnostics = network_json;
+    const size_t diagnostics_insert = network_with_diagnostics.rfind("\n  }");
+    ASSERT_NE(diagnostics_insert, std::string::npos);
+    network_with_diagnostics.insert(diagnostics_insert, R"json(,
+    "diagnostics": {
+      "snapshots": [
+        {
+          "name": "multiplayer_state",
+          "replication": "play_state",
+          "enabled": true,
+          "level": "debug",
+          "cadence_seconds": 0.5,
+          "include_session_state": true,
+          "message": "{event} {description}"
+        }
+      ]
+    })json");
 
     write_text(dir / "network_a.game.json", network_schema_game_json(network_json, "Network Schema A").c_str());
     write_text(dir / "network_b.game.json", network_schema_game_json(network_json, "Different Metadata").c_str());
@@ -6307,6 +6361,8 @@ TEST(GameDataRuntime, ValidatesNetworkReplicationSchemaAndComputesStableHash)
                network_schema_game_json(network_with_session_flow, "Network Schema A").c_str());
     write_text(dir / "network_runtime_bindings.game.json",
                network_schema_game_json(network_with_runtime_bindings, "Network Schema A").c_str());
+    write_text(dir / "network_diagnostics.game.json",
+               network_schema_game_json(network_with_diagnostics, "Network Schema A").c_str());
     write_text(dir / "network_changed.game.json",
                network_schema_game_json(valid_network_schema_json("vec2"), "Network Schema A").c_str());
 
@@ -6319,11 +6375,13 @@ TEST(GameDataRuntime, ValidatesNetworkReplicationSchemaAndComputesStableHash)
     const auto hash_b = load_network_schema_hash(dir / "network_b.game.json");
     const auto hash_with_session_flow = load_network_schema_hash(dir / "network_session_flow.game.json");
     const auto hash_with_runtime_bindings = load_network_schema_hash(dir / "network_runtime_bindings.game.json");
+    const auto hash_with_diagnostics = load_network_schema_hash(dir / "network_diagnostics.game.json");
     const auto hash_changed = load_network_schema_hash(dir / "network_changed.game.json");
 
     EXPECT_EQ(hash_a, hash_b);
     EXPECT_EQ(hash_a, hash_with_session_flow);
     EXPECT_EQ(hash_a, hash_with_runtime_bindings);
+    EXPECT_EQ(hash_a, hash_with_diagnostics);
     EXPECT_NE(hash_a, hash_changed);
 
     remove_test_dir(dir);
@@ -6466,6 +6524,31 @@ TEST(GameDataRuntime, EncodesAndAppliesPongNetworkSnapshotFromAuthoredSchema)
     EXPECT_FALSE(sdl3d_game_data_describe_network_snapshot(host, "play_state", 12345U, tiny_description,
                                                            sizeof(tiny_description), error, sizeof(error)));
     EXPECT_NE(std::string(error).find("buffer is too small"), std::string::npos);
+
+    SDLLogOutputGuard log_guard;
+    CapturedLogMessage captured_log;
+    SDL_SetLogPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_VERBOSE);
+    SDL_SetLogOutputFunction(capture_log_output, &captured_log);
+
+    bool logged = false;
+    ASSERT_TRUE(sdl3d_game_data_log_network_snapshot_diagnostic(host, "multiplayer_state", 12346U, "test_event",
+                                                                "first", &logged, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(logged);
+    EXPECT_EQ(captured_log.category, SDL_LOG_CATEGORY_APPLICATION);
+    EXPECT_EQ(captured_log.priority, SDL_LOG_PRIORITY_INFO);
+    EXPECT_NE(captured_log.message.find("network test_event"), std::string::npos);
+    EXPECT_NE(captured_log.message.find("tick=12346"), std::string::npos);
+    EXPECT_NE(captured_log.message.find("entity.ball.properties.velocity=(3.250,-1.750)"), std::string::npos);
+    EXPECT_NE(captured_log.message.find("first"), std::string::npos);
+
+    captured_log = {};
+    logged = true;
+    ASSERT_TRUE(sdl3d_game_data_log_network_snapshot_diagnostic(host, "multiplayer_state", 12347U, "test_event",
+                                                                "second", &logged, error, sizeof(error)))
+        << error;
+    EXPECT_FALSE(logged);
+    EXPECT_TRUE(captured_log.message.empty());
 
     destroy_runtime_session(host_session, host);
     destroy_runtime_session(client_session, client);
@@ -7449,6 +7532,63 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
     ]
   })json",
             "unknown network replication reference",
+        },
+        {
+            "bad_snapshot_diagnostic_replication",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "diagnostics": {
+      "snapshots": [
+        {
+          "name": "multiplayer_state",
+          "replication": "missing_channel"
+        }
+      ]
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": ["position"]
+          }
+        ]
+      }
+    ]
+  })json",
+            "unknown network replication reference",
+        },
+        {
+            "bad_snapshot_diagnostic_level",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "diagnostics": {
+      "snapshots": [
+        {
+          "name": "multiplayer_state",
+          "replication": "play_state",
+          "level": "chatty"
+        }
+      ]
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": ["position"]
+          }
+        ]
+      }
+    ]
+  })json",
+            "network snapshot diagnostic level is unsupported",
         },
         {
             "bad_runtime_control_binding",

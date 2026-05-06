@@ -94,6 +94,12 @@ termination” can live in JSON instead of C. The runtime passes optional payloa
 properties, such as `reason`, into those actions; supported string fields may
 use `{reason}` placeholders.
 
+Authored `network.diagnostics.snapshots` entries make multiplayer state logging
+policy data-driven as well. A compatibility host or generic runner can call
+`sdl3d_game_data_log_network_snapshot_diagnostic()` by policy name; the game
+data chooses the replication channel, log level, cadence, session-state
+inclusion, and message template.
+
 ## Generic Runner
 
 `sdl3d_runner` launches a game data asset without game-specific C callbacks.

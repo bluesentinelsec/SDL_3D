@@ -87,9 +87,10 @@ termination reasons, and return scenes.
 
 ### Diagnostic Logging
 
-Snapshot diagnostics are schema-driven, but the host still decides when to log
-Pong multiplayer state. A generic runtime can expose an authored diagnostics
-policy for network sessions and replication channels.
+Snapshot diagnostic content and logging policy are now schema-driven. Pong C
+only notifies the engine that a generic network snapshot event occurred; the
+authored `network.diagnostics.snapshots` entry controls the channel, cadence,
+log level, session-state inclusion, and message template.
 
 ## Remaining Pong-Specific C Literals
 

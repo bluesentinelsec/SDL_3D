@@ -1760,6 +1760,36 @@ is passed to actions and can be referenced from supported string fields with
 delivered to the target scene's enter signal; `scene_state.set` writes scalar
 scene-state values directly.
 
+`network.diagnostics.snapshots` lets authored data control schema-driven
+network snapshot logging. Each entry has a unique `name`, a `replication`
+channel reference, optional `enabled`, `level`, `cadence_seconds`,
+`include_session_state`, and `message` fields:
+
+```json
+"diagnostics": {
+  "snapshots": [
+    {
+      "name": "multiplayer_state",
+      "replication": "play_state",
+      "enabled": true,
+      "level": "info",
+      "cadence_seconds": 0.25,
+      "include_session_state": true,
+      "message": "network {event} {description} {extra}"
+    }
+  ]
+}
+```
+
+Hosts and generic runners call
+`sdl3d_game_data_log_network_snapshot_diagnostic()` with a diagnostic `name`,
+packet tick, event label, and optional context string. The runtime enforces the
+authored cadence and log level, formats the selected replication channel with
+`sdl3d_game_data_describe_network_snapshot()`, and expands `{name}`, `{event}`,
+`{extra}`, `{tick}`, and `{description}` placeholders in the message template.
+Missing payload fields expand to an empty string; malformed placeholders are
+treated as literal text.
+
 `runtime_bindings` is optional. It maps host integration semantics to concrete
 authored replication channels and control messages without baking those schema
 names into game host code. `replication` maps semantic names to entries in
@@ -1851,6 +1881,8 @@ Callers that need diagnostic logging can use
 authored `session_flow` state values, and every replicated actor field in schema
 order. This keeps debug output tied to the authored replication channel instead
 of hard-coding game actor ids or property paths in host C.
+`sdl3d_game_data_log_network_snapshot_diagnostic()` wraps that formatter with
+authored enablement, cadence, level, and message policy.
 
 Generic session loops should prefer the runtime-binding snapshot helpers:
 `sdl3d_game_data_encode_network_runtime_snapshot()`,

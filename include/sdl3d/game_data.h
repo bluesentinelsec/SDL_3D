@@ -1210,6 +1210,32 @@ extern "C"
                                                    int error_buffer_size);
 
     /**
+     * @brief Emit an authored network snapshot diagnostic when policy allows.
+     *
+     * The named policy is read from `network.diagnostics.snapshots[]`. The
+     * policy chooses the replicated channel to describe, enabled state, log
+     * level, cadence, session-state inclusion, and message template. Template
+     * placeholders can reference `{name}`, `{event}`, `{extra}`, `{tick}`, and
+     * `{description}`.
+     *
+     * If the policy is disabled or cadence suppresses the message, the function
+     * returns true with @p out_logged set to false.
+     *
+     * @param runtime Runtime whose current state should be logged.
+     * @param diagnostic_name Authored diagnostic policy name.
+     * @param tick Simulation or packet tick to include in the description.
+     * @param event Optional event label, such as `host_snapshot_sent`.
+     * @param extra Optional caller-provided context string.
+     * @param out_logged Optional flag set true only when a log line is emitted.
+     * @param error_buffer Optional buffer for the first failure reason.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when the policy was handled successfully.
+     */
+    bool sdl3d_game_data_log_network_snapshot_diagnostic(sdl3d_game_data_runtime *runtime, const char *diagnostic_name,
+                                                         Uint32 tick, const char *event, const char *extra,
+                                                         bool *out_logged, char *error_buffer, int error_buffer_size);
+
+    /**
      * @brief Encode an authored host-to-client replication snapshot.
      *
      * The named replication channel must exist in the loaded `network`

@@ -897,6 +897,84 @@ static bool validate_network_runtime_bindings(validation_context *ctx, yyjson_va
            validate_network_runtime_pause_binding(ctx, obj_get(bindings, "pause"), names);
 }
 
+static bool is_network_diagnostic_level(const char *level)
+{
+    return level == NULL || SDL_strcmp(level, "debug") == 0 || SDL_strcmp(level, "info") == 0 ||
+           SDL_strcmp(level, "warn") == 0 || SDL_strcmp(level, "warning") == 0 || SDL_strcmp(level, "error") == 0 ||
+           SDL_strcmp(level, "critical") == 0;
+}
+
+static bool validate_network_diagnostics(validation_context *ctx, yyjson_val *network,
+                                         const name_table *replication_names)
+{
+    yyjson_val *diagnostics = obj_get(network, "diagnostics");
+    if (diagnostics == NULL)
+        return true;
+    if (!yyjson_is_obj(diagnostics))
+        return validation_error(ctx, "$.network.diagnostics", "network diagnostics must be an object");
+
+    yyjson_val *snapshots = obj_get(diagnostics, "snapshots");
+    if (snapshots == NULL)
+        return true;
+    if (!yyjson_is_arr(snapshots))
+        return validation_error(ctx, "$.network.diagnostics.snapshots",
+                                "network diagnostics snapshots must be an array");
+
+    name_table diagnostic_names = {0};
+    bool ok = true;
+    for (size_t i = 0; ok && i < yyjson_arr_size(snapshots); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.network.diagnostics.snapshots[%zu]", i);
+        yyjson_val *entry = yyjson_arr_get(snapshots, i);
+        if (!yyjson_is_obj(entry))
+        {
+            ok = validation_error(ctx, path, "network snapshot diagnostic must be an object");
+            break;
+        }
+        if (!require_unique_name(ctx, &diagnostic_names, "network snapshot diagnostic", json_string(entry, "name"),
+                                 path) ||
+            !require_ref(ctx, replication_names, "network replication", json_string(entry, "replication"), path))
+        {
+            ok = false;
+            break;
+        }
+        yyjson_val *enabled = obj_get(entry, "enabled");
+        if (enabled != NULL && !yyjson_is_bool(enabled))
+        {
+            ok = validation_error(ctx, path, "network snapshot diagnostic enabled must be boolean");
+            break;
+        }
+        yyjson_val *include_session_state = obj_get(entry, "include_session_state");
+        if (include_session_state != NULL && !yyjson_is_bool(include_session_state))
+        {
+            ok = validation_error(ctx, path, "network snapshot diagnostic include_session_state must be boolean");
+            break;
+        }
+        yyjson_val *cadence = obj_get(entry, "cadence_seconds");
+        if (cadence != NULL && (!yyjson_is_num(cadence) || yyjson_get_real(cadence) < 0.0))
+        {
+            ok = validation_error(ctx, path, "network snapshot diagnostic cadence_seconds must be non-negative");
+            break;
+        }
+        const char *level = json_string(entry, "level");
+        if (!is_network_diagnostic_level(level))
+        {
+            ok = validation_error(ctx, path, "network snapshot diagnostic level is unsupported");
+            break;
+        }
+        yyjson_val *message = obj_get(entry, "message");
+        if (message != NULL && (!yyjson_is_str(message) || yyjson_get_len(message) == 0))
+        {
+            ok = validation_error(ctx, path, "network snapshot diagnostic message must be a non-empty string");
+            break;
+        }
+    }
+
+    name_table_destroy(&diagnostic_names);
+    return ok;
+}
+
 static bool validate_network(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *network = obj_get(root, "network");
@@ -1040,6 +1118,8 @@ static bool validate_network(validation_context *ctx, yyjson_val *root, validati
     }
     if (ok)
         ok = validate_network_runtime_bindings(ctx, network, &replication_names, &control_names, names);
+    if (ok)
+        ok = validate_network_diagnostics(ctx, network, &replication_names);
     name_table_destroy(&control_names);
     name_table_destroy(&replication_names);
     return ok;

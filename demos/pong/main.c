@@ -54,6 +54,7 @@ static const char PONG_NETWORK_BINDING_CLIENT_DOWN[] = "client_down";
 static const char PONG_NETWORK_BINDING_MENU_SELECT[] = "menu_select";
 static const char PONG_NETWORK_BINDING_CAMERA_TOGGLE[] = "camera_toggle";
 static const char PONG_NETWORK_BINDING_LOBBY_START[] = "lobby_start";
+static const char PONG_NETWORK_DIAGNOSTIC_MULTIPLAYER_STATE[] = "multiplayer_state";
 static const char PONG_HOST_SESSION[] = "host";
 static const char PONG_DIRECT_CONNECT_SESSION[] = "direct_connect";
 static const char PONG_DIRECT_CONNECT_HOST_KEY[] = "direct_connect_host";
@@ -80,26 +81,16 @@ static Uint64 pong_log_timestamp_ms(void)
     return SDL_GetTicks();
 }
 
-static void pong_log_multiplayer_state(const char *prefix, const pong_state *state, Uint32 packet_tick,
-                                       const char *extra)
+static void log_network_snapshot_diagnostic(pong_state *state, Uint32 packet_tick, const char *event, const char *extra)
 {
-    char description[4096] = {0};
     char error[256] = {0};
-    const char *state_channel = NULL;
     if (state == NULL || state->data == NULL ||
-        !sdl3d_game_data_get_network_runtime_replication(state->data, PONG_NETWORK_BINDING_STATE_SNAPSHOT,
-                                                         &state_channel) ||
-        !sdl3d_game_data_describe_network_snapshot(state->data, state_channel, packet_tick, description,
-                                                   sizeof(description), error, sizeof(error)))
+        !sdl3d_game_data_log_network_snapshot_diagnostic(state->data, PONG_NETWORK_DIAGNOSTIC_MULTIPLAYER_STATE,
+                                                         packet_tick, event, extra, NULL, error, (int)sizeof(error)))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong multiplayer state diagnostic failed: %s",
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "network snapshot diagnostic failed: %s",
                     error[0] != '\0' ? error : "runtime unavailable");
-        return;
     }
-
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[%llu ms] Pong %s %s%s%s", (unsigned long long)pong_log_timestamp_ms(),
-                prefix != NULL ? prefix : "state", description, extra != NULL && extra[0] != '\0' ? " " : "",
-                extra != NULL ? extra : "");
 }
 
 static const char *active_scene_name(const pong_state *state)
@@ -659,7 +650,7 @@ static void update_direct_connect_session_status(sdl3d_game_context *ctx, pong_s
                             "Pong client received authoritative state before start command; entering play scene");
                 (void)run_network_flow_event(ctx, state, "client_state_before_start", NULL);
             }
-            pong_log_multiplayer_state("client<-host state", state, result.last_tick, "applied");
+            log_network_snapshot_diagnostic(state, result.last_tick, "client_snapshot_applied", "applied");
         }
 
         if (state->direct_connect_session == NULL)
@@ -843,7 +834,7 @@ static void publish_multiplayer_state(sdl3d_game_context *ctx, pong_state *state
                     error[0] != '\0' ? error : "unknown error");
         return;
     }
-    pong_log_multiplayer_state("host->client state", state, result.last_tick, "sent");
+    log_network_snapshot_diagnostic(state, result.last_tick, "host_snapshot_sent", "sent");
 }
 
 static void update_network_client_input_sensors(sdl3d_game_context *ctx, pong_state *state)
