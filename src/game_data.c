@@ -244,6 +244,26 @@ typedef struct runtime_collection
     int row_capacity;
 } runtime_collection;
 
+typedef enum actor_pool_exhaustion_policy
+{
+    ACTOR_POOL_EXHAUST_FAIL,
+    ACTOR_POOL_EXHAUST_REUSE_OLDEST,
+} actor_pool_exhaustion_policy;
+
+typedef struct actor_pool_runtime
+{
+    char *name;
+    const char *archetype;
+    const char *scene;
+    yyjson_val *archetype_json;
+    char **actor_names;
+    Uint64 *spawn_generations;
+    Uint64 spawn_generation_counter;
+    int capacity;
+    bool initial_active;
+    actor_pool_exhaustion_policy exhaustion;
+} actor_pool_runtime;
+
 typedef struct runtime_direct_connect_session
 {
     char *name;
@@ -340,6 +360,8 @@ typedef struct sdl3d_game_data_runtime
     runtime_collection *collections;
     int collection_count;
     int collection_capacity;
+    actor_pool_runtime *actor_pools;
+    int actor_pool_count;
     runtime_direct_connect_session *direct_connect_sessions;
     int direct_connect_session_count;
     int direct_connect_session_capacity;
@@ -1536,7 +1558,14 @@ static bool scene_has_entity(const scene_entry *scene, const char *entity_name)
 
 static bool active_scene_has_entity_internal(const sdl3d_game_data_runtime *runtime, const char *entity_name)
 {
-    return scene_has_entity(active_scene_entry_const(runtime), entity_name);
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    if (scene_has_entity(scene, entity_name))
+        return true;
+    if (runtime == NULL || scene == NULL || entity_name == NULL)
+        return false;
+    const sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, entity_name);
+    const char *pool_scene = actor != NULL ? sdl3d_properties_get_string(actor->props, "pool_scene", NULL) : NULL;
+    return pool_scene != NULL && scene->name != NULL && SDL_strcmp(pool_scene, scene->name) == 0;
 }
 
 static void apply_scene_camera(sdl3d_game_data_runtime *runtime, const scene_entry *scene)
@@ -7181,6 +7210,21 @@ static void load_actor_properties(sdl3d_registered_actor *actor, yyjson_val *pro
     }
 }
 
+static void initialize_actor_from_json(sdl3d_registered_actor *actor, yyjson_val *entity, const char *classname,
+                                       bool active)
+{
+    if (actor == NULL)
+        return;
+
+    actor->active = active;
+    sdl3d_properties_clear(actor->props);
+    sdl3d_properties_set_string(actor->props, "classname", classname != NULL ? classname : actor->name);
+
+    yyjson_val *transform = obj_get(entity, "transform");
+    actor_set_position(actor, json_vec3(transform, "position", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)));
+    load_actor_properties(actor, obj_get(entity, "properties"));
+}
+
 static bool load_entities(sdl3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
 {
     sdl3d_actor_registry *registry = runtime_registry(runtime);
@@ -7210,12 +7254,121 @@ static bool load_entities(sdl3d_game_data_runtime *runtime, yyjson_val *root, ch
             set_error(error_buffer, error_buffer_size, "failed to register JSON actor");
             return false;
         }
-        actor->active = json_bool(entity, "active", true);
-        sdl3d_properties_set_string(actor->props, "classname", name);
+        initialize_actor_from_json(actor, entity, name, json_bool(entity, "active", true));
+    }
 
-        yyjson_val *transform = obj_get(entity, "transform");
-        actor_set_position(actor, json_vec3(transform, "position", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)));
-        load_actor_properties(actor, obj_get(entity, "properties"));
+    return true;
+}
+
+static yyjson_val *find_actor_archetype_json(yyjson_val *root, const char *name)
+{
+    yyjson_val *archetypes = obj_get(root, "actor_archetypes");
+    for (size_t i = 0; yyjson_is_arr(archetypes) && i < yyjson_arr_size(archetypes); ++i)
+    {
+        yyjson_val *archetype = yyjson_arr_get(archetypes, i);
+        const char *archetype_name = json_string(archetype, "name", NULL);
+        if (archetype_name != NULL && name != NULL && SDL_strcmp(archetype_name, name) == 0)
+            return archetype;
+    }
+    return NULL;
+}
+
+static actor_pool_exhaustion_policy actor_pool_exhaustion_from_string(const char *value)
+{
+    if (value != NULL && SDL_strcmp(value, "reuse_oldest") == 0)
+        return ACTOR_POOL_EXHAUST_REUSE_OLDEST;
+    return ACTOR_POOL_EXHAUST_FAIL;
+}
+
+static bool initialize_pooled_actor(actor_pool_runtime *pool, sdl3d_registered_actor *actor, int index, bool active)
+{
+    if (pool == NULL || actor == NULL || index < 0 || index >= pool->capacity)
+        return false;
+    initialize_actor_from_json(actor, pool->archetype_json, pool->archetype, active);
+    sdl3d_properties_set_string(actor->props, "pool", pool->name);
+    sdl3d_properties_set_int(actor->props, "pool_index", index);
+    if (pool->scene != NULL)
+        sdl3d_properties_set_string(actor->props, "pool_scene", pool->scene);
+    if (!active && pool->spawn_generations != NULL)
+        pool->spawn_generations[index] = 0U;
+    return true;
+}
+
+static bool load_actor_pools(sdl3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                             int error_buffer_size)
+{
+    sdl3d_actor_registry *registry = runtime_registry(runtime);
+    yyjson_val *pools = obj_get(root, "actor_pools");
+    if (!yyjson_is_arr(pools))
+        return true;
+    if (registry == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "game data actor pools require an actor registry");
+        return false;
+    }
+
+    runtime->actor_pool_count = (int)yyjson_arr_size(pools);
+    runtime->actor_pools =
+        (actor_pool_runtime *)SDL_calloc((size_t)runtime->actor_pool_count, sizeof(*runtime->actor_pools));
+    if (runtime->actor_pools == NULL && runtime->actor_pool_count > 0)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate actor pools");
+        return false;
+    }
+
+    for (int i = 0; i < runtime->actor_pool_count; ++i)
+    {
+        yyjson_val *pool_json = yyjson_arr_get(pools, (size_t)i);
+        actor_pool_runtime *pool = &runtime->actor_pools[i];
+        const char *name = json_string(pool_json, "name", NULL);
+        const char *archetype = json_string(pool_json, "archetype", NULL);
+        const int capacity = json_int(pool_json, "capacity", 0);
+        yyjson_val *archetype_json = find_actor_archetype_json(root, archetype);
+        if (name == NULL || archetype == NULL || capacity <= 0 || archetype_json == NULL)
+        {
+            set_error(error_buffer, error_buffer_size, "invalid actor pool declaration");
+            return false;
+        }
+
+        pool->name = SDL_strdup(name);
+        pool->archetype = archetype;
+        pool->scene = json_string(pool_json, "scene", NULL);
+        pool->archetype_json = archetype_json;
+        pool->capacity = capacity;
+        pool->initial_active = json_bool(pool_json, "initial_active", false);
+        pool->exhaustion = actor_pool_exhaustion_from_string(json_string(pool_json, "on_exhausted", "fail"));
+        pool->actor_names = (char **)SDL_calloc((size_t)capacity, sizeof(*pool->actor_names));
+        pool->spawn_generations = (Uint64 *)SDL_calloc((size_t)capacity, sizeof(*pool->spawn_generations));
+        if (pool->name == NULL || pool->actor_names == NULL || pool->spawn_generations == NULL)
+        {
+            set_error(error_buffer, error_buffer_size, "failed to allocate actor pool entries");
+            return false;
+        }
+
+        for (int actor_index = 0; actor_index < capacity; ++actor_index)
+        {
+            char actor_name[256];
+            SDL_snprintf(actor_name, sizeof(actor_name), "%s.%d", name, actor_index);
+            sdl3d_registered_actor *actor = sdl3d_actor_registry_add(registry, actor_name);
+            if (actor == NULL)
+            {
+                set_error(error_buffer, error_buffer_size, "failed to register pooled actor");
+                return false;
+            }
+            pool->actor_names[actor_index] = SDL_strdup(actor_name);
+            if (pool->actor_names[actor_index] == NULL ||
+                !initialize_pooled_actor(pool, actor, actor_index, pool->initial_active))
+            {
+                set_error(error_buffer, error_buffer_size, "failed to initialize pooled actor");
+                return false;
+            }
+            if (pool->initial_active)
+            {
+                pool->spawn_generations[actor_index] = ++pool->spawn_generation_counter;
+                sdl3d_properties_set_int(actor->props, "pool_spawn_generation",
+                                         (int)SDL_min(pool->spawn_generations[actor_index], (Uint64)SDL_MAX_SINT32));
+            }
+        }
     }
 
     return true;
@@ -9857,6 +10010,205 @@ static bool reset_actor_properties_to_authored_defaults(sdl3d_game_data_runtime 
     return true;
 }
 
+static actor_pool_runtime *find_actor_pool(sdl3d_game_data_runtime *runtime, const char *name)
+{
+    if (runtime == NULL || name == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->actor_pool_count; ++i)
+    {
+        if (runtime->actor_pools[i].name != NULL && SDL_strcmp(runtime->actor_pools[i].name, name) == 0)
+            return &runtime->actor_pools[i];
+    }
+    return NULL;
+}
+
+static int actor_pool_index_for_actor(const actor_pool_runtime *pool, const char *actor_name)
+{
+    if (pool == NULL || actor_name == NULL)
+        return -1;
+    for (int i = 0; i < pool->capacity; ++i)
+    {
+        if (pool->actor_names[i] != NULL && SDL_strcmp(pool->actor_names[i], actor_name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+static actor_pool_runtime *find_actor_pool_for_actor(sdl3d_game_data_runtime *runtime, const char *actor_name,
+                                                     int *out_index)
+{
+    if (out_index != NULL)
+        *out_index = -1;
+    if (runtime == NULL || actor_name == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->actor_pool_count; ++i)
+    {
+        const int index = actor_pool_index_for_actor(&runtime->actor_pools[i], actor_name);
+        if (index >= 0)
+        {
+            if (out_index != NULL)
+                *out_index = index;
+            return &runtime->actor_pools[i];
+        }
+    }
+    return NULL;
+}
+
+static sdl3d_registered_actor *actor_pool_allocate(sdl3d_game_data_runtime *runtime, actor_pool_runtime *pool,
+                                                   int *out_index)
+{
+    if (out_index != NULL)
+        *out_index = -1;
+    if (runtime == NULL || pool == NULL)
+        return NULL;
+
+    for (int i = 0; i < pool->capacity; ++i)
+    {
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[i]);
+        if (actor != NULL && !actor->active)
+        {
+            if (out_index != NULL)
+                *out_index = i;
+            return actor;
+        }
+    }
+
+    if (pool->exhaustion != ACTOR_POOL_EXHAUST_REUSE_OLDEST || pool->capacity <= 0)
+        return NULL;
+
+    int index = -1;
+    Uint64 oldest_generation = SDL_MAX_UINT64;
+    for (int i = 0; i < pool->capacity; ++i)
+    {
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[i]);
+        if (actor == NULL || !actor->active)
+            continue;
+        const Uint64 generation = pool->spawn_generations != NULL ? pool->spawn_generations[i] : 0U;
+        if (index < 0 || generation < oldest_generation)
+        {
+            index = i;
+            oldest_generation = generation;
+        }
+    }
+    if (index < 0)
+        return NULL;
+    if (out_index != NULL)
+        *out_index = index;
+    return sdl3d_game_data_find_actor(runtime, pool->actor_names[index]);
+}
+
+static void apply_actor_spawn_properties(sdl3d_registered_actor *actor, yyjson_val *properties)
+{
+    if (actor == NULL || !yyjson_is_obj(properties))
+        return;
+
+    yyjson_val *key;
+    yyjson_val *value;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(properties, &iter);
+    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+    {
+        const char *name = yyjson_get_str(key);
+        value = yyjson_obj_iter_get_val(key);
+        if (name != NULL)
+            set_actor_property_from_json(actor, name, value);
+    }
+}
+
+static sdl3d_vec3 actor_spawn_position_from_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                                   sdl3d_vec3 fallback)
+{
+    sdl3d_vec3 position = fallback;
+    yyjson_val *position_json = obj_get(action, "position");
+    if (position_json != NULL)
+        position = json_vec3_value(position_json, position);
+
+    const char *from_actor_name = json_string(action, "from", NULL);
+    sdl3d_registered_actor *from_actor = sdl3d_game_data_find_actor(runtime, from_actor_name);
+    if (from_actor != NULL)
+        position = from_actor->position;
+
+    yyjson_val *offset_json = obj_get(action, "offset");
+    if (offset_json != NULL)
+    {
+        const sdl3d_vec3 offset = json_vec3_value(offset_json, sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+        position.x += offset.x;
+        position.y += offset.y;
+        position.z += offset.z;
+    }
+    return position;
+}
+
+static bool execute_actor_spawn_action(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    actor_pool_runtime *pool = find_actor_pool(runtime, json_string(action, "pool", NULL));
+    int actor_index = -1;
+    sdl3d_registered_actor *actor = actor_pool_allocate(runtime, pool, &actor_index);
+    if (pool == NULL || actor == NULL || actor_index < 0)
+        return false;
+
+    if (!initialize_pooled_actor(pool, actor, actor_index, true))
+        return false;
+    if (pool->spawn_generations != NULL)
+    {
+        pool->spawn_generations[actor_index] = ++pool->spawn_generation_counter;
+        sdl3d_properties_set_int(actor->props, "pool_spawn_generation",
+                                 (int)SDL_min(pool->spawn_generations[actor_index], (Uint64)SDL_MAX_SINT32));
+    }
+    actor_set_position(actor, actor_spawn_position_from_action(runtime, action, actor->position));
+    apply_actor_spawn_properties(actor, obj_get(action, "properties"));
+
+    const char *actor_key = json_string(action, "output_actor_key", NULL);
+    if (runtime != NULL && runtime->scene_state != NULL && actor_key != NULL)
+        sdl3d_properties_set_string(runtime->scene_state, actor_key, actor->name);
+    const char *id_key = json_string(action, "output_id_key", NULL);
+    if (runtime != NULL && runtime->scene_state != NULL && id_key != NULL)
+        sdl3d_properties_set_int(runtime->scene_state, id_key, actor->id);
+    const char *pool_index_key = json_string(action, "output_pool_index_key", NULL);
+    if (runtime != NULL && runtime->scene_state != NULL && pool_index_key != NULL)
+        sdl3d_properties_set_int(runtime->scene_state, pool_index_key, actor_index);
+    return true;
+}
+
+static bool execute_actor_despawn_action(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    const char *target = json_string(action, "target", NULL);
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, target);
+    if (actor == NULL)
+        return false;
+
+    int actor_index = -1;
+    actor_pool_runtime *pool = find_actor_pool_for_actor(runtime, actor->name, &actor_index);
+    if (pool != NULL && actor_index >= 0)
+        return initialize_pooled_actor(pool, actor, actor_index, false);
+
+    actor->active = false;
+    return true;
+}
+
+static bool execute_actor_despawn_by_tag_action(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    const char *tag = json_string(action, "tag", NULL);
+    if (runtime == NULL || tag == NULL || tag[0] == '\0')
+        return false;
+
+    for (int pool_index = 0; pool_index < runtime->actor_pool_count; ++pool_index)
+    {
+        actor_pool_runtime *pool = &runtime->actor_pools[pool_index];
+        if (!entity_json_has_tags(pool->archetype_json, &tag, 1))
+            continue;
+        for (int actor_index = 0; actor_index < pool->capacity; ++actor_index)
+        {
+            sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[actor_index]);
+            if (actor != NULL && actor->active)
+            {
+                (void)initialize_pooled_actor(pool, actor, actor_index, false);
+            }
+        }
+    }
+    return true;
+}
+
 static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const sdl3d_properties *payload)
 {
     const char *type = json_string(action, "type", "");
@@ -10101,6 +10453,15 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
         actor->active = yyjson_get_bool(active);
         return true;
     }
+
+    if (SDL_strcmp(type, "actor.spawn") == 0)
+        return execute_actor_spawn_action(runtime, action);
+
+    if (SDL_strcmp(type, "actor.despawn") == 0)
+        return execute_actor_despawn_action(runtime, action);
+
+    if (SDL_strcmp(type, "actor.despawn_by_tag") == 0)
+        return execute_actor_despawn_by_tag_action(runtime, action);
 
     if (SDL_strcmp(type, "transform.set_position") == 0)
     {
@@ -11446,6 +11807,7 @@ bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_
     load_active_camera(runtime, root);
     bool ok = load_signals(runtime, root, error_buffer, error_buffer_size) &&
               load_entities(runtime, root, error_buffer, error_buffer_size) &&
+              load_actor_pools(runtime, root, error_buffer, error_buffer_size) &&
               load_input(runtime, root, error_buffer, error_buffer_size) &&
               load_timers(runtime, logic, error_buffer, error_buffer_size) && load_sensors(runtime, logic) &&
               load_scripts(runtime, root, error_buffer, error_buffer_size) &&
@@ -13345,6 +13707,14 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
             sdl3d_properties_destroy(runtime->collections[i].rows[row]);
         SDL_free(runtime->collections[i].rows);
     }
+    for (int i = 0; i < runtime->actor_pool_count; ++i)
+    {
+        SDL_free(runtime->actor_pools[i].name);
+        for (int actor_index = 0; actor_index < runtime->actor_pools[i].capacity; ++actor_index)
+            SDL_free(runtime->actor_pools[i].actor_names[actor_index]);
+        SDL_free(runtime->actor_pools[i].actor_names);
+        SDL_free(runtime->actor_pools[i].spawn_generations);
+    }
     for (int i = 0; i < runtime->direct_connect_session_count; ++i)
     {
         SDL_free(runtime->direct_connect_sessions[i].name);
@@ -13384,6 +13754,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->audio_files);
     SDL_free(runtime->property_snapshots);
     SDL_free(runtime->collections);
+    SDL_free(runtime->actor_pools);
     SDL_free(runtime->direct_connect_sessions);
     SDL_free(runtime->host_sessions);
     SDL_free(runtime->discovery_sessions);

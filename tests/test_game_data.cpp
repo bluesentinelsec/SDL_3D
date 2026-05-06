@@ -5900,6 +5900,380 @@ TEST(GameDataRuntime, LoadsLuaScriptDependenciesBeforeDependentAdapters)
     sdl3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, ActorPoolsSpawnDespawnAndResetActors)
+{
+    const std::filesystem::path dir = unique_test_dir("actor_pools");
+    write_text(dir / "actor_pools.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Actor Pools", "id": "test.actor_pools", "version": "0.1.0" },
+  "world": { "name": "world.actor_pools", "kind": "fixed_screen" },
+  "entities": [
+    { "name": "entity.player", "transform": { "position": [1.0, 2.0, 3.0] } }
+  ],
+  "actor_archetypes": [
+    {
+      "name": "archetype.player_shot",
+      "tags": ["projectile", "player_projectile"],
+      "transform": { "position": [0.0, 0.0, 0.25] },
+      "properties": {
+        "damage": { "type": "int", "value": 1 },
+        "velocity": { "type": "vec2", "value": [0.0, 12.0] }
+      },
+      "components": [
+        { "type": "render.sprite", "sprite": "sprite.player_shot" },
+        { "type": "collision.circle", "radius": 0.08 }
+      ]
+    }
+  ],
+  "actor_pools": [
+    {
+      "name": "pool.player_shots",
+      "archetype": "archetype.player_shot",
+      "capacity": 2,
+      "scene": "scene.play",
+      "initial_active": false,
+      "on_exhausted": "fail"
+    },
+    {
+      "name": "pool.reusable_shots",
+      "archetype": "archetype.player_shot",
+      "capacity": 2,
+      "scene": "scene.play",
+      "initial_active": false,
+      "on_exhausted": "reuse_oldest"
+    }
+  ],
+  "signals": [
+    "signal.spawn",
+    "signal.spawn.second",
+    "signal.spawn.reuse",
+    "signal.spawn.reuse.second",
+    "signal.despawn.reuse.first",
+    "signal.spawn.reuse.again",
+    "signal.spawn.reuse.exhausted",
+    "signal.despawn.first",
+    "signal.despawn.projectiles"
+  ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.spawn",
+        "actions": [
+          {
+            "type": "actor.spawn",
+            "pool": "pool.player_shots",
+            "from": "entity.player",
+            "offset": [0.5, 0.0, 0.0],
+            "properties": { "damage": 7 },
+            "output_actor_key": "last_actor",
+            "output_id_key": "last_actor_id",
+            "output_pool_index_key": "last_actor_pool_index"
+          }
+        ]
+      },
+      {
+        "signal": "signal.spawn.second",
+        "actions": [
+          { "type": "actor.spawn", "pool": "pool.player_shots", "position": [4.0, 5.0, 6.0] }
+        ]
+      },
+      {
+        "signal": "signal.spawn.reuse",
+        "actions": [
+          { "type": "actor.spawn", "pool": "pool.reusable_shots", "position": [7.0, 8.0, 9.0] }
+        ]
+      },
+      {
+        "signal": "signal.spawn.reuse.second",
+        "actions": [
+          { "type": "actor.spawn", "pool": "pool.reusable_shots", "position": [8.0, 9.0, 10.0] }
+        ]
+      },
+      {
+        "signal": "signal.despawn.reuse.first",
+        "actions": [
+          { "type": "actor.despawn", "target": "pool.reusable_shots.0" }
+        ]
+      },
+      {
+        "signal": "signal.spawn.reuse.again",
+        "actions": [
+          {
+            "type": "actor.spawn",
+            "pool": "pool.reusable_shots",
+            "position": [10.0, 11.0, 12.0],
+            "properties": { "damage": 99 }
+          }
+        ]
+      },
+      {
+        "signal": "signal.spawn.reuse.exhausted",
+        "actions": [
+          { "type": "actor.spawn", "pool": "pool.reusable_shots", "position": [13.0, 14.0, 15.0] }
+        ]
+      },
+      {
+        "signal": "signal.despawn.first",
+        "actions": [
+          { "type": "actor.despawn", "target": "pool.player_shots.0" }
+        ]
+      },
+      {
+        "signal": "signal.despawn.projectiles",
+        "actions": [
+          { "type": "actor.despawn_by_tag", "tag": "player_projectile" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "renders_world": true
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "actor_pools.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    sdl3d_registered_actor *shot0 = sdl3d_game_data_find_actor(runtime, "pool.player_shots.0");
+    sdl3d_registered_actor *shot1 = sdl3d_game_data_find_actor(runtime, "pool.player_shots.1");
+    sdl3d_registered_actor *reusable_shot0 = sdl3d_game_data_find_actor(runtime, "pool.reusable_shots.0");
+    sdl3d_registered_actor *reusable_shot1 = sdl3d_game_data_find_actor(runtime, "pool.reusable_shots.1");
+    ASSERT_NE(shot0, nullptr);
+    ASSERT_NE(shot1, nullptr);
+    ASSERT_NE(reusable_shot0, nullptr);
+    ASSERT_NE(reusable_shot1, nullptr);
+    EXPECT_FALSE(shot0->active);
+    EXPECT_FALSE(shot1->active);
+    EXPECT_FALSE(reusable_shot0->active);
+    EXPECT_FALSE(reusable_shot1->active);
+    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 1);
+    EXPECT_STREQ(sdl3d_properties_get_string(shot0->props, "pool", ""), "pool.player_shots");
+    EXPECT_STREQ(sdl3d_properties_get_string(shot0->props, "pool_scene", ""), "scene.play");
+    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "pool_index", -1), 0);
+
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn"), nullptr);
+    EXPECT_TRUE(shot0->active);
+    EXPECT_FALSE(shot1->active);
+    expect_vec3_near(shot0->position, sdl3d_vec3_make(1.5f, 2.0f, 3.0f));
+    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 7);
+    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "last_actor", ""),
+                 "pool.player_shots.0");
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "last_actor_id", -1), shot0->id);
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "last_actor_pool_index", -1), 0);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.second"), nullptr);
+    EXPECT_TRUE(shot1->active);
+    expect_vec3_near(shot1->position, sdl3d_vec3_make(4.0f, 5.0f, 6.0f));
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.reuse"), nullptr);
+    EXPECT_TRUE(reusable_shot0->active);
+    EXPECT_FALSE(reusable_shot1->active);
+    expect_vec3_near(reusable_shot0->position, sdl3d_vec3_make(7.0f, 8.0f, 9.0f));
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.reuse.second"), nullptr);
+    EXPECT_TRUE(reusable_shot0->active);
+    EXPECT_TRUE(reusable_shot1->active);
+    expect_vec3_near(reusable_shot1->position, sdl3d_vec3_make(8.0f, 9.0f, 10.0f));
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.despawn.reuse.first"), nullptr);
+    EXPECT_FALSE(reusable_shot0->active);
+    EXPECT_TRUE(reusable_shot1->active);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.reuse.again"), nullptr);
+    EXPECT_TRUE(reusable_shot0->active);
+    EXPECT_TRUE(reusable_shot1->active);
+    expect_vec3_near(reusable_shot0->position, sdl3d_vec3_make(10.0f, 11.0f, 12.0f));
+    EXPECT_EQ(sdl3d_properties_get_int(reusable_shot0->props, "damage", 0), 99);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.reuse.exhausted"), nullptr);
+    EXPECT_TRUE(reusable_shot0->active);
+    EXPECT_TRUE(reusable_shot1->active);
+    expect_vec3_near(reusable_shot0->position, sdl3d_vec3_make(10.0f, 11.0f, 12.0f));
+    expect_vec3_near(reusable_shot1->position, sdl3d_vec3_make(13.0f, 14.0f, 15.0f));
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.despawn.first"), nullptr);
+    EXPECT_FALSE(shot0->active);
+    EXPECT_TRUE(shot1->active);
+    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 1);
+    expect_vec3_near(shot0->position, sdl3d_vec3_make(0.0f, 0.0f, 0.25f));
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.second"), nullptr);
+    EXPECT_TRUE(shot0->active);
+    expect_vec3_near(shot0->position, sdl3d_vec3_make(4.0f, 5.0f, 6.0f));
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.despawn.projectiles"), nullptr);
+    EXPECT_FALSE(shot0->active);
+    EXPECT_FALSE(shot1->active);
+    EXPECT_FALSE(reusable_shot0->active);
+    EXPECT_FALSE(reusable_shot1->active);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.despawn.projectiles"), nullptr);
+    EXPECT_FALSE(shot0->active);
+    EXPECT_FALSE(shot1->active);
+    EXPECT_FALSE(reusable_shot0->active);
+    EXPECT_FALSE(reusable_shot1->active);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
+{
+    const std::filesystem::path dir = unique_test_dir("actor_pool_validation");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play"
+})json");
+
+    struct Case
+    {
+        const char *name;
+        const char *json;
+        const char *message;
+    };
+
+    const Case cases[] = {
+        {
+            "missing_archetype",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "actor_pools": [
+    { "name": "pool.bad", "archetype": "archetype.missing", "capacity": 1 }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "unknown actor archetype",
+        },
+        {
+            "bad_capacity",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "actor_archetypes": [
+    { "name": "archetype.shot" }
+  ],
+  "actor_pools": [
+    { "name": "pool.bad", "archetype": "archetype.shot", "capacity": 0 }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "capacity",
+        },
+        {
+            "bad_spawn_pool",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "signals": ["signal.spawn"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.spawn",
+        "actions": [
+          { "type": "actor.spawn", "pool": "pool.missing" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "unknown actor pool",
+        },
+        {
+            "bad_spawn_from",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "actor_archetypes": [
+    { "name": "archetype.shot" }
+  ],
+  "actor_pools": [
+    { "name": "pool.shots", "archetype": "archetype.shot", "capacity": 1 }
+  ],
+  "signals": ["signal.spawn"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.spawn",
+        "actions": [
+          { "type": "actor.spawn", "pool": "pool.shots", "from": "entity.missing" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "unknown actor.spawn from actor",
+        },
+        {
+            "bad_despawn_target",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "signals": ["signal.despawn"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.despawn",
+        "actions": [
+          { "type": "actor.despawn", "target": "entity.missing" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "unknown actor.despawn target",
+        },
+        {
+            "pool_actor_collision",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "entities": [
+    { "name": "pool.shots.0" }
+  ],
+  "actor_archetypes": [
+    { "name": "archetype.shot" }
+  ],
+  "actor_pools": [
+    { "name": "pool.shots", "archetype": "archetype.shot", "capacity": 1 }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "collides with entity",
+        },
+    };
+
+    for (const Case &test_case : cases)
+    {
+        const std::filesystem::path path = dir / (std::string(test_case.name) + ".game.json");
+        write_text(path, test_case.json);
+        char error[512]{};
+        EXPECT_FALSE(sdl3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.message), std::string::npos) << test_case.name << ": " << error;
+    }
+
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, LoadsLuaBackedGameDataFromMemoryPack)
 {
     const std::string game_json = read_fixture_file("module_success.game.json");

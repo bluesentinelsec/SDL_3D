@@ -33,6 +33,8 @@ Every file is a JSON object with these fields:
 | `transitions` | no | Named screen transition descriptors such as startup and quit fades. |
 | `ui` | no | Authored UI descriptors. |
 | `entities` | yes | Stable named actors with tags, transforms, properties, and components. |
+| `actor_archetypes` | no | Reusable actor templates used by runtime actor pools. |
+| `actor_pools` | no | Preallocated runtime actor pools for deterministic spawn/despawn. |
 | `signals` | no | Authored signal names. |
 | `logic` | no | Sensors, timers, bindings, conditions, and actions. |
 | `adapters` | no | Named game-specific extension points used by logic actions or controllers. |
@@ -1251,6 +1253,60 @@ Entities are the data form of actor registry entries plus optional component own
 Core fields are generic. Components are module-owned and may be ignored by
 runtimes that do not load that module.
 
+### Actor Archetypes And Pools
+
+Games that need runtime-created gameplay objects, such as bullets, enemies,
+pickups, particles, projectiles, hazards, or temporary effects, should use
+`actor_archetypes` plus `actor_pools`. Pools are preallocated during load so
+runtime spawn/despawn is deterministic and does not depend on heap allocation
+in the middle of gameplay.
+
+```json
+{
+  "actor_archetypes": [
+    {
+      "name": "archetype.player_shot",
+      "tags": ["projectile", "player_shot"],
+      "transform": { "position": [0.0, 0.0, 0.12] },
+      "properties": {
+        "velocity": { "type": "vec2", "value": [0.0, 9.0] },
+        "damage": { "type": "int", "value": 1 }
+      },
+      "components": [
+        { "type": "render.sprite", "sprite": "sprite.player_shot" },
+        { "type": "collision.circle", "radius": 0.1 }
+      ]
+    }
+  ],
+  "actor_pools": [
+    {
+      "name": "pool.player_shots",
+      "archetype": "archetype.player_shot",
+      "capacity": 24,
+      "scene": "scene.play",
+      "on_exhausted": "fail"
+    }
+  ]
+}
+```
+
+Pool names must be unique. `capacity` must be a positive integer. `scene` is
+optional; when present, pooled actors are considered part of that scene for
+generic scene filtering. `on_exhausted` is optional and defaults to `fail`.
+`reuse_oldest` may be authored when the oldest active pooled actor should be
+reset and reused instead of failing the spawn.
+
+Pool actors receive deterministic runtime names in the form
+`<pool-name>.<index>`, such as `pool.player_shots.0`, and are initialized from
+the archetype with `active=false`. Spawning resets the selected actor from the
+archetype, activates it, applies the requested position and property overrides,
+and writes `pool` and `pool_index` properties for diagnostics. Despawning a
+pooled actor resets it back to its archetype defaults and deactivates it.
+
+The first actor-pool slice supports JSON-authored lifecycle actions. Lua
+helpers, tag-targeted sensors, pooled component iteration in every subsystem,
+and network replication of pooled actor state are planned follow-up work.
+
 ### Presentation Components
 
 The first generic presentation components are deliberately simple descriptors:
@@ -1394,7 +1450,7 @@ and transient flashes without host code.
                                                                                                  and boolean `active`,
     used to include or
         exclude an entity from generic updates and
-                rendering - `transform
+                rendering - `actor.spawn` - `actor.despawn` - `actor.despawn_by_tag` - `transform
                                 .set_position` - `motion
                                                      .set_velocity` - `signal
                                                                           .emit` - `timer
@@ -1421,6 +1477,52 @@ and transient flashes without host code.
         {"type" : "transform.set_position", "target" : "entity.ball", "position" : [ 0, 0, 0.12 ]},
         {"type" : "timer.start", "timer" : "timer.round.serve", "delay" : 1.0, "signal" : "signal.ball.serve"}
     ]
+}
+```
+
+Runtime actor lifecycle actions allocate and release pooled actors without
+game-specific host code:
+
+```json
+{
+  "signal": "signal.player.fire",
+  "actions": [
+    {
+      "type": "actor.spawn",
+      "pool": "pool.player_shots",
+      "from": "entity.player",
+      "offset": [0.0, 0.5, 0.0],
+      "properties": {
+        "velocity": { "type": "vec2", "value": [0.0, 11.0] }
+      },
+      "output_actor_key": "last_spawned_actor",
+      "output_id_key": "last_spawned_actor_id",
+      "output_pool_index_key": "last_spawned_pool_index"
+    }
+  ]
+}
+```
+
+`actor.spawn` requires `pool`. Position may be authored directly with
+`position` or derived from another actor with `from` plus optional `offset`.
+`properties` is optional and uses the same typed property shape as entity
+defaults. `output_actor_key` and `output_id_key` are optional scene-state
+outputs that receive the spawned actor name and actor registry id.
+`output_pool_index_key` receives the selected pool slot index when authored.
+Spawned pooled actors also receive `pool`, `pool_index`, and `pool_scene`
+properties for diagnostics and generic scene filtering.
+
+`actor.despawn` requires `target`. When the target is a pooled actor, the
+runtime resets it to the pool archetype and marks it inactive. Non-pooled
+targets are simply marked inactive.
+
+`actor.despawn_by_tag` requires `tag` and deactivates active pooled actors
+whose archetype declares that tag:
+
+```json
+{
+  "type": "actor.despawn_by_tag",
+  "tag": "player_shot"
 }
 ```
 
