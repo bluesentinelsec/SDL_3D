@@ -12,8 +12,14 @@
 #include "sdl3d/sdl3d.h"
 
 #if defined(SDL3D_RUNNER_EMBEDDED_ASSETS)
-extern const unsigned char sdl3d_runner_embedded_assets[];
-extern const size_t sdl3d_runner_embedded_assets_size;
+#if !defined(SDL3D_RUNNER_EMBEDDED_ASSETS_DATA)
+#define SDL3D_RUNNER_EMBEDDED_ASSETS_DATA sdl3d_runner_embedded_assets
+#endif
+#if !defined(SDL3D_RUNNER_EMBEDDED_ASSETS_SIZE)
+#define SDL3D_RUNNER_EMBEDDED_ASSETS_SIZE sdl3d_runner_embedded_assets_size
+#endif
+extern const unsigned char SDL3D_RUNNER_EMBEDDED_ASSETS_DATA[];
+extern const size_t SDL3D_RUNNER_EMBEDDED_ASSETS_SIZE;
 #endif
 
 typedef enum runner_mount_kind
@@ -62,28 +68,38 @@ static bool parse_args(int argc, char **argv, runner_state *state)
 #if defined(SDL3D_MEDIA_DIR)
     state->media_dir = SDL3D_MEDIA_DIR;
 #endif
+#if defined(SDL3D_RUNNER_DEFAULT_DATA_ASSET_PATH)
+    state->data_asset_path = SDL3D_RUNNER_DEFAULT_DATA_ASSET_PATH;
+#endif
+#if defined(SDL3D_RUNNER_DEFAULT_EMBEDDED) && defined(SDL3D_RUNNER_EMBEDDED_ASSETS)
+    state->mount_kind = RUNNER_MOUNT_EMBEDDED;
+#endif
 
+    bool explicit_mount = false;
     for (int i = 1; i < argc; ++i)
     {
         if (SDL_strcmp(argv[i], "--root") == 0 && i + 1 < argc)
         {
-            if (state->mount_kind != RUNNER_MOUNT_NONE)
+            if (explicit_mount)
                 return false;
+            explicit_mount = true;
             state->mount_kind = RUNNER_MOUNT_DIRECTORY;
             state->mount_path = argv[++i];
         }
         else if (SDL_strcmp(argv[i], "--pack") == 0 && i + 1 < argc)
         {
-            if (state->mount_kind != RUNNER_MOUNT_NONE)
+            if (explicit_mount)
                 return false;
+            explicit_mount = true;
             state->mount_kind = RUNNER_MOUNT_PACK;
             state->mount_path = argv[++i];
         }
         else if (SDL_strcmp(argv[i], "--embedded") == 0)
         {
 #if defined(SDL3D_RUNNER_EMBEDDED_ASSETS)
-            if (state->mount_kind != RUNNER_MOUNT_NONE)
+            if (explicit_mount)
                 return false;
+            explicit_mount = true;
             state->mount_kind = RUNNER_MOUNT_EMBEDDED;
 #else
             return false;
@@ -129,8 +145,8 @@ static bool runner_mount_assets(sdl3d_asset_resolver *assets, void *userdata, ch
         return sdl3d_asset_resolver_mount_pack_file(assets, state->mount_path, error_buffer, error_buffer_size);
     case RUNNER_MOUNT_EMBEDDED:
 #if defined(SDL3D_RUNNER_EMBEDDED_ASSETS)
-        return sdl3d_asset_resolver_mount_memory_pack(assets, sdl3d_runner_embedded_assets,
-                                                      sdl3d_runner_embedded_assets_size, "sdl3d_runner.embedded",
+        return sdl3d_asset_resolver_mount_memory_pack(assets, SDL3D_RUNNER_EMBEDDED_ASSETS_DATA,
+                                                      SDL3D_RUNNER_EMBEDDED_ASSETS_SIZE, "sdl3d_runner.embedded",
                                                       error_buffer, error_buffer_size);
 #else
         runner_set_error(error_buffer, error_buffer_size, "runner was not built with embedded assets");
