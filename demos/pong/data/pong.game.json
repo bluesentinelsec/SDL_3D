@@ -322,6 +322,19 @@
         "state": { "actor": "entity.match", "property": "paused" }
       }
     },
+    "diagnostics": {
+      "snapshots": [
+        {
+          "name": "multiplayer_state",
+          "replication": "play_state",
+          "enabled": true,
+          "level": "info",
+          "cadence_seconds": 0.25,
+          "include_session_state": true,
+          "message": "network {event} {description} {extra}"
+        }
+      ]
+    },
     "replication": [
       {
         "name": "play_state",
