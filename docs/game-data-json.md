@@ -1729,8 +1729,12 @@ names into game host code. `replication` maps semantic names to entries in
 `network.replication`, and `controls` maps semantic names to entries in
 `network.control_messages`. `actions` maps semantic names to input actions, and
 `signals` maps semantic names to signals. Values are validated as references.
+Control binding values must be unique, because generic network loops decode
+packets by reversing the concrete control-message name back to one semantic
+runtime binding.
 Callers resolve them with `sdl3d_game_data_get_network_runtime_replication()`,
 `sdl3d_game_data_get_network_runtime_control()`,
+`sdl3d_game_data_get_network_runtime_control_binding()`,
 `sdl3d_game_data_get_network_runtime_action()`, and
 `sdl3d_game_data_get_network_runtime_signal()`. `pause` can additionally bind
 a network pause action and the bool actor property that mirrors pause state into
@@ -1832,6 +1836,15 @@ reject unsupported versions, mismatched schema hashes, invalid control indexes,
 truncation, and trailing bytes. Applying a valid control message emits the
 authored signal with a payload containing `network_control`,
 `network_direction`, and `network_tick`.
+
+Generic session loops should prefer the runtime-binding variants:
+`sdl3d_game_data_encode_network_runtime_control()`,
+`sdl3d_game_data_decode_network_runtime_control()`, and
+`sdl3d_game_data_send_network_runtime_control()`. These helpers resolve
+`network.runtime_bindings.controls` before encoding and after decoding, so the
+loop can dispatch on semantic names like `start_game`, `pause_request`, and
+`disconnect` without knowing the concrete control-message names in the
+authored wire schema.
 
 When a runtime loads game data with a valid `network` block, it computes a
 deterministic schema hash over protocol, replication, input, and control-message

@@ -1028,6 +1028,23 @@ extern "C"
                                                      const char **out_control);
 
     /**
+     * @brief Resolve the semantic runtime binding for an authored control message.
+     *
+     * This is the reverse lookup for
+     * @ref sdl3d_game_data_get_network_runtime_control. It lets generic
+     * network loops decode a control packet and dispatch on the authored
+     * runtime semantic, such as `pause_request` or `disconnect`, without
+     * knowing the concrete control-message name in the wire schema.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param control_name Authored control message name from `network.control_messages`.
+     * @param out_binding Receives the semantic binding name owned by @p runtime.
+     * @return true when a runtime control binding maps to @p control_name.
+     */
+    bool sdl3d_game_data_get_network_runtime_control_binding(const sdl3d_game_data_runtime *runtime,
+                                                             const char *control_name, const char **out_binding);
+
+    /**
      * @brief Resolve an authored network runtime input action binding.
      *
      * Runtime action bindings are authored under
@@ -1300,6 +1317,18 @@ extern "C"
                                                 char *error_buffer, int error_buffer_size);
 
     /**
+     * @brief Encode an authored control packet by runtime binding semantic.
+     *
+     * @p binding_name is resolved through `network.runtime_bindings.controls`
+     * before encoding. Use this from generic session/runtime code so the loop
+     * does not need to know concrete control-message names.
+     */
+    bool sdl3d_game_data_encode_network_runtime_control(const sdl3d_game_data_runtime *runtime,
+                                                        const char *binding_name, Uint32 tick, void *buffer,
+                                                        size_t buffer_size, size_t *out_size, char *error_buffer,
+                                                        int error_buffer_size);
+
+    /**
      * @brief Decode an authored network control message packet.
      *
      * The packet must match the runtime schema hash and reference an authored
@@ -1317,6 +1346,29 @@ extern "C"
     bool sdl3d_game_data_decode_network_control(const sdl3d_game_data_runtime *runtime, const void *packet,
                                                 size_t packet_size, sdl3d_game_data_network_control *out_control,
                                                 char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Decode an authored control packet and resolve its runtime binding.
+     *
+     * On success, @p out_binding receives the semantic name from
+     * `network.runtime_bindings.controls`, while @p out_control receives the
+     * concrete decoded control metadata. Both strings are owned by @p runtime.
+     */
+    bool sdl3d_game_data_decode_network_runtime_control(const sdl3d_game_data_runtime *runtime, const void *packet,
+                                                        size_t packet_size, const char **out_binding,
+                                                        sdl3d_game_data_network_control *out_control,
+                                                        char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Encode and send an authored control packet by runtime binding.
+     *
+     * This helper is transport-light: the caller still owns the session and
+     * higher-level flow, but packet naming, encoding, and send error reporting
+     * are centralized in the engine.
+     */
+    bool sdl3d_game_data_send_network_runtime_control(const sdl3d_game_data_runtime *runtime,
+                                                      sdl3d_network_session *session, const char *binding_name,
+                                                      Uint32 tick, char *error_buffer, int error_buffer_size);
 
     /**
      * @brief Decode and emit an authored network control message signal.
