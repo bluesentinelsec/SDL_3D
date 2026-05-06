@@ -668,6 +668,9 @@ static bool validate_network_scene_state(validation_context *ctx, yyjson_val *ne
     return true;
 }
 
+static bool validate_action_array(validation_context *ctx, yyjson_val *actions, const char *json_path,
+                                  validation_names *names);
+
 static bool validate_network_session_string_map(validation_context *ctx, yyjson_val *map, const char *json_path,
                                                 const char *label, const name_table *scene_names)
 {
@@ -747,6 +750,51 @@ static bool validate_network_session_flow(validation_context *ctx, yyjson_val *n
                                         grouped_maps[map_index].label);
             if (!validate_network_session_string_map(ctx, group, group_path, grouped_maps[map_index].label, NULL))
                 return false;
+        }
+    }
+
+    yyjson_val *events = obj_get(flow, "events");
+    if (events != NULL)
+    {
+        if (!yyjson_is_obj(events))
+            return validation_error(ctx, "$.network.session_flow.events",
+                                    "network session_flow events must be an object");
+        yyjson_val *event_key;
+        yyjson_obj_iter event_iter;
+        yyjson_obj_iter_init(events, &event_iter);
+        while ((event_key = yyjson_obj_iter_next(&event_iter)) != NULL)
+        {
+            const char *event_name = yyjson_get_str(event_key);
+            yyjson_val *event = yyjson_obj_iter_get_val(event_key);
+            char event_path[PATH_BUFFER_SIZE];
+            format_path(event_path, sizeof(event_path), "$.network.session_flow.events.%s",
+                        event_name != NULL ? event_name : "<invalid>");
+            if (event_name == NULL || event_name[0] == '\0')
+                return validation_error(ctx, event_path, "network session_flow event name must be non-empty");
+            if (yyjson_is_arr(event))
+            {
+                if (!validate_action_array(ctx, event, event_path, names))
+                    return false;
+            }
+            else if (yyjson_is_obj(event))
+            {
+                yyjson_val *pause = obj_get(event, "pause");
+                if (pause != NULL && !yyjson_is_bool(pause))
+                    return validation_error(ctx, event_path, "network session_flow event pause must be boolean");
+                yyjson_val *actions = obj_get(event, "actions");
+                if (actions != NULL)
+                {
+                    char actions_path[PATH_BUFFER_SIZE];
+                    format_path(actions_path, sizeof(actions_path), "%s.actions", event_path);
+                    if (!validate_action_array(ctx, actions, actions_path, names))
+                        return false;
+                }
+            }
+            else
+            {
+                return validation_error(ctx, event_path,
+                                        "network session_flow event must be an action array or object");
+            }
         }
     }
 
@@ -2340,9 +2388,6 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
     return true;
 }
 
-static bool validate_action_array(validation_context *ctx, yyjson_val *actions, const char *json_path,
-                                  validation_names *names);
-
 static bool is_tween_easing(const char *easing)
 {
     return easing == NULL || SDL_strcmp(easing, "linear") == 0 || SDL_strcmp(easing, "in_quad") == 0 ||
@@ -2552,6 +2597,15 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         return require_ref(ctx, &names->network_input_channels, "network input channel", json_string(action, "channel"),
                            json_path);
     }
+    if (SDL_strcmp(type, "scene_state.set") == 0)
+    {
+        if (!is_non_empty_string(action, "key"))
+            return validation_error(ctx, json_path, "scene_state.set requires a non-empty key");
+        yyjson_val *value = obj_get(action, "value");
+        if (value == NULL || !(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value)))
+            return validation_error(ctx, json_path, "scene_state.set requires a scalar value");
+        return true;
+    }
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
     {
         if (!is_non_empty_string(action, "name"))
@@ -2687,7 +2741,29 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
     if (SDL_strcmp(type, "camera.set") == 0)
         return require_ref(ctx, &names->cameras, "camera", json_string(action, "camera"), json_path);
     if (SDL_strcmp(type, "scene.set") == 0)
-        return require_ref(ctx, &names->scenes, "scene", json_string(action, "scene"), json_path);
+    {
+        if (!require_ref(ctx, &names->scenes, "scene", json_string(action, "scene"), json_path))
+            return false;
+        yyjson_val *payload = obj_get(action, "payload");
+        if (payload != NULL)
+        {
+            if (!yyjson_is_obj(payload))
+                return validation_error(ctx, json_path, "scene.set payload must be an object");
+            yyjson_val *key;
+            yyjson_obj_iter iter;
+            yyjson_obj_iter_init(payload, &iter);
+            while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+            {
+                const char *name = yyjson_get_str(key);
+                yyjson_val *value = yyjson_obj_iter_get_val(key);
+                if (name == NULL || name[0] == '\0')
+                    return validation_error(ctx, json_path, "scene.set payload keys must be non-empty");
+                if (!(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value)))
+                    return validation_error(ctx, json_path, "scene.set payload values must be scalar");
+            }
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "adapter.invoke") == 0)
     {
         const char *adapter = json_string(action, "adapter");

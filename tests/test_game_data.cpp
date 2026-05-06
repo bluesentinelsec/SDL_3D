@@ -1621,6 +1621,73 @@ TEST(GameDataRuntime, DataGameRuntimeNetworkLoopReplicatesPongInputStateAndContr
     sdl3d_game_session_destroy(host_session);
 }
 
+TEST(GameDataRuntime, AuthoredNetworkSessionFlowEventsDriveSceneTransitions)
+{
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    const std::filesystem::path data_path = SDL3D_PONG_DATA_PATH;
+    const std::string root = data_path.parent_path().string();
+    const std::string asset_path = std::string("asset://") + data_path.filename().string();
+
+    sdl3d_data_game_runtime_desc desc{};
+    sdl3d_data_game_runtime_desc_init(&desc);
+    desc.session = session;
+    desc.media_dir = SDL3D_MEDIA_DIR;
+    desc.data_asset_path = asset_path.c_str();
+    desc.mount_assets = mount_test_directory_assets;
+    desc.mount_userdata = const_cast<char *>(root.c_str());
+
+    char error[512]{};
+    sdl3d_data_game_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error))) << error;
+    sdl3d_game_data_runtime *data = sdl3d_data_game_runtime_data(runtime);
+    ASSERT_NE(data, nullptr);
+
+    sdl3d_game_context ctx{};
+    ctx.session = session;
+
+    ASSERT_TRUE(
+        sdl3d_game_data_run_network_session_flow_event(data, &ctx, "client_start_game", nullptr, error, sizeof(error)))
+        << error;
+    EXPECT_STREQ(sdl3d_game_data_active_scene(data), "scene.play");
+    const sdl3d_properties *scene_state = sdl3d_game_data_scene_state(data);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "match_mode", ""), "lan");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "network_role", ""), "client");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "network_flow", ""), "direct");
+
+    sdl3d_properties *payload = sdl3d_properties_create();
+    ASSERT_NE(payload, nullptr);
+    sdl3d_properties_set_string(payload, "reason", "Cable unplugged");
+    ctx.paused = false;
+    ASSERT_TRUE(sdl3d_game_data_run_network_session_flow_event(data, &ctx, "client_match_terminated", payload, error,
+                                                               sizeof(error)))
+        << error;
+    sdl3d_properties_destroy(payload);
+    scene_state = sdl3d_game_data_scene_state(data);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(ctx.paused);
+    EXPECT_TRUE(sdl3d_properties_get_bool(scene_state, "network_match_termination_active", false));
+    EXPECT_NE(SDL_strstr(sdl3d_properties_get_string(scene_state, "network_match_termination_message", ""),
+                         "Cable unplugged"),
+              nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""), "Cable unplugged");
+
+    ASSERT_TRUE(sdl3d_game_data_run_network_session_flow_event(data, &ctx, "network_match_termination_ack", nullptr,
+                                                               error, sizeof(error)))
+        << error;
+    scene_state = sdl3d_game_data_scene_state(data);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_FALSE(ctx.paused);
+    EXPECT_STREQ(sdl3d_game_data_active_scene(data), "scene.title");
+    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "network_match_termination_active", true));
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "network_match_termination_message", "x"), "");
+
+    sdl3d_data_game_runtime_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, ReadsSpriteAssetMetadata)
 {
     sdl3d_game_session *session = nullptr;
@@ -7280,6 +7347,36 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
     ]
   })json",
             "network session_flow messages value must be a non-empty string",
+        },
+        {
+            "bad_session_flow_event",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "session_flow": {
+      "events": {
+        "disconnect": {
+          "pause": true,
+          "actions": [
+            { "type": "scene_state.set", "value": true }
+          ]
+        }
+      }
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": ["position"]
+          }
+        ]
+      }
+    ]
+  })json",
+            "scene_state.set requires a non-empty key",
         },
         {
             "bad_runtime_replication_binding",
