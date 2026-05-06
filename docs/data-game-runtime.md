@@ -175,7 +175,7 @@ work that should move into reusable data-driven systems.
 
 ## Why This Matters
 
-This API is a stepping stone toward fully data-only games. Once network session
-transition/termination policy is also managed by the engine runtime, a package
-such as Pong should be able to ship as JSON, Lua, and assets rather than as a
-custom C program linked against SDL3D.
+This API is the runtime foundation for data-only games. Pong's normal demo path
+now ships as JSON, Lua, and assets loaded by the generic runner rather than as a
+custom Pong C program. See [Data-Only Games](data-only-games.md) for the
+authoring contract and parity checklist.
