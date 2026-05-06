@@ -180,6 +180,12 @@ end
 - `offset`: vector added after `position` or `from`
 - `properties`: scalar or vector property overrides applied after archetype reset
 
+Vector-like tables used by `position`, `offset`, or vector property overrides
+must provide `x` and `y` fields, or array-style `[1]` and `[2]` fields. The `z`
+component is optional and defaults to the current/fallback `z` value for that
+operation, which keeps 2D gameplay scripts concise while still allowing 3D
+values when needed.
+
 `spawn` resets the selected pooled actor to its archetype, activates it, applies
 the final position and property overrides, and returns the actor wrapper,
 registry id, and pool slot index. When the pool is missing or exhausted, it
@@ -215,7 +221,9 @@ It supports:
 - `Vec3.clamp(v, lo, hi)`
 - `+`, `-`, and `*` arithmetic operators
 
-`Vec3` accepts tables with `x/y/z` or array-style `[1]/[2]/[3]` fields through the helper conversion rules.
+Engine Lua APIs that accept vector-like tables require `x/y` or array-style
+`[1]/[2]` fields. The `z` or `[3]` field is optional and defaults to the API's
+current/fallback `z` value.
 
 ## JSON Helpers
 
