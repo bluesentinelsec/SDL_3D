@@ -6374,6 +6374,69 @@ TEST(GameDataRuntime, EncodesDecodesAndAppliesPongNetworkControlFromAuthoredSche
     destroy_runtime_session(receiver_session, receiver);
 }
 
+TEST(GameDataRuntime, ResolvesRuntimeControlBindingsForGenericNetworkLoops)
+{
+    const std::filesystem::path dir = unique_test_dir("network_runtime_control_bindings");
+    std::string network_json = valid_network_schema_json();
+    const size_t insert = network_json.rfind("\n  }");
+    ASSERT_NE(insert, std::string::npos);
+    network_json.insert(insert, R"json(,
+    "runtime_bindings": {
+      "controls": {
+        "semantic_pause": "pause"
+      }
+    })json");
+    write_text(dir / "network_runtime_controls.game.json", network_schema_game_json(network_json).c_str());
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "network_runtime_controls.game.json").string().c_str(), session,
+                                          &runtime, error, sizeof(error)))
+        << error;
+
+    const char *control_name = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_control(runtime, "semantic_pause", &control_name));
+    EXPECT_STREQ(control_name, "pause");
+
+    const char *binding_name = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_control_binding(runtime, "pause", &binding_name));
+    EXPECT_STREQ(binding_name, "semantic_pause");
+
+    std::array<Uint8, SDL3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE> packet{};
+    size_t packet_size = 0U;
+    ASSERT_TRUE(sdl3d_game_data_encode_network_runtime_control(runtime, "semantic_pause", 99U, packet.data(),
+                                                               packet.size(), &packet_size, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(packet_size, SDL3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE);
+
+    sdl3d_game_data_network_control control{};
+    const char *decoded_binding = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_decode_network_runtime_control(runtime, packet.data(), packet_size, &decoded_binding,
+                                                               &control, error, sizeof(error)))
+        << error;
+    EXPECT_STREQ(decoded_binding, "semantic_pause");
+    EXPECT_STREQ(control.name, "pause");
+    EXPECT_EQ(control.tick, 99U);
+
+    EXPECT_FALSE(sdl3d_game_data_encode_network_runtime_control(runtime, "missing", 1U, packet.data(), packet.size(),
+                                                                &packet_size, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("network runtime control binding 'missing' not found"), std::string::npos)
+        << error;
+
+    ASSERT_TRUE(sdl3d_game_data_encode_network_control(runtime, "start_game", 100U, packet.data(), packet.size(),
+                                                       &packet_size, error, sizeof(error)))
+        << error;
+    EXPECT_FALSE(sdl3d_game_data_decode_network_runtime_control(runtime, packet.data(), packet_size, &decoded_binding,
+                                                                &control, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("network runtime control binding for 'start_game' not found"), std::string::npos)
+        << error;
+
+    destroy_runtime_session(session, runtime);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsPongNetworkControlWithMismatchedSchemaOrBadSize)
 {
     sdl3d_game_session *sender_session = nullptr;
@@ -7032,6 +7095,35 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
     ]
   })json",
             "unknown network control message reference",
+        },
+        {
+            "duplicate_runtime_control_binding_value",
+            R"json({
+    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "runtime_bindings": {
+      "controls": {
+        "pause_request": "pause",
+        "resume_request": "pause"
+      }
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.ball",
+            "fields": ["position"]
+          }
+        ]
+      }
+    ],
+    "control_messages": [
+      { "name": "pause", "direction": "bidirectional", "signal": "signal.network.pause" }
+    ]
+  })json",
+            "duplicate network runtime binding value 'pause'",
         },
         {
             "bad_runtime_action_binding",

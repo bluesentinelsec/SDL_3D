@@ -11544,6 +11544,46 @@ bool sdl3d_game_data_get_network_runtime_control(const sdl3d_game_data_runtime *
     return game_data_get_network_runtime_binding(runtime, "controls", name, out_control);
 }
 
+static bool game_data_get_network_runtime_binding_name_for_value(const sdl3d_game_data_runtime *runtime,
+                                                                 const char *section, const char *value,
+                                                                 const char **out_name)
+{
+    if (out_name != NULL)
+        *out_name = NULL;
+    if (runtime == NULL || section == NULL || section[0] == '\0' || value == NULL || value[0] == '\0' ||
+        out_name == NULL)
+    {
+        return false;
+    }
+
+    yyjson_val *bindings = obj_get(network_runtime_bindings_json(runtime), section);
+    if (!yyjson_is_obj(bindings))
+        return false;
+
+    yyjson_val *key = NULL;
+    yyjson_val *binding_value = NULL;
+    size_t index = 0U;
+    size_t max = 0U;
+    yyjson_obj_foreach(bindings, index, max, key, binding_value)
+    {
+        const char *semantic_name = yyjson_is_str(key) ? yyjson_get_str(key) : NULL;
+        const char *concrete_value = yyjson_is_str(binding_value) ? yyjson_get_str(binding_value) : NULL;
+        if (semantic_name != NULL && concrete_value != NULL && SDL_strcmp(concrete_value, value) == 0)
+        {
+            *out_name = semantic_name;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool sdl3d_game_data_get_network_runtime_control_binding(const sdl3d_game_data_runtime *runtime,
+                                                         const char *control_name, const char **out_binding)
+{
+    return game_data_get_network_runtime_binding_name_for_value(runtime, "controls", control_name, out_binding);
+}
+
 bool sdl3d_game_data_get_network_runtime_action(const sdl3d_game_data_runtime *runtime, const char *name,
                                                 int *out_action)
 {
@@ -12456,6 +12496,23 @@ bool sdl3d_game_data_encode_network_control(const sdl3d_game_data_runtime *runti
     return true;
 }
 
+bool sdl3d_game_data_encode_network_runtime_control(const sdl3d_game_data_runtime *runtime, const char *binding_name,
+                                                    Uint32 tick, void *buffer, size_t buffer_size, size_t *out_size,
+                                                    char *error_buffer, int error_buffer_size)
+{
+    const char *control_name = NULL;
+    if (!sdl3d_game_data_get_network_runtime_control(runtime, binding_name, &control_name))
+    {
+        set_errorf(error_buffer, error_buffer_size, "network runtime control binding '%s' not found",
+                   binding_name != NULL ? binding_name : "<null>");
+        if (out_size != NULL)
+            *out_size = 0U;
+        return false;
+    }
+    return sdl3d_game_data_encode_network_control(runtime, control_name, tick, buffer, buffer_size, out_size,
+                                                  error_buffer, error_buffer_size);
+}
+
 bool sdl3d_game_data_decode_network_control(const sdl3d_game_data_runtime *runtime, const void *packet,
                                             size_t packet_size, sdl3d_game_data_network_control *out_control,
                                             char *error_buffer, int error_buffer_size)
@@ -12536,6 +12593,59 @@ bool sdl3d_game_data_decode_network_control(const sdl3d_game_data_runtime *runti
         out_control->direction = direction;
         out_control->signal_id = signal_id;
         out_control->tick = tick;
+    }
+    return true;
+}
+
+bool sdl3d_game_data_decode_network_runtime_control(const sdl3d_game_data_runtime *runtime, const void *packet,
+                                                    size_t packet_size, const char **out_binding,
+                                                    sdl3d_game_data_network_control *out_control, char *error_buffer,
+                                                    int error_buffer_size)
+{
+    sdl3d_game_data_network_control control;
+    if (out_binding != NULL)
+        *out_binding = NULL;
+    if (!sdl3d_game_data_decode_network_control(runtime, packet, packet_size, &control, error_buffer,
+                                                error_buffer_size))
+    {
+        return false;
+    }
+
+    const char *binding = NULL;
+    if (!sdl3d_game_data_get_network_runtime_control_binding(runtime, control.name, &binding))
+    {
+        set_errorf(error_buffer, error_buffer_size, "network runtime control binding for '%s' not found",
+                   control.name != NULL ? control.name : "<null>");
+        return false;
+    }
+
+    if (out_binding != NULL)
+        *out_binding = binding;
+    if (out_control != NULL)
+        *out_control = control;
+    return true;
+}
+
+bool sdl3d_game_data_send_network_runtime_control(const sdl3d_game_data_runtime *runtime,
+                                                  sdl3d_network_session *session, const char *binding_name, Uint32 tick,
+                                                  char *error_buffer, int error_buffer_size)
+{
+    Uint8 packet[SDL3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE];
+    size_t packet_size = 0U;
+    if (session == NULL || !sdl3d_network_session_is_connected(session))
+    {
+        set_error(error_buffer, error_buffer_size, "network runtime control send requires connected session");
+        return false;
+    }
+    if (!sdl3d_game_data_encode_network_runtime_control(runtime, binding_name, tick, packet, sizeof(packet),
+                                                        &packet_size, error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    if (!sdl3d_network_session_send(session, packet, (int)packet_size))
+    {
+        set_errorf(error_buffer, error_buffer_size, "network runtime control send failed: %s", SDL_GetError());
+        return false;
     }
     return true;
 }
