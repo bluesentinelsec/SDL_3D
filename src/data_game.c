@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
+#include <SDL3/SDL_timer.h>
 
 #include "sdl3d/game_presentation.h"
 #include "sdl3d/input.h"
@@ -30,6 +31,96 @@ static void set_error(char *error_buffer, int error_buffer_size, const char *mes
     {
         SDL_snprintf(error_buffer, (size_t)error_buffer_size, "%s", message != NULL ? message : "");
     }
+}
+
+static void set_errorf(char *error_buffer, int error_buffer_size, const char *fmt, const char *value)
+{
+    if (error_buffer != NULL && error_buffer_size > 0)
+    {
+        SDL_snprintf(error_buffer, (size_t)error_buffer_size, fmt != NULL ? fmt : "%s", value != NULL ? value : "");
+    }
+}
+
+static void network_loop_result_init(sdl3d_data_game_network_loop_result *result, sdl3d_network_session *session)
+{
+    if (result == NULL)
+    {
+        return;
+    }
+
+    SDL_zero(*result);
+    result->session_state = session != NULL ? sdl3d_network_session_state(session) : SDL3D_NETWORK_STATE_DISCONNECTED;
+}
+
+static Uint32 data_game_input_tick(const sdl3d_data_game_runtime *runtime)
+{
+    sdl3d_input_manager *input =
+        runtime != NULL && runtime->session != NULL ? sdl3d_game_session_get_input(runtime->session) : NULL;
+    const sdl3d_input_snapshot *snapshot = input != NULL ? sdl3d_input_get_snapshot(input) : NULL;
+    return snapshot != NULL ? (Uint32)SDL_max(snapshot->tick, 0) : (Uint32)SDL_GetTicks();
+}
+
+static bool data_game_binding_matches(const char *actual, const char *expected)
+{
+    return actual != NULL && expected != NULL && expected[0] != '\0' && SDL_strcmp(actual, expected) == 0;
+}
+
+static bool data_game_decode_runtime_control(sdl3d_data_game_runtime *runtime, const Uint8 *packet, int packet_size,
+                                             const char **out_binding, sdl3d_game_data_network_control *out_control)
+{
+    char error[160] = {0};
+    if (out_binding != NULL)
+        *out_binding = NULL;
+    if (runtime == NULL || runtime->data == NULL || packet == NULL || packet_size <= 0)
+    {
+        return false;
+    }
+
+    return sdl3d_game_data_decode_network_runtime_control(runtime->data, packet, (size_t)packet_size, out_binding,
+                                                          out_control, error, (int)sizeof(error));
+}
+
+static bool data_game_send_runtime_control(sdl3d_data_game_runtime *runtime, sdl3d_network_session *session,
+                                           const char *binding_name, Uint32 tick, char *error_buffer,
+                                           int error_buffer_size)
+{
+    if (runtime == NULL || runtime->data == NULL || session == NULL || binding_name == NULL || binding_name[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "network control send requires runtime, session, and binding");
+        return false;
+    }
+
+    return sdl3d_game_data_send_network_runtime_control(runtime->data, session, binding_name, tick, error_buffer,
+                                                        error_buffer_size);
+}
+
+static bool data_game_sync_network_pause_from_context(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx,
+                                                      char *error_buffer, int error_buffer_size)
+{
+    if (runtime == NULL || runtime->data == NULL || ctx == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network pause sync requires runtime and context");
+        return false;
+    }
+
+    return sdl3d_game_data_set_network_runtime_pause_state(runtime->data, ctx->paused, error_buffer, error_buffer_size);
+}
+
+static bool data_game_sync_context_pause_from_network(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx,
+                                                      char *error_buffer, int error_buffer_size)
+{
+    bool paused = false;
+    if (runtime == NULL || runtime->data == NULL || ctx == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network pause sync requires runtime and context");
+        return false;
+    }
+    if (!sdl3d_game_data_get_network_runtime_pause_state(runtime->data, &paused, error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    ctx->paused = paused;
+    return true;
 }
 
 static bool haptics_signal_connected(const sdl3d_data_game_runtime *runtime, int signal_id)
@@ -275,6 +366,282 @@ bool sdl3d_data_game_runtime_refresh_input_profile_on_device_change(sdl3d_data_g
     return sdl3d_game_data_apply_active_input_profile_on_device_change(
         runtime->data, input, &runtime->input_profile_refresh, out_profile_name, out_applied, error_buffer,
         error_buffer_size);
+}
+
+bool sdl3d_data_game_runtime_update_network_host_session(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx,
+                                                         const char *session_name,
+                                                         const sdl3d_data_game_network_bindings *bindings, bool playing,
+                                                         float dt, sdl3d_data_game_network_loop_result *out_result,
+                                                         char *error_buffer, int error_buffer_size)
+{
+    Uint8 packet[SDL3D_NETWORK_MAX_PACKET_SIZE];
+    sdl3d_network_session *session = runtime != NULL && runtime->data != NULL
+                                         ? sdl3d_game_data_get_network_host_session(runtime->data, session_name)
+                                         : NULL;
+    network_loop_result_init(out_result, session);
+    if (runtime == NULL || runtime->data == NULL || bindings == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network host update requires runtime and bindings");
+        return false;
+    }
+    if (session == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "network host session '%s' not found",
+                   session_name != NULL ? session_name : "<null>");
+        return false;
+    }
+
+    if (!sdl3d_network_session_update(session, dt))
+    {
+        set_errorf(error_buffer, error_buffer_size, "network host session update failed: %s", SDL_GetError());
+        network_loop_result_init(out_result, session);
+        return false;
+    }
+
+    int packet_size = 0;
+    while ((packet_size = sdl3d_network_session_receive(session, packet, (int)sizeof(packet))) > 0)
+    {
+        if (out_result != NULL)
+            ++out_result->packets_received;
+
+        const char *control_binding = NULL;
+        sdl3d_game_data_network_control control;
+        if (data_game_decode_runtime_control(runtime, packet, packet_size, &control_binding, &control))
+        {
+            if (out_result != NULL)
+                out_result->last_tick = control.tick;
+            if (data_game_binding_matches(control_binding, bindings->disconnect))
+            {
+                if (out_result != NULL)
+                    out_result->received_disconnect = true;
+                continue;
+            }
+            if (playing && data_game_binding_matches(control_binding, bindings->pause_request))
+            {
+                if (ctx != NULL)
+                    ctx->paused = true;
+                if (out_result != NULL)
+                    out_result->received_pause_request = true;
+                continue;
+            }
+            if (playing && data_game_binding_matches(control_binding, bindings->resume_request))
+            {
+                if (ctx != NULL)
+                    ctx->paused = false;
+                if (out_result != NULL)
+                    out_result->received_resume_request = true;
+                continue;
+            }
+            continue;
+        }
+
+        if (playing && bindings->client_input != NULL && bindings->client_input[0] != '\0')
+        {
+            Uint32 tick = 0U;
+            char apply_error[160] = {0};
+            sdl3d_input_manager *input =
+                runtime->session != NULL ? sdl3d_game_session_get_input(runtime->session) : NULL;
+            if (sdl3d_game_data_apply_network_runtime_input(runtime->data, bindings->client_input, input, packet,
+                                                            (size_t)packet_size, &tick, apply_error,
+                                                            (int)sizeof(apply_error)))
+            {
+                if (out_result != NULL)
+                {
+                    out_result->applied_input = true;
+                    out_result->last_tick = tick;
+                }
+            }
+        }
+    }
+
+    if (out_result != NULL)
+        out_result->session_state = sdl3d_network_session_state(session);
+    return true;
+}
+
+bool sdl3d_data_game_runtime_publish_network_host_snapshot(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx,
+                                                           const char *session_name,
+                                                           const sdl3d_data_game_network_bindings *bindings,
+                                                           sdl3d_data_game_network_loop_result *out_result,
+                                                           char *error_buffer, int error_buffer_size)
+{
+    sdl3d_network_session *session = runtime != NULL && runtime->data != NULL
+                                         ? sdl3d_game_data_get_network_host_session(runtime->data, session_name)
+                                         : NULL;
+    network_loop_result_init(out_result, session);
+    if (runtime == NULL || runtime->data == NULL || bindings == NULL || bindings->state_snapshot == NULL ||
+        bindings->state_snapshot[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "network host snapshot publish requires runtime and binding");
+        return false;
+    }
+    if (session == NULL || !sdl3d_network_session_is_connected(session))
+    {
+        set_error(error_buffer, error_buffer_size, "network host snapshot publish requires connected host session");
+        return false;
+    }
+    if (!data_game_sync_network_pause_from_context(runtime, ctx, error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+
+    const Uint32 tick = data_game_input_tick(runtime);
+    if (!sdl3d_game_data_send_network_runtime_snapshot(runtime->data, session, bindings->state_snapshot, tick,
+                                                       error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    if (out_result != NULL)
+    {
+        out_result->sent_snapshot = true;
+        out_result->last_tick = tick;
+        out_result->session_state = sdl3d_network_session_state(session);
+    }
+    return true;
+}
+
+bool sdl3d_data_game_runtime_update_network_client_session(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx,
+                                                           const char *session_name,
+                                                           const sdl3d_data_game_network_bindings *bindings,
+                                                           bool playing, bool allow_pause_requests, float dt,
+                                                           sdl3d_data_game_network_loop_result *out_result,
+                                                           char *error_buffer, int error_buffer_size)
+{
+    Uint8 packet[SDL3D_NETWORK_MAX_PACKET_SIZE];
+    sdl3d_network_session *session =
+        runtime != NULL && runtime->data != NULL
+            ? sdl3d_game_data_get_network_direct_connect_session(runtime->data, session_name)
+            : NULL;
+    network_loop_result_init(out_result, session);
+    if (runtime == NULL || runtime->data == NULL || bindings == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network client update requires runtime and bindings");
+        return false;
+    }
+    if (session == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "network client session '%s' not found",
+                   session_name != NULL ? session_name : "<null>");
+        return false;
+    }
+
+    if (!sdl3d_network_session_update(session, dt))
+    {
+        set_errorf(error_buffer, error_buffer_size, "network client session update failed: %s", SDL_GetError());
+        network_loop_result_init(out_result, session);
+        return false;
+    }
+
+    int packet_size = 0;
+    while ((packet_size = sdl3d_network_session_receive(session, packet, (int)sizeof(packet))) > 0)
+    {
+        if (out_result != NULL)
+            ++out_result->packets_received;
+
+        const char *control_binding = NULL;
+        sdl3d_game_data_network_control control;
+        if (data_game_decode_runtime_control(runtime, packet, packet_size, &control_binding, &control))
+        {
+            if (out_result != NULL)
+                out_result->last_tick = control.tick;
+            if (data_game_binding_matches(control_binding, bindings->start_game))
+            {
+                if (out_result != NULL)
+                    out_result->received_start_game = true;
+                continue;
+            }
+            if (data_game_binding_matches(control_binding, bindings->disconnect))
+            {
+                if (out_result != NULL)
+                    out_result->received_disconnect = true;
+                continue;
+            }
+            if (data_game_binding_matches(control_binding, bindings->pause_request))
+            {
+                if (ctx != NULL)
+                    ctx->paused = true;
+                if (out_result != NULL)
+                    out_result->received_pause_request = true;
+                continue;
+            }
+            if (data_game_binding_matches(control_binding, bindings->resume_request))
+            {
+                if (ctx != NULL)
+                    ctx->paused = false;
+                if (out_result != NULL)
+                    out_result->received_resume_request = true;
+                continue;
+            }
+            continue;
+        }
+
+        if (bindings->state_snapshot != NULL && bindings->state_snapshot[0] != '\0')
+        {
+            Uint32 tick = 0U;
+            char apply_error[160] = {0};
+            if (sdl3d_game_data_apply_network_runtime_snapshot(runtime->data, bindings->state_snapshot, packet,
+                                                               (size_t)packet_size, &tick, apply_error,
+                                                               (int)sizeof(apply_error)))
+            {
+                (void)data_game_sync_context_pause_from_network(runtime, ctx, apply_error, (int)sizeof(apply_error));
+                if (out_result != NULL)
+                {
+                    out_result->applied_snapshot = true;
+                    out_result->last_tick = tick;
+                }
+            }
+        }
+    }
+
+    if (playing && sdl3d_network_session_is_connected(session))
+    {
+        sdl3d_input_manager *input = runtime->session != NULL ? sdl3d_game_session_get_input(runtime->session) : NULL;
+        const Uint32 tick = data_game_input_tick(runtime);
+        if (allow_pause_requests && ctx != NULL)
+        {
+            int pause_action = -1;
+            if (sdl3d_game_data_get_network_runtime_pause_action(runtime->data, &pause_action) && input != NULL &&
+                sdl3d_input_is_pressed(input, pause_action))
+            {
+                const bool want_resume = ctx->paused;
+                const char *control_binding = want_resume ? bindings->resume_request : bindings->pause_request;
+                if (control_binding == NULL || control_binding[0] == '\0')
+                {
+                    set_error(error_buffer, error_buffer_size, "network client pause request requires control binding");
+                    return false;
+                }
+                if (!data_game_send_runtime_control(runtime, session, control_binding, tick, error_buffer,
+                                                    error_buffer_size))
+                {
+                    return false;
+                }
+                if (out_result != NULL)
+                {
+                    out_result->sent_pause_request = !want_resume;
+                    out_result->sent_resume_request = want_resume;
+                    out_result->last_tick = tick;
+                }
+            }
+        }
+
+        if (bindings->client_input != NULL && bindings->client_input[0] != '\0' && input != NULL)
+        {
+            if (!sdl3d_game_data_send_network_runtime_input(runtime->data, session, bindings->client_input, input, tick,
+                                                            error_buffer, error_buffer_size))
+            {
+                return false;
+            }
+            if (out_result != NULL)
+            {
+                out_result->sent_input = true;
+                out_result->last_tick = tick;
+            }
+        }
+    }
+
+    if (out_result != NULL)
+        out_result->session_state = sdl3d_network_session_state(session);
+    return true;
 }
 
 static bool refresh_active_input_profile_if_available(sdl3d_data_game_runtime *runtime)
