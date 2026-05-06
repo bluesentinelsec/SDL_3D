@@ -51,6 +51,8 @@ typedef struct validation_context
 typedef struct validation_names
 {
     name_table entities;
+    name_table actor_archetypes;
+    name_table actor_pools;
     name_table signals;
     name_table scripts;
     name_table script_modules;
@@ -1816,6 +1818,49 @@ static bool collect_entities(validation_context *ctx, yyjson_val *root, validati
     return true;
 }
 
+static bool collect_actor_archetypes(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *archetypes = obj_get(root, "actor_archetypes");
+    if (archetypes == NULL)
+        return true;
+    if (!yyjson_is_arr(archetypes))
+        return validation_error(ctx, "$.actor_archetypes", "actor_archetypes must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(archetypes); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.actor_archetypes[%zu]", i);
+        yyjson_val *archetype = yyjson_arr_get(archetypes, i);
+        if (!yyjson_is_obj(archetype))
+            return validation_error(ctx, path, "actor archetype entries must be objects");
+        if (!require_unique_name(ctx, &names->actor_archetypes, "actor archetype", json_string(archetype, "name"),
+                                 path))
+            return false;
+    }
+    return true;
+}
+
+static bool collect_actor_pools(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *pools = obj_get(root, "actor_pools");
+    if (pools == NULL)
+        return true;
+    if (!yyjson_is_arr(pools))
+        return validation_error(ctx, "$.actor_pools", "actor_pools must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(pools); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.actor_pools[%zu]", i);
+        yyjson_val *pool = yyjson_arr_get(pools, i);
+        if (!yyjson_is_obj(pool))
+            return validation_error(ctx, path, "actor pool entries must be objects");
+        if (!require_unique_name(ctx, &names->actor_pools, "actor pool", json_string(pool, "name"), path))
+            return false;
+    }
+    return true;
+}
+
 static bool collect_cameras(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *cameras = obj_get(obj_get(root, "world"), "cameras");
@@ -2262,6 +2307,7 @@ static bool collect_network_input_channels(validation_context *ctx, yyjson_val *
 static bool collect_names(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     return collect_signals(ctx, root, names) && collect_entities(ctx, root, names) &&
+           collect_actor_archetypes(ctx, root, names) && collect_actor_pools(ctx, root, names) &&
            collect_scripts(ctx, root, names) && collect_adapters(ctx, root, names) &&
            collect_input_actions(ctx, root, names) && collect_input_assignment_sets(ctx, root, names) &&
            collect_input_profiles(ctx, root, names) && collect_network_input_channels(ctx, root, names) &&
@@ -2731,6 +2777,54 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
     return true;
 }
 
+static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *archetypes = obj_get(root, "actor_archetypes");
+    for (size_t i = 0; yyjson_is_arr(archetypes) && i < yyjson_arr_size(archetypes); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.actor_archetypes[%zu]", i);
+        yyjson_val *archetype = yyjson_arr_get(archetypes, i);
+        yyjson_val *components = obj_get(archetype, "components");
+        if (components != NULL && !yyjson_is_arr(components))
+            return validation_error(ctx, path, "actor archetype components must be an array");
+        for (size_t c = 0; yyjson_is_arr(components) && c < yyjson_arr_size(components); ++c)
+        {
+            char component_path[PATH_BUFFER_SIZE];
+            format_path(component_path, sizeof(component_path), "%s.components[%zu]", path, c);
+            yyjson_val *component = yyjson_arr_get(components, c);
+            const char *type = json_string(component, "type");
+            if (type == NULL || type[0] == '\0')
+                return validation_error(ctx, component_path, "component requires a non-empty type");
+            if (!is_supported_component_type(type) &&
+                !validation_warning(ctx, component_path, "unsupported component type '%s'", type))
+            {
+                return false;
+            }
+        }
+    }
+
+    yyjson_val *pools = obj_get(root, "actor_pools");
+    for (size_t i = 0; yyjson_is_arr(pools) && i < yyjson_arr_size(pools); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.actor_pools[%zu]", i);
+        yyjson_val *pool = yyjson_arr_get(pools, i);
+        if (!require_ref(ctx, &names->actor_archetypes, "actor archetype", json_string(pool, "archetype"), path))
+            return false;
+        yyjson_val *capacity = obj_get(pool, "capacity");
+        if (!yyjson_is_int(capacity) || yyjson_get_int(capacity) <= 0 || yyjson_get_int(capacity) > 4096)
+            return validation_error(ctx, path, "actor pool capacity must be an integer in 1..4096");
+        const char *scene = json_string(pool, "scene");
+        if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, path))
+            return false;
+        const char *policy = json_string(pool, "on_exhausted");
+        if (policy != NULL && SDL_strcmp(policy, "fail") != 0 && SDL_strcmp(policy, "reuse_oldest") != 0)
+            return validation_error(ctx, path, "actor pool on_exhausted must be fail or reuse_oldest");
+    }
+    return true;
+}
+
 static bool is_tween_easing(const char *easing)
 {
     return easing == NULL || SDL_strcmp(easing, "linear") == 0 || SDL_strcmp(easing, "in_quad") == 0 ||
@@ -2916,6 +3010,31 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             if (!yyjson_is_str(yyjson_arr_get(keys, i)))
                 return validation_error(ctx, json_path, "property.reset_defaults keys must be strings");
         }
+        return true;
+    }
+    if (SDL_strcmp(type, "actor.spawn") == 0)
+    {
+        if (!require_ref(ctx, &names->actor_pools, "actor pool", json_string(action, "pool"), json_path))
+            return false;
+        const char *from = json_string(action, "from");
+        if (from != NULL && !require_ref(ctx, &names->entities, "entity", from, json_path))
+            return false;
+        yyjson_val *properties = obj_get(action, "properties");
+        if (properties != NULL && !yyjson_is_obj(properties))
+            return validation_error(ctx, json_path, "actor.spawn properties must be an object");
+        return true;
+    }
+    if (SDL_strcmp(type, "actor.despawn") == 0)
+    {
+        const char *target = json_string(action, "target");
+        if (target == NULL || target[0] == '\0')
+            return validation_error(ctx, json_path, "actor.despawn requires a non-empty target");
+        return true;
+    }
+    if (SDL_strcmp(type, "actor.despawn_by_tag") == 0)
+    {
+        if (!is_non_empty_string(action, "tag"))
+            return validation_error(ctx, json_path, "actor.despawn_by_tag requires a non-empty tag");
         return true;
     }
     if (SDL_strcmp(type, "input.reset_bindings") == 0)
@@ -4658,8 +4777,8 @@ static bool validate_details(validation_context *ctx, yyjson_val *root, validati
            validate_input_profiles(ctx, root, names) && validate_components(ctx, root, names) &&
            validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases", names) &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
-           validate_network(ctx, root, names) && validate_app_refs(ctx, root, names) &&
-           validate_cameras(ctx, root, names) && validate_ui(ctx, root, names) &&
+           validate_actor_archetypes_and_pools(ctx, root, names) && validate_network(ctx, root, names) &&
+           validate_app_refs(ctx, root, names) && validate_cameras(ctx, root, names) && validate_ui(ctx, root, names) &&
            validate_presentation(ctx, root, names) && validate_render_effects(ctx, root, names) &&
            validate_lights(ctx, root, names) && validate_haptics(ctx, root, names) &&
            validate_logic(ctx, root, names) && validate_adapters(ctx, root, names) &&
@@ -4675,6 +4794,8 @@ static void validation_names_destroy(validation_names *names)
         SDL_free(names->script_manifests[i].dependencies);
     SDL_free(names->script_manifests);
     name_table_destroy(&names->entities);
+    name_table_destroy(&names->actor_archetypes);
+    name_table_destroy(&names->actor_pools);
     name_table_destroy(&names->signals);
     name_table_destroy(&names->scripts);
     name_table_destroy(&names->script_modules);
