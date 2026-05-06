@@ -1815,6 +1815,14 @@ authored `session_flow` state values, and every replicated actor field in schema
 order. This keeps debug output tied to the authored replication channel instead
 of hard-coding game actor ids or property paths in host C.
 
+Generic session loops should prefer the runtime-binding snapshot helpers:
+`sdl3d_game_data_encode_network_runtime_snapshot()`,
+`sdl3d_game_data_apply_network_runtime_snapshot()`, and
+`sdl3d_game_data_send_network_runtime_snapshot()`. These resolve
+`network.runtime_bindings.replication` values such as `state_snapshot` to
+concrete host-to-client channels and verify incoming packets use the expected
+channel before mutating actor state.
+
 Client-to-host input channels can be encoded with
 `sdl3d_game_data_encode_network_input()` and applied with
 `sdl3d_game_data_apply_network_input()`. Input packets use the same strict
@@ -1826,6 +1834,14 @@ normal action snapshot APIs. Malformed packets are rejected before any override
 is changed. When a peer disconnects or a network scene exits, callers should
 use `sdl3d_game_data_clear_network_input_overrides()` for the same channel so
 remote input cannot leak into later local play.
+
+Generic session loops should prefer the runtime-binding input helpers:
+`sdl3d_game_data_encode_network_runtime_input()`,
+`sdl3d_game_data_apply_network_runtime_input()`, and
+`sdl3d_game_data_send_network_runtime_input()`. These resolve
+`network.runtime_bindings.replication` values such as `client_input` to concrete
+client-to-host channels and verify incoming packets use the expected channel
+before applying action overrides.
 
 Control messages can be encoded with
 `sdl3d_game_data_encode_network_control()`, decoded with

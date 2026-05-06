@@ -584,10 +584,7 @@ static bool start_selected_lobby_match(pong_state *state)
 
 static bool send_client_input_packet(pong_state *state)
 {
-    Uint8 packet[128];
-    size_t packet_size = 0U;
     char error[160] = {0};
-    const char *client_input_channel = NULL;
     const int p2_up = network_runtime_action_id(state, PONG_NETWORK_BINDING_CLIENT_UP);
     const int p2_down = network_runtime_action_id(state, PONG_NETWORK_BINDING_CLIENT_DOWN);
 
@@ -596,29 +593,17 @@ static bool send_client_input_packet(pong_state *state)
     {
         return false;
     }
-    if (!sdl3d_game_data_get_network_runtime_replication(state->data, PONG_NETWORK_BINDING_CLIENT_INPUT,
-                                                         &client_input_channel))
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network binding missing: replication.%s",
-                    PONG_NETWORK_BINDING_CLIENT_INPUT);
-        return false;
-    }
 
     const sdl3d_input_snapshot *snapshot = sdl3d_input_get_snapshot(state->input);
     const float up_value = snapshot != NULL ? snapshot->actions[p2_up].value : 0.0f;
     const float down_value = snapshot != NULL ? snapshot->actions[p2_down].value : 0.0f;
     const Uint32 tick = snapshot != NULL ? (Uint32)SDL_max(snapshot->tick, 0) : 0U;
 
-    if (!sdl3d_game_data_encode_network_input(state->data, client_input_channel, state->input, tick, packet,
-                                              sizeof(packet), &packet_size, error, (int)sizeof(error)))
+    if (!sdl3d_game_data_send_network_runtime_input(state->data, state->direct_connect_session,
+                                                    PONG_NETWORK_BINDING_CLIENT_INPUT, state->input, tick, error,
+                                                    (int)sizeof(error)))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong client input packet encode failed: %s", error);
-        return false;
-    }
-
-    if (!sdl3d_network_session_send(state->direct_connect_session, packet, (int)packet_size))
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong client input packet send failed: %s", SDL_GetError());
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong client input packet send failed: %s", error);
         return false;
     }
 
@@ -710,8 +695,8 @@ static bool process_host_input_packet(pong_state *state, const Uint8 *packet, in
         return false;
     }
 
-    if (!sdl3d_game_data_apply_network_input(state->data, state->input, packet, (size_t)packet_size, &tick, error,
-                                             (int)sizeof(error)))
+    if (!sdl3d_game_data_apply_network_runtime_input(state->data, PONG_NETWORK_BINDING_CLIENT_INPUT, state->input,
+                                                     packet, (size_t)packet_size, &tick, error, (int)sizeof(error)))
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong host input packet apply failed: %s", error);
         return false;
@@ -738,8 +723,8 @@ static bool process_client_state_packet(sdl3d_game_context *ctx, pong_state *sta
         return false;
     }
 
-    if (!sdl3d_game_data_apply_network_snapshot(state->data, packet, (size_t)packet_size, &tick, error,
-                                                (int)sizeof(error)))
+    if (!sdl3d_game_data_apply_network_runtime_snapshot(state->data, PONG_NETWORK_BINDING_STATE_SNAPSHOT, packet,
+                                                        (size_t)packet_size, &tick, error, (int)sizeof(error)))
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong client state packet apply failed: %s", error);
         return false;
@@ -878,36 +863,27 @@ static bool process_decoded_network_control_packet(sdl3d_game_context *ctx, pong
 static bool send_host_state_packet(sdl3d_game_context *ctx, pong_state *state)
 {
     const sdl3d_input_snapshot *snapshot = NULL;
-    Uint8 packet[SDL3D_NETWORK_MAX_PACKET_SIZE];
-    size_t packet_size = 0U;
     char error[160] = {0};
-    const char *state_channel = NULL;
 
     if (state == NULL || state->host_session == NULL || !sdl3d_network_session_is_connected(state->host_session) ||
         state->data == NULL || state->input == NULL)
     {
         return false;
     }
-    if (!sdl3d_game_data_get_network_runtime_replication(state->data, PONG_NETWORK_BINDING_STATE_SNAPSHOT,
-                                                         &state_channel))
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong network binding missing: replication.%s",
-                    PONG_NETWORK_BINDING_STATE_SNAPSHOT);
-        return false;
-    }
 
     snapshot = sdl3d_input_get_snapshot(state->input);
-    if (snapshot == NULL || !sync_match_pause_from_context(ctx, state) ||
-        !sdl3d_game_data_encode_network_snapshot(state->data, state_channel, (Uint32)SDL_max(snapshot->tick, 0), packet,
-                                                 sizeof(packet), &packet_size, error, (int)sizeof(error)))
+    if (snapshot == NULL || !sync_match_pause_from_context(ctx, state))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong host state packet encode failed: %s", error);
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong host state packet encode failed: %s",
+                    error[0] != '\0' ? error : "input snapshot unavailable");
         return false;
     }
 
-    if (!sdl3d_network_session_send(state->host_session, packet, (int)packet_size))
+    if (!sdl3d_game_data_send_network_runtime_snapshot(state->data, state->host_session,
+                                                       PONG_NETWORK_BINDING_STATE_SNAPSHOT,
+                                                       (Uint32)SDL_max(snapshot->tick, 0), error, (int)sizeof(error)))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong host state packet send failed: %s", SDL_GetError());
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Pong host state packet send failed: %s", error);
         return false;
     }
 

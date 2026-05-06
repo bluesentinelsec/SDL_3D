@@ -12057,6 +12057,125 @@ bool sdl3d_game_data_encode_network_snapshot(const sdl3d_game_data_runtime *runt
     return true;
 }
 
+bool sdl3d_game_data_encode_network_runtime_snapshot(const sdl3d_game_data_runtime *runtime, const char *binding_name,
+                                                     Uint32 tick, void *buffer, size_t buffer_size, size_t *out_size,
+                                                     char *error_buffer, int error_buffer_size)
+{
+    const char *replication_name = NULL;
+    if (!sdl3d_game_data_get_network_runtime_replication(runtime, binding_name, &replication_name))
+    {
+        set_errorf(error_buffer, error_buffer_size, "network runtime replication binding '%s' not found",
+                   binding_name != NULL ? binding_name : "<null>");
+        if (out_size != NULL)
+            *out_size = 0U;
+        return false;
+    }
+    return sdl3d_game_data_encode_network_snapshot(runtime, replication_name, tick, buffer, buffer_size, out_size,
+                                                   error_buffer, error_buffer_size);
+}
+
+bool sdl3d_game_data_send_network_runtime_snapshot(const sdl3d_game_data_runtime *runtime,
+                                                   sdl3d_network_session *session, const char *binding_name,
+                                                   Uint32 tick, char *error_buffer, int error_buffer_size)
+{
+    Uint8 packet[SDL3D_NETWORK_MAX_PACKET_SIZE];
+    size_t packet_size = 0U;
+    if (session == NULL || !sdl3d_network_session_is_connected(session))
+    {
+        set_error(error_buffer, error_buffer_size, "network runtime snapshot send requires connected session");
+        return false;
+    }
+    if (!sdl3d_game_data_encode_network_runtime_snapshot(runtime, binding_name, tick, packet, sizeof(packet),
+                                                         &packet_size, error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    if (!sdl3d_network_session_send(session, packet, (int)packet_size))
+    {
+        set_errorf(error_buffer, error_buffer_size, "network runtime snapshot send failed: %s", SDL_GetError());
+        return false;
+    }
+    return true;
+}
+
+static bool game_data_network_packet_matches_replication_binding(const sdl3d_game_data_runtime *runtime,
+                                                                 const char *binding_name, const void *packet,
+                                                                 size_t packet_size, Uint32 expected_magic,
+                                                                 Uint32 expected_version, bool host_to_client,
+                                                                 char *error_buffer, int error_buffer_size)
+{
+    const char *expected_channel = NULL;
+    if (runtime == NULL || packet == NULL || packet_size == 0U)
+    {
+        set_error(error_buffer, error_buffer_size, "network runtime replication check requires runtime and packet");
+        return false;
+    }
+    if (!runtime->has_network_schema)
+    {
+        set_error(error_buffer, error_buffer_size,
+                  "network runtime replication check requires an authored network schema");
+        return false;
+    }
+    if (!sdl3d_game_data_get_network_runtime_replication(runtime, binding_name, &expected_channel))
+    {
+        set_errorf(error_buffer, error_buffer_size, "network runtime replication binding '%s' not found",
+                   binding_name != NULL ? binding_name : "<null>");
+        return false;
+    }
+
+    sdl3d_replication_reader reader;
+    sdl3d_replication_reader_init(&reader, packet, packet_size);
+    Uint32 magic = 0U;
+    Uint32 version = 0U;
+    Uint32 tick = 0U;
+    Uint32 channel_index = 0U;
+    Uint8 schema_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE];
+    if (!sdl3d_replication_read_uint32(&reader, &magic) || !sdl3d_replication_read_uint32(&reader, &version) ||
+        !sdl3d_replication_read_uint32(&reader, &tick) || !sdl3d_replication_read_uint32(&reader, &channel_index) ||
+        !sdl3d_replication_read_bytes(&reader, schema_hash, sizeof(schema_hash)))
+    {
+        set_error(error_buffer, error_buffer_size, "network runtime replication packet is too small for header");
+        return false;
+    }
+    if (magic != expected_magic || version != expected_version)
+    {
+        set_error(error_buffer, error_buffer_size, "network runtime replication packet has unsupported header");
+        return false;
+    }
+    if (SDL_memcmp(schema_hash, runtime->network_schema_hash, SDL3D_REPLICATION_SCHEMA_HASH_SIZE) != 0)
+    {
+        set_error(error_buffer, error_buffer_size, "network runtime replication schema hash does not match runtime");
+        return false;
+    }
+
+    yyjson_val *channel = game_data_find_replication_channel_by_index(runtime, channel_index);
+    if (channel == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "network runtime replication channel is invalid for this runtime");
+        return false;
+    }
+    if (host_to_client && !game_data_replication_channel_is_host_to_client(channel))
+    {
+        set_error(error_buffer, error_buffer_size, "network runtime replication channel must be host_to_client");
+        return false;
+    }
+    if (!host_to_client && !game_data_replication_channel_is_client_to_host(channel))
+    {
+        set_error(error_buffer, error_buffer_size, "network runtime replication channel must be client_to_host");
+        return false;
+    }
+
+    const char *actual_channel = json_string(channel, "name", NULL);
+    if (actual_channel == NULL || SDL_strcmp(actual_channel, expected_channel) != 0)
+    {
+        set_errorf(error_buffer, error_buffer_size,
+                   "network runtime replication packet channel '%s' does not match binding '%s'",
+                   actual_channel != NULL ? actual_channel : "<null>", binding_name != NULL ? binding_name : "<null>");
+        return false;
+    }
+    return true;
+}
+
 bool sdl3d_game_data_apply_network_snapshot(sdl3d_game_data_runtime *runtime, const void *packet, size_t packet_size,
                                             Uint32 *out_tick, char *error_buffer, int error_buffer_size)
 {
@@ -12207,6 +12326,22 @@ bool sdl3d_game_data_apply_network_snapshot(sdl3d_game_data_runtime *runtime, co
     return true;
 }
 
+bool sdl3d_game_data_apply_network_runtime_snapshot(sdl3d_game_data_runtime *runtime, const char *binding_name,
+                                                    const void *packet, size_t packet_size, Uint32 *out_tick,
+                                                    char *error_buffer, int error_buffer_size)
+{
+    if (!game_data_network_packet_matches_replication_binding(
+            runtime, binding_name, packet, packet_size, SDL3D_GAME_DATA_NETWORK_SNAPSHOT_MAGIC,
+            SDL3D_GAME_DATA_NETWORK_SNAPSHOT_VERSION, true, error_buffer, error_buffer_size))
+    {
+        if (out_tick != NULL)
+            *out_tick = 0U;
+        return false;
+    }
+    return sdl3d_game_data_apply_network_snapshot(runtime, packet, packet_size, out_tick, error_buffer,
+                                                  error_buffer_size);
+}
+
 bool sdl3d_game_data_encode_network_input(const sdl3d_game_data_runtime *runtime, const char *replication_name,
                                           const sdl3d_input_manager *input, Uint32 tick, void *buffer,
                                           size_t buffer_size, size_t *out_size, char *error_buffer,
@@ -12295,6 +12430,48 @@ bool sdl3d_game_data_encode_network_input(const sdl3d_game_data_runtime *runtime
 
     if (out_size != NULL)
         *out_size = sdl3d_replication_writer_offset(&writer);
+    return true;
+}
+
+bool sdl3d_game_data_encode_network_runtime_input(const sdl3d_game_data_runtime *runtime, const char *binding_name,
+                                                  const sdl3d_input_manager *input, Uint32 tick, void *buffer,
+                                                  size_t buffer_size, size_t *out_size, char *error_buffer,
+                                                  int error_buffer_size)
+{
+    const char *replication_name = NULL;
+    if (!sdl3d_game_data_get_network_runtime_replication(runtime, binding_name, &replication_name))
+    {
+        set_errorf(error_buffer, error_buffer_size, "network runtime replication binding '%s' not found",
+                   binding_name != NULL ? binding_name : "<null>");
+        if (out_size != NULL)
+            *out_size = 0U;
+        return false;
+    }
+    return sdl3d_game_data_encode_network_input(runtime, replication_name, input, tick, buffer, buffer_size, out_size,
+                                                error_buffer, error_buffer_size);
+}
+
+bool sdl3d_game_data_send_network_runtime_input(const sdl3d_game_data_runtime *runtime, sdl3d_network_session *session,
+                                                const char *binding_name, const sdl3d_input_manager *input, Uint32 tick,
+                                                char *error_buffer, int error_buffer_size)
+{
+    Uint8 packet[SDL3D_NETWORK_MAX_PACKET_SIZE];
+    size_t packet_size = 0U;
+    if (session == NULL || !sdl3d_network_session_is_connected(session))
+    {
+        set_error(error_buffer, error_buffer_size, "network runtime input send requires connected session");
+        return false;
+    }
+    if (!sdl3d_game_data_encode_network_runtime_input(runtime, binding_name, input, tick, packet, sizeof(packet),
+                                                      &packet_size, error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    if (!sdl3d_network_session_send(session, packet, (int)packet_size))
+    {
+        set_errorf(error_buffer, error_buffer_size, "network runtime input send failed: %s", SDL_GetError());
+        return false;
+    }
     return true;
 }
 
@@ -12393,6 +12570,22 @@ bool sdl3d_game_data_apply_network_input(const sdl3d_game_data_runtime *runtime,
     if (out_tick != NULL)
         *out_tick = tick;
     return true;
+}
+
+bool sdl3d_game_data_apply_network_runtime_input(const sdl3d_game_data_runtime *runtime, const char *binding_name,
+                                                 sdl3d_input_manager *input, const void *packet, size_t packet_size,
+                                                 Uint32 *out_tick, char *error_buffer, int error_buffer_size)
+{
+    if (!game_data_network_packet_matches_replication_binding(
+            runtime, binding_name, packet, packet_size, SDL3D_GAME_DATA_NETWORK_INPUT_MAGIC,
+            SDL3D_GAME_DATA_NETWORK_INPUT_VERSION, false, error_buffer, error_buffer_size))
+    {
+        if (out_tick != NULL)
+            *out_tick = 0U;
+        return false;
+    }
+    return sdl3d_game_data_apply_network_input(runtime, input, packet, packet_size, out_tick, error_buffer,
+                                               error_buffer_size);
 }
 
 bool sdl3d_game_data_clear_network_input_overrides(const sdl3d_game_data_runtime *runtime, const char *replication_name,

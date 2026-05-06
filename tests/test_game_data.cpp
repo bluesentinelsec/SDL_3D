@@ -6281,6 +6281,72 @@ TEST(GameDataRuntime, EncodesAndAppliesPongNetworkInputFromAuthoredSchema)
     destroy_runtime_session(host_session, host);
 }
 
+TEST(GameDataRuntime, RuntimeReplicationBindingsEncodeAndApplyPongPackets)
+{
+    sdl3d_game_session *host_session = nullptr;
+    sdl3d_game_data_runtime *host = nullptr;
+    load_pong_runtime(&host_session, &host);
+    ASSERT_TRUE(sdl3d_game_data_has_network_schema(host));
+
+    sdl3d_game_session *client_session = nullptr;
+    sdl3d_game_data_runtime *client = nullptr;
+    load_pong_runtime(&client_session, &client);
+    ASSERT_TRUE(sdl3d_game_data_has_network_schema(client));
+
+    sdl3d_registered_actor *host_ball = sdl3d_game_data_find_actor(host, "entity.ball");
+    sdl3d_registered_actor *client_ball = sdl3d_game_data_find_actor(client, "entity.ball");
+    ASSERT_NE(host_ball, nullptr);
+    ASSERT_NE(client_ball, nullptr);
+    host_ball->position = {2.0f, 3.0f, 0.25f};
+
+    std::array<Uint8, 512> packet{};
+    size_t packet_size = 0U;
+    char error[512]{};
+    ASSERT_TRUE(sdl3d_game_data_encode_network_runtime_snapshot(host, "state_snapshot", 123U, packet.data(),
+                                                                packet.size(), &packet_size, error, sizeof(error)))
+        << error;
+
+    Uint32 tick = 0U;
+    ASSERT_TRUE(sdl3d_game_data_apply_network_runtime_snapshot(client, "state_snapshot", packet.data(), packet_size,
+                                                               &tick, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(tick, 123U);
+    expect_vec3_near(client_ball->position, host_ball->position);
+
+    EXPECT_FALSE(sdl3d_game_data_apply_network_runtime_input(host, "client_input",
+                                                             sdl3d_game_session_get_input(host_session), packet.data(),
+                                                             packet_size, nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("unsupported header"), std::string::npos) << error;
+
+    sdl3d_input_manager *client_input = sdl3d_game_session_get_input(client_session);
+    sdl3d_input_manager *host_input = sdl3d_game_session_get_input(host_session);
+    ASSERT_NE(client_input, nullptr);
+    ASSERT_NE(host_input, nullptr);
+    const int client_up_action = sdl3d_game_data_find_action(client, "action.paddle.local.up");
+    const int host_up_action = sdl3d_game_data_find_action(host, "action.paddle.local.up");
+    ASSERT_GE(client_up_action, 0);
+    ASSERT_GE(host_up_action, 0);
+    sdl3d_input_set_action_override(client_input, client_up_action, 0.5f);
+    ASSERT_NE(sdl3d_input_update(client_input, 321), nullptr);
+
+    ASSERT_TRUE(sdl3d_game_data_encode_network_runtime_input(client, "client_input", client_input, 321U, packet.data(),
+                                                             packet.size(), &packet_size, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(sdl3d_game_data_apply_network_runtime_input(host, "client_input", host_input, packet.data(),
+                                                            packet_size, &tick, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(tick, 321U);
+    ASSERT_NE(sdl3d_input_update(host_input, 322), nullptr);
+    EXPECT_NEAR(sdl3d_input_get_value(host_input, host_up_action), 0.5f, 0.0001f);
+
+    EXPECT_FALSE(sdl3d_game_data_apply_network_runtime_snapshot(client, "state_snapshot", packet.data(), packet_size,
+                                                                nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("unsupported header"), std::string::npos) << error;
+
+    destroy_runtime_session(host_session, host);
+    destroy_runtime_session(client_session, client);
+}
+
 TEST(GameDataRuntime, RejectsPongNetworkInputWithMismatchedSchemaOrTruncation)
 {
     sdl3d_game_session *client_session = nullptr;
