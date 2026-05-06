@@ -82,7 +82,7 @@ Pong is now the reference data-only game:
 - Pong gameplay rules are authored in `demos/pong/data/scripts/pong.lua`
 - scenes, options, input, audio, haptics, rendering, networking, diagnostics,
   and app flow are authored in JSON
-- `demos/pong/main.c` remains only as an opt-in legacy compatibility host
+- Pong no longer has a custom `demos/pong/main.c` host
 
 Run Pong through the generic runner from a directory:
 
@@ -104,7 +104,7 @@ build/debug/demos/pong/pong_demo
 
 ## Parity Checklist
 
-Before deleting a legacy host, validate the runner-backed game path:
+Before treating a game as data-only, validate the runner-backed game path:
 
 - startup loads the root game JSON and first scene
 - splash/title/attract flow works
