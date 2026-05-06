@@ -65,4 +65,8 @@ If the template is healthy, a new arcade demo should be able to start with:
 - a small set of scene JSON files
 - one or more Lua scripts
 - mostly assets and authored data
-- only a thin amount of host code for true engine integration points
+- no game-specific host code when the generic runner covers the needed systems
+
+Custom C should mean the game has discovered a missing reusable engine feature.
+After that feature lands, expose it through JSON/Lua so future games do not
+need their own host code for the same behavior.

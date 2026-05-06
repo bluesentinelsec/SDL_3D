@@ -340,8 +340,8 @@ static const char *managed_network_scene_state_string(const sdl3d_data_game_runt
 {
     const sdl3d_properties *scene_state =
         runtime != NULL && runtime->data != NULL ? sdl3d_game_data_scene_state(runtime->data) : NULL;
-    const char *key = managed_network_session_state_key(runtime, key_name, key_name);
-    return scene_state != NULL ? sdl3d_properties_get_string(scene_state, key, fallback) : fallback;
+    const char *key = managed_network_session_state_key(runtime, key_name, NULL);
+    return scene_state != NULL && key != NULL ? sdl3d_properties_get_string(scene_state, key, fallback) : fallback;
 }
 
 static bool managed_network_active_scene_is(const sdl3d_data_game_runtime *runtime, const char *scene_name,
@@ -355,7 +355,7 @@ static bool managed_network_active_scene_is(const sdl3d_data_game_runtime *runti
 
 static bool managed_network_is_play_scene(const sdl3d_data_game_runtime *runtime)
 {
-    return managed_network_active_scene_is(runtime, "play", "scene.play");
+    return managed_network_active_scene_is(runtime, "play", NULL);
 }
 
 static bool managed_network_keep_alive_scene_matches(const sdl3d_data_game_runtime *runtime, const char *session_name)
@@ -369,23 +369,24 @@ static bool managed_network_keep_alive_scene_matches(const sdl3d_data_game_runti
 static bool managed_network_is_network_match(const sdl3d_data_game_runtime *runtime)
 {
     const char *match_mode = managed_network_scene_state_string(runtime, "match_mode", NULL);
-    return match_mode != NULL &&
-           SDL_strcmp(match_mode, managed_network_session_state_value(runtime, "match_mode", "network", "lan")) == 0;
+    const char *network_value = managed_network_session_state_value(runtime, "match_mode", "network", NULL);
+    return match_mode != NULL && network_value != NULL && SDL_strcmp(match_mode, network_value) == 0;
 }
 
 static bool managed_network_is_role_host(const sdl3d_data_game_runtime *runtime)
 {
-    const char *network_role = managed_network_scene_state_string(runtime, "network_role", "none");
-    return managed_network_is_network_match(runtime) &&
-           SDL_strcmp(network_role, managed_network_session_state_value(runtime, "network_role", "host", "host")) == 0;
+    const char *network_role = managed_network_scene_state_string(runtime, "network_role", NULL);
+    const char *host_value = managed_network_session_state_value(runtime, "network_role", "host", NULL);
+    return managed_network_is_network_match(runtime) && network_role != NULL && host_value != NULL &&
+           SDL_strcmp(network_role, host_value) == 0;
 }
 
 static bool managed_network_is_role_client(const sdl3d_data_game_runtime *runtime)
 {
-    const char *network_role = managed_network_scene_state_string(runtime, "network_role", "none");
-    return managed_network_is_network_match(runtime) &&
-           SDL_strcmp(network_role, managed_network_session_state_value(runtime, "network_role", "client", "client")) ==
-               0;
+    const char *network_role = managed_network_scene_state_string(runtime, "network_role", NULL);
+    const char *client_value = managed_network_session_state_value(runtime, "network_role", "client", NULL);
+    return managed_network_is_network_match(runtime) && network_role != NULL && client_value != NULL &&
+           SDL_strcmp(network_role, client_value) == 0;
 }
 
 static int managed_network_action_id(const sdl3d_data_game_runtime *runtime, const char *binding_name)
@@ -465,10 +466,10 @@ static void managed_network_publish_host_status(sdl3d_data_game_runtime *runtime
 
     (void)sdl3d_game_data_network_host_publish_status(
         runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION,
-        managed_network_scene_state_key(runtime, "host", "status", "multiplayer_host_status"),
-        managed_network_scene_state_key(runtime, "host", "endpoint", "multiplayer_host_endpoint"),
-        managed_network_scene_state_key(runtime, "host", "peer", "multiplayer_host_client"),
-        managed_network_scene_state_key(runtime, "host", "connected", "multiplayer_host_connected"));
+        managed_network_scene_state_key(runtime, "host", "status", NULL),
+        managed_network_scene_state_key(runtime, "host", "endpoint", NULL),
+        managed_network_scene_state_key(runtime, "host", "peer", NULL),
+        managed_network_scene_state_key(runtime, "host", "connected", NULL));
 }
 
 static void managed_network_cancel_host(sdl3d_data_game_runtime *runtime, bool notify_peer, const char *status)
@@ -484,13 +485,12 @@ static void managed_network_cancel_host(sdl3d_data_game_runtime *runtime, bool n
         (void)managed_network_send_control_repeated(runtime, session, SDL3D_MANAGED_NETWORK_BINDING_DISCONNECT,
                                                     "host disconnect", 5);
     }
-    (void)sdl3d_game_data_network_host_cancel(
-        runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION,
-        managed_network_scene_state_key(runtime, "host", "status", "multiplayer_host_status"),
-        managed_network_scene_state_key(runtime, "host", "endpoint", "multiplayer_host_endpoint"),
-        managed_network_scene_state_key(runtime, "host", "peer", "multiplayer_host_client"),
-        managed_network_scene_state_key(runtime, "host", "connected", "multiplayer_host_connected"),
-        status != NULL ? status : "Not hosting");
+    (void)sdl3d_game_data_network_host_cancel(runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION,
+                                              managed_network_scene_state_key(runtime, "host", "status", NULL),
+                                              managed_network_scene_state_key(runtime, "host", "endpoint", NULL),
+                                              managed_network_scene_state_key(runtime, "host", "peer", NULL),
+                                              managed_network_scene_state_key(runtime, "host", "connected", NULL),
+                                              status != NULL ? status : "Not hosting");
 }
 
 static void managed_network_publish_direct_connect_status(sdl3d_data_game_runtime *runtime)
@@ -500,9 +500,9 @@ static void managed_network_publish_direct_connect_status(sdl3d_data_game_runtim
 
     (void)sdl3d_game_data_network_direct_connect_publish_status(
         runtime->data, SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION,
-        managed_network_scene_state_key(runtime, "direct_connect", "status", "direct_connect_status"),
-        managed_network_scene_state_key(runtime, "direct_connect", "state", "direct_connect_state"),
-        managed_network_scene_state_key(runtime, "direct_connect", "connected", "direct_connect_connected"));
+        managed_network_scene_state_key(runtime, "direct_connect", "status", NULL),
+        managed_network_scene_state_key(runtime, "direct_connect", "state", NULL),
+        managed_network_scene_state_key(runtime, "direct_connect", "connected", NULL));
 }
 
 static void managed_network_cancel_direct_connect(sdl3d_data_game_runtime *runtime, bool notify_peer,
@@ -521,9 +521,9 @@ static void managed_network_cancel_direct_connect(sdl3d_data_game_runtime *runti
     }
     (void)sdl3d_game_data_network_direct_connect_cancel(
         runtime->data, SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION,
-        managed_network_scene_state_key(runtime, "direct_connect", "status", "direct_connect_status"),
-        managed_network_scene_state_key(runtime, "direct_connect", "state", "direct_connect_state"),
-        managed_network_scene_state_key(runtime, "direct_connect", "connected", "direct_connect_connected"),
+        managed_network_scene_state_key(runtime, "direct_connect", "status", NULL),
+        managed_network_scene_state_key(runtime, "direct_connect", "state", NULL),
+        managed_network_scene_state_key(runtime, "direct_connect", "connected", NULL),
         status != NULL ? status : "Disconnected");
 }
 
@@ -617,9 +617,9 @@ static void managed_network_update_termination_ack(sdl3d_data_game_runtime *runt
 {
     const sdl3d_properties *scene_state =
         runtime != NULL && runtime->data != NULL ? sdl3d_game_data_scene_state(runtime->data) : NULL;
-    const char *active_key =
-        managed_network_session_state_key(runtime, "match_termination_active", "network_match_termination_active");
-    const bool active = scene_state != NULL ? sdl3d_properties_get_bool(scene_state, active_key, false) : false;
+    const char *active_key = managed_network_session_state_key(runtime, "match_termination_active", NULL);
+    const bool active =
+        scene_state != NULL && active_key != NULL ? sdl3d_properties_get_bool(scene_state, active_key, false) : false;
 
     if (runtime == NULL || !active)
     {

@@ -559,8 +559,10 @@ window and audio examples.
 
 For a project-oriented adoption checklist and a minimal reference game file,
 see [docs/standard-options.md](standard-options.md).
-For a concise new-game checklist that mirrors the Pong template structure,
-see [docs/pong-template-checklist.md](pong-template-checklist.md).
+For the JSON/Lua/runner authoring contract, see
+[docs/data-only-games.md](data-only-games.md). For a concise new-game checklist
+that mirrors the Pong template structure, see
+[docs/pong-template-checklist.md](pong-template-checklist.md).
 
 Standard display properties:
 
@@ -2003,7 +2005,10 @@ Validation warnings are non-fatal by default. Tooling can set `treat_warnings_as
 
 ## Pong Data Proof
 
-`demos/pong/data/pong.game.json` is the first concrete file using this format. It is loaded by the Pong demo through `sdl3d_game_data_load_file()`, which instantiates the authored actors, input actions, signals, timers, sensors, and bindings into the managed game session.
+`demos/pong/data/pong.game.json` is the first concrete file using this format.
+The normal Pong demo path loads it through the generic `sdl3d_runner` and
+`sdl3d_data_game_runtime`, which instantiate the authored actors, input
+actions, signals, timers, sensors, and bindings into the managed game session.
 
 - fixed-screen non-sector world
 - player and CPU paddles
@@ -2020,7 +2025,11 @@ Pong keeps specialized math and policy in Lua adapters loaded from `demos/pong/d
 - `adapter.pong.reflect_from_paddle`
 - `adapter.pong.cpu_track_ball`
 
-The JSON decides when those adapters run and handles the ordinary composition around them, such as score increments, round reset, serve timers, camera toggles, and goal/wall/contact sensors. The Pong executable does not register Pong-specific C rule callbacks; its C code owns presentation, rendering, and process lifecycle.
+The JSON decides when those adapters run and handles the ordinary composition
+around them, such as score increments, round reset, serve timers, camera
+toggles, and goal/wall/contact sensors. The normal Pong executable does not
+register Pong-specific C rule callbacks or own a custom callback table; it is a
+runner-backed data game.
 
 ## Loader Acceptance Criteria
 
