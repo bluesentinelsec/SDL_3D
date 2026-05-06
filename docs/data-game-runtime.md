@@ -21,12 +21,14 @@ The runtime currently owns:
 - input-profile hotplug refresh state and automatic gamepad-count rebinding
 - runtime-owned direct-connect, host, and discovery session primitives exposed
   through data actions
+- runtime-bound host/client packet loops for authored control messages,
+  client input replication, authoritative snapshots, and pause-state sync
 - ordered cleanup
 
 The generic `sdl3d_runner` executable owns the outer SDL process loop for games
 that only need the current data runtime surface. For now, Pong still keeps a
-compatibility host for full LAN networking because network session
-orchestration has not moved into the managed runtime yet.
+compatibility host for network scene transitions and termination UI, but the
+packet receive/send/apply loop now lives in the managed runtime.
 
 ## Startup Shape
 
@@ -55,9 +57,33 @@ During the managed loop:
 - call `sdl3d_data_game_runtime_render` from the render callback
 - call `sdl3d_data_game_runtime_refresh_input_profile_on_device_change` when a
   scene or host policy wants device-count hotplug rebinding
+- for LAN/direct-connect play, call
+  `sdl3d_data_game_runtime_update_network_host_session`,
+  `sdl3d_data_game_runtime_update_network_client_session`, and
+  `sdl3d_data_game_runtime_publish_network_host_snapshot` with semantic
+  runtime binding names from `network.runtime_bindings`
 
 The outer loop still controls fixed timestep, SDL events, input snapshots,
 audio frame updates, and presentation.
+
+## Network Packet Loops
+
+The runtime network helpers are game-agnostic. Callers provide session names
+and semantic binding keys, such as `state_snapshot`, `client_input`,
+`start_game`, `pause_request`, `resume_request`, and `disconnect`. The helpers
+resolve those keys through authored `network.runtime_bindings`, then:
+
+- update the runtime-owned host or direct-connect transport session
+- decode control packets and return result flags for scene-flow decisions
+- apply client input overrides on the host
+- apply host snapshots on the client
+- mirror authored network pause state between host context and client context
+- send client input packets while network play is active
+- send host snapshots after the authoritative simulation step
+
+The helpers intentionally report events instead of hard-coding transitions.
+That keeps game-specific flow in JSON/Lua or a thin compatibility host until
+scene/session orchestration is fully authored.
 
 ## Generic Runner
 
@@ -94,6 +120,6 @@ or Lua-driven systems.
 ## Why This Matters
 
 This API is a stepping stone toward fully data-only games. Once network session
-orchestration is also managed by the engine runtime, a package such as Pong
-should be able to ship as JSON, Lua, and assets rather than as a custom C
-program linked against SDL3D.
+transition/termination policy is also managed by the engine runtime, a package
+such as Pong should be able to ship as JSON, Lua, and assets rather than as a
+custom C program linked against SDL3D.

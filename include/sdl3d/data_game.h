@@ -107,6 +107,105 @@ extern "C"
                                                                         int error_buffer_size);
 
     /**
+     * @brief Runtime-binding names used by the generic network packet loop.
+     *
+     * Each field is a semantic key from `network.runtime_bindings`, not a
+     * concrete replication channel or control-message name. Games can author
+     * different schema names while reusing the same host/client loop.
+     */
+    typedef struct sdl3d_data_game_network_bindings
+    {
+        /** @brief Host-to-client snapshot replication binding, or NULL if unused. */
+        const char *state_snapshot;
+        /** @brief Client-to-host input replication binding, or NULL if unused. */
+        const char *client_input;
+        /** @brief Host-to-client start-game control binding, or NULL if unused. */
+        const char *start_game;
+        /** @brief Client-to-host pause request control binding, or NULL if unused. */
+        const char *pause_request;
+        /** @brief Client-to-host resume request control binding, or NULL if unused. */
+        const char *resume_request;
+        /** @brief Bidirectional graceful disconnect control binding, or NULL if unused. */
+        const char *disconnect;
+    } sdl3d_data_game_network_bindings;
+
+    /**
+     * @brief Summary of one generic network packet-loop update.
+     */
+    typedef struct sdl3d_data_game_network_loop_result
+    {
+        /** @brief Current transport state after the update, if a session exists. */
+        sdl3d_network_state session_state;
+        /** @brief Number of user packets consumed from the session queue. */
+        int packets_received;
+        /** @brief Last decoded packet/control tick, or zero when none was decoded. */
+        Uint32 last_tick;
+        /** @brief True when a start-game control was received. */
+        bool received_start_game;
+        /** @brief True when a graceful disconnect control was received. */
+        bool received_disconnect;
+        /** @brief True when a pause request control was received and applied to @p ctx. */
+        bool received_pause_request;
+        /** @brief True when a resume request control was received and applied to @p ctx. */
+        bool received_resume_request;
+        /** @brief True when a client input packet was applied. */
+        bool applied_input;
+        /** @brief True when an authoritative snapshot packet was applied. */
+        bool applied_snapshot;
+        /** @brief True when the client sent an input packet. */
+        bool sent_input;
+        /** @brief True when the host sent an authoritative snapshot packet. */
+        bool sent_snapshot;
+        /** @brief True when the client sent a pause request control. */
+        bool sent_pause_request;
+        /** @brief True when the client sent a resume request control. */
+        bool sent_resume_request;
+    } sdl3d_data_game_network_loop_result;
+
+    /**
+     * @brief Advance a runtime-owned host session and consume client packets.
+     *
+     * The function updates the named `network.host` session, decodes authored
+     * runtime control packets, applies client input packets when @p playing is
+     * true, and mirrors pause/resume requests into @p ctx. Scene transitions
+     * remain caller-owned; callers inspect @p out_result to decide what to do.
+     */
+    bool sdl3d_data_game_runtime_update_network_host_session(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx,
+                                                             const char *session_name,
+                                                             const sdl3d_data_game_network_bindings *bindings,
+                                                             bool playing, float dt,
+                                                             sdl3d_data_game_network_loop_result *out_result,
+                                                             char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Send one authoritative host snapshot over a runtime-owned host session.
+     *
+     * Before encoding, this writes @p ctx->paused into the authored network
+     * pause property so clients can mirror host pause state through snapshots.
+     */
+    bool sdl3d_data_game_runtime_publish_network_host_snapshot(sdl3d_data_game_runtime *runtime,
+                                                               sdl3d_game_context *ctx, const char *session_name,
+                                                               const sdl3d_data_game_network_bindings *bindings,
+                                                               sdl3d_data_game_network_loop_result *out_result,
+                                                               char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Advance a runtime-owned direct-connect client session.
+     *
+     * The function updates the named direct-connect session, consumes
+     * host-to-client control/snapshot packets, mirrors snapshot pause state
+     * into @p ctx, and when @p playing is true sends client input packets. If
+     * @p allow_pause_requests is true, a pressed authored pause action sends
+     * pause/resume request controls based on @p ctx->paused.
+     */
+    bool sdl3d_data_game_runtime_update_network_client_session(sdl3d_data_game_runtime *runtime,
+                                                               sdl3d_game_context *ctx, const char *session_name,
+                                                               const sdl3d_data_game_network_bindings *bindings,
+                                                               bool playing, bool allow_pause_requests, float dt,
+                                                               sdl3d_data_game_network_loop_result *out_result,
+                                                               char *error_buffer, int error_buffer_size);
+
+    /**
      * @brief Advance authored frame/app-flow/presentation systems.
      *
      * This does not update the outer SDL3D game session tick counters; callers

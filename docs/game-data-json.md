@@ -783,9 +783,10 @@ active. `name` identifies the session, `port` / `default_port` select the UDP
 listen port, and `session_name` is advertised to LAN discovery clients.
 `network.host.observe` republishes status, endpoint, peer label, and connection
 state into scene state. `network.host.cancel` destroys the named host session
-and writes a disconnected status. Host packet loops can inspect the
-runtime-owned pointer with `sdl3d_game_data_get_network_host_session()` until
-generic replication-loop ownership moves into the data-game runtime.
+and writes a disconnected status. Generic hosts can inspect the runtime-owned
+pointer with `sdl3d_game_data_get_network_host_session()`, or use the
+data-game runtime helpers to update the host packet loop and publish
+authoritative snapshots by semantic runtime binding.
 
 LAN discovery flows can also be authored with reusable network data actions and
 dynamic-list menus. A typical scene starts or refreshes discovery on enter,
