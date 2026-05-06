@@ -11656,6 +11656,61 @@ bool sdl3d_game_data_get_network_session_message(const sdl3d_game_data_runtime *
     return true;
 }
 
+static yyjson_val *network_managed_runtime_json(const sdl3d_game_data_runtime *runtime)
+{
+    return obj_get(network_session_flow_json(runtime), "managed_runtime");
+}
+
+bool sdl3d_game_data_network_managed_runtime_enabled(const sdl3d_game_data_runtime *runtime)
+{
+    return json_bool(network_managed_runtime_json(runtime), "enabled", false);
+}
+
+bool sdl3d_game_data_get_network_managed_termination_ack_delay(const sdl3d_game_data_runtime *runtime,
+                                                               float *out_seconds)
+{
+    if (out_seconds != NULL)
+        *out_seconds = 0.0f;
+    if (runtime == NULL || out_seconds == NULL)
+        return false;
+
+    yyjson_val *value = obj_get(network_managed_runtime_json(runtime), "termination_ack_delay_seconds");
+    if (!yyjson_is_num(value))
+        return false;
+
+    *out_seconds = SDL_max((float)yyjson_get_real(value), 0.0f);
+    return true;
+}
+
+bool sdl3d_game_data_network_managed_keep_alive_scene_matches(const sdl3d_game_data_runtime *runtime,
+                                                              const char *session_name, const char *scene_name)
+{
+    if (runtime == NULL || session_name == NULL || session_name[0] == '\0' || scene_name == NULL ||
+        scene_name[0] == '\0')
+    {
+        return false;
+    }
+
+    yyjson_val *keep_alive = obj_get(network_managed_runtime_json(runtime), "keep_alive_scenes");
+    yyjson_val *scenes = obj_get(keep_alive, session_name);
+    if (!yyjson_is_arr(scenes))
+        return false;
+
+    for (size_t i = 0U; i < yyjson_arr_size(scenes); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(scenes, i);
+        const char *semantic = yyjson_is_str(entry) ? yyjson_get_str(entry) : NULL;
+        const char *resolved_scene = NULL;
+        if (semantic != NULL && sdl3d_game_data_get_network_session_scene(runtime, semantic, &resolved_scene) &&
+            resolved_scene != NULL && SDL_strcmp(resolved_scene, scene_name) == 0)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool sdl3d_game_data_run_network_session_flow_event(sdl3d_game_data_runtime *runtime, sdl3d_game_context *ctx,
                                                     const char *name, const sdl3d_properties *payload,
                                                     char *error_buffer, int error_buffer_size)

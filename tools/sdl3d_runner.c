@@ -183,6 +183,7 @@ static bool runner_init(sdl3d_game_context *ctx, void *userdata)
     desc.media_dir = state->media_dir;
     desc.mount_assets = runner_mount_assets;
     desc.mount_userdata = state;
+    desc.enable_managed_network = true;
 
     if (!sdl3d_data_game_runtime_create(&desc, &state->runtime, error, (int)sizeof(error)))
     {

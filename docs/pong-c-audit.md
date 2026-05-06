@@ -60,7 +60,9 @@ implementing per-game callbacks.
 
 ### Managed Network Session Orchestration
 
-The largest remaining custom surface is multiplayer session orchestration:
+Pong's legacy host still contains multiplayer session orchestration, but the
+generic data-game runtime now has an opt-in managed network path that covers
+this responsibility for `sdl3d_runner`:
 
 - host session creation/destruction and lobby state publishing
 - direct-connect session lifetime and status publishing
@@ -72,9 +74,11 @@ The largest remaining custom surface is multiplayer session orchestration:
 - authoritative host snapshot publishing
 - client input publishing
 
-Most packet content is already data driven. What remains is the transport
-session flow. This should become an engine-managed network session runner driven
-by authored `network.session_flow` and `network.runtime_bindings`.
+Most packet content is already data driven. The managed runtime path is driven
+by authored `network.session_flow`, `network.runtime_bindings`, and
+`network.scene_state`, using standard semantics such as `host`,
+`direct_connect`, `state_snapshot`, `client_input`, `start_game`, and
+`disconnect`.
 
 ### Runtime State Publication
 
@@ -94,17 +98,15 @@ log level, session-state inclusion, and message template.
 
 ## Remaining Pong-Specific C Literals
 
-The remaining `PONG_*` constants are mostly semantic runtime binding names such
+The remaining `PONG_*` constants in the compatibility host are mostly semantic runtime binding names such
 as `state_snapshot`, `client_input`, `start_game`, `pause_request`, and
 `direct_connect`. They are not hard-coded actor/property packet schemas, but
 they still prove that the current binary is a Pong host rather than a generic
 runner.
 
-A runner should either:
-
-- use standard semantic binding names defined by the engine, or
-- read a small authored runtime profile that declares which session, action,
-  signal, replication, and control roles the standard network loop should use.
+The generic runner now uses standard semantic binding names defined by the
+engine. The remaining task is replacing the demo binary path with the runner
+path and deleting the compatibility host when parity has been verified.
 
 ## No Longer Blocking JSON/Lua Authorship
 
@@ -121,17 +123,9 @@ systems:
 
 ## Next Practical Step
 
-Deprecate the custom Pong host by adding a generic SDL3D runner/runtime.
-
-Recommended first runtime slice:
-
-1. Add a small runner executable that launches a game data asset or pack through
-   that API.
-2. Convert `demos/pong/main.c` into either a thin compatibility wrapper around
-   the runner API or remove it from the normal path once the runner can launch
-   Pong.
-3. Keep multiplayer orchestration in Pong C only until the next slice moves it
-   into a managed network-session runtime.
+Verify full Pong parity through `sdl3d_runner`, then convert `demos/pong` to
+launch through the generic runner or keep only a tiny build-time wrapper for
+asset defaults.
 
 ## Definition Of Done For Pong Without `main.c`
 
