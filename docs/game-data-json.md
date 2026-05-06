@@ -1300,10 +1300,18 @@ Pool actors receive deterministic runtime names in the form
 `<pool-name>.<index>`, such as `pool.player_shots.0`, and are initialized from
 the archetype with `active=false`. Spawning resets the selected actor from the
 archetype, activates it, applies the requested position and property overrides,
-and writes `pool` and `pool_index` properties for diagnostics. Despawning a
-pooled actor resets it back to its archetype defaults and deactivates it.
+and writes `pool`, `pool_index`, and `pool_lifecycle` properties for
+diagnostics. `pool_lifecycle` is one of `inactive`, `spawning`, `active`, or
+`despawning`; `spawning` is a transient state during reset and activation.
+Despawning hides the actor from active queries immediately, then resets it back
+to archetype defaults. If despawn is requested while signals, sensors,
+rendering, or network snapshot application are traversing runtime state, the
+reset is deferred until that protected section finishes so actor wrappers and
+iteration pointers remain valid.
 
 Actor pools support JSON-authored lifecycle actions and Lua lifecycle helpers.
+Authored sensors may target either static entity names or deterministic pooled
+actor names, such as `pool.player_shots.0`.
 Tag-targeted sensors, pooled component iteration in every subsystem, and
 network replication of pooled actor state are planned follow-up work.
 

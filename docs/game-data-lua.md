@@ -209,6 +209,13 @@ marks them inactive. For non-pooled actors, it only clears the active flag.
 active actors it despawned. Pool count helpers report capacity, active count,
 and available inactive slots.
 
+During signal handling, sensor updates, rendering traversal, and network
+snapshot application, pooled despawns are lifecycle-safe: the actor becomes
+inactive immediately, but the archetype reset is deferred until the protected
+section ends. Actor wrappers therefore remain safe to inspect for the rest of
+the callback. Pooled actors expose `pool_lifecycle` as `inactive`, `spawning`,
+`active`, or `despawning` for diagnostics.
+
 ## `Vec3`
 
 `Vec3` is available both as `sdl3d.Vec3` and as a global `Vec3` constructor.
