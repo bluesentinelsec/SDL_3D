@@ -1938,6 +1938,42 @@ extern "C"
                                                                               const char *session_name);
 
     /**
+     * @brief Start or keep a named runtime-owned UDP host session alive.
+     *
+     * Host sessions listen for exactly one client. The session is owned by
+     * @p runtime and remains valid until canceled, replaced, or the runtime is
+     * destroyed. Optional scene-state keys publish human-readable status,
+     * endpoint, peer label, and connected state.
+     */
+    bool sdl3d_game_data_network_host_start(sdl3d_game_data_runtime *runtime, const char *session_name, int port,
+                                            const char *advertised_name, const char *status_key,
+                                            const char *endpoint_key, const char *peer_key, const char *connected_key);
+
+    /**
+     * @brief Cancel and destroy a named runtime-owned host session.
+     *
+     * Canceling an unknown host session is a successful no-op.
+     */
+    bool sdl3d_game_data_network_host_cancel(sdl3d_game_data_runtime *runtime, const char *session_name,
+                                             const char *status_key, const char *endpoint_key, const char *peer_key,
+                                             const char *connected_key, const char *status);
+
+    /**
+     * @brief Publish a named runtime-owned host session's status into scene state.
+     */
+    bool sdl3d_game_data_network_host_publish_status(sdl3d_game_data_runtime *runtime, const char *session_name,
+                                                     const char *status_key, const char *endpoint_key,
+                                                     const char *peer_key, const char *connected_key);
+
+    /**
+     * @brief Return a runtime-owned host session, or NULL when absent.
+     *
+     * The caller must not destroy the returned pointer.
+     */
+    sdl3d_network_session *sdl3d_game_data_get_network_host_session(sdl3d_game_data_runtime *runtime,
+                                                                    const char *session_name);
+
+    /**
      * @brief Start or refresh a named runtime-owned LAN discovery scanner.
      *
      * Results are published to @p collection_name when provided. Each row

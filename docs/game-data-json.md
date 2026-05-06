@@ -740,6 +740,53 @@ owns session lifetime; host code can inspect the runtime-owned pointer with
 `sdl3d_game_data_get_network_direct_connect_session()` when it needs to send or
 receive game packets.
 
+Host lobby screens can create and publish a runtime-owned UDP host session from
+scene activity:
+
+```json
+{
+    "activity" : {
+        "enabled" : true,
+        "on_enter" : [
+            {
+                "type" : "network.host.start",
+                "name" : "host",
+                "default_port" : 27183,
+                "session_name" : "SDL3D Pong",
+                "status_key" : "multiplayer_host_status",
+                "endpoint_key" : "multiplayer_host_endpoint",
+                "peer_key" : "multiplayer_host_client",
+                "connected_key" : "multiplayer_host_connected"
+            }
+        ],
+        "periodic" : [
+            {
+                "interval" : 0.1,
+                "actions" : [
+                    {
+                        "type" : "network.host.observe",
+                        "name" : "host",
+                        "status_key" : "multiplayer_host_status",
+                        "endpoint_key" : "multiplayer_host_endpoint",
+                        "peer_key" : "multiplayer_host_client",
+                        "connected_key" : "multiplayer_host_connected"
+                    }
+                ]
+            }
+        ]
+    }
+}
+```
+
+`network.host.start` creates a runtime-owned host session if one is not already
+active. `name` identifies the session, `port` / `default_port` select the UDP
+listen port, and `session_name` is advertised to LAN discovery clients.
+`network.host.observe` republishes status, endpoint, peer label, and connection
+state into scene state. `network.host.cancel` destroys the named host session
+and writes a disconnected status. Host packet loops can inspect the
+runtime-owned pointer with `sdl3d_game_data_get_network_host_session()` until
+generic replication-loop ownership moves into the data-game runtime.
+
 LAN discovery flows can also be authored with reusable network data actions and
 dynamic-list menus. A typical scene starts or refreshes discovery on enter,
 observes it periodically, and lets a runtime-collection-backed list connect the

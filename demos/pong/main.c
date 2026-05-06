@@ -65,6 +65,7 @@ static const char PONG_NETWORK_BINDING_CLIENT_DOWN[] = "client_down";
 static const char PONG_NETWORK_BINDING_MENU_SELECT[] = "menu_select";
 static const char PONG_NETWORK_BINDING_CAMERA_TOGGLE[] = "camera_toggle";
 static const char PONG_NETWORK_BINDING_LOBBY_START[] = "lobby_start";
+static const char PONG_HOST_SESSION[] = "host";
 static const char PONG_DIRECT_CONNECT_SESSION[] = "direct_connect";
 static const char PONG_DIRECT_CONNECT_HOST_KEY[] = "direct_connect_host";
 static const char PONG_DIRECT_CONNECT_PORT_KEY[] = "direct_connect_port";
@@ -359,46 +360,12 @@ static void update_host_session_scene_state(pong_state *state)
         return;
     }
 
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(state->data);
-    if (scene_state == NULL)
-    {
-        return;
-    }
-
-    const char *status =
-        state->host_session != NULL ? sdl3d_network_session_status(state->host_session) : state->host_status;
-    const Uint16 port =
-        state->host_session != NULL ? sdl3d_network_session_port(state->host_session) : SDL3D_NETWORK_DEFAULT_PORT;
-    char client_label[SDL3D_NETWORK_MAX_HOST_LENGTH + 48];
-    char peer_host[SDL3D_NETWORK_MAX_HOST_LENGTH];
-    Uint16 peer_port = 0;
-    const bool client_connected =
-        state->host_session != NULL && sdl3d_network_session_is_connected(state->host_session);
-    SDL_snprintf(state->host_status, sizeof(state->host_status), "%s",
-                 status != NULL && status[0] != '\0' ? status : "Not hosting");
-    SDL_snprintf(state->host_endpoint, sizeof(state->host_endpoint), "UDP %u", (unsigned int)port);
-    SDL_snprintf(client_label, sizeof(client_label), "Waiting for client");
-    SDL_zero(peer_host);
-    if (client_connected &&
-        sdl3d_network_session_get_peer_endpoint(state->host_session, peer_host, (int)sizeof(peer_host), &peer_port))
-    {
-        SDL_snprintf(client_label, sizeof(client_label), "Client 1 - %s:%u", peer_host, (unsigned int)peer_port);
-    }
-    else if (client_connected)
-    {
-        SDL_snprintf(client_label, sizeof(client_label), "Client 1 - Connected");
-    }
-
-    sdl3d_properties_set_string(
-        scene_state, network_scene_state_key(state, "host", "status", "multiplayer_host_status"), state->host_status);
-    sdl3d_properties_set_string(scene_state,
-                                network_scene_state_key(state, "host", "endpoint", "multiplayer_host_endpoint"),
-                                state->host_endpoint);
-    sdl3d_properties_set_string(scene_state, network_scene_state_key(state, "host", "peer", "multiplayer_host_client"),
-                                client_label);
-    sdl3d_properties_set_bool(scene_state,
-                              network_scene_state_key(state, "host", "connected", "multiplayer_host_connected"),
-                              client_connected);
+    state->host_session = sdl3d_game_data_get_network_host_session(state->data, PONG_HOST_SESSION);
+    (void)sdl3d_game_data_network_host_publish_status(
+        state->data, PONG_HOST_SESSION, network_scene_state_key(state, "host", "status", "multiplayer_host_status"),
+        network_scene_state_key(state, "host", "endpoint", "multiplayer_host_endpoint"),
+        network_scene_state_key(state, "host", "peer", "multiplayer_host_client"),
+        network_scene_state_key(state, "host", "connected", "multiplayer_host_connected"));
 }
 
 static void destroy_host_session_internal(pong_state *state, bool notify_peer)
@@ -410,7 +377,11 @@ static void destroy_host_session_internal(pong_state *state, bool notify_peer)
             (void)send_network_control_packet_repeated(state, state->host_session, PONG_NETWORK_MESSAGE_DISCONNECT,
                                                        "host disconnect", 5);
         }
-        sdl3d_network_session_destroy(state->host_session);
+        (void)sdl3d_game_data_network_host_cancel(
+            state->data, PONG_HOST_SESSION, network_scene_state_key(state, "host", "status", "multiplayer_host_status"),
+            network_scene_state_key(state, "host", "endpoint", "multiplayer_host_endpoint"),
+            network_scene_state_key(state, "host", "peer", "multiplayer_host_client"),
+            network_scene_state_key(state, "host", "connected", "multiplayer_host_connected"), "Not hosting");
         state->host_session = NULL;
     }
 
@@ -458,8 +429,6 @@ static void destroy_direct_connect_session(pong_state *state)
 
 static bool start_host_session(pong_state *state)
 {
-    sdl3d_network_session_desc desc;
-
     if (state == NULL)
     {
         return false;
@@ -470,16 +439,12 @@ static bool start_host_session(pong_state *state)
         return true;
     }
 
-    sdl3d_network_session_desc_init(&desc);
-    desc.role = SDL3D_NETWORK_ROLE_HOST;
-    desc.host = NULL;
-    desc.port = SDL3D_NETWORK_DEFAULT_PORT;
-    desc.local_port = 0;
-    desc.handshake_timeout = 5.0f;
-    desc.idle_timeout = 10.0f;
-    desc.session_name = "Pong";
-
-    if (!sdl3d_network_session_create(&desc, &state->host_session))
+    if (!sdl3d_game_data_network_host_start(
+            state->data, PONG_HOST_SESSION, SDL3D_NETWORK_DEFAULT_PORT, "SDL3D Pong",
+            network_scene_state_key(state, "host", "status", "multiplayer_host_status"),
+            network_scene_state_key(state, "host", "endpoint", "multiplayer_host_endpoint"),
+            network_scene_state_key(state, "host", "peer", "multiplayer_host_client"),
+            network_scene_state_key(state, "host", "connected", "multiplayer_host_connected")))
     {
         SDL_snprintf(state->host_status, sizeof(state->host_status), "%s", SDL_GetError());
         SDL_snprintf(state->host_endpoint, sizeof(state->host_endpoint), "UDP %u",
@@ -489,7 +454,7 @@ static bool start_host_session(pong_state *state)
     }
 
     update_host_session_scene_state(state);
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong host lobby session active: %s", state->host_endpoint);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Pong host lobby session active");
     return true;
 }
 
@@ -1275,6 +1240,8 @@ static void update_multiplayer_sessions(sdl3d_game_context *ctx, pong_state *sta
         state->data != NULL
             ? sdl3d_game_data_get_network_direct_connect_session(state->data, PONG_DIRECT_CONNECT_SESSION)
             : state->direct_connect_session;
+    state->host_session = state->data != NULL ? sdl3d_game_data_get_network_host_session(state->data, PONG_HOST_SESSION)
+                                              : state->host_session;
 
     update_host_session_status(ctx, state, dt);
 

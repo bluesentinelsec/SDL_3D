@@ -23,6 +23,38 @@
     "enter": "scene_in",
     "exit": "scene_out"
   },
+  "activity": {
+    "enabled": true,
+    "input": "any",
+    "reset_periodic_on_input": false,
+    "on_enter": [
+      {
+        "type": "network.host.start",
+        "name": "host",
+        "default_port": 27183,
+        "session_name": "SDL3D Pong",
+        "status_key": "multiplayer_host_status",
+        "endpoint_key": "multiplayer_host_endpoint",
+        "peer_key": "multiplayer_host_client",
+        "connected_key": "multiplayer_host_connected"
+      }
+    ],
+    "periodic": [
+      {
+        "interval": 0.1,
+        "actions": [
+          {
+            "type": "network.host.observe",
+            "name": "host",
+            "status_key": "multiplayer_host_status",
+            "endpoint_key": "multiplayer_host_endpoint",
+            "peer_key": "multiplayer_host_client",
+            "connected_key": "multiplayer_host_connected"
+          }
+        ]
+      }
+    ]
+  },
   "menus": [
     {
       "name": "menu.multiplayer.lobby.connected",
