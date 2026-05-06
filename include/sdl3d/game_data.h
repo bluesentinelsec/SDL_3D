@@ -1211,6 +1211,25 @@ extern "C"
                                                  char *error_buffer, int error_buffer_size);
 
     /**
+     * @brief Encode a host-to-client snapshot packet by runtime binding semantic.
+     *
+     * @p binding_name is resolved through `network.runtime_bindings.replication`
+     * before encoding. Use this from generic session/runtime code so the loop
+     * does not need to know concrete replication channel names.
+     */
+    bool sdl3d_game_data_encode_network_runtime_snapshot(const sdl3d_game_data_runtime *runtime,
+                                                         const char *binding_name, Uint32 tick, void *buffer,
+                                                         size_t buffer_size, size_t *out_size, char *error_buffer,
+                                                         int error_buffer_size);
+
+    /**
+     * @brief Encode and send a host-to-client snapshot packet by runtime binding.
+     */
+    bool sdl3d_game_data_send_network_runtime_snapshot(const sdl3d_game_data_runtime *runtime,
+                                                       sdl3d_network_session *session, const char *binding_name,
+                                                       Uint32 tick, char *error_buffer, int error_buffer_size);
+
+    /**
      * @brief Decode and apply an authored host-to-client replication snapshot.
      *
      * The packet must match the runtime schema hash and reference a
@@ -1230,6 +1249,17 @@ extern "C"
     bool sdl3d_game_data_apply_network_snapshot(sdl3d_game_data_runtime *runtime, const void *packet,
                                                 size_t packet_size, Uint32 *out_tick, char *error_buffer,
                                                 int error_buffer_size);
+
+    /**
+     * @brief Decode and apply a host-to-client snapshot expected by runtime binding.
+     *
+     * The packet must be a valid snapshot packet for the concrete replication
+     * channel mapped by @p binding_name. This prevents generic session loops
+     * from accidentally applying a valid but unexpected channel.
+     */
+    bool sdl3d_game_data_apply_network_runtime_snapshot(sdl3d_game_data_runtime *runtime, const char *binding_name,
+                                                        const void *packet, size_t packet_size, Uint32 *out_tick,
+                                                        char *error_buffer, int error_buffer_size);
 
     /**
      * @brief Encode an authored client-to-host input replication packet.
@@ -1257,6 +1287,22 @@ extern "C"
                                               int error_buffer_size);
 
     /**
+     * @brief Encode a client-to-host input packet by runtime binding semantic.
+     */
+    bool sdl3d_game_data_encode_network_runtime_input(const sdl3d_game_data_runtime *runtime, const char *binding_name,
+                                                      const sdl3d_input_manager *input, Uint32 tick, void *buffer,
+                                                      size_t buffer_size, size_t *out_size, char *error_buffer,
+                                                      int error_buffer_size);
+
+    /**
+     * @brief Encode and send a client-to-host input packet by runtime binding.
+     */
+    bool sdl3d_game_data_send_network_runtime_input(const sdl3d_game_data_runtime *runtime,
+                                                    sdl3d_network_session *session, const char *binding_name,
+                                                    const sdl3d_input_manager *input, Uint32 tick, char *error_buffer,
+                                                    int error_buffer_size);
+
+    /**
      * @brief Decode and apply an authored client-to-host input packet.
      *
      * The packet must match the runtime schema hash and reference a
@@ -1276,6 +1322,17 @@ extern "C"
     bool sdl3d_game_data_apply_network_input(const sdl3d_game_data_runtime *runtime, sdl3d_input_manager *input,
                                              const void *packet, size_t packet_size, Uint32 *out_tick,
                                              char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Decode and apply a client-to-host input packet expected by runtime binding.
+     *
+     * The packet must be a valid input packet for the concrete replication
+     * channel mapped by @p binding_name. On failure, no input overrides are
+     * changed.
+     */
+    bool sdl3d_game_data_apply_network_runtime_input(const sdl3d_game_data_runtime *runtime, const char *binding_name,
+                                                     sdl3d_input_manager *input, const void *packet, size_t packet_size,
+                                                     Uint32 *out_tick, char *error_buffer, int error_buffer_size);
 
     /**
      * @brief Clear action overrides declared by an authored input replication channel.
