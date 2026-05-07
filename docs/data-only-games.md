@@ -73,36 +73,25 @@ C changes are appropriate when the game needs a new reusable engine capability:
 Once implemented, the feature should be consumed from JSON and Lua by all games
 that need it.
 
-## Pong Status
+## Runner Examples
 
-Pong is now the reference data-only game:
-
-- normal `pong_demo` builds from `tools/sdl3d_runner.c`
-- Pong's embedded assets and `asset://pong.game.json` are build-time defaults
-- Pong gameplay rules are authored in `demos/pong/data/scripts/pong.lua`
-- scenes, options, input, audio, haptics, rendering, networking, diagnostics,
-  and app flow are authored in JSON
-- Pong no longer has a custom `demos/pong/main.c` host
-
-Run Pong through the generic runner from a directory:
+Run a data-authored game through the generic runner from a directory:
 
 ```sh
-build/debug/sdl3d_runner --root demos/pong/data --data asset://pong.game.json
+build/debug/sdl3d_runner --root path/to/game/data --data asset://game.game.json
 ```
 
-Run Pong through a pack file:
+Run through a pack file:
 
 ```sh
-build/debug/sdl3d_runner --pack build/debug/demos/pong/pong.sdl3dpak --data asset://pong.game.json
+build/debug/sdl3d_runner --pack path/to/game.sdl3dpak --data asset://game.game.json
 ```
 
-Run the default embedded demo target:
+Demo targets may compile the same runner source with embedded assets and a
+default root data path. That wrapper should only supply build-time defaults; it
+should not contain game rules.
 
-```sh
-build/debug/demos/pong/pong_demo
-```
-
-## Parity Checklist
+## Data-Only Parity Checklist
 
 Before treating a game as data-only, validate the runner-backed game path:
 

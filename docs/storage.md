@@ -12,8 +12,8 @@ The storage root is derived from stable metadata:
 ```json
 {
   "storage": {
-    "organization": "Blue Sentinel Security",
-    "application": "SDL3D Pong",
+    "organization": "Example Studio",
+    "application": "Example Game",
     "profile": "default"
   }
 }
@@ -35,11 +35,11 @@ storage. The deterministic planner used by tests and tools follows this shape:
 
 | Platform policy | Example user root |
 | --- | --- |
-| Windows | `%APPDATA%/Blue Sentinel Security/SDL3D Pong` |
-| Apple | `Application Support/Blue Sentinel Security/SDL3D Pong` |
-| Unix/Linux | `$XDG_DATA_HOME/Blue Sentinel Security/SDL3D Pong` |
-| Android | app-private root plus `Blue Sentinel Security/SDL3D Pong` |
-| Emscripten | persistent virtual root plus `Blue Sentinel Security/SDL3D Pong` |
+| Windows | `%APPDATA%/Example Studio/Example Game` |
+| Apple | `Application Support/Example Studio/Example Game` |
+| Unix/Linux | `$XDG_DATA_HOME/Example Studio/Example Game` |
+| Android | app-private root plus `Example Studio/Example Game` |
+| Emscripten | persistent virtual root plus `Example Studio/Example Game` |
 
 If a profile is configured, SDL3D appends `profiles/<profile>`. The cache root
 then appends `cache`.
