@@ -2852,11 +2852,35 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
         if (!yyjson_is_int(capacity) || yyjson_get_int(capacity) <= 0 || yyjson_get_int(capacity) > 4096)
             return validation_error(ctx, path, "actor pool capacity must be an integer in 1..4096");
         const char *scene = json_string(pool, "scene");
+        yyjson_val *scenes = obj_get(pool, "scenes");
+        if (scene != NULL && scenes != NULL)
+            return validation_error(ctx, path, "actor pool must use either scene or scenes, not both");
         if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, path))
             return false;
+        if (scenes != NULL)
+        {
+            if (!yyjson_is_arr(scenes) || yyjson_arr_size(scenes) <= 0)
+                return validation_error(ctx, path, "actor pool scenes must be a non-empty array");
+            for (size_t scene_index = 0; scene_index < yyjson_arr_size(scenes); ++scene_index)
+            {
+                char scene_path[PATH_BUFFER_SIZE];
+                format_path(scene_path, sizeof(scene_path), "$.actor_pools[%zu].scenes[%zu]", i, scene_index);
+                yyjson_val *scene_value = yyjson_arr_get(scenes, scene_index);
+                if (!yyjson_is_str(scene_value) || yyjson_get_str(scene_value)[0] == '\0')
+                    return validation_error(ctx, scene_path, "actor pool scenes entries must be non-empty strings");
+                if (!require_ref(ctx, &names->scenes, "scene", yyjson_get_str(scene_value), scene_path))
+                    return false;
+            }
+        }
         const char *policy = json_string(pool, "on_exhausted");
         if (policy != NULL && SDL_strcmp(policy, "fail") != 0 && SDL_strcmp(policy, "reuse_oldest") != 0)
             return validation_error(ctx, path, "actor pool on_exhausted must be fail or reuse_oldest");
+        const char *scene_policy = json_string(pool, "on_scene_exit");
+        if (scene_policy != NULL && SDL_strcmp(scene_policy, "reset") != 0 &&
+            SDL_strcmp(scene_policy, "despawn") != 0 && SDL_strcmp(scene_policy, "preserve") != 0)
+        {
+            return validation_error(ctx, path, "actor pool on_scene_exit must be reset, despawn, or preserve");
+        }
     }
     return true;
 }

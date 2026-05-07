@@ -1284,17 +1284,34 @@ in the middle of gameplay.
       "archetype": "archetype.player_shot",
       "capacity": 24,
       "scene": "scene.play",
+      "on_scene_exit": "reset",
       "on_exhausted": "fail"
     }
   ]
 }
 ```
 
-Pool names must be unique. `capacity` must be a positive integer. `scene` is
-optional; when present, pooled actors are considered part of that scene for
-generic scene filtering. `on_exhausted` is optional and defaults to `fail`.
-`reuse_oldest` may be authored when the oldest active pooled actor should be
-reset and reused instead of failing the spawn.
+Pool names must be unique. `capacity` must be a positive integer. `scene` is an
+optional shorthand for one scene; `scenes` may be used instead when a pool
+belongs to multiple scenes, for example a lobby and loading scene that share the
+same connection-status actors. Do not author both `scene` and `scenes` on the
+same pool. Scene membership is used by generic scene filtering and by
+scene-transition cleanup policies.
+
+`on_scene_exit` controls what happens when the active scene leaves the pool's
+scene set. If the next scene is also in the pool's scene set, no exit policy is
+run. Supported values are:
+
+- `reset`: reset every actor in the pool to archetype defaults and the pool's
+  `initial_active` state. This is the default for scene-scoped pools.
+- `despawn`: deactivate active or despawning actors and reset them to inactive
+  archetype defaults. This is useful for projectiles and transient effects.
+- `preserve`: keep pooled actor state intact across the scene transition. This
+  is the default for pools without `scene` or `scenes`.
+
+`on_exhausted` is optional and defaults to `fail`. `reuse_oldest` may be
+authored when the oldest active pooled actor should be reset and reused instead
+of failing the spawn.
 
 Pool actors receive deterministic runtime names in the form
 `<pool-name>.<index>`, such as `pool.player_shots.0`, and are initialized from
