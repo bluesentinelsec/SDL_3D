@@ -481,7 +481,7 @@ static void managed_network_cancel_host(sdl3d_data_game_runtime *runtime, bool n
             : NULL;
     if (runtime == NULL || runtime->data == NULL)
         return;
-    if (session != NULL && notify_peer)
+    if (session != NULL && notify_peer && sdl3d_network_session_is_connected(session))
     {
         (void)managed_network_send_control_repeated(runtime, session, SDL3D_MANAGED_NETWORK_BINDING_DISCONNECT,
                                                     "host disconnect", 5);
@@ -515,7 +515,7 @@ static void managed_network_cancel_direct_connect(sdl3d_data_game_runtime *runti
                                          : NULL;
     if (runtime == NULL || runtime->data == NULL)
         return;
-    if (session != NULL && notify_peer)
+    if (session != NULL && notify_peer && sdl3d_network_session_is_connected(session))
     {
         (void)managed_network_send_control_repeated(runtime, session, SDL3D_MANAGED_NETWORK_BINDING_DISCONNECT,
                                                     "client disconnect", 5);
