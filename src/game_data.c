@@ -12855,27 +12855,9 @@ bool sdl3d_game_data_load_app_config_asset(sdl3d_asset_resolver *assets, const c
         return false;
     }
 
-    sdl3d_asset_buffer buffer;
-    SDL_zero(buffer);
-    char asset_error[256];
-    if (!sdl3d_asset_resolver_read_file(assets, asset_path, &buffer, asset_error, (int)sizeof(asset_error)))
-    {
-        if (error_buffer != NULL && error_buffer_size > 0)
-            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "failed to read game data asset %s: %s", asset_path,
-                         asset_error);
-        return false;
-    }
-
-    yyjson_read_err err;
-    yyjson_doc *doc = yyjson_read_opts((char *)buffer.data, buffer.size, YYJSON_READ_NOFLAG, NULL, &err);
-    sdl3d_asset_buffer_free(&buffer);
+    yyjson_doc *doc = sdl3d_game_data_compose_asset(assets, asset_path, error_buffer, error_buffer_size);
     if (doc == NULL)
-    {
-        if (error_buffer != NULL && error_buffer_size > 0)
-            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "yyjson error %u at byte %llu: %s", err.code,
-                         (unsigned long long)err.pos, err.msg != NULL ? err.msg : "");
         return false;
-    }
 
     yyjson_val *root = yyjson_doc_get_root(doc);
     const bool ok =
@@ -12939,27 +12921,9 @@ bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_
         return false;
     }
 
-    sdl3d_asset_buffer buffer;
-    SDL_zero(buffer);
-    char asset_error[256];
-    if (!sdl3d_asset_resolver_read_file(assets, asset_path, &buffer, asset_error, (int)sizeof(asset_error)))
-    {
-        if (error_buffer != NULL && error_buffer_size > 0)
-            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "failed to read game data asset %s: %s", asset_path,
-                         asset_error);
-        return false;
-    }
-
-    yyjson_read_err err;
-    yyjson_doc *doc = yyjson_read_opts((char *)buffer.data, buffer.size, YYJSON_READ_NOFLAG, NULL, &err);
-    sdl3d_asset_buffer_free(&buffer);
+    yyjson_doc *doc = sdl3d_game_data_compose_asset(assets, asset_path, error_buffer, error_buffer_size);
     if (doc == NULL)
-    {
-        if (error_buffer != NULL && error_buffer_size > 0)
-            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "yyjson error %u at byte %llu: %s", err.code,
-                         (unsigned long long)err.pos, err.msg != NULL ? err.msg : "");
         return false;
-    }
 
     yyjson_val *root = yyjson_doc_get_root(doc);
     if (!yyjson_is_obj(root) || SDL_strcmp(json_string(root, "schema", ""), "sdl3d.game.v0") != 0)

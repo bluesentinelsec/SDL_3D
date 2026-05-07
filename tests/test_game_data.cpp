@@ -6712,10 +6712,101 @@ TEST(GameDataRuntime, ValidatesStructuredJsonImportsAndFragments)
   "schema": "sdl3d.fragment.v0",
   "signals": ["signal.wave.start"]
 })json");
+    write_text(dir / "images" / "player.png", "placeholder");
 
     char error[512]{};
     EXPECT_TRUE(sdl3d_game_data_validate_file((dir / "game.json").string().c_str(), nullptr, error, sizeof(error)))
         << error;
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, LoadsComposedStructuredJsonImports)
+{
+    const std::filesystem::path dir = unique_test_dir("json_imports_composed");
+    write_text(dir / "game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Imports", "id": "test.imports", "version": "0.1.0" },
+  "imports": [
+    { "path": "fragments/entities.json", "sections": ["entities"] },
+    { "path": "fragments/signals.json", "sections": ["signals"] },
+    { "path": "fragments/logic.json", "sections": ["logic"] }
+  ],
+  "signals": ["signal.root"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.imported",
+        "actions": [
+          { "type": "property.set", "target": "entity.imported", "key": "ready", "value": true }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "fragments" / "entities.json",
+               R"json({
+  "schema": "sdl3d.fragment.v0",
+  "entities": [
+    {
+      "name": "entity.imported",
+      "tags": ["imported"],
+      "properties": {
+        "ready": { "type": "bool", "value": false },
+        "count": { "type": "int", "value": 0 }
+      }
+    }
+  ]
+})json");
+    write_text(dir / "fragments" / "signals.json",
+               R"json({
+  "schema": "sdl3d.fragment.v0",
+  "signals": ["signal.imported"]
+})json");
+    write_text(dir / "fragments" / "logic.json",
+               R"json({
+  "schema": "sdl3d.fragment.v0",
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.root",
+        "actions": [
+          { "type": "property.set", "target": "entity.imported", "key": "count", "value": 7 }
+        ]
+      }
+    ]
+  }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "entities": ["entity.imported"]
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    sdl3d_game_data_runtime *runtime = nullptr;
+    char error[512]{};
+    ASSERT_TRUE(
+        sdl3d_game_data_load_file((dir / "game.json").string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, "entity.imported");
+    ASSERT_NE(actor, nullptr);
+    EXPECT_NE(sdl3d_game_data_find_actor_with_tag(runtime, "imported"), nullptr);
+
+    const int root_signal = sdl3d_game_data_find_signal(runtime, "signal.root");
+    const int imported_signal = sdl3d_game_data_find_signal(runtime, "signal.imported");
+    ASSERT_GE(root_signal, 0);
+    ASSERT_GE(imported_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), root_signal, nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(actor->props, "count", 0), 7);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), imported_signal, nullptr);
+    EXPECT_TRUE(sdl3d_properties_get_bool(actor->props, "ready", false));
+
+    destroy_runtime_session(session, runtime);
     remove_test_dir(dir);
 }
 
@@ -6808,6 +6899,21 @@ TEST(GameDataRuntime, RejectsInvalidStructuredJsonImports)
             "b.json",
             R"json({ "schema": "sdl3d.fragment.v0", "imports": [{ "path": "a.json" }], "signals": [] })json",
             "cycle",
+        },
+        {
+            "merge_conflict",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "imports": [
+    { "path": "a.json", "sections": ["storage"] },
+    { "path": "b.json", "sections": ["storage"] }
+  ]
+})json",
+            "a.json",
+            R"json({ "schema": "sdl3d.fragment.v0", "storage": { "organization": "A" } })json",
+            "b.json",
+            R"json({ "schema": "sdl3d.fragment.v0", "storage": { "organization": "B" } })json",
+            "merge conflict",
         },
     };
 

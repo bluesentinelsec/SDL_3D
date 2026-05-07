@@ -98,9 +98,12 @@ game file.
 When `sections` is present, it must be a non-empty array of mergeable section
 names and every selected section must exist in the fragment. Non-selected
 sections in that fragment are rejected so hidden data does not silently depend
-on import order. The current implementation validates the import graph and
-fragment structure; the follow-up composition layer will merge selected
-sections into the runtime document before normal game-data validation and load.
+on import order. Imports are composed deterministically before normal validation
+and load: imported fragments are applied in authored order, nested imports are
+applied before their importing fragment's local sections, and the root file's
+local sections are applied last. Arrays concatenate in that order. Objects merge
+recursively. Scalar/type conflicts at the same object path are rejected instead
+of choosing a hidden winner.
 
 ## Storage
 

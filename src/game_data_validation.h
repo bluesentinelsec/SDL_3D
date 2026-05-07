@@ -16,6 +16,9 @@ bool sdl3d_game_data_validate_document(yyjson_val *root, const char *source_path
                                        const sdl3d_game_data_validation_options *options, char *error_buffer,
                                        int error_buffer_size);
 
+yyjson_doc *sdl3d_game_data_compose_asset(sdl3d_asset_resolver *assets, const char *asset_path, char *error_buffer,
+                                          int error_buffer_size);
+
 bool sdl3d_game_data_network_schema_hash(yyjson_val *root, Uint8 out_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE],
                                          bool *out_present);
 
