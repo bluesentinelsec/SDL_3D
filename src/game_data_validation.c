@@ -100,6 +100,9 @@ static void format_path(char *buffer, size_t buffer_size, const char *format, ..
 static bool validation_error(validation_context *ctx, const char *json_path, const char *format, ...);
 static bool validate_imports_with_stack(validation_context *ctx, yyjson_val *root, import_validation_stack *stack);
 static bool validate_imports(validation_context *ctx, yyjson_val *root);
+static bool compose_document_into(validation_context *ctx, yyjson_val *root, yyjson_val *sections,
+                                  const char *json_path, import_validation_stack *stack, yyjson_mut_doc *doc,
+                                  yyjson_mut_val *target, bool is_root);
 
 static yyjson_val *obj_get(yyjson_val *object, const char *key)
 {
@@ -1989,6 +1992,294 @@ static bool validate_imports(validation_context *ctx, yyjson_val *root)
     SDL_zero(stack);
     stack.paths[stack.count++] = ctx->source_path != NULL ? asset_path_without_scheme(ctx->source_path) : "<root>";
     return validate_imports_with_stack(ctx, root, &stack);
+}
+
+static bool compose_merge_value(validation_context *ctx, yyjson_mut_doc *doc, yyjson_mut_val *target_object,
+                                const char *key, yyjson_val *source_value, const char *json_path);
+
+static bool compose_merge_object_body(validation_context *ctx, yyjson_mut_doc *doc, yyjson_mut_val *target_object,
+                                      yyjson_val *source_object, const char *json_path)
+{
+    yyjson_val *key;
+    yyjson_val *value;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(source_object, &iter);
+    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+    {
+        value = yyjson_obj_iter_get_val(key);
+        const char *name = yyjson_get_str(key);
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "%s.%s", json_path, name);
+        if (!compose_merge_value(ctx, doc, target_object, name, value, path))
+            return false;
+    }
+    return true;
+}
+
+static bool compose_append_array(validation_context *ctx, yyjson_mut_doc *doc, yyjson_mut_val *target_array,
+                                 yyjson_val *source_array, const char *json_path)
+{
+    for (size_t i = 0; i < yyjson_arr_size(source_array); ++i)
+    {
+        yyjson_mut_val *copy = yyjson_val_mut_copy(doc, yyjson_arr_get(source_array, i));
+        if (copy == NULL || !yyjson_mut_arr_append(target_array, copy))
+            return validation_error(ctx, json_path, "failed to append imported array item");
+    }
+    return true;
+}
+
+static bool compose_merge_existing(validation_context *ctx, yyjson_mut_doc *doc, yyjson_mut_val *target_value,
+                                   yyjson_val *source_value, const char *json_path)
+{
+    if (yyjson_mut_is_arr(target_value) && yyjson_is_arr(source_value))
+        return compose_append_array(ctx, doc, target_value, source_value, json_path);
+    if (yyjson_mut_is_obj(target_value) && yyjson_is_obj(source_value))
+        return compose_merge_object_body(ctx, doc, target_value, source_value, json_path);
+    return validation_error(ctx, json_path, "import merge conflict for '%s'", json_path);
+}
+
+static bool compose_merge_value(validation_context *ctx, yyjson_mut_doc *doc, yyjson_mut_val *target_object,
+                                const char *key, yyjson_val *source_value, const char *json_path)
+{
+    yyjson_mut_val *existing = yyjson_mut_obj_get(target_object, key);
+    if (existing != NULL)
+        return compose_merge_existing(ctx, doc, existing, source_value, json_path);
+
+    yyjson_mut_val *key_copy = yyjson_mut_strcpy(doc, key);
+    yyjson_mut_val *copy = yyjson_val_mut_copy(doc, source_value);
+    if (key_copy == NULL || copy == NULL || !yyjson_mut_obj_add(target_object, key_copy, copy))
+        return validation_error(ctx, json_path, "failed to copy imported value");
+    return true;
+}
+
+static bool compose_local_sections(validation_context *ctx, yyjson_val *root, yyjson_val *sections, yyjson_mut_doc *doc,
+                                   yyjson_mut_val *target, bool is_root)
+{
+    yyjson_val *key;
+    yyjson_val *value;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(root, &iter);
+    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+    {
+        value = yyjson_obj_iter_get_val(key);
+        const char *name = yyjson_get_str(key);
+        if (SDL_strcmp(name, "imports") == 0)
+            continue;
+        if (!is_root && SDL_strcmp(name, "schema") == 0)
+            continue;
+        if (!is_root && !import_section_name_allowed(name))
+            continue;
+        if (!is_root && !import_sections_contains(sections, name))
+            continue;
+
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.%s", name);
+        if (!compose_merge_value(ctx, doc, target, name, value, path))
+            return false;
+    }
+    return true;
+}
+
+static bool compose_import_entry(validation_context *ctx, yyjson_val *entry, size_t index,
+                                 import_validation_stack *stack, yyjson_mut_doc *doc, yyjson_mut_val *target)
+{
+    char path[PATH_BUFFER_SIZE];
+    format_path(path, sizeof(path), "$.imports[%zu]", index);
+    if (!yyjson_is_obj(entry))
+        return validation_error(ctx, path, "import entries must be objects");
+
+    const char *import_path = json_string(entry, "path");
+    char path_field[PATH_BUFFER_SIZE];
+    format_path(path_field, sizeof(path_field), "%s.path", path);
+    if (!import_path_is_safe_relative(import_path))
+        return validation_error(ctx, path_field, "import path must be a safe relative path");
+
+    yyjson_val *sections = obj_get(entry, "sections");
+    if (sections != NULL && !yyjson_is_arr(sections))
+        return validation_error(ctx, path, "import sections must be an array");
+
+    char *resolved = import_path_join(ctx->base_dir, import_path);
+    if (resolved == NULL)
+        return validation_error(ctx, path_field, "failed to resolve import path '%s'", import_path);
+    if (ctx->assets == NULL)
+    {
+        SDL_free(resolved);
+        return validation_error(ctx, path, "imports require an asset resolver");
+    }
+    if (stack->count >= GAME_DATA_IMPORT_MAX_DEPTH)
+    {
+        SDL_free(resolved);
+        return validation_error(ctx, path, "import depth exceeds %d", GAME_DATA_IMPORT_MAX_DEPTH);
+    }
+    if (import_stack_contains(stack, resolved))
+    {
+        const bool ok = validation_error(ctx, path, "import cycle detected for '%s'", resolved);
+        SDL_free(resolved);
+        return ok;
+    }
+
+    sdl3d_asset_buffer buffer;
+    SDL_zero(buffer);
+    char asset_error[256];
+    if (!sdl3d_asset_resolver_read_file(ctx->assets, resolved, &buffer, asset_error, (int)sizeof(asset_error)))
+    {
+        const bool ok = validation_error(ctx, path, "import fragment '%s' does not exist or cannot be read", resolved);
+        SDL_free(resolved);
+        return ok;
+    }
+
+    yyjson_read_err err;
+    yyjson_doc *fragment_doc = yyjson_read_opts((char *)buffer.data, buffer.size, YYJSON_READ_NOFLAG, NULL, &err);
+    sdl3d_asset_buffer_free(&buffer);
+    if (fragment_doc == NULL)
+    {
+        const bool ok = validation_error(ctx, path, "import yyjson error %u at byte %llu: %s", err.code,
+                                         (unsigned long long)err.pos, err.msg != NULL ? err.msg : "");
+        SDL_free(resolved);
+        return ok;
+    }
+
+    char *base_dir = path_dirname(asset_path_without_scheme(resolved));
+    validation_context child_ctx = *ctx;
+    child_ctx.source_path = resolved;
+    child_ctx.base_dir = base_dir;
+
+    stack->paths[stack->count++] = resolved;
+    const bool ok =
+        compose_document_into(&child_ctx, yyjson_doc_get_root(fragment_doc), sections, path, stack, doc, target, false);
+    stack->count--;
+
+    SDL_free(base_dir);
+    yyjson_doc_free(fragment_doc);
+    SDL_free(resolved);
+    return ok;
+}
+
+static bool compose_imports_into(validation_context *ctx, yyjson_val *root, import_validation_stack *stack,
+                                 yyjson_mut_doc *doc, yyjson_mut_val *target)
+{
+    yyjson_val *imports = obj_get(root, "imports");
+    if (imports == NULL)
+        return true;
+    if (!yyjson_is_arr(imports))
+        return validation_error(ctx, "$.imports", "imports must be an array");
+    for (size_t i = 0; i < yyjson_arr_size(imports); ++i)
+    {
+        if (!compose_import_entry(ctx, yyjson_arr_get(imports, i), i, stack, doc, target))
+            return false;
+    }
+    return true;
+}
+
+static bool compose_document_into(validation_context *ctx, yyjson_val *root, yyjson_val *sections,
+                                  const char *json_path, import_validation_stack *stack, yyjson_mut_doc *doc,
+                                  yyjson_mut_val *target, bool is_root)
+{
+    if (!yyjson_is_obj(root))
+        return validation_error(ctx, "$", is_root ? "root must be an object" : "fragment root must be an object");
+
+    const char *schema = json_string(root, "schema");
+    if (is_root)
+    {
+        if (SDL_strcmp(schema != NULL ? schema : "", "sdl3d.game.v0") != 0)
+            return validation_error(ctx, "$.schema", "unsupported or missing game data schema");
+    }
+    else
+    {
+        if (SDL_strcmp(schema != NULL ? schema : "", "sdl3d.fragment.v0") != 0)
+            return validation_error(ctx, "$.schema", "import fragment must use schema sdl3d.fragment.v0");
+        if (!validate_import_sections(ctx, sections, root, json_path) || !validate_fragment_keys(ctx, root, sections))
+            return false;
+    }
+
+    return compose_imports_into(ctx, root, stack, doc, target) &&
+           compose_local_sections(ctx, root, sections, doc, target, is_root);
+}
+
+yyjson_doc *sdl3d_game_data_compose_asset(sdl3d_asset_resolver *assets, const char *asset_path, char *error_buffer,
+                                          int error_buffer_size)
+{
+    if (error_buffer != NULL && error_buffer_size > 0)
+        error_buffer[0] = '\0';
+    if (assets == NULL || asset_path == NULL || asset_path[0] == '\0')
+    {
+        validation_context ctx = {
+            .source_path = asset_path != NULL ? asset_path : "<game-data>",
+            .error_buffer = error_buffer,
+            .error_buffer_size = error_buffer_size,
+        };
+        (void)validation_error(&ctx, "$", "invalid game data composition arguments");
+        return NULL;
+    }
+
+    sdl3d_asset_buffer buffer;
+    SDL_zero(buffer);
+    char asset_error[256];
+    if (!sdl3d_asset_resolver_read_file(assets, asset_path, &buffer, asset_error, (int)sizeof(asset_error)))
+    {
+        validation_context ctx = {
+            .source_path = asset_path,
+            .error_buffer = error_buffer,
+            .error_buffer_size = error_buffer_size,
+        };
+        (void)validation_error(&ctx, "$", "failed to read game data asset: %s", asset_error);
+        return NULL;
+    }
+
+    yyjson_read_err err;
+    yyjson_doc *source_doc = yyjson_read_opts((char *)buffer.data, buffer.size, YYJSON_READ_NOFLAG, NULL, &err);
+    sdl3d_asset_buffer_free(&buffer);
+    if (source_doc == NULL)
+    {
+        validation_context ctx = {
+            .source_path = asset_path,
+            .error_buffer = error_buffer,
+            .error_buffer_size = error_buffer_size,
+        };
+        (void)validation_error(&ctx, "$", "yyjson error %u at byte %llu: %s", err.code, (unsigned long long)err.pos,
+                               err.msg != NULL ? err.msg : "");
+        return NULL;
+    }
+
+    char *base_dir = path_dirname(asset_path_without_scheme(asset_path));
+    yyjson_mut_doc *mut_doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *mut_root = mut_doc != NULL ? yyjson_mut_obj(mut_doc) : NULL;
+    if (base_dir == NULL || mut_doc == NULL || mut_root == NULL)
+    {
+        yyjson_mut_doc_free(mut_doc);
+        yyjson_doc_free(source_doc);
+        SDL_free(base_dir);
+        validation_context ctx = {
+            .source_path = asset_path,
+            .error_buffer = error_buffer,
+            .error_buffer_size = error_buffer_size,
+        };
+        (void)validation_error(&ctx, "$", "failed to allocate composed game data document");
+        return NULL;
+    }
+
+    yyjson_mut_doc_set_root(mut_doc, mut_root);
+    validation_context ctx = {
+        .source_path = asset_path,
+        .base_dir = base_dir,
+        .assets = assets,
+        .error_buffer = error_buffer,
+        .error_buffer_size = error_buffer_size,
+    };
+    import_validation_stack stack;
+    SDL_zero(stack);
+    stack.paths[stack.count++] = asset_path_without_scheme(asset_path);
+
+    yyjson_doc *composed_doc = NULL;
+    if (compose_document_into(&ctx, yyjson_doc_get_root(source_doc), NULL, "$", &stack, mut_doc, mut_root, true))
+        composed_doc = yyjson_mut_doc_imut_copy(mut_doc, NULL);
+    if (composed_doc == NULL && (error_buffer == NULL || error_buffer_size <= 0 || error_buffer[0] == '\0'))
+        (void)validation_error(&ctx, "$", "failed to compose game data document");
+
+    yyjson_mut_doc_free(mut_doc);
+    yyjson_doc_free(source_doc);
+    SDL_free(base_dir);
+    return composed_doc;
 }
 
 static bool script_path_exists(validation_context *ctx, const char *script_path, const char *json_path)
@@ -5338,40 +5629,14 @@ bool sdl3d_game_data_validate_asset(sdl3d_asset_resolver *assets, const char *as
         return validation_error(&ctx, "$", "invalid game data asset validation arguments");
     }
 
-    sdl3d_asset_buffer buffer;
-    SDL_zero(buffer);
-    char asset_error[256];
-    if (!sdl3d_asset_resolver_read_file(assets, asset_path, &buffer, asset_error, (int)sizeof(asset_error)))
-    {
-        validation_context ctx = {
-            .options = options,
-            .source_path = asset_path,
-            .error_buffer = error_buffer,
-            .error_buffer_size = error_buffer_size,
-        };
-        return validation_error(&ctx, "$", "failed to read game data asset: %s", asset_error);
-    }
-
-    yyjson_read_err err;
-    yyjson_doc *doc = yyjson_read_opts((char *)buffer.data, buffer.size, YYJSON_READ_NOFLAG, NULL, &err);
+    yyjson_doc *doc = sdl3d_game_data_compose_asset(assets, asset_path, error_buffer, error_buffer_size);
     if (doc == NULL)
-    {
-        sdl3d_asset_buffer_free(&buffer);
-        validation_context ctx = {
-            .options = options,
-            .source_path = asset_path,
-            .error_buffer = error_buffer,
-            .error_buffer_size = error_buffer_size,
-        };
-        return validation_error(&ctx, "$", "yyjson error %u at byte %llu: %s", err.code, (unsigned long long)err.pos,
-                                err.msg != NULL ? err.msg : "");
-    }
+        return false;
 
     char *base_dir = path_dirname(asset_path_without_scheme(asset_path));
     const bool ok = sdl3d_game_data_validate_document(yyjson_doc_get_root(doc), asset_path, base_dir, assets, options,
                                                       error_buffer, error_buffer_size);
     SDL_free(base_dir);
     yyjson_doc_free(doc);
-    sdl3d_asset_buffer_free(&buffer);
     return ok;
 }
