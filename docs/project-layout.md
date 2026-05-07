@@ -1,0 +1,144 @@
+# Project Layout Guidance
+
+SDL3D games should keep one root game file and split implementation detail into
+structured JSON fragments, scene files, Lua scripts, and assets. The goal is
+that a developer can infer where to make a change from the path.
+
+## Recommended Data Project Shape
+
+```text
+data/
+  game.game.json
+  fragments/
+    actors/
+      player.json
+      enemies.json
+      world.json
+      effects.json
+    input/
+      actions.json
+      device_assignments.json
+      profiles.json
+    logic/
+      gameplay.json
+      menus.json
+      options.json
+      network.json
+    network/
+      protocol.json
+      replication.json
+      control_messages.json
+      runtime_bindings.json
+      session_flow.json
+    assets.json
+    interaction.json
+    persistence.json
+    presentation.json
+    runtime.json
+    scripts.json
+  scenes/
+    splash.scene.json
+    title.scene.json
+    play.scene.json
+    options.scene.json
+  scripts/
+    rules.lua
+  images/
+  audio/
+  shaders/
+```
+
+This is guidance, not a required exact tree. Use fewer files for small games
+and add folders only when they make ownership clearer.
+
+## Root File Responsibilities
+
+The root `sdl3d.game.v0` file is the game entry point. It should contain:
+
+- `schema`
+- `imports`
+- `metadata`
+- `app`
+- `scenes`
+- `world`
+
+Root-only sections should remain in the root file because they define how the
+game starts and how tools discover the game. Large reusable sections such as
+actors, input, logic, networking, assets, scripts, persistence, and
+presentation should usually live in fragments.
+
+## Fragment Responsibilities
+
+Fragments use `sdl3d.fragment.v0` and contribute only mergeable sections. Split
+fragments by editing purpose:
+
+- Actor fragments answer "what exists in the world?"
+- Input fragments answer "what can the player do and with which devices?"
+- Logic fragments answer "what happens when a signal, timer, or sensor fires?"
+- Network fragments answer "what is replicated and how sessions flow?"
+- Presentation fragments answer "how does reusable visual/audio polish behave?"
+
+Prefer paths that match developer intent:
+
+- `fragments/actors/player.json`
+- `fragments/logic/scoring.json`
+- `fragments/network/replication.json`
+- `fragments/input/profiles.json`
+
+Avoid vague names such as `misc.json`, `stuff.json`, or `gameplay2.json`.
+
+## Split Criteria
+
+Split a file when:
+
+- it contains multiple concepts edited for different reasons
+- it is difficult to review because unrelated changes appear together
+- it is hard to answer "where do I change this?"
+- two developers would naturally edit different parts independently
+
+Do not split a file when:
+
+- the fragment would contain only incidental leftovers
+- related behavior would require chasing many tiny files
+- the split hides ordering or ownership
+- the file is short and already has one clear purpose
+
+As a rough guideline, files over a few hundred lines deserve review, but line
+count is not the rule. Clarity of ownership is the rule.
+
+## Import Rules
+
+Imports are structured composition, not textual includes.
+
+- Import paths must be safe relative paths.
+- Fragments cannot author root-only sections.
+- Arrays append deterministically in import order.
+- Objects merge recursively.
+- Scalar conflicts fail validation.
+- Duplicate authored names are rejected after composition.
+
+Keep the import list in intentional order. If order matters, document it near
+the affected data rather than relying on accidental filename sorting.
+
+## Lua Placement
+
+Lua belongs under `scripts/` and should hold game-specific rules:
+
+- specialized movement math
+- enemy decision policy
+- scoring formulas
+- procedural spawn choices
+- game-specific save-data interpretation
+
+Lua should not duplicate generic data actions. If a rule can be expressed by
+JSON signals, sensors, timers, conditions, and actions, keep it in JSON.
+
+## Asset Packaging
+
+Use the same data tree for development directories, `.sdl3dpak` files, and
+embedded packs. Build files should include all authored JSON, Lua, shaders, and
+media that the game can load through `asset://` paths.
+
+For demo targets with many fragments, prefer a sorted recursive fragment list
+in CMake so adding a fragment does not silently break embedded or packed
+launch paths.

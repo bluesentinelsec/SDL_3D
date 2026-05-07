@@ -1,36 +1,75 @@
 # SDL3D
 
-SDL3D is an idiomatic C17 project scaffold for a high-level 3D graphics API powered by SDL3's GPU API.
+SDL3D is an alpha-stage, data-driven, general-purpose game engine powered by
+SDL. The project is intended to support both 2D and 3D games while keeping
+game-specific content in JSON, Lua, and assets whenever the engine already
+provides the required reusable primitives.
 
-SDL3D builds as a static library and has a hard dependency on SDL3.
+The current engine direction is:
 
-## Layout
+- a generic runtime/runner that can launch data-authored games
+- JSON for reusable engine primitives and authored composition
+- Lua for game-specific rules, calculations, and policy
+- C for engine systems, platform integration, renderer backends, and reusable
+  performance-critical primitives
+- templates and patterns for common game-development use cases such as retro
+  renderer profiles, dynamic lighting, sprite-heavy 2D games, fixed-screen
+  arcade games, and Doom/Quake-like 3D worlds
 
-- `include/` public headers
-- `src/` library sources
-- `tests/` executable tests registered with CTest
-- `cmake/` reusable CMake modules and package configuration templates
-- `scripts/` repository maintenance scripts
+SDL3D is not 1.0. APIs, schemas, and authored data conventions may still change
+when correctness or engine clarity requires it.
 
-## Testing
+## Project Status
 
-Unit tests use GoogleTest. CMake will use an installed `GTest` package when available and otherwise fetch GoogleTest automatically when `SDL3D_BUILD_TESTS=ON`.
-Testing and renderer-loop policy are documented in [docs/testing.md](docs/testing.md).
-Error propagation conventions are documented in [docs/error-handling.md](docs/error-handling.md).
-Logging conventions are documented in [docs/logging.md](docs/logging.md).
-The data-driven game model and reusable options package are documented in
-[docs/game-data-json.md](docs/game-data-json.md) and
-[docs/standard-options.md](docs/standard-options.md).
+The engine currently builds as a C17 static library plus tools and demo
+targets. The generic `sdl3d_runner` can launch games from:
+
+- a development asset directory
+- a `.sdl3dpak` file
+- an embedded asset pack supplied by the build
+
+The demo games are compatibility proofs for engine capabilities. New demo work
+should strengthen reusable systems instead of adding one-off host code.
+
+## Repository Layout
+
+- `include/`: public C headers
+- `src/`: engine implementation
+- `tools/`: command-line tools such as `sdl3d_runner` and `sdl3d_pack`
+- `demos/`: data-authored and low-level capability demos
+- `docs/`: engine documentation
+- `tests/`: GoogleTest and renderer tests registered with CTest
+- `cmake/`: reusable CMake modules and package configuration templates
+- `scripts/`: repository maintenance scripts
+- `vendor/`: vendored C dependencies
+
+## Documentation
+
+Start here:
+
+- [Documentation Index](docs/index.md)
+- [Engine Overview](docs/engine-overview.md)
+- [Project Layout Guidance](docs/project-layout.md)
+- [Data-Only Games](docs/data-only-games.md)
+- [Game Data JSON](docs/game-data-json.md)
+- [Gameplay Lua API](docs/game-data-lua.md)
+- [Data Game Runtime](docs/data-game-runtime.md)
+- [Assets And Packs](docs/assets.md)
+- [Testing Strategy](docs/testing.md)
 
 ## Dependencies
 
-- SDL3 3.2 or newer, discovered through CMake's config packages
+- SDL3 3.2 or newer, discovered through CMake config packages
 
-SDL3D links publicly against `SDL3::SDL3`, which is the SDL target guaranteed by the official SDL CMake package. That keeps SDL3D compatible with caller projects that choose either static or shared SDL builds.
+SDL3D links publicly against `SDL3::SDL3`, the SDL target guaranteed by the
+official SDL CMake package. If SDL3 is not already available from a parent
+project or `find_package(SDL3 ...)`, SDL3D can fetch SDL3 automatically with
+`FetchContent`. Set `SDL3D_FETCH_SDL3=OFF` if you want SDL3D to require a
+caller-provided SDL3 instead.
 
-If SDL3 is not already available from a parent project or `find_package(SDL3 ...)`, SDL3D can fetch SDL3 automatically with `FetchContent`. The fallback currently pins the latest stable SDL3 release tag, `release-3.4.0`, published on January 1, 2026. Set `SDL3D_FETCH_SDL3=OFF` if you want SDL3D to require a caller-provided SDL3 instead.
-
-When SDL3 is fetched this way, SDL3D disables its own install/export package generation for that build. Normal install/export packaging remains available when SDL3 comes from a parent target or a discovered SDL3 package.
+When SDL3 is fetched this way, SDL3D disables its own install/export package
+generation for that build. Normal install/export packaging remains available
+when SDL3 comes from a parent target or a discovered SDL3 package.
 
 ## Build
 
@@ -40,7 +79,8 @@ cmake --build --preset default
 ctest --preset default
 ```
 
-Top-level builds generate `compile_commands.json` automatically for LSP and other tooling integrations.
+Top-level builds generate `compile_commands.json` automatically for LSP and
+other tooling integrations.
 
 For an optimized build:
 
@@ -50,7 +90,7 @@ cmake --build --preset release
 ctest --preset release
 ```
 
-For a sanitizer-enabled build with AddressSanitizer and UndefinedBehaviorSanitizer:
+For a sanitizer-enabled build:
 
 ```sh
 CC=clang cmake --preset sanitizers
@@ -58,11 +98,23 @@ cmake --build --preset sanitizers
 ctest --preset sanitizers
 ```
 
-## Install
+## Run A Data-Authored Game
+
+From a development directory:
 
 ```sh
-cmake --install build/release
+build/debug/sdl3d_runner --root path/to/game/data --data asset://game.game.json
 ```
+
+From a pack file:
+
+```sh
+build/debug/sdl3d_runner --pack path/to/game.sdl3dpak --data asset://game.game.json
+```
+
+Demo targets may also build a game-specific executable from the same generic
+runner source with embedded assets and a default root data asset. That wrapper
+must not contain game-specific rules.
 
 ## Consume With FetchContent
 
@@ -80,9 +132,12 @@ FetchContent_MakeAvailable(SDL3D)
 target_link_libraries(your_target PRIVATE SDL3D::sdl3d)
 ```
 
-When SDL3D is consumed as a subproject, its tests default to `OFF` so it behaves cleanly inside a parent build. To force them on, set `SDL3D_BUILD_TESTS=ON` before `FetchContent_MakeAvailable`. SDL3D will use a parent-provided `SDL3::SDL3` target first, then `find_package(SDL3 ...)`, and finally its SDL3 fetch fallback when enabled.
+When SDL3D is consumed as a subproject, its tests default to `OFF`. To force
+them on, set `SDL3D_BUILD_TESTS=ON` before `FetchContent_MakeAvailable`.
 
 ## Formatting
+
+Run clang-format before submitting C or C++ changes:
 
 ```sh
 ./scripts/check_clang_format.sh

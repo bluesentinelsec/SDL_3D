@@ -1,8 +1,9 @@
 # Data Game Runtime
 
-`sdl3d_data_game_runtime` is the first engine-owned runtime layer for games
-authored primarily with JSON, Lua, and assets. It is intended to replace
-per-demo lifecycle code such as Pong's custom asset/data/caches/app-flow setup.
+`sdl3d_data_game_runtime` is the engine-owned runtime layer for games authored
+primarily with JSON, Lua, and assets. It exists so games can use the generic
+runner instead of implementing repetitive per-game asset, scene, app-flow,
+presentation, and network lifecycle code.
 
 The runtime is game-agnostic. It does not know scene names, actor names, input
 actions, or replication channels for a specific game.
@@ -45,7 +46,7 @@ The descriptor requires:
 - `session`: the game session that provides input, signals, timers, logic, and
   optional audio
 - `data_asset_path`: the root game JSON asset path, for example
-  `asset://pong.game.json`
+  `asset://game.game.json`
 
 The descriptor may also include:
 
@@ -86,8 +87,8 @@ resolve those keys through authored `network.runtime_bindings`, then:
 - send host snapshots after the authoritative simulation step
 
 The helpers intentionally report events instead of hard-coding transitions.
-That keeps game-specific flow in JSON/Lua or a thin compatibility host until
-scene/session orchestration is fully authored.
+That keeps game-specific flow in authored JSON/Lua rather than native runner
+code.
 
 For data-only games launched by `sdl3d_runner`, prefer
 `enable_managed_network`. The managed path uses standard semantic names:
@@ -126,7 +127,7 @@ properties, such as `reason`, into those actions; supported string fields may
 use `{reason}` placeholders.
 
 Authored `network.diagnostics.snapshots` entries make multiplayer state logging
-policy data-driven as well. A compatibility host or generic runner can call
+policy data-driven as well. Runtime code can call
 `sdl3d_game_data_log_network_snapshot_diagnostic()` by policy name; the game
 data chooses the replication channel, log level, cadence, session-state
 inclusion, and message template.
@@ -141,21 +142,21 @@ loop.
 Development directory example:
 
 ```sh
-build/debug/sdl3d_runner --root demos/pong/data --data asset://pong.game.json
+build/debug/sdl3d_runner --root path/to/game/data --data asset://game.game.json
 ```
 
 Pack-file example:
 
 ```sh
-build/debug/sdl3d_runner --pack build/debug/demos/pong/pong.sdl3dpak --data asset://pong.game.json
+build/debug/sdl3d_runner --pack path/to/game.sdl3dpak --data asset://game.game.json
 ```
 
-Pong's normal demo target is now a game-specific build of this same runner
-source with embedded Pong assets and a default data asset. It can be launched
-without arguments:
+Demo targets may build a game-specific executable from this same runner source
+with embedded assets and a default data asset. Such wrappers should provide
+only build-time defaults:
 
 ```sh
-build/debug/demos/pong/pong_demo
+build/debug/demos/my_game/my_game_demo
 ```
 
 Optional flags:
@@ -166,16 +167,16 @@ Optional flags:
   `SDL3D_RUNNER_EMBEDDED_ASSETS` and provides the generic
   `sdl3d_runner_embedded_assets` pack blob symbols.
 
-The generic runner source is game-agnostic: it does not reference Pong scene
-names, actions, actors, replication channels, or controls. Demo-specific runner
-targets may supply build-time defaults such as an embedded asset symbol and a
-root data asset path, but gameplay and runtime behavior should remain authored
-in JSON and Lua. Any remaining need for a custom host indicates engine runtime
-work that should move into reusable data-driven systems.
+The generic runner source is game-agnostic: it does not reference game scene
+names, actions, actors, replication channels, controls, score state, menus, or
+Lua adapters. Demo-specific runner targets may supply build-time defaults such
+as an embedded asset symbol and a root data asset path, but gameplay and
+runtime behavior should remain authored in JSON and Lua. Any remaining need for
+a custom host indicates engine runtime work that should move into reusable
+data-driven systems.
 
 ## Why This Matters
 
-This API is the runtime foundation for data-only games. Pong's normal demo path
-now ships as JSON, Lua, and assets loaded by the generic runner rather than as a
-custom Pong C program. See [Data-Only Games](data-only-games.md) for the
-authoring contract and parity checklist.
+This API is the runtime foundation for data-only games. See
+[Data-Only Games](data-only-games.md) for the authoring contract and parity
+checklist.

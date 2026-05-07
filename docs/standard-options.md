@@ -20,8 +20,7 @@ or reset values.
 6. Add logic bindings for apply/reset signals.
 7. Wire app window settings and audio bus volume to the same settings actor.
 
-Pong is the reference implementation in
-`demos/pong/data/pong.game.json`. A minimal loadable fixture is kept at
+The package is game-agnostic. A minimal loadable fixture is kept at
 `tests/assets/game_data/standard_options_minimal.game.json`.
 
 ## Settings Actor
@@ -154,8 +153,8 @@ keeping unrelated gameplay entities out of options scenes.
 ## Rebindable Actions
 
 Binding rows are game-owned. The engine only knows how to capture and apply the
-new physical input. This keeps the standard screens reusable across Pong,
-shooters, platformers, RPGs, and games with custom action names.
+new physical input. This keeps the standard screens reusable across arcade
+games, shooters, platformers, RPGs, and games with custom action names.
 
 ```json
 {

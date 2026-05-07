@@ -9,14 +9,14 @@ The API version is currently `sdl3d.lua.v1`.
 Lua scripts are authored as modules that return a table:
 
 ```lua
-local pong = {}
+local rules = {}
 
-function pong.reflect_from_paddle(ball, payload, ctx)
+function rules.handle_collision(actor, payload, ctx)
   -- rule code
   return true
 end
 
-return pong
+return rules
 ```
 
 When game data declares a script module:
@@ -311,13 +311,15 @@ Paths must use `user://` or `cache://`. Absolute paths, `..`, empty segments, ba
 - Use `ctx.storage` and `sdl3d.json` for persistent data, not transient gameplay state.
 - Keep per-frame Lua small and declarative; move heavy math or broad searches into C helpers when a rule becomes hot.
 
-## Pong Example
+## Adapter Example
 
-Pong’s script module shows the intended style:
+Game scripts should keep specialized rules readable while leaving ordinary
+composition in JSON:
 
-- `serve_random(ball, _, ctx)` chooses a constrained serve direction
-- `reflect_from_paddle(ball, payload, ctx)` handles paddle deflection and jitter
-- `cpu_track_ball(paddle, payload, ctx)` handles single-player CPU steering
-- persistence helpers use `ctx.storage` and `sdl3d.json` for score save files
+- choose a constrained random spawn or serve direction
+- apply game-specific collision response math
+- steer an enemy, companion, or CPU-controlled actor
+- interpret game-specific save data with `ctx.storage` and `sdl3d.json`
 
-That module is a reference for how to keep game rules readable without pushing the engine into game-specific code.
+If a behavior can be expressed with signals, conditions, timers, property
+actions, scene actions, or persistence actions, keep it in JSON instead of Lua.
