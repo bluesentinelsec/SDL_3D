@@ -247,6 +247,8 @@ TEST(GameDataJson, PongDataDeclaresGenericTopLevelModel)
     EXPECT_TRUE(yyjson_is_obj(doc.section("presentation")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("transitions")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("haptics")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("storage")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("persistence")));
 }
 
 TEST(GameDataJson, PongDataUsesStructuredImports)
@@ -255,7 +257,7 @@ TEST(GameDataJson, PongDataUsesStructuredImports)
     ASSERT_NE(doc.root(), nullptr) << doc.error();
 
     yyjson_val *imports = required_array(doc.root(), "imports");
-    ASSERT_EQ(yyjson_arr_size(imports), 6u);
+    ASSERT_EQ(yyjson_arr_size(imports), 7u);
     EXPECT_TRUE(yyjson_is_obj(doc.section("assets")));
     EXPECT_TRUE(yyjson_is_arr(doc.section("scripts")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("input")));
@@ -264,6 +266,8 @@ TEST(GameDataJson, PongDataUsesStructuredImports)
     EXPECT_TRUE(yyjson_is_obj(doc.section("presentation")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("transitions")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("haptics")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("storage")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("persistence")));
     EXPECT_EQ(yyjson_obj_get(doc.root(), "assets"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "scripts"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "input"), nullptr);
@@ -272,6 +276,8 @@ TEST(GameDataJson, PongDataUsesStructuredImports)
     EXPECT_EQ(yyjson_obj_get(doc.root(), "presentation"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "transitions"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "haptics"), nullptr);
+    EXPECT_EQ(yyjson_obj_get(doc.root(), "storage"), nullptr);
+    EXPECT_EQ(yyjson_obj_get(doc.root(), "persistence"), nullptr);
 }
 
 TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
@@ -338,7 +344,8 @@ TEST(GameDataJson, PongOptionsUseGenericPersistenceEntry)
     JsonDoc doc(kPongDataPath);
     ASSERT_NE(doc.root(), nullptr) << doc.error();
 
-    yyjson_val *persistence = required_object(doc.root(), "persistence");
+    yyjson_val *persistence = doc.section("persistence");
+    ASSERT_TRUE(yyjson_is_obj(persistence));
     yyjson_val *entries = required_array(persistence, "entries");
     ASSERT_EQ(yyjson_arr_size(entries), 1u);
 

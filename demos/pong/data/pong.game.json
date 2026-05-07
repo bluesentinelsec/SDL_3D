@@ -6,44 +6,14 @@
     { "path": "fragments/input.json", "sections": ["input"] },
     { "path": "fragments/network.json", "sections": ["network"] },
     { "path": "fragments/logic.json", "sections": ["logic"] },
-    { "path": "fragments/presentation.json", "sections": ["presentation", "transitions", "haptics"] }
+    { "path": "fragments/presentation.json", "sections": ["presentation", "transitions", "haptics"] },
+    { "path": "fragments/persistence.json", "sections": ["storage", "persistence"] }
   ],
   "metadata": {
     "name": "Pong",
     "id": "demo.pong",
     "version": "0.1.0",
     "description": "Fixed-screen arcade proof that SDL3D gameplay rules can be authored through generic entities, sensors, signals, timers, and actions."
-  },
-  "storage": {
-    "organization": "Blue Sentinel Security",
-    "application": "SDL3D Pong",
-    "profile": "default"
-  },
-  "persistence": {
-    "entries": [
-      {
-        "name": "persistence.options",
-        "path": "user://settings/options.json",
-        "schema": "sdl3d.options.v1",
-        "version": 1,
-        "target": "entity.settings",
-        "enabled_if": {
-          "type": "property.bool",
-          "target": "entity.settings",
-          "key": "options_persistence_enabled",
-          "equals": true
-        },
-        "properties": [
-          "display_mode",
-          "vsync",
-          "renderer",
-          "gamepad_icons",
-          "vibration",
-          "sfx_volume",
-          "music_volume"
-        ]
-      }
-    ]
   },
   "app": {
     "title": "SDL3D Pong",
