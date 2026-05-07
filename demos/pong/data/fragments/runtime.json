@@ -1,0 +1,36 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "render": {
+    "clear_color": [3, 4, 8, 255],
+    "lighting": true,
+    "bloom": true,
+    "ssao": true,
+    "tonemap": "aces"
+  },
+  "update_phases": {
+    "app_flow": { "active": true, "when_paused": true },
+    "presentation": { "active": true, "when_paused": true },
+    "property_effects": { "active": true, "when_paused": true },
+    "particles": { "active": true, "when_paused": true },
+    "simulation": { "active": true, "when_paused": false }
+  },
+  "profiles": [
+    {
+      "name": "profile.fixed_screen_arcade",
+      "required_modules": [
+        "actor_registry",
+        "input",
+        "logic",
+        "timers",
+        "collision_2d",
+        "render_primitives",
+        "cameras"
+      ],
+      "optional_modules": [
+        "particles",
+        "audio",
+        "post_processing"
+      ]
+    }
+  ]
+}

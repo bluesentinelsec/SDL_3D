@@ -7,7 +7,8 @@
     { "path": "fragments/network.json", "sections": ["network"] },
     { "path": "fragments/logic.json", "sections": ["logic"] },
     { "path": "fragments/presentation.json", "sections": ["presentation", "transitions", "haptics"] },
-    { "path": "fragments/persistence.json", "sections": ["storage", "persistence"] }
+    { "path": "fragments/persistence.json", "sections": ["storage", "persistence"] },
+    { "path": "fragments/runtime.json", "sections": ["render", "update_phases", "profiles"] }
   ],
   "metadata": {
     "name": "Pong",
@@ -347,39 +348,6 @@
       }
     }
   },
-  "render": {
-    "clear_color": [3, 4, 8, 255],
-    "lighting": true,
-    "bloom": true,
-    "ssao": true,
-    "tonemap": "aces"
-  },
-  "update_phases": {
-    "app_flow": { "active": true, "when_paused": true },
-    "presentation": { "active": true, "when_paused": true },
-    "property_effects": { "active": true, "when_paused": true },
-    "particles": { "active": true, "when_paused": true },
-    "simulation": { "active": true, "when_paused": false }
-  },
-  "profiles": [
-    {
-      "name": "profile.fixed_screen_arcade",
-      "required_modules": [
-        "actor_registry",
-        "input",
-        "logic",
-        "timers",
-        "collision_2d",
-        "render_primitives",
-        "cameras"
-      ],
-      "optional_modules": [
-        "particles",
-        "audio",
-        "post_processing"
-      ]
-    }
-  ],
   "ui": { "text": [], "images": [] },
   "world": {
     "name": "world.pong",

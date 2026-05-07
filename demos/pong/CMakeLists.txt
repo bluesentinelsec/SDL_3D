@@ -12,6 +12,7 @@ set(SDL3D_PONG_ASSET_FILES
     fragments/network.json
     fragments/persistence.json
     fragments/presentation.json
+    fragments/runtime.json
     fragments/scripts.json
     images/ball-texture.png
     images/splash-logo.jpg

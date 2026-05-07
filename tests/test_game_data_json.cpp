@@ -249,6 +249,9 @@ TEST(GameDataJson, PongDataDeclaresGenericTopLevelModel)
     EXPECT_TRUE(yyjson_is_obj(doc.section("haptics")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("storage")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("persistence")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("render")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("update_phases")));
+    EXPECT_TRUE(yyjson_is_arr(doc.section("profiles")));
 }
 
 TEST(GameDataJson, PongDataUsesStructuredImports)
@@ -257,7 +260,7 @@ TEST(GameDataJson, PongDataUsesStructuredImports)
     ASSERT_NE(doc.root(), nullptr) << doc.error();
 
     yyjson_val *imports = required_array(doc.root(), "imports");
-    ASSERT_EQ(yyjson_arr_size(imports), 7u);
+    ASSERT_EQ(yyjson_arr_size(imports), 8u);
     EXPECT_TRUE(yyjson_is_obj(doc.section("assets")));
     EXPECT_TRUE(yyjson_is_arr(doc.section("scripts")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("input")));
@@ -268,6 +271,9 @@ TEST(GameDataJson, PongDataUsesStructuredImports)
     EXPECT_TRUE(yyjson_is_obj(doc.section("haptics")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("storage")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("persistence")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("render")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("update_phases")));
+    EXPECT_TRUE(yyjson_is_arr(doc.section("profiles")));
     EXPECT_EQ(yyjson_obj_get(doc.root(), "assets"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "scripts"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "input"), nullptr);
@@ -278,6 +284,9 @@ TEST(GameDataJson, PongDataUsesStructuredImports)
     EXPECT_EQ(yyjson_obj_get(doc.root(), "haptics"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "storage"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "persistence"), nullptr);
+    EXPECT_EQ(yyjson_obj_get(doc.root(), "render"), nullptr);
+    EXPECT_EQ(yyjson_obj_get(doc.root(), "update_phases"), nullptr);
+    EXPECT_EQ(yyjson_obj_get(doc.root(), "profiles"), nullptr);
 }
 
 TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
