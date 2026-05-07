@@ -244,6 +244,9 @@ TEST(GameDataJson, PongDataDeclaresGenericTopLevelModel)
     EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(doc.root(), "entities")));
     EXPECT_TRUE(yyjson_is_arr(doc.section("scripts")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("logic")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("presentation")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("transitions")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("haptics")));
 }
 
 TEST(GameDataJson, PongDataUsesStructuredImports)
@@ -252,17 +255,23 @@ TEST(GameDataJson, PongDataUsesStructuredImports)
     ASSERT_NE(doc.root(), nullptr) << doc.error();
 
     yyjson_val *imports = required_array(doc.root(), "imports");
-    ASSERT_EQ(yyjson_arr_size(imports), 5u);
+    ASSERT_EQ(yyjson_arr_size(imports), 6u);
     EXPECT_TRUE(yyjson_is_obj(doc.section("assets")));
     EXPECT_TRUE(yyjson_is_arr(doc.section("scripts")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("input")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("network")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("logic")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("presentation")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("transitions")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("haptics")));
     EXPECT_EQ(yyjson_obj_get(doc.root(), "assets"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "scripts"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "input"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "network"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "logic"), nullptr);
+    EXPECT_EQ(yyjson_obj_get(doc.root(), "presentation"), nullptr);
+    EXPECT_EQ(yyjson_obj_get(doc.root(), "transitions"), nullptr);
+    EXPECT_EQ(yyjson_obj_get(doc.root(), "haptics"), nullptr);
 }
 
 TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
