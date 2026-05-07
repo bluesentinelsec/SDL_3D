@@ -71,6 +71,10 @@ When SDL3 is fetched this way, SDL3D disables its own install/export package
 generation for that build. Normal install/export packaging remains available
 when SDL3 comes from a parent target or a discovered SDL3 package.
 
+Vendored dependencies live under `vendor/` and are built from source. They are
+kept static-link friendly and should not introduce runtime deployment
+requirements for engine users or SDL3D tools.
+
 ## Build
 
 ```sh

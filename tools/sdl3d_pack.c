@@ -10,56 +10,7 @@
 
 #include "sdl3d/asset.h"
 
-typedef struct pack_args
-{
-    const char *output;
-    const char *root;
-    const char **files;
-    int file_count;
-} pack_args;
-
-static void print_usage(const char *argv0)
-{
-    fprintf(stderr, "Usage: %s --output <pack.sdl3dpak> --root <asset-root> --file <relative-path> [--file ...]\n",
-            argv0 != NULL ? argv0 : "sdl3d_pack");
-}
-
-static bool append_file_arg(pack_args *args, const char *file)
-{
-    const char **files = (const char **)SDL_realloc(args->files, (size_t)(args->file_count + 1) * sizeof(*files));
-    if (files == NULL)
-        return false;
-    args->files = files;
-    args->files[args->file_count++] = file;
-    return true;
-}
-
-static bool parse_args(int argc, char **argv, pack_args *args)
-{
-    SDL_zero(*args);
-    for (int i = 1; i < argc; ++i)
-    {
-        if (SDL_strcmp(argv[i], "--output") == 0 && i + 1 < argc)
-        {
-            args->output = argv[++i];
-        }
-        else if (SDL_strcmp(argv[i], "--root") == 0 && i + 1 < argc)
-        {
-            args->root = argv[++i];
-        }
-        else if (SDL_strcmp(argv[i], "--file") == 0 && i + 1 < argc)
-        {
-            if (!append_file_arg(args, argv[++i]))
-                return false;
-        }
-        else
-        {
-            return false;
-        }
-    }
-
-    return args->output != NULL && args->root != NULL && args->file_count > 0;
-}
+#include "sdl3d_pack_cli.h"
 
 static char *join_path(const char *root, const char *relative)
 {
@@ -81,19 +32,18 @@ static char *join_path(const char *root, const char *relative)
 
 int main(int argc, char **argv)
 {
-    pack_args args;
-    if (!parse_args(argc, argv, &args))
+    sdl3d_pack_args args;
+    const sdl3d_tool_cli_result cli_result = sdl3d_pack_args_parse(argc, argv, &args, stderr);
+    if (cli_result != SDL3D_TOOL_CLI_OK)
     {
-        print_usage(argc > 0 ? argv[0] : NULL);
-        SDL_free(args.files);
-        return 2;
+        return cli_result == SDL3D_TOOL_CLI_HELP ? 0 : 2;
     }
 
     sdl3d_asset_pack_source *sources = (sdl3d_asset_pack_source *)SDL_calloc((size_t)args.file_count, sizeof(*sources));
     if (sources == NULL)
     {
         fprintf(stderr, "sdl3d_pack: failed to allocate source table\n");
-        SDL_free(args.files);
+        sdl3d_pack_args_destroy(&args);
         return 1;
     }
 
@@ -118,6 +68,6 @@ int main(int argc, char **argv)
     for (int i = 0; i < args.file_count; ++i)
         SDL_free((void *)sources[i].source_path);
     SDL_free(sources);
-    SDL_free(args.files);
+    sdl3d_pack_args_destroy(&args);
     return ok ? 0 : 1;
 }
