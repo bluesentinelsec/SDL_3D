@@ -1311,7 +1311,8 @@ run. Supported values are:
 
 `on_exhausted` is optional and defaults to `fail`. `reuse_oldest` may be
 authored when the oldest active pooled actor should be reset and reused instead
-of failing the spawn.
+of failing the spawn. Pool exhaustion logs an application warning with the pool
+name, capacity, and policy so authors can tune capacities from playtest logs.
 
 Pool actors receive deterministic runtime names in the form
 `<pool-name>.<index>`, such as `pool.player_shots.0`, and are initialized from
@@ -1320,6 +1321,10 @@ archetype, activates it, applies the requested position and property overrides,
 and writes `pool`, `pool_index`, and `pool_lifecycle` properties for
 diagnostics. `pool_lifecycle` is one of `inactive`, `spawning`, `active`, or
 `despawning`; `spawning` is a transient state during reset and activation.
+The engine also tracks pool diagnostics for Lua inspection: active count,
+available count, peak active count, spawn attempts, successful spawns, failed
+spawns, exhaustion count, reuse count, despawn count, last spawn-failure reason,
+and last despawn reason.
 Despawning hides the actor from active queries immediately, then resets it back
 to archetype defaults. If despawn is requested while signals, sensors,
 rendering, or network snapshot application are traversing runtime state, the
@@ -1546,17 +1551,47 @@ properties for diagnostics and generic scene filtering.
 
 `actor.despawn` requires `target`. When the target is a pooled actor, the
 runtime resets it to the pool archetype and marks it inactive. Non-pooled
-targets are simply marked inactive.
+targets are simply marked inactive. Optional `reason` is copied into the pool's
+last despawn diagnostic:
+
+```json
+{
+  "type": "actor.despawn",
+  "target": "pool.player_shots.0",
+  "reason": "hit_enemy"
+}
+```
 
 `actor.despawn_by_tag` requires `tag` and deactivates active pooled actors
-whose archetype declares that tag:
+whose archetype declares that tag. Optional `reason` is applied to each pooled
+actor despawned by the action:
 
 ```json
 {
   "type": "actor.despawn_by_tag",
-  "tag": "player_shot"
+  "tag": "player_shot",
+  "reason": "wave_reset"
 }
 ```
+
+For Space Invaders-style games, prefer small specialized pools rather than one
+large catch-all pool:
+
+- `pool.player_shots`: player projectiles, usually `capacity: 1` or a small
+  authored limit, `on_scene_exit: "despawn"`, and `on_exhausted: "fail"` when
+  the game rules limit simultaneous shots.
+- `pool.enemy_shots`: enemy projectiles sized to the maximum simultaneous enemy
+  fire pattern, also `on_scene_exit: "despawn"`.
+- `pool.invaders`: enemy actors for the current wave. Use `reset` when leaving
+  gameplay or `preserve` only if the wave must survive intermediate scenes.
+- `pool.explosions`: short-lived animated sprites or particles, commonly
+  `on_exhausted: "reuse_oldest"` because replacing the oldest effect is better
+  than dropping new feedback.
+
+Use pool peak and exhaustion counters during playtesting to prove the capacities
+cover the intended worst case. In LAN games, replicate the pooled actor
+`active` field, `position`, and any gameplay properties needed by the client;
+presentation-only effects can often remain local.
 
     Presentation state that changes continuously can be expressed with components instead of host
         code. `property.decay` moves an integer or
