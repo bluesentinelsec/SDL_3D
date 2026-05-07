@@ -153,3 +153,30 @@ endif()
 add_library(sdl3d_crypto OBJECT crypto/sdl3d_crypto.c)
 target_include_directories(sdl3d_crypto PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/crypto)
 set_target_properties(sdl3d_crypto PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+add_library(
+    sdl3d_argtable3
+    STATIC
+        argtable3/arg_cmd.c
+        argtable3/arg_date.c
+        argtable3/arg_dbl.c
+        argtable3/arg_dstr.c
+        argtable3/arg_end.c
+        argtable3/arg_file.c
+        argtable3/arg_getopt_long.c
+        argtable3/arg_hashtable.c
+        argtable3/arg_int.c
+        argtable3/arg_lit.c
+        argtable3/arg_rem.c
+        argtable3/arg_rex.c
+        argtable3/arg_str.c
+        argtable3/arg_utils.c
+        argtable3/argtable3.c
+)
+target_include_directories(sdl3d_argtable3 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/argtable3)
+set_target_properties(sdl3d_argtable3 PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    target_compile_options(sdl3d_argtable3 PRIVATE -w)
+elseif(MSVC)
+    target_compile_options(sdl3d_argtable3 PRIVATE /w)
+endif()

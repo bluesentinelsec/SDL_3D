@@ -279,6 +279,15 @@ else()
     sdl3d_add_test(sdl3d_parity_test test_parity.cpp render)
     sdl3d_add_test(sdl3d_crypto_test test_crypto.cpp unit)
     target_include_directories(sdl3d_crypto_test PRIVATE ${CMAKE_SOURCE_DIR}/vendor/crypto)
+    sdl3d_add_test(sdl3d_tool_cli_test test_tool_cli.cpp unit)
+    target_sources(
+        sdl3d_tool_cli_test
+        PRIVATE
+            ${CMAKE_SOURCE_DIR}/tools/sdl3d_pack_cli.c
+            ${CMAKE_SOURCE_DIR}/tools/sdl3d_runner_cli.c
+    )
+    target_link_libraries(sdl3d_tool_cli_test PRIVATE sdl3d_argtable3)
+    target_include_directories(sdl3d_tool_cli_test PRIVATE ${CMAKE_SOURCE_DIR}/tools)
 
     if(NOT EMSCRIPTEN)
         sdl3d_add_test(sdl3d_asset_test test_asset.cpp unit)

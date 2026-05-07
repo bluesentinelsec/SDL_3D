@@ -11,6 +11,8 @@
 
 #include "sdl3d/sdl3d.h"
 
+#include "sdl3d_runner_cli.h"
+
 #if defined(SDL3D_RUNNER_EMBEDDED_ASSETS)
 #if !defined(SDL3D_RUNNER_EMBEDDED_ASSETS_DATA)
 #define SDL3D_RUNNER_EMBEDDED_ASSETS_DATA sdl3d_runner_embedded_assets
@@ -22,21 +24,9 @@ extern const unsigned char SDL3D_RUNNER_EMBEDDED_ASSETS_DATA[];
 extern const size_t SDL3D_RUNNER_EMBEDDED_ASSETS_SIZE;
 #endif
 
-typedef enum runner_mount_kind
-{
-    RUNNER_MOUNT_NONE = 0,
-    RUNNER_MOUNT_DIRECTORY,
-    RUNNER_MOUNT_PACK,
-    RUNNER_MOUNT_EMBEDDED
-} runner_mount_kind;
-
 typedef struct runner_state
 {
-    runner_mount_kind mount_kind;
-    const char *mount_path;
-    const char *data_asset_path;
-    const char *media_dir;
-    bool help_requested;
+    sdl3d_runner_args args;
     sdl3d_game_config config;
     char title[128];
     sdl3d_data_game_runtime *runtime;
@@ -48,86 +38,6 @@ static void runner_set_error(char *error_buffer, int error_buffer_size, const ch
         SDL_snprintf(error_buffer, (size_t)error_buffer_size, "%s", message != NULL ? message : "unknown error");
 }
 
-static void print_usage(const char *argv0)
-{
-    const char *program = argv0 != NULL ? argv0 : "sdl3d_runner";
-    fprintf(stderr,
-            "Usage:\n"
-            "  %s --root <asset-root> --data <asset://game.json> [--media <media-dir>]\n"
-            "  %s --pack <game.sdl3dpak> --data <asset://game.json> [--media <media-dir>]\n",
-            program, program);
-#if defined(SDL3D_RUNNER_EMBEDDED_ASSETS)
-    fprintf(stderr, "  %s --embedded --data <asset://game.json> [--media <media-dir>]\n", program);
-#endif
-}
-
-static bool parse_args(int argc, char **argv, runner_state *state)
-{
-    SDL_zero(*state);
-    state->data_asset_path = NULL;
-#if defined(SDL3D_MEDIA_DIR)
-    state->media_dir = SDL3D_MEDIA_DIR;
-#endif
-#if defined(SDL3D_RUNNER_DEFAULT_DATA_ASSET_PATH)
-    state->data_asset_path = SDL3D_RUNNER_DEFAULT_DATA_ASSET_PATH;
-#endif
-#if defined(SDL3D_RUNNER_DEFAULT_EMBEDDED) && defined(SDL3D_RUNNER_EMBEDDED_ASSETS)
-    state->mount_kind = RUNNER_MOUNT_EMBEDDED;
-#endif
-
-    bool explicit_mount = false;
-    for (int i = 1; i < argc; ++i)
-    {
-        if (SDL_strcmp(argv[i], "--root") == 0 && i + 1 < argc)
-        {
-            if (explicit_mount)
-                return false;
-            explicit_mount = true;
-            state->mount_kind = RUNNER_MOUNT_DIRECTORY;
-            state->mount_path = argv[++i];
-        }
-        else if (SDL_strcmp(argv[i], "--pack") == 0 && i + 1 < argc)
-        {
-            if (explicit_mount)
-                return false;
-            explicit_mount = true;
-            state->mount_kind = RUNNER_MOUNT_PACK;
-            state->mount_path = argv[++i];
-        }
-        else if (SDL_strcmp(argv[i], "--embedded") == 0)
-        {
-#if defined(SDL3D_RUNNER_EMBEDDED_ASSETS)
-            if (explicit_mount)
-                return false;
-            explicit_mount = true;
-            state->mount_kind = RUNNER_MOUNT_EMBEDDED;
-#else
-            return false;
-#endif
-        }
-        else if (SDL_strcmp(argv[i], "--data") == 0 && i + 1 < argc)
-        {
-            state->data_asset_path = argv[++i];
-        }
-        else if (SDL_strcmp(argv[i], "--media") == 0 && i + 1 < argc)
-        {
-            state->media_dir = argv[++i];
-        }
-        else if (SDL_strcmp(argv[i], "--help") == 0 || SDL_strcmp(argv[i], "-h") == 0)
-        {
-            state->help_requested = true;
-            return false;
-        }
-        else
-        {
-            return false;
-        }
-    }
-
-    return state->mount_kind != RUNNER_MOUNT_NONE && state->data_asset_path != NULL &&
-           state->data_asset_path[0] != '\0';
-}
-
 static bool runner_mount_assets(sdl3d_asset_resolver *assets, void *userdata, char *error_buffer, int error_buffer_size)
 {
     const runner_state *state = (const runner_state *)userdata;
@@ -137,13 +47,13 @@ static bool runner_mount_assets(sdl3d_asset_resolver *assets, void *userdata, ch
         return false;
     }
 
-    switch (state->mount_kind)
+    switch (state->args.mount_kind)
     {
-    case RUNNER_MOUNT_DIRECTORY:
-        return sdl3d_asset_resolver_mount_directory(assets, state->mount_path, error_buffer, error_buffer_size);
-    case RUNNER_MOUNT_PACK:
-        return sdl3d_asset_resolver_mount_pack_file(assets, state->mount_path, error_buffer, error_buffer_size);
-    case RUNNER_MOUNT_EMBEDDED:
+    case SDL3D_RUNNER_MOUNT_DIRECTORY:
+        return sdl3d_asset_resolver_mount_directory(assets, state->args.mount_path, error_buffer, error_buffer_size);
+    case SDL3D_RUNNER_MOUNT_PACK:
+        return sdl3d_asset_resolver_mount_pack_file(assets, state->args.mount_path, error_buffer, error_buffer_size);
+    case SDL3D_RUNNER_MOUNT_EMBEDDED:
 #if defined(SDL3D_RUNNER_EMBEDDED_ASSETS)
         return sdl3d_asset_resolver_mount_memory_pack(assets, SDL3D_RUNNER_EMBEDDED_ASSETS_DATA,
                                                       SDL3D_RUNNER_EMBEDDED_ASSETS_SIZE, "sdl3d_runner.embedded",
@@ -152,7 +62,7 @@ static bool runner_mount_assets(sdl3d_asset_resolver *assets, void *userdata, ch
         runner_set_error(error_buffer, error_buffer_size, "runner was not built with embedded assets");
         return false;
 #endif
-    case RUNNER_MOUNT_NONE:
+    case SDL3D_RUNNER_MOUNT_NONE:
     default:
         runner_set_error(error_buffer, error_buffer_size, "no asset mount was configured");
         return false;
@@ -173,7 +83,7 @@ static bool load_runner_config(runner_state *state, char *error_buffer, int erro
     {
         SDL_zero(state->config);
         SDL_snprintf(state->title, sizeof(state->title), "%s", "SDL3D");
-        ok = sdl3d_game_data_load_app_config_asset(assets, state->data_asset_path, &state->config, state->title,
+        ok = sdl3d_game_data_load_app_config_asset(assets, state->args.data_asset_path, &state->config, state->title,
                                                    (int)sizeof(state->title), error_buffer, error_buffer_size);
     }
 
@@ -195,8 +105,8 @@ static bool runner_init(sdl3d_game_context *ctx, void *userdata)
 
     sdl3d_data_game_runtime_desc_init(&desc);
     desc.session = ctx->session;
-    desc.data_asset_path = state->data_asset_path;
-    desc.media_dir = state->media_dir;
+    desc.data_asset_path = state->args.data_asset_path;
+    desc.media_dir = state->args.media_dir;
     desc.mount_assets = runner_mount_assets;
     desc.mount_userdata = state;
     desc.enable_managed_network = true;
@@ -207,7 +117,7 @@ static bool runner_init(sdl3d_game_context *ctx, void *userdata)
         return false;
     }
 
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D runner loaded data asset: %s", state->data_asset_path);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D runner loaded data asset: %s", state->args.data_asset_path);
     return true;
 }
 
@@ -247,10 +157,11 @@ static void runner_shutdown(sdl3d_game_context *ctx, void *userdata)
 int main(int argc, char **argv)
 {
     runner_state state;
-    if (!parse_args(argc, argv, &state))
+    SDL_zero(state);
+    const sdl3d_tool_cli_result cli_result = sdl3d_runner_args_parse(argc, argv, &state.args, stderr);
+    if (cli_result != SDL3D_TOOL_CLI_OK)
     {
-        print_usage(argc > 0 ? argv[0] : NULL);
-        return state.help_requested ? 0 : 2;
+        return cli_result == SDL3D_TOOL_CLI_HELP ? 0 : 2;
     }
 
     char error[512] = "";
