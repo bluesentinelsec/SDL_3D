@@ -161,6 +161,13 @@ struct SignalCapture
     int calls = 0;
 };
 
+struct SensorSignalCapture
+{
+    int calls = 0;
+    std::string actor_name;
+    std::string other_actor_name;
+};
+
 bool serve_adapter(void *userdata, sdl3d_game_data_runtime *runtime, const char *adapter_name,
                    sdl3d_registered_actor *target, const sdl3d_properties *payload)
 {
@@ -237,6 +244,19 @@ void count_signal(void *userdata, int signal_id, const sdl3d_properties *payload
     (void)signal_id;
     (void)payload;
     capture->calls++;
+}
+
+void capture_sensor_signal(void *userdata, int signal_id, const sdl3d_properties *payload)
+{
+    auto *capture = static_cast<SensorSignalCapture *>(userdata);
+    (void)signal_id;
+    if (capture == nullptr)
+    {
+        return;
+    }
+    capture->calls++;
+    capture->actor_name = sdl3d_properties_get_string(payload, "actor_name", "");
+    capture->other_actor_name = sdl3d_properties_get_string(payload, "other_actor_name", "");
 }
 
 std::string fixture_path(const char *filename)
@@ -6253,6 +6273,118 @@ TEST(GameDataRuntime, ActorPoolsApplySceneExitPolicies)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, ContactSensorsMatchActivePooledActorTags)
+{
+    const std::filesystem::path dir = unique_test_dir("actor_pool_tag_sensors");
+    write_text(dir / "actor_pool_tag_sensors.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Actor Pool Tag Sensors", "id": "test.actor_pool_tag_sensors", "version": "0.1.0" },
+  "world": { "name": "world.actor_pool_tag_sensors", "kind": "fixed_screen" },
+  "actor_archetypes": [
+    {
+      "name": "archetype.player_shot",
+      "tags": ["projectile", "player_projectile"],
+      "properties": {
+        "radius": { "type": "float", "value": 0.25 }
+      }
+    },
+    {
+      "name": "archetype.invader",
+      "tags": ["enemy", "invader"],
+      "properties": {
+        "half_width": { "type": "float", "value": 0.5 },
+        "half_height": { "type": "float", "value": 0.5 }
+      }
+    }
+  ],
+  "actor_pools": [
+    {
+      "name": "pool.player_shots",
+      "archetype": "archetype.player_shot",
+      "capacity": 2,
+      "scene": "scene.play"
+    },
+    {
+      "name": "pool.invaders",
+      "archetype": "archetype.invader",
+      "capacity": 1,
+      "scene": "scene.play"
+    }
+  ],
+  "signals": ["signal.spawn.first", "signal.spawn.second", "signal.hit"],
+  "logic": {
+    "sensors": [
+      {
+        "name": "sensor.projectile_enemy_hit",
+        "type": "sensor.contact_2d",
+        "a_tag": "player_projectile",
+        "b_tag": "enemy",
+        "on_enter": "signal.hit"
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.spawn.first",
+        "actions": [
+          { "type": "actor.spawn", "pool": "pool.player_shots", "position": [0.0, 0.0, 0.0] },
+          { "type": "actor.spawn", "pool": "pool.invaders", "position": [0.0, 0.0, 0.0] }
+        ]
+      },
+      {
+        "signal": "signal.spawn.second",
+        "actions": [
+          { "type": "actor.spawn", "pool": "pool.player_shots", "position": [0.1, 0.1, 0.0] }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json", "scenes.title.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": [] })json");
+    write_text(dir / "scenes.title.scene.json",
+               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.title", "entities": [] })json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "actor_pool_tag_sensors.game.json").string().c_str(), session,
+                                          &runtime, error, sizeof(error)))
+        << error;
+
+    SensorSignalCapture capture{};
+    ASSERT_NE(sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(session),
+                                   sdl3d_game_data_find_signal(runtime, "signal.hit"), capture_sensor_signal, &capture),
+              0);
+
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session),
+                      sdl3d_game_data_find_signal(runtime, "signal.spawn.first"), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(capture.calls, 1);
+    EXPECT_EQ(capture.actor_name, "pool.player_shots.0");
+    EXPECT_EQ(capture.other_actor_name, "pool.invaders.0");
+
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(capture.calls, 1);
+
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session),
+                      sdl3d_game_data_find_signal(runtime, "signal.spawn.second"), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(capture.calls, 2);
+    EXPECT_EQ(capture.actor_name, "pool.player_shots.1");
+    EXPECT_EQ(capture.other_actor_name, "pool.invaders.0");
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(capture.calls, 2);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
 {
     const std::filesystem::path dir = unique_test_dir("actor_pool_validation");
@@ -6421,6 +6553,33 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json",
             "on_scene_exit",
+        },
+        {
+            "bad_contact_sensor_endpoint",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "actor_archetypes": [
+    { "name": "archetype.shot", "tags": ["projectile"] }
+  ],
+  "actor_pools": [
+    { "name": "pool.shots", "archetype": "archetype.shot", "capacity": 1, "scene": "scene.play" }
+  ],
+  "signals": ["signal.hit"],
+  "logic": {
+    "sensors": [
+      {
+        "type": "sensor.contact_2d",
+        "a": "pool.shots.0",
+        "a_tag": "projectile",
+        "b_tag": "enemy",
+        "on_enter": "signal.hit"
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "exactly one of a or a_tag",
         },
     };
 

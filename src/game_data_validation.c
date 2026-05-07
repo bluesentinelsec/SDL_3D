@@ -3523,9 +3523,23 @@ static bool validate_logic(validation_context *ctx, yyjson_val *root, validation
         }
         if (SDL_strcmp(type, "sensor.contact_2d") == 0)
         {
-            if (!require_actor_ref(ctx, names, json_string(sensor, "a"), path) ||
-                !require_actor_ref(ctx, names, json_string(sensor, "b"), path) ||
-                !require_ref(ctx, &names->signals, "signal", json_string(sensor, "on_enter"), path))
+            const char *a = json_string(sensor, "a");
+            const char *b = json_string(sensor, "b");
+            const char *a_tag = json_string(sensor, "a_tag");
+            const char *b_tag = json_string(sensor, "b_tag");
+            if ((a == NULL && a_tag == NULL) || (a != NULL && a_tag != NULL))
+                return validation_error(ctx, path, "sensor.contact_2d requires exactly one of a or a_tag");
+            if ((b == NULL && b_tag == NULL) || (b != NULL && b_tag != NULL))
+                return validation_error(ctx, path, "sensor.contact_2d requires exactly one of b or b_tag");
+            if (a != NULL && !require_actor_ref(ctx, names, a, path))
+                return false;
+            if (b != NULL && !require_actor_ref(ctx, names, b, path))
+                return false;
+            if (a_tag != NULL && a_tag[0] == '\0')
+                return validation_error(ctx, path, "sensor.contact_2d a_tag must be non-empty");
+            if (b_tag != NULL && b_tag[0] == '\0')
+                return validation_error(ctx, path, "sensor.contact_2d b_tag must be non-empty");
+            if (!require_ref(ctx, &names->signals, "signal", json_string(sensor, "on_enter"), path))
                 return false;
             continue;
         }

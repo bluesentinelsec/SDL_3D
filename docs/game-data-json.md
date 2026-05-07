@@ -1328,9 +1328,15 @@ iteration pointers remain valid.
 
 Actor pools support JSON-authored lifecycle actions and Lua lifecycle helpers.
 Authored sensors may target either static entity names or deterministic pooled
-actor names, such as `pool.player_shots.0`.
-Tag-targeted sensors, pooled component iteration in every subsystem, and
-network replication of pooled actor state are planned follow-up work.
+actor names, such as `pool.player_shots.0`. `sensor.contact_2d` may also target
+active actor tags with `a_tag` and/or `b_tag`; exactly one of `a` or `a_tag`,
+and exactly one of `b` or `b_tag`, must be authored. Tag-targeted contact
+sensors inspect active static actors and active pooled actors in the current
+scene, emit one enter signal per actor pair, and track pair activity separately
+so a second projectile can still report a hit while the first projectile remains
+overlapping. This is the preferred pattern for arcade projectile-vs-enemy rules.
+Pooled component iteration in every subsystem and network replication of pooled
+actor state are planned follow-up work.
 
 ### Presentation Components
 
