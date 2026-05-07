@@ -1,0 +1,95 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "ui": { "text": [], "images": [] },
+  "signals": [
+    "signal.game.start",
+    "signal.ball.serve",
+    "signal.ball.hit_wall",
+    "signal.ball.hit_paddle",
+    "signal.goal.player",
+    "signal.goal.cpu",
+    "signal.score.player",
+    "signal.score.cpu",
+    "signal.round.reset",
+    "signal.match.player_won",
+    "signal.match.cpu_won",
+    "signal.match.reset",
+    "signal.match.restart",
+    "signal.camera.ball.toggle",
+    "signal.attract.round_reset",
+    "signal.presentation.flash_border",
+    "signal.persistence.load",
+    "signal.persistence.save_options",
+    "signal.settings.apply",
+    "signal.settings.apply_audio",
+    "signal.settings.vibration",
+    "signal.settings.reset_display",
+    "signal.settings.reset_keyboard",
+    "signal.settings.reset_mouse",
+    "signal.settings.reset_gamepad",
+    "signal.settings.reset_audio",
+    "signal.network.start_game",
+    "signal.network.terminate_match",
+    "signal.network.pause_changed",
+    "signal.multiplayer.lobby.start",
+    "signal.multiplayer.discovery.refresh",
+    "signal.multiplayer.discovery.connect",
+    "signal.multiplayer.discovery.cancel",
+    "signal.multiplayer.direct.connect",
+    "signal.multiplayer.direct.disconnect",
+    "signal.ui.menu.move",
+    "signal.ui.menu.select",
+    "signal.app.quit_fade_done"
+  ],
+  "adapters": [
+    {
+      "name": "adapter.pong.serve_random",
+      "kind": "action",
+      "script": "script.pong",
+      "function": "serve_random",
+      "description": "Choose a non-extreme random serve vector for the ball."
+    },
+    {
+      "name": "adapter.pong.reflect_from_paddle",
+      "kind": "action",
+      "script": "script.pong",
+      "function": "reflect_from_paddle",
+      "description": "Reflect ball velocity using Pong-specific hit-offset deflection."
+    },
+    {
+      "name": "adapter.pong.cpu_track_ball",
+      "kind": "controller",
+      "script": "script.pong",
+      "function": "cpu_track_ball",
+      "description": "Move the CPU paddle toward the current ball position."
+    },
+    {
+      "name": "adapter.pong.configure_play_input",
+      "kind": "action",
+      "script": "script.pong",
+      "function": "configure_play_input",
+      "description": "Normalize Pong play scene input role state before the authored active input profile applies."
+    },
+    {
+      "name": "adapter.pong.load_persistence",
+      "kind": "action",
+      "script": "script.pong",
+      "function": "load_persistence",
+      "description": "Load persisted Pong score records from user storage."
+    },
+    {
+      "name": "adapter.pong.record_player_win",
+      "kind": "action",
+      "script": "script.pong",
+      "function": "record_player_win",
+      "description": "Record a player match win in persistent score data."
+    },
+    {
+      "name": "adapter.pong.record_cpu_win",
+      "kind": "action",
+      "script": "script.pong",
+      "function": "record_cpu_win",
+      "description": "Record a CPU match win in persistent score data."
+    }
+  ]
+}
