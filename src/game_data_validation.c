@@ -610,6 +610,40 @@ static bool validate_network_actors(validation_context *ctx, yyjson_val *actors,
     return ok;
 }
 
+static bool validate_network_pools(validation_context *ctx, yyjson_val *pools, const char *json_path,
+                                   validation_names *names)
+{
+    if (!yyjson_is_arr(pools) || yyjson_arr_size(pools) == 0)
+        return validation_error(ctx, json_path, "network pools must be a non-empty array");
+
+    name_table pool_names;
+    SDL_zero(pool_names);
+    bool ok = true;
+    for (size_t i = 0; ok && i < yyjson_arr_size(pools); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "%s[%zu]", json_path, i);
+        yyjson_val *pool = yyjson_arr_get(pools, i);
+        if (!yyjson_is_obj(pool))
+        {
+            ok = validation_error(ctx, path, "network pool entry must be an object");
+            break;
+        }
+        const char *pool_name = json_string(pool, "pool");
+        if (!require_ref(ctx, &names->actor_pools, "actor pool", pool_name, path) ||
+            !require_unique_name(ctx, &pool_names, "network pool", pool_name, path))
+        {
+            ok = false;
+            break;
+        }
+        char fields_path[PATH_BUFFER_SIZE];
+        format_path(fields_path, sizeof(fields_path), "%s.fields", path);
+        ok = validate_network_actor_fields(ctx, obj_get(pool, "fields"), fields_path);
+    }
+    name_table_destroy(&pool_names);
+    return ok;
+}
+
 static bool validate_network_inputs(validation_context *ctx, yyjson_val *inputs, const char *json_path,
                                     validation_names *names)
 {
@@ -1315,12 +1349,13 @@ static bool validate_network(validation_context *ctx, yyjson_val *root, validati
             break;
         }
         yyjson_val *actors = obj_get(entry, "actors");
+        yyjson_val *pools = obj_get(entry, "pools");
         yyjson_val *inputs = obj_get(entry, "inputs");
         if (SDL_strcmp(direction, "host_to_client") == 0)
         {
-            if (actors == NULL)
+            if (actors == NULL && pools == NULL)
             {
-                ok = validation_error(ctx, path, "host_to_client network replication must declare actors");
+                ok = validation_error(ctx, path, "host_to_client network replication must declare actors or pools");
                 break;
             }
             if (inputs != NULL)
@@ -1330,7 +1365,14 @@ static bool validate_network(validation_context *ctx, yyjson_val *root, validati
             }
             char actors_path[PATH_BUFFER_SIZE];
             format_path(actors_path, sizeof(actors_path), "%s.actors", path);
-            ok = validate_network_actors(ctx, actors, actors_path, names);
+            if (actors != NULL)
+                ok = validate_network_actors(ctx, actors, actors_path, names);
+            if (ok && pools != NULL)
+            {
+                char pools_path[PATH_BUFFER_SIZE];
+                format_path(pools_path, sizeof(pools_path), "%s.pools", path);
+                ok = validate_network_pools(ctx, pools, pools_path, names);
+            }
         }
         else
         {
@@ -1342,6 +1384,11 @@ static bool validate_network(validation_context *ctx, yyjson_val *root, validati
             if (actors != NULL)
             {
                 ok = validation_error(ctx, path, "client_to_host network replication must not declare actors");
+                break;
+            }
+            if (pools != NULL)
+            {
+                ok = validation_error(ctx, path, "client_to_host network replication must not declare pools");
                 break;
             }
             char inputs_path[PATH_BUFFER_SIZE];
@@ -1531,6 +1578,18 @@ static void hash_network_actor_fields(sdl3d_crypto_hash32_state *state, yyjson_v
     }
 }
 
+static Sint64 network_actor_pool_capacity(yyjson_val *root, const char *pool_name)
+{
+    yyjson_val *pools = obj_get(root, "actor_pools");
+    for (size_t i = 0; yyjson_is_arr(pools) && i < yyjson_arr_size(pools); ++i)
+    {
+        yyjson_val *pool = yyjson_arr_get(pools, i);
+        if (SDL_strcmp(json_string(pool, "name"), pool_name != NULL ? pool_name : "") == 0)
+            return yyjson_get_sint(obj_get(pool, "capacity"));
+    }
+    return 0;
+}
+
 bool sdl3d_game_data_network_schema_hash(yyjson_val *root, Uint8 out_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE],
                                          bool *out_present)
 {
@@ -1576,6 +1635,17 @@ bool sdl3d_game_data_network_schema_hash(yyjson_val *root, Uint8 out_hash[SDL3D_
             yyjson_val *actor = yyjson_arr_get(actors, a);
             network_hash_update(&state, "actor.entity", json_string(actor, "entity"));
             hash_network_actor_fields(&state, obj_get(actor, "fields"));
+        }
+
+        yyjson_val *pools = obj_get(entry, "pools");
+        network_hash_update_int(&state, "pool_count", (Sint64)yyjson_arr_size(pools));
+        for (size_t p = 0; yyjson_is_arr(pools) && p < yyjson_arr_size(pools); ++p)
+        {
+            yyjson_val *pool = yyjson_arr_get(pools, p);
+            const char *pool_name = json_string(pool, "pool");
+            network_hash_update(&state, "pool.name", pool_name);
+            network_hash_update_int(&state, "pool.capacity", network_actor_pool_capacity(root, pool_name));
+            hash_network_actor_fields(&state, obj_get(pool, "fields"));
         }
 
         yyjson_val *inputs = obj_get(entry, "inputs");

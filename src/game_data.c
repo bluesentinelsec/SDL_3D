@@ -588,6 +588,7 @@ static yyjson_val *obj_get(yyjson_val *object, const char *key);
 static const char *json_string(yyjson_val *object, const char *key, const char *fallback);
 static yyjson_val *runtime_root(const sdl3d_game_data_runtime *runtime);
 static actor_pool_runtime *find_actor_pool(sdl3d_game_data_runtime *runtime, const char *name);
+static const actor_pool_runtime *find_actor_pool_const(const sdl3d_game_data_runtime *runtime, const char *name);
 static actor_pool_runtime *find_actor_pool_for_actor(sdl3d_game_data_runtime *runtime, const char *actor_name,
                                                      int *out_index);
 static const actor_pool_runtime *find_actor_pool_for_actor_const(const sdl3d_game_data_runtime *runtime,
@@ -595,12 +596,15 @@ static const actor_pool_runtime *find_actor_pool_for_actor_const(const sdl3d_gam
 static bool actor_pool_in_scene(const actor_pool_runtime *pool, const char *scene_name);
 static sdl3d_registered_actor *actor_pool_allocate(sdl3d_game_data_runtime *runtime, actor_pool_runtime *pool,
                                                    int *out_index);
+static actor_lifecycle_state actor_pool_lifecycle_state(const actor_pool_runtime *pool, int index);
 static void actor_pool_set_lifecycle_state(actor_pool_runtime *pool, sdl3d_registered_actor *actor, int index,
                                            actor_lifecycle_state state);
 static bool actor_pool_actor_is_active(const actor_pool_runtime *pool, const sdl3d_registered_actor *actor, int index);
 static bool actor_pool_actor_is_available(const actor_pool_runtime *pool, const sdl3d_registered_actor *actor,
                                           int index);
 static bool initialize_pooled_actor(actor_pool_runtime *pool, sdl3d_registered_actor *actor, int index, bool active);
+static bool actor_pool_initialize_slot(sdl3d_game_data_runtime *runtime, actor_pool_runtime *pool, int index,
+                                       bool active);
 static bool actor_pool_request_despawn(sdl3d_game_data_runtime *runtime, actor_pool_runtime *pool,
                                        sdl3d_registered_actor *actor, int index);
 static bool apply_actor_pool_scene_exit_policies(sdl3d_game_data_runtime *runtime, const char *from_scene,
@@ -2400,20 +2404,54 @@ static bool game_data_replication_channel_is_client_to_host(yyjson_val *channel)
     return SDL_strcmp(json_string(channel, "direction", ""), "client_to_host") == 0;
 }
 
-static size_t game_data_replication_channel_field_count(yyjson_val *channel)
+static size_t game_data_replication_field_array_count(yyjson_val *fields)
+{
+    return yyjson_is_arr(fields) ? yyjson_arr_size(fields) : 0U;
+}
+
+static size_t game_data_replication_channel_field_count(const sdl3d_game_data_runtime *runtime, yyjson_val *channel)
 {
     size_t count = 0U;
     yyjson_val *actors = obj_get(channel, "actors");
     for (size_t i = 0; yyjson_is_arr(actors) && i < yyjson_arr_size(actors); ++i)
     {
-        yyjson_val *fields = obj_get(yyjson_arr_get(actors, i), "fields");
-        if (yyjson_is_arr(fields))
-            count += yyjson_arr_size(fields);
+        count += game_data_replication_field_array_count(obj_get(yyjson_arr_get(actors, i), "fields"));
+    }
+
+    yyjson_val *pools = obj_get(channel, "pools");
+    for (size_t i = 0; yyjson_is_arr(pools) && i < yyjson_arr_size(pools); ++i)
+    {
+        yyjson_val *pool_schema = yyjson_arr_get(pools, i);
+        const actor_pool_runtime *pool = find_actor_pool_const(runtime, json_string(pool_schema, "pool", NULL));
+        if (pool != NULL && pool->capacity > 0)
+            count += (size_t)pool->capacity * game_data_replication_field_array_count(obj_get(pool_schema, "fields"));
     }
     return count;
 }
 
-static bool game_data_replication_channel_packet_size(yyjson_val *channel, size_t *out_size)
+static bool game_data_add_replication_fields_packet_size(yyjson_val *fields, size_t multiplier, size_t *size)
+{
+    if (size == NULL)
+        return false;
+
+    for (size_t repeat = 0U; repeat < multiplier; ++repeat)
+    {
+        for (size_t field_index = 0U; yyjson_is_arr(fields) && field_index < yyjson_arr_size(fields); ++field_index)
+        {
+            sdl3d_replication_field_descriptor field;
+            if (!sdl3d_replication_field_descriptor_from_json(yyjson_arr_get(fields, field_index), &field))
+                return false;
+            const size_t field_size = sdl3d_replication_field_wire_size(field.type);
+            if (field_size == 0U || *size > SIZE_MAX - 1U - field_size)
+                return false;
+            *size += 1U + field_size;
+        }
+    }
+    return true;
+}
+
+static bool game_data_replication_channel_packet_size(const sdl3d_game_data_runtime *runtime, yyjson_val *channel,
+                                                      size_t *out_size)
 {
     if (out_size != NULL)
         *out_size = 0U;
@@ -2424,17 +2462,21 @@ static bool game_data_replication_channel_packet_size(yyjson_val *channel, size_
     yyjson_val *actors = obj_get(channel, "actors");
     for (size_t actor_index = 0U; yyjson_is_arr(actors) && actor_index < yyjson_arr_size(actors); ++actor_index)
     {
-        yyjson_val *fields = obj_get(yyjson_arr_get(actors, actor_index), "fields");
-        for (size_t field_index = 0U; yyjson_is_arr(fields) && field_index < yyjson_arr_size(fields); ++field_index)
-        {
-            sdl3d_replication_field_descriptor field;
-            if (!sdl3d_replication_field_descriptor_from_json(yyjson_arr_get(fields, field_index), &field))
-                return false;
-            const size_t field_size = sdl3d_replication_field_wire_size(field.type);
-            if (field_size == 0U || size > SIZE_MAX - 1U - field_size)
-                return false;
-            size += 1U + field_size;
-        }
+        if (!game_data_add_replication_fields_packet_size(obj_get(yyjson_arr_get(actors, actor_index), "fields"), 1U,
+                                                          &size))
+            return false;
+    }
+
+    yyjson_val *pools = obj_get(channel, "pools");
+    for (size_t pool_index = 0U; yyjson_is_arr(pools) && pool_index < yyjson_arr_size(pools); ++pool_index)
+    {
+        yyjson_val *pool_schema = yyjson_arr_get(pools, pool_index);
+        const actor_pool_runtime *pool = find_actor_pool_const(runtime, json_string(pool_schema, "pool", NULL));
+        if (pool == NULL || pool->capacity < 0)
+            return false;
+        if (!game_data_add_replication_fields_packet_size(obj_get(pool_schema, "fields"), (size_t)pool->capacity,
+                                                          &size))
+            return false;
     }
 
     if (out_size != NULL)
@@ -2556,6 +2598,13 @@ static bool game_data_read_actor_replication_field(const sdl3d_registered_actor 
         return false;
 
     out_value->type = field->type;
+    if (SDL_strcmp(field->path, "active") == 0)
+    {
+        if (field->type != SDL3D_REPLICATION_FIELD_BOOL)
+            return false;
+        out_value->value.as_bool = actor->active;
+        return true;
+    }
     if (SDL_strcmp(field->path, "position") == 0)
     {
         if (field->type != SDL3D_REPLICATION_FIELD_VEC3)
@@ -2664,13 +2713,34 @@ static bool game_data_read_snapshot_value(sdl3d_replication_reader *reader, sdl3
     }
 }
 
-static bool game_data_apply_actor_replication_field(sdl3d_registered_actor *actor,
+static bool game_data_apply_actor_replication_field(sdl3d_game_data_runtime *runtime, sdl3d_registered_actor *actor,
                                                     const sdl3d_replication_field_descriptor *field,
                                                     const game_data_snapshot_value *value)
 {
     if (actor == NULL || field == NULL || value == NULL || field->path == NULL || field->type != value->type)
         return false;
 
+    if (SDL_strcmp(field->path, "active") == 0)
+    {
+        if (value->type != SDL3D_REPLICATION_FIELD_BOOL)
+            return false;
+        int actor_index = -1;
+        actor_pool_runtime *pool = find_actor_pool_for_actor(runtime, actor->name, &actor_index);
+        if (pool != NULL && actor_index >= 0)
+        {
+            if (value->value.as_bool)
+            {
+                if (actor_pool_actor_is_active(pool, actor, actor_index))
+                    return true;
+                return actor_pool_initialize_slot(runtime, pool, actor_index, true);
+            }
+            if (actor_pool_lifecycle_state(pool, actor_index) == ACTOR_LIFECYCLE_INACTIVE)
+                return true;
+            return actor_pool_request_despawn(runtime, pool, actor, actor_index);
+        }
+        actor->active = value->value.as_bool;
+        return true;
+    }
     if (SDL_strcmp(field->path, "position") == 0)
     {
         if (value->type != SDL3D_REPLICATION_FIELD_VEC3)
@@ -10656,6 +10726,18 @@ static actor_pool_runtime *find_actor_pool(sdl3d_game_data_runtime *runtime, con
     return NULL;
 }
 
+static const actor_pool_runtime *find_actor_pool_const(const sdl3d_game_data_runtime *runtime, const char *name)
+{
+    if (runtime == NULL || name == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->actor_pool_count; ++i)
+    {
+        if (runtime->actor_pools[i].name != NULL && SDL_strcmp(runtime->actor_pools[i].name, name) == 0)
+            return &runtime->actor_pools[i];
+    }
+    return NULL;
+}
+
 static int actor_pool_index_for_actor(const actor_pool_runtime *pool, const char *actor_name)
 {
     if (pool == NULL || actor_name == NULL)
@@ -13452,6 +13534,54 @@ static bool game_data_describe_network_snapshot_ex(const sdl3d_game_data_runtime
         }
     }
 
+    yyjson_val *pools = obj_get(channel, "pools");
+    for (size_t pool_index = 0U; yyjson_is_arr(pools) && pool_index < yyjson_arr_size(pools); ++pool_index)
+    {
+        yyjson_val *pool_schema = yyjson_arr_get(pools, pool_index);
+        const char *pool_name = json_string(pool_schema, "pool", NULL);
+        const actor_pool_runtime *pool = find_actor_pool_const(runtime, pool_name);
+        if (pool == NULL)
+        {
+            set_errorf(error_buffer, error_buffer_size, "network snapshot describe pool '%s' not found",
+                       pool_name != NULL ? pool_name : "<null>");
+            return false;
+        }
+
+        yyjson_val *fields = obj_get(pool_schema, "fields");
+        for (int actor_index = 0; actor_index < pool->capacity; ++actor_index)
+        {
+            const char *actor_name = pool->actor_names[actor_index];
+            const sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, actor_name);
+            if (actor == NULL)
+            {
+                set_errorf(error_buffer, error_buffer_size, "network snapshot describe pooled actor '%s' not found",
+                           actor_name != NULL ? actor_name : "<null>");
+                return false;
+            }
+            for (size_t field_index = 0U; yyjson_is_arr(fields) && field_index < yyjson_arr_size(fields); ++field_index)
+            {
+                sdl3d_replication_field_descriptor field;
+                game_data_snapshot_value value;
+                if (!sdl3d_replication_field_descriptor_from_json(yyjson_arr_get(fields, field_index), &field) ||
+                    !game_data_read_actor_replication_field(actor, &field, &value))
+                {
+                    set_errorf(error_buffer, error_buffer_size,
+                               "network snapshot describe failed to read field '%s' on pooled actor '%s'",
+                               field.path != NULL ? field.path : "<invalid>",
+                               actor_name != NULL ? actor_name : "<null>");
+                    return false;
+                }
+                if (!append_format(buffer, buffer_size, &offset, " %s.%s=", actor_name != NULL ? actor_name : "<null>",
+                                   field.path != NULL ? field.path : "<invalid>") ||
+                    !game_data_append_snapshot_value(buffer, buffer_size, &offset, &value))
+                {
+                    set_error(error_buffer, error_buffer_size, "network snapshot describe buffer is too small");
+                    return false;
+                }
+            }
+        }
+    }
+
     return true;
 }
 
@@ -13669,14 +13799,14 @@ bool sdl3d_game_data_encode_network_snapshot(const sdl3d_game_data_runtime *runt
         return false;
     }
 
-    const size_t field_count = game_data_replication_channel_field_count(channel);
+    const size_t field_count = game_data_replication_channel_field_count(runtime, channel);
     if (field_count > SDL_MAX_UINT32 || channel_index < 0)
     {
         set_error(error_buffer, error_buffer_size, "network snapshot channel is too large");
         return false;
     }
     size_t required_size = 0U;
-    if (!game_data_replication_channel_packet_size(channel, &required_size))
+    if (!game_data_replication_channel_packet_size(runtime, channel, &required_size))
     {
         set_error(error_buffer, error_buffer_size, "network snapshot channel contains unsupported field data");
         return false;
@@ -13730,6 +13860,52 @@ bool sdl3d_game_data_encode_network_snapshot(const sdl3d_game_data_runtime *runt
             {
                 set_error(error_buffer, error_buffer_size, "network snapshot buffer is too small for field data");
                 return false;
+            }
+        }
+    }
+
+    yyjson_val *pools = obj_get(channel, "pools");
+    for (size_t pool_index = 0U; yyjson_is_arr(pools) && pool_index < yyjson_arr_size(pools); ++pool_index)
+    {
+        yyjson_val *pool_schema = yyjson_arr_get(pools, pool_index);
+        const char *pool_name = json_string(pool_schema, "pool", NULL);
+        const actor_pool_runtime *pool = find_actor_pool_const(runtime, pool_name);
+        if (pool == NULL)
+        {
+            set_errorf(error_buffer, error_buffer_size, "network snapshot pool '%s' not found",
+                       pool_name != NULL ? pool_name : "<null>");
+            return false;
+        }
+
+        yyjson_val *fields = obj_get(pool_schema, "fields");
+        for (int actor_index = 0; actor_index < pool->capacity; ++actor_index)
+        {
+            const char *actor_name = pool->actor_names[actor_index];
+            sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, actor_name);
+            if (actor == NULL)
+            {
+                set_errorf(error_buffer, error_buffer_size, "network snapshot pooled actor '%s' not found",
+                           actor_name != NULL ? actor_name : "<null>");
+                return false;
+            }
+            for (size_t field_index = 0U; yyjson_is_arr(fields) && field_index < yyjson_arr_size(fields); ++field_index)
+            {
+                sdl3d_replication_field_descriptor field;
+                game_data_snapshot_value value;
+                if (!sdl3d_replication_field_descriptor_from_json(yyjson_arr_get(fields, field_index), &field) ||
+                    !game_data_read_actor_replication_field(actor, &field, &value))
+                {
+                    set_errorf(error_buffer, error_buffer_size,
+                               "network snapshot failed to read field '%s' on pooled actor '%s'",
+                               field.path != NULL ? field.path : "<invalid>",
+                               actor_name != NULL ? actor_name : "<null>");
+                    return false;
+                }
+                if (!game_data_write_snapshot_value(&writer, &value))
+                {
+                    set_error(error_buffer, error_buffer_size, "network snapshot buffer is too small for field data");
+                    return false;
+                }
             }
         }
     }
@@ -13909,7 +14085,7 @@ bool sdl3d_game_data_apply_network_snapshot(sdl3d_game_data_runtime *runtime, co
         return false;
     }
 
-    const size_t field_count = game_data_replication_channel_field_count(channel);
+    const size_t field_count = game_data_replication_channel_field_count(runtime, channel);
     if ((Uint32)field_count != packet_field_count)
     {
         set_error(error_buffer, error_buffer_size, "network snapshot field count does not match schema");
@@ -13938,6 +14114,31 @@ bool sdl3d_game_data_apply_network_snapshot(sdl3d_game_data_runtime *runtime, co
                  decoded_index < field_count &&
                  game_data_read_snapshot_value(&reader, field.type, &values[decoded_index]);
             ++decoded_index;
+        }
+    }
+    yyjson_val *pools = obj_get(channel, "pools");
+    for (size_t pool_schema_index = 0U; ok && yyjson_is_arr(pools) && pool_schema_index < yyjson_arr_size(pools);
+         ++pool_schema_index)
+    {
+        yyjson_val *pool_schema = yyjson_arr_get(pools, pool_schema_index);
+        const actor_pool_runtime *pool = find_actor_pool_const(runtime, json_string(pool_schema, "pool", NULL));
+        yyjson_val *fields = obj_get(pool_schema, "fields");
+        if (pool == NULL)
+        {
+            ok = false;
+            break;
+        }
+        for (int actor_index = 0; ok && actor_index < pool->capacity; ++actor_index)
+        {
+            for (size_t field_index = 0U; ok && yyjson_is_arr(fields) && field_index < yyjson_arr_size(fields);
+                 ++field_index)
+            {
+                sdl3d_replication_field_descriptor field;
+                ok = sdl3d_replication_field_descriptor_from_json(yyjson_arr_get(fields, field_index), &field) &&
+                     decoded_index < field_count &&
+                     game_data_read_snapshot_value(&reader, field.type, &values[decoded_index]);
+                ++decoded_index;
+            }
         }
     }
     if (ok && decoded_index != field_count)
@@ -13977,6 +14178,57 @@ bool sdl3d_game_data_apply_network_snapshot(sdl3d_game_data_runtime *runtime, co
         }
     }
 
+    size_t pooled_actor_count = 0U;
+    for (size_t pool_schema_index = 0U; yyjson_is_arr(pools) && pool_schema_index < yyjson_arr_size(pools);
+         ++pool_schema_index)
+    {
+        const actor_pool_runtime *pool =
+            find_actor_pool_const(runtime, json_string(yyjson_arr_get(pools, pool_schema_index), "pool", NULL));
+        if (pool == NULL || pool->capacity < 0)
+        {
+            SDL_free(resolved_actors);
+            SDL_free(values);
+            set_error(error_buffer, error_buffer_size, "network snapshot pool not found");
+            return false;
+        }
+        pooled_actor_count += (size_t)pool->capacity;
+    }
+    sdl3d_registered_actor **resolved_pooled_actors =
+        pooled_actor_count > 0U
+            ? (sdl3d_registered_actor **)SDL_calloc(pooled_actor_count, sizeof(*resolved_pooled_actors))
+            : NULL;
+    if (resolved_pooled_actors == NULL && pooled_actor_count > 0U)
+    {
+        SDL_free(resolved_actors);
+        SDL_free(values);
+        set_error(error_buffer, error_buffer_size, "network snapshot failed to allocate pooled actor lookup storage");
+        return false;
+    }
+
+    size_t resolved_pool_actor_index = 0U;
+    for (size_t pool_schema_index = 0U; yyjson_is_arr(pools) && pool_schema_index < yyjson_arr_size(pools);
+         ++pool_schema_index)
+    {
+        yyjson_val *pool_schema = yyjson_arr_get(pools, pool_schema_index);
+        const char *pool_name = json_string(pool_schema, "pool", NULL);
+        const actor_pool_runtime *pool = find_actor_pool_const(runtime, pool_name);
+        for (int actor_index = 0; pool != NULL && actor_index < pool->capacity; ++actor_index)
+        {
+            const char *actor_name = pool->actor_names[actor_index];
+            resolved_pooled_actors[resolved_pool_actor_index] = sdl3d_game_data_find_actor(runtime, actor_name);
+            if (resolved_pooled_actors[resolved_pool_actor_index] == NULL)
+            {
+                SDL_free(resolved_pooled_actors);
+                SDL_free(resolved_actors);
+                SDL_free(values);
+                set_errorf(error_buffer, error_buffer_size, "network snapshot pooled actor '%s' not found",
+                           actor_name != NULL ? actor_name : "<null>");
+                return false;
+            }
+            ++resolved_pool_actor_index;
+        }
+    }
+
     actor_lifecycle_defer_begin(runtime);
     bool apply_ok = true;
     size_t apply_index = 0U;
@@ -13990,7 +14242,7 @@ bool sdl3d_game_data_apply_network_snapshot(sdl3d_game_data_runtime *runtime, co
             sdl3d_replication_field_descriptor field;
             if (!sdl3d_replication_field_descriptor_from_json(yyjson_arr_get(fields, field_index), &field) ||
                 apply_index >= field_count ||
-                !game_data_apply_actor_replication_field(actor, &field, &values[apply_index]))
+                !game_data_apply_actor_replication_field(runtime, actor, &field, &values[apply_index]))
             {
                 set_errorf(error_buffer, error_buffer_size, "network snapshot failed to apply field '%s' on actor '%s'",
                            field.path != NULL ? field.path : "<invalid>",
@@ -14001,14 +14253,45 @@ bool sdl3d_game_data_apply_network_snapshot(sdl3d_game_data_runtime *runtime, co
             ++apply_index;
         }
     }
+    size_t pooled_apply_actor_index = 0U;
+    for (size_t pool_schema_index = 0U; apply_ok && yyjson_is_arr(pools) && pool_schema_index < yyjson_arr_size(pools);
+         ++pool_schema_index)
+    {
+        yyjson_val *pool_schema = yyjson_arr_get(pools, pool_schema_index);
+        const char *pool_name = json_string(pool_schema, "pool", NULL);
+        const actor_pool_runtime *pool = find_actor_pool_const(runtime, pool_name);
+        yyjson_val *fields = obj_get(pool_schema, "fields");
+        for (int actor_index = 0; pool != NULL && actor_index < pool->capacity; ++actor_index)
+        {
+            sdl3d_registered_actor *actor = resolved_pooled_actors[pooled_apply_actor_index++];
+            const char *actor_name = actor != NULL ? actor->name : "<null>";
+            for (size_t field_index = 0U; yyjson_is_arr(fields) && field_index < yyjson_arr_size(fields); ++field_index)
+            {
+                sdl3d_replication_field_descriptor field;
+                if (!sdl3d_replication_field_descriptor_from_json(yyjson_arr_get(fields, field_index), &field) ||
+                    apply_index >= field_count ||
+                    !game_data_apply_actor_replication_field(runtime, actor, &field, &values[apply_index]))
+                {
+                    set_errorf(error_buffer, error_buffer_size,
+                               "network snapshot failed to apply field '%s' on pooled actor '%s'",
+                               field.path != NULL ? field.path : "<invalid>", actor_name);
+                    apply_ok = false;
+                    break;
+                }
+                ++apply_index;
+            }
+        }
+    }
     actor_lifecycle_defer_end(runtime);
     if (!apply_ok)
     {
+        SDL_free(resolved_pooled_actors);
         SDL_free(resolved_actors);
         SDL_free(values);
         return false;
     }
 
+    SDL_free(resolved_pooled_actors);
     SDL_free(resolved_actors);
     SDL_free(values);
     if (out_tick != NULL)

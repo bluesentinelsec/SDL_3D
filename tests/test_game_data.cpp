@@ -387,6 +387,84 @@ std::string valid_network_schema_json(const char *ball_velocity_type = "vec3")
   })json";
 }
 
+std::string actor_pool_replication_game_json(int pool_capacity)
+{
+    return std::string(R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Actor Pool Replication", "id": "test.actor_pool_replication", "version": "0.1.0" },
+  "world": { "name": "world.actor_pool_replication", "kind": "fixed_screen" },
+  "entities": [],
+  "actor_archetypes": [
+    {
+      "name": "archetype.shot",
+      "tags": ["projectile"],
+      "transform": { "position": [0.0, 0.0, 0.25] },
+      "properties": {
+        "damage": { "type": "int", "value": 1 },
+        "velocity": { "type": "vec2", "value": [0.0, 0.0] }
+      }
+    }
+  ],
+  "actor_pools": [
+    {
+      "name": "pool.shots",
+      "archetype": "archetype.shot",
+      "capacity": )json") +
+           std::to_string(pool_capacity) + R"json(,
+      "scene": "scene.play",
+      "initial_active": false,
+      "on_exhausted": "fail"
+    }
+  ],
+  "signals": [
+    "signal.spawn",
+    "signal.despawn"
+  ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.spawn",
+        "actions": [
+          {
+            "type": "actor.spawn",
+            "pool": "pool.shots",
+            "position": [2.0, 3.0, 4.0],
+            "properties": { "damage": 7 }
+          }
+        ]
+      },
+      {
+        "signal": "signal.despawn",
+        "actions": [
+          { "type": "actor.despawn", "target": "pool.shots.0" }
+        ]
+      }
+    ]
+  },
+  "network": {
+    "protocol": { "id": "sdl3d.test.pool.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "replication": [
+      {
+        "name": "pool_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "pools": [
+          {
+            "pool": "pool.shots",
+            "fields": [
+              "active",
+              "position",
+              { "path": "properties.damage", "type": "int32" }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json";
+}
+
 std::array<Uint8, SDL3D_REPLICATION_SCHEMA_HASH_SIZE> load_network_schema_hash(const std::filesystem::path &path)
 {
     sdl3d_game_session *session = nullptr;
@@ -7685,6 +7763,145 @@ TEST(GameDataRuntime, RejectsPongNetworkSnapshotsWithMismatchedSchemaOrTruncatio
 
     destroy_runtime_session(host_session, host);
     destroy_runtime_session(client_session, client);
+}
+
+TEST(GameDataRuntime, EncodesAndAppliesPooledActorNetworkSnapshots)
+{
+    const std::filesystem::path dir = unique_test_dir("actor_pool_replication");
+    write_text(dir / "pool.game.json", actor_pool_replication_game_json(2).c_str());
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "renders_world": true
+})json");
+
+    sdl3d_game_session *host_session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &host_session));
+    sdl3d_game_data_runtime *host = nullptr;
+    char error[512]{};
+    ASSERT_TRUE(
+        sdl3d_game_data_load_file((dir / "pool.game.json").string().c_str(), host_session, &host, error, sizeof(error)))
+        << error;
+
+    sdl3d_game_session *client_session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &client_session));
+    sdl3d_game_data_runtime *client = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "pool.game.json").string().c_str(), client_session, &client, error,
+                                          sizeof(error)))
+        << error;
+
+    sdl3d_registered_actor *host_shot0 = sdl3d_game_data_find_actor(host, "pool.shots.0");
+    sdl3d_registered_actor *host_shot1 = sdl3d_game_data_find_actor(host, "pool.shots.1");
+    sdl3d_registered_actor *client_shot0 = sdl3d_game_data_find_actor(client, "pool.shots.0");
+    sdl3d_registered_actor *client_shot1 = sdl3d_game_data_find_actor(client, "pool.shots.1");
+    ASSERT_NE(host_shot0, nullptr);
+    ASSERT_NE(host_shot1, nullptr);
+    ASSERT_NE(client_shot0, nullptr);
+    ASSERT_NE(client_shot1, nullptr);
+    EXPECT_FALSE(host_shot0->active);
+    EXPECT_FALSE(client_shot0->active);
+
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(host_session),
+                      sdl3d_game_data_find_signal(host, "signal.spawn"), nullptr);
+    ASSERT_TRUE(host_shot0->active);
+    EXPECT_FALSE(host_shot1->active);
+    host_shot0->position = sdl3d_vec3_make(5.0f, 6.0f, 7.0f);
+    sdl3d_properties_set_int(host_shot0->props, "damage", 11);
+
+    std::array<Uint8, 256> packet{};
+    size_t packet_size = 0U;
+    ASSERT_TRUE(sdl3d_game_data_encode_network_snapshot(host, "pool_state", 55U, packet.data(), packet.size(),
+                                                        &packet_size, error, sizeof(error)))
+        << error;
+    Uint32 tick = 0U;
+    ASSERT_TRUE(sdl3d_game_data_apply_network_snapshot(client, packet.data(), packet_size, &tick, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(tick, 55U);
+    EXPECT_TRUE(client_shot0->active);
+    EXPECT_FALSE(client_shot1->active);
+    expect_vec3_near(client_shot0->position, host_shot0->position);
+    EXPECT_EQ(sdl3d_properties_get_int(client_shot0->props, "damage", 0), 11);
+    EXPECT_STREQ(sdl3d_properties_get_string(client_shot0->props, "pool_lifecycle", ""), "active");
+
+    char description[1024]{};
+    ASSERT_TRUE(sdl3d_game_data_describe_network_snapshot(host, "pool_state", 56U, description, sizeof(description),
+                                                          error, sizeof(error)))
+        << error;
+    EXPECT_NE(std::string(description).find("pool.shots.0.active=true"), std::string::npos);
+    EXPECT_NE(std::string(description).find("pool.shots.0.properties.damage=11"), std::string::npos);
+
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(host_session),
+                      sdl3d_game_data_find_signal(host, "signal.despawn"), nullptr);
+    ASSERT_FALSE(host_shot0->active);
+    ASSERT_TRUE(sdl3d_game_data_encode_network_snapshot(host, "pool_state", 56U, packet.data(), packet.size(),
+                                                        &packet_size, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(sdl3d_game_data_apply_network_snapshot(client, packet.data(), packet_size, &tick, error, sizeof(error)))
+        << error;
+    EXPECT_FALSE(client_shot0->active);
+    EXPECT_STREQ(sdl3d_properties_get_string(client_shot0->props, "pool_lifecycle", ""), "inactive");
+    EXPECT_EQ(sdl3d_properties_get_int(client_shot0->props, "damage", 0), 1);
+    expect_vec3_near(client_shot0->position, sdl3d_vec3_make(0.0f, 0.0f, 0.25f));
+
+    destroy_runtime_session(host_session, host);
+    destroy_runtime_session(client_session, client);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, PooledActorNetworkSchemaHashIncludesPoolCapacity)
+{
+    const std::filesystem::path dir = unique_test_dir("actor_pool_replication_hash");
+    write_text(dir / "capacity_2.game.json", actor_pool_replication_game_json(2).c_str());
+    write_text(dir / "capacity_3.game.json", actor_pool_replication_game_json(3).c_str());
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "renders_world": true
+})json");
+
+    char error[512]{};
+    ASSERT_TRUE(
+        sdl3d_game_data_validate_file((dir / "capacity_2.game.json").string().c_str(), nullptr, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(
+        sdl3d_game_data_validate_file((dir / "capacity_3.game.json").string().c_str(), nullptr, error, sizeof(error)))
+        << error;
+
+    EXPECT_NE(load_network_schema_hash(dir / "capacity_2.game.json"),
+              load_network_schema_hash(dir / "capacity_3.game.json"));
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsUnknownPooledActorNetworkReplicationRefs)
+{
+    const std::filesystem::path dir = unique_test_dir("bad_actor_pool_replication");
+    const std::string network_json = R"json({
+    "protocol": { "id": "sdl3d.test.pool.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "replication": [
+      {
+        "name": "pool_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "pools": [
+          {
+            "pool": "pool.missing",
+            "fields": ["active"]
+          }
+        ]
+      }
+    ]
+  })json";
+    write_text(dir / "bad_pool_ref.game.json", network_schema_game_json(network_json).c_str());
+
+    char error[512]{};
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_pool_ref.game.json").string().c_str(), nullptr, error,
+                                               sizeof(error)));
+    EXPECT_NE(std::string(error).find("actor pool"), std::string::npos) << error;
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, EncodesAndAppliesPongNetworkInputFromAuthoredSchema)
