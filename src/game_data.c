@@ -99,11 +99,21 @@ typedef struct binding_entry
     int connection_id;
 } binding_entry;
 
+typedef struct sensor_contact_pair_state
+{
+    const char *actor_name;
+    const char *other_actor_name;
+    bool active;
+    bool seen;
+} sensor_contact_pair_state;
+
 typedef struct sensor_entry
 {
     game_data_sensor_type type;
     const char *entity;
     const char *other;
+    const char *entity_tag;
+    const char *other_tag;
     const char *action;
     const char *axis;
     const char *side;
@@ -112,7 +122,17 @@ typedef struct sensor_entry
     float threshold;
     int signal_id;
     bool was_active;
+    sensor_contact_pair_state *contact_pairs;
+    int contact_pair_count;
+    int contact_pair_capacity;
 } sensor_entry;
+
+typedef struct sensor_actor_list
+{
+    sdl3d_registered_actor **items;
+    int count;
+    int capacity;
+} sensor_actor_list;
 
 typedef struct input_binding_spec
 {
@@ -11455,6 +11475,8 @@ static bool load_sensors(sdl3d_game_data_runtime *runtime, yyjson_val *logic)
 
         entry->entity = json_string(sensor, "entity", json_string(sensor, "a", NULL));
         entry->other = json_string(sensor, "b", NULL);
+        entry->entity_tag = json_string(sensor, "a_tag", NULL);
+        entry->other_tag = json_string(sensor, "b_tag", NULL);
         entry->action = json_string(sensor, "action", NULL);
         entry->axis = json_string(sensor, "axis", NULL);
         entry->side = json_string(sensor, "side", NULL);
@@ -11970,13 +11992,249 @@ static void emit_sensor_signal(sdl3d_game_data_runtime *runtime, const sensor_en
     sdl3d_properties_destroy(payload);
 }
 
+static bool runtime_actor_is_active(const sdl3d_game_data_runtime *runtime, const sdl3d_registered_actor *actor)
+{
+    if (runtime == NULL || actor == NULL)
+        return false;
+    int actor_index = -1;
+    const actor_pool_runtime *pool = find_actor_pool_for_actor_const(runtime, actor->name, &actor_index);
+    if (pool != NULL)
+        return actor_pool_actor_is_active(pool, actor, actor_index);
+    return actor->active;
+}
+
+static bool sensor_actor_list_add(sensor_actor_list *list, sdl3d_registered_actor *actor)
+{
+    if (list == NULL || actor == NULL)
+        return false;
+    if (list->count >= list->capacity)
+    {
+        const int new_capacity = list->capacity > 0 ? list->capacity * 2 : 8;
+        sdl3d_registered_actor **items =
+            (sdl3d_registered_actor **)SDL_realloc(list->items, (size_t)new_capacity * sizeof(*items));
+        if (items == NULL)
+            return false;
+        list->items = items;
+        list->capacity = new_capacity;
+    }
+    list->items[list->count++] = actor;
+    return true;
+}
+
+static void sensor_actor_list_free(sensor_actor_list *list)
+{
+    if (list == NULL)
+        return;
+    SDL_free(list->items);
+    list->items = NULL;
+    list->count = 0;
+    list->capacity = 0;
+}
+
+static bool collect_sensor_endpoint_actors(sdl3d_game_data_runtime *runtime, const char *actor_name, const char *tag,
+                                           sensor_actor_list *out_list)
+{
+    if (runtime == NULL || out_list == NULL)
+        return false;
+
+    if (actor_name != NULL)
+    {
+        if (!active_scene_has_entity_internal(runtime, actor_name))
+            return true;
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, actor_name);
+        if (runtime_actor_is_active(runtime, actor))
+            return sensor_actor_list_add(out_list, actor);
+        return true;
+    }
+
+    if (tag == NULL || tag[0] == '\0')
+        return true;
+
+    yyjson_val *entities = obj_get(runtime_root(runtime), "entities");
+    for (size_t i = 0; yyjson_is_arr(entities) && i < yyjson_arr_size(entities); ++i)
+    {
+        yyjson_val *entity = yyjson_arr_get(entities, i);
+        const char *tags[1] = {tag};
+        if (!entity_json_has_tags(entity, tags, 1))
+            continue;
+        const char *entity_name = json_string(entity, "name", NULL);
+        if (!active_scene_has_entity_internal(runtime, entity_name))
+            continue;
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, entity_name);
+        if (runtime_actor_is_active(runtime, actor) && !sensor_actor_list_add(out_list, actor))
+            return false;
+    }
+
+    for (int pool_index = 0; pool_index < runtime->actor_pool_count; ++pool_index)
+    {
+        actor_pool_runtime *pool = &runtime->actor_pools[pool_index];
+        const char *tags[1] = {tag};
+        if (!entity_json_has_tags(pool->archetype_json, tags, 1) ||
+            !actor_pool_in_scene(pool, sdl3d_game_data_active_scene(runtime)))
+        {
+            continue;
+        }
+        for (int actor_index = 0; actor_index < pool->capacity; ++actor_index)
+        {
+            sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[actor_index]);
+            if (actor_pool_actor_is_active(pool, actor, actor_index) && !sensor_actor_list_add(out_list, actor))
+                return false;
+        }
+    }
+    return true;
+}
+
+static sensor_contact_pair_state *sensor_contact_pair_state_for(sensor_entry *sensor, const char *actor_name,
+                                                                const char *other_actor_name)
+{
+    if (sensor == NULL || actor_name == NULL || other_actor_name == NULL)
+        return NULL;
+    for (int i = 0; i < sensor->contact_pair_count; ++i)
+    {
+        sensor_contact_pair_state *state = &sensor->contact_pairs[i];
+        if (state->actor_name != NULL && state->other_actor_name != NULL &&
+            SDL_strcmp(state->actor_name, actor_name) == 0 &&
+            SDL_strcmp(state->other_actor_name, other_actor_name) == 0)
+        {
+            return state;
+        }
+    }
+
+    if (sensor->contact_pair_count >= sensor->contact_pair_capacity)
+    {
+        const int new_capacity = sensor->contact_pair_capacity > 0 ? sensor->contact_pair_capacity * 2 : 8;
+        sensor_contact_pair_state *pairs = (sensor_contact_pair_state *)SDL_realloc(
+            sensor->contact_pairs, (size_t)new_capacity * sizeof(*sensor->contact_pairs));
+        if (pairs == NULL)
+            return NULL;
+        SDL_memset(pairs + sensor->contact_pair_capacity, 0,
+                   (size_t)(new_capacity - sensor->contact_pair_capacity) * sizeof(*pairs));
+        sensor->contact_pairs = pairs;
+        sensor->contact_pair_capacity = new_capacity;
+    }
+
+    sensor_contact_pair_state *state = &sensor->contact_pairs[sensor->contact_pair_count++];
+    SDL_zero(*state);
+    state->actor_name = actor_name;
+    state->other_actor_name = other_actor_name;
+    return state;
+}
+
+static bool actors_contact_2d(const sdl3d_registered_actor *a, const sdl3d_registered_actor *b)
+{
+    if (a == NULL || b == NULL)
+        return false;
+
+    const float a_radius = sdl3d_properties_get_float(a->props, "radius", 0.0f);
+    const float b_radius = sdl3d_properties_get_float(b->props, "radius", 0.0f);
+    const float a_half_width = sdl3d_properties_get_float(a->props, "half_width", 0.0f);
+    const float a_half_height = sdl3d_properties_get_float(a->props, "half_height", 0.0f);
+    const float b_half_width = sdl3d_properties_get_float(b->props, "half_width", 0.0f);
+    const float b_half_height = sdl3d_properties_get_float(b->props, "half_height", 0.0f);
+
+    if (a_radius > 0.0f && b_half_width > 0.0f && b_half_height > 0.0f)
+    {
+        const float closest_x = SDL_clamp(a->position.x, b->position.x - b_half_width, b->position.x + b_half_width);
+        const float closest_y = SDL_clamp(a->position.y, b->position.y - b_half_height, b->position.y + b_half_height);
+        const float dx = a->position.x - closest_x;
+        const float dy = a->position.y - closest_y;
+        return dx * dx + dy * dy <= a_radius * a_radius;
+    }
+    if (a_radius > 0.0f && b_radius > 0.0f)
+    {
+        const float dx = a->position.x - b->position.x;
+        const float dy = a->position.y - b->position.y;
+        const float radius = a_radius + b_radius;
+        return dx * dx + dy * dy <= radius * radius;
+    }
+    if (a_half_width > 0.0f && a_half_height > 0.0f && b_half_width > 0.0f && b_half_height > 0.0f)
+    {
+        return SDL_fabsf(a->position.x - b->position.x) <= a_half_width + b_half_width &&
+               SDL_fabsf(a->position.y - b->position.y) <= a_half_height + b_half_height;
+    }
+    if (a_half_width > 0.0f && a_half_height > 0.0f && b_radius > 0.0f)
+    {
+        return actors_contact_2d(b, a);
+    }
+    return false;
+}
+
+static void sensor_contact_states_begin(sensor_entry *sensor)
+{
+    if (sensor == NULL)
+        return;
+    for (int i = 0; i < sensor->contact_pair_count; ++i)
+        sensor->contact_pairs[i].seen = false;
+}
+
+static void sensor_contact_states_end(sensor_entry *sensor)
+{
+    if (sensor == NULL)
+        return;
+    bool any_active = false;
+    for (int i = 0; i < sensor->contact_pair_count; ++i)
+    {
+        if (!sensor->contact_pairs[i].seen)
+            sensor->contact_pairs[i].active = false;
+        any_active = any_active || sensor->contact_pairs[i].active;
+    }
+    sensor->was_active = any_active;
+}
+
+static void update_sensor_contact_pair(sdl3d_game_data_runtime *runtime, sensor_entry *sensor,
+                                       sdl3d_registered_actor *actor, sdl3d_registered_actor *other)
+{
+    if (!runtime_actor_is_active(runtime, actor) || !runtime_actor_is_active(runtime, other))
+        return;
+
+    sensor_contact_pair_state *state = sensor_contact_pair_state_for(sensor, actor->name, other->name);
+    if (state == NULL)
+        return;
+
+    const bool active = actors_contact_2d(actor, other);
+    if (active && !state->active)
+        emit_sensor_signal(runtime, sensor, actor, other);
+    state->active = active;
+    state->seen = true;
+}
+
+static void update_contact_sensor(sdl3d_game_data_runtime *runtime, sensor_entry *sensor)
+{
+    sensor_actor_list actors;
+    sensor_actor_list others;
+    SDL_zero(actors);
+    SDL_zero(others);
+
+    sensor_contact_states_begin(sensor);
+    if (collect_sensor_endpoint_actors(runtime, sensor->entity, sensor->entity_tag, &actors) &&
+        collect_sensor_endpoint_actors(runtime, sensor->other, sensor->other_tag, &others))
+    {
+        for (int a = 0; a < actors.count; ++a)
+        {
+            for (int b = 0; b < others.count; ++b)
+            {
+                if (actors.items[a] != others.items[b])
+                    update_sensor_contact_pair(runtime, sensor, actors.items[a], others.items[b]);
+            }
+        }
+    }
+    sensor_contact_states_end(sensor);
+    sensor_actor_list_free(&actors);
+    sensor_actor_list_free(&others);
+}
+
 static void update_sensors(sdl3d_game_data_runtime *runtime)
 {
     for (int i = 0; i < runtime->sensor_count; ++i)
     {
         sensor_entry *sensor = &runtime->sensors[i];
-        if ((sensor->entity != NULL && !active_scene_has_entity_internal(runtime, sensor->entity)) ||
-            (sensor->other != NULL && !active_scene_has_entity_internal(runtime, sensor->other)))
+        if (sensor->type == GAME_DATA_SENSOR_CONTACT_2D)
+        {
+            update_contact_sensor(runtime, sensor);
+            continue;
+        }
+
+        if (sensor->entity != NULL && !active_scene_has_entity_internal(runtime, sensor->entity))
         {
             sensor->was_active = false;
             continue;
@@ -12017,25 +12275,6 @@ static void update_sensors(sdl3d_game_data_runtime *runtime)
                 sdl3d_properties_set_vec3(actor->props, "velocity", velocity);
                 emit_sensor_signal(runtime, sensor, actor, NULL);
             }
-        }
-        else if (sensor->type == GAME_DATA_SENSOR_CONTACT_2D)
-        {
-            sdl3d_registered_actor *other = sdl3d_game_data_find_actor(runtime, sensor->other);
-            if (other == NULL)
-                continue;
-            const float radius = sdl3d_properties_get_float(actor->props, "radius", 0.0f);
-            const float half_width = sdl3d_properties_get_float(other->props, "half_width", 0.0f);
-            const float half_height = sdl3d_properties_get_float(other->props, "half_height", 0.0f);
-            const float closest_x =
-                SDL_clamp(actor->position.x, other->position.x - half_width, other->position.x + half_width);
-            const float closest_y =
-                SDL_clamp(actor->position.y, other->position.y - half_height, other->position.y + half_height);
-            const float dx = actor->position.x - closest_x;
-            const float dy = actor->position.y - closest_y;
-            const bool active = dx * dx + dy * dy <= radius * radius;
-            if (active && !sensor->was_active)
-                emit_sensor_signal(runtime, sensor, actor, other);
-            sensor->was_active = active;
         }
     }
 }
@@ -14412,6 +14651,8 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->actions);
     SDL_free(runtime->adapters);
     SDL_free(runtime->bindings);
+    for (int i = 0; i < runtime->sensor_count; ++i)
+        SDL_free(runtime->sensors[i].contact_pairs);
     SDL_free(runtime->sensors);
     SDL_free(runtime->input_bindings);
     SDL_free(runtime->ui_states);
