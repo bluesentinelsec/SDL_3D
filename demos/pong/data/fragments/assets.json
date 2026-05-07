@@ -1,0 +1,93 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "assets": {
+    "fonts": [
+      {
+        "id": "font.hud",
+        "builtin": "Inter",
+        "size": 34
+      },
+      {
+        "id": "font.small",
+        "builtin": "Inter",
+        "size": 22
+      },
+      {
+        "id": "font.title",
+        "builtin": "Inter",
+        "size": 96
+      }
+    ],
+    "sprites": [
+      {
+        "id": "sprite.splash.logo",
+        "path": "asset://images/splash-logo.jpg",
+        "frame_width": 784,
+        "frame_height": 1168,
+        "columns": 1,
+        "rows": 1,
+        "frame_count": 1,
+        "direction_count": 1,
+        "fps": 1.0,
+        "loop": false,
+        "lighting": false,
+        "emissive": false,
+        "visual_ground_offset": 0.0,
+        "effect": "melt",
+        "effect_delay": 1.0,
+        "effect_duration": 1.0,
+        "shader_fragment_path": "asset://shaders/splash_logo_melt.frag.glsl"
+      }
+    ],
+    "images": [
+      {
+        "id": "image.splash.logo",
+        "sprite": "sprite.splash.logo"
+      },
+      {
+        "id": "image.ball.texture",
+        "path": "asset://images/ball-texture.png"
+      }
+    ],
+    "sounds": [
+      {
+        "id": "sound.ui.select",
+        "path": "asset://audio/ui/click1.wav",
+        "volume": 0.65,
+        "bus": "sfx"
+      },
+      {
+        "id": "sound.ui.move",
+        "path": "asset://audio/ui/rollover1.wav",
+        "volume": 0.45,
+        "bus": "sfx"
+      },
+      {
+        "id": "sound.ui.splash",
+        "path": "asset://audio/ui/switch3.wav",
+        "volume": 0.55,
+        "bus": "sfx"
+      },
+      {
+        "id": "sound.pong.hit",
+        "path": "asset://audio/ui/click3.wav",
+        "volume": 0.55,
+        "bus": "sfx"
+      },
+      {
+        "id": "sound.pong.score",
+        "path": "asset://audio/ui/switch10.wav",
+        "volume": 0.75,
+        "bus": "sfx"
+      }
+    ],
+    "music": [
+      {
+        "id": "music.title",
+        "path": "asset://audio/music/moonlight-sonata-allegretto.ogg",
+        "volume": 0.5,
+        "loop": true
+      }
+    ]
+  }
+}

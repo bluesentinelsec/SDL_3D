@@ -1,0 +1,12 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "scripts": [
+    {
+      "id": "script.pong",
+      "path": "scripts/pong.lua",
+      "module": "pong.rules",
+      "dependencies": [],
+      "autoload": true
+    }
+  ]
+}

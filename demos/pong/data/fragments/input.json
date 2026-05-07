@@ -1,0 +1,513 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "input": {
+    "contexts": [
+      {
+        "name": "input.gameplay",
+        "actions": [
+          {
+            "name": "action.paddle.up",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "UP"
+              },
+              {
+                "device": "gamepad",
+                "button": "DPAD_UP"
+              },
+              {
+                "device": "gamepad",
+                "axis": "left_y",
+                "scale": -1.0
+              }
+            ]
+          },
+          {
+            "name": "action.paddle.down",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "DOWN"
+              },
+              {
+                "device": "gamepad",
+                "button": "DPAD_DOWN"
+              },
+              {
+                "device": "gamepad",
+                "axis": "left_y",
+                "scale": 1.0
+              }
+            ]
+          },
+          {
+            "name": "action.paddle.local.up"
+          },
+          {
+            "name": "action.paddle.local.down"
+          },
+          {
+            "name": "action.pause",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "RETURN"
+              },
+              {
+                "device": "keyboard",
+                "key": "P"
+              },
+              {
+                "device": "gamepad",
+                "button": "START"
+              }
+            ]
+          },
+          {
+            "name": "action.exit",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "BACKSPACE"
+              },
+              {
+                "device": "gamepad",
+                "button": "BACK"
+              }
+            ]
+          },
+          {
+            "name": "action.restart",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "RETURN"
+              },
+              {
+                "device": "gamepad",
+                "button": "SOUTH"
+              }
+            ]
+          },
+          {
+            "name": "action.camera.ball.toggle",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "B"
+              },
+              {
+                "device": "gamepad",
+                "button": "NORTH"
+              }
+            ]
+          },
+          {
+            "name": "action.menu.up",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "UP"
+              },
+              {
+                "device": "gamepad",
+                "button": "DPAD_UP"
+              },
+              {
+                "device": "gamepad",
+                "axis": "left_y",
+                "scale": -1.0
+              }
+            ]
+          },
+          {
+            "name": "action.menu.down",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "DOWN"
+              },
+              {
+                "device": "gamepad",
+                "button": "DPAD_DOWN"
+              },
+              {
+                "device": "gamepad",
+                "axis": "left_y",
+                "scale": 1.0
+              }
+            ]
+          },
+          {
+            "name": "action.menu.left",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "LEFT"
+              },
+              {
+                "device": "keyboard",
+                "key": "A"
+              },
+              {
+                "device": "gamepad",
+                "button": "DPAD_LEFT"
+              },
+              {
+                "device": "gamepad",
+                "axis": "left_x",
+                "scale": -1.0
+              }
+            ]
+          },
+          {
+            "name": "action.menu.right",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "RIGHT"
+              },
+              {
+                "device": "keyboard",
+                "key": "D"
+              },
+              {
+                "device": "gamepad",
+                "button": "DPAD_RIGHT"
+              },
+              {
+                "device": "gamepad",
+                "axis": "left_x",
+                "scale": 1.0
+              }
+            ]
+          },
+          {
+            "name": "action.menu.back",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "ESCAPE"
+              },
+              {
+                "device": "gamepad",
+                "button": "EAST"
+              }
+            ]
+          },
+          {
+            "name": "action.menu.select",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "RETURN"
+              },
+              {
+                "device": "keyboard",
+                "key": "SPACE"
+              },
+              {
+                "device": "mouse",
+                "button": "LEFT"
+              },
+              {
+                "device": "gamepad",
+                "button": "SOUTH"
+              }
+            ]
+          },
+          {
+            "name": "action.scene.title",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "1"
+              }
+            ]
+          },
+          {
+            "name": "action.scene.options",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "2"
+              }
+            ]
+          },
+          {
+            "name": "action.scene.play",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "3"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "device_assignment_sets": [
+      {
+        "name": "input.assignment.keyboard.vertical_arrows",
+        "device": "keyboard",
+        "bindings": [
+          {
+            "semantic": "up",
+            "key": "UP"
+          },
+          {
+            "semantic": "down",
+            "key": "DOWN"
+          }
+        ]
+      },
+      {
+        "name": "input.assignment.gamepad.vertical_dpad_left_stick",
+        "device": "gamepad",
+        "bindings": [
+          {
+            "semantic": "up",
+            "button": "DPAD_UP"
+          },
+          {
+            "semantic": "down",
+            "button": "DPAD_DOWN"
+          },
+          {
+            "semantic": "up",
+            "axis": "left_y",
+            "scale": -1.0
+          },
+          {
+            "semantic": "down",
+            "axis": "left_y",
+            "scale": 1.0
+          }
+        ]
+      }
+    ],
+    "profiles": [
+      {
+        "name": "profile.pong.play.lan.host",
+        "active_if": {
+          "type": "all",
+          "conditions": [
+            {
+              "type": "scene_state.compare",
+              "key": "match_mode",
+              "op": "==",
+              "value": "lan"
+            },
+            {
+              "type": "scene_state.compare",
+              "key": "network_role",
+              "op": "==",
+              "value": "host"
+            }
+          ]
+        },
+        "unbind": [
+          "action.paddle.up",
+          "action.paddle.down",
+          "action.paddle.local.up",
+          "action.paddle.local.down"
+        ],
+        "assignments": [
+          {
+            "set": "input.assignment.keyboard.vertical_arrows",
+            "actions": {
+              "up": "action.paddle.up",
+              "down": "action.paddle.down"
+            }
+          },
+          {
+            "set": "input.assignment.gamepad.vertical_dpad_left_stick",
+            "slot": 0,
+            "actions": {
+              "up": "action.paddle.up",
+              "down": "action.paddle.down"
+            }
+          }
+        ]
+      },
+      {
+        "name": "profile.pong.play.lan.client",
+        "active_if": {
+          "type": "all",
+          "conditions": [
+            {
+              "type": "scene_state.compare",
+              "key": "match_mode",
+              "op": "==",
+              "value": "lan"
+            },
+            {
+              "type": "scene_state.compare",
+              "key": "network_role",
+              "op": "==",
+              "value": "client"
+            }
+          ]
+        },
+        "unbind": [
+          "action.paddle.up",
+          "action.paddle.down",
+          "action.paddle.local.up",
+          "action.paddle.local.down"
+        ],
+        "assignments": [
+          {
+            "set": "input.assignment.keyboard.vertical_arrows",
+            "actions": {
+              "up": "action.paddle.local.up",
+              "down": "action.paddle.local.down"
+            }
+          },
+          {
+            "set": "input.assignment.gamepad.vertical_dpad_left_stick",
+            "slot": 0,
+            "actions": {
+              "up": "action.paddle.local.up",
+              "down": "action.paddle.local.down"
+            }
+          }
+        ]
+      },
+      {
+        "name": "profile.pong.play.local.keyboard_only",
+        "min_gamepads": 0,
+        "max_gamepads": 0,
+        "active_if": {
+          "type": "scene_state.compare",
+          "key": "match_mode",
+          "op": "==",
+          "value": "local"
+        },
+        "unbind": [
+          "action.paddle.up",
+          "action.paddle.down",
+          "action.paddle.local.up",
+          "action.paddle.local.down"
+        ],
+        "assignments": [
+          {
+            "set": "input.assignment.keyboard.vertical_arrows",
+            "actions": {
+              "up": "action.paddle.up",
+              "down": "action.paddle.down"
+            }
+          }
+        ]
+      },
+      {
+        "name": "profile.pong.play.local.one_gamepad",
+        "min_gamepads": 1,
+        "max_gamepads": 1,
+        "active_if": {
+          "type": "scene_state.compare",
+          "key": "match_mode",
+          "op": "==",
+          "value": "local"
+        },
+        "unbind": [
+          "action.paddle.up",
+          "action.paddle.down",
+          "action.paddle.local.up",
+          "action.paddle.local.down"
+        ],
+        "assignments": [
+          {
+            "set": "input.assignment.keyboard.vertical_arrows",
+            "actions": {
+              "up": "action.paddle.up",
+              "down": "action.paddle.down"
+            }
+          },
+          {
+            "set": "input.assignment.gamepad.vertical_dpad_left_stick",
+            "slot": 0,
+            "actions": {
+              "up": "action.paddle.local.up",
+              "down": "action.paddle.local.down"
+            }
+          }
+        ]
+      },
+      {
+        "name": "profile.pong.play.local.two_gamepads",
+        "min_gamepads": 2,
+        "max_gamepads": 4,
+        "active_if": {
+          "type": "scene_state.compare",
+          "key": "match_mode",
+          "op": "==",
+          "value": "local"
+        },
+        "unbind": [
+          "action.paddle.up",
+          "action.paddle.down",
+          "action.paddle.local.up",
+          "action.paddle.local.down"
+        ],
+        "assignments": [
+          {
+            "set": "input.assignment.keyboard.vertical_arrows",
+            "actions": {
+              "up": "action.paddle.up",
+              "down": "action.paddle.down"
+            }
+          },
+          {
+            "set": "input.assignment.gamepad.vertical_dpad_left_stick",
+            "slot": 0,
+            "actions": {
+              "up": "action.paddle.up",
+              "down": "action.paddle.down"
+            }
+          },
+          {
+            "set": "input.assignment.gamepad.vertical_dpad_left_stick",
+            "slot": 1,
+            "actions": {
+              "up": "action.paddle.local.up",
+              "down": "action.paddle.local.down"
+            }
+          }
+        ]
+      },
+      {
+        "name": "profile.pong.play.single",
+        "active_if": {
+          "type": "scene_state.compare",
+          "key": "match_mode",
+          "op": "==",
+          "value": "single",
+          "default": "single"
+        },
+        "unbind": [
+          "action.paddle.up",
+          "action.paddle.down",
+          "action.paddle.local.up",
+          "action.paddle.local.down"
+        ],
+        "assignments": [
+          {
+            "set": "input.assignment.keyboard.vertical_arrows",
+            "actions": {
+              "up": "action.paddle.up",
+              "down": "action.paddle.down"
+            }
+          },
+          {
+            "set": "input.assignment.gamepad.vertical_dpad_left_stick",
+            "actions": {
+              "up": "action.paddle.up",
+              "down": "action.paddle.down"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

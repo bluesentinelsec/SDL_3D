@@ -1,7 +1,10 @@
 #include <gtest/gtest.h>
 
+#include <filesystem>
+#include <memory>
 #include <set>
 #include <string>
+#include <vector>
 
 extern "C"
 {
@@ -37,14 +40,62 @@ class JsonDoc
         return yyjson_doc_get_root(doc_);
     }
 
+    yyjson_val *section(const char *name)
+    {
+        yyjson_val *value = yyjson_obj_get(root(), name);
+        if (value != nullptr)
+            return value;
+
+        yyjson_val *imports = yyjson_obj_get(root(), "imports");
+        for (size_t i = 0; yyjson_is_arr(imports) && i < yyjson_arr_size(imports); ++i)
+        {
+            yyjson_val *entry = yyjson_arr_get(imports, i);
+            if (!import_includes_section(entry, name))
+                continue;
+            const char *path = yyjson_get_str(yyjson_obj_get(entry, "path"));
+            if (path == nullptr || path[0] == '\0')
+                continue;
+            JsonDoc &fragment = load_fragment(path);
+            value = yyjson_obj_get(fragment.root(), name);
+            if (value != nullptr)
+                return value;
+        }
+        return nullptr;
+    }
+
     const std::string &error() const
     {
         return error_;
     }
 
   private:
+    static bool import_includes_section(yyjson_val *entry, const char *name)
+    {
+        if (!yyjson_is_obj(entry) || name == nullptr)
+            return false;
+        yyjson_val *sections = yyjson_obj_get(entry, "sections");
+        if (sections == nullptr)
+            return true;
+        for (size_t i = 0; yyjson_is_arr(sections) && i < yyjson_arr_size(sections); ++i)
+        {
+            const char *section = yyjson_get_str(yyjson_arr_get(sections, i));
+            if (section != nullptr && std::string(section) == name)
+                return true;
+        }
+        return false;
+    }
+
+    JsonDoc &load_fragment(const char *relative_path)
+    {
+        const std::filesystem::path base = std::filesystem::path(kPongDataPath).parent_path();
+        const std::filesystem::path fragment_path = base / relative_path;
+        fragments_.push_back(std::make_unique<JsonDoc>(fragment_path.string().c_str()));
+        return *fragments_.back();
+    }
+
     yyjson_doc *doc_ = nullptr;
     std::string error_;
+    std::vector<std::unique_ptr<JsonDoc>> fragments_;
 };
 
 std::string required_string(yyjson_val *object, const char *key)
@@ -191,8 +242,23 @@ TEST(GameDataJson, PongDataDeclaresGenericTopLevelModel)
     EXPECT_TRUE(yyjson_is_obj(yyjson_obj_get(doc.root(), "metadata")));
     EXPECT_TRUE(yyjson_is_obj(yyjson_obj_get(doc.root(), "world")));
     EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(doc.root(), "entities")));
-    EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(doc.root(), "scripts")));
+    EXPECT_TRUE(yyjson_is_arr(doc.section("scripts")));
     EXPECT_TRUE(yyjson_is_obj(yyjson_obj_get(doc.root(), "logic")));
+}
+
+TEST(GameDataJson, PongDataUsesStructuredImports)
+{
+    JsonDoc doc(kPongDataPath);
+    ASSERT_NE(doc.root(), nullptr) << doc.error();
+
+    yyjson_val *imports = required_array(doc.root(), "imports");
+    ASSERT_EQ(yyjson_arr_size(imports), 3u);
+    EXPECT_TRUE(yyjson_is_obj(doc.section("assets")));
+    EXPECT_TRUE(yyjson_is_arr(doc.section("scripts")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("input")));
+    EXPECT_EQ(yyjson_obj_get(doc.root(), "assets"), nullptr);
+    EXPECT_EQ(yyjson_obj_get(doc.root(), "scripts"), nullptr);
+    EXPECT_EQ(yyjson_obj_get(doc.root(), "input"), nullptr);
 }
 
 TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
@@ -313,7 +379,7 @@ TEST(GameDataJson, PongDataHasUniqueAuthoredNames)
     collect_named_objects(required_array(doc.root(), "entities"), "name", &entity_names);
     collect_signals(required_array(doc.root(), "signals"), &signal_names);
     collect_named_objects(required_array(doc.root(), "adapters"), "name", &adapter_names);
-    collect_named_objects(required_array(doc.root(), "scripts"), "id", &script_names);
+    collect_named_objects(doc.section("scripts"), "id", &script_names);
 
     EXPECT_NE(entity_names.find("entity.ball"), entity_names.end());
     EXPECT_NE(entity_names.find("entity.score.player"), entity_names.end());
@@ -337,10 +403,11 @@ TEST(GameDataJson, PongLogicReferencesKnownEntitiesSignalsTimersCamerasAndAdapte
     collect_named_objects(required_array(doc.root(), "entities"), "name", &entities);
     collect_signals(required_array(doc.root(), "signals"), &signals);
     collect_named_objects(required_array(doc.root(), "adapters"), "name", &adapters);
-    collect_named_objects(required_array(doc.root(), "scripts"), "id", &scripts);
+    collect_named_objects(doc.section("scripts"), "id", &scripts);
 
     yyjson_val *adapter_array = required_array(doc.root(), "adapters");
-    yyjson_val *script_array = required_array(doc.root(), "scripts");
+    yyjson_val *script_array = doc.section("scripts");
+    ASSERT_TRUE(yyjson_is_arr(script_array));
     for (size_t i = 0; i < yyjson_arr_size(script_array); ++i)
     {
         yyjson_val *script = yyjson_arr_get(script_array, i);
@@ -364,7 +431,7 @@ TEST(GameDataJson, PongLogicReferencesKnownEntitiesSignalsTimersCamerasAndAdapte
     collect_named_objects(required_array(logic, "timers"), "name", &timers);
 
     std::set<std::string> actions;
-    yyjson_val *input_contexts = required_array(required_object(doc.root(), "input"), "contexts");
+    yyjson_val *input_contexts = required_array(doc.section("input"), "contexts");
     for (size_t i = 0; i < yyjson_arr_size(input_contexts); ++i)
     {
         yyjson_val *context = yyjson_arr_get(input_contexts, i);

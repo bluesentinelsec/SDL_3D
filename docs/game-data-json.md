@@ -107,6 +107,12 @@ of choosing a hidden winner. When validation fails after composition, the first
 fatal error reports the source fragment and original JSON path for the imported
 subtree that produced the invalid data.
 
+Prefer broad, stable ownership boundaries at first: assets, scripts, input,
+network schema, reusable actor archetypes/pools, and scene families are good
+fragment candidates. Avoid splitting every small object into its own file; that
+turns authored data into a dependency graph that is harder to review than a
+larger coherent fragment.
+
 ## Storage
 
 The optional `storage` block declares the platform-stable identity used by
