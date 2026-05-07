@@ -21,6 +21,7 @@ Every file is a JSON object with these fields:
 | --- | --- | --- |
 | `schema` | yes | Schema id. First value: `sdl3d.game.v0`. |
 | `metadata` | yes | Human-readable identity and versioning. |
+| `imports` | no | Structured references to `sdl3d.fragment.v0` files that contribute mergeable game-data sections. |
 | `storage` | no | Writable storage identity used to resolve `user://` and `cache://` roots. |
 | `persistence` | no | Reusable actor-property persistence entries for settings, saves, and profiles. |
 | `app` | no | Managed-loop startup config such as title, logical resolution, window mode, backend, tick rate, and tick cap. |
@@ -51,6 +52,54 @@ Names are authored handles and should be stable across reloads. Use role namespa
 - `adapter.pong.reflect_ball`
 
 Loaders should reject duplicate names inside a namespace and should report the JSON pointer of the failure.
+
+## Structured Imports
+
+Large games should keep one root game file and split owned data into structured
+fragments. Imports are not textual includes: each imported file must be a JSON
+object with schema `sdl3d.fragment.v0`, and fragments may only contain
+mergeable sections such as `assets`, `scripts`, `input`, `entities`,
+`actor_archetypes`, `actor_pools`, `signals`, `logic`, `adapters`, `network`,
+`haptics`, `presentation`, or `update_phases`.
+
+```json
+{
+  "schema": "sdl3d.game.v0",
+  "imports": [
+    { "path": "assets/images.json", "sections": ["assets"] },
+    { "path": "actors/pools.json", "sections": ["actor_archetypes", "actor_pools"] },
+    { "path": "network/schema.json", "sections": ["network"] }
+  ]
+}
+```
+
+Fragment example:
+
+```json
+{
+  "schema": "sdl3d.fragment.v0",
+  "actor_archetypes": [
+    { "name": "archetype.enemy", "tags": ["enemy"] }
+  ],
+  "actor_pools": [
+    { "name": "pool.enemies", "archetype": "archetype.enemy", "capacity": 55 }
+  ]
+}
+```
+
+Import paths are resolved relative to the importing file and must be safe
+relative paths: no absolute paths, URI schemes, backslashes, drive prefixes,
+empty path segments, `.`, or `..`. Fragments may import other fragments, but the
+validator rejects cycles and excessive depth. Root-only sections such as
+`metadata`, `app`, `world`, and scene entry-point ownership remain in the root
+game file.
+
+When `sections` is present, it must be a non-empty array of mergeable section
+names and every selected section must exist in the fragment. Non-selected
+sections in that fragment are rejected so hidden data does not silently depend
+on import order. The current implementation validates the import graph and
+fragment structure; the follow-up composition layer will merge selected
+sections into the runtime document before normal game-data validation and load.
 
 ## Storage
 
