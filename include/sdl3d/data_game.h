@@ -56,6 +56,14 @@ extern "C"
         sdl3d_data_game_mount_assets_fn mount_assets;
         /** @brief Userdata passed to @ref mount_assets. */
         void *mount_userdata;
+        /** @brief Optional scene name to enter instead of the authored `scenes.initial` scene. */
+        const char *initial_scene_override;
+        /** @brief Optional persistent scene-state values copied before the first scene-enter signal. */
+        const sdl3d_properties *initial_scene_state;
+        /** @brief Optional transient payload passed to the first scene-enter signal. */
+        const sdl3d_properties *initial_scene_payload;
+        /** @brief Suppress the authored app startup transition when using direct-start tooling. */
+        bool skip_app_flow_startup;
         /**
          * @brief Enable authored host/direct-connect network orchestration.
          *

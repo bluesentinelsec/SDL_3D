@@ -834,6 +834,28 @@ extern "C"
                                    char *error_buffer, int error_buffer_size);
 
     /**
+     * @brief Optional game-data load-time overrides.
+     *
+     * Hosts normally load the authored `scenes.initial` scene and emit that
+     * scene's enter signal. Development tools and editors can provide
+     * `initial_scene_override` to enter a different scene before any enter
+     * signal fires. `initial_scene_state` is copied into the persistent
+     * scene-state bag before the first enter signal; `initial_scene_payload`
+     * is passed only to that initial scene-enter signal.
+     */
+    typedef struct sdl3d_game_data_load_options
+    {
+        /** @brief Game session that receives authored signals, timers, and input bindings. Required. */
+        sdl3d_game_session *session;
+        /** @brief Optional authored scene name to enter instead of `scenes.initial`. */
+        const char *initial_scene_override;
+        /** @brief Optional persistent scene-state values copied before first scene enter. */
+        const sdl3d_properties *initial_scene_state;
+        /** @brief Optional transient payload passed to the first scene-enter signal. */
+        const sdl3d_properties *initial_scene_payload;
+    } sdl3d_game_data_load_options;
+
+    /**
      * @brief Load a JSON game data asset through a resolver.
      *
      * This is the preferred loading entry point for games that may ship data in
@@ -852,6 +874,19 @@ extern "C"
      */
     bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_path, sdl3d_game_session *session,
                                     sdl3d_game_data_runtime **out_runtime, char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Load a JSON game data asset through a resolver with load-time overrides.
+     *
+     * This uses the same resolver and ownership rules as
+     * @ref sdl3d_game_data_load_asset, with the additional ability to choose
+     * the first active scene and seed scene state before any scene-enter signal
+     * runs.
+     */
+    bool sdl3d_game_data_load_asset_with_options(sdl3d_asset_resolver *assets, const char *asset_path,
+                                                 const sdl3d_game_data_load_options *options,
+                                                 sdl3d_game_data_runtime **out_runtime, char *error_buffer,
+                                                 int error_buffer_size);
 
     /**
      * @brief Read the managed-loop config authored in a JSON game data asset.

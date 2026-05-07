@@ -87,6 +87,22 @@ Run through a pack file:
 build/debug/sdl3d_runner --pack path/to/game.sdl3dpak --data asset://game.game.json
 ```
 
+Start directly in a scene while play-testing:
+
+```sh
+build/debug/sdl3d_runner \
+  --root path/to/game/data \
+  --data asset://game.game.json \
+  --scene scene.level_1 \
+  --state checkpoint=midboss \
+  --state lives=3
+```
+
+For larger setup payloads, use `--state-json '{"checkpoint":"midboss"}'` or
+`--state-file dev/level_1_state.json`. Direct-start state is applied before the
+scene enter signal runs, so authored setup logic can read it through normal
+scene-state conditions and Lua state APIs.
+
 Demo targets may compile the same runner source with embedded assets and a
 default root data path. That wrapper should only supply build-time defaults; it
 should not contain game rules.

@@ -12018,7 +12018,19 @@ static bool load_scene_package(sdl3d_game_data_runtime *runtime, yyjson_val *roo
     return ok;
 }
 
-static bool load_scenes(sdl3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
+static void copy_all_properties(sdl3d_properties *target, const sdl3d_properties *source)
+{
+    const int count = sdl3d_properties_count(source);
+    for (int i = 0; i < count; ++i)
+    {
+        const char *key = NULL;
+        if (sdl3d_properties_get_key_at(source, i, &key, NULL))
+            copy_property_value(target, key, sdl3d_properties_get_value(source, key));
+    }
+}
+
+static bool load_scenes(sdl3d_game_data_runtime *runtime, yyjson_val *root, const sdl3d_game_data_load_options *options,
+                        char *error_buffer, int error_buffer_size)
 {
     yyjson_val *scenes = obj_get(root, "scenes");
     yyjson_val *files = obj_get(scenes, "files");
@@ -12069,21 +12081,29 @@ static bool load_scenes(sdl3d_game_data_runtime *runtime, yyjson_val *root, char
     }
 
     runtime->active_scene_index = runtime->scene_count > 0 ? 0 : -1;
-    const char *initial = json_string(scenes, "initial", NULL);
+    const bool using_initial_override =
+        options != NULL && options->initial_scene_override != NULL && options->initial_scene_override[0] != '\0';
+    const char *initial =
+        using_initial_override ? options->initial_scene_override : json_string(scenes, "initial", NULL);
     if (initial != NULL)
     {
         scene_entry *scene = find_scene(runtime, initial);
         if (scene == NULL)
         {
-            set_error(error_buffer, error_buffer_size, "initial scene does not reference a loaded scene");
+            set_error(error_buffer, error_buffer_size,
+                      using_initial_override ? "initial scene override does not reference a loaded scene"
+                                             : "initial scene does not reference a loaded scene");
             return false;
         }
         runtime->active_scene_index = (int)(scene - runtime->scenes);
     }
+    if (options != NULL && options->initial_scene_state != NULL)
+        copy_all_properties(runtime->scene_state, options->initial_scene_state);
     apply_scene_camera(runtime, active_scene_entry(runtime));
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D game data initial scene: %s",
                  sdl3d_game_data_active_scene(runtime) != NULL ? sdl3d_game_data_active_scene(runtime) : "<none>");
-    emit_scene_enter_signal(runtime, active_scene_entry(runtime), NULL, NULL);
+    emit_scene_enter_signal(runtime, active_scene_entry(runtime), NULL,
+                            options != NULL ? options->initial_scene_payload : NULL);
     return true;
 }
 
@@ -12913,9 +12933,22 @@ bool sdl3d_game_data_load_app_config_file(const char *path, sdl3d_game_config *o
 bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_path, sdl3d_game_session *session,
                                 sdl3d_game_data_runtime **out_runtime, char *error_buffer, int error_buffer_size)
 {
+    sdl3d_game_data_load_options options;
+    SDL_zero(options);
+    options.session = session;
+    return sdl3d_game_data_load_asset_with_options(assets, asset_path, &options, out_runtime, error_buffer,
+                                                   error_buffer_size);
+}
+
+bool sdl3d_game_data_load_asset_with_options(sdl3d_asset_resolver *assets, const char *asset_path,
+                                             const sdl3d_game_data_load_options *options,
+                                             sdl3d_game_data_runtime **out_runtime, char *error_buffer,
+                                             int error_buffer_size)
+{
     if (out_runtime != NULL)
         *out_runtime = NULL;
-    if (assets == NULL || asset_path == NULL || asset_path[0] == '\0' || session == NULL || out_runtime == NULL)
+    if (assets == NULL || asset_path == NULL || asset_path[0] == '\0' || options == NULL || options->session == NULL ||
+        out_runtime == NULL)
     {
         set_error(error_buffer, error_buffer_size, "invalid game data load arguments");
         return false;
@@ -12944,7 +12977,7 @@ bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_
         return false;
     }
     runtime->doc = doc;
-    runtime->session = session;
+    runtime->session = options->session;
     runtime->assets = assets;
     runtime->base_dir = path_dirname(asset_path_without_scheme(asset_path));
     runtime->scene_state = sdl3d_properties_create();
@@ -12982,7 +13015,7 @@ bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_
               load_scripts(runtime, root, error_buffer, error_buffer_size) &&
               load_lua_adapters(runtime, root, error_buffer, error_buffer_size) &&
               load_bindings(runtime, logic, error_buffer, error_buffer_size) &&
-              load_scenes(runtime, root, error_buffer, error_buffer_size);
+              load_scenes(runtime, root, options, error_buffer, error_buffer_size);
     if (!ok)
     {
         sdl3d_game_data_destroy(runtime);

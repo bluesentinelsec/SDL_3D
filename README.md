@@ -116,6 +116,16 @@ From a pack file:
 build/debug/sdl3d_runner --pack path/to/game.sdl3dpak --data asset://game.game.json
 ```
 
+Start directly in a scene for development:
+
+```sh
+build/debug/sdl3d_runner \
+  --root path/to/game/data \
+  --data asset://game.game.json \
+  --scene scene.level_1 \
+  --state checkpoint=midboss
+```
+
 Demo targets may also build a game-specific executable from the same generic
 runner source with embedded assets and a default root data asset. That wrapper
 must not contain game-specific rules.

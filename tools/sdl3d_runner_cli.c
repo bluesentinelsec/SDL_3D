@@ -15,12 +15,51 @@ void sdl3d_runner_args_print_usage(const char *argv0, FILE *stream)
     const char *program = argv0 != NULL ? argv0 : "sdl3d_runner";
     fprintf(out,
             "Usage:\n"
-            "  %s --root <asset-root> --data <asset://game.json> [--media <media-dir>]\n"
-            "  %s --pack <game.sdl3dpak> --data <asset://game.json> [--media <media-dir>]\n",
+            "  %s --root <asset-root> --data <asset://game.json> [--media <media-dir>] [--scene <scene>] "
+            "[--state <key=value> ...] [--state-json <object>] [--state-file <path-or-asset>]\n"
+            "  %s --pack <game.sdl3dpak> --data <asset://game.json> [--media <media-dir>] [--scene <scene>] "
+            "[--state <key=value> ...] [--state-json <object>] [--state-file <path-or-asset>]\n",
             program, program);
 #if defined(SDL3D_RUNNER_EMBEDDED_ASSETS)
-    fprintf(out, "  %s --embedded --data <asset://game.json> [--media <media-dir>]\n", program);
+    fprintf(out,
+            "  %s --embedded --data <asset://game.json> [--media <media-dir>] [--scene <scene>] "
+            "[--state <key=value> ...] [--state-json <object>] [--state-file <path-or-asset>]\n",
+            program);
 #endif
+}
+
+static bool copy_string_list(const char ***out_values, int *out_count, const char **values, int count)
+{
+    if (out_values == NULL || out_count == NULL)
+        return false;
+    *out_values = NULL;
+    *out_count = 0;
+    if (count <= 0)
+        return true;
+
+    const char **copy = (const char **)SDL_calloc((size_t)count, sizeof(*copy));
+    if (copy == NULL)
+        return false;
+    for (int i = 0; i < count; ++i)
+        copy[i] = values[i];
+    *out_values = copy;
+    *out_count = count;
+    return true;
+}
+
+void sdl3d_runner_args_destroy(sdl3d_runner_args *args)
+{
+    if (args == NULL)
+        return;
+    SDL_free(args->state_assignments);
+    SDL_free(args->state_json_values);
+    SDL_free(args->state_files);
+    args->state_assignments = NULL;
+    args->state_json_values = NULL;
+    args->state_files = NULL;
+    args->state_assignment_count = 0;
+    args->state_json_count = 0;
+    args->state_file_count = 0;
 }
 
 sdl3d_tool_cli_result sdl3d_runner_args_parse(int argc, char **argv, sdl3d_runner_args *args, FILE *stream)
@@ -32,6 +71,12 @@ sdl3d_tool_cli_result sdl3d_runner_args_parse(int argc, char **argv, sdl3d_runne
 #endif
     struct arg_str *data = arg_str0(NULL, "data", "<asset://game.json>", "root game-data asset path");
     struct arg_str *media = arg_str0(NULL, "media", "<media-dir>", "built-in media directory");
+    struct arg_str *scene = arg_str0(NULL, "scene", "<scene>", "start directly in an authored scene");
+    struct arg_str *state = arg_strn(NULL, "state", "<key=value>", 0, argc > 0 ? argc : 1, "scene-state override");
+    struct arg_str *state_json =
+        arg_strn(NULL, "state-json", "<json-object>", 0, argc > 0 ? argc : 1, "scene-state JSON object");
+    struct arg_str *state_file =
+        arg_strn(NULL, "state-file", "<path-or-asset>", 0, argc > 0 ? argc : 1, "scene-state JSON file");
     struct arg_lit *help = arg_lit0("h", "help", "print this help and exit");
     struct arg_end *end = arg_end(20);
     void *argtable[] = {
@@ -39,7 +84,7 @@ sdl3d_tool_cli_result sdl3d_runner_args_parse(int argc, char **argv, sdl3d_runne
 #if defined(SDL3D_RUNNER_EMBEDDED_ASSETS)
         embedded,
 #endif
-        data,     media, help, end,
+        data,     media, scene, state, state_json, state_file, help, end,
     };
     const char *program = argc > 0 && argv != NULL && argv[0] != NULL ? argv[0] : "sdl3d_runner";
     FILE *out = stream != NULL ? stream : stderr;
@@ -113,6 +158,8 @@ sdl3d_tool_cli_result sdl3d_runner_args_parse(int argc, char **argv, sdl3d_runne
         args->data_asset_path = data->sval[0];
     if (media->count > 0)
         args->media_dir = media->sval[0];
+    if (scene->count > 0)
+        args->scene = scene->sval[0];
 
     const bool mount_path_required =
         args->mount_kind == SDL3D_RUNNER_MOUNT_DIRECTORY || args->mount_kind == SDL3D_RUNNER_MOUNT_PACK;
@@ -123,6 +170,17 @@ sdl3d_tool_cli_result sdl3d_runner_args_parse(int argc, char **argv, sdl3d_runne
         fprintf(out, "%s: an asset mount and --data are required\n", program);
         fprintf(out, "Try '%s --help' for more information.\n", program);
         arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
+        return SDL3D_TOOL_CLI_ERROR;
+    }
+
+    if ((args->scene != NULL && args->scene[0] == '\0') ||
+        !copy_string_list(&args->state_assignments, &args->state_assignment_count, state->sval, state->count) ||
+        !copy_string_list(&args->state_json_values, &args->state_json_count, state_json->sval, state_json->count) ||
+        !copy_string_list(&args->state_files, &args->state_file_count, state_file->sval, state_file->count))
+    {
+        fprintf(out, "%s: invalid or out-of-memory direct-start arguments\n", program);
+        arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
+        sdl3d_runner_args_destroy(args);
         return SDL3D_TOOL_CLI_ERROR;
     }
 

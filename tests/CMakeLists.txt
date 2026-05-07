@@ -285,6 +285,7 @@ else()
         PRIVATE
             ${CMAKE_SOURCE_DIR}/tools/sdl3d_pack_cli.c
             ${CMAKE_SOURCE_DIR}/tools/sdl3d_runner_cli.c
+            ${CMAKE_SOURCE_DIR}/tools/sdl3d_runner_state.c
     )
     target_link_libraries(sdl3d_tool_cli_test PRIVATE sdl3d_argtable3)
     target_include_directories(sdl3d_tool_cli_test PRIVATE ${CMAKE_SOURCE_DIR}/tools)
