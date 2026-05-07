@@ -8,6 +8,7 @@ set(SDL3D_PONG_ASSET_FILES
     ${SDL3D_PONG_AUDIO_FILES}
     fragments/assets.json
     fragments/input.json
+    fragments/logic.json
     fragments/network.json
     fragments/scripts.json
     images/ball-texture.png
