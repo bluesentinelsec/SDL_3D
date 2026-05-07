@@ -12855,7 +12855,7 @@ bool sdl3d_game_data_load_app_config_asset(sdl3d_asset_resolver *assets, const c
         return false;
     }
 
-    yyjson_doc *doc = sdl3d_game_data_compose_asset(assets, asset_path, error_buffer, error_buffer_size);
+    yyjson_doc *doc = sdl3d_game_data_compose_asset(assets, asset_path, NULL, error_buffer, error_buffer_size);
     if (doc == NULL)
         return false;
 
@@ -12921,13 +12921,15 @@ bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_
         return false;
     }
 
-    yyjson_doc *doc = sdl3d_game_data_compose_asset(assets, asset_path, error_buffer, error_buffer_size);
+    sdl3d_game_data_source_map *source_map = NULL;
+    yyjson_doc *doc = sdl3d_game_data_compose_asset(assets, asset_path, &source_map, error_buffer, error_buffer_size);
     if (doc == NULL)
         return false;
 
     yyjson_val *root = yyjson_doc_get_root(doc);
     if (!yyjson_is_obj(root) || SDL_strcmp(json_string(root, "schema", ""), "sdl3d.game.v0") != 0)
     {
+        sdl3d_game_data_source_map_destroy(source_map);
         yyjson_doc_free(doc);
         set_error(error_buffer, error_buffer_size, "unsupported or missing game data schema");
         return false;
@@ -12936,6 +12938,7 @@ bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_
     sdl3d_game_data_runtime *runtime = (sdl3d_game_data_runtime *)SDL_calloc(1, sizeof(*runtime));
     if (runtime == NULL)
     {
+        sdl3d_game_data_source_map_destroy(source_map);
         yyjson_doc_free(doc);
         set_error(error_buffer, error_buffer_size, "failed to allocate game data runtime");
         return false;
@@ -12948,16 +12951,19 @@ bool sdl3d_game_data_load_asset(sdl3d_asset_resolver *assets, const char *asset_
     runtime->rng_state = 0xC0FFEEu;
     if (runtime->base_dir == NULL || runtime->scene_state == NULL)
     {
+        sdl3d_game_data_source_map_destroy(source_map);
         sdl3d_game_data_destroy(runtime);
         set_error(error_buffer, error_buffer_size, "failed to allocate game data runtime state");
         return false;
     }
-    if (!sdl3d_game_data_validate_document(root, asset_path, runtime->base_dir, assets, NULL, error_buffer,
-                                           error_buffer_size))
+    if (!sdl3d_game_data_validate_document_with_source_map(root, asset_path, runtime->base_dir, assets, source_map,
+                                                           NULL, error_buffer, error_buffer_size))
     {
+        sdl3d_game_data_source_map_destroy(source_map);
         sdl3d_game_data_destroy(runtime);
         return false;
     }
+    sdl3d_game_data_source_map_destroy(source_map);
     if (!sdl3d_game_data_network_schema_hash(root, runtime->network_schema_hash, &runtime->has_network_schema))
     {
         sdl3d_game_data_destroy(runtime);

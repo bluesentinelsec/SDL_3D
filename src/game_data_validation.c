@@ -44,10 +44,25 @@ typedef struct validation_context
     const char *source_path;
     const char *base_dir;
     const sdl3d_asset_resolver *assets;
+    const sdl3d_game_data_source_map *source_map;
     char *error_buffer;
     int error_buffer_size;
     bool failed;
 } validation_context;
+
+typedef struct game_data_source_map_entry
+{
+    char *composed_path;
+    char *source_path;
+    char *source_json_path;
+} game_data_source_map_entry;
+
+struct sdl3d_game_data_source_map
+{
+    game_data_source_map_entry *entries;
+    int count;
+    int capacity;
+};
 
 typedef struct validation_names
 {
@@ -209,6 +224,59 @@ static bool input_device_name_valid(const char *device)
            SDL_strcmp(device != NULL ? device : "", "mouse") == 0;
 }
 
+static bool source_path_prefix_matches(const char *entry_path, const char *json_path)
+{
+    if (entry_path == NULL || json_path == NULL)
+        return false;
+    const size_t length = SDL_strlen(entry_path);
+    if (SDL_strncmp(entry_path, json_path, length) != 0)
+        return false;
+    return json_path[length] == '\0' || json_path[length] == '.' || json_path[length] == '[';
+}
+
+static const game_data_source_map_entry *source_map_find_best(const sdl3d_game_data_source_map *map,
+                                                              const char *json_path)
+{
+    const game_data_source_map_entry *best = NULL;
+    size_t best_length = 0U;
+    for (int i = 0; map != NULL && i < map->count; ++i)
+    {
+        const game_data_source_map_entry *entry = &map->entries[i];
+        if (!source_path_prefix_matches(entry->composed_path, json_path))
+            continue;
+        const size_t length = SDL_strlen(entry->composed_path);
+        if (length > best_length)
+        {
+            best = entry;
+            best_length = length;
+        }
+    }
+    return best;
+}
+
+static void resolve_source_location(const validation_context *ctx, const char *json_path, char *source_buffer,
+                                    size_t source_buffer_size, char *path_buffer, size_t path_buffer_size)
+{
+    const char *path = json_path != NULL ? json_path : "$";
+    const char *source = ctx != NULL && ctx->source_path != NULL ? ctx->source_path : "<game-data>";
+    if (ctx != NULL)
+    {
+        const game_data_source_map_entry *entry = source_map_find_best(ctx->source_map, path);
+        if (entry != NULL)
+        {
+            source = entry->source_path != NULL ? entry->source_path : source;
+            const size_t prefix_length = SDL_strlen(entry->composed_path);
+            const char *suffix = path + prefix_length;
+            SDL_snprintf(path_buffer, path_buffer_size, "%s%s",
+                         entry->source_json_path != NULL ? entry->source_json_path : "$", suffix);
+            SDL_snprintf(source_buffer, source_buffer_size, "%s", source);
+            return;
+        }
+    }
+    SDL_snprintf(source_buffer, source_buffer_size, "%s", source);
+    SDL_snprintf(path_buffer, path_buffer_size, "%s", path);
+}
+
 static void set_first_error(validation_context *ctx, const char *json_path, const char *message)
 {
     if (ctx->error_buffer == NULL || ctx->error_buffer_size <= 0 || ctx->error_buffer[0] != '\0')
@@ -216,8 +284,10 @@ static void set_first_error(validation_context *ctx, const char *json_path, cons
         return;
     }
 
-    SDL_snprintf(ctx->error_buffer, (size_t)ctx->error_buffer_size, "%s: %s: %s",
-                 ctx->source_path != NULL ? ctx->source_path : "<game-data>", json_path != NULL ? json_path : "$",
+    char source[PATH_BUFFER_SIZE];
+    char path[PATH_BUFFER_SIZE];
+    resolve_source_location(ctx, json_path, source, sizeof(source), path, sizeof(path));
+    SDL_snprintf(ctx->error_buffer, (size_t)ctx->error_buffer_size, "%s: %s: %s", source, path,
                  message != NULL ? message : "unknown validation error");
 }
 
@@ -1994,11 +2064,62 @@ static bool validate_imports(validation_context *ctx, yyjson_val *root)
     return validate_imports_with_stack(ctx, root, &stack);
 }
 
+static bool source_map_reserve(sdl3d_game_data_source_map *map, int required)
+{
+    if (map == NULL)
+        return false;
+    if (required <= map->capacity)
+        return true;
+    int next_capacity = map->capacity < 16 ? 16 : map->capacity * 2;
+    while (next_capacity < required)
+        next_capacity *= 2;
+    game_data_source_map_entry *entries =
+        (game_data_source_map_entry *)SDL_realloc(map->entries, (size_t)next_capacity * sizeof(*entries));
+    if (entries == NULL)
+        return false;
+    SDL_memset(entries + map->capacity, 0, (size_t)(next_capacity - map->capacity) * sizeof(*entries));
+    map->entries = entries;
+    map->capacity = next_capacity;
+    return true;
+}
+
+static bool source_map_add(validation_context *ctx, const char *composed_path, const char *source_json_path)
+{
+    if (ctx == NULL || ctx->source_map == NULL || composed_path == NULL || source_json_path == NULL)
+        return true;
+    sdl3d_game_data_source_map *map = (sdl3d_game_data_source_map *)ctx->source_map;
+    if (!source_map_reserve(map, map->count + 1))
+        return validation_error(ctx, composed_path, "failed to allocate import source map");
+    game_data_source_map_entry *entry = &map->entries[map->count];
+    entry->composed_path = SDL_strdup(composed_path);
+    entry->source_path = SDL_strdup(ctx->source_path != NULL ? ctx->source_path : "<game-data>");
+    entry->source_json_path = SDL_strdup(source_json_path);
+    if (entry->composed_path == NULL || entry->source_path == NULL || entry->source_json_path == NULL)
+        return validation_error(ctx, composed_path, "failed to allocate import source map entry");
+    map->count++;
+    return true;
+}
+
+void sdl3d_game_data_source_map_destroy(sdl3d_game_data_source_map *map)
+{
+    if (map == NULL)
+        return;
+    for (int i = 0; i < map->count; ++i)
+    {
+        SDL_free(map->entries[i].composed_path);
+        SDL_free(map->entries[i].source_path);
+        SDL_free(map->entries[i].source_json_path);
+    }
+    SDL_free(map->entries);
+    SDL_free(map);
+}
+
 static bool compose_merge_value(validation_context *ctx, yyjson_mut_doc *doc, yyjson_mut_val *target_object,
-                                const char *key, yyjson_val *source_value, const char *json_path);
+                                const char *key, yyjson_val *source_value, const char *target_path,
+                                const char *source_path);
 
 static bool compose_merge_object_body(validation_context *ctx, yyjson_mut_doc *doc, yyjson_mut_val *target_object,
-                                      yyjson_val *source_object, const char *json_path)
+                                      yyjson_val *source_object, const char *target_path, const char *source_path)
 {
     yyjson_val *key;
     yyjson_val *value;
@@ -2008,47 +2129,77 @@ static bool compose_merge_object_body(validation_context *ctx, yyjson_mut_doc *d
     {
         value = yyjson_obj_iter_get_val(key);
         const char *name = yyjson_get_str(key);
-        char path[PATH_BUFFER_SIZE];
-        format_path(path, sizeof(path), "%s.%s", json_path, name);
-        if (!compose_merge_value(ctx, doc, target_object, name, value, path))
+        char target_child_path[PATH_BUFFER_SIZE];
+        char source_child_path[PATH_BUFFER_SIZE];
+        format_path(target_child_path, sizeof(target_child_path), "%s.%s", target_path, name);
+        format_path(source_child_path, sizeof(source_child_path), "%s.%s", source_path, name);
+        if (!compose_merge_value(ctx, doc, target_object, name, value, target_child_path, source_child_path))
             return false;
     }
     return true;
 }
 
 static bool compose_append_array(validation_context *ctx, yyjson_mut_doc *doc, yyjson_mut_val *target_array,
-                                 yyjson_val *source_array, const char *json_path)
+                                 yyjson_val *source_array, const char *target_path, const char *source_path)
 {
     for (size_t i = 0; i < yyjson_arr_size(source_array); ++i)
     {
+        const size_t target_index = yyjson_mut_arr_size(target_array);
         yyjson_mut_val *copy = yyjson_val_mut_copy(doc, yyjson_arr_get(source_array, i));
         if (copy == NULL || !yyjson_mut_arr_append(target_array, copy))
-            return validation_error(ctx, json_path, "failed to append imported array item");
+            return validation_error(ctx, target_path, "failed to append imported array item");
+        char target_item_path[PATH_BUFFER_SIZE];
+        char source_item_path[PATH_BUFFER_SIZE];
+        format_path(target_item_path, sizeof(target_item_path), "%s[%zu]", target_path, target_index);
+        format_path(source_item_path, sizeof(source_item_path), "%s[%zu]", source_path, i);
+        if (!source_map_add(ctx, target_item_path, source_item_path))
+            return false;
     }
     return true;
 }
 
 static bool compose_merge_existing(validation_context *ctx, yyjson_mut_doc *doc, yyjson_mut_val *target_value,
-                                   yyjson_val *source_value, const char *json_path)
+                                   yyjson_val *source_value, const char *target_path, const char *source_path)
 {
     if (yyjson_mut_is_arr(target_value) && yyjson_is_arr(source_value))
-        return compose_append_array(ctx, doc, target_value, source_value, json_path);
+        return compose_append_array(ctx, doc, target_value, source_value, target_path, source_path);
     if (yyjson_mut_is_obj(target_value) && yyjson_is_obj(source_value))
-        return compose_merge_object_body(ctx, doc, target_value, source_value, json_path);
-    return validation_error(ctx, json_path, "import merge conflict for '%s'", json_path);
+        return compose_merge_object_body(ctx, doc, target_value, source_value, target_path, source_path);
+    return validation_error(ctx, target_path, "import merge conflict for '%s'", target_path);
 }
 
 static bool compose_merge_value(validation_context *ctx, yyjson_mut_doc *doc, yyjson_mut_val *target_object,
-                                const char *key, yyjson_val *source_value, const char *json_path)
+                                const char *key, yyjson_val *source_value, const char *target_path,
+                                const char *source_path)
 {
     yyjson_mut_val *existing = yyjson_mut_obj_get(target_object, key);
     if (existing != NULL)
-        return compose_merge_existing(ctx, doc, existing, source_value, json_path);
+        return compose_merge_existing(ctx, doc, existing, source_value, target_path, source_path);
 
     yyjson_mut_val *key_copy = yyjson_mut_strcpy(doc, key);
+    if (key_copy == NULL)
+        return validation_error(ctx, target_path, "failed to copy imported key");
+    if (yyjson_is_arr(source_value))
+    {
+        yyjson_mut_val *array = yyjson_mut_arr(doc);
+        if (array == NULL || !yyjson_mut_obj_add(target_object, key_copy, array) ||
+            !source_map_add(ctx, target_path, source_path))
+            return validation_error(ctx, target_path, "failed to copy imported array");
+        return compose_append_array(ctx, doc, array, source_value, target_path, source_path);
+    }
+    if (yyjson_is_obj(source_value))
+    {
+        yyjson_mut_val *object = yyjson_mut_obj(doc);
+        if (object == NULL || !yyjson_mut_obj_add(target_object, key_copy, object) ||
+            !source_map_add(ctx, target_path, source_path))
+            return validation_error(ctx, target_path, "failed to copy imported object");
+        return compose_merge_object_body(ctx, doc, object, source_value, target_path, source_path);
+    }
+
     yyjson_mut_val *copy = yyjson_val_mut_copy(doc, source_value);
-    if (key_copy == NULL || copy == NULL || !yyjson_mut_obj_add(target_object, key_copy, copy))
-        return validation_error(ctx, json_path, "failed to copy imported value");
+    if (copy == NULL || !yyjson_mut_obj_add(target_object, key_copy, copy) ||
+        !source_map_add(ctx, target_path, source_path))
+        return validation_error(ctx, target_path, "failed to copy imported value");
     return true;
 }
 
@@ -2074,7 +2225,7 @@ static bool compose_local_sections(validation_context *ctx, yyjson_val *root, yy
 
         char path[PATH_BUFFER_SIZE];
         format_path(path, sizeof(path), "$.%s", name);
-        if (!compose_merge_value(ctx, doc, target, name, value, path))
+        if (!compose_merge_value(ctx, doc, target, name, value, path, path))
             return false;
     }
     return true;
@@ -2196,11 +2347,14 @@ static bool compose_document_into(validation_context *ctx, yyjson_val *root, yyj
            compose_local_sections(ctx, root, sections, doc, target, is_root);
 }
 
-yyjson_doc *sdl3d_game_data_compose_asset(sdl3d_asset_resolver *assets, const char *asset_path, char *error_buffer,
+yyjson_doc *sdl3d_game_data_compose_asset(sdl3d_asset_resolver *assets, const char *asset_path,
+                                          sdl3d_game_data_source_map **out_source_map, char *error_buffer,
                                           int error_buffer_size)
 {
     if (error_buffer != NULL && error_buffer_size > 0)
         error_buffer[0] = '\0';
+    if (out_source_map != NULL)
+        *out_source_map = NULL;
     if (assets == NULL || asset_path == NULL || asset_path[0] == '\0')
     {
         validation_context ctx = {
@@ -2244,8 +2398,11 @@ yyjson_doc *sdl3d_game_data_compose_asset(sdl3d_asset_resolver *assets, const ch
     char *base_dir = path_dirname(asset_path_without_scheme(asset_path));
     yyjson_mut_doc *mut_doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *mut_root = mut_doc != NULL ? yyjson_mut_obj(mut_doc) : NULL;
-    if (base_dir == NULL || mut_doc == NULL || mut_root == NULL)
+    sdl3d_game_data_source_map *source_map =
+        out_source_map != NULL ? (sdl3d_game_data_source_map *)SDL_calloc(1, sizeof(*source_map)) : NULL;
+    if (base_dir == NULL || mut_doc == NULL || mut_root == NULL || (out_source_map != NULL && source_map == NULL))
     {
+        sdl3d_game_data_source_map_destroy(source_map);
         yyjson_mut_doc_free(mut_doc);
         yyjson_doc_free(source_doc);
         SDL_free(base_dir);
@@ -2263,6 +2420,7 @@ yyjson_doc *sdl3d_game_data_compose_asset(sdl3d_asset_resolver *assets, const ch
         .source_path = asset_path,
         .base_dir = base_dir,
         .assets = assets,
+        .source_map = source_map,
         .error_buffer = error_buffer,
         .error_buffer_size = error_buffer_size,
     };
@@ -2276,6 +2434,12 @@ yyjson_doc *sdl3d_game_data_compose_asset(sdl3d_asset_resolver *assets, const ch
     if (composed_doc == NULL && (error_buffer == NULL || error_buffer_size <= 0 || error_buffer[0] == '\0'))
         (void)validation_error(&ctx, "$", "failed to compose game data document");
 
+    if (composed_doc != NULL && out_source_map != NULL)
+    {
+        *out_source_map = source_map;
+        source_map = NULL;
+    }
+    sdl3d_game_data_source_map_destroy(source_map);
     yyjson_mut_doc_free(mut_doc);
     yyjson_doc_free(source_doc);
     SDL_free(base_dir);
@@ -5523,10 +5687,11 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->used_scripts);
 }
 
-bool sdl3d_game_data_validate_document(yyjson_val *root, const char *source_path, const char *base_dir,
-                                       const sdl3d_asset_resolver *assets,
-                                       const sdl3d_game_data_validation_options *options, char *error_buffer,
-                                       int error_buffer_size)
+bool sdl3d_game_data_validate_document_with_source_map(yyjson_val *root, const char *source_path, const char *base_dir,
+                                                       const sdl3d_asset_resolver *assets,
+                                                       const sdl3d_game_data_source_map *source_map,
+                                                       const sdl3d_game_data_validation_options *options,
+                                                       char *error_buffer, int error_buffer_size)
 {
     if (error_buffer != NULL && error_buffer_size > 0)
         error_buffer[0] = '\0';
@@ -5536,6 +5701,7 @@ bool sdl3d_game_data_validate_document(yyjson_val *root, const char *source_path
         .source_path = source_path,
         .base_dir = base_dir,
         .assets = assets,
+        .source_map = source_map,
         .error_buffer = error_buffer,
         .error_buffer_size = error_buffer_size,
         .failed = false,
@@ -5553,6 +5719,15 @@ bool sdl3d_game_data_validate_document(yyjson_val *root, const char *source_path
     const bool ok = collect_names(&ctx, root, &names) && validate_details(&ctx, root, &names) && !ctx.failed;
     validation_names_destroy(&names);
     return ok;
+}
+
+bool sdl3d_game_data_validate_document(yyjson_val *root, const char *source_path, const char *base_dir,
+                                       const sdl3d_asset_resolver *assets,
+                                       const sdl3d_game_data_validation_options *options, char *error_buffer,
+                                       int error_buffer_size)
+{
+    return sdl3d_game_data_validate_document_with_source_map(root, source_path, base_dir, assets, NULL, options,
+                                                             error_buffer, error_buffer_size);
 }
 
 bool sdl3d_game_data_validate_file(const char *path, const sdl3d_game_data_validation_options *options,
@@ -5629,14 +5804,16 @@ bool sdl3d_game_data_validate_asset(sdl3d_asset_resolver *assets, const char *as
         return validation_error(&ctx, "$", "invalid game data asset validation arguments");
     }
 
-    yyjson_doc *doc = sdl3d_game_data_compose_asset(assets, asset_path, error_buffer, error_buffer_size);
+    sdl3d_game_data_source_map *source_map = NULL;
+    yyjson_doc *doc = sdl3d_game_data_compose_asset(assets, asset_path, &source_map, error_buffer, error_buffer_size);
     if (doc == NULL)
         return false;
 
     char *base_dir = path_dirname(asset_path_without_scheme(asset_path));
-    const bool ok = sdl3d_game_data_validate_document(yyjson_doc_get_root(doc), asset_path, base_dir, assets, options,
-                                                      error_buffer, error_buffer_size);
+    const bool ok = sdl3d_game_data_validate_document_with_source_map(
+        yyjson_doc_get_root(doc), asset_path, base_dir, assets, source_map, options, error_buffer, error_buffer_size);
     SDL_free(base_dir);
+    sdl3d_game_data_source_map_destroy(source_map);
     yyjson_doc_free(doc);
     return ok;
 }

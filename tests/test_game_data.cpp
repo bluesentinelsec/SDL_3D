@@ -6810,6 +6810,41 @@ TEST(GameDataRuntime, LoadsComposedStructuredJsonImports)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, ImportDiagnosticsReportFragmentSource)
+{
+    const std::filesystem::path dir = unique_test_dir("json_imports_source_diagnostics");
+    write_text(dir / "game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "imports": [
+    { "path": "fragments/logic.json", "sections": ["logic"] }
+  ],
+  "signals": ["signal.root"]
+})json");
+    write_text(dir / "fragments" / "logic.json",
+               R"json({
+  "schema": "sdl3d.fragment.v0",
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.root",
+        "actions": [
+          { "type": "property.set", "target": "entity.missing", "key": "ready", "value": true }
+        ]
+      }
+    ]
+  }
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "game.json").string().c_str(), nullptr, error, sizeof(error)));
+    const std::string message = error;
+    EXPECT_NE(message.find("fragments/logic.json"), std::string::npos) << message;
+    EXPECT_NE(message.find("$.logic.bindings[0].actions[0]"), std::string::npos) << message;
+    EXPECT_NE(message.find("entity.missing"), std::string::npos) << message;
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidStructuredJsonImports)
 {
     const std::filesystem::path dir = unique_test_dir("json_imports_invalid");
