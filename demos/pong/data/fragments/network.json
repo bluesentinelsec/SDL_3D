@@ -1,0 +1,453 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "network": {
+    "protocol": {
+      "id": "sdl3d.pong.v1",
+      "version": 1,
+      "transport": "udp",
+      "tick_rate": 60
+    },
+    "scene_state": {
+      "host": {
+        "status": "multiplayer_host_status",
+        "endpoint": "multiplayer_host_endpoint",
+        "peer": "multiplayer_host_client",
+        "connected": "multiplayer_host_connected"
+      },
+      "discovery": {
+        "count": "multiplayer_discovery_count",
+        "status": "multiplayer_discovery_status",
+        "result_0": "session_0",
+        "result_1": "session_1",
+        "result_2": "session_2",
+        "result_3": "session_3",
+        "result_4": "session_4",
+        "result_5": "session_5",
+        "result_6": "session_6",
+        "result_7": "session_7"
+      },
+      "direct_connect": {
+        "host": "direct_connect_host",
+        "port": "direct_connect_port",
+        "status": "direct_connect_status",
+        "state": "direct_connect_state",
+        "connected": "direct_connect_connected"
+      }
+    },
+    "session_flow": {
+      "scenes": {
+        "play": "scene.play",
+        "host_lobby": "scene.multiplayer.lobby",
+        "join": "scene.multiplayer.join",
+        "direct_connect": "scene.multiplayer.direct_connect",
+        "discovery": "scene.multiplayer.discovery",
+        "title": "scene.title"
+      },
+      "state_keys": {
+        "match_mode": "match_mode",
+        "network_role": "network_role",
+        "network_flow": "network_flow",
+        "match_termination_active": "network_match_termination_active",
+        "match_termination_message": "network_match_termination_message"
+      },
+      "state_values": {
+        "match_mode": {
+          "local": "local",
+          "network": "lan"
+        },
+        "network_role": {
+          "none": "none",
+          "host": "host",
+          "client": "client"
+        },
+        "network_flow": {
+          "none": "none",
+          "host": "host",
+          "direct": "direct"
+        }
+      },
+      "messages": {
+        "disconnect_reasons": {
+          "peer_disconnected": "Peer disconnected",
+          "client_disconnected": "Client disconnected",
+          "host_disconnected": "Host disconnected",
+          "client_exited": "Client exited",
+          "host_exited": "Host exited",
+          "client_timed_out": "Client timed out",
+          "host_timed_out": "Host timed out",
+          "host_rejected": "Host rejected connection",
+          "host_error": "Host connection error"
+        },
+        "disconnect_status": {
+          "disconnected": "Disconnected",
+          "returning_join": "Returning to Join Match"
+        },
+        "disconnect_prompts": {
+          "match_terminated": "Match terminated: {reason} - Press Enter to return to title screen."
+        }
+      },
+      "managed_runtime": {
+        "enabled": true,
+        "termination_ack_delay_seconds": 3.0,
+        "keep_alive_scenes": {
+          "host": [
+            "host_lobby",
+            "play"
+          ],
+          "direct_connect": [
+            "direct_connect",
+            "discovery",
+            "play"
+          ]
+        }
+      },
+      "events": {
+        "host_start_game": {
+          "actions": [
+            {
+              "type": "input.clear_network_input_overrides",
+              "channel": "client_input"
+            },
+            {
+              "type": "scene.set",
+              "scene": "scene.play",
+              "payload": {
+                "match_mode": "lan",
+                "network_role": "host",
+                "network_flow": "host"
+              }
+            }
+          ]
+        },
+        "client_start_game": {
+          "actions": [
+            {
+              "type": "input.clear_network_input_overrides",
+              "channel": "client_input"
+            },
+            {
+              "type": "scene.set",
+              "scene": "scene.play",
+              "payload": {
+                "match_mode": "lan",
+                "network_role": "client",
+                "network_flow": "direct"
+              }
+            }
+          ]
+        },
+        "client_state_before_start": {
+          "actions": [
+            {
+              "type": "input.clear_network_input_overrides",
+              "channel": "client_input"
+            },
+            {
+              "type": "scene.set",
+              "scene": "scene.play",
+              "payload": {
+                "match_mode": "lan",
+                "network_role": "client",
+                "network_flow": "direct"
+              }
+            }
+          ]
+        },
+        "host_match_terminated": {
+          "pause": true,
+          "actions": [
+            {
+              "type": "input.clear_network_input_overrides",
+              "channel": "client_input"
+            },
+            {
+              "type": "scene_state.set",
+              "key": "network_match_termination_active",
+              "value": true
+            },
+            {
+              "type": "scene_state.set",
+              "key": "network_match_termination_message",
+              "value": "Match terminated: {reason} - Press Enter to return to title screen."
+            },
+            {
+              "type": "network.host.cancel",
+              "name": "host",
+              "status_key": "multiplayer_host_status",
+              "endpoint_key": "multiplayer_host_endpoint",
+              "peer_key": "multiplayer_host_client",
+              "connected_key": "multiplayer_host_connected",
+              "status": "{reason}"
+            }
+          ]
+        },
+        "client_match_terminated": {
+          "pause": true,
+          "actions": [
+            {
+              "type": "input.clear_network_input_overrides",
+              "channel": "client_input"
+            },
+            {
+              "type": "scene_state.set",
+              "key": "network_match_termination_active",
+              "value": true
+            },
+            {
+              "type": "scene_state.set",
+              "key": "network_match_termination_message",
+              "value": "Match terminated: {reason} - Press Enter to return to title screen."
+            },
+            {
+              "type": "network.direct_connect.cancel",
+              "name": "direct_connect",
+              "status_key": "direct_connect_status",
+              "state_key": "direct_connect_state",
+              "connected_key": "direct_connect_connected",
+              "status": "{reason}"
+            }
+          ]
+        },
+        "host_client_disconnected": {
+          "pause": false,
+          "actions": [
+            {
+              "type": "input.clear_network_input_overrides",
+              "channel": "client_input"
+            },
+            {
+              "type": "network.host.cancel",
+              "name": "host",
+              "status_key": "multiplayer_host_status",
+              "endpoint_key": "multiplayer_host_endpoint",
+              "peer_key": "multiplayer_host_client",
+              "connected_key": "multiplayer_host_connected",
+              "status": "{reason}"
+            },
+            {
+              "type": "scene.set",
+              "scene": "scene.multiplayer.lobby"
+            }
+          ]
+        },
+        "client_connection_closed": {
+          "pause": false,
+          "actions": [
+            {
+              "type": "input.clear_network_input_overrides",
+              "channel": "client_input"
+            },
+            {
+              "type": "network.direct_connect.cancel",
+              "name": "direct_connect",
+              "status_key": "direct_connect_status",
+              "state_key": "direct_connect_state",
+              "connected_key": "direct_connect_connected",
+              "status": "{reason}"
+            },
+            {
+              "type": "scene.set",
+              "scene": "scene.multiplayer.join"
+            }
+          ]
+        },
+        "network_match_termination_ack": {
+          "pause": false,
+          "actions": [
+            {
+              "type": "scene_state.set",
+              "key": "network_match_termination_active",
+              "value": false
+            },
+            {
+              "type": "scene_state.set",
+              "key": "network_match_termination_message",
+              "value": ""
+            },
+            {
+              "type": "scene.set",
+              "scene": "scene.title"
+            }
+          ]
+        }
+      }
+    },
+    "runtime_bindings": {
+      "replication": {
+        "state_snapshot": "play_state",
+        "client_input": "client_input"
+      },
+      "controls": {
+        "start_game": "start_game",
+        "pause_request": "pause_request",
+        "resume_request": "resume_request",
+        "disconnect": "disconnect"
+      },
+      "actions": {
+        "client_up": "action.paddle.local.up",
+        "client_down": "action.paddle.local.down",
+        "menu_select": "action.menu.select",
+        "menu_back": "action.menu.back",
+        "camera_toggle": "action.camera.ball.toggle"
+      },
+      "signals": {
+        "lobby_start": "signal.multiplayer.lobby.start",
+        "camera_toggle": "signal.camera.ball.toggle",
+        "discovery_refresh": "signal.multiplayer.discovery.refresh",
+        "ui_select": "signal.ui.menu.select",
+        "direct_connect": "signal.multiplayer.direct.connect",
+        "direct_disconnect": "signal.multiplayer.direct.disconnect"
+      },
+      "pause": {
+        "action": "action.pause",
+        "state": {
+          "actor": "entity.match",
+          "property": "paused"
+        }
+      }
+    },
+    "diagnostics": {
+      "snapshots": [
+        {
+          "name": "multiplayer_state",
+          "replication": "play_state",
+          "enabled": true,
+          "level": "info",
+          "cadence_seconds": 0.25,
+          "include_session_state": true,
+          "message": "network {event} {description} {extra}"
+        }
+      ]
+    },
+    "replication": [
+      {
+        "name": "play_state",
+        "direction": "host_to_client",
+        "rate": 60,
+        "actors": [
+          {
+            "entity": "entity.paddle.player",
+            "fields": [
+              "position"
+            ]
+          },
+          {
+            "entity": "entity.paddle.cpu",
+            "fields": [
+              "position"
+            ]
+          },
+          {
+            "entity": "entity.ball",
+            "fields": [
+              "position",
+              {
+                "path": "properties.velocity",
+                "type": "vec2"
+              },
+              {
+                "path": "properties.active_motion",
+                "type": "bool"
+              },
+              {
+                "path": "properties.has_last_reflect_y",
+                "type": "bool"
+              },
+              {
+                "path": "properties.last_reflect_y",
+                "type": "float32"
+              },
+              {
+                "path": "properties.stagnant_reflect_count",
+                "type": "int32"
+              }
+            ]
+          },
+          {
+            "entity": "entity.score.player",
+            "fields": [
+              {
+                "path": "properties.value",
+                "type": "int32"
+              }
+            ]
+          },
+          {
+            "entity": "entity.score.cpu",
+            "fields": [
+              {
+                "path": "properties.value",
+                "type": "int32"
+              }
+            ]
+          },
+          {
+            "entity": "entity.match",
+            "fields": [
+              {
+                "path": "properties.finished",
+                "type": "bool"
+              },
+              {
+                "path": "properties.winner_id",
+                "type": "int32"
+              },
+              {
+                "path": "properties.paused",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "entity": "entity.presentation",
+            "fields": [
+              {
+                "path": "properties.border_flash",
+                "type": "float32"
+              },
+              {
+                "path": "properties.paddle_flash",
+                "type": "float32"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "client_input",
+        "direction": "client_to_host",
+        "rate": 60,
+        "inputs": [
+          {
+            "action": "action.paddle.local.up"
+          },
+          {
+            "action": "action.paddle.local.down"
+          }
+        ]
+      }
+    ],
+    "control_messages": [
+      {
+        "name": "start_game",
+        "direction": "host_to_client",
+        "signal": "signal.network.start_game"
+      },
+      {
+        "name": "pause_request",
+        "direction": "bidirectional",
+        "signal": "signal.network.pause_changed"
+      },
+      {
+        "name": "resume_request",
+        "direction": "bidirectional",
+        "signal": "signal.network.pause_changed"
+      },
+      {
+        "name": "disconnect",
+        "direction": "bidirectional",
+        "signal": "signal.network.terminate_match"
+      }
+    ]
+  }
+}

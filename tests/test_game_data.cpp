@@ -2007,11 +2007,12 @@ TEST(GameDataRuntime, NetworkSessionFlowPlaceholderMalformedBraceIsLiteral)
                           std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing);
 
     const std::filesystem::path game_path = dest / "pong.game.json";
-    std::string game_json = read_text(game_path);
+    const std::filesystem::path network_path = dest / "fragments" / "network.json";
+    std::string network_json = read_text(network_path);
     const std::string marker = R"json("events": {)json";
-    const size_t marker_pos = game_json.find(marker);
+    const size_t marker_pos = network_json.find(marker);
     ASSERT_NE(marker_pos, std::string::npos);
-    game_json.insert(marker_pos + marker.size(), R"json(
+    network_json.insert(marker_pos + marker.size(), R"json(
         "malformed_placeholder": {
           "actions": [
             {
@@ -2022,7 +2023,7 @@ TEST(GameDataRuntime, NetworkSessionFlowPlaceholderMalformedBraceIsLiteral)
           ]
         },
 )json");
-    write_text(game_path, game_json.c_str());
+    write_text(network_path, network_json.c_str());
 
     sdl3d_game_session *session = nullptr;
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
