@@ -8,6 +8,7 @@
 #include "sdl3d/input.h"
 #include "sdl3d/properties.h"
 #include "sdl3d/signal_bus.h"
+#include "sdl3d/transition.h"
 
 struct sdl3d_data_game_runtime
 {
@@ -907,8 +908,14 @@ bool sdl3d_data_game_runtime_create(const sdl3d_data_game_runtime_desc *desc, sd
         return false;
     }
 
-    if (!sdl3d_game_data_load_asset(runtime->assets, desc->data_asset_path, desc->session, &runtime->data, load_error,
-                                    (int)sizeof(load_error)))
+    sdl3d_game_data_load_options load_options;
+    SDL_zero(load_options);
+    load_options.session = desc->session;
+    load_options.initial_scene_override = desc->initial_scene_override;
+    load_options.initial_scene_state = desc->initial_scene_state;
+    load_options.initial_scene_payload = desc->initial_scene_payload;
+    if (!sdl3d_game_data_load_asset_with_options(runtime->assets, desc->data_asset_path, &load_options, &runtime->data,
+                                                 load_error, (int)sizeof(load_error)))
     {
         set_error(error_buffer, error_buffer_size, load_error[0] != '\0' ? load_error : "game data load failed");
         sdl3d_data_game_runtime_destroy(runtime);
@@ -924,6 +931,8 @@ bool sdl3d_data_game_runtime_create(const sdl3d_data_game_runtime_desc *desc, sd
         sdl3d_data_game_runtime_destroy(runtime);
         return false;
     }
+    if (desc->skip_app_flow_startup)
+        sdl3d_transition_reset(&runtime->app_flow.transition);
     if (!connect_haptics_policies(runtime))
     {
         set_error(error_buffer, error_buffer_size, SDL_GetError());

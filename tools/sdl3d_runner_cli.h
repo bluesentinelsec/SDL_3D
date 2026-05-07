@@ -30,9 +30,17 @@ extern "C"
         const char *mount_path;
         const char *data_asset_path;
         const char *media_dir;
+        const char *scene;
+        const char **state_assignments;
+        int state_assignment_count;
+        const char **state_json_values;
+        int state_json_count;
+        const char **state_files;
+        int state_file_count;
     } sdl3d_runner_args;
 
     sdl3d_tool_cli_result sdl3d_runner_args_parse(int argc, char **argv, sdl3d_runner_args *args, FILE *stream);
+    void sdl3d_runner_args_destroy(sdl3d_runner_args *args);
     void sdl3d_runner_args_print_usage(const char *argv0, FILE *stream);
 
 #ifdef __cplusplus

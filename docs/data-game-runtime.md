@@ -163,9 +163,27 @@ Optional flags:
 
 - `--media <dir>` overrides the built-in media directory used for engine fonts
   and shared media.
+- `--scene <scene-id>` starts directly in a loaded scene instead of
+  `scenes.initial`. This is intended for editor and developer workflows such as
+  play-testing a level without sitting through splash, title, or cutscene flow.
+- `--state <key=value>` injects one scene-state value before the direct scene
+  enter signal runs. The value is parsed as JSON when possible, so
+  `--state lives=3`, `--state debug=true`, `--state spawn=[1,2,3]`, and
+  `--state label=checkpoint_a` are all valid. Repeat the flag for multiple
+  values.
+- `--state-json <object>` injects multiple scene-state values from an inline
+  JSON object.
+- `--state-file <path-or-asset>` injects scene-state values from a JSON object
+  file. Files may be host paths or mounted `asset://` paths.
 - `--embedded` is available only when a build target defines
   `SDL3D_RUNNER_EMBEDDED_ASSETS` and provides the generic
   `sdl3d_runner_embedded_assets` pack blob symbols.
+
+State inputs are applied in this order: `--state-file`, then `--state-json`,
+then `--state`. Later values overwrite earlier values with the same key.
+Injected state is available to the scene's `on_enter` signal and to authored
+conditions during scene entry. Direct scene launch also suppresses startup
+app-flow transitions so the requested scene is immediately usable.
 
 The generic runner source is game-agnostic: it does not reference game scene
 names, actions, actors, replication channels, controls, score state, menus, or

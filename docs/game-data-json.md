@@ -239,6 +239,12 @@ grows.
 Scene files use `sdl3d.scene.v0`. They can select entities, input actions,
 menus, UI text, update phases, transitions, and activity hooks.
 
+`scenes.initial` is the normal startup scene. Development tools may override it
+at launch time; for example, `sdl3d_runner --scene scene.level_1` enters a
+loaded scene directly and may inject scene state before that scene's enter
+signal runs. Authored data should still define a valid `scenes.initial` so the
+game has a complete production startup path.
+
 ## Actors
 
 Actors describe runtime objects:

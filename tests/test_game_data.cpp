@@ -572,6 +572,62 @@ void write_hot_reload_json(const std::filesystem::path &dir)
 })json");
 }
 
+void write_direct_start_json(const std::filesystem::path &dir)
+{
+    write_text(dir / "direct_start.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Direct Start", "id": "test.direct_start", "version": "0.1.0" },
+  "world": { "name": "world.direct_start", "kind": "fixed_screen" },
+  "signals": ["signal.intro.enter", "signal.level.enter"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.intro.enter",
+        "actions": [
+          { "type": "scene_state.set", "key": "intro_entered", "value": true }
+        ]
+      },
+      {
+        "signal": "signal.level.enter",
+        "actions": [
+          { "type": "scene_state.set", "key": "level_entered", "value": true },
+          { "type": "scene_state.set", "key": "payload_level", "value": "{selected_level}" },
+          { "type": "scene_state.set", "key": "payload_from_scene", "value": "{from_scene}" },
+          { "type": "scene_state.set", "key": "payload_to_scene", "value": "{to_scene}" },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "checkpoint", "op": "==", "value": "midboss" },
+            "then": [
+              { "type": "scene_state.set", "key": "checkpoint_visible_on_enter", "value": true }
+            ],
+            "else": [
+              { "type": "scene_state.set", "key": "checkpoint_visible_on_enter", "value": false }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": {
+    "initial": "scene.intro",
+    "files": ["scenes/intro.scene.json", "scenes/level1.scene.json"]
+  }
+})json");
+    write_text(dir / "scenes" / "intro.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.intro",
+  "on_enter_signal": "signal.intro.enter"
+})json");
+    write_text(dir / "scenes" / "level1.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.level1",
+  "on_enter_signal": "signal.level.enter"
+})json");
+}
+
 void write_timeline_json(const std::filesystem::path &dir)
 {
     write_text(dir / "timeline.game.json",
@@ -1518,6 +1574,124 @@ TEST(GameDataRuntime, DataGameRuntimeOwnsGenericPongLifecycle)
     EXPECT_TRUE(sdl3d_data_game_runtime_update_frame(runtime, &ctx, 0.016f));
     sdl3d_data_game_runtime_destroy(runtime);
     sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, DirectStartEntersRequestedSceneBeforeInitialSceneRuns)
+{
+    const std::filesystem::path dir = unique_test_dir("direct_start");
+    write_direct_start_json(dir);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    char error[512]{};
+    ASSERT_TRUE(sdl3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+
+    sdl3d_properties *initial_state = sdl3d_properties_create();
+    sdl3d_properties *initial_payload = sdl3d_properties_create();
+    ASSERT_NE(initial_state, nullptr);
+    ASSERT_NE(initial_payload, nullptr);
+    sdl3d_properties_set_string(initial_state, "checkpoint", "midboss");
+    sdl3d_properties_set_int(initial_state, "lives", 3);
+    sdl3d_properties_set_string(initial_payload, "selected_level", "level1");
+
+    sdl3d_game_data_load_options options{};
+    options.session = session;
+    options.initial_scene_override = "scene.level1";
+    options.initial_scene_state = initial_state;
+    options.initial_scene_payload = initial_payload;
+
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_asset_with_options(assets, "asset://direct_start.game.json", &options, &runtime,
+                                                        error, sizeof(error)))
+        << error;
+    ASSERT_NE(runtime, nullptr);
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.level1");
+
+    const sdl3d_properties *scene_state = sdl3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "intro_entered", false));
+    EXPECT_TRUE(sdl3d_properties_get_bool(scene_state, "level_entered", false));
+    EXPECT_TRUE(sdl3d_properties_get_bool(scene_state, "checkpoint_visible_on_enter", false));
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "checkpoint", ""), "midboss");
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "lives", 0), 3);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "payload_level", ""), "level1");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "payload_from_scene", "missing"), "");
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "payload_to_scene", ""), "scene.level1");
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_properties_destroy(initial_payload);
+    sdl3d_properties_destroy(initial_state);
+    sdl3d_asset_resolver_destroy(assets);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, DirectStartRejectsUnknownScene)
+{
+    const std::filesystem::path dir = unique_test_dir("direct_start_bad_scene");
+    write_direct_start_json(dir);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    char error[512]{};
+    ASSERT_TRUE(sdl3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+
+    sdl3d_game_data_load_options options{};
+    options.session = session;
+    options.initial_scene_override = "scene.missing";
+
+    sdl3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(sdl3d_game_data_load_asset_with_options(assets, "asset://direct_start.game.json", &options, &runtime,
+                                                         error, sizeof(error)));
+    EXPECT_EQ(runtime, nullptr);
+    EXPECT_NE(std::string(error).find("initial scene override"), std::string::npos);
+
+    sdl3d_asset_resolver_destroy(assets);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, DataGameRuntimeDirectStartPassesSceneState)
+{
+    const std::filesystem::path dir = unique_test_dir("data_runtime_direct_start");
+    write_direct_start_json(dir);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    sdl3d_properties *initial_state = sdl3d_properties_create();
+    ASSERT_NE(initial_state, nullptr);
+    sdl3d_properties_set_string(initial_state, "checkpoint", "midboss");
+
+    sdl3d_data_game_runtime_desc desc{};
+    const std::string root = dir.string();
+    sdl3d_data_game_runtime_desc_init(&desc);
+    desc.session = session;
+    desc.data_asset_path = "asset://direct_start.game.json";
+    desc.mount_assets = mount_test_directory_assets;
+    desc.mount_userdata = const_cast<char *>(root.c_str());
+    desc.initial_scene_override = "scene.level1";
+    desc.initial_scene_state = initial_state;
+    desc.skip_app_flow_startup = true;
+
+    char error[512]{};
+    sdl3d_data_game_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error))) << error;
+    sdl3d_game_data_runtime *data = sdl3d_data_game_runtime_data(runtime);
+    ASSERT_NE(data, nullptr);
+    EXPECT_STREQ(sdl3d_game_data_active_scene(data), "scene.level1");
+    EXPECT_TRUE(sdl3d_properties_get_bool(sdl3d_game_data_scene_state(data), "checkpoint_visible_on_enter", false));
+
+    sdl3d_data_game_runtime_destroy(runtime);
+    sdl3d_properties_destroy(initial_state);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, DataGameRuntimeRefreshesInputProfilesOnGamepadHotplug)
