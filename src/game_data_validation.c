@@ -468,6 +468,16 @@ static bool require_ref(validation_context *ctx, const name_table *table, const 
     return true;
 }
 
+static bool require_actor_ref(validation_context *ctx, const validation_names *names, const char *name,
+                              const char *json_path)
+{
+    if (name == NULL || name[0] == '\0')
+        return validation_error(ctx, json_path, "missing actor reference");
+    if (!name_table_contains(&names->entities, name) && !name_table_contains(&names->actor_pool_actors, name))
+        return validation_error(ctx, json_path, "unknown actor reference '%s'", name);
+    return true;
+}
+
 static bool note_name(name_table *table, const char *name, const char *json_path)
 {
     if (name == NULL || name[0] == '\0' || name_table_contains(table, name))
@@ -3469,7 +3479,7 @@ static bool validate_logic(validation_context *ctx, yyjson_val *root, validation
             return validation_error(ctx, path, "sensor requires a non-empty type");
         if (SDL_strcmp(type, "sensor.bounds_exit") == 0)
         {
-            if (!require_ref(ctx, &names->entities, "entity", json_string(sensor, "entity"), path) ||
+            if (!require_actor_ref(ctx, names, json_string(sensor, "entity"), path) ||
                 !require_ref(ctx, &names->signals, "signal", json_string(sensor, "on_enter"), path) ||
                 (!is_axis_name(json_string(sensor, "axis")) &&
                  !validation_error(ctx, path, "sensor.bounds_exit requires axis x, y, or z")) ||
@@ -3480,7 +3490,7 @@ static bool validate_logic(validation_context *ctx, yyjson_val *root, validation
         }
         if (SDL_strcmp(type, "sensor.bounds_reflect") == 0)
         {
-            if (!require_ref(ctx, &names->entities, "entity", json_string(sensor, "entity"), path) ||
+            if (!require_actor_ref(ctx, names, json_string(sensor, "entity"), path) ||
                 !require_ref(ctx, &names->signals, "signal", json_string(sensor, "on_reflect"), path) ||
                 (!is_axis_name(json_string(sensor, "axis")) &&
                  !validation_error(ctx, path, "sensor.bounds_reflect requires axis x, y, or z")))
@@ -3489,8 +3499,8 @@ static bool validate_logic(validation_context *ctx, yyjson_val *root, validation
         }
         if (SDL_strcmp(type, "sensor.contact_2d") == 0)
         {
-            if (!require_ref(ctx, &names->entities, "entity", json_string(sensor, "a"), path) ||
-                !require_ref(ctx, &names->entities, "entity", json_string(sensor, "b"), path) ||
+            if (!require_actor_ref(ctx, names, json_string(sensor, "a"), path) ||
+                !require_actor_ref(ctx, names, json_string(sensor, "b"), path) ||
                 !require_ref(ctx, &names->signals, "signal", json_string(sensor, "on_enter"), path))
                 return false;
             continue;

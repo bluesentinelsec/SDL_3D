@@ -6315,8 +6315,25 @@ function rules.despawn_first(_, _, ctx)
   ctx:state_set("before_despawn", #active)
   if active[1] ~= nil then
     ctx:despawn(active[1])
+    ctx:state_set("during_despawn_active", active[1].active)
+    ctx:state_set("during_despawn_damage", active[1]:get_int("damage", -1))
+    ctx:state_set("during_despawn_lifecycle", active[1]:get_string("pool_lifecycle", ""))
+    ctx:state_set("during_despawn_available", ctx:pool_available_count("pool.projectiles"))
   end
   ctx:state_set("after_despawn", #ctx:active_actors_with_tags("projectile"))
+  return true
+end
+
+function rules.inspect_sensor_despawn(_, _, ctx)
+  local shot = ctx:actor("pool.projectiles.0")
+  local active = true
+  if shot ~= nil then
+    active = shot.active
+  end
+  ctx:state_set("sensor_during_active", active)
+  ctx:state_set("sensor_during_damage", shot and shot:get_int("damage", -1) or -1)
+  ctx:state_set("sensor_during_lifecycle", shot and shot:get_string("pool_lifecycle", "") or "")
+  ctx:state_set("sensor_during_available", ctx:pool_available_count("pool.projectiles"))
   return true
 end
 
@@ -6364,14 +6381,19 @@ return rules
   "signals": [
     "signal.spawn",
     "signal.despawn.first",
-    "signal.despawn.all"
+    "signal.despawn.all",
+    "signal.pool.exit"
   ],
   "adapters": [
     { "name": "adapter.spawn_projectile", "kind": "action", "script": "script.rules", "function": "spawn_projectile" },
     { "name": "adapter.despawn_first", "kind": "action", "script": "script.rules", "function": "despawn_first" },
+    { "name": "adapter.inspect_sensor_despawn", "kind": "action", "script": "script.rules", "function": "inspect_sensor_despawn" },
     { "name": "adapter.despawn_all", "kind": "action", "script": "script.rules", "function": "despawn_all" }
   ],
   "logic": {
+    "sensors": [
+      { "type": "sensor.bounds_exit", "entity": "pool.projectiles.0", "axis": "y", "side": "max", "threshold": 2.0, "on_enter": "signal.pool.exit" }
+    ],
     "bindings": [
       {
         "signal": "signal.spawn",
@@ -6389,6 +6411,13 @@ return rules
         "signal": "signal.despawn.all",
         "actions": [
           { "type": "adapter.invoke", "adapter": "adapter.despawn_all" }
+        ]
+      },
+      {
+        "signal": "signal.pool.exit",
+        "actions": [
+          { "type": "actor.despawn", "target": "pool.projectiles.0" },
+          { "type": "adapter.invoke", "adapter": "adapter.inspect_sensor_despawn" }
         ]
       }
     ]
@@ -6433,12 +6462,32 @@ return rules
     EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "pool_available", -1), 1);
     EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "active_projectiles", -1), 1);
 
+    EXPECT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_FALSE(shot0->active);
+    EXPECT_FALSE(sdl3d_properties_get_bool(sdl3d_game_data_scene_state(runtime), "sensor_during_active", true));
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "sensor_during_damage", -1), 5);
+    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "sensor_during_lifecycle", ""),
+                 "despawning");
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "sensor_during_available", -1), 1);
+    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 1);
+    EXPECT_STREQ(sdl3d_properties_get_string(shot0->props, "pool_lifecycle", ""), "inactive");
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn"), nullptr);
+    EXPECT_TRUE(shot0->active);
+    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 5);
+
     sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.despawn.first"), nullptr);
     EXPECT_FALSE(shot0->active);
     EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "before_despawn", -1), 1);
     EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "after_despawn", -1), 0);
+    EXPECT_FALSE(sdl3d_properties_get_bool(sdl3d_game_data_scene_state(runtime), "during_despawn_active", true));
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "during_despawn_damage", -1), 5);
+    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "during_despawn_lifecycle", ""),
+                 "despawning");
+    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "during_despawn_available", -1), 1);
     EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 1);
     EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "touched", -1), 0);
+    EXPECT_STREQ(sdl3d_properties_get_string(shot0->props, "pool_lifecycle", ""), "inactive");
 
     sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.despawn.all"), nullptr);
     EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "despawned_count", -1), 1);
