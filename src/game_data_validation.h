@@ -11,13 +11,24 @@
 #include "sdl3d/network_replication.h"
 #include "yyjson.h"
 
+typedef struct sdl3d_game_data_source_map sdl3d_game_data_source_map;
+
 bool sdl3d_game_data_validate_document(yyjson_val *root, const char *source_path, const char *base_dir,
                                        const sdl3d_asset_resolver *assets,
                                        const sdl3d_game_data_validation_options *options, char *error_buffer,
                                        int error_buffer_size);
 
-yyjson_doc *sdl3d_game_data_compose_asset(sdl3d_asset_resolver *assets, const char *asset_path, char *error_buffer,
+bool sdl3d_game_data_validate_document_with_source_map(yyjson_val *root, const char *source_path, const char *base_dir,
+                                                       const sdl3d_asset_resolver *assets,
+                                                       const sdl3d_game_data_source_map *source_map,
+                                                       const sdl3d_game_data_validation_options *options,
+                                                       char *error_buffer, int error_buffer_size);
+
+yyjson_doc *sdl3d_game_data_compose_asset(sdl3d_asset_resolver *assets, const char *asset_path,
+                                          sdl3d_game_data_source_map **out_source_map, char *error_buffer,
                                           int error_buffer_size);
+
+void sdl3d_game_data_source_map_destroy(sdl3d_game_data_source_map *map);
 
 bool sdl3d_game_data_network_schema_hash(yyjson_val *root, Uint8 out_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE],
                                          bool *out_present);

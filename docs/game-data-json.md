@@ -103,7 +103,9 @@ and load: imported fragments are applied in authored order, nested imports are
 applied before their importing fragment's local sections, and the root file's
 local sections are applied last. Arrays concatenate in that order. Objects merge
 recursively. Scalar/type conflicts at the same object path are rejected instead
-of choosing a hidden winner.
+of choosing a hidden winner. When validation fails after composition, the first
+fatal error reports the source fragment and original JSON path for the imported
+subtree that produced the invalid data.
 
 ## Storage
 
