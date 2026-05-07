@@ -243,7 +243,7 @@ TEST(GameDataJson, PongDataDeclaresGenericTopLevelModel)
     EXPECT_TRUE(yyjson_is_obj(yyjson_obj_get(doc.root(), "world")));
     EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(doc.root(), "entities")));
     EXPECT_TRUE(yyjson_is_arr(doc.section("scripts")));
-    EXPECT_TRUE(yyjson_is_obj(yyjson_obj_get(doc.root(), "logic")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("logic")));
 }
 
 TEST(GameDataJson, PongDataUsesStructuredImports)
@@ -252,15 +252,17 @@ TEST(GameDataJson, PongDataUsesStructuredImports)
     ASSERT_NE(doc.root(), nullptr) << doc.error();
 
     yyjson_val *imports = required_array(doc.root(), "imports");
-    ASSERT_EQ(yyjson_arr_size(imports), 4u);
+    ASSERT_EQ(yyjson_arr_size(imports), 5u);
     EXPECT_TRUE(yyjson_is_obj(doc.section("assets")));
     EXPECT_TRUE(yyjson_is_arr(doc.section("scripts")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("input")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("network")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("logic")));
     EXPECT_EQ(yyjson_obj_get(doc.root(), "assets"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "scripts"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "input"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "network"), nullptr);
+    EXPECT_EQ(yyjson_obj_get(doc.root(), "logic"), nullptr);
 }
 
 TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
@@ -337,7 +339,8 @@ TEST(GameDataJson, PongOptionsUseGenericPersistenceEntry)
     EXPECT_EQ(required_string(options, "target"), "entity.settings");
     EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(options, "properties")));
 
-    yyjson_val *logic = required_object(doc.root(), "logic");
+    yyjson_val *logic = doc.section("logic");
+    ASSERT_TRUE(yyjson_is_obj(logic));
     yyjson_val *bindings = required_array(logic, "bindings");
     bool saw_generic_save = false;
     bool saw_legacy_options_adapter = false;
@@ -429,7 +432,8 @@ TEST(GameDataJson, PongLogicReferencesKnownEntitiesSignalsTimersCamerasAndAdapte
     yyjson_val *world = required_object(doc.root(), "world");
     collect_named_objects(required_array(world, "cameras"), "name", &cameras);
 
-    yyjson_val *logic = required_object(doc.root(), "logic");
+    yyjson_val *logic = doc.section("logic");
+    ASSERT_TRUE(yyjson_is_obj(logic));
     collect_named_objects(required_array(logic, "timers"), "name", &timers);
 
     std::set<std::string> actions;

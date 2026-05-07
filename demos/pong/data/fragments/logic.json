@@ -1,0 +1,849 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "logic": {
+    "sensors": [
+      {
+        "name": "logic.goal.cpu",
+        "type": "sensor.bounds_exit",
+        "entity": "entity.ball",
+        "axis": "x",
+        "side": "min",
+        "threshold": -9.22,
+        "on_enter": "signal.goal.cpu"
+      },
+      {
+        "name": "logic.goal.player",
+        "type": "sensor.bounds_exit",
+        "entity": "entity.ball",
+        "axis": "x",
+        "side": "max",
+        "threshold": 9.22,
+        "on_enter": "signal.goal.player"
+      },
+      {
+        "name": "logic.wall.top_bottom",
+        "type": "sensor.bounds_reflect",
+        "entity": "entity.ball",
+        "axis": "y",
+        "min": -4.78,
+        "max": 4.78,
+        "on_reflect": "signal.ball.hit_wall"
+      },
+      {
+        "name": "logic.paddle.player_contact",
+        "type": "sensor.contact_2d",
+        "a": "entity.ball",
+        "b": "entity.paddle.player",
+        "on_enter": "signal.ball.hit_paddle"
+      },
+      {
+        "name": "logic.paddle.cpu_contact",
+        "type": "sensor.contact_2d",
+        "a": "entity.ball",
+        "b": "entity.paddle.cpu",
+        "on_enter": "signal.ball.hit_paddle"
+      },
+      {
+        "name": "logic.attract.goal.left",
+        "type": "sensor.bounds_exit",
+        "entity": "entity.ball.attract",
+        "axis": "x",
+        "side": "min",
+        "threshold": -9.22,
+        "on_enter": "signal.attract.round_reset"
+      },
+      {
+        "name": "logic.attract.goal.right",
+        "type": "sensor.bounds_exit",
+        "entity": "entity.ball.attract",
+        "axis": "x",
+        "side": "max",
+        "threshold": 9.22,
+        "on_enter": "signal.attract.round_reset"
+      },
+      {
+        "name": "logic.attract.wall.top_bottom",
+        "type": "sensor.bounds_reflect",
+        "entity": "entity.ball.attract",
+        "axis": "y",
+        "min": -4.78,
+        "max": 4.78,
+        "on_reflect": "signal.ball.hit_wall"
+      },
+      {
+        "name": "logic.attract.paddle_left_contact",
+        "type": "sensor.contact_2d",
+        "a": "entity.ball.attract",
+        "b": "entity.paddle.attract_left",
+        "on_enter": "signal.ball.hit_paddle"
+      },
+      {
+        "name": "logic.attract.paddle_right_contact",
+        "type": "sensor.contact_2d",
+        "a": "entity.ball.attract",
+        "b": "entity.paddle.attract_right",
+        "on_enter": "signal.ball.hit_paddle"
+      },
+      {
+        "name": "logic.camera.ball_toggle_input",
+        "type": "sensor.input_pressed",
+        "action": "action.camera.ball.toggle",
+        "on_pressed": "signal.camera.ball.toggle"
+      },
+      {
+        "name": "logic.match.restart_input",
+        "type": "sensor.input_pressed",
+        "action": "action.restart",
+        "on_pressed": "signal.match.restart"
+      }
+    ],
+    "timers": [
+      {
+        "name": "timer.round.serve",
+        "delay": 1.0,
+        "signal": "signal.ball.serve",
+        "repeating": false
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.ui.menu.move",
+        "actions": [
+          {
+            "type": "audio.play_sfx",
+            "sound": "sound.ui.move"
+          }
+        ]
+      },
+      {
+        "signal": "signal.ui.menu.select",
+        "actions": [
+          {
+            "type": "audio.play_sfx",
+            "sound": "sound.ui.select"
+          }
+        ]
+      },
+      {
+        "signal": "signal.multiplayer.discovery.refresh",
+        "actions": [
+          {
+            "type": "network.discovery.refresh",
+            "name": "local_matches",
+            "collection": "local_matches",
+            "default_port": 27183,
+            "status_key": "local_match_status",
+            "count_key": "local_match_count"
+          }
+        ]
+      },
+      {
+        "signal": "signal.multiplayer.discovery.connect",
+        "actions": [
+          {
+            "type": "network.discovery.connect_selected",
+            "name": "local_matches",
+            "collection": "local_matches",
+            "selected_index_key": "local_match_index",
+            "direct_connect_name": "direct_connect",
+            "host_key": "direct_connect_host",
+            "port_key": "direct_connect_port",
+            "status_key": "direct_connect_status",
+            "state_key": "direct_connect_state",
+            "connected_key": "direct_connect_connected",
+            "connecting_status": "Match found. Connecting..."
+          }
+        ]
+      },
+      {
+        "signal": "signal.multiplayer.discovery.cancel",
+        "actions": [
+          {
+            "type": "network.discovery.cancel",
+            "name": "local_matches",
+            "collection": "local_matches",
+            "status": "Discovery canceled",
+            "status_key": "local_match_status",
+            "count_key": "local_match_count"
+          },
+          {
+            "type": "network.direct_connect.cancel",
+            "name": "direct_connect",
+            "status": "Disconnected",
+            "status_key": "direct_connect_status",
+            "state_key": "direct_connect_state",
+            "connected_key": "direct_connect_connected"
+          }
+        ]
+      },
+      {
+        "signal": "signal.multiplayer.direct.connect",
+        "actions": [
+          {
+            "type": "network.direct_connect.start",
+            "name": "direct_connect",
+            "host_key": "direct_connect_host",
+            "port_key": "direct_connect_port",
+            "default_host": "127.0.0.1",
+            "default_port": 27183,
+            "status_key": "direct_connect_status",
+            "state_key": "direct_connect_state",
+            "connected_key": "direct_connect_connected"
+          }
+        ]
+      },
+      {
+        "signal": "signal.multiplayer.direct.disconnect",
+        "actions": [
+          {
+            "type": "network.direct_connect.cancel",
+            "name": "direct_connect",
+            "status": "Disconnected",
+            "status_key": "direct_connect_status",
+            "state_key": "direct_connect_state",
+            "connected_key": "direct_connect_connected"
+          }
+        ]
+      },
+      {
+        "signal": "signal.persistence.load",
+        "actions": [
+          {
+            "type": "persistence.load",
+            "entry": "persistence.options"
+          },
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.pong.load_persistence"
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.settings.apply_audio"
+          }
+        ]
+      },
+      {
+        "signal": "signal.persistence.save_options",
+        "actions": [
+          {
+            "type": "persistence.save",
+            "entry": "persistence.options"
+          }
+        ]
+      },
+      {
+        "signal": "signal.settings.apply",
+        "actions": [
+          {
+            "type": "signal.emit",
+            "signal": "signal.settings.apply_audio"
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.persistence.save_options"
+          }
+        ]
+      },
+      {
+        "signal": "signal.settings.apply_audio",
+        "actions": [
+          {
+            "type": "audio.set_bus_volume",
+            "bus": "sfx",
+            "source": {
+              "target": "entity.settings",
+              "key": "sfx_volume",
+              "scale": 0.1
+            }
+          },
+          {
+            "type": "audio.set_bus_volume",
+            "bus": "music",
+            "source": {
+              "target": "entity.settings",
+              "key": "music_volume",
+              "scale": 0.1
+            }
+          }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_display",
+        "actions": [
+          {
+            "type": "property.reset_defaults",
+            "target": "entity.settings",
+            "keys": [
+              "display_mode",
+              "vsync",
+              "renderer"
+            ]
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.persistence.save_options"
+          }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_keyboard",
+        "actions": [
+          {
+            "type": "input.reset_bindings",
+            "menu": "menu.options.keyboard"
+          }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_mouse",
+        "actions": [
+          {
+            "type": "input.reset_bindings",
+            "menu": "menu.options.mouse"
+          }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_gamepad",
+        "actions": [
+          {
+            "type": "property.reset_defaults",
+            "target": "entity.settings",
+            "keys": [
+              "gamepad_icons",
+              "vibration"
+            ]
+          },
+          {
+            "type": "input.reset_bindings",
+            "menu": "menu.options.gamepad"
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.persistence.save_options"
+          }
+        ]
+      },
+      {
+        "signal": "signal.settings.vibration",
+        "actions": [
+          {
+            "type": "signal.emit",
+            "signal": "signal.persistence.save_options"
+          }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_audio",
+        "actions": [
+          {
+            "type": "property.reset_defaults",
+            "target": "entity.settings",
+            "keys": [
+              "sfx_volume",
+              "music_volume"
+            ]
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.settings.apply_audio"
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.persistence.save_options"
+          }
+        ]
+      },
+      {
+        "signal": "signal.game.start",
+        "actions": [
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.pong.configure_play_input"
+          },
+          {
+            "type": "input.clear_network_input_overrides",
+            "channel": "client_input"
+          },
+          {
+            "type": "input.apply_active_profile"
+          },
+          {
+            "type": "branch",
+            "if": {
+              "type": "not",
+              "condition": {
+                "type": "scene_state.compare",
+                "key": "network_role",
+                "op": "==",
+                "value": "client"
+              }
+            },
+            "then": [
+              {
+                "type": "timer.start",
+                "timer": "timer.round.serve"
+              }
+            ],
+            "else": []
+          }
+        ]
+      },
+      {
+        "signal": "signal.ball.serve",
+        "actions": [
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.pong.serve_random",
+            "target": "entity.ball"
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball",
+            "key": "active_motion",
+            "value": true
+          }
+        ]
+      },
+      {
+        "signal": "signal.ball.hit_paddle",
+        "actions": [
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.pong.reflect_from_paddle"
+          },
+          {
+            "type": "audio.play_sfx",
+            "sound": "sound.pong.hit"
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.presentation.flash_border"
+          }
+        ]
+      },
+      {
+        "signal": "signal.ball.hit_wall",
+        "actions": [
+          {
+            "type": "audio.play_sfx",
+            "sound": "sound.pong.hit",
+            "volume": 0.35
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.presentation.flash_border"
+          }
+        ]
+      },
+      {
+        "signal": "signal.presentation.flash_border",
+        "actions": [
+          {
+            "type": "property.set",
+            "target": "entity.presentation",
+            "key": "border_flash",
+            "value": 1.0
+          },
+          {
+            "type": "property.set",
+            "target": "entity.presentation",
+            "key": "paddle_flash",
+            "value": 1.0
+          }
+        ]
+      },
+      {
+        "signal": "signal.goal.player",
+        "actions": [
+          {
+            "type": "signal.emit",
+            "signal": "signal.score.player"
+          }
+        ]
+      },
+      {
+        "signal": "signal.goal.cpu",
+        "actions": [
+          {
+            "type": "signal.emit",
+            "signal": "signal.score.cpu"
+          }
+        ]
+      },
+      {
+        "signal": "signal.score.player",
+        "actions": [
+          {
+            "type": "audio.play_sfx",
+            "sound": "sound.pong.score"
+          },
+          {
+            "type": "property.add",
+            "target": "entity.score.player",
+            "key": "value",
+            "value": 1
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.round.reset"
+          },
+          {
+            "type": "branch",
+            "if": {
+              "type": "property.compare",
+              "target": "entity.score.player",
+              "key": "value",
+              "op": ">=",
+              "value": 10
+            },
+            "then": [
+              {
+                "type": "signal.emit",
+                "signal": "signal.match.player_won"
+              }
+            ],
+            "else": [
+              {
+                "type": "timer.start",
+                "timer": "timer.round.serve"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.score.cpu",
+        "actions": [
+          {
+            "type": "audio.play_sfx",
+            "sound": "sound.pong.score"
+          },
+          {
+            "type": "property.add",
+            "target": "entity.score.cpu",
+            "key": "value",
+            "value": 1
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.round.reset"
+          },
+          {
+            "type": "branch",
+            "if": {
+              "type": "property.compare",
+              "target": "entity.score.cpu",
+              "key": "value",
+              "op": ">=",
+              "value": 10
+            },
+            "then": [
+              {
+                "type": "signal.emit",
+                "signal": "signal.match.cpu_won"
+              }
+            ],
+            "else": [
+              {
+                "type": "timer.start",
+                "timer": "timer.round.serve"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.match.player_won",
+        "actions": [
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "finished",
+            "value": true
+          },
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "winner",
+            "value": "player"
+          },
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "winner_id",
+            "value": 1
+          },
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.pong.record_player_win"
+          },
+          {
+            "type": "entity.set_active",
+            "target": "entity.ball",
+            "active": false
+          }
+        ]
+      },
+      {
+        "signal": "signal.match.cpu_won",
+        "actions": [
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "finished",
+            "value": true
+          },
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "winner",
+            "value": "cpu"
+          },
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "winner_id",
+            "value": 2
+          },
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.pong.record_cpu_win"
+          },
+          {
+            "type": "entity.set_active",
+            "target": "entity.ball",
+            "active": false
+          }
+        ]
+      },
+      {
+        "signal": "signal.round.reset",
+        "actions": [
+          {
+            "type": "entity.set_active",
+            "target": "entity.ball",
+            "active": true
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball",
+            "key": "active_motion",
+            "value": false
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball",
+            "key": "velocity",
+            "value": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball",
+            "key": "has_last_reflect_y",
+            "value": false
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball",
+            "key": "stagnant_reflect_count",
+            "value": 0
+          },
+          {
+            "type": "transform.set_position",
+            "target": "entity.ball",
+            "position": [
+              0.0,
+              0.0,
+              0.12
+            ]
+          },
+          {
+            "type": "transform.set_position",
+            "target": "entity.paddle.player",
+            "position": [
+              -8.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "type": "transform.set_position",
+            "target": "entity.paddle.cpu",
+            "position": [
+              8.0,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.attract.round_reset",
+        "actions": [
+          {
+            "type": "property.set",
+            "target": "entity.ball.attract",
+            "key": "active_motion",
+            "value": false
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball.attract",
+            "key": "velocity",
+            "value": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball.attract",
+            "key": "has_last_reflect_y",
+            "value": false
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball.attract",
+            "key": "stagnant_reflect_count",
+            "value": 0
+          },
+          {
+            "type": "transform.set_position",
+            "target": "entity.ball.attract",
+            "position": [
+              0.0,
+              0.0,
+              0.12
+            ]
+          },
+          {
+            "type": "transform.set_position",
+            "target": "entity.paddle.attract_left",
+            "position": [
+              -8.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "type": "transform.set_position",
+            "target": "entity.paddle.attract_right",
+            "position": [
+              8.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.pong.serve_random",
+            "target": "entity.ball.attract"
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball.attract",
+            "key": "active_motion",
+            "value": true
+          }
+        ]
+      },
+      {
+        "signal": "signal.match.reset",
+        "actions": [
+          {
+            "type": "property.set",
+            "target": "entity.score.player",
+            "key": "value",
+            "value": 0
+          },
+          {
+            "type": "property.set",
+            "target": "entity.score.cpu",
+            "key": "value",
+            "value": 0
+          },
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "finished",
+            "value": false
+          },
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "winner",
+            "value": "none"
+          },
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "winner_id",
+            "value": 0
+          },
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "paused",
+            "value": false
+          },
+          {
+            "type": "property.set",
+            "target": "entity.presentation",
+            "key": "border_flash",
+            "value": 0.0
+          },
+          {
+            "type": "property.set",
+            "target": "entity.presentation",
+            "key": "paddle_flash",
+            "value": 0.0
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.round.reset"
+          }
+        ]
+      },
+      {
+        "signal": "signal.match.restart",
+        "actions": [
+          {
+            "type": "branch",
+            "if": {
+              "type": "property.compare",
+              "target": "entity.match",
+              "key": "finished",
+              "op": "==",
+              "value": true
+            },
+            "then": [
+              {
+                "type": "signal.emit",
+                "signal": "signal.match.reset"
+              },
+              {
+                "type": "signal.emit",
+                "signal": "signal.game.start"
+              }
+            ],
+            "else": []
+          }
+        ]
+      },
+      {
+        "signal": "signal.camera.ball.toggle",
+        "actions": [
+          {
+            "type": "camera.toggle",
+            "camera": "camera.ball_chase",
+            "fallback": "camera.overhead"
+          }
+        ]
+      }
+    ]
+  }
+}
