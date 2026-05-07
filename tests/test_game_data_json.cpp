@@ -252,13 +252,15 @@ TEST(GameDataJson, PongDataUsesStructuredImports)
     ASSERT_NE(doc.root(), nullptr) << doc.error();
 
     yyjson_val *imports = required_array(doc.root(), "imports");
-    ASSERT_EQ(yyjson_arr_size(imports), 3u);
+    ASSERT_EQ(yyjson_arr_size(imports), 4u);
     EXPECT_TRUE(yyjson_is_obj(doc.section("assets")));
     EXPECT_TRUE(yyjson_is_arr(doc.section("scripts")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("input")));
+    EXPECT_TRUE(yyjson_is_obj(doc.section("network")));
     EXPECT_EQ(yyjson_obj_get(doc.root(), "assets"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "scripts"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "input"), nullptr);
+    EXPECT_EQ(yyjson_obj_get(doc.root(), "network"), nullptr);
 }
 
 TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
