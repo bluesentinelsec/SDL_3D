@@ -1,0 +1,197 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "entities": [
+    {
+      "name": "entity.options.flow.magenta",
+      "active": true,
+      "tags": [
+        "effect",
+        "particles",
+        "options"
+      ],
+      "transform": {
+        "position": [
+          -3.8,
+          -4.8,
+          -0.10
+        ]
+      },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [
+            2.2,
+            0.35,
+            0.05
+          ],
+          "direction": [
+            0.16,
+            1.0,
+            0.0
+          ],
+          "spread": 0.48,
+          "speed_min": 0.18,
+          "speed_max": 0.48,
+          "lifetime_min": 6.0,
+          "lifetime_max": 9.5,
+          "size_start": 0.035,
+          "size_end": 0.008,
+          "gravity": 0.0,
+          "max_particles": 130,
+          "emit_rate": 20.0,
+          "color_start": [
+            245,
+            62,
+            195,
+            82
+          ],
+          "color_end": [
+            255,
+            104,
+            223,
+            0
+          ],
+          "emissive_intensity": 1.45,
+          "camera_facing": true,
+          "depth_test": false,
+          "additive_blend": true,
+          "draw_emissive": [
+            1.0,
+            0.15,
+            0.78
+          ],
+          "random_seed": 3093511
+        }
+      ]
+    },
+    {
+      "name": "entity.options.flow.cyan",
+      "active": true,
+      "tags": [
+        "effect",
+        "particles",
+        "options"
+      ],
+      "transform": {
+        "position": [
+          3.2,
+          -4.5,
+          -0.08
+        ]
+      },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [
+            2.6,
+            0.35,
+            0.05
+          ],
+          "direction": [
+            -0.12,
+            1.0,
+            0.0
+          ],
+          "spread": 0.52,
+          "speed_min": 0.16,
+          "speed_max": 0.42,
+          "lifetime_min": 6.4,
+          "lifetime_max": 10.0,
+          "size_start": 0.035,
+          "size_end": 0.008,
+          "gravity": 0.0,
+          "max_particles": 135,
+          "emit_rate": 20.0,
+          "color_start": [
+            62,
+            222,
+            255,
+            78
+          ],
+          "color_end": [
+            120,
+            245,
+            255,
+            0
+          ],
+          "emissive_intensity": 1.45,
+          "camera_facing": true,
+          "depth_test": false,
+          "additive_blend": true,
+          "draw_emissive": [
+            0.18,
+            0.95,
+            1.0
+          ],
+          "random_seed": 742019
+        }
+      ]
+    },
+    {
+      "name": "entity.options.flow.gold",
+      "active": true,
+      "tags": [
+        "effect",
+        "particles",
+        "options"
+      ],
+      "transform": {
+        "position": [
+          0.1,
+          -5.0,
+          -0.05
+        ]
+      },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [
+            1.8,
+            0.25,
+            0.05
+          ],
+          "direction": [
+            0.05,
+            1.0,
+            0.0
+          ],
+          "spread": 0.38,
+          "speed_min": 0.12,
+          "speed_max": 0.36,
+          "lifetime_min": 5.8,
+          "lifetime_max": 9.0,
+          "size_start": 0.03,
+          "size_end": 0.007,
+          "gravity": 0.0,
+          "max_particles": 85,
+          "emit_rate": 12.0,
+          "color_start": [
+            255,
+            178,
+            54,
+            72
+          ],
+          "color_end": [
+            255,
+            225,
+            104,
+            0
+          ],
+          "emissive_intensity": 1.35,
+          "camera_facing": true,
+          "depth_test": false,
+          "additive_blend": true,
+          "draw_emissive": [
+            1.0,
+            0.62,
+            0.12
+          ],
+          "random_seed": 919571
+        }
+      ]
+    }
+  ]
+}

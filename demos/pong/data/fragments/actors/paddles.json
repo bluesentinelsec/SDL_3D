@@ -1,0 +1,322 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "entities": [
+    {
+      "name": "entity.paddle.player",
+      "active": true,
+      "tags": [
+        "paddle",
+        "player"
+      ],
+      "transform": {
+        "position": [
+          -8.0,
+          0.0,
+          0.0
+        ]
+      },
+      "properties": {
+        "half_width": {
+          "type": "float",
+          "value": 0.18
+        },
+        "half_height": {
+          "type": "float",
+          "value": 0.95
+        },
+        "speed": {
+          "type": "float",
+          "value": 7.5
+        }
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [
+            0.36,
+            1.9,
+            0.28
+          ],
+          "color": [
+            205,
+            230,
+            255,
+            255
+          ],
+          "effects": [
+            {
+              "type": "flash",
+              "source": "entity.presentation",
+              "property": "paddle_flash",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "emissive": [
+                0.35,
+                0.42,
+                0.50
+              ]
+            }
+          ]
+        },
+        {
+          "type": "collision.aabb",
+          "half_extents": [
+            0.18,
+            0.95,
+            0.14
+          ]
+        },
+        {
+          "type": "control.axis_1d",
+          "axis": "y",
+          "negative": "action.paddle.down",
+          "positive": "action.paddle.up"
+        }
+      ]
+    },
+    {
+      "name": "entity.paddle.cpu",
+      "active": true,
+      "tags": [
+        "paddle",
+        "cpu"
+      ],
+      "transform": {
+        "position": [
+          8.0,
+          0.0,
+          0.0
+        ]
+      },
+      "properties": {
+        "half_width": {
+          "type": "float",
+          "value": 0.18
+        },
+        "half_height": {
+          "type": "float",
+          "value": 0.95
+        },
+        "speed": {
+          "type": "float",
+          "value": 5.5
+        }
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [
+            0.36,
+            1.9,
+            0.28
+          ],
+          "color": [
+            195,
+            255,
+            212,
+            255
+          ],
+          "effects": [
+            {
+              "type": "flash",
+              "source": "entity.presentation",
+              "property": "paddle_flash",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "emissive": [
+                0.35,
+                0.42,
+                0.50
+              ]
+            }
+          ]
+        },
+        {
+          "type": "collision.aabb",
+          "half_extents": [
+            0.18,
+            0.95,
+            0.14
+          ]
+        },
+        {
+          "type": "adapter.controller",
+          "adapter": "adapter.pong.cpu_track_ball",
+          "target": "entity.ball",
+          "enabled_if": {
+            "type": "scene_state.compare",
+            "key": "match_mode",
+            "op": "==",
+            "value": "single"
+          }
+        },
+        {
+          "type": "control.axis_1d",
+          "axis": "y",
+          "negative": "action.paddle.local.down",
+          "positive": "action.paddle.local.up"
+        }
+      ]
+    },
+    {
+      "name": "entity.paddle.attract_left",
+      "active": true,
+      "tags": [
+        "paddle",
+        "attract"
+      ],
+      "transform": {
+        "position": [
+          -8.0,
+          0.0,
+          0.0
+        ]
+      },
+      "properties": {
+        "half_width": {
+          "type": "float",
+          "value": 0.18
+        },
+        "half_height": {
+          "type": "float",
+          "value": 0.95
+        },
+        "speed": {
+          "type": "float",
+          "value": 5.5
+        }
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [
+            0.36,
+            1.9,
+            0.28
+          ],
+          "color": [
+            205,
+            230,
+            255,
+            255
+          ],
+          "effects": [
+            {
+              "type": "flash",
+              "source": "entity.presentation",
+              "property": "paddle_flash",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "emissive": [
+                0.35,
+                0.42,
+                0.50
+              ]
+            }
+          ]
+        },
+        {
+          "type": "collision.aabb",
+          "half_extents": [
+            0.18,
+            0.95,
+            0.14
+          ]
+        },
+        {
+          "type": "adapter.controller",
+          "adapter": "adapter.pong.cpu_track_ball",
+          "target": "entity.ball.attract"
+        }
+      ]
+    },
+    {
+      "name": "entity.paddle.attract_right",
+      "active": true,
+      "tags": [
+        "paddle",
+        "attract"
+      ],
+      "transform": {
+        "position": [
+          8.0,
+          0.0,
+          0.0
+        ]
+      },
+      "properties": {
+        "half_width": {
+          "type": "float",
+          "value": 0.18
+        },
+        "half_height": {
+          "type": "float",
+          "value": 0.95
+        },
+        "speed": {
+          "type": "float",
+          "value": 5.5
+        }
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [
+            0.36,
+            1.9,
+            0.28
+          ],
+          "color": [
+            195,
+            255,
+            212,
+            255
+          ],
+          "effects": [
+            {
+              "type": "flash",
+              "source": "entity.presentation",
+              "property": "paddle_flash",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "emissive": [
+                0.35,
+                0.42,
+                0.50
+              ]
+            }
+          ]
+        },
+        {
+          "type": "collision.aabb",
+          "half_extents": [
+            0.18,
+            0.95,
+            0.14
+          ]
+        },
+        {
+          "type": "adapter.controller",
+          "adapter": "adapter.pong.cpu_track_ball",
+          "target": "entity.ball.attract"
+        }
+      ]
+    }
+  ]
+}

@@ -4,18 +4,14 @@ file(GLOB SDL3D_PONG_AUDIO_FILES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/data/audio/ui/*")
 list(SORT SDL3D_PONG_AUDIO_FILES)
 
+file(GLOB_RECURSE SDL3D_PONG_FRAGMENT_FILES CONFIGURE_DEPENDS
+    RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/data"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/fragments/*.json")
+list(SORT SDL3D_PONG_FRAGMENT_FILES)
+
 set(SDL3D_PONG_ASSET_FILES
     ${SDL3D_PONG_AUDIO_FILES}
-    fragments/assets.json
-    fragments/entities.json
-    fragments/input.json
-    fragments/interaction.json
-    fragments/logic.json
-    fragments/network.json
-    fragments/persistence.json
-    fragments/presentation.json
-    fragments/runtime.json
-    fragments/scripts.json
+    ${SDL3D_PONG_FRAGMENT_FILES}
     images/ball-texture.png
     images/splash-logo.jpg
     pong.game.json

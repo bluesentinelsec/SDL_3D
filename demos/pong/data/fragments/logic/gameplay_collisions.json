@@ -1,0 +1,98 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "logic": {
+    "sensors": [
+      {
+        "name": "logic.goal.cpu",
+        "type": "sensor.bounds_exit",
+        "entity": "entity.ball",
+        "axis": "x",
+        "side": "min",
+        "threshold": -9.22,
+        "on_enter": "signal.goal.cpu"
+      },
+      {
+        "name": "logic.goal.player",
+        "type": "sensor.bounds_exit",
+        "entity": "entity.ball",
+        "axis": "x",
+        "side": "max",
+        "threshold": 9.22,
+        "on_enter": "signal.goal.player"
+      },
+      {
+        "name": "logic.wall.top_bottom",
+        "type": "sensor.bounds_reflect",
+        "entity": "entity.ball",
+        "axis": "y",
+        "min": -4.78,
+        "max": 4.78,
+        "on_reflect": "signal.ball.hit_wall"
+      },
+      {
+        "name": "logic.paddle.player_contact",
+        "type": "sensor.contact_2d",
+        "a": "entity.ball",
+        "b": "entity.paddle.player",
+        "on_enter": "signal.ball.hit_paddle"
+      },
+      {
+        "name": "logic.paddle.cpu_contact",
+        "type": "sensor.contact_2d",
+        "a": "entity.ball",
+        "b": "entity.paddle.cpu",
+        "on_enter": "signal.ball.hit_paddle"
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.ball.hit_paddle",
+        "actions": [
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.pong.reflect_from_paddle"
+          },
+          {
+            "type": "audio.play_sfx",
+            "sound": "sound.pong.hit"
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.presentation.flash_border"
+          }
+        ]
+      },
+      {
+        "signal": "signal.ball.hit_wall",
+        "actions": [
+          {
+            "type": "audio.play_sfx",
+            "sound": "sound.pong.hit",
+            "volume": 0.35
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.presentation.flash_border"
+          }
+        ]
+      },
+      {
+        "signal": "signal.presentation.flash_border",
+        "actions": [
+          {
+            "type": "property.set",
+            "target": "entity.presentation",
+            "key": "border_flash",
+            "value": 1.0
+          },
+          {
+            "type": "property.set",
+            "target": "entity.presentation",
+            "key": "paddle_flash",
+            "value": 1.0
+          }
+        ]
+      }
+    ]
+  }
+}

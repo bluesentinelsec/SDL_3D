@@ -1,0 +1,25 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "logic": {
+    "sensors": [
+      {
+        "name": "logic.camera.ball_toggle_input",
+        "type": "sensor.input_pressed",
+        "action": "action.camera.ball.toggle",
+        "on_pressed": "signal.camera.ball.toggle"
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.camera.ball.toggle",
+        "actions": [
+          {
+            "type": "camera.toggle",
+            "camera": "camera.ball_chase",
+            "fallback": "camera.overhead"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,233 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "entities": [
+    {
+      "name": "entity.field.border.top",
+      "active": true,
+      "tags": [
+        "render",
+        "field",
+        "border"
+      ],
+      "transform": {
+        "position": [
+          0.0,
+          5.12,
+          0.0
+        ]
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [
+            18.35,
+            0.12,
+            0.18
+          ],
+          "color": [
+            62,
+            72,
+            92,
+            255
+          ],
+          "emissive": true,
+          "effects": [
+            {
+              "type": "flash",
+              "source": "entity.presentation",
+              "property": "border_flash",
+              "color": [
+                210,
+                235,
+                255,
+                255
+              ],
+              "size_add": [
+                0.06,
+                0.06,
+                0.0
+              ],
+              "size_mode": "minor_axis",
+              "emissive": [
+                0.55,
+                0.70,
+                1.0
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.field.border.bottom",
+      "active": true,
+      "tags": [
+        "render",
+        "field",
+        "border"
+      ],
+      "transform": {
+        "position": [
+          0.0,
+          -5.12,
+          0.0
+        ]
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [
+            18.35,
+            0.12,
+            0.18
+          ],
+          "color": [
+            62,
+            72,
+            92,
+            255
+          ],
+          "emissive": true,
+          "effects": [
+            {
+              "type": "flash",
+              "source": "entity.presentation",
+              "property": "border_flash",
+              "color": [
+                210,
+                235,
+                255,
+                255
+              ],
+              "size_add": [
+                0.06,
+                0.06,
+                0.0
+              ],
+              "size_mode": "minor_axis",
+              "emissive": [
+                0.55,
+                0.70,
+                1.0
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.field.border.left",
+      "active": true,
+      "tags": [
+        "render",
+        "field",
+        "border"
+      ],
+      "transform": {
+        "position": [
+          -9.12,
+          0.0,
+          0.0
+        ]
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [
+            0.12,
+            10.35,
+            0.18
+          ],
+          "color": [
+            62,
+            72,
+            92,
+            255
+          ],
+          "emissive": true,
+          "effects": [
+            {
+              "type": "flash",
+              "source": "entity.presentation",
+              "property": "border_flash",
+              "color": [
+                210,
+                235,
+                255,
+                255
+              ],
+              "size_add": [
+                0.06,
+                0.06,
+                0.0
+              ],
+              "size_mode": "minor_axis",
+              "emissive": [
+                0.55,
+                0.70,
+                1.0
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.field.border.right",
+      "active": true,
+      "tags": [
+        "render",
+        "field",
+        "border"
+      ],
+      "transform": {
+        "position": [
+          9.12,
+          0.0,
+          0.0
+        ]
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [
+            0.12,
+            10.35,
+            0.18
+          ],
+          "color": [
+            62,
+            72,
+            92,
+            255
+          ],
+          "emissive": true,
+          "effects": [
+            {
+              "type": "flash",
+              "source": "entity.presentation",
+              "property": "border_flash",
+              "color": [
+                210,
+                235,
+                255,
+                255
+              ],
+              "size_add": [
+                0.06,
+                0.06,
+                0.0
+              ],
+              "size_mode": "minor_axis",
+              "emissive": [
+                0.55,
+                0.70,
+                1.0
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

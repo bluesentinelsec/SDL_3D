@@ -1,0 +1,212 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "entities": [
+    {
+      "name": "entity.options.glow.magenta",
+      "active": true,
+      "tags": [
+        "render",
+        "options",
+        "background"
+      ],
+      "transform": {
+        "position": [
+          -4.6,
+          -1.9,
+          -0.30
+        ]
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 1.05,
+          "rings": 16,
+          "slices": 24,
+          "color": [
+            205,
+            42,
+            178,
+            118
+          ],
+          "emissive": true,
+          "effects": [
+            {
+              "type": "drift",
+              "offset": [
+                0.95,
+                0.55,
+                0.0
+              ],
+              "rates": [
+                0.34,
+                0.27,
+                0.0
+              ],
+              "phase": 0.3
+            },
+            {
+              "type": "pulse",
+              "rate": 1.25,
+              "phase": 0.3,
+              "radius_add": 0.28,
+              "color": [
+                255,
+                78,
+                212,
+                154
+              ],
+              "emissive_base": [
+                0.16,
+                0.02,
+                0.14
+              ],
+              "emissive_add": [
+                0.42,
+                0.05,
+                0.30
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.options.glow.cyan",
+      "active": true,
+      "tags": [
+        "render",
+        "options",
+        "background"
+      ],
+      "transform": {
+        "position": [
+          3.9,
+          0.65,
+          -0.28
+        ]
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 1.18,
+          "rings": 16,
+          "slices": 24,
+          "color": [
+            38,
+            198,
+            220,
+            112
+          ],
+          "emissive": true,
+          "effects": [
+            {
+              "type": "drift",
+              "offset": [
+                0.75,
+                0.70,
+                0.0
+              ],
+              "rates": [
+                0.22,
+                0.31,
+                0.0
+              ],
+              "phase": 1.4
+            },
+            {
+              "type": "pulse",
+              "rate": 1.05,
+              "phase": 1.4,
+              "radius_add": 0.34,
+              "color": [
+                80,
+                236,
+                255,
+                146
+              ],
+              "emissive_base": [
+                0.03,
+                0.16,
+                0.19
+              ],
+              "emissive_add": [
+                0.05,
+                0.34,
+                0.42
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.options.glow.gold",
+      "active": true,
+      "tags": [
+        "render",
+        "options",
+        "background"
+      ],
+      "transform": {
+        "position": [
+          0.7,
+          -3.20,
+          -0.22
+        ]
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.82,
+          "rings": 16,
+          "slices": 24,
+          "color": [
+            255,
+            155,
+            42,
+            96
+          ],
+          "emissive": true,
+          "effects": [
+            {
+              "type": "drift",
+              "offset": [
+                1.10,
+                0.45,
+                0.0
+              ],
+              "rates": [
+                0.29,
+                0.19,
+                0.0
+              ],
+              "phase": 2.1
+            },
+            {
+              "type": "pulse",
+              "rate": 1.40,
+              "phase": 2.1,
+              "radius_add": 0.22,
+              "color": [
+                255,
+                206,
+                84,
+                138
+              ],
+              "emissive_base": [
+                0.15,
+                0.07,
+                0.01
+              ],
+              "emissive_add": [
+                0.34,
+                0.18,
+                0.04
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
