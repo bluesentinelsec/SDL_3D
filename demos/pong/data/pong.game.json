@@ -5,7 +5,8 @@
     { "path": "fragments/scripts.json", "sections": ["scripts"] },
     { "path": "fragments/input.json", "sections": ["input"] },
     { "path": "fragments/network.json", "sections": ["network"] },
-    { "path": "fragments/logic.json", "sections": ["logic"] }
+    { "path": "fragments/logic.json", "sections": ["logic"] },
+    { "path": "fragments/presentation.json", "sections": ["presentation", "transitions", "haptics"] }
   ],
   "metadata": {
     "name": "Pong",
@@ -389,51 +390,6 @@
     "property_effects": { "active": true, "when_paused": true },
     "particles": { "active": true, "when_paused": true },
     "simulation": { "active": true, "when_paused": false }
-  },
-  "presentation": {
-    "metrics": {
-      "fps_sample_seconds": 0.25
-    },
-    "ui_pulse_clock": "clock.pause_flash",
-    "clocks": [
-      {
-        "name": "clock.pause_flash",
-        "target": "entity.presentation",
-        "key": "pause_flash",
-        "speed_property": { "target": "entity.presentation", "key": "pause_flash_speed" },
-        "wrap": 1.0,
-        "reset_on_pause_enter": true,
-        "reset_value": 0.0,
-        "active_if": { "type": "app.paused", "equals": true }
-      }
-    ]
-  },
-  "transitions": {
-    "startup": {
-      "type": "fade",
-      "direction": "in",
-      "color": [0, 0, 0, 255],
-      "duration": 0.7
-    },
-    "quit": {
-      "type": "fade",
-      "direction": "out",
-      "color": [0, 0, 0, 255],
-      "duration": 0.45,
-      "done_signal": "signal.app.quit_fade_done"
-    },
-    "scene_out": {
-      "type": "fade",
-      "direction": "out",
-      "color": [0, 0, 0, 255],
-      "duration": 0.28
-    },
-    "scene_in": {
-      "type": "fade",
-      "direction": "in",
-      "color": [0, 0, 0, 255],
-      "duration": 0.28
-    }
   },
   "profiles": [
     {
@@ -1224,33 +1180,6 @@
       }
     }
   ],
-  "haptics": {
-    "policies": [
-      {
-        "name": "haptics.gamepad.vibration_test",
-        "signal": "signal.settings.vibration",
-        "low_frequency": 0.30,
-        "high_frequency": 0.70,
-        "duration_ms": 100
-      },
-      {
-        "name": "haptics.gamepad.paddle_hit",
-        "signal": "signal.ball.hit_paddle",
-        "enabled_if": { "type": "property.compare", "target": "entity.settings", "key": "vibration", "op": "==", "value": true },
-        "low_frequency": 0.45,
-        "high_frequency": 0.75,
-        "duration_ms": 120,
-        "payload_actor_filters": [
-          { "key": "other_actor_name", "tags": ["paddle", "player"] },
-          {
-            "key": "other_actor_name",
-            "tags": ["paddle", "cpu"],
-            "active_if": { "type": "scene_state.compare", "key": "match_mode", "op": "==", "value": "local" }
-          }
-        ]
-      }
-    ]
-  },
   "signals": [
     "signal.game.start",
     "signal.ball.serve",
