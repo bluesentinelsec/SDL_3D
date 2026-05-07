@@ -521,18 +521,19 @@ std::filesystem::path copy_pong_data_with_storage_overrides(const std::filesyste
                           std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing);
 
     const std::filesystem::path game_path = dest / "pong.game.json";
-    std::string game_json = read_text(game_path);
+    const std::filesystem::path persistence_path = dest / "fragments" / "persistence.json";
+    std::string persistence_json = read_text(persistence_path);
     const std::string marker = R"json("profile": "default")json";
     const std::string replacement = std::string(R"json("profile": "default",
     "user_root_override": ")json") + user_root.generic_string() +
                                     R"json(",
     "cache_root_override": ")json" + cache_root.generic_string() +
                                     R"json(")json";
-    const size_t marker_pos = game_json.find(marker);
+    const size_t marker_pos = persistence_json.find(marker);
     if (marker_pos == std::string::npos)
         throw std::runtime_error("Pong storage profile marker not found");
-    game_json.replace(marker_pos, marker.size(), replacement);
-    write_text(game_path, game_json.c_str());
+    persistence_json.replace(marker_pos, marker.size(), replacement);
+    write_text(persistence_path, persistence_json.c_str());
     return game_path;
 }
 
