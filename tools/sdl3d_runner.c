@@ -11,6 +11,7 @@
 
 #include "sdl3d/sdl3d.h"
 
+#include "sdl3d_fused.h"
 #include "sdl3d_runner_cli.h"
 #include "sdl3d_runner_state.h"
 
@@ -28,6 +29,9 @@ extern const size_t SDL3D_RUNNER_EMBEDDED_ASSETS_SIZE;
 typedef struct runner_state
 {
     sdl3d_runner_args args;
+    const char *executable_path;
+    bool fused_available;
+    sdl3d_fused_pack fused_pack;
     sdl3d_game_config config;
     char title[128];
     sdl3d_data_game_runtime *runtime;
@@ -69,10 +73,39 @@ static bool runner_mount_assets(sdl3d_asset_resolver *assets, void *userdata, ch
         return false;
 #endif
     case SDL3D_RUNNER_MOUNT_NONE:
+        if (state->fused_available)
+            return sdl3d_fused_mount_pack(assets, state->executable_path, &state->fused_pack, error_buffer,
+                                          error_buffer_size);
+        runner_set_error(error_buffer, error_buffer_size,
+                         "no asset mount was configured and the runner executable is not fused");
+        return false;
     default:
         runner_set_error(error_buffer, error_buffer_size, "no asset mount was configured");
         return false;
     }
+}
+
+static bool runner_prepare_fused_defaults(runner_state *state, char *error_buffer, int error_buffer_size)
+{
+    if (state == NULL || state->args.mount_kind != SDL3D_RUNNER_MOUNT_NONE)
+        return true;
+
+    char footer_error[256] = "";
+    if (!sdl3d_fused_read_footer(state->executable_path, &state->fused_pack, footer_error, (int)sizeof(footer_error)))
+    {
+        if (state->args.data_asset_path != NULL)
+        {
+            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "%s",
+                         footer_error[0] != '\0' ? footer_error : "runner executable is not fused");
+            return false;
+        }
+        return true;
+    }
+
+    state->fused_available = true;
+    if (state->args.data_asset_path == NULL || state->args.data_asset_path[0] == '\0')
+        state->args.data_asset_path = state->fused_pack.data_asset_path;
+    return true;
 }
 
 static bool runner_set_errorf(char *error_buffer, int error_buffer_size, const char *fmt, const char *value)
@@ -285,6 +318,7 @@ int main(int argc, char **argv)
 {
     runner_state state;
     SDL_zero(state);
+    state.executable_path = argc > 0 && argv != NULL && argv[0] != NULL ? argv[0] : NULL;
     const sdl3d_tool_cli_result cli_result = sdl3d_runner_args_parse(argc, argv, &state.args, stderr);
     if (cli_result != SDL3D_TOOL_CLI_OK)
     {
@@ -292,6 +326,19 @@ int main(int argc, char **argv)
     }
 
     char error[512] = "";
+    if (!runner_prepare_fused_defaults(&state, error, (int)sizeof(error)))
+    {
+        fprintf(stderr, "sdl3d_runner: %s\n", error[0] != '\0' ? error : "failed to inspect fused runner");
+        sdl3d_runner_args_destroy(&state.args);
+        return 1;
+    }
+    if ((state.args.data_asset_path == NULL || state.args.data_asset_path[0] == '\0') &&
+        state.args.mount_kind == SDL3D_RUNNER_MOUNT_NONE)
+    {
+        fprintf(stderr, "sdl3d_runner: an asset mount and --data are required unless the executable is fused\n");
+        sdl3d_runner_args_destroy(&state.args);
+        return 2;
+    }
     if (!load_runner_config(&state, error, (int)sizeof(error)))
     {
         fprintf(stderr, "sdl3d_runner: %s\n", error[0] != '\0' ? error : "failed to load app config");

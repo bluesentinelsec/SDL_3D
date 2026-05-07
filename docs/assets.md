@@ -68,6 +68,34 @@ sdl3d_add_asset_pack(my_asset_pack
         scripts/rules.lua)
 ```
 
+## Fused Executables
+
+`sdl3d_bundle` creates a Love2D-style fused executable after the generic runner
+has already been built. It copies `sdl3d_runner`, packs game data with the same
+`.sdl3dpak` writer used by the rest of the engine, appends those pack bytes to
+the copied executable, and writes a small footer containing the pack byte range
+and default game-data asset path.
+
+```sh
+build/debug/sdl3d_bundle \
+  --runner build/debug/sdl3d_runner \
+  --root path/to/game/data \
+  --data asset://game.game.json \
+  --output build/MyGame
+
+build/MyGame
+```
+
+When a runner starts without `--root`, `--pack`, or `--embedded`, it checks its
+own executable for this footer. If present, it mounts the appended pack and uses
+the footer's `--data` value as the default entry point. Explicit mount flags
+still take precedence, so the same binary can be run against loose data during
+debugging.
+
+If no `--file` flags are passed, `sdl3d_bundle` includes every regular file
+under `--root` recursively. Pass repeated `--file <relative-path>` values to
+create a smaller fused executable from an explicit manifest.
+
 For Emscripten tests or demos that use loose source directories:
 
 ```cmake

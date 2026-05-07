@@ -15,11 +15,12 @@ void sdl3d_runner_args_print_usage(const char *argv0, FILE *stream)
     const char *program = argv0 != NULL ? argv0 : "sdl3d_runner";
     fprintf(out,
             "Usage:\n"
+            "  %s\n"
             "  %s --root <asset-root> --data <asset://game.json> [--media <media-dir>] [--scene <scene>] "
             "[--state <key=value> ...] [--state-json <object>] [--state-file <path-or-asset>]\n"
             "  %s --pack <game.sdl3dpak> --data <asset://game.json> [--media <media-dir>] [--scene <scene>] "
             "[--state <key=value> ...] [--state-json <object>] [--state-file <path-or-asset>]\n",
-            program, program);
+            program, program, program);
 #if defined(SDL3D_RUNNER_EMBEDDED_ASSETS)
     fprintf(out,
             "  %s --embedded --data <asset://game.json> [--media <media-dir>] [--scene <scene>] "
@@ -163,11 +164,11 @@ sdl3d_tool_cli_result sdl3d_runner_args_parse(int argc, char **argv, sdl3d_runne
 
     const bool mount_path_required =
         args->mount_kind == SDL3D_RUNNER_MOUNT_DIRECTORY || args->mount_kind == SDL3D_RUNNER_MOUNT_PACK;
-    if (args->mount_kind == SDL3D_RUNNER_MOUNT_NONE ||
-        (mount_path_required && (args->mount_path == NULL || args->mount_path[0] == '\0')) ||
-        args->data_asset_path == NULL || args->data_asset_path[0] == '\0')
+    if ((mount_path_required && (args->mount_path == NULL || args->mount_path[0] == '\0')) ||
+        (args->mount_kind != SDL3D_RUNNER_MOUNT_NONE &&
+         (args->data_asset_path == NULL || args->data_asset_path[0] == '\0')))
     {
-        fprintf(out, "%s: an asset mount and --data are required\n", program);
+        fprintf(out, "%s: explicit asset mounts require --data\n", program);
         fprintf(out, "Try '%s --help' for more information.\n", program);
         arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
         return SDL3D_TOOL_CLI_ERROR;

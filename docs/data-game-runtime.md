@@ -151,6 +151,22 @@ Pack-file example:
 build/debug/sdl3d_runner --pack path/to/game.sdl3dpak --data asset://game.game.json
 ```
 
+Fused executable example:
+
+```sh
+build/debug/sdl3d_bundle \
+  --runner build/debug/sdl3d_runner \
+  --root path/to/game/data \
+  --data asset://game.game.json \
+  --output build/MyGame
+
+build/MyGame
+```
+
+The fused executable path is still the same generic runner. The game data is
+stored as an appended `.sdl3dpak`, and the runner auto-mounts it only when no
+explicit mount flags are provided.
+
 Demo targets may build a game-specific executable from this same runner source
 with embedded assets and a default data asset. Such wrappers should provide
 only build-time defaults:

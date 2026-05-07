@@ -10,7 +10,8 @@ platform service the engine does not yet expose.
 The generic runner owns process-level behavior:
 
 - SDL window and renderer creation from authored app/window config.
-- Asset mounting from a development directory, `.sdl3dpak`, or embedded pack.
+- Asset mounting from a development directory, `.sdl3dpak`, embedded pack, or
+  fused executable.
 - Root game JSON loading.
 - Fixed/update/pause/render callback ownership.
 - Input snapshots, text input, and gamepad hotplug refresh.
@@ -86,6 +87,21 @@ Run through a pack file:
 ```sh
 build/debug/sdl3d_runner --pack path/to/game.sdl3dpak --data asset://game.game.json
 ```
+
+Bundle as a renamed single-file executable:
+
+```sh
+build/debug/sdl3d_bundle \
+  --runner build/debug/sdl3d_runner \
+  --root path/to/game/data \
+  --data asset://game.game.json \
+  --output build/MyGame
+
+build/MyGame
+```
+
+The bundled executable remains game-agnostic native code. The game-specific
+content is the appended pack plus the footer's default data entry point.
 
 Start directly in a scene while play-testing:
 

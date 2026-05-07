@@ -27,6 +27,7 @@ targets. The generic `sdl3d_runner` can launch games from:
 - a development asset directory
 - a `.sdl3dpak` file
 - an embedded asset pack supplied by the build
+- a fused executable produced by appending a pack to the generic runner
 
 The demo games are compatibility proofs for engine capabilities. New demo work
 should strengthen reusable systems instead of adding one-off host code.
@@ -35,7 +36,7 @@ should strengthen reusable systems instead of adding one-off host code.
 
 - `include/`: public C headers
 - `src/`: engine implementation
-- `tools/`: command-line tools such as `sdl3d_runner` and `sdl3d_pack`
+- `tools/`: command-line tools such as `sdl3d_runner`, `sdl3d_pack`, and `sdl3d_bundle`
 - `demos/`: data-authored and low-level capability demos
 - `docs/`: engine documentation
 - `tests/`: GoogleTest and renderer tests registered with CTest
@@ -114,6 +115,18 @@ From a pack file:
 
 ```sh
 build/debug/sdl3d_runner --pack path/to/game.sdl3dpak --data asset://game.game.json
+```
+
+As a single fused executable:
+
+```sh
+build/debug/sdl3d_bundle \
+  --runner build/debug/sdl3d_runner \
+  --root path/to/game/data \
+  --data asset://game.game.json \
+  --output build/MyGame
+
+build/MyGame
 ```
 
 Start directly in a scene for development:
