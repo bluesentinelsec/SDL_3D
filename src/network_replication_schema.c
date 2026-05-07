@@ -68,6 +68,12 @@ const char *sdl3d_replication_field_type_name(sdl3d_replication_field_type type)
 
 bool sdl3d_replication_builtin_field_type(const char *field, sdl3d_replication_field_type *out_type)
 {
+    if (field != NULL && SDL_strcmp(field, "active") == 0)
+    {
+        if (out_type != NULL)
+            *out_type = SDL3D_REPLICATION_FIELD_BOOL;
+        return true;
+    }
     if (field != NULL &&
         (SDL_strcmp(field, "position") == 0 || SDL_strcmp(field, "rotation") == 0 || SDL_strcmp(field, "scale") == 0))
     {

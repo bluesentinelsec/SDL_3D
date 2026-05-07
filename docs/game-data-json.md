@@ -1335,8 +1335,9 @@ sensors inspect active static actors and active pooled actors in the current
 scene, emit one enter signal per actor pair, and track pair activity separately
 so a second projectile can still report a hit while the first projectile remains
 overlapping. This is the preferred pattern for arcade projectile-vs-enemy rules.
-Pooled component iteration in every subsystem and network replication of pooled
-actor state are planned follow-up work.
+Pooled component iteration in every subsystem and host-to-client network
+replication of pooled actor state are supported by the same deterministic actor
+names.
 
 ### Presentation Components
 
@@ -2018,16 +2019,22 @@ orchestration metadata and are not part of the replication schema hash.
 
 Replication channel directions are `host_to_client` or `client_to_host`, and
 `rate` must be a positive integer.
-Host-to-client channels author `actors`; each actor must reference an existing
-entity and declare a non-empty `fields` array. Field strings are allowed for
-built-in transform fields with known types (`position`, `rotation`, `scale`,
-all encoded as `vec3`). Property fields should use object form with an explicit
-`path` and `type`. Supported field types are `bool`, `int32`, `float32`,
-`enum_id`, `vec2`, and `vec3`; aliases `boolean`, `int`, `float`, and
-`string_id` are accepted where obvious. The generic JSON type name `number` is
-not accepted for network fields; authors should choose `int32` or `float32`
-explicitly. Duplicate actor entries and duplicate fields within an actor are
-rejected.
+Host-to-client channels author `actors`, `pools`, or both. Each `actors` entry
+must reference an existing static entity and declare a non-empty `fields` array.
+Each `pools` entry must reference an existing actor pool and declare a non-empty
+`fields` array; the packet expands that field list over every deterministic
+pool slot in ascending index order. Replicated pool layout is part of the schema
+hash: changing a pool name, capacity, field path, or field type makes snapshots
+incompatible.
+
+Field strings are allowed for built-in actor fields with known types: `active`
+(`bool`) and `position`, `rotation`, `scale` (all `vec3`). Property fields
+should use object form with an explicit `path` and `type`. Supported field types
+are `bool`, `int32`, `float32`, `enum_id`, `vec2`, and `vec3`; aliases
+`boolean`, `int`, `float`, and `string_id` are accepted where obvious. The
+generic JSON type name `number` is not accepted for network fields; authors
+should choose `int32` or `float32` explicitly. Duplicate actor entries,
+duplicate pool entries, and duplicate fields within an entry are rejected.
 
 Client-to-host channels author `inputs`; each input must reference an existing
 input action. Duplicate input actions within a channel are rejected.
@@ -2045,6 +2052,10 @@ mismatched schema hashes, wrong field counts, wrong field tags, truncation, and
 trailing bytes. Built-in `position` fields update the actor transform; object
 paths under `properties.` update actor properties. `vec2` property replication
 is stored in SDL3D's existing vec3 property bag by updating x/y and preserving z.
+For pooled actors, replicate `active` first when the peer needs lifecycle state:
+`active=true` initializes the destination pool slot from its archetype before
+later fields are applied, while `active=false` despawns and resets the slot
+after the protected snapshot-apply section completes.
 Callers that need diagnostic logging can use
 `sdl3d_game_data_describe_network_snapshot()` to format the active scene,
 authored `session_flow` state values, and every replicated actor field in schema
