@@ -1,0 +1,171 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.goal.player",
+        "actions": [
+          {
+            "type": "signal.emit",
+            "signal": "signal.score.player"
+          }
+        ]
+      },
+      {
+        "signal": "signal.goal.cpu",
+        "actions": [
+          {
+            "type": "signal.emit",
+            "signal": "signal.score.cpu"
+          }
+        ]
+      },
+      {
+        "signal": "signal.score.player",
+        "actions": [
+          {
+            "type": "audio.play_sfx",
+            "sound": "sound.pong.score"
+          },
+          {
+            "type": "property.add",
+            "target": "entity.score.player",
+            "key": "value",
+            "value": 1
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.round.reset"
+          },
+          {
+            "type": "branch",
+            "if": {
+              "type": "property.compare",
+              "target": "entity.score.player",
+              "key": "value",
+              "op": ">=",
+              "value": 10
+            },
+            "then": [
+              {
+                "type": "signal.emit",
+                "signal": "signal.match.player_won"
+              }
+            ],
+            "else": [
+              {
+                "type": "timer.start",
+                "timer": "timer.round.serve"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.score.cpu",
+        "actions": [
+          {
+            "type": "audio.play_sfx",
+            "sound": "sound.pong.score"
+          },
+          {
+            "type": "property.add",
+            "target": "entity.score.cpu",
+            "key": "value",
+            "value": 1
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.round.reset"
+          },
+          {
+            "type": "branch",
+            "if": {
+              "type": "property.compare",
+              "target": "entity.score.cpu",
+              "key": "value",
+              "op": ">=",
+              "value": 10
+            },
+            "then": [
+              {
+                "type": "signal.emit",
+                "signal": "signal.match.cpu_won"
+              }
+            ],
+            "else": [
+              {
+                "type": "timer.start",
+                "timer": "timer.round.serve"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.match.player_won",
+        "actions": [
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "finished",
+            "value": true
+          },
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "winner",
+            "value": "player"
+          },
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "winner_id",
+            "value": 1
+          },
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.pong.record_player_win"
+          },
+          {
+            "type": "entity.set_active",
+            "target": "entity.ball",
+            "active": false
+          }
+        ]
+      },
+      {
+        "signal": "signal.match.cpu_won",
+        "actions": [
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "finished",
+            "value": true
+          },
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "winner",
+            "value": "cpu"
+          },
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "winner_id",
+            "value": 2
+          },
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.pong.record_cpu_win"
+          },
+          {
+            "type": "entity.set_active",
+            "target": "entity.ball",
+            "active": false
+          }
+        ]
+      }
+    ]
+  }
+}

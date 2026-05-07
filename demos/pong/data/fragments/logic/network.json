@@ -1,0 +1,88 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.multiplayer.discovery.refresh",
+        "actions": [
+          {
+            "type": "network.discovery.refresh",
+            "name": "local_matches",
+            "collection": "local_matches",
+            "default_port": 27183,
+            "status_key": "local_match_status",
+            "count_key": "local_match_count"
+          }
+        ]
+      },
+      {
+        "signal": "signal.multiplayer.discovery.connect",
+        "actions": [
+          {
+            "type": "network.discovery.connect_selected",
+            "name": "local_matches",
+            "collection": "local_matches",
+            "selected_index_key": "local_match_index",
+            "direct_connect_name": "direct_connect",
+            "host_key": "direct_connect_host",
+            "port_key": "direct_connect_port",
+            "status_key": "direct_connect_status",
+            "state_key": "direct_connect_state",
+            "connected_key": "direct_connect_connected",
+            "connecting_status": "Match found. Connecting..."
+          }
+        ]
+      },
+      {
+        "signal": "signal.multiplayer.discovery.cancel",
+        "actions": [
+          {
+            "type": "network.discovery.cancel",
+            "name": "local_matches",
+            "collection": "local_matches",
+            "status": "Discovery canceled",
+            "status_key": "local_match_status",
+            "count_key": "local_match_count"
+          },
+          {
+            "type": "network.direct_connect.cancel",
+            "name": "direct_connect",
+            "status": "Disconnected",
+            "status_key": "direct_connect_status",
+            "state_key": "direct_connect_state",
+            "connected_key": "direct_connect_connected"
+          }
+        ]
+      },
+      {
+        "signal": "signal.multiplayer.direct.connect",
+        "actions": [
+          {
+            "type": "network.direct_connect.start",
+            "name": "direct_connect",
+            "host_key": "direct_connect_host",
+            "port_key": "direct_connect_port",
+            "default_host": "127.0.0.1",
+            "default_port": 27183,
+            "status_key": "direct_connect_status",
+            "state_key": "direct_connect_state",
+            "connected_key": "direct_connect_connected"
+          }
+        ]
+      },
+      {
+        "signal": "signal.multiplayer.direct.disconnect",
+        "actions": [
+          {
+            "type": "network.direct_connect.cancel",
+            "name": "direct_connect",
+            "status": "Disconnected",
+            "status_key": "direct_connect_status",
+            "state_key": "direct_connect_state",
+            "connected_key": "direct_connect_connected"
+          }
+        ]
+      }
+    ]
+  }
+}

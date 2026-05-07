@@ -46,6 +46,19 @@ class JsonDoc
         if (value != nullptr)
             return value;
 
+        std::vector<yyjson_val *> imported_sections = sections(name);
+        if (!imported_sections.empty())
+            return imported_sections.front();
+        return nullptr;
+    }
+
+    std::vector<yyjson_val *> sections(const char *name)
+    {
+        std::vector<yyjson_val *> values;
+        yyjson_val *value = yyjson_obj_get(root(), name);
+        if (value != nullptr)
+            values.push_back(value);
+
         yyjson_val *imports = yyjson_obj_get(root(), "imports");
         for (size_t i = 0; yyjson_is_arr(imports) && i < yyjson_arr_size(imports); ++i)
         {
@@ -58,9 +71,9 @@ class JsonDoc
             JsonDoc &fragment = load_fragment(path);
             value = yyjson_obj_get(fragment.root(), name);
             if (value != nullptr)
-                return value;
+                values.push_back(value);
         }
-        return nullptr;
+        return values;
     }
 
     const std::string &error() const
@@ -132,6 +145,43 @@ void collect_named_objects(yyjson_val *array, const char *field, std::set<std::s
         EXPECT_FALSE(name.empty());
         EXPECT_TRUE(names->insert(name).second) << "Duplicate authored name: " << name;
     }
+}
+
+void collect_named_objects(JsonDoc *doc, const char *section, const char *field, std::set<std::string> *names)
+{
+    ASSERT_NE(doc, nullptr);
+    std::vector<yyjson_val *> sections = doc->sections(section);
+    ASSERT_FALSE(sections.empty()) << "Expected JSON section: " << section;
+    for (yyjson_val *array : sections)
+    {
+        collect_named_objects(array, field, names);
+    }
+}
+
+std::vector<yyjson_val *> logic_arrays(JsonDoc *doc, const char *key)
+{
+    std::vector<yyjson_val *> arrays;
+    if (doc == nullptr)
+    {
+        ADD_FAILURE() << "Missing JSON document";
+        return arrays;
+    }
+    for (yyjson_val *logic : doc->sections("logic"))
+    {
+        if (!yyjson_is_obj(logic))
+        {
+            ADD_FAILURE() << "Expected logic object";
+            continue;
+        }
+        yyjson_val *array = yyjson_obj_get(logic, key);
+        if (array != nullptr)
+        {
+            EXPECT_TRUE(yyjson_is_arr(array)) << "Expected logic array: " << key;
+            if (yyjson_is_arr(array))
+                arrays.push_back(array);
+        }
+    }
+    return arrays;
 }
 
 void collect_signals(yyjson_val *signals, std::set<std::string> *names)
@@ -241,7 +291,7 @@ TEST(GameDataJson, PongDataDeclaresGenericTopLevelModel)
     EXPECT_EQ(required_string(doc.root(), "schema"), "sdl3d.game.v0");
     EXPECT_TRUE(yyjson_is_obj(yyjson_obj_get(doc.root(), "metadata")));
     EXPECT_TRUE(yyjson_is_obj(yyjson_obj_get(doc.root(), "world")));
-    EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(doc.root(), "entities")));
+    EXPECT_TRUE(yyjson_is_arr(doc.section("entities")));
     EXPECT_TRUE(yyjson_is_arr(doc.section("scripts")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("logic")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("presentation")));
@@ -263,7 +313,7 @@ TEST(GameDataJson, PongDataUsesStructuredImports)
     ASSERT_NE(doc.root(), nullptr) << doc.error();
 
     yyjson_val *imports = required_array(doc.root(), "imports");
-    ASSERT_EQ(yyjson_arr_size(imports), 9u);
+    ASSERT_EQ(yyjson_arr_size(imports), 32u);
     EXPECT_TRUE(yyjson_is_obj(doc.section("assets")));
     EXPECT_TRUE(yyjson_is_arr(doc.section("scripts")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("input")));
@@ -280,6 +330,7 @@ TEST(GameDataJson, PongDataUsesStructuredImports)
     EXPECT_TRUE(yyjson_is_obj(doc.section("ui")));
     EXPECT_TRUE(yyjson_is_arr(doc.section("signals")));
     EXPECT_TRUE(yyjson_is_arr(doc.section("adapters")));
+    EXPECT_TRUE(yyjson_is_arr(doc.section("entities")));
     EXPECT_EQ(yyjson_obj_get(doc.root(), "assets"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "scripts"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "input"), nullptr);
@@ -296,6 +347,7 @@ TEST(GameDataJson, PongDataUsesStructuredImports)
     EXPECT_EQ(yyjson_obj_get(doc.root(), "ui"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "signals"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "adapters"), nullptr);
+    EXPECT_EQ(yyjson_obj_get(doc.root(), "entities"), nullptr);
 }
 
 TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
@@ -373,22 +425,23 @@ TEST(GameDataJson, PongOptionsUseGenericPersistenceEntry)
     EXPECT_EQ(required_string(options, "target"), "entity.settings");
     EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(options, "properties")));
 
-    yyjson_val *logic = doc.section("logic");
-    ASSERT_TRUE(yyjson_is_obj(logic));
-    yyjson_val *bindings = required_array(logic, "bindings");
     bool saw_generic_save = false;
     bool saw_legacy_options_adapter = false;
-    for (size_t i = 0; i < yyjson_arr_size(bindings); ++i)
+    std::vector<yyjson_val *> binding_arrays = logic_arrays(&doc, "bindings");
+    for (yyjson_val *bindings : binding_arrays)
     {
-        yyjson_val *actions = yyjson_obj_get(yyjson_arr_get(bindings, i), "actions");
-        for (size_t j = 0; yyjson_is_arr(actions) && j < yyjson_arr_size(actions); ++j)
+        for (size_t i = 0; i < yyjson_arr_size(bindings); ++i)
         {
-            yyjson_val *action = yyjson_arr_get(actions, j);
-            const std::string type = required_string(action, "type");
-            if (type == "persistence.save" && required_string(action, "entry") == "persistence.options")
-                saw_generic_save = true;
-            if (type == "adapter.invoke" && required_string(action, "adapter") == "adapter.pong.save_options")
-                saw_legacy_options_adapter = true;
+            yyjson_val *actions = yyjson_obj_get(yyjson_arr_get(bindings, i), "actions");
+            for (size_t j = 0; yyjson_is_arr(actions) && j < yyjson_arr_size(actions); ++j)
+            {
+                yyjson_val *action = yyjson_arr_get(actions, j);
+                const std::string type = required_string(action, "type");
+                if (type == "persistence.save" && required_string(action, "entry") == "persistence.options")
+                    saw_generic_save = true;
+                if (type == "adapter.invoke" && required_string(action, "adapter") == "adapter.pong.save_options")
+                    saw_legacy_options_adapter = true;
+            }
         }
     }
     EXPECT_TRUE(saw_generic_save);
@@ -415,7 +468,7 @@ TEST(GameDataJson, PongDataHasUniqueAuthoredNames)
     std::set<std::string> signal_names;
     std::set<std::string> adapter_names;
     std::set<std::string> script_names;
-    collect_named_objects(required_array(doc.root(), "entities"), "name", &entity_names);
+    collect_named_objects(&doc, "entities", "name", &entity_names);
     yyjson_val *signals_section = doc.section("signals");
     yyjson_val *adapters_section = doc.section("adapters");
     ASSERT_TRUE(yyjson_is_arr(signals_section));
@@ -443,7 +496,7 @@ TEST(GameDataJson, PongLogicReferencesKnownEntitiesSignalsTimersCamerasAndAdapte
     std::set<std::string> adapters;
     std::set<std::string> scripts;
 
-    collect_named_objects(required_array(doc.root(), "entities"), "name", &entities);
+    collect_named_objects(&doc, "entities", "name", &entities);
     yyjson_val *signals_section = doc.section("signals");
     yyjson_val *adapters_section = doc.section("adapters");
     ASSERT_TRUE(yyjson_is_arr(signals_section));
@@ -475,9 +528,10 @@ TEST(GameDataJson, PongLogicReferencesKnownEntitiesSignalsTimersCamerasAndAdapte
     yyjson_val *world = required_object(doc.root(), "world");
     collect_named_objects(required_array(world, "cameras"), "name", &cameras);
 
-    yyjson_val *logic = doc.section("logic");
-    ASSERT_TRUE(yyjson_is_obj(logic));
-    collect_named_objects(required_array(logic, "timers"), "name", &timers);
+    for (yyjson_val *timer_array : logic_arrays(&doc, "timers"))
+    {
+        collect_named_objects(timer_array, "name", &timers);
+    }
 
     std::set<std::string> actions;
     yyjson_val *input_contexts = required_array(doc.section("input"), "contexts");
@@ -493,25 +547,29 @@ TEST(GameDataJson, PongLogicReferencesKnownEntitiesSignalsTimersCamerasAndAdapte
     expect_ref(entities, allowed_if, "target");
     EXPECT_EQ(required_string(allowed_if, "type"), "property.compare");
 
-    yyjson_val *sensors = required_array(logic, "sensors");
-    for (size_t i = 0; i < yyjson_arr_size(sensors); ++i)
+    for (yyjson_val *sensors : logic_arrays(&doc, "sensors"))
     {
-        yyjson_val *sensor = yyjson_arr_get(sensors, i);
-        ASSERT_TRUE(yyjson_is_obj(sensor));
-        expect_ref(entities, sensor, "entity");
-        expect_ref(entities, sensor, "a");
-        expect_ref(entities, sensor, "b");
-        expect_ref(signals, sensor, "on_enter");
-        expect_ref(signals, sensor, "on_pressed");
-        expect_ref(signals, sensor, "on_reflect");
+        for (size_t i = 0; i < yyjson_arr_size(sensors); ++i)
+        {
+            yyjson_val *sensor = yyjson_arr_get(sensors, i);
+            ASSERT_TRUE(yyjson_is_obj(sensor));
+            expect_ref(entities, sensor, "entity");
+            expect_ref(entities, sensor, "a");
+            expect_ref(entities, sensor, "b");
+            expect_ref(signals, sensor, "on_enter");
+            expect_ref(signals, sensor, "on_pressed");
+            expect_ref(signals, sensor, "on_reflect");
+        }
     }
 
-    yyjson_val *bindings = required_array(logic, "bindings");
-    for (size_t i = 0; i < yyjson_arr_size(bindings); ++i)
+    for (yyjson_val *bindings : logic_arrays(&doc, "bindings"))
     {
-        yyjson_val *binding = yyjson_arr_get(bindings, i);
-        ASSERT_TRUE(yyjson_is_obj(binding));
-        expect_ref(signals, binding, "signal");
-        validate_action_array(required_array(binding, "actions"), entities, signals, timers, cameras, adapters);
+        for (size_t i = 0; i < yyjson_arr_size(bindings); ++i)
+        {
+            yyjson_val *binding = yyjson_arr_get(bindings, i);
+            ASSERT_TRUE(yyjson_is_obj(binding));
+            expect_ref(signals, binding, "signal");
+            validate_action_array(required_array(binding, "actions"), entities, signals, timers, cameras, adapters);
+        }
     }
 }

@@ -2008,7 +2008,7 @@ TEST(GameDataRuntime, NetworkSessionFlowPlaceholderMalformedBraceIsLiteral)
                           std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing);
 
     const std::filesystem::path game_path = dest / "pong.game.json";
-    const std::filesystem::path network_path = dest / "fragments" / "network.json";
+    const std::filesystem::path network_path = dest / "fragments" / "network" / "session_flow.json";
     std::string network_json = read_text(network_path);
     const std::string marker = R"json("events": {)json";
     const size_t marker_pos = network_json.find(marker);

@@ -1,0 +1,156 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.persistence.load",
+        "actions": [
+          {
+            "type": "persistence.load",
+            "entry": "persistence.options"
+          },
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.pong.load_persistence"
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.settings.apply_audio"
+          }
+        ]
+      },
+      {
+        "signal": "signal.persistence.save_options",
+        "actions": [
+          {
+            "type": "persistence.save",
+            "entry": "persistence.options"
+          }
+        ]
+      },
+      {
+        "signal": "signal.settings.apply",
+        "actions": [
+          {
+            "type": "signal.emit",
+            "signal": "signal.settings.apply_audio"
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.persistence.save_options"
+          }
+        ]
+      },
+      {
+        "signal": "signal.settings.apply_audio",
+        "actions": [
+          {
+            "type": "audio.set_bus_volume",
+            "bus": "sfx",
+            "source": {
+              "target": "entity.settings",
+              "key": "sfx_volume",
+              "scale": 0.1
+            }
+          },
+          {
+            "type": "audio.set_bus_volume",
+            "bus": "music",
+            "source": {
+              "target": "entity.settings",
+              "key": "music_volume",
+              "scale": 0.1
+            }
+          }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_display",
+        "actions": [
+          {
+            "type": "property.reset_defaults",
+            "target": "entity.settings",
+            "keys": [
+              "display_mode",
+              "vsync",
+              "renderer"
+            ]
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.persistence.save_options"
+          }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_keyboard",
+        "actions": [
+          {
+            "type": "input.reset_bindings",
+            "menu": "menu.options.keyboard"
+          }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_mouse",
+        "actions": [
+          {
+            "type": "input.reset_bindings",
+            "menu": "menu.options.mouse"
+          }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_gamepad",
+        "actions": [
+          {
+            "type": "property.reset_defaults",
+            "target": "entity.settings",
+            "keys": [
+              "gamepad_icons",
+              "vibration"
+            ]
+          },
+          {
+            "type": "input.reset_bindings",
+            "menu": "menu.options.gamepad"
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.persistence.save_options"
+          }
+        ]
+      },
+      {
+        "signal": "signal.settings.vibration",
+        "actions": [
+          {
+            "type": "signal.emit",
+            "signal": "signal.persistence.save_options"
+          }
+        ]
+      },
+      {
+        "signal": "signal.settings.reset_audio",
+        "actions": [
+          {
+            "type": "property.reset_defaults",
+            "target": "entity.settings",
+            "keys": [
+              "sfx_volume",
+              "music_volume"
+            ]
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.settings.apply_audio"
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.persistence.save_options"
+          }
+        ]
+      }
+    ]
+  }
+}

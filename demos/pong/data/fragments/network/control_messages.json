@@ -1,0 +1,27 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "network": {
+    "control_messages": [
+      {
+        "name": "start_game",
+        "direction": "host_to_client",
+        "signal": "signal.network.start_game"
+      },
+      {
+        "name": "pause_request",
+        "direction": "bidirectional",
+        "signal": "signal.network.pause_changed"
+      },
+      {
+        "name": "resume_request",
+        "direction": "bidirectional",
+        "signal": "signal.network.pause_changed"
+      },
+      {
+        "name": "disconnect",
+        "direction": "bidirectional",
+        "signal": "signal.network.terminate_match"
+      }
+    ]
+  }
+}

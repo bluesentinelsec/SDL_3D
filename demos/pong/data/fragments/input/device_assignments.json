@@ -1,0 +1,45 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "input": {
+    "device_assignment_sets": [
+      {
+        "name": "input.assignment.keyboard.vertical_arrows",
+        "device": "keyboard",
+        "bindings": [
+          {
+            "semantic": "up",
+            "key": "UP"
+          },
+          {
+            "semantic": "down",
+            "key": "DOWN"
+          }
+        ]
+      },
+      {
+        "name": "input.assignment.gamepad.vertical_dpad_left_stick",
+        "device": "gamepad",
+        "bindings": [
+          {
+            "semantic": "up",
+            "button": "DPAD_UP"
+          },
+          {
+            "semantic": "down",
+            "button": "DPAD_DOWN"
+          },
+          {
+            "semantic": "up",
+            "axis": "left_y",
+            "scale": -1.0
+          },
+          {
+            "semantic": "down",
+            "axis": "left_y",
+            "scale": 1.0
+          }
+        ]
+      }
+    ]
+  }
+}

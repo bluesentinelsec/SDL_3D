@@ -1,0 +1,39 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "network": {
+    "runtime_bindings": {
+      "replication": {
+        "state_snapshot": "play_state",
+        "client_input": "client_input"
+      },
+      "controls": {
+        "start_game": "start_game",
+        "pause_request": "pause_request",
+        "resume_request": "resume_request",
+        "disconnect": "disconnect"
+      },
+      "actions": {
+        "client_up": "action.paddle.local.up",
+        "client_down": "action.paddle.local.down",
+        "menu_select": "action.menu.select",
+        "menu_back": "action.menu.back",
+        "camera_toggle": "action.camera.ball.toggle"
+      },
+      "signals": {
+        "lobby_start": "signal.multiplayer.lobby.start",
+        "camera_toggle": "signal.camera.ball.toggle",
+        "discovery_refresh": "signal.multiplayer.discovery.refresh",
+        "ui_select": "signal.ui.menu.select",
+        "direct_connect": "signal.multiplayer.direct.connect",
+        "direct_disconnect": "signal.multiplayer.direct.disconnect"
+      },
+      "pause": {
+        "action": "action.pause",
+        "state": {
+          "actor": "entity.match",
+          "property": "paused"
+        }
+      }
+    }
+  }
+}

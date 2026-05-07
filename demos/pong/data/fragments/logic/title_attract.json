@@ -1,0 +1,120 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "logic": {
+    "sensors": [
+      {
+        "name": "logic.attract.goal.left",
+        "type": "sensor.bounds_exit",
+        "entity": "entity.ball.attract",
+        "axis": "x",
+        "side": "min",
+        "threshold": -9.22,
+        "on_enter": "signal.attract.round_reset"
+      },
+      {
+        "name": "logic.attract.goal.right",
+        "type": "sensor.bounds_exit",
+        "entity": "entity.ball.attract",
+        "axis": "x",
+        "side": "max",
+        "threshold": 9.22,
+        "on_enter": "signal.attract.round_reset"
+      },
+      {
+        "name": "logic.attract.wall.top_bottom",
+        "type": "sensor.bounds_reflect",
+        "entity": "entity.ball.attract",
+        "axis": "y",
+        "min": -4.78,
+        "max": 4.78,
+        "on_reflect": "signal.ball.hit_wall"
+      },
+      {
+        "name": "logic.attract.paddle_left_contact",
+        "type": "sensor.contact_2d",
+        "a": "entity.ball.attract",
+        "b": "entity.paddle.attract_left",
+        "on_enter": "signal.ball.hit_paddle"
+      },
+      {
+        "name": "logic.attract.paddle_right_contact",
+        "type": "sensor.contact_2d",
+        "a": "entity.ball.attract",
+        "b": "entity.paddle.attract_right",
+        "on_enter": "signal.ball.hit_paddle"
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.attract.round_reset",
+        "actions": [
+          {
+            "type": "property.set",
+            "target": "entity.ball.attract",
+            "key": "active_motion",
+            "value": false
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball.attract",
+            "key": "velocity",
+            "value": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball.attract",
+            "key": "has_last_reflect_y",
+            "value": false
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball.attract",
+            "key": "stagnant_reflect_count",
+            "value": 0
+          },
+          {
+            "type": "transform.set_position",
+            "target": "entity.ball.attract",
+            "position": [
+              0.0,
+              0.0,
+              0.12
+            ]
+          },
+          {
+            "type": "transform.set_position",
+            "target": "entity.paddle.attract_left",
+            "position": [
+              -8.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "type": "transform.set_position",
+            "target": "entity.paddle.attract_right",
+            "position": [
+              8.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.pong.serve_random",
+            "target": "entity.ball.attract"
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball.attract",
+            "key": "active_motion",
+            "value": true
+          }
+        ]
+      }
+    ]
+  }
+}

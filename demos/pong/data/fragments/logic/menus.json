@@ -1,0 +1,25 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.ui.menu.move",
+        "actions": [
+          {
+            "type": "audio.play_sfx",
+            "sound": "sound.ui.move"
+          }
+        ]
+      },
+      {
+        "signal": "signal.ui.menu.select",
+        "actions": [
+          {
+            "type": "audio.play_sfx",
+            "sound": "sound.ui.select"
+          }
+        ]
+      }
+    ]
+  }
+}

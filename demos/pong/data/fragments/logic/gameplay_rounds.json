@@ -1,0 +1,221 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "logic": {
+    "sensors": [
+      {
+        "name": "logic.match.restart_input",
+        "type": "sensor.input_pressed",
+        "action": "action.restart",
+        "on_pressed": "signal.match.restart"
+      }
+    ],
+    "timers": [
+      {
+        "name": "timer.round.serve",
+        "delay": 1.0,
+        "signal": "signal.ball.serve",
+        "repeating": false
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.game.start",
+        "actions": [
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.pong.configure_play_input"
+          },
+          {
+            "type": "input.clear_network_input_overrides",
+            "channel": "client_input"
+          },
+          {
+            "type": "input.apply_active_profile"
+          },
+          {
+            "type": "branch",
+            "if": {
+              "type": "not",
+              "condition": {
+                "type": "scene_state.compare",
+                "key": "network_role",
+                "op": "==",
+                "value": "client"
+              }
+            },
+            "then": [
+              {
+                "type": "timer.start",
+                "timer": "timer.round.serve"
+              }
+            ],
+            "else": []
+          }
+        ]
+      },
+      {
+        "signal": "signal.ball.serve",
+        "actions": [
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.pong.serve_random",
+            "target": "entity.ball"
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball",
+            "key": "active_motion",
+            "value": true
+          }
+        ]
+      },
+      {
+        "signal": "signal.round.reset",
+        "actions": [
+          {
+            "type": "entity.set_active",
+            "target": "entity.ball",
+            "active": true
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball",
+            "key": "active_motion",
+            "value": false
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball",
+            "key": "velocity",
+            "value": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball",
+            "key": "has_last_reflect_y",
+            "value": false
+          },
+          {
+            "type": "property.set",
+            "target": "entity.ball",
+            "key": "stagnant_reflect_count",
+            "value": 0
+          },
+          {
+            "type": "transform.set_position",
+            "target": "entity.ball",
+            "position": [
+              0.0,
+              0.0,
+              0.12
+            ]
+          },
+          {
+            "type": "transform.set_position",
+            "target": "entity.paddle.player",
+            "position": [
+              -8.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "type": "transform.set_position",
+            "target": "entity.paddle.cpu",
+            "position": [
+              8.0,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.match.reset",
+        "actions": [
+          {
+            "type": "property.set",
+            "target": "entity.score.player",
+            "key": "value",
+            "value": 0
+          },
+          {
+            "type": "property.set",
+            "target": "entity.score.cpu",
+            "key": "value",
+            "value": 0
+          },
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "finished",
+            "value": false
+          },
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "winner",
+            "value": "none"
+          },
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "winner_id",
+            "value": 0
+          },
+          {
+            "type": "property.set",
+            "target": "entity.match",
+            "key": "paused",
+            "value": false
+          },
+          {
+            "type": "property.set",
+            "target": "entity.presentation",
+            "key": "border_flash",
+            "value": 0.0
+          },
+          {
+            "type": "property.set",
+            "target": "entity.presentation",
+            "key": "paddle_flash",
+            "value": 0.0
+          },
+          {
+            "type": "signal.emit",
+            "signal": "signal.round.reset"
+          }
+        ]
+      },
+      {
+        "signal": "signal.match.restart",
+        "actions": [
+          {
+            "type": "branch",
+            "if": {
+              "type": "property.compare",
+              "target": "entity.match",
+              "key": "finished",
+              "op": "==",
+              "value": true
+            },
+            "then": [
+              {
+                "type": "signal.emit",
+                "signal": "signal.match.reset"
+              },
+              {
+                "type": "signal.emit",
+                "signal": "signal.game.start"
+              }
+            ],
+            "else": []
+          }
+        ]
+      }
+    ]
+  }
+}

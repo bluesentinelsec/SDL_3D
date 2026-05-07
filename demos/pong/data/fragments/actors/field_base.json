@@ -1,0 +1,324 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "entities": [
+    {
+      "name": "entity.field.base",
+      "active": true,
+      "tags": [
+        "render",
+        "field"
+      ],
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -0.45
+        ]
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [
+            18.8,
+            10.8,
+            0.10
+          ],
+          "color": [
+            42,
+            48,
+            62,
+            255
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.field.center_ticks",
+      "active": true,
+      "tags": [
+        "render",
+        "field",
+        "centerline"
+      ],
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          0.02
+        ]
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "offset": [
+            0.0,
+            -4.0,
+            0.0
+          ],
+          "size": [
+            0.055,
+            0.42,
+            0.08
+          ],
+          "color": [
+            115,
+            132,
+            162,
+            180
+          ],
+          "emissive": true,
+          "effects": [
+            {
+              "type": "emissive",
+              "color": [
+                0.10,
+                0.12,
+                0.16
+              ]
+            }
+          ]
+        },
+        {
+          "type": "render.cube",
+          "offset": [
+            0.0,
+            -3.0,
+            0.0
+          ],
+          "size": [
+            0.055,
+            0.42,
+            0.08
+          ],
+          "color": [
+            115,
+            132,
+            162,
+            180
+          ],
+          "emissive": true,
+          "effects": [
+            {
+              "type": "emissive",
+              "color": [
+                0.10,
+                0.12,
+                0.16
+              ]
+            }
+          ]
+        },
+        {
+          "type": "render.cube",
+          "offset": [
+            0.0,
+            -2.0,
+            0.0
+          ],
+          "size": [
+            0.055,
+            0.42,
+            0.08
+          ],
+          "color": [
+            115,
+            132,
+            162,
+            180
+          ],
+          "emissive": true,
+          "effects": [
+            {
+              "type": "emissive",
+              "color": [
+                0.10,
+                0.12,
+                0.16
+              ]
+            }
+          ]
+        },
+        {
+          "type": "render.cube",
+          "offset": [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          "size": [
+            0.055,
+            0.42,
+            0.08
+          ],
+          "color": [
+            115,
+            132,
+            162,
+            180
+          ],
+          "emissive": true,
+          "effects": [
+            {
+              "type": "emissive",
+              "color": [
+                0.10,
+                0.12,
+                0.16
+              ]
+            }
+          ]
+        },
+        {
+          "type": "render.cube",
+          "offset": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.055,
+            0.42,
+            0.08
+          ],
+          "color": [
+            115,
+            132,
+            162,
+            180
+          ],
+          "emissive": true,
+          "effects": [
+            {
+              "type": "emissive",
+              "color": [
+                0.10,
+                0.12,
+                0.16
+              ]
+            }
+          ]
+        },
+        {
+          "type": "render.cube",
+          "offset": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "size": [
+            0.055,
+            0.42,
+            0.08
+          ],
+          "color": [
+            115,
+            132,
+            162,
+            180
+          ],
+          "emissive": true,
+          "effects": [
+            {
+              "type": "emissive",
+              "color": [
+                0.10,
+                0.12,
+                0.16
+              ]
+            }
+          ]
+        },
+        {
+          "type": "render.cube",
+          "offset": [
+            0.0,
+            2.0,
+            0.0
+          ],
+          "size": [
+            0.055,
+            0.42,
+            0.08
+          ],
+          "color": [
+            115,
+            132,
+            162,
+            180
+          ],
+          "emissive": true,
+          "effects": [
+            {
+              "type": "emissive",
+              "color": [
+                0.10,
+                0.12,
+                0.16
+              ]
+            }
+          ]
+        },
+        {
+          "type": "render.cube",
+          "offset": [
+            0.0,
+            3.0,
+            0.0
+          ],
+          "size": [
+            0.055,
+            0.42,
+            0.08
+          ],
+          "color": [
+            115,
+            132,
+            162,
+            180
+          ],
+          "emissive": true,
+          "effects": [
+            {
+              "type": "emissive",
+              "color": [
+                0.10,
+                0.12,
+                0.16
+              ]
+            }
+          ]
+        },
+        {
+          "type": "render.cube",
+          "offset": [
+            0.0,
+            4.0,
+            0.0
+          ],
+          "size": [
+            0.055,
+            0.42,
+            0.08
+          ],
+          "color": [
+            115,
+            132,
+            162,
+            180
+          ],
+          "emissive": true,
+          "effects": [
+            {
+              "type": "emissive",
+              "color": [
+                0.10,
+                0.12,
+                0.16
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

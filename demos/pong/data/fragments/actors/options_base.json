@@ -1,0 +1,100 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "entities": [
+    {
+      "name": "entity.options.background.base",
+      "active": true,
+      "tags": [
+        "render",
+        "options",
+        "background"
+      ],
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -0.65
+        ]
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [
+            22.0,
+            13.0,
+            0.08
+          ],
+          "color": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "lighting": false
+        }
+      ]
+    },
+    {
+      "name": "entity.effect.ambient_particles",
+      "active": true,
+      "tags": [
+        "effect",
+        "particles"
+      ],
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          0.35
+        ]
+      },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [
+            8.8,
+            4.8,
+            0.18
+          ],
+          "direction": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "spread": 1.1,
+          "speed_min": 0.08,
+          "speed_max": 0.45,
+          "lifetime_min": 2.5,
+          "lifetime_max": 5.0,
+          "size_start": 0.035,
+          "size_end": 0.012,
+          "gravity": 0.0,
+          "max_particles": 360,
+          "emit_rate": 95.0,
+          "color_start": [
+            220,
+            235,
+            255,
+            105
+          ],
+          "color_end": [
+            255,
+            255,
+            255,
+            0
+          ],
+          "emissive_intensity": 1.35,
+          "camera_facing": true,
+          "depth_test": true,
+          "draw_emissive": [
+            0.8,
+            0.9,
+            1.0
+          ],
+          "random_seed": 19088743
+        }
+      ]
+    }
+  ]
+}
