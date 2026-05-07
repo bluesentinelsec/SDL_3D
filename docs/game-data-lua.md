@@ -59,6 +59,15 @@ The `ctx` table provides:
 - `ctx:pool_capacity(pool)`: return the authored pool capacity, or `0` for an unknown pool
 - `ctx:pool_active_count(pool)`: return the active actor count for a pool
 - `ctx:pool_available_count(pool)`: return the inactive actor count for a pool
+- `ctx:pool_peak_active_count(pool)`: return the highest active count reached since load
+- `ctx:pool_spawn_attempt_count(pool)`: return attempted spawns
+- `ctx:pool_spawn_success_count(pool)`: return successful spawns
+- `ctx:pool_spawn_failure_count(pool)`: return failed spawns
+- `ctx:pool_exhaustion_count(pool)`: return times the pool was exhausted
+- `ctx:pool_reuse_count(pool)`: return times `reuse_oldest` replaced an actor
+- `ctx:pool_despawn_count(pool)`: return pooled actor despawns, including reuse replacement
+- `ctx:pool_last_spawn_failure_reason(pool)`: return the last spawn failure reason, or `none`
+- `ctx:pool_last_despawn_reason(pool)`: return the last despawn reason, or `none`
 - `ctx:state_get(key, fallback)`: read persistent scene state
 - `ctx:state_set(key, value)`: write persistent scene state; passing `nil` removes the key
 - `ctx:random()`: deterministic per-runtime pseudo-random value in `[0, 1)`
@@ -147,6 +156,15 @@ The runtime installs a small `sdl3d` table for low-level access and utility help
 - `sdl3d.pool_capacity(pool)`
 - `sdl3d.pool_active_count(pool)`
 - `sdl3d.pool_available_count(pool)`
+- `sdl3d.pool_peak_active_count(pool)`
+- `sdl3d.pool_spawn_attempt_count(pool)`
+- `sdl3d.pool_spawn_success_count(pool)`
+- `sdl3d.pool_spawn_failure_count(pool)`
+- `sdl3d.pool_exhaustion_count(pool)`
+- `sdl3d.pool_reuse_count(pool)`
+- `sdl3d.pool_despawn_count(pool)`
+- `sdl3d.pool_last_spawn_failure_reason(pool)`
+- `sdl3d.pool_last_despawn_reason(pool)`
 - `sdl3d.log(message)`
 - `sdl3d.storage.*`
 - `sdl3d.json.*`
@@ -203,11 +221,19 @@ for _, shot in ipairs(ctx:active_actors_with_tags("player_shot")) do
 end
 ```
 
-`ctx:despawn(actor_or_name)` resets pooled actors back to archetype defaults and
-marks them inactive. For non-pooled actors, it only clears the active flag.
-`ctx:despawn_by_tag(tag)` applies to pooled actors and returns the number of
-active actors it despawned. Pool count helpers report capacity, active count,
-and available inactive slots.
+`ctx:despawn(actor_or_name, reason)` resets pooled actors back to archetype
+defaults and marks them inactive. For non-pooled actors, it only clears the
+active flag. The optional reason is stored in the pool's last despawn
+diagnostic. `ctx:despawn_by_tag(tag, reason)` applies to pooled actors and
+returns the number of active actors it despawned.
+
+Pool helpers report capacity, active count, available inactive slots, peak
+active count, spawn attempts, spawn successes, spawn failures, exhaustion
+events, reuse events, despawns, and the latest spawn/despawn reason. Use these
+diagnostics while tuning projectile, enemy, pickup, and effect pools. An
+exhausted pool logs an application warning; repeated warnings usually mean the
+authored capacity or exhaustion policy does not match the game's intended worst
+case.
 
 During signal handling, sensor updates, rendering traversal, and network
 snapshot application, pooled despawns are lifecycle-safe: the actor becomes

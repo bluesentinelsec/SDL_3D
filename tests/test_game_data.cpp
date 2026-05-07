@@ -6898,6 +6898,159 @@ return rules
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, ActorPoolDiagnosticsTrackUsageAndExhaustion)
+{
+    const std::filesystem::path dir = unique_test_dir("actor_pool_diagnostics");
+    write_text(dir / "scripts" / "rules.lua",
+               R"lua(
+local rules = {}
+
+function rules.run(_, _, ctx)
+  local first, _, first_index = ctx:spawn("pool.fail", { position = Vec3(1.0, 2.0, 0.0) })
+  local second, err = ctx:spawn("pool.fail", { position = Vec3(3.0, 4.0, 0.0) })
+  ctx:state_set("fail_first_index", first_index or -1)
+  ctx:state_set("fail_second_missing", second == nil)
+  ctx:state_set("fail_error", err or "")
+  ctx:state_set("fail_attempts", ctx:pool_spawn_attempt_count("pool.fail"))
+  ctx:state_set("fail_success", ctx:pool_spawn_success_count("pool.fail"))
+  ctx:state_set("fail_failures", ctx:pool_spawn_failure_count("pool.fail"))
+  ctx:state_set("fail_exhaustion", ctx:pool_exhaustion_count("pool.fail"))
+  ctx:state_set("fail_peak", ctx:pool_peak_active_count("pool.fail"))
+  ctx:state_set("fail_last_failure", ctx:pool_last_spawn_failure_reason("pool.fail"))
+  ctx:state_set("fail_active", ctx:pool_active_count("pool.fail"))
+  ctx:state_set("fail_available", ctx:pool_available_count("pool.fail"))
+  if first ~= nil then
+    ctx:despawn(first, "hit_enemy")
+  end
+  ctx:state_set("fail_despawns", ctx:pool_despawn_count("pool.fail"))
+  ctx:state_set("fail_last_despawn", ctx:pool_last_despawn_reason("pool.fail"))
+
+  ctx:spawn("pool.reuse", { position = Vec3(1.0, 0.0, 0.0), properties = { generation = 1 } })
+  ctx:spawn("pool.reuse", { position = Vec3(2.0, 0.0, 0.0), properties = { generation = 2 } })
+  ctx:state_set("reuse_attempts", ctx:pool_spawn_attempt_count("pool.reuse"))
+  ctx:state_set("reuse_success", ctx:pool_spawn_success_count("pool.reuse"))
+  ctx:state_set("reuse_failures", ctx:pool_spawn_failure_count("pool.reuse"))
+  ctx:state_set("reuse_exhaustion", ctx:pool_exhaustion_count("pool.reuse"))
+  ctx:state_set("reuse_count", ctx:pool_reuse_count("pool.reuse"))
+  ctx:state_set("reuse_despawns", ctx:pool_despawn_count("pool.reuse"))
+  ctx:state_set("reuse_last_despawn", ctx:pool_last_despawn_reason("pool.reuse"))
+  ctx:state_set("reuse_peak", ctx:pool_peak_active_count("pool.reuse"))
+  ctx:state_set("reuse_active", ctx:pool_active_count("pool.reuse"))
+  return true
+end
+
+return rules
+)lua");
+    write_text(dir / "actor_pool_diagnostics.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Actor Pool Diagnostics", "id": "test.actor_pool_diagnostics", "version": "0.1.0" },
+  "world": { "name": "world.actor_pool_diagnostics", "kind": "fixed_screen" },
+  "scripts": [
+    { "id": "script.rules", "path": "scripts/rules.lua", "module": "test.actor_pool_diagnostics" }
+  ],
+  "actor_archetypes": [
+    {
+      "name": "archetype.projectile",
+      "tags": ["projectile"],
+      "properties": {
+        "generation": { "type": "int", "value": 0 }
+      }
+    }
+  ],
+  "actor_pools": [
+    {
+      "name": "pool.fail",
+      "archetype": "archetype.projectile",
+      "capacity": 1,
+      "scene": "scene.play",
+      "on_exhausted": "fail"
+    },
+    {
+      "name": "pool.reuse",
+      "archetype": "archetype.projectile",
+      "capacity": 1,
+      "scene": "scene.play",
+      "on_exhausted": "reuse_oldest"
+    }
+  ],
+  "signals": ["signal.run"],
+  "adapters": [
+    { "name": "adapter.run", "kind": "action", "script": "script.rules", "function": "run" }
+  ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.run",
+        "actions": [
+          { "type": "adapter.invoke", "adapter": "adapter.run" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play"
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "actor_pool_diagnostics.game.json").string().c_str(), session,
+                                          &runtime, error, sizeof(error)))
+        << error;
+
+    SDLLogOutputGuard log_guard;
+    CapturedLogMessage captured_log;
+    SDL_SetLogPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_VERBOSE);
+    SDL_SetLogOutputFunction(capture_log_output, &captured_log);
+
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.run"), nullptr);
+
+    const sdl3d_properties *scene_state = sdl3d_game_data_scene_state(runtime);
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_first_index", -1), 0);
+    EXPECT_TRUE(sdl3d_properties_get_bool(scene_state, "fail_second_missing", false));
+    EXPECT_NE(std::string(sdl3d_properties_get_string(scene_state, "fail_error", "")).find("exhausted"),
+              std::string::npos);
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_attempts", -1), 2);
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_success", -1), 1);
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_failures", -1), 1);
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_exhaustion", -1), 1);
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_peak", -1), 1);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "fail_last_failure", ""), "exhausted");
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_active", -1), 1);
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_available", -1), 0);
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_despawns", -1), 1);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "fail_last_despawn", ""), "hit_enemy");
+
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "reuse_attempts", -1), 2);
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "reuse_success", -1), 2);
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "reuse_failures", -1), 0);
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "reuse_exhaustion", -1), 1);
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "reuse_count", -1), 1);
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "reuse_despawns", -1), 1);
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "reuse_last_despawn", ""), "reuse_oldest");
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "reuse_peak", -1), 1);
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "reuse_active", -1), 1);
+    sdl3d_registered_actor *reused = sdl3d_game_data_find_actor(runtime, "pool.reuse.0");
+    ASSERT_NE(reused, nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(reused->props, "generation", -1), 2);
+
+    EXPECT_EQ(captured_log.category, SDL_LOG_CATEGORY_APPLICATION);
+    EXPECT_EQ(captured_log.priority, SDL_LOG_PRIORITY_WARN);
+    EXPECT_NE(captured_log.message.find("SDL3D actor pool exhausted"), std::string::npos);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, LoadsLuaBackedGameDataFromMemoryPack)
 {
     const std::string game_json = read_fixture_file("module_success.game.json");

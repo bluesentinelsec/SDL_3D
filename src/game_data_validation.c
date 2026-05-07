@@ -3166,12 +3166,18 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             return validation_error(ctx, json_path, "actor.despawn requires a non-empty target");
         if (!name_table_contains(&names->entities, target) && !name_table_contains(&names->actor_pool_actors, target))
             return validation_error(ctx, json_path, "unknown actor.despawn target '%s'", target);
+        yyjson_val *reason = obj_get(action, "reason");
+        if (reason != NULL && !yyjson_is_str(reason))
+            return validation_error(ctx, json_path, "actor.despawn reason must be a string");
         return true;
     }
     if (SDL_strcmp(type, "actor.despawn_by_tag") == 0)
     {
         if (!is_non_empty_string(action, "tag"))
             return validation_error(ctx, json_path, "actor.despawn_by_tag requires a non-empty tag");
+        yyjson_val *reason = obj_get(action, "reason");
+        if (reason != NULL && !yyjson_is_str(reason))
+            return validation_error(ctx, json_path, "actor.despawn_by_tag reason must be a string");
         return true;
     }
     if (SDL_strcmp(type, "input.reset_bindings") == 0)

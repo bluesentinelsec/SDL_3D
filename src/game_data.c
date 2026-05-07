@@ -297,6 +297,15 @@ typedef struct actor_pool_runtime
     Uint64 *spawn_generations;
     actor_lifecycle_state *lifecycle_states;
     Uint64 spawn_generation_counter;
+    Uint64 spawn_attempt_count;
+    Uint64 spawn_success_count;
+    Uint64 spawn_failure_count;
+    Uint64 exhaustion_count;
+    Uint64 reuse_count;
+    Uint64 despawn_count;
+    int peak_active_count;
+    char last_spawn_failure_reason[64];
+    char last_despawn_reason[64];
     int capacity;
     bool initial_active;
     actor_pool_exhaustion_policy exhaustion;
@@ -602,11 +611,16 @@ static void actor_pool_set_lifecycle_state(actor_pool_runtime *pool, sdl3d_regis
 static bool actor_pool_actor_is_active(const actor_pool_runtime *pool, const sdl3d_registered_actor *actor, int index);
 static bool actor_pool_actor_is_available(const actor_pool_runtime *pool, const sdl3d_registered_actor *actor,
                                           int index);
+static int actor_pool_active_count(const sdl3d_game_data_runtime *runtime, const actor_pool_runtime *pool);
+static int actor_pool_available_count(const sdl3d_game_data_runtime *runtime, const actor_pool_runtime *pool);
+static void actor_pool_note_spawn_attempt(actor_pool_runtime *pool);
+static void actor_pool_note_spawn_success(sdl3d_game_data_runtime *runtime, actor_pool_runtime *pool);
+static void actor_pool_note_spawn_failure(actor_pool_runtime *pool, const char *reason);
 static bool initialize_pooled_actor(actor_pool_runtime *pool, sdl3d_registered_actor *actor, int index, bool active);
 static bool actor_pool_initialize_slot(sdl3d_game_data_runtime *runtime, actor_pool_runtime *pool, int index,
                                        bool active);
 static bool actor_pool_request_despawn(sdl3d_game_data_runtime *runtime, actor_pool_runtime *pool,
-                                       sdl3d_registered_actor *actor, int index);
+                                       sdl3d_registered_actor *actor, int index, const char *reason);
 static bool apply_actor_pool_scene_exit_policies(sdl3d_game_data_runtime *runtime, const char *from_scene,
                                                  const char *to_scene);
 static void actor_lifecycle_defer_begin(sdl3d_game_data_runtime *runtime);
@@ -616,6 +630,11 @@ static bool entity_json_has_tags(yyjson_val *entity, const char *const *tags, in
 static sdl3d_game_data_runtime *lua_runtime(lua_State *lua)
 {
     return (sdl3d_game_data_runtime *)lua_touserdata(lua, lua_upvalueindex(1));
+}
+
+static lua_Integer lua_counter_value(Uint64 value)
+{
+    return (lua_Integer)SDL_min(value, (Uint64)LUA_MAXINTEGER);
 }
 
 static sdl3d_registered_actor *lua_actor_arg(lua_State *lua, sdl3d_game_data_runtime *runtime, int index)
@@ -1039,10 +1058,12 @@ static int lua_spawn_actor(lua_State *lua)
 {
     sdl3d_game_data_runtime *runtime = lua_runtime(lua);
     actor_pool_runtime *pool = find_actor_pool(runtime, luaL_checkstring(lua, 1));
+    actor_pool_note_spawn_attempt(pool);
     int actor_index = -1;
     sdl3d_registered_actor *actor = actor_pool_allocate(runtime, pool, &actor_index);
     if (pool == NULL || actor == NULL || actor_index < 0)
     {
+        actor_pool_note_spawn_failure(pool, "exhausted");
         lua_pushnil(lua);
         lua_pushstring(lua, "actor pool exhausted or missing");
         return 2;
@@ -1051,6 +1072,7 @@ static int lua_spawn_actor(lua_State *lua)
     actor_pool_set_lifecycle_state(pool, actor, actor_index, ACTOR_LIFECYCLE_SPAWNING);
     if (!initialize_pooled_actor(pool, actor, actor_index, true))
     {
+        actor_pool_note_spawn_failure(pool, "initialize_failed");
         lua_pushnil(lua);
         lua_pushstring(lua, "failed to initialize pooled actor");
         return 2;
@@ -1097,6 +1119,7 @@ static int lua_spawn_actor(lua_State *lua)
     }
 
     actor_set_position(actor, position);
+    actor_pool_note_spawn_success(runtime, pool);
     lua_push_actor_wrapper(lua, actor);
     lua_pushinteger(lua, actor->id);
     lua_pushinteger(lua, actor_index);
@@ -1115,8 +1138,10 @@ static int lua_despawn_actor(lua_State *lua)
 
     int actor_index = -1;
     actor_pool_runtime *pool = find_actor_pool_for_actor(runtime, actor->name, &actor_index);
-    const bool ok = pool != NULL && actor_index >= 0 ? actor_pool_request_despawn(runtime, pool, actor, actor_index)
-                                                     : (actor->active = false, true);
+    const char *reason = lua_isstring(lua, 2) ? lua_tostring(lua, 2) : "lua";
+    const bool ok = pool != NULL && actor_index >= 0
+                        ? actor_pool_request_despawn(runtime, pool, actor, actor_index, reason)
+                        : (actor->active = false, true);
     lua_pushboolean(lua, ok);
     return 1;
 }
@@ -1125,6 +1150,7 @@ static int lua_despawn_actors_by_tag(lua_State *lua)
 {
     sdl3d_game_data_runtime *runtime = lua_runtime(lua);
     const char *tag = luaL_checkstring(lua, 1);
+    const char *reason = lua_isstring(lua, 2) ? lua_tostring(lua, 2) : "lua_tag";
     int despawned = 0;
     if (runtime != NULL && tag != NULL && tag[0] != '\0')
     {
@@ -1137,7 +1163,7 @@ static int lua_despawn_actors_by_tag(lua_State *lua)
             {
                 sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[actor_index]);
                 if (actor_pool_actor_is_active(pool, actor, actor_index) &&
-                    actor_pool_request_despawn(runtime, pool, actor, actor_index))
+                    actor_pool_request_despawn(runtime, pool, actor, actor_index, reason))
                     ++despawned;
             }
         }
@@ -1157,14 +1183,7 @@ static int lua_pool_active_count(lua_State *lua)
 {
     sdl3d_game_data_runtime *runtime = lua_runtime(lua);
     actor_pool_runtime *pool = find_actor_pool(runtime, luaL_checkstring(lua, 1));
-    int count = 0;
-    for (int i = 0; pool != NULL && i < pool->capacity; ++i)
-    {
-        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[i]);
-        if (actor_pool_actor_is_active(pool, actor, i))
-            ++count;
-    }
-    lua_pushinteger(lua, count);
+    lua_pushinteger(lua, actor_pool_active_count(runtime, pool));
     return 1;
 }
 
@@ -1172,14 +1191,71 @@ static int lua_pool_available_count(lua_State *lua)
 {
     sdl3d_game_data_runtime *runtime = lua_runtime(lua);
     actor_pool_runtime *pool = find_actor_pool(runtime, luaL_checkstring(lua, 1));
-    int count = 0;
-    for (int i = 0; pool != NULL && i < pool->capacity; ++i)
-    {
-        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[i]);
-        if (actor_pool_actor_is_available(pool, actor, i))
-            ++count;
-    }
-    lua_pushinteger(lua, count);
+    lua_pushinteger(lua, actor_pool_available_count(runtime, pool));
+    return 1;
+}
+
+static int lua_pool_peak_active_count(lua_State *lua)
+{
+    actor_pool_runtime *pool = find_actor_pool(lua_runtime(lua), luaL_checkstring(lua, 1));
+    lua_pushinteger(lua, pool != NULL ? pool->peak_active_count : 0);
+    return 1;
+}
+
+static int lua_pool_spawn_attempt_count(lua_State *lua)
+{
+    actor_pool_runtime *pool = find_actor_pool(lua_runtime(lua), luaL_checkstring(lua, 1));
+    lua_pushinteger(lua, pool != NULL ? lua_counter_value(pool->spawn_attempt_count) : 0);
+    return 1;
+}
+
+static int lua_pool_spawn_success_count(lua_State *lua)
+{
+    actor_pool_runtime *pool = find_actor_pool(lua_runtime(lua), luaL_checkstring(lua, 1));
+    lua_pushinteger(lua, pool != NULL ? lua_counter_value(pool->spawn_success_count) : 0);
+    return 1;
+}
+
+static int lua_pool_spawn_failure_count(lua_State *lua)
+{
+    actor_pool_runtime *pool = find_actor_pool(lua_runtime(lua), luaL_checkstring(lua, 1));
+    lua_pushinteger(lua, pool != NULL ? lua_counter_value(pool->spawn_failure_count) : 0);
+    return 1;
+}
+
+static int lua_pool_exhaustion_count(lua_State *lua)
+{
+    actor_pool_runtime *pool = find_actor_pool(lua_runtime(lua), luaL_checkstring(lua, 1));
+    lua_pushinteger(lua, pool != NULL ? lua_counter_value(pool->exhaustion_count) : 0);
+    return 1;
+}
+
+static int lua_pool_reuse_count(lua_State *lua)
+{
+    actor_pool_runtime *pool = find_actor_pool(lua_runtime(lua), luaL_checkstring(lua, 1));
+    lua_pushinteger(lua, pool != NULL ? lua_counter_value(pool->reuse_count) : 0);
+    return 1;
+}
+
+static int lua_pool_despawn_count(lua_State *lua)
+{
+    actor_pool_runtime *pool = find_actor_pool(lua_runtime(lua), luaL_checkstring(lua, 1));
+    lua_pushinteger(lua, pool != NULL ? lua_counter_value(pool->despawn_count) : 0);
+    return 1;
+}
+
+static int lua_pool_last_spawn_failure_reason(lua_State *lua)
+{
+    actor_pool_runtime *pool = find_actor_pool(lua_runtime(lua), luaL_checkstring(lua, 1));
+    lua_pushstring(lua, pool != NULL && pool->last_spawn_failure_reason[0] != '\0' ? pool->last_spawn_failure_reason
+                                                                                   : "none");
+    return 1;
+}
+
+static int lua_pool_last_despawn_reason(lua_State *lua)
+{
+    actor_pool_runtime *pool = find_actor_pool(lua_runtime(lua), luaL_checkstring(lua, 1));
+    lua_pushstring(lua, pool != NULL && pool->last_despawn_reason[0] != '\0' ? pool->last_despawn_reason : "none");
     return 1;
 }
 
@@ -1645,17 +1721,17 @@ static void install_lua_helpers(lua_State *lua)
         "            end\n"
         "            return sdl3d.spawn(self_or_pool, maybe_pool)\n"
         "        end,\n"
-        "        despawn = function(self_or_actor, maybe_actor)\n"
+        "        despawn = function(self_or_actor, maybe_actor, maybe_reason)\n"
         "            if type(self_or_actor) == 'table' and self_or_actor.adapter ~= nil then\n"
-        "                return sdl3d.despawn(maybe_actor)\n"
+        "                return sdl3d.despawn(maybe_actor, maybe_reason)\n"
         "            end\n"
-        "            return sdl3d.despawn(self_or_actor)\n"
+        "            return sdl3d.despawn(self_or_actor, maybe_actor)\n"
         "        end,\n"
-        "        despawn_by_tag = function(self_or_tag, maybe_tag)\n"
+        "        despawn_by_tag = function(self_or_tag, maybe_tag, maybe_reason)\n"
         "            if type(self_or_tag) == 'table' and self_or_tag.adapter ~= nil then\n"
-        "                return sdl3d.despawn_by_tag(maybe_tag)\n"
+        "                return sdl3d.despawn_by_tag(maybe_tag, maybe_reason)\n"
         "            end\n"
-        "            return sdl3d.despawn_by_tag(self_or_tag)\n"
+        "            return sdl3d.despawn_by_tag(self_or_tag, maybe_tag)\n"
         "        end,\n"
         "        actor_with_tags = function(self_or_tag, maybe_tag, ...)\n"
         "            if type(self_or_tag) == 'table' and self_or_tag.adapter ~= nil then\n"
@@ -1679,6 +1755,33 @@ static void install_lua_helpers(lua_State *lua)
         "        end,\n"
         "        pool_available_count = function(self_or_pool, maybe_pool)\n"
         "            return sdl3d.pool_available_count(maybe_pool or self_or_pool)\n"
+        "        end,\n",
+        "        pool_peak_active_count = function(self_or_pool, maybe_pool)\n"
+        "            return sdl3d.pool_peak_active_count(maybe_pool or self_or_pool)\n"
+        "        end,\n"
+        "        pool_spawn_attempt_count = function(self_or_pool, maybe_pool)\n"
+        "            return sdl3d.pool_spawn_attempt_count(maybe_pool or self_or_pool)\n"
+        "        end,\n"
+        "        pool_spawn_success_count = function(self_or_pool, maybe_pool)\n"
+        "            return sdl3d.pool_spawn_success_count(maybe_pool or self_or_pool)\n"
+        "        end,\n"
+        "        pool_spawn_failure_count = function(self_or_pool, maybe_pool)\n"
+        "            return sdl3d.pool_spawn_failure_count(maybe_pool or self_or_pool)\n"
+        "        end,\n"
+        "        pool_exhaustion_count = function(self_or_pool, maybe_pool)\n"
+        "            return sdl3d.pool_exhaustion_count(maybe_pool or self_or_pool)\n"
+        "        end,\n"
+        "        pool_reuse_count = function(self_or_pool, maybe_pool)\n"
+        "            return sdl3d.pool_reuse_count(maybe_pool or self_or_pool)\n"
+        "        end,\n"
+        "        pool_despawn_count = function(self_or_pool, maybe_pool)\n"
+        "            return sdl3d.pool_despawn_count(maybe_pool or self_or_pool)\n"
+        "        end,\n"
+        "        pool_last_spawn_failure_reason = function(self_or_pool, maybe_pool)\n"
+        "            return sdl3d.pool_last_spawn_failure_reason(maybe_pool or self_or_pool)\n"
+        "        end,\n"
+        "        pool_last_despawn_reason = function(self_or_pool, maybe_pool)\n"
+        "            return sdl3d.pool_last_despawn_reason(maybe_pool or self_or_pool)\n"
         "        end,\n",
         "        state_get = function(self_or_key, maybe_key, fallback)\n"
         "            if type(self_or_key) == 'table' and self_or_key.adapter ~= nil then\n"
@@ -1784,6 +1887,15 @@ static void register_lua_api(sdl3d_game_data_runtime *runtime, sdl3d_script_engi
     SDL3D_LUA_BIND("pool_capacity", lua_pool_capacity);
     SDL3D_LUA_BIND("pool_active_count", lua_pool_active_count);
     SDL3D_LUA_BIND("pool_available_count", lua_pool_available_count);
+    SDL3D_LUA_BIND("pool_peak_active_count", lua_pool_peak_active_count);
+    SDL3D_LUA_BIND("pool_spawn_attempt_count", lua_pool_spawn_attempt_count);
+    SDL3D_LUA_BIND("pool_spawn_success_count", lua_pool_spawn_success_count);
+    SDL3D_LUA_BIND("pool_spawn_failure_count", lua_pool_spawn_failure_count);
+    SDL3D_LUA_BIND("pool_exhaustion_count", lua_pool_exhaustion_count);
+    SDL3D_LUA_BIND("pool_reuse_count", lua_pool_reuse_count);
+    SDL3D_LUA_BIND("pool_despawn_count", lua_pool_despawn_count);
+    SDL3D_LUA_BIND("pool_last_spawn_failure_reason", lua_pool_last_spawn_failure_reason);
+    SDL3D_LUA_BIND("pool_last_despawn_reason", lua_pool_last_despawn_reason);
     SDL3D_LUA_BIND("log", lua_log);
     SDL3D_LUA_BIND("storage_read", lua_storage_read);
     SDL3D_LUA_BIND("storage_write", lua_storage_write);
@@ -2736,7 +2848,7 @@ static bool game_data_apply_actor_replication_field(sdl3d_game_data_runtime *run
             }
             if (actor_pool_lifecycle_state(pool, actor_index) == ACTOR_LIFECYCLE_INACTIVE)
                 return true;
-            return actor_pool_request_despawn(runtime, pool, actor, actor_index);
+            return actor_pool_request_despawn(runtime, pool, actor, actor_index, "network_snapshot");
         }
         actor->active = value->value.as_bool;
         return true;
@@ -7859,6 +7971,69 @@ static bool actor_pool_actor_is_available(const actor_pool_runtime *pool, const 
             actor_pool_lifecycle_state(pool, index) == ACTOR_LIFECYCLE_INACTIVE);
 }
 
+static void actor_pool_copy_reason(char *target, size_t target_size, const char *reason)
+{
+    if (target == NULL || target_size == 0U)
+        return;
+    SDL_strlcpy(target, reason != NULL && reason[0] != '\0' ? reason : "none", target_size);
+}
+
+static int actor_pool_active_count(const sdl3d_game_data_runtime *runtime, const actor_pool_runtime *pool)
+{
+    int count = 0;
+    for (int i = 0; runtime != NULL && pool != NULL && i < pool->capacity; ++i)
+    {
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[i]);
+        if (actor_pool_actor_is_active(pool, actor, i))
+            ++count;
+    }
+    return count;
+}
+
+static int actor_pool_available_count(const sdl3d_game_data_runtime *runtime, const actor_pool_runtime *pool)
+{
+    int count = 0;
+    for (int i = 0; runtime != NULL && pool != NULL && i < pool->capacity; ++i)
+    {
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[i]);
+        if (actor_pool_actor_is_available(pool, actor, i))
+            ++count;
+    }
+    return count;
+}
+
+static void actor_pool_update_peak_active_count(sdl3d_game_data_runtime *runtime, actor_pool_runtime *pool)
+{
+    if (runtime == NULL || pool == NULL)
+        return;
+    const int active_count = actor_pool_active_count(runtime, pool);
+    if (active_count > pool->peak_active_count)
+        pool->peak_active_count = active_count;
+}
+
+static void actor_pool_note_spawn_attempt(actor_pool_runtime *pool)
+{
+    if (pool != NULL)
+        pool->spawn_attempt_count++;
+}
+
+static void actor_pool_note_spawn_success(sdl3d_game_data_runtime *runtime, actor_pool_runtime *pool)
+{
+    if (pool == NULL)
+        return;
+    pool->spawn_success_count++;
+    actor_pool_copy_reason(pool->last_spawn_failure_reason, sizeof(pool->last_spawn_failure_reason), "none");
+    actor_pool_update_peak_active_count(runtime, pool);
+}
+
+static void actor_pool_note_spawn_failure(actor_pool_runtime *pool, const char *reason)
+{
+    if (pool == NULL)
+        return;
+    pool->spawn_failure_count++;
+    actor_pool_copy_reason(pool->last_spawn_failure_reason, sizeof(pool->last_spawn_failure_reason), reason);
+}
+
 static void actor_lifecycle_defer_begin(sdl3d_game_data_runtime *runtime)
 {
     if (runtime != NULL)
@@ -7880,7 +8055,10 @@ static void actor_lifecycle_flush(sdl3d_game_data_runtime *runtime)
                 continue;
             sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[actor_index]);
             if (actor != NULL)
-                (void)initialize_pooled_actor(pool, actor, actor_index, false);
+            {
+                if (initialize_pooled_actor(pool, actor, actor_index, false))
+                    sdl3d_properties_set_string(actor->props, "pool_last_despawn_reason", pool->last_despawn_reason);
+            }
         }
     }
 }
@@ -7907,6 +8085,8 @@ static bool actor_pool_initialize_slot(sdl3d_game_data_runtime *runtime, actor_p
         sdl3d_properties_set_int(actor->props, "pool_spawn_generation",
                                  (int)SDL_min(pool->spawn_generations[index], (Uint64)SDL_MAX_SINT32));
     }
+    if (active)
+        actor_pool_update_peak_active_count(runtime, pool);
     return true;
 }
 
@@ -7947,7 +8127,7 @@ static bool apply_actor_pool_scene_exit_policies(sdl3d_game_data_runtime *runtim
             if (pool->scene_exit_policy == ACTOR_POOL_SCENE_EXIT_DESPAWN)
             {
                 if (actor_pool_lifecycle_state(pool, actor_index) != ACTOR_LIFECYCLE_INACTIVE &&
-                    !actor_pool_request_despawn(runtime, pool, actor, actor_index))
+                    !actor_pool_request_despawn(runtime, pool, actor, actor_index, "scene_exit"))
                 {
                     return false;
                 }
@@ -8039,6 +8219,8 @@ static bool load_actor_pools(sdl3d_game_data_runtime *runtime, yyjson_val *root,
         pool->scene_exit_policy = actor_pool_scene_exit_policy_from_string(
             json_string(pool_json, "on_scene_exit", NULL),
             pool->scene_count > 0 ? ACTOR_POOL_SCENE_EXIT_RESET : ACTOR_POOL_SCENE_EXIT_PRESERVE);
+        actor_pool_copy_reason(pool->last_spawn_failure_reason, sizeof(pool->last_spawn_failure_reason), "none");
+        actor_pool_copy_reason(pool->last_despawn_reason, sizeof(pool->last_despawn_reason), "none");
         pool->actor_names = (char **)SDL_calloc((size_t)capacity, sizeof(*pool->actor_names));
         pool->spawn_generations = (Uint64 *)SDL_calloc((size_t)capacity, sizeof(*pool->spawn_generations));
         pool->lifecycle_states = (actor_lifecycle_state *)SDL_calloc((size_t)capacity, sizeof(*pool->lifecycle_states));
@@ -8071,6 +8253,7 @@ static bool load_actor_pools(sdl3d_game_data_runtime *runtime, yyjson_val *root,
                 pool->spawn_generations[actor_index] = ++pool->spawn_generation_counter;
                 sdl3d_properties_set_int(actor->props, "pool_spawn_generation",
                                          (int)SDL_min(pool->spawn_generations[actor_index], (Uint64)SDL_MAX_SINT32));
+                actor_pool_update_peak_active_count(runtime, pool);
             }
         }
     }
@@ -10810,7 +10993,17 @@ static sdl3d_registered_actor *actor_pool_allocate(sdl3d_game_data_runtime *runt
     }
 
     if (pool->exhaustion != ACTOR_POOL_EXHAUST_REUSE_OLDEST || pool->capacity <= 0)
+    {
+        if (pool != NULL)
+        {
+            pool->exhaustion_count++;
+            actor_pool_copy_reason(pool->last_spawn_failure_reason, sizeof(pool->last_spawn_failure_reason),
+                                   "exhausted");
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D actor pool exhausted: pool=%s capacity=%d policy=fail",
+                        pool->name != NULL ? pool->name : "<unnamed>", pool->capacity);
+        }
         return NULL;
+    }
 
     int index = -1;
     Uint64 oldest_generation = SDL_MAX_UINT64;
@@ -10827,18 +11020,36 @@ static sdl3d_registered_actor *actor_pool_allocate(sdl3d_game_data_runtime *runt
         }
     }
     if (index < 0)
+    {
+        pool->exhaustion_count++;
+        actor_pool_copy_reason(pool->last_spawn_failure_reason, sizeof(pool->last_spawn_failure_reason), "exhausted");
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D actor pool exhausted: pool=%s capacity=%d no reusable actor",
+                    pool->name != NULL ? pool->name : "<unnamed>", pool->capacity);
         return NULL;
+    }
     if (out_index != NULL)
         *out_index = index;
+    pool->exhaustion_count++;
+    pool->reuse_count++;
+    pool->despawn_count++;
+    actor_pool_copy_reason(pool->last_despawn_reason, sizeof(pool->last_despawn_reason), "reuse_oldest");
+    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D actor pool exhausted: pool=%s capacity=%d reusing actor=%s",
+                pool->name != NULL ? pool->name : "<unnamed>", pool->capacity,
+                pool->actor_names[index] != NULL ? pool->actor_names[index] : "<unnamed>");
     return sdl3d_game_data_find_actor(runtime, pool->actor_names[index]);
 }
 
 static bool actor_pool_request_despawn(sdl3d_game_data_runtime *runtime, actor_pool_runtime *pool,
-                                       sdl3d_registered_actor *actor, int index)
+                                       sdl3d_registered_actor *actor, int index, const char *reason)
 {
     if (runtime == NULL || pool == NULL || actor == NULL || index < 0 || index >= pool->capacity)
         return false;
 
+    if (!actor->active && actor_pool_lifecycle_state(pool, index) == ACTOR_LIFECYCLE_INACTIVE)
+        return true;
+
+    pool->despawn_count++;
+    actor_pool_copy_reason(pool->last_despawn_reason, sizeof(pool->last_despawn_reason), reason);
     actor->active = false;
     actor_pool_set_lifecycle_state(pool, actor, index, ACTOR_LIFECYCLE_DESPAWNING);
     if (runtime->actor_lifecycle_defer_depth > 0)
@@ -10846,7 +11057,10 @@ static bool actor_pool_request_despawn(sdl3d_game_data_runtime *runtime, actor_p
         runtime->actor_lifecycle_flush_pending = true;
         return true;
     }
-    return initialize_pooled_actor(pool, actor, index, false);
+    if (!initialize_pooled_actor(pool, actor, index, false))
+        return false;
+    sdl3d_properties_set_string(actor->props, "pool_last_despawn_reason", pool->last_despawn_reason);
+    return true;
 }
 
 static void apply_actor_spawn_properties(sdl3d_registered_actor *actor, yyjson_val *properties)
@@ -10894,14 +11108,21 @@ static sdl3d_vec3 actor_spawn_position_from_action(sdl3d_game_data_runtime *runt
 static bool execute_actor_spawn_action(sdl3d_game_data_runtime *runtime, yyjson_val *action)
 {
     actor_pool_runtime *pool = find_actor_pool(runtime, json_string(action, "pool", NULL));
+    actor_pool_note_spawn_attempt(pool);
     int actor_index = -1;
     sdl3d_registered_actor *actor = actor_pool_allocate(runtime, pool, &actor_index);
     if (pool == NULL || actor == NULL || actor_index < 0)
+    {
+        actor_pool_note_spawn_failure(pool, "exhausted");
         return false;
+    }
 
     actor_pool_set_lifecycle_state(pool, actor, actor_index, ACTOR_LIFECYCLE_SPAWNING);
     if (!initialize_pooled_actor(pool, actor, actor_index, true))
+    {
+        actor_pool_note_spawn_failure(pool, "initialize_failed");
         return false;
+    }
     if (pool->spawn_generations != NULL)
     {
         pool->spawn_generations[actor_index] = ++pool->spawn_generation_counter;
@@ -10910,6 +11131,7 @@ static bool execute_actor_spawn_action(sdl3d_game_data_runtime *runtime, yyjson_
     }
     actor_set_position(actor, actor_spawn_position_from_action(runtime, action, actor->position));
     apply_actor_spawn_properties(actor, obj_get(action, "properties"));
+    actor_pool_note_spawn_success(runtime, pool);
 
     const char *actor_key = json_string(action, "output_actor_key", NULL);
     if (runtime != NULL && runtime->scene_state != NULL && actor_key != NULL)
@@ -10933,7 +11155,7 @@ static bool execute_actor_despawn_action(sdl3d_game_data_runtime *runtime, yyjso
     int actor_index = -1;
     actor_pool_runtime *pool = find_actor_pool_for_actor(runtime, actor->name, &actor_index);
     if (pool != NULL && actor_index >= 0)
-        return actor_pool_request_despawn(runtime, pool, actor, actor_index);
+        return actor_pool_request_despawn(runtime, pool, actor, actor_index, json_string(action, "reason", "action"));
 
     actor->active = false;
     return true;
@@ -10955,7 +11177,8 @@ static bool execute_actor_despawn_by_tag_action(sdl3d_game_data_runtime *runtime
             sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[actor_index]);
             if (actor_pool_actor_is_active(pool, actor, actor_index))
             {
-                (void)actor_pool_request_despawn(runtime, pool, actor, actor_index);
+                (void)actor_pool_request_despawn(runtime, pool, actor, actor_index,
+                                                 json_string(action, "reason", "action_tag"));
             }
         }
     }
