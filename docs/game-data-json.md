@@ -58,9 +58,10 @@ Loaders should reject duplicate names inside a namespace and should report the J
 Large games should keep one root game file and split owned data into structured
 fragments. Imports are not textual includes: each imported file must be a JSON
 object with schema `sdl3d.fragment.v0`, and fragments may only contain
-mergeable sections such as `assets`, `scripts`, `input`, `entities`,
-`actor_archetypes`, `actor_pools`, `signals`, `logic`, `adapters`, `network`,
-`haptics`, `presentation`, or `update_phases`.
+mergeable sections: `storage`, `persistence`, `profiles`, `assets`, `scripts`,
+`input`, `render`, `transitions`, `ui`, `entities`, `actor_archetypes`,
+`actor_pools`, `signals`, `logic`, `adapters`, `network`, `haptics`,
+`presentation`, and `update_phases`.
 
 ```json
 {
