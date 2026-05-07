@@ -7,6 +7,7 @@ list(SORT SDL3D_PONG_AUDIO_FILES)
 set(SDL3D_PONG_ASSET_FILES
     ${SDL3D_PONG_AUDIO_FILES}
     fragments/assets.json
+    fragments/entities.json
     fragments/input.json
     fragments/interaction.json
     fragments/logic.json

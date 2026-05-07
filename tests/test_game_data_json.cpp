@@ -241,7 +241,7 @@ TEST(GameDataJson, PongDataDeclaresGenericTopLevelModel)
     EXPECT_EQ(required_string(doc.root(), "schema"), "sdl3d.game.v0");
     EXPECT_TRUE(yyjson_is_obj(yyjson_obj_get(doc.root(), "metadata")));
     EXPECT_TRUE(yyjson_is_obj(yyjson_obj_get(doc.root(), "world")));
-    EXPECT_TRUE(yyjson_is_arr(yyjson_obj_get(doc.root(), "entities")));
+    EXPECT_TRUE(yyjson_is_arr(doc.section("entities")));
     EXPECT_TRUE(yyjson_is_arr(doc.section("scripts")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("logic")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("presentation")));
@@ -263,7 +263,7 @@ TEST(GameDataJson, PongDataUsesStructuredImports)
     ASSERT_NE(doc.root(), nullptr) << doc.error();
 
     yyjson_val *imports = required_array(doc.root(), "imports");
-    ASSERT_EQ(yyjson_arr_size(imports), 9u);
+    ASSERT_EQ(yyjson_arr_size(imports), 10u);
     EXPECT_TRUE(yyjson_is_obj(doc.section("assets")));
     EXPECT_TRUE(yyjson_is_arr(doc.section("scripts")));
     EXPECT_TRUE(yyjson_is_obj(doc.section("input")));
@@ -280,6 +280,7 @@ TEST(GameDataJson, PongDataUsesStructuredImports)
     EXPECT_TRUE(yyjson_is_obj(doc.section("ui")));
     EXPECT_TRUE(yyjson_is_arr(doc.section("signals")));
     EXPECT_TRUE(yyjson_is_arr(doc.section("adapters")));
+    EXPECT_TRUE(yyjson_is_arr(doc.section("entities")));
     EXPECT_EQ(yyjson_obj_get(doc.root(), "assets"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "scripts"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "input"), nullptr);
@@ -296,6 +297,7 @@ TEST(GameDataJson, PongDataUsesStructuredImports)
     EXPECT_EQ(yyjson_obj_get(doc.root(), "ui"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "signals"), nullptr);
     EXPECT_EQ(yyjson_obj_get(doc.root(), "adapters"), nullptr);
+    EXPECT_EQ(yyjson_obj_get(doc.root(), "entities"), nullptr);
 }
 
 TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
@@ -415,7 +417,9 @@ TEST(GameDataJson, PongDataHasUniqueAuthoredNames)
     std::set<std::string> signal_names;
     std::set<std::string> adapter_names;
     std::set<std::string> script_names;
-    collect_named_objects(required_array(doc.root(), "entities"), "name", &entity_names);
+    yyjson_val *entities_section = doc.section("entities");
+    ASSERT_TRUE(yyjson_is_arr(entities_section));
+    collect_named_objects(entities_section, "name", &entity_names);
     yyjson_val *signals_section = doc.section("signals");
     yyjson_val *adapters_section = doc.section("adapters");
     ASSERT_TRUE(yyjson_is_arr(signals_section));
@@ -443,7 +447,9 @@ TEST(GameDataJson, PongLogicReferencesKnownEntitiesSignalsTimersCamerasAndAdapte
     std::set<std::string> adapters;
     std::set<std::string> scripts;
 
-    collect_named_objects(required_array(doc.root(), "entities"), "name", &entities);
+    yyjson_val *entities_section = doc.section("entities");
+    ASSERT_TRUE(yyjson_is_arr(entities_section));
+    collect_named_objects(entities_section, "name", &entities);
     yyjson_val *signals_section = doc.section("signals");
     yyjson_val *adapters_section = doc.section("adapters");
     ASSERT_TRUE(yyjson_is_arr(signals_section));
