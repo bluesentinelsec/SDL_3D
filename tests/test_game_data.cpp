@@ -6131,6 +6131,128 @@ TEST(GameDataRuntime, ActorPoolsSpawnDespawnAndResetActors)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, ActorPoolsApplySceneExitPolicies)
+{
+    const std::filesystem::path dir = unique_test_dir("actor_pool_scene_policy");
+    write_text(dir / "actor_pool_scene_policy.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Actor Pool Scene Policy", "id": "test.actor_pool_scene_policy", "version": "0.1.0" },
+  "world": { "name": "world.actor_pool_scene_policy", "kind": "fixed_screen" },
+  "actor_archetypes": [
+    {
+      "name": "archetype.shot",
+      "transform": { "position": [0.0, 0.0, 0.0] },
+      "properties": {
+        "damage": { "type": "int", "value": 1 }
+      }
+    }
+  ],
+  "actor_pools": [
+    {
+      "name": "pool.reset_shots",
+      "archetype": "archetype.shot",
+      "capacity": 1,
+      "scene": "scene.play",
+      "on_scene_exit": "reset"
+    },
+    {
+      "name": "pool.preserved_shots",
+      "archetype": "archetype.shot",
+      "capacity": 1,
+      "scene": "scene.play",
+      "on_scene_exit": "preserve"
+    },
+    {
+      "name": "pool.shared_shots",
+      "archetype": "archetype.shot",
+      "capacity": 1,
+      "scenes": ["scene.play", "scene.shop"],
+      "on_scene_exit": "reset"
+    },
+    {
+      "name": "pool.despawned_shots",
+      "archetype": "archetype.shot",
+      "capacity": 1,
+      "scene": "scene.play",
+      "on_scene_exit": "despawn"
+    }
+  ],
+  "signals": ["signal.spawn"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.spawn",
+        "actions": [
+          { "type": "actor.spawn", "pool": "pool.reset_shots", "position": [1.0, 0.0, 0.0], "properties": { "damage": 7 } },
+          { "type": "actor.spawn", "pool": "pool.preserved_shots", "position": [2.0, 0.0, 0.0], "properties": { "damage": 9 } },
+          { "type": "actor.spawn", "pool": "pool.shared_shots", "position": [3.0, 0.0, 0.0], "properties": { "damage": 11 } },
+          { "type": "actor.spawn", "pool": "pool.despawned_shots", "position": [4.0, 0.0, 0.0], "properties": { "damage": 13 } }
+        ]
+      }
+    ]
+  },
+  "scenes": {
+    "initial": "scene.play",
+    "files": ["scenes/play.scene.json", "scenes/shop.scene.json", "scenes/title.scene.json"]
+  }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": [] })json");
+    write_text(dir / "scenes" / "shop.scene.json",
+               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.shop", "entities": [] })json");
+    write_text(dir / "scenes" / "title.scene.json",
+               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.title", "entities": [] })json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "actor_pool_scene_policy.game.json").string().c_str(), session,
+                                          &runtime, error, sizeof(error)))
+        << error;
+
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), sdl3d_game_data_find_signal(runtime, "signal.spawn"),
+                      nullptr);
+    sdl3d_registered_actor *reset = sdl3d_game_data_find_actor(runtime, "pool.reset_shots.0");
+    sdl3d_registered_actor *preserved = sdl3d_game_data_find_actor(runtime, "pool.preserved_shots.0");
+    sdl3d_registered_actor *shared = sdl3d_game_data_find_actor(runtime, "pool.shared_shots.0");
+    sdl3d_registered_actor *despawned = sdl3d_game_data_find_actor(runtime, "pool.despawned_shots.0");
+    ASSERT_NE(reset, nullptr);
+    ASSERT_NE(preserved, nullptr);
+    ASSERT_NE(shared, nullptr);
+    ASSERT_NE(despawned, nullptr);
+    EXPECT_TRUE(reset->active);
+    EXPECT_TRUE(preserved->active);
+    EXPECT_TRUE(shared->active);
+    EXPECT_TRUE(despawned->active);
+    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "pool.shared_shots.0"));
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.shop"));
+    EXPECT_FALSE(reset->active);
+    EXPECT_EQ(sdl3d_properties_get_int(reset->props, "damage", 0), 1);
+    expect_vec3_near(reset->position, sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(preserved->active);
+    EXPECT_EQ(sdl3d_properties_get_int(preserved->props, "damage", 0), 9);
+    expect_vec3_near(preserved->position, sdl3d_vec3_make(2.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(shared->active);
+    EXPECT_EQ(sdl3d_properties_get_int(shared->props, "damage", 0), 11);
+    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "pool.shared_shots.0"));
+    EXPECT_FALSE(despawned->active);
+    EXPECT_EQ(sdl3d_properties_get_int(despawned->props, "damage", 0), 1);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
+    EXPECT_TRUE(preserved->active);
+    EXPECT_EQ(sdl3d_properties_get_int(preserved->props, "damage", 0), 9);
+    EXPECT_FALSE(shared->active);
+    EXPECT_EQ(sdl3d_properties_get_int(shared->props, "damage", 0), 1);
+    EXPECT_FALSE(sdl3d_game_data_active_scene_has_entity(runtime, "pool.shared_shots.0"));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
 {
     const std::filesystem::path dir = unique_test_dir("actor_pool_validation");
@@ -6258,6 +6380,47 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json",
             "collides with entity",
+        },
+        {
+            "bad_pool_scenes",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "actor_archetypes": [
+    { "name": "archetype.shot" }
+  ],
+  "actor_pools": [
+    {
+      "name": "pool.bad",
+      "archetype": "archetype.shot",
+      "capacity": 1,
+      "scenes": ["scene.missing"]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "unknown scene",
+        },
+        {
+            "bad_scene_exit_policy",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "actor_archetypes": [
+    { "name": "archetype.shot" }
+  ],
+  "actor_pools": [
+    {
+      "name": "pool.bad",
+      "archetype": "archetype.shot",
+      "capacity": 1,
+      "scene": "scene.play",
+      "on_scene_exit": "hide"
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "on_scene_exit",
         },
     };
 
