@@ -6674,6 +6674,162 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, ValidatesStructuredJsonImportsAndFragments)
+{
+    const std::filesystem::path dir = unique_test_dir("json_imports_valid");
+    write_text(dir / "game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "imports": [
+    { "path": "fragments/assets.json", "sections": ["assets"] },
+    { "path": "fragments/actors.json" }
+  ]
+})json");
+    write_text(dir / "fragments" / "assets.json",
+               R"json({
+  "schema": "sdl3d.fragment.v0",
+  "assets": {
+    "images": [
+      { "id": "image.player", "path": "asset://images/player.png" }
+    ]
+  }
+})json");
+    write_text(dir / "fragments" / "actors.json",
+               R"json({
+  "schema": "sdl3d.fragment.v0",
+  "imports": [
+    { "path": "shared/signals.json", "sections": ["signals"] }
+  ],
+  "actor_archetypes": [
+    { "name": "archetype.enemy", "tags": ["enemy"] }
+  ],
+  "actor_pools": [
+    { "name": "pool.enemies", "archetype": "archetype.enemy", "capacity": 32 }
+  ]
+})json");
+    write_text(dir / "fragments" / "shared" / "signals.json",
+               R"json({
+  "schema": "sdl3d.fragment.v0",
+  "signals": ["signal.wave.start"]
+})json");
+
+    char error[512]{};
+    EXPECT_TRUE(sdl3d_game_data_validate_file((dir / "game.json").string().c_str(), nullptr, error, sizeof(error)))
+        << error;
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidStructuredJsonImports)
+{
+    const std::filesystem::path dir = unique_test_dir("json_imports_invalid");
+    struct Case
+    {
+        const char *name;
+        const char *root;
+        const char *fragment_path;
+        const char *fragment;
+        const char *extra_path;
+        const char *extra;
+        const char *message;
+    };
+
+    const Case cases[] = {
+        {
+            "unsafe_path",
+            R"json({ "schema": "sdl3d.game.v0", "imports": [{ "path": "../fragment.json" }] })json",
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            "safe relative path",
+        },
+        {
+            "bad_schema",
+            R"json({ "schema": "sdl3d.game.v0", "imports": [{ "path": "fragment.json" }] })json",
+            "fragment.json",
+            R"json({ "schema": "sdl3d.game.v0" })json",
+            NULL,
+            NULL,
+            "must use schema sdl3d.fragment.v0",
+        },
+        {
+            "root_only_key",
+            R"json({ "schema": "sdl3d.game.v0", "imports": [{ "path": "fragment.json" }] })json",
+            "fragment.json",
+            R"json({
+  "schema": "sdl3d.fragment.v0",
+  "metadata": { "name": "Bad Fragment" }
+})json",
+            NULL,
+            NULL,
+            "root-only or unsupported section",
+        },
+        {
+            "bad_section",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "imports": [{ "path": "fragment.json", "sections": ["metadata"] }]
+})json",
+            "fragment.json",
+            R"json({ "schema": "sdl3d.fragment.v0", "assets": {} })json",
+            NULL,
+            NULL,
+            "not mergeable",
+        },
+        {
+            "missing_selected_section",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "imports": [{ "path": "fragment.json", "sections": ["assets"] }]
+})json",
+            "fragment.json",
+            R"json({ "schema": "sdl3d.fragment.v0", "signals": [] })json",
+            NULL,
+            NULL,
+            "not present in fragment",
+        },
+        {
+            "unselected_section",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "imports": [{ "path": "fragment.json", "sections": ["assets"] }]
+})json",
+            "fragment.json",
+            R"json({ "schema": "sdl3d.fragment.v0", "assets": {}, "signals": [] })json",
+            NULL,
+            NULL,
+            "not selected by the import filter",
+        },
+        {
+            "cycle",
+            R"json({ "schema": "sdl3d.game.v0", "imports": [{ "path": "a.json" }] })json",
+            "a.json",
+            R"json({ "schema": "sdl3d.fragment.v0", "imports": [{ "path": "b.json" }], "signals": [] })json",
+            "b.json",
+            R"json({ "schema": "sdl3d.fragment.v0", "imports": [{ "path": "a.json" }], "signals": [] })json",
+            "cycle",
+        },
+    };
+
+    for (const Case &test_case : cases)
+    {
+        const std::filesystem::path case_dir = dir / test_case.name;
+        write_text(case_dir / "game.json", test_case.root);
+        if (test_case.fragment_path != NULL)
+            write_text(case_dir / test_case.fragment_path, test_case.fragment);
+        if (test_case.extra_path != NULL)
+            write_text(case_dir / test_case.extra_path, test_case.extra);
+
+        char error[512]{};
+        EXPECT_FALSE(
+            sdl3d_game_data_validate_file((case_dir / "game.json").string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.message), std::string::npos) << test_case.name << ": " << error;
+    }
+
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, LuaCanSpawnIterateAndDespawnPooledActors)
 {
     const std::filesystem::path dir = unique_test_dir("lua_actor_pools");

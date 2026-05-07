@@ -17,6 +17,7 @@
 
 #define PATH_BUFFER_SIZE 256
 #define GAME_DATA_MENU_TEXT_MAX_BYTES 255
+#define GAME_DATA_IMPORT_MAX_DEPTH 16
 
 typedef struct name_table
 {
@@ -78,6 +79,12 @@ typedef struct validation_names
     int script_count;
 } validation_names;
 
+typedef struct import_validation_stack
+{
+    const char *paths[GAME_DATA_IMPORT_MAX_DEPTH];
+    int count;
+} import_validation_stack;
+
 static bool validate_data_condition(validation_context *ctx, yyjson_val *condition, const char *path,
                                     validation_names *names);
 static bool validate_storage(validation_context *ctx, yyjson_val *root);
@@ -91,6 +98,8 @@ static bool asset_path_exists(validation_context *ctx, const char *asset_path, c
                               const char *asset_kind);
 static void format_path(char *buffer, size_t buffer_size, const char *format, ...);
 static bool validation_error(validation_context *ctx, const char *json_path, const char *format, ...);
+static bool validate_imports_with_stack(validation_context *ctx, yyjson_val *root, import_validation_stack *stack);
+static bool validate_imports(validation_context *ctx, yyjson_val *root);
 
 static yyjson_val *obj_get(yyjson_val *object, const char *key)
 {
@@ -1733,6 +1742,253 @@ static char *path_join(const char *base_dir, const char *path)
 static const char *asset_path_without_scheme(const char *path)
 {
     return path != NULL && SDL_strncmp(path, "asset://", 8) == 0 ? path + 8 : path;
+}
+
+static const char *import_path_compare_start(const char *path)
+{
+    while (path != NULL && path[0] == '.' && (path[1] == '/' || path[1] == '\\'))
+        path += 2;
+    return path != NULL ? path : "";
+}
+
+static char *import_path_join(const char *base_dir, const char *path)
+{
+    if (path == NULL)
+        return NULL;
+    if (base_dir == NULL || base_dir[0] == '\0' || SDL_strcmp(base_dir, ".") == 0)
+        return SDL_strdup(path);
+    return path_join(base_dir, path);
+}
+
+static bool import_stack_contains(const import_validation_stack *stack, const char *path)
+{
+    const char *target = import_path_compare_start(asset_path_without_scheme(path));
+    for (int i = 0; stack != NULL && i < stack->count; ++i)
+    {
+        const char *existing = import_path_compare_start(asset_path_without_scheme(stack->paths[i]));
+        if (SDL_strcmp(existing, target) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool import_path_is_safe_relative(const char *path)
+{
+    if (path == NULL || path[0] == '\0' || path_is_absolute(path) || SDL_strstr(path, "://") != NULL)
+        return false;
+    if (SDL_strchr(path, '\\') != NULL || SDL_strchr(path, ':') != NULL)
+        return false;
+
+    const char *segment = path;
+    while (*segment != '\0')
+    {
+        const char *end = SDL_strchr(segment, '/');
+        const size_t length = end != NULL ? (size_t)(end - segment) : SDL_strlen(segment);
+        if (length == 0U)
+            return false;
+        if ((length == 1U && segment[0] == '.') || (length == 2U && segment[0] == '.' && segment[1] == '.'))
+        {
+            return false;
+        }
+        if (end == NULL)
+            break;
+        segment = end + 1;
+    }
+    return true;
+}
+
+static bool import_section_name_allowed(const char *name)
+{
+    static const char *const allowed[] = {
+        "storage",     "persistence", "profiles", "assets",           "scripts",      "input",   "render",
+        "transitions", "ui",          "entities", "actor_archetypes", "actor_pools",  "signals", "logic",
+        "adapters",    "network",     "haptics",  "presentation",     "update_phases"};
+    for (size_t i = 0; name != NULL && i < SDL_arraysize(allowed); ++i)
+    {
+        if (SDL_strcmp(name, allowed[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool import_fragment_key_allowed(const char *name)
+{
+    return SDL_strcmp(name != NULL ? name : "", "schema") == 0 ||
+           SDL_strcmp(name != NULL ? name : "", "imports") == 0 || import_section_name_allowed(name);
+}
+
+static bool import_sections_contains(yyjson_val *sections, const char *name)
+{
+    if (!yyjson_is_arr(sections))
+        return true;
+    for (size_t i = 0; i < yyjson_arr_size(sections); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(sections, i);
+        if (yyjson_is_str(entry) && SDL_strcmp(yyjson_get_str(entry), name) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool validate_import_sections(validation_context *ctx, yyjson_val *sections, yyjson_val *fragment_root,
+                                     const char *json_path)
+{
+    if (sections == NULL)
+        return true;
+    if (!yyjson_is_arr(sections) || yyjson_arr_size(sections) == 0)
+        return validation_error(ctx, json_path, "import sections must be a non-empty array when present");
+
+    for (size_t i = 0; i < yyjson_arr_size(sections); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "%s.sections[%zu]", json_path, i);
+        yyjson_val *entry = yyjson_arr_get(sections, i);
+        if (!yyjson_is_str(entry) || yyjson_get_str(entry)[0] == '\0')
+            return validation_error(ctx, path, "import section must be a non-empty string");
+        const char *section = yyjson_get_str(entry);
+        if (!import_section_name_allowed(section))
+            return validation_error(ctx, path, "import section '%s' is not mergeable", section);
+        for (size_t prior = 0; prior < i; ++prior)
+        {
+            yyjson_val *prior_entry = yyjson_arr_get(sections, prior);
+            if (yyjson_is_str(prior_entry) && SDL_strcmp(yyjson_get_str(prior_entry), section) == 0)
+                return validation_error(ctx, path, "duplicate import section '%s'", section);
+        }
+        if (obj_get(fragment_root, section) == NULL)
+            return validation_error(ctx, path, "import section '%s' is not present in fragment", section);
+    }
+    return true;
+}
+
+static bool validate_fragment_keys(validation_context *ctx, yyjson_val *fragment_root, yyjson_val *sections)
+{
+    yyjson_val *key;
+    yyjson_val *value;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(fragment_root, &iter);
+    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+    {
+        value = yyjson_obj_iter_get_val(key);
+        (void)value;
+        const char *name = yyjson_get_str(key);
+        if (!import_fragment_key_allowed(name))
+            return validation_error(ctx, "$", "fragment contains root-only or unsupported section '%s'", name);
+        if (import_section_name_allowed(name) && !import_sections_contains(sections, name))
+        {
+            char path[PATH_BUFFER_SIZE];
+            format_path(path, sizeof(path), "$.%s", name);
+            return validation_error(ctx, path, "fragment section is not selected by the import filter");
+        }
+    }
+    return true;
+}
+
+static bool validate_import_document(validation_context *parent_ctx, const char *asset_path, yyjson_val *sections,
+                                     const char *json_path, import_validation_stack *stack)
+{
+    if (parent_ctx->assets == NULL)
+        return validation_error(parent_ctx, json_path, "imports require an asset resolver");
+    if (stack->count >= GAME_DATA_IMPORT_MAX_DEPTH)
+        return validation_error(parent_ctx, json_path, "import depth exceeds %d", GAME_DATA_IMPORT_MAX_DEPTH);
+    if (import_stack_contains(stack, asset_path))
+        return validation_error(parent_ctx, json_path, "import cycle detected for '%s'", asset_path);
+
+    sdl3d_asset_buffer buffer;
+    SDL_zero(buffer);
+    char asset_error[256];
+    if (!sdl3d_asset_resolver_read_file(parent_ctx->assets, asset_path, &buffer, asset_error, (int)sizeof(asset_error)))
+    {
+        return validation_error(parent_ctx, json_path, "import fragment '%s' does not exist or cannot be read",
+                                asset_path);
+    }
+
+    yyjson_read_err err;
+    yyjson_doc *doc = yyjson_read_opts((char *)buffer.data, buffer.size, YYJSON_READ_NOFLAG, NULL, &err);
+    sdl3d_asset_buffer_free(&buffer);
+    if (doc == NULL)
+    {
+        return validation_error(parent_ctx, json_path, "import yyjson error %u at byte %llu: %s", err.code,
+                                (unsigned long long)err.pos, err.msg != NULL ? err.msg : "");
+    }
+
+    yyjson_val *fragment_root = yyjson_doc_get_root(doc);
+    char *base_dir = path_dirname(asset_path_without_scheme(asset_path));
+    validation_context child_ctx = *parent_ctx;
+    child_ctx.source_path = asset_path;
+    child_ctx.base_dir = base_dir;
+
+    bool ok = true;
+    if (!yyjson_is_obj(fragment_root))
+    {
+        ok = validation_error(&child_ctx, "$", "fragment root must be an object");
+    }
+    else if (SDL_strcmp(json_string(fragment_root, "schema") != NULL ? json_string(fragment_root, "schema") : "",
+                        "sdl3d.fragment.v0") != 0)
+    {
+        ok = validation_error(&child_ctx, "$.schema", "import fragment must use schema sdl3d.fragment.v0");
+    }
+    else
+    {
+        stack->paths[stack->count++] = asset_path;
+        ok = validate_import_sections(parent_ctx, sections, fragment_root, json_path) &&
+             validate_fragment_keys(&child_ctx, fragment_root, sections) &&
+             validate_imports_with_stack(&child_ctx, fragment_root, stack);
+        stack->count--;
+    }
+
+    SDL_free(base_dir);
+    yyjson_doc_free(doc);
+    return ok;
+}
+
+static bool validate_import_entry(validation_context *ctx, yyjson_val *entry, size_t index,
+                                  import_validation_stack *stack)
+{
+    char path[PATH_BUFFER_SIZE];
+    format_path(path, sizeof(path), "$.imports[%zu]", index);
+    if (!yyjson_is_obj(entry))
+        return validation_error(ctx, path, "import entries must be objects");
+
+    const char *import_path = json_string(entry, "path");
+    char path_field[PATH_BUFFER_SIZE];
+    format_path(path_field, sizeof(path_field), "%s.path", path);
+    if (!import_path_is_safe_relative(import_path))
+        return validation_error(ctx, path_field, "import path must be a safe relative path");
+
+    yyjson_val *sections = obj_get(entry, "sections");
+    if (sections != NULL && !yyjson_is_arr(sections))
+        return validation_error(ctx, path, "import sections must be an array");
+
+    char *resolved = import_path_join(ctx->base_dir, import_path);
+    if (resolved == NULL)
+        return validation_error(ctx, path_field, "failed to resolve import path '%s'", import_path);
+
+    const bool ok = validate_import_document(ctx, resolved, sections, path, stack);
+    SDL_free(resolved);
+    return ok;
+}
+
+static bool validate_imports_with_stack(validation_context *ctx, yyjson_val *root, import_validation_stack *stack)
+{
+    yyjson_val *imports = obj_get(root, "imports");
+    if (imports == NULL)
+        return true;
+    if (!yyjson_is_arr(imports))
+        return validation_error(ctx, "$.imports", "imports must be an array");
+    for (size_t i = 0; i < yyjson_arr_size(imports); ++i)
+    {
+        if (!validate_import_entry(ctx, yyjson_arr_get(imports, i), i, stack))
+            return false;
+    }
+    return true;
+}
+
+static bool validate_imports(validation_context *ctx, yyjson_val *root)
+{
+    import_validation_stack stack;
+    SDL_zero(stack);
+    stack.paths[stack.count++] = ctx->source_path != NULL ? asset_path_without_scheme(ctx->source_path) : "<root>";
+    return validate_imports_with_stack(ctx, root, &stack);
 }
 
 static bool script_path_exists(validation_context *ctx, const char *script_path, const char *json_path)
@@ -4998,6 +5254,8 @@ bool sdl3d_game_data_validate_document(yyjson_val *root, const char *source_path
         return validation_error(&ctx, "$", "root must be an object");
     if (SDL_strcmp(json_string(root, "schema") != NULL ? json_string(root, "schema") : "", "sdl3d.game.v0") != 0)
         return validation_error(&ctx, "$.schema", "unsupported or missing game data schema");
+    if (!validate_imports(&ctx, root))
+        return false;
 
     validation_names names;
     SDL_zero(names);
