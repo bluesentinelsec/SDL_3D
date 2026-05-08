@@ -2534,7 +2534,7 @@ static bool is_supported_component_type(const char *type)
         "adapter.controller", "collision.aabb",     "collision.circle", "control.axis_1d",    "controller.fps_sector",
         "lifecycle.ttl",      "light.directional",  "light.point",      "light.spot",         "motion.grid_agent",
         "motion.oscillate",   "motion.scroll_wrap", "motion.spin",      "motion.velocity_2d", "motion.velocity_3d",
-        "particles.emitter",  "property.decay",     "render.cube",      "render.sphere",
+        "particles.emitter",  "property.decay",     "render.cube",      "render.sphere",      "render.sprite",
     };
 
     if (type == NULL)
@@ -4237,7 +4237,8 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 if (color != NULL && !is_vec_array(color, 3))
                     return validation_error(ctx, path, "light component color must be a vec3");
             }
-            else if (SDL_strcmp(type, "render.cube") == 0 || SDL_strcmp(type, "render.sphere") == 0)
+            else if (SDL_strcmp(type, "render.cube") == 0 || SDL_strcmp(type, "render.sphere") == 0 ||
+                     SDL_strcmp(type, "render.sprite") == 0)
             {
                 yyjson_val *lighting = obj_get(component, "lighting");
                 if (lighting != NULL && !yyjson_is_bool(lighting))
@@ -4268,6 +4269,20 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                     const char *texture = json_string(component, "texture");
                     if (texture != NULL && !require_ref(ctx, &names->images, "image asset", texture, path))
                         return false;
+                }
+                if (SDL_strcmp(type, "render.sprite") == 0)
+                {
+                    if (!require_ref(ctx, &names->sprites, "sprite asset", json_string(component, "sprite"), path))
+                        return false;
+                    yyjson_val *size = obj_get(component, "size");
+                    if (size != NULL && !is_vec_array(size, 2))
+                        return validation_error(ctx, path, "render.sprite size must be a vec2");
+                    yyjson_val *facing_yaw = obj_get(component, "facing_yaw");
+                    if (facing_yaw != NULL && !yyjson_is_num(facing_yaw))
+                        return validation_error(ctx, path, "render.sprite facing_yaw must be a number");
+                    yyjson_val *facing_yaw_property = obj_get(component, "facing_yaw_property");
+                    if (facing_yaw_property != NULL && !is_non_empty_string(component, "facing_yaw_property"))
+                        return validation_error(ctx, path, "render.sprite facing_yaw_property must be non-empty");
                 }
             }
         }
@@ -4376,6 +4391,21 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                 yyjson_val *size_property = obj_get(component, "size_property");
                 if (size_property != NULL && !is_non_empty_string(component, "size_property"))
                     return validation_error(ctx, component_path, "render.cube size_property must be non-empty");
+            }
+            else if (SDL_strcmp(type, "render.sprite") == 0)
+            {
+                if (!require_ref(ctx, &names->sprites, "sprite asset", json_string(component, "sprite"),
+                                 component_path))
+                    return false;
+                yyjson_val *size = obj_get(component, "size");
+                if (size != NULL && !is_vec_array(size, 2))
+                    return validation_error(ctx, component_path, "render.sprite size must be a vec2");
+                yyjson_val *facing_yaw = obj_get(component, "facing_yaw");
+                if (facing_yaw != NULL && !yyjson_is_num(facing_yaw))
+                    return validation_error(ctx, component_path, "render.sprite facing_yaw must be a number");
+                yyjson_val *facing_yaw_property = obj_get(component, "facing_yaw_property");
+                if (facing_yaw_property != NULL && !is_non_empty_string(component, "facing_yaw_property"))
+                    return validation_error(ctx, component_path, "render.sprite facing_yaw_property must be non-empty");
             }
         }
     }

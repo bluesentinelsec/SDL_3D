@@ -5559,6 +5559,17 @@ static bool emit_actor_render_primitives(const sdl3d_game_data_runtime *runtime,
             primitive.slices = json_int(component, "slices", 16);
             primitive.rings = json_int(component, "rings", 8);
         }
+        else if (SDL_strcmp(type, "render.sprite") == 0)
+        {
+            primitive.type = SDL3D_GAME_DATA_RENDER_SPRITE;
+            primitive.sprite_asset = json_string(component, "sprite", NULL);
+            (void)json_vec2_value(obj_get(component, "size"), 1.0f, 1.0f, &primitive.sprite_size.x,
+                                  &primitive.sprite_size.y);
+            primitive.sprite_facing_yaw = json_float(component, "facing_yaw", 0.0f);
+            const char *facing_yaw_property = json_string(component, "facing_yaw_property", NULL);
+            if (facing_yaw_property != NULL)
+                primitive.sprite_facing_yaw += sdl3d_properties_get_float(actor->props, facing_yaw_property, 0.0f);
+        }
         else
         {
             continue;

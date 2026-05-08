@@ -4,7 +4,15 @@
   "camera": "camera.doom.player",
   "updates_game": true,
   "renders_world": true,
-  "entities": ["entity.player", "entity.effect.nukage.vapor"],
+  "entities": [
+    "entity.player",
+    "entity.effect.nukage.vapor",
+    "entity.doom.robot.entry",
+    "entity.doom.robot.nukage",
+    "entity.doom.health.entry",
+    "entity.doom.health.hall",
+    "entity.doom.crate.nukage"
+  ],
   "input": {
     "actions": [
       "action.move.forward",

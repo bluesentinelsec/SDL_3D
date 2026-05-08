@@ -350,6 +350,8 @@ extern "C"
         SDL3D_GAME_DATA_RENDER_SPHERE = 2,
         /** @brief Batched sphere primitive instances sharing one shape/material. */
         SDL3D_GAME_DATA_RENDER_SPHERE_BATCH = 3,
+        /** @brief Billboard sprite primitive backed by an authored sprite asset. */
+        SDL3D_GAME_DATA_RENDER_SPRITE = 4,
     } sdl3d_game_data_render_primitive_type;
 
     /**
@@ -387,6 +389,12 @@ extern "C"
         sdl3d_color color;
         /** @brief Optional image asset id used as an albedo texture by primitives that support textures. */
         const char *texture_image;
+        /** @brief Optional sprite asset id for SDL3D_GAME_DATA_RENDER_SPRITE. */
+        const char *sprite_asset;
+        /** @brief Billboard size for SDL3D_GAME_DATA_RENDER_SPRITE. */
+        sdl3d_vec2 sprite_size;
+        /** @brief World yaw in radians for directional sprite frame selection. */
+        float sprite_facing_yaw;
         /** @brief True when the primitive should use scene lighting. */
         bool lighting_enabled;
         /** @brief Whether the primitive should be treated as emissive by the caller. */

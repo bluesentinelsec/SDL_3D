@@ -107,6 +107,10 @@ struct RenderPrimitiveCapture
     bool saw_pooled_sphere = false;
     bool saw_pickup_batch = false;
     int pickup_batch_instances = 0;
+    int sprites = 0;
+    bool saw_doom_robot_sprite = false;
+    bool saw_doom_health_sprite = false;
+    bool saw_doom_crate = false;
 };
 
 struct SectorLevelInstanceCapture
@@ -1264,6 +1268,8 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         capture->spheres++;
     else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE_BATCH)
         capture->spheres++;
+    else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPRITE)
+        capture->sprites++;
 
     if (std::string(primitive->entity_name) == "entity.paddle.player")
     {
@@ -1329,6 +1335,30 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         capture->pickup_batch_instances += primitive->instance_count;
         EXPECT_GT(primitive->instance_count, 0);
         EXPECT_NE(primitive->instances, nullptr);
+    }
+    if (std::string(primitive->entity_name) == "entity.doom.robot.entry")
+    {
+        capture->saw_doom_robot_sprite = true;
+        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_SPRITE);
+        EXPECT_STREQ(primitive->sprite_asset, "sprite.doom.robot.static");
+        EXPECT_NEAR(primitive->sprite_size.x, 3.4f, 0.0001f);
+        EXPECT_NEAR(primitive->sprite_size.y, 5.2f, 0.0001f);
+        EXPECT_TRUE(primitive->lighting_enabled);
+    }
+    if (std::string(primitive->entity_name) == "entity.doom.health.entry")
+    {
+        capture->saw_doom_health_sprite = true;
+        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_SPRITE);
+        EXPECT_STREQ(primitive->sprite_asset, "sprite.doom.health_pack");
+        EXPECT_NEAR(primitive->sprite_size.x, 1.0f, 0.0001f);
+        EXPECT_NEAR(primitive->sprite_size.y, 1.0f, 0.0001f);
+    }
+    if (std::string(primitive->entity_name) == "entity.doom.crate.nukage")
+    {
+        capture->saw_doom_crate = true;
+        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
+        EXPECT_NEAR(primitive->size.x, 0.9f, 0.0001f);
+        EXPECT_EQ(primitive->color.g, 170);
     }
     return true;
 }
@@ -6343,10 +6373,16 @@ TEST(GameDataRuntime, LoadsLuaScriptDependenciesBeforeDependentAdapters)
 TEST(GameDataRuntime, ActorPoolsSpawnDespawnAndResetActors)
 {
     const std::filesystem::path dir = unique_test_dir("actor_pools");
+    write_text(dir / "shot.png", "test sprite placeholder");
     write_text(dir / "actor_pools.game.json",
                R"json({
   "schema": "sdl3d.game.v0",
   "metadata": { "name": "Actor Pools", "id": "test.actor_pools", "version": "0.1.0" },
+  "assets": {
+    "sprites": [
+      { "id": "sprite.player_shot", "path": "asset://shot.png", "frame_width": 1, "frame_height": 1 }
+    ]
+  },
   "world": { "name": "world.actor_pools", "kind": "fixed_screen" },
   "entities": [
     { "name": "entity.player", "transform": { "position": [1.0, 2.0, 3.0] } }
@@ -8020,6 +8056,15 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     ParticleCapture particles{};
     ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &particles));
     EXPECT_TRUE(particles.saw_nukage_vapor);
+    RenderPrimitiveCapture authored_props{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &authored_props));
+    EXPECT_TRUE(authored_props.saw_doom_robot_sprite);
+    EXPECT_TRUE(authored_props.saw_doom_health_sprite);
+    EXPECT_TRUE(authored_props.saw_doom_crate);
+    EXPECT_GE(authored_props.sprites, 4);
+    sdl3d_game_data_sprite_asset robot_sprite{};
+    ASSERT_TRUE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.doom.robot.static", &robot_sprite));
+    EXPECT_STREQ(robot_sprite.path, "asset://sprites/skeletal_robot/south.png");
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
