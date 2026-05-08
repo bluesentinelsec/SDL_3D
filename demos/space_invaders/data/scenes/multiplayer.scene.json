@@ -1,0 +1,92 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.multiplayer",
+  "updates_game": true,
+  "renders_world": true,
+  "camera": "camera.arcade",
+  "entities": [
+    "entity.field.base",
+    "entity.field.bottom_glow",
+    "entity.field.top_glow",
+    "entity.effect.stars",
+    "entity.effect.nebula",
+    "entity.player",
+    "entity.player2",
+    "entity.presentation"
+  ],
+  "input": {
+    "actions": [
+      "action.menu.up",
+      "action.menu.down",
+      "action.menu.back",
+      "action.menu.select"
+    ]
+  },
+  "transitions": {
+    "enter": "scene_in",
+    "exit": "scene_out"
+  },
+  "menus": [
+    {
+      "name": "menu.multiplayer",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "back_action": "action.menu.back",
+      "move_signal": "signal.ui.menu.move",
+      "select_signal": "signal.ui.menu.select",
+      "selected": 0,
+      "items": [
+        {
+          "label": "Local Co-op",
+          "scene": "scene.play",
+          "scene_state": { "key": "match_mode", "value": "local" }
+        },
+        {
+          "label": "LAN",
+          "scene": "scene.multiplayer.lan"
+        },
+        {
+          "label": "Back",
+          "scene": "scene.title"
+        }
+      ]
+    }
+  ],
+  "ui": {
+    "text": [
+      {
+        "name": "ui.multiplayer.title",
+        "font": "font.title",
+        "text": "MULTIPLAYER",
+        "x": 0.5,
+        "y": 0.22,
+        "normalized": true,
+        "centered": true,
+        "color": [230, 248, 255, 255]
+      }
+    ],
+    "menus": [
+      {
+        "name": "ui.multiplayer.menu",
+        "menu": "menu.multiplayer",
+        "font": "font.hud",
+        "x": 0.42,
+        "y": 0.47,
+        "gap": 0.08,
+        "normalized": true,
+        "align": "left",
+        "color": [220, 236, 255, 245],
+        "selected_color": [255, 238, 125, 255],
+        "selected_pulse_alpha": true,
+        "cursor": {
+          "text": ">",
+          "offset_x": -0.035,
+          "align": "right",
+          "color": [255, 82, 190, 255],
+          "pulse_alpha": true
+        }
+      }
+    ]
+  }
+}

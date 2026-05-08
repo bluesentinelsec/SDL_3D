@@ -2209,6 +2209,16 @@ static yyjson_val *find_component_json(yyjson_val *entity, const char *type)
     return NULL;
 }
 
+static yyjson_val *find_actor_definition_json(const sdl3d_game_data_runtime *runtime, const char *actor_name)
+{
+    yyjson_val *entity = find_entity_json(runtime, actor_name);
+    if (entity != NULL)
+        return entity;
+
+    const actor_pool_runtime *pool = find_actor_pool_for_actor_const(runtime, actor_name, NULL);
+    return pool != NULL ? pool->archetype_json : NULL;
+}
+
 static yyjson_val *find_font_json(const sdl3d_game_data_runtime *runtime, const char *id)
 {
     yyjson_val *fonts = obj_get(obj_get(runtime_root(runtime), "assets"), "fonts");
@@ -4067,6 +4077,64 @@ static void apply_render_effects(const sdl3d_game_data_runtime *runtime, yyjson_
     }
 }
 
+static bool emit_actor_render_primitives(const sdl3d_game_data_runtime *runtime,
+                                         const sdl3d_game_data_render_eval *eval, const sdl3d_registered_actor *actor,
+                                         yyjson_val *components, sdl3d_game_data_render_primitive_fn callback,
+                                         void *userdata)
+{
+    if (runtime == NULL || actor == NULL || callback == NULL || !yyjson_is_arr(components))
+        return true;
+
+    for (size_t c = 0; c < yyjson_arr_size(components); ++c)
+    {
+        yyjson_val *component = yyjson_arr_get(components, c);
+        const char *type = json_string(component, "type", "");
+        sdl3d_game_data_render_primitive primitive;
+        SDL_zero(primitive);
+        primitive.entity_name = actor->name;
+        primitive.position = actor->position;
+        const sdl3d_vec3 offset = json_vec3(component, "offset", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+        primitive.position.x += offset.x;
+        primitive.position.y += offset.y;
+        primitive.position.z += offset.z;
+        primitive.rotation_axis = json_vec3(component, "rotation_axis", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+        primitive.rotation_angle = json_float(component, "rotation_angle", 0.0f);
+        const char *rotation_property = json_string(component, "rotation_property", NULL);
+        if (rotation_property != NULL)
+            primitive.rotation_angle += sdl3d_properties_get_float(actor->props, rotation_property, 0.0f);
+        primitive.color = json_color(component, "color", (sdl3d_color){255, 255, 255, 255});
+        primitive.texture_image = json_string(component, "texture", NULL);
+        primitive.lighting_enabled = json_bool(component, "lighting", true);
+        primitive.emissive = json_bool(component, "emissive", false);
+        primitive.emissive_color =
+            primitive.emissive ? sdl3d_vec3_make(0.2f, 0.2f, 0.2f) : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+
+        if (SDL_strcmp(type, "render.cube") == 0)
+        {
+            primitive.type = SDL3D_GAME_DATA_RENDER_CUBE;
+            primitive.size = json_vec3(component, "size", sdl3d_vec3_make(1.0f, 1.0f, 1.0f));
+        }
+        else if (SDL_strcmp(type, "render.sphere") == 0)
+        {
+            primitive.type = SDL3D_GAME_DATA_RENDER_SPHERE;
+            primitive.radius = json_float(component, "radius", 0.5f);
+            primitive.slices = json_int(component, "slices", 16);
+            primitive.rings = json_int(component, "rings", 8);
+        }
+        else
+        {
+            continue;
+        }
+
+        if (eval != NULL)
+            apply_render_effects(runtime, component, eval, &primitive);
+        if (!callback(userdata, &primitive))
+            return false;
+    }
+
+    return true;
+}
+
 static bool for_each_render_primitive_internal(const sdl3d_game_data_runtime *runtime,
                                                const sdl3d_game_data_render_eval *eval,
                                                sdl3d_game_data_render_primitive_fn callback, void *userdata)
@@ -4085,58 +4153,23 @@ static bool for_each_render_primitive_internal(const sdl3d_game_data_runtime *ru
         if (!active_scene_has_entity_internal(runtime, entity_name))
             continue;
         sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, entity_name);
-        yyjson_val *components = obj_get(entity, "components");
-        if (actor == NULL || !actor->active || !yyjson_is_arr(components))
+        if (actor == NULL || !actor->active)
             continue;
-
-        for (size_t c = 0; c < yyjson_arr_size(components); ++c)
+        keep_iterating =
+            emit_actor_render_primitives(runtime, eval, actor, obj_get(entity, "components"), callback, userdata);
+    }
+    for (int pool_index = 0; keep_iterating && pool_index < runtime->actor_pool_count; ++pool_index)
+    {
+        actor_pool_runtime *pool = &runtime->actor_pools[pool_index];
+        if (!actor_pool_in_scene(pool, sdl3d_game_data_active_scene(runtime)))
+            continue;
+        yyjson_val *components = obj_get(pool->archetype_json, "components");
+        for (int actor_index = 0; keep_iterating && actor_index < pool->capacity; ++actor_index)
         {
-            yyjson_val *component = yyjson_arr_get(components, c);
-            const char *type = json_string(component, "type", "");
-            sdl3d_game_data_render_primitive primitive;
-            SDL_zero(primitive);
-            primitive.entity_name = entity_name;
-            primitive.position = actor->position;
-            const sdl3d_vec3 offset = json_vec3(component, "offset", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
-            primitive.position.x += offset.x;
-            primitive.position.y += offset.y;
-            primitive.position.z += offset.z;
-            primitive.rotation_axis = json_vec3(component, "rotation_axis", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
-            primitive.rotation_angle = json_float(component, "rotation_angle", 0.0f);
-            const char *rotation_property = json_string(component, "rotation_property", NULL);
-            if (rotation_property != NULL)
-                primitive.rotation_angle += sdl3d_properties_get_float(actor->props, rotation_property, 0.0f);
-            primitive.color = json_color(component, "color", (sdl3d_color){255, 255, 255, 255});
-            primitive.texture_image = json_string(component, "texture", NULL);
-            primitive.lighting_enabled = json_bool(component, "lighting", true);
-            primitive.emissive = json_bool(component, "emissive", false);
-            primitive.emissive_color =
-                primitive.emissive ? sdl3d_vec3_make(0.2f, 0.2f, 0.2f) : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
-
-            if (SDL_strcmp(type, "render.cube") == 0)
-            {
-                primitive.type = SDL3D_GAME_DATA_RENDER_CUBE;
-                primitive.size = json_vec3(component, "size", sdl3d_vec3_make(1.0f, 1.0f, 1.0f));
-            }
-            else if (SDL_strcmp(type, "render.sphere") == 0)
-            {
-                primitive.type = SDL3D_GAME_DATA_RENDER_SPHERE;
-                primitive.radius = json_float(component, "radius", 0.5f);
-                primitive.slices = json_int(component, "slices", 16);
-                primitive.rings = json_int(component, "rings", 8);
-            }
-            else
-            {
+            sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[actor_index]);
+            if (!actor_pool_actor_is_active(pool, actor, actor_index))
                 continue;
-            }
-
-            if (eval != NULL)
-                apply_render_effects(runtime, component, eval, &primitive);
-            if (!callback(userdata, &primitive))
-            {
-                keep_iterating = false;
-                break;
-            }
+            keep_iterating = emit_actor_render_primitives(runtime, eval, actor, components, callback, userdata);
         }
     }
     actor_lifecycle_defer_end(mutable_runtime);
@@ -4164,7 +4197,7 @@ bool sdl3d_game_data_get_particle_emitter(const sdl3d_game_data_runtime *runtime
     if (runtime == NULL || entity_name == NULL || out_config == NULL)
         return false;
 
-    yyjson_val *entity = find_entity_json(runtime, entity_name);
+    yyjson_val *entity = find_actor_definition_json(runtime, entity_name);
     yyjson_val *component = find_component_json(entity, "particles.emitter");
     sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, entity_name);
     if (component == NULL || actor == NULL)
@@ -4210,7 +4243,7 @@ bool sdl3d_game_data_get_particle_emitter_draw_emissive(const sdl3d_game_data_ru
     if (runtime == NULL || entity_name == NULL || out_rgb == NULL)
         return false;
 
-    yyjson_val *entity = find_entity_json(runtime, entity_name);
+    yyjson_val *entity = find_actor_definition_json(runtime, entity_name);
     yyjson_val *component = find_component_json(entity, "particles.emitter");
     if (component == NULL)
         return false;
@@ -4250,6 +4283,32 @@ bool sdl3d_game_data_for_each_particle_emitter(const sdl3d_game_data_runtime *ru
 
         if (!callback(userdata, &emitter))
             keep_iterating = false;
+    }
+    for (int pool_index = 0; keep_iterating && pool_index < runtime->actor_pool_count; ++pool_index)
+    {
+        actor_pool_runtime *pool = &runtime->actor_pools[pool_index];
+        if (!actor_pool_in_scene(pool, sdl3d_game_data_active_scene(runtime)) ||
+            find_component_json(pool->archetype_json, "particles.emitter") == NULL)
+        {
+            continue;
+        }
+
+        for (int actor_index = 0; keep_iterating && actor_index < pool->capacity; ++actor_index)
+        {
+            sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[actor_index]);
+            if (!actor_pool_actor_is_active(pool, actor, actor_index))
+                continue;
+
+            sdl3d_game_data_particle_emitter emitter;
+            SDL_zero(emitter);
+            emitter.entity_name = actor->name;
+            if (!sdl3d_game_data_get_particle_emitter(runtime, actor->name, &emitter.config))
+                continue;
+            (void)sdl3d_game_data_get_particle_emitter_draw_emissive(runtime, actor->name, &emitter.draw_emissive);
+
+            if (!callback(userdata, &emitter))
+                keep_iterating = false;
+        }
     }
     actor_lifecycle_defer_end(mutable_runtime);
     return true;

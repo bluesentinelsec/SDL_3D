@@ -4,6 +4,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -11,6 +12,8 @@ extern "C"
 {
 #include "sdl3d/math.h"
 #include "sdl3d/properties.h"
+#include "sdl3d_bundle_cli.h"
+#include "sdl3d_fused.h"
 #include "sdl3d_pack_cli.h"
 #include "sdl3d_runner_cli.h"
 #include "sdl3d_runner_state.h"
@@ -38,6 +41,13 @@ void write_text(const std::filesystem::path &path, const char *text)
 {
     std::ofstream out(path, std::ios::binary);
     out << text;
+}
+
+std::filesystem::path unique_cli_test_dir(const char *name)
+{
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    return std::filesystem::temp_directory_path() /
+           ("sdl3d_tool_cli_" + std::string(name) + "_" + std::to_string(stamp));
 }
 } // namespace
 
@@ -73,6 +83,16 @@ TEST(ToolCli, RunnerHelpDoesNotRequireMountOrData)
     std::vector<char *> argv = argv_from({"sdl3d_runner", "--help"});
     sdl3d_runner_args args;
     EXPECT_EQ(sdl3d_runner_args_parse((int)argv.size(), argv.data(), &args, nullptr), SDL3D_TOOL_CLI_HELP);
+}
+
+TEST(ToolCli, RunnerAllowsFusedExecutableWithoutExplicitMount)
+{
+    std::vector<char *> argv = argv_from({"sdl3d_runner"});
+    sdl3d_runner_args args;
+    ASSERT_EQ(sdl3d_runner_args_parse((int)argv.size(), argv.data(), &args, nullptr), SDL3D_TOOL_CLI_OK);
+    EXPECT_EQ(args.mount_kind, SDL3D_RUNNER_MOUNT_NONE);
+    EXPECT_EQ(args.data_asset_path, nullptr);
+    sdl3d_runner_args_destroy(&args);
 }
 
 TEST(ToolCli, RunnerParsesDirectStartStateInputs)
@@ -122,6 +142,136 @@ TEST(ToolCli, PackRejectsEmptyFile)
     sdl3d_pack_args args;
     EXPECT_EQ(sdl3d_pack_args_parse((int)argv.size(), argv.data(), &args, nullptr), SDL3D_TOOL_CLI_ERROR);
     sdl3d_pack_args_destroy(&args);
+}
+
+TEST(ToolCli, BundleParsesRequiredArgumentsAndOptionalFiles)
+{
+    std::vector<char *> argv = argv_from({"sdl3d_bundle", "--runner", "sdl3d_runner", "--root", "game/data", "--data",
+                                          "asset://game.game.json", "--output", "Game", "--file", "game.game.json",
+                                          "--file", "scripts/main.lua"});
+    sdl3d_bundle_args args;
+    ASSERT_EQ(sdl3d_bundle_args_parse((int)argv.size(), argv.data(), &args, nullptr), SDL3D_TOOL_CLI_OK);
+    EXPECT_STREQ(args.runner, "sdl3d_runner");
+    EXPECT_STREQ(args.root, "game/data");
+    EXPECT_STREQ(args.data_asset_path, "asset://game.game.json");
+    EXPECT_STREQ(args.output, "Game");
+    ASSERT_EQ(args.file_count, 2);
+    EXPECT_STREQ(args.files[0], "game.game.json");
+    EXPECT_STREQ(args.files[1], "scripts/main.lua");
+    sdl3d_bundle_args_destroy(&args);
+}
+
+TEST(ToolCli, BundleAllowsOmittingFilesForRecursiveRootPackaging)
+{
+    std::vector<char *> argv = argv_from({"sdl3d_bundle", "--runner", "sdl3d_runner", "--root", "game/data", "--data",
+                                          "asset://game.game.json", "--output", "Game"});
+    sdl3d_bundle_args args;
+    ASSERT_EQ(sdl3d_bundle_args_parse((int)argv.size(), argv.data(), &args, nullptr), SDL3D_TOOL_CLI_OK);
+    EXPECT_EQ(args.file_count, 0);
+    EXPECT_EQ(args.files, nullptr);
+    sdl3d_bundle_args_destroy(&args);
+}
+
+TEST(ToolCli, BundleRejectsMissingRequiredArguments)
+{
+    std::vector<char *> argv = argv_from({"sdl3d_bundle", "--runner", "sdl3d_runner", "--root", "game/data"});
+    sdl3d_bundle_args args;
+    EXPECT_EQ(sdl3d_bundle_args_parse((int)argv.size(), argv.data(), &args, nullptr), SDL3D_TOOL_CLI_ERROR);
+}
+
+TEST(ToolCli, FusedFooterRoundTripsAndRejectsPlainFiles)
+{
+    const std::filesystem::path path = unique_cli_test_path("fused");
+    write_text(path, "runner-bytes");
+
+    char error[256]{};
+    sdl3d_fused_pack missing{};
+    EXPECT_FALSE(sdl3d_fused_read_footer(path.string().c_str(), &missing, error, sizeof(error)));
+
+    std::ofstream out(path, std::ios::binary | std::ios::app);
+    out << "pack-bytes";
+    out.close();
+    ASSERT_TRUE(
+        sdl3d_fused_append_footer(path.string().c_str(), 12, 10, "asset://game.game.json", error, sizeof(error)))
+        << error;
+
+    sdl3d_fused_pack pack{};
+    ASSERT_TRUE(sdl3d_fused_read_footer(path.string().c_str(), &pack, error, sizeof(error))) << error;
+    EXPECT_EQ(pack.pack_offset, 12u);
+    EXPECT_EQ(pack.pack_size, 10u);
+    EXPECT_STREQ(pack.data_asset_path, "asset://game.game.json");
+
+    void *bytes = nullptr;
+    size_t size = 0;
+    ASSERT_TRUE(sdl3d_fused_read_pack_bytes(path.string().c_str(), &pack, &bytes, &size, error, sizeof(error)))
+        << error;
+    ASSERT_EQ(size, 10u);
+    EXPECT_EQ(std::memcmp(bytes, "pack-bytes", 10), 0);
+    SDL_free(bytes);
+
+    std::filesystem::remove(path);
+}
+
+TEST(ToolCli, FusedFooterRejectsInvalidPackRange)
+{
+    const std::filesystem::path path = unique_cli_test_path("fused_bad_range");
+    write_text(path, "runner");
+
+    char error[256]{};
+    ASSERT_TRUE(
+        sdl3d_fused_append_footer(path.string().c_str(), 128, 64, "asset://game.game.json", error, sizeof(error)))
+        << error;
+
+    sdl3d_fused_pack pack{};
+    EXPECT_FALSE(sdl3d_fused_read_footer(path.string().c_str(), &pack, error, sizeof(error)));
+    std::filesystem::remove(path);
+}
+
+TEST(ToolCli, FusedPackMountsAppendedAssetPack)
+{
+    const std::filesystem::path dir = unique_cli_test_dir("fused_mount");
+    std::filesystem::create_directories(dir / "root" / "scripts");
+    write_text(dir / "root" / "game.game.json", R"json({"schema":"sdl3d.game.v0"})json");
+    write_text(dir / "root" / "scripts" / "main.lua", "return 42\n");
+
+    const std::filesystem::path pack_path = dir / "game.sdl3dpak";
+    const std::string game_json_path = (dir / "root" / "game.game.json").string();
+    const std::string script_path = (dir / "root" / "scripts" / "main.lua").string();
+    sdl3d_asset_pack_source sources[2] = {
+        {"game.game.json", game_json_path.c_str()},
+        {"scripts/main.lua", script_path.c_str()},
+    };
+    char error[256]{};
+    ASSERT_TRUE(sdl3d_asset_pack_write_file(pack_path.string().c_str(), sources, 2, error, sizeof(error))) << error;
+
+    const std::filesystem::path executable = dir / "Game";
+    write_text(executable, "runner");
+    const std::string pack_bytes = [&pack_path]() {
+        std::ifstream in(pack_path, std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    }();
+    {
+        std::ofstream out(executable, std::ios::binary | std::ios::app);
+        out.write(pack_bytes.data(), (std::streamsize)pack_bytes.size());
+    }
+    ASSERT_TRUE(sdl3d_fused_append_footer(executable.string().c_str(), 6, pack_bytes.size(), "asset://game.game.json",
+                                          error, sizeof(error)))
+        << error;
+
+    sdl3d_fused_pack fused{};
+    ASSERT_TRUE(sdl3d_fused_read_footer(executable.string().c_str(), &fused, error, sizeof(error))) << error;
+    sdl3d_asset_resolver *resolver = sdl3d_asset_resolver_create();
+    ASSERT_NE(resolver, nullptr);
+    ASSERT_TRUE(sdl3d_fused_mount_pack(resolver, executable.string().c_str(), &fused, error, sizeof(error))) << error;
+
+    sdl3d_asset_buffer buffer{};
+    ASSERT_TRUE(sdl3d_asset_resolver_read_file(resolver, "asset://scripts/main.lua", &buffer, error, sizeof(error)))
+        << error;
+    ASSERT_EQ(buffer.size, 10u);
+    EXPECT_EQ(std::memcmp(buffer.data, "return 42\n", 10), 0);
+    sdl3d_asset_buffer_free(&buffer);
+    sdl3d_asset_resolver_destroy(resolver);
+    std::filesystem::remove_all(dir);
 }
 
 TEST(ToolCli, RunnerStateInputsMergeWithExpectedPrecedenceAndTypes)

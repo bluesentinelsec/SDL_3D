@@ -284,6 +284,8 @@ else()
         sdl3d_tool_cli_test
         PRIVATE
             ${CMAKE_SOURCE_DIR}/tools/sdl3d_pack_cli.c
+            ${CMAKE_SOURCE_DIR}/tools/sdl3d_bundle_cli.c
+            ${CMAKE_SOURCE_DIR}/tools/sdl3d_fused.c
             ${CMAKE_SOURCE_DIR}/tools/sdl3d_runner_cli.c
             ${CMAKE_SOURCE_DIR}/tools/sdl3d_runner_state.c
     )
