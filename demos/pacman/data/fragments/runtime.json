@@ -1,7 +1,7 @@
 {
   "schema": "sdl3d.fragment.v0",
   "render": {
-    "clear_color": [1, 1, 8, 255],
+    "clear_color": [0, 0, 0, 255],
     "lighting": true,
     "bloom": true,
     "ssao": true,

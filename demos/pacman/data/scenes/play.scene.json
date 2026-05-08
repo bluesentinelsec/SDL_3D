@@ -94,6 +94,17 @@
         "color": [92, 225, 255, 255]
       },
       {
+        "name": "ui.hud.fps",
+        "font": "font.small",
+        "format": "FPS %.0f",
+        "bindings": [
+          { "type": "metric", "metric": "fps" }
+        ],
+        "x": 18.0,
+        "y": 18.0,
+        "color": [132, 164, 210, 220]
+      },
+      {
         "name": "ui.hud.win",
         "font": "font.hud",
         "visible_if": {

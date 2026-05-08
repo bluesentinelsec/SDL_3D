@@ -7190,11 +7190,13 @@ TEST(GameDataRuntime, PacmanDemoLoadsAndRunsMazeCollection)
     sdl3d_registered_actor *pellet = sdl3d_game_data_find_actor(runtime, "pool.pellets.0");
     sdl3d_registered_actor *power = sdl3d_game_data_find_actor(runtime, "pool.power_pellets.0");
     sdl3d_registered_actor *game = sdl3d_game_data_find_actor(runtime, "entity.game");
+    sdl3d_registered_actor *red_ghost = sdl3d_game_data_find_actor(runtime, "entity.ghost.red");
     ASSERT_NE(pac, nullptr);
     ASSERT_NE(wall, nullptr);
     ASSERT_NE(pellet, nullptr);
     ASSERT_NE(power, nullptr);
     ASSERT_NE(game, nullptr);
+    ASSERT_NE(red_ghost, nullptr);
     EXPECT_TRUE(wall->active);
     EXPECT_TRUE(pellet->active);
     EXPECT_TRUE(power->active);
@@ -7214,7 +7216,8 @@ TEST(GameDataRuntime, PacmanDemoLoadsAndRunsMazeCollection)
     EXPECT_GT(sdl3d_properties_get_int(pac->props, "grid_col", -1), 1);
     EXPECT_LT(sdl3d_properties_get_int(game->props, "pellets_remaining", spawned_collectibles), spawned_collectibles);
     EXPECT_GT(sdl3d_properties_get_int(game->props, "score", 0), 0);
-    EXPECT_TRUE(sdl3d_game_data_find_actor(runtime, "entity.ghost.red")->active);
+    EXPECT_TRUE(red_ghost->active);
+    EXPECT_LT(sdl3d_properties_get_int(red_ghost->props, "grid_row", 99), 7);
     EXPECT_TRUE(sdl3d_game_data_find_actor(runtime, "entity.ghost.pink")->active);
     EXPECT_TRUE(sdl3d_game_data_find_actor(runtime, "entity.ghost.cyan")->active);
     EXPECT_TRUE(sdl3d_game_data_find_actor(runtime, "entity.ghost.orange")->active);
