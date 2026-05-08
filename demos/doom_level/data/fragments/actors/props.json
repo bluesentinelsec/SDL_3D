@@ -1,0 +1,110 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "assets": {
+    "sprites": [
+      {
+        "id": "sprite.doom.robot.static",
+        "path": "asset://sprites/skeletal_robot/south.png",
+        "frame_width": 92,
+        "frame_height": 92,
+        "columns": 1,
+        "rows": 1,
+        "frame_count": 1,
+        "direction_count": 1,
+        "fps": 1.0,
+        "loop": true,
+        "lighting": true,
+        "emissive": false,
+        "visual_ground_offset": 0.56
+      },
+      {
+        "id": "sprite.doom.health_pack",
+        "path": "asset://sprites/health-pack.png",
+        "frame_width": 64,
+        "frame_height": 64,
+        "columns": 1,
+        "rows": 1,
+        "frame_count": 1,
+        "direction_count": 1,
+        "fps": 1.0,
+        "loop": true,
+        "lighting": true,
+        "emissive": false
+      }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.doom.robot.entry",
+      "active": true,
+      "tags": ["npc", "robot", "billboard"],
+      "transform": { "position": [5.8, 0.0, 6.8] },
+      "components": [
+        { "type": "render.sprite", "sprite": "sprite.doom.robot.static", "size": [3.4, 5.2] }
+      ]
+    },
+    {
+      "name": "entity.doom.robot.nukage",
+      "active": true,
+      "tags": ["npc", "robot", "billboard"],
+      "transform": { "position": [4.2, 0.0, 21.5] },
+      "components": [
+        { "type": "render.sprite", "sprite": "sprite.doom.robot.static", "size": [3.2, 4.8] }
+      ]
+    },
+    {
+      "name": "entity.doom.health.entry",
+      "active": true,
+      "tags": ["pickup", "health", "billboard"],
+      "transform": { "position": [5.0, 0.25, 10.8] },
+      "components": [
+        {
+          "type": "render.sprite",
+          "sprite": "sprite.doom.health_pack",
+          "size": [1.0, 1.0],
+          "lighting": true
+        },
+        {
+          "type": "motion.oscillate",
+          "origin": [5.0, 0.25, 10.8],
+          "amplitude": [0.0, 0.12, 0.0],
+          "rate": 1.8
+        }
+      ]
+    },
+    {
+      "name": "entity.doom.health.hall",
+      "active": true,
+      "tags": ["pickup", "health", "billboard"],
+      "transform": { "position": [24.0, 0.25, 28.5] },
+      "components": [
+        {
+          "type": "render.sprite",
+          "sprite": "sprite.doom.health_pack",
+          "size": [1.0, 1.0],
+          "lighting": true
+        },
+        {
+          "type": "motion.oscillate",
+          "origin": [24.0, 0.25, 28.5],
+          "amplitude": [0.0, 0.12, 0.0],
+          "rate": 2.1
+        }
+      ]
+    },
+    {
+      "name": "entity.doom.crate.nukage",
+      "active": true,
+      "tags": ["prop", "crate"],
+      "transform": { "position": [7.2, 0.45, 19.0] },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [0.9, 0.9, 0.9],
+          "color": [78, 170, 72, 255],
+          "lighting": true
+        }
+      ]
+    }
+  ]
+}

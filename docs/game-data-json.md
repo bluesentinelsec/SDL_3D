@@ -759,6 +759,11 @@ Reusable components include:
 - `render.cube`: renders a cube using authored `size`, or a vec3 actor property
   named by `size_property`. The property path is useful for grid wall runs and
   other pooled actors that need per-instance dimensions.
+- `render.sprite`: renders an upright billboard using an authored sprite asset.
+  Use `size` for world-space width/height and optional `facing_yaw` or
+  `facing_yaw_property` for directional sprite frame selection. Sprite assets
+  participate in dynamic lighting when their asset and component both leave
+  lighting enabled.
 
 Example parallax strip:
 

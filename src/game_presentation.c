@@ -18,6 +18,9 @@ typedef struct primitive_draw_context
     const sdl3d_game_data_runtime *runtime;
     sdl3d_render_context *renderer;
     sdl3d_game_data_image_cache *image_cache;
+    sdl3d_game_data_sprite_cache *sprite_cache;
+    const sdl3d_camera3d *camera;
+    const sdl3d_game_data_render_eval *eval;
     sdl3d_game_data_render_primitive sphere_batch;
     sdl3d_vec3 *sphere_batch_positions;
     int sphere_batch_count;
@@ -336,6 +339,26 @@ static bool ensure_image_cache_capacity(sdl3d_game_data_image_cache *cache, int 
     return true;
 }
 
+static bool ensure_sprite_cache_capacity(sdl3d_game_data_sprite_cache *cache, int required)
+{
+    if (cache == NULL || required <= cache->capacity)
+        return cache != NULL;
+
+    int next_capacity = cache->capacity < 4 ? 4 : cache->capacity * 2;
+    while (next_capacity < required)
+        next_capacity *= 2;
+
+    sdl3d_game_data_sprite_cache_entry *entries =
+        (sdl3d_game_data_sprite_cache_entry *)SDL_realloc(cache->entries, (size_t)next_capacity * sizeof(*entries));
+    if (entries == NULL)
+        return false;
+
+    SDL_memset(entries + cache->capacity, 0, (size_t)(next_capacity - cache->capacity) * sizeof(*entries));
+    cache->entries = entries;
+    cache->capacity = next_capacity;
+    return true;
+}
+
 static sdl3d_game_data_particle_cache_entry *find_particle_entry(sdl3d_game_data_particle_cache *cache,
                                                                  const char *entity_name)
 {
@@ -531,6 +554,39 @@ static sdl3d_game_data_image_cache_entry *find_or_load_image_entry(const sdl3d_g
     return entry;
 }
 
+static sdl3d_game_data_sprite_cache_entry *find_or_load_sprite_entry(const sdl3d_game_data_runtime *runtime,
+                                                                     sdl3d_game_data_sprite_cache *cache,
+                                                                     const char *sprite_id)
+{
+    if (runtime == NULL || cache == NULL || cache->assets == NULL || sprite_id == NULL)
+        return NULL;
+
+    for (int i = 0; i < cache->count; ++i)
+    {
+        if (cache->entries[i].sprite_id != NULL && SDL_strcmp(cache->entries[i].sprite_id, sprite_id) == 0)
+            return cache->entries[i].loaded ? &cache->entries[i] : NULL;
+    }
+
+    if (!ensure_sprite_cache_capacity(cache, cache->count + 1))
+        return NULL;
+
+    sdl3d_game_data_sprite_cache_entry *entry = &cache->entries[cache->count];
+    SDL_zero(*entry);
+    entry->sprite_id = sprite_id;
+
+    char error[256];
+    if (!sdl3d_game_data_load_sprite_asset(runtime, sprite_id, &entry->sprite, error, (int)sizeof(error)))
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load world sprite asset %s: %s", sprite_id, error);
+        SDL_zero(entry);
+        return NULL;
+    }
+
+    entry->loaded = true;
+    ++cache->count;
+    return entry;
+}
+
 static bool draw_sphere_batch(sdl3d_render_context *renderer, const sdl3d_game_data_render_primitive *primitive)
 {
     if (renderer == NULL || primitive == NULL || primitive->instances == NULL || primitive->instance_count <= 0)
@@ -718,6 +774,37 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
     {
         if (!draw_sphere_batch(context->renderer, primitive))
             return false;
+    }
+    else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPRITE)
+    {
+        if (context->sprite_cache == NULL)
+            return true;
+        sdl3d_game_data_sprite_cache_entry *entry =
+            find_or_load_sprite_entry(context->runtime, context->sprite_cache, primitive->sprite_asset);
+        if (entry == NULL)
+            return false;
+
+        sdl3d_sprite_actor actor;
+        SDL_zero(actor);
+        sdl3d_sprite_asset_apply_actor(&actor, &entry->sprite);
+        actor.position = primitive->position;
+        actor.size = primitive->sprite_size.x > 0.0f && primitive->sprite_size.y > 0.0f ? primitive->sprite_size
+                                                                                        : (sdl3d_vec2){1.0f, 1.0f};
+        actor.tint = primitive->color;
+        actor.visible = true;
+        actor.sector_id = -1;
+        sdl3d_sprite_actor_set_facing_yaw(&actor, primitive->sprite_facing_yaw);
+        if (context->eval != NULL)
+            actor.animation_time = context->eval->time;
+
+        sdl3d_sprite_scene scene;
+        SDL_zero(scene);
+        scene.actors = &actor;
+        scene.count = 1;
+        scene.capacity = 1;
+        const sdl3d_vec3 camera_position =
+            context->camera != NULL ? context->camera->position : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+        sdl3d_sprite_scene_draw(&scene, context->renderer, camera_position, NULL);
     }
     sdl3d_set_emissive(context->renderer, 0.0f, 0.0f, 0.0f);
     if (!primitive->lighting_enabled)
@@ -952,10 +1039,30 @@ void sdl3d_game_data_image_cache_free(sdl3d_game_data_image_cache *cache)
     SDL_zero(*cache);
 }
 
-static bool draw_render_primitives_evaluated_with_cache(const sdl3d_game_data_runtime *runtime,
-                                                        sdl3d_render_context *renderer,
-                                                        const sdl3d_game_data_render_eval *eval,
-                                                        sdl3d_game_data_image_cache *image_cache)
+void sdl3d_game_data_sprite_cache_init(sdl3d_game_data_sprite_cache *cache, sdl3d_asset_resolver *assets)
+{
+    if (cache == NULL)
+        return;
+    SDL_zero(*cache);
+    cache->assets = assets;
+}
+
+void sdl3d_game_data_sprite_cache_free(sdl3d_game_data_sprite_cache *cache)
+{
+    if (cache == NULL)
+        return;
+    for (int i = 0; i < cache->count; ++i)
+    {
+        if (cache->entries[i].loaded)
+            sdl3d_sprite_asset_free(&cache->entries[i].sprite);
+    }
+    SDL_free(cache->entries);
+    SDL_zero(*cache);
+}
+
+static bool draw_render_primitives_evaluated_with_cache(
+    const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer, const sdl3d_game_data_render_eval *eval,
+    sdl3d_game_data_image_cache *image_cache, sdl3d_game_data_sprite_cache *sprite_cache, const sdl3d_camera3d *camera)
 {
     if (runtime == NULL || renderer == NULL)
         return false;
@@ -965,6 +1072,9 @@ static bool draw_render_primitives_evaluated_with_cache(const sdl3d_game_data_ru
     context.runtime = runtime;
     context.renderer = renderer;
     context.image_cache = image_cache;
+    context.sprite_cache = sprite_cache;
+    context.camera = camera;
+    context.eval = eval;
     bool ok = sdl3d_game_data_for_each_render_primitive_evaluated(runtime, eval, draw_primitive, &context);
     ok = flush_sphere_draw_batch(&context) && ok;
     SDL_free(context.sphere_batch_positions);
@@ -1052,14 +1162,14 @@ bool sdl3d_game_data_draw_sector_levels(const sdl3d_game_data_runtime *runtime, 
 
 bool sdl3d_game_data_draw_render_primitives(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer)
 {
-    return draw_render_primitives_evaluated_with_cache(runtime, renderer, NULL, NULL);
+    return draw_render_primitives_evaluated_with_cache(runtime, renderer, NULL, NULL, NULL, NULL);
 }
 
 bool sdl3d_game_data_draw_render_primitives_evaluated(const sdl3d_game_data_runtime *runtime,
                                                       sdl3d_render_context *renderer,
                                                       const sdl3d_game_data_render_eval *eval)
 {
-    return draw_render_primitives_evaluated_with_cache(runtime, renderer, eval, NULL);
+    return draw_render_primitives_evaluated_with_cache(runtime, renderer, eval, NULL, NULL, NULL);
 }
 
 bool sdl3d_game_data_draw_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
@@ -2083,7 +2193,7 @@ bool sdl3d_game_data_draw_frame(const sdl3d_game_data_frame_desc *frame)
             if (frame->particle_cache != NULL)
                 ok = sdl3d_game_data_draw_particles(frame->runtime, frame->renderer, frame->particle_cache) && ok;
             ok = draw_render_primitives_evaluated_with_cache(frame->runtime, frame->renderer, frame->render_eval,
-                                                             frame->image_cache) &&
+                                                             frame->image_cache, frame->sprite_cache, &camera) &&
                  ok;
             ok = run_frame_hook(frame, frame->after_world_3d) && ok;
             sdl3d_end_mode_3d(frame->renderer);

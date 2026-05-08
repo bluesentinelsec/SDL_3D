@@ -112,6 +112,29 @@ extern "C"
         int capacity;                                  /**< Allocated entry slots. */
     } sdl3d_game_data_particle_cache;
 
+    /** @brief One cached sprite asset referenced by authored render.sprite data. */
+    typedef struct sdl3d_game_data_sprite_cache_entry
+    {
+        const char *sprite_id;             /**< Runtime-owned sprite asset id. */
+        sdl3d_sprite_asset_runtime sprite; /**< Loaded sprite runtime. */
+        bool loaded;                       /**< True once the sprite owns loaded textures. */
+    } sdl3d_game_data_sprite_cache_entry;
+
+    /**
+     * @brief Runtime cache for sprite assets referenced by authored world sprites.
+     *
+     * The cache owns loaded sprite textures and reads through the host asset
+     * resolver, so directory, pack, and embedded launches use the same authored
+     * `asset://` paths.
+     */
+    typedef struct sdl3d_game_data_sprite_cache
+    {
+        sdl3d_game_data_sprite_cache_entry *entries; /**< Cached sprite entries. */
+        int count;                                   /**< Number of cached sprite assets. */
+        int capacity;                                /**< Allocated cache slots. */
+        sdl3d_asset_resolver *assets;                /**< Resolver used for lazy loads; not owned. */
+    } sdl3d_game_data_sprite_cache;
+
     /**
      * @brief Result produced by the generic authored menu controller.
      *
@@ -226,6 +249,7 @@ extern "C"
         sdl3d_game_data_font_cache *font_cache;         /**< Font cache used by authored UI text. */
         sdl3d_game_data_image_cache *image_cache;       /**< Image cache used by authored UI images. */
         sdl3d_game_data_particle_cache *particle_cache; /**< Particle cache used by authored emitters. */
+        sdl3d_game_data_sprite_cache *sprite_cache;     /**< Sprite cache used by authored render.sprite data. */
         const sdl3d_game_data_app_flow *app_flow;       /**< Optional app flow whose transitions are drawn. */
         const sdl3d_game_data_ui_metrics *metrics;      /**< Optional UI metrics. */
         const sdl3d_game_data_render_eval *render_eval; /**< Optional primitive effect evaluation inputs. */
@@ -285,6 +309,19 @@ extern "C"
     bool sdl3d_game_data_draw_render_primitives_evaluated(const sdl3d_game_data_runtime *runtime,
                                                           sdl3d_render_context *renderer,
                                                           const sdl3d_game_data_render_eval *eval);
+
+    /**
+     * @brief Initialize a world sprite asset cache.
+     *
+     * @param cache Cache to initialize.
+     * @param assets Asset resolver used to read authored sprite paths; not owned.
+     */
+    void sdl3d_game_data_sprite_cache_init(sdl3d_game_data_sprite_cache *cache, sdl3d_asset_resolver *assets);
+
+    /**
+     * @brief Free all sprite assets owned by a world sprite cache.
+     */
+    void sdl3d_game_data_sprite_cache_free(sdl3d_game_data_sprite_cache *cache);
 
     /**
      * @brief Draw active-scene authored sector levels.
