@@ -273,6 +273,21 @@ typedef struct runtime_collection
     int row_capacity;
 } runtime_collection;
 
+typedef struct grid_map_runtime
+{
+    char *name;
+    char *cells;
+    char *walkable;
+    int width;
+    int height;
+    float cell_width;
+    float cell_height;
+    float row_direction;
+    sdl3d_vec3 origin;
+    bool wrap_x;
+    bool wrap_y;
+} grid_map_runtime;
+
 typedef enum actor_pool_exhaustion_policy
 {
     ACTOR_POOL_EXHAUST_FAIL,
@@ -419,6 +434,8 @@ typedef struct sdl3d_game_data_runtime
     runtime_collection *collections;
     int collection_count;
     int collection_capacity;
+    grid_map_runtime *grid_maps;
+    int grid_map_count;
     actor_pool_runtime *actor_pools;
     int actor_pool_count;
     runtime_direct_connect_session *direct_connect_sessions;
@@ -646,6 +663,14 @@ static bool apply_actor_pool_scene_exit_policies(sdl3d_game_data_runtime *runtim
 static void actor_lifecycle_defer_begin(sdl3d_game_data_runtime *runtime);
 static void actor_lifecycle_defer_end(sdl3d_game_data_runtime *runtime);
 static bool entity_json_has_tags(yyjson_val *entity, const char *const *tags, int tag_count);
+static const grid_map_runtime *find_grid_map(const sdl3d_game_data_runtime *runtime, const char *name);
+static bool grid_map_normalize_cell(const grid_map_runtime *map, int *col, int *row);
+static char grid_map_cell(const grid_map_runtime *map, int col, int row);
+static bool grid_map_cell_to_world(const grid_map_runtime *map, int col, int row, sdl3d_vec3 *out_position);
+static bool grid_map_world_to_cell(const grid_map_runtime *map, float x, float y, int *out_col, int *out_row);
+static bool grid_map_is_walkable(const grid_map_runtime *map, int col, int row);
+static bool grid_map_next_step(const grid_map_runtime *map, int start_col, int start_row, int goal_col, int goal_row,
+                               int *out_col, int *out_row);
 
 static sdl3d_game_data_runtime *lua_runtime(lua_State *lua)
 {
@@ -1634,6 +1659,121 @@ static int lua_json_encode(lua_State *lua)
     return 1;
 }
 
+static int lua_grid_cell_to_world(lua_State *lua)
+{
+    const grid_map_runtime *map = find_grid_map(lua_runtime(lua), luaL_checkstring(lua, 1));
+    const int col = (int)luaL_checkinteger(lua, 2);
+    const int row = (int)luaL_checkinteger(lua, 3);
+    sdl3d_vec3 position;
+    if (!grid_map_cell_to_world(map, col, row, &position))
+    {
+        lua_pushnil(lua);
+        return 1;
+    }
+    lua_pushnumber(lua, position.x);
+    lua_pushnumber(lua, position.y);
+    lua_pushnumber(lua, position.z);
+    return 3;
+}
+
+static int lua_grid_world_to_cell(lua_State *lua)
+{
+    const grid_map_runtime *map = find_grid_map(lua_runtime(lua), luaL_checkstring(lua, 1));
+    const float x = (float)luaL_checknumber(lua, 2);
+    const float y = (float)luaL_checknumber(lua, 3);
+    int col = 0;
+    int row = 0;
+    if (!grid_map_world_to_cell(map, x, y, &col, &row))
+    {
+        lua_pushnil(lua);
+        return 1;
+    }
+    lua_pushinteger(lua, col);
+    lua_pushinteger(lua, row);
+    return 2;
+}
+
+static int lua_grid_tile(lua_State *lua)
+{
+    const grid_map_runtime *map = find_grid_map(lua_runtime(lua), luaL_checkstring(lua, 1));
+    const int col = (int)luaL_checkinteger(lua, 2);
+    const int row = (int)luaL_checkinteger(lua, 3);
+    const char cell = grid_map_cell(map, col, row);
+    if (cell == '\0')
+    {
+        lua_pushnil(lua);
+        return 1;
+    }
+    lua_pushlstring(lua, &cell, 1);
+    return 1;
+}
+
+static int lua_grid_walkable(lua_State *lua)
+{
+    const grid_map_runtime *map = find_grid_map(lua_runtime(lua), luaL_checkstring(lua, 1));
+    const int col = (int)luaL_checkinteger(lua, 2);
+    const int row = (int)luaL_checkinteger(lua, 3);
+    lua_pushboolean(lua, grid_map_is_walkable(map, col, row));
+    return 1;
+}
+
+static void lua_push_grid_cell(lua_State *lua, const grid_map_runtime *map, int col, int row)
+{
+    lua_newtable(lua);
+    lua_pushinteger(lua, col);
+    lua_setfield(lua, -2, "col");
+    lua_pushinteger(lua, row);
+    lua_setfield(lua, -2, "row");
+    const char cell = grid_map_cell(map, col, row);
+    if (cell != '\0')
+    {
+        lua_pushlstring(lua, &cell, 1);
+        lua_setfield(lua, -2, "tile");
+    }
+}
+
+static int lua_grid_neighbors(lua_State *lua)
+{
+    const grid_map_runtime *map = find_grid_map(lua_runtime(lua), luaL_checkstring(lua, 1));
+    const int col = (int)luaL_checkinteger(lua, 2);
+    const int row = (int)luaL_checkinteger(lua, 3);
+    lua_newtable(lua);
+    if (map == NULL)
+        return 1;
+
+    static const int dirs[4][2] = {{1, 0}, {-1, 0}, {0, -1}, {0, 1}};
+    int output_index = 1;
+    for (size_t d = 0; d < SDL_arraysize(dirs); ++d)
+    {
+        int next_col = col + dirs[d][0];
+        int next_row = row + dirs[d][1];
+        if (!grid_map_normalize_cell(map, &next_col, &next_row) || !grid_map_is_walkable(map, next_col, next_row))
+            continue;
+        lua_push_grid_cell(lua, map, next_col, next_row);
+        lua_rawseti(lua, -2, output_index++);
+    }
+    return 1;
+}
+
+static int lua_grid_next_step(lua_State *lua)
+{
+    const grid_map_runtime *map = find_grid_map(lua_runtime(lua), luaL_checkstring(lua, 1));
+    const int start_col = (int)luaL_checkinteger(lua, 2);
+    const int start_row = (int)luaL_checkinteger(lua, 3);
+    const int goal_col = (int)luaL_checkinteger(lua, 4);
+    const int goal_row = (int)luaL_checkinteger(lua, 5);
+    int next_col = start_col;
+    int next_row = start_row;
+    if (!grid_map_next_step(map, start_col, start_row, goal_col, goal_row, &next_col, &next_row))
+    {
+        lua_pushnil(lua);
+        return 1;
+    }
+    lua_pushinteger(lua, next_col);
+    lua_pushinteger(lua, next_row);
+    return 2;
+}
+
 static void install_lua_helpers(lua_State *lua)
 {
     static const char *source_parts[] = {
@@ -1802,6 +1942,61 @@ static void install_lua_helpers(lua_State *lua)
         "        pool_last_despawn_reason = function(self_or_pool, maybe_pool)\n"
         "            return sdl3d.pool_last_despawn_reason(maybe_pool or self_or_pool)\n"
         "        end,\n",
+        "        grid_cell_to_world = function(self_or_map, maybe_map, maybe_col, maybe_row)\n"
+        "            local map, col, row\n"
+        "            if type(self_or_map) == 'table' and self_or_map.adapter ~= nil then\n"
+        "                map, col, row = maybe_map, maybe_col, maybe_row\n"
+        "            else\n"
+        "                map, col, row = self_or_map, maybe_map, maybe_col\n"
+        "            end\n"
+        "            local x, y, z = sdl3d.grid_cell_to_world(map, col, row)\n"
+        "            if x == nil then return nil end\n"
+        "            return Vec3(x, y, z)\n"
+        "        end,\n"
+        "        grid_world_to_cell = function(self_or_map, maybe_map, maybe_position)\n"
+        "            local map, position\n"
+        "            if type(self_or_map) == 'table' and self_or_map.adapter ~= nil then\n"
+        "                map, position = maybe_map, maybe_position\n"
+        "            else\n"
+        "                map, position = self_or_map, maybe_map\n"
+        "            end\n"
+        "            position = as_vec3(position)\n"
+        "            local col, row = sdl3d.grid_world_to_cell(map, position.x, position.y)\n"
+        "            if col == nil then return nil end\n"
+        "            return { col = col, row = row }\n"
+        "        end,\n"
+        "        grid_tile = function(self_or_map, maybe_map, maybe_col, maybe_row)\n"
+        "            if type(self_or_map) == 'table' and self_or_map.adapter ~= nil then\n"
+        "                return sdl3d.grid_tile(maybe_map, maybe_col, maybe_row)\n"
+        "            end\n"
+        "            return sdl3d.grid_tile(self_or_map, maybe_map, maybe_col)\n"
+        "        end,\n"
+        "        grid_walkable = function(self_or_map, maybe_map, maybe_col, maybe_row)\n"
+        "            if type(self_or_map) == 'table' and self_or_map.adapter ~= nil then\n"
+        "                return sdl3d.grid_walkable(maybe_map, maybe_col, maybe_row)\n"
+        "            end\n"
+        "            return sdl3d.grid_walkable(self_or_map, maybe_map, maybe_col)\n"
+        "        end,\n"
+        "        grid_neighbors = function(self_or_map, maybe_map, maybe_col, maybe_row)\n"
+        "            if type(self_or_map) == 'table' and self_or_map.adapter ~= nil then\n"
+        "                return sdl3d.grid_neighbors(maybe_map, maybe_col, maybe_row)\n"
+        "            end\n"
+        "            return sdl3d.grid_neighbors(self_or_map, maybe_map, maybe_col)\n"
+        "        end,\n"
+        "        grid_next_step = function(self_or_map, maybe_map, maybe_start_col, maybe_start_row, maybe_goal_col, "
+        "maybe_goal_row)\n"
+        "            local map, start_col, start_row, goal_col, goal_row\n"
+        "            if type(self_or_map) == 'table' and self_or_map.adapter ~= nil then\n"
+        "                map, start_col, start_row, goal_col, goal_row = maybe_map, maybe_start_col, maybe_start_row, "
+        "maybe_goal_col, maybe_goal_row\n"
+        "            else\n"
+        "                map, start_col, start_row, goal_col, goal_row = self_or_map, maybe_map, maybe_start_col, "
+        "maybe_start_row, maybe_goal_col\n"
+        "            end\n"
+        "            local col, row = sdl3d.grid_next_step(map, start_col, start_row, goal_col, goal_row)\n"
+        "            if col == nil then return nil end\n"
+        "            return { col = col, row = row }\n"
+        "        end,\n",
         "        state_get = function(self_or_key, maybe_key, fallback)\n"
         "            if type(self_or_key) == 'table' and self_or_key.adapter ~= nil then\n"
         "                return sdl3d.state_get(maybe_key, fallback)\n"
@@ -1915,6 +2110,12 @@ static void register_lua_api(sdl3d_game_data_runtime *runtime, sdl3d_script_engi
     SDL3D_LUA_BIND("pool_despawn_count", lua_pool_despawn_count);
     SDL3D_LUA_BIND("pool_last_spawn_failure_reason", lua_pool_last_spawn_failure_reason);
     SDL3D_LUA_BIND("pool_last_despawn_reason", lua_pool_last_despawn_reason);
+    SDL3D_LUA_BIND("grid_cell_to_world", lua_grid_cell_to_world);
+    SDL3D_LUA_BIND("grid_world_to_cell", lua_grid_world_to_cell);
+    SDL3D_LUA_BIND("grid_tile", lua_grid_tile);
+    SDL3D_LUA_BIND("grid_walkable", lua_grid_walkable);
+    SDL3D_LUA_BIND("grid_neighbors", lua_grid_neighbors);
+    SDL3D_LUA_BIND("grid_next_step", lua_grid_next_step);
     SDL3D_LUA_BIND("log", lua_log);
     SDL3D_LUA_BIND("storage_read", lua_storage_read);
     SDL3D_LUA_BIND("storage_write", lua_storage_write);
@@ -2002,6 +2203,265 @@ static sdl3d_vec3 json_vec3_value(yyjson_val *value, sdl3d_vec3 fallback)
 static sdl3d_vec3 json_vec3(yyjson_val *object, const char *key, sdl3d_vec3 fallback)
 {
     return json_vec3_value(obj_get(object, key), fallback);
+}
+
+static bool json_vec2_value(yyjson_val *value, float fallback_x, float fallback_y, float *out_x, float *out_y)
+{
+    if (out_x == NULL || out_y == NULL)
+        return false;
+    *out_x = fallback_x;
+    *out_y = fallback_y;
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_arr(value) || yyjson_arr_size(value) < 2)
+        return false;
+    yyjson_val *x = yyjson_arr_get(value, 0);
+    yyjson_val *y = yyjson_arr_get(value, 1);
+    if (!yyjson_is_num(x) || !yyjson_is_num(y))
+        return false;
+    *out_x = (float)yyjson_get_num(x);
+    *out_y = (float)yyjson_get_num(y);
+    return true;
+}
+
+static bool grid_map_normalize_cell(const grid_map_runtime *map, int *col, int *row)
+{
+    if (map == NULL || col == NULL || row == NULL || map->width <= 0 || map->height <= 0)
+        return false;
+    if (*col < 0 || *col >= map->width)
+    {
+        if (!map->wrap_x)
+            return false;
+        *col = (*col % map->width + map->width) % map->width;
+    }
+    if (*row < 0 || *row >= map->height)
+    {
+        if (!map->wrap_y)
+            return false;
+        *row = (*row % map->height + map->height) % map->height;
+    }
+    return true;
+}
+
+static char grid_map_cell(const grid_map_runtime *map, int col, int row)
+{
+    if (!grid_map_normalize_cell(map, &col, &row))
+        return '\0';
+    return map->cells[row * map->width + col];
+}
+
+static bool grid_map_is_walkable(const grid_map_runtime *map, int col, int row)
+{
+    const char cell = grid_map_cell(map, col, row);
+    if (cell == '\0' || map == NULL || map->walkable == NULL)
+        return false;
+    for (const char *cursor = map->walkable; *cursor != '\0'; ++cursor)
+    {
+        if (*cursor == cell)
+            return true;
+    }
+    return false;
+}
+
+static bool grid_map_cell_to_world(const grid_map_runtime *map, int col, int row, sdl3d_vec3 *out_position)
+{
+    if (map == NULL || out_position == NULL || !grid_map_normalize_cell(map, &col, &row))
+        return false;
+    *out_position = sdl3d_vec3_make(map->origin.x + (float)col * map->cell_width,
+                                    map->origin.y + (float)row * map->cell_height * map->row_direction, map->origin.z);
+    return true;
+}
+
+static int grid_round_to_int(float value)
+{
+    return value >= 0.0f ? (int)(value + 0.5f) : (int)(value - 0.5f);
+}
+
+static bool grid_map_world_to_cell(const grid_map_runtime *map, float x, float y, int *out_col, int *out_row)
+{
+    if (map == NULL || out_col == NULL || out_row == NULL || map->cell_width <= 0.0f || map->cell_height <= 0.0f ||
+        map->row_direction == 0.0f)
+    {
+        return false;
+    }
+    int col = grid_round_to_int((x - map->origin.x) / map->cell_width);
+    int row = grid_round_to_int((y - map->origin.y) / (map->cell_height * map->row_direction));
+    if (!grid_map_normalize_cell(map, &col, &row))
+        return false;
+    *out_col = col;
+    *out_row = row;
+    return true;
+}
+
+static const grid_map_runtime *find_grid_map(const sdl3d_game_data_runtime *runtime, const char *name)
+{
+    if (runtime == NULL || name == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->grid_map_count; ++i)
+    {
+        if (runtime->grid_maps[i].name != NULL && SDL_strcmp(runtime->grid_maps[i].name, name) == 0)
+            return &runtime->grid_maps[i];
+    }
+    return NULL;
+}
+
+static bool grid_map_next_step(const grid_map_runtime *map, int start_col, int start_row, int goal_col, int goal_row,
+                               int *out_col, int *out_row)
+{
+    if (out_col != NULL)
+        *out_col = start_col;
+    if (out_row != NULL)
+        *out_row = start_row;
+    if (map == NULL || out_col == NULL || out_row == NULL || !grid_map_normalize_cell(map, &start_col, &start_row) ||
+        !grid_map_normalize_cell(map, &goal_col, &goal_row) || !grid_map_is_walkable(map, start_col, start_row) ||
+        !grid_map_is_walkable(map, goal_col, goal_row))
+    {
+        return false;
+    }
+    if (start_col == goal_col && start_row == goal_row)
+        return true;
+
+    const int count = map->width * map->height;
+    bool *visited = (bool *)SDL_calloc((size_t)count, sizeof(*visited));
+    int *previous = (int *)SDL_malloc((size_t)count * sizeof(*previous));
+    int *queue = (int *)SDL_malloc((size_t)count * sizeof(*queue));
+    if (visited == NULL || previous == NULL || queue == NULL)
+    {
+        SDL_free(visited);
+        SDL_free(previous);
+        SDL_free(queue);
+        return false;
+    }
+    for (int i = 0; i < count; ++i)
+        previous[i] = -1;
+
+    const int start = start_row * map->width + start_col;
+    const int goal = goal_row * map->width + goal_col;
+    int read_index = 0;
+    int write_index = 0;
+    queue[write_index++] = start;
+    visited[start] = true;
+
+    static const int dirs[4][2] = {{1, 0}, {-1, 0}, {0, -1}, {0, 1}};
+    while (read_index < write_index && !visited[goal])
+    {
+        const int current = queue[read_index++];
+        const int col = current % map->width;
+        const int row = current / map->width;
+        for (size_t d = 0; d < SDL_arraysize(dirs); ++d)
+        {
+            int next_col = col + dirs[d][0];
+            int next_row = row + dirs[d][1];
+            if (!grid_map_normalize_cell(map, &next_col, &next_row) || !grid_map_is_walkable(map, next_col, next_row))
+            {
+                continue;
+            }
+            const int next = next_row * map->width + next_col;
+            if (visited[next])
+                continue;
+            visited[next] = true;
+            previous[next] = current;
+            queue[write_index++] = next;
+            if (next == goal)
+                break;
+        }
+    }
+
+    bool found = visited[goal];
+    if (found)
+    {
+        int step = goal;
+        while (previous[step] >= 0 && previous[step] != start)
+            step = previous[step];
+        *out_col = step % map->width;
+        *out_row = step / map->width;
+    }
+
+    SDL_free(visited);
+    SDL_free(previous);
+    SDL_free(queue);
+    return found;
+}
+
+static bool load_grid_maps(sdl3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                           int error_buffer_size)
+{
+    yyjson_val *maps = obj_get(root, "grid_maps");
+    if (maps == NULL)
+        return true;
+    if (!yyjson_is_arr(maps))
+    {
+        set_error(error_buffer, error_buffer_size, "grid_maps must be an array");
+        return false;
+    }
+
+    runtime->grid_map_count = (int)yyjson_arr_size(maps);
+    runtime->grid_maps = (grid_map_runtime *)SDL_calloc((size_t)runtime->grid_map_count, sizeof(*runtime->grid_maps));
+    if (runtime->grid_maps == NULL && runtime->grid_map_count > 0)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate grid maps");
+        return false;
+    }
+
+    for (int i = 0; i < runtime->grid_map_count; ++i)
+    {
+        yyjson_val *map_json = yyjson_arr_get(maps, (size_t)i);
+        yyjson_val *rows = obj_get(map_json, "rows");
+        const int height = yyjson_is_arr(rows) ? (int)yyjson_arr_size(rows) : 0;
+        const char *first_row =
+            height > 0 && yyjson_is_str(yyjson_arr_get(rows, 0)) ? yyjson_get_str(yyjson_arr_get(rows, 0)) : NULL;
+        const int width = first_row != NULL ? (int)SDL_strlen(first_row) : 0;
+        if (width <= 0 || height <= 0)
+        {
+            set_error(error_buffer, error_buffer_size, "grid map rows must be non-empty strings");
+            return false;
+        }
+
+        grid_map_runtime *map = &runtime->grid_maps[i];
+        map->name = SDL_strdup(json_string(map_json, "name", ""));
+        map->cells = (char *)SDL_malloc((size_t)(width * height + 1));
+        map->width = width;
+        map->height = height;
+        map->cell_width = 1.0f;
+        map->cell_height = 1.0f;
+        if (!json_vec2_value(obj_get(map_json, "cell_size"), 1.0f, 1.0f, &map->cell_width, &map->cell_height))
+        {
+            set_error(error_buffer, error_buffer_size, "grid map cell_size must be a vec2");
+            return false;
+        }
+        map->origin = json_vec3(map_json, "origin", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+        map->row_direction = json_float(map_json, "row_direction", -1.0f) < 0.0f ? -1.0f : 1.0f;
+        map->wrap_x = json_bool(map_json, "wrap_x", false);
+        map->wrap_y = json_bool(map_json, "wrap_y", false);
+        yyjson_val *walkable = obj_get(map_json, "walkable");
+        size_t walkable_count = yyjson_is_arr(walkable) ? yyjson_arr_size(walkable) : 0;
+        map->walkable = (char *)SDL_malloc(walkable_count + 1u);
+        if (map->name == NULL || map->cells == NULL || map->walkable == NULL)
+        {
+            set_error(error_buffer, error_buffer_size, "failed to allocate grid map data");
+            return false;
+        }
+        for (int row = 0; row < height; ++row)
+        {
+            yyjson_val *row_value = yyjson_arr_get(rows, (size_t)row);
+            const char *row_text = yyjson_is_str(row_value) ? yyjson_get_str(row_value) : NULL;
+            if (row_text == NULL || (int)SDL_strlen(row_text) != width)
+            {
+                set_error(error_buffer, error_buffer_size, "grid map rows must have identical widths");
+                return false;
+            }
+            SDL_memcpy(map->cells + row * width, row_text, (size_t)width);
+        }
+        map->cells[width * height] = '\0';
+        for (size_t w = 0; w < walkable_count; ++w)
+        {
+            const char *glyph =
+                yyjson_is_str(yyjson_arr_get(walkable, w)) ? yyjson_get_str(yyjson_arr_get(walkable, w)) : NULL;
+            map->walkable[w] = glyph != NULL ? glyph[0] : '\0';
+        }
+        map->walkable[walkable_count] = '\0';
+    }
+    return true;
 }
 
 static sdl3d_color json_color_value(yyjson_val *value, sdl3d_color fallback)
@@ -11445,6 +11905,91 @@ static bool execute_projectile_fire_action(sdl3d_game_data_runtime *runtime, yyj
     return true;
 }
 
+static bool grid_spawn_rule_matches(yyjson_val *rule, char glyph)
+{
+    const char *rule_glyph = json_string(rule, "glyph", NULL);
+    return rule_glyph != NULL && rule_glyph[0] == glyph && rule_glyph[1] == '\0';
+}
+
+static bool execute_grid_spawn_from_glyphs_action(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    const grid_map_runtime *map = find_grid_map(runtime, json_string(action, "map", NULL));
+    yyjson_val *spawns = obj_get(action, "spawns");
+    if (runtime == NULL || map == NULL || !yyjson_is_arr(spawns))
+        return false;
+
+    bool ok = true;
+    int spawned_count = 0;
+    for (int row = 0; row < map->height; ++row)
+    {
+        for (int col = 0; col < map->width; ++col)
+        {
+            const char glyph = grid_map_cell(map, col, row);
+            yyjson_val *rule = NULL;
+            for (size_t i = 0; i < yyjson_arr_size(spawns); ++i)
+            {
+                yyjson_val *candidate = yyjson_arr_get(spawns, i);
+                if (grid_spawn_rule_matches(candidate, glyph))
+                {
+                    rule = candidate;
+                    break;
+                }
+            }
+            if (rule == NULL)
+                continue;
+
+            actor_pool_runtime *pool = find_actor_pool(runtime, json_string(rule, "pool", NULL));
+            actor_pool_note_spawn_attempt(pool);
+            int actor_index = -1;
+            sdl3d_registered_actor *actor = actor_pool_allocate(runtime, pool, &actor_index);
+            if (pool == NULL || actor == NULL || actor_index < 0)
+            {
+                actor_pool_note_spawn_failure(pool, "exhausted");
+                ok = false;
+                continue;
+            }
+
+            actor_pool_set_lifecycle_state(pool, actor, actor_index, ACTOR_LIFECYCLE_SPAWNING);
+            if (!initialize_pooled_actor(pool, actor, actor_index, true))
+            {
+                actor_pool_note_spawn_failure(pool, "initialize_failed");
+                ok = false;
+                continue;
+            }
+            if (pool->spawn_generations != NULL)
+            {
+                pool->spawn_generations[actor_index] = ++pool->spawn_generation_counter;
+                sdl3d_properties_set_int(actor->props, "pool_spawn_generation",
+                                         (int)SDL_min(pool->spawn_generations[actor_index], (Uint64)SDL_MAX_SINT32));
+            }
+
+            sdl3d_vec3 position;
+            if (!grid_map_cell_to_world(map, col, row, &position))
+            {
+                actor_pool_note_spawn_failure(pool, "invalid_cell");
+                ok = false;
+                continue;
+            }
+            position.z = json_float(rule, "z", json_float(action, "z", position.z));
+            actor_set_position(actor, position);
+            sdl3d_properties_set_string(actor->props, "grid_map", map->name);
+            sdl3d_properties_set_int(actor->props, "grid_col", col);
+            sdl3d_properties_set_int(actor->props, "grid_row", row);
+            char glyph_text[2] = {glyph, '\0'};
+            sdl3d_properties_set_string(actor->props, "grid_glyph", glyph_text);
+            apply_actor_spawn_properties(actor, obj_get(action, "properties"));
+            apply_actor_spawn_properties(actor, obj_get(rule, "properties"));
+            actor_pool_note_spawn_success(runtime, pool);
+            spawned_count++;
+        }
+    }
+
+    const char *count_key = json_string(action, "output_count_key", NULL);
+    if (count_key != NULL && runtime->scene_state != NULL)
+        sdl3d_properties_set_int(runtime->scene_state, count_key, spawned_count);
+    return ok;
+}
+
 static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const sdl3d_properties *payload)
 {
     const char *type = json_string(action, "type", "");
@@ -11701,6 +12246,8 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
 
     if (SDL_strcmp(type, "projectile.fire") == 0)
         return execute_projectile_fire_action(runtime, action, payload);
+    if (SDL_strcmp(type, "grid.spawn_from_glyphs") == 0)
+        return execute_grid_spawn_from_glyphs_action(runtime, action);
 
     if (SDL_strcmp(type, "transform.set_position") == 0)
     {
@@ -12517,6 +13064,125 @@ static void update_motion_components(sdl3d_game_data_runtime *runtime, yyjson_va
                         value = min_value;
                     set_vec_axis(&position, axis, value);
                     actor_set_position(actor, position);
+                }
+                else if (SDL_strcmp(type, "motion.grid_agent") == 0)
+                {
+                    const grid_map_runtime *map = find_grid_map(runtime, json_string(component, "map", NULL));
+                    if (map == NULL)
+                        continue;
+
+                    int col = sdl3d_properties_get_int(actor->props, "grid_col", INT32_MIN);
+                    int row = sdl3d_properties_get_int(actor->props, "grid_row", INT32_MIN);
+                    if (col == INT32_MIN || row == INT32_MIN)
+                    {
+                        if (!grid_map_world_to_cell(map, actor->position.x, actor->position.y, &col, &row))
+                            continue;
+                        sdl3d_properties_set_int(actor->props, "grid_col", col);
+                        sdl3d_properties_set_int(actor->props, "grid_row", row);
+                    }
+
+                    int target_col = sdl3d_properties_get_int(actor->props, "grid_target_col", -1);
+                    int target_row = sdl3d_properties_get_int(actor->props, "grid_target_row", -1);
+                    int from_col = sdl3d_properties_get_int(actor->props, "grid_from_col", col);
+                    int from_row = sdl3d_properties_get_int(actor->props, "grid_from_row", row);
+                    float progress = sdl3d_properties_get_float(actor->props, "grid_progress", 0.0f);
+                    const bool has_target =
+                        target_col >= 0 && target_row >= 0 && grid_map_normalize_cell(map, &target_col, &target_row);
+                    if (!has_target || (target_col == col && target_row == row && progress <= 0.0f))
+                    {
+                        const int queued_dx =
+                            SDL_clamp(sdl3d_properties_get_int(actor->props, "grid_next_dir_x", 0), -1, 1);
+                        const int queued_dy =
+                            SDL_clamp(sdl3d_properties_get_int(actor->props, "grid_next_dir_y", 0), -1, 1);
+                        const int current_dx =
+                            SDL_clamp(sdl3d_properties_get_int(actor->props, "grid_dir_x", 0), -1, 1);
+                        const int current_dy =
+                            SDL_clamp(sdl3d_properties_get_int(actor->props, "grid_dir_y", 0), -1, 1);
+                        int chosen_dx = 0;
+                        int chosen_dy = 0;
+                        int next_col = col + queued_dx;
+                        int next_row = row + queued_dy;
+                        if ((queued_dx != 0 || queued_dy != 0) && grid_map_is_walkable(map, next_col, next_row))
+                        {
+                            chosen_dx = queued_dx;
+                            chosen_dy = queued_dy;
+                        }
+                        else
+                        {
+                            next_col = col + current_dx;
+                            next_row = row + current_dy;
+                            if ((current_dx != 0 || current_dy != 0) && grid_map_is_walkable(map, next_col, next_row))
+                            {
+                                chosen_dx = current_dx;
+                                chosen_dy = current_dy;
+                            }
+                        }
+
+                        if (chosen_dx == 0 && chosen_dy == 0)
+                        {
+                            sdl3d_vec3 centered;
+                            if (grid_map_cell_to_world(map, col, row, &centered))
+                            {
+                                centered.z = actor->position.z;
+                                actor_set_position(actor, centered);
+                            }
+                            sdl3d_properties_set_float(actor->props, "grid_progress", 0.0f);
+                            sdl3d_properties_set_int(actor->props, "grid_target_col", -1);
+                            sdl3d_properties_set_int(actor->props, "grid_target_row", -1);
+                            continue;
+                        }
+
+                        next_col = col + chosen_dx;
+                        next_row = row + chosen_dy;
+                        if (!grid_map_normalize_cell(map, &next_col, &next_row))
+                            continue;
+                        from_col = col;
+                        from_row = row;
+                        target_col = next_col;
+                        target_row = next_row;
+                        progress = 0.0f;
+                        sdl3d_properties_set_int(actor->props, "grid_dir_x", chosen_dx);
+                        sdl3d_properties_set_int(actor->props, "grid_dir_y", chosen_dy);
+                        sdl3d_properties_set_int(actor->props, "grid_from_col", from_col);
+                        sdl3d_properties_set_int(actor->props, "grid_from_row", from_row);
+                        sdl3d_properties_set_int(actor->props, "grid_target_col", target_col);
+                        sdl3d_properties_set_int(actor->props, "grid_target_row", target_row);
+                    }
+
+                    const float speed =
+                        sdl3d_properties_get_float(actor->props, "grid_speed", json_float(component, "speed", 1.0f));
+                    progress += SDL_max(speed, 0.0f) * dt;
+                    if (progress >= 1.0f)
+                    {
+                        col = target_col;
+                        row = target_row;
+                        progress = 0.0f;
+                        sdl3d_properties_set_int(actor->props, "grid_col", col);
+                        sdl3d_properties_set_int(actor->props, "grid_row", row);
+                        sdl3d_properties_set_int(actor->props, "grid_target_col", -1);
+                        sdl3d_properties_set_int(actor->props, "grid_target_row", -1);
+                        sdl3d_vec3 centered;
+                        if (grid_map_cell_to_world(map, col, row, &centered))
+                        {
+                            centered.z = actor->position.z;
+                            actor_set_position(actor, centered);
+                        }
+                    }
+                    else
+                    {
+                        sdl3d_vec3 from_position;
+                        sdl3d_vec3 target_position;
+                        if (grid_map_cell_to_world(map, from_col, from_row, &from_position) &&
+                            grid_map_cell_to_world(map, target_col, target_row, &target_position))
+                        {
+                            const float z = actor->position.z;
+                            actor_set_position(
+                                actor,
+                                sdl3d_vec3_make(from_position.x + (target_position.x - from_position.x) * progress,
+                                                from_position.y + (target_position.y - from_position.y) * progress, z));
+                        }
+                        sdl3d_properties_set_float(actor->props, "grid_progress", progress);
+                    }
                 }
                 else if (SDL_strcmp(type, "motion.oscillate") == 0)
                 {
@@ -13452,6 +14118,7 @@ bool sdl3d_game_data_load_asset_with_options(sdl3d_asset_resolver *assets, const
     load_active_camera(runtime, root);
     bool ok = load_signals(runtime, root, error_buffer, error_buffer_size) &&
               load_entities(runtime, root, error_buffer, error_buffer_size) &&
+              load_grid_maps(runtime, root, error_buffer, error_buffer_size) &&
               load_actor_pools(runtime, root, error_buffer, error_buffer_size) &&
               load_input(runtime, root, error_buffer, error_buffer_size) &&
               load_timers(runtime, logic, error_buffer, error_buffer_size) && load_sensors(runtime, logic) &&
@@ -15561,6 +16228,12 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
             sdl3d_properties_destroy(runtime->collections[i].rows[row]);
         SDL_free(runtime->collections[i].rows);
     }
+    for (int i = 0; i < runtime->grid_map_count; ++i)
+    {
+        SDL_free(runtime->grid_maps[i].name);
+        SDL_free(runtime->grid_maps[i].cells);
+        SDL_free(runtime->grid_maps[i].walkable);
+    }
     for (int i = 0; i < runtime->actor_pool_count; ++i)
     {
         SDL_free(runtime->actor_pools[i].name);
@@ -15613,6 +16286,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->audio_files);
     SDL_free(runtime->property_snapshots);
     SDL_free(runtime->collections);
+    SDL_free(runtime->grid_maps);
     SDL_free(runtime->actor_pools);
     SDL_free(runtime->direct_connect_sessions);
     SDL_free(runtime->host_sessions);

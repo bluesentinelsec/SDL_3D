@@ -39,6 +39,7 @@ Every root game file is a JSON object.
 | `transitions` | no | Named transition descriptors. |
 | `ui` | no | Reusable UI descriptors. |
 | `entities` | no | Named actors with tags, transforms, properties, and components. |
+| `grid_maps` | no | Authored tile grids for maze, board, and grid-locked games. |
 | `actor_archetypes` | no | Templates used by runtime actor pools. |
 | `actor_pools` | no | Preallocated spawn/despawn pools. |
 | `signals` | no | Authored signal names. |
@@ -356,12 +357,95 @@ from a signal or collision payload.
 This keeps common collision effects data-authored while still allowing Lua to
 provide game-specific policy when needed.
 
+## Grid Maps And Maze Primitives
+
+`grid_maps` describe deterministic tile grids for maze, board, and
+grid-locked arcade games. They are game-agnostic data: the grid tells the
+engine which cells exist, which glyphs are walkable, how cells map to world
+space, and whether movement wraps at the edges.
+
+```json
+{
+  "grid_maps": [
+    {
+      "name": "map.maze",
+      "origin": [0.0, 0.0, 0.0],
+      "cell_size": [1.0, 1.0],
+      "row_direction": -1.0,
+      "wrap_x": true,
+      "walkable": [" ", ".", "o", "P", "G"],
+      "rows": [
+        "#####",
+        "#P.o#",
+        "# # #",
+        "#G..#",
+        "#####"
+      ]
+    }
+  ]
+}
+```
+
+Rows must be non-empty strings with identical widths. Glyphs are single-byte
+characters; use Lua or imported fragments for higher-level meaning such as
+`P = player spawn`, `G = ghost spawn`, `.` = pellet, or `o` = power pellet.
+Cell `(0, 0)` maps to `origin`; increasing columns move along +x; increasing
+rows move along `cell_size.y * row_direction`.
+
+`motion.grid_agent` moves an actor from cell center to cell center with queued
+turns and wall blocking:
+
+```json
+{
+  "name": "entity.player",
+  "properties": {
+    "grid_col": { "type": "int", "value": 1 },
+    "grid_row": { "type": "int", "value": 1 },
+    "grid_dir_x": { "type": "int", "value": 1 },
+    "grid_dir_y": { "type": "int", "value": 0 },
+    "grid_next_dir_x": { "type": "int", "value": 0 },
+    "grid_next_dir_y": { "type": "int", "value": 0 },
+    "grid_speed": { "type": "float", "value": 6.0 }
+  },
+  "components": [
+    { "type": "motion.grid_agent", "map": "map.maze", "speed": 6.0 }
+  ]
+}
+```
+
+`grid_speed` is measured in cells per second. Scripts or input actions can set
+`grid_next_dir_x` and `grid_next_dir_y`; the component applies the queued turn
+at the next cell center if the target cell is walkable, otherwise it continues
+in the current direction when possible.
+
+`grid.spawn_from_glyphs` populates actor pools from map glyphs. This is useful
+for pellets, power-ups, pickups, destructible tiles, and spawn markers:
+
+```json
+{
+  "type": "grid.spawn_from_glyphs",
+  "map": "map.maze",
+  "output_count_key": "remaining_collectibles",
+  "spawns": [
+    { "glyph": ".", "pool": "pool.pellets", "properties": { "points": 10 } },
+    { "glyph": "o", "pool": "pool.power_pellets", "properties": { "points": 50 } }
+  ]
+}
+```
+
+Spawned actors receive `grid_map`, `grid_col`, `grid_row`, and `grid_glyph`
+properties in addition to their archetype defaults and authored overrides.
+Use pool scene-exit policies or `actor.despawn_by_tag` to reset grids between
+levels.
+
 ## Components
 
 Reusable components include:
 
 - `motion.velocity_2d`: moves an actor by a `vec3` velocity property on the x/y
   plane.
+- `motion.grid_agent`: moves an actor along an authored `grid_maps` maze with
+  queued turns, walkability checks, center snapping, and optional map wrapping.
 - `motion.scroll_wrap`: scrolls an actor along one axis and wraps to the
   opposite bound. This is intended for parallax panels, repeating stars, clouds,
   conveyor belts, and similar backgrounds.

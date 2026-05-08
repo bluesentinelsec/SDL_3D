@@ -68,6 +68,12 @@ The `ctx` table provides:
 - `ctx:pool_despawn_count(pool)`: return pooled actor despawns, including reuse replacement
 - `ctx:pool_last_spawn_failure_reason(pool)`: return the last spawn failure reason, or `none`
 - `ctx:pool_last_despawn_reason(pool)`: return the last despawn reason, or `none`
+- `ctx:grid_cell_to_world(map, col, row)`: return a `Vec3` at the center of a grid cell, or `nil`
+- `ctx:grid_world_to_cell(map, position)`: return `{ col, row }` for a world position, or `nil`
+- `ctx:grid_tile(map, col, row)`: return the single-character tile glyph, or `nil`
+- `ctx:grid_walkable(map, col, row)`: return whether a cell is walkable
+- `ctx:grid_neighbors(map, col, row)`: return walkable neighbor cells as `{ col, row, tile }` tables
+- `ctx:grid_next_step(map, start_col, start_row, goal_col, goal_row)`: return the next walkable BFS step as `{ col, row }`, or `nil`
 - `ctx:state_get(key, fallback)`: read persistent scene state
 - `ctx:state_set(key, value)`: write persistent scene state; passing `nil` removes the key
 - `ctx:random()`: deterministic per-runtime pseudo-random value in `[0, 1)`
@@ -79,6 +85,7 @@ The `ctx` table provides:
 - `ctx:actor(name)` is the cheapest way to reach a known entity name.
 - `ctx:actor_with_tags(...)` scans the actor registry and should be used for authored role discovery, not inner-loop per-frame work.
 - `ctx:active_actors_with_tags(...)` scans static entities and actor pools. It is useful for gameplay rules over small groups, but hot paths with many actors should use narrower engine sensors or future collection helpers.
+- `ctx:grid_next_step(...)` runs breadth-first search over the referenced grid. It is appropriate for maze AI decisions at intersections; avoid calling it for every actor every frame on large maps.
 - `ctx.storage.*` performs filesystem I/O and should be used for saves, settings, caches, and similar infrequent tasks.
 - `ctx:random()` is deterministic within a runtime session, which makes it safe for gameplay logic that should replay or sync consistently.
 
@@ -165,11 +172,39 @@ The runtime installs a small `sdl3d` table for low-level access and utility help
 - `sdl3d.pool_despawn_count(pool)`
 - `sdl3d.pool_last_spawn_failure_reason(pool)`
 - `sdl3d.pool_last_despawn_reason(pool)`
+- `sdl3d.grid_cell_to_world(map, col, row)`
+- `sdl3d.grid_world_to_cell(map, x, y)`
+- `sdl3d.grid_tile(map, col, row)`
+- `sdl3d.grid_walkable(map, col, row)`
+- `sdl3d.grid_neighbors(map, col, row)`
+- `sdl3d.grid_next_step(map, start_col, start_row, goal_col, goal_row)`
 - `sdl3d.log(message)`
 - `sdl3d.storage.*`
 - `sdl3d.json.*`
 
 The low-level `sdl3d.get_*` and `sdl3d.set_*` helpers are useful for compact scripts and host integration. Gameplay scripts should generally prefer the `Actor` wrapper for readability.
+
+## Grid Maps
+
+Lua can inspect JSON-authored `grid_maps` without hard-coded native maze code:
+
+```lua
+local player = ctx:actor("entity.player")
+local cell = ctx:grid_world_to_cell("map.maze", player.position)
+local next_step = ctx:grid_next_step("map.maze", cell.col, cell.row, target_col, target_row)
+
+if next_step ~= nil then
+  player:set_int("grid_next_dir_x", next_step.col - cell.col)
+  player:set_int("grid_next_dir_y", next_step.row - cell.row)
+end
+```
+
+`ctx:grid_cell_to_world` returns the same world-space cell centers used by
+`motion.grid_agent` and `grid.spawn_from_glyphs`. These helpers are intended
+for game-specific decisions such as ghost target selection, spawn point
+selection, tile-trigger behavior, and authored maze debugging. Keep frequent
+movement integration in `motion.grid_agent`; use Lua to choose desired
+directions and high-level policy.
 
 ## Actor Pools
 

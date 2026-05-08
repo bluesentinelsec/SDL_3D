@@ -64,7 +64,7 @@ The root `sdl3d.game.v0` file is the game entry point. It should contain:
 
 Root-only sections should remain in the root file because they define how the
 game starts and how tools discover the game. Large reusable sections such as
-actors, input, logic, networking, assets, scripts, persistence, and
+actors, grid maps, input, logic, networking, assets, scripts, persistence, and
 presentation should usually live in fragments.
 
 ## Fragment Responsibilities
@@ -73,6 +73,7 @@ Fragments use `sdl3d.fragment.v0` and contribute only mergeable sections. Split
 fragments by editing purpose:
 
 - Actor fragments answer "what exists in the world?"
+- Grid fragments answer "what tile, maze, or board layout drives this level?"
 - Input fragments answer "what can the player do and with which devices?"
 - Logic fragments answer "what happens when a signal, timer, or sensor fires?"
 - Network fragments answer "what is replicated and how sessions flow?"
@@ -81,6 +82,7 @@ fragments by editing purpose:
 Prefer paths that match developer intent:
 
 - `fragments/actors/player.json`
+- `fragments/grids/level_1_maze.json`
 - `fragments/logic/scoring.json`
 - `fragments/network/replication.json`
 - `fragments/input/profiles.json`

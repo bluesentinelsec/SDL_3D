@@ -6969,6 +6969,290 @@ TEST(GameDataRuntime, ArcadeShooterPrimitivesAreDataDriven)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, MazePrimitivesSupportGridMovementLuaQueriesAndGlyphSpawns)
+{
+    const std::filesystem::path dir = unique_test_dir("maze_primitives");
+    write_text(dir / "scripts" / "rules.lua",
+               R"lua(
+local rules = {}
+
+function rules.inspect(_, _, ctx)
+  local world = ctx:grid_cell_to_world("map.maze", 1, 1)
+  ctx:state_set("cell_world_x", world and world.x or -99)
+  ctx:state_set("cell_world_y", world and world.y or -99)
+
+  local cell = ctx:grid_world_to_cell("map.maze", world)
+  ctx:state_set("cell_col", cell and cell.col or -1)
+  ctx:state_set("cell_row", cell and cell.row or -1)
+
+  ctx:state_set("wall_tile", ctx:grid_tile("map.maze", 0, 0) or "")
+  ctx:state_set("player_walkable", ctx:grid_walkable("map.maze", 1, 1))
+  ctx:state_set("wall_walkable", ctx:grid_walkable("map.maze", 0, 0))
+
+  local neighbors = ctx:grid_neighbors("map.maze", 1, 1)
+  ctx:state_set("neighbor_count", #neighbors)
+
+  local step = ctx:grid_next_step("map.maze", 1, 3, 3, 1)
+  ctx:state_set("path_found", step ~= nil)
+  ctx:state_set("path_step_col", step and step.col or -1)
+  ctx:state_set("path_step_row", step and step.row or -1)
+  return true
+end
+
+return rules
+)lua");
+    write_text(dir / "maze_primitives.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Maze Primitives", "id": "test.maze_primitives", "version": "0.1.0" },
+  "world": { "name": "world.maze_primitives", "kind": "fixed_screen" },
+  "scripts": [
+    { "id": "script.rules", "path": "scripts/rules.lua", "module": "test.maze" }
+  ],
+  "grid_maps": [
+    {
+      "name": "map.maze",
+      "origin": [0.0, 0.0, 0.0],
+      "cell_size": [1.0, 1.0],
+      "row_direction": -1.0,
+      "walkable": [" ", ".", "o", "P", "G"],
+      "rows": [
+        "#####",
+        "#P.o#",
+        "# # #",
+        "#G..#",
+        "#####"
+      ]
+    }
+  ],
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [1.0, -1.0, 0.25] },
+      "properties": {
+        "grid_col": { "type": "int", "value": 1 },
+        "grid_row": { "type": "int", "value": 1 },
+        "grid_dir_x": { "type": "int", "value": 1 },
+        "grid_dir_y": { "type": "int", "value": 0 },
+        "grid_next_dir_x": { "type": "int", "value": 0 },
+        "grid_next_dir_y": { "type": "int", "value": 0 },
+        "grid_speed": { "type": "float", "value": 4.0 }
+      },
+      "components": [
+        { "type": "motion.grid_agent", "map": "map.maze", "speed": 4.0 }
+      ]
+    }
+  ],
+  "actor_archetypes": [
+    {
+      "name": "archetype.pellet",
+      "tags": ["collectible", "pellet"],
+      "properties": {
+        "points": { "type": "int", "value": 10 },
+        "kind": { "type": "string", "value": "pellet" }
+      }
+    },
+    {
+      "name": "archetype.power_pellet",
+      "tags": ["collectible", "power_pellet"],
+      "properties": {
+        "points": { "type": "int", "value": 50 },
+        "kind": { "type": "string", "value": "power" }
+      }
+    }
+  ],
+  "actor_pools": [
+    { "name": "pool.pellets", "archetype": "archetype.pellet", "capacity": 3, "scene": "scene.play" },
+    { "name": "pool.power_pellets", "archetype": "archetype.power_pellet", "capacity": 1, "scene": "scene.play" }
+  ],
+  "signals": ["signal.inspect", "signal.spawn.collectibles"],
+  "adapters": [
+    { "name": "adapter.inspect", "kind": "action", "script": "script.rules", "function": "inspect" }
+  ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.inspect",
+        "actions": [
+          { "type": "adapter.invoke", "adapter": "adapter.inspect" }
+        ]
+      },
+      {
+        "signal": "signal.spawn.collectibles",
+        "actions": [
+          {
+            "type": "grid.spawn_from_glyphs",
+            "map": "map.maze",
+            "output_count_key": "spawned_collectibles",
+            "spawns": [
+              { "glyph": ".", "pool": "pool.pellets", "properties": { "kind": "pellet" } },
+              { "glyph": "o", "pool": "pool.power_pellets", "properties": { "kind": "power" } }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.player"] })json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "maze_primitives.game.json").string().c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.inspect"), nullptr);
+    const sdl3d_properties *state = sdl3d_game_data_scene_state(runtime);
+    EXPECT_FLOAT_EQ(sdl3d_properties_get_float(state, "cell_world_x", -99.0f), 1.0f);
+    EXPECT_FLOAT_EQ(sdl3d_properties_get_float(state, "cell_world_y", -99.0f), -1.0f);
+    EXPECT_EQ(sdl3d_properties_get_int(state, "cell_col", -1), 1);
+    EXPECT_EQ(sdl3d_properties_get_int(state, "cell_row", -1), 1);
+    EXPECT_STREQ(sdl3d_properties_get_string(state, "wall_tile", ""), "#");
+    EXPECT_TRUE(sdl3d_properties_get_bool(state, "player_walkable", false));
+    EXPECT_FALSE(sdl3d_properties_get_bool(state, "wall_walkable", true));
+    EXPECT_EQ(sdl3d_properties_get_int(state, "neighbor_count", 0), 2);
+    EXPECT_TRUE(sdl3d_properties_get_bool(state, "path_found", false));
+    EXPECT_GE(sdl3d_properties_get_int(state, "path_step_col", -1), 1);
+    EXPECT_GE(sdl3d_properties_get_int(state, "path_step_row", -1), 1);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.collectibles"), nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(state, "spawned_collectibles", 0), 4);
+    sdl3d_registered_actor *pellet0 = sdl3d_game_data_find_actor(runtime, "pool.pellets.0");
+    sdl3d_registered_actor *pellet2 = sdl3d_game_data_find_actor(runtime, "pool.pellets.2");
+    sdl3d_registered_actor *power = sdl3d_game_data_find_actor(runtime, "pool.power_pellets.0");
+    ASSERT_NE(pellet0, nullptr);
+    ASSERT_NE(pellet2, nullptr);
+    ASSERT_NE(power, nullptr);
+    EXPECT_TRUE(pellet0->active);
+    EXPECT_TRUE(pellet2->active);
+    EXPECT_TRUE(power->active);
+    EXPECT_EQ(sdl3d_properties_get_int(pellet0->props, "grid_col", -1), 2);
+    EXPECT_EQ(sdl3d_properties_get_int(pellet0->props, "grid_row", -1), 1);
+    EXPECT_STREQ(sdl3d_properties_get_string(power->props, "kind", ""), "power");
+    expect_vec3_near(power->position, sdl3d_vec3_make(3.0f, -1.0f, 0.0f));
+
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_col", -1), 2);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_row", -1), 1);
+    expect_vec3_near(player->position, sdl3d_vec3_make(2.0f, -1.0f, 0.25f));
+
+    sdl3d_properties_set_int(player->props, "grid_next_dir_x", 0);
+    sdl3d_properties_set_int(player->props, "grid_next_dir_y", 1);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_col", -1), 3);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_row", -1), 1);
+
+    sdl3d_properties_set_int(player->props, "grid_dir_x", 0);
+    sdl3d_properties_set_int(player->props, "grid_dir_y", -1);
+    sdl3d_properties_set_int(player->props, "grid_next_dir_x", 0);
+    sdl3d_properties_set_int(player->props, "grid_next_dir_y", -1);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_col", -1), 3);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_row", -1), 1);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidMazePrimitiveData)
+{
+    const std::filesystem::path dir = unique_test_dir("maze_primitive_validation");
+    write_text(dir / "scenes" / "play.scene.json", R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play" })json");
+
+    struct Case
+    {
+        const char *name;
+        const char *json;
+        const char *message;
+    };
+
+    const Case cases[] = {
+        {
+            "ragged_rows",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "world": { "name": "world.invalid", "kind": "fixed_screen" },
+  "grid_maps": [
+    { "name": "map.bad", "walkable": ["."], "rows": ["###", "##"] }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "grid map rows must have identical widths",
+        },
+        {
+            "bad_grid_agent_map",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "world": { "name": "world.invalid", "kind": "fixed_screen" },
+  "entities": [
+    { "name": "entity.actor", "components": [{ "type": "motion.grid_agent", "map": "map.missing" }] }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "unknown grid map",
+        },
+        {
+            "bad_spawn_glyph",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "world": { "name": "world.invalid", "kind": "fixed_screen" },
+  "grid_maps": [
+    { "name": "map.maze", "walkable": ["."], "rows": [".."] }
+  ],
+  "actor_archetypes": [
+    { "name": "archetype.pickup" }
+  ],
+  "actor_pools": [
+    { "name": "pool.pickups", "archetype": "archetype.pickup", "capacity": 1 }
+  ],
+  "signals": ["signal.spawn"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.spawn",
+        "actions": [
+          {
+            "type": "grid.spawn_from_glyphs",
+            "map": "map.maze",
+            "spawns": [{ "glyph": "too_long", "pool": "pool.pickups" }]
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "grid spawn glyph must be a single-byte string",
+        },
+    };
+
+    for (const Case &test_case : cases)
+    {
+        const std::filesystem::path path = dir / (std::string(test_case.name) + ".game.json");
+        write_text(path, test_case.json);
+        char error[512]{};
+        EXPECT_FALSE(sdl3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.message), std::string::npos) << test_case.name << ": " << error;
+    }
+
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
 {
     const std::filesystem::path dir = unique_test_dir("actor_pool_validation");

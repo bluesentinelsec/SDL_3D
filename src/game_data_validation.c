@@ -70,6 +70,7 @@ typedef struct validation_names
     name_table actor_archetypes;
     name_table actor_pools;
     name_table actor_pool_actors;
+    name_table grid_maps;
     name_table signals;
     name_table scripts;
     name_table script_modules;
@@ -1873,9 +1874,9 @@ static bool import_path_is_safe_relative(const char *path)
 static bool import_section_name_allowed(const char *name)
 {
     static const char *const allowed[] = {
-        "storage",     "persistence", "profiles", "assets",           "scripts",      "input",   "render",
-        "transitions", "ui",          "entities", "actor_archetypes", "actor_pools",  "signals", "logic",
-        "adapters",    "network",     "haptics",  "presentation",     "update_phases"};
+        "storage",     "persistence", "profiles", "assets",    "scripts",          "input",        "render",
+        "transitions", "ui",          "entities", "grid_maps", "actor_archetypes", "actor_pools",  "signals",
+        "logic",       "adapters",    "network",  "haptics",   "presentation",     "update_phases"};
     for (size_t i = 0; name != NULL && i < SDL_arraysize(allowed); ++i)
     {
         if (SDL_strcmp(name, allowed[i]) == 0)
@@ -2516,9 +2517,10 @@ static bool is_wave_axis_value(yyjson_val *value)
 static bool is_supported_component_type(const char *type)
 {
     const char *known[] = {
-        "adapter.controller", "collision.aabb",    "collision.circle", "control.axis_1d",    "light.directional",
-        "light.point",        "light.spot",        "motion.oscillate", "motion.scroll_wrap", "motion.spin",
-        "motion.velocity_2d", "particles.emitter", "property.decay",   "render.cube",        "render.sphere",
+        "adapter.controller", "collision.aabb",     "collision.circle", "control.axis_1d",
+        "light.directional",  "light.point",        "light.spot",       "motion.grid_agent",
+        "motion.oscillate",   "motion.scroll_wrap", "motion.spin",      "motion.velocity_2d",
+        "particles.emitter",  "property.decay",     "render.cube",      "render.sphere",
     };
 
     if (type == NULL)
@@ -2614,6 +2616,27 @@ static bool collect_entities(validation_context *ctx, yyjson_val *root, validati
         if (!yyjson_is_obj(entity))
             return validation_error(ctx, path, "entity entries must be objects");
         if (!require_unique_name(ctx, &names->entities, "entity", json_string(entity, "name"), path))
+            return false;
+    }
+    return true;
+}
+
+static bool collect_grid_maps(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *maps = obj_get(root, "grid_maps");
+    if (maps == NULL)
+        return true;
+    if (!yyjson_is_arr(maps))
+        return validation_error(ctx, "$.grid_maps", "grid_maps must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(maps); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.grid_maps[%zu]", i);
+        yyjson_val *map = yyjson_arr_get(maps, i);
+        if (!yyjson_is_obj(map))
+            return validation_error(ctx, path, "grid map entries must be objects");
+        if (!require_unique_name(ctx, &names->grid_maps, "grid map", json_string(map, "name"), path))
             return false;
     }
     return true;
@@ -3133,14 +3156,14 @@ static bool collect_network_input_channels(validation_context *ctx, yyjson_val *
 static bool collect_names(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     return collect_signals(ctx, root, names) && collect_entities(ctx, root, names) &&
-           collect_actor_archetypes(ctx, root, names) && collect_actor_pools(ctx, root, names) &&
-           collect_scripts(ctx, root, names) && collect_adapters(ctx, root, names) &&
-           collect_input_actions(ctx, root, names) && collect_input_assignment_sets(ctx, root, names) &&
-           collect_input_profiles(ctx, root, names) && collect_network_input_channels(ctx, root, names) &&
-           collect_cameras(ctx, root, names) && collect_fonts(ctx, root, names) &&
-           collect_sprite_assets(ctx, root, names) && collect_images(ctx, root, names) &&
-           collect_audio_assets(ctx, root, names) && collect_timers(ctx, root, names) &&
-           collect_sensors(ctx, root, names);
+           collect_grid_maps(ctx, root, names) && collect_actor_archetypes(ctx, root, names) &&
+           collect_actor_pools(ctx, root, names) && collect_scripts(ctx, root, names) &&
+           collect_adapters(ctx, root, names) && collect_input_actions(ctx, root, names) &&
+           collect_input_assignment_sets(ctx, root, names) && collect_input_profiles(ctx, root, names) &&
+           collect_network_input_channels(ctx, root, names) && collect_cameras(ctx, root, names) &&
+           collect_fonts(ctx, root, names) && collect_sprite_assets(ctx, root, names) &&
+           collect_images(ctx, root, names) && collect_audio_assets(ctx, root, names) &&
+           collect_timers(ctx, root, names) && collect_sensors(ctx, root, names);
 }
 
 static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)
@@ -3495,6 +3518,64 @@ static bool validate_input_profiles(validation_context *ctx, yyjson_val *root, v
     return ok;
 }
 
+static bool is_single_byte_string(yyjson_val *value)
+{
+    return yyjson_is_str(value) && SDL_strlen(yyjson_get_str(value)) == 1U;
+}
+
+static bool validate_grid_maps(validation_context *ctx, yyjson_val *root)
+{
+    yyjson_val *maps = obj_get(root, "grid_maps");
+    for (size_t i = 0; yyjson_is_arr(maps) && i < yyjson_arr_size(maps); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.grid_maps[%zu]", i);
+        yyjson_val *map = yyjson_arr_get(maps, i);
+        yyjson_val *rows = obj_get(map, "rows");
+        if (!yyjson_is_arr(rows) || yyjson_arr_size(rows) <= 0)
+            return validation_error(ctx, path, "grid map rows must be a non-empty array");
+        yyjson_val *first = yyjson_arr_get(rows, 0);
+        if (!yyjson_is_str(first) || SDL_strlen(yyjson_get_str(first)) <= 0)
+        {
+            char row_path[PATH_BUFFER_SIZE];
+            format_path(row_path, sizeof(row_path), "%s.rows[0]", path);
+            return validation_error(ctx, row_path, "grid map rows must be non-empty strings");
+        }
+        const size_t width = SDL_strlen(yyjson_get_str(first));
+        for (size_t row = 0; row < yyjson_arr_size(rows); ++row)
+        {
+            yyjson_val *row_value = yyjson_arr_get(rows, row);
+            if (!yyjson_is_str(row_value) || SDL_strlen(yyjson_get_str(row_value)) != width)
+                return validation_error(ctx, path, "grid map rows must have identical widths");
+        }
+        yyjson_val *cell_size = obj_get(map, "cell_size");
+        if (cell_size != NULL && !is_vec_array(cell_size, 2))
+            return validation_error(ctx, path, "grid map cell_size must be a vec2");
+        if (cell_size != NULL && (yyjson_get_num(yyjson_arr_get(cell_size, 0)) <= 0.0 ||
+                                  yyjson_get_num(yyjson_arr_get(cell_size, 1)) <= 0.0))
+            return validation_error(ctx, path, "grid map cell_size values must be positive");
+        yyjson_val *origin = obj_get(map, "origin");
+        if (origin != NULL && !is_vec_array(origin, 3))
+            return validation_error(ctx, path, "grid map origin must be a vec3");
+        yyjson_val *row_direction = obj_get(map, "row_direction");
+        if (row_direction != NULL && !yyjson_is_num(row_direction))
+            return validation_error(ctx, path, "grid map row_direction must be numeric");
+        yyjson_val *walkable = obj_get(map, "walkable");
+        if (!yyjson_is_arr(walkable) || yyjson_arr_size(walkable) <= 0)
+            return validation_error(ctx, path, "grid map walkable must be a non-empty array");
+        for (size_t glyph = 0; glyph < yyjson_arr_size(walkable); ++glyph)
+        {
+            if (!is_single_byte_string(yyjson_arr_get(walkable, glyph)))
+                return validation_error(ctx, path, "grid map walkable entries must be single-byte glyph strings");
+        }
+        yyjson_val *wrap_x = obj_get(map, "wrap_x");
+        yyjson_val *wrap_y = obj_get(map, "wrap_y");
+        if ((wrap_x != NULL && !yyjson_is_bool(wrap_x)) || (wrap_y != NULL && !yyjson_is_bool(wrap_y)))
+            return validation_error(ctx, path, "grid map wrap flags must be booleans");
+    }
+    return true;
+}
+
 static bool validate_components(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *entities = obj_get(root, "entities");
@@ -3574,6 +3655,14 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 if (!yyjson_is_num(obj_get(component, "min")) || !yyjson_is_num(obj_get(component, "max")))
                     return validation_error(ctx, path, "motion.scroll_wrap requires numeric min and max");
             }
+            else if (SDL_strcmp(type, "motion.grid_agent") == 0)
+            {
+                if (!require_ref(ctx, &names->grid_maps, "grid map", json_string(component, "map"), path))
+                    return false;
+                yyjson_val *speed = obj_get(component, "speed");
+                if (speed != NULL && (!yyjson_is_num(speed) || yyjson_get_num(speed) < 0.0))
+                    return validation_error(ctx, path, "motion.grid_agent speed must be a non-negative number");
+            }
             else if (SDL_strcmp(type, "motion.spin") == 0)
             {
                 yyjson_val *property = obj_get(component, "property");
@@ -3641,6 +3730,15 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                 !validation_warning(ctx, component_path, "unsupported component type '%s'", type))
             {
                 return false;
+            }
+            if (SDL_strcmp(type, "motion.grid_agent") == 0)
+            {
+                if (!require_ref(ctx, &names->grid_maps, "grid map", json_string(component, "map"), component_path))
+                    return false;
+                yyjson_val *speed = obj_get(component, "speed");
+                if (speed != NULL && (!yyjson_is_num(speed) || yyjson_get_num(speed) < 0.0))
+                    return validation_error(ctx, component_path,
+                                            "motion.grid_agent speed must be a non-negative number");
             }
         }
     }
@@ -3965,6 +4063,42 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *properties = obj_get(action, "properties");
         if (properties != NULL && !yyjson_is_obj(properties))
             return validation_error(ctx, json_path, "projectile.fire properties must be an object");
+        return true;
+    }
+    if (SDL_strcmp(type, "grid.spawn_from_glyphs") == 0)
+    {
+        if (!require_ref(ctx, &names->grid_maps, "grid map", json_string(action, "map"), json_path))
+            return false;
+        yyjson_val *spawns = obj_get(action, "spawns");
+        if (!yyjson_is_arr(spawns) || yyjson_arr_size(spawns) <= 0)
+            return validation_error(ctx, json_path, "grid.spawn_from_glyphs requires a non-empty spawns array");
+        yyjson_val *properties = obj_get(action, "properties");
+        if (properties != NULL && !yyjson_is_obj(properties))
+            return validation_error(ctx, json_path, "grid.spawn_from_glyphs properties must be an object");
+        yyjson_val *z = obj_get(action, "z");
+        if (z != NULL && !yyjson_is_num(z))
+            return validation_error(ctx, json_path, "grid.spawn_from_glyphs z must be numeric");
+        yyjson_val *output_count_key = obj_get(action, "output_count_key");
+        if (output_count_key != NULL && !is_non_empty_string(action, "output_count_key"))
+            return validation_error(ctx, json_path, "grid.spawn_from_glyphs output_count_key must be non-empty");
+        for (size_t i = 0; i < yyjson_arr_size(spawns); ++i)
+        {
+            char spawn_path[PATH_BUFFER_SIZE];
+            format_path(spawn_path, sizeof(spawn_path), "%s.spawns[%zu]", json_path, i);
+            yyjson_val *spawn = yyjson_arr_get(spawns, i);
+            if (!yyjson_is_obj(spawn))
+                return validation_error(ctx, spawn_path, "grid spawn entries must be objects");
+            if (!is_single_byte_string(obj_get(spawn, "glyph")))
+                return validation_error(ctx, spawn_path, "grid spawn glyph must be a single-byte string");
+            if (!require_ref(ctx, &names->actor_pools, "actor pool", json_string(spawn, "pool"), spawn_path))
+                return false;
+            yyjson_val *spawn_properties = obj_get(spawn, "properties");
+            if (spawn_properties != NULL && !yyjson_is_obj(spawn_properties))
+                return validation_error(ctx, spawn_path, "grid spawn properties must be an object");
+            yyjson_val *spawn_z = obj_get(spawn, "z");
+            if (spawn_z != NULL && !yyjson_is_num(spawn_z))
+                return validation_error(ctx, spawn_path, "grid spawn z must be numeric");
+        }
         return true;
     }
     if (SDL_strcmp(type, "input.reset_bindings") == 0)
@@ -5777,7 +5911,8 @@ static bool validate_details(validation_context *ctx, yyjson_val *root, validati
 {
     return validate_storage(ctx, root) && validate_persistence(ctx, root, names) &&
            validate_input_bindings(ctx, root) && validate_input_assignment_sets(ctx, root) &&
-           validate_input_profiles(ctx, root, names) && validate_components(ctx, root, names) &&
+           validate_input_profiles(ctx, root, names) && validate_grid_maps(ctx, root) &&
+           validate_components(ctx, root, names) &&
            validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases", names) &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
            validate_actor_archetypes_and_pools(ctx, root, names) && validate_network(ctx, root, names) &&
@@ -5800,6 +5935,7 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->actor_archetypes);
     name_table_destroy(&names->actor_pools);
     name_table_destroy(&names->actor_pool_actors);
+    name_table_destroy(&names->grid_maps);
     name_table_destroy(&names->signals);
     name_table_destroy(&names->scripts);
     name_table_destroy(&names->script_modules);
