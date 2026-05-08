@@ -7993,10 +7993,6 @@ TEST(GameDataRuntime, RejectsInvalidFpsSectorController)
 
 TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
 {
-#if defined(__EMSCRIPTEN__)
-    GTEST_SKIP() << "Full Doom data smoke test is native-only; focused sector-door tests cover wasm.";
-#endif
-
     const std::filesystem::path doom_path = doom_level_data_path();
     ASSERT_TRUE(std::filesystem::exists(doom_path)) << doom_path;
 

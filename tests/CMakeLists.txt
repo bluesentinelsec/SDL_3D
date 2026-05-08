@@ -227,6 +227,13 @@ else()
                 SDL3D_DEMOS_ROOT="/demos"
                 SDL3D_GAME_DATA_FIXTURE_DIR="/game_data"
         )
+        target_link_options(
+            sdl3d_game_data_test
+            PRIVATE
+                "-sALLOW_MEMORY_GROWTH=1"
+                "-sINITIAL_MEMORY=134217728"
+                "-sMAXIMUM_MEMORY=536870912"
+        )
         sdl3d_target_preload_asset_directory(sdl3d_game_data_test "${CMAKE_SOURCE_DIR}/demos" "/demos")
         sdl3d_target_preload_asset_directory(sdl3d_game_data_test "${CMAKE_SOURCE_DIR}/tests/assets/game_data"
                                              "/game_data")
