@@ -13159,6 +13159,7 @@ static void update_motion_components(sdl3d_game_data_runtime *runtime, yyjson_va
                         progress = 0.0f;
                         sdl3d_properties_set_int(actor->props, "grid_col", col);
                         sdl3d_properties_set_int(actor->props, "grid_row", row);
+                        sdl3d_properties_set_float(actor->props, "grid_progress", 0.0f);
                         sdl3d_properties_set_int(actor->props, "grid_target_col", -1);
                         sdl3d_properties_set_int(actor->props, "grid_target_row", -1);
                         sdl3d_vec3 centered;

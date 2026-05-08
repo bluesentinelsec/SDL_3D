@@ -1,0 +1,22 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "assets": {
+    "fonts": [
+      {
+        "id": "font.title",
+        "builtin": "Inter",
+        "size": 82
+      },
+      {
+        "id": "font.hud",
+        "builtin": "Inter",
+        "size": 31
+      },
+      {
+        "id": "font.small",
+        "builtin": "Inter",
+        "size": 21
+      }
+    ]
+  }
+}

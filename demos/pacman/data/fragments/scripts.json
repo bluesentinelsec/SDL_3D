@@ -1,0 +1,29 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "scripts": [
+    {
+      "id": "script.pacman",
+      "path": "scripts/pacman.lua",
+      "module": "pacman",
+      "dependencies": [],
+      "autoload": true
+    }
+  ],
+  "adapters": [
+    {
+      "name": "adapter.pacman.start",
+      "script": "script.pacman",
+      "function": "start"
+    },
+    {
+      "name": "adapter.pacman.after_spawn",
+      "script": "script.pacman",
+      "function": "after_spawn"
+    },
+    {
+      "name": "adapter.pacman.update",
+      "script": "script.pacman",
+      "function": "update"
+    }
+  ]
+}

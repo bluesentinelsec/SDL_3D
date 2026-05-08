@@ -7165,6 +7165,64 @@ return rules
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, PacmanDemoLoadsAndRunsMazeCollection)
+{
+    const std::filesystem::path demos_root =
+        std::filesystem::path(SDL3D_PONG_DATA_PATH).parent_path().parent_path().parent_path();
+    const std::filesystem::path pacman_path = demos_root / "pacman" / "data" / "pacman.game.json";
+    ASSERT_TRUE(std::filesystem::exists(pacman_path)) << pacman_path;
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pacman_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    ASSERT_NE(runtime, nullptr);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
+    const sdl3d_properties *state = sdl3d_game_data_scene_state(runtime);
+    ASSERT_NE(state, nullptr);
+    EXPECT_GT(sdl3d_properties_get_int(state, "pacman_spawned_collectibles", 0), 0);
+
+    sdl3d_registered_actor *pac = sdl3d_game_data_find_actor(runtime, "entity.pacman");
+    sdl3d_registered_actor *wall = sdl3d_game_data_find_actor(runtime, "pool.walls.0");
+    sdl3d_registered_actor *pellet = sdl3d_game_data_find_actor(runtime, "pool.pellets.0");
+    sdl3d_registered_actor *power = sdl3d_game_data_find_actor(runtime, "pool.power_pellets.0");
+    sdl3d_registered_actor *game = sdl3d_game_data_find_actor(runtime, "entity.game");
+    ASSERT_NE(pac, nullptr);
+    ASSERT_NE(wall, nullptr);
+    ASSERT_NE(pellet, nullptr);
+    ASSERT_NE(power, nullptr);
+    ASSERT_NE(game, nullptr);
+    EXPECT_TRUE(wall->active);
+    EXPECT_TRUE(pellet->active);
+    EXPECT_TRUE(power->active);
+    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "pool.walls.0"));
+    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "pool.pellets.0"));
+
+    const int spawned_collectibles = sdl3d_properties_get_int(state, "pacman_spawned_collectibles", 0);
+    EXPECT_EQ(sdl3d_properties_get_int(game->props, "pellets_remaining", -1), spawned_collectibles);
+    EXPECT_EQ(sdl3d_properties_get_int(pac->props, "grid_col", -1), 1);
+    EXPECT_EQ(sdl3d_properties_get_int(pac->props, "grid_row", -1), 1);
+
+    for (int i = 0; i < 24; ++i)
+    {
+        ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f / 60.0f));
+    }
+
+    EXPECT_GT(sdl3d_properties_get_int(pac->props, "grid_col", -1), 1);
+    EXPECT_LT(sdl3d_properties_get_int(game->props, "pellets_remaining", spawned_collectibles), spawned_collectibles);
+    EXPECT_GT(sdl3d_properties_get_int(game->props, "score", 0), 0);
+    EXPECT_TRUE(sdl3d_game_data_find_actor(runtime, "entity.ghost.red")->active);
+    EXPECT_TRUE(sdl3d_game_data_find_actor(runtime, "entity.ghost.pink")->active);
+    EXPECT_TRUE(sdl3d_game_data_find_actor(runtime, "entity.ghost.cyan")->active);
+    EXPECT_TRUE(sdl3d_game_data_find_actor(runtime, "entity.ghost.orange")->active);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, RejectsInvalidMazePrimitiveData)
 {
     const std::filesystem::path dir = unique_test_dir("maze_primitive_validation");

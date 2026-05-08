@@ -1,0 +1,539 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "entities": [
+    {
+      "name": "entity.field.base",
+      "active": true,
+      "tags": ["field", "background"],
+      "transform": { "position": [0.0, 0.0, -0.23] },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [12.8, 10.4, 0.14],
+          "color": [3, 4, 18, 255]
+        }
+      ]
+    },
+    {
+      "name": "entity.field.grid_glow",
+      "active": true,
+      "tags": ["field", "glow"],
+      "transform": { "position": [0.0, 0.0, -0.12] },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [11.9, 9.7, 0.08],
+          "color": [3, 10, 42, 255]
+        }
+      ]
+    },
+    {
+      "name": "entity.effect.ambient",
+      "active": true,
+      "tags": ["effect", "particles", "ambient"],
+      "transform": { "position": [0.0, 0.0, 0.42] },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [6.0, 4.8, 0.08],
+          "direction": [0.0, 0.0, 1.0],
+          "spread": 2.4,
+          "speed_min": 0.025,
+          "speed_max": 0.14,
+          "lifetime_min": 3.0,
+          "lifetime_max": 7.0,
+          "size_start": 0.055,
+          "size_end": 0.006,
+          "gravity": 0.0,
+          "max_particles": 220,
+          "emit_rate": 28.0,
+          "color_start": [42, 118, 255, 70],
+          "color_end": [255, 210, 60, 0],
+          "emissive_intensity": 1.45,
+          "camera_facing": true,
+          "depth_test": true,
+          "draw_emissive": [0.2, 0.34, 1.0],
+          "random_seed": 9001
+        }
+      ]
+    },
+    {
+      "name": "entity.pacman",
+      "active": true,
+      "tags": ["player", "pacman"],
+      "transform": { "position": [-5.04, 4.48, 0.28] },
+      "properties": {
+        "grid_col": { "type": "int", "value": 1 },
+        "grid_row": { "type": "int", "value": 1 },
+        "grid_dir_x": { "type": "int", "value": 1 },
+        "grid_dir_y": { "type": "int", "value": 0 },
+        "grid_next_dir_x": { "type": "int", "value": 1 },
+        "grid_next_dir_y": { "type": "int", "value": 0 },
+        "grid_speed": { "type": "float", "value": 6.8 },
+        "mouth_phase": { "type": "float", "value": 0.0 },
+        "radius": { "type": "float", "value": 0.24 }
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.245,
+          "rings": 22,
+          "slices": 28,
+          "color": [255, 218, 32, 255]
+        },
+        {
+          "type": "render.cube",
+          "size": [0.18, 0.06, 0.04],
+          "offset": [0.18, 0.0, 0.07],
+          "color": [6, 5, 16, 255]
+        },
+        {
+          "type": "motion.grid_agent",
+          "map": "map.maze",
+          "speed": 6.8
+        }
+      ]
+    },
+    {
+      "name": "entity.ghost.red",
+      "active": true,
+      "tags": ["ghost", "ghost_red"],
+      "transform": { "position": [-0.56, 0.56, 0.28] },
+      "properties": {
+        "grid_col": { "type": "int", "value": 9 },
+        "grid_row": { "type": "int", "value": 7 },
+        "grid_dir_x": { "type": "int", "value": -1 },
+        "grid_dir_y": { "type": "int", "value": 0 },
+        "grid_next_dir_x": { "type": "int", "value": -1 },
+        "grid_next_dir_y": { "type": "int", "value": 0 },
+        "grid_speed": { "type": "float", "value": 4.35 },
+        "home_col": { "type": "int", "value": 9 },
+        "home_row": { "type": "int", "value": 7 },
+        "scatter_col": { "type": "int", "value": 19 },
+        "scatter_row": { "type": "int", "value": 1 },
+        "idle_timer": { "type": "float", "value": 0.0 },
+        "phase": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        { "type": "render.sphere", "radius": 0.245, "rings": 18, "slices": 24, "color": [255, 38, 55, 255] },
+        { "type": "render.cube", "size": [0.42, 0.28, 0.18], "offset": [0.0, -0.03, -0.04], "color": [255, 38, 55, 255] },
+        { "type": "render.sphere", "radius": 0.055, "rings": 8, "slices": 10, "offset": [-0.08, -0.15, 0.13], "color": [245, 250, 255, 255] },
+        { "type": "render.sphere", "radius": 0.055, "rings": 8, "slices": 10, "offset": [0.08, -0.15, 0.13], "color": [245, 250, 255, 255] },
+        { "type": "motion.grid_agent", "map": "map.maze", "speed": 4.35 }
+      ]
+    },
+    {
+      "name": "entity.ghost.pink",
+      "active": true,
+      "tags": ["ghost", "ghost_pink"],
+      "transform": { "position": [0.0, 0.56, 0.28] },
+      "properties": {
+        "grid_col": { "type": "int", "value": 10 },
+        "grid_row": { "type": "int", "value": 7 },
+        "grid_dir_x": { "type": "int", "value": 1 },
+        "grid_dir_y": { "type": "int", "value": 0 },
+        "grid_next_dir_x": { "type": "int", "value": 1 },
+        "grid_next_dir_y": { "type": "int", "value": 0 },
+        "grid_speed": { "type": "float", "value": 4.05 },
+        "home_col": { "type": "int", "value": 10 },
+        "home_row": { "type": "int", "value": 7 },
+        "scatter_col": { "type": "int", "value": 1 },
+        "scatter_row": { "type": "int", "value": 1 },
+        "idle_timer": { "type": "float", "value": 0.6 },
+        "phase": { "type": "float", "value": 0.25 }
+      },
+      "components": [
+        { "type": "render.sphere", "radius": 0.245, "rings": 18, "slices": 24, "color": [255, 88, 190, 255] },
+        { "type": "render.cube", "size": [0.42, 0.28, 0.18], "offset": [0.0, -0.03, -0.04], "color": [255, 88, 190, 255] },
+        { "type": "render.sphere", "radius": 0.055, "rings": 8, "slices": 10, "offset": [-0.08, -0.15, 0.13], "color": [245, 250, 255, 255] },
+        { "type": "render.sphere", "radius": 0.055, "rings": 8, "slices": 10, "offset": [0.08, -0.15, 0.13], "color": [245, 250, 255, 255] },
+        { "type": "motion.grid_agent", "map": "map.maze", "speed": 4.05 }
+      ]
+    },
+    {
+      "name": "entity.ghost.cyan",
+      "active": true,
+      "tags": ["ghost", "ghost_cyan"],
+      "transform": { "position": [0.56, 0.56, 0.28] },
+      "properties": {
+        "grid_col": { "type": "int", "value": 11 },
+        "grid_row": { "type": "int", "value": 7 },
+        "grid_dir_x": { "type": "int", "value": 1 },
+        "grid_dir_y": { "type": "int", "value": 0 },
+        "grid_next_dir_x": { "type": "int", "value": 1 },
+        "grid_next_dir_y": { "type": "int", "value": 0 },
+        "grid_speed": { "type": "float", "value": 3.95 },
+        "home_col": { "type": "int", "value": 11 },
+        "home_row": { "type": "int", "value": 7 },
+        "scatter_col": { "type": "int", "value": 19 },
+        "scatter_row": { "type": "int", "value": 15 },
+        "idle_timer": { "type": "float", "value": 1.2 },
+        "phase": { "type": "float", "value": 0.5 }
+      },
+      "components": [
+        { "type": "render.sphere", "radius": 0.245, "rings": 18, "slices": 24, "color": [72, 232, 255, 255] },
+        { "type": "render.cube", "size": [0.42, 0.28, 0.18], "offset": [0.0, -0.03, -0.04], "color": [72, 232, 255, 255] },
+        { "type": "render.sphere", "radius": 0.055, "rings": 8, "slices": 10, "offset": [-0.08, -0.15, 0.13], "color": [245, 250, 255, 255] },
+        { "type": "render.sphere", "radius": 0.055, "rings": 8, "slices": 10, "offset": [0.08, -0.15, 0.13], "color": [245, 250, 255, 255] },
+        { "type": "motion.grid_agent", "map": "map.maze", "speed": 3.95 }
+      ]
+    },
+    {
+      "name": "entity.ghost.orange",
+      "active": true,
+      "tags": ["ghost", "ghost_orange"],
+      "transform": { "position": [0.0, 0.0, 0.28] },
+      "properties": {
+        "grid_col": { "type": "int", "value": 10 },
+        "grid_row": { "type": "int", "value": 8 },
+        "grid_dir_x": { "type": "int", "value": 0 },
+        "grid_dir_y": { "type": "int", "value": 1 },
+        "grid_next_dir_x": { "type": "int", "value": 0 },
+        "grid_next_dir_y": { "type": "int", "value": 1 },
+        "grid_speed": { "type": "float", "value": 3.8 },
+        "home_col": { "type": "int", "value": 10 },
+        "home_row": { "type": "int", "value": 8 },
+        "scatter_col": { "type": "int", "value": 1 },
+        "scatter_row": { "type": "int", "value": 15 },
+        "idle_timer": { "type": "float", "value": 1.8 },
+        "phase": { "type": "float", "value": 0.75 }
+      },
+      "components": [
+        { "type": "render.sphere", "radius": 0.245, "rings": 18, "slices": 24, "color": [255, 142, 30, 255] },
+        { "type": "render.cube", "size": [0.42, 0.28, 0.18], "offset": [0.0, -0.03, -0.04], "color": [255, 142, 30, 255] },
+        { "type": "render.sphere", "radius": 0.055, "rings": 8, "slices": 10, "offset": [-0.08, -0.15, 0.13], "color": [245, 250, 255, 255] },
+        { "type": "render.sphere", "radius": 0.055, "rings": 8, "slices": 10, "offset": [0.08, -0.15, 0.13], "color": [245, 250, 255, 255] },
+        { "type": "motion.grid_agent", "map": "map.maze", "speed": 3.8 }
+      ]
+    },
+    {
+      "name": "entity.game",
+      "active": true,
+      "tags": ["state", "game"],
+      "properties": {
+        "score": { "type": "int", "value": 0 },
+        "pellets_remaining": { "type": "int", "value": 0 },
+        "power_timer": { "type": "float", "value": 0.0 },
+        "power_active": { "type": "bool", "value": false },
+        "defeat_warnings": { "type": "int", "value": 0 },
+        "ghosts_defeated": { "type": "int", "value": 0 },
+        "won": { "type": "bool", "value": false },
+        "game_over": { "type": "bool", "value": false },
+        "effect_timer": { "type": "float", "value": 0.0 },
+        "ghost_decision_timer": { "type": "float", "value": 0.0 }
+      }
+    },
+    {
+      "name": "entity.controller",
+      "active": true,
+      "tags": ["controller"],
+      "components": [
+        {
+          "type": "adapter.controller",
+          "adapter": "adapter.pacman.update"
+        }
+      ]
+    },
+    {
+      "name": "entity.presentation",
+      "active": true,
+      "tags": ["presentation"],
+      "properties": {
+        "pulse": { "type": "float", "value": 0.0 },
+        "pulse_speed": { "type": "float", "value": 1.55 }
+      }
+    }
+  ],
+  "actor_archetypes": [
+    {
+      "name": "archetype.wall",
+      "tags": ["wall", "maze_geometry"],
+      "transform": { "position": [0.0, 0.0, 0.04] },
+      "properties": {
+        "kind": { "type": "string", "value": "wall" }
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [0.54, 0.54, 0.26],
+          "color": [20, 54, 210, 255]
+        },
+        {
+          "type": "render.cube",
+          "size": [0.42, 0.42, 0.08],
+          "offset": [0.0, 0.0, 0.18],
+          "color": [42, 122, 255, 255],
+          "emissive": true
+        },
+        {
+          "type": "collision.aabb",
+          "half_extents": [0.27, 0.27, 0.16]
+        }
+      ]
+    },
+    {
+      "name": "archetype.pellet",
+      "tags": ["collectible", "pellet"],
+      "transform": { "position": [0.0, 0.0, 0.20] },
+      "properties": {
+        "kind": { "type": "string", "value": "pellet" },
+        "points": { "type": "int", "value": 10 },
+        "radius": { "type": "float", "value": 0.14 }
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.07,
+          "rings": 10,
+          "slices": 12,
+          "color": [255, 226, 116, 255],
+          "emissive": true
+        }
+      ]
+    },
+    {
+      "name": "archetype.power_pellet",
+      "tags": ["collectible", "power_pellet"],
+      "transform": { "position": [0.0, 0.0, 0.22] },
+      "properties": {
+        "kind": { "type": "string", "value": "power" },
+        "points": { "type": "int", "value": 50 },
+        "radius": { "type": "float", "value": 0.20 }
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.135,
+          "rings": 14,
+          "slices": 18,
+          "color": [255, 245, 160, 255],
+          "emissive": true
+        },
+        {
+          "type": "particles.emitter",
+          "shape": "sphere",
+          "extents": [0.12, 0.12, 0.04],
+          "direction": [0.0, 0.0, 1.0],
+          "spread": 2.0,
+          "speed_min": 0.05,
+          "speed_max": 0.22,
+          "lifetime_min": 0.20,
+          "lifetime_max": 0.55,
+          "size_start": 0.028,
+          "size_end": 0.003,
+          "gravity": 0.0,
+          "max_particles": 42,
+          "emit_rate": 32.0,
+          "color_start": [255, 245, 90, 190],
+          "color_end": [80, 220, 255, 0],
+          "emissive_intensity": 2.5,
+          "camera_facing": true,
+          "depth_test": true,
+          "draw_emissive": [1.0, 0.84, 0.12],
+          "random_seed": 401
+        }
+      ]
+    },
+    {
+      "name": "archetype.pellet_burst",
+      "tags": ["effect", "pellet_effect"],
+      "transform": { "position": [0.0, 0.0, 0.32] },
+      "properties": {
+        "age": { "type": "float", "value": 0.0 },
+        "ttl": { "type": "float", "value": 0.34 }
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.08,
+          "rings": 8,
+          "slices": 10,
+          "color": [255, 235, 92, 180],
+          "emissive": true
+        },
+        {
+          "type": "particles.emitter",
+          "shape": "sphere",
+          "extents": [0.18, 0.18, 0.08],
+          "direction": [0.0, 0.0, 1.0],
+          "spread": 3.14,
+          "speed_min": 0.35,
+          "speed_max": 1.4,
+          "lifetime_min": 0.12,
+          "lifetime_max": 0.46,
+          "size_start": 0.065,
+          "size_end": 0.004,
+          "gravity": 0.0,
+          "max_particles": 70,
+          "emit_rate": 190.0,
+          "color_start": [255, 226, 74, 220],
+          "color_end": [255, 80, 200, 0],
+          "emissive_intensity": 2.8,
+          "camera_facing": true,
+          "depth_test": true,
+          "draw_emissive": [1.0, 0.72, 0.10],
+          "random_seed": 702
+        },
+        {
+          "type": "light.point",
+          "color": [1.0, 0.72, 0.12],
+          "intensity": 3.8,
+          "range": 1.6
+        }
+      ]
+    },
+    {
+      "name": "archetype.power_burst",
+      "tags": ["effect", "power_effect"],
+      "transform": { "position": [0.0, 0.0, 0.38] },
+      "properties": {
+        "age": { "type": "float", "value": 0.0 },
+        "ttl": { "type": "float", "value": 0.75 }
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.16,
+          "rings": 12,
+          "slices": 16,
+          "color": [120, 235, 255, 190],
+          "emissive": true
+        },
+        {
+          "type": "particles.emitter",
+          "shape": "sphere",
+          "extents": [0.38, 0.38, 0.12],
+          "direction": [0.0, 0.0, 1.0],
+          "spread": 3.14,
+          "speed_min": 0.45,
+          "speed_max": 2.2,
+          "lifetime_min": 0.18,
+          "lifetime_max": 0.72,
+          "size_start": 0.105,
+          "size_end": 0.006,
+          "gravity": 0.0,
+          "max_particles": 120,
+          "emit_rate": 240.0,
+          "color_start": [80, 225, 255, 235],
+          "color_end": [255, 230, 72, 0],
+          "emissive_intensity": 3.4,
+          "camera_facing": true,
+          "depth_test": true,
+          "draw_emissive": [0.2, 0.9, 1.0],
+          "random_seed": 1701
+        },
+        {
+          "type": "light.point",
+          "color": [0.25, 0.90, 1.0],
+          "intensity": 7.0,
+          "range": 2.5
+        }
+      ]
+    },
+    {
+      "name": "archetype.ghost_burst",
+      "tags": ["effect", "ghost_effect"],
+      "transform": { "position": [0.0, 0.0, 0.40] },
+      "properties": {
+        "age": { "type": "float", "value": 0.0 },
+        "ttl": { "type": "float", "value": 0.85 }
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.18,
+          "rings": 12,
+          "slices": 16,
+          "color": [255, 88, 210, 190],
+          "emissive": true
+        },
+        {
+          "type": "particles.emitter",
+          "shape": "sphere",
+          "extents": [0.44, 0.44, 0.12],
+          "direction": [0.0, 0.0, 1.0],
+          "spread": 3.14,
+          "speed_min": 0.50,
+          "speed_max": 2.4,
+          "lifetime_min": 0.18,
+          "lifetime_max": 0.74,
+          "size_start": 0.095,
+          "size_end": 0.006,
+          "gravity": 0.0,
+          "max_particles": 130,
+          "emit_rate": 255.0,
+          "color_start": [255, 80, 210, 230],
+          "color_end": [72, 225, 255, 0],
+          "emissive_intensity": 3.2,
+          "camera_facing": true,
+          "depth_test": true,
+          "draw_emissive": [1.0, 0.18, 0.72],
+          "random_seed": 808
+        },
+        {
+          "type": "light.point",
+          "color": [1.0, 0.16, 0.76],
+          "intensity": 6.5,
+          "range": 2.35
+        }
+      ]
+    }
+  ],
+  "actor_pools": [
+    {
+      "name": "pool.walls",
+      "archetype": "archetype.wall",
+      "capacity": 220,
+      "scene": "scene.play",
+      "initial_active": false,
+      "on_exhausted": "fail",
+      "on_scene_exit": "reset"
+    },
+    {
+      "name": "pool.pellets",
+      "archetype": "archetype.pellet",
+      "capacity": 180,
+      "scene": "scene.play",
+      "initial_active": false,
+      "on_exhausted": "fail",
+      "on_scene_exit": "reset"
+    },
+    {
+      "name": "pool.power_pellets",
+      "archetype": "archetype.power_pellet",
+      "capacity": 8,
+      "scene": "scene.play",
+      "initial_active": false,
+      "on_exhausted": "fail",
+      "on_scene_exit": "reset"
+    },
+    {
+      "name": "pool.pellet_bursts",
+      "archetype": "archetype.pellet_burst",
+      "capacity": 80,
+      "scene": "scene.play",
+      "initial_active": false,
+      "on_exhausted": "reuse_oldest",
+      "on_scene_exit": "reset"
+    },
+    {
+      "name": "pool.power_bursts",
+      "archetype": "archetype.power_burst",
+      "capacity": 20,
+      "scene": "scene.play",
+      "initial_active": false,
+      "on_exhausted": "reuse_oldest",
+      "on_scene_exit": "reset"
+    },
+    {
+      "name": "pool.ghost_bursts",
+      "archetype": "archetype.ghost_burst",
+      "capacity": 16,
+      "scene": "scene.play",
+      "initial_active": false,
+      "on_exhausted": "reuse_oldest",
+      "on_scene_exit": "reset"
+    }
+  ]
+}
