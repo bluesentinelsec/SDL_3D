@@ -1,0 +1,31 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.doom_level.play",
+  "camera": "camera.doom.fixed",
+  "updates_game": false,
+  "renders_world": true,
+  "world": {
+    "sector_levels": [
+      {
+        "level": "sector.doom.e1m1",
+        "variant": "lightmapped",
+        "position": [0.0, 0.0, 0.0],
+        "portal_culling": true
+      }
+    ]
+  },
+  "ui": {
+    "text": [
+      {
+        "name": "ui.doom_level.phase",
+        "text": "DATA-DRIVEN SECTOR LEVEL",
+        "x": 0.5,
+        "y": 0.06,
+        "scale": 1.0,
+        "centered": true,
+        "normalized": true,
+        "color": [220, 230, 255, 230]
+      }
+    ]
+  }
+}

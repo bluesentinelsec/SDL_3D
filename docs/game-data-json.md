@@ -327,7 +327,33 @@ At load time SDL3D builds three runtime variants per sector level:
 - `vertex_baked`: baked vertex lighting without a lightmap atlas
 - `unlit`: raw material color/texture without baked lights
 
-Later renderer and controller phases should consume these runtime descriptors
+Scenes render sector levels by declaring instances under `world.sector_levels`:
+
+```json
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.level_1",
+  "camera": "camera.level_1",
+  "world": {
+    "sector_levels": [
+      {
+        "level": "sector.e1m1",
+        "variant": "lightmapped",
+        "position": [0.0, 0.0, 0.0],
+        "portal_culling": true
+      }
+    ]
+  }
+}
+```
+
+`level` references a top-level sector level. `variant` defaults to
+`lightmapped` and may be `lightmapped`, `vertex_baked`, or `unlit`.
+`position` defaults to the origin and translates the level as a whole.
+`portal_culling` defaults to `true`; when enabled, generic presentation
+computes visibility from the active camera before drawing the level.
+
+Renderer, controller, and editor phases should consume runtime descriptors
 instead of parsing JSON directly. `world.kind` remains a high-level statement
 of spatial intent; `sector_levels` is the concrete sector-world data.
 

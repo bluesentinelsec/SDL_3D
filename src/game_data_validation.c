@@ -5986,6 +5986,50 @@ static bool scene_has_menu_name(yyjson_val *scene_root, const char *name)
     return false;
 }
 
+static bool validate_scene_sector_levels(validation_context *ctx, yyjson_val *scene_root, const char *json_path,
+                                         validation_names *names)
+{
+    yyjson_val *world = obj_get(scene_root, "world");
+    if (world == NULL)
+        return true;
+    if (!yyjson_is_obj(world))
+        return validation_error(ctx, json_path, "scene world must be an object");
+
+    yyjson_val *sector_levels = obj_get(world, "sector_levels");
+    if (sector_levels == NULL)
+        return true;
+    char levels_path[PATH_BUFFER_SIZE];
+    format_path(levels_path, sizeof(levels_path), "%s.world.sector_levels", json_path);
+    if (!yyjson_is_arr(sector_levels))
+        return validation_error(ctx, levels_path, "scene world.sector_levels must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(sector_levels); ++i)
+    {
+        char entry_path[PATH_BUFFER_SIZE];
+        format_path(entry_path, sizeof(entry_path), "%s[%zu]", levels_path, i);
+        yyjson_val *entry = yyjson_arr_get(sector_levels, i);
+        if (!yyjson_is_obj(entry))
+            return validation_error(ctx, entry_path, "scene sector level entries must be objects");
+        if (!require_ref(ctx, &names->sector_levels, "sector level", json_string(entry, "level"), entry_path))
+            return false;
+
+        const char *variant = json_string(entry, "variant");
+        if (variant != NULL && SDL_strcmp(variant, "lightmapped") != 0 && SDL_strcmp(variant, "vertex_baked") != 0 &&
+            SDL_strcmp(variant, "unlit") != 0)
+        {
+            return validation_error(ctx, entry_path,
+                                    "scene sector level variant must be lightmapped, vertex_baked, or unlit");
+        }
+        yyjson_val *position = obj_get(entry, "position");
+        if (position != NULL && !is_exact_vec_array(position, 3))
+            return validation_error(ctx, entry_path, "scene sector level position must be a vec3 array");
+        yyjson_val *portal_culling = obj_get(entry, "portal_culling");
+        if (portal_culling != NULL && !yyjson_is_bool(portal_culling))
+            return validation_error(ctx, entry_path, "scene sector level portal_culling must be a boolean");
+    }
+    return true;
+}
+
 static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yyjson_val *game_root,
                                    validation_names *names, const char *json_path)
 {
@@ -6009,6 +6053,9 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
         return validation_error(ctx, json_path, "scene camera must be a string");
     const char *camera = json_string(root, "camera");
     if (camera != NULL && !require_ref(ctx, &names->cameras, "camera", camera, json_path))
+        return false;
+
+    if (!validate_scene_sector_levels(ctx, root, json_path, names))
         return false;
 
     char phases_path[PATH_BUFFER_SIZE];

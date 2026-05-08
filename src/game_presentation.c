@@ -25,6 +25,15 @@ typedef struct primitive_draw_context
     bool sphere_batch_active;
 } primitive_draw_context;
 
+typedef struct sector_level_draw_context
+{
+    sdl3d_render_context *renderer;
+    const sdl3d_camera3d *camera;
+    bool *sector_visible;
+    int sector_visible_capacity;
+    bool ok;
+} sector_level_draw_context;
+
 typedef struct ui_draw_context
 {
     const sdl3d_game_data_runtime *runtime;
@@ -960,6 +969,85 @@ static bool draw_render_primitives_evaluated_with_cache(const sdl3d_game_data_ru
     ok = flush_sphere_draw_batch(&context) && ok;
     SDL_free(context.sphere_batch_positions);
     return ok;
+}
+
+static bool draw_sector_level_instance(void *userdata, const sdl3d_game_data_sector_level_instance *instance)
+{
+    sector_level_draw_context *context = (sector_level_draw_context *)userdata;
+    if (context == NULL || context->renderer == NULL || instance == NULL || instance->level == NULL)
+        return false;
+
+    sdl3d_visibility_result vis;
+    SDL_zero(vis);
+    const sdl3d_visibility_result *vis_ptr = NULL;
+    if (instance->portal_culling && context->camera != NULL && instance->sectors != NULL && instance->sector_count > 0)
+    {
+        if (context->sector_visible_capacity < instance->sector_count)
+        {
+            bool *visible =
+                (bool *)SDL_realloc(context->sector_visible, (size_t)instance->sector_count * sizeof(*visible));
+            if (visible == NULL)
+            {
+                context->ok = false;
+                return false;
+            }
+            context->sector_visible = visible;
+            context->sector_visible_capacity = instance->sector_count;
+        }
+        vis.sector_visible = context->sector_visible;
+        sdl3d_camera3d local_camera = *context->camera;
+        local_camera.position.x -= instance->position.x;
+        local_camera.position.y -= instance->position.y;
+        local_camera.position.z -= instance->position.z;
+        local_camera.target.x -= instance->position.x;
+        local_camera.target.y -= instance->position.y;
+        local_camera.target.z -= instance->position.z;
+        sdl3d_level_compute_visibility_from_camera(
+            instance->level, instance->sectors, &local_camera, sdl3d_get_render_context_width(context->renderer),
+            sdl3d_get_render_context_height(context->renderer), 0.01f, 1000.0f, &vis);
+        vis_ptr = &vis;
+    }
+
+    bool pushed = false;
+    if (instance->position.x != 0.0f || instance->position.y != 0.0f || instance->position.z != 0.0f)
+    {
+        if (!sdl3d_push_matrix(context->renderer))
+        {
+            context->ok = false;
+            return false;
+        }
+        pushed = true;
+        if (!sdl3d_translate(context->renderer, instance->position.x, instance->position.y, instance->position.z))
+        {
+            context->ok = false;
+            if (pushed)
+                (void)sdl3d_pop_matrix(context->renderer);
+            return false;
+        }
+    }
+
+    const bool drawn = sdl3d_draw_level(context->renderer, instance->level, vis_ptr, (sdl3d_color){255, 255, 255, 255});
+    if (pushed && !sdl3d_pop_matrix(context->renderer))
+        context->ok = false;
+    if (!drawn)
+        context->ok = false;
+    return context->ok;
+}
+
+bool sdl3d_game_data_draw_sector_levels(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
+                                        const sdl3d_camera3d *camera)
+{
+    if (runtime == NULL || renderer == NULL)
+        return false;
+
+    sector_level_draw_context context;
+    SDL_zero(context);
+    context.renderer = renderer;
+    context.camera = camera;
+    context.ok = true;
+    const bool iterated = sdl3d_game_data_for_each_sector_level_instance(runtime, draw_sector_level_instance, &context);
+    SDL_free(context.sector_visible);
+    return iterated && context.ok;
 }
 
 bool sdl3d_game_data_draw_render_primitives(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer)
@@ -1991,6 +2079,7 @@ bool sdl3d_game_data_draw_frame(const sdl3d_game_data_frame_desc *frame)
         if (sdl3d_begin_mode_3d(frame->renderer, camera))
         {
             ok = run_frame_hook(frame, frame->before_world_3d) && ok;
+            ok = sdl3d_game_data_draw_sector_levels(frame->runtime, frame->renderer, &camera) && ok;
             if (frame->particle_cache != NULL)
                 ok = sdl3d_game_data_draw_particles(frame->runtime, frame->renderer, frame->particle_cache) && ok;
             ok = draw_render_primitives_evaluated_with_cache(frame->runtime, frame->renderer, frame->render_eval,

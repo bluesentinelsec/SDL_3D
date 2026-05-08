@@ -5689,6 +5689,19 @@ const sdl3d_properties *sdl3d_game_data_scene_state(const sdl3d_game_data_runtim
     return runtime != NULL ? runtime->scene_state : NULL;
 }
 
+static const sector_level_runtime *find_sector_level_runtime(const sdl3d_game_data_runtime *runtime, const char *name)
+{
+    if (runtime == NULL || name == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->sector_level_count; ++i)
+    {
+        const sector_level_runtime *level = &runtime->sector_levels[i];
+        if (level->name != NULL && SDL_strcmp(level->name, name) == 0)
+            return level;
+    }
+    return NULL;
+}
+
 bool sdl3d_game_data_get_sector_level(const sdl3d_game_data_runtime *runtime, const char *name,
                                       sdl3d_game_data_sector_level *out_level)
 {
@@ -5697,26 +5710,94 @@ bool sdl3d_game_data_get_sector_level(const sdl3d_game_data_runtime *runtime, co
     if (runtime == NULL || name == NULL || out_level == NULL)
         return false;
 
-    for (int i = 0; i < runtime->sector_level_count; ++i)
-    {
-        const sector_level_runtime *level = &runtime->sector_levels[i];
-        if (level->name == NULL || SDL_strcmp(level->name, name) != 0)
-            continue;
+    const sector_level_runtime *level = find_sector_level_runtime(runtime, name);
+    if (level == NULL)
+        return false;
 
-        out_level->name = level->name;
-        out_level->sectors = level->sectors;
-        out_level->sector_names = level->sector_names;
-        out_level->sector_count = level->sector_count;
-        out_level->materials = level->materials;
-        out_level->material_count = level->material_count;
-        out_level->lights = level->lights;
-        out_level->light_count = level->light_count;
-        out_level->lightmapped = &level->lightmapped;
-        out_level->vertex_baked = &level->vertex_baked;
-        out_level->unlit = &level->unlit;
-        return true;
+    out_level->name = level->name;
+    out_level->sectors = level->sectors;
+    out_level->sector_names = level->sector_names;
+    out_level->sector_count = level->sector_count;
+    out_level->materials = level->materials;
+    out_level->material_count = level->material_count;
+    out_level->lights = level->lights;
+    out_level->light_count = level->light_count;
+    out_level->lightmapped = &level->lightmapped;
+    out_level->vertex_baked = &level->vertex_baked;
+    out_level->unlit = &level->unlit;
+    return true;
+}
+
+static sdl3d_game_data_sector_level_variant sector_level_variant_from_string(const char *variant,
+                                                                             const sdl3d_level **out_level,
+                                                                             const sector_level_runtime *level)
+{
+    if (out_level != NULL)
+        *out_level = NULL;
+    if (level == NULL)
+        return 0;
+
+    const char *name = variant != NULL ? variant : "lightmapped";
+    if (SDL_strcmp(name, "lightmapped") == 0)
+    {
+        if (out_level != NULL)
+            *out_level = &level->lightmapped;
+        return SDL3D_GAME_DATA_SECTOR_LEVEL_LIGHTMAPPED;
     }
-    return false;
+    if (SDL_strcmp(name, "vertex_baked") == 0)
+    {
+        if (out_level != NULL)
+            *out_level = &level->vertex_baked;
+        return SDL3D_GAME_DATA_SECTOR_LEVEL_VERTEX_BAKED;
+    }
+    if (SDL_strcmp(name, "unlit") == 0)
+    {
+        if (out_level != NULL)
+            *out_level = &level->unlit;
+        return SDL3D_GAME_DATA_SECTOR_LEVEL_UNLIT;
+    }
+    return 0;
+}
+
+bool sdl3d_game_data_for_each_sector_level_instance(const sdl3d_game_data_runtime *runtime,
+                                                    sdl3d_game_data_sector_level_instance_fn callback, void *userdata)
+{
+    if (runtime == NULL || callback == NULL)
+        return false;
+
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    yyjson_val *instances = obj_get(obj_get(scene != NULL ? scene->root : NULL, "world"), "sector_levels");
+    if (instances == NULL)
+        return true;
+    if (!yyjson_is_arr(instances))
+        return false;
+
+    for (size_t i = 0; i < yyjson_arr_size(instances); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(instances, i);
+        const char *level_name = json_string(entry, "level", NULL);
+        const char *variant_name = json_string(entry, "variant", "lightmapped");
+        const sector_level_runtime *level_runtime = find_sector_level_runtime(runtime, level_name);
+        const sdl3d_level *level = NULL;
+        const sdl3d_game_data_sector_level_variant variant =
+            sector_level_variant_from_string(variant_name, &level, level_runtime);
+        if (level_runtime == NULL || level == NULL || variant == 0)
+            return false;
+
+        sdl3d_game_data_sector_level_instance instance;
+        SDL_zero(instance);
+        instance.level_name = level_runtime->name;
+        instance.variant_name = variant_name;
+        instance.variant = variant;
+        instance.level = level;
+        instance.sectors = level_runtime->sectors;
+        instance.sector_count = level_runtime->sector_count;
+        instance.position = json_vec3(entry, "position", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+        instance.portal_culling = json_bool(entry, "portal_culling", true);
+        if (!callback(userdata, &instance))
+            return true;
+    }
+    return true;
 }
 
 void sdl3d_game_data_ui_state_init(sdl3d_game_data_ui_state *state)

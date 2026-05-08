@@ -249,6 +249,52 @@ extern "C"
         const sdl3d_level *unlit;
     } sdl3d_game_data_sector_level;
 
+    /** @brief Runtime mesh variant selected for an authored sector level instance. */
+    typedef enum sdl3d_game_data_sector_level_variant
+    {
+        /** @brief Baked lightmap atlas variant. */
+        SDL3D_GAME_DATA_SECTOR_LEVEL_LIGHTMAPPED = 1,
+        /** @brief Baked per-vertex lighting variant without a lightmap atlas. */
+        SDL3D_GAME_DATA_SECTOR_LEVEL_VERTEX_BAKED = 2,
+        /** @brief Unlit material variant. */
+        SDL3D_GAME_DATA_SECTOR_LEVEL_UNLIT = 3,
+    } sdl3d_game_data_sector_level_variant;
+
+    /**
+     * @brief Active-scene instance of an authored sector level.
+     *
+     * Scene files declare sector level instances under `world.sector_levels`.
+     * The runtime resolves the authored level name to built level data and
+     * supplies the selected render variant. Pointers are runtime-owned.
+     */
+    typedef struct sdl3d_game_data_sector_level_instance
+    {
+        /** @brief Authored sector level name. */
+        const char *level_name;
+        /** @brief Authored variant name, such as `lightmapped`. */
+        const char *variant_name;
+        /** @brief Selected built level variant. */
+        sdl3d_game_data_sector_level_variant variant;
+        /** @brief Built level selected by @p variant. */
+        const sdl3d_level *level;
+        /** @brief Runtime sector definitions parallel to @p level. */
+        const sdl3d_sector *sectors;
+        /** @brief Number of entries in @p sectors. */
+        int sector_count;
+        /** @brief World-space translation applied before drawing. */
+        sdl3d_vec3 position;
+        /** @brief Whether renderers should compute portal visibility for this instance. */
+        bool portal_culling;
+    } sdl3d_game_data_sector_level_instance;
+
+    /**
+     * @brief Callback for active authored sector level instances.
+     *
+     * Return false to stop iteration early.
+     */
+    typedef bool (*sdl3d_game_data_sector_level_instance_fn)(void *userdata,
+                                                             const sdl3d_game_data_sector_level_instance *instance);
+
     /**
      * @brief Runtime metrics used when evaluating data-authored UI bindings.
      *
@@ -822,6 +868,18 @@ extern "C"
      */
     bool sdl3d_game_data_get_sector_level(const sdl3d_game_data_runtime *runtime, const char *name,
                                           sdl3d_game_data_sector_level *out_level);
+
+    /**
+     * @brief Iterate sector levels declared by the active scene.
+     *
+     * The active scene owns placement and variant selection through
+     * `world.sector_levels`. This helper is renderer-agnostic so tests,
+     * editors, and custom hosts can inspect the same resolved instances that
+     * the generic presentation layer draws.
+     */
+    bool sdl3d_game_data_for_each_sector_level_instance(const sdl3d_game_data_runtime *runtime,
+                                                        sdl3d_game_data_sector_level_instance_fn callback,
+                                                        void *userdata);
 
     /** @brief Authored game data diagnostic severity. */
     typedef enum sdl3d_game_data_diagnostic_severity
