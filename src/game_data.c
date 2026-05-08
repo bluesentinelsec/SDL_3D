@@ -5,6 +5,7 @@
 
 #include "sdl3d/game_data.h"
 
+#include <SDL3/SDL_error.h>
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_log.h>
@@ -323,6 +324,21 @@ typedef struct grid_pickup_layer_runtime
     int render_position_capacity;
 } grid_pickup_layer_runtime;
 
+typedef struct sector_level_runtime
+{
+    char *name;
+    sdl3d_sector *sectors;
+    const char **sector_names;
+    int sector_count;
+    sdl3d_level_material *materials;
+    int material_count;
+    sdl3d_level_light *lights;
+    int light_count;
+    sdl3d_level lightmapped;
+    sdl3d_level vertex_baked;
+    sdl3d_level unlit;
+} sector_level_runtime;
+
 typedef enum actor_pool_exhaustion_policy
 {
     ACTOR_POOL_EXHAUST_FAIL,
@@ -476,6 +492,8 @@ typedef struct sdl3d_game_data_runtime
     int grid_actor_index_capacity;
     grid_pickup_layer_runtime *grid_pickup_layers;
     int grid_pickup_layer_count;
+    sector_level_runtime *sector_levels;
+    int sector_level_count;
     actor_pool_runtime *actor_pools;
     int actor_pool_count;
     runtime_direct_connect_session *direct_connect_sessions;
@@ -2868,6 +2886,252 @@ static bool load_grid_pickup_layers(sdl3d_game_data_runtime *runtime, yyjson_val
                 set_error(error_buffer, error_buffer_size, "failed to allocate grid pickup kind data");
                 return false;
             }
+        }
+    }
+    return true;
+}
+
+static void strip_sector_level_lightmap(sdl3d_level *level)
+{
+    if (level == NULL)
+        return;
+
+    SDL_free(level->lightmap_pixels);
+    level->lightmap_pixels = NULL;
+    level->lightmap_width = 0;
+    level->lightmap_height = 0;
+    sdl3d_free_texture(&level->lightmap_texture);
+    for (int i = 0; i < level->model.mesh_count; ++i)
+    {
+        SDL_free(level->model.meshes[i].lightmap_uvs);
+        level->model.meshes[i].lightmap_uvs = NULL;
+    }
+}
+
+static bool json_float_array(yyjson_val *value, float *out_values, int count, const float *fallback)
+{
+    if (out_values == NULL || count <= 0)
+        return false;
+
+    if (!yyjson_is_arr(value) || yyjson_arr_size(value) < (size_t)count)
+    {
+        if (fallback != NULL)
+            SDL_memcpy(out_values, fallback, (size_t)count * sizeof(*out_values));
+        return fallback != NULL;
+    }
+
+    for (int i = 0; i < count; ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(value, (size_t)i);
+        if (!yyjson_is_num(entry))
+        {
+            if (fallback != NULL)
+                SDL_memcpy(out_values, fallback, (size_t)count * sizeof(*out_values));
+            return fallback != NULL;
+        }
+        out_values[i] = (float)yyjson_get_num(entry);
+    }
+    return true;
+}
+
+static int sector_material_index(yyjson_val *materials, yyjson_val *ref, bool allow_none)
+{
+    if (allow_none && ref == NULL)
+        return -1;
+    if (yyjson_is_null(ref) && allow_none)
+        return -1;
+    if (yyjson_is_int(ref))
+    {
+        const int index = (int)yyjson_get_int(ref);
+        if (allow_none && index == -1)
+            return -1;
+        return (index >= 0 && index < (int)yyjson_arr_size(materials)) ? index : -2;
+    }
+    if (yyjson_is_str(ref))
+    {
+        const char *name = yyjson_get_str(ref);
+        if (allow_none && name != NULL && SDL_strcmp(name, "none") == 0)
+            return -1;
+        for (size_t i = 0; yyjson_is_arr(materials) && i < yyjson_arr_size(materials); ++i)
+        {
+            yyjson_val *material = yyjson_arr_get(materials, i);
+            if (SDL_strcmp(json_string(material, "name", ""), name != NULL ? name : "") == 0)
+                return (int)i;
+        }
+    }
+    return -2;
+}
+
+static bool load_sector_level_materials(sector_level_runtime *level, yyjson_val *materials, char *error_buffer,
+                                        int error_buffer_size)
+{
+    level->material_count = yyjson_is_arr(materials) ? (int)yyjson_arr_size(materials) : 0;
+    level->materials = (sdl3d_level_material *)SDL_calloc((size_t)level->material_count, sizeof(*level->materials));
+    if (level->materials == NULL && level->material_count > 0)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate sector level materials");
+        return false;
+    }
+
+    static const float default_albedo[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    for (int i = 0; i < level->material_count; ++i)
+    {
+        yyjson_val *material_json = yyjson_arr_get(materials, (size_t)i);
+        yyjson_val *albedo = obj_get(material_json, "albedo");
+        sdl3d_level_material *material = &level->materials[i];
+        SDL_memcpy(material->albedo, default_albedo, sizeof(material->albedo));
+        if (yyjson_is_arr(albedo) && yyjson_arr_size(albedo) >= 3)
+        {
+            for (int channel = 0; channel < 4 && channel < (int)yyjson_arr_size(albedo); ++channel)
+            {
+                yyjson_val *value = yyjson_arr_get(albedo, (size_t)channel);
+                if (yyjson_is_num(value))
+                    material->albedo[channel] = (float)yyjson_get_num(value);
+            }
+        }
+        material->metallic = json_float(material_json, "metallic", 0.0f);
+        material->roughness = json_float(material_json, "roughness", 1.0f);
+        material->texture = json_string(material_json, "texture", NULL);
+        material->tex_scale = json_float(material_json, "tex_scale", 4.0f);
+    }
+    return true;
+}
+
+static bool load_sector_level_sectors(sector_level_runtime *level, yyjson_val *materials, yyjson_val *sectors,
+                                      char *error_buffer, int error_buffer_size)
+{
+    level->sector_count = yyjson_is_arr(sectors) ? (int)yyjson_arr_size(sectors) : 0;
+    level->sectors = (sdl3d_sector *)SDL_calloc((size_t)level->sector_count, sizeof(*level->sectors));
+    level->sector_names = (const char **)SDL_calloc((size_t)level->sector_count, sizeof(*level->sector_names));
+    if ((level->sectors == NULL || level->sector_names == NULL) && level->sector_count > 0)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate sector level sectors");
+        return false;
+    }
+
+    for (int sector_index = 0; sector_index < level->sector_count; ++sector_index)
+    {
+        yyjson_val *sector_json = yyjson_arr_get(sectors, (size_t)sector_index);
+        yyjson_val *points = obj_get(sector_json, "points");
+        sdl3d_sector *sector = &level->sectors[sector_index];
+
+        level->sector_names[sector_index] = json_string(sector_json, "name", NULL);
+        sector->num_points = yyjson_is_arr(points) ? (int)yyjson_arr_size(points) : 0;
+        for (int point_index = 0; point_index < sector->num_points; ++point_index)
+        {
+            yyjson_val *point = yyjson_arr_get(points, (size_t)point_index);
+            json_vec2_value(point, 0.0f, 0.0f, &sector->points[point_index][0], &sector->points[point_index][1]);
+        }
+
+        sector->floor_y = json_float(sector_json, "floor_y", 0.0f);
+        sector->ceil_y = json_float(sector_json, "ceil_y", sector->floor_y + 4.0f);
+        sector->floor_material = sector_material_index(materials, obj_get(sector_json, "floor_material"), true);
+        sector->ceil_material = sector_material_index(materials, obj_get(sector_json, "ceil_material"), true);
+        sector->wall_material = sector_material_index(materials, obj_get(sector_json, "wall_material"), false);
+        json_float_array(obj_get(sector_json, "floor_normal"), sector->floor_normal, 3, NULL);
+        json_float_array(obj_get(sector_json, "ceil_normal"), sector->ceil_normal, 3, NULL);
+        sector->ambient_sound_id = json_int(sector_json, "ambient_sound_id", 0);
+        json_float_array(obj_get(sector_json, "push_velocity"), sector->push_velocity, 3, NULL);
+        sector->damage_per_second = json_float(sector_json, "damage_per_second", 0.0f);
+    }
+    return true;
+}
+
+static bool load_sector_level_lights(sector_level_runtime *level, yyjson_val *lights, char *error_buffer,
+                                     int error_buffer_size)
+{
+    level->light_count = yyjson_is_arr(lights) ? (int)yyjson_arr_size(lights) : 0;
+    if (level->light_count <= 0)
+        return true;
+
+    level->lights = (sdl3d_level_light *)SDL_calloc((size_t)level->light_count, sizeof(*level->lights));
+    if (level->lights == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate sector level lights");
+        return false;
+    }
+
+    static const float default_color[3] = {1.0f, 1.0f, 1.0f};
+    for (int i = 0; i < level->light_count; ++i)
+    {
+        yyjson_val *light_json = yyjson_arr_get(lights, (size_t)i);
+        sdl3d_level_light *light = &level->lights[i];
+        json_float_array(obj_get(light_json, "position"), light->position, 3, NULL);
+        json_float_array(obj_get(light_json, "color"), light->color, 3, default_color);
+        light->intensity = json_float(light_json, "intensity", 1.0f);
+        light->range = json_float(light_json, "range", 8.0f);
+    }
+    return true;
+}
+
+static bool build_sector_level_variants(sector_level_runtime *level, char *error_buffer, int error_buffer_size)
+{
+    if (!sdl3d_build_level(level->sectors, level->sector_count, level->materials, level->material_count, level->lights,
+                           level->light_count, &level->lightmapped))
+    {
+        set_errorf(error_buffer, error_buffer_size, "sector level '%s' lightmapped build failed: %s", level->name,
+                   SDL_GetError());
+        return false;
+    }
+    if (!sdl3d_build_level(level->sectors, level->sector_count, level->materials, level->material_count, level->lights,
+                           level->light_count, &level->vertex_baked))
+    {
+        set_errorf(error_buffer, error_buffer_size, "sector level '%s' vertex-baked build failed: %s", level->name,
+                   SDL_GetError());
+        return false;
+    }
+    strip_sector_level_lightmap(&level->vertex_baked);
+    if (!sdl3d_build_level(level->sectors, level->sector_count, level->materials, level->material_count, NULL, 0,
+                           &level->unlit))
+    {
+        set_errorf(error_buffer, error_buffer_size, "sector level '%s' unlit build failed: %s", level->name,
+                   SDL_GetError());
+        return false;
+    }
+    return true;
+}
+
+static bool load_sector_levels(sdl3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                               int error_buffer_size)
+{
+    yyjson_val *levels = obj_get(root, "sector_levels");
+    if (levels == NULL)
+        return true;
+    if (!yyjson_is_arr(levels))
+    {
+        set_error(error_buffer, error_buffer_size, "sector_levels must be an array");
+        return false;
+    }
+
+    runtime->sector_level_count = (int)yyjson_arr_size(levels);
+    runtime->sector_levels =
+        (sector_level_runtime *)SDL_calloc((size_t)runtime->sector_level_count, sizeof(*runtime->sector_levels));
+    if (runtime->sector_levels == NULL && runtime->sector_level_count > 0)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate sector levels");
+        return false;
+    }
+
+    for (int i = 0; i < runtime->sector_level_count; ++i)
+    {
+        yyjson_val *level_json = yyjson_arr_get(levels, (size_t)i);
+        sector_level_runtime *level = &runtime->sector_levels[i];
+        level->name = SDL_strdup(json_string(level_json, "name", ""));
+        if (level->name == NULL)
+        {
+            set_error(error_buffer, error_buffer_size, "failed to allocate sector level name");
+            return false;
+        }
+
+        yyjson_val *materials = obj_get(level_json, "materials");
+        yyjson_val *sectors = obj_get(level_json, "sectors");
+        yyjson_val *lights = obj_get(level_json, "lights");
+        if (!load_sector_level_materials(level, materials, error_buffer, error_buffer_size) ||
+            !load_sector_level_sectors(level, materials, sectors, error_buffer, error_buffer_size) ||
+            !load_sector_level_lights(level, lights, error_buffer, error_buffer_size) ||
+            !build_sector_level_variants(level, error_buffer, error_buffer_size))
+        {
+            return false;
         }
     }
     return true;
@@ -5423,6 +5687,36 @@ sdl3d_properties *sdl3d_game_data_mutable_scene_state(sdl3d_game_data_runtime *r
 const sdl3d_properties *sdl3d_game_data_scene_state(const sdl3d_game_data_runtime *runtime)
 {
     return runtime != NULL ? runtime->scene_state : NULL;
+}
+
+bool sdl3d_game_data_get_sector_level(const sdl3d_game_data_runtime *runtime, const char *name,
+                                      sdl3d_game_data_sector_level *out_level)
+{
+    if (out_level != NULL)
+        SDL_zero(*out_level);
+    if (runtime == NULL || name == NULL || out_level == NULL)
+        return false;
+
+    for (int i = 0; i < runtime->sector_level_count; ++i)
+    {
+        const sector_level_runtime *level = &runtime->sector_levels[i];
+        if (level->name == NULL || SDL_strcmp(level->name, name) != 0)
+            continue;
+
+        out_level->name = level->name;
+        out_level->sectors = level->sectors;
+        out_level->sector_names = level->sector_names;
+        out_level->sector_count = level->sector_count;
+        out_level->materials = level->materials;
+        out_level->material_count = level->material_count;
+        out_level->lights = level->lights;
+        out_level->light_count = level->light_count;
+        out_level->lightmapped = &level->lightmapped;
+        out_level->vertex_baked = &level->vertex_baked;
+        out_level->unlit = &level->unlit;
+        return true;
+    }
+    return false;
 }
 
 void sdl3d_game_data_ui_state_init(sdl3d_game_data_ui_state *state)
@@ -14780,6 +15074,7 @@ bool sdl3d_game_data_load_asset_with_options(sdl3d_asset_resolver *assets, const
               load_entities(runtime, root, error_buffer, error_buffer_size) &&
               load_grid_maps(runtime, root, error_buffer, error_buffer_size) &&
               load_grid_pickup_layers(runtime, root, error_buffer, error_buffer_size) &&
+              load_sector_levels(runtime, root, error_buffer, error_buffer_size) &&
               load_actor_pools(runtime, root, error_buffer, error_buffer_size) &&
               load_input(runtime, root, error_buffer, error_buffer_size) &&
               load_timers(runtime, logic, error_buffer, error_buffer_size) && load_sensors(runtime, logic) &&
@@ -16910,6 +17205,17 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
         SDL_free(runtime->grid_pickup_layers[i].cells);
         SDL_free(runtime->grid_pickup_layers[i].render_positions);
     }
+    for (int i = 0; i < runtime->sector_level_count; ++i)
+    {
+        SDL_free(runtime->sector_levels[i].name);
+        SDL_free(runtime->sector_levels[i].sectors);
+        SDL_free(runtime->sector_levels[i].sector_names);
+        SDL_free(runtime->sector_levels[i].materials);
+        SDL_free(runtime->sector_levels[i].lights);
+        sdl3d_free_level(&runtime->sector_levels[i].lightmapped);
+        sdl3d_free_level(&runtime->sector_levels[i].vertex_baked);
+        sdl3d_free_level(&runtime->sector_levels[i].unlit);
+    }
     for (int i = 0; i < runtime->actor_pool_count; ++i)
     {
         SDL_free(runtime->actor_pools[i].name);
@@ -16965,6 +17271,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->grid_maps);
     SDL_free(runtime->grid_actor_indices);
     SDL_free(runtime->grid_pickup_layers);
+    SDL_free(runtime->sector_levels);
     SDL_free(runtime->actor_pools);
     SDL_free(runtime->direct_connect_sessions);
     SDL_free(runtime->host_sessions);
