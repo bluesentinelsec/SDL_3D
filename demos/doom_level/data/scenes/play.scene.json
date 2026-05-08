@@ -1,9 +1,19 @@
 {
   "schema": "sdl3d.scene.v0",
   "name": "scene.doom_level.play",
-  "camera": "camera.doom.fixed",
-  "updates_game": false,
+  "camera": "camera.doom.player",
+  "updates_game": true,
   "renders_world": true,
+  "entities": ["entity.player"],
+  "input": {
+    "actions": [
+      "action.move.forward",
+      "action.move.back",
+      "action.move.left",
+      "action.move.right",
+      "action.jump"
+    ]
+  },
   "world": {
     "sector_levels": [
       {
@@ -18,7 +28,7 @@
     "text": [
       {
         "name": "ui.doom_level.phase",
-        "text": "DATA-DRIVEN SECTOR LEVEL",
+        "text": "DATA-DRIVEN SECTOR LEVEL - WASD + MOUSE",
         "x": 0.5,
         "y": 0.06,
         "scale": 1.0,

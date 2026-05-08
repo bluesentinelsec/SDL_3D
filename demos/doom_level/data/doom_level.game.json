@@ -19,16 +19,61 @@
     "ambient_light": [0.18, 0.18, 0.2],
     "cameras": [
       {
-        "name": "camera.doom.fixed",
-        "type": "perspective",
-        "position": [5.0, 1.8, -3.0],
-        "target": [5.0, 1.5, 8.0],
-        "up": [0.0, 1.0, 0.0],
+        "name": "camera.doom.player",
+        "type": "fps",
+        "target_entity": "entity.player",
         "fovy": 65.0,
         "active": true
       }
     ]
   },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.doom_level",
+        "actions": [
+          { "name": "action.move.forward", "bindings": [{ "device": "keyboard", "key": "W" }] },
+          { "name": "action.move.back", "bindings": [{ "device": "keyboard", "key": "S" }] },
+          { "name": "action.move.left", "bindings": [{ "device": "keyboard", "key": "A" }] },
+          { "name": "action.move.right", "bindings": [{ "device": "keyboard", "key": "D" }] },
+          { "name": "action.jump", "bindings": [{ "device": "keyboard", "key": "SPACE" }] }
+        ]
+      }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [5.0, 1.6, 4.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 3.14159 },
+        "pitch": { "type": "float", "value": 0.0 },
+        "current_sector": { "type": "int", "value": -1 }
+      },
+      "components": [
+        {
+          "type": "controller.fps_sector",
+          "sector_level": "sector.doom.e1m1",
+          "actions": {
+            "forward": "action.move.forward",
+            "back": "action.move.back",
+            "left": "action.move.left",
+            "right": "action.move.right",
+            "jump": "action.jump"
+          },
+          "move_speed": 12.0,
+          "jump_velocity": 6.0,
+          "gravity": 14.0,
+          "player_height": 1.6,
+          "player_radius": 0.35,
+          "step_height": 1.1,
+          "ceiling_clearance": 0.1,
+          "mouse_sensitivity": 0.002
+        }
+      ]
+    }
+  ],
   "render": {
     "clear_color": [8, 10, 14, 255],
     "lighting": true,

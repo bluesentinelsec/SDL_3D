@@ -7517,6 +7517,265 @@ TEST(GameDataRuntime, ResolvesActiveSceneSectorLevelInstances)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, RunsAuthoredFpsSectorController)
+{
+    const std::filesystem::path dir = unique_test_dir("fps_sector_controller");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.player",
+  "updates_game": true,
+  "entities": ["entity.player"],
+  "input": {
+    "actions": [
+      "action.move.forward",
+      "action.move.back",
+      "action.move.left",
+      "action.move.right",
+      "action.jump"
+    ]
+  },
+  "world": {
+    "sector_levels": [
+      { "level": "sector.test", "variant": "unlit" }
+    ]
+  }
+})json");
+    write_text(dir / "fps_sector.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "FPS Sector Controller Test" },
+  "world": {
+    "name": "world.test",
+    "kind": "sector",
+    "cameras": [
+      {
+        "name": "camera.player",
+        "type": "fps",
+        "target_entity": "entity.player",
+        "fovy": 70.0,
+        "active": true
+      }
+    ]
+  },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.play",
+        "actions": [
+          { "name": "action.move.forward" },
+          { "name": "action.move.back" },
+          { "name": "action.move.left" },
+          { "name": "action.move.right" },
+          { "name": "action.jump" }
+        ]
+      }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [2.0, 1.6, 2.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.0 },
+        "pitch": { "type": "float", "value": 0.0 },
+        "current_sector": { "type": "int", "value": -1 }
+      },
+      "components": [
+        {
+          "type": "controller.fps_sector",
+          "sector_level": "sector.test",
+          "actions": {
+            "forward": "action.move.forward",
+            "back": "action.move.back",
+            "left": "action.move.left",
+            "right": "action.move.right",
+            "jump": "action.jump"
+          },
+          "move_speed": 4.0,
+          "jump_velocity": 4.0,
+          "gravity": 9.0,
+          "player_height": 1.6,
+          "player_radius": 0.25,
+          "step_height": 0.6,
+          "ceiling_clearance": 0.1,
+          "mouse_sensitivity": 0.0
+        }
+      ]
+    }
+  ],
+  "sector_levels": [
+    {
+      "name": "sector.test",
+      "materials": [
+        { "name": "floor", "albedo": [0.6, 0.6, 0.6, 1.0] },
+        { "name": "wall", "albedo": [0.2, 0.2, 0.25, 1.0] }
+      ],
+      "sectors": [
+        {
+          "name": "room",
+          "points": [[0, 0], [4, 0], [4, 4], [0, 4]],
+          "floor_y": 0.0,
+          "ceil_y": 4.0,
+          "floor_material": "floor",
+          "ceil_material": "wall",
+          "wall_material": "wall"
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "fps_sector.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    const float initial_z = player->position.z;
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    const int forward = sdl3d_game_data_find_action(runtime, "action.move.forward");
+    ASSERT_GE(forward, 0);
+    sdl3d_input_set_action_override(input, forward, 1.0f);
+    ASSERT_NE(sdl3d_input_update(input, 1000), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.1f));
+
+    EXPECT_LT(player->position.z, initial_z);
+    EXPECT_NEAR(player->position.y, 1.6f, 0.001f);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "current_sector", -1), 0);
+    EXPECT_TRUE(sdl3d_properties_get_bool(player->props, "on_ground", false));
+
+    sdl3d_camera3d camera{};
+    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.player", &camera));
+    EXPECT_EQ(camera.projection, SDL3D_CAMERA_PERSPECTIVE);
+    EXPECT_NEAR(camera.position.x, player->position.x, 0.001f);
+    EXPECT_NEAR(camera.position.y, player->position.y, 0.001f);
+    EXPECT_NEAR(camera.position.z, player->position.z, 0.001f);
+    EXPECT_LT(camera.target.z, camera.position.z);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidFpsSectorController)
+{
+    const std::filesystem::path dir = unique_test_dir("fps_sector_controller_invalid");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "entities": ["entity.player"]
+})json");
+
+    struct Case
+    {
+        const char *name;
+        const char *component_json;
+        const char *expected_error;
+    };
+    const Case cases[] = {
+        {
+            "unknown_level",
+            R"json({
+              "type": "controller.fps_sector",
+              "sector_level": "sector.missing",
+              "actions": {
+                "forward": "action.move.forward",
+                "back": "action.move.back",
+                "left": "action.move.left",
+                "right": "action.move.right"
+              }
+            })json",
+            "unknown sector level",
+        },
+        {
+            "missing_actions",
+            R"json({
+              "type": "controller.fps_sector",
+              "sector_level": "sector.test"
+            })json",
+            "requires an actions object",
+        },
+        {
+            "unknown_action",
+            R"json({
+              "type": "controller.fps_sector",
+              "sector_level": "sector.test",
+              "actions": {
+                "forward": "action.missing",
+                "back": "action.move.back",
+                "left": "action.move.left",
+                "right": "action.move.right"
+              }
+            })json",
+            "unknown input action",
+        },
+    };
+
+    for (const Case &test_case : cases)
+    {
+        const std::filesystem::path game_path = dir / (std::string(test_case.name) + ".game.json");
+        const std::string game_json = std::string(R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid FPS Sector Controller" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.play",
+        "actions": [
+          { "name": "action.move.forward" },
+          { "name": "action.move.back" },
+          { "name": "action.move.left" },
+          { "name": "action.move.right" }
+        ]
+      }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.player",
+      "components": [
+)json") + test_case.component_json +
+                                      R"json(
+      ]
+    }
+  ],
+  "sector_levels": [
+    {
+      "name": "sector.test",
+      "materials": [{ "name": "floor" }],
+      "sectors": [{
+        "points": [[0, 0], [4, 0], [4, 4], [0, 4]],
+        "floor_y": 0,
+        "ceil_y": 3,
+        "wall_material": "floor"
+      }]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json";
+        write_text(game_path, game_json.c_str());
+
+        char error[512]{};
+        EXPECT_FALSE(sdl3d_game_data_validate_file(game_path.string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
+            << test_case.name << ": " << error;
+    }
+
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidSceneSectorLevelInstances)
 {
     const std::filesystem::path dir = unique_test_dir("sector_level_scene_invalid");
