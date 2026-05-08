@@ -23,6 +23,7 @@
 #include "sdl3d/door.h"
 #include "sdl3d/fps_mover.h"
 #include "sdl3d/input.h"
+#include "sdl3d/level.h"
 #include "sdl3d/math.h"
 #include "sdl3d/network.h"
 #include "sdl3d/script.h"
@@ -49,6 +50,7 @@ typedef enum game_data_sensor_type
     GAME_DATA_SENSOR_BOUNDS_REFLECT,
     GAME_DATA_SENSOR_CONTACT_2D,
     GAME_DATA_SENSOR_INPUT_PRESSED,
+    GAME_DATA_SENSOR_SECTOR,
 } game_data_sensor_type;
 
 typedef struct named_signal
@@ -117,6 +119,10 @@ typedef struct sensor_entry
     const char *other;
     const char *entity_tag;
     const char *other_tag;
+    const char *sector_level;
+    const char *sector;
+    const char *sector_property;
+    int sector_index;
     const char *action;
     const char *axis;
     const char *side;
@@ -5957,6 +5963,18 @@ static const sector_level_runtime *find_sector_level_runtime(const sdl3d_game_da
     return NULL;
 }
 
+static int sector_level_find_sector_name(const sector_level_runtime *level, const char *sector_name)
+{
+    if (level == NULL || sector_name == NULL)
+        return -1;
+    for (int i = 0; i < level->sector_count; ++i)
+    {
+        if (level->sector_names[i] != NULL && SDL_strcmp(level->sector_names[i], sector_name) == 0)
+            return i;
+    }
+    return -1;
+}
+
 bool sdl3d_game_data_get_sector_level(const sdl3d_game_data_runtime *runtime, const char *name,
                                       sdl3d_game_data_sector_level *out_level)
 {
@@ -6633,6 +6651,8 @@ static yyjson_val *active_timeline_events(const sdl3d_game_data_runtime *runtime
 }
 
 static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const sdl3d_properties *payload);
+static sdl3d_registered_actor *actor_from_payload_key(sdl3d_game_data_runtime *runtime, const sdl3d_properties *payload,
+                                                      const char *key);
 
 void sdl3d_game_data_timeline_state_init(sdl3d_game_data_timeline_state *state)
 {
@@ -12022,6 +12042,15 @@ static const char *persistence_property_key(yyjson_val *property)
     return json_string(property, "key", NULL);
 }
 
+static sdl3d_registered_actor *action_target_actor(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                                   const sdl3d_properties *payload)
+{
+    const char *target_from_payload = json_string(action, "target_from_payload", NULL);
+    if (target_from_payload != NULL)
+        return actor_from_payload_key(runtime, payload, target_from_payload);
+    return sdl3d_game_data_find_actor(runtime, json_string(action, "target", NULL));
+}
+
 static bool json_add_property_value(yyjson_mut_doc *doc, yyjson_mut_val *object, const char *key,
                                     const sdl3d_value *value)
 {
@@ -13372,21 +13401,49 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
 
     if (SDL_strcmp(type, "property.set") == 0 || SDL_strcmp(type, "property.add") == 0)
     {
-        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, json_string(action, "target", NULL));
+        sdl3d_registered_actor *actor = action_target_actor(runtime, action, payload);
         const char *key = json_string(action, "key", NULL);
         yyjson_val *value = obj_get(action, "value");
-        if (actor == NULL || key == NULL || value == NULL)
+        const char *value_from_payload = json_string(action, "value_from_payload", NULL);
+        const sdl3d_value *payload_value = value_from_payload != NULL && payload != NULL
+                                               ? sdl3d_properties_get_value(payload, value_from_payload)
+                                               : NULL;
+        if (actor == NULL || key == NULL || (value == NULL && payload_value == NULL))
             return false;
 
         if (SDL_strcmp(type, "property.add") == 0)
         {
             const sdl3d_value *existing = sdl3d_properties_get_value(actor->props, key);
-            if (existing != NULL && existing->type == SDL3D_VALUE_INT && yyjson_is_num(value))
+            if (existing != NULL && existing->type == SDL3D_VALUE_INT && payload_value != NULL &&
+                payload_value->type == SDL3D_VALUE_INT)
+            {
+                sdl3d_properties_set_int(actor->props, key, existing->as_int + payload_value->as_int);
+            }
+            else if (existing != NULL && existing->type == SDL3D_VALUE_FLOAT && payload_value != NULL &&
+                     payload_value->type == SDL3D_VALUE_FLOAT)
+            {
+                sdl3d_properties_set_float(actor->props, key, existing->as_float + payload_value->as_float);
+            }
+            else if (existing != NULL && existing->type == SDL3D_VALUE_FLOAT && payload_value != NULL &&
+                     payload_value->type == SDL3D_VALUE_INT)
+            {
+                sdl3d_properties_set_float(actor->props, key, existing->as_float + (float)payload_value->as_int);
+            }
+            else if (existing != NULL && existing->type == SDL3D_VALUE_INT && payload_value != NULL &&
+                     payload_value->type == SDL3D_VALUE_FLOAT)
+            {
+                sdl3d_properties_set_float(actor->props, key, (float)existing->as_int + payload_value->as_float);
+            }
+            else if (existing != NULL && existing->type == SDL3D_VALUE_INT && yyjson_is_num(value))
                 sdl3d_properties_set_int(actor->props, key, existing->as_int + (int)yyjson_get_int(value));
             else if (existing != NULL && existing->type == SDL3D_VALUE_FLOAT && yyjson_is_num(value))
                 sdl3d_properties_set_float(actor->props, key, existing->as_float + (float)yyjson_get_real(value));
             else
                 return false;
+        }
+        else if (payload_value != NULL)
+        {
+            copy_property_value(actor->props, key, payload_value);
         }
         else
         {
@@ -13958,11 +14015,21 @@ static bool load_sensors(sdl3d_game_data_runtime *runtime, yyjson_val *logic)
             entry->type = GAME_DATA_SENSOR_CONTACT_2D;
         else if (SDL_strcmp(type, "sensor.input_pressed") == 0)
             entry->type = GAME_DATA_SENSOR_INPUT_PRESSED;
+        else if (SDL_strcmp(type, "sensor.sector") == 0)
+            entry->type = GAME_DATA_SENSOR_SECTOR;
 
         entry->entity = json_string(sensor, "entity", json_string(sensor, "a", NULL));
+        if (entry->entity == NULL)
+            entry->entity = json_string(sensor, "actor", NULL);
         entry->other = json_string(sensor, "b", NULL);
         entry->entity_tag = json_string(sensor, "a_tag", NULL);
+        if (entry->entity_tag == NULL)
+            entry->entity_tag = json_string(sensor, "actor_tag", NULL);
         entry->other_tag = json_string(sensor, "b_tag", NULL);
+        entry->sector_level = json_string(sensor, "sector_level", NULL);
+        entry->sector = json_string(sensor, "sector", NULL);
+        entry->sector_property = json_string(sensor, "sector_property", "current_sector");
+        entry->sector_index = json_int(sensor, "sector_index", -1);
         entry->action = json_string(sensor, "action", NULL);
         entry->axis = json_string(sensor, "axis", NULL);
         entry->side = json_string(sensor, "side", NULL);
@@ -13971,9 +14038,13 @@ static bool load_sensors(sdl3d_game_data_runtime *runtime, yyjson_val *logic)
         entry->threshold = json_float(sensor, "threshold", 0.0f);
         entry->actions = obj_get(sensor, "actions");
         entry->edge = json_string(sensor, "edge", "enter");
-        entry->signal_id = sdl3d_game_data_find_signal(
-            runtime, json_string(sensor, "on_enter",
-                                 json_string(sensor, "on_pressed", json_string(sensor, "on_reflect", NULL))));
+        const char *signal_name =
+            json_string(sensor, "on_enter", json_string(sensor, "on_pressed", json_string(sensor, "on_reflect", NULL)));
+        if (SDL_strcmp(entry->edge, "stay") == 0 || SDL_strcmp(entry->edge, "overlap") == 0)
+            signal_name = json_string(sensor, "on_stay", signal_name);
+        else if (SDL_strcmp(entry->edge, "exit") == 0)
+            signal_name = json_string(sensor, "on_exit", signal_name);
+        entry->signal_id = sdl3d_game_data_find_signal(runtime, signal_name);
     }
     return true;
 }
@@ -15155,6 +15226,147 @@ static void update_contact_sensor(sdl3d_game_data_runtime *runtime, sensor_entry
     sensor_actor_list_free(&others);
 }
 
+static bool sensor_edge_is_stay(const sensor_entry *sensor)
+{
+    return sensor != NULL && sensor->edge != NULL &&
+           (SDL_strcmp(sensor->edge, "stay") == 0 || SDL_strcmp(sensor->edge, "overlap") == 0);
+}
+
+static bool sensor_edge_is_exit(const sensor_entry *sensor)
+{
+    return sensor != NULL && sensor->edge != NULL && SDL_strcmp(sensor->edge, "exit") == 0;
+}
+
+static int sensor_target_sector_index(const sector_level_runtime *level, const sensor_entry *sensor)
+{
+    if (level == NULL || sensor == NULL)
+        return -1;
+    if (sensor->sector_index >= 0)
+        return sensor->sector_index < level->sector_count ? sensor->sector_index : -1;
+    return sector_level_find_sector_name(level, sensor->sector);
+}
+
+static int actor_sector_index_for_sensor(const sector_level_runtime *level, const sensor_entry *sensor,
+                                         const sdl3d_registered_actor *actor)
+{
+    if (level == NULL || actor == NULL)
+        return -1;
+
+    const char *sector_property =
+        sensor != NULL && sensor->sector_property != NULL ? sensor->sector_property : "current_sector";
+    const sdl3d_value *current_sector = sdl3d_properties_get_value(actor->props, sector_property);
+    if (current_sector != NULL && current_sector->type == SDL3D_VALUE_INT && current_sector->as_int >= 0 &&
+        current_sector->as_int < level->sector_count)
+    {
+        return current_sector->as_int;
+    }
+
+    return sdl3d_level_find_sector_at(&level->lightmapped, level->sectors, actor->position.x, actor->position.z,
+                                      actor->position.y);
+}
+
+static sdl3d_properties *create_sector_sensor_payload(const sdl3d_game_data_runtime *runtime,
+                                                      const sensor_entry *sensor, const sector_level_runtime *level,
+                                                      const sdl3d_registered_actor *actor, int sector_index)
+{
+    (void)sensor;
+    sdl3d_properties *payload = sdl3d_properties_create();
+    if (payload == NULL)
+        return NULL;
+
+    sdl3d_properties_set_string(payload, "actor_name", actor != NULL && actor->name != NULL ? actor->name : "");
+    sdl3d_properties_set_string(payload, "sector_level", level != NULL && level->name != NULL ? level->name : "");
+    sdl3d_properties_set_int(payload, "sector_index", sector_index);
+    sdl3d_properties_set_string(payload, "sector_name",
+                                level != NULL && sector_index >= 0 && sector_index < level->sector_count &&
+                                        level->sector_names[sector_index] != NULL
+                                    ? level->sector_names[sector_index]
+                                    : "");
+    const sdl3d_sector *sector =
+        level != NULL && sector_index >= 0 && sector_index < level->sector_count ? &level->sectors[sector_index] : NULL;
+    const float damage_per_second = sdl3d_sector_damage_per_second(sector);
+    sdl3d_properties_set_float(payload, "sector_damage_per_second", damage_per_second);
+    sdl3d_properties_set_float(payload, "sector_damage_delta",
+                               sdl3d_sector_damage_for_delta(sector, runtime != NULL ? runtime->current_dt : 0.0f));
+    sdl3d_properties_set_int(payload, "ambient_sound_id", sector != NULL ? sector->ambient_sound_id : -1);
+    return payload;
+}
+
+static void emit_sector_sensor_signal(sdl3d_game_data_runtime *runtime, const sensor_entry *sensor,
+                                      const sector_level_runtime *level, sdl3d_registered_actor *actor,
+                                      int sector_index)
+{
+    sdl3d_signal_bus *bus = runtime_bus(runtime);
+    if (bus == NULL || sensor == NULL || sensor->signal_id < 0)
+        return;
+
+    sdl3d_properties *payload = create_sector_sensor_payload(runtime, sensor, level, actor, sector_index);
+    sdl3d_signal_emit(bus, sensor->signal_id, payload);
+    sdl3d_properties_destroy(payload);
+}
+
+static void execute_sector_sensor_actions(sdl3d_game_data_runtime *runtime, const sensor_entry *sensor,
+                                          const sector_level_runtime *level, sdl3d_registered_actor *actor,
+                                          int sector_index)
+{
+    if (runtime == NULL || sensor == NULL || !yyjson_is_arr(sensor->actions))
+        return;
+
+    sdl3d_properties *payload = create_sector_sensor_payload(runtime, sensor, level, actor, sector_index);
+    if (payload != NULL)
+        (void)execute_action_array(runtime, sensor->actions, payload);
+    sdl3d_properties_destroy(payload);
+}
+
+static void update_sector_sensor_actor(sdl3d_game_data_runtime *runtime, sensor_entry *sensor,
+                                       const sector_level_runtime *level, int target_sector,
+                                       sdl3d_registered_actor *actor)
+{
+    if (!runtime_actor_is_active(runtime, actor))
+        return;
+
+    const int current_sector = actor_sector_index_for_sensor(level, sensor, actor);
+    const bool active = current_sector == target_sector;
+    const char *sector_name = "";
+    if (target_sector >= 0 && target_sector < level->sector_count && level->sector_names[target_sector] != NULL)
+        sector_name = level->sector_names[target_sector];
+    sensor_contact_pair_state *state =
+        sensor_contact_pair_state_for(sensor, actor != NULL ? actor->name : NULL, sector_name);
+    if (state == NULL)
+        return;
+
+    const bool should_emit = sensor_edge_is_exit(sensor)   ? (!active && state->active)
+                             : sensor_edge_is_stay(sensor) ? active
+                                                           : (active && !state->active);
+    if (should_emit)
+    {
+        const int event_sector = active ? current_sector : target_sector;
+        emit_sector_sensor_signal(runtime, sensor, level, actor, event_sector);
+        execute_sector_sensor_actions(runtime, sensor, level, actor, event_sector);
+    }
+    state->active = active;
+    state->seen = true;
+}
+
+static void update_sector_sensor(sdl3d_game_data_runtime *runtime, sensor_entry *sensor)
+{
+    const sector_level_runtime *level = find_sector_level_runtime(runtime, sensor->sector_level);
+    const int target_sector = sensor_target_sector_index(level, sensor);
+    if (level == NULL || target_sector < 0)
+        return;
+
+    sensor_actor_list actors;
+    SDL_zero(actors);
+    sensor_contact_states_begin(sensor);
+    if (collect_sensor_endpoint_actors(runtime, sensor->entity, sensor->entity_tag, &actors))
+    {
+        for (int i = 0; i < actors.count; ++i)
+            update_sector_sensor_actor(runtime, sensor, level, target_sector, actors.items[i]);
+    }
+    sensor_contact_states_end(sensor);
+    sensor_actor_list_free(&actors);
+}
+
 static void update_sensors(sdl3d_game_data_runtime *runtime)
 {
     for (int i = 0; i < runtime->sensor_count; ++i)
@@ -15163,6 +15375,11 @@ static void update_sensors(sdl3d_game_data_runtime *runtime)
         if (sensor->type == GAME_DATA_SENSOR_CONTACT_2D)
         {
             update_contact_sensor(runtime, sensor);
+            continue;
+        }
+        if (sensor->type == GAME_DATA_SENSOR_SECTOR)
+        {
+            update_sector_sensor(runtime, sensor);
             continue;
         }
 

@@ -7,7 +7,8 @@
   },
   "imports": [
     { "path": "fragments/world/sector_levels.json", "sections": ["sector_levels"] },
-    { "path": "fragments/world/sector_doors.json", "sections": ["sector_doors", "signals", "logic"] }
+    { "path": "fragments/world/sector_doors.json", "sections": ["sector_doors", "signals", "logic"] },
+    { "path": "fragments/world/sector_hazards.json", "sections": ["logic"] }
   ],
   "app": {
     "title": "SDL3D Doom Level",
@@ -51,7 +52,9 @@
       "properties": {
         "yaw": { "type": "float", "value": 3.14159 },
         "pitch": { "type": "float", "value": 0.0 },
-        "current_sector": { "type": "int", "value": -1 }
+        "current_sector": { "type": "int", "value": -1 },
+        "damage_taken": { "type": "float", "value": 0.0 },
+        "last_damage_per_second": { "type": "float", "value": 0.0 }
       },
       "components": [
         {
@@ -72,6 +75,35 @@
           "step_height": 1.1,
           "ceiling_clearance": 0.1,
           "mouse_sensitivity": 0.002
+        }
+      ]
+    },
+    {
+      "name": "entity.effect.nukage.vapor",
+      "active": true,
+      "transform": { "position": [4.0, -0.35, 21.0] },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [5.3, 0.05, 4.2],
+          "direction": [0.04, 1.0, -0.03],
+          "spread": 1.15,
+          "speed_min": 0.35,
+          "speed_max": 1.05,
+          "lifetime_min": 2.4,
+          "lifetime_max": 4.6,
+          "size_start": 0.045,
+          "size_end": 0.16,
+          "color_start": [35, 245, 45, 155],
+          "color_end": [0, 185, 55, 0],
+          "gravity": -0.16,
+          "max_particles": 360,
+          "emit_rate": 95.0,
+          "camera_facing": true,
+          "depth_test": true,
+          "additive_blend": true,
+          "draw_emissive": [0.25, 0.95, 0.25]
         }
       ]
     }

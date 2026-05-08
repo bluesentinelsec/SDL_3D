@@ -167,6 +167,7 @@ struct ParticleCapture
     bool saw_ambient = false;
     bool saw_options_flow = false;
     bool saw_pooled_emitter = false;
+    bool saw_nukage_vapor = false;
 };
 
 struct EvaluatedPrimitiveCapture
@@ -1431,6 +1432,13 @@ bool capture_particle(void *userdata, const sdl3d_game_data_particle_emitter *em
         EXPECT_EQ(emitter->config.max_particles, 12);
         EXPECT_NEAR(emitter->config.position.x, 2.0f, 0.0001f);
         EXPECT_NEAR(emitter->draw_emissive.y, 0.8f, 0.0001f);
+    }
+    if (std::string(emitter->entity_name) == "entity.effect.nukage.vapor")
+    {
+        capture->saw_nukage_vapor = true;
+        EXPECT_EQ(emitter->config.max_particles, 360);
+        EXPECT_TRUE(emitter->config.additive_blend);
+        EXPECT_NEAR(emitter->draw_emissive.y, 0.95f, 0.0001f);
     }
     return true;
 }
@@ -8009,9 +8017,163 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     capture.prefix = "door.";
     ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_door_prefix_render_primitive, &capture));
     EXPECT_EQ(capture.door_primitives, 5);
+    ParticleCapture particles{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &particles));
+    EXPECT_TRUE(particles.saw_nukage_vapor);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, RunsAuthoredSectorHazardSensors)
+{
+    const std::filesystem::path dir = unique_test_dir("sector_hazard_sensors");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "entities": ["entity.player", "entity.bot"],
+  "world": { "sector_levels": [{ "level": "sector.test", "variant": "unlit" }] }
+})json");
+    write_text(dir / "sector_hazard_sensors.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Sector Hazard Sensor Test" },
+  "world": { "name": "world.test", "kind": "sector" },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [1.0, 1.0, 1.0] },
+      "properties": {
+        "current_sector": { "type": "int", "value": 0 },
+        "damage_taken": { "type": "int", "value": 0 },
+        "last_damage_per_second": { "type": "float", "value": 0.0 },
+        "entered_hazard": { "type": "bool", "value": false }
+      }
+    },
+    {
+      "name": "entity.bot",
+      "active": true,
+      "tags": ["hazard_subject"],
+      "transform": { "position": [3.0, 1.0, 1.0] },
+      "properties": {
+        "tag_damage": { "type": "int", "value": 0 }
+      }
+    }
+  ],
+  "sector_levels": [
+    {
+      "name": "sector.test",
+      "materials": [{ "name": "floor" }],
+      "sectors": [
+        {
+          "name": "safe",
+          "points": [[0, 0], [2, 0], [2, 2], [0, 2]],
+          "floor_y": 0.0,
+          "ceil_y": 3.0,
+          "wall_material": "floor"
+        },
+        {
+          "name": "hazard",
+          "points": [[2, 0], [4, 0], [4, 2], [2, 2]],
+          "floor_y": 0.0,
+          "ceil_y": 3.0,
+          "wall_material": "floor",
+          "damage_per_second": 10.0,
+          "ambient_sound_id": 3
+        }
+      ]
+    }
+  ],
+  "logic": {
+    "sensors": [
+      {
+        "name": "sensor.hazard.enter",
+        "type": "sensor.sector",
+        "actor": "entity.player",
+        "sector_level": "sector.test",
+        "sector": "hazard",
+        "edge": "enter",
+        "actions": [
+          { "type": "property.set", "target_from_payload": "actor_name", "key": "entered_hazard", "value": true }
+        ]
+      },
+      {
+        "name": "sensor.hazard.stay",
+        "type": "sensor.sector",
+        "actor": "entity.player",
+        "sector_level": "sector.test",
+        "sector": "hazard",
+        "edge": "stay",
+        "actions": [
+          { "type": "property.add", "target_from_payload": "actor_name", "key": "damage_taken", "value_from_payload": "sector_damage_delta" },
+          { "type": "property.set", "target_from_payload": "actor_name", "key": "last_damage_per_second", "value_from_payload": "sector_damage_per_second" }
+        ]
+      },
+      {
+        "name": "sensor.hazard.tag_stay",
+        "type": "sensor.sector",
+        "actor_tag": "hazard_subject",
+        "sector_level": "sector.test",
+        "sector": "hazard",
+        "edge": "stay",
+        "actions": [
+          { "type": "property.add", "target_from_payload": "actor_name", "key": "tag_damage", "value_from_payload": "sector_damage_delta" }
+        ]
+      },
+      {
+        "name": "sensor.hazard.exit",
+        "type": "sensor.sector",
+        "actor": "entity.player",
+        "sector_level": "sector.test",
+        "sector": "hazard",
+        "edge": "exit",
+        "actions": [
+          { "type": "property.set", "target_from_payload": "actor_name", "key": "last_damage_per_second", "value": 0.0 }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "sector_hazard_sensors.game.json").string().c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    sdl3d_registered_actor *bot = sdl3d_game_data_find_actor(runtime, "entity.bot");
+    ASSERT_NE(bot, nullptr);
+
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    EXPECT_FALSE(sdl3d_properties_get_bool(player->props, "entered_hazard", true));
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "damage_taken", -1), 0);
+    EXPECT_NEAR(sdl3d_properties_get_float(bot->props, "tag_damage", 0.0f), 2.5f, 0.0001f);
+
+    sdl3d_properties_set_int(player->props, "current_sector", 1);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    EXPECT_TRUE(sdl3d_properties_get_bool(player->props, "entered_hazard", false));
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "damage_taken", 0.0f), 2.5f, 0.0001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "last_damage_per_second", 0.0f), 10.0f, 0.0001f);
+
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.1f));
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "damage_taken", 0.0f), 3.5f, 0.0001f);
+
+    sdl3d_properties_set_int(player->props, "current_sector", 0);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "damage_taken", 0.0f), 3.5f, 0.0001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "last_damage_per_second", -1.0f), 0.0f, 0.0001f);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, RejectsInvalidSectorDoorsAndActions)
@@ -8060,6 +8222,25 @@ TEST(GameDataRuntime, RejectsInvalidSectorDoorsAndActions)
               ]
             })json",
             "unknown sector door reference",
+        },
+        {
+            "unknown_sector_sensor_sector",
+            R"json([])json",
+            R"json({
+              "sensors": [
+                {
+                  "type": "sensor.sector",
+                  "actor": "entity.player",
+                  "sector_level": "sector.test",
+                  "sector": "missing",
+                  "edge": "stay",
+                  "actions": [
+                    { "type": "property.add", "target_from_payload": "actor_name", "key": "damage_taken", "value_from_payload": "sector_damage_delta" }
+                  ]
+                }
+              ]
+            })json",
+            "unknown sensor.sector sector",
         },
     };
 

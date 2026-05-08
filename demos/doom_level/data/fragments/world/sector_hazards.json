@@ -1,0 +1,45 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "logic": {
+    "sensors": [
+      {
+        "name": "sensor.nukage.damage",
+        "type": "sensor.sector",
+        "actor": "entity.player",
+        "sector_level": "sector.doom.e1m1",
+        "sector": "nukage_basin",
+        "edge": "stay",
+        "actions": [
+          {
+            "type": "property.add",
+            "target_from_payload": "actor_name",
+            "key": "damage_taken",
+            "value_from_payload": "sector_damage_delta"
+          },
+          {
+            "type": "property.set",
+            "target_from_payload": "actor_name",
+            "key": "last_damage_per_second",
+            "value_from_payload": "sector_damage_per_second"
+          }
+        ]
+      },
+      {
+        "name": "sensor.nukage.exit",
+        "type": "sensor.sector",
+        "actor": "entity.player",
+        "sector_level": "sector.doom.e1m1",
+        "sector": "nukage_basin",
+        "edge": "exit",
+        "actions": [
+          {
+            "type": "property.set",
+            "target_from_payload": "actor_name",
+            "key": "last_damage_per_second",
+            "value": 0.0
+          }
+        ]
+      }
+    ]
+  }
+}
