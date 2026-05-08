@@ -1,0 +1,244 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "renders_world": true,
+  "camera": "camera.side",
+  "on_enter_signal": "signal.game.start",
+  "entities": [
+    "entity.field.base",
+    "entity.field.horizon",
+    "entity.field.ceiling",
+    "entity.field.parallax_far_a",
+    "entity.field.parallax_far_b",
+    "entity.effect.star_fast",
+    "entity.effect.nebula",
+    "entity.player",
+    "entity.player2",
+    "entity.game",
+    "entity.controller",
+    "entity.presentation",
+    "entity.settings"
+  ],
+  "input": {
+    "actions": [
+      "action.player.left",
+      "action.player.right",
+      "action.player.up",
+      "action.player.down",
+      "action.player.fire",
+      "action.player2.left",
+      "action.player2.right",
+      "action.player2.up",
+      "action.player2.down",
+      "action.player2.fire",
+      "action.pause",
+      "action.restart",
+      "action.menu.up",
+      "action.menu.down",
+      "action.menu.select"
+    ]
+  },
+  "transitions": {
+    "enter": "scene_in",
+    "exit": "scene_out"
+  },
+  "menus": [
+    {
+      "name": "menu.pause",
+      "active_if": {
+        "type": "all",
+        "conditions": [
+          { "type": "app.paused", "equals": true },
+          { "type": "property.compare", "target": "entity.game", "key": "game_over", "op": "==", "value": false }
+        ]
+      },
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "move_signal": "signal.ui.menu.move",
+      "select_signal": "signal.ui.menu.select",
+      "selected": 0,
+      "items": [
+        { "label": "Resume", "pause": "resume" },
+        { "label": "Restart", "pause": "resume", "signal": "signal.game.start" },
+        { "label": "Title", "pause": "resume", "scene": "scene.title" }
+      ]
+    },
+    {
+      "name": "menu.game_over",
+      "active_if": {
+        "type": "property.compare",
+        "target": "entity.game",
+        "key": "game_over",
+        "op": "==",
+        "value": true
+      },
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "move_signal": "signal.ui.menu.move",
+      "select_signal": "signal.ui.menu.select",
+      "selected": 0,
+      "items": [
+        { "label": "Restart", "signal": "signal.game.start" },
+        { "label": "Title", "scene": "scene.title" }
+      ]
+    }
+  ],
+  "ui": {
+    "text": [
+      {
+        "name": "ui.hud.status",
+        "font": "font.small",
+        "format": "SCORE %06d    LIVES %d    WAVE %d    DIST %.1f    THREATS %d",
+        "bindings": [
+          { "type": "property", "entity": "entity.game", "key": "score" },
+          { "type": "property", "entity": "entity.game", "key": "lives" },
+          { "type": "property", "entity": "entity.game", "key": "wave" },
+          { "type": "property", "entity": "entity.game", "key": "distance" },
+          { "type": "property", "entity": "entity.game", "key": "threats_active" }
+        ],
+        "x": 0.5,
+        "y": 0.04,
+        "normalized": true,
+        "centered": true,
+        "color": [228, 244, 255, 255]
+      },
+      {
+        "name": "ui.hud.fps",
+        "font": "font.small",
+        "format": "FPS %.0f",
+        "visible_if": {
+          "type": "property.compare",
+          "target": "entity.settings",
+          "key": "show_fps",
+          "op": "==",
+          "value": true
+        },
+        "bindings": [
+          { "type": "metric", "metric": "fps" }
+        ],
+        "x": 18.0,
+        "y": 18.0,
+        "color": [132, 164, 210, 210]
+      },
+      {
+        "name": "ui.controls",
+        "font": "font.small",
+        "text": "MOVE WASD OR ARROWS    FIRE SPACE    PAUSE ENTER",
+        "x": 0.5,
+        "y": 0.955,
+        "normalized": true,
+        "centered": true,
+        "color": [124, 255, 190, 205]
+      },
+      {
+        "name": "ui.coop.controls",
+        "font": "font.small",
+        "visible_if": {
+          "type": "scene_state.compare",
+          "key": "match_mode",
+          "op": "==",
+          "value": "local"
+        },
+        "text": "P2: IJKL MOVE, RIGHT SHIFT FIRE",
+        "x": 0.5,
+        "y": 0.905,
+        "normalized": true,
+        "centered": true,
+        "color": [255, 210, 100, 215]
+      },
+      {
+        "name": "ui.game_over.lose",
+        "font": "font.hud",
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "property.compare", "target": "entity.game", "key": "game_over", "op": "==", "value": true },
+            { "type": "property.compare", "target": "entity.game", "key": "won", "op": "==", "value": false }
+          ]
+        },
+        "text": "CONVOY LOST",
+        "x": 0.5,
+        "y": 0.35,
+        "normalized": true,
+        "centered": true,
+        "color": [255, 92, 180, 255]
+      },
+      {
+        "name": "ui.game_over.win",
+        "font": "font.hud",
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "property.compare", "target": "entity.game", "key": "game_over", "op": "==", "value": true },
+            { "type": "property.compare", "target": "entity.game", "key": "won", "op": "==", "value": true }
+          ]
+        },
+        "text": "ROUTE CLEARED",
+        "x": 0.5,
+        "y": 0.35,
+        "normalized": true,
+        "centered": true,
+        "color": [144, 255, 135, 255]
+      },
+      {
+        "name": "ui.paused",
+        "font": "font.hud",
+        "visible_if": {
+          "type": "app.paused",
+          "equals": true
+        },
+        "text": "PAUSED",
+        "x": 0.5,
+        "y": 0.29,
+        "normalized": true,
+        "centered": true,
+        "color": [255, 238, 125, 255]
+      }
+    ],
+    "menus": [
+      {
+        "name": "ui.pause.menu",
+        "menu": "menu.pause",
+        "font": "font.hud",
+        "x": 0.43,
+        "y": 0.44,
+        "gap": 0.07,
+        "normalized": true,
+        "align": "left",
+        "color": [220, 236, 255, 245],
+        "selected_color": [255, 238, 125, 255],
+        "selected_pulse_alpha": true,
+        "cursor": {
+          "text": ">",
+          "offset_x": -0.035,
+          "align": "right",
+          "color": [255, 82, 190, 255],
+          "pulse_alpha": true
+        }
+      },
+      {
+        "name": "ui.game_over.menu",
+        "menu": "menu.game_over",
+        "font": "font.hud",
+        "x": 0.43,
+        "y": 0.47,
+        "gap": 0.07,
+        "normalized": true,
+        "align": "left",
+        "color": [220, 236, 255, 245],
+        "selected_color": [255, 238, 125, 255],
+        "selected_pulse_alpha": true,
+        "cursor": {
+          "text": ">",
+          "offset_x": -0.035,
+          "align": "right",
+          "color": [255, 82, 190, 255],
+          "pulse_alpha": true
+        }
+      }
+    ]
+  }
+}

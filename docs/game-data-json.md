@@ -296,6 +296,96 @@ Runtime spawning uses preallocated pools:
 Pools support deterministic spawn/despawn, scene-exit policy, lifecycle safety,
 metrics, and Lua helpers.
 
+Common projectile archetype conventions:
+
+- tag projectile actors with a broad tag such as `projectile` and a role tag
+  such as `player_projectile` or `enemy_projectile`
+- store `velocity` as a `vec3` property and add a
+  `{ "type": "motion.velocity_2d", "property": "velocity" }` component
+- store collision shape data with either `radius` or `half_width` /
+  `half_height`
+- store gameplay fields such as `damage`, `owner`, and `ttl` as authored
+  properties so JSON actions and Lua can read the same data
+- add optional `light.point` and `particles.emitter` components on projectile
+  or explosion archetypes when pooled effects should emit light or particles
+
+Example:
+
+```json
+{
+  "name": "archetype.player_shot",
+  "tags": ["projectile", "player_projectile"],
+  "properties": {
+    "radius": { "type": "float", "value": 0.12 },
+    "damage": { "type": "int", "value": 1 },
+    "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.0] }
+  },
+  "components": [
+    { "type": "motion.velocity_2d", "property": "velocity" },
+    { "type": "light.point", "color": [0.2, 0.8, 1.0], "intensity": 2.0, "range": 1.8 }
+  ]
+}
+```
+
+`projectile.fire` is a reusable action for firing from an actor into a pool:
+
+```json
+{
+  "type": "projectile.fire",
+  "target": "entity.player",
+  "pool": "pool.player_shots",
+  "offset": [0.6, 0.0, 0.1],
+  "velocity": [12.0, 0.0, 0.0],
+  "cooldown_property": "fire_timer",
+  "properties": { "owner": 1, "damage": 1 }
+}
+```
+
+The target actor may define `fire_cooldown`; otherwise the action's `cooldown`
+field is used. If the cooldown property is positive, no projectile is spawned.
+Use `target_from_payload` instead of `target` when the firing actor should come
+from a signal or collision payload.
+
+`actor.spawn` and `actor.despawn` can also resolve actors from payload fields:
+
+```json
+{ "type": "actor.spawn", "pool": "pool.explosions", "from_payload": "other_actor_name" }
+{ "type": "actor.despawn", "target_from_payload": "actor_name" }
+```
+
+This keeps common collision effects data-authored while still allowing Lua to
+provide game-specific policy when needed.
+
+## Components
+
+Reusable components include:
+
+- `motion.velocity_2d`: moves an actor by a `vec3` velocity property on the x/y
+  plane.
+- `motion.scroll_wrap`: scrolls an actor along one axis and wraps to the
+  opposite bound. This is intended for parallax panels, repeating stars, clouds,
+  conveyor belts, and similar backgrounds.
+- `motion.oscillate` and `motion.spin`: simple authored movement effects.
+- `light.point`, `light.spot`, and `light.directional`: actor-attached light
+  components. They work on static actors and active pooled actors. Component
+  lights inherit the actor transform and may use an `offset`.
+- `particles.emitter`: actor-attached particle emitter. On pooled actors, the
+  emitter is active only while the actor is active.
+
+Example parallax strip:
+
+```json
+{
+  "name": "entity.background.nebula_strip",
+  "active": true,
+  "transform": { "position": [4.0, 2.0, -0.2] },
+  "components": [
+    { "type": "render.cube", "size": [4.0, 0.1, 0.1], "color": [50, 80, 180, 180] },
+    { "type": "motion.scroll_wrap", "axis": "x", "speed": -0.7, "min": -9.0, "max": 9.0 }
+  ]
+}
+```
+
 ## Input
 
 Input data declares actions and how devices bind to those actions:
@@ -348,6 +438,82 @@ Logic connects sensors, timers, signals, conditions, and actions:
 
 Use JSON actions for ordinary composition. Use Lua adapters only for
 game-specific calculations or policy that is not a reusable engine primitive.
+
+`collision.on_overlap` is a data-action variant of the 2D contact sensor. It
+matches actors by fixed actor names or tags, publishes `actor_name` and
+`other_actor_name` in the action payload, and runs actions when overlap occurs.
+
+```json
+{
+  "name": "sensor.projectile_hits_enemy",
+  "type": "collision.on_overlap",
+  "a_tag": "player_projectile",
+  "b_tag": "enemy",
+  "edge": "enter",
+  "actions": [
+    { "type": "actor.despawn", "target_from_payload": "actor_name" },
+    { "type": "actor.spawn", "pool": "pool.explosions", "from_payload": "other_actor_name" },
+    { "type": "actor.despawn", "target_from_payload": "other_actor_name" },
+    { "type": "property.add", "target": "entity.game", "key": "score", "value": 100 }
+  ]
+}
+```
+
+`edge` may be `enter` for first contact only or `stay` / `overlap` for every
+update while actors overlap.
+
+`logic.wave_schedules` spawn actors from pools over time:
+
+```json
+{
+  "logic": {
+    "wave_schedules": [
+      {
+        "name": "wave.basic_enemies",
+        "pool": "pool.enemies",
+        "interval": 0.75,
+        "initial_delay": 0.25,
+        "max_active_tag": "enemy",
+        "max_active": 24,
+        "active_if": { "type": "property.compare", "target": "entity.game", "key": "game_over", "op": "==", "value": false },
+        "position": { "x": 9.0, "y": [-3.5, 3.5], "z": 0.2 },
+        "velocity": [-3.0, 0.0, 0.0],
+        "properties": { "hp": 1, "points": 100 }
+      }
+    ]
+  }
+}
+```
+
+Schedules are deterministic in structure but can use random ranges for axis
+values. `catch_up: true` allows multiple spawns after a long frame; by default a
+schedule spawns at most once per update.
+
+## Scene Templates
+
+Reusable scene fragments should be treated as conventions rather than hidden
+engine behavior. A professional data-only project should keep title, play,
+pause, and game-over HUD files in obvious places, for example:
+
+```text
+data/
+  scenes/
+    splash.scene.json
+    title.scene.json
+    play.scene.json
+    pause.scene.json        # optional if pause UI is separate
+    game-over.scene.json    # optional if game-over UI is separate
+  fragments/
+    actors/
+    logic/
+    ui/
+      hud.json
+      menus.json
+```
+
+For compact arcade games it is also valid to keep pause and game-over menus in
+the play scene using `active_if` conditions. The important rule is that reusable
+presentation structure stays in JSON, while game-exclusive rules stay in Lua.
 
 ## Lua Scripts And Adapters
 

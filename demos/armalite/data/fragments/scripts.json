@@ -1,0 +1,24 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "scripts": [
+    {
+      "id": "script.armalite",
+      "path": "scripts/armalite.lua",
+      "module": "armalite",
+      "dependencies": [],
+      "autoload": true
+    }
+  ],
+  "adapters": [
+    {
+      "name": "adapter.armalite.start",
+      "script": "script.armalite",
+      "function": "start"
+    },
+    {
+      "name": "adapter.armalite.update",
+      "script": "script.armalite",
+      "function": "update"
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.title",
+  "updates_game": true,
+  "renders_world": true,
+  "camera": "camera.side",
+  "entities": [
+    "entity.field.base",
+    "entity.field.horizon",
+    "entity.field.ceiling",
+    "entity.field.parallax_far_a",
+    "entity.field.parallax_far_b",
+    "entity.effect.star_fast",
+    "entity.effect.nebula",
+    "entity.player",
+    "entity.presentation"
+  ],
+  "input": {
+    "actions": [
+      "action.menu.up",
+      "action.menu.down",
+      "action.menu.select"
+    ]
+  },
+  "transitions": {
+    "enter": "scene_in",
+    "exit": "scene_out"
+  },
+  "menus": [
+    {
+      "name": "menu.title",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "move_signal": "signal.ui.menu.move",
+      "select_signal": "signal.ui.menu.select",
+      "selected": 0,
+      "items": [
+        {
+          "label": "Single Player",
+          "scene": "scene.play",
+          "scene_state": { "key": "match_mode", "value": "single" }
+        },
+        {
+          "label": "Local Co-op",
+          "scene": "scene.play",
+          "scene_state": { "key": "match_mode", "value": "local" }
+        },
+        {
+          "label": "Options",
+          "scene": "scene.options"
+        },
+        {
+          "label": "Exit",
+          "quit": true
+        }
+      ]
+    }
+  ],
+  "ui": {
+    "text": [
+      {
+        "name": "ui.title.logo",
+        "font": "font.title",
+        "text": "ARMALITE",
+        "x": 0.5,
+        "y": 0.20,
+        "normalized": true,
+        "centered": true,
+        "color": [232, 248, 255, 255]
+      },
+      {
+        "name": "ui.title.tagline",
+        "font": "font.small",
+        "text": "SIDE-SCROLLER  /  ACTOR POOLS  /  LUA RULES  /  DYNAMIC LIGHTS",
+        "x": 0.5,
+        "y": 0.315,
+        "normalized": true,
+        "centered": true,
+        "color": [125, 245, 255, 225]
+      }
+    ],
+    "menus": [
+      {
+        "name": "ui.title.menu",
+        "menu": "menu.title",
+        "font": "font.hud",
+        "x": 0.40,
+        "y": 0.48,
+        "gap": 0.075,
+        "normalized": true,
+        "align": "left",
+        "color": [220, 236, 255, 245],
+        "selected_color": [255, 238, 125, 255],
+        "selected_pulse_alpha": true,
+        "cursor": {
+          "text": ">",
+          "offset_x": -0.035,
+          "align": "right",
+          "color": [255, 82, 190, 255],
+          "pulse_alpha": true
+        }
+      }
+    ]
+  }
+}

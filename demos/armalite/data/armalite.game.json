@@ -1,0 +1,180 @@
+{
+  "schema": "sdl3d.game.v0",
+  "imports": [
+    { "path": "fragments/assets.json", "sections": ["assets"] },
+    { "path": "fragments/scripts.json", "sections": ["scripts", "adapters"] },
+    { "path": "fragments/input.json", "sections": ["input"] },
+    { "path": "fragments/runtime.json", "sections": ["render", "update_phases", "presentation", "transitions"] },
+    { "path": "fragments/actors.json", "sections": ["entities", "actor_archetypes", "actor_pools"] },
+    { "path": "fragments/logic.json", "sections": ["signals", "logic"] }
+  ],
+  "metadata": {
+    "name": "ArmaLite PoC",
+    "id": "demo.armalite",
+    "version": "0.1.0",
+    "description": "Data-authored horizontal side-scroller shoot 'em up using 3D geometry, actor pools, Lua gameplay, particles, and dynamic lighting."
+  },
+  "app": {
+    "title": "SDL3D ArmaLite PoC",
+    "logical_width": 1280,
+    "logical_height": 720,
+    "backend": "opengl",
+    "window": {
+      "display_mode": "windowed",
+      "development_display_mode": "windowed",
+      "production_display_mode": "windowed",
+      "maximized": true,
+      "resizable": true,
+      "vsync": true,
+      "renderer": "opengl"
+    },
+    "tick_rate": 0.008333333,
+    "max_ticks_per_frame": 12,
+    "enable_audio": false,
+    "pause": {
+      "action": "action.pause",
+      "allowed_if": {
+        "type": "property.compare",
+        "target": "entity.game",
+        "key": "game_over",
+        "op": "==",
+        "value": false
+      }
+    },
+    "quit": {
+      "action": "action.exit",
+      "transition": "quit",
+      "quit_signal": "signal.app.quit_fade_done"
+    },
+    "scene_shortcuts": [
+      { "action": "action.scene.title", "scene": "scene.title" },
+      { "action": "action.scene.play", "scene": "scene.play" }
+    ],
+    "input_policy": {
+      "global_actions": [
+        "action.exit",
+        "action.scene.title",
+        "action.scene.play"
+      ]
+    },
+    "scene_transition_policy": {
+      "allow_same_scene": false,
+      "allow_interrupt": false,
+      "reset_menu_input_on_request": true
+    }
+  },
+  "scenes": {
+    "initial": "scene.splash",
+    "files": [
+      "scenes/splash.scene.json",
+      "scenes/title.scene.json",
+      "scenes/options.scene.json",
+      "scenes/play.scene.json"
+    ]
+  },
+  "world": {
+    "name": "world.armalite",
+    "kind": "side_scroller",
+    "units": "world_units",
+    "axes": {
+      "horizontal": "x",
+      "vertical": "y",
+      "depth": "z"
+    },
+    "bounds": {
+      "min": [-8.7, -4.85, -1.4],
+      "max": [8.7, 4.85, 4.0]
+    },
+    "ambient_light": [0.004, 0.006, 0.014],
+    "cameras": [
+      {
+        "name": "camera.side",
+        "type": "orthographic",
+        "position": [0.0, 0.0, 17.5],
+        "target": [0.0, 0.0, 0.0],
+        "up": [0.0, 1.0, 0.0],
+        "size": 10.3,
+        "active": true
+      },
+      {
+        "name": "camera.dramatic",
+        "type": "perspective",
+        "position": [-3.8, -7.8, 5.2],
+        "target": [0.4, 0.0, 0.0],
+        "up": [0.0, 0.0, 1.0],
+        "fovy": 50.0,
+        "active": false
+      }
+    ],
+    "lights": [
+      {
+        "name": "light.player.engine",
+        "type": "point",
+        "target_entity": "entity.player",
+        "offset": [-0.42, 0.0, 0.42],
+        "color": [0.15, 0.80, 1.0],
+        "intensity": 9.0,
+        "range": 3.6,
+        "effects": [
+          { "type": "pulse", "rate": 5.2, "color": [0.55, 0.95, 1.0], "color_blend": 0.25, "intensity_add": 1.1, "range_add": 0.4 }
+        ]
+      },
+      {
+        "name": "light.player2.engine",
+        "type": "point",
+        "target_entity": "entity.player2",
+        "offset": [-0.42, 0.0, 0.42],
+        "color": [1.0, 0.55, 0.15],
+        "intensity": 7.0,
+        "range": 3.1,
+        "effects": [
+          { "type": "pulse", "rate": 4.6, "color": [1.0, 0.92, 0.38], "color_blend": 0.25, "intensity_add": 0.9, "range_add": 0.35 }
+        ]
+      },
+      {
+        "name": "light.left.wake",
+        "type": "spot",
+        "position": [-6.8, 0.0, 3.25],
+        "direction": [0.58, 0.0, -1.0],
+        "color": [0.05, 0.65, 1.0],
+        "intensity": 12.5,
+        "range": 9.0,
+        "inner_cutoff": 0.86,
+        "outer_cutoff": 0.34,
+        "effects": [
+          { "type": "color_cycle", "duration": 6.0, "phase": 0.0, "colors": [[0.05, 0.62, 1.0], [0.30, 1.0, 0.80], [0.10, 0.28, 1.0]], "color_blend": 1.0 },
+          { "type": "pulse", "rate": 2.4, "color": [0.70, 1.0, 1.0], "color_blend": 0.15, "intensity_add": 1.6, "range_add": 0.6 }
+        ]
+      },
+      {
+        "name": "light.enemy.red",
+        "type": "spot",
+        "position": [5.7, 1.8, 3.4],
+        "direction": [-0.55, -0.12, -1.0],
+        "color": [1.0, 0.08, 0.28],
+        "intensity": 13.5,
+        "range": 8.5,
+        "inner_cutoff": 0.82,
+        "outer_cutoff": 0.36,
+        "effects": [
+          { "type": "color_cycle", "duration": 5.3, "phase": 0.2, "colors": [[1.0, 0.04, 0.22], [1.0, 0.36, 0.08], [1.0, 0.12, 0.62]], "color_blend": 1.0 }
+        ]
+      },
+      {
+        "name": "light.asteroid.green",
+        "type": "spot",
+        "position": [3.2, -3.0, 2.9],
+        "direction": [-0.18, 0.28, -1.0],
+        "color": [0.24, 1.0, 0.48],
+        "intensity": 8.0,
+        "range": 6.8,
+        "inner_cutoff": 0.82,
+        "outer_cutoff": 0.42,
+        "effects": [
+          { "type": "pulse", "rate": 1.6, "color": [0.70, 1.0, 0.72], "color_blend": 0.24, "intensity_add": 1.0, "range_add": 0.55 }
+        ]
+      }
+    ]
+  }
+}
+
