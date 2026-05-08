@@ -438,6 +438,30 @@ properties in addition to their archetype defaults and authored overrides.
 Use pool scene-exit policies or `actor.despawn_by_tag` to reset grids between
 levels.
 
+`grid.spawn_runs_from_glyphs` batches contiguous glyph runs into one actor per
+run. This is intended for solid maze walls, platforms, and other rectangular
+tile runs where one long actor is cheaper than one actor per tile:
+
+```json
+{
+  "type": "grid.spawn_runs_from_glyphs",
+  "map": "map.maze",
+  "axis": "x",
+  "depth": 0.25,
+  "inset": 0.03,
+  "output_count_key": "spawned_wall_runs",
+  "spawns": [
+    { "glyph": "#", "pool": "pool.walls" }
+  ]
+}
+```
+
+Run actors receive the same `grid_*` properties as single-cell spawns, plus
+`grid_run_axis`, `grid_run_start_col`, `grid_run_start_row`,
+`grid_run_end_col`, `grid_run_end_row`, `grid_run_length`, and
+`grid_run_size`. A `render.cube` can consume that size using
+`"size_property": "grid_run_size"`.
+
 ## Components
 
 Reusable components include:
@@ -455,6 +479,9 @@ Reusable components include:
   lights inherit the actor transform and may use an `offset`.
 - `particles.emitter`: actor-attached particle emitter. On pooled actors, the
   emitter is active only while the actor is active.
+- `render.cube`: renders a cube using authored `size`, or a vec3 actor property
+  named by `size_property`. The property path is useful for grid wall runs and
+  other pooled actors that need per-instance dimensions.
 
 Example parallax strip:
 

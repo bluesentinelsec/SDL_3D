@@ -71,8 +71,12 @@
             "target": "entity.game"
           },
           {
-            "type": "grid.spawn_from_glyphs",
+            "type": "grid.spawn_runs_from_glyphs",
             "map": "map.maze",
+            "axis": "x",
+            "depth": 0.26,
+            "inset": 0.03,
+            "output_count_key": "pacman_spawned_wall_runs",
             "spawns": [
               { "glyph": "#", "pool": "pool.walls", "z": 0.03 }
             ]

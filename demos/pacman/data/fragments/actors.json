@@ -251,24 +251,15 @@
       "tags": ["wall", "maze_geometry"],
       "transform": { "position": [0.0, 0.0, 0.04] },
       "properties": {
-        "kind": { "type": "string", "value": "wall" }
+        "kind": { "type": "string", "value": "wall" },
+        "grid_run_size": { "type": "vec3", "value": [0.54, 0.54, 0.26] }
       },
       "components": [
         {
           "type": "render.cube",
-          "size": [0.54, 0.54, 0.26],
-          "color": [20, 54, 210, 255]
-        },
-        {
-          "type": "render.cube",
-          "size": [0.42, 0.42, 0.08],
-          "offset": [0.0, 0.0, 0.18],
+          "size_property": "grid_run_size",
           "color": [42, 122, 255, 255],
           "emissive": true
-        },
-        {
-          "type": "collision.aabb",
-          "half_extents": [0.27, 0.27, 0.16]
         }
       ]
     },
@@ -484,7 +475,7 @@
     {
       "name": "pool.walls",
       "archetype": "archetype.wall",
-      "capacity": 220,
+      "capacity": 128,
       "scene": "scene.play",
       "initial_active": false,
       "on_exhausted": "fail",

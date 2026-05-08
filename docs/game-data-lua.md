@@ -74,6 +74,7 @@ The `ctx` table provides:
 - `ctx:grid_walkable(map, col, row)`: return whether a cell is walkable
 - `ctx:grid_neighbors(map, col, row)`: return walkable neighbor cells as `{ col, row, tile }` tables
 - `ctx:grid_next_step(map, start_col, start_row, goal_col, goal_row)`: return the next walkable BFS step as `{ col, row }`, or `nil`
+- `ctx:grid_actor_at(map, pool, col, row)`: return the active pooled actor indexed at a grid cell, or `nil`
 - `ctx:state_get(key, fallback)`: read persistent scene state
 - `ctx:state_set(key, value)`: write persistent scene state; passing `nil` removes the key
 - `ctx:random()`: deterministic per-runtime pseudo-random value in `[0, 1)`
@@ -85,6 +86,9 @@ The `ctx` table provides:
 - `ctx:actor(name)` is the cheapest way to reach a known entity name.
 - `ctx:actor_with_tags(...)` scans the actor registry and should be used for authored role discovery, not inner-loop per-frame work.
 - `ctx:active_actors_with_tags(...)` scans static entities and actor pools. It is useful for gameplay rules over small groups, but hot paths with many actors should use narrower engine sensors or future collection helpers.
+- `ctx:grid_actor_at(...)` is intended for hot grid lookups such as pellets,
+  keys, pickups, and hazards spawned through grid spawn actions. It avoids
+  scanning a tag set every frame.
 - `ctx:grid_next_step(...)` runs breadth-first search over the referenced grid. It is appropriate for maze AI decisions at intersections; avoid calling it for every actor every frame on large maps.
 - `ctx.storage.*` performs filesystem I/O and should be used for saves, settings, caches, and similar infrequent tasks.
 - `ctx:random()` is deterministic within a runtime session, which makes it safe for gameplay logic that should replay or sync consistently.
@@ -200,11 +204,13 @@ end
 ```
 
 `ctx:grid_cell_to_world` returns the same world-space cell centers used by
-`motion.grid_agent` and `grid.spawn_from_glyphs`. These helpers are intended
-for game-specific decisions such as ghost target selection, spawn point
-selection, tile-trigger behavior, and authored maze debugging. Keep frequent
-movement integration in `motion.grid_agent`; use Lua to choose desired
-directions and high-level policy.
+`motion.grid_agent`, `grid.spawn_from_glyphs`, and
+`grid.spawn_runs_from_glyphs`. `ctx:grid_actor_at` uses the grid index built by
+those spawn actions, so it returns actors in O(1) for typical pickup and hazard
+checks. These helpers are intended for game-specific decisions such as ghost
+target selection, spawn point selection, tile-trigger behavior, and authored
+maze debugging. Keep frequent movement integration in `motion.grid_agent`; use
+Lua to choose desired directions and high-level policy.
 
 ## Actor Pools
 

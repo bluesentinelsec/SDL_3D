@@ -178,24 +178,28 @@ local function collect_pellets(ctx, game)
     local player_row = player:get_int("grid_row", -1)
     local remaining = game:get_int("pellets_remaining", 0)
 
-    for _, pellet in ipairs(ctx:active_actors_with_tags("collectible")) do
-        if pellet:get_int("grid_col", -99) == player_col and pellet:get_int("grid_row", -99) == player_row then
-            local kind = pellet:get_string("kind", "pellet")
-            local points = pellet:get_int("points", 10)
-            local position = pellet.position
-            local effect_pool = kind == "power" and "pool.power_bursts" or "pool.pellet_bursts"
-            local ttl = kind == "power" and 0.72 or 0.34
-
-            game:set_int("score", game:get_int("score", 0) + points)
-            remaining = math.max(remaining - 1, 0)
-            spawn_effect(ctx, effect_pool, Vec3(position.x, position.y, 0.36), ttl)
-            if kind == "power" then
-                game:set_float("power_timer", POWER_SECONDS)
-                game:set_bool("power_active", true)
-            end
-            pellet:despawn("collected")
+    local function collect_actor(pellet)
+        if pellet == nil then
+            return
         end
+        local kind = pellet:get_string("kind", "pellet")
+        local points = pellet:get_int("points", 10)
+        local position = pellet.position
+        local effect_pool = kind == "power" and "pool.power_bursts" or "pool.pellet_bursts"
+        local ttl = kind == "power" and 0.72 or 0.34
+
+        game:set_int("score", game:get_int("score", 0) + points)
+        remaining = math.max(remaining - 1, 0)
+        spawn_effect(ctx, effect_pool, Vec3(position.x, position.y, 0.36), ttl)
+        if kind == "power" then
+            game:set_float("power_timer", POWER_SECONDS)
+            game:set_bool("power_active", true)
+        end
+        pellet:despawn("collected")
     end
+
+    collect_actor(ctx:grid_actor_at("map.maze", "pool.pellets", player_col, player_row))
+    collect_actor(ctx:grid_actor_at("map.maze", "pool.power_pellets", player_col, player_row))
 
     game:set_int("pellets_remaining", remaining)
     if remaining <= 0 then

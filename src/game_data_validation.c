@@ -3683,6 +3683,15 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 yyjson_val *lighting = obj_get(component, "lighting");
                 if (lighting != NULL && !yyjson_is_bool(lighting))
                     return validation_error(ctx, path, "render primitive lighting must be a boolean");
+                if (SDL_strcmp(type, "render.cube") == 0)
+                {
+                    yyjson_val *size = obj_get(component, "size");
+                    if (size != NULL && !is_vec_array(size, 3))
+                        return validation_error(ctx, path, "render.cube size must be a vec3");
+                    yyjson_val *size_property = obj_get(component, "size_property");
+                    if (size_property != NULL && !is_non_empty_string(component, "size_property"))
+                        return validation_error(ctx, path, "render.cube size_property must be non-empty");
+                }
                 if (SDL_strcmp(type, "render.sphere") == 0)
                 {
                     yyjson_val *rotation_axis = obj_get(component, "rotation_axis");
@@ -3739,6 +3748,15 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                 if (speed != NULL && (!yyjson_is_num(speed) || yyjson_get_num(speed) < 0.0))
                     return validation_error(ctx, component_path,
                                             "motion.grid_agent speed must be a non-negative number");
+            }
+            else if (SDL_strcmp(type, "render.cube") == 0)
+            {
+                yyjson_val *size = obj_get(component, "size");
+                if (size != NULL && !is_vec_array(size, 3))
+                    return validation_error(ctx, component_path, "render.cube size must be a vec3");
+                yyjson_val *size_property = obj_get(component, "size_property");
+                if (size_property != NULL && !is_non_empty_string(component, "size_property"))
+                    return validation_error(ctx, component_path, "render.cube size_property must be non-empty");
             }
         }
     }
@@ -4065,22 +4083,38 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             return validation_error(ctx, json_path, "projectile.fire properties must be an object");
         return true;
     }
-    if (SDL_strcmp(type, "grid.spawn_from_glyphs") == 0)
+    if (SDL_strcmp(type, "grid.spawn_from_glyphs") == 0 || SDL_strcmp(type, "grid.spawn_runs_from_glyphs") == 0)
     {
         if (!require_ref(ctx, &names->grid_maps, "grid map", json_string(action, "map"), json_path))
             return false;
         yyjson_val *spawns = obj_get(action, "spawns");
         if (!yyjson_is_arr(spawns) || yyjson_arr_size(spawns) <= 0)
-            return validation_error(ctx, json_path, "grid.spawn_from_glyphs requires a non-empty spawns array");
+            return validation_error(ctx, json_path, "%s requires a non-empty spawns array", type);
         yyjson_val *properties = obj_get(action, "properties");
         if (properties != NULL && !yyjson_is_obj(properties))
-            return validation_error(ctx, json_path, "grid.spawn_from_glyphs properties must be an object");
+            return validation_error(ctx, json_path, "%s properties must be an object", type);
         yyjson_val *z = obj_get(action, "z");
         if (z != NULL && !yyjson_is_num(z))
-            return validation_error(ctx, json_path, "grid.spawn_from_glyphs z must be numeric");
+            return validation_error(ctx, json_path, "%s z must be numeric", type);
+        yyjson_val *depth = obj_get(action, "depth");
+        if (depth != NULL && !yyjson_is_num(depth))
+            return validation_error(ctx, json_path, "%s depth must be numeric", type);
+        yyjson_val *inset = obj_get(action, "inset");
+        if (inset != NULL && !yyjson_is_num(inset))
+            return validation_error(ctx, json_path, "%s inset must be numeric", type);
+        yyjson_val *size = obj_get(action, "size");
+        if (size != NULL && !is_vec_array(size, 3))
+            return validation_error(ctx, json_path, "%s size must be a vec3", type);
+        const char *axis = json_string(action, "axis");
+        if (axis != NULL && SDL_strcmp(axis, "x") != 0 && SDL_strcmp(axis, "horizontal") != 0 &&
+            SDL_strcmp(axis, "row") != 0 && SDL_strcmp(axis, "y") != 0 && SDL_strcmp(axis, "vertical") != 0 &&
+            SDL_strcmp(axis, "column") != 0)
+        {
+            return validation_error(ctx, json_path, "%s axis must be x, y, horizontal, vertical, row, or column", type);
+        }
         yyjson_val *output_count_key = obj_get(action, "output_count_key");
         if (output_count_key != NULL && !is_non_empty_string(action, "output_count_key"))
-            return validation_error(ctx, json_path, "grid.spawn_from_glyphs output_count_key must be non-empty");
+            return validation_error(ctx, json_path, "%s output_count_key must be non-empty", type);
         for (size_t i = 0; i < yyjson_arr_size(spawns); ++i)
         {
             char spawn_path[PATH_BUFFER_SIZE];
@@ -4098,6 +4132,23 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             yyjson_val *spawn_z = obj_get(spawn, "z");
             if (spawn_z != NULL && !yyjson_is_num(spawn_z))
                 return validation_error(ctx, spawn_path, "grid spawn z must be numeric");
+            yyjson_val *spawn_depth = obj_get(spawn, "depth");
+            if (spawn_depth != NULL && !yyjson_is_num(spawn_depth))
+                return validation_error(ctx, spawn_path, "grid spawn depth must be numeric");
+            yyjson_val *spawn_inset = obj_get(spawn, "inset");
+            if (spawn_inset != NULL && !yyjson_is_num(spawn_inset))
+                return validation_error(ctx, spawn_path, "grid spawn inset must be numeric");
+            yyjson_val *spawn_size = obj_get(spawn, "size");
+            if (spawn_size != NULL && !is_vec_array(spawn_size, 3))
+                return validation_error(ctx, spawn_path, "grid spawn size must be a vec3");
+            const char *spawn_axis = json_string(spawn, "axis");
+            if (spawn_axis != NULL && SDL_strcmp(spawn_axis, "x") != 0 && SDL_strcmp(spawn_axis, "horizontal") != 0 &&
+                SDL_strcmp(spawn_axis, "row") != 0 && SDL_strcmp(spawn_axis, "y") != 0 &&
+                SDL_strcmp(spawn_axis, "vertical") != 0 && SDL_strcmp(spawn_axis, "column") != 0)
+            {
+                return validation_error(ctx, spawn_path,
+                                        "grid spawn axis must be x, y, horizontal, vertical, row, or column");
+            }
         }
         return true;
     }

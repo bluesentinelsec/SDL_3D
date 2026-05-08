@@ -6996,6 +6996,9 @@ function rules.inspect(_, _, ctx)
   ctx:state_set("path_found", step ~= nil)
   ctx:state_set("path_step_col", step and step.col or -1)
   ctx:state_set("path_step_row", step and step.row or -1)
+
+  local pellet = ctx:grid_actor_at("map.maze", "pool.pellets", 2, 1)
+  ctx:state_set("lookup_pellet", pellet and pellet.name or "")
   return true
 end
 
@@ -7060,13 +7063,24 @@ return rules
         "points": { "type": "int", "value": 50 },
         "kind": { "type": "string", "value": "power" }
       }
+    },
+    {
+      "name": "archetype.wall",
+      "tags": ["wall"],
+      "properties": {
+        "grid_run_size": { "type": "vec3", "value": [1.0, 1.0, 0.25] }
+      },
+      "components": [
+        { "type": "render.cube", "size_property": "grid_run_size", "color": [10, 20, 30, 255] }
+      ]
     }
   ],
   "actor_pools": [
     { "name": "pool.pellets", "archetype": "archetype.pellet", "capacity": 3, "scene": "scene.play" },
-    { "name": "pool.power_pellets", "archetype": "archetype.power_pellet", "capacity": 1, "scene": "scene.play" }
+    { "name": "pool.power_pellets", "archetype": "archetype.power_pellet", "capacity": 1, "scene": "scene.play" },
+    { "name": "pool.walls", "archetype": "archetype.wall", "capacity": 10, "scene": "scene.play" }
   ],
-  "signals": ["signal.inspect", "signal.spawn.collectibles"],
+  "signals": ["signal.inspect", "signal.spawn.collectibles", "signal.spawn.walls"],
   "adapters": [
     { "name": "adapter.inspect", "kind": "action", "script": "script.rules", "function": "inspect" }
   ],
@@ -7088,6 +7102,21 @@ return rules
             "spawns": [
               { "glyph": ".", "pool": "pool.pellets", "properties": { "kind": "pellet" } },
               { "glyph": "o", "pool": "pool.power_pellets", "properties": { "kind": "power" } }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.spawn.walls",
+        "actions": [
+          {
+            "type": "grid.spawn_runs_from_glyphs",
+            "map": "map.maze",
+            "output_count_key": "spawned_wall_runs",
+            "axis": "x",
+            "depth": 0.3,
+            "spawns": [
+              { "glyph": "#", "pool": "pool.walls" }
             ]
           }
         ]
@@ -7138,6 +7167,22 @@ return rules
     EXPECT_EQ(sdl3d_properties_get_int(pellet0->props, "grid_row", -1), 1);
     EXPECT_STREQ(sdl3d_properties_get_string(power->props, "kind", ""), "power");
     expect_vec3_near(power->position, sdl3d_vec3_make(3.0f, -1.0f, 0.0f));
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.inspect"), nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(state, "lookup_pellet", ""), "pool.pellets.0");
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.walls"), nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(state, "spawned_wall_runs", 0), 9);
+    sdl3d_registered_actor *wall0 = sdl3d_game_data_find_actor(runtime, "pool.walls.0");
+    sdl3d_registered_actor *wall1 = sdl3d_game_data_find_actor(runtime, "pool.walls.1");
+    ASSERT_NE(wall0, nullptr);
+    ASSERT_NE(wall1, nullptr);
+    EXPECT_TRUE(wall0->active);
+    EXPECT_EQ(sdl3d_properties_get_int(wall0->props, "grid_run_length", 0), 5);
+    EXPECT_STREQ(sdl3d_properties_get_string(wall0->props, "grid_run_axis", ""), "x");
+    expect_vec3_near(sdl3d_properties_get_vec3(wall0->props, "grid_run_size", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)),
+                     sdl3d_vec3_make(5.0f, 1.0f, 0.3f));
+    expect_vec3_near(wall0->position, sdl3d_vec3_make(2.0f, 0.0f, 0.0f));
+    EXPECT_EQ(sdl3d_properties_get_int(wall1->props, "grid_run_length", 0), 1);
 
     sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
     ASSERT_NE(player, nullptr);
@@ -7202,6 +7247,8 @@ TEST(GameDataRuntime, PacmanDemoLoadsAndRunsMazeCollection)
     EXPECT_TRUE(power->active);
     EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "pool.walls.0"));
     EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "pool.pellets.0"));
+    EXPECT_GT(sdl3d_properties_get_int(state, "pacman_spawned_wall_runs", 0), 0);
+    EXPECT_LT(sdl3d_properties_get_int(state, "pacman_spawned_wall_runs", 999), 180);
 
     const int spawned_collectibles = sdl3d_properties_get_int(state, "pacman_spawned_collectibles", 0);
     EXPECT_EQ(sdl3d_properties_get_int(game->props, "pellets_remaining", -1), spawned_collectibles);
