@@ -12,9 +12,11 @@
 
 #include "game_data_standard_options.h"
 #include "network_replication_schema.h"
+#include "sdl3d/actor_controller.h"
 #include "sdl3d/door.h"
 #include "sdl3d/input.h"
 #include "sdl3d/level.h"
+#include "sdl3d/sprite_actor.h"
 #include "sdl3d_crypto.h"
 
 #define PATH_BUFFER_SIZE 256
@@ -2531,10 +2533,11 @@ static bool is_wave_axis_value(yyjson_val *value)
 static bool is_supported_component_type(const char *type)
 {
     const char *known[] = {
-        "adapter.controller", "collision.aabb",     "collision.circle", "control.axis_1d",    "controller.fps_sector",
-        "lifecycle.ttl",      "light.directional",  "light.point",      "light.spot",         "motion.grid_agent",
-        "motion.oscillate",   "motion.scroll_wrap", "motion.spin",      "motion.velocity_2d", "motion.velocity_3d",
-        "particles.emitter",  "property.decay",     "render.cube",      "render.sphere",      "render.sprite",
+        "adapter.controller", "collision.aabb",    "collision.circle",   "control.axis_1d", "controller.fps_sector",
+        "lifecycle.ttl",      "light.directional", "light.point",        "light.spot",      "motion.grid_agent",
+        "motion.oscillate",   "motion.patrol",     "motion.scroll_wrap", "motion.spin",     "motion.velocity_2d",
+        "motion.velocity_3d", "particles.emitter", "property.decay",     "render.cube",     "render.sphere",
+        "render.sprite",
     };
 
     if (type == NULL)
@@ -2900,10 +2903,61 @@ static bool collect_sprite_assets(validation_context *ctx, yyjson_val *root, val
             return validation_error(ctx, path, "sprite asset entries must be objects");
         if (!require_unique_name(ctx, &names->sprites, "sprite asset", json_string(sprite, "id"), path))
             return false;
-        if (!is_non_empty_string(sprite, "path"))
-            return validation_error(ctx, path, "sprite asset requires a non-empty path");
-        if (!asset_path_exists(ctx, json_string(sprite, "path"), path, "sprite"))
-            return false;
+        const char *kind = json_string(sprite, "kind");
+        if (kind == NULL)
+            kind = "sheet";
+        if (SDL_strcmp(kind, "sheet") != 0 && SDL_strcmp(kind, "files") != 0)
+            return validation_error(ctx, path, "sprite asset kind must be 'sheet' or 'files'");
+        if (SDL_strcmp(kind, "sheet") == 0)
+        {
+            if (!is_non_empty_string(sprite, "path"))
+                return validation_error(ctx, path, "sprite sheet asset requires a non-empty path");
+            if (!asset_path_exists(ctx, json_string(sprite, "path"), path, "sprite"))
+                return false;
+        }
+        else
+        {
+            yyjson_val *base_paths = obj_get(sprite, "base_paths");
+            yyjson_val *frame_paths = obj_get(sprite, "frame_paths");
+            yyjson_val *frame_count_value = obj_get(sprite, "frame_count");
+            yyjson_val *direction_count_value = obj_get(sprite, "direction_count");
+            const int frame_count = yyjson_is_int(frame_count_value) ? (int)yyjson_get_int(frame_count_value) : 0;
+            const int direction_count =
+                yyjson_is_int(direction_count_value) ? (int)yyjson_get_int(direction_count_value) : 0;
+            if (!yyjson_is_arr(base_paths) || !yyjson_is_arr(frame_paths))
+                return validation_error(ctx, path, "sprite file-list assets require base_paths and frame_paths arrays");
+            if (direction_count <= 0 || frame_count <= 0)
+                return validation_error(ctx, path,
+                                        "sprite file-list assets require positive frame_count and direction_count");
+            if ((int)yyjson_arr_size(base_paths) != direction_count)
+                return validation_error(ctx, path, "sprite file-list base_paths count must match direction_count");
+            if ((int)yyjson_arr_size(frame_paths) != frame_count * direction_count)
+                return validation_error(ctx, path,
+                                        "sprite file-list frame_paths count must match frame_count * direction_count");
+            for (size_t path_index = 0; path_index < yyjson_arr_size(base_paths); ++path_index)
+            {
+                yyjson_val *entry = yyjson_arr_get(base_paths, path_index);
+                const char *asset_path = yyjson_get_str(entry);
+                if (asset_path == NULL || asset_path[0] == '\0')
+                    return validation_error(ctx, path, "sprite file-list base paths must be non-empty strings");
+                if (!asset_path_exists(ctx, asset_path, path, "sprite"))
+                    return false;
+            }
+            for (size_t path_index = 0; path_index < yyjson_arr_size(frame_paths); ++path_index)
+            {
+                yyjson_val *entry = yyjson_arr_get(frame_paths, path_index);
+                const char *asset_path = yyjson_get_str(entry);
+                if (asset_path == NULL || asset_path[0] == '\0')
+                    return validation_error(ctx, path, "sprite file-list frame paths must be non-empty strings");
+                if (!asset_path_exists(ctx, asset_path, path, "sprite"))
+                    return false;
+            }
+        }
+        yyjson_val *direction_count_value = obj_get(sprite, "direction_count");
+        const int direction_count =
+            yyjson_is_int(direction_count_value) ? (int)yyjson_get_int(direction_count_value) : 1;
+        if (direction_count <= 0 || direction_count > SDL3D_SPRITE_ROTATION_COUNT)
+            return validation_error(ctx, path, "sprite direction_count must be between 1 and 8");
         const char *shader_vertex_path = json_string(sprite, "shader_vertex_path");
         const char *shader_fragment_path = json_string(sprite, "shader_fragment_path");
         if (shader_vertex_path != NULL && shader_vertex_path[0] != '\0' &&
@@ -4182,6 +4236,49 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                     return validation_error(ctx, path, "motion.oscillate rate must be a number");
                 if (phase != NULL && !yyjson_is_num(phase))
                     return validation_error(ctx, path, "motion.oscillate phase must be a number");
+            }
+            else if (SDL_strcmp(type, "motion.patrol") == 0)
+            {
+                yyjson_val *waypoints = obj_get(component, "waypoints");
+                if (!yyjson_is_arr(waypoints) || yyjson_arr_size(waypoints) < 2 ||
+                    yyjson_arr_size(waypoints) > SDL3D_ACTOR_PATROL_MAX_WAYPOINTS)
+                    return validation_error(ctx, path, "motion.patrol requires 2 to 16 waypoints");
+                for (size_t waypoint_index = 0; waypoint_index < yyjson_arr_size(waypoints); ++waypoint_index)
+                {
+                    if (!is_vec_array(yyjson_arr_get(waypoints, waypoint_index), 3))
+                        return validation_error(ctx, path, "motion.patrol waypoints must be vec3 values");
+                }
+                yyjson_val *speed = obj_get(component, "speed");
+                yyjson_val *wait_time = obj_get(component, "wait_time");
+                yyjson_val *arrival_radius = obj_get(component, "arrival_radius");
+                if (speed != NULL && (!yyjson_is_num(speed) || yyjson_get_num(speed) <= 0.0))
+                    return validation_error(ctx, path, "motion.patrol speed must be positive");
+                if (wait_time != NULL && (!yyjson_is_num(wait_time) || yyjson_get_num(wait_time) < 0.0))
+                    return validation_error(ctx, path, "motion.patrol wait_time must be non-negative");
+                if (arrival_radius != NULL && (!yyjson_is_num(arrival_radius) || yyjson_get_num(arrival_radius) <= 0.0))
+                    return validation_error(ctx, path, "motion.patrol arrival_radius must be positive");
+                const char *mode = json_string(component, "mode");
+                if (mode != NULL && SDL_strcmp(mode, "loop") != 0 && SDL_strcmp(mode, "ping_pong") != 0)
+                    return validation_error(ctx, path, "motion.patrol mode must be 'loop' or 'ping_pong'");
+                yyjson_val *start_idle = obj_get(component, "start_idle");
+                if (start_idle != NULL && !yyjson_is_bool(start_idle))
+                    return validation_error(ctx, path, "motion.patrol start_idle must be a boolean");
+                yyjson_val *yaw_property = obj_get(component, "yaw_property");
+                if (yaw_property != NULL && !is_non_empty_string(component, "yaw_property"))
+                    return validation_error(ctx, path, "motion.patrol yaw_property must be non-empty");
+                yyjson_val *signals = obj_get(component, "signals");
+                if (signals != NULL)
+                {
+                    if (!yyjson_is_obj(signals))
+                        return validation_error(ctx, path, "motion.patrol signals must be an object");
+                    const char *signal_keys[] = {"waypoint_reached", "loop_completed", "idle_started", "walk_started"};
+                    for (size_t signal_index = 0; signal_index < SDL_arraysize(signal_keys); ++signal_index)
+                    {
+                        const char *signal_name = json_string(signals, signal_keys[signal_index]);
+                        if (signal_name != NULL && !require_ref(ctx, &names->signals, "signal", signal_name, path))
+                            return false;
+                    }
+                }
             }
             else if (SDL_strcmp(type, "motion.scroll_wrap") == 0)
             {

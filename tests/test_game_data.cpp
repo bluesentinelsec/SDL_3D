@@ -1340,7 +1340,7 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
     {
         capture->saw_doom_robot_sprite = true;
         EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_SPRITE);
-        EXPECT_STREQ(primitive->sprite_asset, "sprite.doom.robot.static");
+        EXPECT_STREQ(primitive->sprite_asset, "sprite.doom.robot.walk");
         EXPECT_NEAR(primitive->sprite_size.x, 3.4f, 0.0001f);
         EXPECT_NEAR(primitive->sprite_size.y, 5.2f, 0.0001f);
         EXPECT_TRUE(primitive->lighting_enabled);
@@ -8063,8 +8063,24 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     EXPECT_TRUE(authored_props.saw_doom_crate);
     EXPECT_GE(authored_props.sprites, 4);
     sdl3d_game_data_sprite_asset robot_sprite{};
-    ASSERT_TRUE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.doom.robot.static", &robot_sprite));
-    EXPECT_STREQ(robot_sprite.path, "asset://sprites/skeletal_robot/south.png");
+    ASSERT_TRUE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.doom.robot.walk", &robot_sprite));
+    EXPECT_EQ(robot_sprite.source_kind, SDL3D_SPRITE_ASSET_SOURCE_FILES);
+    EXPECT_EQ(robot_sprite.frame_count, 6);
+    EXPECT_EQ(robot_sprite.direction_count, 8);
+    sdl3d_sprite_asset_runtime robot_sprite_runtime{};
+    ASSERT_TRUE(sdl3d_game_data_load_sprite_asset(runtime, "sprite.doom.robot.walk", &robot_sprite_runtime, error,
+                                                  sizeof(error)))
+        << error;
+    EXPECT_EQ(robot_sprite_runtime.animation_frame_count, 6);
+    EXPECT_EQ(robot_sprite_runtime.direction_count, 8);
+    sdl3d_sprite_asset_free(&robot_sprite_runtime);
+
+    sdl3d_registered_actor *robot = sdl3d_game_data_find_actor(runtime, "entity.doom.robot.entry");
+    ASSERT_NE(robot, nullptr);
+    const float robot_start_x = robot->position.x;
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.5f));
+    EXPECT_GT(robot->position.x, robot_start_x);
+    EXPECT_GT(sdl3d_properties_get_float(robot->props, "sprite_yaw", 0.0f), 1.0f);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
