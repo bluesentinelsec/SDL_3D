@@ -6,7 +6,8 @@
     "version": "0.1.0"
   },
   "imports": [
-    { "path": "fragments/world/sector_levels.json", "sections": ["sector_levels"] }
+    { "path": "fragments/world/sector_levels.json", "sections": ["sector_levels"] },
+    { "path": "fragments/world/sector_doors.json", "sections": ["sector_doors", "signals", "logic"] }
   ],
   "app": {
     "title": "SDL3D Doom Level",
@@ -36,7 +37,8 @@
           { "name": "action.move.back", "bindings": [{ "device": "keyboard", "key": "S" }] },
           { "name": "action.move.left", "bindings": [{ "device": "keyboard", "key": "A" }] },
           { "name": "action.move.right", "bindings": [{ "device": "keyboard", "key": "D" }] },
-          { "name": "action.jump", "bindings": [{ "device": "keyboard", "key": "SPACE" }] }
+          { "name": "action.jump", "bindings": [{ "device": "keyboard", "key": "SPACE" }] },
+          { "name": "action.interact", "bindings": [{ "device": "keyboard", "key": "E" }] }
         ]
       }
     ]

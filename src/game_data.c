@@ -20,6 +20,7 @@
 #include "network_replication_schema.h"
 #include "script_internal.h"
 #include "sdl3d/asset.h"
+#include "sdl3d/door.h"
 #include "sdl3d/fps_mover.h"
 #include "sdl3d/input.h"
 #include "sdl3d/math.h"
@@ -340,6 +341,12 @@ typedef struct sector_level_runtime
     sdl3d_level unlit;
 } sector_level_runtime;
 
+typedef struct sector_door_runtime
+{
+    yyjson_val *json;
+    sdl3d_door door;
+} sector_door_runtime;
+
 typedef struct fps_controller_runtime
 {
     const char *entity_name;
@@ -503,6 +510,8 @@ typedef struct sdl3d_game_data_runtime
     int grid_pickup_layer_count;
     sector_level_runtime *sector_levels;
     int sector_level_count;
+    sector_door_runtime *sector_doors;
+    int sector_door_count;
     fps_controller_runtime *fps_controllers;
     int fps_controller_count;
     int fps_controller_capacity;
@@ -3149,6 +3158,75 @@ static bool load_sector_levels(sdl3d_game_data_runtime *runtime, yyjson_val *roo
     return true;
 }
 
+static sdl3d_bounding_box json_bounds(yyjson_val *value, sdl3d_bounding_box fallback)
+{
+    if (!yyjson_is_obj(value))
+        return fallback;
+    return (sdl3d_bounding_box){
+        json_vec3(value, "min", fallback.min),
+        json_vec3(value, "max", fallback.max),
+    };
+}
+
+static bool load_sector_doors(sdl3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                              int error_buffer_size)
+{
+    yyjson_val *doors = obj_get(root, "sector_doors");
+    if (doors == NULL)
+        return true;
+    if (!yyjson_is_arr(doors))
+    {
+        set_error(error_buffer, error_buffer_size, "sector_doors must be an array");
+        return false;
+    }
+
+    runtime->sector_door_count = (int)yyjson_arr_size(doors);
+    runtime->sector_doors =
+        (sector_door_runtime *)SDL_calloc((size_t)runtime->sector_door_count, sizeof(*runtime->sector_doors));
+    if (runtime->sector_doors == NULL && runtime->sector_door_count > 0)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate sector doors");
+        return false;
+    }
+
+    for (int i = 0; i < runtime->sector_door_count; ++i)
+    {
+        yyjson_val *door_json = yyjson_arr_get(doors, (size_t)i);
+        yyjson_val *panels = obj_get(door_json, "panels");
+        sdl3d_door_desc desc;
+        SDL_zero(desc);
+        desc.door_id = json_int(door_json, "id", i + 1);
+        desc.name = json_string(door_json, "name", "");
+        desc.panel_count = yyjson_is_arr(panels) ? (int)yyjson_arr_size(panels) : 0;
+        desc.open_seconds = json_float(door_json, "open_seconds", 0.5f);
+        desc.close_seconds = json_float(door_json, "close_seconds", 0.5f);
+        desc.stay_open_seconds = json_float(door_json, "stay_open_seconds", 0.0f);
+        desc.start_open = json_bool(door_json, "start_open", false);
+
+        if (desc.panel_count < 1 || desc.panel_count > SDL3D_DOOR_MAX_PANELS)
+        {
+            set_errorf(error_buffer, error_buffer_size, "sector door '%s' must declare 1 or 2 panels", desc.name);
+            return false;
+        }
+        for (int panel_index = 0; panel_index < desc.panel_count; ++panel_index)
+        {
+            yyjson_val *panel_json = yyjson_arr_get(panels, (size_t)panel_index);
+            const sdl3d_bounding_box fallback = {
+                sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
+                sdl3d_vec3_make(1.0f, 1.0f, 1.0f),
+            };
+            desc.panels[panel_index].closed_bounds = json_bounds(
+                obj_get(panel_json, "bounds") != NULL ? obj_get(panel_json, "bounds") : panel_json, fallback);
+            desc.panels[panel_index].open_offset =
+                json_vec3(panel_json, "open_offset", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+        }
+
+        runtime->sector_doors[i].json = door_json;
+        sdl3d_door_init(&runtime->sector_doors[i].door, &desc);
+    }
+    return true;
+}
+
 static yyjson_val *runtime_root(const sdl3d_game_data_runtime *runtime)
 {
     return runtime != NULL && runtime->doc != NULL ? yyjson_doc_get_root(runtime->doc) : NULL;
@@ -3190,6 +3268,35 @@ static const scene_entry *find_scene_const(const sdl3d_game_data_runtime *runtim
             return &runtime->scenes[i];
     }
     return NULL;
+}
+
+static sector_door_runtime *find_sector_door(sdl3d_game_data_runtime *runtime, const char *name)
+{
+    if (runtime == NULL || name == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->sector_door_count; ++i)
+    {
+        sector_door_runtime *door = &runtime->sector_doors[i];
+        if (door->door.name != NULL && SDL_strcmp(door->door.name, name) == 0)
+            return door;
+    }
+    return NULL;
+}
+
+static bool sector_door_in_scene(const sector_door_runtime *door, const char *scene_name)
+{
+    if (door == NULL)
+        return false;
+    const char *scene = json_string(door->json, "scene", NULL);
+    if (scene == NULL || scene[0] == '\0')
+        return true;
+    return scene_name != NULL && SDL_strcmp(scene, scene_name) == 0;
+}
+
+static bool sector_door_in_active_scene(const sdl3d_game_data_runtime *runtime, const sector_door_runtime *door)
+{
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    return sector_door_in_scene(door, scene != NULL ? scene->name : NULL);
 }
 
 static scene_menu_state *find_scene_menu(scene_entry *scene, const char *name)
@@ -5520,6 +5627,52 @@ static bool emit_grid_pickup_layer_render_primitives(const sdl3d_game_data_runti
     return true;
 }
 
+static bool emit_sector_door_render_primitives(const sdl3d_game_data_runtime *runtime,
+                                               const sdl3d_game_data_render_eval *eval,
+                                               sdl3d_game_data_render_primitive_fn callback, void *userdata)
+{
+    if (runtime == NULL || callback == NULL)
+        return true;
+
+    for (int door_index = 0; door_index < runtime->sector_door_count; ++door_index)
+    {
+        const sector_door_runtime *door = &runtime->sector_doors[door_index];
+        if (!sector_door_in_active_scene(runtime, door))
+            continue;
+
+        yyjson_val *render = obj_get(door->json, "render");
+        for (int panel_index = 0; panel_index < sdl3d_door_panel_count(&door->door); ++panel_index)
+        {
+            sdl3d_bounding_box bounds;
+            if (!sdl3d_door_get_panel_bounds(&door->door, panel_index, &bounds))
+                continue;
+
+            sdl3d_game_data_render_primitive primitive;
+            SDL_zero(primitive);
+            primitive.entity_name = door->door.name;
+            primitive.type = SDL3D_GAME_DATA_RENDER_CUBE;
+            primitive.position =
+                sdl3d_vec3_make((bounds.min.x + bounds.max.x) * 0.5f, (bounds.min.y + bounds.max.y) * 0.5f,
+                                (bounds.min.z + bounds.max.z) * 0.5f);
+            primitive.size = sdl3d_vec3_make(SDL_max(bounds.max.x - bounds.min.x, 0.001f),
+                                             SDL_max(bounds.max.y - bounds.min.y, 0.001f),
+                                             SDL_max(bounds.max.z - bounds.min.z, 0.001f));
+            primitive.color = json_color(render, "color", (sdl3d_color){170, 185, 205, 255});
+            primitive.texture_image = json_string(render, "texture", NULL);
+            primitive.lighting_enabled = json_bool(render, "lighting", true);
+            primitive.emissive = json_bool(render, "emissive", false);
+            primitive.emissive_color = primitive.emissive
+                                           ? json_vec3(render, "emissive_color", sdl3d_vec3_make(0.12f, 0.15f, 0.18f))
+                                           : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+            if (eval != NULL)
+                apply_render_effects(runtime, render, eval, &primitive);
+            if (!callback(userdata, &primitive))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool for_each_render_primitive_internal(const sdl3d_game_data_runtime *runtime,
                                                const sdl3d_game_data_render_eval *eval,
                                                sdl3d_game_data_render_primitive_fn callback, void *userdata)
@@ -5562,6 +5715,8 @@ static bool for_each_render_primitive_internal(const sdl3d_game_data_runtime *ru
         keep_iterating = emit_grid_pickup_layer_render_primitives(
             runtime, &mutable_runtime->grid_pickup_layers[layer_index], callback, userdata);
     }
+    if (keep_iterating)
+        keep_iterating = emit_sector_door_render_primitives(runtime, eval, callback, userdata);
     actor_lifecycle_defer_end(mutable_runtime);
     return true;
 }
@@ -10948,6 +11103,8 @@ static int action_signal_id(sdl3d_game_data_runtime *runtime, yyjson_val *action
 
 static bool execute_action_array(sdl3d_game_data_runtime *runtime, yyjson_val *actions,
                                  const sdl3d_properties *payload);
+static float sector_door_distance_sq_xz(const sdl3d_door *door, sdl3d_vec3 point);
+static bool sector_door_is_in_front(const sdl3d_door *door, sdl3d_vec3 point, float yaw, float min_dot);
 
 static bool compare_value(const sdl3d_value *left, const char *op, yyjson_val *right)
 {
@@ -13092,6 +13249,103 @@ static bool execute_grid_pickup_layer_reset_action(sdl3d_game_data_runtime *runt
     return true;
 }
 
+static const char *sector_door_action_target_name(yyjson_val *action, const sdl3d_properties *payload)
+{
+    const char *target_from_payload = json_string(action, "target_from_payload", NULL);
+    if (target_from_payload != NULL && payload != NULL)
+    {
+        const char *target = sdl3d_properties_get_string(payload, target_from_payload, NULL);
+        if (target != NULL && target[0] != '\0')
+            return target;
+    }
+    return json_string(action, "target", NULL);
+}
+
+static bool execute_sector_door_state_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                             const sdl3d_properties *payload, const char *kind)
+{
+    sector_door_runtime *door = find_sector_door(runtime, sector_door_action_target_name(action, payload));
+    if (door == NULL || !sector_door_in_active_scene(runtime, door))
+        return false;
+
+    yyjson_val *auto_close = obj_get(action, "stay_open_seconds");
+    if (auto_close == NULL)
+        auto_close = obj_get(action, "auto_close_seconds");
+    if (yyjson_is_num(auto_close))
+        sdl3d_door_set_auto_close_delay(&door->door, (float)yyjson_get_num(auto_close));
+
+    if (SDL_strcmp(kind, "open") == 0)
+        return sdl3d_door_open(&door->door);
+    if (SDL_strcmp(kind, "close") == 0)
+        return sdl3d_door_close(&door->door);
+    return sdl3d_door_toggle(&door->door);
+}
+
+static sector_door_runtime *find_interactable_sector_door(sdl3d_game_data_runtime *runtime,
+                                                          const sdl3d_registered_actor *actor, yyjson_val *action)
+{
+    if (runtime == NULL || actor == NULL)
+        return NULL;
+
+    const float range = json_float(action, "range", 2.25f);
+    const float min_dot = json_float(action, "min_dot", 0.15f);
+    const float yaw = sdl3d_properties_get_float(actor->props, json_string(action, "yaw_property", "yaw"), 0.0f);
+    sector_door_runtime *best = NULL;
+    float best_distance = 0.0f;
+    for (int i = 0; i < runtime->sector_door_count; ++i)
+    {
+        sector_door_runtime *door = &runtime->sector_doors[i];
+        if (!sector_door_in_active_scene(runtime, door) ||
+            !sdl3d_door_point_in_interaction_range(&door->door, actor->position, range) ||
+            !sector_door_is_in_front(&door->door, actor->position, yaw, min_dot))
+        {
+            continue;
+        }
+
+        const float distance = sector_door_distance_sq_xz(&door->door, actor->position);
+        if (best == NULL || distance < best_distance)
+        {
+            best = door;
+            best_distance = distance;
+        }
+    }
+    return best;
+}
+
+static bool execute_sector_door_interact_action(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, json_string(action, "actor", NULL));
+    if (actor == NULL)
+        return false;
+
+    sector_door_runtime *door = find_interactable_sector_door(runtime, actor, action);
+    if (door == NULL)
+        return true;
+
+    sdl3d_properties *payload = sdl3d_properties_create();
+    if (payload == NULL)
+        return false;
+    sdl3d_properties_set_string(payload, "actor_name", actor->name);
+    sdl3d_properties_set_string(payload, "door_name", door->door.name != NULL ? door->door.name : "");
+    sdl3d_properties_set_int(payload, "door_id", door->door.door_id);
+
+    bool ok = true;
+    yyjson_val *actions = obj_get(action, "actions");
+    if (yyjson_is_arr(actions))
+    {
+        ok = execute_action_array(runtime, actions, payload);
+    }
+    else
+    {
+        const int signal_id = action_signal_id(runtime, action, "signal");
+        ok = signal_id >= 0 && runtime_bus(runtime) != NULL;
+        if (ok)
+            sdl3d_signal_emit(runtime_bus(runtime), signal_id, payload);
+    }
+    sdl3d_properties_destroy(payload);
+    return ok;
+}
+
 static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const sdl3d_properties *payload)
 {
     const char *type = json_string(action, "type", "");
@@ -13354,6 +13608,15 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
         return execute_grid_spawn_runs_from_glyphs_action(runtime, action);
     if (SDL_strcmp(type, "grid.pickup_layer.reset") == 0)
         return execute_grid_pickup_layer_reset_action(runtime, action);
+
+    if (SDL_strcmp(type, "sector_door.open") == 0)
+        return execute_sector_door_state_action(runtime, action, payload, "open");
+    if (SDL_strcmp(type, "sector_door.close") == 0)
+        return execute_sector_door_state_action(runtime, action, payload, "close");
+    if (SDL_strcmp(type, "sector_door.toggle") == 0)
+        return execute_sector_door_state_action(runtime, action, payload, "toggle");
+    if (SDL_strcmp(type, "sector_door.interact") == 0)
+        return execute_sector_door_interact_action(runtime, action);
 
     if (SDL_strcmp(type, "transform.set_position") == 0)
     {
@@ -14089,6 +14352,86 @@ static void fps_controller_publish_actor_state(const fps_controller_runtime *con
                              controller->mover.current_sector);
 }
 
+static sdl3d_bounding_box sector_door_closed_bounds(const sdl3d_door *door)
+{
+    if (door == NULL || door->panel_count <= 0)
+    {
+        return (sdl3d_bounding_box){
+            sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
+            sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
+        };
+    }
+    sdl3d_bounding_box bounds = door->panels[0].closed_bounds;
+    for (int i = 1; i < door->panel_count; ++i)
+    {
+        const sdl3d_bounding_box panel = door->panels[i].closed_bounds;
+        bounds.min.x = SDL_min(bounds.min.x, panel.min.x);
+        bounds.min.y = SDL_min(bounds.min.y, panel.min.y);
+        bounds.min.z = SDL_min(bounds.min.z, panel.min.z);
+        bounds.max.x = SDL_max(bounds.max.x, panel.max.x);
+        bounds.max.y = SDL_max(bounds.max.y, panel.max.y);
+        bounds.max.z = SDL_max(bounds.max.z, panel.max.z);
+    }
+    return bounds;
+}
+
+static sdl3d_vec3 sector_door_closed_center(const sdl3d_door *door)
+{
+    const sdl3d_bounding_box bounds = sector_door_closed_bounds(door);
+    return sdl3d_vec3_make((bounds.min.x + bounds.max.x) * 0.5f, (bounds.min.y + bounds.max.y) * 0.5f,
+                           (bounds.min.z + bounds.max.z) * 0.5f);
+}
+
+static float sector_door_distance_sq_xz(const sdl3d_door *door, sdl3d_vec3 point)
+{
+    if (door == NULL || door->panel_count <= 0)
+        return 0.0f;
+    const sdl3d_vec3 center = sector_door_closed_center(door);
+    const float dx = center.x - point.x;
+    const float dz = center.z - point.z;
+    return dx * dx + dz * dz;
+}
+
+static bool sector_door_is_in_front(const sdl3d_door *door, sdl3d_vec3 point, float yaw, float min_dot)
+{
+    if (door == NULL)
+        return false;
+    const sdl3d_vec3 center = sector_door_closed_center(door);
+    float dx = center.x - point.x;
+    float dz = center.z - point.z;
+    const float length = SDL_sqrtf(dx * dx + dz * dz);
+    if (length <= 0.0001f)
+        return true;
+    dx /= length;
+    dz /= length;
+    const float forward_x = SDL_sinf(yaw);
+    const float forward_z = -SDL_cosf(yaw);
+    return dx * forward_x + dz * forward_z >= min_dot;
+}
+
+static void resolve_fps_controller_sector_doors(sdl3d_game_data_runtime *runtime, fps_controller_runtime *controller)
+{
+    if (runtime == NULL || controller == NULL)
+        return;
+
+    bool resolved = false;
+    for (int i = 0; i < runtime->sector_door_count; ++i)
+    {
+        sector_door_runtime *door = &runtime->sector_doors[i];
+        if (!sector_door_in_active_scene(runtime, door))
+            continue;
+        resolved = sdl3d_door_resolve_cylinder(&door->door, &controller->mover.position,
+                                               controller->mover.config.player_height,
+                                               controller->mover.config.player_radius) ||
+                   resolved;
+    }
+    if (resolved)
+    {
+        controller->mover.last_good_position = controller->mover.position;
+        controller->mover.has_last_good = true;
+    }
+}
+
 static void update_fps_sector_controller(sdl3d_game_data_runtime *runtime, yyjson_val *component,
                                          sdl3d_registered_actor *actor, const sdl3d_input_manager *input, float dt)
 {
@@ -14151,7 +14494,17 @@ static void update_fps_sector_controller(sdl3d_game_data_runtime *runtime, yyjso
     const float mouse_dy = mouse_look && input != NULL ? sdl3d_input_get_mouse_dy(input) : 0.0f;
     sdl3d_fps_mover_update(&controller->mover, &sector_level->lightmapped, sector_level->sectors, wish, mouse_dx,
                            mouse_dy, json_float(component, "mouse_sensitivity", 0.002f), dt);
+    resolve_fps_controller_sector_doors(runtime, controller);
     fps_controller_publish_actor_state(controller, component, actor);
+}
+
+static void update_sector_doors(sdl3d_game_data_runtime *runtime, float dt)
+{
+    for (int i = 0; runtime != NULL && i < runtime->sector_door_count; ++i)
+    {
+        if (sector_door_in_active_scene(runtime, &runtime->sector_doors[i]))
+            sdl3d_door_update(&runtime->sector_doors[i].door, dt);
+    }
 }
 
 static void update_control_components(sdl3d_game_data_runtime *runtime, yyjson_val *root, float dt)
@@ -14967,6 +15320,7 @@ bool sdl3d_game_data_update(sdl3d_game_data_runtime *runtime, float dt)
 
     yyjson_val *root = yyjson_doc_get_root(runtime->doc);
     actor_lifecycle_defer_begin(runtime);
+    update_sector_doors(runtime, dt);
     update_control_components(runtime, root, dt);
     update_motion_components(runtime, root, dt);
     update_wave_schedules(runtime, dt);
@@ -15366,6 +15720,7 @@ bool sdl3d_game_data_load_asset_with_options(sdl3d_asset_resolver *assets, const
               load_grid_maps(runtime, root, error_buffer, error_buffer_size) &&
               load_grid_pickup_layers(runtime, root, error_buffer, error_buffer_size) &&
               load_sector_levels(runtime, root, error_buffer, error_buffer_size) &&
+              load_sector_doors(runtime, root, error_buffer, error_buffer_size) &&
               load_actor_pools(runtime, root, error_buffer, error_buffer_size) &&
               load_input(runtime, root, error_buffer, error_buffer_size) &&
               load_timers(runtime, logic, error_buffer, error_buffer_size) && load_sensors(runtime, logic) &&
@@ -17563,6 +17918,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->grid_actor_indices);
     SDL_free(runtime->grid_pickup_layers);
     SDL_free(runtime->sector_levels);
+    SDL_free(runtime->sector_doors);
     SDL_free(runtime->fps_controllers);
     SDL_free(runtime->actor_pools);
     SDL_free(runtime->direct_connect_sessions);
