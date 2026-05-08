@@ -103,6 +103,8 @@ struct RenderPrimitiveCapture
     float ball_rotation_angle = 0.0f;
     bool saw_options_background = false;
     bool saw_options_glow = false;
+    bool saw_pooled_cube = false;
+    bool saw_pooled_sphere = false;
 };
 
 void capture_signal_payload(void *userdata, int signal_id, const sdl3d_properties *payload)
@@ -139,6 +141,7 @@ struct ParticleCapture
     int count = 0;
     bool saw_ambient = false;
     bool saw_options_flow = false;
+    bool saw_pooled_emitter = false;
 };
 
 struct EvaluatedPrimitiveCapture
@@ -1256,6 +1259,20 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         EXPECT_NEAR(primitive->radius, 1.05f, 0.0001f);
         EXPECT_TRUE(primitive->emissive);
     }
+    if (std::string(primitive->entity_name) == "pool.renderables.0" && primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
+    {
+        capture->saw_pooled_cube = true;
+        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
+        EXPECT_NEAR(primitive->position.x, 2.0f, 0.0001f);
+        EXPECT_NEAR(primitive->size.x, 0.5f, 0.0001f);
+    }
+    if (std::string(primitive->entity_name) == "pool.renderables.0" && primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
+    {
+        capture->saw_pooled_sphere = true;
+        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_SPHERE);
+        EXPECT_NEAR(primitive->position.y, 3.0f, 0.0001f);
+        EXPECT_NEAR(primitive->radius, 0.2f, 0.0001f);
+    }
     return true;
 }
 
@@ -1304,6 +1321,13 @@ bool capture_particle(void *userdata, const sdl3d_game_data_particle_emitter *em
         EXPECT_FALSE(emitter->config.depth_test);
         EXPECT_TRUE(emitter->config.additive_blend);
         EXPECT_LT(emitter->config.size_start, 0.04f);
+    }
+    if (std::string(emitter->entity_name) == "pool.renderables.0")
+    {
+        capture->saw_pooled_emitter = true;
+        EXPECT_EQ(emitter->config.max_particles, 12);
+        EXPECT_NEAR(emitter->config.position.x, 2.0f, 0.0001f);
+        EXPECT_NEAR(emitter->draw_emissive.y, 0.8f, 0.0001f);
     }
     return true;
 }
@@ -6399,6 +6423,109 @@ TEST(GameDataRuntime, ActorPoolsSpawnDespawnAndResetActors)
     EXPECT_FALSE(shot1->active);
     EXPECT_FALSE(reusable_shot0->active);
     EXPECT_FALSE(reusable_shot1->active);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, ActivePooledActorsRenderAndEmitParticles)
+{
+    const std::filesystem::path dir = unique_test_dir("actor_pool_render");
+    write_text(dir / "actor_pool_render.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Actor Pool Render", "id": "test.actor_pool_render", "version": "0.1.0" },
+  "world": { "name": "world.actor_pool_render", "kind": "fixed_screen" },
+  "actor_archetypes": [
+    {
+      "name": "archetype.renderable",
+      "tags": ["renderable"],
+      "components": [
+        { "type": "render.cube", "size": [0.5, 0.4, 0.3], "color": [10, 20, 30, 255] },
+        { "type": "render.sphere", "radius": 0.2, "rings": 8, "slices": 12, "offset": [0.0, 1.0, 0.0] },
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [0.1, 0.2, 0.0],
+          "direction": [0.0, 1.0, 0.0],
+          "max_particles": 12,
+          "emit_rate": 4.0,
+          "draw_emissive": [0.2, 0.8, 0.4]
+        }
+      ]
+    }
+  ],
+  "actor_pools": [
+    {
+      "name": "pool.renderables",
+      "archetype": "archetype.renderable",
+      "capacity": 2,
+      "scene": "scene.play",
+      "initial_active": false,
+      "on_exhausted": "fail"
+    }
+  ],
+  "signals": ["signal.spawn.one", "signal.spawn.two"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.spawn.one",
+        "actions": [
+          { "type": "actor.spawn", "pool": "pool.renderables", "position": [2.0, 2.0, 0.5] }
+        ]
+      },
+      {
+        "signal": "signal.spawn.two",
+        "actions": [
+          { "type": "actor.spawn", "pool": "pool.renderables", "position": [3.0, 2.0, 0.5] }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "renders_world": true
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "actor_pool_render.game.json").string().c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+
+    RenderPrimitiveCapture inactive_render{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &inactive_render));
+    EXPECT_EQ(inactive_render.cubes, 0);
+    EXPECT_EQ(inactive_render.spheres, 0);
+
+    ParticleCapture inactive_particles{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &inactive_particles));
+    EXPECT_EQ(inactive_particles.count, 0);
+
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.one"), nullptr);
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.two"), nullptr);
+
+    RenderPrimitiveCapture active_render{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &active_render));
+    EXPECT_EQ(active_render.cubes, 2);
+    EXPECT_EQ(active_render.spheres, 2);
+    EXPECT_TRUE(active_render.saw_pooled_cube);
+    EXPECT_TRUE(active_render.saw_pooled_sphere);
+
+    ParticleCapture active_particles{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &active_particles));
+    EXPECT_EQ(active_particles.count, 2);
+    EXPECT_TRUE(active_particles.saw_pooled_emitter);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
