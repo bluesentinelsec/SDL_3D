@@ -7314,6 +7314,176 @@ return rules
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, LoadsAuthoredSectorLevels)
+{
+    const std::filesystem::path dir = unique_test_dir("sector_levels");
+    write_text(dir / "sector_level.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Sector Level Test" },
+  "sector_levels": [
+    {
+      "name": "sector.test",
+      "materials": [
+        { "name": "floor", "albedo": [0.7, 0.7, 0.7, 1.0], "roughness": 0.9, "tex_scale": 2.0 },
+        { "name": "wall", "albedo": [0.2, 0.25, 0.35, 1.0], "metallic": 0.1, "roughness": 0.6 }
+      ],
+      "sectors": [
+        {
+          "name": "room",
+          "points": [[0, 0], [4, 0], [4, 4], [0, 4]],
+          "floor_y": 0.0,
+          "ceil_y": 3.0,
+          "floor_material": "floor",
+          "ceil_material": "wall",
+          "wall_material": "wall",
+          "ambient_sound_id": 2,
+          "damage_per_second": 1.5
+        },
+        {
+          "name": "hall",
+          "points": [[4, 1], [7, 1], [7, 3], [4, 3]],
+          "floor_y": 0.0,
+          "ceil_y": 3.0,
+          "floor_material": "floor",
+          "ceil_material": -1,
+          "wall_material": "wall",
+          "push_velocity": [1.0, 0.0, 0.0]
+        }
+      ],
+      "lights": [
+        { "position": [2.0, 2.5, 2.0], "color": [1.0, 0.8, 0.6], "intensity": 2.0, "range": 6.0 }
+      ]
+    }
+  ]
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "sector_level.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    sdl3d_game_data_sector_level level{};
+    ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.test", &level));
+    EXPECT_STREQ(level.name, "sector.test");
+    ASSERT_EQ(level.material_count, 2);
+    EXPECT_FLOAT_EQ(level.materials[0].tex_scale, 2.0f);
+    EXPECT_FLOAT_EQ(level.materials[1].metallic, 0.1f);
+    ASSERT_EQ(level.sector_count, 2);
+    ASSERT_NE(level.sector_names, nullptr);
+    EXPECT_STREQ(level.sector_names[0], "room");
+    EXPECT_STREQ(level.sector_names[1], "hall");
+    EXPECT_EQ(level.sectors[0].ambient_sound_id, 2);
+    EXPECT_FLOAT_EQ(sdl3d_sector_damage_per_second(&level.sectors[0]), 1.5f);
+    expect_vec3_near(sdl3d_sector_push_velocity(&level.sectors[1]), sdl3d_vec3_make(1.0f, 0.0f, 0.0f));
+    ASSERT_EQ(level.light_count, 1);
+    EXPECT_FLOAT_EQ(level.lights[0].intensity, 2.0f);
+
+    ASSERT_NE(level.lightmapped, nullptr);
+    ASSERT_NE(level.vertex_baked, nullptr);
+    ASSERT_NE(level.unlit, nullptr);
+    EXPECT_EQ(level.lightmapped->sector_count, 2);
+    EXPECT_GT(level.lightmapped->model.mesh_count, 0);
+    EXPECT_GT(level.lightmapped->portal_count, 0);
+    EXPECT_GT(level.lightmapped->lightmap_width, 0);
+    EXPECT_GT(level.lightmapped->lightmap_height, 0);
+    EXPECT_EQ(level.vertex_baked->lightmap_width, 0);
+    EXPECT_EQ(level.vertex_baked->lightmap_height, 0);
+    EXPECT_EQ(sdl3d_level_find_sector(level.lightmapped, level.sectors, 1.0f, 1.0f), 0);
+    EXPECT_EQ(sdl3d_level_find_sector(level.lightmapped, level.sectors, 5.0f, 2.0f), 1);
+
+    sdl3d_game_data_sector_level missing{};
+    EXPECT_FALSE(sdl3d_game_data_get_sector_level(runtime, "sector.missing", &missing));
+    EXPECT_EQ(missing.name, nullptr);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidAuthoredSectorLevels)
+{
+    const std::filesystem::path dir = unique_test_dir("sector_level_invalid");
+    struct Case
+    {
+        const char *name;
+        const char *sector_json;
+        const char *expected_error;
+    };
+    const Case cases[] = {
+        {
+            "bad_material",
+            R"json({
+              "name": "sector.bad",
+              "materials": [{ "name": "floor" }],
+              "sectors": [{
+                "points": [[0,0], [2,0], [2,2], [0,2]],
+                "floor_y": 0,
+                "ceil_y": 3,
+                "floor_material": "floor",
+                "ceil_material": "floor",
+                "wall_material": "missing"
+              }]
+            })json",
+            "material refs",
+        },
+        {
+            "bad_points",
+            R"json({
+              "name": "sector.bad",
+              "materials": [{ "name": "floor" }],
+              "sectors": [{
+                "points": [[0,0], [2,0]],
+                "floor_y": 0,
+                "ceil_y": 3,
+                "wall_material": "floor"
+              }]
+            })json",
+            "points",
+        },
+        {
+            "bad_height",
+            R"json({
+              "name": "sector.bad",
+              "materials": [{ "name": "floor" }],
+              "sectors": [{
+                "points": [[0,0], [2,0], [2,2], [0,2]],
+                "floor_y": 4,
+                "ceil_y": 3,
+                "wall_material": "floor"
+              }]
+            })json",
+            "ceil_y",
+        },
+    };
+
+    for (const Case &test_case : cases)
+    {
+        const std::filesystem::path path = dir / (std::string(test_case.name) + ".game.json");
+        const std::string json = std::string(R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Sector Level" },
+  "sector_levels": [
+)json") + test_case.sector_json +
+                                 R"json(
+  ]
+})json";
+        write_text(path, json.c_str());
+
+        char error[512]{};
+        EXPECT_FALSE(sdl3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
+            << test_case.name << ": " << error;
+    }
+
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, PacmanDemoLoadsAndRunsMazeCollection)
 {
     const std::filesystem::path pacman_path = pacman_data_path();

@@ -23,6 +23,7 @@
 #include "sdl3d/effects.h"
 #include "sdl3d/font.h"
 #include "sdl3d/game.h"
+#include "sdl3d/level.h"
 #include "sdl3d/lighting.h"
 #include "sdl3d/network.h"
 #include "sdl3d/network_replication.h"
@@ -214,6 +215,39 @@ extern "C"
         /** @brief Duration of the effect ramp, in seconds. */
         float effect_duration;
     } sdl3d_game_data_sprite_asset;
+
+    /**
+     * @brief Runtime descriptor for a JSON-authored sector level.
+     *
+     * Sector levels are data-authored Doom/Quake-style indoor worlds. The
+     * runtime owns all pointers in this descriptor. They remain valid until
+     * sdl3d_game_data_destroy().
+     */
+    typedef struct sdl3d_game_data_sector_level
+    {
+        /** @brief Stable authored level name. */
+        const char *name;
+        /** @brief Runtime sector definitions used for collision, sensors, and future mutation. */
+        const sdl3d_sector *sectors;
+        /** @brief Optional authored sector names parallel to @p sectors. */
+        const char *const *sector_names;
+        /** @brief Number of entries in @p sectors and @p sector_names. */
+        int sector_count;
+        /** @brief Runtime material palette used to build the sector meshes. */
+        const sdl3d_level_material *materials;
+        /** @brief Number of entries in @p materials. */
+        int material_count;
+        /** @brief Authored baked-light definitions. */
+        const sdl3d_level_light *lights;
+        /** @brief Number of entries in @p lights. */
+        int light_count;
+        /** @brief Level built with authored baked lights and lightmap atlas data. */
+        const sdl3d_level *lightmapped;
+        /** @brief Level built with baked vertex colors but no lightmap atlas data. */
+        const sdl3d_level *vertex_baked;
+        /** @brief Level built without baked lights. */
+        const sdl3d_level *unlit;
+    } sdl3d_game_data_sector_level;
 
     /**
      * @brief Runtime metrics used when evaluating data-authored UI bindings.
@@ -773,6 +807,21 @@ extern "C"
      * @see sdl3d_game_data_mutable_scene_state
      */
     const sdl3d_properties *sdl3d_game_data_scene_state(const sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Look up a JSON-authored sector level by name.
+     *
+     * This exposes loaded and built sector-world data to renderer,
+     * controller, sensor, and editor systems without making callers parse
+     * JSON. The returned pointers are runtime-owned.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param name Authored sector level name.
+     * @param out_level Receives runtime-owned sector level pointers.
+     * @return true when @p name resolves to an authored sector level.
+     */
+    bool sdl3d_game_data_get_sector_level(const sdl3d_game_data_runtime *runtime, const char *name,
+                                          sdl3d_game_data_sector_level *out_level);
 
     /** @brief Authored game data diagnostic severity. */
     typedef enum sdl3d_game_data_diagnostic_severity

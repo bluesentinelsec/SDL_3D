@@ -13,6 +13,7 @@
 #include "game_data_standard_options.h"
 #include "network_replication_schema.h"
 #include "sdl3d/input.h"
+#include "sdl3d/level.h"
 #include "sdl3d_crypto.h"
 
 #define PATH_BUFFER_SIZE 256
@@ -72,6 +73,7 @@ typedef struct validation_names
     name_table actor_pool_actors;
     name_table grid_maps;
     name_table grid_pickup_layers;
+    name_table sector_levels;
     name_table signals;
     name_table scripts;
     name_table script_modules;
@@ -1875,10 +1877,10 @@ static bool import_path_is_safe_relative(const char *path)
 static bool import_section_name_allowed(const char *name)
 {
     static const char *const allowed[] = {
-        "storage",          "persistence",  "profiles",     "assets",   "scripts",   "input",
-        "render",           "transitions",  "ui",           "entities", "grid_maps", "grid_pickup_layers",
-        "actor_archetypes", "actor_pools",  "signals",      "logic",    "adapters",  "network",
-        "haptics",          "presentation", "update_phases"};
+        "storage",       "persistence",      "profiles",     "assets",       "scripts",   "input",
+        "render",        "transitions",      "ui",           "entities",     "grid_maps", "grid_pickup_layers",
+        "sector_levels", "actor_archetypes", "actor_pools",  "signals",      "logic",     "adapters",
+        "network",       "haptics",          "presentation", "update_phases"};
     for (size_t i = 0; name != NULL && i < SDL_arraysize(allowed); ++i)
     {
         if (SDL_strcmp(name, allowed[i]) == 0)
@@ -2507,6 +2509,11 @@ static bool is_vec_array(yyjson_val *value, size_t min_count)
     return true;
 }
 
+static bool is_exact_vec_array(yyjson_val *value, size_t count)
+{
+    return yyjson_is_arr(value) && yyjson_arr_size(value) == count && is_vec_array(value, count);
+}
+
 static bool is_wave_axis_value(yyjson_val *value)
 {
     if (value == NULL || yyjson_is_num(value))
@@ -2661,6 +2668,27 @@ static bool collect_grid_pickup_layers(validation_context *ctx, yyjson_val *root
             return validation_error(ctx, path, "grid pickup layer entries must be objects");
         if (!require_unique_name(ctx, &names->grid_pickup_layers, "grid pickup layer", json_string(layer, "name"),
                                  path))
+            return false;
+    }
+    return true;
+}
+
+static bool collect_sector_levels(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *levels = obj_get(root, "sector_levels");
+    if (levels == NULL)
+        return true;
+    if (!yyjson_is_arr(levels))
+        return validation_error(ctx, "$.sector_levels", "sector_levels must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(levels); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.sector_levels[%zu]", i);
+        yyjson_val *level = yyjson_arr_get(levels, i);
+        if (!yyjson_is_obj(level))
+            return validation_error(ctx, path, "sector level entries must be objects");
+        if (!require_unique_name(ctx, &names->sector_levels, "sector level", json_string(level, "name"), path))
             return false;
     }
     return true;
@@ -3181,14 +3209,14 @@ static bool collect_names(validation_context *ctx, yyjson_val *root, validation_
 {
     return collect_signals(ctx, root, names) && collect_entities(ctx, root, names) &&
            collect_grid_maps(ctx, root, names) && collect_grid_pickup_layers(ctx, root, names) &&
-           collect_actor_archetypes(ctx, root, names) && collect_actor_pools(ctx, root, names) &&
-           collect_scripts(ctx, root, names) && collect_adapters(ctx, root, names) &&
-           collect_input_actions(ctx, root, names) && collect_input_assignment_sets(ctx, root, names) &&
-           collect_input_profiles(ctx, root, names) && collect_network_input_channels(ctx, root, names) &&
-           collect_cameras(ctx, root, names) && collect_fonts(ctx, root, names) &&
-           collect_sprite_assets(ctx, root, names) && collect_images(ctx, root, names) &&
-           collect_audio_assets(ctx, root, names) && collect_timers(ctx, root, names) &&
-           collect_sensors(ctx, root, names);
+           collect_sector_levels(ctx, root, names) && collect_actor_archetypes(ctx, root, names) &&
+           collect_actor_pools(ctx, root, names) && collect_scripts(ctx, root, names) &&
+           collect_adapters(ctx, root, names) && collect_input_actions(ctx, root, names) &&
+           collect_input_assignment_sets(ctx, root, names) && collect_input_profiles(ctx, root, names) &&
+           collect_network_input_channels(ctx, root, names) && collect_cameras(ctx, root, names) &&
+           collect_fonts(ctx, root, names) && collect_sprite_assets(ctx, root, names) &&
+           collect_images(ctx, root, names) && collect_audio_assets(ctx, root, names) &&
+           collect_timers(ctx, root, names) && collect_sensors(ctx, root, names);
 }
 
 static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)
@@ -3691,6 +3719,235 @@ static bool validate_grid_pickup_layers(validation_context *ctx, yyjson_val *roo
             }
         }
         name_table_destroy(&glyphs);
+        if (!ok)
+            return false;
+    }
+    return true;
+}
+
+static bool sector_level_material_ref_valid(yyjson_val *materials, const name_table *material_names, yyjson_val *ref,
+                                            bool allow_none)
+{
+    if (allow_none && (ref == NULL || yyjson_is_null(ref)))
+        return true;
+    if (yyjson_is_int(ref))
+    {
+        const int index = (int)yyjson_get_int(ref);
+        return index >= (allow_none ? -1 : 0) && index < (int)yyjson_arr_size(materials);
+    }
+    if (yyjson_is_str(ref))
+    {
+        const char *name = yyjson_get_str(ref);
+        if (allow_none && SDL_strcmp(name != NULL ? name : "", "none") == 0)
+            return true;
+        return name_table_contains(material_names, name);
+    }
+    return false;
+}
+
+static bool validate_sector_levels(validation_context *ctx, yyjson_val *root)
+{
+    yyjson_val *levels = obj_get(root, "sector_levels");
+    if (levels == NULL)
+        return true;
+    if (!yyjson_is_arr(levels))
+        return validation_error(ctx, "$.sector_levels", "sector_levels must be an array");
+
+    for (size_t level_index = 0; level_index < yyjson_arr_size(levels); ++level_index)
+    {
+        char level_path[PATH_BUFFER_SIZE];
+        format_path(level_path, sizeof(level_path), "$.sector_levels[%zu]", level_index);
+        yyjson_val *level = yyjson_arr_get(levels, level_index);
+        yyjson_val *materials = obj_get(level, "materials");
+        yyjson_val *sectors = obj_get(level, "sectors");
+        yyjson_val *lights = obj_get(level, "lights");
+        name_table material_names;
+        name_table sector_names;
+        SDL_zero(material_names);
+        SDL_zero(sector_names);
+        bool ok = true;
+
+        if (!yyjson_is_obj(level))
+        {
+            ok = validation_error(ctx, level_path, "sector level entries must be objects");
+            goto done;
+        }
+        if (!yyjson_is_arr(materials) || yyjson_arr_size(materials) <= 0)
+        {
+            ok = validation_error(ctx, level_path, "sector level materials must be a non-empty array");
+            goto done;
+        }
+        if (!yyjson_is_arr(sectors) || yyjson_arr_size(sectors) <= 0)
+        {
+            ok = validation_error(ctx, level_path, "sector level sectors must be a non-empty array");
+            goto done;
+        }
+
+        for (size_t material_index = 0; ok && material_index < yyjson_arr_size(materials); ++material_index)
+        {
+            char material_path[PATH_BUFFER_SIZE];
+            format_path(material_path, sizeof(material_path), "%s.materials[%zu]", level_path, material_index);
+            yyjson_val *material = yyjson_arr_get(materials, material_index);
+            if (!yyjson_is_obj(material))
+            {
+                ok = validation_error(ctx, material_path, "sector material entries must be objects");
+                break;
+            }
+            if (!require_unique_name(ctx, &material_names, "sector material", json_string(material, "name"),
+                                     material_path))
+            {
+                ok = false;
+                break;
+            }
+            yyjson_val *albedo = obj_get(material, "albedo");
+            if (albedo != NULL && !is_vec_array(albedo, 3))
+            {
+                ok = validation_error(ctx, material_path, "sector material albedo must be a vec3 or vec4");
+                break;
+            }
+            yyjson_val *metallic = obj_get(material, "metallic");
+            yyjson_val *roughness = obj_get(material, "roughness");
+            yyjson_val *tex_scale = obj_get(material, "tex_scale");
+            if ((metallic != NULL && !yyjson_is_num(metallic)) || (roughness != NULL && !yyjson_is_num(roughness)) ||
+                (tex_scale != NULL && !yyjson_is_num(tex_scale)))
+            {
+                ok = validation_error(ctx, material_path, "sector material numeric fields must be numbers");
+                break;
+            }
+            if (tex_scale != NULL && yyjson_get_num(tex_scale) <= 0.0)
+            {
+                ok = validation_error(ctx, material_path, "sector material tex_scale must be positive");
+                break;
+            }
+            const char *texture = json_string(material, "texture");
+            if (texture != NULL && texture[0] == '\0')
+            {
+                ok = validation_error(ctx, material_path, "sector material texture must be non-empty when present");
+                break;
+            }
+            if (texture != NULL && !asset_path_exists(ctx, texture, material_path, "sector material texture"))
+            {
+                ok = false;
+                break;
+            }
+        }
+
+        for (size_t sector_index = 0; ok && sector_index < yyjson_arr_size(sectors); ++sector_index)
+        {
+            char sector_path[PATH_BUFFER_SIZE];
+            format_path(sector_path, sizeof(sector_path), "%s.sectors[%zu]", level_path, sector_index);
+            yyjson_val *sector = yyjson_arr_get(sectors, sector_index);
+            yyjson_val *points = obj_get(sector, "points");
+            if (!yyjson_is_obj(sector))
+            {
+                ok = validation_error(ctx, sector_path, "sector entries must be objects");
+                break;
+            }
+            const char *sector_name = json_string(sector, "name");
+            if (sector_name != NULL && sector_name[0] != '\0' &&
+                !require_unique_name(ctx, &sector_names, "sector", sector_name, sector_path))
+            {
+                ok = false;
+                break;
+            }
+            if (!yyjson_is_arr(points) || yyjson_arr_size(points) < 3 ||
+                yyjson_arr_size(points) > SDL3D_SECTOR_MAX_POINTS)
+            {
+                ok = validation_error(ctx, sector_path, "sector points must contain 3..%d vec2 entries",
+                                      SDL3D_SECTOR_MAX_POINTS);
+                break;
+            }
+            for (size_t point_index = 0; point_index < yyjson_arr_size(points); ++point_index)
+            {
+                if (!is_exact_vec_array(yyjson_arr_get(points, point_index), 2))
+                {
+                    ok = validation_error(ctx, sector_path, "sector points must be vec2 arrays");
+                    break;
+                }
+            }
+            if (!ok)
+                break;
+            yyjson_val *floor_y = obj_get(sector, "floor_y");
+            yyjson_val *ceil_y = obj_get(sector, "ceil_y");
+            if (!yyjson_is_num(floor_y) || !yyjson_is_num(ceil_y))
+            {
+                ok = validation_error(ctx, sector_path, "sector floor_y and ceil_y must be numbers");
+                break;
+            }
+            if (yyjson_get_num(ceil_y) <= yyjson_get_num(floor_y))
+            {
+                ok = validation_error(ctx, sector_path, "sector ceil_y must be greater than floor_y");
+                break;
+            }
+            if (!sector_level_material_ref_valid(materials, &material_names, obj_get(sector, "floor_material"), true) ||
+                !sector_level_material_ref_valid(materials, &material_names, obj_get(sector, "ceil_material"), true) ||
+                !sector_level_material_ref_valid(materials, &material_names, obj_get(sector, "wall_material"), false))
+            {
+                ok = validation_error(ctx, sector_path, "sector material refs must reference a declared material");
+                break;
+            }
+            yyjson_val *floor_normal = obj_get(sector, "floor_normal");
+            yyjson_val *ceil_normal = obj_get(sector, "ceil_normal");
+            yyjson_val *push_velocity = obj_get(sector, "push_velocity");
+            if ((floor_normal != NULL && !is_exact_vec_array(floor_normal, 3)) ||
+                (ceil_normal != NULL && !is_exact_vec_array(ceil_normal, 3)) ||
+                (push_velocity != NULL && !is_exact_vec_array(push_velocity, 3)))
+            {
+                ok = validation_error(ctx, sector_path, "sector normals and push_velocity must be vec3 arrays");
+                break;
+            }
+            yyjson_val *ambient = obj_get(sector, "ambient_sound_id");
+            if (ambient != NULL && (!yyjson_is_int(ambient) || yyjson_get_int(ambient) < 0))
+            {
+                ok = validation_error(ctx, sector_path, "sector ambient_sound_id must be a non-negative integer");
+                break;
+            }
+            yyjson_val *damage = obj_get(sector, "damage_per_second");
+            if (damage != NULL && (!yyjson_is_num(damage) || yyjson_get_num(damage) < 0.0))
+            {
+                ok = validation_error(ctx, sector_path, "sector damage_per_second must be non-negative");
+                break;
+            }
+        }
+
+        if (ok && lights != NULL)
+        {
+            if (!yyjson_is_arr(lights))
+            {
+                ok = validation_error(ctx, level_path, "sector level lights must be an array");
+                goto done;
+            }
+            for (size_t light_index = 0; ok && light_index < yyjson_arr_size(lights); ++light_index)
+            {
+                char light_path[PATH_BUFFER_SIZE];
+                format_path(light_path, sizeof(light_path), "%s.lights[%zu]", level_path, light_index);
+                yyjson_val *light = yyjson_arr_get(lights, light_index);
+                if (!yyjson_is_obj(light) || !is_exact_vec_array(obj_get(light, "position"), 3))
+                {
+                    ok = validation_error(ctx, light_path, "sector light requires position vec3");
+                    break;
+                }
+                yyjson_val *color = obj_get(light, "color");
+                if (color != NULL && !is_exact_vec_array(color, 3))
+                {
+                    ok = validation_error(ctx, light_path, "sector light color must be a vec3");
+                    break;
+                }
+                yyjson_val *intensity = obj_get(light, "intensity");
+                yyjson_val *range = obj_get(light, "range");
+                if ((intensity != NULL && (!yyjson_is_num(intensity) || yyjson_get_num(intensity) < 0.0)) ||
+                    (range != NULL && (!yyjson_is_num(range) || yyjson_get_num(range) <= 0.0)))
+                {
+                    ok = validation_error(ctx, light_path,
+                                          "sector light intensity must be non-negative and range positive");
+                    break;
+                }
+            }
+        }
+
+    done:
+        name_table_destroy(&material_names);
+        name_table_destroy(&sector_names);
         if (!ok)
             return false;
     }
@@ -6137,7 +6394,8 @@ static bool validate_details(validation_context *ctx, yyjson_val *root, validati
     return validate_storage(ctx, root) && validate_persistence(ctx, root, names) &&
            validate_input_bindings(ctx, root) && validate_input_assignment_sets(ctx, root) &&
            validate_input_profiles(ctx, root, names) && validate_grid_maps(ctx, root) &&
-           validate_grid_pickup_layers(ctx, root, names) && validate_components(ctx, root, names) &&
+           validate_grid_pickup_layers(ctx, root, names) && validate_sector_levels(ctx, root) &&
+           validate_components(ctx, root, names) &&
            validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases", names) &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
            validate_actor_archetypes_and_pools(ctx, root, names) && validate_network(ctx, root, names) &&
@@ -6162,6 +6420,7 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->actor_pool_actors);
     name_table_destroy(&names->grid_maps);
     name_table_destroy(&names->grid_pickup_layers);
+    name_table_destroy(&names->sector_levels);
     name_table_destroy(&names->signals);
     name_table_destroy(&names->scripts);
     name_table_destroy(&names->script_modules);

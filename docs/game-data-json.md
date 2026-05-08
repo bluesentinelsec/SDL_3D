@@ -41,6 +41,7 @@ Every root game file is a JSON object.
 | `entities` | no | Named actors with tags, transforms, properties, and components. |
 | `grid_maps` | no | Authored tile grids for maze, board, and grid-locked games. |
 | `grid_pickup_layers` | no | Dense grid-indexed pickup layers rendered and collected without one actor per pickup. |
+| `sector_levels` | no | Authored sector/portal worlds for Doom/Quake-style indoor levels. |
 | `actor_archetypes` | no | Templates used by runtime actor pools. |
 | `actor_pools` | no | Preallocated spawn/despawn pools. |
 | `signals` | no | Authored signal names. |
@@ -81,6 +82,7 @@ a JSON object with schema `sdl3d.fragment.v0`.
   "imports": [
     { "path": "fragments/assets.json", "sections": ["assets"] },
     { "path": "fragments/actors/player.json", "sections": ["entities"] },
+    { "path": "fragments/world/e1m1.sectors.json", "sections": ["sector_levels"] },
     { "path": "fragments/input/profiles.json", "sections": ["input"] },
     { "path": "fragments/network/replication.json", "sections": ["network"] }
   ]
@@ -237,6 +239,97 @@ any other specific world type.
 World kinds may include fixed-screen playfields, tile grids, room graphs,
 sector/portal maps, brush worlds, or general 3D scenes as engine support
 grows.
+
+## Sector Levels
+
+`sector_levels` describe sector/portal worlds as data. This is the reusable
+foundation for Doom-like indoor maps: materials, sector floor plans, heights,
+sector metadata, and baked lights are authored in JSON and loaded into runtime
+`sdl3d_level` variants.
+
+```json
+{
+  "sector_levels": [
+    {
+      "name": "sector.e1m1",
+      "materials": [
+        {
+          "name": "rock_floor",
+          "texture": "asset://textures/rock_floor.jpg",
+          "albedo": [1.0, 1.0, 1.0, 1.0],
+          "roughness": 0.9,
+          "tex_scale": 4.0
+        },
+        {
+          "name": "wall_metal",
+          "texture": "asset://textures/wall_metal.jpg",
+          "roughness": 0.7,
+          "tex_scale": 4.0
+        }
+      ],
+      "sectors": [
+        {
+          "name": "start_room",
+          "points": [[0, 0], [10, 0], [10, 8], [0, 8]],
+          "floor_y": 0.0,
+          "ceil_y": 4.0,
+          "floor_material": "rock_floor",
+          "ceil_material": "wall_metal",
+          "wall_material": "wall_metal"
+        },
+        {
+          "name": "hazard_basin",
+          "points": [[-2, 16], [10, 16], [10, 26], [-2, 26]],
+          "floor_y": -0.5,
+          "ceil_y": 4.5,
+          "floor_material": "rock_floor",
+          "ceil_material": "wall_metal",
+          "wall_material": "wall_metal",
+          "damage_per_second": 18.0,
+          "ambient_sound_id": 1,
+          "push_velocity": [0.0, 0.0, 0.0]
+        }
+      ],
+      "lights": [
+        {
+          "position": [5.0, 3.5, 4.0],
+          "color": [1.0, 0.82, 0.58],
+          "intensity": 2.4,
+          "range": 9.5
+        }
+      ]
+    }
+  ]
+}
+```
+
+Sector material references may be material names or zero-based material
+indices. Prefer names for maintainability. `floor_material` and
+`ceil_material` may be omitted, `null`, `-1`, or `"none"` to omit that
+surface; `wall_material` must reference a declared material.
+
+Validation requires:
+
+- unique sector level names
+- a non-empty `materials` array with unique material names
+- a non-empty `sectors` array
+- each sector to contain 3..32 vec2 `points`
+- numeric `floor_y` and `ceil_y`, with `ceil_y > floor_y`
+- valid material references
+- optional `floor_normal`, `ceil_normal`, and `push_velocity` as vec3 arrays
+- non-negative `ambient_sound_id` and `damage_per_second`
+- optional lights with `position` vec3, optional `color` vec3, non-negative
+  `intensity`, and positive `range`
+
+At load time SDL3D builds three runtime variants per sector level:
+
+- `lightmapped`: baked lights plus lightmap atlas data
+- `vertex_baked`: baked vertex lighting without a lightmap atlas
+- `unlit`: raw material color/texture without baked lights
+
+Later renderer and controller phases should consume these runtime descriptors
+instead of parsing JSON directly. `world.kind` remains a high-level statement
+of spatial intent; `sector_levels` is the concrete sector-world data.
 
 ## Scenes
 
