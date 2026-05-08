@@ -1,0 +1,138 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "signals": [
+    "signal.app.quit_fade_done",
+    "signal.splash.done",
+    "signal.game.start",
+    "signal.move.left",
+    "signal.move.right",
+    "signal.move.up",
+    "signal.move.down",
+    "signal.camera.toggle",
+    "signal.ui.menu.move",
+    "signal.ui.menu.select"
+  ],
+  "logic": {
+    "sensors": [
+      {
+        "name": "logic.move.left",
+        "type": "sensor.input_pressed",
+        "action": "action.move.left",
+        "on_pressed": "signal.move.left"
+      },
+      {
+        "name": "logic.move.right",
+        "type": "sensor.input_pressed",
+        "action": "action.move.right",
+        "on_pressed": "signal.move.right"
+      },
+      {
+        "name": "logic.move.up",
+        "type": "sensor.input_pressed",
+        "action": "action.move.up",
+        "on_pressed": "signal.move.up"
+      },
+      {
+        "name": "logic.move.down",
+        "type": "sensor.input_pressed",
+        "action": "action.move.down",
+        "on_pressed": "signal.move.down"
+      },
+      {
+        "name": "logic.restart_input",
+        "type": "sensor.input_pressed",
+        "action": "action.restart",
+        "on_pressed": "signal.game.start"
+      },
+      {
+        "name": "logic.camera_toggle",
+        "type": "sensor.input_pressed",
+        "action": "action.camera.toggle",
+        "on_pressed": "signal.camera.toggle"
+      }
+    ],
+    "timers": [
+      {
+        "name": "timer.splash.done",
+        "delay": 1.35,
+        "signal": "signal.splash.done",
+        "repeating": false
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.splash.done",
+        "actions": [
+          { "type": "scene.set", "scene": "scene.title" }
+        ]
+      },
+      {
+        "signal": "signal.game.start",
+        "actions": [
+          { "type": "actor.despawn_by_tag", "tag": "maze_geometry", "reason": "restart" },
+          { "type": "actor.despawn_by_tag", "tag": "effect", "reason": "restart" },
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.pacman.start",
+            "target": "entity.game"
+          },
+          {
+            "type": "grid.spawn_runs_from_glyphs",
+            "map": "map.maze",
+            "axis": "x",
+            "depth": 0.26,
+            "inset": 0.03,
+            "output_count_key": "pacman_spawned_wall_runs",
+            "spawns": [
+              { "glyph": "#", "pool": "pool.walls", "z": 0.03 }
+            ]
+          },
+          {
+            "type": "grid.pickup_layer.reset",
+            "layer": "pickup.pacman.collectibles",
+            "output_count_key": "pacman_spawned_collectibles"
+          },
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.pacman.after_spawn",
+            "target": "entity.game"
+          }
+        ]
+      },
+      {
+        "signal": "signal.move.left",
+        "actions": [
+          { "type": "property.set", "target": "entity.pacman", "key": "grid_next_dir_x", "value": -1 },
+          { "type": "property.set", "target": "entity.pacman", "key": "grid_next_dir_y", "value": 0 }
+        ]
+      },
+      {
+        "signal": "signal.move.right",
+        "actions": [
+          { "type": "property.set", "target": "entity.pacman", "key": "grid_next_dir_x", "value": 1 },
+          { "type": "property.set", "target": "entity.pacman", "key": "grid_next_dir_y", "value": 0 }
+        ]
+      },
+      {
+        "signal": "signal.move.up",
+        "actions": [
+          { "type": "property.set", "target": "entity.pacman", "key": "grid_next_dir_x", "value": 0 },
+          { "type": "property.set", "target": "entity.pacman", "key": "grid_next_dir_y", "value": -1 }
+        ]
+      },
+      {
+        "signal": "signal.move.down",
+        "actions": [
+          { "type": "property.set", "target": "entity.pacman", "key": "grid_next_dir_x", "value": 0 },
+          { "type": "property.set", "target": "entity.pacman", "key": "grid_next_dir_y", "value": 1 }
+        ]
+      },
+      {
+        "signal": "signal.camera.toggle",
+        "actions": [
+          { "type": "camera.toggle", "camera": "camera.player.first_person", "fallback": "camera.maze" }
+        ]
+      }
+    ]
+  }
+}

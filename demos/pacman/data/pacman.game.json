@@ -1,0 +1,233 @@
+{
+  "schema": "sdl3d.game.v0",
+  "imports": [
+    { "path": "fragments/assets.json", "sections": ["assets"] },
+    { "path": "fragments/scripts.json", "sections": ["scripts", "adapters"] },
+    { "path": "fragments/input.json", "sections": ["input"] },
+    { "path": "fragments/runtime.json", "sections": ["render", "update_phases", "presentation", "transitions"] },
+    { "path": "fragments/grid.json", "sections": ["grid_maps", "grid_pickup_layers"] },
+    { "path": "fragments/actors.json", "sections": ["entities", "actor_archetypes", "actor_pools"] },
+    { "path": "fragments/logic.json", "sections": ["signals", "logic"] }
+  ],
+  "metadata": {
+    "name": "Pac-Man",
+    "id": "demo.pacman",
+    "version": "0.1.0",
+    "description": "Data-authored 3D maze chase demo using grid maps, pooled actors, Lua gameplay rules, dynamic lighting, and particles."
+  },
+  "app": {
+    "title": "SDL3D Pac-Man",
+    "logical_width": 1280,
+    "logical_height": 720,
+    "backend": "opengl",
+    "window": {
+      "display_mode": "windowed",
+      "development_display_mode": "windowed",
+      "production_display_mode": "windowed",
+      "maximized": true,
+      "resizable": true,
+      "vsync": true,
+      "renderer": "opengl"
+    },
+    "tick_rate": 0.008333333,
+    "max_ticks_per_frame": 12,
+    "enable_audio": false,
+    "pause": {
+      "action": "action.pause",
+      "allowed_if": {
+        "type": "property.compare",
+        "target": "entity.game",
+        "key": "game_over",
+        "op": "==",
+        "value": false
+      }
+    },
+    "quit": {
+      "action": "action.exit",
+      "transition": "quit",
+      "quit_signal": "signal.app.quit_fade_done"
+    },
+    "scene_shortcuts": [
+      { "action": "action.scene.title", "scene": "scene.title" },
+      { "action": "action.scene.play", "scene": "scene.play" }
+    ],
+    "input_policy": {
+      "global_actions": [
+        "action.exit",
+        "action.scene.title",
+        "action.scene.play"
+      ]
+    },
+    "scene_transition_policy": {
+      "allow_same_scene": false,
+      "allow_interrupt": false,
+      "reset_menu_input_on_request": true
+    }
+  },
+  "scenes": {
+    "initial": "scene.splash",
+    "files": [
+      "scenes/splash.scene.json",
+      "scenes/title.scene.json",
+      "scenes/options.scene.json",
+      "scenes/play.scene.json"
+    ]
+  },
+  "world": {
+    "name": "world.pacman",
+    "kind": "fixed_screen",
+    "units": "world_units",
+    "axes": {
+      "horizontal": "x",
+      "vertical": "y",
+      "depth": "z"
+    },
+    "bounds": {
+      "min": [-7.0, -5.4, -1.2],
+      "max": [7.0, 5.4, 4.5]
+    },
+    "ambient_light": [0.004, 0.005, 0.018],
+    "cameras": [
+      {
+        "name": "camera.maze",
+        "type": "orthographic",
+        "position": [0.0, 0.0, 16.0],
+        "target": [0.0, 0.0, 0.0],
+        "up": [0.0, 1.0, 0.0],
+        "size": 10.6,
+        "active": true
+      },
+      {
+        "name": "camera.low",
+        "type": "perspective",
+        "position": [0.0, -6.6, 5.1],
+        "target": [0.0, 0.0, 0.0],
+        "up": [0.0, 0.0, 1.0],
+        "fovy": 48.0,
+        "active": false
+      },
+      {
+        "name": "camera.player.first_person",
+        "type": "chase",
+        "target_entity": "entity.pacman",
+        "velocity_property": "camera_forward",
+        "fallback_forward": [1.0, 0.0, 0.0],
+        "eye_offset": [0.0, 0.0, 0.08],
+        "target_offset": [0.0, 0.0, 0.0],
+        "target_z_offset": 0.18,
+        "height": 0.28,
+        "chase_distance": 0.0,
+        "lookahead": 1.8,
+        "up": [0.0, 0.0, 1.0],
+        "fovy": 72.0,
+        "active": false
+      }
+    ],
+    "lights": [
+      {
+        "name": "light.maze.left",
+        "type": "spot",
+        "position": [-5.4, 0.2, 3.5],
+        "direction": [0.35, 0.0, -1.0],
+        "color": [0.10, 0.24, 1.0],
+        "intensity": 13.0,
+        "range": 8.5,
+        "inner_cutoff": 0.82,
+        "outer_cutoff": 0.34,
+        "effects": [
+          { "type": "color_cycle", "duration": 8.0, "phase": 0.12, "colors": [[0.08, 0.20, 1.0], [0.10, 0.86, 1.0], [0.35, 0.10, 1.0]], "color_blend": 1.0 },
+          { "type": "pulse", "rate": 1.5, "color": [0.40, 0.92, 1.0], "color_blend": 0.18, "intensity_add": 1.0, "range_add": 0.65 }
+        ]
+      },
+      {
+        "name": "light.maze.right",
+        "type": "spot",
+        "position": [5.4, 0.2, 3.5],
+        "direction": [-0.35, 0.0, -1.0],
+        "color": [1.0, 0.10, 0.28],
+        "intensity": 13.0,
+        "range": 8.5,
+        "inner_cutoff": 0.82,
+        "outer_cutoff": 0.34,
+        "effects": [
+          { "type": "color_cycle", "duration": 7.3, "phase": 0.44, "colors": [[1.0, 0.08, 0.25], [1.0, 0.42, 0.08], [0.95, 0.08, 0.75]], "color_blend": 1.0 },
+          { "type": "pulse", "rate": 1.8, "color": [1.0, 0.45, 0.32], "color_blend": 0.16, "intensity_add": 1.2, "range_add": 0.65 }
+        ]
+      },
+      {
+        "name": "light.pacman",
+        "type": "point",
+        "target_entity": "entity.pacman",
+        "offset": [0.0, 0.0, 0.82],
+        "color": [1.0, 0.84, 0.16],
+        "intensity": 9.0,
+        "range": 3.9,
+        "effects": [
+          { "type": "pulse", "rate": 4.8, "color": [1.0, 0.96, 0.42], "color_blend": 0.28, "intensity_add": 1.9, "range_add": 0.75 }
+        ]
+      },
+      {
+        "name": "light.ghost.red",
+        "type": "point",
+        "target_entity": "entity.ghost.red",
+        "offset": [0.0, 0.0, 0.70],
+        "color": [1.0, 0.08, 0.12],
+        "intensity": 4.8,
+        "range": 2.4,
+        "effects": [
+          { "type": "pulse", "rate": 2.2, "color": [1.0, 0.42, 0.32], "color_blend": 0.18, "intensity_add": 0.8, "range_add": 0.30 }
+        ]
+      },
+      {
+        "name": "light.ghost.pink",
+        "type": "point",
+        "target_entity": "entity.ghost.pink",
+        "offset": [0.0, 0.0, 0.70],
+        "color": [1.0, 0.22, 0.78],
+        "intensity": 4.6,
+        "range": 2.3,
+        "effects": [
+          { "type": "pulse", "rate": 2.6, "color": [1.0, 0.58, 0.94], "color_blend": 0.18, "intensity_add": 0.65, "range_add": 0.25 }
+        ]
+      },
+      {
+        "name": "light.ghost.cyan",
+        "type": "point",
+        "target_entity": "entity.ghost.cyan",
+        "offset": [0.0, 0.0, 0.70],
+        "color": [0.10, 0.92, 1.0],
+        "intensity": 4.6,
+        "range": 2.3,
+        "effects": [
+          { "type": "pulse", "rate": 2.0, "color": [0.58, 1.0, 1.0], "color_blend": 0.18, "intensity_add": 0.75, "range_add": 0.28 }
+        ]
+      },
+      {
+        "name": "light.ghost.orange",
+        "type": "point",
+        "target_entity": "entity.ghost.orange",
+        "offset": [0.0, 0.0, 0.70],
+        "color": [1.0, 0.48, 0.10],
+        "intensity": 4.4,
+        "range": 2.2,
+        "effects": [
+          { "type": "pulse", "rate": 2.9, "color": [1.0, 0.82, 0.20], "color_blend": 0.18, "intensity_add": 0.70, "range_add": 0.25 }
+        ]
+      },
+      {
+        "name": "light.power.house",
+        "type": "spot",
+        "position": [0.0, 0.05, 3.4],
+        "direction": [0.0, 0.0, -1.0],
+        "color": [0.95, 0.80, 0.20],
+        "intensity": 8.2,
+        "range": 5.3,
+        "inner_cutoff": 0.92,
+        "outer_cutoff": 0.48,
+        "effects": [
+          { "type": "color_cycle", "duration": 5.0, "phase": 0.2, "colors": [[1.0, 0.78, 0.16], [0.20, 0.88, 1.0], [1.0, 0.20, 0.68]], "color_blend": 0.55 }
+        ]
+      }
+    ]
+  }
+}

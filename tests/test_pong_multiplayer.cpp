@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <string>
 
@@ -35,6 +36,16 @@ constexpr const char *PONG_NETWORK_BINDING_PAUSE_REQUEST = "pause_request";
 constexpr const char *PONG_NETWORK_BINDING_RESUME_REQUEST = "resume_request";
 constexpr const char *PONG_NETWORK_BINDING_DISCONNECT = "disconnect";
 
+static std::filesystem::path demo_data_path(const char *demo_name, const char *data_file)
+{
+    return std::filesystem::path(SDL3D_DEMOS_ROOT) / demo_name / "data" / data_file;
+}
+
+static std::filesystem::path pong_data_path()
+{
+    return demo_data_path("pong", "pong.game.json");
+}
+
 static sdl3d_game_session *create_session(bool include_audio = false)
 {
     sdl3d_game_session_desc desc{};
@@ -52,7 +63,9 @@ static sdl3d_game_session *create_session(bool include_audio = false)
 static bool load_pong_runtime(sdl3d_game_session *session, sdl3d_game_data_runtime **out_runtime)
 {
     char error[256]{};
-    EXPECT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, out_runtime, error, sizeof(error))) << error;
+    EXPECT_TRUE(
+        sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, out_runtime, error, sizeof(error)))
+        << error;
     return *out_runtime != nullptr;
 }
 

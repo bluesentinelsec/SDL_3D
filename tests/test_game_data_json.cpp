@@ -14,7 +14,12 @@ extern "C"
 namespace
 {
 
-const char *kPongDataPath = SDL3D_PONG_DATA_PATH;
+std::filesystem::path demo_data_path(const char *demo_name, const char *data_file)
+{
+    return std::filesystem::path(SDL3D_DEMOS_ROOT) / demo_name / "data" / data_file;
+}
+
+const std::string kPongDataPath = demo_data_path("pong", "pong.game.json").string();
 
 class JsonDoc
 {
@@ -278,14 +283,14 @@ void validate_action_refs(yyjson_val *action, const std::set<std::string> &entit
 
 TEST(GameDataJson, PongDataParsesAsStrictJson)
 {
-    JsonDoc doc(kPongDataPath);
+    JsonDoc doc(kPongDataPath.c_str());
     ASSERT_NE(doc.root(), nullptr) << doc.error();
     EXPECT_TRUE(yyjson_is_obj(doc.root()));
 }
 
 TEST(GameDataJson, PongDataDeclaresGenericTopLevelModel)
 {
-    JsonDoc doc(kPongDataPath);
+    JsonDoc doc(kPongDataPath.c_str());
     ASSERT_NE(doc.root(), nullptr) << doc.error();
 
     EXPECT_EQ(required_string(doc.root(), "schema"), "sdl3d.game.v0");
@@ -309,7 +314,7 @@ TEST(GameDataJson, PongDataDeclaresGenericTopLevelModel)
 
 TEST(GameDataJson, PongDataUsesStructuredImports)
 {
-    JsonDoc doc(kPongDataPath);
+    JsonDoc doc(kPongDataPath.c_str());
     ASSERT_NE(doc.root(), nullptr) << doc.error();
 
     yyjson_val *imports = required_array(doc.root(), "imports");
@@ -352,7 +357,7 @@ TEST(GameDataJson, PongDataUsesStructuredImports)
 
 TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
 {
-    JsonDoc doc(kPongDataPath);
+    JsonDoc doc(kPongDataPath.c_str());
     ASSERT_NE(doc.root(), nullptr) << doc.error();
 
     yyjson_val *scenes = required_object(doc.root(), "scenes");
@@ -411,7 +416,7 @@ TEST(GameDataJson, PongUsesStandardOptionsScenePackage)
 
 TEST(GameDataJson, PongOptionsUseGenericPersistenceEntry)
 {
-    JsonDoc doc(kPongDataPath);
+    JsonDoc doc(kPongDataPath.c_str());
     ASSERT_NE(doc.root(), nullptr) << doc.error();
 
     yyjson_val *persistence = doc.section("persistence");
@@ -450,7 +455,7 @@ TEST(GameDataJson, PongOptionsUseGenericPersistenceEntry)
 
 TEST(GameDataJson, PongDataUsesNonSectorFixedScreenWorld)
 {
-    JsonDoc doc(kPongDataPath);
+    JsonDoc doc(kPongDataPath.c_str());
     ASSERT_NE(doc.root(), nullptr) << doc.error();
 
     yyjson_val *world = required_object(doc.root(), "world");
@@ -461,7 +466,7 @@ TEST(GameDataJson, PongDataUsesNonSectorFixedScreenWorld)
 
 TEST(GameDataJson, PongDataHasUniqueAuthoredNames)
 {
-    JsonDoc doc(kPongDataPath);
+    JsonDoc doc(kPongDataPath.c_str());
     ASSERT_NE(doc.root(), nullptr) << doc.error();
 
     std::set<std::string> entity_names;
@@ -486,7 +491,7 @@ TEST(GameDataJson, PongDataHasUniqueAuthoredNames)
 
 TEST(GameDataJson, PongLogicReferencesKnownEntitiesSignalsTimersCamerasAndAdapters)
 {
-    JsonDoc doc(kPongDataPath);
+    JsonDoc doc(kPongDataPath.c_str());
     ASSERT_NE(doc.root(), nullptr) << doc.error();
 
     std::set<std::string> entities;

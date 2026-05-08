@@ -39,6 +39,8 @@ Every root game file is a JSON object.
 | `transitions` | no | Named transition descriptors. |
 | `ui` | no | Reusable UI descriptors. |
 | `entities` | no | Named actors with tags, transforms, properties, and components. |
+| `grid_maps` | no | Authored tile grids for maze, board, and grid-locked games. |
+| `grid_pickup_layers` | no | Dense grid-indexed pickup layers rendered and collected without one actor per pickup. |
 | `actor_archetypes` | no | Templates used by runtime actor pools. |
 | `actor_pools` | no | Preallocated spawn/despawn pools. |
 | `signals` | no | Authored signal names. |
@@ -159,6 +161,23 @@ The optional `app` object configures the managed loop before the window exists:
   }
 }
 ```
+
+## World Cameras
+
+`world.cameras` defines reusable render cameras by name. Scenes can select a
+camera with their `camera` field, and logic actions can switch cameras with
+`camera.set` or `camera.toggle`.
+
+Camera types:
+
+- `orthographic`: fixed position/target/up with `size`.
+- `perspective`: fixed position/target/up with `fovy`.
+- `chase`: follows an actor named by `target_entity`. The forward vector comes
+  from a Vec3 actor property such as `velocity` or an authored
+  `camera_forward`, with `fallback_forward` used when that property is near
+  zero. Use `chase_distance: 0` for actor-perspective cameras and larger
+  values for behind-the-actor chase cameras.
+- `adapter`: delegates camera ownership to a native or Lua adapter.
 
 ## Storage And Persistence
 
@@ -356,12 +375,141 @@ from a signal or collision payload.
 This keeps common collision effects data-authored while still allowing Lua to
 provide game-specific policy when needed.
 
+## Grid Maps And Maze Primitives
+
+`grid_maps` describe deterministic tile grids for maze, board, and
+grid-locked arcade games. They are game-agnostic data: the grid tells the
+engine which cells exist, which glyphs are walkable, how cells map to world
+space, and whether movement wraps at the edges.
+
+```json
+{
+  "grid_maps": [
+    {
+      "name": "map.maze",
+      "origin": [0.0, 0.0, 0.0],
+      "cell_size": [1.0, 1.0],
+      "row_direction": -1.0,
+      "wrap_x": true,
+      "walkable": [" ", ".", "o", "P", "G"],
+      "rows": [
+        "#####",
+        "#P.o#",
+        "# # #",
+        "#G..#",
+        "#####"
+      ]
+    }
+  ]
+}
+```
+
+Rows must be non-empty strings with identical widths. Glyphs are single-byte
+characters; use Lua or imported fragments for higher-level meaning such as
+`P = player spawn`, `G = ghost spawn`, `.` = pellet, or `o` = power pellet.
+Cell `(0, 0)` maps to `origin`; increasing columns move along +x; increasing
+rows move along `cell_size.y * row_direction`.
+
+`motion.grid_agent` moves an actor from cell center to cell center with queued
+turns and wall blocking:
+
+```json
+{
+  "name": "entity.player",
+  "properties": {
+    "grid_col": { "type": "int", "value": 1 },
+    "grid_row": { "type": "int", "value": 1 },
+    "grid_dir_x": { "type": "int", "value": 1 },
+    "grid_dir_y": { "type": "int", "value": 0 },
+    "grid_next_dir_x": { "type": "int", "value": 0 },
+    "grid_next_dir_y": { "type": "int", "value": 0 },
+    "grid_speed": { "type": "float", "value": 6.0 }
+  },
+  "components": [
+    { "type": "motion.grid_agent", "map": "map.maze", "speed": 6.0 }
+  ]
+}
+```
+
+`grid_speed` is measured in cells per second. Scripts or input actions can set
+`grid_next_dir_x` and `grid_next_dir_y`; the component applies the queued turn
+at the next cell center if the target cell is walkable, otherwise it continues
+in the current direction when possible.
+
+`grid_pickup_layers` represent dense collectible maps as a runtime bitset
+instead of one actor per pickup. Each layer references a `grid_maps` entry and
+declares the glyphs that should be collectible and batched for rendering:
+
+```json
+{
+  "grid_pickup_layers": [
+    {
+      "name": "pickup.collectibles",
+      "map": "map.maze",
+      "kinds": [
+        { "glyph": ".", "kind": "pellet", "points": 10, "radius": 0.07 },
+        { "glyph": "o", "kind": "power", "points": 50, "radius": 0.14 }
+      ]
+    }
+  ]
+}
+```
+
+Reset a layer from its map glyphs with `grid.pickup_layer.reset`; Lua can then
+use `ctx:grid_pickup_at(...)`, `ctx:grid_collect_at(...)`, and
+`ctx:grid_pickup_count(...)` for O(1) pickup checks without scanning actors.
+Pickup layers are intended for dense pellets, coins, keys, and similar static
+collectibles. Use actor pools when each pickup needs independent behavior,
+collision shape state, or per-actor scriptable lifecycle.
+Pickup layer rendering emits a batched sphere primitive so a dense grid costs
+one draw submission per pickup kind instead of one actor and draw submission per
+cell.
+
+`grid.spawn_from_glyphs` populates actor pools from map glyphs. This is useful
+for pickups that need actor identity, destructible tiles, and spawn markers.
+Spawned actors receive `grid_map`, `grid_col`, `grid_row`, and `grid_glyph`
+properties in addition to their archetype defaults and authored overrides.
+Use pool scene-exit policies or `actor.despawn_by_tag` to reset grids between
+levels.
+
+`grid.spawn_runs_from_glyphs` batches contiguous glyph runs into one actor per
+run. This is intended for solid maze walls, platforms, and other rectangular
+tile runs where one long actor is cheaper than one actor per tile:
+
+```json
+{
+  "type": "grid.spawn_runs_from_glyphs",
+  "map": "map.maze",
+  "axis": "x",
+  "depth": 0.25,
+  "inset": 0.03,
+  "output_count_key": "spawned_wall_runs",
+  "spawns": [
+    { "glyph": "#", "pool": "pool.walls" }
+  ]
+}
+```
+
+Run actors receive the same `grid_*` properties as single-cell spawns, plus
+`grid_run_axis`, `grid_run_start_col`, `grid_run_start_row`,
+`grid_run_end_col`, `grid_run_end_row`, `grid_run_length`, and
+`grid_run_size`. A `render.cube` can consume that size using
+`"size_property": "grid_run_size"`.
+
 ## Components
 
 Reusable components include:
 
 - `motion.velocity_2d`: moves an actor by a `vec3` velocity property on the x/y
   plane.
+- `motion.velocity_3d`: moves an actor by a `vec3` velocity property on all
+  axes. This is useful for effect actors, projectiles, particles represented as
+  pooled actors, and other simple kinematic objects.
+- `lifecycle.ttl`: increments an age property every update and despawns pooled
+  actors once the configured TTL is reached. Use this for short-lived bursts and
+  effects instead of scanning active actors in Lua.
+- `motion.grid_agent`: moves an actor along an authored `grid_maps` maze with
+  queued turns, walkability checks, center snapping, and optional map wrapping.
 - `motion.scroll_wrap`: scrolls an actor along one axis and wraps to the
   opposite bound. This is intended for parallax panels, repeating stars, clouds,
   conveyor belts, and similar backgrounds.
@@ -371,6 +519,9 @@ Reusable components include:
   lights inherit the actor transform and may use an `offset`.
 - `particles.emitter`: actor-attached particle emitter. On pooled actors, the
   emitter is active only while the actor is active.
+- `render.cube`: renders a cube using authored `size`, or a vec3 actor property
+  named by `size_property`. The property path is useful for grid wall runs and
+  other pooled actors that need per-instance dimensions.
 
 Example parallax strip:
 

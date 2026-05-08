@@ -1,0 +1,57 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.splash",
+  "updates_game": true,
+  "renders_world": true,
+  "camera": "camera.maze",
+  "entities": [
+    "entity.field.base",
+    "entity.field.grid_glow",
+    "entity.effect.ambient",
+    "entity.presentation"
+  ],
+  "input": {
+    "actions": [
+      "action.menu.select"
+    ]
+  },
+  "transitions": {
+    "enter": "scene_in",
+    "exit": "scene_out"
+  },
+  "activity": {
+    "enabled": true,
+    "input": "any",
+    "consume_wake_input": true,
+    "on_enter": [
+      { "type": "timer.start", "timer": "timer.splash.done" }
+    ],
+    "on_active": [
+      { "type": "scene.set", "scene": "scene.title" }
+    ]
+  },
+  "ui": {
+    "text": [
+      {
+        "name": "ui.splash.title",
+        "font": "font.title",
+        "text": "SDL3D",
+        "x": 0.5,
+        "y": 0.39,
+        "normalized": true,
+        "centered": true,
+        "color": [230, 246, 255, 255]
+      },
+      {
+        "name": "ui.splash.subtitle",
+        "font": "font.small",
+        "text": "PAC-MAN DATA DEMO",
+        "x": 0.5,
+        "y": 0.54,
+        "normalized": true,
+        "centered": true,
+        "color": [255, 216, 70, 235]
+      }
+    ]
+  }
+}

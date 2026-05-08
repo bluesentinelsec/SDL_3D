@@ -18,6 +18,11 @@ typedef struct primitive_draw_context
     const sdl3d_game_data_runtime *runtime;
     sdl3d_render_context *renderer;
     sdl3d_game_data_image_cache *image_cache;
+    sdl3d_game_data_render_primitive sphere_batch;
+    sdl3d_vec3 *sphere_batch_positions;
+    int sphere_batch_count;
+    int sphere_batch_capacity;
+    bool sphere_batch_active;
 } primitive_draw_context;
 
 typedef struct ui_draw_context
@@ -164,13 +169,40 @@ static bool apply_world_lights(const sdl3d_game_data_runtime *runtime, sdl3d_ren
     sdl3d_game_data_get_world_ambient_light(runtime, ambient);
     ok = sdl3d_set_ambient_light(renderer, ambient[0], ambient[1], ambient[2]) && ok;
 
+    sdl3d_light selected[SDL3D_MAX_LIGHTS];
+    float scores[SDL3D_MAX_LIGHTS];
+    int selected_count = 0;
     const int light_count = sdl3d_game_data_world_light_count(runtime);
     for (int i = 0; i < light_count; ++i)
     {
         sdl3d_light light;
-        if (sdl3d_game_data_get_world_light_evaluated(runtime, i, eval, &light))
-            ok = sdl3d_add_light(renderer, &light) && ok;
+        if (!sdl3d_game_data_get_world_light_evaluated(runtime, i, eval, &light))
+            continue;
+        const float score =
+            light.type == SDL3D_LIGHT_DIRECTIONAL ? 1000000.0f + light.intensity : light.intensity * light.range;
+        int insert = selected_count;
+        for (int candidate = 0; candidate < selected_count; ++candidate)
+        {
+            if (score > scores[candidate])
+            {
+                insert = candidate;
+                break;
+            }
+        }
+        if (insert >= SDL3D_MAX_LIGHTS)
+            continue;
+        if (selected_count < SDL3D_MAX_LIGHTS)
+            ++selected_count;
+        for (int move = selected_count - 1; move > insert; --move)
+        {
+            selected[move] = selected[move - 1];
+            scores[move] = scores[move - 1];
+        }
+        selected[insert] = light;
+        scores[insert] = score;
     }
+    for (int i = 0; i < selected_count; ++i)
+        ok = sdl3d_add_light(renderer, &selected[i]) && ok;
     return ok;
 }
 
@@ -490,10 +522,165 @@ static sdl3d_game_data_image_cache_entry *find_or_load_image_entry(const sdl3d_g
     return entry;
 }
 
+static bool draw_sphere_batch(sdl3d_render_context *renderer, const sdl3d_game_data_render_primitive *primitive)
+{
+    if (renderer == NULL || primitive == NULL || primitive->instances == NULL || primitive->instance_count <= 0)
+        return true;
+
+    const int rings = SDL_max(primitive->rings, 3);
+    const int slices = SDL_max(primitive->slices, 3);
+    const int verts_per_sphere = (rings + 1) * (slices + 1);
+    const int indices_per_sphere = rings * slices * 6;
+    const int vertex_count = verts_per_sphere * primitive->instance_count;
+    const int index_count = indices_per_sphere * primitive->instance_count;
+    float *positions = (float *)SDL_malloc((size_t)vertex_count * 3U * sizeof(*positions));
+    float *normals = (float *)SDL_malloc((size_t)vertex_count * 3U * sizeof(*normals));
+    float *uvs = (float *)SDL_malloc((size_t)vertex_count * 2U * sizeof(*uvs));
+    unsigned int *indices = (unsigned int *)SDL_malloc((size_t)index_count * sizeof(*indices));
+    if (positions == NULL || normals == NULL || uvs == NULL || indices == NULL)
+    {
+        SDL_free(positions);
+        SDL_free(normals);
+        SDL_free(uvs);
+        SDL_free(indices);
+        return false;
+    }
+
+    int vertex_offset = 0;
+    int index_offset = 0;
+    for (int instance = 0; instance < primitive->instance_count; ++instance)
+    {
+        const sdl3d_vec3 center = primitive->instances[instance];
+        for (int ring = 0; ring <= rings; ++ring)
+        {
+            const float theta = SDL_PI_F * (float)ring / (float)rings;
+            const float sin_t = SDL_sinf(theta);
+            const float cos_t = SDL_cosf(theta);
+            for (int slice = 0; slice <= slices; ++slice)
+            {
+                const float phi = 2.0f * SDL_PI_F * (float)slice / (float)slices;
+                const float nx = sin_t * SDL_cosf(phi);
+                const float ny = cos_t;
+                const float nz = sin_t * SDL_sinf(phi);
+                const int vertex = vertex_offset + ring * (slices + 1) + slice;
+                positions[vertex * 3 + 0] = center.x + primitive->radius * nx;
+                positions[vertex * 3 + 1] = center.y + primitive->radius * ny;
+                positions[vertex * 3 + 2] = center.z + primitive->radius * nz;
+                normals[vertex * 3 + 0] = nx;
+                normals[vertex * 3 + 1] = ny;
+                normals[vertex * 3 + 2] = nz;
+                uvs[vertex * 2 + 0] = (float)slice / (float)slices;
+                uvs[vertex * 2 + 1] = 1.0f - (float)ring / (float)rings;
+            }
+        }
+        for (int ring = 0; ring < rings; ++ring)
+        {
+            for (int slice = 0; slice < slices; ++slice)
+            {
+                const unsigned int v00 = (unsigned int)(vertex_offset + ring * (slices + 1) + slice);
+                const unsigned int v01 = v00 + 1U;
+                const unsigned int v10 = (unsigned int)(vertex_offset + (ring + 1) * (slices + 1) + slice);
+                const unsigned int v11 = v10 + 1U;
+                indices[index_offset++] = v00;
+                indices[index_offset++] = v01;
+                indices[index_offset++] = v11;
+                indices[index_offset++] = v00;
+                indices[index_offset++] = v11;
+                indices[index_offset++] = v10;
+            }
+        }
+        vertex_offset += verts_per_sphere;
+    }
+
+    sdl3d_mesh mesh;
+    SDL_zero(mesh);
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.uvs = uvs;
+    mesh.indices = indices;
+    mesh.vertex_count = vertex_count;
+    mesh.index_count = index_count;
+    const bool ok = sdl3d_draw_mesh(renderer, &mesh, NULL, primitive->color);
+    SDL_free(positions);
+    SDL_free(normals);
+    SDL_free(uvs);
+    SDL_free(indices);
+    return ok;
+}
+
+static bool primitive_sphere_can_batch(const sdl3d_game_data_render_primitive *primitive)
+{
+    if (primitive == NULL || primitive->type != SDL3D_GAME_DATA_RENDER_SPHERE || primitive->texture_image != NULL)
+        return false;
+    return SDL_fabsf(primitive->rotation_angle) <= 0.0001f && SDL_fabsf(primitive->rotation_axis.x) <= 0.0001f &&
+           SDL_fabsf(primitive->rotation_axis.y) <= 0.0001f && SDL_fabsf(primitive->rotation_axis.z) <= 0.0001f;
+}
+
+static bool primitive_sphere_batch_matches(const sdl3d_game_data_render_primitive *batch,
+                                           const sdl3d_game_data_render_primitive *primitive)
+{
+    if (batch == NULL || primitive == NULL)
+        return false;
+    return batch->type == SDL3D_GAME_DATA_RENDER_SPHERE && primitive_sphere_can_batch(primitive) &&
+           SDL_fabsf(batch->radius - primitive->radius) <= 0.0001f && batch->rings == primitive->rings &&
+           batch->slices == primitive->slices && batch->lighting_enabled == primitive->lighting_enabled &&
+           batch->emissive == primitive->emissive &&
+           SDL_fabsf(batch->emissive_color.x - primitive->emissive_color.x) <= 0.0001f &&
+           SDL_fabsf(batch->emissive_color.y - primitive->emissive_color.y) <= 0.0001f &&
+           SDL_fabsf(batch->emissive_color.z - primitive->emissive_color.z) <= 0.0001f &&
+           batch->color.r == primitive->color.r && batch->color.g == primitive->color.g &&
+           batch->color.b == primitive->color.b && batch->color.a == primitive->color.a;
+}
+
+static bool flush_sphere_draw_batch(primitive_draw_context *context)
+{
+    if (context == NULL || !context->sphere_batch_active || context->sphere_batch_count <= 0)
+        return true;
+    sdl3d_game_data_render_primitive primitive = context->sphere_batch;
+    primitive.type = SDL3D_GAME_DATA_RENDER_SPHERE_BATCH;
+    primitive.instances = context->sphere_batch_positions;
+    primitive.instance_count = context->sphere_batch_count;
+    const bool ok = draw_sphere_batch(context->renderer, &primitive);
+    context->sphere_batch_active = false;
+    context->sphere_batch_count = 0;
+    return ok;
+}
+
+static bool append_sphere_draw_batch(primitive_draw_context *context, const sdl3d_game_data_render_primitive *primitive)
+{
+    if (context == NULL || primitive == NULL)
+        return false;
+    if (!context->sphere_batch_active || !primitive_sphere_batch_matches(&context->sphere_batch, primitive))
+    {
+        if (!flush_sphere_draw_batch(context))
+            return false;
+        context->sphere_batch = *primitive;
+        context->sphere_batch.instances = NULL;
+        context->sphere_batch.instance_count = 0;
+        context->sphere_batch_active = true;
+    }
+    if (context->sphere_batch_count >= context->sphere_batch_capacity)
+    {
+        const int next_capacity = context->sphere_batch_capacity > 0 ? context->sphere_batch_capacity * 2 : 16;
+        sdl3d_vec3 *positions =
+            (sdl3d_vec3 *)SDL_realloc(context->sphere_batch_positions, (size_t)next_capacity * sizeof(*positions));
+        if (positions == NULL)
+            return false;
+        context->sphere_batch_positions = positions;
+        context->sphere_batch_capacity = next_capacity;
+    }
+    context->sphere_batch_positions[context->sphere_batch_count++] = primitive->position;
+    return true;
+}
+
 static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitive *primitive)
 {
     primitive_draw_context *context = (primitive_draw_context *)userdata;
     if (context == NULL || context->renderer == NULL || primitive == NULL)
+        return false;
+    if (primitive_sphere_can_batch(primitive))
+        return append_sphere_draw_batch(context, primitive);
+    if (!flush_sphere_draw_batch(context))
         return false;
 
     const bool restore_lighting = sdl3d_is_lighting_enabled(context->renderer);
@@ -517,6 +704,11 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
         sdl3d_draw_sphere_textured(context->renderer, primitive->position, primitive->radius, primitive->rings,
                                    primitive->slices, primitive->rotation_axis, primitive->rotation_angle, texture,
                                    primitive->color);
+    }
+    else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE_BATCH)
+    {
+        if (!draw_sphere_batch(context->renderer, primitive))
+            return false;
     }
     sdl3d_set_emissive(context->renderer, 0.0f, 0.0f, 0.0f);
     if (!primitive->lighting_enabled)
@@ -759,8 +951,15 @@ static bool draw_render_primitives_evaluated_with_cache(const sdl3d_game_data_ru
     if (runtime == NULL || renderer == NULL)
         return false;
 
-    primitive_draw_context context = {runtime, renderer, image_cache};
-    return sdl3d_game_data_for_each_render_primitive_evaluated(runtime, eval, draw_primitive, &context);
+    primitive_draw_context context;
+    SDL_zero(context);
+    context.runtime = runtime;
+    context.renderer = renderer;
+    context.image_cache = image_cache;
+    bool ok = sdl3d_game_data_for_each_render_primitive_evaluated(runtime, eval, draw_primitive, &context);
+    ok = flush_sphere_draw_batch(&context) && ok;
+    SDL_free(context.sphere_batch_positions);
+    return ok;
 }
 
 bool sdl3d_game_data_draw_render_primitives(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer)

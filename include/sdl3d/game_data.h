@@ -268,6 +268,8 @@ extern "C"
         SDL3D_GAME_DATA_RENDER_CUBE = 1,
         /** @brief Sphere primitive. */
         SDL3D_GAME_DATA_RENDER_SPHERE = 2,
+        /** @brief Batched sphere primitive instances sharing one shape/material. */
+        SDL3D_GAME_DATA_RENDER_SPHERE_BATCH = 3,
     } sdl3d_game_data_render_primitive_type;
 
     /**
@@ -285,6 +287,10 @@ extern "C"
         sdl3d_game_data_render_primitive_type type;
         /** @brief Current world-space position from the owning actor plus optional component offset. */
         sdl3d_vec3 position;
+        /** @brief Optional world-space instance positions for batched primitives. */
+        const sdl3d_vec3 *instances;
+        /** @brief Number of entries in @ref instances for batched primitives. */
+        int instance_count;
         /** @brief Axis used for primitive-local rotation by primitives that support rotation. */
         sdl3d_vec3 rotation_axis;
         /** @brief Primitive-local rotation angle in radians by primitives that support rotation. */

@@ -105,6 +105,8 @@ struct RenderPrimitiveCapture
     bool saw_options_glow = false;
     bool saw_pooled_cube = false;
     bool saw_pooled_sphere = false;
+    bool saw_pickup_batch = false;
+    int pickup_batch_instances = 0;
 };
 
 void capture_signal_payload(void *userdata, int signal_id, const sdl3d_properties *payload)
@@ -265,6 +267,21 @@ void capture_sensor_signal(void *userdata, int signal_id, const sdl3d_properties
 std::string fixture_path(const char *filename)
 {
     return std::string(SDL3D_GAME_DATA_FIXTURE_DIR) + "/" + filename;
+}
+
+std::filesystem::path demo_data_path(const char *demo_name, const char *data_file)
+{
+    return std::filesystem::path(SDL3D_DEMOS_ROOT) / demo_name / "data" / data_file;
+}
+
+std::filesystem::path pong_data_path()
+{
+    return demo_data_path("pong", "pong.game.json");
+}
+
+std::filesystem::path pacman_data_path()
+{
+    return demo_data_path("pacman", "pacman.game.json");
 }
 
 std::string read_fixture_file(const char *filename)
@@ -496,7 +513,8 @@ void load_pong_runtime(sdl3d_game_session **out_session, sdl3d_game_data_runtime
 
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, out_session));
     char error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, *out_session, out_runtime, error, sizeof(error)))
+    ASSERT_TRUE(
+        sdl3d_game_data_load_file(pong_data_path().string().c_str(), *out_session, out_runtime, error, sizeof(error)))
         << error;
     ASSERT_NE(*out_runtime, nullptr);
 }
@@ -518,7 +536,7 @@ std::filesystem::path copy_pong_data_with_storage_overrides(const std::filesyste
                                                             const std::filesystem::path &user_root,
                                                             const std::filesystem::path &cache_root)
 {
-    const std::filesystem::path source = std::filesystem::path(SDL3D_PONG_DATA_PATH).parent_path();
+    const std::filesystem::path source = std::filesystem::path(pong_data_path()).parent_path();
     const std::filesystem::path dest = dir / "pong_data";
     std::filesystem::copy(source, dest,
                           std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing);
@@ -1215,6 +1233,8 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         capture->cubes++;
     else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
         capture->spheres++;
+    else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE_BATCH)
+        capture->spheres++;
 
     if (std::string(primitive->entity_name) == "entity.paddle.player")
     {
@@ -1272,6 +1292,14 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_SPHERE);
         EXPECT_NEAR(primitive->position.y, 3.0f, 0.0001f);
         EXPECT_NEAR(primitive->radius, 0.2f, 0.0001f);
+    }
+    if (std::string(primitive->entity_name).rfind("pickup.", 0) == 0 &&
+        primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE_BATCH)
+    {
+        capture->saw_pickup_batch = true;
+        capture->pickup_batch_instances += primitive->instance_count;
+        EXPECT_GT(primitive->instance_count, 0);
+        EXPECT_NE(primitive->instances, nullptr);
     }
     return true;
 }
@@ -1419,7 +1447,8 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.ball"), nullptr);
     EXPECT_NE(sdl3d_game_data_find_actor_with_tag(runtime, "ball"), nullptr);
@@ -1571,7 +1600,7 @@ TEST(GameDataRuntime, DataGameRuntimeOwnsGenericPongLifecycle)
     sdl3d_game_session *session = nullptr;
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
 
-    const std::filesystem::path data_path = SDL3D_PONG_DATA_PATH;
+    const std::filesystem::path data_path = pong_data_path();
     const std::string root = data_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + data_path.filename().string();
 
@@ -1731,7 +1760,7 @@ TEST(GameDataRuntime, DataGameRuntimeRefreshesInputProfilesOnGamepadHotplug)
         GTEST_SKIP() << "requires no pre-connected gamepads";
     }
 
-    const std::filesystem::path data_path = SDL3D_PONG_DATA_PATH;
+    const std::filesystem::path data_path = pong_data_path();
     const std::string root = data_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + data_path.filename().string();
 
@@ -1801,7 +1830,7 @@ TEST(GameDataRuntime, DataGameRuntimeNetworkLoopReplicatesPongInputStateAndContr
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &host_session));
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &client_session));
 
-    const std::filesystem::path data_path = SDL3D_PONG_DATA_PATH;
+    const std::filesystem::path data_path = pong_data_path();
     const std::string root = data_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + data_path.filename().string();
 
@@ -1972,7 +2001,7 @@ TEST(GameDataRuntime, ManagedNetworkRuntimeStartsPongMatchAndReplicatesState)
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &host_session));
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &client_session));
 
-    const std::filesystem::path data_path = SDL3D_PONG_DATA_PATH;
+    const std::filesystem::path data_path = pong_data_path();
     const std::string root = data_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + data_path.filename().string();
 
@@ -2135,7 +2164,7 @@ TEST(GameDataRuntime, AuthoredNetworkSessionFlowEventsDriveSceneTransitions)
     sdl3d_game_session *session = nullptr;
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
 
-    const std::filesystem::path data_path = SDL3D_PONG_DATA_PATH;
+    const std::filesystem::path data_path = pong_data_path();
     const std::string root = data_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + data_path.filename().string();
 
@@ -2200,7 +2229,7 @@ TEST(GameDataRuntime, AuthoredNetworkSessionFlowEventsDriveSceneTransitions)
 TEST(GameDataRuntime, NetworkSessionFlowPlaceholderMalformedBraceIsLiteral)
 {
     const std::filesystem::path dir = unique_test_dir("network_flow_malformed_placeholder");
-    const std::filesystem::path source = std::filesystem::path(SDL3D_PONG_DATA_PATH).parent_path();
+    const std::filesystem::path source = std::filesystem::path(pong_data_path()).parent_path();
     const std::filesystem::path dest = dir / "pong_data";
     std::filesystem::copy(source, dest,
                           std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing);
@@ -2625,7 +2654,8 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_game_data_skip_policy skip{};
     ASSERT_TRUE(sdl3d_game_data_get_active_skip_policy(runtime, &skip));
@@ -3134,7 +3164,8 @@ TEST(GameDataRuntime, ResolvesRuntimeUiStateForTextAndImages)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_game_data_ui_image logo{};
     bool saw_logo = false;
@@ -3249,7 +3280,8 @@ TEST(GameDataRuntime, DataAuthoredInputPolicyUpdatePhasesAndPresentationClocks)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     const int pause = sdl3d_game_data_find_action(runtime, "action.pause");
     const int scene_play = sdl3d_game_data_find_action(runtime, "action.scene.play");
@@ -3305,7 +3337,8 @@ TEST(GameDataRuntime, AppliesAuthoredPongPlayInputProfiles)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
@@ -3388,7 +3421,8 @@ TEST(GameDataRuntime, AppliesAuthoredPongGamepadAssignmentPolicies)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
@@ -3470,7 +3504,8 @@ TEST(GameDataRuntime, RefreshesActiveInputProfileWhenGamepadCountChanges)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
@@ -3614,7 +3649,8 @@ TEST(GameDataRuntime, MenuControllerConsumesAuthoredMenuInput)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
@@ -4387,7 +4423,8 @@ TEST(GameDataRuntime, PlaySceneMenusAreSelectedByAuthoredConditions)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
 
     sdl3d_game_data_ui_metrics metrics{};
@@ -4433,7 +4470,8 @@ TEST(GameDataRuntime, PauseMenuResumeConsumesSharedEnterWithoutRepausing)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
 
     sdl3d_game_data_app_flow flow{};
@@ -4463,7 +4501,8 @@ TEST(GameDataRuntime, OptionsMenuCanReturnToAuthoredScene)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
 
     sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
@@ -4516,7 +4555,8 @@ TEST(GameDataRuntime, OptionsSubmenusDoNotOverwriteCallerReturnScene)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -4563,7 +4603,8 @@ TEST(GameDataRuntime, DisplayOptionControlsApplyImmediately)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
 
     const int menu_select_signal = sdl3d_game_data_find_signal(runtime, "signal.ui.menu.select");
@@ -4603,7 +4644,8 @@ TEST(GameDataRuntime, AudioOptionSlidersApplyImmediatelyWithLeftRightInput)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.audio"));
 
     const int menu_select_signal = sdl3d_game_data_find_signal(runtime, "signal.ui.menu.select");
@@ -4681,7 +4723,8 @@ TEST(GameDataRuntime, KeyboardOptionsCaptureAndApplyAuthoredInputBindings)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.keyboard"));
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
@@ -4806,7 +4849,8 @@ TEST(GameDataRuntime, GamepadOptionsCaptureAndApplyAuthoredInputBindings)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.gamepad"));
 
     sdl3d_game_data_menu menu{};
@@ -4970,7 +5014,8 @@ TEST(GameDataRuntime, OptionsMenusUseGamepadAxesAndBack)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
 
     sdl3d_game_data_menu menu{};
@@ -5026,7 +5071,8 @@ TEST(GameDataRuntime, MouseOptionsCaptureAndApplyAuthoredInputBindings)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.mouse"));
 
     sdl3d_game_data_menu menu{};
@@ -5128,7 +5174,8 @@ TEST(GameDataRuntime, AuthoredSettingsResetRestoresSelectedDefaults)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings, nullptr);
@@ -5164,7 +5211,8 @@ TEST(GameDataRuntime, PongStandardOptionsUseImmediateApplyContract)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings, nullptr);
@@ -5208,7 +5256,8 @@ TEST(GameDataRuntime, AppFlowConsumesAuthoredLifecycleAndSceneShortcutControls)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_game_context ctx{};
     ctx.session = session;
@@ -5316,7 +5365,8 @@ TEST(GameDataRuntime, SceneFlowRunsAuthoredExitAndEnterTransitions)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
 
     sdl3d_game_data_scene_flow flow{};
@@ -5835,7 +5885,8 @@ TEST(GameDataRuntime, SignalBindingsResolveLuaAdaptersDeclaredInJson)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     const int serve_signal = sdl3d_game_data_find_signal(runtime, "signal.ball.serve");
     ASSERT_GE(serve_signal, 0);
@@ -5862,7 +5913,8 @@ TEST(GameDataRuntime, PongTitleAttractServeHasJitterAndMovesCpuPaddles)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
     ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, sdl3d_game_session_get_input(session), 0.0f));
@@ -5898,7 +5950,8 @@ TEST(GameDataRuntime, LuaAdapterReflectsBallFromPaddle)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
     sdl3d_registered_actor *paddle = sdl3d_game_data_find_actor(runtime, "entity.paddle.player");
@@ -5933,7 +5986,8 @@ TEST(GameDataRuntime, LuaAdapterAddsJitterAfterRepeatedFlatPaddleReflects)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
     sdl3d_registered_actor *left = sdl3d_game_data_find_actor(runtime, "entity.paddle.player");
@@ -5978,7 +6032,8 @@ TEST(GameDataRuntime, AttractBallReflectsApplyAuthoredRandomJitter)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball.attract");
     sdl3d_registered_actor *left = sdl3d_game_data_find_actor(runtime, "entity.paddle.attract_left");
@@ -6023,7 +6078,8 @@ TEST(GameDataRuntime, LuaControllerMovesCpuPaddleTowardBall)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
     sdl3d_registered_actor *cpu = sdl3d_game_data_find_actor(runtime, "entity.paddle.cpu");
@@ -6055,7 +6111,8 @@ TEST(GameDataRuntime, PongClientDoesNotStartServeTimer)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_register_adapter(runtime, "adapter.pong.configure_play_input",
                                                  configure_play_input_adapter, nullptr));
 
@@ -6081,7 +6138,8 @@ TEST(GameDataRuntime, PongMatchStateAndRestartAreAuthoredLogic)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_registered_actor *player_score = sdl3d_game_data_find_actor(runtime, "entity.score.player");
     sdl3d_registered_actor *cpu_score = sdl3d_game_data_find_actor(runtime, "entity.score.cpu");
@@ -6130,7 +6188,8 @@ TEST(GameDataRuntime, RegisteredCAdaptersOverrideLuaAdapters)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     AdapterCapture capture{};
     ASSERT_TRUE(sdl3d_game_data_register_adapter(runtime, "adapter.pong.serve_random", serve_adapter, &capture));
@@ -6839,9 +6898,14 @@ TEST(GameDataRuntime, ArcadeShooterPrimitivesAreDataDriven)
       "name": "archetype.explosion",
       "tags": ["effect"],
       "properties": {
-        "radius": { "type": "float", "value": 0.3 }
+        "radius": { "type": "float", "value": 0.3 },
+        "age": { "type": "float", "value": 0.0 },
+        "ttl": { "type": "float", "value": 0.1 },
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 1.0] }
       },
       "components": [
+        { "type": "motion.velocity_3d", "property": "velocity" },
+        { "type": "lifecycle.ttl", "age_property": "age", "ttl_property": "ttl" },
         { "type": "light.point", "color": [1.0, 0.45, 0.08], "intensity": 4.0, "range": 2.6 },
         { "type": "particles.emitter", "shape": "sphere", "radius": 0.2, "emit_rate": 10.0, "max_particles": 8 }
       ]
@@ -6963,9 +7027,475 @@ TEST(GameDataRuntime, ArcadeShooterPrimitivesAreDataDriven)
     ParticleCapture particles{};
     ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &particles));
     EXPECT_EQ(particles.count, 1);
+    const float explosion_z = explosion->position.z;
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.05f));
+    EXPECT_TRUE(explosion->active);
+    EXPECT_GT(explosion->position.z, explosion_z);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.06f));
+    EXPECT_FALSE(explosion->active);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, MazePrimitivesSupportGridMovementLuaQueriesAndGlyphSpawns)
+{
+    const std::filesystem::path dir = unique_test_dir("maze_primitives");
+    write_text(dir / "scripts" / "rules.lua",
+               R"lua(
+local rules = {}
+
+function rules.inspect(_, _, ctx)
+  local world = ctx:grid_cell_to_world("map.maze", 1, 1)
+  ctx:state_set("cell_world_x", world and world.x or -99)
+  ctx:state_set("cell_world_y", world and world.y or -99)
+
+  local cell = ctx:grid_world_to_cell("map.maze", world)
+  ctx:state_set("cell_col", cell and cell.col or -1)
+  ctx:state_set("cell_row", cell and cell.row or -1)
+
+  ctx:state_set("wall_tile", ctx:grid_tile("map.maze", 0, 0) or "")
+  ctx:state_set("player_walkable", ctx:grid_walkable("map.maze", 1, 1))
+  ctx:state_set("wall_walkable", ctx:grid_walkable("map.maze", 0, 0))
+
+  local neighbors = ctx:grid_neighbors("map.maze", 1, 1)
+  ctx:state_set("neighbor_count", #neighbors)
+
+  local step = ctx:grid_next_step("map.maze", 1, 3, 3, 1)
+  ctx:state_set("path_found", step ~= nil)
+  ctx:state_set("path_step_col", step and step.col or -1)
+  ctx:state_set("path_step_row", step and step.row or -1)
+
+  local pellet = ctx:grid_actor_at("map.maze", "pool.pellets", 2, 1)
+  ctx:state_set("lookup_pellet", pellet and pellet.name or "")
+  local pickup = ctx:grid_pickup_at("pickup.collectibles", 3, 1)
+  ctx:state_set("pickup_kind", pickup and pickup.kind or "")
+  local collected = ctx:grid_collect_at("pickup.collectibles", 3, 1)
+  ctx:state_set("collected_kind", collected and collected.kind or "")
+  ctx:state_set("pickup_remaining", ctx:grid_pickup_count("pickup.collectibles"))
+  return true
+end
+
+return rules
+)lua");
+    write_text(dir / "maze_primitives.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Maze Primitives", "id": "test.maze_primitives", "version": "0.1.0" },
+  "world": { "name": "world.maze_primitives", "kind": "fixed_screen" },
+  "scripts": [
+    { "id": "script.rules", "path": "scripts/rules.lua", "module": "test.maze" }
+  ],
+  "grid_maps": [
+    {
+      "name": "map.maze",
+      "origin": [0.0, 0.0, 0.0],
+      "cell_size": [1.0, 1.0],
+      "row_direction": -1.0,
+      "walkable": [" ", ".", "o", "P", "G"],
+      "rows": [
+        "#####",
+        "#P.o#",
+        "# # #",
+        "#G..#",
+        "#####"
+      ]
+    }
+  ],
+  "grid_pickup_layers": [
+    {
+      "name": "pickup.collectibles",
+      "map": "map.maze",
+      "kinds": [
+        { "glyph": ".", "kind": "pellet", "points": 10, "z": 0.2, "radius": 0.1, "rings": 4, "slices": 5 },
+        { "glyph": "o", "kind": "power", "points": 50, "z": 0.2, "radius": 0.2, "rings": 5, "slices": 6 }
+      ]
+    }
+  ],
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [1.0, -1.0, 0.25] },
+      "properties": {
+        "grid_col": { "type": "int", "value": 1 },
+        "grid_row": { "type": "int", "value": 1 },
+        "grid_dir_x": { "type": "int", "value": 1 },
+        "grid_dir_y": { "type": "int", "value": 0 },
+        "grid_next_dir_x": { "type": "int", "value": 0 },
+        "grid_next_dir_y": { "type": "int", "value": 0 },
+        "grid_speed": { "type": "float", "value": 4.0 }
+      },
+      "components": [
+        { "type": "motion.grid_agent", "map": "map.maze", "speed": 4.0 }
+      ]
+    }
+  ],
+  "actor_archetypes": [
+    {
+      "name": "archetype.pellet",
+      "tags": ["collectible", "pellet"],
+      "properties": {
+        "points": { "type": "int", "value": 10 },
+        "kind": { "type": "string", "value": "pellet" }
+      }
+    },
+    {
+      "name": "archetype.power_pellet",
+      "tags": ["collectible", "power_pellet"],
+      "properties": {
+        "points": { "type": "int", "value": 50 },
+        "kind": { "type": "string", "value": "power" }
+      }
+    },
+    {
+      "name": "archetype.wall",
+      "tags": ["wall"],
+      "properties": {
+        "grid_run_size": { "type": "vec3", "value": [1.0, 1.0, 0.25] }
+      },
+      "components": [
+        { "type": "render.cube", "size_property": "grid_run_size", "color": [10, 20, 30, 255] }
+      ]
+    }
+  ],
+  "actor_pools": [
+    { "name": "pool.pellets", "archetype": "archetype.pellet", "capacity": 3, "scene": "scene.play" },
+    { "name": "pool.power_pellets", "archetype": "archetype.power_pellet", "capacity": 1, "scene": "scene.play" },
+    { "name": "pool.walls", "archetype": "archetype.wall", "capacity": 10, "scene": "scene.play" }
+  ],
+  "signals": ["signal.inspect", "signal.spawn.collectibles", "signal.reset.pickups", "signal.spawn.walls"],
+  "adapters": [
+    { "name": "adapter.inspect", "kind": "action", "script": "script.rules", "function": "inspect" }
+  ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.inspect",
+        "actions": [
+          { "type": "adapter.invoke", "adapter": "adapter.inspect" }
+        ]
+      },
+      {
+        "signal": "signal.reset.pickups",
+        "actions": [
+          {
+            "type": "grid.pickup_layer.reset",
+            "layer": "pickup.collectibles",
+            "output_count_key": "pickup_count"
+          }
+        ]
+      },
+      {
+        "signal": "signal.spawn.collectibles",
+        "actions": [
+          {
+            "type": "grid.spawn_from_glyphs",
+            "map": "map.maze",
+            "output_count_key": "spawned_collectibles",
+            "spawns": [
+              { "glyph": ".", "pool": "pool.pellets", "properties": { "kind": "pellet" } },
+              { "glyph": "o", "pool": "pool.power_pellets", "properties": { "kind": "power" } }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.spawn.walls",
+        "actions": [
+          {
+            "type": "grid.spawn_runs_from_glyphs",
+            "map": "map.maze",
+            "output_count_key": "spawned_wall_runs",
+            "axis": "x",
+            "depth": 0.3,
+            "spawns": [
+              { "glyph": "#", "pool": "pool.walls" }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.player"] })json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "maze_primitives.game.json").string().c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.inspect"), nullptr);
+    const sdl3d_properties *state = sdl3d_game_data_scene_state(runtime);
+    EXPECT_FLOAT_EQ(sdl3d_properties_get_float(state, "cell_world_x", -99.0f), 1.0f);
+    EXPECT_FLOAT_EQ(sdl3d_properties_get_float(state, "cell_world_y", -99.0f), -1.0f);
+    EXPECT_EQ(sdl3d_properties_get_int(state, "cell_col", -1), 1);
+    EXPECT_EQ(sdl3d_properties_get_int(state, "cell_row", -1), 1);
+    EXPECT_STREQ(sdl3d_properties_get_string(state, "wall_tile", ""), "#");
+    EXPECT_TRUE(sdl3d_properties_get_bool(state, "player_walkable", false));
+    EXPECT_FALSE(sdl3d_properties_get_bool(state, "wall_walkable", true));
+    EXPECT_EQ(sdl3d_properties_get_int(state, "neighbor_count", 0), 2);
+    EXPECT_TRUE(sdl3d_properties_get_bool(state, "path_found", false));
+    EXPECT_GE(sdl3d_properties_get_int(state, "path_step_col", -1), 1);
+    EXPECT_GE(sdl3d_properties_get_int(state, "path_step_row", -1), 1);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.collectibles"), nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(state, "spawned_collectibles", 0), 4);
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.reset.pickups"), nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(state, "pickup_count", 0), 4);
+    RenderPrimitiveCapture pickup_render{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &pickup_render));
+    EXPECT_TRUE(pickup_render.saw_pickup_batch);
+    EXPECT_EQ(pickup_render.pickup_batch_instances, 4);
+    sdl3d_registered_actor *pellet0 = sdl3d_game_data_find_actor(runtime, "pool.pellets.0");
+    sdl3d_registered_actor *pellet2 = sdl3d_game_data_find_actor(runtime, "pool.pellets.2");
+    sdl3d_registered_actor *power = sdl3d_game_data_find_actor(runtime, "pool.power_pellets.0");
+    ASSERT_NE(pellet0, nullptr);
+    ASSERT_NE(pellet2, nullptr);
+    ASSERT_NE(power, nullptr);
+    EXPECT_TRUE(pellet0->active);
+    EXPECT_TRUE(pellet2->active);
+    EXPECT_TRUE(power->active);
+    EXPECT_EQ(sdl3d_properties_get_int(pellet0->props, "grid_col", -1), 2);
+    EXPECT_EQ(sdl3d_properties_get_int(pellet0->props, "grid_row", -1), 1);
+    EXPECT_STREQ(sdl3d_properties_get_string(power->props, "kind", ""), "power");
+    expect_vec3_near(power->position, sdl3d_vec3_make(3.0f, -1.0f, 0.0f));
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.inspect"), nullptr);
+    EXPECT_STREQ(sdl3d_properties_get_string(state, "lookup_pellet", ""), "pool.pellets.0");
+    EXPECT_STREQ(sdl3d_properties_get_string(state, "pickup_kind", ""), "power");
+    EXPECT_STREQ(sdl3d_properties_get_string(state, "collected_kind", ""), "power");
+    EXPECT_EQ(sdl3d_properties_get_int(state, "pickup_remaining", 0), 3);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.walls"), nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(state, "spawned_wall_runs", 0), 9);
+    sdl3d_registered_actor *wall0 = sdl3d_game_data_find_actor(runtime, "pool.walls.0");
+    sdl3d_registered_actor *wall1 = sdl3d_game_data_find_actor(runtime, "pool.walls.1");
+    ASSERT_NE(wall0, nullptr);
+    ASSERT_NE(wall1, nullptr);
+    EXPECT_TRUE(wall0->active);
+    EXPECT_EQ(sdl3d_properties_get_int(wall0->props, "grid_run_length", 0), 5);
+    EXPECT_STREQ(sdl3d_properties_get_string(wall0->props, "grid_run_axis", ""), "x");
+    expect_vec3_near(sdl3d_properties_get_vec3(wall0->props, "grid_run_size", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)),
+                     sdl3d_vec3_make(5.0f, 1.0f, 0.3f));
+    expect_vec3_near(wall0->position, sdl3d_vec3_make(2.0f, 0.0f, 0.0f));
+    EXPECT_EQ(sdl3d_properties_get_int(wall1->props, "grid_run_length", 0), 1);
+
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_col", -1), 2);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_row", -1), 1);
+    expect_vec3_near(player->position, sdl3d_vec3_make(2.0f, -1.0f, 0.25f));
+
+    sdl3d_properties_set_int(player->props, "grid_next_dir_x", 0);
+    sdl3d_properties_set_int(player->props, "grid_next_dir_y", 1);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_col", -1), 3);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_row", -1), 1);
+
+    sdl3d_properties_set_int(player->props, "grid_dir_x", 0);
+    sdl3d_properties_set_int(player->props, "grid_dir_y", -1);
+    sdl3d_properties_set_int(player->props, "grid_next_dir_x", 0);
+    sdl3d_properties_set_int(player->props, "grid_next_dir_y", -1);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_col", -1), 3);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_row", -1), 1);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, PacmanDemoLoadsAndRunsMazeCollection)
+{
+    const std::filesystem::path pacman_path = pacman_data_path();
+    ASSERT_TRUE(std::filesystem::exists(pacman_path)) << pacman_path;
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pacman_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    ASSERT_NE(runtime, nullptr);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
+    const sdl3d_properties *state = sdl3d_game_data_scene_state(runtime);
+    ASSERT_NE(state, nullptr);
+    EXPECT_GT(sdl3d_properties_get_int(state, "pacman_spawned_collectibles", 0), 0);
+
+    sdl3d_registered_actor *pac = sdl3d_game_data_find_actor(runtime, "entity.pacman");
+    sdl3d_registered_actor *wall = sdl3d_game_data_find_actor(runtime, "pool.walls.0");
+    sdl3d_registered_actor *game = sdl3d_game_data_find_actor(runtime, "entity.game");
+    sdl3d_registered_actor *red_ghost = sdl3d_game_data_find_actor(runtime, "entity.ghost.red");
+    ASSERT_NE(pac, nullptr);
+    ASSERT_NE(wall, nullptr);
+    ASSERT_NE(game, nullptr);
+    ASSERT_NE(red_ghost, nullptr);
+    EXPECT_TRUE(wall->active);
+    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "pool.walls.0"));
+    EXPECT_GT(sdl3d_properties_get_int(state, "pacman_spawned_wall_runs", 0), 0);
+    EXPECT_LT(sdl3d_properties_get_int(state, "pacman_spawned_wall_runs", 999), 180);
+    RenderPrimitiveCapture pickup_render{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &pickup_render));
+    EXPECT_TRUE(pickup_render.saw_pickup_batch);
+    EXPECT_GT(pickup_render.pickup_batch_instances, 0);
+
+    const int spawned_collectibles = sdl3d_properties_get_int(state, "pacman_spawned_collectibles", 0);
+    EXPECT_EQ(sdl3d_properties_get_int(game->props, "pellets_remaining", -1), spawned_collectibles);
+    EXPECT_EQ(sdl3d_properties_get_int(pac->props, "grid_col", -1), 1);
+    EXPECT_EQ(sdl3d_properties_get_int(pac->props, "grid_row", -1), 1);
+    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.maze");
+
+    sdl3d_camera3d player_camera{};
+    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.player.first_person", &player_camera));
+    EXPECT_EQ(player_camera.projection, SDL3D_CAMERA_PERSPECTIVE);
+    EXPECT_NEAR(player_camera.position.x, pac->position.x, 0.0001f);
+    EXPECT_NEAR(player_camera.position.y, pac->position.y, 0.0001f);
+    EXPECT_GT(player_camera.target.x, player_camera.position.x);
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    const int camera_toggle = sdl3d_game_data_find_action(runtime, "action.camera.toggle");
+    ASSERT_GE(camera_toggle, 0);
+    EXPECT_TRUE(sdl3d_game_data_active_scene_allows_action(runtime, camera_toggle));
+    sdl3d_input_set_action_override(input, camera_toggle, 1.0f);
+    ASSERT_NE(sdl3d_input_update(input, 9100), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f / 60.0f));
+    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.player.first_person");
+    sdl3d_input_set_action_override(input, camera_toggle, 0.0f);
+    ASSERT_NE(sdl3d_input_update(input, 9101), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f / 60.0f));
+    sdl3d_input_set_action_override(input, camera_toggle, 1.0f);
+    ASSERT_NE(sdl3d_input_update(input, 9102), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f / 60.0f));
+    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.maze");
+    sdl3d_input_set_action_override(input, camera_toggle, 0.0f);
+    ASSERT_NE(sdl3d_input_update(input, 9103), nullptr);
+
+    for (int i = 0; i < 24; ++i)
+    {
+        ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f / 60.0f));
+    }
+
+    EXPECT_GT(sdl3d_properties_get_int(pac->props, "grid_col", -1), 1);
+    EXPECT_LT(sdl3d_properties_get_int(game->props, "pellets_remaining", spawned_collectibles), spawned_collectibles);
+    EXPECT_GT(sdl3d_properties_get_int(game->props, "score", 0), 0);
+    EXPECT_TRUE(red_ghost->active);
+    EXPECT_LT(sdl3d_properties_get_int(red_ghost->props, "grid_row", 99), 7);
+    EXPECT_TRUE(sdl3d_game_data_find_actor(runtime, "entity.ghost.pink")->active);
+    EXPECT_TRUE(sdl3d_game_data_find_actor(runtime, "entity.ghost.cyan")->active);
+    EXPECT_TRUE(sdl3d_game_data_find_actor(runtime, "entity.ghost.orange")->active);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, RejectsInvalidMazePrimitiveData)
+{
+    const std::filesystem::path dir = unique_test_dir("maze_primitive_validation");
+    write_text(dir / "scenes" / "play.scene.json", R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play" })json");
+
+    struct Case
+    {
+        const char *name;
+        const char *json;
+        const char *message;
+    };
+
+    const Case cases[] = {
+        {
+            "ragged_rows",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "world": { "name": "world.invalid", "kind": "fixed_screen" },
+  "grid_maps": [
+    { "name": "map.bad", "walkable": ["."], "rows": ["###", "##"] }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "grid map rows must have identical widths",
+        },
+        {
+            "bad_grid_agent_map",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "world": { "name": "world.invalid", "kind": "fixed_screen" },
+  "entities": [
+    { "name": "entity.actor", "components": [{ "type": "motion.grid_agent", "map": "map.missing" }] }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "unknown grid map",
+        },
+        {
+            "bad_spawn_glyph",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "world": { "name": "world.invalid", "kind": "fixed_screen" },
+  "grid_maps": [
+    { "name": "map.maze", "walkable": ["."], "rows": [".."] }
+  ],
+  "actor_archetypes": [
+    { "name": "archetype.pickup" }
+  ],
+  "actor_pools": [
+    { "name": "pool.pickups", "archetype": "archetype.pickup", "capacity": 1 }
+  ],
+  "signals": ["signal.spawn"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.spawn",
+        "actions": [
+          {
+            "type": "grid.spawn_from_glyphs",
+            "map": "map.maze",
+            "spawns": [{ "glyph": "too_long", "pool": "pool.pickups" }]
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "grid spawn glyph must be a single-byte string",
+        },
+        {
+            "bad_pickup_layer_map",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "grid_pickup_layers": [
+    { "name": "pickup.bad", "map": "map.missing", "kinds": [{ "glyph": ".", "kind": "pellet" }] }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "unknown grid map",
+        },
+    };
+
+    for (const Case &test_case : cases)
+    {
+        const std::filesystem::path path = dir / (std::string(test_case.name) + ".game.json");
+        write_text(path, test_case.json);
+        char error[512]{};
+        EXPECT_FALSE(sdl3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.message), std::string::npos) << test_case.name << ": " << error;
+    }
+
     remove_test_dir(dir);
 }
 
@@ -8055,7 +8585,8 @@ TEST(GameDataRuntime, ValidatesPongDataWithoutDiagnostics)
     options.userdata = &capture;
 
     char error[512]{};
-    EXPECT_TRUE(sdl3d_game_data_validate_file(SDL3D_PONG_DATA_PATH, &options, error, sizeof(error))) << error;
+    EXPECT_TRUE(sdl3d_game_data_validate_file(pong_data_path().string().c_str(), &options, error, sizeof(error)))
+        << error;
     EXPECT_TRUE(capture.diagnostics.empty());
     EXPECT_EQ(error[0], '\0');
 }
@@ -9186,7 +9717,8 @@ TEST(GameDataRuntime, AuthoredDirectConnectActionsUpdateSceneState)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -9235,7 +9767,8 @@ TEST(GameDataRuntime, RuntimeOwnedHostSessionPublishesSceneState)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -9278,7 +9811,8 @@ TEST(GameDataRuntime, AuthoredDiscoveryConnectActionsUpdateSceneState)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -10506,7 +11040,8 @@ TEST(GameDataRuntime, AuthoredGoalSensorDrivesScoreBinding)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
     sdl3d_registered_actor *cpu_score = sdl3d_game_data_find_actor(runtime, "entity.score.cpu");

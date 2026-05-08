@@ -1,0 +1,100 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.title",
+  "updates_game": true,
+  "renders_world": true,
+  "camera": "camera.maze",
+  "entities": [
+    "entity.field.base",
+    "entity.field.grid_glow",
+    "entity.effect.ambient",
+    "entity.pacman",
+    "entity.ghost.red",
+    "entity.ghost.pink",
+    "entity.ghost.cyan",
+    "entity.ghost.orange",
+    "entity.presentation"
+  ],
+  "input": {
+    "actions": [
+      "action.menu.up",
+      "action.menu.down",
+      "action.menu.select"
+    ]
+  },
+  "transitions": {
+    "enter": "scene_in",
+    "exit": "scene_out"
+  },
+  "menus": [
+    {
+      "name": "menu.title",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "move_signal": "signal.ui.menu.move",
+      "select_signal": "signal.ui.menu.select",
+      "selected": 0,
+      "items": [
+        {
+          "label": "Start",
+          "scene": "scene.play"
+        },
+        {
+          "label": "Options",
+          "scene": "scene.options"
+        },
+        {
+          "label": "Exit",
+          "quit": true
+        }
+      ]
+    }
+  ],
+  "ui": {
+    "text": [
+      {
+        "name": "ui.title.logo",
+        "font": "font.title",
+        "text": "PAC-MAN",
+        "x": 0.5,
+        "y": 0.22,
+        "normalized": true,
+        "centered": true,
+        "color": [255, 226, 52, 255]
+      },
+      {
+        "name": "ui.title.tagline",
+        "font": "font.small",
+        "text": "GRID MAPS  /  3D ACTORS  /  PARTICLES  /  LUA RULES",
+        "x": 0.5,
+        "y": 0.335,
+        "normalized": true,
+        "centered": true,
+        "color": [92, 225, 255, 230]
+      }
+    ],
+    "menus": [
+      {
+        "name": "ui.title.menu",
+        "menu": "menu.title",
+        "font": "font.hud",
+        "x": 0.43,
+        "y": 0.49,
+        "gap": 0.075,
+        "normalized": true,
+        "align": "left",
+        "color": [220, 236, 255, 245],
+        "selected_color": [255, 226, 52, 255],
+        "selected_pulse_alpha": true,
+        "cursor": {
+          "text": ">",
+          "offset_x": -0.035,
+          "align": "right",
+          "color": [255, 82, 190, 255],
+          "pulse_alpha": true
+        }
+      }
+    ]
+  }
+}

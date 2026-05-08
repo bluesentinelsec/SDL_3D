@@ -1,0 +1,62 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "render": {
+    "clear_color": [0, 0, 0, 255],
+    "lighting": true,
+    "bloom": true,
+    "ssao": true,
+    "tonemap": "aces"
+  },
+  "presentation": {
+    "metrics": {
+      "fps_sample_seconds": 0.25
+    },
+    "ui_pulse_clock": "clock.menu_pulse",
+    "clocks": [
+      {
+        "name": "clock.menu_pulse",
+        "target": "entity.presentation",
+        "key": "pulse",
+        "speed_property": {
+          "target": "entity.presentation",
+          "key": "pulse_speed"
+        },
+        "wrap": 1.0
+      }
+    ]
+  },
+  "update_phases": {
+    "app_flow": { "active": true, "when_paused": true },
+    "presentation": { "active": true, "when_paused": true },
+    "property_effects": { "active": true, "when_paused": true },
+    "particles": { "active": true, "when_paused": true },
+    "simulation": { "active": true, "when_paused": false }
+  },
+  "transitions": {
+    "startup": {
+      "type": "fade",
+      "direction": "in",
+      "color": [0, 0, 0, 255],
+      "duration": 0.42
+    },
+    "quit": {
+      "type": "fade",
+      "direction": "out",
+      "color": [0, 0, 0, 255],
+      "duration": 0.35,
+      "done_signal": "signal.app.quit_fade_done"
+    },
+    "scene_out": {
+      "type": "fade",
+      "direction": "out",
+      "color": [0, 0, 0, 255],
+      "duration": 0.16
+    },
+    "scene_in": {
+      "type": "fade",
+      "direction": "in",
+      "color": [0, 0, 0, 255],
+      "duration": 0.16
+    }
+  }
+}
