@@ -42,6 +42,7 @@ Every root game file is a JSON object.
 | `grid_maps` | no | Authored tile grids for maze, board, and grid-locked games. |
 | `grid_pickup_layers` | no | Dense grid-indexed pickup layers rendered and collected without one actor per pickup. |
 | `sector_levels` | no | Authored sector/portal worlds for Doom/Quake-style indoor levels. |
+| `sector_doors` | no | Runtime sliding doors for sector/FPS worlds. |
 | `actor_archetypes` | no | Templates used by runtime actor pools. |
 | `actor_pools` | no | Preallocated spawn/despawn pools. |
 | `signals` | no | Authored signal names. |
@@ -83,6 +84,7 @@ a JSON object with schema `sdl3d.fragment.v0`.
     { "path": "fragments/assets.json", "sections": ["assets"] },
     { "path": "fragments/actors/player.json", "sections": ["entities"] },
     { "path": "fragments/world/e1m1.sectors.json", "sections": ["sector_levels"] },
+    { "path": "fragments/world/e1m1.doors.json", "sections": ["sector_doors", "signals", "logic"] },
     { "path": "fragments/input/profiles.json", "sections": ["input"] },
     { "path": "fragments/network/replication.json", "sections": ["network"] }
   ]
@@ -360,6 +362,68 @@ computes visibility from the active camera before drawing the level.
 Renderer, controller, and editor phases should consume runtime descriptors
 instead of parsing JSON directly. `world.kind` remains a high-level statement
 of spatial intent; `sector_levels` is the concrete sector-world data.
+
+`sector_doors` add dynamic, collidable door panels to sector/FPS scenes without
+hard-coding them in a demo host. A door has one or two axis-aligned panels,
+closed bounds, an open offset, animation timing, optional scene scoping, and
+optional cube-render settings:
+
+```json
+{
+  "sector_doors": [
+    {
+      "name": "door.security.east",
+      "id": 12,
+      "scene": "scene.level_1",
+      "open_seconds": 0.7,
+      "close_seconds": 0.7,
+      "stay_open_seconds": 5.0,
+      "panels": [
+        {
+          "bounds": { "min": [9.85, -0.5, 18.0], "max": [10.15, 3.5, 22.0] },
+          "open_offset": [0.0, 4.2, 0.0]
+        }
+      ],
+      "render": { "color": [145, 165, 190, 255], "lighting": true }
+    }
+  ]
+}
+```
+
+Doors update each frame while their scene is active, emit render primitives
+through the normal authored primitive path, and participate in
+`controller.fps_sector` collision as dynamic obstacles. `scene` may be omitted
+for a door that is active in every scene. `render.texture` may reference an
+image asset id.
+
+Door actions are data-authored:
+
+```json
+{ "type": "sector_door.open", "target": "door.security.east", "stay_open_seconds": 5.0 }
+{ "type": "sector_door.close", "target": "door.security.east" }
+{ "type": "sector_door.toggle", "target": "door.security.east" }
+```
+
+Use `target_from_payload` when a previous action picked the door. The
+`sector_door.interact` action finds the nearest active door in front of an
+actor and either emits a signal or runs nested actions with `actor_name`,
+`door_name`, and `door_id` payload fields:
+
+```json
+{
+  "type": "sector_door.interact",
+  "actor": "entity.player",
+  "range": 2.25,
+  "min_dot": 0.15,
+  "actions": [
+    { "type": "sector_door.open", "target_from_payload": "door_name" }
+  ]
+}
+```
+
+If no door is in range and in front of the actor, the interaction is treated as
+a successful no-op so use-button bindings can be authored without extra guard
+conditions.
 
 Use `controller.fps_sector` on an actor to drive first-person movement through
 a sector level:

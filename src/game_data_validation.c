@@ -12,6 +12,7 @@
 
 #include "game_data_standard_options.h"
 #include "network_replication_schema.h"
+#include "sdl3d/door.h"
 #include "sdl3d/input.h"
 #include "sdl3d/level.h"
 #include "sdl3d_crypto.h"
@@ -74,6 +75,7 @@ typedef struct validation_names
     name_table grid_maps;
     name_table grid_pickup_layers;
     name_table sector_levels;
+    name_table sector_doors;
     name_table signals;
     name_table scripts;
     name_table script_modules;
@@ -1876,11 +1878,14 @@ static bool import_path_is_safe_relative(const char *path)
 
 static bool import_section_name_allowed(const char *name)
 {
-    static const char *const allowed[] = {
-        "storage",       "persistence",      "profiles",     "assets",       "scripts",   "input",
-        "render",        "transitions",      "ui",           "entities",     "grid_maps", "grid_pickup_layers",
-        "sector_levels", "actor_archetypes", "actor_pools",  "signals",      "logic",     "adapters",
-        "network",       "haptics",          "presentation", "update_phases"};
+    static const char *const allowed[] = {"storage",       "persistence",  "profiles",
+                                          "assets",        "scripts",      "input",
+                                          "render",        "transitions",  "ui",
+                                          "entities",      "grid_maps",    "grid_pickup_layers",
+                                          "sector_levels", "sector_doors", "actor_archetypes",
+                                          "actor_pools",   "signals",      "logic",
+                                          "adapters",      "network",      "haptics",
+                                          "presentation",  "update_phases"};
     for (size_t i = 0; name != NULL && i < SDL_arraysize(allowed); ++i)
     {
         if (SDL_strcmp(name, allowed[i]) == 0)
@@ -2745,6 +2750,27 @@ static bool collect_sector_levels(validation_context *ctx, yyjson_val *root, val
     return true;
 }
 
+static bool collect_sector_doors(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *doors = obj_get(root, "sector_doors");
+    if (doors == NULL)
+        return true;
+    if (!yyjson_is_arr(doors))
+        return validation_error(ctx, "$.sector_doors", "sector_doors must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(doors); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.sector_doors[%zu]", i);
+        yyjson_val *door = yyjson_arr_get(doors, i);
+        if (!yyjson_is_obj(door))
+            return validation_error(ctx, path, "sector door entries must be objects");
+        if (!require_unique_name(ctx, &names->sector_doors, "sector door", json_string(door, "name"), path))
+            return false;
+    }
+    return true;
+}
+
 static bool collect_actor_archetypes(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *archetypes = obj_get(root, "actor_archetypes");
@@ -3260,14 +3286,15 @@ static bool collect_names(validation_context *ctx, yyjson_val *root, validation_
 {
     return collect_signals(ctx, root, names) && collect_entities(ctx, root, names) &&
            collect_grid_maps(ctx, root, names) && collect_grid_pickup_layers(ctx, root, names) &&
-           collect_sector_levels(ctx, root, names) && collect_actor_archetypes(ctx, root, names) &&
-           collect_actor_pools(ctx, root, names) && collect_scripts(ctx, root, names) &&
-           collect_adapters(ctx, root, names) && collect_input_actions(ctx, root, names) &&
-           collect_input_assignment_sets(ctx, root, names) && collect_input_profiles(ctx, root, names) &&
-           collect_network_input_channels(ctx, root, names) && collect_cameras(ctx, root, names) &&
-           collect_fonts(ctx, root, names) && collect_sprite_assets(ctx, root, names) &&
-           collect_images(ctx, root, names) && collect_audio_assets(ctx, root, names) &&
-           collect_timers(ctx, root, names) && collect_sensors(ctx, root, names);
+           collect_sector_levels(ctx, root, names) && collect_sector_doors(ctx, root, names) &&
+           collect_actor_archetypes(ctx, root, names) && collect_actor_pools(ctx, root, names) &&
+           collect_scripts(ctx, root, names) && collect_adapters(ctx, root, names) &&
+           collect_input_actions(ctx, root, names) && collect_input_assignment_sets(ctx, root, names) &&
+           collect_input_profiles(ctx, root, names) && collect_network_input_channels(ctx, root, names) &&
+           collect_cameras(ctx, root, names) && collect_fonts(ctx, root, names) &&
+           collect_sprite_assets(ctx, root, names) && collect_images(ctx, root, names) &&
+           collect_audio_assets(ctx, root, names) && collect_timers(ctx, root, names) &&
+           collect_sensors(ctx, root, names);
 }
 
 static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)
@@ -4005,6 +4032,82 @@ static bool validate_sector_levels(validation_context *ctx, yyjson_val *root)
     return true;
 }
 
+static bool validate_sector_doors(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *doors = obj_get(root, "sector_doors");
+    if (doors == NULL)
+        return true;
+    if (!yyjson_is_arr(doors))
+        return validation_error(ctx, "$.sector_doors", "sector_doors must be an array");
+
+    for (size_t door_index = 0; door_index < yyjson_arr_size(doors); ++door_index)
+    {
+        char door_path[PATH_BUFFER_SIZE];
+        format_path(door_path, sizeof(door_path), "$.sector_doors[%zu]", door_index);
+        yyjson_val *door = yyjson_arr_get(doors, door_index);
+        if (!yyjson_is_obj(door))
+            return validation_error(ctx, door_path, "sector door entries must be objects");
+        const char *scene = json_string(door, "scene");
+        if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, door_path))
+            return false;
+
+        yyjson_val *id = obj_get(door, "id");
+        if (id != NULL && !yyjson_is_int(id))
+            return validation_error(ctx, door_path, "sector door id must be an integer");
+        const char *numeric_fields[] = {"open_seconds", "close_seconds", "stay_open_seconds"};
+        for (size_t n = 0; n < SDL_arraysize(numeric_fields); ++n)
+        {
+            yyjson_val *value = obj_get(door, numeric_fields[n]);
+            if (value != NULL && (!yyjson_is_num(value) || yyjson_get_num(value) < 0.0))
+                return validation_error(ctx, door_path, "sector door timing values must be non-negative");
+        }
+        yyjson_val *start_open = obj_get(door, "start_open");
+        if (start_open != NULL && !yyjson_is_bool(start_open))
+            return validation_error(ctx, door_path, "sector door start_open must be a boolean");
+
+        yyjson_val *panels = obj_get(door, "panels");
+        if (!yyjson_is_arr(panels) || yyjson_arr_size(panels) < 1 || yyjson_arr_size(panels) > SDL3D_DOOR_MAX_PANELS)
+        {
+            return validation_error(ctx, door_path, "sector door panels must be an array with 1 or 2 entries");
+        }
+        for (size_t panel_index = 0; panel_index < yyjson_arr_size(panels); ++panel_index)
+        {
+            char panel_path[PATH_BUFFER_SIZE];
+            format_path(panel_path, sizeof(panel_path), "%s.panels[%zu]", door_path, panel_index);
+            yyjson_val *panel = yyjson_arr_get(panels, panel_index);
+            yyjson_val *bounds = obj_get(panel, "bounds");
+            yyjson_val *bounds_source = bounds != NULL ? bounds : panel;
+            if (!yyjson_is_obj(panel))
+                return validation_error(ctx, panel_path, "sector door panel entries must be objects");
+            if (!is_exact_vec_array(obj_get(bounds_source, "min"), 3) ||
+                !is_exact_vec_array(obj_get(bounds_source, "max"), 3))
+            {
+                return validation_error(ctx, panel_path, "sector door panel requires bounds min and max vec3 values");
+            }
+            if (!is_exact_vec_array(obj_get(panel, "open_offset"), 3))
+                return validation_error(ctx, panel_path, "sector door panel requires open_offset vec3");
+        }
+
+        yyjson_val *render = obj_get(door, "render");
+        if (render != NULL)
+        {
+            if (!yyjson_is_obj(render))
+                return validation_error(ctx, door_path, "sector door render must be an object");
+            yyjson_val *color = obj_get(render, "color");
+            if (color != NULL && !is_vec_array(color, 3))
+                return validation_error(ctx, door_path, "sector door render color must be a vec3 or vec4");
+            yyjson_val *lighting = obj_get(render, "lighting");
+            yyjson_val *emissive = obj_get(render, "emissive");
+            if ((lighting != NULL && !yyjson_is_bool(lighting)) || (emissive != NULL && !yyjson_is_bool(emissive)))
+                return validation_error(ctx, door_path, "sector door render lighting flags must be booleans");
+            const char *texture = json_string(render, "texture");
+            if (texture != NULL && !require_ref(ctx, &names->images, "image asset", texture, door_path))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool validate_components(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *entities = obj_get(root, "entities");
@@ -4529,6 +4632,52 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (reason != NULL && !yyjson_is_str(reason))
             return validation_error(ctx, json_path, "actor.despawn_by_tag reason must be a string");
         return true;
+    }
+    if (SDL_strcmp(type, "sector_door.open") == 0 || SDL_strcmp(type, "sector_door.close") == 0 ||
+        SDL_strcmp(type, "sector_door.toggle") == 0)
+    {
+        const char *target = json_string(action, "target");
+        const char *target_from_payload = json_string(action, "target_from_payload");
+        if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
+        {
+            return validation_error(ctx, json_path,
+                                    "sector door action requires exactly one of target or target_from_payload");
+        }
+        if (target != NULL && !require_ref(ctx, &names->sector_doors, "sector door", target, json_path))
+            return false;
+        if (target_from_payload != NULL && target_from_payload[0] == '\0')
+            return validation_error(ctx, json_path, "sector door target_from_payload must be non-empty");
+        yyjson_val *stay = obj_get(action, "stay_open_seconds");
+        yyjson_val *auto_close = obj_get(action, "auto_close_seconds");
+        if ((stay != NULL && (!yyjson_is_num(stay) || yyjson_get_num(stay) < 0.0)) ||
+            (auto_close != NULL && (!yyjson_is_num(auto_close) || yyjson_get_num(auto_close) < 0.0)))
+        {
+            return validation_error(ctx, json_path, "sector door auto-close timing must be non-negative");
+        }
+        return true;
+    }
+    if (SDL_strcmp(type, "sector_door.interact") == 0)
+    {
+        if (!require_actor_ref(ctx, names, json_string(action, "actor"), json_path))
+            return false;
+        yyjson_val *range = obj_get(action, "range");
+        yyjson_val *min_dot = obj_get(action, "min_dot");
+        if ((range != NULL && (!yyjson_is_num(range) || yyjson_get_num(range) < 0.0)) ||
+            (min_dot != NULL &&
+             (!yyjson_is_num(min_dot) || yyjson_get_num(min_dot) < -1.0 || yyjson_get_num(min_dot) > 1.0)))
+        {
+            return validation_error(ctx, json_path, "sector door interaction range/min_dot are invalid");
+        }
+        yyjson_val *yaw_property = obj_get(action, "yaw_property");
+        if (yaw_property != NULL && !is_non_empty_string(action, "yaw_property"))
+            return validation_error(ctx, json_path, "sector door yaw_property must be non-empty");
+        yyjson_val *actions = obj_get(action, "actions");
+        const char *signal = json_string(action, "signal");
+        if ((actions == NULL && signal == NULL) || (actions != NULL && signal != NULL))
+            return validation_error(ctx, json_path, "sector_door.interact requires exactly one of actions or signal");
+        if (actions != NULL)
+            return validate_action_array(ctx, actions, json_path, names);
+        return require_ref(ctx, &names->signals, "signal", signal, json_path);
     }
     if (SDL_strcmp(type, "projectile.fire") == 0)
     {
@@ -6511,8 +6660,9 @@ static bool validate_details(validation_context *ctx, yyjson_val *root, validati
            validate_components(ctx, root, names) &&
            validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases", names) &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
-           validate_actor_archetypes_and_pools(ctx, root, names) && validate_network(ctx, root, names) &&
-           validate_app_refs(ctx, root, names) && validate_cameras(ctx, root, names) && validate_ui(ctx, root, names) &&
+           validate_sector_doors(ctx, root, names) && validate_actor_archetypes_and_pools(ctx, root, names) &&
+           validate_network(ctx, root, names) && validate_app_refs(ctx, root, names) &&
+           validate_cameras(ctx, root, names) && validate_ui(ctx, root, names) &&
            validate_presentation(ctx, root, names) && validate_render_effects(ctx, root, names) &&
            validate_lights(ctx, root, names) && validate_haptics(ctx, root, names) &&
            validate_logic(ctx, root, names) && validate_adapters(ctx, root, names) &&
@@ -6534,6 +6684,7 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->grid_maps);
     name_table_destroy(&names->grid_pickup_layers);
     name_table_destroy(&names->sector_levels);
+    name_table_destroy(&names->sector_doors);
     name_table_destroy(&names->signals);
     name_table_destroy(&names->scripts);
     name_table_destroy(&names->script_modules);

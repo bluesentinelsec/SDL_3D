@@ -120,6 +120,18 @@ struct SectorLevelInstanceCapture
     bool portal_culling = true;
 };
 
+struct SectorDoorRenderCapture
+{
+    int door_primitives = 0;
+    sdl3d_vec3 first_position{};
+};
+
+struct DoorPrefixRenderCapture
+{
+    const char *prefix = nullptr;
+    int door_primitives = 0;
+};
+
 void capture_signal_payload(void *userdata, int signal_id, const sdl3d_properties *payload)
 {
     auto *capture = static_cast<NetworkSignalCapture *>(userdata);
@@ -293,6 +305,11 @@ std::filesystem::path pong_data_path()
 std::filesystem::path pacman_data_path()
 {
     return demo_data_path("pacman", "pacman.game.json");
+}
+
+std::filesystem::path doom_level_data_path()
+{
+    return demo_data_path("doom_level", "doom_level.game.json");
 }
 
 std::string read_fixture_file(const char *filename)
@@ -1312,6 +1329,40 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         EXPECT_GT(primitive->instance_count, 0);
         EXPECT_NE(primitive->instances, nullptr);
     }
+    return true;
+}
+
+bool capture_sector_door_render_primitive(void *userdata, const sdl3d_game_data_render_primitive *primitive)
+{
+    auto *capture = static_cast<SectorDoorRenderCapture *>(userdata);
+    if (capture == nullptr || primitive == nullptr || primitive->entity_name == nullptr ||
+        std::string(primitive->entity_name) != "door.test")
+    {
+        return true;
+    }
+    if (capture->door_primitives == 0)
+        capture->first_position = primitive->position;
+    capture->door_primitives++;
+    EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
+    EXPECT_NEAR(primitive->size.x, 0.4f, 0.001f);
+    EXPECT_NEAR(primitive->size.y, 2.0f, 0.001f);
+    EXPECT_NEAR(primitive->size.z, 0.4f, 0.001f);
+    return true;
+}
+
+bool capture_door_prefix_render_primitive(void *userdata, const sdl3d_game_data_render_primitive *primitive)
+{
+    auto *capture = static_cast<DoorPrefixRenderCapture *>(userdata);
+    if (capture == nullptr || primitive == nullptr || primitive->entity_name == nullptr || capture->prefix == nullptr ||
+        std::string(primitive->entity_name).rfind(capture->prefix, 0) != 0)
+    {
+        return true;
+    }
+    capture->door_primitives++;
+    EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
+    EXPECT_GT(primitive->size.x, 0.0f);
+    EXPECT_GT(primitive->size.y, 0.0f);
+    EXPECT_GT(primitive->size.z, 0.0f);
     return true;
 }
 
@@ -7667,6 +7718,170 @@ TEST(GameDataRuntime, RunsAuthoredFpsSectorController)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, RunsAuthoredSectorDoorInteractionRenderAndCollision)
+{
+    const std::filesystem::path dir = unique_test_dir("sector_doors");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.player",
+  "updates_game": true,
+  "entities": ["entity.player"],
+  "input": { "actions": ["action.move.forward"] },
+  "world": { "sector_levels": [{ "level": "sector.test", "variant": "unlit" }] }
+})json");
+    write_text(dir / "sector_doors.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Sector Door Test" },
+  "world": {
+    "name": "world.test",
+    "kind": "sector",
+    "cameras": [
+      { "name": "camera.player", "type": "fps", "target_entity": "entity.player", "fovy": 70.0, "active": true }
+    ]
+  },
+  "signals": ["signal.interact"],
+  "input": {
+    "contexts": [
+      {
+        "name": "input.play",
+        "actions": [
+          { "name": "action.move.forward" },
+          { "name": "action.move.back" },
+          { "name": "action.move.left" },
+          { "name": "action.move.right" }
+        ]
+      }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [2.0, 1.6, 2.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.0 },
+        "pitch": { "type": "float", "value": 0.0 },
+        "current_sector": { "type": "int", "value": -1 }
+      },
+      "components": [
+        {
+          "type": "controller.fps_sector",
+          "sector_level": "sector.test",
+          "actions": {
+            "forward": "action.move.forward",
+            "back": "action.move.back",
+            "left": "action.move.left",
+            "right": "action.move.right"
+          },
+          "move_speed": 4.0,
+          "jump_velocity": 0.0,
+          "gravity": 0.0,
+          "player_height": 1.6,
+          "player_radius": 0.25,
+          "step_height": 0.2,
+          "ceiling_clearance": 0.1,
+          "mouse_sensitivity": 0.0
+        }
+      ]
+    }
+  ],
+  "sector_levels": [
+    {
+      "name": "sector.test",
+      "materials": [{ "name": "floor" }, { "name": "wall" }],
+      "sectors": [
+        {
+          "name": "room",
+          "points": [[0, 0], [4, 0], [4, 4], [0, 4]],
+          "floor_y": 0.0,
+          "ceil_y": 4.0,
+          "floor_material": "floor",
+          "ceil_material": "wall",
+          "wall_material": "wall"
+        }
+      ]
+    }
+  ],
+  "sector_doors": [
+    {
+      "name": "door.test",
+      "id": 7,
+      "scene": "scene.play",
+      "open_seconds": 1.0,
+      "close_seconds": 1.0,
+      "panels": [
+        {
+          "bounds": { "min": [1.8, 0.0, 0.8], "max": [2.2, 2.0, 1.2] },
+          "open_offset": [0.0, 2.1, 0.0]
+        }
+      ],
+      "render": { "color": [120, 180, 240, 255], "lighting": true }
+    }
+  ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.interact",
+        "actions": [
+          {
+            "type": "sector_door.interact",
+            "actor": "entity.player",
+            "range": 2.0,
+            "min_dot": 0.1,
+            "actions": [
+              { "type": "sector_door.open", "target_from_payload": "door_name", "stay_open_seconds": 0.5 }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "sector_doors.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+
+    SectorDoorRenderCapture closed_render{};
+    ASSERT_TRUE(
+        sdl3d_game_data_for_each_render_primitive(runtime, capture_sector_door_render_primitive, &closed_render));
+    ASSERT_EQ(closed_render.door_primitives, 1);
+    EXPECT_NEAR(closed_render.first_position.y, 1.0f, 0.001f);
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    const int forward = sdl3d_game_data_find_action(runtime, "action.move.forward");
+    ASSERT_GE(forward, 0);
+    sdl3d_input_set_action_override(input, forward, 1.0f);
+    ASSERT_NE(sdl3d_input_update(input, 1000), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.2f));
+    EXPECT_GT(player->position.z, 1.2f);
+
+    sdl3d_input_set_action_override(input, forward, 0.0f);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session),
+                      sdl3d_game_data_find_signal(runtime, "signal.interact"), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f));
+    SectorDoorRenderCapture open_render{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_sector_door_render_primitive, &open_render));
+    ASSERT_EQ(open_render.door_primitives, 1);
+    EXPECT_NEAR(open_render.first_position.y, 3.1f, 0.001f);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidFpsSectorController)
 {
     const std::filesystem::path dir = unique_test_dir("fps_sector_controller_invalid");
@@ -7762,6 +7977,145 @@ TEST(GameDataRuntime, RejectsInvalidFpsSectorController)
       }]
     }
   ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json";
+        write_text(game_path, game_json.c_str());
+
+        char error[512]{};
+        EXPECT_FALSE(sdl3d_game_data_validate_file(game_path.string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
+            << test_case.name << ": " << error;
+    }
+
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
+{
+    const std::filesystem::path doom_path = doom_level_data_path();
+    ASSERT_TRUE(std::filesystem::exists(doom_path)) << doom_path;
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(doom_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    ASSERT_NE(runtime, nullptr);
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.doom_level.play"));
+    DoorPrefixRenderCapture capture{};
+    capture.prefix = "door.";
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_door_prefix_render_primitive, &capture));
+    EXPECT_EQ(capture.door_primitives, 5);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, RejectsInvalidSectorDoorsAndActions)
+{
+    const std::filesystem::path dir = unique_test_dir("sector_doors_invalid");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.player"] })json");
+
+    struct Case
+    {
+        const char *name;
+        const char *door_json;
+        const char *logic_json;
+        const char *expected_error;
+    };
+    const Case cases[] = {
+        {
+            "bad_panel_bounds",
+            R"json([
+              {
+                "name": "door.test",
+                "panels": [
+                  { "bounds": { "min": [1, 0], "max": [2, 2, 2] }, "open_offset": [0, 1, 0] }
+                ]
+              }
+            ])json",
+            R"json({ "bindings": [] })json",
+            "requires bounds min and max vec3",
+        },
+        {
+            "unknown_action_target",
+            R"json([
+              {
+                "name": "door.test",
+                "panels": [
+                  { "bounds": { "min": [1, 0, 1], "max": [2, 2, 2] }, "open_offset": [0, 1, 0] }
+                ]
+              }
+            ])json",
+            R"json({
+              "bindings": [
+                {
+                  "signal": "signal.run",
+                  "actions": [{ "type": "sector_door.open", "target": "door.missing" }]
+                }
+              ]
+            })json",
+            "unknown sector door reference",
+        },
+    };
+
+    for (const Case &test_case : cases)
+    {
+        const std::filesystem::path game_path = dir / (std::string(test_case.name) + ".game.json");
+        const std::string game_json = std::string(R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Sector Door" },
+  "signals": ["signal.run"],
+  "input": {
+    "contexts": [
+      {
+        "name": "input.play",
+        "actions": [
+          { "name": "action.move.forward" },
+          { "name": "action.move.back" },
+          { "name": "action.move.left" },
+          { "name": "action.move.right" }
+        ]
+      }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.player",
+      "components": [
+        {
+          "type": "controller.fps_sector",
+          "sector_level": "sector.test",
+          "actions": {
+            "forward": "action.move.forward",
+            "back": "action.move.back",
+            "left": "action.move.left",
+            "right": "action.move.right"
+          }
+        }
+      ]
+    }
+  ],
+  "sector_levels": [
+    {
+      "name": "sector.test",
+      "materials": [{ "name": "floor" }],
+      "sectors": [{
+        "points": [[0, 0], [4, 0], [4, 4], [0, 4]],
+        "floor_y": 0,
+        "ceil_y": 3,
+        "wall_material": "floor"
+      }]
+    }
+  ],
+  "sector_doors": )json") + test_case.door_json +
+                                      R"json(,
+  "logic": )json" + test_case.logic_json +
+                                      R"json(,
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json";
         write_text(game_path, game_json.c_str());
