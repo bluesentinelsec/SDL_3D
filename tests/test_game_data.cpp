@@ -109,6 +109,17 @@ struct RenderPrimitiveCapture
     int pickup_batch_instances = 0;
 };
 
+struct SectorLevelInstanceCapture
+{
+    int count = 0;
+    std::string level_name;
+    std::string variant_name;
+    sdl3d_game_data_sector_level_variant variant = static_cast<sdl3d_game_data_sector_level_variant>(0);
+    const sdl3d_level *level = nullptr;
+    sdl3d_vec3 position{};
+    bool portal_culling = true;
+};
+
 void capture_signal_payload(void *userdata, int signal_id, const sdl3d_properties *payload)
 {
     auto *capture = static_cast<NetworkSignalCapture *>(userdata);
@@ -1301,6 +1312,19 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         EXPECT_GT(primitive->instance_count, 0);
         EXPECT_NE(primitive->instances, nullptr);
     }
+    return true;
+}
+
+bool capture_sector_level_instance(void *userdata, const sdl3d_game_data_sector_level_instance *instance)
+{
+    auto *capture = static_cast<SectorLevelInstanceCapture *>(userdata);
+    capture->count++;
+    capture->level_name = instance->level_name != nullptr ? instance->level_name : "";
+    capture->variant_name = instance->variant_name != nullptr ? instance->variant_name : "";
+    capture->variant = instance->variant;
+    capture->level = instance->level;
+    capture->position = instance->position;
+    capture->portal_culling = instance->portal_culling;
     return true;
 }
 
@@ -7402,6 +7426,160 @@ TEST(GameDataRuntime, LoadsAuthoredSectorLevels)
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, ResolvesActiveSceneSectorLevelInstances)
+{
+    const std::filesystem::path dir = unique_test_dir("sector_level_scene");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.fixed",
+  "world": {
+    "sector_levels": [
+      {
+        "level": "sector.test",
+        "variant": "unlit",
+        "position": [1.0, 2.0, 3.0],
+        "portal_culling": false
+      }
+    ]
+  }
+})json");
+    write_text(dir / "sector_scene.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Sector Scene Test" },
+  "world": {
+    "name": "world.sector_scene",
+    "kind": "sector",
+    "cameras": [
+      {
+        "name": "camera.fixed",
+        "type": "perspective",
+        "position": [2.0, 1.5, -4.0],
+        "target": [2.0, 1.5, 2.0],
+        "up": [0.0, 1.0, 0.0],
+        "fovy": 60.0,
+        "active": true
+      }
+    ]
+  },
+  "sector_levels": [
+    {
+      "name": "sector.test",
+      "materials": [
+        { "name": "floor", "albedo": [0.7, 0.7, 0.7, 1.0] },
+        { "name": "wall", "albedo": [0.2, 0.25, 0.35, 1.0] }
+      ],
+      "sectors": [
+        {
+          "name": "room",
+          "points": [[0, 0], [4, 0], [4, 4], [0, 4]],
+          "floor_y": 0.0,
+          "ceil_y": 3.0,
+          "floor_material": "floor",
+          "ceil_material": "wall",
+          "wall_material": "wall"
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "sector_scene.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    sdl3d_game_data_sector_level level{};
+    ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.test", &level));
+
+    SectorLevelInstanceCapture capture{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_sector_level_instance(runtime, capture_sector_level_instance, &capture));
+    EXPECT_EQ(capture.count, 1);
+    EXPECT_EQ(capture.level_name, "sector.test");
+    EXPECT_EQ(capture.variant_name, "unlit");
+    EXPECT_EQ(capture.variant, SDL3D_GAME_DATA_SECTOR_LEVEL_UNLIT);
+    EXPECT_EQ(capture.level, level.unlit);
+    expect_vec3_near(capture.position, sdl3d_vec3_make(1.0f, 2.0f, 3.0f));
+    EXPECT_FALSE(capture.portal_culling);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidSceneSectorLevelInstances)
+{
+    const std::filesystem::path dir = unique_test_dir("sector_level_scene_invalid");
+    struct Case
+    {
+        const char *name;
+        const char *scene_world_json;
+        const char *expected_error;
+    };
+    const Case cases[] = {
+        {
+            "unknown_level",
+            R"json({ "sector_levels": [{ "level": "sector.missing" }] })json",
+            "unknown sector level",
+        },
+        {
+            "bad_variant",
+            R"json({ "sector_levels": [{ "level": "sector.test", "variant": "dynamic" }] })json",
+            "variant",
+        },
+        {
+            "bad_position",
+            R"json({ "sector_levels": [{ "level": "sector.test", "position": [1.0, 2.0] }] })json",
+            "position",
+        },
+    };
+
+    for (const Case &test_case : cases)
+    {
+        const std::filesystem::path game_path = dir / (std::string(test_case.name) + ".game.json");
+        write_text(dir / "scenes" / (std::string(test_case.name) + ".scene.json"), (std::string(R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "world": )json") + test_case.scene_world_json + R"json(
+})json")
+                                                                                       .c_str());
+        const std::string game_json = std::string(R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Sector Scene" },
+  "sector_levels": [
+    {
+      "name": "sector.test",
+      "materials": [{ "name": "floor" }],
+      "sectors": [{
+        "points": [[0, 0], [2, 0], [2, 2], [0, 2]],
+        "floor_y": 0,
+        "ceil_y": 3,
+        "wall_material": "floor"
+      }]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/)json") +
+                                      test_case.name + R"json(.scene.json"] }
+})json";
+        write_text(game_path, game_json.c_str());
+
+        char error[512]{};
+        EXPECT_FALSE(sdl3d_game_data_validate_file(game_path.string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
+            << test_case.name << ": " << error;
+    }
+
     remove_test_dir(dir);
 }
 

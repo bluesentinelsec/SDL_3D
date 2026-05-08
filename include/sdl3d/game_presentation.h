@@ -287,6 +287,16 @@ extern "C"
                                                           const sdl3d_game_data_render_eval *eval);
 
     /**
+     * @brief Draw active-scene authored sector levels.
+     *
+     * Scene files declare sector level instances under `world.sector_levels`.
+     * Call inside an active 3D pass. When an instance enables portal culling,
+     * this helper computes visibility from @p camera before drawing.
+     */
+    bool sdl3d_game_data_draw_sector_levels(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
+                                            const sdl3d_camera3d *camera);
+
+    /**
      * @brief Draw authored UI text for the active scene.
      *
      * Built-in font assets are loaded on demand through @p font_cache. Text is

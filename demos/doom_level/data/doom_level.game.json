@@ -1,0 +1,43 @@
+{
+  "schema": "sdl3d.game.v0",
+  "metadata": {
+    "name": "SDL3D Doom Level",
+    "id": "demo.doom_level",
+    "version": "0.1.0"
+  },
+  "imports": [
+    { "path": "fragments/world/sector_levels.json", "sections": ["sector_levels"] }
+  ],
+  "app": {
+    "title": "SDL3D Doom Level",
+    "window": { "width": 1280, "height": 720, "renderer": "opengl", "vsync": true },
+    "audio": { "enabled": false }
+  },
+  "world": {
+    "name": "world.doom_level",
+    "kind": "sector",
+    "ambient_light": [0.18, 0.18, 0.2],
+    "cameras": [
+      {
+        "name": "camera.doom.fixed",
+        "type": "perspective",
+        "position": [5.0, 1.8, -3.0],
+        "target": [5.0, 1.5, 8.0],
+        "up": [0.0, 1.0, 0.0],
+        "fovy": 65.0,
+        "active": true
+      }
+    ]
+  },
+  "render": {
+    "clear_color": [8, 10, 14, 255],
+    "lighting": true,
+    "bloom": true,
+    "ssao": true,
+    "tonemap": "aces"
+  },
+  "scenes": {
+    "initial": "scene.doom_level.play",
+    "files": ["scenes/play.scene.json"]
+  }
+}
