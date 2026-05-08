@@ -41,6 +41,46 @@
       ]
     },
     {
+      "name": "entity.field.parallax_far_a",
+      "active": true,
+      "tags": ["field", "parallax"],
+      "transform": { "position": [0.0, 2.72, -0.12] },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [3.6, 0.08, 0.10],
+          "color": [32, 82, 166, 190]
+        },
+        {
+          "type": "motion.scroll_wrap",
+          "axis": "x",
+          "speed": -0.65,
+          "min": -9.2,
+          "max": 9.2
+        }
+      ]
+    },
+    {
+      "name": "entity.field.parallax_far_b",
+      "active": true,
+      "tags": ["field", "parallax"],
+      "transform": { "position": [6.0, -1.90, -0.11] },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [4.6, 0.10, 0.10],
+          "color": [68, 34, 148, 185]
+        },
+        {
+          "type": "motion.scroll_wrap",
+          "axis": "x",
+          "speed": -0.92,
+          "min": -9.2,
+          "max": 9.2
+        }
+      ]
+    },
+    {
       "name": "entity.effect.star_fast",
       "active": true,
       "tags": ["effect", "particles", "stars"],
@@ -151,6 +191,13 @@
           "axis": "y",
           "negative": "action.player.down",
           "positive": "action.player.up"
+        },
+        {
+          "type": "property.decay",
+          "property": "fire_timer",
+          "rate": 1.0,
+          "target": 0.0,
+          "min": 0.0
         }
       ]
     },
@@ -203,6 +250,13 @@
           "axis": "y",
           "negative": "action.player2.down",
           "positive": "action.player2.up"
+        },
+        {
+          "type": "property.decay",
+          "property": "fire_timer",
+          "rate": 1.0,
+          "target": 0.0,
+          "min": 0.0
         }
       ]
     },
@@ -215,9 +269,6 @@
         "lives": { "type": "int", "value": 3 },
         "wave": { "type": "int", "value": 1 },
         "distance": { "type": "float", "value": 0.0 },
-        "enemy_spawn_timer": { "type": "float", "value": 0.0 },
-        "asteroid_spawn_timer": { "type": "float", "value": 0.0 },
-        "enemy_fire_timer": { "type": "float", "value": 0.0 },
         "threats_active": { "type": "int", "value": 0 },
         "game_over": { "type": "bool", "value": false },
         "won": { "type": "bool", "value": false },
@@ -287,6 +338,9 @@
         {
           "type": "collision.aabb",
           "half_extents": [0.36, 0.26, 0.18]
+        },
+        {
+          "type": "motion.velocity_2d"
         }
       ]
     },
@@ -328,6 +382,9 @@
         {
           "type": "collision.aabb",
           "half_extents": [0.58, 0.34, 0.20]
+        },
+        {
+          "type": "motion.velocity_2d"
         }
       ]
     },
@@ -363,6 +420,9 @@
         {
           "type": "collision.aabb",
           "half_extents": [0.42, 0.42, 0.28]
+        },
+        {
+          "type": "motion.velocity_2d"
         }
       ]
     },
@@ -414,6 +474,16 @@
           "depth_test": true,
           "draw_emissive": [0.24, 0.92, 1.0],
           "random_seed": 221
+        },
+        {
+          "type": "motion.velocity_2d"
+        },
+        {
+          "type": "light.point",
+          "offset": [0.0, 0.0, 0.16],
+          "color": [0.18, 0.88, 1.0],
+          "intensity": 2.9,
+          "range": 1.9
         }
       ]
     },
@@ -456,6 +526,16 @@
           "depth_test": true,
           "draw_emissive": [1.0, 0.12, 0.55],
           "random_seed": 661
+        },
+        {
+          "type": "motion.velocity_2d"
+        },
+        {
+          "type": "light.point",
+          "offset": [0.0, 0.0, 0.14],
+          "color": [1.0, 0.10, 0.46],
+          "intensity": 2.4,
+          "range": 1.7
         }
       ]
     },
@@ -498,6 +578,13 @@
           "depth_test": true,
           "draw_emissive": [1.0, 0.55, 0.12],
           "random_seed": 92811
+        },
+        {
+          "type": "light.point",
+          "offset": [0.0, 0.0, 0.20],
+          "color": [1.0, 0.58, 0.12],
+          "intensity": 5.0,
+          "range": 2.6
         }
       ]
     }
@@ -559,4 +646,3 @@
     }
   ]
 }
-

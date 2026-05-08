@@ -12,6 +12,43 @@
   "logic": {
     "sensors": [
       {
+        "name": "logic.projectile_hits_threat",
+        "type": "collision.on_overlap",
+        "a_tag": "player_projectile",
+        "b_tag": "threat",
+        "edge": "enter",
+        "actions": [
+          { "type": "actor.despawn", "target_from_payload": "actor_name", "reason": "projectile impact" },
+          { "type": "actor.spawn", "pool": "pool.explosions", "from_payload": "other_actor_name", "properties": { "ttl": 0.42 } },
+          { "type": "actor.despawn", "target_from_payload": "other_actor_name", "reason": "destroyed by projectile" },
+          { "type": "property.add", "target": "entity.game", "key": "score", "value": 100 }
+        ]
+      },
+      {
+        "name": "logic.enemy_fire_hits_player",
+        "type": "collision.on_overlap",
+        "a_tag": "enemy_projectile",
+        "b_tag": "player",
+        "edge": "enter",
+        "actions": [
+          { "type": "actor.despawn", "target_from_payload": "actor_name", "reason": "player hit" },
+          { "type": "actor.spawn", "pool": "pool.explosions", "from_payload": "other_actor_name", "properties": { "ttl": 0.56 } },
+          { "type": "property.add", "target": "entity.game", "key": "lives", "value": -1 }
+        ]
+      },
+      {
+        "name": "logic.threat_hits_player",
+        "type": "collision.on_overlap",
+        "a_tag": "threat",
+        "b_tag": "player",
+        "edge": "enter",
+        "actions": [
+          { "type": "actor.spawn", "pool": "pool.explosions", "from_payload": "other_actor_name", "properties": { "ttl": 0.56 } },
+          { "type": "actor.despawn", "target_from_payload": "actor_name", "reason": "rammed player" },
+          { "type": "property.add", "target": "entity.game", "key": "lives", "value": -1 }
+        ]
+      },
+      {
         "name": "logic.player.fire_input",
         "type": "sensor.input_pressed",
         "action": "action.player.fire",
@@ -28,6 +65,55 @@
         "type": "sensor.input_pressed",
         "action": "action.restart",
         "on_pressed": "signal.game.start"
+      }
+    ],
+    "wave_schedules": [
+      {
+        "name": "wave.drones",
+        "pool": "pool.drones",
+        "interval": 0.62,
+        "initial_delay": 0.25,
+        "max_active_tag": "threat",
+        "max_active": 26,
+        "active_if": { "type": "property.compare", "target": "entity.game", "key": "game_over", "op": "==", "value": false },
+        "position": { "x": 9.05, "y": [-3.55, 3.55], "z": 0.21 },
+        "velocity": [-2.95, 0.0, 0.0],
+        "properties": { "hp": 1, "points": 100 }
+      },
+      {
+        "name": "wave.cruisers",
+        "pool": "pool.cruisers",
+        "interval": 3.8,
+        "initial_delay": 2.2,
+        "max_active_tag": "threat",
+        "max_active": 26,
+        "active_if": { "type": "property.compare", "target": "entity.game", "key": "game_over", "op": "==", "value": false },
+        "position": { "x": 9.2, "y": [-3.1, 3.1], "z": 0.24 },
+        "velocity": [-1.65, 0.0, 0.0],
+        "properties": { "hp": 3, "points": 300 }
+      },
+      {
+        "name": "wave.asteroids",
+        "pool": "pool.asteroids",
+        "interval": 1.55,
+        "initial_delay": 1.0,
+        "max_active_tag": "threat",
+        "max_active": 26,
+        "active_if": { "type": "property.compare", "target": "entity.game", "key": "game_over", "op": "==", "value": false },
+        "position": { "x": 9.15, "y": [-3.65, 3.65], "z": 0.13 },
+        "velocity": [-2.05, 0.0, 0.0],
+        "properties": { "hp": 4, "points": 80 }
+      },
+      {
+        "name": "wave.enemy_fire",
+        "pool": "pool.enemy_shots",
+        "interval": 1.05,
+        "initial_delay": 1.4,
+        "max_active_tag": "enemy_projectile",
+        "max_active": 18,
+        "active_if": { "type": "property.compare", "target": "entity.game", "key": "game_over", "op": "==", "value": false },
+        "position": { "x": [4.0, 8.2], "y": [-3.65, 3.65], "z": 0.32 },
+        "velocity": [-5.8, 0.0, 0.0]
       }
     ],
     "timers": [
@@ -84,9 +170,20 @@
         "signal": "signal.player.fire",
         "actions": [
           {
-            "type": "adapter.invoke",
-            "adapter": "adapter.armalite.fire_player_one",
-            "target": "entity.player"
+            "type": "branch",
+            "if": { "type": "property.compare", "target": "entity.game", "key": "game_over", "op": "==", "value": false },
+            "then": [
+              {
+                "type": "projectile.fire",
+                "target": "entity.player",
+                "pool": "pool.player_shots",
+                "offset": [0.62, 0.0, 0.16],
+                "velocity": [12.4, 0.0, 0.0],
+                "cooldown_property": "fire_timer",
+                "properties": { "owner": 1, "damage": 1 }
+              }
+            ],
+            "else": []
           }
         ]
       },
@@ -94,13 +191,23 @@
         "signal": "signal.player2.fire",
         "actions": [
           {
-            "type": "adapter.invoke",
-            "adapter": "adapter.armalite.fire_player_two",
-            "target": "entity.player2"
+            "type": "branch",
+            "if": { "type": "property.compare", "target": "entity.game", "key": "game_over", "op": "==", "value": false },
+            "then": [
+              {
+                "type": "projectile.fire",
+                "target": "entity.player2",
+                "pool": "pool.player_shots",
+                "offset": [0.62, 0.0, 0.16],
+                "velocity": [12.8, 0.0, 0.0],
+                "cooldown_property": "fire_timer",
+                "properties": { "owner": 2, "damage": 2 }
+              }
+            ],
+            "else": []
           }
         ]
       }
     ]
   }
 }
-

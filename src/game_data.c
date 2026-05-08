@@ -121,11 +121,20 @@ typedef struct sensor_entry
     float max_value;
     float threshold;
     int signal_id;
+    yyjson_val *actions;
+    const char *edge;
     bool was_active;
     sensor_contact_pair_state *contact_pairs;
     int contact_pair_count;
     int contact_pair_capacity;
 } sensor_entry;
+
+typedef struct wave_schedule_entry
+{
+    yyjson_val *schedule;
+    float elapsed;
+    bool initialized;
+} wave_schedule_entry;
 
 typedef struct sensor_actor_list
 {
@@ -376,6 +385,8 @@ typedef struct sdl3d_game_data_runtime
     int binding_count;
     sensor_entry *sensors;
     int sensor_count;
+    wave_schedule_entry *wave_schedules;
+    int wave_schedule_count;
     input_binding_spec *input_bindings;
     int input_binding_count;
     int input_binding_capacity;
@@ -489,8 +500,17 @@ static bool set_action_gamepad_button_binding(sdl3d_game_data_runtime *runtime, 
                                               SDL_GamepadButton button);
 static bool eval_data_condition(const sdl3d_game_data_runtime *runtime, yyjson_val *condition,
                                 const sdl3d_game_data_ui_metrics *metrics);
+static bool runtime_actor_is_active(const sdl3d_game_data_runtime *runtime, const sdl3d_registered_actor *actor);
 static int menu_runtime_item_count(const sdl3d_game_data_runtime *runtime, const scene_menu_state *menu);
 static void update_dynamic_list_selection_state(sdl3d_game_data_runtime *runtime, scene_menu_state *menu);
+
+static float game_data_random01(sdl3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return 0.0f;
+    runtime->rng_state = runtime->rng_state * 1664525u + 1013904223u;
+    return (float)((runtime->rng_state >> 8) & 0x00FFFFFFu) / (float)0x01000000u;
+}
 
 static bool path_is_absolute(const char *path)
 {
@@ -904,8 +924,7 @@ static int lua_random(lua_State *lua)
         return 1;
     }
 
-    runtime->rng_state = runtime->rng_state * 1664525u + 1013904223u;
-    lua_pushnumber(lua, (lua_Number)((runtime->rng_state >> 8) & 0x00FFFFFFu) / (lua_Number)0x01000000u);
+    lua_pushnumber(lua, (lua_Number)game_data_random01(runtime));
     return 1;
 }
 
@@ -3772,7 +3791,46 @@ bool sdl3d_game_data_get_camera_float(const sdl3d_game_data_runtime *runtime, co
 int sdl3d_game_data_world_light_count(const sdl3d_game_data_runtime *runtime)
 {
     yyjson_val *lights = obj_get(obj_get(runtime_root(runtime), "world"), "lights");
-    return yyjson_is_arr(lights) ? (int)yyjson_arr_size(lights) : 0;
+    int count = yyjson_is_arr(lights) ? (int)yyjson_arr_size(lights) : 0;
+    yyjson_val *entities = obj_get(runtime_root(runtime), "entities");
+    for (size_t i = 0; runtime != NULL && yyjson_is_arr(entities) && i < yyjson_arr_size(entities); ++i)
+    {
+        yyjson_val *entity = yyjson_arr_get(entities, i);
+        const char *entity_name = json_string(entity, "name", NULL);
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, entity_name);
+        if (!active_scene_has_entity_internal(runtime, entity_name) || actor == NULL || !actor->active)
+            continue;
+        yyjson_val *components = obj_get(entity, "components");
+        for (size_t c = 0; yyjson_is_arr(components) && c < yyjson_arr_size(components); ++c)
+        {
+            const char *type = json_string(yyjson_arr_get(components, c), "type", "");
+            if (SDL_strncmp(type, "light.", 6) == 0)
+                count++;
+        }
+    }
+    for (int pool_index = 0; runtime != NULL && pool_index < runtime->actor_pool_count; ++pool_index)
+    {
+        actor_pool_runtime *pool = &runtime->actor_pools[pool_index];
+        if (!actor_pool_in_scene(pool, sdl3d_game_data_active_scene(runtime)))
+            continue;
+        yyjson_val *components = obj_get(pool->archetype_json, "components");
+        int light_components = 0;
+        for (size_t c = 0; yyjson_is_arr(components) && c < yyjson_arr_size(components); ++c)
+        {
+            const char *type = json_string(yyjson_arr_get(components, c), "type", "");
+            if (SDL_strncmp(type, "light.", 6) == 0)
+                light_components++;
+        }
+        if (light_components <= 0)
+            continue;
+        for (int actor_index = 0; actor_index < pool->capacity; ++actor_index)
+        {
+            sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[actor_index]);
+            if (actor_pool_actor_is_active(pool, actor, actor_index))
+                count += light_components;
+        }
+    }
+    return count;
 }
 
 bool sdl3d_game_data_get_world_ambient_light(const sdl3d_game_data_runtime *runtime, float out_rgb[3])
@@ -3800,25 +3858,25 @@ bool sdl3d_game_data_get_world_ambient_light(const sdl3d_game_data_runtime *runt
     return true;
 }
 
-bool sdl3d_game_data_get_world_light(const sdl3d_game_data_runtime *runtime, int index, sdl3d_light *out_light)
+static bool read_light_json(const sdl3d_game_data_runtime *runtime, yyjson_val *light_json,
+                            const sdl3d_registered_actor *component_actor, sdl3d_light *out_light)
 {
     if (out_light != NULL)
         SDL_zero(*out_light);
-    yyjson_val *lights = obj_get(obj_get(runtime_root(runtime), "world"), "lights");
-    if (runtime == NULL || index < 0 || out_light == NULL || !yyjson_is_arr(lights) ||
-        (size_t)index >= yyjson_arr_size(lights))
+    if (runtime == NULL || light_json == NULL || out_light == NULL)
         return false;
 
-    yyjson_val *light_json = yyjson_arr_get(lights, (size_t)index);
     const char *type = json_string(light_json, "type", "point");
-    if (SDL_strcmp(type, "directional") == 0)
+    if (SDL_strcmp(type, "directional") == 0 || SDL_strcmp(type, "light.directional") == 0)
         out_light->type = SDL3D_LIGHT_DIRECTIONAL;
-    else if (SDL_strcmp(type, "spot") == 0)
+    else if (SDL_strcmp(type, "spot") == 0 || SDL_strcmp(type, "light.spot") == 0)
         out_light->type = SDL3D_LIGHT_SPOT;
     else
         out_light->type = SDL3D_LIGHT_POINT;
 
     out_light->position = json_vec3(light_json, "position", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    if (component_actor != NULL)
+        out_light->position = component_actor->position;
     const char *target_entity = json_string(light_json, "target_entity", NULL);
     sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, target_entity);
     yyjson_val *target_entities = obj_get(light_json, "target_entities");
@@ -3835,10 +3893,12 @@ bool sdl3d_game_data_get_world_light(const sdl3d_game_data_runtime *runtime, int
             target = sdl3d_game_data_find_actor(runtime, candidate);
     }
     if (target != NULL)
+        out_light->position = target->position;
+    if (target != NULL || component_actor != NULL)
     {
         const sdl3d_vec3 offset = json_vec3(light_json, "offset", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
-        out_light->position = sdl3d_vec3_make(target->position.x + offset.x, target->position.y + offset.y,
-                                              target->position.z + offset.z);
+        out_light->position = sdl3d_vec3_make(out_light->position.x + offset.x, out_light->position.y + offset.y,
+                                              out_light->position.z + offset.z);
     }
     out_light->direction = json_vec3(light_json, "direction", sdl3d_vec3_make(0.0f, -1.0f, 0.0f));
     yyjson_val *color = obj_get(light_json, "color");
@@ -3856,6 +3916,60 @@ bool sdl3d_game_data_get_world_light(const sdl3d_game_data_runtime *runtime, int
     out_light->inner_cutoff = json_float(light_json, "inner_cutoff", 0.0f);
     out_light->outer_cutoff = json_float(light_json, "outer_cutoff", 0.0f);
     return true;
+}
+
+bool sdl3d_game_data_get_world_light(const sdl3d_game_data_runtime *runtime, int index, sdl3d_light *out_light)
+{
+    yyjson_val *lights = obj_get(obj_get(runtime_root(runtime), "world"), "lights");
+    const int world_count = yyjson_is_arr(lights) ? (int)yyjson_arr_size(lights) : 0;
+    if (runtime == NULL || index < 0 || out_light == NULL)
+        return false;
+    if (index < world_count)
+        return read_light_json(runtime, yyjson_arr_get(lights, (size_t)index), NULL, out_light);
+
+    int remaining = index - world_count;
+    yyjson_val *entities = obj_get(runtime_root(runtime), "entities");
+    for (size_t i = 0; yyjson_is_arr(entities) && i < yyjson_arr_size(entities); ++i)
+    {
+        yyjson_val *entity = yyjson_arr_get(entities, i);
+        const char *entity_name = json_string(entity, "name", NULL);
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, entity_name);
+        if (!active_scene_has_entity_internal(runtime, entity_name) || actor == NULL || !actor->active)
+            continue;
+        yyjson_val *components = obj_get(entity, "components");
+        for (size_t c = 0; yyjson_is_arr(components) && c < yyjson_arr_size(components); ++c)
+        {
+            yyjson_val *component = yyjson_arr_get(components, c);
+            const char *type = json_string(component, "type", "");
+            if (SDL_strncmp(type, "light.", 6) != 0)
+                continue;
+            if (remaining-- == 0)
+                return read_light_json(runtime, component, actor, out_light);
+        }
+    }
+    for (int pool_index = 0; pool_index < runtime->actor_pool_count; ++pool_index)
+    {
+        actor_pool_runtime *pool = &runtime->actor_pools[pool_index];
+        if (!actor_pool_in_scene(pool, sdl3d_game_data_active_scene(runtime)))
+            continue;
+        yyjson_val *components = obj_get(pool->archetype_json, "components");
+        for (int actor_index = 0; actor_index < pool->capacity; ++actor_index)
+        {
+            sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[actor_index]);
+            if (!actor_pool_actor_is_active(pool, actor, actor_index))
+                continue;
+            for (size_t c = 0; yyjson_is_arr(components) && c < yyjson_arr_size(components); ++c)
+            {
+                yyjson_val *component = yyjson_arr_get(components, c);
+                const char *type = json_string(component, "type", "");
+                if (SDL_strncmp(type, "light.", 6) != 0)
+                    continue;
+                if (remaining-- == 0)
+                    return read_light_json(runtime, component, actor, out_light);
+            }
+        }
+    }
+    return false;
 }
 
 static float game_data_clampf(float value, float lo, float hi);
@@ -11140,13 +11254,25 @@ static void apply_actor_spawn_properties(sdl3d_registered_actor *actor, yyjson_v
     }
 }
 
+static sdl3d_registered_actor *actor_from_payload_key(sdl3d_game_data_runtime *runtime, const sdl3d_properties *payload,
+                                                      const char *key)
+{
+    const char *actor_name = payload != NULL && key != NULL ? sdl3d_properties_get_string(payload, key, NULL) : NULL;
+    return sdl3d_game_data_find_actor(runtime, actor_name);
+}
+
 static sdl3d_vec3 actor_spawn_position_from_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
-                                                   sdl3d_vec3 fallback)
+                                                   const sdl3d_properties *payload, sdl3d_vec3 fallback)
 {
     sdl3d_vec3 position = fallback;
     yyjson_val *position_json = obj_get(action, "position");
     if (position_json != NULL)
         position = json_vec3_value(position_json, position);
+
+    const char *from_payload_key = json_string(action, "from_payload", NULL);
+    sdl3d_registered_actor *from_payload_actor = actor_from_payload_key(runtime, payload, from_payload_key);
+    if (from_payload_actor != NULL)
+        position = from_payload_actor->position;
 
     const char *from_actor_name = json_string(action, "from", NULL);
     sdl3d_registered_actor *from_actor = sdl3d_game_data_find_actor(runtime, from_actor_name);
@@ -11164,7 +11290,8 @@ static sdl3d_vec3 actor_spawn_position_from_action(sdl3d_game_data_runtime *runt
     return position;
 }
 
-static bool execute_actor_spawn_action(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+static bool execute_actor_spawn_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                       const sdl3d_properties *payload)
 {
     actor_pool_runtime *pool = find_actor_pool(runtime, json_string(action, "pool", NULL));
     actor_pool_note_spawn_attempt(pool);
@@ -11188,7 +11315,7 @@ static bool execute_actor_spawn_action(sdl3d_game_data_runtime *runtime, yyjson_
         sdl3d_properties_set_int(actor->props, "pool_spawn_generation",
                                  (int)SDL_min(pool->spawn_generations[actor_index], (Uint64)SDL_MAX_SINT32));
     }
-    actor_set_position(actor, actor_spawn_position_from_action(runtime, action, actor->position));
+    actor_set_position(actor, actor_spawn_position_from_action(runtime, action, payload, actor->position));
     apply_actor_spawn_properties(actor, obj_get(action, "properties"));
     actor_pool_note_spawn_success(runtime, pool);
 
@@ -11220,6 +11347,23 @@ static bool execute_actor_despawn_action(sdl3d_game_data_runtime *runtime, yyjso
     return true;
 }
 
+static bool execute_actor_despawn_action_with_payload(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                                      const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *actor =
+        actor_from_payload_key(runtime, payload, json_string(action, "target_from_payload", NULL));
+    if (actor == NULL)
+        return execute_actor_despawn_action(runtime, action);
+
+    int actor_index = -1;
+    actor_pool_runtime *pool = find_actor_pool_for_actor(runtime, actor->name, &actor_index);
+    if (pool != NULL && actor_index >= 0)
+        return actor_pool_request_despawn(runtime, pool, actor, actor_index, json_string(action, "reason", "action"));
+
+    actor->active = false;
+    return true;
+}
+
 static bool execute_actor_despawn_by_tag_action(sdl3d_game_data_runtime *runtime, yyjson_val *action)
 {
     const char *tag = json_string(action, "tag", NULL);
@@ -11240,6 +11384,63 @@ static bool execute_actor_despawn_by_tag_action(sdl3d_game_data_runtime *runtime
                                                  json_string(action, "reason", "action_tag"));
             }
         }
+    }
+    return true;
+}
+
+static bool execute_projectile_fire_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                           const sdl3d_properties *payload)
+{
+    const char *target_name = json_string(action, "target", NULL);
+    sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, target_name);
+    if (target == NULL)
+        target = actor_from_payload_key(runtime, payload, json_string(action, "target_from_payload", NULL));
+    if (target == NULL || !runtime_actor_is_active(runtime, target))
+        return false;
+
+    const char *cooldown_property = json_string(action, "cooldown_property", "fire_timer");
+    if (cooldown_property != NULL && cooldown_property[0] != '\0' &&
+        sdl3d_properties_get_float(target->props, cooldown_property, 0.0f) > 0.0f)
+    {
+        return true;
+    }
+
+    actor_pool_runtime *pool = find_actor_pool(runtime, json_string(action, "pool", NULL));
+    actor_pool_note_spawn_attempt(pool);
+    int actor_index = -1;
+    sdl3d_registered_actor *actor = actor_pool_allocate(runtime, pool, &actor_index);
+    if (pool == NULL || actor == NULL || actor_index < 0)
+    {
+        actor_pool_note_spawn_failure(pool, "exhausted");
+        return false;
+    }
+
+    actor_pool_set_lifecycle_state(pool, actor, actor_index, ACTOR_LIFECYCLE_SPAWNING);
+    if (!initialize_pooled_actor(pool, actor, actor_index, true))
+    {
+        actor_pool_note_spawn_failure(pool, "initialize_failed");
+        return false;
+    }
+    if (pool->spawn_generations != NULL)
+    {
+        pool->spawn_generations[actor_index] = ++pool->spawn_generation_counter;
+        sdl3d_properties_set_int(actor->props, "pool_spawn_generation",
+                                 (int)SDL_min(pool->spawn_generations[actor_index], (Uint64)SDL_MAX_SINT32));
+    }
+
+    actor_set_position(actor, actor_spawn_position_from_action(runtime, action, payload, target->position));
+    apply_actor_spawn_properties(actor, obj_get(action, "properties"));
+    yyjson_val *velocity = obj_get(action, "velocity");
+    if (velocity != NULL)
+        sdl3d_properties_set_vec3(actor->props, "velocity",
+                                  json_vec3_value(velocity, sdl3d_vec3_make(0.0f, 0.0f, 0.0f)));
+    actor_pool_note_spawn_success(runtime, pool);
+
+    if (cooldown_property != NULL && cooldown_property[0] != '\0')
+    {
+        const float cooldown =
+            json_float(action, "cooldown", sdl3d_properties_get_float(target->props, "fire_cooldown", 0.0f));
+        sdl3d_properties_set_float(target->props, cooldown_property, cooldown);
     }
     return true;
 }
@@ -11490,13 +11691,16 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
     }
 
     if (SDL_strcmp(type, "actor.spawn") == 0)
-        return execute_actor_spawn_action(runtime, action);
+        return execute_actor_spawn_action(runtime, action, payload);
 
     if (SDL_strcmp(type, "actor.despawn") == 0)
-        return execute_actor_despawn_action(runtime, action);
+        return execute_actor_despawn_action_with_payload(runtime, action, payload);
 
     if (SDL_strcmp(type, "actor.despawn_by_tag") == 0)
         return execute_actor_despawn_by_tag_action(runtime, action);
+
+    if (SDL_strcmp(type, "projectile.fire") == 0)
+        return execute_projectile_fire_action(runtime, action, payload);
 
     if (SDL_strcmp(type, "transform.set_position") == 0)
     {
@@ -11834,6 +12038,8 @@ static bool load_sensors(sdl3d_game_data_runtime *runtime, yyjson_val *logic)
             entry->type = GAME_DATA_SENSOR_BOUNDS_REFLECT;
         else if (SDL_strcmp(type, "sensor.contact_2d") == 0)
             entry->type = GAME_DATA_SENSOR_CONTACT_2D;
+        else if (SDL_strcmp(type, "collision.on_overlap") == 0)
+            entry->type = GAME_DATA_SENSOR_CONTACT_2D;
         else if (SDL_strcmp(type, "sensor.input_pressed") == 0)
             entry->type = GAME_DATA_SENSOR_INPUT_PRESSED;
 
@@ -11847,9 +12053,32 @@ static bool load_sensors(sdl3d_game_data_runtime *runtime, yyjson_val *logic)
         entry->min_value = json_float(sensor, "min", 0.0f);
         entry->max_value = json_float(sensor, "max", 0.0f);
         entry->threshold = json_float(sensor, "threshold", 0.0f);
+        entry->actions = obj_get(sensor, "actions");
+        entry->edge = json_string(sensor, "edge", "enter");
         entry->signal_id = sdl3d_game_data_find_signal(
             runtime, json_string(sensor, "on_enter",
                                  json_string(sensor, "on_pressed", json_string(sensor, "on_reflect", NULL))));
+    }
+    return true;
+}
+
+static bool load_wave_schedules(sdl3d_game_data_runtime *runtime, yyjson_val *logic)
+{
+    yyjson_val *schedules = obj_get(logic, "wave_schedules");
+    if (!yyjson_is_arr(schedules))
+        return true;
+
+    const int count = (int)yyjson_arr_size(schedules);
+    runtime->wave_schedules = (wave_schedule_entry *)SDL_calloc((size_t)count, sizeof(*runtime->wave_schedules));
+    if (runtime->wave_schedules == NULL && count > 0)
+        return false;
+    runtime->wave_schedule_count = count;
+
+    for (int i = 0; i < count; ++i)
+    {
+        runtime->wave_schedules[i].schedule = yyjson_arr_get(schedules, (size_t)i);
+        runtime->wave_schedules[i].elapsed = 0.0f;
+        runtime->wave_schedules[i].initialized = false;
     }
     return true;
 }
@@ -12233,58 +12462,88 @@ static void update_control_components(sdl3d_game_data_runtime *runtime, yyjson_v
 
 static void update_motion_components(sdl3d_game_data_runtime *runtime, yyjson_val *root, float dt)
 {
-    yyjson_val *entities = obj_get(root, "entities");
-    for (size_t i = 0; yyjson_is_arr(entities) && i < yyjson_arr_size(entities); ++i)
+    (void)root;
+    for (int actor_id = 0; actor_id < runtime->actor_pool_count + 1; ++actor_id)
     {
-        yyjson_val *entity = yyjson_arr_get(entities, i);
-        const char *entity_name = json_string(entity, "name", NULL);
-        if (!active_scene_has_entity_internal(runtime, entity_name))
-            continue;
-        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, entity_name);
-        yyjson_val *components = obj_get(entity, "components");
-        if (actor == NULL || !actor->active || !yyjson_is_arr(components))
+        yyjson_val *entities = actor_id == 0 ? obj_get(runtime_root(runtime), "entities") : NULL;
+        const int entity_count = actor_id == 0 && yyjson_is_arr(entities) ? (int)yyjson_arr_size(entities) : 0;
+        const int pool_index = actor_id - 1;
+        const int count = actor_id == 0 ? entity_count : runtime->actor_pools[pool_index].capacity;
+
+        if (actor_id > 0 &&
+            !actor_pool_in_scene(&runtime->actor_pools[pool_index], sdl3d_game_data_active_scene(runtime)))
             continue;
 
-        for (size_t c = 0; c < yyjson_arr_size(components); ++c)
+        for (int i = 0; i < count; ++i)
         {
-            yyjson_val *component = yyjson_arr_get(components, c);
-            const char *type = json_string(component, "type", "");
+            yyjson_val *entity =
+                actor_id == 0 ? yyjson_arr_get(entities, (size_t)i) : runtime->actor_pools[pool_index].archetype_json;
+            const char *entity_name =
+                actor_id == 0 ? json_string(entity, "name", NULL) : runtime->actor_pools[pool_index].actor_names[i];
+            if (!active_scene_has_entity_internal(runtime, entity_name))
+                continue;
+            sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, entity_name);
+            yyjson_val *components = obj_get(entity, "components");
+            if (actor == NULL || !runtime_actor_is_active(runtime, actor) || !yyjson_is_arr(components))
+                continue;
             if (!sdl3d_properties_get_bool(actor->props, "active_motion", true))
             {
                 continue;
             }
 
-            if (SDL_strcmp(type, "motion.velocity_2d") == 0)
+            for (size_t c = 0; c < yyjson_arr_size(components); ++c)
             {
-                const char *property = json_string(component, "property", "velocity");
-                const sdl3d_vec3 velocity = actor_vec_property(actor, property);
-                actor_set_position(actor, sdl3d_vec3_make(actor->position.x + velocity.x * dt,
-                                                          actor->position.y + velocity.y * dt, actor->position.z));
-            }
-            else if (SDL_strcmp(type, "motion.oscillate") == 0)
-            {
-                const char *time_property = json_string(component, "time_property", "motion_time");
-                const float time = sdl3d_properties_get_float(actor->props, time_property, 0.0f) + dt;
-                sdl3d_properties_set_float(actor->props, time_property, time);
+                yyjson_val *component = yyjson_arr_get(components, c);
+                const char *type = json_string(component, "type", "");
 
-                const sdl3d_vec3 origin = json_vec3_value(obj_get(component, "origin"), actor->position);
-                const sdl3d_vec3 amplitude =
-                    json_vec3_value(obj_get(component, "amplitude"), sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
-                const float rate = json_float(component, "rate", 1.0f);
-                const float phase = json_float(component, "phase", 0.0f);
-                const float wave = SDL_sinf(time * rate + phase);
-                actor_set_position(actor, sdl3d_vec3_make(origin.x + amplitude.x * wave, origin.y + amplitude.y * wave,
-                                                          origin.z + amplitude.z * wave));
-            }
-            else if (SDL_strcmp(type, "motion.spin") == 0)
-            {
-                const char *property = json_string(component, "property", "rotation_angle");
-                const float rate = json_float(component, "rate", 1.0f);
-                float angle = sdl3d_properties_get_float(actor->props, property, 0.0f) + rate * dt;
-                const float two_pi = 6.28318530717958647692f;
-                if (angle > two_pi || angle < -two_pi)
-                    angle = SDL_fmodf(angle, two_pi);
-                sdl3d_properties_set_float(actor->props, property, angle);
+                if (SDL_strcmp(type, "motion.velocity_2d") == 0)
+                {
+                    const char *property = json_string(component, "property", "velocity");
+                    const sdl3d_vec3 velocity = actor_vec_property(actor, property);
+                    actor_set_position(actor, sdl3d_vec3_make(actor->position.x + velocity.x * dt,
+                                                              actor->position.y + velocity.y * dt, actor->position.z));
+                }
+                else if (SDL_strcmp(type, "motion.scroll_wrap") == 0)
+                {
+                    const int axis = axis_index(json_string(component, "axis", "x"));
+                    const float speed = json_float(component, "speed", 0.0f);
+                    const float min_value = json_float(component, "min", -10.0f);
+                    const float max_value = json_float(component, "max", 10.0f);
+                    sdl3d_vec3 position = actor->position;
+                    float value = vec_axis(position, axis) + speed * dt;
+                    if (speed < 0.0f && value < min_value)
+                        value = max_value;
+                    else if (speed > 0.0f && value > max_value)
+                        value = min_value;
+                    set_vec_axis(&position, axis, value);
+                    actor_set_position(actor, position);
+                }
+                else if (SDL_strcmp(type, "motion.oscillate") == 0)
+                {
+                    const char *time_property = json_string(component, "time_property", "motion_time");
+                    const float time = sdl3d_properties_get_float(actor->props, time_property, 0.0f) + dt;
+                    sdl3d_properties_set_float(actor->props, time_property, time);
+
+                    const sdl3d_vec3 origin = json_vec3_value(obj_get(component, "origin"), actor->position);
+                    const sdl3d_vec3 amplitude =
+                        json_vec3_value(obj_get(component, "amplitude"), sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+                    const float rate = json_float(component, "rate", 1.0f);
+                    const float phase = json_float(component, "phase", 0.0f);
+                    const float wave = SDL_sinf(time * rate + phase);
+                    actor_set_position(actor,
+                                       sdl3d_vec3_make(origin.x + amplitude.x * wave, origin.y + amplitude.y * wave,
+                                                       origin.z + amplitude.z * wave));
+                }
+                else if (SDL_strcmp(type, "motion.spin") == 0)
+                {
+                    const char *property = json_string(component, "property", "rotation_angle");
+                    const float rate = json_float(component, "rate", 1.0f);
+                    float angle = sdl3d_properties_get_float(actor->props, property, 0.0f) + rate * dt;
+                    const float two_pi = 6.28318530717958647692f;
+                    if (angle > two_pi || angle < -two_pi)
+                        angle = SDL_fmodf(angle, two_pi);
+                    sdl3d_properties_set_float(actor->props, property, angle);
+                }
             }
         }
     }
@@ -12373,6 +12632,26 @@ static void emit_sensor_signal(sdl3d_game_data_runtime *runtime, const sensor_en
             sdl3d_properties_set_string(payload, "other_actor_name", b->name);
     }
     sdl3d_signal_emit(bus, sensor->signal_id, payload);
+    sdl3d_properties_destroy(payload);
+}
+
+static void execute_sensor_actions(sdl3d_game_data_runtime *runtime, const sensor_entry *sensor,
+                                   sdl3d_registered_actor *a, sdl3d_registered_actor *b)
+{
+    if (runtime == NULL || sensor == NULL || !yyjson_is_arr(sensor->actions))
+        return;
+
+    sdl3d_properties *payload = sdl3d_properties_create();
+    if (payload != NULL)
+    {
+        if (a != NULL)
+            sdl3d_properties_set_string(payload, "actor_name", a->name);
+        if (b != NULL)
+            sdl3d_properties_set_string(payload, "other_actor_name", b->name);
+    }
+
+    for (size_t i = 0; i < yyjson_arr_size(sensor->actions); ++i)
+        (void)execute_one_action(runtime, yyjson_arr_get(sensor->actions, i), payload);
     sdl3d_properties_destroy(payload);
 }
 
@@ -12576,8 +12855,13 @@ static void update_sensor_contact_pair(sdl3d_game_data_runtime *runtime, sensor_
         return;
 
     const bool active = actors_contact_2d(actor, other);
-    if (active && !state->active)
+    const bool stay =
+        sensor->edge != NULL && (SDL_strcmp(sensor->edge, "stay") == 0 || SDL_strcmp(sensor->edge, "overlap") == 0);
+    if (active && (stay || !state->active))
+    {
         emit_sensor_signal(runtime, sensor, actor, other);
+        execute_sensor_actions(runtime, sensor, actor, other);
+    }
     state->active = active;
     state->seen = true;
 }
@@ -12663,6 +12947,105 @@ static void update_sensors(sdl3d_game_data_runtime *runtime)
     }
 }
 
+static float json_random_axis(sdl3d_game_data_runtime *runtime, yyjson_val *value, float fallback)
+{
+    if (yyjson_is_num(value))
+        return (float)yyjson_get_num(value);
+    if (yyjson_is_arr(value) && yyjson_arr_size(value) >= 2 && yyjson_is_num(yyjson_arr_get(value, 0)) &&
+        yyjson_is_num(yyjson_arr_get(value, 1)))
+    {
+        const float lo = (float)yyjson_get_num(yyjson_arr_get(value, 0));
+        const float hi = (float)yyjson_get_num(yyjson_arr_get(value, 1));
+        return lo + (hi - lo) * game_data_random01(runtime);
+    }
+    return fallback;
+}
+
+static sdl3d_vec3 wave_schedule_position(sdl3d_game_data_runtime *runtime, yyjson_val *schedule, sdl3d_vec3 fallback)
+{
+    yyjson_val *position = obj_get(schedule, "position");
+    if (yyjson_is_arr(position))
+        return json_vec3_value(position, fallback);
+    if (yyjson_is_obj(position))
+    {
+        return sdl3d_vec3_make(json_random_axis(runtime, obj_get(position, "x"), fallback.x),
+                               json_random_axis(runtime, obj_get(position, "y"), fallback.y),
+                               json_random_axis(runtime, obj_get(position, "z"), fallback.z));
+    }
+    return fallback;
+}
+
+static void update_wave_schedules(sdl3d_game_data_runtime *runtime, float dt)
+{
+    for (int i = 0; runtime != NULL && i < runtime->wave_schedule_count; ++i)
+    {
+        wave_schedule_entry *entry = &runtime->wave_schedules[i];
+        yyjson_val *schedule = entry->schedule;
+        yyjson_val *active_if = obj_get(schedule, "active_if");
+        if (active_if != NULL && !eval_data_condition(runtime, active_if, NULL))
+        {
+            entry->initialized = false;
+            entry->elapsed = 0.0f;
+            continue;
+        }
+
+        const float interval = SDL_max(json_float(schedule, "interval", 1.0f), 0.001f);
+        if (!entry->initialized)
+        {
+            entry->elapsed = -json_float(schedule, "initial_delay", interval);
+            entry->initialized = true;
+        }
+        entry->elapsed += dt;
+        if (entry->elapsed < 0.0f)
+            continue;
+
+        const char *max_active_tag = json_string(schedule, "max_active_tag", NULL);
+        if (max_active_tag != NULL)
+        {
+            sensor_actor_list active;
+            SDL_zero(active);
+            (void)collect_sensor_endpoint_actors(runtime, NULL, max_active_tag, &active);
+            const int max_active = json_int(schedule, "max_active", 0);
+            if (max_active > 0 && active.count >= max_active)
+            {
+                sensor_actor_list_free(&active);
+                entry->elapsed = SDL_min(entry->elapsed, interval);
+                continue;
+            }
+            sensor_actor_list_free(&active);
+        }
+
+        while (entry->elapsed >= 0.0f)
+        {
+            actor_pool_runtime *pool = find_actor_pool(runtime, json_string(schedule, "pool", NULL));
+            actor_pool_note_spawn_attempt(pool);
+            int actor_index = -1;
+            sdl3d_registered_actor *actor = actor_pool_allocate(runtime, pool, &actor_index);
+            if (pool == NULL || actor == NULL || actor_index < 0)
+            {
+                actor_pool_note_spawn_failure(pool, "exhausted");
+                break;
+            }
+            actor_pool_set_lifecycle_state(pool, actor, actor_index, ACTOR_LIFECYCLE_SPAWNING);
+            if (!initialize_pooled_actor(pool, actor, actor_index, true))
+            {
+                actor_pool_note_spawn_failure(pool, "initialize_failed");
+                break;
+            }
+            actor_set_position(actor, wave_schedule_position(runtime, schedule, actor->position));
+            apply_actor_spawn_properties(actor, obj_get(schedule, "properties"));
+            yyjson_val *velocity = obj_get(schedule, "velocity");
+            if (velocity != NULL)
+                sdl3d_properties_set_vec3(actor->props, "velocity",
+                                          json_vec3_value(velocity, sdl3d_vec3_make(0.0f, 0.0f, 0.0f)));
+            actor_pool_note_spawn_success(runtime, pool);
+            entry->elapsed -= interval;
+            if (!json_bool(schedule, "catch_up", false))
+                break;
+        }
+    }
+}
+
 bool sdl3d_game_data_update(sdl3d_game_data_runtime *runtime, float dt)
 {
     if (runtime == NULL || runtime->doc == NULL)
@@ -12675,6 +13058,7 @@ bool sdl3d_game_data_update(sdl3d_game_data_runtime *runtime, float dt)
     actor_lifecycle_defer_begin(runtime);
     update_control_components(runtime, root, dt);
     update_motion_components(runtime, root, dt);
+    update_wave_schedules(runtime, dt);
     update_sensors(runtime);
     actor_lifecycle_defer_end(runtime);
     return true;
@@ -13071,7 +13455,7 @@ bool sdl3d_game_data_load_asset_with_options(sdl3d_asset_resolver *assets, const
               load_actor_pools(runtime, root, error_buffer, error_buffer_size) &&
               load_input(runtime, root, error_buffer, error_buffer_size) &&
               load_timers(runtime, logic, error_buffer, error_buffer_size) && load_sensors(runtime, logic) &&
-              load_scripts(runtime, root, error_buffer, error_buffer_size) &&
+              load_wave_schedules(runtime, logic) && load_scripts(runtime, root, error_buffer, error_buffer_size) &&
               load_lua_adapters(runtime, root, error_buffer, error_buffer_size) &&
               load_bindings(runtime, logic, error_buffer, error_buffer_size) &&
               load_scenes(runtime, root, options, error_buffer, error_buffer_size);
@@ -15222,6 +15606,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     for (int i = 0; i < runtime->sensor_count; ++i)
         SDL_free(runtime->sensors[i].contact_pairs);
     SDL_free(runtime->sensors);
+    SDL_free(runtime->wave_schedules);
     SDL_free(runtime->input_bindings);
     SDL_free(runtime->ui_states);
     SDL_free(runtime->animations);

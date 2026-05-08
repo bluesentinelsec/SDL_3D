@@ -4,7 +4,8 @@ Runner-first horizontal side-scroller shoot 'em up proof of concept.
 
 This demo is intentionally authored as JSON and Lua data. It uses the generic
 `sdl3d_runner`, actor pools, dynamic lighting, emissive projectiles, particles,
-and Lua gameplay rules. It does not have a game-specific native host.
+wave schedules, collision actions, scrolling parallax geometry, and Lua
+gameplay rules. It does not have a game-specific native host.
 
 Run from the repository root:
 
@@ -25,3 +26,13 @@ Controls:
 - Enter or P: pause
 - Backspace: quit
 
+Data-driven proof points:
+
+- `projectile.fire` handles pooled player projectile spawning and cooldowns.
+- `logic.wave_schedules` spawn enemies, asteroids, and enemy fire without Lua
+  spawn loops.
+- `collision.on_overlap` handles projectile/threat/player overlaps with JSON
+  actions.
+- `motion.scroll_wrap` drives parallax background strips.
+- Pooled projectile and explosion archetypes carry their own light/effect
+  components.

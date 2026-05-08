@@ -19,17 +19,6 @@
       "name": "adapter.armalite.update",
       "script": "script.armalite",
       "function": "update"
-    },
-    {
-      "name": "adapter.armalite.fire_player_one",
-      "script": "script.armalite",
-      "function": "fire_player_one"
-    },
-    {
-      "name": "adapter.armalite.fire_player_two",
-      "script": "script.armalite",
-      "function": "fire_player_two"
     }
   ]
 }
-

@@ -15,7 +15,7 @@ data-authored games running on a generic SDL-powered runtime.
 ## Authoring
 
 - [Game Data JSON](game-data-json.md): root game schema, fragments, scenes,
-  actors, input, logic, networking, and validation.
+  actors, input, logic, arcade shooter primitives, networking, and validation.
 - [Gameplay Lua API](game-data-lua.md): Lua adapter model and runtime helper
   surface.
 - [Standard Options Package](standard-options.md): reusable display, audio,

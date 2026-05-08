@@ -35,6 +35,7 @@ sdl3d_add_embedded_asset_pack(pong_assets
 add_executable(pong_demo
     "${CMAKE_SOURCE_DIR}/tools/sdl3d_runner.c"
     "${CMAKE_SOURCE_DIR}/tools/sdl3d_runner_cli.c"
+    "${CMAKE_SOURCE_DIR}/tools/sdl3d_fused.c"
     "${CMAKE_SOURCE_DIR}/tools/sdl3d_runner_state.c")
 target_link_libraries(pong_demo PRIVATE SDL3D::sdl3d sdl3d_argtable3)
 target_link_libraries(pong_demo PRIVATE pong_assets)

@@ -6766,6 +6766,209 @@ TEST(GameDataRuntime, ContactSensorsMatchActivePooledActorTags)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, ArcadeShooterPrimitivesAreDataDriven)
+{
+    const std::filesystem::path dir = unique_test_dir("arcade_shooter_primitives");
+    write_text(dir / "arcade_shooter_primitives.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Arcade Shooter Primitives", "id": "test.arcade_shooter_primitives", "version": "0.1.0" },
+  "world": { "name": "world.arcade_shooter_primitives", "kind": "fixed_screen" },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "tags": ["player"],
+      "transform": { "position": [0.0, 0.0, 0.0] },
+      "properties": {
+        "fire_timer": { "type": "float", "value": 0.0 },
+        "fire_cooldown": { "type": "float", "value": 0.5 },
+        "half_width": { "type": "float", "value": 0.25 },
+        "half_height": { "type": "float", "value": 0.25 }
+      },
+      "components": [
+        { "type": "property.decay", "property": "fire_timer", "rate": 1.0, "target": 0.0, "min": 0.0 },
+        { "type": "collision.aabb", "half_extents": [0.25, 0.25, 0.1] }
+      ]
+    },
+    {
+      "name": "entity.game",
+      "active": true,
+      "properties": {
+        "score": { "type": "int", "value": 0 },
+        "game_over": { "type": "bool", "value": false }
+      }
+    },
+    {
+      "name": "entity.parallax",
+      "active": true,
+      "transform": { "position": [-0.9, 0.0, -0.2] },
+      "components": [
+        { "type": "motion.scroll_wrap", "axis": "x", "speed": -0.5, "min": -1.0, "max": 1.0 }
+      ]
+    }
+  ],
+  "actor_archetypes": [
+    {
+      "name": "archetype.player_shot",
+      "tags": ["projectile", "player_projectile"],
+      "properties": {
+        "radius": { "type": "float", "value": 0.2 },
+        "damage": { "type": "int", "value": 1 },
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.0] }
+      },
+      "components": [
+        { "type": "motion.velocity_2d", "property": "velocity" },
+        { "type": "light.point", "color": [0.25, 0.85, 1.0], "intensity": 2.5, "range": 2.0 }
+      ]
+    },
+    {
+      "name": "archetype.invader",
+      "tags": ["threat", "enemy"],
+      "properties": {
+        "half_width": { "type": "float", "value": 0.25 },
+        "half_height": { "type": "float", "value": 0.25 },
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.0] }
+      },
+      "components": [
+        { "type": "motion.velocity_2d", "property": "velocity" },
+        { "type": "collision.aabb", "half_extents": [0.25, 0.25, 0.1] }
+      ]
+    },
+    {
+      "name": "archetype.explosion",
+      "tags": ["effect"],
+      "properties": {
+        "radius": { "type": "float", "value": 0.3 }
+      },
+      "components": [
+        { "type": "light.point", "color": [1.0, 0.45, 0.08], "intensity": 4.0, "range": 2.6 },
+        { "type": "particles.emitter", "shape": "sphere", "radius": 0.2, "emit_rate": 10.0, "max_particles": 8 }
+      ]
+    }
+  ],
+  "actor_pools": [
+    { "name": "pool.player_shots", "archetype": "archetype.player_shot", "capacity": 2, "scene": "scene.play" },
+    { "name": "pool.invaders", "archetype": "archetype.invader", "capacity": 1, "scene": "scene.play" },
+    { "name": "pool.explosions", "archetype": "archetype.explosion", "capacity": 1, "scene": "scene.play" }
+  ],
+  "signals": ["signal.fire"],
+  "logic": {
+    "sensors": [
+      {
+        "name": "sensor.projectile_hits_threat",
+        "type": "collision.on_overlap",
+        "a_tag": "player_projectile",
+        "b_tag": "threat",
+        "edge": "enter",
+        "actions": [
+          { "type": "actor.despawn", "target_from_payload": "actor_name" },
+          { "type": "actor.spawn", "pool": "pool.explosions", "from_payload": "other_actor_name" },
+          { "type": "actor.despawn", "target_from_payload": "other_actor_name" },
+          { "type": "property.add", "target": "entity.game", "key": "score", "value": 10 }
+        ]
+      }
+    ],
+    "wave_schedules": [
+      {
+        "name": "wave.invaders",
+        "pool": "pool.invaders",
+        "interval": 0.1,
+        "initial_delay": 0.0,
+        "max_active_tag": "threat",
+        "max_active": 1,
+        "active_if": { "type": "property.compare", "target": "entity.game", "key": "game_over", "op": "==", "value": false },
+        "position": [0.0, 0.0, 0.0],
+        "velocity": [0.0, 0.0, 0.0]
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.fire",
+        "actions": [
+          {
+            "type": "projectile.fire",
+            "target": "entity.player",
+            "pool": "pool.player_shots",
+            "velocity": [2.0, 0.0, 0.0],
+            "cooldown_property": "fire_timer"
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "entities": ["entity.player", "entity.game", "entity.parallax"]
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "arcade_shooter_primitives.game.json").string().c_str(), session,
+                                          &runtime, error, sizeof(error)))
+        << error;
+
+    sdl3d_registered_actor *parallax = sdl3d_game_data_find_actor(runtime, "entity.parallax");
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    sdl3d_registered_actor *shot0 = sdl3d_game_data_find_actor(runtime, "pool.player_shots.0");
+    sdl3d_registered_actor *shot1 = sdl3d_game_data_find_actor(runtime, "pool.player_shots.1");
+    sdl3d_registered_actor *invader = sdl3d_game_data_find_actor(runtime, "pool.invaders.0");
+    sdl3d_registered_actor *explosion = sdl3d_game_data_find_actor(runtime, "pool.explosions.0");
+    ASSERT_NE(parallax, nullptr);
+    ASSERT_NE(player, nullptr);
+    ASSERT_NE(shot0, nullptr);
+    ASSERT_NE(shot1, nullptr);
+    ASSERT_NE(invader, nullptr);
+    ASSERT_NE(explosion, nullptr);
+    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.parallax"));
+    EXPECT_TRUE(parallax->active);
+
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.3f));
+    EXPECT_TRUE(invader->active);
+    expect_vec3_near(parallax->position, sdl3d_vec3_make(1.0f, 0.0f, -0.2f));
+
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), sdl3d_game_data_find_signal(runtime, "signal.fire"),
+                      nullptr);
+    EXPECT_TRUE(shot0->active);
+    EXPECT_FALSE(shot1->active);
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "fire_timer", 0.0f), 0.5f, 0.0001f);
+    expect_vec3_near(sdl3d_properties_get_vec3(shot0->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)),
+                     sdl3d_vec3_make(2.0f, 0.0f, 0.0f));
+
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), sdl3d_game_data_find_signal(runtime, "signal.fire"),
+                      nullptr);
+    EXPECT_FALSE(shot1->active);
+
+    EXPECT_EQ(sdl3d_game_data_world_light_count(runtime), 1);
+    sdl3d_light projectile_light{};
+    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 0, &projectile_light));
+    EXPECT_EQ(projectile_light.type, SDL3D_LIGHT_POINT);
+    EXPECT_NEAR(projectile_light.position.x, shot0->position.x, 0.0001f);
+
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_FALSE(shot0->active);
+    EXPECT_FALSE(invader->active);
+    EXPECT_TRUE(explosion->active);
+    sdl3d_registered_actor *game = sdl3d_game_data_find_actor(runtime, "entity.game");
+    ASSERT_NE(game, nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(game->props, "score", 0), 10);
+    EXPECT_EQ(sdl3d_game_data_world_light_count(runtime), 1);
+
+    ParticleCapture particles{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &particles));
+    EXPECT_EQ(particles.count, 1);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
 {
     const std::filesystem::path dir = unique_test_dir("actor_pool_validation");

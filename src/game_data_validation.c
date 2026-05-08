@@ -2504,12 +2504,21 @@ static bool is_vec_array(yyjson_val *value, size_t min_count)
     return true;
 }
 
+static bool is_wave_axis_value(yyjson_val *value)
+{
+    if (value == NULL || yyjson_is_num(value))
+        return true;
+    if (!yyjson_is_arr(value) || yyjson_arr_size(value) != 2)
+        return false;
+    return yyjson_is_num(yyjson_arr_get(value, 0)) && yyjson_is_num(yyjson_arr_get(value, 1));
+}
+
 static bool is_supported_component_type(const char *type)
 {
     const char *known[] = {
-        "adapter.controller", "collision.aabb", "collision.circle",   "control.axis_1d",
-        "motion.oscillate",   "motion.spin",    "motion.velocity_2d", "particles.emitter",
-        "property.decay",     "render.cube",    "render.sphere",
+        "adapter.controller", "collision.aabb",    "collision.circle", "control.axis_1d",    "light.directional",
+        "light.point",        "light.spot",        "motion.oscillate", "motion.scroll_wrap", "motion.spin",
+        "motion.velocity_2d", "particles.emitter", "property.decay",   "render.cube",        "render.sphere",
     };
 
     if (type == NULL)
@@ -3556,6 +3565,15 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 if (phase != NULL && !yyjson_is_num(phase))
                     return validation_error(ctx, path, "motion.oscillate phase must be a number");
             }
+            else if (SDL_strcmp(type, "motion.scroll_wrap") == 0)
+            {
+                if (!is_axis_name(json_string(component, "axis")))
+                    return validation_error(ctx, path, "motion.scroll_wrap requires axis x, y, or z");
+                if (!yyjson_is_num(obj_get(component, "speed")))
+                    return validation_error(ctx, path, "motion.scroll_wrap requires numeric speed");
+                if (!yyjson_is_num(obj_get(component, "min")) || !yyjson_is_num(obj_get(component, "max")))
+                    return validation_error(ctx, path, "motion.scroll_wrap requires numeric min and max");
+            }
             else if (SDL_strcmp(type, "motion.spin") == 0)
             {
                 yyjson_val *property = obj_get(component, "property");
@@ -3564,6 +3582,12 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 yyjson_val *rate = obj_get(component, "rate");
                 if (rate != NULL && !yyjson_is_num(rate))
                     return validation_error(ctx, path, "motion.spin rate must be a number");
+            }
+            else if (SDL_strncmp(type, "light.", 6) == 0)
+            {
+                yyjson_val *color = obj_get(component, "color");
+                if (color != NULL && !is_vec_array(color, 3))
+                    return validation_error(ctx, path, "light component color must be a vec3");
             }
             else if (SDL_strcmp(type, "render.cube") == 0 || SDL_strcmp(type, "render.sphere") == 0)
             {
@@ -3865,6 +3889,9 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         {
             return validation_error(ctx, json_path, "unknown actor.spawn from actor reference '%s'", from);
         }
+        yyjson_val *from_payload = obj_get(action, "from_payload");
+        if (from_payload != NULL && (!yyjson_is_str(from_payload) || yyjson_get_str(from_payload)[0] == '\0'))
+            return validation_error(ctx, json_path, "actor.spawn from_payload must be a non-empty string");
         yyjson_val *properties = obj_get(action, "properties");
         if (properties != NULL && !yyjson_is_obj(properties))
             return validation_error(ctx, json_path, "actor.spawn properties must be an object");
@@ -3872,10 +3899,23 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
     }
     if (SDL_strcmp(type, "actor.despawn") == 0)
     {
+        yyjson_val *target_value = obj_get(action, "target");
+        yyjson_val *target_from_payload_value = obj_get(action, "target_from_payload");
         const char *target = json_string(action, "target");
-        if (target == NULL || target[0] == '\0')
-            return validation_error(ctx, json_path, "actor.despawn requires a non-empty target");
-        if (!name_table_contains(&names->entities, target) && !name_table_contains(&names->actor_pool_actors, target))
+        const char *target_from_payload = json_string(action, "target_from_payload");
+        if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
+            return validation_error(ctx, json_path,
+                                    "actor.despawn requires exactly one of target or target_from_payload");
+        if (target_value != NULL && !yyjson_is_str(target_value))
+            return validation_error(ctx, json_path, "actor.despawn target must be a string");
+        if (target_from_payload_value != NULL && !yyjson_is_str(target_from_payload_value))
+            return validation_error(ctx, json_path, "actor.despawn target_from_payload must be a string");
+        if (target != NULL && target[0] == '\0')
+            return validation_error(ctx, json_path, "actor.despawn target must be non-empty");
+        if (target_from_payload != NULL && target_from_payload[0] == '\0')
+            return validation_error(ctx, json_path, "actor.despawn target_from_payload must be non-empty");
+        if (target != NULL && !name_table_contains(&names->entities, target) &&
+            !name_table_contains(&names->actor_pool_actors, target))
             return validation_error(ctx, json_path, "unknown actor.despawn target '%s'", target);
         yyjson_val *reason = obj_get(action, "reason");
         if (reason != NULL && !yyjson_is_str(reason))
@@ -3889,6 +3929,42 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *reason = obj_get(action, "reason");
         if (reason != NULL && !yyjson_is_str(reason))
             return validation_error(ctx, json_path, "actor.despawn_by_tag reason must be a string");
+        return true;
+    }
+    if (SDL_strcmp(type, "projectile.fire") == 0)
+    {
+        if (!require_ref(ctx, &names->actor_pools, "actor pool", json_string(action, "pool"), json_path))
+            return false;
+        yyjson_val *target_value = obj_get(action, "target");
+        yyjson_val *target_from_payload_value = obj_get(action, "target_from_payload");
+        const char *target = json_string(action, "target");
+        const char *target_from_payload = json_string(action, "target_from_payload");
+        if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
+            return validation_error(ctx, json_path,
+                                    "projectile.fire requires exactly one of target or target_from_payload");
+        if (target_value != NULL && !yyjson_is_str(target_value))
+            return validation_error(ctx, json_path, "projectile.fire target must be a string");
+        if (target != NULL && !require_actor_ref(ctx, names, target, json_path))
+            return false;
+        if (target_from_payload_value != NULL &&
+            (!yyjson_is_str(target_from_payload_value) || yyjson_get_str(target_from_payload_value)[0] == '\0'))
+            return validation_error(ctx, json_path, "projectile.fire target_from_payload must be a non-empty string");
+        yyjson_val *offset = obj_get(action, "offset");
+        if (offset != NULL && !is_vec_array(offset, 3))
+            return validation_error(ctx, json_path, "projectile.fire offset must be a vec3");
+        yyjson_val *velocity = obj_get(action, "velocity");
+        if (velocity != NULL && !is_vec_array(velocity, 3))
+            return validation_error(ctx, json_path, "projectile.fire velocity must be a vec3");
+        yyjson_val *cooldown = obj_get(action, "cooldown");
+        if (cooldown != NULL && !yyjson_is_num(cooldown))
+            return validation_error(ctx, json_path, "projectile.fire cooldown must be numeric");
+        yyjson_val *cooldown_property = obj_get(action, "cooldown_property");
+        if (cooldown_property != NULL &&
+            (!yyjson_is_str(cooldown_property) || yyjson_get_str(cooldown_property)[0] == '\0'))
+            return validation_error(ctx, json_path, "projectile.fire cooldown_property must be a non-empty string");
+        yyjson_val *properties = obj_get(action, "properties");
+        if (properties != NULL && !yyjson_is_obj(properties))
+            return validation_error(ctx, json_path, "projectile.fire properties must be an object");
         return true;
     }
     if (SDL_strcmp(type, "input.reset_bindings") == 0)
@@ -4308,7 +4384,7 @@ static bool validate_logic(validation_context *ctx, yyjson_val *root, validation
                 return false;
             continue;
         }
-        if (SDL_strcmp(type, "sensor.contact_2d") == 0)
+        if (SDL_strcmp(type, "sensor.contact_2d") == 0 || SDL_strcmp(type, "collision.on_overlap") == 0)
         {
             const char *a = json_string(sensor, "a");
             const char *b = json_string(sensor, "b");
@@ -4326,8 +4402,19 @@ static bool validate_logic(validation_context *ctx, yyjson_val *root, validation
                 return validation_error(ctx, path, "sensor.contact_2d a_tag must be non-empty");
             if (b_tag != NULL && b_tag[0] == '\0')
                 return validation_error(ctx, path, "sensor.contact_2d b_tag must be non-empty");
-            if (!require_ref(ctx, &names->signals, "signal", json_string(sensor, "on_enter"), path))
+            yyjson_val *actions = obj_get(sensor, "actions");
+            const char *on_enter = json_string(sensor, "on_enter");
+            if (actions != NULL && !validate_action_array(ctx, actions, path, names))
                 return false;
+            if (actions == NULL && !require_ref(ctx, &names->signals, "signal", on_enter, path))
+                return false;
+            yyjson_val *edge = obj_get(sensor, "edge");
+            if (edge != NULL && (!yyjson_is_str(edge) || (SDL_strcmp(yyjson_get_str(edge), "enter") != 0 &&
+                                                          SDL_strcmp(yyjson_get_str(edge), "stay") != 0 &&
+                                                          SDL_strcmp(yyjson_get_str(edge), "overlap") != 0)))
+            {
+                return validation_error(ctx, path, "collision edge must be enter, stay, or overlap");
+            }
             continue;
         }
         if (SDL_strcmp(type, "sensor.input_pressed") == 0)
@@ -4338,6 +4425,54 @@ static bool validate_logic(validation_context *ctx, yyjson_val *root, validation
             continue;
         }
         return validation_error(ctx, path, "unsupported sensor type '%s'", type);
+    }
+
+    yyjson_val *wave_schedules = obj_get(logic, "wave_schedules");
+    if (wave_schedules != NULL && !yyjson_is_arr(wave_schedules))
+        return validation_error(ctx, "$.logic.wave_schedules", "logic wave_schedules must be an array");
+    for (size_t i = 0; yyjson_is_arr(wave_schedules) && i < yyjson_arr_size(wave_schedules); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.logic.wave_schedules[%zu]", i);
+        yyjson_val *schedule = yyjson_arr_get(wave_schedules, i);
+        if (!yyjson_is_obj(schedule))
+            return validation_error(ctx, path, "wave schedule must be an object");
+        if (!require_ref(ctx, &names->actor_pools, "actor pool", json_string(schedule, "pool"), path))
+            return false;
+        if (!yyjson_is_num(obj_get(schedule, "interval")))
+            return validation_error(ctx, path, "wave schedule requires numeric interval");
+        yyjson_val *active_if = obj_get(schedule, "active_if");
+        if (active_if != NULL && !validate_data_condition(ctx, active_if, path, names))
+            return false;
+        yyjson_val *position = obj_get(schedule, "position");
+        if (position != NULL && !yyjson_is_arr(position) && !yyjson_is_obj(position))
+            return validation_error(ctx, path, "wave schedule position must be a vec3 array or axis object");
+        if (yyjson_is_arr(position) && !is_vec_array(position, 3))
+            return validation_error(ctx, path, "wave schedule position array must be a vec3");
+        if (yyjson_is_obj(position) &&
+            (!is_wave_axis_value(obj_get(position, "x")) || !is_wave_axis_value(obj_get(position, "y")) ||
+             !is_wave_axis_value(obj_get(position, "z"))))
+        {
+            return validation_error(ctx, path, "wave schedule position axes must be numbers or [min, max] arrays");
+        }
+        yyjson_val *velocity = obj_get(schedule, "velocity");
+        if (velocity != NULL && !is_vec_array(velocity, 3))
+            return validation_error(ctx, path, "wave schedule velocity must be a vec3");
+        yyjson_val *max_active_tag = obj_get(schedule, "max_active_tag");
+        if (max_active_tag != NULL && (!yyjson_is_str(max_active_tag) || yyjson_get_str(max_active_tag)[0] == '\0'))
+            return validation_error(ctx, path, "wave schedule max_active_tag must be a non-empty string");
+        yyjson_val *max_active = obj_get(schedule, "max_active");
+        if (max_active != NULL && !yyjson_is_int(max_active))
+            return validation_error(ctx, path, "wave schedule max_active must be an integer");
+        yyjson_val *initial_delay = obj_get(schedule, "initial_delay");
+        if (initial_delay != NULL && !yyjson_is_num(initial_delay))
+            return validation_error(ctx, path, "wave schedule initial_delay must be numeric");
+        yyjson_val *catch_up = obj_get(schedule, "catch_up");
+        if (catch_up != NULL && !yyjson_is_bool(catch_up))
+            return validation_error(ctx, path, "wave schedule catch_up must be bool");
+        yyjson_val *properties = obj_get(schedule, "properties");
+        if (properties != NULL && !yyjson_is_obj(properties))
+            return validation_error(ctx, path, "wave schedule properties must be an object");
     }
 
     yyjson_val *bindings = obj_get(logic, "bindings");

@@ -9,6 +9,8 @@
     "entity.field.base",
     "entity.field.horizon",
     "entity.field.ceiling",
+    "entity.field.parallax_far_a",
+    "entity.field.parallax_far_b",
     "entity.effect.star_fast",
     "entity.effect.nebula",
     "entity.player",
@@ -240,4 +242,3 @@
     ]
   }
 }
-
