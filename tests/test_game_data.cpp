@@ -269,6 +269,21 @@ std::string fixture_path(const char *filename)
     return std::string(SDL3D_GAME_DATA_FIXTURE_DIR) + "/" + filename;
 }
 
+std::filesystem::path demo_data_path(const char *demo_name, const char *data_file)
+{
+    return std::filesystem::path(SDL3D_DEMOS_ROOT) / demo_name / "data" / data_file;
+}
+
+std::filesystem::path pong_data_path()
+{
+    return demo_data_path("pong", "pong.game.json");
+}
+
+std::filesystem::path pacman_data_path()
+{
+    return demo_data_path("pacman", "pacman.game.json");
+}
+
 std::string read_fixture_file(const char *filename)
 {
     std::ifstream in(fixture_path(filename), std::ios::binary);
@@ -498,7 +513,8 @@ void load_pong_runtime(sdl3d_game_session **out_session, sdl3d_game_data_runtime
 
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, out_session));
     char error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, *out_session, out_runtime, error, sizeof(error)))
+    ASSERT_TRUE(
+        sdl3d_game_data_load_file(pong_data_path().string().c_str(), *out_session, out_runtime, error, sizeof(error)))
         << error;
     ASSERT_NE(*out_runtime, nullptr);
 }
@@ -520,7 +536,7 @@ std::filesystem::path copy_pong_data_with_storage_overrides(const std::filesyste
                                                             const std::filesystem::path &user_root,
                                                             const std::filesystem::path &cache_root)
 {
-    const std::filesystem::path source = std::filesystem::path(SDL3D_PONG_DATA_PATH).parent_path();
+    const std::filesystem::path source = std::filesystem::path(pong_data_path()).parent_path();
     const std::filesystem::path dest = dir / "pong_data";
     std::filesystem::copy(source, dest,
                           std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing);
@@ -1431,7 +1447,8 @@ TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.ball"), nullptr);
     EXPECT_NE(sdl3d_game_data_find_actor_with_tag(runtime, "ball"), nullptr);
@@ -1583,7 +1600,7 @@ TEST(GameDataRuntime, DataGameRuntimeOwnsGenericPongLifecycle)
     sdl3d_game_session *session = nullptr;
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
 
-    const std::filesystem::path data_path = SDL3D_PONG_DATA_PATH;
+    const std::filesystem::path data_path = pong_data_path();
     const std::string root = data_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + data_path.filename().string();
 
@@ -1743,7 +1760,7 @@ TEST(GameDataRuntime, DataGameRuntimeRefreshesInputProfilesOnGamepadHotplug)
         GTEST_SKIP() << "requires no pre-connected gamepads";
     }
 
-    const std::filesystem::path data_path = SDL3D_PONG_DATA_PATH;
+    const std::filesystem::path data_path = pong_data_path();
     const std::string root = data_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + data_path.filename().string();
 
@@ -1813,7 +1830,7 @@ TEST(GameDataRuntime, DataGameRuntimeNetworkLoopReplicatesPongInputStateAndContr
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &host_session));
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &client_session));
 
-    const std::filesystem::path data_path = SDL3D_PONG_DATA_PATH;
+    const std::filesystem::path data_path = pong_data_path();
     const std::string root = data_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + data_path.filename().string();
 
@@ -1984,7 +2001,7 @@ TEST(GameDataRuntime, ManagedNetworkRuntimeStartsPongMatchAndReplicatesState)
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &host_session));
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &client_session));
 
-    const std::filesystem::path data_path = SDL3D_PONG_DATA_PATH;
+    const std::filesystem::path data_path = pong_data_path();
     const std::string root = data_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + data_path.filename().string();
 
@@ -2147,7 +2164,7 @@ TEST(GameDataRuntime, AuthoredNetworkSessionFlowEventsDriveSceneTransitions)
     sdl3d_game_session *session = nullptr;
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
 
-    const std::filesystem::path data_path = SDL3D_PONG_DATA_PATH;
+    const std::filesystem::path data_path = pong_data_path();
     const std::string root = data_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + data_path.filename().string();
 
@@ -2212,7 +2229,7 @@ TEST(GameDataRuntime, AuthoredNetworkSessionFlowEventsDriveSceneTransitions)
 TEST(GameDataRuntime, NetworkSessionFlowPlaceholderMalformedBraceIsLiteral)
 {
     const std::filesystem::path dir = unique_test_dir("network_flow_malformed_placeholder");
-    const std::filesystem::path source = std::filesystem::path(SDL3D_PONG_DATA_PATH).parent_path();
+    const std::filesystem::path source = std::filesystem::path(pong_data_path()).parent_path();
     const std::filesystem::path dest = dir / "pong_data";
     std::filesystem::copy(source, dest,
                           std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing);
@@ -2637,7 +2654,8 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_game_data_skip_policy skip{};
     ASSERT_TRUE(sdl3d_game_data_get_active_skip_policy(runtime, &skip));
@@ -3146,7 +3164,8 @@ TEST(GameDataRuntime, ResolvesRuntimeUiStateForTextAndImages)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_game_data_ui_image logo{};
     bool saw_logo = false;
@@ -3261,7 +3280,8 @@ TEST(GameDataRuntime, DataAuthoredInputPolicyUpdatePhasesAndPresentationClocks)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     const int pause = sdl3d_game_data_find_action(runtime, "action.pause");
     const int scene_play = sdl3d_game_data_find_action(runtime, "action.scene.play");
@@ -3317,7 +3337,8 @@ TEST(GameDataRuntime, AppliesAuthoredPongPlayInputProfiles)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
@@ -3400,7 +3421,8 @@ TEST(GameDataRuntime, AppliesAuthoredPongGamepadAssignmentPolicies)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
@@ -3482,7 +3504,8 @@ TEST(GameDataRuntime, RefreshesActiveInputProfileWhenGamepadCountChanges)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
@@ -3626,7 +3649,8 @@ TEST(GameDataRuntime, MenuControllerConsumesAuthoredMenuInput)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
@@ -4399,7 +4423,8 @@ TEST(GameDataRuntime, PlaySceneMenusAreSelectedByAuthoredConditions)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
 
     sdl3d_game_data_ui_metrics metrics{};
@@ -4445,7 +4470,8 @@ TEST(GameDataRuntime, PauseMenuResumeConsumesSharedEnterWithoutRepausing)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
 
     sdl3d_game_data_app_flow flow{};
@@ -4475,7 +4501,8 @@ TEST(GameDataRuntime, OptionsMenuCanReturnToAuthoredScene)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
 
     sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
@@ -4528,7 +4555,8 @@ TEST(GameDataRuntime, OptionsSubmenusDoNotOverwriteCallerReturnScene)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -4575,7 +4603,8 @@ TEST(GameDataRuntime, DisplayOptionControlsApplyImmediately)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
 
     const int menu_select_signal = sdl3d_game_data_find_signal(runtime, "signal.ui.menu.select");
@@ -4615,7 +4644,8 @@ TEST(GameDataRuntime, AudioOptionSlidersApplyImmediatelyWithLeftRightInput)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.audio"));
 
     const int menu_select_signal = sdl3d_game_data_find_signal(runtime, "signal.ui.menu.select");
@@ -4693,7 +4723,8 @@ TEST(GameDataRuntime, KeyboardOptionsCaptureAndApplyAuthoredInputBindings)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.keyboard"));
 
     sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
@@ -4818,7 +4849,8 @@ TEST(GameDataRuntime, GamepadOptionsCaptureAndApplyAuthoredInputBindings)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.gamepad"));
 
     sdl3d_game_data_menu menu{};
@@ -4982,7 +5014,8 @@ TEST(GameDataRuntime, OptionsMenusUseGamepadAxesAndBack)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
 
     sdl3d_game_data_menu menu{};
@@ -5038,7 +5071,8 @@ TEST(GameDataRuntime, MouseOptionsCaptureAndApplyAuthoredInputBindings)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.mouse"));
 
     sdl3d_game_data_menu menu{};
@@ -5140,7 +5174,8 @@ TEST(GameDataRuntime, AuthoredSettingsResetRestoresSelectedDefaults)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings, nullptr);
@@ -5176,7 +5211,8 @@ TEST(GameDataRuntime, PongStandardOptionsUseImmediateApplyContract)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings, nullptr);
@@ -5220,7 +5256,8 @@ TEST(GameDataRuntime, AppFlowConsumesAuthoredLifecycleAndSceneShortcutControls)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_game_context ctx{};
     ctx.session = session;
@@ -5328,7 +5365,8 @@ TEST(GameDataRuntime, SceneFlowRunsAuthoredExitAndEnterTransitions)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
 
     sdl3d_game_data_scene_flow flow{};
@@ -5847,7 +5885,8 @@ TEST(GameDataRuntime, SignalBindingsResolveLuaAdaptersDeclaredInJson)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     const int serve_signal = sdl3d_game_data_find_signal(runtime, "signal.ball.serve");
     ASSERT_GE(serve_signal, 0);
@@ -5874,7 +5913,8 @@ TEST(GameDataRuntime, PongTitleAttractServeHasJitterAndMovesCpuPaddles)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
     ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, sdl3d_game_session_get_input(session), 0.0f));
@@ -5910,7 +5950,8 @@ TEST(GameDataRuntime, LuaAdapterReflectsBallFromPaddle)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
     sdl3d_registered_actor *paddle = sdl3d_game_data_find_actor(runtime, "entity.paddle.player");
@@ -5945,7 +5986,8 @@ TEST(GameDataRuntime, LuaAdapterAddsJitterAfterRepeatedFlatPaddleReflects)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
     sdl3d_registered_actor *left = sdl3d_game_data_find_actor(runtime, "entity.paddle.player");
@@ -5990,7 +6032,8 @@ TEST(GameDataRuntime, AttractBallReflectsApplyAuthoredRandomJitter)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball.attract");
     sdl3d_registered_actor *left = sdl3d_game_data_find_actor(runtime, "entity.paddle.attract_left");
@@ -6035,7 +6078,8 @@ TEST(GameDataRuntime, LuaControllerMovesCpuPaddleTowardBall)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
     sdl3d_registered_actor *cpu = sdl3d_game_data_find_actor(runtime, "entity.paddle.cpu");
@@ -6067,7 +6111,8 @@ TEST(GameDataRuntime, PongClientDoesNotStartServeTimer)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(sdl3d_game_data_register_adapter(runtime, "adapter.pong.configure_play_input",
                                                  configure_play_input_adapter, nullptr));
 
@@ -6093,7 +6138,8 @@ TEST(GameDataRuntime, PongMatchStateAndRestartAreAuthoredLogic)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_registered_actor *player_score = sdl3d_game_data_find_actor(runtime, "entity.score.player");
     sdl3d_registered_actor *cpu_score = sdl3d_game_data_find_actor(runtime, "entity.score.cpu");
@@ -6142,7 +6188,8 @@ TEST(GameDataRuntime, RegisteredCAdaptersOverrideLuaAdapters)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     AdapterCapture capture{};
     ASSERT_TRUE(sdl3d_game_data_register_adapter(runtime, "adapter.pong.serve_random", serve_adapter, &capture));
@@ -7269,7 +7316,7 @@ return rules
 
 TEST(GameDataRuntime, PacmanDemoLoadsAndRunsMazeCollection)
 {
-    const std::filesystem::path pacman_path = SDL3D_PACMAN_DATA_PATH;
+    const std::filesystem::path pacman_path = pacman_data_path();
     ASSERT_TRUE(std::filesystem::exists(pacman_path)) << pacman_path;
 
     sdl3d_game_session *session = nullptr;
@@ -8538,7 +8585,8 @@ TEST(GameDataRuntime, ValidatesPongDataWithoutDiagnostics)
     options.userdata = &capture;
 
     char error[512]{};
-    EXPECT_TRUE(sdl3d_game_data_validate_file(SDL3D_PONG_DATA_PATH, &options, error, sizeof(error))) << error;
+    EXPECT_TRUE(sdl3d_game_data_validate_file(pong_data_path().string().c_str(), &options, error, sizeof(error)))
+        << error;
     EXPECT_TRUE(capture.diagnostics.empty());
     EXPECT_EQ(error[0], '\0');
 }
@@ -9669,7 +9717,8 @@ TEST(GameDataRuntime, AuthoredDirectConnectActionsUpdateSceneState)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -9718,7 +9767,8 @@ TEST(GameDataRuntime, RuntimeOwnedHostSessionPublishesSceneState)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -9761,7 +9811,8 @@ TEST(GameDataRuntime, AuthoredDiscoveryConnectActionsUpdateSceneState)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -10989,7 +11040,8 @@ TEST(GameDataRuntime, AuthoredGoalSensorDrivesScoreBinding)
 
     char error[512]{};
     sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(SDL3D_PONG_DATA_PATH, session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
 
     sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
     sdl3d_registered_actor *cpu_score = sdl3d_game_data_find_actor(runtime, "entity.score.cpu");

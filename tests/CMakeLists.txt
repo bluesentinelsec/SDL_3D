@@ -143,7 +143,8 @@ if(ANDROID)
     target_compile_definitions(
         main
         PRIVATE
-            SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
+            SDL3D_DEMOS_ROOT="${CMAKE_SOURCE_DIR}/demos"
+            SDL3D_GAME_DATA_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/assets/game_data"
     )
     sdl3d_enable_sanitizers(main)
 elseif(IOS)
@@ -167,7 +168,8 @@ elseif(IOS)
     target_compile_definitions(
         sdl3d_ios_tests
         PRIVATE
-            SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
+            SDL3D_DEMOS_ROOT="${CMAKE_SOURCE_DIR}/demos"
+            SDL3D_GAME_DATA_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/assets/game_data"
     )
     sdl3d_enable_sanitizers(sdl3d_ios_tests)
 
@@ -222,20 +224,17 @@ else()
         target_compile_definitions(
             sdl3d_game_data_test
             PRIVATE
-                SDL3D_PONG_DATA_PATH="/pong/pong.game.json"
-                SDL3D_PACMAN_DATA_PATH="/pacman/pacman.game.json"
+                SDL3D_DEMOS_ROOT="/demos"
                 SDL3D_GAME_DATA_FIXTURE_DIR="/game_data"
         )
-        sdl3d_target_preload_asset_directory(sdl3d_game_data_test "${CMAKE_SOURCE_DIR}/demos/pong/data" "/pong")
-        sdl3d_target_preload_asset_directory(sdl3d_game_data_test "${CMAKE_SOURCE_DIR}/demos/pacman/data" "/pacman")
+        sdl3d_target_preload_asset_directory(sdl3d_game_data_test "${CMAKE_SOURCE_DIR}/demos" "/demos")
         sdl3d_target_preload_asset_directory(sdl3d_game_data_test "${CMAKE_SOURCE_DIR}/tests/assets/game_data"
                                              "/game_data")
     else()
         target_compile_definitions(
             sdl3d_game_data_test
             PRIVATE
-                SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
-                SDL3D_PACMAN_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pacman/data/pacman.game.json"
+                SDL3D_DEMOS_ROOT="${CMAKE_SOURCE_DIR}/demos"
                 SDL3D_GAME_DATA_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/assets/game_data"
         )
     endif()
@@ -255,7 +254,7 @@ else()
         target_compile_definitions(
             sdl3d_pong_multiplayer_test
             PRIVATE
-                SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
+                SDL3D_DEMOS_ROOT="${CMAKE_SOURCE_DIR}/demos"
         )
     endif()
     sdl3d_add_test(doom_backend_test test_doom_backend.cpp unit)
@@ -266,13 +265,13 @@ else()
     target_include_directories(doom_surveillance_test PRIVATE ${CMAKE_SOURCE_DIR}/demos/doom_level)
     sdl3d_add_test(game_data_json_test test_game_data_json.cpp unit)
     if(EMSCRIPTEN)
-        target_compile_definitions(game_data_json_test PRIVATE SDL3D_PONG_DATA_PATH="/pong/pong.game.json")
-        sdl3d_target_preload_asset_directory(game_data_json_test "${CMAKE_SOURCE_DIR}/demos/pong/data" "/pong")
+        target_compile_definitions(game_data_json_test PRIVATE SDL3D_DEMOS_ROOT="/demos")
+        sdl3d_target_preload_asset_directory(game_data_json_test "${CMAKE_SOURCE_DIR}/demos" "/demos")
     else()
         target_compile_definitions(
             game_data_json_test
             PRIVATE
-                SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
+                SDL3D_DEMOS_ROOT="${CMAKE_SOURCE_DIR}/demos"
         )
     endif()
     target_include_directories(game_data_json_test PRIVATE ${CMAKE_SOURCE_DIR}/vendor)
