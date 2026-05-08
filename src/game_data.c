@@ -297,6 +297,32 @@ typedef struct grid_actor_index
     int height;
 } grid_actor_index;
 
+typedef struct grid_pickup_kind_runtime
+{
+    char glyph;
+    char *kind;
+    int points;
+    float z;
+    float radius;
+    int rings;
+    int slices;
+    sdl3d_color color;
+    bool lighting;
+    bool emissive;
+} grid_pickup_kind_runtime;
+
+typedef struct grid_pickup_layer_runtime
+{
+    char *name;
+    const grid_map_runtime *map;
+    grid_pickup_kind_runtime *kinds;
+    int kind_count;
+    Uint8 *cells;
+    int active_count;
+    sdl3d_vec3 *render_positions;
+    int render_position_capacity;
+} grid_pickup_layer_runtime;
+
 typedef enum actor_pool_exhaustion_policy
 {
     ACTOR_POOL_EXHAUST_FAIL,
@@ -448,6 +474,8 @@ typedef struct sdl3d_game_data_runtime
     grid_actor_index *grid_actor_indices;
     int grid_actor_index_count;
     int grid_actor_index_capacity;
+    grid_pickup_layer_runtime *grid_pickup_layers;
+    int grid_pickup_layer_count;
     actor_pool_runtime *actor_pools;
     int actor_pool_count;
     runtime_direct_connect_session *direct_connect_sessions;
@@ -689,6 +717,10 @@ static void grid_actor_index_clear(sdl3d_game_data_runtime *runtime, const grid_
                                    const char *pool_name);
 static sdl3d_registered_actor *grid_actor_index_find(sdl3d_game_data_runtime *runtime, const char *map_name,
                                                      const char *pool_name, int col, int row);
+static grid_pickup_layer_runtime *find_grid_pickup_layer(sdl3d_game_data_runtime *runtime, const char *name);
+static bool grid_pickup_layer_reset(sdl3d_game_data_runtime *runtime, grid_pickup_layer_runtime *layer);
+static bool grid_pickup_layer_collect_at(sdl3d_game_data_runtime *runtime, grid_pickup_layer_runtime *layer, int col,
+                                         int row, grid_pickup_kind_runtime *out_kind);
 
 static sdl3d_game_data_runtime *lua_runtime(lua_State *lua)
 {
@@ -1374,6 +1406,65 @@ static int lua_grid_actor_at(lua_State *lua)
     return 1;
 }
 
+static void lua_push_grid_pickup(lua_State *lua, const grid_pickup_kind_runtime *kind, int col, int row)
+{
+    if (kind == NULL)
+    {
+        lua_pushnil(lua);
+        return;
+    }
+    lua_newtable(lua);
+    lua_pushstring(lua, kind->kind != NULL ? kind->kind : "");
+    lua_setfield(lua, -2, "kind");
+    lua_pushinteger(lua, kind->points);
+    lua_setfield(lua, -2, "points");
+    lua_pushinteger(lua, col);
+    lua_setfield(lua, -2, "col");
+    lua_pushinteger(lua, row);
+    lua_setfield(lua, -2, "row");
+}
+
+static int lua_grid_pickup_at(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    grid_pickup_layer_runtime *layer = find_grid_pickup_layer(runtime, luaL_checkstring(lua, 1));
+    int col = (int)luaL_checkinteger(lua, 2);
+    int row = (int)luaL_checkinteger(lua, 3);
+    if (layer == NULL || layer->cells == NULL || !grid_map_normalize_cell(layer->map, &col, &row))
+    {
+        lua_pushnil(lua);
+        return 1;
+    }
+    const Uint8 kind_cell = layer->cells[row * layer->map->width + col];
+    lua_push_grid_pickup(
+        lua, kind_cell > 0 && kind_cell <= (Uint8)layer->kind_count ? &layer->kinds[kind_cell - 1] : NULL, col, row);
+    return 1;
+}
+
+static int lua_grid_collect_at(lua_State *lua)
+{
+    sdl3d_game_data_runtime *runtime = lua_runtime(lua);
+    grid_pickup_layer_runtime *layer = find_grid_pickup_layer(runtime, luaL_checkstring(lua, 1));
+    int col = (int)luaL_checkinteger(lua, 2);
+    int row = (int)luaL_checkinteger(lua, 3);
+    grid_pickup_kind_runtime kind;
+    SDL_zero(kind);
+    if (!grid_pickup_layer_collect_at(runtime, layer, col, row, &kind))
+    {
+        lua_pushnil(lua);
+        return 1;
+    }
+    lua_push_grid_pickup(lua, &kind, col, row);
+    return 1;
+}
+
+static int lua_grid_pickup_count(lua_State *lua)
+{
+    grid_pickup_layer_runtime *layer = find_grid_pickup_layer(lua_runtime(lua), luaL_checkstring(lua, 1));
+    lua_pushinteger(lua, layer != NULL ? layer->active_count : 0);
+    return 1;
+}
+
 static int lua_log(lua_State *lua)
 {
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "[lua] %s", luaL_checkstring(lua, 1));
@@ -2035,6 +2126,21 @@ static void install_lua_helpers(lua_State *lua)
         "            end\n"
         "            return sdl3d.grid_actor_at(map, pool, col, row)\n"
         "        end,\n",
+        "        grid_pickup_at = function(self_or_layer, maybe_layer, maybe_col, maybe_row)\n"
+        "            if type(self_or_layer) == 'table' and self_or_layer.adapter ~= nil then\n"
+        "                return sdl3d.grid_pickup_at(maybe_layer, maybe_col, maybe_row)\n"
+        "            end\n"
+        "            return sdl3d.grid_pickup_at(self_or_layer, maybe_layer, maybe_col)\n"
+        "        end,\n"
+        "        grid_collect_at = function(self_or_layer, maybe_layer, maybe_col, maybe_row)\n"
+        "            if type(self_or_layer) == 'table' and self_or_layer.adapter ~= nil then\n"
+        "                return sdl3d.grid_collect_at(maybe_layer, maybe_col, maybe_row)\n"
+        "            end\n"
+        "            return sdl3d.grid_collect_at(self_or_layer, maybe_layer, maybe_col)\n"
+        "        end,\n"
+        "        grid_pickup_count = function(self_or_layer, maybe_layer)\n"
+        "            return sdl3d.grid_pickup_count(maybe_layer or self_or_layer)\n"
+        "        end,\n",
         "        state_get = function(self_or_key, maybe_key, fallback)\n"
         "            if type(self_or_key) == 'table' and self_or_key.adapter ~= nil then\n"
         "                return sdl3d.state_get(maybe_key, fallback)\n"
@@ -2155,6 +2261,9 @@ static void register_lua_api(sdl3d_game_data_runtime *runtime, sdl3d_script_engi
     SDL3D_LUA_BIND("grid_neighbors", lua_grid_neighbors);
     SDL3D_LUA_BIND("grid_next_step", lua_grid_next_step);
     SDL3D_LUA_BIND("grid_actor_at", lua_grid_actor_at);
+    SDL3D_LUA_BIND("grid_pickup_at", lua_grid_pickup_at);
+    SDL3D_LUA_BIND("grid_collect_at", lua_grid_collect_at);
+    SDL3D_LUA_BIND("grid_pickup_count", lua_grid_pickup_count);
     SDL3D_LUA_BIND("log", lua_log);
     SDL3D_LUA_BIND("storage_read", lua_storage_read);
     SDL3D_LUA_BIND("storage_write", lua_storage_write);
@@ -2454,6 +2563,63 @@ static sdl3d_registered_actor *grid_actor_index_find(sdl3d_game_data_runtime *ru
     return actor;
 }
 
+static grid_pickup_layer_runtime *find_grid_pickup_layer(sdl3d_game_data_runtime *runtime, const char *name)
+{
+    if (runtime == NULL || name == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->grid_pickup_layer_count; ++i)
+    {
+        if (runtime->grid_pickup_layers[i].name != NULL && SDL_strcmp(runtime->grid_pickup_layers[i].name, name) == 0)
+            return &runtime->grid_pickup_layers[i];
+    }
+    return NULL;
+}
+
+static bool grid_pickup_layer_reset(sdl3d_game_data_runtime *runtime, grid_pickup_layer_runtime *layer)
+{
+    (void)runtime;
+    if (layer == NULL || layer->map == NULL || layer->cells == NULL)
+        return false;
+    const int count = layer->map->width * layer->map->height;
+    SDL_memset(layer->cells, 0, (size_t)count * sizeof(*layer->cells));
+    layer->active_count = 0;
+    for (int row = 0; row < layer->map->height; ++row)
+    {
+        for (int col = 0; col < layer->map->width; ++col)
+        {
+            const char glyph = grid_map_cell(layer->map, col, row);
+            for (int kind_index = 0; kind_index < layer->kind_count; ++kind_index)
+            {
+                if (layer->kinds[kind_index].glyph != glyph)
+                    continue;
+                layer->cells[row * layer->map->width + col] = (Uint8)(kind_index + 1);
+                layer->active_count++;
+                break;
+            }
+        }
+    }
+    return true;
+}
+
+static bool grid_pickup_layer_collect_at(sdl3d_game_data_runtime *runtime, grid_pickup_layer_runtime *layer, int col,
+                                         int row, grid_pickup_kind_runtime *out_kind)
+{
+    (void)runtime;
+    if (out_kind != NULL)
+        SDL_zero(*out_kind);
+    if (layer == NULL || layer->map == NULL || layer->cells == NULL || !grid_map_normalize_cell(layer->map, &col, &row))
+        return false;
+    Uint8 *cell = &layer->cells[row * layer->map->width + col];
+    if (*cell == 0 || *cell > (Uint8)layer->kind_count)
+        return false;
+    if (out_kind != NULL)
+        *out_kind = layer->kinds[*cell - 1];
+    *cell = 0;
+    if (layer->active_count > 0)
+        layer->active_count--;
+    return true;
+}
+
 static bool grid_map_next_step(const grid_map_runtime *map, int start_col, int start_row, int goal_col, int goal_row,
                                int *out_col, int *out_row)
 {
@@ -2636,6 +2802,75 @@ static sdl3d_color json_color_value(yyjson_val *value, sdl3d_color fallback)
 static sdl3d_color json_color(yyjson_val *object, const char *key, sdl3d_color fallback)
 {
     return json_color_value(obj_get(object, key), fallback);
+}
+
+static bool load_grid_pickup_layers(sdl3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                                    int error_buffer_size)
+{
+    yyjson_val *layers = obj_get(root, "grid_pickup_layers");
+    if (layers == NULL)
+        return true;
+    if (!yyjson_is_arr(layers))
+    {
+        set_error(error_buffer, error_buffer_size, "grid_pickup_layers must be an array");
+        return false;
+    }
+
+    runtime->grid_pickup_layer_count = (int)yyjson_arr_size(layers);
+    runtime->grid_pickup_layers = (grid_pickup_layer_runtime *)SDL_calloc((size_t)runtime->grid_pickup_layer_count,
+                                                                          sizeof(*runtime->grid_pickup_layers));
+    if (runtime->grid_pickup_layers == NULL && runtime->grid_pickup_layer_count > 0)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate grid pickup layers");
+        return false;
+    }
+
+    for (int i = 0; i < runtime->grid_pickup_layer_count; ++i)
+    {
+        yyjson_val *layer_json = yyjson_arr_get(layers, (size_t)i);
+        const grid_map_runtime *map = find_grid_map(runtime, json_string(layer_json, "map", NULL));
+        yyjson_val *kinds = obj_get(layer_json, "kinds");
+        if (map == NULL || !yyjson_is_arr(kinds) || yyjson_arr_size(kinds) <= 0)
+        {
+            set_error(error_buffer, error_buffer_size, "grid pickup layer requires a map and non-empty kinds");
+            return false;
+        }
+
+        grid_pickup_layer_runtime *layer = &runtime->grid_pickup_layers[i];
+        layer->name = SDL_strdup(json_string(layer_json, "name", ""));
+        layer->map = map;
+        layer->kind_count = (int)yyjson_arr_size(kinds);
+        layer->kinds = (grid_pickup_kind_runtime *)SDL_calloc((size_t)layer->kind_count, sizeof(*layer->kinds));
+        layer->cells = (Uint8 *)SDL_calloc((size_t)map->width * (size_t)map->height, sizeof(*layer->cells));
+        if (layer->name == NULL || layer->kinds == NULL || layer->cells == NULL)
+        {
+            set_error(error_buffer, error_buffer_size, "failed to allocate grid pickup layer data");
+            return false;
+        }
+
+        for (int kind_index = 0; kind_index < layer->kind_count; ++kind_index)
+        {
+            yyjson_val *kind_json = yyjson_arr_get(kinds, (size_t)kind_index);
+            const char *glyph = json_string(kind_json, "glyph", NULL);
+            grid_pickup_kind_runtime *kind = &layer->kinds[kind_index];
+            kind->glyph = glyph != NULL ? glyph[0] : '\0';
+            kind->kind = SDL_strdup(json_string(kind_json, "kind", ""));
+            kind->points = json_int(kind_json, "points", 0);
+            kind->z = json_float(kind_json, "z", 0.0f);
+            kind->radius = json_float(kind_json, "radius", 0.1f);
+            kind->rings = SDL_max(json_int(kind_json, "rings", 8), 3);
+            kind->slices = SDL_max(json_int(kind_json, "slices", 10), 3);
+            kind->color = json_color(kind_json, "color", (sdl3d_color){255, 255, 255, 255});
+            kind->lighting = json_bool(kind_json, "lighting", true);
+            kind->emissive = json_bool(kind_json, "emissive", false);
+            if (kind->kind == NULL)
+            {
+                set_error(error_buffer, error_buffer_size, "failed to allocate grid pickup kind data");
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 static yyjson_val *runtime_root(const sdl3d_game_data_runtime *runtime)
@@ -4861,6 +5096,66 @@ static bool emit_actor_render_primitives(const sdl3d_game_data_runtime *runtime,
     return true;
 }
 
+static bool emit_grid_pickup_layer_render_primitives(const sdl3d_game_data_runtime *runtime,
+                                                     grid_pickup_layer_runtime *layer,
+                                                     sdl3d_game_data_render_primitive_fn callback, void *userdata)
+{
+    if (runtime == NULL || layer == NULL || layer->map == NULL || layer->cells == NULL || callback == NULL ||
+        layer->active_count <= 0)
+    {
+        return true;
+    }
+
+    if (layer->render_position_capacity < layer->active_count)
+    {
+        sdl3d_vec3 *positions =
+            (sdl3d_vec3 *)SDL_realloc(layer->render_positions, (size_t)layer->active_count * sizeof(*positions));
+        if (positions == NULL)
+            return false;
+        layer->render_positions = positions;
+        layer->render_position_capacity = layer->active_count;
+    }
+
+    for (int kind_index = 0; kind_index < layer->kind_count; ++kind_index)
+    {
+        const grid_pickup_kind_runtime *kind = &layer->kinds[kind_index];
+        int count = 0;
+        for (int row = 0; row < layer->map->height; ++row)
+        {
+            for (int col = 0; col < layer->map->width; ++col)
+            {
+                if (layer->cells[row * layer->map->width + col] != (Uint8)(kind_index + 1))
+                    continue;
+                sdl3d_vec3 position;
+                if (!grid_map_cell_to_world(layer->map, col, row, &position))
+                    continue;
+                position.z = kind->z;
+                layer->render_positions[count++] = position;
+            }
+        }
+        if (count <= 0)
+            continue;
+
+        sdl3d_game_data_render_primitive primitive;
+        SDL_zero(primitive);
+        primitive.entity_name = layer->name;
+        primitive.type = SDL3D_GAME_DATA_RENDER_SPHERE_BATCH;
+        primitive.radius = kind->radius;
+        primitive.rings = kind->rings;
+        primitive.slices = kind->slices;
+        primitive.color = kind->color;
+        primitive.lighting_enabled = kind->lighting;
+        primitive.emissive = kind->emissive;
+        primitive.emissive_color =
+            kind->emissive ? sdl3d_vec3_make(0.25f, 0.22f, 0.08f) : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+        primitive.instances = layer->render_positions;
+        primitive.instance_count = count;
+        if (!callback(userdata, &primitive))
+            return false;
+    }
+    return true;
+}
+
 static bool for_each_render_primitive_internal(const sdl3d_game_data_runtime *runtime,
                                                const sdl3d_game_data_render_eval *eval,
                                                sdl3d_game_data_render_primitive_fn callback, void *userdata)
@@ -4897,6 +5192,11 @@ static bool for_each_render_primitive_internal(const sdl3d_game_data_runtime *ru
                 continue;
             keep_iterating = emit_actor_render_primitives(runtime, eval, actor, components, callback, userdata);
         }
+    }
+    for (int layer_index = 0; keep_iterating && layer_index < runtime->grid_pickup_layer_count; ++layer_index)
+    {
+        keep_iterating = emit_grid_pickup_layer_render_primitives(
+            runtime, &mutable_runtime->grid_pickup_layers[layer_index], callback, userdata);
     }
     actor_lifecycle_defer_end(mutable_runtime);
     return true;
@@ -12305,6 +12605,18 @@ static bool execute_grid_spawn_runs_from_glyphs_action(sdl3d_game_data_runtime *
     return ok;
 }
 
+static bool execute_grid_pickup_layer_reset_action(sdl3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    grid_pickup_layer_runtime *layer = find_grid_pickup_layer(runtime, json_string(action, "layer", NULL));
+    if (layer == NULL || !grid_pickup_layer_reset(runtime, layer))
+        return false;
+
+    const char *count_key = json_string(action, "output_count_key", NULL);
+    if (count_key != NULL && runtime != NULL && runtime->scene_state != NULL)
+        sdl3d_properties_set_int(runtime->scene_state, count_key, layer->active_count);
+    return true;
+}
+
 static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const sdl3d_properties *payload)
 {
     const char *type = json_string(action, "type", "");
@@ -12565,6 +12877,8 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
         return execute_grid_spawn_from_glyphs_action(runtime, action);
     if (SDL_strcmp(type, "grid.spawn_runs_from_glyphs") == 0)
         return execute_grid_spawn_runs_from_glyphs_action(runtime, action);
+    if (SDL_strcmp(type, "grid.pickup_layer.reset") == 0)
+        return execute_grid_pickup_layer_reset_action(runtime, action);
 
     if (SDL_strcmp(type, "transform.set_position") == 0)
     {
@@ -13367,6 +13681,14 @@ static void update_motion_components(sdl3d_game_data_runtime *runtime, yyjson_va
                     actor_set_position(actor, sdl3d_vec3_make(actor->position.x + velocity.x * dt,
                                                               actor->position.y + velocity.y * dt, actor->position.z));
                 }
+                else if (SDL_strcmp(type, "motion.velocity_3d") == 0)
+                {
+                    const char *property = json_string(component, "property", "velocity");
+                    const sdl3d_vec3 velocity = actor_vec_property(actor, property);
+                    actor_set_position(actor, sdl3d_vec3_make(actor->position.x + velocity.x * dt,
+                                                              actor->position.y + velocity.y * dt,
+                                                              actor->position.z + velocity.z * dt));
+                }
                 else if (SDL_strcmp(type, "motion.scroll_wrap") == 0)
                 {
                     const int axis = axis_index(json_string(component, "axis", "x"));
@@ -13527,6 +13849,26 @@ static void update_motion_components(sdl3d_game_data_runtime *runtime, yyjson_va
                     if (angle > two_pi || angle < -two_pi)
                         angle = SDL_fmodf(angle, two_pi);
                     sdl3d_properties_set_float(actor->props, property, angle);
+                }
+                else if (SDL_strcmp(type, "lifecycle.ttl") == 0)
+                {
+                    const char *age_property = json_string(component, "age_property", "age");
+                    const char *ttl_property = json_string(component, "ttl_property", "ttl");
+                    const float ttl =
+                        ttl_property != NULL && ttl_property[0] != '\0'
+                            ? sdl3d_properties_get_float(actor->props, ttl_property, json_float(component, "ttl", 0.0f))
+                            : json_float(component, "ttl", 0.0f);
+                    const float age = sdl3d_properties_get_float(actor->props, age_property, 0.0f) + dt;
+                    sdl3d_properties_set_float(actor->props, age_property, age);
+                    if (ttl > 0.0f && age >= ttl)
+                    {
+                        if (actor_id > 0)
+                            (void)actor_pool_request_despawn(runtime, &runtime->actor_pools[pool_index], actor, i,
+                                                             json_string(component, "reason", "ttl"));
+                        else
+                            actor->active = false;
+                        break;
+                    }
                 }
             }
         }
@@ -14437,6 +14779,7 @@ bool sdl3d_game_data_load_asset_with_options(sdl3d_asset_resolver *assets, const
     bool ok = load_signals(runtime, root, error_buffer, error_buffer_size) &&
               load_entities(runtime, root, error_buffer, error_buffer_size) &&
               load_grid_maps(runtime, root, error_buffer, error_buffer_size) &&
+              load_grid_pickup_layers(runtime, root, error_buffer, error_buffer_size) &&
               load_actor_pools(runtime, root, error_buffer, error_buffer_size) &&
               load_input(runtime, root, error_buffer, error_buffer_size) &&
               load_timers(runtime, logic, error_buffer, error_buffer_size) && load_sensors(runtime, logic) &&
@@ -16558,6 +16901,15 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
         SDL_free(runtime->grid_actor_indices[i].pool);
         SDL_free(runtime->grid_actor_indices[i].actors);
     }
+    for (int i = 0; i < runtime->grid_pickup_layer_count; ++i)
+    {
+        SDL_free(runtime->grid_pickup_layers[i].name);
+        for (int kind_index = 0; kind_index < runtime->grid_pickup_layers[i].kind_count; ++kind_index)
+            SDL_free(runtime->grid_pickup_layers[i].kinds[kind_index].kind);
+        SDL_free(runtime->grid_pickup_layers[i].kinds);
+        SDL_free(runtime->grid_pickup_layers[i].cells);
+        SDL_free(runtime->grid_pickup_layers[i].render_positions);
+    }
     for (int i = 0; i < runtime->actor_pool_count; ++i)
     {
         SDL_free(runtime->actor_pools[i].name);
@@ -16612,6 +16964,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->collections);
     SDL_free(runtime->grid_maps);
     SDL_free(runtime->grid_actor_indices);
+    SDL_free(runtime->grid_pickup_layers);
     SDL_free(runtime->actor_pools);
     SDL_free(runtime->direct_connect_sessions);
     SDL_free(runtime->host_sessions);

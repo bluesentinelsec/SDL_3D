@@ -57,6 +57,13 @@
             ]
           },
           {
+            "name": "action.camera.toggle",
+            "bindings": [
+              { "device": "keyboard", "key": "B" },
+              { "device": "gamepad", "button": "RIGHT_SHOULDER" }
+            ]
+          },
+          {
             "name": "action.exit",
             "bindings": [
               { "device": "keyboard", "key": "BACKSPACE" },

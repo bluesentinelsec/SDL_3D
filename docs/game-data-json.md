@@ -40,6 +40,7 @@ Every root game file is a JSON object.
 | `ui` | no | Reusable UI descriptors. |
 | `entities` | no | Named actors with tags, transforms, properties, and components. |
 | `grid_maps` | no | Authored tile grids for maze, board, and grid-locked games. |
+| `grid_pickup_layers` | no | Dense grid-indexed pickup layers rendered and collected without one actor per pickup. |
 | `actor_archetypes` | no | Templates used by runtime actor pools. |
 | `actor_pools` | no | Preallocated spawn/despawn pools. |
 | `signals` | no | Authored signal names. |
@@ -160,6 +161,23 @@ The optional `app` object configures the managed loop before the window exists:
   }
 }
 ```
+
+## World Cameras
+
+`world.cameras` defines reusable render cameras by name. Scenes can select a
+camera with their `camera` field, and logic actions can switch cameras with
+`camera.set` or `camera.toggle`.
+
+Camera types:
+
+- `orthographic`: fixed position/target/up with `size`.
+- `perspective`: fixed position/target/up with `fovy`.
+- `chase`: follows an actor named by `target_entity`. The forward vector comes
+  from a Vec3 actor property such as `velocity` or an authored
+  `camera_forward`, with `fallback_forward` used when that property is near
+  zero. Use `chase_distance: 0` for actor-perspective cameras and larger
+  values for behind-the-actor chase cameras.
+- `adapter`: delegates camera ownership to a native or Lua adapter.
 
 ## Storage And Persistence
 
@@ -418,21 +436,37 @@ turns and wall blocking:
 at the next cell center if the target cell is walkable, otherwise it continues
 in the current direction when possible.
 
-`grid.spawn_from_glyphs` populates actor pools from map glyphs. This is useful
-for pellets, power-ups, pickups, destructible tiles, and spawn markers:
+`grid_pickup_layers` represent dense collectible maps as a runtime bitset
+instead of one actor per pickup. Each layer references a `grid_maps` entry and
+declares the glyphs that should be collectible and batched for rendering:
 
 ```json
 {
-  "type": "grid.spawn_from_glyphs",
-  "map": "map.maze",
-  "output_count_key": "remaining_collectibles",
-  "spawns": [
-    { "glyph": ".", "pool": "pool.pellets", "properties": { "points": 10 } },
-    { "glyph": "o", "pool": "pool.power_pellets", "properties": { "points": 50 } }
+  "grid_pickup_layers": [
+    {
+      "name": "pickup.collectibles",
+      "map": "map.maze",
+      "kinds": [
+        { "glyph": ".", "kind": "pellet", "points": 10, "radius": 0.07 },
+        { "glyph": "o", "kind": "power", "points": 50, "radius": 0.14 }
+      ]
+    }
   ]
 }
 ```
 
+Reset a layer from its map glyphs with `grid.pickup_layer.reset`; Lua can then
+use `ctx:grid_pickup_at(...)`, `ctx:grid_collect_at(...)`, and
+`ctx:grid_pickup_count(...)` for O(1) pickup checks without scanning actors.
+Pickup layers are intended for dense pellets, coins, keys, and similar static
+collectibles. Use actor pools when each pickup needs independent behavior,
+collision shape state, or per-actor scriptable lifecycle.
+Pickup layer rendering emits a batched sphere primitive so a dense grid costs
+one draw submission per pickup kind instead of one actor and draw submission per
+cell.
+
+`grid.spawn_from_glyphs` populates actor pools from map glyphs. This is useful
+for pickups that need actor identity, destructible tiles, and spawn markers.
 Spawned actors receive `grid_map`, `grid_col`, `grid_row`, and `grid_glyph`
 properties in addition to their archetype defaults and authored overrides.
 Use pool scene-exit policies or `actor.despawn_by_tag` to reset grids between
@@ -468,6 +502,12 @@ Reusable components include:
 
 - `motion.velocity_2d`: moves an actor by a `vec3` velocity property on the x/y
   plane.
+- `motion.velocity_3d`: moves an actor by a `vec3` velocity property on all
+  axes. This is useful for effect actors, projectiles, particles represented as
+  pooled actors, and other simple kinematic objects.
+- `lifecycle.ttl`: increments an age property every update and despawns pooled
+  actors once the configured TTL is reached. Use this for short-lived bursts and
+  effects instead of scanning active actors in Lua.
 - `motion.grid_agent`: moves an actor along an authored `grid_maps` maze with
   queued turns, walkability checks, center snapping, and optional map wrapping.
 - `motion.scroll_wrap`: scrolls an actor along one axis and wraps to the

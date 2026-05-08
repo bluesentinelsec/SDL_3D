@@ -57,10 +57,19 @@ local function set_grid_direction(actor, dx, dy)
     actor:set_int("grid_next_dir_y", dy)
 end
 
+local function sync_player_camera_forward(actor)
+    if actor == nil then
+        return
+    end
+
+    actor:set_vec3("camera_forward", Vec3(actor:get_int("grid_dir_x", 1), actor:get_int("grid_dir_y", 0), 0.0))
+end
+
 local function reset_pacman(ctx)
     local actor = ctx:actor("entity.pacman")
     set_cell_actor(ctx, actor, PACMAN_START.col, PACMAN_START.row, PACMAN_Z)
     set_grid_direction(actor, PACMAN_START.dx, PACMAN_START.dy)
+    sync_player_camera_forward(actor)
     if actor ~= nil then
         actor:set_float("grid_speed", 6.8)
         actor:set_float("mouth_phase", 0.0)
@@ -97,7 +106,6 @@ end
 
 local function reset_runtime_actors(ctx)
     ctx:despawn_by_tag("maze_geometry", "new game")
-    ctx:despawn_by_tag("collectible", "new game")
     ctx:despawn_by_tag("effect", "new game")
 end
 
@@ -154,6 +162,7 @@ local function update_power_state(ctx, game, dt)
         local lift = timer > 0.0 and (POWER_Z + math.sin(phase * 2.1) * 0.035) or PACMAN_Z
         pac.position = Vec3(position.x, position.y, lift)
         pac:set_float("grid_speed", timer > 0.0 and 7.35 or 6.8)
+        sync_player_camera_forward(pac)
 
         if timer > 0.0 then
             local effect_timer = game:get_float("effect_timer", 0.0) - dt
@@ -178,13 +187,14 @@ local function collect_pellets(ctx, game)
     local player_row = player:get_int("grid_row", -1)
     local remaining = game:get_int("pellets_remaining", 0)
 
-    local function collect_actor(pellet)
-        if pellet == nil then
+    local pickup = ctx:grid_collect_at("pickup.pacman.collectibles", player_col, player_row)
+    if pickup ~= nil then
+        local kind = pickup.kind or "pellet"
+        local points = pickup.points or 10
+        local position = ctx:grid_cell_to_world(MAP, player_col, player_row)
+        if position == nil then
             return
         end
-        local kind = pellet:get_string("kind", "pellet")
-        local points = pellet:get_int("points", 10)
-        local position = pellet.position
         local effect_pool = kind == "power" and "pool.power_bursts" or "pool.pellet_bursts"
         local ttl = kind == "power" and 0.72 or 0.34
 
@@ -195,11 +205,7 @@ local function collect_pellets(ctx, game)
             game:set_float("power_timer", POWER_SECONDS)
             game:set_bool("power_active", true)
         end
-        pellet:despawn("collected")
     end
-
-    collect_actor(ctx:grid_actor_at("map.maze", "pool.pellets", player_col, player_row))
-    collect_actor(ctx:grid_actor_at("map.maze", "pool.power_pellets", player_col, player_row))
 
     game:set_int("pellets_remaining", remaining)
     if remaining <= 0 then
@@ -345,19 +351,6 @@ local function handle_ghost_contacts(ctx, game, dt)
     end
 end
 
-local function update_effects(ctx, dt)
-    for _, effect in ipairs(ctx:active_actors_with_tags("effect")) do
-        local age = effect:get_float("age", 0.0) + dt
-        effect:set_float("age", age)
-        if age >= effect:get_float("ttl", 0.4) then
-            effect:despawn("effect expired")
-        else
-            local position = effect.position
-            effect.position = Vec3(position.x, position.y, position.z + dt * 0.10)
-        end
-    end
-end
-
 function pacman.update(_, _, ctx)
     local game = game_actor(ctx)
     if game == nil or game:get_bool("game_over", false) then
@@ -369,7 +362,6 @@ function pacman.update(_, _, ctx)
     collect_pellets(ctx, game)
     update_ghosts(ctx, game, dt)
     handle_ghost_contacts(ctx, game, dt)
-    update_effects(ctx, dt)
     return true
 end
 

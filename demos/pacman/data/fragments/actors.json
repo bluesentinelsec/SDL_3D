@@ -70,6 +70,7 @@
         "grid_dir_y": { "type": "int", "value": 0 },
         "grid_next_dir_x": { "type": "int", "value": 1 },
         "grid_next_dir_y": { "type": "int", "value": 0 },
+        "camera_forward": { "type": "vec3", "value": [1.0, 0.0, 0.0] },
         "grid_speed": { "type": "float", "value": 6.8 },
         "mouth_phase": { "type": "float", "value": 0.0 },
         "radius": { "type": "float", "value": 0.24 }
@@ -264,77 +265,17 @@
       ]
     },
     {
-      "name": "archetype.pellet",
-      "tags": ["collectible", "pellet"],
-      "transform": { "position": [0.0, 0.0, 0.20] },
-      "properties": {
-        "kind": { "type": "string", "value": "pellet" },
-        "points": { "type": "int", "value": 10 },
-        "radius": { "type": "float", "value": 0.14 }
-      },
-      "components": [
-        {
-          "type": "render.sphere",
-          "radius": 0.07,
-          "rings": 10,
-          "slices": 12,
-          "color": [255, 226, 116, 255],
-          "emissive": true
-        }
-      ]
-    },
-    {
-      "name": "archetype.power_pellet",
-      "tags": ["collectible", "power_pellet"],
-      "transform": { "position": [0.0, 0.0, 0.22] },
-      "properties": {
-        "kind": { "type": "string", "value": "power" },
-        "points": { "type": "int", "value": 50 },
-        "radius": { "type": "float", "value": 0.20 }
-      },
-      "components": [
-        {
-          "type": "render.sphere",
-          "radius": 0.135,
-          "rings": 14,
-          "slices": 18,
-          "color": [255, 245, 160, 255],
-          "emissive": true
-        },
-        {
-          "type": "particles.emitter",
-          "shape": "sphere",
-          "extents": [0.12, 0.12, 0.04],
-          "direction": [0.0, 0.0, 1.0],
-          "spread": 2.0,
-          "speed_min": 0.05,
-          "speed_max": 0.22,
-          "lifetime_min": 0.20,
-          "lifetime_max": 0.55,
-          "size_start": 0.028,
-          "size_end": 0.003,
-          "gravity": 0.0,
-          "max_particles": 42,
-          "emit_rate": 32.0,
-          "color_start": [255, 245, 90, 190],
-          "color_end": [80, 220, 255, 0],
-          "emissive_intensity": 2.5,
-          "camera_facing": true,
-          "depth_test": true,
-          "draw_emissive": [1.0, 0.84, 0.12],
-          "random_seed": 401
-        }
-      ]
-    },
-    {
       "name": "archetype.pellet_burst",
       "tags": ["effect", "pellet_effect"],
       "transform": { "position": [0.0, 0.0, 0.32] },
       "properties": {
         "age": { "type": "float", "value": 0.0 },
-        "ttl": { "type": "float", "value": 0.34 }
+        "ttl": { "type": "float", "value": 0.34 },
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.10] }
       },
       "components": [
+        { "type": "motion.velocity_3d", "property": "velocity" },
+        { "type": "lifecycle.ttl", "age_property": "age", "ttl_property": "ttl", "reason": "effect expired" },
         {
           "type": "render.sphere",
           "radius": 0.08,
@@ -380,9 +321,12 @@
       "transform": { "position": [0.0, 0.0, 0.38] },
       "properties": {
         "age": { "type": "float", "value": 0.0 },
-        "ttl": { "type": "float", "value": 0.75 }
+        "ttl": { "type": "float", "value": 0.75 },
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.10] }
       },
       "components": [
+        { "type": "motion.velocity_3d", "property": "velocity" },
+        { "type": "lifecycle.ttl", "age_property": "age", "ttl_property": "ttl", "reason": "effect expired" },
         {
           "type": "render.sphere",
           "radius": 0.16,
@@ -428,9 +372,12 @@
       "transform": { "position": [0.0, 0.0, 0.40] },
       "properties": {
         "age": { "type": "float", "value": 0.0 },
-        "ttl": { "type": "float", "value": 0.85 }
+        "ttl": { "type": "float", "value": 0.85 },
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.10] }
       },
       "components": [
+        { "type": "motion.velocity_3d", "property": "velocity" },
+        { "type": "lifecycle.ttl", "age_property": "age", "ttl_property": "ttl", "reason": "effect expired" },
         {
           "type": "render.sphere",
           "radius": 0.18,
@@ -476,24 +423,6 @@
       "name": "pool.walls",
       "archetype": "archetype.wall",
       "capacity": 128,
-      "scene": "scene.play",
-      "initial_active": false,
-      "on_exhausted": "fail",
-      "on_scene_exit": "reset"
-    },
-    {
-      "name": "pool.pellets",
-      "archetype": "archetype.pellet",
-      "capacity": 180,
-      "scene": "scene.play",
-      "initial_active": false,
-      "on_exhausted": "fail",
-      "on_scene_exit": "reset"
-    },
-    {
-      "name": "pool.power_pellets",
-      "archetype": "archetype.power_pellet",
-      "capacity": 8,
       "scene": "scene.play",
       "initial_active": false,
       "on_exhausted": "fail",

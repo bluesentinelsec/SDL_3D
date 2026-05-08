@@ -105,6 +105,8 @@ struct RenderPrimitiveCapture
     bool saw_options_glow = false;
     bool saw_pooled_cube = false;
     bool saw_pooled_sphere = false;
+    bool saw_pickup_batch = false;
+    int pickup_batch_instances = 0;
 };
 
 void capture_signal_payload(void *userdata, int signal_id, const sdl3d_properties *payload)
@@ -1215,6 +1217,8 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         capture->cubes++;
     else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
         capture->spheres++;
+    else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE_BATCH)
+        capture->spheres++;
 
     if (std::string(primitive->entity_name) == "entity.paddle.player")
     {
@@ -1272,6 +1276,14 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_SPHERE);
         EXPECT_NEAR(primitive->position.y, 3.0f, 0.0001f);
         EXPECT_NEAR(primitive->radius, 0.2f, 0.0001f);
+    }
+    if (std::string(primitive->entity_name).rfind("pickup.", 0) == 0 &&
+        primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE_BATCH)
+    {
+        capture->saw_pickup_batch = true;
+        capture->pickup_batch_instances += primitive->instance_count;
+        EXPECT_GT(primitive->instance_count, 0);
+        EXPECT_NE(primitive->instances, nullptr);
     }
     return true;
 }
@@ -6839,9 +6851,14 @@ TEST(GameDataRuntime, ArcadeShooterPrimitivesAreDataDriven)
       "name": "archetype.explosion",
       "tags": ["effect"],
       "properties": {
-        "radius": { "type": "float", "value": 0.3 }
+        "radius": { "type": "float", "value": 0.3 },
+        "age": { "type": "float", "value": 0.0 },
+        "ttl": { "type": "float", "value": 0.1 },
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 1.0] }
       },
       "components": [
+        { "type": "motion.velocity_3d", "property": "velocity" },
+        { "type": "lifecycle.ttl", "age_property": "age", "ttl_property": "ttl" },
         { "type": "light.point", "color": [1.0, 0.45, 0.08], "intensity": 4.0, "range": 2.6 },
         { "type": "particles.emitter", "shape": "sphere", "radius": 0.2, "emit_rate": 10.0, "max_particles": 8 }
       ]
@@ -6963,6 +6980,12 @@ TEST(GameDataRuntime, ArcadeShooterPrimitivesAreDataDriven)
     ParticleCapture particles{};
     ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &particles));
     EXPECT_EQ(particles.count, 1);
+    const float explosion_z = explosion->position.z;
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.05f));
+    EXPECT_TRUE(explosion->active);
+    EXPECT_GT(explosion->position.z, explosion_z);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.06f));
+    EXPECT_FALSE(explosion->active);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
@@ -6999,6 +7022,11 @@ function rules.inspect(_, _, ctx)
 
   local pellet = ctx:grid_actor_at("map.maze", "pool.pellets", 2, 1)
   ctx:state_set("lookup_pellet", pellet and pellet.name or "")
+  local pickup = ctx:grid_pickup_at("pickup.collectibles", 3, 1)
+  ctx:state_set("pickup_kind", pickup and pickup.kind or "")
+  local collected = ctx:grid_collect_at("pickup.collectibles", 3, 1)
+  ctx:state_set("collected_kind", collected and collected.kind or "")
+  ctx:state_set("pickup_remaining", ctx:grid_pickup_count("pickup.collectibles"))
   return true
 end
 
@@ -7025,6 +7053,16 @@ return rules
         "# # #",
         "#G..#",
         "#####"
+      ]
+    }
+  ],
+  "grid_pickup_layers": [
+    {
+      "name": "pickup.collectibles",
+      "map": "map.maze",
+      "kinds": [
+        { "glyph": ".", "kind": "pellet", "points": 10, "z": 0.2, "radius": 0.1, "rings": 4, "slices": 5 },
+        { "glyph": "o", "kind": "power", "points": 50, "z": 0.2, "radius": 0.2, "rings": 5, "slices": 6 }
       ]
     }
   ],
@@ -7080,7 +7118,7 @@ return rules
     { "name": "pool.power_pellets", "archetype": "archetype.power_pellet", "capacity": 1, "scene": "scene.play" },
     { "name": "pool.walls", "archetype": "archetype.wall", "capacity": 10, "scene": "scene.play" }
   ],
-  "signals": ["signal.inspect", "signal.spawn.collectibles", "signal.spawn.walls"],
+  "signals": ["signal.inspect", "signal.spawn.collectibles", "signal.reset.pickups", "signal.spawn.walls"],
   "adapters": [
     { "name": "adapter.inspect", "kind": "action", "script": "script.rules", "function": "inspect" }
   ],
@@ -7090,6 +7128,16 @@ return rules
         "signal": "signal.inspect",
         "actions": [
           { "type": "adapter.invoke", "adapter": "adapter.inspect" }
+        ]
+      },
+      {
+        "signal": "signal.reset.pickups",
+        "actions": [
+          {
+            "type": "grid.pickup_layer.reset",
+            "layer": "pickup.collectibles",
+            "output_count_key": "pickup_count"
+          }
         ]
       },
       {
@@ -7154,6 +7202,12 @@ return rules
 
     sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.collectibles"), nullptr);
     EXPECT_EQ(sdl3d_properties_get_int(state, "spawned_collectibles", 0), 4);
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.reset.pickups"), nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(state, "pickup_count", 0), 4);
+    RenderPrimitiveCapture pickup_render{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &pickup_render));
+    EXPECT_TRUE(pickup_render.saw_pickup_batch);
+    EXPECT_EQ(pickup_render.pickup_batch_instances, 4);
     sdl3d_registered_actor *pellet0 = sdl3d_game_data_find_actor(runtime, "pool.pellets.0");
     sdl3d_registered_actor *pellet2 = sdl3d_game_data_find_actor(runtime, "pool.pellets.2");
     sdl3d_registered_actor *power = sdl3d_game_data_find_actor(runtime, "pool.power_pellets.0");
@@ -7169,6 +7223,9 @@ return rules
     expect_vec3_near(power->position, sdl3d_vec3_make(3.0f, -1.0f, 0.0f));
     sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.inspect"), nullptr);
     EXPECT_STREQ(sdl3d_properties_get_string(state, "lookup_pellet", ""), "pool.pellets.0");
+    EXPECT_STREQ(sdl3d_properties_get_string(state, "pickup_kind", ""), "power");
+    EXPECT_STREQ(sdl3d_properties_get_string(state, "collected_kind", ""), "power");
+    EXPECT_EQ(sdl3d_properties_get_int(state, "pickup_remaining", 0), 3);
 
     sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.walls"), nullptr);
     EXPECT_EQ(sdl3d_properties_get_int(state, "spawned_wall_runs", 0), 9);
@@ -7212,9 +7269,7 @@ return rules
 
 TEST(GameDataRuntime, PacmanDemoLoadsAndRunsMazeCollection)
 {
-    const std::filesystem::path demos_root =
-        std::filesystem::path(SDL3D_PONG_DATA_PATH).parent_path().parent_path().parent_path();
-    const std::filesystem::path pacman_path = demos_root / "pacman" / "data" / "pacman.game.json";
+    const std::filesystem::path pacman_path = SDL3D_PACMAN_DATA_PATH;
     ASSERT_TRUE(std::filesystem::exists(pacman_path)) << pacman_path;
 
     sdl3d_game_session *session = nullptr;
@@ -7232,28 +7287,52 @@ TEST(GameDataRuntime, PacmanDemoLoadsAndRunsMazeCollection)
 
     sdl3d_registered_actor *pac = sdl3d_game_data_find_actor(runtime, "entity.pacman");
     sdl3d_registered_actor *wall = sdl3d_game_data_find_actor(runtime, "pool.walls.0");
-    sdl3d_registered_actor *pellet = sdl3d_game_data_find_actor(runtime, "pool.pellets.0");
-    sdl3d_registered_actor *power = sdl3d_game_data_find_actor(runtime, "pool.power_pellets.0");
     sdl3d_registered_actor *game = sdl3d_game_data_find_actor(runtime, "entity.game");
     sdl3d_registered_actor *red_ghost = sdl3d_game_data_find_actor(runtime, "entity.ghost.red");
     ASSERT_NE(pac, nullptr);
     ASSERT_NE(wall, nullptr);
-    ASSERT_NE(pellet, nullptr);
-    ASSERT_NE(power, nullptr);
     ASSERT_NE(game, nullptr);
     ASSERT_NE(red_ghost, nullptr);
     EXPECT_TRUE(wall->active);
-    EXPECT_TRUE(pellet->active);
-    EXPECT_TRUE(power->active);
     EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "pool.walls.0"));
-    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "pool.pellets.0"));
     EXPECT_GT(sdl3d_properties_get_int(state, "pacman_spawned_wall_runs", 0), 0);
     EXPECT_LT(sdl3d_properties_get_int(state, "pacman_spawned_wall_runs", 999), 180);
+    RenderPrimitiveCapture pickup_render{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &pickup_render));
+    EXPECT_TRUE(pickup_render.saw_pickup_batch);
+    EXPECT_GT(pickup_render.pickup_batch_instances, 0);
 
     const int spawned_collectibles = sdl3d_properties_get_int(state, "pacman_spawned_collectibles", 0);
     EXPECT_EQ(sdl3d_properties_get_int(game->props, "pellets_remaining", -1), spawned_collectibles);
     EXPECT_EQ(sdl3d_properties_get_int(pac->props, "grid_col", -1), 1);
     EXPECT_EQ(sdl3d_properties_get_int(pac->props, "grid_row", -1), 1);
+    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.maze");
+
+    sdl3d_camera3d player_camera{};
+    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.player.first_person", &player_camera));
+    EXPECT_EQ(player_camera.projection, SDL3D_CAMERA_PERSPECTIVE);
+    EXPECT_NEAR(player_camera.position.x, pac->position.x, 0.0001f);
+    EXPECT_NEAR(player_camera.position.y, pac->position.y, 0.0001f);
+    EXPECT_GT(player_camera.target.x, player_camera.position.x);
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    const int camera_toggle = sdl3d_game_data_find_action(runtime, "action.camera.toggle");
+    ASSERT_GE(camera_toggle, 0);
+    EXPECT_TRUE(sdl3d_game_data_active_scene_allows_action(runtime, camera_toggle));
+    sdl3d_input_set_action_override(input, camera_toggle, 1.0f);
+    ASSERT_NE(sdl3d_input_update(input, 9100), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f / 60.0f));
+    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.player.first_person");
+    sdl3d_input_set_action_override(input, camera_toggle, 0.0f);
+    ASSERT_NE(sdl3d_input_update(input, 9101), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f / 60.0f));
+    sdl3d_input_set_action_override(input, camera_toggle, 1.0f);
+    ASSERT_NE(sdl3d_input_update(input, 9102), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f / 60.0f));
+    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.maze");
+    sdl3d_input_set_action_override(input, camera_toggle, 0.0f);
+    ASSERT_NE(sdl3d_input_update(input, 9103), nullptr);
 
     for (int i = 0; i < 24; ++i)
     {
@@ -7345,6 +7424,18 @@ TEST(GameDataRuntime, RejectsInvalidMazePrimitiveData)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json",
             "grid spawn glyph must be a single-byte string",
+        },
+        {
+            "bad_pickup_layer_map",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "grid_pickup_layers": [
+    { "name": "pickup.bad", "map": "map.missing", "kinds": [{ "glyph": ".", "kind": "pellet" }] }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "unknown grid map",
         },
     };
 

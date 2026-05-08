@@ -27,5 +27,37 @@
         "#####################"
       ]
     }
+  ],
+  "grid_pickup_layers": [
+    {
+      "name": "pickup.pacman.collectibles",
+      "map": "map.maze",
+      "kinds": [
+        {
+          "glyph": ".",
+          "kind": "pellet",
+          "points": 10,
+          "z": 0.20,
+          "radius": 0.07,
+          "rings": 6,
+          "slices": 8,
+          "color": [255, 226, 116, 255],
+          "lighting": true,
+          "emissive": true
+        },
+        {
+          "glyph": "o",
+          "kind": "power",
+          "points": 50,
+          "z": 0.22,
+          "radius": 0.135,
+          "rings": 8,
+          "slices": 10,
+          "color": [255, 245, 160, 255],
+          "lighting": true,
+          "emissive": true
+        }
+      ]
+    }
   ]
 }

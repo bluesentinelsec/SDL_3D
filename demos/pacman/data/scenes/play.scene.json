@@ -26,6 +26,7 @@
       "action.move.down",
       "action.pause",
       "action.restart",
+      "action.camera.toggle",
       "action.menu.up",
       "action.menu.down",
       "action.menu.select"
@@ -124,7 +125,7 @@
       {
         "name": "ui.controls",
         "font": "font.small",
-        "text": "MOVE WASD / ARROWS    PAUSE ENTER    RESTART R",
+        "text": "MOVE WASD / ARROWS    CAMERA B    PAUSE ENTER    RESTART R",
         "x": 0.5,
         "y": 0.955,
         "normalized": true,

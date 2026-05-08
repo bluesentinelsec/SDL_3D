@@ -5,7 +5,7 @@
     { "path": "fragments/scripts.json", "sections": ["scripts", "adapters"] },
     { "path": "fragments/input.json", "sections": ["input"] },
     { "path": "fragments/runtime.json", "sections": ["render", "update_phases", "presentation", "transitions"] },
-    { "path": "fragments/grid.json", "sections": ["grid_maps"] },
+    { "path": "fragments/grid.json", "sections": ["grid_maps", "grid_pickup_layers"] },
     { "path": "fragments/actors.json", "sections": ["entities", "actor_archetypes", "actor_pools"] },
     { "path": "fragments/logic.json", "sections": ["signals", "logic"] }
   ],
@@ -104,6 +104,22 @@
         "target": [0.0, 0.0, 0.0],
         "up": [0.0, 0.0, 1.0],
         "fovy": 48.0,
+        "active": false
+      },
+      {
+        "name": "camera.player.first_person",
+        "type": "chase",
+        "target_entity": "entity.pacman",
+        "velocity_property": "camera_forward",
+        "fallback_forward": [1.0, 0.0, 0.0],
+        "eye_offset": [0.0, 0.0, 0.08],
+        "target_offset": [0.0, 0.0, 0.0],
+        "target_z_offset": 0.18,
+        "height": 0.28,
+        "chase_distance": 0.0,
+        "lookahead": 1.8,
+        "up": [0.0, 0.0, 1.0],
+        "fovy": 72.0,
         "active": false
       }
     ],

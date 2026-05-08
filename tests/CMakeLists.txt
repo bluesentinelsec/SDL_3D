@@ -223,9 +223,11 @@ else()
             sdl3d_game_data_test
             PRIVATE
                 SDL3D_PONG_DATA_PATH="/pong/pong.game.json"
+                SDL3D_PACMAN_DATA_PATH="/pacman/pacman.game.json"
                 SDL3D_GAME_DATA_FIXTURE_DIR="/game_data"
         )
         sdl3d_target_preload_asset_directory(sdl3d_game_data_test "${CMAKE_SOURCE_DIR}/demos/pong/data" "/pong")
+        sdl3d_target_preload_asset_directory(sdl3d_game_data_test "${CMAKE_SOURCE_DIR}/demos/pacman/data" "/pacman")
         sdl3d_target_preload_asset_directory(sdl3d_game_data_test "${CMAKE_SOURCE_DIR}/tests/assets/game_data"
                                              "/game_data")
     else()
@@ -233,6 +235,7 @@ else()
             sdl3d_game_data_test
             PRIVATE
                 SDL3D_PONG_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pong/data/pong.game.json"
+                SDL3D_PACMAN_DATA_PATH="${CMAKE_SOURCE_DIR}/demos/pacman/data/pacman.game.json"
                 SDL3D_GAME_DATA_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/assets/game_data"
         )
     endif()

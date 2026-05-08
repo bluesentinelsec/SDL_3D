@@ -8,6 +8,7 @@
     "signal.move.right",
     "signal.move.up",
     "signal.move.down",
+    "signal.camera.toggle",
     "signal.ui.menu.move",
     "signal.ui.menu.select"
   ],
@@ -42,6 +43,12 @@
         "type": "sensor.input_pressed",
         "action": "action.restart",
         "on_pressed": "signal.game.start"
+      },
+      {
+        "name": "logic.camera_toggle",
+        "type": "sensor.input_pressed",
+        "action": "action.camera.toggle",
+        "on_pressed": "signal.camera.toggle"
       }
     ],
     "timers": [
@@ -63,7 +70,6 @@
         "signal": "signal.game.start",
         "actions": [
           { "type": "actor.despawn_by_tag", "tag": "maze_geometry", "reason": "restart" },
-          { "type": "actor.despawn_by_tag", "tag": "collectible", "reason": "restart" },
           { "type": "actor.despawn_by_tag", "tag": "effect", "reason": "restart" },
           {
             "type": "adapter.invoke",
@@ -82,13 +88,9 @@
             ]
           },
           {
-            "type": "grid.spawn_from_glyphs",
-            "map": "map.maze",
-            "output_count_key": "pacman_spawned_collectibles",
-            "spawns": [
-              { "glyph": ".", "pool": "pool.pellets", "z": 0.20, "properties": { "kind": "pellet", "points": 10 } },
-              { "glyph": "o", "pool": "pool.power_pellets", "z": 0.22, "properties": { "kind": "power", "points": 50 } }
-            ]
+            "type": "grid.pickup_layer.reset",
+            "layer": "pickup.pacman.collectibles",
+            "output_count_key": "pacman_spawned_collectibles"
           },
           {
             "type": "adapter.invoke",
@@ -123,6 +125,12 @@
         "actions": [
           { "type": "property.set", "target": "entity.pacman", "key": "grid_next_dir_x", "value": 0 },
           { "type": "property.set", "target": "entity.pacman", "key": "grid_next_dir_y", "value": 1 }
+        ]
+      },
+      {
+        "signal": "signal.camera.toggle",
+        "actions": [
+          { "type": "camera.toggle", "camera": "camera.player.first_person", "fallback": "camera.maze" }
         ]
       }
     ]
