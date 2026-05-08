@@ -13429,6 +13429,11 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
             {
                 sdl3d_properties_set_float(actor->props, key, existing->as_float + (float)payload_value->as_int);
             }
+            else if (existing != NULL && existing->type == SDL3D_VALUE_INT && payload_value != NULL &&
+                     payload_value->type == SDL3D_VALUE_FLOAT)
+            {
+                sdl3d_properties_set_float(actor->props, key, (float)existing->as_int + payload_value->as_float);
+            }
             else if (existing != NULL && existing->type == SDL3D_VALUE_INT && yyjson_is_num(value))
                 sdl3d_properties_set_int(actor->props, key, existing->as_int + (int)yyjson_get_int(value));
             else if (existing != NULL && existing->type == SDL3D_VALUE_FLOAT && yyjson_is_num(value))

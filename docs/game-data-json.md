@@ -835,7 +835,8 @@ game-specific calculations or policy that is not a reusable engine primitive.
 
 Use `target_from_payload` when a sensor or previous action supplies the actor
 name. Use `value_from_payload` when the amount should come from sensor payload
-data:
+data. When `property.add` combines an integer with a float, the result is stored
+as a float so fractional damage, timers, and meters can accumulate correctly:
 
 ```json
 {

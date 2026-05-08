@@ -8033,7 +8033,7 @@ TEST(GameDataRuntime, RunsAuthoredSectorHazardSensors)
   "schema": "sdl3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
-  "entities": ["entity.player"],
+  "entities": ["entity.player", "entity.bot"],
   "world": { "sector_levels": [{ "level": "sector.test", "variant": "unlit" }] }
 })json");
     write_text(dir / "sector_hazard_sensors.game.json",
@@ -8048,9 +8048,18 @@ TEST(GameDataRuntime, RunsAuthoredSectorHazardSensors)
       "transform": { "position": [1.0, 1.0, 1.0] },
       "properties": {
         "current_sector": { "type": "int", "value": 0 },
-        "damage_taken": { "type": "float", "value": 0.0 },
+        "damage_taken": { "type": "int", "value": 0 },
         "last_damage_per_second": { "type": "float", "value": 0.0 },
         "entered_hazard": { "type": "bool", "value": false }
+      }
+    },
+    {
+      "name": "entity.bot",
+      "active": true,
+      "tags": ["hazard_subject"],
+      "transform": { "position": [3.0, 1.0, 1.0] },
+      "properties": {
+        "tag_damage": { "type": "int", "value": 0 }
       }
     }
   ],
@@ -8104,6 +8113,17 @@ TEST(GameDataRuntime, RunsAuthoredSectorHazardSensors)
         ]
       },
       {
+        "name": "sensor.hazard.tag_stay",
+        "type": "sensor.sector",
+        "actor_tag": "hazard_subject",
+        "sector_level": "sector.test",
+        "sector": "hazard",
+        "edge": "stay",
+        "actions": [
+          { "type": "property.add", "target_from_payload": "actor_name", "key": "tag_damage", "value_from_payload": "sector_damage_delta" }
+        ]
+      },
+      {
         "name": "sensor.hazard.exit",
         "type": "sensor.sector",
         "actor": "entity.player",
@@ -8129,10 +8149,13 @@ TEST(GameDataRuntime, RunsAuthoredSectorHazardSensors)
         << error;
     sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
     ASSERT_NE(player, nullptr);
+    sdl3d_registered_actor *bot = sdl3d_game_data_find_actor(runtime, "entity.bot");
+    ASSERT_NE(bot, nullptr);
 
     ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
     EXPECT_FALSE(sdl3d_properties_get_bool(player->props, "entered_hazard", true));
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "damage_taken", -1.0f), 0.0f, 0.0001f);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "damage_taken", -1), 0);
+    EXPECT_NEAR(sdl3d_properties_get_float(bot->props, "tag_damage", 0.0f), 2.5f, 0.0001f);
 
     sdl3d_properties_set_int(player->props, "current_sector", 1);
     ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
