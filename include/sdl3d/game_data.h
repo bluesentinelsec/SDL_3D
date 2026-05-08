@@ -180,6 +180,8 @@ extern "C"
     {
         /** @brief Stable asset id, such as `sprite.robot.walk`. */
         const char *id;
+        /** @brief Source kind: sheet image or explicit file list. */
+        sdl3d_sprite_asset_source_kind source_kind;
         /** @brief Virtual or filesystem path to the sprite source image. */
         const char *path;
         /** @brief Optional vertex shader source path for a sprite-specific GPU program. */

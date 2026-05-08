@@ -739,6 +739,10 @@ Reusable components include:
 - `motion.velocity_3d`: moves an actor by a `vec3` velocity property on all
   axes. This is useful for effect actors, projectiles, particles represented as
   pooled actors, and other simple kinematic objects.
+- `motion.patrol`: moves an actor through an authored list of 3D waypoints.
+  Use `speed`, `wait_time`, `arrival_radius`, `mode` (`loop` or `ping_pong`),
+  and optional `yaw_property` to expose movement direction to rendering or Lua
+  logic.
 - `lifecycle.ttl`: increments an age property every update and despawns pooled
   actors once the configured TTL is reached. Use this for short-lived bursts and
   effects instead of scanning active actors in Lua.
@@ -764,6 +768,14 @@ Reusable components include:
   `facing_yaw_property` for directional sprite frame selection. Sprite assets
   participate in dynamic lighting when their asset and component both leave
   lighting enabled.
+
+Sprite assets can be authored as either sheet assets or explicit file lists.
+Sheet assets omit `kind` or set `"kind": "sheet"` and provide `path`,
+`frame_width`, `frame_height`, `columns`, `rows`, `frame_count`, and
+`direction_count`. File-list assets use `"kind": "files"` with `base_paths`
+containing one fallback image per direction and `frame_paths` containing
+animation frames in frame-major, direction-minor order. File-list assets are
+useful when tools export one image per frame/direction instead of an atlas.
 
 Example parallax strip:
 

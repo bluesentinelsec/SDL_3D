@@ -19,6 +19,7 @@
 #include "lua.h"
 #include "network_replication_schema.h"
 #include "script_internal.h"
+#include "sdl3d/actor_controller.h"
 #include "sdl3d/asset.h"
 #include "sdl3d/door.h"
 #include "sdl3d/fps_mover.h"
@@ -361,6 +362,14 @@ typedef struct fps_controller_runtime
     bool initialized;
 } fps_controller_runtime;
 
+typedef struct patrol_controller_runtime
+{
+    const char *entity_name;
+    yyjson_val *component;
+    sdl3d_actor_patrol_controller controller;
+    bool initialized;
+} patrol_controller_runtime;
+
 typedef enum actor_pool_exhaustion_policy
 {
     ACTOR_POOL_EXHAUST_FAIL,
@@ -521,6 +530,9 @@ typedef struct sdl3d_game_data_runtime
     fps_controller_runtime *fps_controllers;
     int fps_controller_count;
     int fps_controller_capacity;
+    patrol_controller_runtime *patrol_controllers;
+    int patrol_controller_count;
+    int patrol_controller_capacity;
     actor_pool_runtime *actor_pools;
     int actor_pool_count;
     runtime_direct_connect_session *direct_connect_sessions;
@@ -3624,6 +3636,52 @@ static fps_controller_runtime *find_or_add_fps_controller(sdl3d_game_data_runtim
     return controller;
 }
 
+static patrol_controller_runtime *find_patrol_controller(sdl3d_game_data_runtime *runtime, const char *entity_name)
+{
+    if (runtime == NULL || entity_name == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->patrol_controller_count; ++i)
+    {
+        patrol_controller_runtime *controller = &runtime->patrol_controllers[i];
+        if (controller->entity_name != NULL && SDL_strcmp(controller->entity_name, entity_name) == 0)
+            return controller;
+    }
+    return NULL;
+}
+
+static patrol_controller_runtime *find_or_add_patrol_controller(sdl3d_game_data_runtime *runtime,
+                                                                const char *entity_name, yyjson_val *component)
+{
+    patrol_controller_runtime *controller = find_patrol_controller(runtime, entity_name);
+    if (controller != NULL)
+    {
+        if (component != NULL && controller->component != component)
+        {
+            controller->component = component;
+            controller->initialized = false;
+        }
+        return controller;
+    }
+    if (runtime == NULL || entity_name == NULL || component == NULL)
+        return NULL;
+    if (runtime->patrol_controller_count >= runtime->patrol_controller_capacity)
+    {
+        const int next_capacity = runtime->patrol_controller_capacity > 0 ? runtime->patrol_controller_capacity * 2 : 4;
+        patrol_controller_runtime *controllers = (patrol_controller_runtime *)SDL_realloc(
+            runtime->patrol_controllers, (size_t)next_capacity * sizeof(*controllers));
+        if (controllers == NULL)
+            return NULL;
+        runtime->patrol_controllers = controllers;
+        runtime->patrol_controller_capacity = next_capacity;
+    }
+
+    controller = &runtime->patrol_controllers[runtime->patrol_controller_count++];
+    SDL_zero(*controller);
+    controller->entity_name = entity_name;
+    controller->component = component;
+    return controller;
+}
+
 static sdl3d_backend parse_backend(const char *value, sdl3d_backend fallback)
 {
     if (value == NULL)
@@ -4893,6 +4951,7 @@ bool sdl3d_game_data_get_sprite_asset(const sdl3d_game_data_runtime *runtime, co
     if (out_sprite != NULL)
     {
         SDL_zero(*out_sprite);
+        out_sprite->source_kind = SDL3D_SPRITE_ASSET_SOURCE_SHEET;
         out_sprite->columns = 1;
         out_sprite->rows = 1;
         out_sprite->frame_count = 1;
@@ -4908,6 +4967,9 @@ bool sdl3d_game_data_get_sprite_asset(const sdl3d_game_data_runtime *runtime, co
         return false;
 
     out_sprite->id = json_string(sprite, "id", NULL);
+    const char *kind = json_string(sprite, "kind", "sheet");
+    out_sprite->source_kind = kind != NULL && SDL_strcmp(kind, "files") == 0 ? SDL3D_SPRITE_ASSET_SOURCE_FILES
+                                                                             : SDL3D_SPRITE_ASSET_SOURCE_SHEET;
     out_sprite->path = json_string(sprite, "path", NULL);
     out_sprite->shader_vertex_path = json_string(sprite, "shader_vertex_path", NULL);
     out_sprite->shader_fragment_path = json_string(sprite, "shader_fragment_path", NULL);
@@ -4926,13 +4988,46 @@ bool sdl3d_game_data_get_sprite_asset(const sdl3d_game_data_runtime *runtime, co
     out_sprite->effect_delay = json_float(sprite, "effect_delay", 0.0f);
     out_sprite->effect_duration = json_float(sprite, "effect_duration", 1.0f);
 
-    if (out_sprite->id == NULL || out_sprite->path == NULL || out_sprite->frame_width <= 0 ||
-        out_sprite->frame_height <= 0 || out_sprite->columns <= 0 || out_sprite->rows <= 0 ||
-        out_sprite->frame_count <= 0 || out_sprite->direction_count <= 0)
+    if (out_sprite->id == NULL || out_sprite->frame_count <= 0 || out_sprite->direction_count <= 0 ||
+        (out_sprite->source_kind == SDL3D_SPRITE_ASSET_SOURCE_SHEET &&
+         (out_sprite->path == NULL || out_sprite->frame_width <= 0 || out_sprite->frame_height <= 0 ||
+          out_sprite->columns <= 0 || out_sprite->rows <= 0)))
     {
         SDL_zero(*out_sprite);
         return false;
     }
+    return true;
+}
+
+static bool read_sprite_path_array(yyjson_val *array, const char ***out_paths, int *out_count)
+{
+    if (out_paths == NULL || out_count == NULL)
+        return false;
+
+    *out_paths = NULL;
+    *out_count = 0;
+    if (!yyjson_is_arr(array) || yyjson_arr_size(array) <= 0)
+        return false;
+
+    const size_t count = yyjson_arr_size(array);
+    const char **paths = (const char **)SDL_calloc(count, sizeof(*paths));
+    if (paths == NULL)
+        return false;
+
+    for (size_t i = 0; i < count; ++i)
+    {
+        yyjson_val *value = yyjson_arr_get(array, i);
+        const char *path = yyjson_get_str(value);
+        if (path == NULL || path[0] == '\0')
+        {
+            SDL_free(paths);
+            return false;
+        }
+        paths[i] = path;
+    }
+
+    *out_paths = paths;
+    *out_count = (int)count;
     return true;
 }
 
@@ -4942,6 +5037,10 @@ bool sdl3d_game_data_load_sprite_asset(const sdl3d_game_data_runtime *runtime, c
 {
     sdl3d_game_data_sprite_asset sprite;
     sdl3d_sprite_asset_source source;
+    const char **base_paths = NULL;
+    const char **frame_paths = NULL;
+    int base_path_count = 0;
+    int frame_path_count = 0;
 
     if (out_sprite != NULL)
         SDL_zero(*out_sprite);
@@ -4955,7 +5054,7 @@ bool sdl3d_game_data_load_sprite_asset(const sdl3d_game_data_runtime *runtime, c
     }
 
     SDL_zero(source);
-    source.kind = SDL3D_SPRITE_ASSET_SOURCE_SHEET;
+    source.kind = sprite.source_kind;
     source.sheet_path = sprite.path;
     source.shader_vertex_path = sprite.shader_vertex_path;
     source.shader_fragment_path = sprite.shader_fragment_path;
@@ -4974,7 +5073,33 @@ bool sdl3d_game_data_load_sprite_asset(const sdl3d_game_data_runtime *runtime, c
     source.effect_delay = sprite.effect_delay;
     source.effect_duration = sprite.effect_duration;
 
-    if (!sdl3d_sprite_asset_load(runtime->assets, &source, out_sprite, error_buffer, error_buffer_size))
+    if (sprite.source_kind == SDL3D_SPRITE_ASSET_SOURCE_FILES)
+    {
+        yyjson_val *sprite_json = find_sprite_json(runtime, id);
+        if (!read_sprite_path_array(obj_get(sprite_json, "base_paths"), &base_paths, &base_path_count) ||
+            !read_sprite_path_array(obj_get(sprite_json, "frame_paths"), &frame_paths, &frame_path_count))
+        {
+            SDL_free(base_paths);
+            SDL_free(frame_paths);
+            set_error(error_buffer, error_buffer_size, "invalid sprite file-list paths");
+            return false;
+        }
+        if (base_path_count != sprite.direction_count ||
+            frame_path_count != sprite.frame_count * sprite.direction_count)
+        {
+            SDL_free(base_paths);
+            SDL_free(frame_paths);
+            set_error(error_buffer, error_buffer_size, "sprite file-list path count does not match metadata");
+            return false;
+        }
+        source.base_paths = base_paths;
+        source.frame_paths = frame_paths;
+    }
+
+    const bool loaded = sdl3d_sprite_asset_load(runtime->assets, &source, out_sprite, error_buffer, error_buffer_size);
+    SDL_free(base_paths);
+    SDL_free(frame_paths);
+    if (!loaded)
         return false;
     return true;
 }
@@ -14415,6 +14540,73 @@ static bool fps_controller_action_pressed(const sdl3d_game_data_runtime *runtime
            sdl3d_input_is_pressed(input, action_id);
 }
 
+static sdl3d_actor_patrol_mode parse_patrol_mode(const char *value)
+{
+    if (value != NULL && SDL_strcmp(value, "ping_pong") == 0)
+        return SDL3D_ACTOR_PATROL_PING_PONG;
+    return SDL3D_ACTOR_PATROL_LOOP;
+}
+
+static int patrol_signal_id(const sdl3d_game_data_runtime *runtime, yyjson_val *component, const char *name)
+{
+    yyjson_val *signals = obj_get(component, "signals");
+    return sdl3d_game_data_find_signal(runtime, json_string(signals, name, NULL));
+}
+
+static bool initialize_patrol_controller(sdl3d_game_data_runtime *runtime, patrol_controller_runtime *controller,
+                                         yyjson_val *component, sdl3d_registered_actor *actor)
+{
+    if (runtime == NULL || controller == NULL || component == NULL || actor == NULL)
+        return false;
+
+    sdl3d_actor_patrol_config config = sdl3d_actor_patrol_default_config();
+    config.speed = json_float(component, "speed", config.speed);
+    config.wait_time = json_float(component, "wait_time", config.wait_time);
+    config.arrival_radius = json_float(component, "arrival_radius", config.arrival_radius);
+    config.mode = parse_patrol_mode(json_string(component, "mode", "loop"));
+    config.start_idle = json_bool(component, "start_idle", config.start_idle);
+    config.signals.waypoint_reached = patrol_signal_id(runtime, component, "waypoint_reached");
+    config.signals.loop_completed = patrol_signal_id(runtime, component, "loop_completed");
+    config.signals.idle_started = patrol_signal_id(runtime, component, "idle_started");
+    config.signals.walk_started = patrol_signal_id(runtime, component, "walk_started");
+
+    sdl3d_actor_patrol_controller_init(&controller->controller, actor->id, actor->id, &config);
+    yyjson_val *waypoints = obj_get(component, "waypoints");
+    for (size_t i = 0; yyjson_is_arr(waypoints) && i < yyjson_arr_size(waypoints); ++i)
+    {
+        if (!sdl3d_actor_patrol_controller_add_waypoint(&controller->controller,
+                                                        json_vec3_value(yyjson_arr_get(waypoints, i), actor->position)))
+        {
+            return false;
+        }
+    }
+
+    controller->initialized = true;
+    sdl3d_actor_patrol_controller_sync_properties(&controller->controller, actor);
+    return true;
+}
+
+static void update_patrol_controller(sdl3d_game_data_runtime *runtime, yyjson_val *component,
+                                     sdl3d_registered_actor *actor, float dt)
+{
+    patrol_controller_runtime *controller =
+        actor != NULL ? find_or_add_patrol_controller(runtime, actor->name, component) : NULL;
+    if (controller == NULL)
+        return;
+
+    if (!controller->initialized && !initialize_patrol_controller(runtime, controller, component, actor))
+        return;
+
+    sdl3d_actor_patrol_result result = sdl3d_actor_patrol_controller_update(
+        &controller->controller, runtime_registry(runtime), runtime_bus(runtime), dt, NULL, NULL);
+    actor_set_position(actor, result.position);
+    if (result.moved)
+    {
+        const float yaw = SDL_atan2f(result.movement_delta.x, -result.movement_delta.z);
+        sdl3d_properties_set_float(actor->props, json_string(component, "yaw_property", "yaw"), yaw);
+    }
+}
+
 static void fps_controller_publish_actor_state(const fps_controller_runtime *controller, yyjson_val *component,
                                                sdl3d_registered_actor *actor)
 {
@@ -14723,6 +14915,10 @@ static void update_motion_components(sdl3d_game_data_runtime *runtime, yyjson_va
                         value = min_value;
                     set_vec_axis(&position, axis, value);
                     actor_set_position(actor, position);
+                }
+                else if (SDL_strcmp(type, "motion.patrol") == 0)
+                {
+                    update_patrol_controller(runtime, component, actor, dt);
                 }
                 else if (SDL_strcmp(type, "motion.grid_agent") == 0)
                 {
@@ -18148,6 +18344,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->sector_levels);
     SDL_free(runtime->sector_doors);
     SDL_free(runtime->fps_controllers);
+    SDL_free(runtime->patrol_controllers);
     SDL_free(runtime->actor_pools);
     SDL_free(runtime->direct_connect_sessions);
     SDL_free(runtime->host_sessions);
