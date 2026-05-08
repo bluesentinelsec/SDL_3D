@@ -1,0 +1,57 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.splash",
+  "updates_game": true,
+  "renders_world": true,
+  "camera": "camera.side",
+  "entities": [
+    "entity.field.base",
+    "entity.effect.star_fast",
+    "entity.effect.nebula",
+    "entity.presentation"
+  ],
+  "transitions": {
+    "enter": "startup",
+    "exit": "scene_out"
+  },
+  "input": {
+    "actions": [
+      "action.menu.select"
+    ]
+  },
+  "activity": {
+    "enabled": true,
+    "input": "any",
+    "consume_wake_input": true,
+    "on_enter": [
+      { "type": "timer.start", "timer": "timer.splash.done" }
+    ],
+    "on_active": [
+      { "type": "scene.set", "scene": "scene.title" }
+    ]
+  },
+  "ui": {
+    "text": [
+      {
+        "name": "ui.splash.brand",
+        "font": "font.title",
+        "text": "SDL3D",
+        "x": 0.5,
+        "y": 0.43,
+        "normalized": true,
+        "centered": true,
+        "color": [230, 248, 255, 255]
+      },
+      {
+        "name": "ui.splash.demo",
+        "font": "font.small",
+        "text": "HORIZONTAL SHOOTER POC",
+        "x": 0.5,
+        "y": 0.54,
+        "normalized": true,
+        "centered": true,
+        "color": [120, 240, 255, 220]
+      }
+    ]
+  }
+}

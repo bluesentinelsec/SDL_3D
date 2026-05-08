@@ -1,0 +1,92 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.options",
+  "updates_game": true,
+  "renders_world": true,
+  "camera": "camera.side",
+  "entities": [
+    "entity.field.base",
+    "entity.field.horizon",
+    "entity.field.ceiling",
+    "entity.effect.star_fast",
+    "entity.effect.nebula",
+    "entity.presentation"
+  ],
+  "input": {
+    "actions": [
+      "action.menu.up",
+      "action.menu.down",
+      "action.menu.back",
+      "action.menu.select"
+    ]
+  },
+  "transitions": {
+    "enter": "scene_in",
+    "exit": "scene_out"
+  },
+  "menus": [
+    {
+      "name": "menu.options",
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "back_action": "action.menu.back",
+      "move_signal": "signal.ui.menu.move",
+      "select_signal": "signal.ui.menu.select",
+      "selected": 0,
+      "items": [
+        {
+          "label": "Back",
+          "scene": "scene.title"
+        }
+      ]
+    }
+  ],
+  "ui": {
+    "text": [
+      {
+        "name": "ui.options.title",
+        "font": "font.title",
+        "text": "OPTIONS",
+        "x": 0.5,
+        "y": 0.22,
+        "normalized": true,
+        "centered": true,
+        "color": [230, 248, 255, 255]
+      },
+      {
+        "name": "ui.options.note",
+        "font": "font.small",
+        "text": "STANDARD ENGINE OPTIONS CAN BE ADDED HERE AS DATA",
+        "x": 0.5,
+        "y": 0.36,
+        "normalized": true,
+        "centered": true,
+        "color": [124, 255, 190, 220]
+      }
+    ],
+    "menus": [
+      {
+        "name": "ui.options.menu",
+        "menu": "menu.options",
+        "font": "font.hud",
+        "x": 0.45,
+        "y": 0.52,
+        "gap": 0.08,
+        "normalized": true,
+        "align": "left",
+        "color": [220, 236, 255, 245],
+        "selected_color": [255, 238, 125, 255],
+        "selected_pulse_alpha": true,
+        "cursor": {
+          "text": ">",
+          "offset_x": -0.035,
+          "align": "right",
+          "color": [255, 82, 190, 255],
+          "pulse_alpha": true
+        }
+      }
+    ]
+  }
+}
+

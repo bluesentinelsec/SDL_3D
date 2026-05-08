@@ -1,0 +1,106 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "signals": [
+    "signal.app.quit_fade_done",
+    "signal.splash.done",
+    "signal.game.start",
+    "signal.player.fire",
+    "signal.player2.fire",
+    "signal.ui.menu.move",
+    "signal.ui.menu.select"
+  ],
+  "logic": {
+    "sensors": [
+      {
+        "name": "logic.player.fire_input",
+        "type": "sensor.input_pressed",
+        "action": "action.player.fire",
+        "on_pressed": "signal.player.fire"
+      },
+      {
+        "name": "logic.player2.fire_input",
+        "type": "sensor.input_pressed",
+        "action": "action.player2.fire",
+        "on_pressed": "signal.player2.fire"
+      },
+      {
+        "name": "logic.restart_input",
+        "type": "sensor.input_pressed",
+        "action": "action.restart",
+        "on_pressed": "signal.game.start"
+      }
+    ],
+    "timers": [
+      {
+        "name": "timer.splash.done",
+        "delay": 1.35,
+        "signal": "signal.splash.done",
+        "repeating": false
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.splash.done",
+        "actions": [
+          { "type": "scene.set", "scene": "scene.title" }
+        ]
+      },
+      {
+        "signal": "signal.game.start",
+        "actions": [
+          {
+            "type": "branch",
+            "if": {
+              "type": "scene_state.compare",
+              "key": "match_mode",
+              "op": "==",
+              "value": "local"
+            },
+            "then": [
+              { "type": "entity.set_active", "target": "entity.player2", "active": true }
+            ],
+            "else": [
+              { "type": "entity.set_active", "target": "entity.player2", "active": false }
+            ]
+          },
+          {
+            "type": "transform.set_position",
+            "target": "entity.player",
+            "position": [-6.55, 0.0, 0.18]
+          },
+          {
+            "type": "transform.set_position",
+            "target": "entity.player2",
+            "position": [-6.05, -0.72, 0.18]
+          },
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.armalite.start",
+            "target": "entity.game"
+          }
+        ]
+      },
+      {
+        "signal": "signal.player.fire",
+        "actions": [
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.armalite.fire_player_one",
+            "target": "entity.player"
+          }
+        ]
+      },
+      {
+        "signal": "signal.player2.fire",
+        "actions": [
+          {
+            "type": "adapter.invoke",
+            "adapter": "adapter.armalite.fire_player_two",
+            "target": "entity.player2"
+          }
+        ]
+      }
+    ]
+  }
+}
+

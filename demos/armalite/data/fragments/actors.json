@@ -1,0 +1,562 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "entities": [
+    {
+      "name": "entity.field.base",
+      "active": true,
+      "tags": ["field", "background"],
+      "transform": { "position": [0.0, 0.0, -0.32] },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [17.4, 9.8, 0.12],
+          "color": [3, 8, 26, 255]
+        }
+      ]
+    },
+    {
+      "name": "entity.field.horizon",
+      "active": true,
+      "tags": ["field", "horizon"],
+      "transform": { "position": [0.0, -3.92, -0.08] },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [17.4, 0.10, 0.16],
+          "color": [18, 120, 210, 255]
+        }
+      ]
+    },
+    {
+      "name": "entity.field.ceiling",
+      "active": true,
+      "tags": ["field", "ceiling"],
+      "transform": { "position": [0.0, 4.18, -0.08] },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [17.4, 0.08, 0.16],
+          "color": [125, 42, 210, 230]
+        }
+      ]
+    },
+    {
+      "name": "entity.effect.star_fast",
+      "active": true,
+      "tags": ["effect", "particles", "stars"],
+      "transform": { "position": [0.0, 0.0, 0.26] },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [8.4, 4.6, 0.05],
+          "direction": [-1.0, 0.0, 0.0],
+          "spread": 0.10,
+          "speed_min": 0.85,
+          "speed_max": 2.7,
+          "lifetime_min": 1.2,
+          "lifetime_max": 3.2,
+          "size_start": 0.026,
+          "size_end": 0.004,
+          "gravity": 0.0,
+          "max_particles": 620,
+          "emit_rate": 190.0,
+          "color_start": [125, 210, 255, 150],
+          "color_end": [255, 255, 255, 0],
+          "emissive_intensity": 1.8,
+          "camera_facing": true,
+          "depth_test": true,
+          "draw_emissive": [0.32, 0.82, 1.0],
+          "random_seed": 715231
+        }
+      ]
+    },
+    {
+      "name": "entity.effect.nebula",
+      "active": true,
+      "tags": ["effect", "particles", "nebula"],
+      "transform": { "position": [0.0, 0.2, 0.08] },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [8.5, 3.5, 0.04],
+          "direction": [-1.0, 0.02, 0.0],
+          "spread": 0.35,
+          "speed_min": 0.06,
+          "speed_max": 0.18,
+          "lifetime_min": 5.0,
+          "lifetime_max": 10.0,
+          "size_start": 0.16,
+          "size_end": 0.03,
+          "gravity": 0.0,
+          "max_particles": 160,
+          "emit_rate": 18.0,
+          "color_start": [60, 42, 255, 60],
+          "color_end": [25, 230, 255, 0],
+          "emissive_intensity": 1.15,
+          "camera_facing": true,
+          "depth_test": true,
+          "draw_emissive": [0.28, 0.16, 1.0],
+          "random_seed": 7129
+        }
+      ]
+    },
+    {
+      "name": "entity.player",
+      "active": true,
+      "tags": ["player", "ship"],
+      "transform": { "position": [-6.55, 0.0, 0.18] },
+      "properties": {
+        "half_width": { "type": "float", "value": 0.36 },
+        "half_height": { "type": "float", "value": 0.36 },
+        "speed": { "type": "float", "value": 6.6 },
+        "fire_cooldown": { "type": "float", "value": 0.13 },
+        "fire_timer": { "type": "float", "value": 0.0 },
+        "player_id": { "type": "int", "value": 1 }
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [0.82, 0.28, 0.28],
+          "color": [70, 214, 255, 255]
+        },
+        {
+          "type": "render.cube",
+          "size": [0.36, 0.62, 0.16],
+          "offset": [-0.18, 0.0, 0.03],
+          "color": [40, 132, 255, 255]
+        },
+        {
+          "type": "render.sphere",
+          "radius": 0.15,
+          "rings": 12,
+          "slices": 16,
+          "offset": [0.46, 0.0, 0.08],
+          "color": [230, 252, 255, 255],
+          "emissive": true
+        },
+        {
+          "type": "collision.aabb",
+          "half_extents": [0.42, 0.32, 0.18]
+        },
+        {
+          "type": "control.axis_1d",
+          "axis": "x",
+          "negative": "action.player.left",
+          "positive": "action.player.right"
+        },
+        {
+          "type": "control.axis_1d",
+          "axis": "y",
+          "negative": "action.player.down",
+          "positive": "action.player.up"
+        }
+      ]
+    },
+    {
+      "name": "entity.player2",
+      "active": false,
+      "tags": ["player", "ship", "player2"],
+      "transform": { "position": [-6.05, -0.72, 0.18] },
+      "properties": {
+        "half_width": { "type": "float", "value": 0.36 },
+        "half_height": { "type": "float", "value": 0.36 },
+        "speed": { "type": "float", "value": 6.3 },
+        "fire_cooldown": { "type": "float", "value": 0.15 },
+        "fire_timer": { "type": "float", "value": 0.0 },
+        "player_id": { "type": "int", "value": 2 }
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [0.78, 0.26, 0.26],
+          "color": [255, 188, 62, 255]
+        },
+        {
+          "type": "render.cube",
+          "size": [0.34, 0.56, 0.14],
+          "offset": [-0.18, 0.0, 0.03],
+          "color": [255, 110, 38, 255]
+        },
+        {
+          "type": "render.sphere",
+          "radius": 0.14,
+          "rings": 12,
+          "slices": 16,
+          "offset": [0.44, 0.0, 0.08],
+          "color": [255, 235, 120, 255],
+          "emissive": true
+        },
+        {
+          "type": "collision.aabb",
+          "half_extents": [0.40, 0.30, 0.18]
+        },
+        {
+          "type": "control.axis_1d",
+          "axis": "x",
+          "negative": "action.player2.left",
+          "positive": "action.player2.right"
+        },
+        {
+          "type": "control.axis_1d",
+          "axis": "y",
+          "negative": "action.player2.down",
+          "positive": "action.player2.up"
+        }
+      ]
+    },
+    {
+      "name": "entity.game",
+      "active": true,
+      "tags": ["state", "game"],
+      "properties": {
+        "score": { "type": "int", "value": 0 },
+        "lives": { "type": "int", "value": 3 },
+        "wave": { "type": "int", "value": 1 },
+        "distance": { "type": "float", "value": 0.0 },
+        "enemy_spawn_timer": { "type": "float", "value": 0.0 },
+        "asteroid_spawn_timer": { "type": "float", "value": 0.0 },
+        "enemy_fire_timer": { "type": "float", "value": 0.0 },
+        "threats_active": { "type": "int", "value": 0 },
+        "game_over": { "type": "bool", "value": false },
+        "won": { "type": "bool", "value": false },
+        "paused": { "type": "bool", "value": false }
+      }
+    },
+    {
+      "name": "entity.controller",
+      "active": true,
+      "tags": ["controller"],
+      "components": [
+        {
+          "type": "adapter.controller",
+          "adapter": "adapter.armalite.update"
+        }
+      ]
+    },
+    {
+      "name": "entity.presentation",
+      "active": true,
+      "tags": ["presentation"],
+      "properties": {
+        "pulse": { "type": "float", "value": 0.0 },
+        "pulse_speed": { "type": "float", "value": 1.55 }
+      }
+    },
+    {
+      "name": "entity.settings",
+      "active": true,
+      "tags": ["settings"],
+      "properties": {
+        "difficulty": { "type": "string", "value": "normal" },
+        "show_fps": { "type": "bool", "value": true }
+      }
+    }
+  ],
+  "actor_archetypes": [
+    {
+      "name": "archetype.enemy.drone",
+      "tags": ["enemy", "drone", "threat"],
+      "transform": { "position": [8.7, 0.0, 0.20] },
+      "properties": {
+        "velocity": { "type": "vec2", "value": [-2.9, 0.0] },
+        "hp": { "type": "int", "value": 1 },
+        "points": { "type": "int", "value": 120 },
+        "phase": { "type": "float", "value": 0.0 },
+        "amplitude": { "type": "float", "value": 0.45 },
+        "base_y": { "type": "float", "value": 0.0 },
+        "half_width": { "type": "float", "value": 0.36 },
+        "half_height": { "type": "float", "value": 0.26 }
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [0.72, 0.38, 0.30],
+          "color": [255, 68, 146, 255]
+        },
+        {
+          "type": "render.sphere",
+          "radius": 0.13,
+          "rings": 12,
+          "slices": 16,
+          "offset": [-0.18, 0.0, 0.20],
+          "color": [255, 210, 80, 255],
+          "emissive": true
+        },
+        {
+          "type": "collision.aabb",
+          "half_extents": [0.36, 0.26, 0.18]
+        }
+      ]
+    },
+    {
+      "name": "archetype.enemy.cruiser",
+      "tags": ["enemy", "cruiser", "threat"],
+      "transform": { "position": [8.7, 0.0, 0.22] },
+      "properties": {
+        "velocity": { "type": "vec2", "value": [-1.65, 0.0] },
+        "hp": { "type": "int", "value": 3 },
+        "points": { "type": "int", "value": 350 },
+        "phase": { "type": "float", "value": 0.0 },
+        "amplitude": { "type": "float", "value": 0.25 },
+        "base_y": { "type": "float", "value": 0.0 },
+        "half_width": { "type": "float", "value": 0.58 },
+        "half_height": { "type": "float", "value": 0.34 }
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [1.15, 0.54, 0.36],
+          "color": [140, 255, 82, 255]
+        },
+        {
+          "type": "render.cube",
+          "size": [0.30, 0.84, 0.20],
+          "offset": [0.05, 0.0, 0.08],
+          "color": [82, 255, 205, 255]
+        },
+        {
+          "type": "render.sphere",
+          "radius": 0.17,
+          "rings": 12,
+          "slices": 16,
+          "offset": [-0.38, 0.0, 0.25],
+          "color": [255, 64, 200, 255],
+          "emissive": true
+        },
+        {
+          "type": "collision.aabb",
+          "half_extents": [0.58, 0.34, 0.20]
+        }
+      ]
+    },
+    {
+      "name": "archetype.asteroid",
+      "tags": ["asteroid", "threat"],
+      "transform": { "position": [8.8, 0.0, 0.10] },
+      "properties": {
+        "velocity": { "type": "vec2", "value": [-2.15, 0.0] },
+        "hp": { "type": "int", "value": 4 },
+        "points": { "type": "int", "value": 80 },
+        "radius": { "type": "float", "value": 0.42 },
+        "half_width": { "type": "float", "value": 0.42 },
+        "half_height": { "type": "float", "value": 0.42 }
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.42,
+          "rings": 14,
+          "slices": 18,
+          "color": [126, 104, 96, 255]
+        },
+        {
+          "type": "render.sphere",
+          "radius": 0.11,
+          "rings": 8,
+          "slices": 10,
+          "offset": [0.18, -0.16, 0.22],
+          "color": [80, 255, 160, 255],
+          "emissive": true
+        },
+        {
+          "type": "collision.aabb",
+          "half_extents": [0.42, 0.42, 0.28]
+        }
+      ]
+    },
+    {
+      "name": "archetype.player_shot",
+      "tags": ["projectile", "player_projectile"],
+      "transform": { "position": [0.0, 0.0, 0.32] },
+      "properties": {
+        "owner": { "type": "int", "value": 1 },
+        "velocity": { "type": "vec2", "value": [11.8, 0.0] },
+        "radius": { "type": "float", "value": 0.10 },
+        "damage": { "type": "int", "value": 1 }
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.105,
+          "rings": 14,
+          "slices": 18,
+          "color": [125, 245, 255, 255],
+          "emissive": true
+        },
+        {
+          "type": "render.cube",
+          "size": [0.36, 0.045, 0.045],
+          "offset": [-0.18, 0.0, 0.0],
+          "color": [80, 180, 255, 210],
+          "emissive": true
+        },
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [0.05, 0.04, 0.02],
+          "direction": [-1.0, 0.0, 0.0],
+          "spread": 0.28,
+          "speed_min": 0.5,
+          "speed_max": 1.8,
+          "lifetime_min": 0.10,
+          "lifetime_max": 0.30,
+          "size_start": 0.038,
+          "size_end": 0.004,
+          "gravity": 0.0,
+          "max_particles": 22,
+          "emit_rate": 96.0,
+          "color_start": [110, 240, 255, 220],
+          "color_end": [110, 240, 255, 0],
+          "emissive_intensity": 2.2,
+          "camera_facing": true,
+          "depth_test": true,
+          "draw_emissive": [0.24, 0.92, 1.0],
+          "random_seed": 221
+        }
+      ]
+    },
+    {
+      "name": "archetype.enemy_shot",
+      "tags": ["projectile", "enemy_projectile"],
+      "transform": { "position": [0.0, 0.0, 0.30] },
+      "properties": {
+        "velocity": { "type": "vec2", "value": [-5.8, 0.0] },
+        "radius": { "type": "float", "value": 0.11 }
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.11,
+          "rings": 14,
+          "slices": 18,
+          "color": [255, 72, 168, 255],
+          "emissive": true
+        },
+        {
+          "type": "particles.emitter",
+          "shape": "box",
+          "extents": [0.05, 0.05, 0.02],
+          "direction": [1.0, 0.0, 0.0],
+          "spread": 0.32,
+          "speed_min": 0.45,
+          "speed_max": 1.6,
+          "lifetime_min": 0.11,
+          "lifetime_max": 0.32,
+          "size_start": 0.040,
+          "size_end": 0.004,
+          "gravity": 0.0,
+          "max_particles": 22,
+          "emit_rate": 82.0,
+          "color_start": [255, 70, 190, 220],
+          "color_end": [255, 70, 190, 0],
+          "emissive_intensity": 2.1,
+          "camera_facing": true,
+          "depth_test": true,
+          "draw_emissive": [1.0, 0.12, 0.55],
+          "random_seed": 661
+        }
+      ]
+    },
+    {
+      "name": "archetype.explosion",
+      "tags": ["effect", "explosion"],
+      "transform": { "position": [0.0, 0.0, 0.40] },
+      "properties": {
+        "age": { "type": "float", "value": 0.0 },
+        "ttl": { "type": "float", "value": 0.42 }
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.22,
+          "rings": 12,
+          "slices": 16,
+          "color": [255, 238, 82, 205],
+          "emissive": true
+        },
+        {
+          "type": "particles.emitter",
+          "shape": "sphere",
+          "extents": [0.20, 0.20, 0.10],
+          "direction": [0.0, 0.0, 1.0],
+          "spread": 3.14,
+          "speed_min": 0.65,
+          "speed_max": 2.9,
+          "lifetime_min": 0.14,
+          "lifetime_max": 0.52,
+          "size_start": 0.120,
+          "size_end": 0.006,
+          "gravity": 0.0,
+          "max_particles": 96,
+          "emit_rate": 250.0,
+          "color_start": [255, 230, 70, 235],
+          "color_end": [255, 45, 170, 0],
+          "emissive_intensity": 3.2,
+          "camera_facing": true,
+          "depth_test": true,
+          "draw_emissive": [1.0, 0.55, 0.12],
+          "random_seed": 92811
+        }
+      ]
+    }
+  ],
+  "actor_pools": [
+    {
+      "name": "pool.drones",
+      "archetype": "archetype.enemy.drone",
+      "capacity": 36,
+      "scene": "scene.play",
+      "initial_active": false,
+      "on_exhausted": "reuse_oldest",
+      "on_scene_exit": "reset"
+    },
+    {
+      "name": "pool.cruisers",
+      "archetype": "archetype.enemy.cruiser",
+      "capacity": 12,
+      "scene": "scene.play",
+      "initial_active": false,
+      "on_exhausted": "reuse_oldest",
+      "on_scene_exit": "reset"
+    },
+    {
+      "name": "pool.asteroids",
+      "archetype": "archetype.asteroid",
+      "capacity": 18,
+      "scene": "scene.play",
+      "initial_active": false,
+      "on_exhausted": "reuse_oldest",
+      "on_scene_exit": "reset"
+    },
+    {
+      "name": "pool.player_shots",
+      "archetype": "archetype.player_shot",
+      "capacity": 18,
+      "scene": "scene.play",
+      "initial_active": false,
+      "on_exhausted": "reuse_oldest",
+      "on_scene_exit": "reset"
+    },
+    {
+      "name": "pool.enemy_shots",
+      "archetype": "archetype.enemy_shot",
+      "capacity": 24,
+      "scene": "scene.play",
+      "initial_active": false,
+      "on_exhausted": "reuse_oldest",
+      "on_scene_exit": "reset"
+    },
+    {
+      "name": "pool.explosions",
+      "archetype": "archetype.explosion",
+      "capacity": 48,
+      "scene": "scene.play",
+      "initial_active": false,
+      "on_exhausted": "reuse_oldest",
+      "on_scene_exit": "reset"
+    }
+  ]
+}
+

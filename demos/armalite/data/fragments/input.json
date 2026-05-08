@@ -1,0 +1,161 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "input": {
+    "contexts": [
+      {
+        "name": "input.gameplay",
+        "actions": [
+          {
+            "name": "action.player.left",
+            "bindings": [
+              { "device": "keyboard", "key": "LEFT" },
+              { "device": "keyboard", "key": "A" },
+              { "device": "gamepad", "button": "DPAD_LEFT" },
+              { "device": "gamepad", "axis": "left_x", "scale": -1.0 }
+            ]
+          },
+          {
+            "name": "action.player.right",
+            "bindings": [
+              { "device": "keyboard", "key": "RIGHT" },
+              { "device": "keyboard", "key": "D" },
+              { "device": "gamepad", "button": "DPAD_RIGHT" },
+              { "device": "gamepad", "axis": "left_x", "scale": 1.0 }
+            ]
+          },
+          {
+            "name": "action.player.up",
+            "bindings": [
+              { "device": "keyboard", "key": "UP" },
+              { "device": "keyboard", "key": "W" },
+              { "device": "gamepad", "button": "DPAD_UP" },
+              { "device": "gamepad", "axis": "left_y", "scale": -1.0 }
+            ]
+          },
+          {
+            "name": "action.player.down",
+            "bindings": [
+              { "device": "keyboard", "key": "DOWN" },
+              { "device": "keyboard", "key": "S" },
+              { "device": "gamepad", "button": "DPAD_DOWN" },
+              { "device": "gamepad", "axis": "left_y", "scale": 1.0 }
+            ]
+          },
+          {
+            "name": "action.player.fire",
+            "bindings": [
+              { "device": "keyboard", "key": "SPACE" },
+              { "device": "gamepad", "button": "SOUTH" }
+            ]
+          },
+          {
+            "name": "action.player2.left",
+            "bindings": [
+              { "device": "keyboard", "key": "J" },
+              { "device": "gamepad", "slot": 1, "button": "DPAD_LEFT" },
+              { "device": "gamepad", "slot": 1, "axis": "left_x", "scale": -1.0 }
+            ]
+          },
+          {
+            "name": "action.player2.right",
+            "bindings": [
+              { "device": "keyboard", "key": "L" },
+              { "device": "gamepad", "slot": 1, "button": "DPAD_RIGHT" },
+              { "device": "gamepad", "slot": 1, "axis": "left_x", "scale": 1.0 }
+            ]
+          },
+          {
+            "name": "action.player2.up",
+            "bindings": [
+              { "device": "keyboard", "key": "I" },
+              { "device": "gamepad", "slot": 1, "button": "DPAD_UP" },
+              { "device": "gamepad", "slot": 1, "axis": "left_y", "scale": -1.0 }
+            ]
+          },
+          {
+            "name": "action.player2.down",
+            "bindings": [
+              { "device": "keyboard", "key": "K" },
+              { "device": "gamepad", "slot": 1, "button": "DPAD_DOWN" },
+              { "device": "gamepad", "slot": 1, "axis": "left_y", "scale": 1.0 }
+            ]
+          },
+          {
+            "name": "action.player2.fire",
+            "bindings": [
+              { "device": "keyboard", "key": "RSHIFT" },
+              { "device": "gamepad", "slot": 1, "button": "SOUTH" }
+            ]
+          },
+          {
+            "name": "action.pause",
+            "bindings": [
+              { "device": "keyboard", "key": "RETURN" },
+              { "device": "keyboard", "key": "P" },
+              { "device": "gamepad", "button": "START" }
+            ]
+          },
+          {
+            "name": "action.restart",
+            "bindings": [
+              { "device": "keyboard", "key": "R" },
+              { "device": "gamepad", "button": "NORTH" }
+            ]
+          },
+          {
+            "name": "action.exit",
+            "bindings": [
+              { "device": "keyboard", "key": "BACKSPACE" },
+              { "device": "gamepad", "button": "BACK" }
+            ]
+          },
+          {
+            "name": "action.scene.title",
+            "bindings": [
+              { "device": "keyboard", "key": "F1" }
+            ]
+          },
+          {
+            "name": "action.scene.play",
+            "bindings": [
+              { "device": "keyboard", "key": "F5" }
+            ]
+          },
+          {
+            "name": "action.menu.up",
+            "bindings": [
+              { "device": "keyboard", "key": "UP" },
+              { "device": "gamepad", "button": "DPAD_UP" },
+              { "device": "gamepad", "axis": "left_y", "scale": -1.0 }
+            ]
+          },
+          {
+            "name": "action.menu.down",
+            "bindings": [
+              { "device": "keyboard", "key": "DOWN" },
+              { "device": "gamepad", "button": "DPAD_DOWN" },
+              { "device": "gamepad", "axis": "left_y", "scale": 1.0 }
+            ]
+          },
+          {
+            "name": "action.menu.back",
+            "bindings": [
+              { "device": "keyboard", "key": "ESCAPE" },
+              { "device": "gamepad", "button": "EAST" }
+            ]
+          },
+          {
+            "name": "action.menu.select",
+            "bindings": [
+              { "device": "keyboard", "key": "RETURN" },
+              { "device": "keyboard", "key": "SPACE" },
+              { "device": "mouse", "button": "LEFT" },
+              { "device": "gamepad", "button": "SOUTH" }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
