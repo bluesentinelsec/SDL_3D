@@ -827,6 +827,25 @@ Logic connects sensors, timers, signals, conditions, and actions:
 Use JSON actions for ordinary composition. Use Lua adapters only for
 game-specific calculations or policy that is not a reusable engine primitive.
 
+`property.set` and `property.add` normally target a fixed actor:
+
+```json
+{ "type": "property.add", "target": "entity.player", "key": "health", "value": -1 }
+```
+
+Use `target_from_payload` when a sensor or previous action supplies the actor
+name. Use `value_from_payload` when the amount should come from sensor payload
+data:
+
+```json
+{
+  "type": "property.add",
+  "target_from_payload": "actor_name",
+  "key": "damage_taken",
+  "value_from_payload": "sector_damage_delta"
+}
+```
+
 `collision.on_overlap` is a data-action variant of the 2D contact sensor. It
 matches actors by fixed actor names or tags, publishes `actor_name` and
 `other_actor_name` in the action payload, and runs actions when overlap occurs.
@@ -849,6 +868,37 @@ matches actors by fixed actor names or tags, publishes `actor_name` and
 
 `edge` may be `enter` for first contact only or `stay` / `overlap` for every
 update while actors overlap.
+
+`sensor.sector` detects when an actor is inside an authored sector from a
+`sector_levels` entry. It can fire on `enter`, `stay` / `overlap`, or `exit`;
+authors can use separate sensors for different edges. The payload includes
+`actor_name`, `sector_level`, `sector_name`, `sector_index`,
+`sector_damage_per_second`, `sector_damage_delta`, and `ambient_sound_id`.
+`sector_damage_delta` is `damage_per_second * dt`, so damage-over-time sectors
+can be authored without Lua:
+
+```json
+{
+  "name": "sensor.nukage.damage",
+  "type": "sensor.sector",
+  "actor": "entity.player",
+  "sector_level": "sector.doom.e1m1",
+  "sector": "nukage_basin",
+  "edge": "stay",
+  "actions": [
+    {
+      "type": "property.add",
+      "target_from_payload": "actor_name",
+      "key": "damage_taken",
+      "value_from_payload": "sector_damage_delta"
+    }
+  ]
+}
+```
+
+Use `actor_tag` instead of `actor` to apply a sector sensor to every active
+actor with a matching tag. `sector_index` may be used instead of `sector` when
+the authored sector order is deliberate and stable.
 
 `logic.wave_schedules` spawn actors from pools over time:
 

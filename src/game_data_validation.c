@@ -4275,6 +4275,39 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
     return true;
 }
 
+static yyjson_val *find_sector_level_json(yyjson_val *root, const char *level_name)
+{
+    yyjson_val *levels = obj_get(root, "sector_levels");
+    for (size_t i = 0; level_name != NULL && yyjson_is_arr(levels) && i < yyjson_arr_size(levels); ++i)
+    {
+        yyjson_val *level = yyjson_arr_get(levels, i);
+        const char *name = json_string(level, "name");
+        if (name != NULL && SDL_strcmp(name, level_name) == 0)
+            return level;
+    }
+    return NULL;
+}
+
+static bool sector_level_has_sector_name(yyjson_val *root, const char *level_name, const char *sector_name)
+{
+    yyjson_val *level = find_sector_level_json(root, level_name);
+    yyjson_val *sectors = obj_get(level, "sectors");
+    for (size_t i = 0; sector_name != NULL && yyjson_is_arr(sectors) && i < yyjson_arr_size(sectors); ++i)
+    {
+        const char *name = json_string(yyjson_arr_get(sectors, i), "name");
+        if (name != NULL && SDL_strcmp(name, sector_name) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool sector_level_has_sector_index(yyjson_val *root, const char *level_name, int sector_index)
+{
+    yyjson_val *level = find_sector_level_json(root, level_name);
+    yyjson_val *sectors = obj_get(level, "sectors");
+    return yyjson_is_arr(sectors) && sector_index >= 0 && (size_t)sector_index < yyjson_arr_size(sectors);
+}
+
 static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *archetypes = obj_get(root, "actor_archetypes");
@@ -4533,12 +4566,31 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         return require_ref(ctx, &names->timers, "timer", json_string(action, "timer"), json_path);
     if (SDL_strcmp(type, "property.set") == 0 || SDL_strcmp(type, "property.add") == 0)
     {
-        if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
+        yyjson_val *target_value = obj_get(action, "target");
+        yyjson_val *target_from_payload_value = obj_get(action, "target_from_payload");
+        const char *target = json_string(action, "target");
+        const char *target_from_payload = json_string(action, "target_from_payload");
+        if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
+            return validation_error(ctx, json_path, "%s requires exactly one of target or target_from_payload", type);
+        if (target_value != NULL && !yyjson_is_str(target_value))
+            return validation_error(ctx, json_path, "%s target must be a string", type);
+        if (target_from_payload_value != NULL && !yyjson_is_str(target_from_payload_value))
+            return validation_error(ctx, json_path, "%s target_from_payload must be a string", type);
+        if (target != NULL && !require_ref(ctx, &names->entities, "entity", target, json_path))
             return false;
+        if (target_from_payload != NULL && target_from_payload[0] == '\0')
+            return validation_error(ctx, json_path, "%s target_from_payload must be non-empty", type);
         if (!is_non_empty_string(action, "key"))
             return validation_error(ctx, json_path, "%s requires a non-empty key", type);
-        if (obj_get(action, "value") == NULL)
-            return validation_error(ctx, json_path, "%s requires a value", type);
+        yyjson_val *value = obj_get(action, "value");
+        yyjson_val *value_from_payload_value = obj_get(action, "value_from_payload");
+        const char *value_from_payload = json_string(action, "value_from_payload");
+        if ((value == NULL && value_from_payload == NULL) || (value != NULL && value_from_payload != NULL))
+            return validation_error(ctx, json_path, "%s requires exactly one of value or value_from_payload", type);
+        if (value_from_payload_value != NULL && !yyjson_is_str(value_from_payload_value))
+            return validation_error(ctx, json_path, "%s value_from_payload must be a string", type);
+        if (value_from_payload != NULL && value_from_payload[0] == '\0')
+            return validation_error(ctx, json_path, "%s value_from_payload must be non-empty", type);
         return true;
     }
     if (SDL_strcmp(type, "property.snapshot") == 0 || SDL_strcmp(type, "property.restore_snapshot") == 0)
@@ -5247,6 +5299,65 @@ static bool validate_logic(validation_context *ctx, yyjson_val *root, validation
         {
             if (!require_ref(ctx, &names->actions, "input action", json_string(sensor, "action"), path) ||
                 !require_ref(ctx, &names->signals, "signal", json_string(sensor, "on_pressed"), path))
+                return false;
+            continue;
+        }
+        if (SDL_strcmp(type, "sensor.sector") == 0)
+        {
+            const char *actor = json_string(sensor, "actor");
+            if (actor == NULL)
+                actor = json_string(sensor, "entity");
+            const char *actor_tag = json_string(sensor, "actor_tag");
+            if (actor_tag == NULL)
+                actor_tag = json_string(sensor, "a_tag");
+            const char *sector_level = json_string(sensor, "sector_level");
+            const char *sector = json_string(sensor, "sector");
+            yyjson_val *sector_index = obj_get(sensor, "sector_index");
+            yyjson_val *actions = obj_get(sensor, "actions");
+            const char *edge = json_string(sensor, "edge");
+            const char *signal = json_string(sensor, "on_enter");
+            if (edge != NULL && (SDL_strcmp(edge, "stay") == 0 || SDL_strcmp(edge, "overlap") == 0))
+            {
+                const char *on_stay = json_string(sensor, "on_stay");
+                signal = on_stay != NULL ? on_stay : signal;
+            }
+            else if (edge != NULL && SDL_strcmp(edge, "exit") == 0)
+            {
+                const char *on_exit = json_string(sensor, "on_exit");
+                signal = on_exit != NULL ? on_exit : signal;
+            }
+
+            if ((actor == NULL && actor_tag == NULL) || (actor != NULL && actor_tag != NULL))
+                return validation_error(ctx, path, "sensor.sector requires exactly one of actor or actor_tag");
+            if (actor != NULL && !require_actor_ref(ctx, names, actor, path))
+                return false;
+            if (actor_tag != NULL && actor_tag[0] == '\0')
+                return validation_error(ctx, path, "sensor.sector actor_tag must be non-empty");
+            if (!require_ref(ctx, &names->sector_levels, "sector level", sector_level, path))
+                return false;
+            if ((sector == NULL && sector_index == NULL) || (sector != NULL && sector_index != NULL))
+                return validation_error(ctx, path, "sensor.sector requires exactly one of sector or sector_index");
+            if (sector != NULL && !sector_level_has_sector_name(root, sector_level, sector))
+                return validation_error(ctx, path, "unknown sensor.sector sector '%s'", sector);
+            if (sector_index != NULL &&
+                (!yyjson_is_int(sector_index) ||
+                 !sector_level_has_sector_index(root, sector_level, (int)yyjson_get_int(sector_index))))
+            {
+                return validation_error(ctx, path,
+                                        "sensor.sector sector_index must reference a sector in sector_level");
+            }
+            if (edge != NULL && SDL_strcmp(edge, "enter") != 0 && SDL_strcmp(edge, "stay") != 0 &&
+                SDL_strcmp(edge, "overlap") != 0 && SDL_strcmp(edge, "exit") != 0)
+            {
+                return validation_error(ctx, path, "sensor.sector edge must be enter, stay, overlap, or exit");
+            }
+            yyjson_val *sector_property = obj_get(sensor, "sector_property");
+            if (sector_property != NULL &&
+                (!yyjson_is_str(sector_property) || yyjson_get_str(sector_property)[0] == '\0'))
+                return validation_error(ctx, path, "sensor.sector sector_property must be a non-empty string");
+            if (actions != NULL && !validate_action_array(ctx, actions, path, names))
+                return false;
+            if (actions == NULL && !require_ref(ctx, &names->signals, "signal", signal, path))
                 return false;
             continue;
         }
