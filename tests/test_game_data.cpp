@@ -7776,6 +7776,65 @@ TEST(GameDataRuntime, RejectsInvalidFpsSectorController)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, RejectsFpsSectorControllerOnArchetypes)
+{
+    const std::filesystem::path dir = unique_test_dir("fps_sector_controller_archetype_invalid");
+    write_text(dir / "fps_sector_archetype.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid FPS Sector Archetype Controller" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.play",
+        "actions": [
+          { "name": "action.move.forward" },
+          { "name": "action.move.back" },
+          { "name": "action.move.left" },
+          { "name": "action.move.right" }
+        ]
+      }
+    ]
+  },
+  "sector_levels": [
+    {
+      "name": "sector.test",
+      "materials": [{ "name": "floor" }],
+      "sectors": [{
+        "points": [[0, 0], [4, 0], [4, 4], [0, 4]],
+        "floor_y": 0,
+        "ceil_y": 3,
+        "wall_material": "floor"
+      }]
+    }
+  ],
+  "actor_archetypes": [
+    {
+      "name": "archetype.player",
+      "components": [
+        {
+          "type": "controller.fps_sector",
+          "sector_level": "sector.test",
+          "actions": {
+            "forward": "action.move.forward",
+            "back": "action.move.back",
+            "left": "action.move.left",
+            "right": "action.move.right"
+          }
+        }
+      ]
+    }
+  ]
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "fps_sector_archetype.game.json").string().c_str(), nullptr,
+                                               error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("only supported on static entities"), std::string::npos) << error;
+
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidSceneSectorLevelInstances)
 {
     const std::filesystem::path dir = unique_test_dir("sector_level_scene_invalid");

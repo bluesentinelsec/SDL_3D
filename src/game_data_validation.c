@@ -4198,8 +4198,8 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
             }
             if (SDL_strcmp(type, "controller.fps_sector") == 0)
             {
-                if (!validate_fps_sector_component(ctx, component, component_path, names))
-                    return false;
+                return validation_error(ctx, component_path,
+                                        "controller.fps_sector is only supported on static entities");
             }
             else if (SDL_strcmp(type, "motion.grid_agent") == 0)
             {
