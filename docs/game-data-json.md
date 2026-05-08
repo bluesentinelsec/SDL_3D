@@ -179,6 +179,10 @@ Camera types:
   `camera_forward`, with `fallback_forward` used when that property is near
   zero. Use `chase_distance: 0` for actor-perspective cameras and larger
   values for behind-the-actor chase cameras.
+- `fps`: reads a first-person sector controller from `target_entity` and
+  renders from that actor's eye position. If the controller has not updated
+  yet, the camera falls back to the actor's `yaw`, `pitch`, and `view_smooth`
+  properties.
 - `adapter`: delegates camera ownership to a native or Lua adapter.
 
 ## Storage And Persistence
@@ -356,6 +360,53 @@ computes visibility from the active camera before drawing the level.
 Renderer, controller, and editor phases should consume runtime descriptors
 instead of parsing JSON directly. `world.kind` remains a high-level statement
 of spatial intent; `sector_levels` is the concrete sector-world data.
+
+Use `controller.fps_sector` on an actor to drive first-person movement through
+a sector level:
+
+```json
+{
+  "name": "entity.player",
+  "active": true,
+  "transform": { "position": [5.0, 1.6, 4.0] },
+  "properties": {
+    "yaw": { "type": "float", "value": 3.14159 },
+    "pitch": { "type": "float", "value": 0.0 },
+    "current_sector": { "type": "int", "value": -1 }
+  },
+  "components": [
+    {
+      "type": "controller.fps_sector",
+      "sector_level": "sector.e1m1",
+      "actions": {
+        "forward": "action.move.forward",
+        "back": "action.move.back",
+        "left": "action.move.left",
+        "right": "action.move.right",
+        "jump": "action.jump"
+      },
+      "move_speed": 12.0,
+      "jump_velocity": 6.0,
+      "gravity": 14.0,
+      "player_height": 1.6,
+      "player_radius": 0.35,
+      "step_height": 1.1,
+      "ceiling_clearance": 0.1,
+      "mouse_sensitivity": 0.002
+    }
+  ]
+}
+```
+
+The actor transform is the player's eye position; feet are
+`position.y - player_height`. The controller applies sector collision, stair
+stepping, wall sliding, gravity, jumping, and mouse-look. It writes the actor's
+position plus diagnostic properties each frame. Property names can be customized
+with `yaw_property`, `pitch_property`, `view_smooth_property`,
+`vertical_velocity_property`, `on_ground_property`, and `sector_property`; the
+defaults are `yaw`, `pitch`, `view_smooth`, `vertical_velocity`, `on_ground`,
+and `current_sector`. Use an `fps` camera targeting the same actor for the
+player view.
 
 ## Scenes
 
@@ -629,6 +680,9 @@ Reusable components include:
   effects instead of scanning active actors in Lua.
 - `motion.grid_agent`: moves an actor along an authored `grid_maps` maze with
   queued turns, walkability checks, center snapping, and optional map wrapping.
+- `controller.fps_sector`: first-person movement through a sector level using
+  authored input actions, sector collision, jumping, gravity, stair stepping,
+  and mouse-look.
 - `motion.scroll_wrap`: scrolls an actor along one axis and wraps to the
   opposite bound. This is intended for parallax panels, repeating stars, clouds,
   conveyor belts, and similar backgrounds.

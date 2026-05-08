@@ -20,6 +20,7 @@
 #include "network_replication_schema.h"
 #include "script_internal.h"
 #include "sdl3d/asset.h"
+#include "sdl3d/fps_mover.h"
 #include "sdl3d/input.h"
 #include "sdl3d/math.h"
 #include "sdl3d/network.h"
@@ -339,6 +340,14 @@ typedef struct sector_level_runtime
     sdl3d_level unlit;
 } sector_level_runtime;
 
+typedef struct fps_controller_runtime
+{
+    const char *entity_name;
+    yyjson_val *component;
+    sdl3d_fps_mover mover;
+    bool initialized;
+} fps_controller_runtime;
+
 typedef enum actor_pool_exhaustion_policy
 {
     ACTOR_POOL_EXHAUST_FAIL,
@@ -494,6 +503,9 @@ typedef struct sdl3d_game_data_runtime
     int grid_pickup_layer_count;
     sector_level_runtime *sector_levels;
     int sector_level_count;
+    fps_controller_runtime *fps_controllers;
+    int fps_controller_count;
+    int fps_controller_capacity;
     actor_pool_runtime *actor_pools;
     int actor_pool_count;
     runtime_direct_connect_session *direct_connect_sessions;
@@ -3439,6 +3451,66 @@ static yyjson_val *find_camera_json(const sdl3d_game_data_runtime *runtime, cons
     return NULL;
 }
 
+static fps_controller_runtime *find_fps_controller(sdl3d_game_data_runtime *runtime, const char *entity_name)
+{
+    if (runtime == NULL || entity_name == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->fps_controller_count; ++i)
+    {
+        fps_controller_runtime *controller = &runtime->fps_controllers[i];
+        if (controller->entity_name != NULL && SDL_strcmp(controller->entity_name, entity_name) == 0)
+            return controller;
+    }
+    return NULL;
+}
+
+static const fps_controller_runtime *find_fps_controller_const(const sdl3d_game_data_runtime *runtime,
+                                                               const char *entity_name)
+{
+    if (runtime == NULL || entity_name == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->fps_controller_count; ++i)
+    {
+        const fps_controller_runtime *controller = &runtime->fps_controllers[i];
+        if (controller->entity_name != NULL && SDL_strcmp(controller->entity_name, entity_name) == 0)
+            return controller;
+    }
+    return NULL;
+}
+
+static fps_controller_runtime *find_or_add_fps_controller(sdl3d_game_data_runtime *runtime, const char *entity_name,
+                                                          yyjson_val *component)
+{
+    fps_controller_runtime *controller = find_fps_controller(runtime, entity_name);
+    if (controller != NULL)
+    {
+        if (component != NULL && controller->component != component)
+        {
+            controller->component = component;
+            controller->initialized = false;
+        }
+        return controller;
+    }
+    if (runtime == NULL || entity_name == NULL || component == NULL)
+        return NULL;
+    if (runtime->fps_controller_count >= runtime->fps_controller_capacity)
+    {
+        const int next_capacity = runtime->fps_controller_capacity > 0 ? runtime->fps_controller_capacity * 2 : 4;
+        fps_controller_runtime *controllers = (fps_controller_runtime *)SDL_realloc(
+            runtime->fps_controllers, (size_t)next_capacity * sizeof(*controllers));
+        if (controllers == NULL)
+            return NULL;
+        runtime->fps_controllers = controllers;
+        runtime->fps_controller_capacity = next_capacity;
+    }
+
+    controller = &runtime->fps_controllers[runtime->fps_controller_count++];
+    SDL_zero(*controller);
+    controller->entity_name = entity_name;
+    controller->component = component;
+    return controller;
+}
+
 static sdl3d_backend parse_backend(const char *value, sdl3d_backend fallback)
 {
     if (value == NULL)
@@ -4813,6 +4885,34 @@ bool sdl3d_game_data_get_camera(const sdl3d_game_data_runtime *runtime, const ch
     const char *type = json_string(camera_json, "type", "perspective");
     if (SDL_strcmp(type, "adapter") == 0)
         return false;
+
+    if (SDL_strcmp(type, "fps") == 0)
+    {
+        sdl3d_registered_actor *target =
+            sdl3d_game_data_find_actor(runtime, json_string(camera_json, "target_entity", NULL));
+        if (target == NULL)
+            return false;
+
+        const float fovy = json_float(camera_json, "fovy", 65.0f);
+        const fps_controller_runtime *controller = find_fps_controller_const(runtime, target->name);
+        if (controller != NULL && controller->initialized)
+        {
+            *out_camera = sdl3d_fps_mover_camera(&controller->mover, fovy);
+            return true;
+        }
+
+        sdl3d_fps_mover fallback_mover;
+        SDL_zero(fallback_mover);
+        fallback_mover.position = target->position;
+        fallback_mover.yaw = sdl3d_properties_get_float(target->props, json_string(camera_json, "yaw_property", "yaw"),
+                                                        json_float(camera_json, "yaw", 0.0f));
+        fallback_mover.pitch = sdl3d_properties_get_float(
+            target->props, json_string(camera_json, "pitch_property", "pitch"), json_float(camera_json, "pitch", 0.0f));
+        fallback_mover.view_smooth = sdl3d_properties_get_float(
+            target->props, json_string(camera_json, "view_smooth_property", "view_smooth"), 0.0f);
+        *out_camera = sdl3d_fps_mover_camera(&fallback_mover, fovy);
+        return true;
+    }
 
     if (SDL_strcmp(type, "chase") == 0)
     {
@@ -13948,6 +14048,112 @@ static bool load_scenes(sdl3d_game_data_runtime *runtime, yyjson_val *root, cons
     return true;
 }
 
+static int fps_controller_action_id(const sdl3d_game_data_runtime *runtime, yyjson_val *component, const char *name)
+{
+    yyjson_val *actions = obj_get(component, "actions");
+    const char *action = json_string(actions, name, NULL);
+    return sdl3d_game_data_find_action(runtime, action);
+}
+
+static float fps_controller_action_value(const sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input,
+                                         int action_id)
+{
+    if (input == NULL || action_id < 0 || !sdl3d_game_data_active_scene_allows_action(runtime, action_id))
+        return 0.0f;
+    return sdl3d_input_get_value(input, action_id);
+}
+
+static bool fps_controller_action_pressed(const sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input,
+                                          int action_id)
+{
+    return input != NULL && action_id >= 0 && sdl3d_game_data_active_scene_allows_action(runtime, action_id) &&
+           sdl3d_input_is_pressed(input, action_id);
+}
+
+static void fps_controller_publish_actor_state(const fps_controller_runtime *controller, yyjson_val *component,
+                                               sdl3d_registered_actor *actor)
+{
+    if (controller == NULL || component == NULL || actor == NULL)
+        return;
+    actor_set_position(actor, controller->mover.position);
+    sdl3d_properties_set_float(actor->props, json_string(component, "yaw_property", "yaw"), controller->mover.yaw);
+    sdl3d_properties_set_float(actor->props, json_string(component, "pitch_property", "pitch"),
+                               controller->mover.pitch);
+    sdl3d_properties_set_float(actor->props, json_string(component, "view_smooth_property", "view_smooth"),
+                               controller->mover.view_smooth);
+    sdl3d_properties_set_float(actor->props, json_string(component, "vertical_velocity_property", "vertical_velocity"),
+                               controller->mover.vertical_velocity);
+    sdl3d_properties_set_bool(actor->props, json_string(component, "on_ground_property", "on_ground"),
+                              controller->mover.on_ground);
+    sdl3d_properties_set_int(actor->props, json_string(component, "sector_property", "current_sector"),
+                             controller->mover.current_sector);
+}
+
+static void update_fps_sector_controller(sdl3d_game_data_runtime *runtime, yyjson_val *component,
+                                         sdl3d_registered_actor *actor, const sdl3d_input_manager *input, float dt)
+{
+    if (runtime == NULL || component == NULL || actor == NULL)
+        return;
+
+    const sector_level_runtime *sector_level =
+        find_sector_level_runtime(runtime, json_string(component, "sector_level", NULL));
+    if (sector_level == NULL)
+        return;
+
+    fps_controller_runtime *controller = find_or_add_fps_controller(runtime, actor->name, component);
+    if (controller == NULL)
+        return;
+
+    if (!controller->initialized)
+    {
+        sdl3d_fps_mover_config config;
+        SDL_zero(config);
+        config.move_speed = json_float(component, "move_speed", 12.0f);
+        config.jump_velocity = json_float(component, "jump_velocity", 6.0f);
+        config.gravity = json_float(component, "gravity", 14.0f);
+        config.player_height = json_float(component, "player_height", 1.6f);
+        config.player_radius = json_float(component, "player_radius", 0.35f);
+        config.step_height = json_float(component, "step_height", 1.1f);
+        config.ceiling_clearance = json_float(component, "ceiling_clearance", 0.1f);
+        const float yaw = sdl3d_properties_get_float(actor->props, json_string(component, "yaw_property", "yaw"),
+                                                     json_float(component, "spawn_yaw", 0.0f));
+        sdl3d_fps_mover_init(&controller->mover, &config, actor->position, yaw);
+        controller->mover.pitch =
+            sdl3d_properties_get_float(actor->props, json_string(component, "pitch_property", "pitch"),
+                                       json_float(component, "spawn_pitch", 0.0f));
+        controller->initialized = true;
+    }
+
+    const int forward_action = fps_controller_action_id(runtime, component, "forward");
+    const int back_action = fps_controller_action_id(runtime, component, "back");
+    const int left_action = fps_controller_action_id(runtime, component, "left");
+    const int right_action = fps_controller_action_id(runtime, component, "right");
+    const int jump_action = fps_controller_action_id(runtime, component, "jump");
+
+    if (fps_controller_action_pressed(runtime, input, jump_action))
+        sdl3d_fps_mover_jump(&controller->mover);
+
+    const float forward = fps_controller_action_value(runtime, input, forward_action) -
+                          fps_controller_action_value(runtime, input, back_action);
+    const float side = fps_controller_action_value(runtime, input, right_action) -
+                       fps_controller_action_value(runtime, input, left_action);
+    const float fwd_x = SDL_sinf(controller->mover.yaw);
+    const float fwd_z = -SDL_cosf(controller->mover.yaw);
+    const float right_x = SDL_cosf(controller->mover.yaw);
+    const float right_z = SDL_sinf(controller->mover.yaw);
+    const sdl3d_vec2 wish = {
+        fwd_x * forward + right_x * side,
+        fwd_z * forward + right_z * side,
+    };
+
+    const bool mouse_look = json_bool(component, "mouse_look", true);
+    const float mouse_dx = mouse_look && input != NULL ? sdl3d_input_get_mouse_dx(input) : 0.0f;
+    const float mouse_dy = mouse_look && input != NULL ? sdl3d_input_get_mouse_dy(input) : 0.0f;
+    sdl3d_fps_mover_update(&controller->mover, &sector_level->lightmapped, sector_level->sectors, wish, mouse_dx,
+                           mouse_dy, json_float(component, "mouse_sensitivity", 0.002f), dt);
+    fps_controller_publish_actor_state(controller, component, actor);
+}
+
 static void update_control_components(sdl3d_game_data_runtime *runtime, yyjson_val *root, float dt)
 {
     sdl3d_input_manager *input = runtime_input(runtime);
@@ -14008,6 +14214,10 @@ static void update_control_components(sdl3d_game_data_runtime *runtime, yyjson_v
                     invoke_adapter(runtime, adapter, actor, payload);
                     sdl3d_properties_destroy(payload);
                 }
+            }
+            else if (SDL_strcmp(type, "controller.fps_sector") == 0)
+            {
+                update_fps_sector_controller(runtime, component, actor, input, dt);
             }
         }
     }
@@ -17353,6 +17563,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->grid_actor_indices);
     SDL_free(runtime->grid_pickup_layers);
     SDL_free(runtime->sector_levels);
+    SDL_free(runtime->fps_controllers);
     SDL_free(runtime->actor_pools);
     SDL_free(runtime->direct_connect_sessions);
     SDL_free(runtime->host_sessions);
