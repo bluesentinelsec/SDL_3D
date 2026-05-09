@@ -4955,6 +4955,39 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             return validation_error(ctx, json_path, "projectile.fire properties must be an object");
         return true;
     }
+    if (SDL_strcmp(type, "controller.fps_sector.launch") == 0 ||
+        SDL_strcmp(type, "controller.fps_sector.teleport") == 0)
+    {
+        yyjson_val *target_value = obj_get(action, "target");
+        yyjson_val *target_from_payload_value = obj_get(action, "target_from_payload");
+        const char *target = json_string(action, "target");
+        const char *target_from_payload = json_string(action, "target_from_payload");
+        if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
+            return validation_error(ctx, json_path, "%s requires exactly one of target or target_from_payload", type);
+        if (target_value != NULL && !yyjson_is_str(target_value))
+            return validation_error(ctx, json_path, "%s target must be a string", type);
+        if (target != NULL && !require_ref(ctx, &names->entities, "entity", target, json_path))
+            return false;
+        if (target_from_payload_value != NULL &&
+            (!yyjson_is_str(target_from_payload_value) || yyjson_get_str(target_from_payload_value)[0] == '\0'))
+            return validation_error(ctx, json_path, "%s target_from_payload must be a non-empty string", type);
+        if (SDL_strcmp(type, "controller.fps_sector.launch") == 0)
+        {
+            yyjson_val *vertical_velocity = obj_get(action, "vertical_velocity");
+            if (!yyjson_is_num(vertical_velocity) || yyjson_get_num(vertical_velocity) <= 0.0)
+                return validation_error(ctx, json_path,
+                                        "controller.fps_sector.launch requires positive vertical_velocity");
+            return true;
+        }
+
+        if (!is_vec_array(obj_get(action, "position"), 3))
+            return validation_error(ctx, json_path, "controller.fps_sector.teleport requires a vec3 position");
+        yyjson_val *yaw = obj_get(action, "yaw");
+        yyjson_val *pitch = obj_get(action, "pitch");
+        if ((yaw != NULL && !yyjson_is_num(yaw)) || (pitch != NULL && !yyjson_is_num(pitch)))
+            return validation_error(ctx, json_path, "controller.fps_sector.teleport yaw and pitch must be numeric");
+        return true;
+    }
     if (SDL_strcmp(type, "grid.spawn_from_glyphs") == 0 || SDL_strcmp(type, "grid.spawn_runs_from_glyphs") == 0)
     {
         if (!require_ref(ctx, &names->grid_maps, "grid map", json_string(action, "map"), json_path))

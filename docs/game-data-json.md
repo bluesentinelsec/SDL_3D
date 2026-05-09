@@ -474,6 +474,35 @@ defaults are `yaw`, `pitch`, `view_smooth`, `vertical_velocity`, `on_ground`,
 and `current_sector`. Use an `fps` camera targeting the same actor for the
 player view.
 
+FPS sector controllers also expose reusable actions for trigger volumes and
+scripted events:
+
+```json
+{
+  "type": "controller.fps_sector.launch",
+  "target": "entity.player",
+  "vertical_velocity": 15.0
+}
+```
+
+`controller.fps_sector.launch` applies an upward impulse to the controller and
+requires a positive `vertical_velocity`.
+
+```json
+{
+  "type": "controller.fps_sector.teleport",
+  "target": "entity.player",
+  "position": [72.0, 4.1, 63.0],
+  "yaw": -1.5707964,
+  "pitch": 0.0
+}
+```
+
+`controller.fps_sector.teleport` moves the controller and actor to the given
+eye-position. `yaw` and `pitch` are optional; omitted angles preserve the
+current orientation. Both actions also support `target_from_payload` instead of
+`target` when a sensor payload supplies the actor name.
+
 ## Scenes
 
 `scenes` defines the initial scene and scene files or packages:

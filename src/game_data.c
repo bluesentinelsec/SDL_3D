@@ -6791,6 +6791,10 @@ static yyjson_val *active_timeline_events(const sdl3d_game_data_runtime *runtime
 }
 
 static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const sdl3d_properties *payload);
+static bool execute_fps_controller_launch_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                                 const sdl3d_properties *payload);
+static bool execute_fps_controller_teleport_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                                   const sdl3d_properties *payload);
 static sdl3d_registered_actor *actor_from_payload_key(sdl3d_game_data_runtime *runtime, const sdl3d_properties *payload,
                                                       const char *key);
 
@@ -13814,6 +13818,10 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
 
     if (SDL_strcmp(type, "projectile.fire") == 0)
         return execute_projectile_fire_action(runtime, action, payload);
+    if (SDL_strcmp(type, "controller.fps_sector.launch") == 0)
+        return execute_fps_controller_launch_action(runtime, action, payload);
+    if (SDL_strcmp(type, "controller.fps_sector.teleport") == 0)
+        return execute_fps_controller_teleport_action(runtime, action, payload);
     if (SDL_strcmp(type, "grid.spawn_from_glyphs") == 0)
         return execute_grid_spawn_from_glyphs_action(runtime, action);
     if (SDL_strcmp(type, "grid.spawn_runs_from_glyphs") == 0)
@@ -14655,6 +14663,93 @@ static void fps_controller_publish_actor_state(const fps_controller_runtime *con
                              controller->mover.current_sector);
 }
 
+static bool initialize_fps_controller_runtime(sdl3d_game_data_runtime *runtime, fps_controller_runtime *controller,
+                                              yyjson_val *component, sdl3d_registered_actor *actor)
+{
+    (void)runtime;
+    if (controller == NULL || component == NULL || actor == NULL)
+        return false;
+    if (controller->initialized)
+        return true;
+
+    sdl3d_fps_mover_config config;
+    SDL_zero(config);
+    config.move_speed = json_float(component, "move_speed", 12.0f);
+    config.jump_velocity = json_float(component, "jump_velocity", 6.0f);
+    config.gravity = json_float(component, "gravity", 14.0f);
+    config.player_height = json_float(component, "player_height", 1.6f);
+    config.player_radius = json_float(component, "player_radius", 0.35f);
+    config.step_height = json_float(component, "step_height", 1.1f);
+    config.ceiling_clearance = json_float(component, "ceiling_clearance", 0.1f);
+    const float yaw = sdl3d_properties_get_float(actor->props, json_string(component, "yaw_property", "yaw"),
+                                                 json_float(component, "spawn_yaw", 0.0f));
+    sdl3d_fps_mover_init(&controller->mover, &config, actor->position, yaw);
+    controller->mover.pitch = sdl3d_properties_get_float(
+        actor->props, json_string(component, "pitch_property", "pitch"), json_float(component, "spawn_pitch", 0.0f));
+    controller->initialized = true;
+    fps_controller_publish_actor_state(controller, component, actor);
+    return true;
+}
+
+static fps_controller_runtime *fps_controller_for_actor_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                                               const sdl3d_properties *payload,
+                                                               sdl3d_registered_actor **out_actor,
+                                                               yyjson_val **out_component)
+{
+    const char *target = json_string(action, "target", NULL);
+    const char *target_from_payload = json_string(action, "target_from_payload", NULL);
+    if ((target == NULL || target[0] == '\0') && target_from_payload != NULL && payload != NULL)
+        target = sdl3d_properties_get_string(payload, target_from_payload, NULL);
+
+    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, target);
+    yyjson_val *entity = find_entity_json(runtime, target);
+    yyjson_val *component = find_component_json(entity, "controller.fps_sector");
+    fps_controller_runtime *controller =
+        actor != NULL && component != NULL ? find_or_add_fps_controller(runtime, target, component) : NULL;
+    if (controller == NULL || !initialize_fps_controller_runtime(runtime, controller, component, actor))
+        return NULL;
+
+    if (out_actor != NULL)
+        *out_actor = actor;
+    if (out_component != NULL)
+        *out_component = component;
+    return controller;
+}
+
+static bool execute_fps_controller_launch_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                                 const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *actor = NULL;
+    yyjson_val *component = NULL;
+    fps_controller_runtime *controller = fps_controller_for_actor_action(runtime, action, payload, &actor, &component);
+    const float vertical_velocity = json_float(action, "vertical_velocity", 0.0f);
+    if (controller == NULL || vertical_velocity <= 0.0f)
+        return false;
+
+    sdl3d_fps_mover_launch(&controller->mover, vertical_velocity);
+    fps_controller_publish_actor_state(controller, component, actor);
+    return true;
+}
+
+static bool execute_fps_controller_teleport_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                                   const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *actor = NULL;
+    yyjson_val *component = NULL;
+    fps_controller_runtime *controller = fps_controller_for_actor_action(runtime, action, payload, &actor, &component);
+    yyjson_val *position = obj_get(action, "position");
+    if (controller == NULL || !yyjson_is_arr(position) || yyjson_arr_size(position) != 3)
+        return false;
+
+    yyjson_val *yaw = obj_get(action, "yaw");
+    yyjson_val *pitch = obj_get(action, "pitch");
+    sdl3d_fps_mover_teleport(&controller->mover, json_vec3_value(position, actor->position), yyjson_is_num(yaw),
+                             json_float(action, "yaw", controller->mover.yaw), yyjson_is_num(pitch),
+                             json_float(action, "pitch", controller->mover.pitch));
+    fps_controller_publish_actor_state(controller, component, actor);
+    return true;
+}
+
 static sdl3d_bounding_box sector_door_closed_bounds(const sdl3d_door *door)
 {
     if (door == NULL || door->panel_count <= 0)
@@ -14750,25 +14845,8 @@ static void update_fps_sector_controller(sdl3d_game_data_runtime *runtime, yyjso
     if (controller == NULL)
         return;
 
-    if (!controller->initialized)
-    {
-        sdl3d_fps_mover_config config;
-        SDL_zero(config);
-        config.move_speed = json_float(component, "move_speed", 12.0f);
-        config.jump_velocity = json_float(component, "jump_velocity", 6.0f);
-        config.gravity = json_float(component, "gravity", 14.0f);
-        config.player_height = json_float(component, "player_height", 1.6f);
-        config.player_radius = json_float(component, "player_radius", 0.35f);
-        config.step_height = json_float(component, "step_height", 1.1f);
-        config.ceiling_clearance = json_float(component, "ceiling_clearance", 0.1f);
-        const float yaw = sdl3d_properties_get_float(actor->props, json_string(component, "yaw_property", "yaw"),
-                                                     json_float(component, "spawn_yaw", 0.0f));
-        sdl3d_fps_mover_init(&controller->mover, &config, actor->position, yaw);
-        controller->mover.pitch =
-            sdl3d_properties_get_float(actor->props, json_string(component, "pitch_property", "pitch"),
-                                       json_float(component, "spawn_pitch", 0.0f));
-        controller->initialized = true;
-    }
+    if (!initialize_fps_controller_runtime(runtime, controller, component, actor))
+        return;
 
     const int forward_action = fps_controller_action_id(runtime, component, "forward");
     const int back_action = fps_controller_action_id(runtime, component, "back");

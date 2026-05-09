@@ -7696,6 +7696,7 @@ TEST(GameDataRuntime, RunsAuthoredFpsSectorController)
       }
     ]
   },
+  "signals": ["signal.launch", "signal.teleport"],
   "entities": [
     {
       "name": "entity.player",
@@ -7749,6 +7750,32 @@ TEST(GameDataRuntime, RunsAuthoredFpsSectorController)
       ]
     }
   ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.launch",
+        "actions": [
+          {
+            "type": "controller.fps_sector.launch",
+            "target": "entity.player",
+            "vertical_velocity": 5.0
+          }
+        ]
+      },
+      {
+        "signal": "signal.teleport",
+        "actions": [
+          {
+            "type": "controller.fps_sector.teleport",
+            "target": "entity.player",
+            "position": [3.0, 1.8, 3.0],
+            "yaw": 1.25,
+            "pitch": -0.25
+          }
+        ]
+      }
+    ]
+  },
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
 
@@ -7786,6 +7813,18 @@ TEST(GameDataRuntime, RunsAuthoredFpsSectorController)
     EXPECT_NEAR(camera.position.y, player->position.y, 0.001f);
     EXPECT_NEAR(camera.position.z, player->position.z, 0.001f);
     EXPECT_LT(camera.target.z, camera.position.z);
+
+    const int launch_signal = sdl3d_game_data_find_signal(runtime, "signal.launch");
+    ASSERT_GE(launch_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), launch_signal, nullptr);
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "vertical_velocity", 0.0f), 5.0f, 0.001f);
+
+    const int teleport_signal = sdl3d_game_data_find_signal(runtime, "signal.teleport");
+    ASSERT_GE(teleport_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), teleport_signal, nullptr);
+    expect_vec3_near(player->position, sdl3d_vec3_make(3.0f, 1.8f, 3.0f));
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "yaw", 0.0f), 1.25f, 0.001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "pitch", 0.0f), -0.25f, 0.001f);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
@@ -9300,6 +9339,33 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json",
             "min must be less than or equal to max",
+        },
+        {
+            "bad_fps_launch_velocity",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "entities": [
+    { "name": "entity.player", "active": true }
+  ],
+  "signals": ["signal.launch"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.launch",
+        "actions": [
+          {
+            "type": "controller.fps_sector.launch",
+            "target": "entity.player",
+            "vertical_velocity": 0.0
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "positive vertical_velocity",
         },
     };
 
