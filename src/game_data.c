@@ -14921,6 +14921,30 @@ static void update_motion_components(sdl3d_game_data_runtime *runtime, yyjson_va
                                                               actor->position.y + velocity.y * dt,
                                                               actor->position.z + velocity.z * dt));
                 }
+                else if (SDL_strcmp(type, "motion.sector_velocity_3d") == 0)
+                {
+                    const sector_level_runtime *level =
+                        find_sector_level_runtime(runtime, json_string(component, "sector_level", NULL));
+                    const char *property = json_string(component, "property", "velocity");
+                    const sdl3d_vec3 velocity = actor_vec_property(actor, property);
+                    const float speed = sdl3d_vec3_length(velocity);
+                    if (level == NULL || speed <= 0.000001f)
+                        continue;
+
+                    const sdl3d_vec3 direction = sdl3d_vec3_scale(velocity, 1.0f / speed);
+                    const sdl3d_level_trace_result trace = sdl3d_level_trace_point(
+                        &level->lightmapped, level->sectors, actor->position, direction, speed * dt);
+                    actor_set_position(actor, trace.end_point);
+                    if (trace.hit && json_bool(component, "despawn_on_hit", true))
+                    {
+                        if (actor_id > 0)
+                            (void)actor_pool_request_despawn(runtime, &runtime->actor_pools[pool_index], actor, i,
+                                                             json_string(component, "reason", "sector impact"));
+                        else
+                            actor->active = false;
+                        break;
+                    }
+                }
                 else if (SDL_strcmp(type, "motion.scroll_wrap") == 0)
                 {
                     const int axis = axis_index(json_string(component, "axis", "x"));

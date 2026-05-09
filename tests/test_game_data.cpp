@@ -7792,6 +7792,118 @@ TEST(GameDataRuntime, RunsAuthoredFpsSectorController)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, SectorVelocityMotionDespawnsPooledActorsOnImpact)
+{
+    const std::filesystem::path dir = unique_test_dir("sector_velocity_motion");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "entities": ["entity.player"],
+  "world": {
+    "sector_levels": [
+      { "level": "sector.test", "variant": "unlit" }
+    ]
+  }
+})json");
+    write_text(dir / "sector_velocity.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Sector Velocity Motion Test" },
+  "world": { "name": "world.test", "kind": "sector" },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [2.0, 1.5, 2.0] },
+      "properties": {
+        "camera_forward": { "type": "vec3", "value": [1.0, 0.0, 0.0] },
+        "fire_timer": { "type": "float", "value": 0.0 }
+      }
+    }
+  ],
+  "actor_archetypes": [
+    {
+      "name": "archetype.shot",
+      "properties": {
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.0] }
+      },
+      "components": [
+        {
+          "type": "motion.sector_velocity_3d",
+          "property": "velocity",
+          "sector_level": "sector.test",
+          "reason": "hit wall"
+        }
+      ]
+    }
+  ],
+  "actor_pools": [
+    { "name": "pool.shots", "archetype": "archetype.shot", "capacity": 1, "scene": "scene.play" }
+  ],
+  "signals": ["signal.fire"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.fire",
+        "actions": [
+          {
+            "type": "projectile.fire",
+            "target": "entity.player",
+            "pool": "pool.shots",
+            "velocity_from_property": "camera_forward",
+            "speed": 20.0
+          }
+        ]
+      }
+    ]
+  },
+  "sector_levels": [
+    {
+      "name": "sector.test",
+      "materials": [{ "name": "wall" }],
+      "sectors": [
+        {
+          "name": "room",
+          "points": [[0, 0], [4, 0], [4, 4], [0, 4]],
+          "floor_y": 0.0,
+          "ceil_y": 4.0,
+          "wall_material": "wall"
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "sector_velocity.game.json").string().c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+
+    sdl3d_registered_actor *shot = sdl3d_game_data_find_actor(runtime, "pool.shots.0");
+    ASSERT_NE(shot, nullptr);
+    ASSERT_FALSE(shot->active);
+    const int fire_signal = sdl3d_game_data_find_signal(runtime, "signal.fire");
+    ASSERT_GE(fire_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), fire_signal, nullptr);
+    ASSERT_TRUE(shot->active);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.05f));
+    EXPECT_TRUE(shot->active);
+    EXPECT_NEAR(shot->position.x, 3.0f, 0.3f);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.1f));
+    EXPECT_FALSE(shot->active);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RunsAuthoredSectorDoorInteractionRenderAndCollision)
 {
     const std::filesystem::path dir = unique_test_dir("sector_doors");
@@ -8909,6 +9021,26 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json",
             "speed must be non-negative",
+        },
+        {
+            "bad_sector_velocity_level",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "actor_archetypes": [
+    {
+      "name": "archetype.shot",
+      "components": [
+        { "type": "motion.sector_velocity_3d", "sector_level": "sector.missing" }
+      ]
+    }
+  ],
+  "actor_pools": [
+    { "name": "pool.shots", "archetype": "archetype.shot", "capacity": 1 }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "unknown sector level",
         },
         {
             "bad_spawn_from",

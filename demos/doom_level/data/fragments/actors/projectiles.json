@@ -21,8 +21,10 @@
           "lighting": false
         },
         {
-          "type": "motion.velocity_3d",
-          "property": "velocity"
+          "type": "motion.sector_velocity_3d",
+          "property": "velocity",
+          "sector_level": "sector.doom.e1m1",
+          "reason": "projectile impact"
         },
         {
           "type": "lifecycle.ttl",

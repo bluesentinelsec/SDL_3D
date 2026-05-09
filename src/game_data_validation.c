@@ -2533,10 +2533,27 @@ static bool is_wave_axis_value(yyjson_val *value)
 static bool is_supported_component_type(const char *type)
 {
     const char *known[] = {
-        "adapter.controller", "collision.aabb",    "collision.circle",   "control.axis_1d", "controller.fps_sector",
-        "lifecycle.ttl",      "light.directional", "light.point",        "light.spot",      "motion.grid_agent",
-        "motion.oscillate",   "motion.patrol",     "motion.scroll_wrap", "motion.spin",     "motion.velocity_2d",
-        "motion.velocity_3d", "particles.emitter", "property.decay",     "render.cube",     "render.sphere",
+        "adapter.controller",
+        "collision.aabb",
+        "collision.circle",
+        "control.axis_1d",
+        "controller.fps_sector",
+        "lifecycle.ttl",
+        "light.directional",
+        "light.point",
+        "light.spot",
+        "motion.grid_agent",
+        "motion.oscillate",
+        "motion.patrol",
+        "motion.scroll_wrap",
+        "motion.sector_velocity_3d",
+        "motion.spin",
+        "motion.velocity_2d",
+        "motion.velocity_3d",
+        "particles.emitter",
+        "property.decay",
+        "render.cube",
+        "render.sphere",
         "render.sprite",
     };
 
@@ -4332,6 +4349,21 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 if (rate != NULL && !yyjson_is_num(rate))
                     return validation_error(ctx, path, "motion.spin rate must be a number");
             }
+            else if (SDL_strcmp(type, "motion.sector_velocity_3d") == 0)
+            {
+                if (!require_ref(ctx, &names->sector_levels, "sector level", json_string(component, "sector_level"),
+                                 path))
+                    return false;
+                yyjson_val *property = obj_get(component, "property");
+                if (property != NULL && !is_non_empty_string(component, "property"))
+                    return validation_error(ctx, path, "motion.sector_velocity_3d property must be non-empty");
+                yyjson_val *despawn_on_hit = obj_get(component, "despawn_on_hit");
+                if (despawn_on_hit != NULL && !yyjson_is_bool(despawn_on_hit))
+                    return validation_error(ctx, path, "motion.sector_velocity_3d despawn_on_hit must be a boolean");
+                yyjson_val *reason = obj_get(component, "reason");
+                if (reason != NULL && !is_non_empty_string(component, "reason"))
+                    return validation_error(ctx, path, "motion.sector_velocity_3d reason must be non-empty");
+            }
             else if (SDL_strncmp(type, "light.", 6) == 0)
             {
                 yyjson_val *color = obj_get(component, "color");
@@ -4467,6 +4499,23 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                 yyjson_val *property = obj_get(component, "property");
                 if (property != NULL && !is_non_empty_string(component, "property"))
                     return validation_error(ctx, component_path, "%s property must be non-empty", type);
+            }
+            else if (SDL_strcmp(type, "motion.sector_velocity_3d") == 0)
+            {
+                if (!require_ref(ctx, &names->sector_levels, "sector level", json_string(component, "sector_level"),
+                                 component_path))
+                    return false;
+                yyjson_val *property = obj_get(component, "property");
+                if (property != NULL && !is_non_empty_string(component, "property"))
+                    return validation_error(ctx, component_path,
+                                            "motion.sector_velocity_3d property must be non-empty");
+                yyjson_val *despawn_on_hit = obj_get(component, "despawn_on_hit");
+                if (despawn_on_hit != NULL && !yyjson_is_bool(despawn_on_hit))
+                    return validation_error(ctx, component_path,
+                                            "motion.sector_velocity_3d despawn_on_hit must be a boolean");
+                yyjson_val *reason = obj_get(component, "reason");
+                if (reason != NULL && !is_non_empty_string(component, "reason"))
+                    return validation_error(ctx, component_path, "motion.sector_velocity_3d reason must be non-empty");
             }
             else if (SDL_strcmp(type, "lifecycle.ttl") == 0)
             {

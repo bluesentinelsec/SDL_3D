@@ -745,6 +745,10 @@ Reusable components include:
 - `motion.velocity_3d`: moves an actor by a `vec3` velocity property on all
   axes. This is useful for effect actors, projectiles, particles represented as
   pooled actors, and other simple kinematic objects.
+- `motion.sector_velocity_3d`: moves an actor by a `vec3` velocity property
+  through an authored `sector_level`, tracing against sector volumes and
+  despawning on impact by default. Use this for data-authored projectiles in
+  FPS/sector worlds.
 - `motion.patrol`: moves an actor through an authored list of 3D waypoints.
   Use `speed`, `wait_time`, `arrival_radius`, `mode` (`loop` or `ping_pong`),
   and optional `yaw_property` to expose movement direction to rendering or Lua
