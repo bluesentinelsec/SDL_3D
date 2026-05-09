@@ -24,6 +24,8 @@ data/
       actions.json
       device_assignments.json
       profiles.json
+    editor/
+      metadata.json
     logic/
       gameplay.json
       menus.json
@@ -84,6 +86,8 @@ fragments by editing purpose:
   platforms define this level?"
 - Grid fragments answer "what tile, maze, or board layout drives this level?"
 - Input fragments answer "what can the player do and with which devices?"
+- Editor fragments answer "how should tools preview, categorize, place, and
+  test reusable authored objects?"
 - Logic fragments answer "what happens when a signal, timer, or sensor fires?"
 - Network fragments answer "what is replicated and how sessions flow?"
 - Presentation fragments answer "how does reusable visual/audio polish behave?"
@@ -147,6 +151,20 @@ Use templates as starting points, then rename ids to match the game. Prefer
 templates for reusable primitives such as FPS controls, render profile toggles,
 pause/HUD widgets, reticles, and sector interactions. Keep game-specific rules
 in the game project's fragments and Lua scripts.
+
+## Dojos And Editor Metadata
+
+Mechanic dojos are small data-only projects or scenes used to tune reusable
+primitives in isolation. Prefer mock geometry, colored lights, particles, and
+clear UI indicators over finished media while the mechanic is still evolving.
+Launch dojos through `sdl3d_runner` and direct scene selection so mechanics can
+be tested without walking through splash, title, or campaign flow.
+
+Use optional `editor` metadata beside the authored object it describes. This
+keeps future editor palettes and prefab browsers grounded in the same JSON that
+runtime validation sees. Metadata should describe categories, previews, bounds,
+snap hints, exposed properties, and recommended test scenes; it should not
+encode gameplay rules.
 
 ## Lua Placement
 

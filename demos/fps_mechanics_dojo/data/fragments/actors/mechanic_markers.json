@@ -1,0 +1,82 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "actor_archetypes": [
+    {
+      "name": "archetype.dojo.marker.pad",
+      "active": true,
+      "tags": ["dojo_marker", "mechanic_marker"],
+      "components": [
+        { "type": "render.cube", "size": [2.0, 0.12, 2.0], "color": [50, 170, 230, 210], "lighting": true, "emissive": true },
+        { "type": "light.point", "color": [0.2, 0.8, 1.0], "intensity": 1.8, "range": 5.0 }
+      ],
+      "editor": {
+        "display_name": "Mechanic Marker Pad",
+        "category": "mechanics/markers",
+        "tags": ["marker", "mockup"],
+        "preview": { "primitive": "cube", "color": [0.2, 0.8, 1.0, 1.0] },
+        "bounds": { "size": [2.0, 0.12, 2.0] },
+        "snap": { "grid": [0.5, 0.25, 0.5], "align_to_floor": true },
+        "exposed_properties": [
+          { "name": "label", "type": "string", "display_name": "Label" }
+        ],
+        "test_scene": "scene.dojo.fps_world"
+      }
+    }
+  ],
+  "actor_instances": [
+    {
+      "name": "entity.dojo.launch_pad",
+      "archetype": "archetype.dojo.marker.pad",
+      "transform": { "position": [6.0, 0.08, 6.0] },
+      "properties": { "label": { "type": "string", "value": "Launch Pad" } },
+      "components": [
+        { "type": "render.cube", "size": [2.0, 0.12, 2.0], "color": [60, 190, 255, 230], "lighting": true, "emissive": true },
+        { "type": "light.point", "color": [0.25, 0.85, 1.0], "intensity": 2.0, "range": 6.0 }
+      ],
+      "editor": {
+        "display_name": "Launch Pad Mockup",
+        "category": "mechanics/movement",
+        "tags": ["jump_pad", "launch"],
+        "preview": { "primitive": "cube", "color": [0.25, 0.85, 1.0, 1.0] },
+        "bounds": { "size": [2.0, 0.12, 2.0] },
+        "test_scene": "scene.dojo.fps_world"
+      }
+    },
+    {
+      "name": "entity.dojo.teleporter_pad",
+      "archetype": "archetype.dojo.marker.pad",
+      "transform": { "position": [13.0, 0.08, 5.0] },
+      "properties": { "label": { "type": "string", "value": "Teleporter" } },
+      "components": [
+        { "type": "render.cube", "size": [2.0, 0.12, 2.0], "color": [180, 70, 255, 230], "lighting": true, "emissive": true },
+        { "type": "light.point", "color": [0.8, 0.25, 1.0], "intensity": 2.2, "range": 6.0 }
+      ],
+      "editor": {
+        "display_name": "Teleporter Pad Mockup",
+        "category": "mechanics/movement",
+        "tags": ["teleporter"],
+        "preview": { "primitive": "cube", "color": [0.8, 0.25, 1.0, 1.0] },
+        "bounds": { "size": [2.0, 0.12, 2.0] },
+        "test_scene": "scene.dojo.fps_world"
+      }
+    },
+    {
+      "name": "entity.dojo.teleporter_destination",
+      "archetype": "archetype.dojo.marker.pad",
+      "transform": { "position": [22.0, 0.08, 10.0] },
+      "properties": { "label": { "type": "string", "value": "Destination" } },
+      "components": [
+        { "type": "render.cube", "size": [1.2, 0.1, 1.2], "color": [220, 190, 50, 230], "lighting": true, "emissive": true },
+        { "type": "light.point", "color": [1.0, 0.75, 0.2], "intensity": 1.6, "range": 4.0 }
+      ],
+      "editor": {
+        "display_name": "Teleporter Destination Mockup",
+        "category": "mechanics/movement",
+        "tags": ["teleporter", "destination"],
+        "preview": { "primitive": "cube", "color": [1.0, 0.75, 0.2, 1.0] },
+        "bounds": { "size": [1.2, 0.1, 1.2] },
+        "test_scene": "scene.dojo.fps_world"
+      }
+    }
+  ]
+}

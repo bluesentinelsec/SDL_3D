@@ -338,6 +338,11 @@ std::filesystem::path doom_level_data_path()
     return demo_data_path("doom_level", "doom_level.game.json");
 }
 
+std::filesystem::path fps_mechanics_dojo_data_path()
+{
+    return demo_data_path("fps_mechanics_dojo", "fps_mechanics_dojo.game.json");
+}
+
 std::string read_fixture_file(const char *filename)
 {
     std::ifstream in(fixture_path(filename), std::ios::binary);
@@ -6797,6 +6802,86 @@ TEST(GameDataRuntime, ActorInstancesExpandArchetypesBeforeValidation)
     EXPECT_FALSE(sdl3d_game_data_load_file((dir / "bad_instances.game.json").string().c_str(), session, &runtime, error,
                                            sizeof(error)));
     EXPECT_NE(std::string(error).find("unknown actor archetype"), std::string::npos) << error;
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, EditorMetadataValidatesAndFpsMechanicsDojoLoads)
+{
+    const std::filesystem::path dojo_path = fps_mechanics_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.dojo.fps_world"));
+    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.player"), nullptr);
+    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.launch_pad"), nullptr);
+    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.teleporter_pad"), nullptr);
+    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.teleporter_destination"), nullptr);
+
+    RenderPrimitiveCapture render{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &render));
+    EXPECT_GE(render.cubes, 3);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, RejectsInvalidEditorMetadata)
+{
+    const std::filesystem::path dir = unique_test_dir("editor_metadata");
+    write_text(dir / "bad_editor.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad Editor Metadata", "id": "test.bad_editor", "version": "0.1.0" },
+  "world": { "name": "world.bad_editor", "kind": "fixed_screen" },
+  "editor": {
+    "display_name": "Bad Metadata",
+    "tags": ["valid", ""],
+    "snap": { "grid": 0.0 }
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json", R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play" })json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "bad_editor.game.json").string().c_str(), session, &runtime, error,
+                                           sizeof(error)));
+    EXPECT_NE(std::string(error).find("editor tag entries must be non-empty strings"), std::string::npos) << error;
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+
+    write_text(dir / "bad_editor_default.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad Editor Default", "id": "test.bad_editor_default", "version": "0.1.0" },
+  "world": { "name": "world.bad_editor_default", "kind": "fixed_screen" },
+  "editor": {
+    "display_name": "Bad Editor Default",
+    "exposed_properties": [
+      { "name": "position", "type": "vec3", "default": [1.0, 2.0, 3.0, 4.0] }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    runtime = nullptr;
+    SDL_zeroa(error);
+    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "bad_editor_default.game.json").string().c_str(), session, &runtime,
+                                           error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("editor exposed property default does not match its type"), std::string::npos)
+        << error;
+
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
     remove_test_dir(dir);

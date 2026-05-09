@@ -38,6 +38,7 @@ Every root game file is a JSON object.
 | `render` | no | Renderer setup and global render policy. |
 | `transitions` | no | Named transition descriptors. |
 | `ui` | no | Reusable UI descriptors. |
+| `editor` | no | Optional authoring metadata for tools, templates, previews, and dojos. Ignored by runtime gameplay. |
 | `entities` | no | Named actors with tags, transforms, properties, and components. |
 | `grid_maps` | no | Authored tile grids for maze, board, and grid-locked games. |
 | `grid_pickup_layers` | no | Dense grid-indexed pickup layers rendered and collected without one actor per pickup. |
@@ -163,6 +164,8 @@ Import rules:
 - `actor_instances` and `sector_level_fragments` are composition-time authoring
   helpers; they are expanded into normal `entities` and `sector_levels` before
   ordinary validation and runtime loading
+- `editor` metadata is mergeable so templates and future editor palettes can
+  live beside the fragments they describe
 
 See [Project Layout Guidance](project-layout.md) for recommended fragment
 organization.
@@ -831,6 +834,54 @@ Runtime spawning uses preallocated pools:
 Pools support deterministic spawn/despawn, scene-exit policy, lifecycle safety,
 metrics, and Lua helpers.
 
+`entities`, `actor_archetypes`, `actor_instances`, and `actor_pools` may carry
+an optional `editor` object. The runtime ignores this metadata during gameplay;
+it exists for editors, dojos, palette browsers, prefab previews, and validation.
+
+```json
+{
+  "name": "archetype.jump_pad",
+  "tags": ["mechanic", "jump_pad"],
+  "editor": {
+    "display_name": "Jump Pad",
+    "category": "mechanics/movement",
+    "tags": ["launch", "trigger"],
+    "preview": { "primitive": "cube", "color": [0.25, 0.85, 1.0, 1.0] },
+    "bounds": { "size": [2.0, 0.2, 2.0] },
+    "snap": { "grid": 0.5, "align_to_floor": true },
+    "exposed_properties": [
+      { "name": "vertical_velocity", "type": "float", "display_name": "Launch Velocity", "min": 0.1 }
+    ],
+    "test_scene": "scene.dojo.fps_world"
+  }
+}
+```
+
+Supported editor fields:
+
+- `display_name`, `description`, `category`, `icon`, and `preview_asset`:
+  non-empty strings when present
+- `tags`: array of non-empty strings
+- `preview`: object with optional `primitive`, `asset`, and `color`; primitive
+  may be `none`, `cube`, `sphere`, `capsule`, `sprite`, `model`, `light`,
+  `volume`, or `sector`
+- `bounds`: optional `center`, positive `size`, positive `half_extents`, or
+  positive `radius`
+- `snap`: optional positive `grid` number or vec3, positive
+  `rotation_degrees`, and boolean `align_to_floor`
+- `exposed_properties`: tool-facing property controls with unique `name`,
+  optional display text, optional `type` (`bool`, `int`, `float`, `string`,
+  `vec2`, `vec3`, `color`, or `enum`), numeric `min`/`max`, and scalar/vector
+  default matching the declared type; `color` defaults may be RGB or RGBA
+- `test_scene`: optional scene reference that tools can launch through the
+  runner for isolated tuning
+
+The root `editor` object may also declare reusable `templates`. Template
+entries use the same fields plus required `name`, and optional `source` /
+`source_kind` strings that identify the authored object or fragment a tool
+should copy or instantiate. This is intentionally metadata only; copying,
+placement, and editing behavior belongs to tools.
+
 Common projectile archetype conventions:
 
 - tag projectile actors with a broad tag such as `projectile` and a role tag
@@ -1458,6 +1509,8 @@ JSON path. It checks:
 - script ids, modules, dependencies, dependency cycles, and file existence
 - input binding structure
 - component, sensor, timer, action, app, UI, render, and camera payloads
+- editor metadata shape, preview hints, exposed properties, and test-scene
+  references
 - network protocol, replication fields, control messages, runtime bindings,
   directions, schema hash shape, and managed session-flow metadata
 
