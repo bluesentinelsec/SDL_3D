@@ -910,12 +910,19 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
             if (clip_index >= entry->model.animation_count)
                 clip_index = 0;
             const sdl3d_animation_clip *clip = &entry->model.animations[clip_index];
+            float animation_time = primitive->animation_time;
+            if (primitive->animation_loop && clip->duration > 0.0f)
+            {
+                animation_time = SDL_fmodf(animation_time, clip->duration);
+                if (animation_time < 0.0f)
+                    animation_time += clip->duration;
+            }
             const int joint_count = entry->model.skeleton->joint_count;
             sdl3d_mat4 *joint_matrices = (sdl3d_mat4 *)SDL_calloc((size_t)joint_count, sizeof(*joint_matrices));
             if (joint_matrices == NULL)
                 return false;
             const bool evaluated =
-                sdl3d_evaluate_animation(entry->model.skeleton, clip, primitive->animation_time, joint_matrices);
+                sdl3d_evaluate_animation(entry->model.skeleton, clip, animation_time, joint_matrices);
             const bool drawn =
                 evaluated && sdl3d_draw_model_skinned_with_assets(
                                  context->renderer, context->model_cache->assets, &entry->model, primitive->position,

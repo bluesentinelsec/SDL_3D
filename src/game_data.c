@@ -5962,6 +5962,7 @@ static bool emit_actor_render_primitives(const sdl3d_game_data_runtime *runtime,
             primitive.model_scale = json_vec3(component, "scale", sdl3d_vec3_make(1.0f, 1.0f, 1.0f));
             primitive.animation_clip = json_int(component, "animation_clip", -1);
             primitive.animation_time = json_float(component, "animation_time", 0.0f);
+            primitive.animation_loop = json_bool(component, "animation_loop", true);
             const char *animation_time_property = json_string(component, "animation_time_property", NULL);
             if (animation_time_property != NULL)
                 primitive.animation_time =

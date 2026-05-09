@@ -169,6 +169,7 @@ struct UiTextCapture
     bool saw_pause = false;
     bool saw_network_match_terminated = false;
     bool saw_doom_reticle = false;
+    bool saw_doom_fps = false;
 };
 
 struct UiImageCapture
@@ -1406,7 +1407,10 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         EXPECT_NEAR(primitive->position.x, 24.0f, 0.0001f);
         EXPECT_NEAR(primitive->position.z, 74.0f, 0.0001f);
         EXPECT_NEAR(primitive->model_scale.x, 2.0f, 0.0001f);
+        EXPECT_NEAR(primitive->rotation_axis.y, 1.0f, 0.0001f);
+        EXPECT_NEAR(primitive->rotation_angle, 3.1415927f, 0.0001f);
         EXPECT_EQ(primitive->animation_clip, 0);
+        EXPECT_TRUE(primitive->animation_loop);
     }
     return true;
 }
@@ -1494,6 +1498,14 @@ bool capture_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
         EXPECT_TRUE(text->normalized);
         EXPECT_NEAR(text->x, 0.5f, 0.0001f);
         EXPECT_NEAR(text->y, 0.5f, 0.0001f);
+    }
+    if (std::string(text->name) == "ui.doom_level.fps")
+    {
+        capture->saw_doom_fps = true;
+        EXPECT_STREQ(text->format, "FPS %.0f");
+        EXPECT_TRUE(text->normalized);
+        EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_RIGHT);
+        EXPECT_NEAR(text->x, 0.985f, 0.0001f);
     }
     return true;
 }
@@ -8670,6 +8682,7 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     UiTextCapture ui_text{};
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui_text, &ui_text));
     EXPECT_TRUE(ui_text.saw_doom_reticle);
+    EXPECT_TRUE(ui_text.saw_doom_fps);
     sdl3d_game_data_ui_text pause_text{};
     bool saw_pause_text = false;
     auto find_doom_pause_text = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {

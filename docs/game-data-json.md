@@ -1009,6 +1009,8 @@ Reusable components include:
 - `render.model`: renders an authored `assets.models` entry with `model`,
   optional `scale`, axis-angle rotation, `color` tint, and optional skeletal
   animation playback via `animation_clip` and `animation_time_property`.
+  `animation_loop` defaults to `true` and wraps authored animation time by the
+  selected clip duration.
 - `render.sprite`: renders an upright billboard using an authored sprite asset.
   Use `size` for world-space width/height and optional `facing_yaw` or
   `facing_yaw_property` for directional sprite frame selection. Sprite assets

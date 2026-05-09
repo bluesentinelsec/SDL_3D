@@ -4534,6 +4534,9 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                     yyjson_val *animation_time_property = obj_get(component, "animation_time_property");
                     if (animation_time_property != NULL && !is_non_empty_string(component, "animation_time_property"))
                         return validation_error(ctx, path, "render.model animation_time_property must be non-empty");
+                    yyjson_val *animation_loop = obj_get(component, "animation_loop");
+                    if (animation_loop != NULL && !yyjson_is_bool(animation_loop))
+                        return validation_error(ctx, path, "render.model animation_loop must be a boolean");
                 }
             }
         }
@@ -4762,6 +4765,9 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                 if (animation_time_property != NULL && !is_non_empty_string(component, "animation_time_property"))
                     return validation_error(ctx, component_path,
                                             "render.model animation_time_property must be non-empty");
+                yyjson_val *animation_loop = obj_get(component, "animation_loop");
+                if (animation_loop != NULL && !yyjson_is_bool(animation_loop))
+                    return validation_error(ctx, component_path, "render.model animation_loop must be a boolean");
             }
         }
     }

@@ -368,8 +368,11 @@
           "type": "render.model",
           "model": "model.doom.black_dragon",
           "scale": [2.0, 2.0, 2.0],
+          "rotation_axis": [0.0, 1.0, 0.0],
+          "rotation_angle": 3.1415927,
           "animation_clip": 0,
           "animation_time_property": "dragon_anim_time",
+          "animation_loop": true,
           "color": [255, 255, 255, 255],
           "lighting": true
         }

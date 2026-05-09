@@ -227,6 +227,17 @@
         "color": [255, 255, 255, 220]
       },
       {
+        "name": "ui.doom_level.fps",
+        "format": "FPS %.0f",
+        "bindings": [{ "type": "metric", "metric": "fps" }],
+        "x": 0.985,
+        "y": 0.035,
+        "scale": 0.8,
+        "align": "right",
+        "normalized": true,
+        "color": [180, 235, 190, 230]
+      },
+      {
         "name": "ui.doom_level.pause.title",
         "text": "PAUSED",
         "x": 0.5,

@@ -446,6 +446,8 @@ extern "C"
         int animation_clip;
         /** @brief Animation time in seconds for SDL3D_GAME_DATA_RENDER_MODEL. */
         float animation_time;
+        /** @brief Whether SDL3D_GAME_DATA_RENDER_MODEL wraps animation time by the clip duration. */
+        bool animation_loop;
         /** @brief Billboard size for SDL3D_GAME_DATA_RENDER_SPRITE. */
         sdl3d_vec2 sprite_size;
         /** @brief World yaw in radians for directional sprite frame selection. */
