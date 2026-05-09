@@ -23,6 +23,7 @@ extern "C"
 #include "sdl3d/game.h"
 #include "sdl3d/game_data.h"
 #include "sdl3d/game_presentation.h"
+#include "sdl3d/image.h"
 #include "sdl3d/math.h"
 #include "sdl3d/properties.h"
 #include "sdl3d/signal_bus.h"
@@ -8495,6 +8496,16 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
 {
     const std::filesystem::path doom_path = doom_level_data_path();
     ASSERT_TRUE(std::filesystem::exists(doom_path)) << doom_path;
+    for (const char *texture_name : {"rock_floor.jpg", "ceiling_metal.jpg", "wall_metal.jpg", "lava.jpg"})
+    {
+        sdl3d_image image{};
+        const std::filesystem::path texture_path = doom_path.parent_path() / "textures" / texture_name;
+        ASSERT_TRUE(sdl3d_load_image_from_file(texture_path.string().c_str(), &image))
+            << texture_path << ": " << SDL_GetError();
+        EXPECT_GE(image.width, 256) << texture_name;
+        EXPECT_GE(image.height, 256) << texture_name;
+        sdl3d_free_image(&image);
+    }
 
     sdl3d_game_session *session = nullptr;
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
