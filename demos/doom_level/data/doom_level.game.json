@@ -51,6 +51,10 @@
     ]
   },
   "assets": {
+    "fonts": [
+      { "id": "font.doom.hud", "builtin": "Inter", "size": 22 },
+      { "id": "font.doom.title", "builtin": "Inter", "size": 42 }
+    ],
     "images": [
       { "id": "image.doom.skybox.px", "path": "asset://skyboxes/sky_17/px.png" },
       { "id": "image.doom.skybox.nx", "path": "asset://skyboxes/sky_17/nx.png" },
