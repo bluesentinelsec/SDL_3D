@@ -52,6 +52,7 @@ typedef enum game_data_sensor_type
     GAME_DATA_SENSOR_CONTACT_2D,
     GAME_DATA_SENSOR_INPUT_PRESSED,
     GAME_DATA_SENSOR_SECTOR,
+    GAME_DATA_SENSOR_VOLUME,
 } game_data_sensor_type;
 
 typedef struct named_signal
@@ -116,6 +117,7 @@ typedef struct sensor_contact_pair_state
 typedef struct sensor_entry
 {
     game_data_sensor_type type;
+    const char *name;
     const char *entity;
     const char *other;
     const char *entity_tag;
@@ -130,6 +132,8 @@ typedef struct sensor_entry
     float min_value;
     float max_value;
     float threshold;
+    sdl3d_vec3 volume_min;
+    sdl3d_vec3 volume_max;
     int signal_id;
     yyjson_val *actions;
     const char *edge;
@@ -14168,7 +14172,10 @@ static bool load_sensors(sdl3d_game_data_runtime *runtime, yyjson_val *logic)
             entry->type = GAME_DATA_SENSOR_INPUT_PRESSED;
         else if (SDL_strcmp(type, "sensor.sector") == 0)
             entry->type = GAME_DATA_SENSOR_SECTOR;
+        else if (SDL_strcmp(type, "sensor.volume") == 0)
+            entry->type = GAME_DATA_SENSOR_VOLUME;
 
+        entry->name = json_string(sensor, "name", NULL);
         entry->entity = json_string(sensor, "entity", json_string(sensor, "a", NULL));
         if (entry->entity == NULL)
             entry->entity = json_string(sensor, "actor", NULL);
@@ -14187,6 +14194,8 @@ static bool load_sensors(sdl3d_game_data_runtime *runtime, yyjson_val *logic)
         entry->min_value = json_float(sensor, "min", 0.0f);
         entry->max_value = json_float(sensor, "max", 0.0f);
         entry->threshold = json_float(sensor, "threshold", 0.0f);
+        entry->volume_min = json_vec3(sensor, "min", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+        entry->volume_max = json_vec3(sensor, "max", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
         entry->actions = obj_get(sensor, "actions");
         entry->edge = json_string(sensor, "edge", "enter");
         const char *signal_name =
@@ -15618,6 +15627,53 @@ static void update_sector_sensor(sdl3d_game_data_runtime *runtime, sensor_entry 
     sensor_actor_list_free(&actors);
 }
 
+static bool point_in_sensor_volume(const sensor_entry *sensor, sdl3d_vec3 position)
+{
+    if (sensor == NULL)
+        return false;
+    return position.x >= sensor->volume_min.x && position.x <= sensor->volume_max.x &&
+           position.y >= sensor->volume_min.y && position.y <= sensor->volume_max.y &&
+           position.z >= sensor->volume_min.z && position.z <= sensor->volume_max.z;
+}
+
+static void update_volume_sensor_actor(sdl3d_game_data_runtime *runtime, sensor_entry *sensor,
+                                       sdl3d_registered_actor *actor)
+{
+    if (!runtime_actor_is_active(runtime, actor))
+        return;
+
+    sensor_contact_pair_state *state = sensor_contact_pair_state_for(sensor, actor != NULL ? actor->name : NULL,
+                                                                     sensor->name != NULL ? sensor->name : "volume");
+    if (state == NULL)
+        return;
+
+    const bool active = point_in_sensor_volume(sensor, actor->position);
+    const bool should_emit = sensor_edge_is_exit(sensor)   ? (!active && state->active)
+                             : sensor_edge_is_stay(sensor) ? active
+                                                           : (active && !state->active);
+    if (should_emit)
+    {
+        emit_sensor_signal(runtime, sensor, actor, NULL);
+        execute_sensor_actions(runtime, sensor, actor, NULL);
+    }
+    state->active = active;
+    state->seen = true;
+}
+
+static void update_volume_sensor(sdl3d_game_data_runtime *runtime, sensor_entry *sensor)
+{
+    sensor_actor_list actors;
+    SDL_zero(actors);
+    sensor_contact_states_begin(sensor);
+    if (collect_sensor_endpoint_actors(runtime, sensor->entity, sensor->entity_tag, &actors))
+    {
+        for (int i = 0; i < actors.count; ++i)
+            update_volume_sensor_actor(runtime, sensor, actors.items[i]);
+    }
+    sensor_contact_states_end(sensor);
+    sensor_actor_list_free(&actors);
+}
+
 static void update_sensors(sdl3d_game_data_runtime *runtime)
 {
     for (int i = 0; i < runtime->sensor_count; ++i)
@@ -15631,6 +15687,11 @@ static void update_sensors(sdl3d_game_data_runtime *runtime)
         if (sensor->type == GAME_DATA_SENSOR_SECTOR)
         {
             update_sector_sensor(runtime, sensor);
+            continue;
+        }
+        if (sensor->type == GAME_DATA_SENSOR_VOLUME)
+        {
+            update_volume_sensor(runtime, sensor);
             continue;
         }
 

@@ -1,0 +1,29 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "logic": {
+    "sensors": [
+      {
+        "name": "logic.doom.surveillance.enter",
+        "type": "sensor.volume",
+        "actor": "entity.player",
+        "min": [41.8, -0.1, 87.8],
+        "max": [44.2, 2.0, 90.2],
+        "edge": "enter",
+        "actions": [
+          { "type": "camera.set", "camera": "camera.doom.surveillance" }
+        ]
+      },
+      {
+        "name": "logic.doom.surveillance.exit",
+        "type": "sensor.volume",
+        "actor": "entity.player",
+        "min": [41.8, -0.1, 87.8],
+        "max": [44.2, 2.0, 90.2],
+        "edge": "exit",
+        "actions": [
+          { "type": "camera.set", "camera": "camera.doom.player" }
+        ]
+      }
+    ]
+  }
+}

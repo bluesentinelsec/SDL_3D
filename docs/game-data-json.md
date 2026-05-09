@@ -928,6 +928,25 @@ Use `actor_tag` instead of `actor` to apply a sector sensor to every active
 actor with a matching tag. `sector_index` may be used instead of `sector` when
 the authored sector order is deliberate and stable.
 
+`sensor.volume` detects whether an actor is inside an authored axis-aligned 3D
+box. It supports the same `enter`, `stay` / `overlap`, and `exit` edges and
+publishes `actor_name` to actions or signals. Use it for trigger volumes such
+as camera zones, pickups, checkpoints, and area-specific effects:
+
+```json
+{
+  "name": "sensor.camera_zone.enter",
+  "type": "sensor.volume",
+  "actor": "entity.player",
+  "min": [41.8, -0.1, 87.8],
+  "max": [44.2, 2.0, 90.2],
+  "edge": "enter",
+  "actions": [
+    { "type": "camera.set", "camera": "camera.surveillance" }
+  ]
+}
+```
+
 `logic.wave_schedules` spawn actors from pools over time:
 
 ```json
