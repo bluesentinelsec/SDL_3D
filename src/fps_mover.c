@@ -5,8 +5,8 @@
 #include "sdl3d/math.h"
 
 /* Hard limits / tuning constants kept private. The pitch limit prevents
- * gimbal lock at the poles. The view-smooth decay rate matches the
- * doom_level demo's tuning (higher = snappier). */
+ * gimbal lock at the poles. The view-smooth decay rate keeps stair movement
+ * responsive without snapping the camera instantly. */
 #define SDL3D_FPS_PITCH_LIMIT 1.4f
 #define SDL3D_FPS_VIEW_SMOOTH_SPEED 12.0f
 #define SDL3D_FPS_WALKABLE_NORMAL_Y 0.7f

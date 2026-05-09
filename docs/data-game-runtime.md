@@ -8,6 +8,12 @@ presentation, and network lifecycle code.
 The runtime is game-agnostic. It does not know scene names, actor names, input
 actions, or replication channels for a specific game.
 
+Sector/FPS games use the same runtime path as fixed-screen or arcade demos.
+Authored `sector_levels`, `controller.fps_sector`, `fps` cameras,
+`sector_doors`, `sector_platforms`, `sensor.sector`, render profiles, and
+ordinary scene/menu data are consumed by the generic runtime and renderer; they
+do not require a game-specific native host.
+
 ## Responsibilities
 
 The runtime currently owns:
