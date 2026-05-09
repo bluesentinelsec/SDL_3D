@@ -7245,6 +7245,23 @@ bool sdl3d_game_data_active_scene_allows_action(const sdl3d_game_data_runtime *r
     return string_array_contains(actions, action);
 }
 
+bool sdl3d_game_data_active_scene_mouse_capture(const sdl3d_game_data_runtime *runtime, bool paused)
+{
+    if (runtime == NULL)
+        return false;
+
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    yyjson_val *input = obj_get(scene != NULL ? scene->root : NULL, "input");
+    const char *policy = json_string(input, "mouse_capture", "never");
+    if (policy == NULL || SDL_strcmp(policy, "never") == 0)
+        return false;
+    if (SDL_strcmp(policy, "always") == 0)
+        return true;
+    if (SDL_strcmp(policy, "unpaused") == 0)
+        return !paused;
+    return false;
+}
+
 bool sdl3d_game_data_get_scene_transition_policy(const sdl3d_game_data_runtime *runtime,
                                                  sdl3d_game_data_scene_transition_policy *out_policy)
 {

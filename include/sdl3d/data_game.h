@@ -105,6 +105,15 @@ extern "C"
      */
     void sdl3d_data_game_runtime_destroy(sdl3d_data_game_runtime *runtime);
 
+    /**
+     * @brief Release any relative mouse capture applied by the runtime.
+     *
+     * Generic hosts should call this during shutdown before destroying the
+     * runtime when a window is still available. It is safe to call with NULL
+     * arguments or when no capture policy has been applied.
+     */
+    void sdl3d_data_game_runtime_release_mouse_capture(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx);
+
     /** @brief Return the runtime-owned asset resolver, or NULL. */
     sdl3d_asset_resolver *sdl3d_data_game_runtime_assets(const sdl3d_data_game_runtime *runtime);
 

@@ -3,6 +3,7 @@
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_timer.h>
+#include <SDL3/SDL_video.h>
 
 #include "sdl3d/game_presentation.h"
 #include "sdl3d/input.h"
@@ -31,6 +32,8 @@ struct sdl3d_data_game_runtime
     int managed_network_camera_toggle_signal_id;
     bool managed_network_lobby_start_requested;
     float managed_network_termination_timer;
+    bool mouse_capture_applied;
+    bool mouse_capture_enabled;
 };
 
 static const char SDL3D_MANAGED_NETWORK_HOST_SESSION[] = "host";
@@ -79,6 +82,32 @@ static Uint32 data_game_input_tick(const sdl3d_data_game_runtime *runtime)
         runtime != NULL && runtime->session != NULL ? sdl3d_game_session_get_input(runtime->session) : NULL;
     const sdl3d_input_snapshot *snapshot = input != NULL ? sdl3d_input_get_snapshot(input) : NULL;
     return snapshot != NULL ? (Uint32)SDL_max(snapshot->tick, 0) : (Uint32)SDL_GetTicks();
+}
+
+static void data_game_release_mouse_capture(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx)
+{
+    if (runtime == NULL || ctx == NULL || ctx->window == NULL || !runtime->mouse_capture_applied ||
+        !runtime->mouse_capture_enabled)
+    {
+        return;
+    }
+
+    SDL_SetWindowRelativeMouseMode(ctx->window, false);
+    runtime->mouse_capture_enabled = false;
+}
+
+static void data_game_apply_scene_mouse_capture(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx)
+{
+    if (runtime == NULL || runtime->data == NULL || ctx == NULL || ctx->window == NULL)
+        return;
+
+    const bool capture = sdl3d_game_data_active_scene_mouse_capture(runtime->data, ctx->paused);
+    if (runtime->mouse_capture_applied && runtime->mouse_capture_enabled == capture)
+        return;
+
+    SDL_SetWindowRelativeMouseMode(ctx->window, capture);
+    runtime->mouse_capture_applied = true;
+    runtime->mouse_capture_enabled = capture;
 }
 
 static bool data_game_binding_matches(const char *actual, const char *expected)
@@ -970,6 +999,11 @@ void sdl3d_data_game_runtime_destroy(sdl3d_data_game_runtime *runtime)
     SDL_free(runtime);
 }
 
+void sdl3d_data_game_runtime_release_mouse_capture(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx)
+{
+    data_game_release_mouse_capture(runtime, ctx);
+}
+
 sdl3d_asset_resolver *sdl3d_data_game_runtime_assets(const sdl3d_data_game_runtime *runtime)
 {
     return runtime != NULL ? runtime->assets : NULL;
@@ -1320,6 +1354,7 @@ bool sdl3d_data_game_runtime_update_frame(sdl3d_data_game_runtime *runtime, sdl3
         return false;
 
     managed_network_update_after_frame(runtime, ctx);
+    data_game_apply_scene_mouse_capture(runtime, ctx);
     return true;
 }
 
