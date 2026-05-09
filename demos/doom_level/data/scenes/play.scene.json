@@ -47,6 +47,7 @@
       "action.move.left",
       "action.move.right",
       "action.jump",
+      "action.pause",
       "action.interact",
       "action.render.lighting.toggle",
       "action.render.variant.cycle",
@@ -181,6 +182,16 @@
         "pulse_rate": 2.8,
         "pulse_min": 0.45,
         "pulse_max": 1.0
+      },
+      {
+        "name": "ui.doom_level.pause.backdrop",
+        "x": 0.0,
+        "y": 0.0,
+        "w": 1.0,
+        "h": 1.0,
+        "normalized": true,
+        "color": [0, 0, 0, 120],
+        "visible_if": { "type": "app.paused", "equals": true }
       }
     ],
     "text": [
@@ -203,6 +214,29 @@
         "centered": true,
         "normalized": true,
         "color": [255, 255, 255, 220]
+      },
+      {
+        "name": "ui.doom_level.pause.title",
+        "text": "PAUSED",
+        "x": 0.5,
+        "y": 0.42,
+        "scale": 1.6,
+        "centered": true,
+        "normalized": true,
+        "color": [245, 248, 255, 255],
+        "pulse_alpha": true,
+        "visible_if": { "type": "app.paused", "equals": true }
+      },
+      {
+        "name": "ui.doom_level.pause.help",
+        "text": "Press P to resume - Esc exits",
+        "x": 0.5,
+        "y": 0.5,
+        "scale": 0.9,
+        "centered": true,
+        "normalized": true,
+        "color": [190, 205, 235, 220],
+        "visible_if": { "type": "app.paused", "equals": true }
       }
     ]
   }

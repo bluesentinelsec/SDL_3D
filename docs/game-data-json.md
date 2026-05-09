@@ -221,10 +221,22 @@ The optional `app` object configures the managed loop before the window exists:
     "backend": "opengl",
     "tick_rate": 60,
     "audio": { "enabled": true },
-    "pause": { "action": "action.pause" }
+    "startup_transition": "startup",
+    "pause": { "action": "action.pause" },
+    "quit": { "action": "action.exit", "transition": "quit" },
+    "input_policy": {
+      "global_actions": ["action.exit"]
+    }
   }
 }
 ```
+
+`pause.action` toggles the managed runtime pause state when the active scene
+allows the action and `pause.allowed_if` is absent or true. `quit.action`
+requests shutdown through the managed app flow; when `quit.transition` names an
+authored transition, shutdown is delayed until that transition finishes. Use
+`app.input_policy.global_actions` for lifecycle actions such as quit that should
+work even when a scene restricts its local `input.actions` list.
 
 ## UI Rectangles
 

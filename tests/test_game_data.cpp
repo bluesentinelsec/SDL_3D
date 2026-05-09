@@ -8505,6 +8505,53 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     ASSERT_NE(runtime, nullptr);
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.doom_level.play"));
+    sdl3d_game_data_app_control app{};
+    ASSERT_TRUE(sdl3d_game_data_get_app_control(runtime, &app));
+    EXPECT_EQ(app.start_signal_id, -1);
+    EXPECT_GE(app.pause_action_id, 0);
+    EXPECT_GE(app.quit_action_id, 0);
+    EXPECT_STREQ(app.startup_transition, "startup");
+    EXPECT_STREQ(app.quit_transition, "quit");
+
+    sdl3d_game_context ctx{};
+    ctx.session = session;
+    sdl3d_game_data_app_flow flow{};
+    sdl3d_game_data_app_flow_init(&flow);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
+    EXPECT_TRUE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_P;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 1);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_TRUE(ctx.paused);
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 2);
+    key.type = SDL_EVENT_KEY_DOWN;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 3);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_FALSE(ctx.paused);
+
+    key.type = SDL_EVENT_KEY_UP;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 4);
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_ESCAPE;
+    sdl3d_input_process_event(input, &key);
+    sdl3d_input_update(input, 5);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_TRUE(sdl3d_game_data_app_flow_quit_pending(&flow));
+    EXPECT_FALSE(ctx.quit_requested);
+    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.36f));
+    EXPECT_TRUE(ctx.quit_requested);
+
     sdl3d_game_data_render_settings render_settings{};
     ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &render_settings));
     EXPECT_TRUE(render_settings.has_profile);
@@ -8571,11 +8618,30 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     UiTextCapture ui_text{};
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui_text, &ui_text));
     EXPECT_TRUE(ui_text.saw_doom_reticle);
+    sdl3d_game_data_ui_text pause_text{};
+    bool saw_pause_text = false;
+    auto find_doom_pause_text = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        if (std::string(text->name) != "ui.doom_level.pause.title")
+            return true;
+        auto *args = static_cast<std::pair<sdl3d_game_data_ui_text *, bool *> *>(userdata);
+        *args->first = *text;
+        *args->second = true;
+        return false;
+    };
+    std::pair<sdl3d_game_data_ui_text *, bool *> pause_text_args{&pause_text, &saw_pause_text};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_doom_pause_text, &pause_text_args));
+    ASSERT_TRUE(saw_pause_text);
+    sdl3d_game_data_ui_metrics ui_metrics{};
+    ui_metrics.paused = false;
+    EXPECT_FALSE(sdl3d_game_data_ui_text_is_visible(runtime, &pause_text, &ui_metrics));
+    ui_metrics.paused = true;
+    EXPECT_TRUE(sdl3d_game_data_ui_text_is_visible(runtime, &pause_text, &ui_metrics));
+
     sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
     ASSERT_NE(player, nullptr);
     UiRectCapture ui_rects{};
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_rect(runtime, capture_ui_rect, &ui_rects));
-    EXPECT_EQ(ui_rects.count, 4);
+    EXPECT_EQ(ui_rects.count, 5);
     EXPECT_TRUE(ui_rects.saw_doom_damage_feedback);
     sdl3d_game_data_ui_rect resolved_damage_rect{};
     bool damage_rect_visible = true;

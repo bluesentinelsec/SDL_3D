@@ -21,7 +21,13 @@
   "app": {
     "title": "SDL3D Doom Level",
     "window": { "width": 1280, "height": 720, "renderer": "opengl", "vsync": true },
-    "audio": { "enabled": true }
+    "audio": { "enabled": true },
+    "startup_transition": "startup",
+    "pause": { "action": "action.pause" },
+    "quit": { "action": "action.exit", "transition": "quit" },
+    "input_policy": {
+      "global_actions": ["action.exit"]
+    }
   },
   "world": {
     "name": "world.doom_level",
@@ -54,6 +60,8 @@
           { "name": "action.move.left", "bindings": [{ "device": "keyboard", "key": "A" }] },
           { "name": "action.move.right", "bindings": [{ "device": "keyboard", "key": "D" }] },
           { "name": "action.jump", "bindings": [{ "device": "keyboard", "key": "SPACE" }] },
+          { "name": "action.pause", "bindings": [{ "device": "keyboard", "key": "P" }] },
+          { "name": "action.exit", "bindings": [{ "device": "keyboard", "key": "ESCAPE" }] },
           { "name": "action.interact", "bindings": [{ "device": "keyboard", "key": "E" }] },
           { "name": "action.render.lighting.toggle", "bindings": [{ "device": "keyboard", "key": "L" }] },
           { "name": "action.render.variant.cycle", "bindings": [{ "device": "keyboard", "key": "M" }] },
@@ -157,6 +165,20 @@
     "ssao": true,
     "profile": "modern",
     "profile_key": "doom.render.profile"
+  },
+  "transitions": {
+    "startup": {
+      "type": "fade",
+      "direction": "in",
+      "color": [0, 0, 0, 255],
+      "duration": 0.35
+    },
+    "quit": {
+      "type": "fade",
+      "direction": "out",
+      "color": [0, 0, 0, 255],
+      "duration": 0.35
+    }
   },
   "scenes": {
     "initial": "scene.doom_level.play",
