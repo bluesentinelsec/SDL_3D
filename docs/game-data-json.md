@@ -1109,6 +1109,16 @@ instances, and conditions can read:
 Use `set` for fixed values, `toggle` for booleans, and `cycle` for small
 ordered sets such as render profiles or debug variants.
 
+UI text bindings can read scene state with an optional scalar `default`, which
+keeps HUD text renderable before the first action writes a transient value:
+
+```json
+{
+  "format": "PROFILE %s",
+  "bindings": [{ "type": "scene_state", "key": "render_profile", "default": "modern" }]
+}
+```
+
 `property.set` and `property.add` normally target a fixed actor:
 
 ```json

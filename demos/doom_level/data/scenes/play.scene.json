@@ -209,7 +209,7 @@
       {
         "name": "ui.doom_level.phase",
         "font": "font.doom.hud",
-        "text": "DATA-DRIVEN SECTOR LEVEL - WASD + MOUSE - E OPENS DOORS - CLICK/F FIRES",
+        "text": "DATA-DRIVEN SECTOR LEVEL - WASD + MOUSE - E OPENS DOORS - CLICK/F FIRES - 1-5 PROFILES",
         "x": 0.5,
         "y": 0.06,
         "scale": 1.0,
@@ -227,6 +227,18 @@
         "centered": true,
         "normalized": true,
         "color": [255, 255, 255, 220]
+      },
+      {
+        "name": "ui.doom_level.profile",
+        "font": "font.doom.hud",
+        "format": "PROFILE %s",
+        "bindings": [{ "type": "scene_state", "key": "doom.render.profile", "default": "modern" }],
+        "x": 0.015,
+        "y": 0.035,
+        "scale": 0.8,
+        "align": "left",
+        "normalized": true,
+        "color": [200, 215, 245, 230]
       },
       {
         "name": "ui.doom_level.fps",

@@ -7304,6 +7304,10 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
                                             type != NULL ? type : "<missing>");
                 if (!is_non_empty_string(binding, "key"))
                     return validation_error(ctx, binding_path, "scene UI scene_state binding requires a non-empty key");
+                yyjson_val *fallback = obj_get(binding, "default");
+                if (fallback != NULL && !yyjson_is_str(fallback) && !yyjson_is_int(fallback) &&
+                    !yyjson_is_real(fallback) && !yyjson_is_bool(fallback))
+                    return validation_error(ctx, binding_path, "scene UI scene_state binding default must be scalar");
             }
         }
     }

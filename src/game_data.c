@@ -12309,6 +12309,9 @@ static bool read_ui_binding_value(const sdl3d_game_data_runtime *runtime, yyjson
         const sdl3d_value *value = runtime != NULL && runtime->scene_state != NULL && key != NULL
                                        ? sdl3d_properties_get_value(runtime->scene_state, key)
                                        : NULL;
+        sdl3d_value fallback;
+        if (value == NULL && json_scalar_to_value(obj_get(binding, "default"), &fallback))
+            value = &fallback;
         if (value == NULL)
             return false;
         switch (value->type)

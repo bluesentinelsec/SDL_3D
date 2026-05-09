@@ -169,6 +169,7 @@ struct UiTextCapture
     bool saw_pause = false;
     bool saw_network_match_terminated = false;
     bool saw_doom_reticle = false;
+    bool saw_doom_profile = false;
     bool saw_doom_fps = false;
 };
 
@@ -1508,6 +1509,14 @@ bool capture_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
         EXPECT_TRUE(text->normalized);
         EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_RIGHT);
         EXPECT_NEAR(text->x, 0.985f, 0.0001f);
+    }
+    if (std::string(text->name) == "ui.doom_level.profile")
+    {
+        capture->saw_doom_profile = true;
+        EXPECT_STREQ(text->font, "font.doom.hud");
+        EXPECT_STREQ(text->format, "PROFILE %s");
+        EXPECT_TRUE(text->normalized);
+        EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
     }
     return true;
 }
@@ -8684,11 +8693,28 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     UiTextCapture ui_text{};
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui_text, &ui_text));
     EXPECT_TRUE(ui_text.saw_doom_reticle);
+    EXPECT_TRUE(ui_text.saw_doom_profile);
     EXPECT_TRUE(ui_text.saw_doom_fps);
     sdl3d_game_data_font_asset doom_hud_font{};
     ASSERT_TRUE(sdl3d_game_data_get_font_asset(runtime, "font.doom.hud", &doom_hud_font));
     EXPECT_TRUE(doom_hud_font.builtin);
     EXPECT_NEAR(doom_hud_font.size, 22.0f, 0.0001f);
+    sdl3d_game_data_ui_text profile_text{};
+    bool saw_profile_text = false;
+    auto find_doom_profile_text = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        if (std::string(text->name) != "ui.doom_level.profile")
+            return true;
+        auto *args = static_cast<std::pair<sdl3d_game_data_ui_text *, bool *> *>(userdata);
+        *args->first = *text;
+        *args->second = true;
+        return false;
+    };
+    std::pair<sdl3d_game_data_ui_text *, bool *> profile_text_args{&profile_text, &saw_profile_text};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_doom_profile_text, &profile_text_args));
+    ASSERT_TRUE(saw_profile_text);
+    char profile_label[64]{};
+    ASSERT_TRUE(sdl3d_game_data_format_ui_text(runtime, &profile_text, nullptr, profile_label, sizeof(profile_label)));
+    EXPECT_STREQ(profile_label, "PROFILE ps1");
     sdl3d_game_data_ui_text pause_text{};
     bool saw_pause_text = false;
     auto find_doom_pause_text = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
@@ -8763,6 +8789,67 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.5f));
     EXPECT_GT(robot->position.x, robot_start_x);
     EXPECT_GT(sdl3d_properties_get_float(robot->props, "sprite_yaw", 0.0f), 1.0f);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, DoomLevelNumberKeysSwitchRenderProfiles)
+{
+    const std::filesystem::path doom_path = doom_level_data_path();
+    ASSERT_TRUE(std::filesystem::exists(doom_path)) << doom_path;
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(doom_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    ASSERT_NE(runtime, nullptr);
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.doom_level.play"));
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+
+    struct ProfileKeyCase
+    {
+        SDL_Scancode scancode;
+        const char *expected_name;
+        bool expected_vertex_snap;
+        bool expected_quantize;
+        sdl3d_tonemap_mode expected_tonemap;
+    };
+    const ProfileKeyCase cases[] = {
+        {SDL_SCANCODE_1, "modern", false, false, SDL3D_TONEMAP_ACES},
+        {SDL_SCANCODE_2, "ps1", true, true, SDL3D_TONEMAP_NONE},
+        {SDL_SCANCODE_3, "n64", false, false, SDL3D_TONEMAP_NONE},
+        {SDL_SCANCODE_4, "dos", false, true, SDL3D_TONEMAP_NONE},
+        {SDL_SCANCODE_5, "snes", false, true, SDL3D_TONEMAP_NONE},
+    };
+
+    Uint64 tick = 1;
+    for (const ProfileKeyCase &test_case : cases)
+    {
+        SDL_Event event{};
+        event.type = SDL_EVENT_KEY_DOWN;
+        event.key.scancode = test_case.scancode;
+        sdl3d_input_process_event(input, &event);
+        sdl3d_input_update(input, tick++);
+        ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+
+        sdl3d_game_data_render_settings settings{};
+        ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &settings));
+        ASSERT_TRUE(settings.has_profile);
+        EXPECT_STREQ(settings.profile_name, test_case.expected_name);
+        EXPECT_EQ(settings.profile.vertex_snap, test_case.expected_vertex_snap) << test_case.expected_name;
+        EXPECT_EQ(settings.profile.color_quantize, test_case.expected_quantize) << test_case.expected_name;
+        EXPECT_EQ(settings.tonemap, test_case.expected_tonemap) << test_case.expected_name;
+
+        event.type = SDL_EVENT_KEY_UP;
+        sdl3d_input_process_event(input, &event);
+        sdl3d_input_update(input, tick++);
+        ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    }
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
