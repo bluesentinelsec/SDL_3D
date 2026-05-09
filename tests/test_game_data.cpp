@@ -171,6 +171,13 @@ struct UiImageCapture
     bool saw_splash_logo = false;
 };
 
+struct UiRectCapture
+{
+    int count = 0;
+    bool saw_doom_damage_feedback = false;
+    sdl3d_game_data_ui_rect damage_rect{};
+};
+
 struct ParticleCapture
 {
     int count = 0;
@@ -1459,6 +1466,23 @@ bool capture_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
         EXPECT_TRUE(text->normalized);
         EXPECT_NEAR(text->x, 0.5f, 0.0001f);
         EXPECT_NEAR(text->y, 0.5f, 0.0001f);
+    }
+    return true;
+}
+
+bool capture_ui_rect(void *userdata, const sdl3d_game_data_ui_rect *rect)
+{
+    auto *capture = static_cast<UiRectCapture *>(userdata);
+    capture->count++;
+    if (std::string(rect->name) == "ui.doom_level.damage_feedback.top")
+    {
+        capture->saw_doom_damage_feedback = true;
+        capture->damage_rect = *rect;
+        EXPECT_TRUE(rect->normalized);
+        EXPECT_TRUE(rect->pulse_alpha);
+        EXPECT_STREQ(rect->alpha_source_target, "entity.player");
+        EXPECT_STREQ(rect->alpha_source_key, "last_damage_per_second");
+        EXPECT_GT(rect->alpha_source_scale, 0.0f);
     }
     return true;
 }
@@ -8507,6 +8531,23 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     UiTextCapture ui_text{};
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui_text, &ui_text));
     EXPECT_TRUE(ui_text.saw_doom_reticle);
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    UiRectCapture ui_rects{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_rect(runtime, capture_ui_rect, &ui_rects));
+    EXPECT_EQ(ui_rects.count, 4);
+    EXPECT_TRUE(ui_rects.saw_doom_damage_feedback);
+    sdl3d_game_data_ui_rect resolved_damage_rect{};
+    bool damage_rect_visible = true;
+    ASSERT_TRUE(sdl3d_game_data_resolve_ui_rect(runtime, &ui_rects.damage_rect, nullptr, &resolved_damage_rect,
+                                                &damage_rect_visible));
+    EXPECT_FALSE(damage_rect_visible);
+    sdl3d_properties_set_float(player->props, "last_damage_per_second", 18.0f);
+    ASSERT_TRUE(sdl3d_game_data_resolve_ui_rect(runtime, &ui_rects.damage_rect, nullptr, &resolved_damage_rect,
+                                                &damage_rect_visible));
+    EXPECT_TRUE(damage_rect_visible);
+    EXPECT_GT(resolved_damage_rect.color.a, 90);
+    EXPECT_LT(resolved_damage_rect.color.a, 120);
     sdl3d_registered_actor *projectile = sdl3d_game_data_find_actor(runtime, "pool.doom.projectiles.0");
     ASSERT_NE(projectile, nullptr);
     EXPECT_FALSE(projectile->active);
@@ -8522,8 +8563,6 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     EXPECT_EQ(projectile_capture.doom_projectile_spheres, 1);
     sdl3d_camera3d surveillance_camera{};
     ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.doom.surveillance", &surveillance_camera));
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
-    ASSERT_NE(player, nullptr);
     EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.doom.player");
     player->position = sdl3d_vec3_make(43.0f, 0.5f, 89.0f);
     ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));

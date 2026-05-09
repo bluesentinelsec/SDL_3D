@@ -57,6 +57,15 @@ typedef struct ui_image_draw_context
     bool ok;
 } ui_image_draw_context;
 
+typedef struct ui_rect_draw_context
+{
+    const sdl3d_game_data_runtime *runtime;
+    sdl3d_render_context *renderer;
+    const sdl3d_game_data_ui_metrics *metrics;
+    const sdl3d_game_data_render_eval *render_eval;
+    bool ok;
+} ui_rect_draw_context;
+
 static Uint32 ui_image_hash_string(const char *s)
 {
     Uint32 h = 2166136261u;
@@ -973,6 +982,71 @@ static bool draw_ui_image(void *userdata, const sdl3d_game_data_ui_image *image)
     return true;
 }
 
+static void resolve_ui_rect_rect(const sdl3d_game_data_ui_rect *rect, int width, int height, float *out_x, float *out_y,
+                                 float *out_w, float *out_h)
+{
+    float w = rect->normalized ? rect->w * (float)width : rect->w;
+    float h = rect->normalized ? rect->h * (float)height : rect->h;
+    const float scale = rect->scale > 0.0f ? rect->scale : 1.0f;
+    w *= scale;
+    h *= scale;
+
+    float x = rect->normalized ? rect->x * (float)width : rect->x;
+    float y = rect->normalized ? rect->y * (float)height : rect->y;
+    if (rect->align == SDL3D_GAME_DATA_UI_ALIGN_CENTER)
+        x -= w * 0.5f;
+    else if (rect->align == SDL3D_GAME_DATA_UI_ALIGN_RIGHT)
+        x -= w;
+    if (rect->valign == SDL3D_GAME_DATA_UI_VALIGN_CENTER)
+        y -= h * 0.5f;
+    else if (rect->valign == SDL3D_GAME_DATA_UI_VALIGN_BOTTOM)
+        y -= h;
+
+    *out_x = x;
+    *out_y = y;
+    *out_w = w;
+    *out_h = h;
+}
+
+static bool draw_ui_rect(void *userdata, const sdl3d_game_data_ui_rect *rect)
+{
+    ui_rect_draw_context *draw = (ui_rect_draw_context *)userdata;
+    if (draw == NULL || rect == NULL)
+        return false;
+
+    sdl3d_game_data_ui_rect resolved;
+    bool visible = false;
+    if (!sdl3d_game_data_resolve_ui_rect(draw->runtime, rect, draw->metrics, &resolved, &visible))
+    {
+        draw->ok = false;
+        return true;
+    }
+    if (!visible)
+        return true;
+
+    sdl3d_color color = resolved.color;
+    if (resolved.pulse_alpha)
+    {
+        const float time = draw->render_eval != NULL ? draw->render_eval->time : 0.0f;
+        const float pulse = 0.5f + 0.5f * SDL_sinf(time * SDL_max(resolved.pulse_rate, 0.0f) * SDL_PI_F * 2.0f);
+        const float alpha = resolved.pulse_min + (resolved.pulse_max - resolved.pulse_min) * pulse;
+        color.a = (Uint8)SDL_clamp((int)((float)color.a * SDL_clamp(alpha, 0.0f, 1.0f) + 0.5f), 0, 255);
+    }
+    if (color.a == 0)
+        return true;
+
+    const int width = sdl3d_get_render_context_width(draw->renderer);
+    const int height = sdl3d_get_render_context_height(draw->renderer);
+    float x = 0.0f;
+    float y = 0.0f;
+    float w = 0.0f;
+    float h = 0.0f;
+    resolve_ui_rect_rect(&resolved, width, height, &x, &y, &w, &h);
+    if (!sdl3d_draw_rect_overlay(draw->renderer, x, y, w, h, color))
+        draw->ok = false;
+    return true;
+}
+
 static bool update_particle(void *userdata, const sdl3d_game_data_particle_emitter *emitter)
 {
     particle_update_context *context = (particle_update_context *)userdata;
@@ -1208,6 +1282,24 @@ bool sdl3d_game_data_draw_ui_images(const sdl3d_game_data_runtime *runtime, sdl3
     context.ok = true;
 
     return sdl3d_game_data_for_each_ui_image(runtime, draw_ui_image, &context) && context.ok;
+}
+
+bool sdl3d_game_data_draw_ui_rects(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
+                                   const sdl3d_game_data_ui_metrics *metrics,
+                                   const sdl3d_game_data_render_eval *render_eval)
+{
+    if (runtime == NULL || renderer == NULL)
+        return false;
+
+    ui_rect_draw_context context;
+    SDL_zero(context);
+    context.runtime = runtime;
+    context.renderer = renderer;
+    context.metrics = metrics;
+    context.render_eval = render_eval;
+    context.ok = true;
+
+    return sdl3d_game_data_for_each_ui_rect(runtime, draw_ui_rect, &context) && context.ok;
 }
 
 void sdl3d_game_data_particle_cache_init(sdl3d_game_data_particle_cache *cache)
@@ -2205,6 +2297,7 @@ bool sdl3d_game_data_draw_frame(const sdl3d_game_data_frame_desc *frame)
     }
 
     ok = run_frame_hook(frame, frame->before_ui) && ok;
+    ok = sdl3d_game_data_draw_ui_rects(frame->runtime, frame->renderer, frame->metrics, frame->render_eval) && ok;
     if (frame->image_cache != NULL)
         ok = sdl3d_game_data_draw_ui_images(frame->runtime, frame->renderer, frame->image_cache, frame->metrics,
                                             frame->render_eval) &&
