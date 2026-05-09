@@ -15,21 +15,6 @@
 #define ROCKET_LIGHT_INTENSITY 4.0f
 #define ROCKET_LIGHT_RANGE 4.0f
 
-static sdl3d_vec3 camera_forward(const sdl3d_camera3d *camera)
-{
-    if (camera == NULL)
-    {
-        return sdl3d_vec3_make(0.0f, 0.0f, -1.0f);
-    }
-
-    sdl3d_vec3 forward = sdl3d_vec3_sub(camera->target, camera->position);
-    if (sdl3d_vec3_length_squared(forward) <= 0.000001f)
-    {
-        return sdl3d_vec3_make(0.0f, 0.0f, -1.0f);
-    }
-    return sdl3d_vec3_normalize(forward);
-}
-
 void render_state_init(render_state *rs)
 {
     SDL_zerop(rs);
@@ -83,7 +68,6 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
 
     float px = mover->position.x, py = mover->position.y;
     float pz = mover->position.z;
-    const sdl3d_vec3 forward = camera_forward(&cam);
 
     int current_sector = sdl3d_level_find_sector_at(&ld->unlit, g_sectors, px, pz, py - PLAYER_HEIGHT);
     if (current_sector < 0)
@@ -166,17 +150,6 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
         sdl3d_set_emissive(ctx, 5.0f, 3.0f, 1.0f);
         sdl3d_draw_sphere(ctx, sdl3d_vec3_make(player->proj_x, player->proj_y, player->proj_z), 0.1f, 8, 8,
                           (sdl3d_color){255, 200, 100, 255});
-        sdl3d_set_emissive(ctx, 0, 0, 0);
-    }
-
-    /* Crosshair */
-    {
-        float chx = cam.position.x + forward.x * 0.4f;
-        float chy = cam.position.y + forward.y * 0.4f;
-        float chz = cam.position.z + forward.z * 0.4f;
-        sdl3d_set_emissive(ctx, 8, 8, 8);
-        sdl3d_draw_cube(ctx, sdl3d_vec3_make(chx, chy, chz), sdl3d_vec3_make(0.003f, 0.003f, 0.003f),
-                        (sdl3d_color){255, 255, 255, 255});
         sdl3d_set_emissive(ctx, 0, 0, 0);
     }
 

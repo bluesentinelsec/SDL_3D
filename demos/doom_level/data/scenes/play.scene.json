@@ -71,6 +71,16 @@
         "centered": true,
         "normalized": true,
         "color": [220, 230, 255, 230]
+      },
+      {
+        "name": "ui.doom_level.reticle",
+        "text": "+",
+        "x": 0.5,
+        "y": 0.5,
+        "scale": 1.2,
+        "centered": true,
+        "normalized": true,
+        "color": [255, 255, 255, 220]
       }
     ]
   }

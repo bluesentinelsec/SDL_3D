@@ -161,6 +161,7 @@ struct UiTextCapture
     bool saw_score = false;
     bool saw_pause = false;
     bool saw_network_match_terminated = false;
+    bool saw_doom_reticle = false;
 };
 
 struct UiImageCapture
@@ -1446,6 +1447,15 @@ bool capture_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
         capture->saw_network_match_terminated = true;
         EXPECT_TRUE(text->centered);
         EXPECT_TRUE(text->normalized);
+    }
+    if (std::string(text->name) == "ui.doom_level.reticle")
+    {
+        capture->saw_doom_reticle = true;
+        EXPECT_STREQ(text->text, "+");
+        EXPECT_TRUE(text->centered);
+        EXPECT_TRUE(text->normalized);
+        EXPECT_NEAR(text->x, 0.5f, 0.0001f);
+        EXPECT_NEAR(text->y, 0.5f, 0.0001f);
     }
     return true;
 }
@@ -8079,6 +8089,9 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     EXPECT_EQ(authored_props.doom_crates, 8);
     EXPECT_EQ(authored_props.doom_presentation_cubes, 14);
     EXPECT_GE(authored_props.sprites, 10);
+    UiTextCapture ui_text{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui_text, &ui_text));
+    EXPECT_TRUE(ui_text.saw_doom_reticle);
     sdl3d_game_data_sprite_asset robot_sprite{};
     ASSERT_TRUE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.doom.robot.walk", &robot_sprite));
     EXPECT_EQ(robot_sprite.source_kind, SDL3D_SPRITE_ASSET_SOURCE_FILES);
