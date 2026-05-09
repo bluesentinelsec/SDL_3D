@@ -47,7 +47,8 @@
       "action.move.left",
       "action.move.right",
       "action.jump",
-      "action.interact"
+      "action.interact",
+      "action.fire"
     ]
   },
   "world": {
@@ -64,7 +65,7 @@
     "text": [
       {
         "name": "ui.doom_level.phase",
-        "text": "DATA-DRIVEN SECTOR LEVEL - WASD + MOUSE - E OPENS DOORS",
+        "text": "DATA-DRIVEN SECTOR LEVEL - WASD + MOUSE - E OPENS DOORS - CLICK/F FIRES",
         "x": 0.5,
         "y": 0.06,
         "scale": 1.0,

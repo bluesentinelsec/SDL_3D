@@ -13140,9 +13140,24 @@ static bool execute_projectile_fire_action(sdl3d_game_data_runtime *runtime, yyj
     actor_set_position(actor, actor_spawn_position_from_action(runtime, action, payload, target->position));
     apply_actor_spawn_properties(actor, obj_get(action, "properties"));
     yyjson_val *velocity = obj_get(action, "velocity");
-    if (velocity != NULL)
-        sdl3d_properties_set_vec3(actor->props, "velocity",
-                                  json_vec3_value(velocity, sdl3d_vec3_make(0.0f, 0.0f, 0.0f)));
+    const sdl3d_vec3 fallback_velocity = json_vec3_value(velocity, sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const char *velocity_property = json_string(action, "velocity_from_property", NULL);
+    if (velocity_property != NULL || velocity != NULL)
+    {
+        sdl3d_vec3 projectile_velocity =
+            velocity_property != NULL ? sdl3d_properties_get_vec3(target->props, velocity_property, fallback_velocity)
+                                      : fallback_velocity;
+        yyjson_val *speed_value = obj_get(action, "speed");
+        if (yyjson_is_num(speed_value))
+        {
+            const float speed = (float)yyjson_get_num(speed_value);
+            if (sdl3d_vec3_length_squared(projectile_velocity) > 0.000001f)
+                projectile_velocity = sdl3d_vec3_scale(sdl3d_vec3_normalize(projectile_velocity), speed);
+            else
+                projectile_velocity = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+        }
+        sdl3d_properties_set_vec3(actor->props, "velocity", projectile_velocity);
+    }
     actor_pool_note_spawn_success(runtime, pool);
 
     if (cooldown_property != NULL && cooldown_property[0] != '\0')
@@ -14612,10 +14627,15 @@ static void fps_controller_publish_actor_state(const fps_controller_runtime *con
 {
     if (controller == NULL || component == NULL || actor == NULL)
         return;
+    const float cos_pitch = SDL_cosf(controller->mover.pitch);
+    const sdl3d_vec3 forward =
+        sdl3d_vec3_make(SDL_sinf(controller->mover.yaw) * cos_pitch, SDL_sinf(controller->mover.pitch),
+                        -SDL_cosf(controller->mover.yaw) * cos_pitch);
     actor_set_position(actor, controller->mover.position);
     sdl3d_properties_set_float(actor->props, json_string(component, "yaw_property", "yaw"), controller->mover.yaw);
     sdl3d_properties_set_float(actor->props, json_string(component, "pitch_property", "pitch"),
                                controller->mover.pitch);
+    sdl3d_properties_set_vec3(actor->props, json_string(component, "forward_property", "camera_forward"), forward);
     sdl3d_properties_set_float(actor->props, json_string(component, "view_smooth_property", "view_smooth"),
                                controller->mover.view_smooth);
     sdl3d_properties_set_float(actor->props, json_string(component, "vertical_velocity_property", "vertical_velocity"),
