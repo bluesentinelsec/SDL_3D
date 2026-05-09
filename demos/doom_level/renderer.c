@@ -49,8 +49,8 @@ static bool render_state_ensure_sector_capacity(render_state *rs, int sector_cou
 }
 
 void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_font *font, sdl3d_ui_context *ui,
-                       level_data *ld, entities *ent, const doom_doors *doors, const player_state *player,
-                       int backbuffer_w, int backbuffer_h, float dt, const char *render_profile_name)
+                       level_data *ld, entities *ent, const player_state *player, int backbuffer_w, int backbuffer_h,
+                       float dt, const char *render_profile_name)
 {
     const sdl3d_fps_mover *mover = &player->mover;
     sdl3d_level *active = level_data_active(ld);
@@ -97,9 +97,6 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
 
     /* Level geometry */
     sdl3d_draw_level(ctx, active, rs->portal_culling ? &rs->vis : NULL, (sdl3d_color){255, 255, 255, 255});
-
-    /* Runtime doors are dynamic gameplay geometry, drawn after the static level mesh. */
-    doom_doors_draw(doors, ctx);
 
     /* 3D scene actors */
     if (ent->scene)
