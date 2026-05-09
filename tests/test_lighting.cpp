@@ -857,6 +857,9 @@ TEST_F(SDL3DLightingFixture, SetAndGetRenderProfile)
     EXPECT_EQ(out.vertex_snap_precision, 1);
     EXPECT_TRUE(out.color_quantize);
     EXPECT_EQ(out.display_profile, SDL3D_DISPLAY_PROFILE_PS1);
+    EXPECT_EQ(out.display_width, 320);
+    EXPECT_EQ(out.display_height, 240);
+    EXPECT_EQ(out.display_filter, SDL3D_DISPLAY_FILTER_NEAREST);
 }
 
 TEST_F(SDL3DLightingFixture, RuntimeProfileSwitch)
@@ -872,6 +875,9 @@ TEST_F(SDL3DLightingFixture, RuntimeProfileSwitch)
         EXPECT_EQ(out.shading, profiles[i].shading) << "profile " << i;
         EXPECT_EQ(out.uv_mode, profiles[i].uv_mode) << "profile " << i;
         EXPECT_EQ(out.display_profile, profiles[i].display_profile) << "profile " << i;
+        EXPECT_EQ(out.display_width, profiles[i].display_width) << "profile " << i;
+        EXPECT_EQ(out.display_height, profiles[i].display_height) << "profile " << i;
+        EXPECT_EQ(out.display_filter, profiles[i].display_filter) << "profile " << i;
     }
 }
 
@@ -903,6 +909,9 @@ struct PresetCase
     bool expected_snap;
     bool expected_quantize;
     sdl3d_display_profile expected_display_profile;
+    int expected_display_width;
+    int expected_display_height;
+    sdl3d_display_filter expected_display_filter;
 };
 
 class SDL3DPresetTable : public ::testing::TestWithParam<PresetCase>
@@ -919,20 +928,25 @@ TEST_P(SDL3DPresetTable, FieldsMatchSpec)
     EXPECT_EQ(p.vertex_snap, c.expected_snap) << c.label;
     EXPECT_EQ(p.color_quantize, c.expected_quantize) << c.label;
     EXPECT_EQ(p.display_profile, c.expected_display_profile) << c.label;
+    EXPECT_EQ(p.display_width, c.expected_display_width) << c.label;
+    EXPECT_EQ(p.display_height, c.expected_display_height) << c.label;
+    EXPECT_EQ(p.display_filter, c.expected_display_filter) << c.label;
 }
 
 INSTANTIATE_TEST_SUITE_P(
     Presets, SDL3DPresetTable,
     ::testing::Values(PresetCase{"modern", sdl3d_profile_modern, SDL3D_SHADING_PHONG, SDL3D_UV_PERSPECTIVE,
-                                 SDL3D_TONEMAP_ACES, false, false, SDL3D_DISPLAY_PROFILE_MODERN},
+                                 SDL3D_TONEMAP_ACES, false, false, SDL3D_DISPLAY_PROFILE_MODERN, 0, 0,
+                                 SDL3D_DISPLAY_FILTER_LINEAR},
                       PresetCase{"ps1", sdl3d_profile_ps1, SDL3D_SHADING_GOURAUD, SDL3D_UV_AFFINE, SDL3D_TONEMAP_NONE,
-                                 true, true, SDL3D_DISPLAY_PROFILE_PS1},
+                                 true, true, SDL3D_DISPLAY_PROFILE_PS1, 320, 240, SDL3D_DISPLAY_FILTER_NEAREST},
                       PresetCase{"n64", sdl3d_profile_n64, SDL3D_SHADING_GOURAUD, SDL3D_UV_PERSPECTIVE,
-                                 SDL3D_TONEMAP_NONE, false, false, SDL3D_DISPLAY_PROFILE_N64},
+                                 SDL3D_TONEMAP_NONE, false, false, SDL3D_DISPLAY_PROFILE_N64, 320, 240,
+                                 SDL3D_DISPLAY_FILTER_LINEAR},
                       PresetCase{"dos", sdl3d_profile_dos, SDL3D_SHADING_GOURAUD, SDL3D_UV_AFFINE, SDL3D_TONEMAP_NONE,
-                                 false, true, SDL3D_DISPLAY_PROFILE_DOS},
+                                 false, true, SDL3D_DISPLAY_PROFILE_DOS, 320, 200, SDL3D_DISPLAY_FILTER_NEAREST},
                       PresetCase{"snes", sdl3d_profile_snes, SDL3D_SHADING_FLAT, SDL3D_UV_AFFINE, SDL3D_TONEMAP_NONE,
-                                 false, true, SDL3D_DISPLAY_PROFILE_SNES}));
+                                 false, true, SDL3D_DISPLAY_PROFILE_SNES, 256, 224, SDL3D_DISPLAY_FILTER_NEAREST}));
 
 /* ================================================================== */
 /* Color quantization unit tests                                      */
@@ -963,17 +977,25 @@ TEST_F(SDL3DLightingFixture, CustomProfileMixAndMatch)
     EXPECT_EQ(out.uv_mode, SDL3D_UV_AFFINE);
     EXPECT_FALSE(out.vertex_snap);
     EXPECT_EQ(out.display_profile, SDL3D_DISPLAY_PROFILE_PS1);
+    EXPECT_EQ(out.display_width, 320);
+    EXPECT_EQ(out.display_height, 240);
 }
 
 TEST_F(SDL3DLightingFixture, InvalidCustomDisplayProfileFallsBackToModern)
 {
     sdl3d_render_profile p = sdl3d_profile_ps1();
     p.display_profile = (sdl3d_display_profile)999;
+    p.display_width = -1;
+    p.display_height = 240;
+    p.display_filter = (sdl3d_display_filter)999;
     ASSERT_TRUE(sdl3d_set_render_profile(ctx, &p));
 
     sdl3d_render_profile out{};
     ASSERT_TRUE(sdl3d_get_render_profile(ctx, &out));
     EXPECT_EQ(out.display_profile, SDL3D_DISPLAY_PROFILE_MODERN);
+    EXPECT_EQ(out.display_width, 0);
+    EXPECT_EQ(out.display_height, 0);
+    EXPECT_EQ(out.display_filter, SDL3D_DISPLAY_FILTER_LINEAR);
 }
 
 /* ================================================================== */

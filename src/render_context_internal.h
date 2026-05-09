@@ -86,6 +86,9 @@ struct sdl3d_render_context
     bool color_quantize;
     int color_depth;
     sdl3d_display_profile display_profile;
+    int display_width;
+    int display_height;
+    sdl3d_display_filter display_filter;
 
     /* OpenGL backend (NULL when using software backend). */
     struct sdl3d_gl_context *gl;

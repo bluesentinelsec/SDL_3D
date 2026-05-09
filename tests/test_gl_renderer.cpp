@@ -101,11 +101,16 @@ TEST_F(GLRendererTest, RenderProfilesSelectRetroPostProcess)
     {
         sdl3d_render_profile (*profile)(void);
         int expected_retro_profile;
+        int expected_width;
+        int expected_height;
+        int expected_filter;
     };
     const ProfileCase cases[] = {
-        {sdl3d_profile_modern, (int)SDL3D_DISPLAY_PROFILE_MODERN}, {sdl3d_profile_ps1, (int)SDL3D_DISPLAY_PROFILE_PS1},
-        {sdl3d_profile_n64, (int)SDL3D_DISPLAY_PROFILE_N64},       {sdl3d_profile_dos, (int)SDL3D_DISPLAY_PROFILE_DOS},
-        {sdl3d_profile_snes, (int)SDL3D_DISPLAY_PROFILE_SNES},
+        {sdl3d_profile_modern, (int)SDL3D_DISPLAY_PROFILE_MODERN, 0, 0, (int)SDL3D_DISPLAY_FILTER_LINEAR},
+        {sdl3d_profile_ps1, (int)SDL3D_DISPLAY_PROFILE_PS1, 320, 240, (int)SDL3D_DISPLAY_FILTER_NEAREST},
+        {sdl3d_profile_n64, (int)SDL3D_DISPLAY_PROFILE_N64, 320, 240, (int)SDL3D_DISPLAY_FILTER_LINEAR},
+        {sdl3d_profile_dos, (int)SDL3D_DISPLAY_PROFILE_DOS, 320, 200, (int)SDL3D_DISPLAY_FILTER_NEAREST},
+        {sdl3d_profile_snes, (int)SDL3D_DISPLAY_PROFILE_SNES, 256, 224, (int)SDL3D_DISPLAY_FILTER_NEAREST},
     };
 
     for (const ProfileCase &test_case : cases)
@@ -113,7 +118,13 @@ TEST_F(GLRendererTest, RenderProfilesSelectRetroPostProcess)
         sdl3d_render_profile profile = test_case.profile();
         ASSERT_TRUE(sdl3d_set_render_profile(ctx, &profile));
         ASSERT_TRUE(sdl3d_clear_render_context(ctx, (sdl3d_color){4, 5, 6, 255}));
+        int width = -1;
+        int height = -1;
+        sdl3d_gl_active_retro_virtual_resolution(ctx->gl, &width, &height);
         EXPECT_EQ(sdl3d_gl_active_retro_profile(ctx->gl), test_case.expected_retro_profile);
+        EXPECT_EQ(width, test_case.expected_width);
+        EXPECT_EQ(height, test_case.expected_height);
+        EXPECT_EQ(sdl3d_gl_active_retro_filter(ctx->gl), test_case.expected_filter);
     }
 }
 

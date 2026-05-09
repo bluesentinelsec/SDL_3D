@@ -344,6 +344,9 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     context->color_quantize = false;
     context->color_depth = 0;
     context->display_profile = SDL3D_DISPLAY_PROFILE_MODERN;
+    context->display_width = 0;
+    context->display_height = 0;
+    context->display_filter = SDL3D_DISPLAY_FILTER_LINEAR;
     if (context->backend == SDL3D_BACKEND_SOFTWARE)
     {
         sdl3d_try_create_parallel_rasterizer(context);

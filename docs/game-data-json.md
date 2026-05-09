@@ -94,12 +94,17 @@ The root `render` object configures frame-level presentation defaults:
 `profile` may be `modern`, `ps1`, `n64`, `dos`, or `snes`. Each profile selects
 both reusable render settings and a named display treatment; capable backends
 apply profile-specific post-processing so retro profiles visibly change the
-final image instead of only changing internal shading flags. If `tonemap` is not
-authored, the selected profile supplies its tonemap mode. `tonemap` may be
-`none`, `reinhard`, or `aces` when a game wants to override the profile.
-Optional `*_key` fields read scene-state values at draw time and override the
-authored defaults. This lets games author debug/profile toggles through sensors
-and logic actions while keeping the runner game-agnostic.
+final image instead of only changing internal shading flags. Retro profiles use
+an authored virtual presentation resolution and upscale treatment: for example,
+`ps1` presents the scene as a low-resolution nearest-upscaled image with
+dithering and color reduction, while `n64` uses a softer low-resolution
+treatment. UI overlays are drawn after this presentation pass so menus and HUD
+text remain readable. If `tonemap` is not authored, the selected profile
+supplies its tonemap mode. `tonemap` may be `none`, `reinhard`, or `aces` when a
+game wants to override the profile. Optional `*_key` fields read scene-state
+values at draw time and override the authored defaults. This lets games author
+debug/profile toggles through sensors and logic actions while keeping the runner
+game-agnostic.
 
 ## Structured Imports
 

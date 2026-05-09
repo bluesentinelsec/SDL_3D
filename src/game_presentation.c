@@ -174,9 +174,12 @@ static bool apply_render_settings(const sdl3d_game_data_runtime *runtime, sdl3d_
         return false;
 
     bool ok = true;
+    if (!settings.lighting_enabled)
+        ok = sdl3d_set_lighting_enabled(renderer, false) && ok;
+    else if (!settings.has_profile)
+        ok = sdl3d_set_lighting_enabled(renderer, true) && ok;
     if (settings.has_profile)
         ok = sdl3d_set_render_profile(renderer, &settings.profile) && ok;
-    ok = sdl3d_set_lighting_enabled(renderer, settings.lighting_enabled) && ok;
     ok = sdl3d_set_bloom_enabled(renderer, settings.bloom_enabled) && ok;
     ok = sdl3d_set_ssao_enabled(renderer, settings.ssao_enabled) && ok;
     ok = sdl3d_set_tonemap_mode(renderer, settings.tonemap) && ok;

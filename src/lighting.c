@@ -564,6 +564,11 @@ static sdl3d_display_profile normalize_display_profile(sdl3d_display_profile pro
                : SDL3D_DISPLAY_PROFILE_MODERN;
 }
 
+static sdl3d_display_filter normalize_display_filter(sdl3d_display_filter filter)
+{
+    return filter == SDL3D_DISPLAY_FILTER_NEAREST ? SDL3D_DISPLAY_FILTER_NEAREST : SDL3D_DISPLAY_FILTER_LINEAR;
+}
+
 bool sdl3d_set_render_profile(sdl3d_render_context *context, const sdl3d_render_profile *profile)
 {
     if (context == NULL)
@@ -584,6 +589,17 @@ bool sdl3d_set_render_profile(sdl3d_render_context *context, const sdl3d_render_
     context->color_quantize = profile->color_quantize;
     context->color_depth = profile->color_depth;
     context->display_profile = normalize_display_profile(profile->display_profile);
+    if (profile->display_width > 0 && profile->display_height > 0)
+    {
+        context->display_width = profile->display_width;
+        context->display_height = profile->display_height;
+    }
+    else
+    {
+        context->display_width = 0;
+        context->display_height = 0;
+    }
+    context->display_filter = normalize_display_filter(profile->display_filter);
     return true;
 }
 
@@ -607,6 +623,9 @@ bool sdl3d_get_render_profile(const sdl3d_render_context *context, sdl3d_render_
     out->color_depth = context->color_depth;
     out->texture_filter = context->texture_filter;
     out->display_profile = context->display_profile;
+    out->display_width = context->display_width;
+    out->display_height = context->display_height;
+    out->display_filter = context->display_filter;
     return true;
 }
 
@@ -620,6 +639,7 @@ sdl3d_render_profile sdl3d_profile_modern(void)
     p.fog_eval = SDL3D_FOG_EVAL_FRAGMENT;
     p.tonemap = SDL3D_TONEMAP_ACES;
     p.display_profile = SDL3D_DISPLAY_PROFILE_MODERN;
+    p.display_filter = SDL3D_DISPLAY_FILTER_LINEAR;
     return p;
 }
 
@@ -637,6 +657,9 @@ sdl3d_render_profile sdl3d_profile_ps1(void)
     p.color_quantize = true;
     p.color_depth = 32;
     p.display_profile = SDL3D_DISPLAY_PROFILE_PS1;
+    p.display_width = 320;
+    p.display_height = 240;
+    p.display_filter = SDL3D_DISPLAY_FILTER_NEAREST;
     return p;
 }
 
@@ -650,6 +673,9 @@ sdl3d_render_profile sdl3d_profile_n64(void)
     p.fog_eval = SDL3D_FOG_EVAL_VERTEX;
     p.tonemap = SDL3D_TONEMAP_NONE;
     p.display_profile = SDL3D_DISPLAY_PROFILE_N64;
+    p.display_width = 320;
+    p.display_height = 240;
+    p.display_filter = SDL3D_DISPLAY_FILTER_LINEAR;
     return p;
 }
 
@@ -665,6 +691,9 @@ sdl3d_render_profile sdl3d_profile_dos(void)
     p.color_quantize = true;
     p.color_depth = 6;
     p.display_profile = SDL3D_DISPLAY_PROFILE_DOS;
+    p.display_width = 320;
+    p.display_height = 200;
+    p.display_filter = SDL3D_DISPLAY_FILTER_NEAREST;
     return p;
 }
 
@@ -680,5 +709,8 @@ sdl3d_render_profile sdl3d_profile_snes(void)
     p.color_quantize = true;
     p.color_depth = 32;
     p.display_profile = SDL3D_DISPLAY_PROFILE_SNES;
+    p.display_width = 256;
+    p.display_height = 224;
+    p.display_filter = SDL3D_DISPLAY_FILTER_NEAREST;
     return p;
 }

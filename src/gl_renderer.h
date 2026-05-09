@@ -23,6 +23,8 @@ void sdl3d_gl_post_process(sdl3d_gl_context *ctx, int effects, float bloom_thres
  * Used for automated testing. */
 void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgba);
 int sdl3d_gl_active_retro_profile(const sdl3d_gl_context *ctx);
+void sdl3d_gl_active_retro_virtual_resolution(const sdl3d_gl_context *ctx, int *out_width, int *out_height);
+int sdl3d_gl_active_retro_filter(const sdl3d_gl_context *ctx);
 
 /* Shadow pass control. */
 void sdl3d_gl_begin_shadow_pass(sdl3d_gl_context *ctx, const float *light_vp, float bias);

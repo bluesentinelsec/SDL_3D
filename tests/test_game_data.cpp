@@ -8632,6 +8632,9 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &render_settings));
     EXPECT_STREQ(render_settings.profile_name, "ps1");
     EXPECT_TRUE(render_settings.profile.vertex_snap);
+    EXPECT_EQ(render_settings.profile.display_width, 320);
+    EXPECT_EQ(render_settings.profile.display_height, 240);
+    EXPECT_EQ(render_settings.profile.display_filter, SDL3D_DISPLAY_FILTER_NEAREST);
     EXPECT_EQ(render_settings.tonemap, SDL3D_TONEMAP_NONE);
 
     SectorLevelInstanceCapture sector_capture{};

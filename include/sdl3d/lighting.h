@@ -196,6 +196,15 @@ extern "C"
         SDL3D_DISPLAY_PROFILE_SNES = 4
     } sdl3d_display_profile;
 
+    /**
+     * @brief Upscale filter for a render profile's virtual presentation resolution.
+     */
+    typedef enum sdl3d_display_filter
+    {
+        SDL3D_DISPLAY_FILTER_LINEAR = 0,
+        SDL3D_DISPLAY_FILTER_NEAREST = 1
+    } sdl3d_display_filter;
+
     /* ============================================================== */
     /* Render profile                                                 */
     /* ============================================================== */
@@ -213,6 +222,12 @@ extern "C"
         int color_depth;
         /** Named display treatment for backends with full-screen profile effects. */
         sdl3d_display_profile display_profile;
+        /** Virtual presentation width in pixels, or 0 for native render resolution. */
+        int display_width;
+        /** Virtual presentation height in pixels, or 0 for native render resolution. */
+        int display_height;
+        /** Upscale filter used when presenting a virtual resolution. */
+        sdl3d_display_filter display_filter;
     } sdl3d_render_profile;
 
     bool sdl3d_set_render_profile(sdl3d_render_context *context, const sdl3d_render_profile *profile);
