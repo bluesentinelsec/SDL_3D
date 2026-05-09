@@ -8505,6 +8505,12 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     ASSERT_NE(runtime, nullptr);
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.doom_level.play"));
+    sdl3d_game_data_scene_skybox skybox{};
+    ASSERT_TRUE(sdl3d_game_data_get_active_scene_skybox(runtime, &skybox));
+    EXPECT_STREQ(skybox.pos_x, "image.doom.skybox.px");
+    EXPECT_STREQ(skybox.neg_z, "image.doom.skybox.nz");
+    EXPECT_FLOAT_EQ(skybox.size, 400.0f);
+
     sdl3d_game_data_app_control app{};
     ASSERT_TRUE(sdl3d_game_data_get_app_control(runtime, &app));
     EXPECT_EQ(app.start_signal_id, -1);
@@ -9047,6 +9053,7 @@ TEST(GameDataRuntime, RejectsFpsSectorControllerOnArchetypes)
 TEST(GameDataRuntime, RejectsInvalidSceneSectorLevelInstances)
 {
     const std::filesystem::path dir = unique_test_dir("sector_level_scene_invalid");
+    write_text(dir / "textures" / "sky.png", "placeholder");
     struct Case
     {
         const char *name;
@@ -9069,6 +9076,16 @@ TEST(GameDataRuntime, RejectsInvalidSceneSectorLevelInstances)
             R"json({ "sector_levels": [{ "level": "sector.test", "position": [1.0, 2.0] }] })json",
             "position",
         },
+        {
+            "unknown_skybox_image",
+            R"json({ "skybox": { "pos_x": "image.missing", "neg_x": "image.sky.nx", "pos_y": "image.sky.py", "neg_y": "image.sky.ny", "pos_z": "image.sky.pz", "neg_z": "image.sky.nz" } })json",
+            "unknown image asset",
+        },
+        {
+            "bad_skybox_size",
+            R"json({ "skybox": { "pos_x": "image.sky.px", "neg_x": "image.sky.nx", "pos_y": "image.sky.py", "neg_y": "image.sky.ny", "pos_z": "image.sky.pz", "neg_z": "image.sky.nz", "size": 1.0 } })json",
+            "skybox size",
+        },
     };
 
     for (const Case &test_case : cases)
@@ -9083,6 +9100,16 @@ TEST(GameDataRuntime, RejectsInvalidSceneSectorLevelInstances)
         const std::string game_json = std::string(R"json({
   "schema": "sdl3d.game.v0",
   "metadata": { "name": "Invalid Sector Scene" },
+  "assets": {
+    "images": [
+      { "id": "image.sky.px", "path": "asset://textures/sky.png" },
+      { "id": "image.sky.nx", "path": "asset://textures/sky.png" },
+      { "id": "image.sky.py", "path": "asset://textures/sky.png" },
+      { "id": "image.sky.ny", "path": "asset://textures/sky.png" },
+      { "id": "image.sky.pz", "path": "asset://textures/sky.png" },
+      { "id": "image.sky.nz", "path": "asset://textures/sky.png" }
+    ]
+  },
   "sector_levels": [
     {
       "name": "sector.test",

@@ -7210,6 +7210,30 @@ bool sdl3d_game_data_active_scene_renders_world(const sdl3d_game_data_runtime *r
     return scene != NULL ? json_bool(scene->root, "renders_world", true) : true;
 }
 
+bool sdl3d_game_data_get_active_scene_skybox(const sdl3d_game_data_runtime *runtime,
+                                             sdl3d_game_data_scene_skybox *out_skybox)
+{
+    if (out_skybox != NULL)
+        SDL_zero(*out_skybox);
+    if (runtime == NULL || out_skybox == NULL)
+        return false;
+
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    yyjson_val *skybox = obj_get(obj_get(scene != NULL ? scene->root : NULL, "world"), "skybox");
+    if (!yyjson_is_obj(skybox))
+        return false;
+
+    out_skybox->pos_x = json_string(skybox, "pos_x", NULL);
+    out_skybox->neg_x = json_string(skybox, "neg_x", NULL);
+    out_skybox->pos_y = json_string(skybox, "pos_y", NULL);
+    out_skybox->neg_y = json_string(skybox, "neg_y", NULL);
+    out_skybox->pos_z = json_string(skybox, "pos_z", NULL);
+    out_skybox->neg_z = json_string(skybox, "neg_z", NULL);
+    out_skybox->size = json_float(skybox, "size", 400.0f);
+    return out_skybox->pos_x != NULL && out_skybox->neg_x != NULL && out_skybox->pos_y != NULL &&
+           out_skybox->neg_y != NULL && out_skybox->pos_z != NULL && out_skybox->neg_z != NULL;
+}
+
 bool sdl3d_game_data_active_scene_has_entity(const sdl3d_game_data_runtime *runtime, const char *entity_name)
 {
     return runtime != NULL && active_scene_has_entity_internal(runtime, entity_name);

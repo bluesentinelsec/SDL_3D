@@ -63,6 +63,15 @@
     ]
   },
   "world": {
+    "skybox": {
+      "pos_x": "image.doom.skybox.px",
+      "neg_x": "image.doom.skybox.nx",
+      "pos_y": "image.doom.skybox.py",
+      "neg_y": "image.doom.skybox.ny",
+      "pos_z": "image.doom.skybox.pz",
+      "neg_z": "image.doom.skybox.nz",
+      "size": 400.0
+    },
     "sector_levels": [
       {
         "level": "sector.doom.e1m1",

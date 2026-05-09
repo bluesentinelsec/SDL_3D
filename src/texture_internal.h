@@ -1,6 +1,7 @@
 #ifndef SDL3D_TEXTURE_INTERNAL_H
 #define SDL3D_TEXTURE_INTERNAL_H
 
+#include "sdl3d/asset.h"
 #include "sdl3d/texture.h"
 
 typedef struct sdl3d_texture_cache_entry
@@ -15,5 +16,8 @@ void sdl3d_texture_sample_rgba(const sdl3d_texture2d *texture, float u, float v,
 void sdl3d_texture_cache_destroy(sdl3d_texture_cache_entry *cache);
 bool sdl3d_texture_cache_get_or_load(sdl3d_texture_cache_entry **cache, const char *source_path,
                                      const char *texture_path, const sdl3d_texture2d **out_texture);
+bool sdl3d_texture_cache_get_or_load_asset(sdl3d_texture_cache_entry **cache, const sdl3d_asset_resolver *assets,
+                                           const char *source_path, const char *texture_path,
+                                           const sdl3d_texture2d **out_texture);
 
 #endif

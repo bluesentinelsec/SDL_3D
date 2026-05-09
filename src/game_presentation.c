@@ -31,6 +31,7 @@ typedef struct primitive_draw_context
 typedef struct sector_level_draw_context
 {
     sdl3d_render_context *renderer;
+    const sdl3d_asset_resolver *assets;
     const sdl3d_camera3d *camera;
     bool *sector_visible;
     int sector_visible_capacity;
@@ -1212,7 +1213,8 @@ static bool draw_sector_level_instance(void *userdata, const sdl3d_game_data_sec
         }
     }
 
-    const bool drawn = sdl3d_draw_level(context->renderer, instance->level, vis_ptr, (sdl3d_color){255, 255, 255, 255});
+    const bool drawn = sdl3d_draw_level_with_assets(context->renderer, context->assets, instance->level, vis_ptr,
+                                                    (sdl3d_color){255, 255, 255, 255});
     if (pushed && !sdl3d_pop_matrix(context->renderer))
         context->ok = false;
     if (!drawn)
@@ -1223,17 +1225,51 @@ static bool draw_sector_level_instance(void *userdata, const sdl3d_game_data_sec
 bool sdl3d_game_data_draw_sector_levels(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
                                         const sdl3d_camera3d *camera)
 {
+    return sdl3d_game_data_draw_sector_levels_with_assets(runtime, renderer, NULL, camera);
+}
+
+bool sdl3d_game_data_draw_sector_levels_with_assets(const sdl3d_game_data_runtime *runtime,
+                                                    sdl3d_render_context *renderer, const sdl3d_asset_resolver *assets,
+                                                    const sdl3d_camera3d *camera)
+{
     if (runtime == NULL || renderer == NULL)
         return false;
 
     sector_level_draw_context context;
     SDL_zero(context);
     context.renderer = renderer;
+    context.assets = assets;
     context.camera = camera;
     context.ok = true;
     const bool iterated = sdl3d_game_data_for_each_sector_level_instance(runtime, draw_sector_level_instance, &context);
     SDL_free(context.sector_visible);
     return iterated && context.ok;
+}
+
+static bool draw_active_scene_skybox(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
+                                     sdl3d_game_data_image_cache *image_cache)
+{
+    sdl3d_game_data_scene_skybox skybox_desc;
+    if (runtime == NULL || renderer == NULL || image_cache == NULL)
+        return true;
+    if (!sdl3d_game_data_get_active_scene_skybox(runtime, &skybox_desc))
+        return true;
+
+    sdl3d_game_data_image_cache_entry *pos_x = find_or_load_image_entry(runtime, image_cache, skybox_desc.pos_x);
+    sdl3d_game_data_image_cache_entry *neg_x = find_or_load_image_entry(runtime, image_cache, skybox_desc.neg_x);
+    sdl3d_game_data_image_cache_entry *pos_y = find_or_load_image_entry(runtime, image_cache, skybox_desc.pos_y);
+    sdl3d_game_data_image_cache_entry *neg_y = find_or_load_image_entry(runtime, image_cache, skybox_desc.neg_y);
+    sdl3d_game_data_image_cache_entry *pos_z = find_or_load_image_entry(runtime, image_cache, skybox_desc.pos_z);
+    sdl3d_game_data_image_cache_entry *neg_z = find_or_load_image_entry(runtime, image_cache, skybox_desc.neg_z);
+    if (pos_x == NULL || neg_x == NULL || pos_y == NULL || neg_y == NULL || pos_z == NULL || neg_z == NULL)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load active scene skybox image assets");
+        return false;
+    }
+
+    sdl3d_skybox_textured skybox = {&pos_x->texture, &neg_x->texture, &pos_y->texture, &neg_y->texture,
+                                    &pos_z->texture, &neg_z->texture, skybox_desc.size};
+    return sdl3d_draw_skybox_textured(renderer, &skybox);
 }
 
 bool sdl3d_game_data_draw_render_primitives(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer)
@@ -2283,7 +2319,11 @@ bool sdl3d_game_data_draw_frame(const sdl3d_game_data_frame_desc *frame)
         if (sdl3d_begin_mode_3d(frame->renderer, camera))
         {
             ok = run_frame_hook(frame, frame->before_world_3d) && ok;
-            ok = sdl3d_game_data_draw_sector_levels(frame->runtime, frame->renderer, &camera) && ok;
+            ok = draw_active_scene_skybox(frame->runtime, frame->renderer, frame->image_cache) && ok;
+            ok = sdl3d_game_data_draw_sector_levels_with_assets(
+                     frame->runtime, frame->renderer, frame->image_cache != NULL ? frame->image_cache->assets : NULL,
+                     &camera) &&
+                 ok;
             if (frame->particle_cache != NULL)
                 ok = sdl3d_game_data_draw_particles(frame->runtime, frame->renderer, frame->particle_cache) && ok;
             ok = draw_render_primitives_evaluated_with_cache(frame->runtime, frame->renderer, frame->render_eval,

@@ -50,6 +50,16 @@
       }
     ]
   },
+  "assets": {
+    "images": [
+      { "id": "image.doom.skybox.px", "path": "asset://skyboxes/sky_17/px.png" },
+      { "id": "image.doom.skybox.nx", "path": "asset://skyboxes/sky_17/nx.png" },
+      { "id": "image.doom.skybox.py", "path": "asset://skyboxes/sky_17/py.png" },
+      { "id": "image.doom.skybox.ny", "path": "asset://skyboxes/sky_17/ny.png" },
+      { "id": "image.doom.skybox.pz", "path": "asset://skyboxes/sky_17/pz.png" },
+      { "id": "image.doom.skybox.nz", "path": "asset://skyboxes/sky_17/nz.png" }
+    ]
+  },
   "input": {
     "contexts": [
       {

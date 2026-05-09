@@ -334,6 +334,19 @@ extern "C"
                                             const sdl3d_camera3d *camera);
 
     /**
+     * @brief Draw active-scene sector levels and resolve `asset://` material
+     * textures through an asset resolver.
+     *
+     * This variant is intended for the generic data runner and pack/embedded
+     * games. Passing NULL for @p assets preserves the filesystem-only behavior
+     * of sdl3d_game_data_draw_sector_levels().
+     */
+    bool sdl3d_game_data_draw_sector_levels_with_assets(const sdl3d_game_data_runtime *runtime,
+                                                        sdl3d_render_context *renderer,
+                                                        const sdl3d_asset_resolver *assets,
+                                                        const sdl3d_camera3d *camera);
+
+    /**
      * @brief Draw authored UI text for the active scene.
      *
      * Built-in font assets are loaded on demand through @p font_cache. Text is

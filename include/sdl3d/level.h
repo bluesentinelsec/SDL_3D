@@ -37,6 +37,7 @@ extern "C"
 #define SDL3D_SIGNAL_ENTERED_SECTOR 0x53454354
 
     struct sdl3d_render_context;
+    struct sdl3d_asset_resolver;
     typedef struct sdl3d_signal_bus sdl3d_signal_bus;
 
     typedef struct sdl3d_level_material
@@ -389,6 +390,15 @@ extern "C"
      */
     bool sdl3d_draw_level(struct sdl3d_render_context *context, const sdl3d_level *level,
                           const sdl3d_visibility_result *vis, sdl3d_color tint);
+
+    /*
+     * Same as sdl3d_draw_level, but resolves `asset://` material texture paths
+     * through an asset resolver. Use this for data-authored or packed levels
+     * whose material images live in a mounted source directory, pack file, or
+     * embedded pack.
+     */
+    bool sdl3d_draw_level_with_assets(struct sdl3d_render_context *context, const struct sdl3d_asset_resolver *assets,
+                                      const sdl3d_level *level, const sdl3d_visibility_result *vis, sdl3d_color tint);
 
 #ifdef __cplusplus
 }

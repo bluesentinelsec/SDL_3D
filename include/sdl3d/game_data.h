@@ -145,6 +145,25 @@ extern "C"
         const char *sprite;
     } sdl3d_game_data_image_asset;
 
+    /** @brief Authored scene skybox descriptor using six image asset ids. */
+    typedef struct sdl3d_game_data_scene_skybox
+    {
+        /** @brief +X face image asset id. */
+        const char *pos_x;
+        /** @brief -X face image asset id. */
+        const char *neg_x;
+        /** @brief +Y face image asset id. */
+        const char *pos_y;
+        /** @brief -Y face image asset id. */
+        const char *neg_y;
+        /** @brief +Z face image asset id. */
+        const char *pos_z;
+        /** @brief -Z face image asset id. */
+        const char *neg_z;
+        /** @brief Skybox cube half-size in world units. */
+        float size;
+    } sdl3d_game_data_scene_skybox;
+
     /** @brief Authored sound-effect asset descriptor. */
     typedef struct sdl3d_game_data_sound_asset
     {
@@ -2224,6 +2243,15 @@ extern "C"
      * `renders_world`. Games without authored scenes return true.
      */
     bool sdl3d_game_data_active_scene_renders_world(const sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Read the active scene's optional skybox descriptor.
+     *
+     * Scene skyboxes are authored under `world.skybox` and reference image
+     * assets by id. Returns false when the active scene has no skybox.
+     */
+    bool sdl3d_game_data_get_active_scene_skybox(const sdl3d_game_data_runtime *runtime,
+                                                 sdl3d_game_data_scene_skybox *out_skybox);
 
     /**
      * @brief Return whether an entity belongs to the active scene.

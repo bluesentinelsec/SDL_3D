@@ -462,6 +462,15 @@ Scenes render sector levels by declaring instances under `world.sector_levels`:
   "name": "scene.level_1",
   "camera": "camera.level_1",
   "world": {
+    "skybox": {
+      "pos_x": "image.sky.px",
+      "neg_x": "image.sky.nx",
+      "pos_y": "image.sky.py",
+      "neg_y": "image.sky.ny",
+      "pos_z": "image.sky.pz",
+      "neg_z": "image.sky.nz",
+      "size": 400.0
+    },
     "sector_levels": [
       {
         "level": "sector.e1m1",
@@ -475,6 +484,11 @@ Scenes render sector levels by declaring instances under `world.sector_levels`:
   }
 }
 ```
+
+`world.skybox` is optional and references six `assets.images` entries using
+standard cubemap face names: `pos_x`, `neg_x`, `pos_y`, `neg_y`, `pos_z`, and
+`neg_z`. The generic presentation layer draws it before sector levels and other
+world primitives. Use `asset://` image paths for pack-file and embedded builds.
 
 `level` references a top-level sector level. `variant` defaults to
 `lightmapped` and may be `lightmapped`, `vertex_baked`, or `unlit`.

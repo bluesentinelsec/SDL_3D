@@ -1651,9 +1651,9 @@ static sdl3d_mat4 sdl3d_mat4_from_trs_node(const float *t, const float *r, const
  * Draw a single mesh by index, resolving material/texture/lighting.
  * joint_matrices may be NULL for non-skinned draws.
  */
-static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_model *model, int mesh_index,
-                                  const sdl3d_texture2d *lightmap_texture, sdl3d_vec4 tint_modulate,
-                                  const sdl3d_mat4 *joint_matrices)
+static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_asset_resolver *assets,
+                                  const sdl3d_model *model, int mesh_index, const sdl3d_texture2d *lightmap_texture,
+                                  sdl3d_vec4 tint_modulate, const sdl3d_mat4 *joint_matrices)
 {
     const sdl3d_mesh *mesh = &model->meshes[mesh_index];
     const sdl3d_texture2d *texture = NULL;
@@ -1725,8 +1725,8 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_mod
             }
             else
             {
-                ok = sdl3d_texture_cache_get_or_load(&context->texture_cache, model->source_path, material->albedo_map,
-                                                     &texture);
+                ok = sdl3d_texture_cache_get_or_load_asset(&context->texture_cache, assets, model->source_path,
+                                                           material->albedo_map, &texture);
                 if (!ok)
                 {
                     return false;
@@ -1768,8 +1768,9 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_mod
  * Recursively draw a node and its children, applying local TRS transforms
  * via the matrix stack.
  */
-static bool sdl3d_draw_model_node(sdl3d_render_context *context, const sdl3d_model *model, int node_index,
-                                  sdl3d_vec4 tint_modulate, const sdl3d_mat4 *joint_matrices)
+static bool sdl3d_draw_model_node(sdl3d_render_context *context, const sdl3d_asset_resolver *assets,
+                                  const sdl3d_model *model, int node_index, sdl3d_vec4 tint_modulate,
+                                  const sdl3d_mat4 *joint_matrices)
 {
     if (node_index < 0 || node_index >= model->node_count)
     {
@@ -1802,13 +1803,13 @@ static bool sdl3d_draw_model_node(sdl3d_render_context *context, const sdl3d_mod
     /* Draw this node's mesh if it has one. */
     if (node->mesh_index >= 0 && node->mesh_index < model->mesh_count)
     {
-        ok = sdl3d_draw_model_mesh(context, model, node->mesh_index, NULL, tint_modulate, joint_matrices);
+        ok = sdl3d_draw_model_mesh(context, assets, model, node->mesh_index, NULL, tint_modulate, joint_matrices);
     }
 
     /* Recurse into children. */
     for (int c = 0; ok && c < node->child_count; ++c)
     {
-        ok = sdl3d_draw_model_node(context, model, node->children[c], tint_modulate, joint_matrices);
+        ok = sdl3d_draw_model_node(context, assets, model, node->children[c], tint_modulate, joint_matrices);
     }
 
     if (!sdl3d_pop_matrix(context))
@@ -1864,14 +1865,14 @@ bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model
     {
         for (int r = 0; ok && r < model->root_count; ++r)
         {
-            ok = sdl3d_draw_model_node(context, model, model->root_nodes[r], tint_modulate, NULL);
+            ok = sdl3d_draw_model_node(context, NULL, model, model->root_nodes[r], tint_modulate, NULL);
         }
     }
     else
     {
         for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
         {
-            ok = sdl3d_draw_model_mesh(context, model, mesh_index, NULL, tint_modulate, NULL);
+            ok = sdl3d_draw_model_mesh(context, NULL, model, mesh_index, NULL, tint_modulate, NULL);
         }
     }
 
@@ -1927,14 +1928,14 @@ bool sdl3d_draw_model_skinned(sdl3d_render_context *context, const sdl3d_model *
     {
         for (int r = 0; ok && r < model->root_count; ++r)
         {
-            ok = sdl3d_draw_model_node(context, model, model->root_nodes[r], tint_modulate, joint_matrices);
+            ok = sdl3d_draw_model_node(context, NULL, model, model->root_nodes[r], tint_modulate, joint_matrices);
         }
     }
     else
     {
         for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
         {
-            ok = sdl3d_draw_model_mesh(context, model, mesh_index, NULL, tint_modulate, joint_matrices);
+            ok = sdl3d_draw_model_mesh(context, NULL, model, mesh_index, NULL, tint_modulate, joint_matrices);
         }
     }
 
@@ -2234,6 +2235,12 @@ bool sdl3d_get_framebuffer_depth(const sdl3d_render_context *context, int x, int
 bool sdl3d_draw_level(sdl3d_render_context *context, const sdl3d_level *level, const sdl3d_visibility_result *vis,
                       sdl3d_color tint)
 {
+    return sdl3d_draw_level_with_assets(context, NULL, level, vis, tint);
+}
+
+bool sdl3d_draw_level_with_assets(sdl3d_render_context *context, const sdl3d_asset_resolver *assets,
+                                  const sdl3d_level *level, const sdl3d_visibility_result *vis, sdl3d_color tint)
+{
     if (!sdl3d_require_mode_3d(context, "sdl3d_draw_level"))
         return false;
     if (!level)
@@ -2255,7 +2262,7 @@ bool sdl3d_draw_level(sdl3d_render_context *context, const sdl3d_level *level, c
             if (sid >= 0 && sid < level->sector_count && !vis->sector_visible[sid])
                 continue;
         }
-        ok = sdl3d_draw_model_mesh(context, model, i,
+        ok = sdl3d_draw_model_mesh(context, assets, model, i,
                                    level->lightmap_texture.pixels != NULL ? &level->lightmap_texture : NULL,
                                    tint_modulate, NULL);
     }

@@ -6838,6 +6838,39 @@ static bool validate_scene_sector_levels(validation_context *ctx, yyjson_val *sc
     return true;
 }
 
+static bool validate_scene_skybox(validation_context *ctx, yyjson_val *scene_root, const char *json_path,
+                                  validation_names *names)
+{
+    yyjson_val *world = obj_get(scene_root, "world");
+    if (world == NULL)
+        return true;
+    if (!yyjson_is_obj(world))
+        return validation_error(ctx, json_path, "scene world must be an object");
+
+    yyjson_val *skybox = obj_get(world, "skybox");
+    if (skybox == NULL)
+        return true;
+
+    char skybox_path[PATH_BUFFER_SIZE];
+    format_path(skybox_path, sizeof(skybox_path), "%s.world.skybox", json_path);
+    if (!yyjson_is_obj(skybox))
+        return validation_error(ctx, skybox_path, "scene world.skybox must be an object");
+
+    static const char *const faces[] = {"pos_x", "neg_x", "pos_y", "neg_y", "pos_z", "neg_z"};
+    for (size_t i = 0; i < SDL_arraysize(faces); ++i)
+    {
+        char face_path[PATH_BUFFER_SIZE];
+        format_path(face_path, sizeof(face_path), "%s.%s", skybox_path, faces[i]);
+        if (!require_ref(ctx, &names->images, "image asset", json_string(skybox, faces[i]), face_path))
+            return false;
+    }
+
+    yyjson_val *size = obj_get(skybox, "size");
+    if (size != NULL && (!yyjson_is_num(size) || yyjson_get_num(size) <= 1.0))
+        return validation_error(ctx, skybox_path, "scene world.skybox size must be greater than 1");
+    return true;
+}
+
 static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yyjson_val *game_root,
                                    validation_names *names, const char *json_path)
 {
@@ -6864,6 +6897,8 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
         return false;
 
     if (!validate_scene_sector_levels(ctx, root, json_path, names))
+        return false;
+    if (!validate_scene_skybox(ctx, root, json_path, names))
         return false;
 
     char phases_path[PATH_BUFFER_SIZE];
