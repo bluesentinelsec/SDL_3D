@@ -15,7 +15,8 @@
     { "path": "fragments/world/sector_ambient.json", "sections": ["assets", "logic"] },
     { "path": "fragments/world/sector_hazards.json", "sections": ["logic"] },
     { "path": "fragments/world/player_triggers.json", "sections": ["logic"] },
-    { "path": "fragments/world/surveillance.json", "sections": ["logic"] }
+    { "path": "fragments/world/surveillance.json", "sections": ["logic"] },
+    { "path": "fragments/world/render_controls.json", "sections": ["signals", "logic"] }
   ],
   "app": {
     "title": "SDL3D Doom Level",
@@ -54,6 +55,15 @@
           { "name": "action.move.right", "bindings": [{ "device": "keyboard", "key": "D" }] },
           { "name": "action.jump", "bindings": [{ "device": "keyboard", "key": "SPACE" }] },
           { "name": "action.interact", "bindings": [{ "device": "keyboard", "key": "E" }] },
+          { "name": "action.render.lighting.toggle", "bindings": [{ "device": "keyboard", "key": "L" }] },
+          { "name": "action.render.variant.cycle", "bindings": [{ "device": "keyboard", "key": "M" }] },
+          { "name": "action.render.portal_culling.toggle", "bindings": [{ "device": "keyboard", "key": "F2" }] },
+          { "name": "action.render.profile.cycle", "bindings": [{ "device": "keyboard", "key": "TAB" }] },
+          { "name": "action.render.profile.modern", "bindings": [{ "device": "keyboard", "key": "1" }] },
+          { "name": "action.render.profile.ps1", "bindings": [{ "device": "keyboard", "key": "2" }] },
+          { "name": "action.render.profile.n64", "bindings": [{ "device": "keyboard", "key": "3" }] },
+          { "name": "action.render.profile.dos", "bindings": [{ "device": "keyboard", "key": "4" }] },
+          { "name": "action.render.profile.snes", "bindings": [{ "device": "keyboard", "key": "5" }] },
           {
             "name": "action.fire",
             "bindings": [
@@ -142,9 +152,11 @@
   "render": {
     "clear_color": [8, 10, 14, 255],
     "lighting": true,
+    "lighting_key": "doom.render.lighting",
     "bloom": true,
     "ssao": true,
-    "tonemap": "aces"
+    "profile": "modern",
+    "profile_key": "doom.render.profile"
   },
   "scenes": {
     "initial": "scene.doom_level.play",

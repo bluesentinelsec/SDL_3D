@@ -433,6 +433,12 @@ extern "C"
     {
         /** @brief Clear color for the frame. */
         sdl3d_color clear_color;
+        /** @brief True when a render profile was authored or selected through scene state. */
+        bool has_profile;
+        /** @brief Render profile selected by authored data or scene state. */
+        sdl3d_render_profile profile;
+        /** @brief Name of the selected render profile, or NULL. */
+        const char *profile_name;
         /** @brief Whether 3D lighting should be enabled. */
         bool lighting_enabled;
         /** @brief Whether bloom post-processing should be enabled. */

@@ -3885,6 +3885,51 @@ static sdl3d_tonemap_mode parse_tonemap(const char *value, sdl3d_tonemap_mode fa
     return fallback;
 }
 
+static bool parse_render_profile(const char *value, sdl3d_render_profile *out_profile)
+{
+    if (value == NULL || out_profile == NULL)
+        return false;
+    if (SDL_strcasecmp(value, "modern") == 0)
+        *out_profile = sdl3d_profile_modern();
+    else if (SDL_strcasecmp(value, "ps1") == 0)
+        *out_profile = sdl3d_profile_ps1();
+    else if (SDL_strcasecmp(value, "n64") == 0)
+        *out_profile = sdl3d_profile_n64();
+    else if (SDL_strcasecmp(value, "dos") == 0)
+        *out_profile = sdl3d_profile_dos();
+    else if (SDL_strcasecmp(value, "snes") == 0)
+        *out_profile = sdl3d_profile_snes();
+    else
+        return false;
+    return true;
+}
+
+static const char *scene_state_string(const sdl3d_game_data_runtime *runtime, const char *key, const char *fallback)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0')
+        return fallback;
+    return sdl3d_properties_get_string(runtime->scene_state, key, fallback);
+}
+
+static bool scene_state_bool(const sdl3d_game_data_runtime *runtime, const char *key, bool fallback)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0')
+        return fallback;
+    const sdl3d_value *value = sdl3d_properties_get_value(runtime->scene_state, key);
+    if (value == NULL)
+        return fallback;
+    if (value->type == SDL3D_VALUE_BOOL)
+        return value->as_bool;
+    if (value->type == SDL3D_VALUE_INT)
+        return value->as_int != 0;
+    if (value->type == SDL3D_VALUE_STRING && value->as_string != NULL)
+    {
+        return SDL_strcasecmp(value->as_string, "true") == 0 || SDL_strcmp(value->as_string, "1") == 0 ||
+               SDL_strcasecmp(value->as_string, "on") == 0 || SDL_strcasecmp(value->as_string, "yes") == 0;
+    }
+    return fallback;
+}
+
 static sdl3d_transition_type parse_transition_type(const char *value, sdl3d_transition_type fallback)
 {
     if (value == NULL)
@@ -6206,10 +6251,27 @@ bool sdl3d_game_data_get_render_settings(const sdl3d_game_data_runtime *runtime,
         return true;
 
     out_settings->clear_color = json_color(render, "clear_color", out_settings->clear_color);
-    out_settings->lighting_enabled = json_bool(render, "lighting", out_settings->lighting_enabled);
-    out_settings->bloom_enabled = json_bool(render, "bloom", out_settings->bloom_enabled);
-    out_settings->ssao_enabled = json_bool(render, "ssao", out_settings->ssao_enabled);
-    out_settings->tonemap = parse_tonemap(json_string(render, "tonemap", NULL), out_settings->tonemap);
+    out_settings->lighting_enabled = scene_state_bool(runtime, json_string(render, "lighting_key", NULL),
+                                                      json_bool(render, "lighting", out_settings->lighting_enabled));
+    out_settings->bloom_enabled = scene_state_bool(runtime, json_string(render, "bloom_key", NULL),
+                                                   json_bool(render, "bloom", out_settings->bloom_enabled));
+    out_settings->ssao_enabled = scene_state_bool(runtime, json_string(render, "ssao_key", NULL),
+                                                  json_bool(render, "ssao", out_settings->ssao_enabled));
+    const char *tonemap_name =
+        scene_state_string(runtime, json_string(render, "tonemap_key", NULL), json_string(render, "tonemap", NULL));
+    out_settings->tonemap = parse_tonemap(tonemap_name, out_settings->tonemap);
+
+    const char *profile_name =
+        scene_state_string(runtime, json_string(render, "profile_key", NULL), json_string(render, "profile", NULL));
+    sdl3d_render_profile profile;
+    if (parse_render_profile(profile_name, &profile))
+    {
+        out_settings->has_profile = true;
+        out_settings->profile = profile;
+        out_settings->profile_name = profile_name;
+        if (tonemap_name == NULL)
+            out_settings->tonemap = profile.tonemap;
+    }
     return true;
 }
 
@@ -6375,7 +6437,8 @@ bool sdl3d_game_data_for_each_sector_level_instance(const sdl3d_game_data_runtim
     {
         yyjson_val *entry = yyjson_arr_get(instances, i);
         const char *level_name = json_string(entry, "level", NULL);
-        const char *variant_name = json_string(entry, "variant", "lightmapped");
+        const char *variant_name = scene_state_string(runtime, json_string(entry, "variant_key", NULL),
+                                                      json_string(entry, "variant", "lightmapped"));
         const sector_level_runtime *level_runtime = find_sector_level_runtime(runtime, level_name);
         const sdl3d_level *level = NULL;
         const sdl3d_game_data_sector_level_variant variant =
@@ -6392,7 +6455,8 @@ bool sdl3d_game_data_for_each_sector_level_instance(const sdl3d_game_data_runtim
         instance.sectors = level_runtime->sectors;
         instance.sector_count = level_runtime->sector_count;
         instance.position = json_vec3(entry, "position", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
-        instance.portal_culling = json_bool(entry, "portal_culling", true);
+        instance.portal_culling = scene_state_bool(runtime, json_string(entry, "portal_culling_key", NULL),
+                                                   json_bool(entry, "portal_culling", true));
         if (!callback(userdata, &instance))
             return true;
     }
@@ -14109,6 +14173,42 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
         if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0' || value == NULL)
             return false;
         return set_property_from_json_with_payload(runtime->scene_state, key, value, payload);
+    }
+
+    if (SDL_strcmp(type, "scene_state.toggle") == 0)
+    {
+        const char *key = json_string(action, "key", NULL);
+        if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0')
+            return false;
+        const bool current = scene_state_bool(runtime, key, json_bool(action, "default", false));
+        sdl3d_properties_set_bool(runtime->scene_state, key, !current);
+        return true;
+    }
+
+    if (SDL_strcmp(type, "scene_state.cycle") == 0)
+    {
+        const char *key = json_string(action, "key", NULL);
+        yyjson_val *values = obj_get(action, "values");
+        const size_t count = yyjson_is_arr(values) ? yyjson_arr_size(values) : 0U;
+        if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0' || count == 0U)
+            return false;
+
+        const sdl3d_value *current = sdl3d_properties_get_value(runtime->scene_state, key);
+        sdl3d_value fallback;
+        if (current == NULL && json_scalar_to_value(obj_get(action, "default"), &fallback))
+            current = &fallback;
+        size_t next = 0U;
+        for (size_t i = 0; i < count; ++i)
+        {
+            yyjson_val *value = yyjson_arr_get(values, i);
+            if (json_value_matches_property(value, current))
+            {
+                next = (i + 1U) % count;
+                break;
+            }
+        }
+
+        return set_property_from_json(runtime->scene_state, key, yyjson_arr_get(values, next));
     }
 
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
