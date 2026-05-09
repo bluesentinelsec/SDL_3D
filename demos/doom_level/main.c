@@ -327,7 +327,6 @@ static bool doom_logic_teleport_player(void *userdata, const sdl3d_teleport_dest
 
     sdl3d_fps_mover_teleport(&state->player.mover, destination->position, destination->use_yaw, destination->yaw,
                              destination->use_pitch, destination->pitch);
-    state->player.proj_active = false;
     state->teleport_feedback_timer = TELEPORT_FEEDBACK_SECONDS;
     const int trigger_id =
         payload != NULL

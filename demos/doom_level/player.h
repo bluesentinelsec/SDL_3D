@@ -1,4 +1,4 @@
-/* Player controller: FPS mover, input, projectile. */
+/* Player controller: FPS mover and input. */
 #ifndef DOOM_PLAYER_H
 #define DOOM_PLAYER_H
 
@@ -29,15 +29,8 @@ typedef struct player_state
     int action_move_left;
     int action_move_right;
     int action_jump;
-    int action_fire;
     int action_menu;
     int action_reset;
-
-    /* Projectile */
-    bool proj_active;
-    float proj_x, proj_y, proj_z;
-    float proj_dx, proj_dy, proj_dz;
-    float proj_life;
 
     /* Demonstration damage bookkeeping; death rules are intentionally omitted. */
     float damage_taken;
