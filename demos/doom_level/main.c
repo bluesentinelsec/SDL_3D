@@ -16,7 +16,6 @@
 #include "backend.h"
 #include "doom_doors.h"
 #include "entities.h"
-#include "hazard_effects.h"
 #include "level_data.h"
 #include "player.h"
 #include "renderer.h"
@@ -28,7 +27,6 @@
 #define SIG_LAUNCHER_ENTER 2007
 #define SIG_DRAGON_TELEPORT_ENTER 2008
 #define SIG_DAMAGE_FLOOR_TICK 2009
-#define SIG_LOGIC_STARTUP 2010
 #define LIFT_FLOOR_MIN_Y 0.0f
 #define LIFT_FLOOR_MAX_Y 2.5f
 #define LIFT_CEIL_Y 12.0f
@@ -51,13 +49,11 @@
 #define LAUNCHER_PAD_Z 68.0f
 #define FEEDBACK_AMBIENT_ZONE "ambient_zone"
 #define FEEDBACK_DAMAGE_FLOOR "damage_floor"
-#define EFFECT_NUKAGE_PARTICLES "nukage_particles"
 
 typedef struct doom_state
 {
     level_data level;
     entities ent;
-    doom_hazard_particles hazards;
     doom_doors doors;
     player_state player;
     render_state render;
@@ -134,7 +130,6 @@ static void doom_state_cleanup(doom_state *state)
         state->doors_ready = false;
     }
     render_state_free(&state->render);
-    doom_hazard_particles_free(&state->hazards);
     if (state->entities_ready)
     {
         entities_free(&state->ent);
@@ -243,25 +238,6 @@ static bool doom_logic_trigger_feedback(void *userdata, const char *feedback_nam
         state->damage_feedback_target_strength =
             DAMAGE_FEEDBACK_MIN_STRENGTH +
             clamp01(damage_per_second / DAMAGE_FEEDBACK_REFERENCE_DPS) * (1.0f - DAMAGE_FEEDBACK_MIN_STRENGTH);
-        return true;
-    }
-
-    return false;
-}
-
-static bool doom_logic_set_effect_active(void *userdata, const char *effect_name, bool active,
-                                         const sdl3d_properties *payload)
-{
-    (void)payload;
-    doom_state *state = (doom_state *)userdata;
-    if (state == NULL || effect_name == NULL)
-    {
-        return false;
-    }
-
-    if (SDL_strcmp(effect_name, EFFECT_NUKAGE_PARTICLES) == 0)
-    {
-        doom_hazard_particles_set_enabled(&state->hazards, active);
         return true;
     }
 
@@ -399,7 +375,6 @@ static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
     adapters.door_command = doom_logic_door_command;
     adapters.set_sector_geometry = doom_logic_set_sector_geometry;
     adapters.launch_player = doom_logic_launch_player;
-    adapters.set_effect_active = doom_logic_set_effect_active;
     sdl3d_logic_world_set_game_adapters(state->logic, &adapters);
 
     sdl3d_logic_target_context target_context;
@@ -462,12 +437,6 @@ static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
 
     sdl3d_logic_action damage_feedback_action = sdl3d_logic_action_make_trigger_feedback(FEEDBACK_DAMAGE_FLOOR, 0.0f);
     if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_DAMAGE_FLOOR_TICK, &damage_feedback_action) == 0)
-    {
-        return false;
-    }
-
-    sdl3d_logic_action particles_action = sdl3d_logic_action_make_set_effect_active(EFFECT_NUKAGE_PARTICLES, true);
-    if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_LOGIC_STARTUP, &particles_action) == 0)
     {
         return false;
     }
@@ -565,13 +534,6 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     }
     state->entities_ready = true;
 
-    if (!doom_hazard_particles_init(&state->hazards, &state->level.unlit, g_sectors))
-    {
-        doom_state_cleanup(state);
-        return false;
-    }
-    doom_hazard_particles_set_enabled(&state->hazards, false);
-
     if (!doom_doors_init(&state->doors))
     {
         doom_state_cleanup(state);
@@ -584,11 +546,6 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     init_launcher_sensor(state);
     init_damage_sensor(state);
     if (!bind_doom_logic(ctx, state))
-    {
-        doom_state_cleanup(state);
-        return false;
-    }
-    if (!sdl3d_logic_world_emit_signal(state->logic, SIG_LOGIC_STARTUP, NULL))
     {
         doom_state_cleanup(state);
         return false;
@@ -773,7 +730,6 @@ typedef struct doom_tick_profile
     double transition_ms;
     double lift_ms;
     double doors_ms;
-    double particles_ms;
     double entities_ms;
     double player_ms;
     double sensors_ms;
@@ -798,15 +754,13 @@ static double doom_profile_elapsed_ms(Uint64 start, Uint64 end)
 }
 
 static void doom_tick_profile_record(double actions_ms, double transition_ms, double lift_ms, double doors_ms,
-                                     double particles_ms, double entities_ms, double player_ms, double sensors_ms,
-                                     double frame_ms)
+                                     double entities_ms, double player_ms, double sensors_ms, double frame_ms)
 {
     const Uint64 now = SDL_GetPerformanceCounter();
     g_tick_profile.actions_ms += actions_ms;
     g_tick_profile.transition_ms += transition_ms;
     g_tick_profile.lift_ms += lift_ms;
     g_tick_profile.doors_ms += doors_ms;
-    g_tick_profile.particles_ms += particles_ms;
     g_tick_profile.entities_ms += entities_ms;
     g_tick_profile.player_ms += player_ms;
     g_tick_profile.sensors_ms += sensors_ms;
@@ -825,18 +779,17 @@ static void doom_tick_profile_record(double actions_ms, double transition_ms, do
 
     const double ticks = g_tick_profile.ticks > 0 ? (double)g_tick_profile.ticks : 1.0;
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "Doom tick profile: tick=%.2fms actions=%.2f transition=%.2f lift=%.2f doors=%.2f particles=%.2f "
-                "entities=%.2f player=%.2f sensors=%.2f ticks=%d",
+                "Doom tick profile: tick=%.2fms actions=%.2f transition=%.2f lift=%.2f doors=%.2f entities=%.2f "
+                "player=%.2f sensors=%.2f ticks=%d",
                 g_tick_profile.frame_ms / ticks, g_tick_profile.actions_ms / ticks,
                 g_tick_profile.transition_ms / ticks, g_tick_profile.lift_ms / ticks, g_tick_profile.doors_ms / ticks,
-                g_tick_profile.particles_ms / ticks, g_tick_profile.entities_ms / ticks,
-                g_tick_profile.player_ms / ticks, g_tick_profile.sensors_ms / ticks, g_tick_profile.ticks);
+                g_tick_profile.entities_ms / ticks, g_tick_profile.player_ms / ticks, g_tick_profile.sensors_ms / ticks,
+                g_tick_profile.ticks);
     g_tick_profile.last_counter = now;
     g_tick_profile.actions_ms = 0.0;
     g_tick_profile.transition_ms = 0.0;
     g_tick_profile.lift_ms = 0.0;
     g_tick_profile.doors_ms = 0.0;
-    g_tick_profile.particles_ms = 0.0;
     g_tick_profile.entities_ms = 0.0;
     g_tick_profile.player_ms = 0.0;
     g_tick_profile.sensors_ms = 0.0;
@@ -854,7 +807,6 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     double transition_ms = 0.0;
     double lift_ms = 0.0;
     double doors_ms = 0.0;
-    double particles_ms = 0.0;
     double entities_ms = 0.0;
     double player_ms = 0.0;
     double sensors_ms = 0.0;
@@ -910,13 +862,6 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     {
         Uint64 now = SDL_GetPerformanceCounter();
         doors_ms = doom_profile_elapsed_ms(section_start, now);
-        section_start = now;
-    }
-    doom_hazard_particles_update(&state->hazards, dt);
-    if (profile_tick)
-    {
-        Uint64 now = SDL_GetPerformanceCounter();
-        particles_ms = doom_profile_elapsed_ms(section_start, now);
         section_start = now;
     }
     entities_update(&state->ent, &state->level.unlit, dt, state->player.mover.position);
@@ -997,8 +942,8 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     {
         Uint64 now = SDL_GetPerformanceCounter();
         sensors_ms += doom_profile_elapsed_ms(section_start, now);
-        doom_tick_profile_record(actions_ms, transition_ms, lift_ms, doors_ms, particles_ms, entities_ms, player_ms,
-                                 sensors_ms, doom_profile_elapsed_ms(tick_start, now));
+        doom_tick_profile_record(actions_ms, transition_ms, lift_ms, doors_ms, entities_ms, player_ms, sensors_ms,
+                                 doom_profile_elapsed_ms(tick_start, now));
     }
 }
 
@@ -1100,8 +1045,8 @@ static void game_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     const float frame_dt = sdl3d_time_get_unscaled_delta_time();
 
     render_draw_frame(&state->render, ctx->renderer, state->has_font ? &state->debug_font : NULL, state->ui,
-                      &state->level, &state->ent, &state->hazards, &state->doors, &state->player, WINDOW_W, WINDOW_H,
-                      frame_dt, backend_profile_name(state->render_profile));
+                      &state->level, &state->ent, &state->doors, &state->player, WINDOW_W, WINDOW_H, frame_dt,
+                      backend_profile_name(state->render_profile));
     sdl3d_transition_draw(&state->transition, ctx->renderer);
     draw_damage_overlay(ctx, state);
     if (ctx->paused && !state->quit_pending)
