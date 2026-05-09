@@ -17,35 +17,6 @@
 #define LAUNCHER_PAD_X 38.0f
 #define LAUNCHER_PAD_Z 68.0f
 
-static sdl3d_color sample_actor_tint(const sdl3d_level_light *lights, int light_count, sdl3d_vec3 position)
-{
-    float r = 0.7f, g = 0.7f, b = 0.72f;
-
-    for (int i = 0; i < light_count; ++i)
-    {
-        float dx = lights[i].position[0] - position.x;
-        float dy = lights[i].position[1] - position.y;
-        float dz = lights[i].position[2] - position.z;
-        float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
-        if (dist >= lights[i].range || dist <= 0.0001f)
-            continue;
-        float t = 1.0f - (dist / lights[i].range);
-        float atten = t * t;
-        float scale = lights[i].intensity * atten * 0.28f;
-        r += lights[i].color[0] * scale;
-        g += lights[i].color[1] * scale;
-        b += lights[i].color[2] * scale;
-    }
-
-    if (r > 1.0f)
-        r = 1.0f;
-    if (g > 1.0f)
-        g = 1.0f;
-    if (b > 1.0f)
-        b = 1.0f;
-    return (sdl3d_color){(Uint8)(r * 255.0f), (Uint8)(g * 255.0f), (Uint8)(b * 255.0f), 255};
-}
-
 static sdl3d_vec3 camera_forward(const sdl3d_camera3d *camera)
 {
     if (camera == NULL)
@@ -191,18 +162,6 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
         sdl3d_draw_scene_with_visibility(ctx, ent->scene, rs->portal_culling ? &rs->vis : NULL);
     }
 
-    /* Crate props */
-    {
-        static const sdl3d_vec3 crate_positions[] = {
-            {3.0f, 0.5f, 5.0f},   {7.0f, 0.5f, 5.0f},   {3.0f, 0.5f, 10.0f},  {7.0f, 0.5f, 10.0f},
-            {14.0f, 0.5f, 20.0f}, {14.0f, 1.5f, 20.0f}, {22.0f, 0.5f, 16.0f},
-        };
-        const sdl3d_texture2d *tex = ent->crate_tex.pixels ? &ent->crate_tex : NULL;
-        for (int i = 0; i < (int)SDL_arraysize(crate_positions); i++)
-            sdl3d_draw_cube_textured(ctx, crate_positions[i], sdl3d_vec3_make(1.0f, 1.0f, 1.0f),
-                                     sdl3d_vec3_make(0, 1, 0), 0.0f, tex, (sdl3d_color){255, 255, 255, 255});
-    }
-
     /* Ambient-zone feedback beacon. */
     sdl3d_draw_cube(ctx, sdl3d_vec3_make(73.0f, 3.0f, 63.0f), sdl3d_vec3_make(0.7f, 0.7f, 0.7f),
                     ambient_feedback_active ? (sdl3d_color){220, 40, 30, 255} : (sdl3d_color){40, 210, 70, 255});
@@ -244,20 +203,6 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
                         (sdl3d_color){50, 60, 75, 255});
         sdl3d_draw_cube(ctx, sdl3d_vec3_make(c.x, 2.2f, c.z), sdl3d_vec3_make(0.8f, 0.45f, 0.45f),
                         active_button ? (sdl3d_color){40, 180, 90, 255} : (sdl3d_color){70, 90, 120, 255});
-    }
-
-    /* Sprites */
-    {
-        for (int i = 0; i < ent->sprites.count; ++i)
-        {
-            sdl3d_sprite_actor *sa = &ent->sprites.actors[i];
-            sdl3d_vec3 light_sample_position = sa->position;
-            light_sample_position.y += sa->size.y * 0.5f;
-            sa->tint = sample_actor_tint(g_lights, g_light_count, light_sample_position);
-            sa->sector_id =
-                rs->portal_culling ? sdl3d_level_find_sector(active, g_sectors, sa->position.x, sa->position.z) : -1;
-        }
-        sdl3d_sprite_scene_draw(&ent->sprites, ctx, cam.position, rs->portal_culling ? &rs->vis : NULL);
     }
 
     /* Sector hazard particles */

@@ -541,25 +541,6 @@ static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
         return false;
     }
 
-    for (int i = 0; i < state->ent.robot_count; ++i)
-    {
-        if (state->ent.robots[i].actor_id <= 0)
-        {
-            continue;
-        }
-
-        sdl3d_value enabled;
-        SDL_zero(enabled);
-        enabled.type = SDL3D_VALUE_BOOL;
-        enabled.as_bool = true;
-        sdl3d_logic_action patrol_action = sdl3d_logic_action_make_set_actor_property(
-            sdl3d_logic_target_actor_id(state->ent.robots[i].actor_id), "patrol_enabled", enabled);
-        if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_LOGIC_STARTUP, &patrol_action) == 0)
-        {
-            return false;
-        }
-    }
-
     return true;
 }
 
