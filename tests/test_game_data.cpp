@@ -114,6 +114,7 @@ struct RenderPrimitiveCapture
     int doom_robot_sprites = 0;
     int doom_health_sprites = 0;
     int doom_crates = 0;
+    int doom_presentation_cubes = 0;
 };
 
 struct SectorLevelInstanceCapture
@@ -1346,6 +1347,8 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         capture->doom_health_sprites++;
     if (entity_name.rfind("entity.doom.crate.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
         capture->doom_crates++;
+    if (entity_name.rfind("entity.doom.presentation.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
+        capture->doom_presentation_cubes++;
     if (entity_name == "entity.doom.robot.entry")
     {
         capture->saw_doom_robot_sprite = true;
@@ -8074,6 +8077,7 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     EXPECT_EQ(authored_props.doom_robot_sprites, 5);
     EXPECT_EQ(authored_props.doom_health_sprites, 5);
     EXPECT_EQ(authored_props.doom_crates, 8);
+    EXPECT_EQ(authored_props.doom_presentation_cubes, 14);
     EXPECT_GE(authored_props.sprites, 10);
     sdl3d_game_data_sprite_asset robot_sprite{};
     ASSERT_TRUE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.doom.robot.walk", &robot_sprite));

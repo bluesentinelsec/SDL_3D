@@ -31,7 +31,6 @@ void render_state_free(render_state *rs);
 void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_font *font, sdl3d_ui_context *ui,
                        level_data *ld, entities *ent, const doom_hazard_particles *hazards, const doom_doors *doors,
                        const doom_surveillance_camera *surveillance, const player_state *player, int backbuffer_w,
-                       int backbuffer_h, float dt, const char *render_profile_name, bool ambient_feedback_active,
-                       bool teleport_feedback_active, bool launcher_feedback_active);
+                       int backbuffer_h, float dt, const char *render_profile_name);
 
 #endif

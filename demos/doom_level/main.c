@@ -1176,9 +1176,7 @@ static void game_render(sdl3d_game_context *ctx, void *userdata, float alpha)
 
     render_draw_frame(&state->render, ctx->renderer, state->has_font ? &state->debug_font : NULL, state->ui,
                       &state->level, &state->ent, &state->hazards, &state->doors, &state->surveillance, &state->player,
-                      WINDOW_W, WINDOW_H, frame_dt, backend_profile_name(state->render_profile),
-                      state->ambient_feedback_timer > 0.0f, state->teleport_feedback_timer > 0.0f,
-                      state->launcher_feedback_timer > 0.0f);
+                      WINDOW_W, WINDOW_H, frame_dt, backend_profile_name(state->render_profile));
     sdl3d_transition_draw(&state->transition, ctx->renderer);
     draw_damage_overlay(ctx, state);
     if (ctx->paused && !state->quit_pending)
