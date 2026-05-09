@@ -49,9 +49,8 @@ static bool render_state_ensure_sector_capacity(render_state *rs, int sector_cou
 }
 
 void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_font *font, sdl3d_ui_context *ui,
-                       level_data *ld, entities *ent, const doom_hazard_particles *hazards, const doom_doors *doors,
-                       const player_state *player, int backbuffer_w, int backbuffer_h, float dt,
-                       const char *render_profile_name)
+                       level_data *ld, entities *ent, const doom_doors *doors, const player_state *player,
+                       int backbuffer_w, int backbuffer_h, float dt, const char *render_profile_name)
 {
     const sdl3d_fps_mover *mover = &player->mover;
     sdl3d_level *active = level_data_active(ld);
@@ -115,13 +114,6 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
             sdl3d_actor_set_sector(a, sdl3d_level_find_sector(active, g_sectors, ap.x, ap.z));
         }
         sdl3d_draw_scene_with_visibility(ctx, ent->scene, rs->portal_culling ? &rs->vis : NULL);
-    }
-
-    /* Sector hazard particles */
-    if (!doom_hazard_particles_draw(hazards, ctx))
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Hazard particle draw failed: %s", SDL_GetError());
-        SDL_ClearError();
     }
 
     sdl3d_end_mode_3d(ctx);
