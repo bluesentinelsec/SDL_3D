@@ -7,6 +7,7 @@
   },
   "imports": [
     { "path": "fragments/actors/props.json", "sections": ["assets", "entities"] },
+    { "path": "fragments/actors/presentation_props.json", "sections": ["entities"] },
     { "path": "fragments/world/sector_levels.json", "sections": ["sector_levels"] },
     { "path": "fragments/world/sector_doors.json", "sections": ["sector_doors", "signals", "logic"] },
     { "path": "fragments/world/sector_hazards.json", "sections": ["logic"] }

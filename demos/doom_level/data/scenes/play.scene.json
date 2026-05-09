@@ -24,7 +24,21 @@
     "entity.doom.crate.entry.3",
     "entity.doom.crate.storage.0",
     "entity.doom.crate.storage.1",
-    "entity.doom.crate.storage.2"
+    "entity.doom.crate.storage.2",
+    "entity.doom.presentation.ambient_feedback",
+    "entity.doom.presentation.teleporter.source_pad",
+    "entity.doom.presentation.teleporter.destination_beacon",
+    "entity.doom.presentation.launcher.base",
+    "entity.doom.presentation.launcher.pad",
+    "entity.doom.presentation.launcher.post",
+    "entity.doom.presentation.conveyor.deck",
+    "entity.doom.presentation.conveyor.center_line",
+    "entity.doom.presentation.conveyor.arrow_top",
+    "entity.doom.presentation.conveyor.arrow_bottom",
+    "entity.doom.presentation.surveillance.base",
+    "entity.doom.presentation.surveillance.button",
+    "entity.doom.presentation.surveillance.post",
+    "entity.doom.presentation.surveillance.camera_body"
   ],
   "input": {
     "actions": [
