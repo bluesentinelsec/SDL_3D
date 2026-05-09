@@ -191,6 +191,156 @@
       ]
     },
     {
+      "name": "entity.doom.health.north",
+      "active": true,
+      "tags": ["pickup", "health", "billboard"],
+      "transform": { "position": [24.0, 0.25, 4.5] },
+      "components": [
+        {
+          "type": "render.sprite",
+          "sprite": "sprite.doom.health_pack",
+          "size": [1.0, 1.0],
+          "lighting": true
+        },
+        {
+          "type": "motion.oscillate",
+          "origin": [24.0, 0.25, 4.5],
+          "amplitude": [0.0, 0.15, 0.0],
+          "rate": 1.5
+        }
+      ]
+    },
+    {
+      "name": "entity.doom.health.side",
+      "active": true,
+      "tags": ["pickup", "health", "billboard"],
+      "transform": { "position": [35.5, 0.25, 27.0] },
+      "components": [
+        {
+          "type": "render.sprite",
+          "sprite": "sprite.doom.health_pack",
+          "size": [1.0, 1.0],
+          "lighting": true
+        },
+        {
+          "type": "motion.oscillate",
+          "origin": [35.5, 0.25, 27.0],
+          "amplitude": [0.0, 0.1, 0.0],
+          "rate": 1.7
+        }
+      ]
+    },
+    {
+      "name": "entity.doom.health.dragon",
+      "active": true,
+      "tags": ["pickup", "health", "billboard"],
+      "transform": { "position": [10.0, 0.25, 84.0] },
+      "components": [
+        {
+          "type": "render.sprite",
+          "sprite": "sprite.doom.health_pack",
+          "size": [1.0, 1.0],
+          "lighting": true
+        },
+        {
+          "type": "motion.oscillate",
+          "origin": [10.0, 0.25, 84.0],
+          "amplitude": [0.0, 0.14, 0.0],
+          "rate": 1.6
+        }
+      ]
+    },
+    {
+      "name": "entity.doom.robot.storage",
+      "active": true,
+      "tags": ["npc", "robot", "billboard"],
+      "transform": { "position": [24.0, 0.0, 19.0] },
+      "properties": {
+        "sprite_yaw": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        {
+          "type": "render.sprite",
+          "sprite": "sprite.doom.robot.walk",
+          "size": [3.6, 5.6],
+          "facing_yaw_property": "sprite_yaw"
+        },
+        {
+          "type": "motion.patrol",
+          "waypoints": [
+            [24.0, 0.0, 19.0],
+            [24.0, 0.0, 23.0]
+          ],
+          "speed": 0.8,
+          "wait_time": 1.2,
+          "arrival_radius": 0.08,
+          "mode": "ping_pong",
+          "start_idle": false,
+          "yaw_property": "sprite_yaw"
+        }
+      ]
+    },
+    {
+      "name": "entity.doom.robot.hall",
+      "active": true,
+      "tags": ["npc", "robot", "billboard"],
+      "transform": { "position": [24.0, 0.0, 37.5] },
+      "properties": {
+        "sprite_yaw": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        {
+          "type": "render.sprite",
+          "sprite": "sprite.doom.robot.walk",
+          "size": [3.4, 5.2],
+          "facing_yaw_property": "sprite_yaw"
+        },
+        {
+          "type": "motion.patrol",
+          "waypoints": [
+            [24.0, 0.0, 37.5],
+            [24.0, 0.0, 41.5]
+          ],
+          "speed": 0.7,
+          "wait_time": 1.6,
+          "arrival_radius": 0.08,
+          "mode": "ping_pong",
+          "start_idle": false,
+          "yaw_property": "sprite_yaw"
+        }
+      ]
+    },
+    {
+      "name": "entity.doom.robot.dragon",
+      "active": true,
+      "tags": ["npc", "robot", "billboard"],
+      "transform": { "position": [24.0, 0.0, 72.0] },
+      "properties": {
+        "sprite_yaw": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        {
+          "type": "render.sprite",
+          "sprite": "sprite.doom.robot.walk",
+          "size": [3.6, 5.6],
+          "facing_yaw_property": "sprite_yaw"
+        },
+        {
+          "type": "motion.patrol",
+          "waypoints": [
+            [24.0, 0.0, 72.0],
+            [32.0, 0.0, 72.0]
+          ],
+          "speed": 1.0,
+          "wait_time": 1.5,
+          "arrival_radius": 0.08,
+          "mode": "ping_pong",
+          "start_idle": false,
+          "yaw_property": "sprite_yaw"
+        }
+      ]
+    },
+    {
       "name": "entity.doom.crate.nukage",
       "active": true,
       "tags": ["prop", "crate"],
@@ -202,6 +352,69 @@
           "color": [78, 170, 72, 255],
           "lighting": true
         }
+      ]
+    },
+    {
+      "name": "entity.doom.crate.entry.0",
+      "active": true,
+      "tags": ["prop", "crate"],
+      "transform": { "position": [3.0, 0.5, 5.0] },
+      "components": [
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "color": [78, 170, 72, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.doom.crate.entry.1",
+      "active": true,
+      "tags": ["prop", "crate"],
+      "transform": { "position": [7.0, 0.5, 5.0] },
+      "components": [
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "color": [78, 170, 72, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.doom.crate.entry.2",
+      "active": true,
+      "tags": ["prop", "crate"],
+      "transform": { "position": [3.0, 0.5, 10.0] },
+      "components": [
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "color": [78, 170, 72, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.doom.crate.entry.3",
+      "active": true,
+      "tags": ["prop", "crate"],
+      "transform": { "position": [7.0, 0.5, 10.0] },
+      "components": [
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "color": [78, 170, 72, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.doom.crate.storage.0",
+      "active": true,
+      "tags": ["prop", "crate"],
+      "transform": { "position": [14.0, 0.5, 20.0] },
+      "components": [
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "color": [78, 170, 72, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.doom.crate.storage.1",
+      "active": true,
+      "tags": ["prop", "crate"],
+      "transform": { "position": [14.0, 1.5, 20.0] },
+      "components": [
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "color": [78, 170, 72, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.doom.crate.storage.2",
+      "active": true,
+      "tags": ["prop", "crate"],
+      "transform": { "position": [22.0, 0.5, 16.0] },
+      "components": [
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "color": [78, 170, 72, 255], "lighting": true }
       ]
     }
   ]

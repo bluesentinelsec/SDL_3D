@@ -9,9 +9,22 @@
     "entity.effect.nukage.vapor",
     "entity.doom.robot.entry",
     "entity.doom.robot.nukage",
+    "entity.doom.robot.storage",
+    "entity.doom.robot.hall",
+    "entity.doom.robot.dragon",
     "entity.doom.health.entry",
     "entity.doom.health.hall",
-    "entity.doom.crate.nukage"
+    "entity.doom.health.north",
+    "entity.doom.health.side",
+    "entity.doom.health.dragon",
+    "entity.doom.crate.nukage",
+    "entity.doom.crate.entry.0",
+    "entity.doom.crate.entry.1",
+    "entity.doom.crate.entry.2",
+    "entity.doom.crate.entry.3",
+    "entity.doom.crate.storage.0",
+    "entity.doom.crate.storage.1",
+    "entity.doom.crate.storage.2"
   ],
   "input": {
     "actions": [

@@ -111,6 +111,9 @@ struct RenderPrimitiveCapture
     bool saw_doom_robot_sprite = false;
     bool saw_doom_health_sprite = false;
     bool saw_doom_crate = false;
+    int doom_robot_sprites = 0;
+    int doom_health_sprites = 0;
+    int doom_crates = 0;
 };
 
 struct SectorLevelInstanceCapture
@@ -1336,7 +1339,14 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         EXPECT_GT(primitive->instance_count, 0);
         EXPECT_NE(primitive->instances, nullptr);
     }
-    if (std::string(primitive->entity_name) == "entity.doom.robot.entry")
+    const std::string entity_name = primitive->entity_name != nullptr ? primitive->entity_name : "";
+    if (entity_name.rfind("entity.doom.robot.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_SPRITE)
+        capture->doom_robot_sprites++;
+    if (entity_name.rfind("entity.doom.health.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_SPRITE)
+        capture->doom_health_sprites++;
+    if (entity_name.rfind("entity.doom.crate.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
+        capture->doom_crates++;
+    if (entity_name == "entity.doom.robot.entry")
     {
         capture->saw_doom_robot_sprite = true;
         EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_SPRITE);
@@ -1345,7 +1355,7 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         EXPECT_NEAR(primitive->sprite_size.y, 5.2f, 0.0001f);
         EXPECT_TRUE(primitive->lighting_enabled);
     }
-    if (std::string(primitive->entity_name) == "entity.doom.health.entry")
+    if (entity_name == "entity.doom.health.entry")
     {
         capture->saw_doom_health_sprite = true;
         EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_SPRITE);
@@ -1353,7 +1363,7 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         EXPECT_NEAR(primitive->sprite_size.x, 1.0f, 0.0001f);
         EXPECT_NEAR(primitive->sprite_size.y, 1.0f, 0.0001f);
     }
-    if (std::string(primitive->entity_name) == "entity.doom.crate.nukage")
+    if (entity_name == "entity.doom.crate.nukage")
     {
         capture->saw_doom_crate = true;
         EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
@@ -8061,7 +8071,10 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     EXPECT_TRUE(authored_props.saw_doom_robot_sprite);
     EXPECT_TRUE(authored_props.saw_doom_health_sprite);
     EXPECT_TRUE(authored_props.saw_doom_crate);
-    EXPECT_GE(authored_props.sprites, 4);
+    EXPECT_EQ(authored_props.doom_robot_sprites, 5);
+    EXPECT_EQ(authored_props.doom_health_sprites, 5);
+    EXPECT_EQ(authored_props.doom_crates, 8);
+    EXPECT_GE(authored_props.sprites, 10);
     sdl3d_game_data_sprite_asset robot_sprite{};
     ASSERT_TRUE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.doom.robot.walk", &robot_sprite));
     EXPECT_EQ(robot_sprite.source_kind, SDL3D_SPRITE_ASSET_SOURCE_FILES);
