@@ -126,6 +126,8 @@ INSTANTIATE_TEST_SUITE_P(Profiles, ProfileParityTest,
                          ::testing::Values(ProfileCase{"modern", sdl3d_profile_modern},
                                            ProfileCase{"ps1", sdl3d_profile_ps1}, ProfileCase{"n64", sdl3d_profile_n64},
                                            ProfileCase{"dos", sdl3d_profile_dos},
-                                           ProfileCase{"snes", sdl3d_profile_snes}));
+                                           ProfileCase{"snes", sdl3d_profile_snes},
+                                           ProfileCase{"grayscale", sdl3d_profile_grayscale},
+                                           ProfileCase{"gameboy", sdl3d_profile_gameboy}));
 
 } // namespace

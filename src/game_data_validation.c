@@ -7411,7 +7411,8 @@ static bool valid_render_profile_name(const char *name)
 {
     return name != NULL &&
            (SDL_strcasecmp(name, "modern") == 0 || SDL_strcasecmp(name, "ps1") == 0 ||
-            SDL_strcasecmp(name, "n64") == 0 || SDL_strcasecmp(name, "dos") == 0 || SDL_strcasecmp(name, "snes") == 0);
+            SDL_strcasecmp(name, "n64") == 0 || SDL_strcasecmp(name, "dos") == 0 || SDL_strcasecmp(name, "snes") == 0 ||
+            SDL_strcasecmp(name, "grayscale") == 0 || SDL_strcasecmp(name, "gameboy") == 0);
 }
 
 static bool valid_tonemap_name(const char *name)

@@ -86,6 +86,8 @@
           { "name": "action.render.profile.n64", "bindings": [{ "device": "keyboard", "key": "3" }] },
           { "name": "action.render.profile.dos", "bindings": [{ "device": "keyboard", "key": "4" }] },
           { "name": "action.render.profile.snes", "bindings": [{ "device": "keyboard", "key": "5" }] },
+          { "name": "action.render.profile.grayscale", "bindings": [{ "device": "keyboard", "key": "6" }] },
+          { "name": "action.render.profile.gameboy", "bindings": [{ "device": "keyboard", "key": "7" }] },
           {
             "name": "action.fire",
             "bindings": [

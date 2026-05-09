@@ -60,6 +60,8 @@
       "action.render.profile.n64",
       "action.render.profile.dos",
       "action.render.profile.snes",
+      "action.render.profile.grayscale",
+      "action.render.profile.gameboy",
       "action.fire"
     ]
   },

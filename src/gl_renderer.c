@@ -379,8 +379,12 @@ struct sdl3d_gl_context
     GLuint retro_program;
     GLint retro_scene_loc;
     GLint retro_profile_loc;
-    GLint retro_resolution_loc;
-    int active_retro_profile; /* 0=modern, 1=PS1, 2=N64, 3=DOS, 4=SNES */
+    GLint retro_virtual_resolution_loc;
+    GLint retro_output_resolution_loc;
+    int active_retro_profile; /* 0=modern, 1=PS1, 2=N64, 3=DOS, 4=SNES, 5=grayscale, 6=Game Boy */
+    int active_retro_virtual_w;
+    int active_retro_virtual_h;
+    int active_retro_filter;
 
     /* SSAO post-process */
     GLuint ssao_program;
@@ -912,61 +916,119 @@ static const char k_composite_frag[] = "in vec2 vTexCoord;\n"
                                        "    fragColor = vec4(max(color, 0.0), 1.0);\n"
                                        "}\n";
 
-static const char k_retro_frag[] = "in vec2 vTexCoord;\n"
-                                   "uniform sampler2D uScene;\n"
-                                   "uniform int uProfile;\n"
-                                   "uniform vec2 uResolution;\n"
-                                   "out vec4 fragColor;\n"
-                                   "void main() {\n"
-                                   "    vec2 uv = vTexCoord;\n"
-                                   "    vec3 color;\n"
-                                   "    if (uProfile == 1) {\n"
-                                   "        vec2 lowRes = vec2(320.0, 240.0);\n"
-                                   "        vec2 pixelUV = floor(uv * lowRes) / lowRes;\n"
-                                   "        color = texture(uScene, pixelUV).rgb;\n"
-                                   "        ivec2 px = ivec2(gl_FragCoord.xy);\n"
-                                   "        float bayer[16] = float[16](0.0/16.0, 8.0/16.0, 2.0/16.0, 10.0/16.0,\n"
-                                   "                                    12.0/16.0, 4.0/16.0, 14.0/16.0, 6.0/16.0,\n"
-                                   "                                    3.0/16.0, 11.0/16.0, 1.0/16.0, 9.0/16.0,\n"
-                                   "                                    15.0/16.0, 7.0/16.0, 13.0/16.0, 5.0/16.0);\n"
-                                   "        float dither = (bayer[(px.y % 4) * 4 + (px.x % 4)] - 0.5) / 24.0;\n"
-                                   "        color = floor((color + dither) * 32.0 + 0.5) / 32.0;\n"
-                                   "        float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
-                                   "        color = mix(vec3(lum), color, 0.8);\n"
-                                   "    } else if (uProfile == 2) {\n"
-                                   "        vec2 lowRes = vec2(320.0, 240.0);\n"
-                                   "        vec2 pixelUV = floor(uv * lowRes + 0.5) / lowRes;\n"
-                                   "        color = texture(uScene, pixelUV).rgb;\n"
-                                   "        color *= vec3(1.05, 1.0, 0.92);\n"
-                                   "        color = (color - 0.5) * 1.08 + 0.5;\n"
-                                   "        color = clamp(color, 0.0, 1.0);\n"
-                                   "    } else if (uProfile == 3) {\n"
-                                   "        vec2 lowRes = vec2(320.0, 200.0);\n"
-                                   "        vec2 pixelUV = floor(uv * lowRes) / lowRes;\n"
-                                   "        color = texture(uScene, pixelUV).rgb;\n"
-                                   "        ivec2 px = ivec2(gl_FragCoord.xy);\n"
-                                   "        float bayer[16] = float[16](0.0/16.0, 8.0/16.0, 2.0/16.0, 10.0/16.0,\n"
-                                   "                                    12.0/16.0, 4.0/16.0, 14.0/16.0, 6.0/16.0,\n"
-                                   "                                    3.0/16.0, 11.0/16.0, 1.0/16.0, 9.0/16.0,\n"
-                                   "                                    15.0/16.0, 7.0/16.0, 13.0/16.0, 5.0/16.0);\n"
-                                   "        float dither = (bayer[(px.y % 4) * 4 + (px.x % 4)] - 0.5) / 5.0;\n"
-                                   "        color = floor((color + dither) * 6.0 + 0.5) / 6.0;\n"
-                                   "        float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
-                                   "        color = mix(vec3(lum), color, 0.65);\n"
-                                   "        color *= vec3(1.08, 0.98, 0.88);\n"
-                                   "    } else if (uProfile == 4) {\n"
-                                   "        vec2 lowRes = vec2(256.0, 224.0);\n"
-                                   "        vec2 pixelUV = floor(uv * lowRes) / lowRes;\n"
-                                   "        color = texture(uScene, pixelUV).rgb;\n"
-                                   "        color = floor(color * 32.0 + 0.5) / 32.0;\n"
-                                   "        int row = int(gl_FragCoord.y);\n"
-                                   "        if ((row & 1) == 0) color *= 0.8;\n"
-                                   "        color *= vec3(0.93, 0.96, 1.08);\n"
-                                   "    } else {\n"
-                                   "        color = texture(uScene, uv).rgb;\n"
-                                   "    }\n"
-                                   "    fragColor = vec4(max(color, 0.0), 1.0);\n"
-                                   "}\n";
+static const char k_retro_frag_helpers[] =
+    "in vec2 vTexCoord;\n"
+    "uniform sampler2D uScene;\n"
+    "uniform int uProfile;\n"
+    "uniform vec2 uVirtualResolution;\n"
+    "uniform vec2 uOutputResolution;\n"
+    "out vec4 fragColor;\n"
+    "float retroBayer4(vec2 p) {\n"
+    "    int x = int(mod(p.x, 4.0));\n"
+    "    int y = int(mod(p.y, 4.0));\n"
+    "    int i = y * 4 + x;\n"
+    "    float bayer[16] = float[16](0.0/16.0, 8.0/16.0, 2.0/16.0, 10.0/16.0,\n"
+    "                                    12.0/16.0, 4.0/16.0, 14.0/16.0, 6.0/16.0,\n"
+    "                                    3.0/16.0, 11.0/16.0, 1.0/16.0, 9.0/16.0,\n"
+    "                                    15.0/16.0, 7.0/16.0, 13.0/16.0, 5.0/16.0);\n"
+    "    return bayer[i];\n"
+    "}\n"
+    "vec3 retroGrade(vec3 color, float contrast, float saturation) {\n"
+    "    color = (color - 0.5) * contrast + 0.5;\n"
+    "    float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
+    "    return mix(vec3(lum), color, saturation);\n"
+    "}\n"
+    "vec2 retroNearestUV(vec2 uv, vec2 virtualResolution) {\n"
+    "    vec2 res = max(virtualResolution, vec2(1.0));\n"
+    "    return clamp((floor(uv * res) + vec2(0.5)) / res, vec2(0.0), vec2(1.0));\n"
+    "}\n"
+    "vec3 retroSampleNearest(vec2 uv, vec2 virtualResolution) {\n"
+    "    return texture(uScene, retroNearestUV(uv, virtualResolution)).rgb;\n"
+    "}\n"
+    "vec3 retroSampleSoft(vec2 uv, vec2 virtualResolution) {\n"
+    "    vec2 res = max(virtualResolution, vec2(1.0));\n"
+    "    vec2 base = retroNearestUV(uv, res);\n"
+    "    vec2 texel = 1.0 / res;\n"
+    "    vec3 color = texture(uScene, base).rgb * 0.50;\n"
+    "    color += texture(uScene, clamp(base + vec2(texel.x, 0.0), vec2(0.0), vec2(1.0))).rgb * 0.125;\n"
+    "    color += texture(uScene, clamp(base - vec2(texel.x, 0.0), vec2(0.0), vec2(1.0))).rgb * 0.125;\n"
+    "    color += texture(uScene, clamp(base + vec2(0.0, texel.y), vec2(0.0), vec2(1.0))).rgb * 0.125;\n"
+    "    color += texture(uScene, clamp(base - vec2(0.0, texel.y), vec2(0.0), vec2(1.0))).rgb * 0.125;\n"
+    "    return color;\n"
+    "}\n"
+    "vec3 retroQuantize(vec3 color, float levels, float dither) {\n"
+    "    return floor(clamp(color + vec3(dither), vec3(0.0), vec3(1.0)) * levels + 0.5) / levels;\n"
+    "}\n"
+    "float retroVignette(vec2 uv, float strength) {\n"
+    "    vec2 centered = uv * 2.0 - 1.0;\n"
+    "    return clamp(1.0 - dot(centered, centered) * strength, 0.0, 1.0);\n"
+    "}\n";
+
+static const char k_retro_frag_main[] =
+    "void main() {\n"
+    "    vec2 uv = vTexCoord;\n"
+    "    vec2 outputCoord = vTexCoord * max(uOutputResolution, vec2(1.0));\n"
+    "    vec3 color;\n"
+    "    if (uProfile == 1) {\n"
+    "        vec2 res = (uVirtualResolution.x > 0.0 && uVirtualResolution.y > 0.0) ? "
+    "uVirtualResolution : vec2(320.0, 240.0);\n"
+    "        float row = floor(uv.y * res.y);\n"
+    "        float jitter = (fract(sin(row * 12.9898) * 43758.5453) - 0.5) * 1.35 / res.x;\n"
+    "        color = retroSampleNearest(vec2(clamp(uv.x + jitter, 0.0, 1.0), uv.y), res);\n"
+    "        float dither = (retroBayer4(outputCoord) - 0.5) / 10.0;\n"
+    "        color = retroQuantize(color, 31.0, dither);\n"
+    "        color = retroGrade(color, 1.22, 0.82) * vec3(1.05, 0.98, 0.92);\n"
+    "        color *= retroVignette(uv, 0.28);\n"
+    "    } else if (uProfile == 2) {\n"
+    "        vec2 res = (uVirtualResolution.x > 0.0 && uVirtualResolution.y > 0.0) ? "
+    "uVirtualResolution : vec2(320.0, 240.0);\n"
+    "        color = retroSampleSoft(uv, res);\n"
+    "        color = retroQuantize(color, 63.0, 0.0);\n"
+    "        color = retroGrade(color * vec3(1.08, 1.03, 0.92), 1.08, 1.12);\n"
+    "        color *= retroVignette(uv, 0.16);\n"
+    "    } else if (uProfile == 3) {\n"
+    "        vec2 res = (uVirtualResolution.x > 0.0 && uVirtualResolution.y > 0.0) ? "
+    "uVirtualResolution : vec2(320.0, 200.0);\n"
+    "        color = retroSampleNearest(uv, res);\n"
+    "        float dither = (retroBayer4(outputCoord) - 0.5) / 2.75;\n"
+    "        color = retroQuantize(color, 5.0, dither);\n"
+    "        color = retroGrade(color * vec3(1.13, 0.98, 0.82), 1.28, 0.72);\n"
+    "        if (mod(outputCoord.y, 2.0) < 1.0) color *= 0.76;\n"
+    "    } else if (uProfile == 4) {\n"
+    "        vec2 res = (uVirtualResolution.x > 0.0 && uVirtualResolution.y > 0.0) ? "
+    "uVirtualResolution : vec2(256.0, 224.0);\n"
+    "        color = retroSampleNearest(uv, res);\n"
+    "        color = retroQuantize(color, 31.0, (retroBayer4(outputCoord) - 0.5) / 18.0);\n"
+    "        color = retroGrade(color * vec3(0.90, 0.96, 1.14), 1.12, 1.18);\n"
+    "        if (mod(outputCoord.y, 2.0) < 1.0) color *= 0.82;\n"
+    "    } else if (uProfile == 5) {\n"
+    "        vec2 res = (uVirtualResolution.x > 0.0 && uVirtualResolution.y > 0.0) ? "
+    "uVirtualResolution : vec2(512.0, 342.0);\n"
+    "        color = retroSampleNearest(uv, res);\n"
+    "        float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
+    "        float dither = (retroBayer4(outputCoord) - 0.5) / 3.0;\n"
+    "        float grey = floor(clamp(lum + dither, 0.0, 1.0) * 3.0 + 0.5) / 3.0;\n"
+    "        color = vec3(grey);\n"
+    "        if (mod(outputCoord.y, 2.0) < 1.0) color *= 0.90;\n"
+    "    } else if (uProfile == 6) {\n"
+    "        vec2 res = (uVirtualResolution.x > 0.0 && uVirtualResolution.y > 0.0) ? "
+    "uVirtualResolution : vec2(160.0, 144.0);\n"
+    "        color = retroSampleNearest(uv, res);\n"
+    "        float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
+    "        float dither = (retroBayer4(outputCoord) - 0.5) / 14.0;\n"
+    "        float ramp = floor(clamp(pow(lum, 0.86) + dither, 0.0, 1.0) * 11.0 + 0.5) / 11.0;\n"
+    "        vec3 shadow = vec3(0.045, 0.105, 0.045);\n"
+    "        vec3 mid = vec3(0.360, 0.565, 0.190);\n"
+    "        vec3 highlight = vec3(0.790, 0.880, 0.485);\n"
+    "        color = mix(shadow, mid, smoothstep(0.0, 0.62, ramp));\n"
+    "        color = mix(color, highlight, smoothstep(0.40, 1.0, ramp));\n"
+    "        color = retroGrade(color, 1.08, 1.0);\n"
+    "        if (mod(outputCoord.y, 2.0) < 1.0) color *= 0.92;\n"
+    "    } else {\n"
+    "        color = texture(uScene, uv).rgb;\n"
+    "    }\n"
+    "    fragColor = vec4(clamp(color, 0.0, 1.0), 1.0);\n"
+    "}\n";
 
 static const char k_ssao_frag[] = "in vec2 vTexCoord;\n"
                                   "uniform sampler2D uScene;\n"
@@ -3346,7 +3408,16 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->comp_saturation_loc = gl->GetUniformLocation(ctx->composite_program, "uSaturation");
 
     /* ---- Retro profile shader ---- */
-    ctx->retro_program = build_program(gl, version_prefix, k_fullscreen_vert, k_retro_frag);
+    {
+        GLuint vs = compile_shader(gl, GL_VERTEX_SHADER, version_prefix, k_fullscreen_vert);
+        const char *frag_srcs[3] = {version_prefix, k_retro_frag_helpers, k_retro_frag_main};
+        GLuint fs = vs ? compile_shader_multi(gl, GL_FRAGMENT_SHADER, 3, frag_srcs) : 0;
+        ctx->retro_program = (vs && fs) ? link_program(gl, vs, fs) : 0;
+        if (vs)
+            gl->DeleteShader(vs);
+        if (fs)
+            gl->DeleteShader(fs);
+    }
     if (!ctx->retro_program)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: retro shader compilation failed");
@@ -3355,7 +3426,8 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     }
     ctx->retro_scene_loc = gl->GetUniformLocation(ctx->retro_program, "uScene");
     ctx->retro_profile_loc = gl->GetUniformLocation(ctx->retro_program, "uProfile");
-    ctx->retro_resolution_loc = gl->GetUniformLocation(ctx->retro_program, "uResolution");
+    ctx->retro_virtual_resolution_loc = gl->GetUniformLocation(ctx->retro_program, "uVirtualResolution");
+    ctx->retro_output_resolution_loc = gl->GetUniformLocation(ctx->retro_program, "uOutputResolution");
 
     /* ---- SSAO shader ---- */
     ctx->ssao_program = build_program(gl, version_prefix, k_fullscreen_vert, k_ssao_frag);
@@ -3509,17 +3581,13 @@ static bool gl_clear(sdl3d_render_context *context, sdl3d_color color)
     ctx->current_ctx = context;
     ctx->ubo_dirty = true;
 
-    /* Map shading mode to retro profile. */
-    if (context->shading_mode == SDL3D_SHADING_GOURAUD && context->vertex_snap)
-        ctx->active_retro_profile = 1; /* PS1 */
-    else if (context->shading_mode == SDL3D_SHADING_GOURAUD && context->uv_mode == SDL3D_UV_AFFINE)
-        ctx->active_retro_profile = 3; /* DOS */
-    else if (context->shading_mode == SDL3D_SHADING_GOURAUD)
-        ctx->active_retro_profile = 2; /* N64 */
-    else if (context->shading_mode == SDL3D_SHADING_FLAT)
-        ctx->active_retro_profile = 4; /* SNES */
-    else
-        ctx->active_retro_profile = 0; /* Modern */
+    ctx->active_retro_profile = (int)context->display_profile;
+    if (ctx->active_retro_profile < (int)SDL3D_DISPLAY_PROFILE_MODERN ||
+        ctx->active_retro_profile > (int)SDL3D_DISPLAY_PROFILE_GAMEBOY)
+        ctx->active_retro_profile = (int)SDL3D_DISPLAY_PROFILE_MODERN;
+    ctx->active_retro_virtual_w = context->display_width;
+    ctx->active_retro_virtual_h = context->display_height;
+    ctx->active_retro_filter = (int)context->display_filter;
 
     /* Sync shadow state from render context so deferred replay works. */
     if (context->shadow_enabled[0])
@@ -3960,33 +4028,6 @@ static bool gl_present(sdl3d_render_context *context)
     gl->Disable(GL_CULL_FACE);
     gl->BindVertexArray(ctx->fullscreen_vao);
 
-    /* Retro profile pass: runs before bloom so bloom operates on the
-     * retro-styled scene. Renders fbo_color through the retro uber-shader
-     * into pp_fbo_a, then bloom reads from pp_tex_a instead of fbo_color. */
-    if (ctx->active_retro_profile > 0)
-    {
-        gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->pp_fbo_a);
-        gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
-        gl->Clear(GL_COLOR_BUFFER_BIT);
-        gl->UseProgram(ctx->retro_program);
-        gl->ActiveTexture(GL_TEXTURE0);
-        gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
-        gl->Uniform1i(ctx->retro_scene_loc, 0);
-        gl->Uniform1i(ctx->retro_profile_loc, ctx->active_retro_profile);
-        gl->Uniform2f(ctx->retro_resolution_loc, (float)ctx->logical_w, (float)ctx->logical_h);
-        gl->DrawArrays(GL_TRIANGLES, 0, 3);
-
-        /* Copy retro result back to fbo_color so the rest of the pipeline
-         * (bloom threshold, composite scene read) works unchanged. */
-        gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-        gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
-        gl->UseProgram(ctx->copy_program);
-        gl->ActiveTexture(GL_TEXTURE0);
-        gl->BindTexture(GL_TEXTURE_2D, ctx->pp_tex_a);
-        gl->Uniform1i(ctx->copy_texture_loc, 0);
-        gl->DrawArrays(GL_TRIANGLES, 0, 3);
-    }
-
     /* SSAO pass: darken pixels where nearby depth samples indicate occlusion.
      * Reads fbo_color + fbo_depth, writes to pp_fbo_a, then copies back. */
     if (context->ssao_enabled)
@@ -4100,14 +4141,35 @@ static bool gl_present(sdl3d_render_context *context)
     gl->Clear(GL_COLOR_BUFFER_BIT);
     gl->Viewport(vp_x, vp_y, vp_w, vp_h);
 
-    /* Draw fullscreen triangle sampling the FBO color attachment. */
+    /* Draw fullscreen triangle sampling the FBO color attachment. Retro
+     * presentation profiles are applied here so the final scene, including
+     * bloom/SSAO/transitions, receives the display treatment while the UI
+     * overlay remains crisp and readable afterward. */
     gl->Disable(GL_DEPTH_TEST);
     gl->Disable(GL_CULL_FACE);
-    gl->UseProgram(ctx->copy_program);
     gl->ActiveTexture(GL_TEXTURE0);
     gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
-    gl->Uniform1i(ctx->copy_texture_loc, 0);
+    {
+        const GLint profile_filter =
+            ctx->active_retro_filter == (int)SDL3D_DISPLAY_FILTER_NEAREST ? GL_NEAREST : GL_LINEAR;
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, profile_filter);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, profile_filter);
+    }
     gl->BindVertexArray(ctx->fullscreen_vao);
+    if (ctx->active_retro_profile > 0)
+    {
+        gl->UseProgram(ctx->retro_program);
+        gl->Uniform1i(ctx->retro_scene_loc, 0);
+        gl->Uniform1i(ctx->retro_profile_loc, ctx->active_retro_profile);
+        gl->Uniform2f(ctx->retro_virtual_resolution_loc, (float)ctx->active_retro_virtual_w,
+                      (float)ctx->active_retro_virtual_h);
+        gl->Uniform2f(ctx->retro_output_resolution_loc, (float)vp_w, (float)vp_h);
+    }
+    else
+    {
+        gl->UseProgram(ctx->copy_program);
+        gl->Uniform1i(ctx->copy_texture_loc, 0);
+    }
     gl->DrawArrays(GL_TRIANGLES, 0, 3);
     gl->Disable(GL_CULL_FACE);
     gl->Enable(GL_DEPTH_TEST);
@@ -4249,6 +4311,24 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
     SDL_GL_MakeCurrent(ctx->window, ctx->gl_context);
     ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
     ctx->gl.ReadPixels(x, y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+}
+
+int sdl3d_gl_active_retro_profile(const sdl3d_gl_context *ctx)
+{
+    return ctx != NULL ? ctx->active_retro_profile : (int)SDL3D_DISPLAY_PROFILE_MODERN;
+}
+
+void sdl3d_gl_active_retro_virtual_resolution(const sdl3d_gl_context *ctx, int *out_width, int *out_height)
+{
+    if (out_width != NULL)
+        *out_width = ctx != NULL ? ctx->active_retro_virtual_w : 0;
+    if (out_height != NULL)
+        *out_height = ctx != NULL ? ctx->active_retro_virtual_h : 0;
+}
+
+int sdl3d_gl_active_retro_filter(const sdl3d_gl_context *ctx)
+{
+    return ctx != NULL ? ctx->active_retro_filter : (int)SDL3D_DISPLAY_FILTER_LINEAR;
 }
 
 void sdl3d_gl_backend_init(sdl3d_backend_interface *iface)

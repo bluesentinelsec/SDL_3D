@@ -3912,6 +3912,10 @@ static bool parse_render_profile(const char *value, sdl3d_render_profile *out_pr
         *out_profile = sdl3d_profile_dos();
     else if (SDL_strcasecmp(value, "snes") == 0)
         *out_profile = sdl3d_profile_snes();
+    else if (SDL_strcasecmp(value, "grayscale") == 0)
+        *out_profile = sdl3d_profile_grayscale();
+    else if (SDL_strcasecmp(value, "gameboy") == 0)
+        *out_profile = sdl3d_profile_gameboy();
     else
         return false;
     return true;
