@@ -526,6 +526,51 @@ extern "C"
         float effect_speed;
     } sdl3d_game_data_ui_image;
 
+    /** @brief Authored UI rectangle descriptor. */
+    typedef struct sdl3d_game_data_ui_rect
+    {
+        /** @brief Stable UI item name. */
+        const char *name;
+        /** @brief Caller-defined visibility key. */
+        const char *visible;
+        /** @brief Horizontal position. */
+        float x;
+        /** @brief Vertical position. */
+        float y;
+        /** @brief Rectangle width. */
+        float w;
+        /** @brief Rectangle height. */
+        float h;
+        /** @brief Whether x/y/w/h are normalized to the current render size. */
+        bool normalized;
+        /** @brief Horizontal alignment of the rectangle around x. */
+        sdl3d_game_data_ui_align align;
+        /** @brief Vertical alignment of the rectangle around y. */
+        sdl3d_game_data_ui_valign valign;
+        /** @brief Runtime or authored scale multiplier applied around the rectangle anchor. */
+        float scale;
+        /** @brief Rectangle color. */
+        sdl3d_color color;
+        /** @brief Optional actor that supplies an alpha multiplier property. */
+        const char *alpha_source_target;
+        /** @brief Optional property on @ref alpha_source_target used as alpha source. */
+        const char *alpha_source_key;
+        /** @brief Multiplier applied to the alpha source property. */
+        float alpha_source_scale;
+        /** @brief Minimum alpha multiplier when an alpha source is authored. */
+        float alpha_source_min;
+        /** @brief Maximum alpha multiplier when an alpha source is authored. */
+        float alpha_source_max;
+        /** @brief True when alpha should pulse while visible. */
+        bool pulse_alpha;
+        /** @brief Pulse frequency in cycles per second. */
+        float pulse_rate;
+        /** @brief Minimum pulse alpha multiplier. */
+        float pulse_min;
+        /** @brief Maximum pulse alpha multiplier. */
+        float pulse_max;
+    } sdl3d_game_data_ui_rect;
+
     /** @brief Bit flags indicating which runtime UI state fields override authored descriptor values. */
     typedef enum sdl3d_game_data_ui_state_flags
     {
@@ -579,6 +624,13 @@ extern "C"
      * Return false to stop iteration early.
      */
     typedef bool (*sdl3d_game_data_ui_image_fn)(void *userdata, const sdl3d_game_data_ui_image *image);
+
+    /**
+     * @brief Callback for iterating authored UI rectangle descriptors.
+     *
+     * Return false to stop iteration early.
+     */
+    typedef bool (*sdl3d_game_data_ui_rect_fn)(void *userdata, const sdl3d_game_data_ui_rect *rect);
 
     /** @brief Input mode used by a data-authored scene skip policy. */
     typedef enum sdl3d_game_data_skip_input
@@ -2636,6 +2688,16 @@ extern "C"
                                            void *userdata);
 
     /**
+     * @brief Iterate authored UI rectangles visible to the active scene.
+     *
+     * Iteration includes global `ui.rects` followed by active-scene
+     * `ui.rects`. Visibility is evaluated separately by
+     * sdl3d_game_data_ui_rect_is_visible().
+     */
+    bool sdl3d_game_data_for_each_ui_rect(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_ui_rect_fn callback,
+                                          void *userdata);
+
+    /**
      * @brief Initialize runtime UI state to identity values.
      *
      * The initialized state has no override flags, zero offset, scale 1, alpha
@@ -2689,6 +2751,17 @@ extern "C"
                                           sdl3d_game_data_ui_image *out_image, bool *out_visible);
 
     /**
+     * @brief Resolve authored rectangle plus runtime UI state for presentation.
+     *
+     * @p out_visible receives the final visibility after authored conditions,
+     * property-driven alpha, and runtime overrides. @p out_rect may alias
+     * @p rect.
+     */
+    bool sdl3d_game_data_resolve_ui_rect(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_rect *rect,
+                                         const sdl3d_game_data_ui_metrics *metrics, sdl3d_game_data_ui_rect *out_rect,
+                                         bool *out_visible);
+
+    /**
      * @brief Evaluate a UI text descriptor's authored visibility condition.
      *
      * Supports camera-active checks, app pause checks, actor property
@@ -2702,6 +2775,12 @@ extern "C"
     bool sdl3d_game_data_ui_image_is_visible(const sdl3d_game_data_runtime *runtime,
                                              const sdl3d_game_data_ui_image *image,
                                              const sdl3d_game_data_ui_metrics *metrics);
+
+    /**
+     * @brief Evaluate a UI rectangle descriptor's authored visibility condition.
+     */
+    bool sdl3d_game_data_ui_rect_is_visible(const sdl3d_game_data_runtime *runtime, const sdl3d_game_data_ui_rect *rect,
+                                            const sdl3d_game_data_ui_metrics *metrics);
 
     /**
      * @brief Read the active scene's authored skip policy.

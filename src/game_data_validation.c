@@ -6149,13 +6149,16 @@ static bool validate_ui(validation_context *ctx, yyjson_val *root, validation_na
     yyjson_val *ui = obj_get(root, "ui");
     yyjson_val *texts = obj_get(ui, "text");
     yyjson_val *images = obj_get(ui, "images");
+    yyjson_val *rects = obj_get(ui, "rects");
     yyjson_val *menus = obj_get(ui, "menus");
-    if (texts == NULL && images == NULL && menus == NULL)
+    if (texts == NULL && images == NULL && rects == NULL && menus == NULL)
         return true;
     if (texts != NULL && !yyjson_is_arr(texts))
         return validation_error(ctx, "$.ui.text", "UI text must be an array");
     if (images != NULL && !yyjson_is_arr(images))
         return validation_error(ctx, "$.ui.images", "UI images must be an array");
+    if (rects != NULL && !yyjson_is_arr(rects))
+        return validation_error(ctx, "$.ui.rects", "UI rectangles must be an array");
     if (menus != NULL && !yyjson_is_arr(menus))
         return validation_error(ctx, "$.ui.menus", "UI menus must be an array");
 
@@ -6213,6 +6216,40 @@ static bool validate_ui(validation_context *ctx, yyjson_val *root, validation_na
         char condition_path[PATH_BUFFER_SIZE];
         format_path(condition_path, sizeof(condition_path), "%s.visible_if", path);
         if (!validate_data_condition(ctx, obj_get(image, "visible_if"), condition_path, names))
+            return false;
+    }
+
+    for (size_t i = 0; yyjson_is_arr(rects) && i < yyjson_arr_size(rects); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.ui.rects[%zu]", i);
+        yyjson_val *rect = yyjson_arr_get(rects, i);
+        if (!yyjson_is_obj(rect))
+            return validation_error(ctx, path, "UI rectangle entries must be objects");
+        if (!is_non_empty_string(rect, "name"))
+            return validation_error(ctx, path, "UI rectangle requires a non-empty name");
+        yyjson_val *alpha_source = obj_get(rect, "alpha_source");
+        if (alpha_source != NULL)
+        {
+            if (!yyjson_is_obj(alpha_source))
+                return validation_error(ctx, path, "UI rectangle alpha_source must be an object");
+            if (!require_ref(ctx, &names->entities, "entity", json_string(alpha_source, "target"), path))
+                return false;
+            if (!is_non_empty_string(alpha_source, "key"))
+                return validation_error(ctx, path, "UI rectangle alpha_source requires a non-empty key");
+            yyjson_val *min_value = obj_get(alpha_source, "min");
+            yyjson_val *max_value = obj_get(alpha_source, "max");
+            if (min_value != NULL && !yyjson_is_num(min_value))
+                return validation_error(ctx, path, "UI rectangle alpha_source min must be numeric");
+            if (max_value != NULL && !yyjson_is_num(max_value))
+                return validation_error(ctx, path, "UI rectangle alpha_source max must be numeric");
+            if (yyjson_is_num(min_value) && yyjson_is_num(max_value) &&
+                yyjson_get_real(max_value) < yyjson_get_real(min_value))
+                return validation_error(ctx, path, "UI rectangle alpha_source max must be >= min");
+        }
+        char condition_path[PATH_BUFFER_SIZE];
+        format_path(condition_path, sizeof(condition_path), "%s.visible_if", path);
+        if (!validate_data_condition(ctx, obj_get(rect, "visible_if"), condition_path, names))
             return false;
     }
 
@@ -6979,9 +7016,12 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
 
     yyjson_val *texts = obj_get(obj_get(root, "ui"), "text");
     yyjson_val *images = obj_get(obj_get(root, "ui"), "images");
+    yyjson_val *rects = obj_get(obj_get(root, "ui"), "rects");
     yyjson_val *ui_menus = obj_get(obj_get(root, "ui"), "menus");
     if (images != NULL && !yyjson_is_arr(images))
         return validation_error(ctx, json_path, "scene UI images must be an array");
+    if (rects != NULL && !yyjson_is_arr(rects))
+        return validation_error(ctx, json_path, "scene UI rectangles must be an array");
     if (ui_menus != NULL && !yyjson_is_arr(ui_menus))
         return validation_error(ctx, json_path, "scene UI menus must be an array");
     for (size_t i = 0; yyjson_is_arr(ui_menus) && i < yyjson_arr_size(ui_menus); ++i)
@@ -7035,6 +7075,40 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
         char condition_path[PATH_BUFFER_SIZE];
         format_path(condition_path, sizeof(condition_path), "%s.visible_if", image_path);
         if (!validate_scene_ui_condition(ctx, obj_get(image, "visible_if"), condition_path, names))
+            return false;
+    }
+
+    for (size_t i = 0; yyjson_is_arr(rects) && i < yyjson_arr_size(rects); ++i)
+    {
+        char rect_path[PATH_BUFFER_SIZE];
+        format_path(rect_path, sizeof(rect_path), "%s.ui.rects[%zu]", json_path, i);
+        yyjson_val *rect = yyjson_arr_get(rects, i);
+        if (!yyjson_is_obj(rect))
+            return validation_error(ctx, rect_path, "scene UI rectangle entries must be objects");
+        if (!is_non_empty_string(rect, "name"))
+            return validation_error(ctx, rect_path, "scene UI rectangle requires a non-empty name");
+        yyjson_val *alpha_source = obj_get(rect, "alpha_source");
+        if (alpha_source != NULL)
+        {
+            if (!yyjson_is_obj(alpha_source))
+                return validation_error(ctx, rect_path, "scene UI rectangle alpha_source must be an object");
+            if (!require_ref(ctx, &names->entities, "entity", json_string(alpha_source, "target"), rect_path))
+                return false;
+            if (!is_non_empty_string(alpha_source, "key"))
+                return validation_error(ctx, rect_path, "scene UI rectangle alpha_source requires a non-empty key");
+            yyjson_val *min_value = obj_get(alpha_source, "min");
+            yyjson_val *max_value = obj_get(alpha_source, "max");
+            if (min_value != NULL && !yyjson_is_num(min_value))
+                return validation_error(ctx, rect_path, "scene UI rectangle alpha_source min must be numeric");
+            if (max_value != NULL && !yyjson_is_num(max_value))
+                return validation_error(ctx, rect_path, "scene UI rectangle alpha_source max must be numeric");
+            if (yyjson_is_num(min_value) && yyjson_is_num(max_value) &&
+                yyjson_get_real(max_value) < yyjson_get_real(min_value))
+                return validation_error(ctx, rect_path, "scene UI rectangle alpha_source max must be >= min");
+        }
+        char condition_path[PATH_BUFFER_SIZE];
+        format_path(condition_path, sizeof(condition_path), "%s.visible_if", rect_path);
+        if (!validate_scene_ui_condition(ctx, obj_get(rect, "visible_if"), condition_path, names))
             return false;
     }
 

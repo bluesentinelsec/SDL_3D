@@ -201,6 +201,53 @@ The optional `app` object configures the managed loop before the window exists:
 }
 ```
 
+## UI Rectangles
+
+`ui.rects` draws solid overlay rectangles in the generic presentation path.
+Use them for reusable presentation feedback such as low-health tints, damage
+vignettes, shield flashes, letterbox bars, or panel backgrounds without adding
+host-specific drawing code.
+
+```json
+{
+  "ui": {
+    "rects": [
+      {
+        "name": "ui.damage.top",
+        "x": 0.0,
+        "y": 0.0,
+        "w": 1.0,
+        "h": 0.08,
+        "normalized": true,
+        "color": [220, 20, 20, 170],
+        "alpha_source": {
+          "target": "entity.player",
+          "key": "last_damage_per_second",
+          "scale": 0.033333,
+          "min": 0.35,
+          "max": 1.0
+        },
+        "visible_if": {
+          "type": "property.compare",
+          "target": "entity.player",
+          "key": "last_damage_per_second",
+          "op": ">",
+          "value": 0.0
+        },
+        "pulse_alpha": true,
+        "pulse_rate": 2.8,
+        "pulse_min": 0.45,
+        "pulse_max": 1.0
+      }
+    ]
+  }
+}
+```
+
+`alpha_source` accepts integer or float properties and multiplies the authored
+color alpha by `clamp(value * scale, min, max)`. Pair it with `visible_if` when
+zero-valued feedback should disappear entirely.
+
 ## World Cameras
 
 `world.cameras` defines reusable render cameras by name. Scenes can select a

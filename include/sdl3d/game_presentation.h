@@ -357,6 +357,16 @@ extern "C"
                                         const sdl3d_game_data_render_eval *render_eval);
 
     /**
+     * @brief Draw authored UI rectangles for the active scene.
+     *
+     * Rectangles are drawn on SDL3D's overlay path after world rendering.
+     * @p render_eval supplies the current presentation time for pulse effects.
+     */
+    bool sdl3d_game_data_draw_ui_rects(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
+                                       const sdl3d_game_data_ui_metrics *metrics,
+                                       const sdl3d_game_data_render_eval *render_eval);
+
+    /**
      * @brief Initialize a particle emitter cache.
      */
     void sdl3d_game_data_particle_cache_init(sdl3d_game_data_particle_cache *cache);

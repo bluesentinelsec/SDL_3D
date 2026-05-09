@@ -20,13 +20,6 @@
 #include "renderer.h"
 
 #define SIG_FADE_OUT_DONE 2001
-#define SIG_DAMAGE_FLOOR_TICK 2009
-#define DAMAGE_FEEDBACK_REFERENCE_DPS 30.0f
-#define DAMAGE_FEEDBACK_MIN_STRENGTH 0.35f
-#define DAMAGE_FEEDBACK_ATTACK_RATE 10.0f
-#define DAMAGE_FEEDBACK_DECAY_RATE 4.0f
-#define DAMAGE_FEEDBACK_PULSE_HZ 2.8f
-#define FEEDBACK_DAMAGE_FLOOR "damage_floor"
 
 typedef struct doom_state
 {
@@ -38,13 +31,8 @@ typedef struct doom_state
     sdl3d_font debug_font;
     sdl3d_ui_context *ui;
     sdl3d_demo_player *demo_player;
-    sdl3d_logic_world *logic;
-    sdl3d_logic_sector_damage_sensor damage_sensor;
     sdl3d_backend current_backend;
     doom_render_profile render_profile;
-    float damage_feedback_strength;
-    float damage_feedback_target_strength;
-    float damage_pulse_timer;
     int action_pause;
     int action_menu;
     int action_toggle_lighting;
@@ -59,8 +47,6 @@ typedef struct doom_state
     bool entities_ready;
     bool quit_pending;
 } doom_state;
-
-static float clamp01(float value);
 
 static sdl3d_actor_registry *ctx_registry(const sdl3d_game_context *ctx)
 {
@@ -77,14 +63,8 @@ static sdl3d_input_manager *ctx_input(const sdl3d_game_context *ctx)
     return sdl3d_game_session_get_input(ctx != NULL ? ctx->session : NULL);
 }
 
-static sdl3d_logic_world *ctx_logic(const sdl3d_game_context *ctx)
-{
-    return sdl3d_game_session_get_logic_world(ctx != NULL ? ctx->session : NULL);
-}
-
 static void doom_state_cleanup(doom_state *state)
 {
-    state->logic = NULL;
     render_state_free(&state->render);
     if (state->entities_ready)
     {
@@ -134,69 +114,6 @@ static void on_fade_out_done(void *userdata, int signal_id, const sdl3d_properti
     (void)payload;
     sdl3d_game_context *ctx = (sdl3d_game_context *)userdata;
     ctx->quit_requested = true;
-}
-
-static bool doom_logic_trigger_feedback(void *userdata, const char *feedback_name, float duration_seconds,
-                                        const sdl3d_properties *payload)
-{
-    doom_state *state = (doom_state *)userdata;
-    if (state == NULL || feedback_name == NULL)
-    {
-        return false;
-    }
-
-    if (SDL_strcmp(feedback_name, FEEDBACK_DAMAGE_FLOOR) == 0)
-    {
-        const float damage_per_second =
-            payload != NULL ? sdl3d_properties_get_float(payload, "damage_per_second", 0.0f) : 0.0f;
-        if (damage_per_second <= 0.0f)
-        {
-            state->damage_feedback_target_strength = 0.0f;
-            return true;
-        }
-
-        state->damage_feedback_target_strength =
-            DAMAGE_FEEDBACK_MIN_STRENGTH +
-            clamp01(damage_per_second / DAMAGE_FEEDBACK_REFERENCE_DPS) * (1.0f - DAMAGE_FEEDBACK_MIN_STRENGTH);
-        return true;
-    }
-
-    return false;
-}
-
-static void init_damage_sensor(doom_state *state)
-{
-    sdl3d_logic_sector_damage_sensor_init(&state->damage_sensor, 1, SIG_DAMAGE_FLOOR_TICK, 0.0f);
-}
-
-static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
-{
-    state->logic = ctx_logic(ctx);
-    if (state->logic == NULL)
-    {
-        return false;
-    }
-
-    sdl3d_logic_game_adapters adapters;
-    SDL_zero(adapters);
-    adapters.userdata = state;
-    adapters.trigger_feedback = doom_logic_trigger_feedback;
-    sdl3d_logic_world_set_game_adapters(state->logic, &adapters);
-
-    sdl3d_logic_target_context target_context;
-    SDL_zero(target_context);
-    target_context.level = &state->level.unlit;
-    target_context.sectors = g_sectors;
-    target_context.sector_count = g_sector_count;
-    sdl3d_logic_world_set_target_context(state->logic, &target_context);
-
-    sdl3d_logic_action damage_feedback_action = sdl3d_logic_action_make_trigger_feedback(FEEDBACK_DAMAGE_FLOOR, 0.0f);
-    if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_DAMAGE_FLOOR_TICK, &damage_feedback_action) == 0)
-    {
-        return false;
-    }
-
-    return true;
 }
 
 static void start_quit_fade(sdl3d_game_context *ctx, doom_state *state)
@@ -286,12 +203,6 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     state->entities_ready = true;
 
     player_init(&state->player, ctx_input(ctx));
-    init_damage_sensor(state);
-    if (!bind_doom_logic(ctx, state))
-    {
-        doom_state_cleanup(state);
-        return false;
-    }
     render_state_init(&state->render);
     sdl3d_transition_start(&state->transition, SDL3D_TRANSITION_FADE, SDL3D_TRANSITION_IN, (sdl3d_color){0, 0, 0, 255},
                            1.0f, -1);
@@ -396,44 +307,6 @@ static void apply_doom_profile_actions(sdl3d_game_context *ctx, doom_state *stat
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Render profile switch failed: %s", SDL_GetError());
         }
     }
-}
-
-static float clamp01(float value)
-{
-    if (value < 0.0f)
-    {
-        return 0.0f;
-    }
-    if (value > 1.0f)
-    {
-        return 1.0f;
-    }
-    return value;
-}
-
-static void update_damage_feedback(doom_state *state, float dt)
-{
-    const float target_strength = state->damage_feedback_target_strength;
-    const float rate =
-        target_strength > state->damage_feedback_strength ? DAMAGE_FEEDBACK_ATTACK_RATE : DAMAGE_FEEDBACK_DECAY_RATE;
-    const float blend = clamp01(rate * dt);
-    state->damage_feedback_strength += (target_strength - state->damage_feedback_strength) * blend;
-
-    if (state->damage_feedback_strength > 0.001f)
-    {
-        state->damage_pulse_timer += dt * DAMAGE_FEEDBACK_PULSE_HZ;
-        while (state->damage_pulse_timer >= 1.0f)
-        {
-            state->damage_pulse_timer -= 1.0f;
-        }
-    }
-    else
-    {
-        state->damage_feedback_strength = 0.0f;
-        state->damage_pulse_timer = 0.0f;
-    }
-
-    state->damage_feedback_target_strength = 0.0f;
 }
 
 typedef struct doom_tick_profile
@@ -570,12 +443,6 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
             section_start = now;
         }
         player_apply_sector_damage(&state->player, g_sectors, g_sector_count, dt);
-        sdl3d_logic_sector_damage_sensor_update(&state->damage_sensor, state->logic,
-                                                sdl3d_vec3_make(state->player.mover.position.x,
-                                                                state->player.mover.position.y - PLAYER_HEIGHT,
-                                                                state->player.mover.position.z),
-                                                dt);
-        update_damage_feedback(state, dt);
         if (profile_tick)
         {
             Uint64 now = SDL_GetPerformanceCounter();
@@ -621,43 +488,6 @@ static void game_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_
     }
 }
 
-static void draw_damage_overlay(sdl3d_game_context *ctx, const doom_state *state)
-{
-    const int width = sdl3d_get_render_context_width(ctx->renderer);
-    const int height = sdl3d_get_render_context_height(ctx->renderer);
-
-    if (width <= 0 || height <= 0 || state->damage_feedback_strength <= 0.001f)
-    {
-        return;
-    }
-
-    const float pulse = (SDL_sinf(state->damage_pulse_timer * SDL_PI_F * 2.0f) + 1.0f) * 0.5f;
-    const float alpha = (58.0f + pulse * 72.0f) * state->damage_feedback_strength;
-    const float max_band = SDL_min((float)width, (float)height) * 0.12f;
-    const int layers = 5;
-    const float band = max_band / (float)layers;
-
-    for (int i = 0; i < layers; ++i)
-    {
-        const float inset = (float)i * band;
-        const float layer_scale = 1.0f - ((float)i / (float)layers);
-        float layer_alpha_f = alpha * layer_scale;
-        if (layer_alpha_f > 180.0f)
-        {
-            layer_alpha_f = 180.0f;
-        }
-        const Uint8 layer_alpha = (Uint8)layer_alpha_f;
-        const sdl3d_color red = {220, 20, 20, layer_alpha};
-
-        sdl3d_draw_rect_overlay(ctx->renderer, inset, inset, (float)width - inset * 2.0f, band, red);
-        sdl3d_draw_rect_overlay(ctx->renderer, inset, (float)height - inset - band, (float)width - inset * 2.0f, band,
-                                red);
-        sdl3d_draw_rect_overlay(ctx->renderer, inset, inset + band, band, (float)height - (inset + band) * 2.0f, red);
-        sdl3d_draw_rect_overlay(ctx->renderer, (float)width - inset - band, inset + band, band,
-                                (float)height - (inset + band) * 2.0f, red);
-    }
-}
-
 static void draw_pause_overlay(sdl3d_game_context *ctx, doom_state *state)
 {
     const int width = sdl3d_get_render_context_width(ctx->renderer);
@@ -694,7 +524,6 @@ static void game_render(sdl3d_game_context *ctx, void *userdata, float alpha)
                       &state->level, &state->ent, &state->player, WINDOW_W, WINDOW_H, frame_dt,
                       backend_profile_name(state->render_profile));
     sdl3d_transition_draw(&state->transition, ctx->renderer);
-    draw_damage_overlay(ctx, state);
     if (ctx->paused && !state->quit_pending)
     {
         draw_pause_overlay(ctx, state);

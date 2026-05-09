@@ -62,6 +62,116 @@
     ]
   },
   "ui": {
+    "rects": [
+      {
+        "name": "ui.doom_level.damage_feedback.top",
+        "x": 0.0,
+        "y": 0.0,
+        "w": 1.0,
+        "h": 0.08,
+        "normalized": true,
+        "color": [220, 20, 20, 170],
+        "alpha_source": {
+          "target": "entity.player",
+          "key": "last_damage_per_second",
+          "scale": 0.033333,
+          "min": 0.35,
+          "max": 1.0
+        },
+        "visible_if": {
+          "type": "property.compare",
+          "target": "entity.player",
+          "key": "last_damage_per_second",
+          "op": ">",
+          "value": 0.0
+        },
+        "pulse_alpha": true,
+        "pulse_rate": 2.8,
+        "pulse_min": 0.45,
+        "pulse_max": 1.0
+      },
+      {
+        "name": "ui.doom_level.damage_feedback.bottom",
+        "x": 0.0,
+        "y": 0.92,
+        "w": 1.0,
+        "h": 0.08,
+        "normalized": true,
+        "color": [220, 20, 20, 170],
+        "alpha_source": {
+          "target": "entity.player",
+          "key": "last_damage_per_second",
+          "scale": 0.033333,
+          "min": 0.35,
+          "max": 1.0
+        },
+        "visible_if": {
+          "type": "property.compare",
+          "target": "entity.player",
+          "key": "last_damage_per_second",
+          "op": ">",
+          "value": 0.0
+        },
+        "pulse_alpha": true,
+        "pulse_rate": 2.8,
+        "pulse_min": 0.45,
+        "pulse_max": 1.0
+      },
+      {
+        "name": "ui.doom_level.damage_feedback.left",
+        "x": 0.0,
+        "y": 0.08,
+        "w": 0.06,
+        "h": 0.84,
+        "normalized": true,
+        "color": [220, 20, 20, 170],
+        "alpha_source": {
+          "target": "entity.player",
+          "key": "last_damage_per_second",
+          "scale": 0.033333,
+          "min": 0.35,
+          "max": 1.0
+        },
+        "visible_if": {
+          "type": "property.compare",
+          "target": "entity.player",
+          "key": "last_damage_per_second",
+          "op": ">",
+          "value": 0.0
+        },
+        "pulse_alpha": true,
+        "pulse_rate": 2.8,
+        "pulse_min": 0.45,
+        "pulse_max": 1.0
+      },
+      {
+        "name": "ui.doom_level.damage_feedback.right",
+        "x": 0.94,
+        "y": 0.08,
+        "w": 0.06,
+        "h": 0.84,
+        "normalized": true,
+        "color": [220, 20, 20, 170],
+        "alpha_source": {
+          "target": "entity.player",
+          "key": "last_damage_per_second",
+          "scale": 0.033333,
+          "min": 0.35,
+          "max": 1.0
+        },
+        "visible_if": {
+          "type": "property.compare",
+          "target": "entity.player",
+          "key": "last_damage_per_second",
+          "op": ">",
+          "value": 0.0
+        },
+        "pulse_alpha": true,
+        "pulse_rate": 2.8,
+        "pulse_min": 0.45,
+        "pulse_max": 1.0
+      }
+    ],
     "text": [
       {
         "name": "ui.doom_level.phase",
