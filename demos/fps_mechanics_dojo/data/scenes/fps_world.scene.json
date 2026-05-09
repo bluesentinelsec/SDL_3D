@@ -8,7 +8,8 @@
     "entity.player",
     "entity.dojo.launch_pad",
     "entity.dojo.teleporter_pad",
-    "entity.dojo.teleporter_destination"
+    "entity.dojo.teleporter_destination",
+    "entity.dojo.combat_dummy"
   ],
   "input": {
     "mouse_capture": "unpaused",
@@ -19,6 +20,7 @@
       "action.move.right",
       "action.jump",
       "action.interact",
+      "action.fire",
       "action.pause"
     ]
   },
@@ -50,6 +52,15 @@
         "position": [0.02, 0.07],
         "anchor": "top_left",
         "color": [255, 150, 120, 220],
+        "scale": 0.75
+      },
+      {
+        "name": "ui.dojo.dummy",
+        "text": "Dummy HP {target.entity.dojo.combat_dummy.health}  Armor {target.entity.dojo.combat_dummy.armor}  Alive {target.entity.dojo.combat_dummy.alive}",
+        "font": "font.dojo.hud",
+        "position": [0.02, 0.11],
+        "anchor": "top_left",
+        "color": [255, 210, 180, 220],
         "scale": 0.75
       },
       {

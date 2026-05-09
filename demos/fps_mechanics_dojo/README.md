@@ -17,6 +17,7 @@ The first scene demonstrates existing data-authored primitives:
 - `controller.fps_sector.teleport` for teleport pads
 - `sensor.volume` and `sensor.sector`
 - `sector_doors` and `sector_platforms`
+- `combat.health` plus `combat.damage` against a mock target dummy
 - actor archetype/instance mockups with optional `editor` metadata
 
 The dojo is meant to grow alongside reusable mechanics from issue #282.
