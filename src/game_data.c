@@ -358,6 +358,23 @@ typedef struct sector_door_runtime
     sdl3d_door door;
 } sector_door_runtime;
 
+typedef struct sector_platform_runtime
+{
+    yyjson_val *json;
+    const char *name;
+    sector_level_runtime *level;
+    int sector_index;
+    float min_floor_y;
+    float max_floor_y;
+    float ceil_y;
+    float cycle_seconds;
+    float rebuild_min_delta;
+    float time;
+    float last_floor_y;
+    bool has_last_floor_y;
+    bool enabled;
+} sector_platform_runtime;
+
 typedef struct fps_controller_runtime
 {
     const char *entity_name;
@@ -531,6 +548,8 @@ typedef struct sdl3d_game_data_runtime
     int sector_level_count;
     sector_door_runtime *sector_doors;
     int sector_door_count;
+    sector_platform_runtime *sector_platforms;
+    int sector_platform_count;
     fps_controller_runtime *fps_controllers;
     int fps_controller_count;
     int fps_controller_capacity;
@@ -619,6 +638,8 @@ static bool set_action_gamepad_button_binding(sdl3d_game_data_runtime *runtime, 
 static bool eval_data_condition(const sdl3d_game_data_runtime *runtime, yyjson_val *condition,
                                 const sdl3d_game_data_ui_metrics *metrics);
 static bool runtime_actor_is_active(const sdl3d_game_data_runtime *runtime, const sdl3d_registered_actor *actor);
+static sector_level_runtime *find_sector_level_runtime_mutable(sdl3d_game_data_runtime *runtime, const char *name);
+static int sector_level_find_sector_name(const sector_level_runtime *level, const char *sector_name);
 static int menu_runtime_item_count(const sdl3d_game_data_runtime *runtime, const scene_menu_state *menu);
 static void update_dynamic_list_selection_state(sdl3d_game_data_runtime *runtime, scene_menu_state *menu);
 
@@ -3134,6 +3155,46 @@ static bool build_sector_level_variants(sector_level_runtime *level, char *error
     return true;
 }
 
+static bool set_sector_level_geometry(sector_level_runtime *level, int sector_index,
+                                      const sdl3d_sector_geometry *geometry, char *error_buffer, int error_buffer_size)
+{
+    if (level == NULL || geometry == NULL || sector_index < 0 || sector_index >= level->sector_count)
+    {
+        set_error(error_buffer, error_buffer_size, "sector platform geometry target is invalid");
+        return false;
+    }
+    if (geometry->ceil_y <= geometry->floor_y)
+    {
+        set_error(error_buffer, error_buffer_size, "sector platform ceiling must be above floor");
+        return false;
+    }
+
+    if (!sdl3d_level_set_sector_geometry(&level->lightmapped, level->sectors, level->sector_count, sector_index,
+                                         geometry, level->materials, level->material_count, level->lights,
+                                         level->light_count))
+    {
+        set_errorf(error_buffer, error_buffer_size, "sector level '%s' lightmapped geometry update failed: %s",
+                   level->name, SDL_GetError());
+        return false;
+    }
+    if (!sdl3d_level_set_sector_geometry(&level->vertex_baked, level->sectors, level->sector_count, sector_index,
+                                         geometry, level->materials, level->material_count, level->lights,
+                                         level->light_count))
+    {
+        set_errorf(error_buffer, error_buffer_size, "sector level '%s' vertex-baked geometry update failed: %s",
+                   level->name, SDL_GetError());
+        return false;
+    }
+    if (!sdl3d_level_set_sector_geometry(&level->unlit, level->sectors, level->sector_count, sector_index, geometry,
+                                         level->materials, level->material_count, NULL, 0))
+    {
+        set_errorf(error_buffer, error_buffer_size, "sector level '%s' unlit geometry update failed: %s", level->name,
+                   SDL_GetError());
+        return false;
+    }
+    return true;
+}
+
 static bool load_sector_levels(sdl3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
                                int error_buffer_size)
 {
@@ -3249,6 +3310,72 @@ static bool load_sector_doors(sdl3d_game_data_runtime *runtime, yyjson_val *root
     return true;
 }
 
+static bool load_sector_platforms(sdl3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                                  int error_buffer_size)
+{
+    yyjson_val *platforms = obj_get(root, "sector_platforms");
+    if (platforms == NULL)
+        return true;
+    if (!yyjson_is_arr(platforms))
+    {
+        set_error(error_buffer, error_buffer_size, "sector_platforms must be an array");
+        return false;
+    }
+
+    runtime->sector_platform_count = (int)yyjson_arr_size(platforms);
+    runtime->sector_platforms = (sector_platform_runtime *)SDL_calloc((size_t)runtime->sector_platform_count,
+                                                                      sizeof(*runtime->sector_platforms));
+    if (runtime->sector_platforms == NULL && runtime->sector_platform_count > 0)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate sector platforms");
+        return false;
+    }
+
+    for (int i = 0; i < runtime->sector_platform_count; ++i)
+    {
+        yyjson_val *platform_json = yyjson_arr_get(platforms, (size_t)i);
+        sector_platform_runtime *platform = &runtime->sector_platforms[i];
+        platform->json = platform_json;
+        platform->name = json_string(platform_json, "name", "");
+        platform->level = find_sector_level_runtime_mutable(runtime, json_string(platform_json, "sector_level", NULL));
+        if (platform->level == NULL)
+        {
+            set_errorf(error_buffer, error_buffer_size, "sector platform '%s' references an unknown sector level",
+                       platform->name);
+            return false;
+        }
+
+        const char *sector_name = json_string(platform_json, "sector", NULL);
+        yyjson_val *sector_index_value = obj_get(platform_json, "sector_index");
+        platform->sector_index =
+            sector_name != NULL ? sector_level_find_sector_name(platform->level, sector_name)
+                                : (yyjson_is_int(sector_index_value) ? (int)yyjson_get_int(sector_index_value) : -1);
+        if (platform->sector_index < 0 || platform->sector_index >= platform->level->sector_count)
+        {
+            set_errorf(error_buffer, error_buffer_size, "sector platform '%s' references an unknown sector",
+                       platform->name);
+            return false;
+        }
+
+        const sdl3d_sector *sector = &platform->level->sectors[platform->sector_index];
+        platform->min_floor_y = json_float(platform_json, "min_floor_y", sector->floor_y);
+        platform->max_floor_y = json_float(platform_json, "max_floor_y", sector->floor_y);
+        if (platform->min_floor_y > platform->max_floor_y)
+        {
+            const float temp = platform->min_floor_y;
+            platform->min_floor_y = platform->max_floor_y;
+            platform->max_floor_y = temp;
+        }
+        platform->ceil_y = json_float(platform_json, "ceil_y", sector->ceil_y);
+        platform->cycle_seconds = json_float(platform_json, "cycle_seconds", 1.0f);
+        platform->rebuild_min_delta = SDL_max(json_float(platform_json, "rebuild_min_delta", 0.02f), 0.0f);
+        platform->last_floor_y = sector->floor_y;
+        platform->has_last_floor_y = true;
+        platform->enabled = json_bool(platform_json, "enabled", true);
+    }
+    return true;
+}
+
 static yyjson_val *runtime_root(const sdl3d_game_data_runtime *runtime)
 {
     return runtime != NULL && runtime->doc != NULL ? yyjson_doc_get_root(runtime->doc) : NULL;
@@ -3319,6 +3446,23 @@ static bool sector_door_in_active_scene(const sdl3d_game_data_runtime *runtime, 
 {
     const scene_entry *scene = active_scene_entry_const(runtime);
     return sector_door_in_scene(door, scene != NULL ? scene->name : NULL);
+}
+
+static bool sector_platform_in_scene(const sector_platform_runtime *platform, const char *scene_name)
+{
+    if (platform == NULL)
+        return false;
+    const char *scene = json_string(platform->json, "scene", NULL);
+    if (scene == NULL || scene[0] == '\0')
+        return true;
+    return scene_name != NULL && SDL_strcmp(scene, scene_name) == 0;
+}
+
+static bool sector_platform_in_active_scene(const sdl3d_game_data_runtime *runtime,
+                                            const sector_platform_runtime *platform)
+{
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    return sector_platform_in_scene(platform, scene != NULL ? scene->name : NULL);
 }
 
 static scene_menu_state *find_scene_menu(scene_entry *scene, const char *name)
@@ -6090,17 +6234,22 @@ const sdl3d_properties *sdl3d_game_data_scene_state(const sdl3d_game_data_runtim
     return runtime != NULL ? runtime->scene_state : NULL;
 }
 
-static const sector_level_runtime *find_sector_level_runtime(const sdl3d_game_data_runtime *runtime, const char *name)
+static sector_level_runtime *find_sector_level_runtime_mutable(sdl3d_game_data_runtime *runtime, const char *name)
 {
     if (runtime == NULL || name == NULL)
         return NULL;
     for (int i = 0; i < runtime->sector_level_count; ++i)
     {
-        const sector_level_runtime *level = &runtime->sector_levels[i];
+        sector_level_runtime *level = &runtime->sector_levels[i];
         if (level->name != NULL && SDL_strcmp(level->name, name) == 0)
             return level;
     }
     return NULL;
+}
+
+static const sector_level_runtime *find_sector_level_runtime(const sdl3d_game_data_runtime *runtime, const char *name)
+{
+    return find_sector_level_runtime_mutable((sdl3d_game_data_runtime *)runtime, name);
 }
 
 static int sector_level_find_sector_name(const sector_level_runtime *level, const char *sector_name)
@@ -14888,6 +15037,50 @@ static void update_sector_doors(sdl3d_game_data_runtime *runtime, float dt)
     }
 }
 
+static bool update_sector_platforms(sdl3d_game_data_runtime *runtime, float dt)
+{
+    if (runtime == NULL)
+        return false;
+    if (dt < 0.0f)
+        dt = 0.0f;
+
+    for (int i = 0; i < runtime->sector_platform_count; ++i)
+    {
+        sector_platform_runtime *platform = &runtime->sector_platforms[i];
+        if (!platform->enabled || platform->cycle_seconds <= 0.0f ||
+            !sector_platform_in_active_scene(runtime, platform))
+            continue;
+
+        platform->time += dt;
+        while (platform->time >= platform->cycle_seconds)
+            platform->time -= platform->cycle_seconds;
+
+        const float phase = platform->time / platform->cycle_seconds;
+        const float wave = (SDL_sinf(phase * SDL_PI_F * 2.0f - SDL_PI_F * 0.5f) + 1.0f) * 0.5f;
+        const float floor_y = platform->min_floor_y + (platform->max_floor_y - platform->min_floor_y) * wave;
+        if (platform->has_last_floor_y && SDL_fabsf(floor_y - platform->last_floor_y) < platform->rebuild_min_delta)
+            continue;
+
+        sdl3d_sector_geometry geometry;
+        SDL_zero(geometry);
+        geometry.floor_y = floor_y;
+        geometry.ceil_y = platform->ceil_y;
+        geometry.floor_normal[1] = 1.0f;
+        geometry.ceil_normal[1] = -1.0f;
+
+        char error[256];
+        if (!set_sector_level_geometry(platform->level, platform->sector_index, &geometry, error, (int)sizeof(error)))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D sector platform '%s' update failed: %s",
+                        platform->name != NULL ? platform->name : "<unnamed>", error);
+            return false;
+        }
+        platform->last_floor_y = floor_y;
+        platform->has_last_floor_y = true;
+    }
+    return true;
+}
+
 static void update_control_components(sdl3d_game_data_runtime *runtime, yyjson_val *root, float dt)
 {
     sdl3d_input_manager *input = runtime_input(runtime);
@@ -15928,6 +16121,11 @@ bool sdl3d_game_data_update(sdl3d_game_data_runtime *runtime, float dt)
     yyjson_val *root = yyjson_doc_get_root(runtime->doc);
     actor_lifecycle_defer_begin(runtime);
     update_sector_doors(runtime, dt);
+    if (!update_sector_platforms(runtime, dt))
+    {
+        actor_lifecycle_defer_end(runtime);
+        return false;
+    }
     update_control_components(runtime, root, dt);
     update_motion_components(runtime, root, dt);
     update_wave_schedules(runtime, dt);
@@ -16328,6 +16526,7 @@ bool sdl3d_game_data_load_asset_with_options(sdl3d_asset_resolver *assets, const
               load_grid_pickup_layers(runtime, root, error_buffer, error_buffer_size) &&
               load_sector_levels(runtime, root, error_buffer, error_buffer_size) &&
               load_sector_doors(runtime, root, error_buffer, error_buffer_size) &&
+              load_sector_platforms(runtime, root, error_buffer, error_buffer_size) &&
               load_actor_pools(runtime, root, error_buffer, error_buffer_size) &&
               load_input(runtime, root, error_buffer, error_buffer_size) &&
               load_timers(runtime, logic, error_buffer, error_buffer_size) && load_sensors(runtime, logic) &&
@@ -18526,6 +18725,7 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->grid_pickup_layers);
     SDL_free(runtime->sector_levels);
     SDL_free(runtime->sector_doors);
+    SDL_free(runtime->sector_platforms);
     SDL_free(runtime->fps_controllers);
     SDL_free(runtime->patrol_controllers);
     SDL_free(runtime->actor_pools);

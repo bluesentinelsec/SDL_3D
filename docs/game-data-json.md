@@ -43,6 +43,7 @@ Every root game file is a JSON object.
 | `grid_pickup_layers` | no | Dense grid-indexed pickup layers rendered and collected without one actor per pickup. |
 | `sector_levels` | no | Authored sector/portal worlds for Doom/Quake-style indoor levels. |
 | `sector_doors` | no | Runtime sliding doors for sector/FPS worlds. |
+| `sector_platforms` | no | Runtime moving floor/ceiling sectors for lifts, elevators, and oscillating platforms. |
 | `actor_archetypes` | no | Templates used by runtime actor pools. |
 | `actor_pools` | no | Preallocated spawn/despawn pools. |
 | `signals` | no | Authored signal names. |
@@ -85,6 +86,7 @@ a JSON object with schema `sdl3d.fragment.v0`.
     { "path": "fragments/actors/player.json", "sections": ["entities"] },
     { "path": "fragments/world/e1m1.sectors.json", "sections": ["sector_levels"] },
     { "path": "fragments/world/e1m1.doors.json", "sections": ["sector_doors", "signals", "logic"] },
+    { "path": "fragments/world/e1m1.platforms.json", "sections": ["sector_platforms"] },
     { "path": "fragments/input/profiles.json", "sections": ["input"] },
     { "path": "fragments/network/replication.json", "sections": ["network"] }
   ]
@@ -426,6 +428,35 @@ actor and either emits a signal or runs nested actions with `actor_name`,
 If no door is in range and in front of the actor, the interaction is treated as
 a successful no-op so use-button bindings can be authored without extra guard
 conditions.
+
+`sector_platforms` move authored sector floors over time and rebuild sector
+render/collision variants when the movement exceeds `rebuild_min_delta`. Use
+them for elevators, lifts, moving bridges, and other deterministic sector
+geometry motion:
+
+```json
+{
+  "sector_platforms": [
+    {
+      "name": "platform.lift",
+      "scene": "scene.level_1",
+      "sector_level": "sector.level_1",
+      "sector": "lift",
+      "min_floor_y": 0.0,
+      "max_floor_y": 2.5,
+      "ceil_y": 12.0,
+      "cycle_seconds": 6.0,
+      "rebuild_min_delta": 0.02
+    }
+  ]
+}
+```
+
+Use either `sector` or `sector_index` to choose the sector. `ceil_y` must stay
+above `max_floor_y`, `cycle_seconds` must be positive, and `scene` may be
+omitted for a platform that updates in every scene. The platform follows a
+smooth sine cycle that starts at `min_floor_y`, rises to `max_floor_y`, and
+returns to `min_floor_y`.
 
 Use `controller.fps_sector` on an actor to drive first-person movement through
 a sector level:

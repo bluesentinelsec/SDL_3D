@@ -11,6 +11,7 @@
     { "path": "fragments/actors/projectiles.json", "sections": ["actor_archetypes", "actor_pools", "signals", "logic"] },
     { "path": "fragments/world/sector_levels.json", "sections": ["sector_levels"] },
     { "path": "fragments/world/sector_doors.json", "sections": ["sector_doors", "signals", "logic"] },
+    { "path": "fragments/world/sector_platforms.json", "sections": ["sector_platforms"] },
     { "path": "fragments/world/sector_hazards.json", "sections": ["logic"] },
     { "path": "fragments/world/player_triggers.json", "sections": ["logic"] },
     { "path": "fragments/world/surveillance.json", "sections": ["logic"] }
