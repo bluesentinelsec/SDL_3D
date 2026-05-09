@@ -20,11 +20,8 @@
 #include "level_data.h"
 #include "player.h"
 #include "renderer.h"
-#include "surveillance.h"
 
 #define SIG_FADE_OUT_DONE 2001
-#define SIG_SURVEILLANCE_ENTER 2002
-#define SIG_SURVEILLANCE_EXIT 2003
 #define SIG_AMBIENT_FEEDBACK 2004
 #define SIG_AMBIENT_FEEDBACK_SKIP 2005
 #define SIG_DOOR_INTERACT 2006
@@ -50,8 +47,6 @@
 #define DAMAGE_FEEDBACK_ATTACK_RATE 10.0f
 #define DAMAGE_FEEDBACK_DECAY_RATE 4.0f
 #define DAMAGE_FEEDBACK_PULSE_HZ 2.8f
-#define SURVEILLANCE_BUTTON_X 43.0f
-#define SURVEILLANCE_BUTTON_Z 89.0f
 #define LAUNCHER_PAD_X 38.0f
 #define LAUNCHER_PAD_Z 68.0f
 #define FEEDBACK_AMBIENT_ZONE "ambient_zone"
@@ -78,7 +73,6 @@ typedef struct doom_state
     sdl3d_logic_contact_sensor launcher_sensor;
     sdl3d_logic_contact_sensor dragon_teleport_sensor;
     sdl3d_sector_watcher sector_watcher;
-    doom_surveillance_camera surveillance;
     sdl3d_backend current_backend;
     doom_render_profile render_profile;
     float ambient_feedback_timer;
@@ -344,36 +338,6 @@ static bool doom_logic_teleport_player(void *userdata, const sdl3d_teleport_dest
     return true;
 }
 
-static bool doom_logic_set_active_camera(void *userdata, const char *camera_name, const sdl3d_camera3d *camera,
-                                         const sdl3d_properties *payload)
-{
-    (void)payload;
-    doom_state *state = (doom_state *)userdata;
-    if (state == NULL || camera == NULL)
-    {
-        return false;
-    }
-
-    state->surveillance.camera = *camera;
-    state->surveillance.active = true;
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Activated surveillance camera '%s'",
-                camera_name != NULL ? camera_name : "unnamed");
-    return true;
-}
-
-static bool doom_logic_restore_camera(void *userdata, const sdl3d_properties *payload)
-{
-    (void)payload;
-    doom_state *state = (doom_state *)userdata;
-    if (state == NULL)
-    {
-        return false;
-    }
-
-    state->surveillance.active = false;
-    return true;
-}
-
 static sdl3d_teleport_destination dragon_teleport_destination(void)
 {
     sdl3d_teleport_destination destination;
@@ -394,23 +358,6 @@ static void init_dragon_teleport_sensor(doom_state *state)
     };
     sdl3d_logic_contact_sensor_init(&state->dragon_teleport_sensor, DRAGON_TELEPORTER_ID, source,
                                     SIG_DRAGON_TELEPORT_ENTER, SDL3D_TRIGGER_EDGE_ENTER);
-}
-
-static void init_surveillance_camera(doom_state *state)
-{
-    sdl3d_bounding_box button_bounds = {
-        sdl3d_vec3_make(SURVEILLANCE_BUTTON_X - 1.2f, -0.1f, SURVEILLANCE_BUTTON_Z - 1.2f),
-        sdl3d_vec3_make(SURVEILLANCE_BUTTON_X + 1.2f, 2.0f, SURVEILLANCE_BUTTON_Z + 1.2f),
-    };
-    sdl3d_camera3d camera;
-    SDL_zero(camera);
-    camera.position = sdl3d_vec3_make(4.0f, 3.25f, 25.2f);
-    camera.target = sdl3d_vec3_make(4.0f, 0.15f, 18.4f);
-    camera.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
-    camera.fovy = 70.0f;
-    camera.projection = SDL3D_CAMERA_PERSPECTIVE;
-
-    doom_surveillance_init(&state->surveillance, button_bounds, camera, SIG_SURVEILLANCE_ENTER, SIG_SURVEILLANCE_EXIT);
 }
 
 static void init_dynamic_lift(doom_state *state)
@@ -448,8 +395,6 @@ static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
     SDL_zero(adapters);
     adapters.userdata = state;
     adapters.teleport_player = doom_logic_teleport_player;
-    adapters.set_active_camera = doom_logic_set_active_camera;
-    adapters.restore_camera = doom_logic_restore_camera;
     adapters.set_ambient = doom_logic_set_ambient;
     adapters.trigger_feedback = doom_logic_trigger_feedback;
     adapters.door_command = doom_logic_door_command;
@@ -498,19 +443,6 @@ static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
 
     sdl3d_logic_action dragon_teleport_action = sdl3d_logic_action_make_teleport_player(dragon_teleport_destination());
     if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_DRAGON_TELEPORT_ENTER, &dragon_teleport_action) == 0)
-    {
-        return false;
-    }
-
-    sdl3d_logic_action camera_action =
-        sdl3d_logic_action_make_set_active_camera("nukage_surveillance", &state->surveillance.camera);
-    if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_SURVEILLANCE_ENTER, &camera_action) == 0)
-    {
-        return false;
-    }
-
-    sdl3d_logic_action restore_camera_action = sdl3d_logic_action_make_restore_camera();
-    if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_SURVEILLANCE_EXIT, &restore_camera_action) == 0)
     {
         return false;
     }
@@ -650,7 +582,6 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
 
     player_init(&state->player, ctx_input(ctx));
     init_dragon_teleport_sensor(state);
-    init_surveillance_camera(state);
     init_launcher_sensor(state);
     init_damage_sensor(state);
     if (!bind_doom_logic(ctx, state))
@@ -1058,11 +989,6 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
                                                       state->player.mover.position.y - PLAYER_HEIGHT,
                                                       state->player.mover.position.z));
 
-    doom_surveillance_update(&state->surveillance, state->logic,
-                             sdl3d_vec3_make(state->player.mover.position.x,
-                                             state->player.mover.position.y - PLAYER_HEIGHT,
-                                             state->player.mover.position.z));
-
     sdl3d_sector_watcher_update(&state->sector_watcher, &state->level.unlit, g_sectors,
                                 sdl3d_vec3_make(state->player.mover.position.x,
                                                 state->player.mover.position.y - PLAYER_HEIGHT,
@@ -1175,8 +1101,8 @@ static void game_render(sdl3d_game_context *ctx, void *userdata, float alpha)
     const float frame_dt = sdl3d_time_get_unscaled_delta_time();
 
     render_draw_frame(&state->render, ctx->renderer, state->has_font ? &state->debug_font : NULL, state->ui,
-                      &state->level, &state->ent, &state->hazards, &state->doors, &state->surveillance, &state->player,
-                      WINDOW_W, WINDOW_H, frame_dt, backend_profile_name(state->render_profile));
+                      &state->level, &state->ent, &state->hazards, &state->doors, &state->player, WINDOW_W, WINDOW_H,
+                      frame_dt, backend_profile_name(state->render_profile));
     sdl3d_transition_draw(&state->transition, ctx->renderer);
     draw_damage_overlay(ctx, state);
     if (ctx->paused && !state->quit_pending)

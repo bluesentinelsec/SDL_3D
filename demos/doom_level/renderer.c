@@ -56,14 +56,12 @@ static bool render_state_ensure_sector_capacity(render_state *rs, int sector_cou
 
 void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_font *font, sdl3d_ui_context *ui,
                        level_data *ld, entities *ent, const doom_hazard_particles *hazards, const doom_doors *doors,
-                       const doom_surveillance_camera *surveillance, const player_state *player, int backbuffer_w,
-                       int backbuffer_h, float dt, const char *render_profile_name)
+                       const player_state *player, int backbuffer_w, int backbuffer_h, float dt,
+                       const char *render_profile_name)
 {
     const sdl3d_fps_mover *mover = &player->mover;
     sdl3d_level *active = level_data_active(ld);
-    const sdl3d_camera3d player_cam = sdl3d_fps_mover_camera(mover, 75.0f);
-    const sdl3d_camera3d *surveillance_cam = doom_surveillance_active_camera(surveillance);
-    sdl3d_camera3d cam = surveillance_cam != NULL ? *surveillance_cam : player_cam;
+    sdl3d_camera3d cam = sdl3d_fps_mover_camera(mover, 75.0f);
     const int sector_count = active->sector_count;
 
     float px = mover->position.x, py = mover->position.y;
@@ -167,8 +165,6 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
                         sector_count);
         sdl3d_ui_labelf(ui, 10.0f, 140.0f, "pos %.1f, %.1f, %.1f", px, py, pz);
         sdl3d_ui_labelf(ui, 10.0f, 180.0f, "profile=%s", render_profile_name ? render_profile_name : "Modern");
-        if (doom_surveillance_is_active(surveillance))
-            sdl3d_ui_label(ui, 10.0f, 220.0f, "SURVEILLANCE VIEW");
         sdl3d_ui_end_frame(ui);
         sdl3d_ui_render(ui, ctx);
     }
