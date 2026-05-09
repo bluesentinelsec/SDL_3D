@@ -1,0 +1,48 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "assets": {
+    "models": [
+      { "id": "model.doom.black_dragon", "path": "asset://models/black_dragon/scene.gltf" }
+    ]
+  },
+  "actor_archetypes": [
+    {
+      "name": "archetype.doom.dragon",
+      "active": true,
+      "tags": ["npc", "dragon", "model"],
+      "properties": {
+        "dragon_anim_time": { "type": "float", "value": 0.0 },
+        "classname": { "type": "string", "value": "npc_dragon" },
+        "health": { "type": "int", "value": 500 }
+      },
+      "components": [
+        {
+          "type": "motion.oscillate",
+          "time_property": "dragon_anim_time",
+          "origin": [24.0, 0.0, 74.0],
+          "amplitude": [0.0, 0.0, 0.0],
+          "rate": 1.0
+        },
+        {
+          "type": "render.model",
+          "model": "model.doom.black_dragon",
+          "scale": [2.0, 2.0, 2.0],
+          "rotation_axis": [0.0, 1.0, 0.0],
+          "rotation_angle": 3.1415927,
+          "animation_clip": 0,
+          "animation_time_property": "dragon_anim_time",
+          "animation_loop": true,
+          "color": [255, 255, 255, 255],
+          "lighting": true
+        }
+      ]
+    }
+  ],
+  "actor_instances": [
+    {
+      "name": "entity.doom.dragon",
+      "archetype": "archetype.doom.dragon",
+      "transform": { "position": [24.0, 0.0, 74.0] }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "actor_archetypes": [
+    {
+      "name": "archetype.fps.projectile",
+      "tags": ["projectile", "player_projectile"],
+      "properties": {
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.0] },
+        "age": { "type": "float", "value": 0.0 },
+        "ttl": { "type": "float", "value": 2.5 },
+        "damage": { "type": "int", "value": 10 }
+      },
+      "components": [
+        { "type": "render.sphere", "radius": 0.08, "slices": 8, "rings": 8, "color": [255, 220, 110, 255], "emissive": true, "lighting": false },
+        { "type": "motion.sector_velocity_3d", "property": "velocity", "sector_level": "sector.level_1", "reason": "projectile impact" },
+        { "type": "lifecycle.ttl", "age_property": "age", "ttl_property": "ttl", "reason": "projectile expired" },
+        { "type": "light.point", "color": [1.0, 0.65, 0.25], "intensity": 4.0, "range": 4.0 }
+      ]
+    }
+  ],
+  "actor_pools": [
+    {
+      "name": "pool.fps.projectiles",
+      "archetype": "archetype.fps.projectile",
+      "capacity": 32,
+      "scene": "scene.play",
+      "exhaustion_policy": "reuse_oldest",
+      "on_scene_exit": "reset"
+    }
+  ]
+}

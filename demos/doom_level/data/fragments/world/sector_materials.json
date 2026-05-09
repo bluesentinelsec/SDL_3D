@@ -1,0 +1,16 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "sector_level_fragments": [
+    {
+      "level": "sector.doom.e1m1",
+      "materials": [
+        { "name": "rock_floor", "texture": "asset://textures/rock_floor.jpg", "albedo": [1.0, 1.0, 1.0, 1.0], "roughness": 0.9, "tex_scale": 4.0 },
+        { "name": "ceiling_metal", "texture": "asset://textures/ceiling_metal.jpg", "albedo": [1.0, 1.0, 1.0, 1.0], "roughness": 0.8, "tex_scale": 4.0 },
+        { "name": "wall_metal", "texture": "asset://textures/wall_metal.jpg", "albedo": [1.0, 1.0, 1.0, 1.0], "roughness": 0.7, "tex_scale": 4.0 },
+        { "name": "lava", "texture": "asset://textures/lava.jpg", "albedo": [1.0, 1.0, 1.0, 1.0], "roughness": 0.9, "tex_scale": 4.0 },
+        { "name": "wall_metal_dark", "texture": "asset://textures/wall_metal.jpg", "albedo": [1.0, 1.0, 1.0, 1.0], "roughness": 0.6, "tex_scale": 4.0 },
+        { "name": "rock_floor_alt", "texture": "asset://textures/rock_floor.jpg", "albedo": [1.0, 1.0, 1.0, 1.0], "roughness": 0.9, "tex_scale": 4.0 }
+      ]
+    }
+  ]
+}

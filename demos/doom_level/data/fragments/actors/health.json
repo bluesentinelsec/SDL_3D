@@ -1,0 +1,75 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "assets": {
+    "sprites": [
+      {
+        "id": "sprite.doom.health_pack",
+        "path": "asset://sprites/health-pack.png",
+        "frame_width": 64,
+        "frame_height": 64,
+        "columns": 1,
+        "rows": 1,
+        "frame_count": 1,
+        "direction_count": 1,
+        "fps": 1.0,
+        "loop": true,
+        "lighting": true,
+        "emissive": false
+      }
+    ]
+  },
+  "actor_archetypes": [
+    {
+      "name": "archetype.doom.health_pack",
+      "active": true,
+      "tags": ["pickup", "health", "billboard"]
+    }
+  ],
+  "actor_instances": [
+    {
+      "name": "entity.doom.health.entry",
+      "archetype": "archetype.doom.health_pack",
+      "transform": { "position": [5.0, 0.25, 10.8] },
+      "components": [
+        { "type": "render.sprite", "sprite": "sprite.doom.health_pack", "size": [1.0, 1.0], "lighting": true },
+        { "type": "motion.oscillate", "origin": [5.0, 0.25, 10.8], "amplitude": [0.0, 0.12, 0.0], "rate": 1.8 }
+      ]
+    },
+    {
+      "name": "entity.doom.health.hall",
+      "archetype": "archetype.doom.health_pack",
+      "transform": { "position": [24.0, 0.25, 28.5] },
+      "components": [
+        { "type": "render.sprite", "sprite": "sprite.doom.health_pack", "size": [1.0, 1.0], "lighting": true },
+        { "type": "motion.oscillate", "origin": [24.0, 0.25, 28.5], "amplitude": [0.0, 0.12, 0.0], "rate": 2.1 }
+      ]
+    },
+    {
+      "name": "entity.doom.health.north",
+      "archetype": "archetype.doom.health_pack",
+      "transform": { "position": [24.0, 0.25, 4.5] },
+      "components": [
+        { "type": "render.sprite", "sprite": "sprite.doom.health_pack", "size": [1.0, 1.0], "lighting": true },
+        { "type": "motion.oscillate", "origin": [24.0, 0.25, 4.5], "amplitude": [0.0, 0.15, 0.0], "rate": 1.5 }
+      ]
+    },
+    {
+      "name": "entity.doom.health.side",
+      "archetype": "archetype.doom.health_pack",
+      "transform": { "position": [35.5, 0.25, 27.0] },
+      "components": [
+        { "type": "render.sprite", "sprite": "sprite.doom.health_pack", "size": [1.0, 1.0], "lighting": true },
+        { "type": "motion.oscillate", "origin": [35.5, 0.25, 27.0], "amplitude": [0.0, 0.1, 0.0], "rate": 1.7 }
+      ]
+    },
+    {
+      "name": "entity.doom.health.dragon",
+      "archetype": "archetype.doom.health_pack",
+      "transform": { "position": [10.0, 0.25, 84.0] },
+      "components": [
+        { "type": "render.sprite", "sprite": "sprite.doom.health_pack", "size": [1.0, 1.0], "lighting": true },
+        { "type": "motion.oscillate", "origin": [10.0, 0.25, 84.0], "amplitude": [0.0, 0.14, 0.0], "rate": 1.6 }
+      ]
+    }
+  ]
+}

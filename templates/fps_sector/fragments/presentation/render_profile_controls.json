@@ -1,0 +1,32 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "signals": [
+    "signal.render.profile.modern",
+    "signal.render.profile.ps1",
+    "signal.render.profile.n64",
+    "signal.render.profile.dos",
+    "signal.render.profile.snes",
+    "signal.render.profile.grayscale",
+    "signal.render.profile.gameboy"
+  ],
+  "logic": {
+    "sensors": [
+      { "name": "sensor.profile.modern", "type": "sensor.input_pressed", "action": "action.render.profile.modern", "on_pressed": "signal.render.profile.modern" },
+      { "name": "sensor.profile.ps1", "type": "sensor.input_pressed", "action": "action.render.profile.ps1", "on_pressed": "signal.render.profile.ps1" },
+      { "name": "sensor.profile.n64", "type": "sensor.input_pressed", "action": "action.render.profile.n64", "on_pressed": "signal.render.profile.n64" },
+      { "name": "sensor.profile.dos", "type": "sensor.input_pressed", "action": "action.render.profile.dos", "on_pressed": "signal.render.profile.dos" },
+      { "name": "sensor.profile.snes", "type": "sensor.input_pressed", "action": "action.render.profile.snes", "on_pressed": "signal.render.profile.snes" },
+      { "name": "sensor.profile.grayscale", "type": "sensor.input_pressed", "action": "action.render.profile.grayscale", "on_pressed": "signal.render.profile.grayscale" },
+      { "name": "sensor.profile.gameboy", "type": "sensor.input_pressed", "action": "action.render.profile.gameboy", "on_pressed": "signal.render.profile.gameboy" }
+    ],
+    "bindings": [
+      { "signal": "signal.render.profile.modern", "actions": [{ "type": "scene_state.set", "key": "render.profile", "value": "modern" }] },
+      { "signal": "signal.render.profile.ps1", "actions": [{ "type": "scene_state.set", "key": "render.profile", "value": "ps1" }] },
+      { "signal": "signal.render.profile.n64", "actions": [{ "type": "scene_state.set", "key": "render.profile", "value": "n64" }] },
+      { "signal": "signal.render.profile.dos", "actions": [{ "type": "scene_state.set", "key": "render.profile", "value": "dos" }] },
+      { "signal": "signal.render.profile.snes", "actions": [{ "type": "scene_state.set", "key": "render.profile", "value": "snes" }] },
+      { "signal": "signal.render.profile.grayscale", "actions": [{ "type": "scene_state.set", "key": "render.profile", "value": "grayscale" }] },
+      { "signal": "signal.render.profile.gameboy", "actions": [{ "type": "scene_state.set", "key": "render.profile", "value": "gameboy" }] }
+    ]
+  }
+}

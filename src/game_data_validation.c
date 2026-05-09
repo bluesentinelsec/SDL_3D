@@ -1896,9 +1896,11 @@ static bool import_section_name_allowed(const char *name)
                                           "grid_maps",
                                           "grid_pickup_layers",
                                           "sector_levels",
+                                          "sector_level_fragments",
                                           "sector_doors",
                                           "sector_platforms",
                                           "actor_archetypes",
+                                          "actor_instances",
                                           "actor_pools",
                                           "signals",
                                           "logic",
@@ -2378,6 +2380,259 @@ static bool compose_document_into(validation_context *ctx, yyjson_val *root, yyj
            compose_local_sections(ctx, root, sections, doc, target, is_root);
 }
 
+static const char *compose_mut_string(yyjson_mut_val *object, const char *key)
+{
+    yyjson_mut_val *value = yyjson_mut_obj_get(object, key);
+    return yyjson_mut_is_str(value) ? yyjson_mut_get_str(value) : NULL;
+}
+
+static yyjson_mut_val *compose_find_actor_archetype(yyjson_mut_val *root, const char *name)
+{
+    yyjson_mut_val *archetypes = yyjson_mut_obj_get(root, "actor_archetypes");
+    for (size_t i = 0; name != NULL && yyjson_mut_is_arr(archetypes) && i < yyjson_mut_arr_size(archetypes); ++i)
+    {
+        yyjson_mut_val *archetype = yyjson_mut_arr_get(archetypes, i);
+        const char *archetype_name = compose_mut_string(archetype, "name");
+        if (archetype_name != NULL && SDL_strcmp(archetype_name, name) == 0)
+            return archetype;
+    }
+    return NULL;
+}
+
+static bool compose_merge_mut_override(validation_context *ctx, yyjson_mut_doc *doc, yyjson_mut_val *target,
+                                       yyjson_mut_val *source, const char *path)
+{
+    yyjson_mut_obj_iter iter;
+    yyjson_mut_obj_iter_init(source, &iter);
+    yyjson_mut_val *key;
+    while ((key = yyjson_mut_obj_iter_next(&iter)) != NULL)
+    {
+        yyjson_mut_val *value = yyjson_mut_obj_iter_get_val(key);
+        const char *name = yyjson_mut_get_str(key);
+        if (name == NULL || SDL_strcmp(name, "archetype") == 0)
+            continue;
+
+        yyjson_mut_val *existing = yyjson_mut_obj_get(target, name);
+        if (yyjson_mut_is_obj(existing) && yyjson_mut_is_obj(value))
+        {
+            char child_path[PATH_BUFFER_SIZE];
+            format_path(child_path, sizeof(child_path), "%s.%s", path, name);
+            if (!compose_merge_mut_override(ctx, doc, existing, value, child_path))
+                return false;
+            continue;
+        }
+
+        yyjson_mut_val *key_copy = yyjson_mut_strcpy(doc, name);
+        yyjson_mut_val *value_copy = yyjson_mut_val_mut_copy(doc, value);
+        if (key_copy == NULL || value_copy == NULL || !yyjson_mut_obj_put(target, key_copy, value_copy))
+            return validation_error(ctx, path, "failed to apply actor instance override '%s'", name);
+    }
+    return true;
+}
+
+static yyjson_mut_val *compose_ensure_entities_array(validation_context *ctx, yyjson_mut_doc *doc, yyjson_mut_val *root)
+{
+    yyjson_mut_val *entities = yyjson_mut_obj_get(root, "entities");
+    if (entities == NULL)
+    {
+        entities = yyjson_mut_arr(doc);
+        yyjson_mut_val *key = yyjson_mut_strcpy(doc, "entities");
+        if (entities == NULL || key == NULL || !yyjson_mut_obj_add(root, key, entities))
+        {
+            (void)validation_error(ctx, "$.entities", "failed to allocate generated entities array");
+            return NULL;
+        }
+    }
+    if (!yyjson_mut_is_arr(entities))
+    {
+        (void)validation_error(ctx, "$.entities", "entities must be an array");
+        return NULL;
+    }
+    return entities;
+}
+
+static bool compose_expand_actor_instances(validation_context *ctx, yyjson_mut_doc *doc, yyjson_mut_val *root)
+{
+    yyjson_mut_val *instances = yyjson_mut_obj_get(root, "actor_instances");
+    if (instances == NULL)
+        return true;
+    if (!yyjson_mut_is_arr(instances))
+        return validation_error(ctx, "$.actor_instances", "actor_instances must be an array");
+
+    yyjson_mut_val *entities = compose_ensure_entities_array(ctx, doc, root);
+    if (entities == NULL)
+        return false;
+
+    for (size_t i = 0; i < yyjson_mut_arr_size(instances); ++i)
+    {
+        yyjson_mut_val *instance = yyjson_mut_arr_get(instances, i);
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.actor_instances[%zu]", i);
+        if (!yyjson_mut_is_obj(instance))
+            return validation_error(ctx, path, "actor instance entries must be objects");
+
+        const char *name = compose_mut_string(instance, "name");
+        const char *archetype_name = compose_mut_string(instance, "archetype");
+        if (name == NULL || name[0] == '\0')
+            return validation_error(ctx, path, "actor instance requires a non-empty name");
+        if (archetype_name == NULL || archetype_name[0] == '\0')
+            return validation_error(ctx, path, "actor instance requires a non-empty archetype");
+
+        yyjson_mut_val *archetype = compose_find_actor_archetype(root, archetype_name);
+        if (archetype == NULL)
+            return validation_error(ctx, path, "actor instance references unknown actor archetype '%s'",
+                                    archetype_name);
+
+        yyjson_mut_val *entity = yyjson_mut_val_mut_copy(doc, archetype);
+        if (entity == NULL || !yyjson_mut_is_obj(entity))
+            return validation_error(ctx, path, "failed to copy actor archetype '%s'", archetype_name);
+        if (!compose_merge_mut_override(ctx, doc, entity, instance, path))
+            return false;
+
+        const size_t target_index = yyjson_mut_arr_size(entities);
+        if (!yyjson_mut_arr_append(entities, entity))
+            return validation_error(ctx, path, "failed to append generated actor instance");
+
+        char target_path[PATH_BUFFER_SIZE];
+        format_path(target_path, sizeof(target_path), "$.entities[%zu]", target_index);
+        if (!source_map_add(ctx, target_path, path))
+            return false;
+    }
+    return true;
+}
+
+static yyjson_mut_val *compose_find_sector_level(yyjson_mut_val *root, const char *name)
+{
+    yyjson_mut_val *levels = yyjson_mut_obj_get(root, "sector_levels");
+    for (size_t i = 0; name != NULL && yyjson_mut_is_arr(levels) && i < yyjson_mut_arr_size(levels); ++i)
+    {
+        yyjson_mut_val *level = yyjson_mut_arr_get(levels, i);
+        const char *level_name = compose_mut_string(level, "name");
+        if (level_name != NULL && SDL_strcmp(level_name, name) == 0)
+            return level;
+    }
+    return NULL;
+}
+
+static yyjson_mut_val *compose_ensure_sector_levels_array(validation_context *ctx, yyjson_mut_doc *doc,
+                                                          yyjson_mut_val *root)
+{
+    yyjson_mut_val *levels = yyjson_mut_obj_get(root, "sector_levels");
+    if (levels == NULL)
+    {
+        levels = yyjson_mut_arr(doc);
+        yyjson_mut_val *key = yyjson_mut_strcpy(doc, "sector_levels");
+        if (levels == NULL || key == NULL || !yyjson_mut_obj_add(root, key, levels))
+        {
+            (void)validation_error(ctx, "$.sector_levels", "failed to allocate generated sector_levels array");
+            return NULL;
+        }
+    }
+    if (!yyjson_mut_is_arr(levels))
+    {
+        (void)validation_error(ctx, "$.sector_levels", "sector_levels must be an array");
+        return NULL;
+    }
+    return levels;
+}
+
+static yyjson_mut_val *compose_create_sector_level(validation_context *ctx, yyjson_mut_doc *doc, yyjson_mut_val *root,
+                                                   const char *name)
+{
+    yyjson_mut_val *levels = compose_ensure_sector_levels_array(ctx, doc, root);
+    yyjson_mut_val *level = yyjson_mut_obj(doc);
+    yyjson_mut_val *name_key = yyjson_mut_strcpy(doc, "name");
+    yyjson_mut_val *name_value = yyjson_mut_strcpy(doc, name);
+    if (levels == NULL || level == NULL || name_key == NULL || name_value == NULL ||
+        !yyjson_mut_obj_add(level, name_key, name_value) || !yyjson_mut_arr_append(levels, level))
+    {
+        (void)validation_error(ctx, "$.sector_levels", "failed to allocate generated sector level '%s'", name);
+        return NULL;
+    }
+    return level;
+}
+
+static yyjson_mut_val *compose_ensure_mut_array_property(validation_context *ctx, yyjson_mut_doc *doc,
+                                                         yyjson_mut_val *object, const char *key, const char *path)
+{
+    yyjson_mut_val *array = yyjson_mut_obj_get(object, key);
+    if (array == NULL)
+    {
+        array = yyjson_mut_arr(doc);
+        yyjson_mut_val *key_value = yyjson_mut_strcpy(doc, key);
+        if (array == NULL || key_value == NULL || !yyjson_mut_obj_add(object, key_value, array))
+        {
+            (void)validation_error(ctx, path, "failed to allocate generated array '%s'", key);
+            return NULL;
+        }
+    }
+    if (!yyjson_mut_is_arr(array))
+    {
+        (void)validation_error(ctx, path, "generated array '%s' conflicts with a non-array value", key);
+        return NULL;
+    }
+    return array;
+}
+
+static bool compose_append_mut_array_items(validation_context *ctx, yyjson_mut_doc *doc, yyjson_mut_val *target_array,
+                                           yyjson_mut_val *source_array, const char *path)
+{
+    if (source_array == NULL)
+        return true;
+    if (!yyjson_mut_is_arr(source_array))
+        return validation_error(ctx, path, "sector level fragment arrays must be arrays");
+    for (size_t i = 0; i < yyjson_mut_arr_size(source_array); ++i)
+    {
+        yyjson_mut_val *copy = yyjson_mut_val_mut_copy(doc, yyjson_mut_arr_get(source_array, i));
+        if (copy == NULL || !yyjson_mut_arr_append(target_array, copy))
+            return validation_error(ctx, path, "failed to append sector level fragment item");
+    }
+    return true;
+}
+
+static bool compose_expand_sector_level_fragments(validation_context *ctx, yyjson_mut_doc *doc, yyjson_mut_val *root)
+{
+    yyjson_mut_val *fragments = yyjson_mut_obj_get(root, "sector_level_fragments");
+    if (fragments == NULL)
+        return true;
+    if (!yyjson_mut_is_arr(fragments))
+        return validation_error(ctx, "$.sector_level_fragments", "sector_level_fragments must be an array");
+
+    for (size_t i = 0; i < yyjson_mut_arr_size(fragments); ++i)
+    {
+        yyjson_mut_val *fragment = yyjson_mut_arr_get(fragments, i);
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.sector_level_fragments[%zu]", i);
+        if (!yyjson_mut_is_obj(fragment))
+            return validation_error(ctx, path, "sector level fragment entries must be objects");
+
+        const char *level_name = compose_mut_string(fragment, "level");
+        if (level_name == NULL || level_name[0] == '\0')
+            return validation_error(ctx, path, "sector level fragment requires a non-empty level");
+
+        yyjson_mut_val *level = compose_find_sector_level(root, level_name);
+        if (level == NULL)
+            level = compose_create_sector_level(ctx, doc, root, level_name);
+        if (level == NULL)
+            return false;
+
+        static const char *const array_keys[] = {"materials", "sectors", "lights"};
+        for (size_t key_index = 0; key_index < SDL_arraysize(array_keys); ++key_index)
+        {
+            const char *key = array_keys[key_index];
+            yyjson_mut_val *source = yyjson_mut_obj_get(fragment, key);
+            if (source == NULL)
+                continue;
+            char child_path[PATH_BUFFER_SIZE];
+            format_path(child_path, sizeof(child_path), "%s.%s", path, key);
+            yyjson_mut_val *target = compose_ensure_mut_array_property(ctx, doc, level, key, child_path);
+            if (target == NULL || !compose_append_mut_array_items(ctx, doc, target, source, child_path))
+                return false;
+        }
+    }
+    return true;
+}
+
 yyjson_doc *sdl3d_game_data_compose_asset(sdl3d_asset_resolver *assets, const char *asset_path,
                                           sdl3d_game_data_source_map **out_source_map, char *error_buffer,
                                           int error_buffer_size)
@@ -2460,8 +2715,12 @@ yyjson_doc *sdl3d_game_data_compose_asset(sdl3d_asset_resolver *assets, const ch
     stack.paths[stack.count++] = asset_path_without_scheme(asset_path);
 
     yyjson_doc *composed_doc = NULL;
-    if (compose_document_into(&ctx, yyjson_doc_get_root(source_doc), NULL, "$", &stack, mut_doc, mut_root, true))
+    if (compose_document_into(&ctx, yyjson_doc_get_root(source_doc), NULL, "$", &stack, mut_doc, mut_root, true) &&
+        compose_expand_sector_level_fragments(&ctx, mut_doc, mut_root) &&
+        compose_expand_actor_instances(&ctx, mut_doc, mut_root))
+    {
         composed_doc = yyjson_mut_doc_imut_copy(mut_doc, NULL);
+    }
     if (composed_doc == NULL && (error_buffer == NULL || error_buffer_size <= 0 || error_buffer[0] == '\0'))
         (void)validation_error(&ctx, "$", "failed to compose game data document");
 
@@ -2575,6 +2834,7 @@ static bool is_supported_component_type(const char *type)
         "render.model",
         "render.sphere",
         "render.sprite",
+        "weapon.projectile",
     };
 
     if (type == NULL)
@@ -2639,6 +2899,66 @@ static bool validate_fps_sector_component(validation_context *ctx, yyjson_val *c
     {
         return validation_error(ctx, path, "controller.fps_sector spawn yaw and pitch values must be numbers");
     }
+    return true;
+}
+
+static bool validate_projectile_fire_shape(validation_context *ctx, yyjson_val *value, const char *path,
+                                           validation_names *names, bool require_target)
+{
+    if (!require_ref(ctx, &names->actor_pools, "actor pool", json_string(value, "pool"), path))
+        return false;
+
+    yyjson_val *target_value = obj_get(value, "target");
+    yyjson_val *target_from_payload_value = obj_get(value, "target_from_payload");
+    const char *target = json_string(value, "target");
+    const char *target_from_payload = json_string(value, "target_from_payload");
+    if (require_target)
+    {
+        if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
+            return validation_error(ctx, path, "projectile.fire requires exactly one of target or target_from_payload");
+    }
+    else if (target != NULL || target_from_payload != NULL)
+    {
+        return validation_error(ctx, path,
+                                "weapon.projectile uses its owning actor and must not declare target fields");
+    }
+    if (target_value != NULL && !yyjson_is_str(target_value))
+        return validation_error(ctx, path, "projectile target must be a string");
+    if (target != NULL && !require_actor_ref(ctx, names, target, path))
+        return false;
+    if (target_from_payload_value != NULL &&
+        (!yyjson_is_str(target_from_payload_value) || yyjson_get_str(target_from_payload_value)[0] == '\0'))
+    {
+        return validation_error(ctx, path, "projectile target_from_payload must be a non-empty string");
+    }
+
+    yyjson_val *offset = obj_get(value, "offset");
+    if (offset != NULL && !is_vec_array(offset, 3))
+        return validation_error(ctx, path, "projectile offset must be a vec3");
+    yyjson_val *velocity = obj_get(value, "velocity");
+    if (velocity != NULL && !is_vec_array(velocity, 3))
+        return validation_error(ctx, path, "projectile velocity must be a vec3");
+    yyjson_val *velocity_from_property = obj_get(value, "velocity_from_property");
+    if (velocity_from_property != NULL &&
+        (!yyjson_is_str(velocity_from_property) || yyjson_get_str(velocity_from_property)[0] == '\0'))
+    {
+        return validation_error(ctx, path, "projectile velocity_from_property must be a non-empty string");
+    }
+    yyjson_val *speed = obj_get(value, "speed");
+    if (speed != NULL && (!yyjson_is_num(speed) || yyjson_get_num(speed) < 0.0))
+        return validation_error(ctx, path, "projectile speed must be non-negative");
+    yyjson_val *cooldown = obj_get(value, "cooldown");
+    if (cooldown != NULL && !yyjson_is_num(cooldown))
+        return validation_error(ctx, path, "projectile cooldown must be numeric");
+    yyjson_val *cooldown_property = obj_get(value, "cooldown_property");
+    if (cooldown_property != NULL &&
+        (!yyjson_is_str(cooldown_property) || yyjson_get_str(cooldown_property)[0] == '\0'))
+    {
+        return validation_error(ctx, path, "projectile cooldown_property must be a non-empty string");
+    }
+    yyjson_val *properties = obj_get(value, "properties");
+    if (properties != NULL && !yyjson_is_obj(properties))
+        return validation_error(ctx, path, "projectile properties must be an object");
     return true;
 }
 
@@ -4331,6 +4651,14 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 if (!validate_fps_sector_component(ctx, component, path, names))
                     return false;
             }
+            else if (SDL_strcmp(type, "weapon.projectile") == 0)
+            {
+                if (!require_ref(ctx, &names->actions, "input action", json_string(component, "action"), path) ||
+                    !validate_projectile_fire_shape(ctx, component, path, names, false))
+                {
+                    return false;
+                }
+            }
             else if (SDL_strcmp(type, "property.decay") == 0)
             {
                 if (!is_non_empty_string(component, "property"))
@@ -4667,6 +4995,15 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
             {
                 return validation_error(ctx, component_path,
                                         "controller.fps_sector is only supported on static entities");
+            }
+            else if (SDL_strcmp(type, "weapon.projectile") == 0)
+            {
+                if (!require_ref(ctx, &names->actions, "input action", json_string(component, "action"),
+                                 component_path) ||
+                    !validate_projectile_fire_shape(ctx, component, component_path, names, false))
+                {
+                    return false;
+                }
             }
             else if (SDL_strcmp(type, "motion.grid_agent") == 0)
             {
@@ -5137,47 +5474,7 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
     }
     if (SDL_strcmp(type, "projectile.fire") == 0)
     {
-        if (!require_ref(ctx, &names->actor_pools, "actor pool", json_string(action, "pool"), json_path))
-            return false;
-        yyjson_val *target_value = obj_get(action, "target");
-        yyjson_val *target_from_payload_value = obj_get(action, "target_from_payload");
-        const char *target = json_string(action, "target");
-        const char *target_from_payload = json_string(action, "target_from_payload");
-        if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
-            return validation_error(ctx, json_path,
-                                    "projectile.fire requires exactly one of target or target_from_payload");
-        if (target_value != NULL && !yyjson_is_str(target_value))
-            return validation_error(ctx, json_path, "projectile.fire target must be a string");
-        if (target != NULL && !require_actor_ref(ctx, names, target, json_path))
-            return false;
-        if (target_from_payload_value != NULL &&
-            (!yyjson_is_str(target_from_payload_value) || yyjson_get_str(target_from_payload_value)[0] == '\0'))
-            return validation_error(ctx, json_path, "projectile.fire target_from_payload must be a non-empty string");
-        yyjson_val *offset = obj_get(action, "offset");
-        if (offset != NULL && !is_vec_array(offset, 3))
-            return validation_error(ctx, json_path, "projectile.fire offset must be a vec3");
-        yyjson_val *velocity = obj_get(action, "velocity");
-        if (velocity != NULL && !is_vec_array(velocity, 3))
-            return validation_error(ctx, json_path, "projectile.fire velocity must be a vec3");
-        yyjson_val *velocity_from_property = obj_get(action, "velocity_from_property");
-        if (velocity_from_property != NULL &&
-            (!yyjson_is_str(velocity_from_property) || yyjson_get_str(velocity_from_property)[0] == '\0'))
-            return validation_error(ctx, json_path,
-                                    "projectile.fire velocity_from_property must be a non-empty string");
-        yyjson_val *speed = obj_get(action, "speed");
-        if (speed != NULL && (!yyjson_is_num(speed) || yyjson_get_num(speed) < 0.0))
-            return validation_error(ctx, json_path, "projectile.fire speed must be non-negative");
-        yyjson_val *cooldown = obj_get(action, "cooldown");
-        if (cooldown != NULL && !yyjson_is_num(cooldown))
-            return validation_error(ctx, json_path, "projectile.fire cooldown must be numeric");
-        yyjson_val *cooldown_property = obj_get(action, "cooldown_property");
-        if (cooldown_property != NULL &&
-            (!yyjson_is_str(cooldown_property) || yyjson_get_str(cooldown_property)[0] == '\0'))
-            return validation_error(ctx, json_path, "projectile.fire cooldown_property must be a non-empty string");
-        yyjson_val *properties = obj_get(action, "properties");
-        if (properties != NULL && !yyjson_is_obj(properties))
-            return validation_error(ctx, json_path, "projectile.fire properties must be an object");
-        return true;
+        return validate_projectile_fire_shape(ctx, action, json_path, names, true);
     }
     if (SDL_strcmp(type, "controller.fps_sector.launch") == 0 ||
         SDL_strcmp(type, "controller.fps_sector.teleport") == 0)
