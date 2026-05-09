@@ -91,6 +91,7 @@ typedef struct validation_names
     name_table cameras;
     name_table fonts;
     name_table images;
+    name_table models;
     name_table sprites;
     name_table sounds;
     name_table music;
@@ -2571,6 +2572,7 @@ static bool is_supported_component_type(const char *type)
         "particles.emitter",
         "property.decay",
         "render.cube",
+        "render.model",
         "render.sphere",
         "render.sprite",
     };
@@ -3083,6 +3085,31 @@ static bool collect_images(validation_context *ctx, yyjson_val *root, validation
     return true;
 }
 
+static bool collect_models(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *models = obj_get(obj_get(root, "assets"), "models");
+    if (models == NULL)
+        return true;
+    if (!yyjson_is_arr(models))
+        return validation_error(ctx, "$.assets.models", "model assets must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(models); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.assets.models[%zu]", i);
+        yyjson_val *model = yyjson_arr_get(models, i);
+        if (!yyjson_is_obj(model))
+            return validation_error(ctx, path, "model asset entries must be objects");
+        if (!require_unique_name(ctx, &names->models, "model asset", json_string(model, "id"), path))
+            return false;
+        if (!is_non_empty_string(model, "path"))
+            return validation_error(ctx, path, "model asset requires path");
+        if (!asset_path_exists(ctx, json_string(model, "path"), path, "model"))
+            return false;
+    }
+    return true;
+}
+
 static bool is_audio_bus_name(const char *bus)
 {
     return bus == NULL || SDL_strcmp(bus, "sound_effects") == 0 || SDL_strcmp(bus, "sfx") == 0 ||
@@ -3435,8 +3462,9 @@ static bool collect_names(validation_context *ctx, yyjson_val *root, validation_
            collect_input_assignment_sets(ctx, root, names) && collect_input_profiles(ctx, root, names) &&
            collect_network_input_channels(ctx, root, names) && collect_cameras(ctx, root, names) &&
            collect_fonts(ctx, root, names) && collect_sprite_assets(ctx, root, names) &&
-           collect_images(ctx, root, names) && collect_audio_assets(ctx, root, names) &&
-           collect_timers(ctx, root, names) && collect_sensors(ctx, root, names);
+           collect_images(ctx, root, names) && collect_models(ctx, root, names) &&
+           collect_audio_assets(ctx, root, names) && collect_timers(ctx, root, names) &&
+           collect_sensors(ctx, root, names);
 }
 
 static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)
@@ -4438,7 +4466,7 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                     return validation_error(ctx, path, "light component color must be a vec3");
             }
             else if (SDL_strcmp(type, "render.cube") == 0 || SDL_strcmp(type, "render.sphere") == 0 ||
-                     SDL_strcmp(type, "render.sprite") == 0)
+                     SDL_strcmp(type, "render.sprite") == 0 || SDL_strcmp(type, "render.model") == 0)
             {
                 yyjson_val *lighting = obj_get(component, "lighting");
                 if (lighting != NULL && !yyjson_is_bool(lighting))
@@ -4487,6 +4515,25 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                     yyjson_val *facing_yaw_property = obj_get(component, "facing_yaw_property");
                     if (facing_yaw_property != NULL && !is_non_empty_string(component, "facing_yaw_property"))
                         return validation_error(ctx, path, "render.sprite facing_yaw_property must be non-empty");
+                }
+                if (SDL_strcmp(type, "render.model") == 0)
+                {
+                    if (!require_ref(ctx, &names->models, "model asset", json_string(component, "model"), path))
+                        return false;
+                    yyjson_val *scale = obj_get(component, "scale");
+                    if (scale != NULL && !is_vec_array(scale, 3))
+                        return validation_error(ctx, path, "render.model scale must be a vec3");
+                    yyjson_val *animation_clip = obj_get(component, "animation_clip");
+                    if (animation_clip != NULL &&
+                        (!yyjson_is_int(animation_clip) || yyjson_get_int(animation_clip) < 0))
+                        return validation_error(ctx, path,
+                                                "render.model animation_clip must be a non-negative integer");
+                    yyjson_val *animation_time = obj_get(component, "animation_time");
+                    if (animation_time != NULL && !yyjson_is_num(animation_time))
+                        return validation_error(ctx, path, "render.model animation_time must be a number");
+                    yyjson_val *animation_time_property = obj_get(component, "animation_time_property");
+                    if (animation_time_property != NULL && !is_non_empty_string(component, "animation_time_property"))
+                        return validation_error(ctx, path, "render.model animation_time_property must be non-empty");
                 }
             }
         }
@@ -4696,6 +4743,25 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                 yyjson_val *facing_yaw_property = obj_get(component, "facing_yaw_property");
                 if (facing_yaw_property != NULL && !is_non_empty_string(component, "facing_yaw_property"))
                     return validation_error(ctx, component_path, "render.sprite facing_yaw_property must be non-empty");
+            }
+            else if (SDL_strcmp(type, "render.model") == 0)
+            {
+                if (!require_ref(ctx, &names->models, "model asset", json_string(component, "model"), component_path))
+                    return false;
+                yyjson_val *scale = obj_get(component, "scale");
+                if (scale != NULL && !is_vec_array(scale, 3))
+                    return validation_error(ctx, component_path, "render.model scale must be a vec3");
+                yyjson_val *animation_clip = obj_get(component, "animation_clip");
+                if (animation_clip != NULL && (!yyjson_is_int(animation_clip) || yyjson_get_int(animation_clip) < 0))
+                    return validation_error(ctx, component_path,
+                                            "render.model animation_clip must be a non-negative integer");
+                yyjson_val *animation_time = obj_get(component, "animation_time");
+                if (animation_time != NULL && !yyjson_is_num(animation_time))
+                    return validation_error(ctx, component_path, "render.model animation_time must be a number");
+                yyjson_val *animation_time_property = obj_get(component, "animation_time_property");
+                if (animation_time_property != NULL && !is_non_empty_string(component, "animation_time_property"))
+                    return validation_error(ctx, component_path,
+                                            "render.model animation_time_property must be non-empty");
             }
         }
     }
@@ -7424,6 +7490,7 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->cameras);
     name_table_destroy(&names->fonts);
     name_table_destroy(&names->images);
+    name_table_destroy(&names->models);
     name_table_destroy(&names->sprites);
     name_table_destroy(&names->sounds);
     name_table_destroy(&names->music);

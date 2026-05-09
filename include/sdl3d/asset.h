@@ -133,6 +133,26 @@ extern "C"
                                         sdl3d_asset_buffer *out_buffer, char *error_buffer, int error_buffer_size);
 
     /**
+     * @brief Resolve an asset to a host filesystem path when it comes from a directory mount.
+     *
+     * This is intended for integrations with third-party loaders that require
+     * a filesystem path and cannot read through @ref sdl3d_asset_resolver_read_file().
+     * Pack and memory-pack mounts cannot produce stable paths, so this returns
+     * false for assets that exist only inside archives.
+     *
+     * Free @p out_path with @ref sdl3d_asset_resolver_free_path().
+     *
+     * @return true when @p asset_path resolves to an existing file on a mounted directory.
+     */
+    bool sdl3d_asset_resolver_resolve_file_path(const sdl3d_asset_resolver *resolver, const char *asset_path,
+                                                char **out_path, char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Free a path returned by @ref sdl3d_asset_resolver_resolve_file_path().
+     */
+    void sdl3d_asset_resolver_free_path(char *path);
+
+    /**
      * @brief Free bytes returned by sdl3d_asset_resolver_read_file().
      *
      * Safe to call with NULL or an already empty buffer.

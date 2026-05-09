@@ -1830,6 +1830,14 @@ bool sdl3d_draw_model(sdl3d_render_context *context, const sdl3d_model *model, s
 bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model, sdl3d_vec3 position,
                          sdl3d_vec3 rotation_axis, float rotation_angle_radians, sdl3d_vec3 scale, sdl3d_color tint)
 {
+    return sdl3d_draw_model_ex_with_assets(context, NULL, model, position, rotation_axis, rotation_angle_radians, scale,
+                                           tint);
+}
+
+bool sdl3d_draw_model_ex_with_assets(sdl3d_render_context *context, const sdl3d_asset_resolver *assets,
+                                     const sdl3d_model *model, sdl3d_vec3 position, sdl3d_vec3 rotation_axis,
+                                     float rotation_angle_radians, sdl3d_vec3 scale, sdl3d_color tint)
+{
     const sdl3d_vec4 tint_modulate = sdl3d_color_to_modulate(tint);
     bool ok = false;
 
@@ -1865,14 +1873,14 @@ bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model
     {
         for (int r = 0; ok && r < model->root_count; ++r)
         {
-            ok = sdl3d_draw_model_node(context, NULL, model, model->root_nodes[r], tint_modulate, NULL);
+            ok = sdl3d_draw_model_node(context, assets, model, model->root_nodes[r], tint_modulate, NULL);
         }
     }
     else
     {
         for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
         {
-            ok = sdl3d_draw_model_mesh(context, NULL, model, mesh_index, NULL, tint_modulate, NULL);
+            ok = sdl3d_draw_model_mesh(context, assets, model, mesh_index, NULL, tint_modulate, NULL);
         }
     }
 
@@ -1887,6 +1895,15 @@ bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model
 bool sdl3d_draw_model_skinned(sdl3d_render_context *context, const sdl3d_model *model, sdl3d_vec3 position,
                               sdl3d_vec3 rotation_axis, float rotation_angle_radians, sdl3d_vec3 scale,
                               sdl3d_color tint, const sdl3d_mat4 *joint_matrices)
+{
+    return sdl3d_draw_model_skinned_with_assets(context, NULL, model, position, rotation_axis, rotation_angle_radians,
+                                                scale, tint, joint_matrices);
+}
+
+bool sdl3d_draw_model_skinned_with_assets(sdl3d_render_context *context, const sdl3d_asset_resolver *assets,
+                                          const sdl3d_model *model, sdl3d_vec3 position, sdl3d_vec3 rotation_axis,
+                                          float rotation_angle_radians, sdl3d_vec3 scale, sdl3d_color tint,
+                                          const sdl3d_mat4 *joint_matrices)
 {
     /* Re-use draw_model_ex logic but pass joint_matrices through.
      * For now, call draw_model_ex for the non-skinned parts and
@@ -1928,14 +1945,14 @@ bool sdl3d_draw_model_skinned(sdl3d_render_context *context, const sdl3d_model *
     {
         for (int r = 0; ok && r < model->root_count; ++r)
         {
-            ok = sdl3d_draw_model_node(context, NULL, model, model->root_nodes[r], tint_modulate, joint_matrices);
+            ok = sdl3d_draw_model_node(context, assets, model, model->root_nodes[r], tint_modulate, joint_matrices);
         }
     }
     else
     {
         for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
         {
-            ok = sdl3d_draw_model_mesh(context, NULL, model, mesh_index, NULL, tint_modulate, joint_matrices);
+            ok = sdl3d_draw_model_mesh(context, assets, model, mesh_index, NULL, tint_modulate, joint_matrices);
         }
     }
 

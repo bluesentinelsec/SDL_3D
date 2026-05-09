@@ -112,10 +112,12 @@ struct RenderPrimitiveCapture
     bool saw_doom_robot_sprite = false;
     bool saw_doom_health_sprite = false;
     bool saw_doom_crate = false;
+    bool saw_doom_dragon_model = false;
     int doom_robot_sprites = 0;
     int doom_health_sprites = 0;
     int doom_crates = 0;
     int doom_textured_crates = 0;
+    int doom_model_primitives = 0;
     int doom_presentation_cubes = 0;
     int doom_projectile_spheres = 0;
 };
@@ -1365,6 +1367,8 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
             std::string(primitive->texture_image) == "image.doom.radioactive_crate")
             capture->doom_textured_crates++;
     }
+    if (entity_name.rfind("entity.doom.dragon", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_MODEL)
+        capture->doom_model_primitives++;
     if (entity_name.rfind("entity.doom.presentation.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
         capture->doom_presentation_cubes++;
     if (entity_name.rfind("pool.doom.projectiles.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
@@ -1393,6 +1397,16 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         EXPECT_NEAR(primitive->size.x, 0.9f, 0.0001f);
         EXPECT_EQ(primitive->color.g, 170);
         EXPECT_STREQ(primitive->texture_image, "image.doom.radioactive_crate");
+    }
+    if (entity_name == "entity.doom.dragon")
+    {
+        capture->saw_doom_dragon_model = true;
+        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_MODEL);
+        EXPECT_STREQ(primitive->model_asset, "model.doom.black_dragon");
+        EXPECT_NEAR(primitive->position.x, 24.0f, 0.0001f);
+        EXPECT_NEAR(primitive->position.z, 74.0f, 0.0001f);
+        EXPECT_NEAR(primitive->model_scale.x, 2.0f, 0.0001f);
+        EXPECT_EQ(primitive->animation_clip, 0);
     }
     return true;
 }
@@ -8639,10 +8653,12 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     EXPECT_TRUE(authored_props.saw_doom_robot_sprite);
     EXPECT_TRUE(authored_props.saw_doom_health_sprite);
     EXPECT_TRUE(authored_props.saw_doom_crate);
+    EXPECT_TRUE(authored_props.saw_doom_dragon_model);
     EXPECT_EQ(authored_props.doom_robot_sprites, 5);
     EXPECT_EQ(authored_props.doom_health_sprites, 5);
     EXPECT_EQ(authored_props.doom_crates, 8);
     EXPECT_EQ(authored_props.doom_textured_crates, 8);
+    EXPECT_EQ(authored_props.doom_model_primitives, 1);
     EXPECT_EQ(authored_props.doom_presentation_cubes, 14);
     EXPECT_GE(authored_props.sprites, 10);
     sdl3d_game_data_ambient_asset ambient{};

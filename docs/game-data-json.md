@@ -208,6 +208,25 @@ Audio assets are split by playback role:
 emitted by sector sensors, to loopable environmental streams. `ambient_id: 0`
 is reserved by convention for silence and does not need an asset entry.
 
+3D model assets are declared in `assets.models`:
+
+```json
+{
+  "assets": {
+    "models": [
+      { "id": "model.dragon", "path": "asset://models/dragon/scene.gltf" }
+    ]
+  }
+}
+```
+
+Model assets are rendered with `render.model`. Current model loading uses the
+engine's filesystem-backed model loaders, so model paths must resolve from a
+directory-mounted asset root. Source-directory development builds support GLTF,
+GLB, OBJ, and FBX; pack/embedded model loading should prefer self-contained GLB
+assets until model loaders can read every dependency directly through the asset
+resolver.
+
 ## App
 
 The optional `app` object configures the managed loop before the window exists:
@@ -987,6 +1006,9 @@ Reusable components include:
   face is UV-mapped to the full image and tinted by `color`. The property path
   is useful for grid wall runs and other pooled actors that need per-instance
   dimensions.
+- `render.model`: renders an authored `assets.models` entry with `model`,
+  optional `scale`, axis-angle rotation, `color` tint, and optional skeletal
+  animation playback via `animation_clip` and `animation_time_property`.
 - `render.sprite`: renders an upright billboard using an authored sprite asset.
   Use `size` for world-space width/height and optional `facing_yaw` or
   `facing_yaw_property` for directional sprite frame selection. Sprite assets

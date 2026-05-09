@@ -12,6 +12,7 @@
     "entity.doom.robot.storage",
     "entity.doom.robot.hall",
     "entity.doom.robot.dragon",
+    "entity.doom.dragon",
     "entity.doom.health.entry",
     "entity.doom.health.hall",
     "entity.doom.health.north",

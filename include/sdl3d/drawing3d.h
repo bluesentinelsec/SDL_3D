@@ -9,6 +9,8 @@
 #include "sdl3d/texture.h"
 #include "sdl3d/types.h"
 
+struct sdl3d_asset_resolver;
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -151,6 +153,16 @@ extern "C"
                              sdl3d_color tint);
 
     /*
+     * Same as sdl3d_draw_model_ex, but resolves material texture paths through
+     * an optional asset resolver. This lets data-authored games load model
+     * materials from mounted asset directories while preserving the existing
+     * filesystem path behavior when assets is NULL.
+     */
+    bool sdl3d_draw_model_ex_with_assets(sdl3d_render_context *context, const struct sdl3d_asset_resolver *assets,
+                                         const sdl3d_model *model, sdl3d_vec3 position, sdl3d_vec3 rotation_axis,
+                                         float rotation_angle_radians, sdl3d_vec3 scale, sdl3d_color tint);
+
+    /*
      * Draw a model with skeletal animation applied. `joint_matrices` is
      * an array of skeleton->joint_count mat4 entries from
      * sdl3d_evaluate_animation. Pass NULL for bind pose (same as draw_model_ex).
@@ -158,6 +170,15 @@ extern "C"
     bool sdl3d_draw_model_skinned(sdl3d_render_context *context, const sdl3d_model *model, sdl3d_vec3 position,
                                   sdl3d_vec3 rotation_axis, float rotation_angle_radians, sdl3d_vec3 scale,
                                   sdl3d_color tint, const sdl3d_mat4 *joint_matrices);
+
+    /*
+     * Same as sdl3d_draw_model_skinned, but resolves material texture paths
+     * through an optional asset resolver.
+     */
+    bool sdl3d_draw_model_skinned_with_assets(sdl3d_render_context *context, const struct sdl3d_asset_resolver *assets,
+                                              const sdl3d_model *model, sdl3d_vec3 position, sdl3d_vec3 rotation_axis,
+                                              float rotation_angle_radians, sdl3d_vec3 scale, sdl3d_color tint,
+                                              const sdl3d_mat4 *joint_matrices);
 
     /*
      * Draw a solid screen-space rectangle on the UI overlay layer.

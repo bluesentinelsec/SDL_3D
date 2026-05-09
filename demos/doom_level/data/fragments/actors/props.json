@@ -4,6 +4,9 @@
     "images": [
       { "id": "image.doom.radioactive_crate", "path": "asset://textures/radioactive-crate.png" }
     ],
+    "models": [
+      { "id": "model.doom.black_dragon", "path": "asset://models/black_dragon/scene.gltf" }
+    ],
     "sprites": [
       {
         "id": "sprite.doom.robot.walk",
@@ -340,6 +343,35 @@
           "mode": "ping_pong",
           "start_idle": false,
           "yaw_property": "sprite_yaw"
+        }
+      ]
+    },
+    {
+      "name": "entity.doom.dragon",
+      "active": true,
+      "tags": ["npc", "dragon", "model"],
+      "transform": { "position": [24.0, 0.0, 74.0] },
+      "properties": {
+        "dragon_anim_time": { "type": "float", "value": 0.0 },
+        "classname": { "type": "string", "value": "npc_dragon" },
+        "health": { "type": "int", "value": 500 }
+      },
+      "components": [
+        {
+          "type": "motion.oscillate",
+          "time_property": "dragon_anim_time",
+          "origin": [24.0, 0.0, 74.0],
+          "amplitude": [0.0, 0.0, 0.0],
+          "rate": 1.0
+        },
+        {
+          "type": "render.model",
+          "model": "model.doom.black_dragon",
+          "scale": [2.0, 2.0, 2.0],
+          "animation_clip": 0,
+          "animation_time_property": "dragon_anim_time",
+          "color": [255, 255, 255, 255],
+          "lighting": true
         }
       ]
     },

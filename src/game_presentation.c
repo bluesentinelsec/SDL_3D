@@ -8,6 +8,7 @@
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include "sdl3d/animation.h"
 #include "sdl3d/drawing3d.h"
 #include "sdl3d/image.h"
 #include "sdl3d/lighting.h"
@@ -19,6 +20,7 @@ typedef struct primitive_draw_context
     sdl3d_render_context *renderer;
     sdl3d_game_data_image_cache *image_cache;
     sdl3d_game_data_sprite_cache *sprite_cache;
+    sdl3d_game_data_model_cache *model_cache;
     const sdl3d_camera3d *camera;
     const sdl3d_game_data_render_eval *eval;
     sdl3d_game_data_render_primitive sphere_batch;
@@ -371,6 +373,26 @@ static bool ensure_sprite_cache_capacity(sdl3d_game_data_sprite_cache *cache, in
     return true;
 }
 
+static bool ensure_model_cache_capacity(sdl3d_game_data_model_cache *cache, int required)
+{
+    if (cache == NULL || required <= cache->capacity)
+        return cache != NULL;
+
+    int next_capacity = cache->capacity < 4 ? 4 : cache->capacity * 2;
+    while (next_capacity < required)
+        next_capacity *= 2;
+
+    sdl3d_game_data_model_cache_entry *entries =
+        (sdl3d_game_data_model_cache_entry *)SDL_realloc(cache->entries, (size_t)next_capacity * sizeof(*entries));
+    if (entries == NULL)
+        return false;
+
+    SDL_memset(entries + cache->capacity, 0, (size_t)(next_capacity - cache->capacity) * sizeof(*entries));
+    cache->entries = entries;
+    cache->capacity = next_capacity;
+    return true;
+}
+
 static sdl3d_game_data_particle_cache_entry *find_particle_entry(sdl3d_game_data_particle_cache *cache,
                                                                  const char *entity_name)
 {
@@ -595,6 +617,52 @@ static sdl3d_game_data_sprite_cache_entry *find_or_load_sprite_entry(const sdl3d
     }
 
     entry->loaded = true;
+    ++cache->count;
+    return entry;
+}
+
+static sdl3d_game_data_model_cache_entry *find_or_load_model_entry(const sdl3d_game_data_runtime *runtime,
+                                                                   sdl3d_game_data_model_cache *cache,
+                                                                   const char *model_id)
+{
+    if (runtime == NULL || cache == NULL || cache->assets == NULL || model_id == NULL)
+        return NULL;
+
+    for (int i = 0; i < cache->count; ++i)
+    {
+        if (cache->entries[i].model_id != NULL && SDL_strcmp(cache->entries[i].model_id, model_id) == 0)
+            return cache->entries[i].loaded ? &cache->entries[i] : NULL;
+    }
+
+    if (!ensure_model_cache_capacity(cache, cache->count + 1))
+        return NULL;
+
+    sdl3d_game_data_model_asset asset;
+    if (!sdl3d_game_data_get_model_asset(runtime, model_id, &asset))
+        return NULL;
+
+    char error[256];
+    char *filesystem_path = NULL;
+    if (!sdl3d_asset_resolver_resolve_file_path(cache->assets, asset.path, &filesystem_path, error, (int)sizeof(error)))
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "Failed to resolve model asset %s (%s): %s. Model assets currently require a directory mount.",
+                     model_id, asset.path != NULL ? asset.path : "<null>", error);
+        return NULL;
+    }
+
+    sdl3d_game_data_model_cache_entry *entry = &cache->entries[cache->count];
+    SDL_zero(*entry);
+    entry->model_id = model_id;
+    entry->loaded = sdl3d_load_model_from_file(filesystem_path, &entry->model);
+    sdl3d_asset_resolver_free_path(filesystem_path);
+    if (!entry->loaded)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load model asset %s: %s", model_id, SDL_GetError());
+        SDL_zero(entry);
+        return NULL;
+    }
+
     ++cache->count;
     return entry;
 }
@@ -827,6 +895,42 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
         const sdl3d_vec3 camera_position =
             context->camera != NULL ? context->camera->position : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
         sdl3d_sprite_scene_draw(&scene, context->renderer, camera_position, NULL);
+    }
+    else if (primitive->type == SDL3D_GAME_DATA_RENDER_MODEL)
+    {
+        if (context->model_cache == NULL)
+            return true;
+        sdl3d_game_data_model_cache_entry *entry =
+            find_or_load_model_entry(context->runtime, context->model_cache, primitive->model_asset);
+        if (entry == NULL)
+            return false;
+        if (primitive->animation_clip >= 0 && entry->model.skeleton != NULL && entry->model.animation_count > 0)
+        {
+            int clip_index = primitive->animation_clip;
+            if (clip_index >= entry->model.animation_count)
+                clip_index = 0;
+            const sdl3d_animation_clip *clip = &entry->model.animations[clip_index];
+            const int joint_count = entry->model.skeleton->joint_count;
+            sdl3d_mat4 *joint_matrices = (sdl3d_mat4 *)SDL_calloc((size_t)joint_count, sizeof(*joint_matrices));
+            if (joint_matrices == NULL)
+                return false;
+            const bool evaluated =
+                sdl3d_evaluate_animation(entry->model.skeleton, clip, primitive->animation_time, joint_matrices);
+            const bool drawn =
+                evaluated && sdl3d_draw_model_skinned_with_assets(
+                                 context->renderer, context->model_cache->assets, &entry->model, primitive->position,
+                                 primitive->rotation_axis, primitive->rotation_angle, primitive->model_scale,
+                                 primitive->color, joint_matrices);
+            SDL_free(joint_matrices);
+            if (!drawn)
+                return false;
+        }
+        else if (!sdl3d_draw_model_ex_with_assets(context->renderer, context->model_cache->assets, &entry->model,
+                                                  primitive->position, primitive->rotation_axis,
+                                                  primitive->rotation_angle, primitive->model_scale, primitive->color))
+        {
+            return false;
+        }
     }
     sdl3d_set_emissive(context->renderer, 0.0f, 0.0f, 0.0f);
     if (!primitive->lighting_enabled)
@@ -1147,9 +1251,31 @@ void sdl3d_game_data_sprite_cache_free(sdl3d_game_data_sprite_cache *cache)
     SDL_zero(*cache);
 }
 
+void sdl3d_game_data_model_cache_init(sdl3d_game_data_model_cache *cache, sdl3d_asset_resolver *assets)
+{
+    if (cache == NULL)
+        return;
+    SDL_zero(*cache);
+    cache->assets = assets;
+}
+
+void sdl3d_game_data_model_cache_free(sdl3d_game_data_model_cache *cache)
+{
+    if (cache == NULL)
+        return;
+    for (int i = 0; i < cache->count; ++i)
+    {
+        if (cache->entries[i].loaded)
+            sdl3d_free_model(&cache->entries[i].model);
+    }
+    SDL_free(cache->entries);
+    SDL_zero(*cache);
+}
+
 static bool draw_render_primitives_evaluated_with_cache(
     const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer, const sdl3d_game_data_render_eval *eval,
-    sdl3d_game_data_image_cache *image_cache, sdl3d_game_data_sprite_cache *sprite_cache, const sdl3d_camera3d *camera)
+    sdl3d_game_data_image_cache *image_cache, sdl3d_game_data_sprite_cache *sprite_cache,
+    sdl3d_game_data_model_cache *model_cache, const sdl3d_camera3d *camera)
 {
     if (runtime == NULL || renderer == NULL)
         return false;
@@ -1160,6 +1286,7 @@ static bool draw_render_primitives_evaluated_with_cache(
     context.renderer = renderer;
     context.image_cache = image_cache;
     context.sprite_cache = sprite_cache;
+    context.model_cache = model_cache;
     context.camera = camera;
     context.eval = eval;
     bool ok = sdl3d_game_data_for_each_render_primitive_evaluated(runtime, eval, draw_primitive, &context);
@@ -1284,14 +1411,14 @@ static bool draw_active_scene_skybox(const sdl3d_game_data_runtime *runtime, sdl
 
 bool sdl3d_game_data_draw_render_primitives(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer)
 {
-    return draw_render_primitives_evaluated_with_cache(runtime, renderer, NULL, NULL, NULL, NULL);
+    return draw_render_primitives_evaluated_with_cache(runtime, renderer, NULL, NULL, NULL, NULL, NULL);
 }
 
 bool sdl3d_game_data_draw_render_primitives_evaluated(const sdl3d_game_data_runtime *runtime,
                                                       sdl3d_render_context *renderer,
                                                       const sdl3d_game_data_render_eval *eval)
 {
-    return draw_render_primitives_evaluated_with_cache(runtime, renderer, eval, NULL, NULL, NULL);
+    return draw_render_primitives_evaluated_with_cache(runtime, renderer, eval, NULL, NULL, NULL, NULL);
 }
 
 bool sdl3d_game_data_draw_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
@@ -2337,7 +2464,8 @@ bool sdl3d_game_data_draw_frame(const sdl3d_game_data_frame_desc *frame)
             if (frame->particle_cache != NULL)
                 ok = sdl3d_game_data_draw_particles(frame->runtime, frame->renderer, frame->particle_cache) && ok;
             ok = draw_render_primitives_evaluated_with_cache(frame->runtime, frame->renderer, frame->render_eval,
-                                                             frame->image_cache, frame->sprite_cache, &camera) &&
+                                                             frame->image_cache, frame->sprite_cache,
+                                                             frame->model_cache, &camera) &&
                  ok;
             ok = run_frame_hook(frame, frame->after_world_3d) && ok;
             sdl3d_end_mode_3d(frame->renderer);
