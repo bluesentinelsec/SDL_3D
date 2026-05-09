@@ -9,12 +9,6 @@
 #include "sdl3d/lighting.h"
 #include "sdl3d/sdl3d.h"
 
-#define ROCKET_LIGHT_R 1.0f
-#define ROCKET_LIGHT_G 0.6f
-#define ROCKET_LIGHT_B 0.2f
-#define ROCKET_LIGHT_INTENSITY 4.0f
-#define ROCKET_LIGHT_RANGE 4.0f
-
 void render_state_init(render_state *rs)
 {
     SDL_zerop(rs);
@@ -74,18 +68,6 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
 
     /* Dynamic lights. */
     sdl3d_clear_lights(ctx);
-    if (player->proj_active)
-    {
-        sdl3d_light rocket = {0};
-        rocket.type = SDL3D_LIGHT_POINT;
-        rocket.position = sdl3d_vec3_make(player->proj_x, player->proj_y, player->proj_z);
-        rocket.color[0] = ROCKET_LIGHT_R;
-        rocket.color[1] = ROCKET_LIGHT_G;
-        rocket.color[2] = ROCKET_LIGHT_B;
-        rocket.intensity = ROCKET_LIGHT_INTENSITY;
-        rocket.range = ROCKET_LIGHT_RANGE;
-        sdl3d_add_light(ctx, &rocket);
-    }
 
     sdl3d_clear_render_context(ctx, (sdl3d_color){10, 10, 15, 255});
     sdl3d_begin_mode_3d(ctx, cam);
@@ -140,15 +122,6 @@ void render_draw_frame(render_state *rs, sdl3d_render_context *ctx, const sdl3d_
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Hazard particle draw failed: %s", SDL_GetError());
         SDL_ClearError();
-    }
-
-    /* Projectile */
-    if (player->proj_active)
-    {
-        sdl3d_set_emissive(ctx, 5.0f, 3.0f, 1.0f);
-        sdl3d_draw_sphere(ctx, sdl3d_vec3_make(player->proj_x, player->proj_y, player->proj_z), 0.1f, 8, 8,
-                          (sdl3d_color){255, 200, 100, 255});
-        sdl3d_set_emissive(ctx, 0, 0, 0);
     }
 
     sdl3d_end_mode_3d(ctx);
