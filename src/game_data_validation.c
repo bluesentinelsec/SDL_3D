@@ -6935,6 +6935,10 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
     yyjson_val *scene_input = obj_get(root, "input");
     if (scene_input != NULL && !yyjson_is_obj(scene_input))
         return validation_error(ctx, json_path, "scene input must be an object");
+    const char *mouse_capture = json_string(scene_input, "mouse_capture");
+    if (mouse_capture != NULL && SDL_strcmp(mouse_capture, "never") != 0 &&
+        SDL_strcmp(mouse_capture, "unpaused") != 0 && SDL_strcmp(mouse_capture, "always") != 0)
+        return validation_error(ctx, json_path, "scene input.mouse_capture must be never, unpaused, or always");
     yyjson_val *scene_actions = obj_get(scene_input, "actions");
     if (scene_actions != NULL && !yyjson_is_arr(scene_actions))
         return validation_error(ctx, json_path, "scene input.actions must be an array");

@@ -41,6 +41,7 @@
     "entity.doom.presentation.surveillance.camera_body"
   ],
   "input": {
+    "mouse_capture": "unpaused",
     "actions": [
       "action.move.forward",
       "action.move.back",

@@ -2243,6 +2243,16 @@ extern "C"
     bool sdl3d_game_data_active_scene_allows_action(const sdl3d_game_data_runtime *runtime, int action_id);
 
     /**
+     * @brief Return whether the active scene requests relative mouse capture.
+     *
+     * Scenes may author `input.mouse_capture` as `never`, `unpaused`, or
+     * `always`. Missing policy defaults to `never`. The @p paused argument lets
+     * generic hosts release the cursor while an authored pause/menu overlay is
+     * active.
+     */
+    bool sdl3d_game_data_active_scene_mouse_capture(const sdl3d_game_data_runtime *runtime, bool paused);
+
+    /**
      * @brief Read authored scene transition policy.
      *
      * Missing fields use stable defaults: same-scene requests and interrupting

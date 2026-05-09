@@ -682,6 +682,22 @@ loaded scene directly and may inject scene state before that scene's enter
 signal runs. Authored data should still define a valid `scenes.initial` so the
 game has a complete production startup path.
 
+Scene `input` can restrict allowed actions and request relative mouse capture:
+
+```json
+{
+  "input": {
+    "mouse_capture": "unpaused",
+    "actions": ["action.move.forward", "action.look", "action.pause"]
+  }
+}
+```
+
+`input.mouse_capture` accepts `never`, `unpaused`, or `always`. Missing policy
+defaults to `never`. FPS-style scenes should normally use `unpaused` so the
+generic runtime captures relative mouse motion during play and releases it
+while authored pause/menu overlays are active.
+
 ## Actors
 
 Actors describe runtime objects:

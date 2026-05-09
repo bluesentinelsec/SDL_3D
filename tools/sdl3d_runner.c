@@ -306,9 +306,9 @@ static void runner_render(sdl3d_game_context *ctx, void *userdata, float alpha)
 static void runner_shutdown(sdl3d_game_context *ctx, void *userdata)
 {
     runner_state *state = (runner_state *)userdata;
-    (void)ctx;
     if (state != NULL)
     {
+        sdl3d_data_game_runtime_release_mouse_capture(state->runtime, ctx);
         sdl3d_data_game_runtime_destroy(state->runtime);
         state->runtime = NULL;
     }

@@ -8551,6 +8551,8 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     EXPECT_FALSE(ctx.quit_requested);
     ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.36f));
     EXPECT_TRUE(ctx.quit_requested);
+    EXPECT_TRUE(sdl3d_game_data_active_scene_mouse_capture(runtime, false));
+    EXPECT_FALSE(sdl3d_game_data_active_scene_mouse_capture(runtime, true));
 
     sdl3d_game_data_render_settings render_settings{};
     ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &render_settings));
@@ -9104,6 +9106,31 @@ TEST(GameDataRuntime, RejectsInvalidSceneSectorLevelInstances)
         EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
             << test_case.name << ": " << error;
     }
+
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidSceneMouseCapturePolicy)
+{
+    const std::filesystem::path dir = unique_test_dir("scene_mouse_capture_invalid");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "input": { "mouse_capture": "relative" }
+})json");
+    write_text(dir / "game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Scene Mouse Capture" },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("scene input.mouse_capture must be never, unpaused, or always"),
+              std::string::npos)
+        << error;
 
     remove_test_dir(dir);
 }
