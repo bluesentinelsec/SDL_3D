@@ -1,0 +1,39 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "logic": {
+    "sensors": [
+      {
+        "name": "sensor.launcher.enter",
+        "type": "sensor.volume",
+        "actor": "entity.player",
+        "min": [36.5, 0.0, 66.5],
+        "max": [39.5, 2.4, 69.5],
+        "edge": "enter",
+        "actions": [
+          {
+            "type": "controller.fps_sector.launch",
+            "target": "entity.player",
+            "vertical_velocity": 15.0
+          }
+        ]
+      },
+      {
+        "name": "sensor.teleporter.dragon.enter",
+        "type": "sensor.volume",
+        "actor": "entity.player",
+        "min": [22.5, 0.0, 86.5],
+        "max": [25.5, 2.4, 89.5],
+        "edge": "enter",
+        "actions": [
+          {
+            "type": "controller.fps_sector.teleport",
+            "target": "entity.player",
+            "position": [72.0, 4.1, 63.0],
+            "yaw": -1.5707964,
+            "pitch": 0.0
+          }
+        ]
+      }
+    ]
+  }
+}

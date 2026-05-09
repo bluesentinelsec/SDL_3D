@@ -22,8 +22,6 @@
 #define SIG_FADE_OUT_DONE 2001
 #define SIG_AMBIENT_FEEDBACK 2004
 #define SIG_AMBIENT_FEEDBACK_SKIP 2005
-#define SIG_LAUNCHER_ENTER 2007
-#define SIG_DRAGON_TELEPORT_ENTER 2008
 #define SIG_DAMAGE_FLOOR_TICK 2009
 #define LIFT_FLOOR_MIN_Y 0.0f
 #define LIFT_FLOOR_MAX_Y 2.5f
@@ -33,17 +31,11 @@
 #define LIFT_ENTITY_ID 1
 #define AMBIENT_FADE_SECONDS 1.0f
 #define AMBIENT_FEEDBACK_SECONDS 5.0f
-#define TELEPORT_FEEDBACK_SECONDS 2.0f
-#define LAUNCHER_FEEDBACK_SECONDS 1.25f
-#define LAUNCHER_VERTICAL_VELOCITY 15.0f
-#define DRAGON_TELEPORTER_ID 1
 #define DAMAGE_FEEDBACK_REFERENCE_DPS 30.0f
 #define DAMAGE_FEEDBACK_MIN_STRENGTH 0.35f
 #define DAMAGE_FEEDBACK_ATTACK_RATE 10.0f
 #define DAMAGE_FEEDBACK_DECAY_RATE 4.0f
 #define DAMAGE_FEEDBACK_PULSE_HZ 2.8f
-#define LAUNCHER_PAD_X 38.0f
-#define LAUNCHER_PAD_Z 68.0f
 #define FEEDBACK_AMBIENT_ZONE "ambient_zone"
 #define FEEDBACK_DAMAGE_FLOOR "damage_floor"
 
@@ -62,14 +54,10 @@ typedef struct doom_state
     sdl3d_logic_branch ambient_feedback_branch;
     sdl3d_logic_sector_platform dynamic_lift;
     sdl3d_logic_sector_damage_sensor damage_sensor;
-    sdl3d_logic_contact_sensor launcher_sensor;
-    sdl3d_logic_contact_sensor dragon_teleport_sensor;
     sdl3d_sector_watcher sector_watcher;
     sdl3d_backend current_backend;
     doom_render_profile render_profile;
     float ambient_feedback_timer;
-    float teleport_feedback_timer;
-    float launcher_feedback_timer;
     float damage_feedback_strength;
     float damage_feedback_target_strength;
     float damage_pulse_timer;
@@ -251,65 +239,6 @@ static bool doom_logic_set_sector_geometry(void *userdata, int sector_index, con
     return true;
 }
 
-static bool doom_logic_launch_player(void *userdata, sdl3d_vec3 velocity, const sdl3d_properties *payload)
-{
-    (void)payload;
-    doom_state *state = (doom_state *)userdata;
-    if (state == NULL || velocity.y <= 0.0f)
-    {
-        return false;
-    }
-
-    sdl3d_fps_mover_launch(&state->player.mover, velocity.y);
-    state->launcher_feedback_timer = LAUNCHER_FEEDBACK_SECONDS;
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Launcher applied vertical velocity %.1f", velocity.y);
-    return true;
-}
-
-static bool doom_logic_teleport_player(void *userdata, const sdl3d_teleport_destination *destination,
-                                       const sdl3d_properties *payload)
-{
-    doom_state *state = (doom_state *)userdata;
-
-    if (state == NULL || destination == NULL)
-    {
-        return false;
-    }
-
-    sdl3d_fps_mover_teleport(&state->player.mover, destination->position, destination->use_yaw, destination->yaw,
-                             destination->use_pitch, destination->pitch);
-    state->teleport_feedback_timer = TELEPORT_FEEDBACK_SECONDS;
-    const int trigger_id =
-        payload != NULL
-            ? sdl3d_properties_get_int(payload, "teleporter_id", sdl3d_properties_get_int(payload, "sensor_id", -1))
-            : -1;
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Teleport trigger %d moved player to %.1f %.1f %.1f", trigger_id,
-                destination->position.x, destination->position.y, destination->position.z);
-    return true;
-}
-
-static sdl3d_teleport_destination dragon_teleport_destination(void)
-{
-    sdl3d_teleport_destination destination;
-    SDL_zero(destination);
-    destination.position = sdl3d_vec3_make(72.0f, 2.5f + PLAYER_HEIGHT, 63.0f);
-    destination.yaw = -SDL_PI_F * 0.5f;
-    destination.pitch = 0.0f;
-    destination.use_yaw = true;
-    destination.use_pitch = true;
-    return destination;
-}
-
-static void init_dragon_teleport_sensor(doom_state *state)
-{
-    const sdl3d_bounding_box source = {
-        sdl3d_vec3_make(22.5f, 0.0f, 86.5f),
-        sdl3d_vec3_make(25.5f, 2.4f, 89.5f),
-    };
-    sdl3d_logic_contact_sensor_init(&state->dragon_teleport_sensor, DRAGON_TELEPORTER_ID, source,
-                                    SIG_DRAGON_TELEPORT_ENTER, SDL3D_TRIGGER_EDGE_ENTER);
-}
-
 static void init_dynamic_lift(doom_state *state)
 {
     sdl3d_logic_sector_platform_init(&state->dynamic_lift, LIFT_ENTITY_ID,
@@ -317,15 +246,6 @@ static void init_dynamic_lift(doom_state *state)
                                      LIFT_FLOOR_MAX_Y, LIFT_CEIL_Y, LIFT_CYCLE_SECONDS, LIFT_REBUILD_MIN_DELTA);
     state->dynamic_lift.last_floor_y = g_sectors[DOOM_DYNAMIC_LIFT_SECTOR].floor_y;
     state->dynamic_lift.has_last_floor_y = true;
-}
-
-static void init_launcher_sensor(doom_state *state)
-{
-    const sdl3d_bounding_box bounds = {
-        sdl3d_vec3_make(LAUNCHER_PAD_X - 1.5f, -0.15f, LAUNCHER_PAD_Z - 1.5f),
-        sdl3d_vec3_make(LAUNCHER_PAD_X + 1.5f, 0.45f, LAUNCHER_PAD_Z + 1.5f),
-    };
-    sdl3d_logic_contact_sensor_init(&state->launcher_sensor, 1, bounds, SIG_LAUNCHER_ENTER, SDL3D_TRIGGER_EDGE_ENTER);
 }
 
 static void init_damage_sensor(doom_state *state)
@@ -344,11 +264,9 @@ static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
     sdl3d_logic_game_adapters adapters;
     SDL_zero(adapters);
     adapters.userdata = state;
-    adapters.teleport_player = doom_logic_teleport_player;
     adapters.set_ambient = doom_logic_set_ambient;
     adapters.trigger_feedback = doom_logic_trigger_feedback;
     adapters.set_sector_geometry = doom_logic_set_sector_geometry;
-    adapters.launch_player = doom_logic_launch_player;
     sdl3d_logic_world_set_game_adapters(state->logic, &adapters);
 
     sdl3d_logic_target_context target_context;
@@ -379,25 +297,6 @@ static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
     sdl3d_logic_action ambient_feedback_action =
         sdl3d_logic_action_make_trigger_feedback(FEEDBACK_AMBIENT_ZONE, AMBIENT_FEEDBACK_SECONDS);
     if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_AMBIENT_FEEDBACK, &ambient_feedback_action) == 0)
-    {
-        return false;
-    }
-
-    sdl3d_logic_action teleport_action = sdl3d_logic_action_make_teleport_player_from_payload();
-    if (sdl3d_logic_world_bind_logic_action(state->logic, SDL3D_SIGNAL_TELEPORT, &teleport_action) == 0)
-    {
-        return false;
-    }
-
-    sdl3d_logic_action dragon_teleport_action = sdl3d_logic_action_make_teleport_player(dragon_teleport_destination());
-    if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_DRAGON_TELEPORT_ENTER, &dragon_teleport_action) == 0)
-    {
-        return false;
-    }
-
-    sdl3d_logic_action launcher_action =
-        sdl3d_logic_action_make_launch_player(sdl3d_vec3_make(0.0f, LAUNCHER_VERTICAL_VELOCITY, 0.0f));
-    if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_LAUNCHER_ENTER, &launcher_action) == 0)
     {
         return false;
     }
@@ -501,8 +400,6 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
     state->entities_ready = true;
 
     player_init(&state->player, ctx_input(ctx));
-    init_dragon_teleport_sensor(state);
-    init_launcher_sensor(state);
     init_damage_sensor(state);
     if (!bind_doom_logic(ctx, state))
     {
@@ -826,10 +723,6 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
             player_ms = doom_profile_elapsed_ms(section_start, now);
             section_start = now;
         }
-        sdl3d_logic_contact_sensor_update(&state->launcher_sensor, state->logic,
-                                          sdl3d_vec3_make(state->player.mover.position.x,
-                                                          state->player.mover.position.y - PLAYER_HEIGHT,
-                                                          state->player.mover.position.z));
         player_apply_sector_damage(&state->player, g_sectors, g_sector_count, dt);
         sdl3d_logic_sector_damage_sensor_update(&state->damage_sensor, state->logic,
                                                 sdl3d_vec3_make(state->player.mover.position.x,
@@ -853,28 +746,6 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
             state->ambient_feedback_timer = 0.0f;
         }
     }
-    if (state->teleport_feedback_timer > 0.0f)
-    {
-        state->teleport_feedback_timer -= dt;
-        if (state->teleport_feedback_timer < 0.0f)
-        {
-            state->teleport_feedback_timer = 0.0f;
-        }
-    }
-    if (state->launcher_feedback_timer > 0.0f)
-    {
-        state->launcher_feedback_timer -= dt;
-        if (state->launcher_feedback_timer < 0.0f)
-        {
-            state->launcher_feedback_timer = 0.0f;
-        }
-    }
-
-    sdl3d_logic_contact_sensor_update(&state->dragon_teleport_sensor, state->logic,
-                                      sdl3d_vec3_make(state->player.mover.position.x,
-                                                      state->player.mover.position.y - PLAYER_HEIGHT,
-                                                      state->player.mover.position.z));
-
     sdl3d_sector_watcher_update(&state->sector_watcher, &state->level.unlit, g_sectors,
                                 sdl3d_vec3_make(state->player.mover.position.x,
                                                 state->player.mover.position.y - PLAYER_HEIGHT,
