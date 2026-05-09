@@ -22,6 +22,7 @@
 #include "sdl3d/game.h"
 #include "sdl3d/game_data.h"
 #include "sdl3d/input.h"
+#include "sdl3d/model.h"
 #include "sdl3d/render_context.h"
 #include "sdl3d/signal_bus.h"
 #include "sdl3d/texture.h"
@@ -134,6 +135,28 @@ extern "C"
         int capacity;                                /**< Allocated cache slots. */
         sdl3d_asset_resolver *assets;                /**< Resolver used for lazy loads; not owned. */
     } sdl3d_game_data_sprite_cache;
+
+    /** @brief One cached model asset referenced by authored render.model data. */
+    typedef struct sdl3d_game_data_model_cache_entry
+    {
+        const char *model_id; /**< Runtime-owned model asset id. */
+        sdl3d_model model;    /**< Loaded model runtime. */
+        bool loaded;          /**< True once the model owns loaded meshes/materials. */
+    } sdl3d_game_data_model_cache_entry;
+
+    /**
+     * @brief Runtime cache for model assets referenced by authored world models.
+     *
+     * The cache owns loaded model data. Current model loaders require a
+     * filesystem path, so model assets must resolve through a directory mount.
+     */
+    typedef struct sdl3d_game_data_model_cache
+    {
+        sdl3d_game_data_model_cache_entry *entries; /**< Cached model entries. */
+        int count;                                  /**< Number of cached models. */
+        int capacity;                               /**< Allocated cache slots. */
+        sdl3d_asset_resolver *assets;               /**< Resolver used for lazy loads; not owned. */
+    } sdl3d_game_data_model_cache;
 
     /**
      * @brief Result produced by the generic authored menu controller.
@@ -250,6 +273,7 @@ extern "C"
         sdl3d_game_data_image_cache *image_cache;       /**< Image cache used by authored UI images. */
         sdl3d_game_data_particle_cache *particle_cache; /**< Particle cache used by authored emitters. */
         sdl3d_game_data_sprite_cache *sprite_cache;     /**< Sprite cache used by authored render.sprite data. */
+        sdl3d_game_data_model_cache *model_cache;       /**< Model cache used by authored render.model data. */
         const sdl3d_game_data_app_flow *app_flow;       /**< Optional app flow whose transitions are drawn. */
         const sdl3d_game_data_ui_metrics *metrics;      /**< Optional UI metrics. */
         const sdl3d_game_data_render_eval *render_eval; /**< Optional primitive effect evaluation inputs. */
@@ -295,9 +319,9 @@ extern "C"
     /**
      * @brief Draw authored render primitives for the active scene.
      *
-     * This renders currently supported primitive components (`render.cube` and
-     * `render.sphere`) using SDL3D's immediate drawing helpers. Call inside an
-     * active 3D pass.
+     * This renders currently supported primitive components (`render.cube`,
+     * `render.sphere`, `render.sprite`, and `render.model`) using SDL3D's
+     * immediate drawing helpers. Call inside an active 3D pass.
      */
     bool sdl3d_game_data_draw_render_primitives(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer);
 
@@ -324,6 +348,19 @@ extern "C"
     void sdl3d_game_data_sprite_cache_free(sdl3d_game_data_sprite_cache *cache);
 
     /**
+     * @brief Initialize a world model asset cache.
+     *
+     * @param cache Cache to initialize.
+     * @param assets Asset resolver used to resolve authored model paths; not owned.
+     */
+    void sdl3d_game_data_model_cache_init(sdl3d_game_data_model_cache *cache, sdl3d_asset_resolver *assets);
+
+    /**
+     * @brief Free all models owned by a world model cache.
+     */
+    void sdl3d_game_data_model_cache_free(sdl3d_game_data_model_cache *cache);
+
+    /**
      * @brief Draw active-scene authored sector levels.
      *
      * Scene files declare sector level instances under `world.sector_levels`.
@@ -332,6 +369,19 @@ extern "C"
      */
     bool sdl3d_game_data_draw_sector_levels(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
                                             const sdl3d_camera3d *camera);
+
+    /**
+     * @brief Draw active-scene sector levels and resolve `asset://` material
+     * textures through an asset resolver.
+     *
+     * This variant is intended for the generic data runner and pack/embedded
+     * games. Passing NULL for @p assets preserves the filesystem-only behavior
+     * of sdl3d_game_data_draw_sector_levels().
+     */
+    bool sdl3d_game_data_draw_sector_levels_with_assets(const sdl3d_game_data_runtime *runtime,
+                                                        sdl3d_render_context *renderer,
+                                                        const sdl3d_asset_resolver *assets,
+                                                        const sdl3d_camera3d *camera);
 
     /**
      * @brief Draw authored UI text for the active scene.

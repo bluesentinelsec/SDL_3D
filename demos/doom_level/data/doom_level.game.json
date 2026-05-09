@@ -10,7 +10,7 @@
     { "path": "fragments/actors/presentation_props.json", "sections": ["entities"] },
     { "path": "fragments/actors/projectiles.json", "sections": ["actor_archetypes", "actor_pools", "signals", "logic"] },
     { "path": "fragments/world/sector_levels.json", "sections": ["sector_levels"] },
-    { "path": "fragments/world/sector_doors.json", "sections": ["sector_doors", "signals", "logic"] },
+    { "path": "fragments/world/sector_doors.json", "sections": ["assets", "sector_doors", "signals", "logic"] },
     { "path": "fragments/world/sector_platforms.json", "sections": ["sector_platforms"] },
     { "path": "fragments/world/sector_ambient.json", "sections": ["assets", "logic"] },
     { "path": "fragments/world/sector_hazards.json", "sections": ["logic"] },
@@ -48,6 +48,20 @@
         "target": [4.0, 0.15, 18.4],
         "fovy": 70.0
       }
+    ]
+  },
+  "assets": {
+    "fonts": [
+      { "id": "font.doom.hud", "builtin": "Inter", "size": 22 },
+      { "id": "font.doom.title", "builtin": "Inter", "size": 42 }
+    ],
+    "images": [
+      { "id": "image.doom.skybox.px", "path": "asset://skyboxes/sky_17/px.png" },
+      { "id": "image.doom.skybox.nx", "path": "asset://skyboxes/sky_17/nx.png" },
+      { "id": "image.doom.skybox.py", "path": "asset://skyboxes/sky_17/py.png" },
+      { "id": "image.doom.skybox.ny", "path": "asset://skyboxes/sky_17/ny.png" },
+      { "id": "image.doom.skybox.pz", "path": "asset://skyboxes/sky_17/pz.png" },
+      { "id": "image.doom.skybox.nz", "path": "asset://skyboxes/sky_17/nz.png" }
     ]
   },
   "input": {
@@ -162,7 +176,7 @@
     "lighting": true,
     "lighting_key": "doom.render.lighting",
     "bloom": true,
-    "ssao": true,
+    "ssao": false,
     "profile": "modern",
     "profile_key": "doom.render.profile"
   },

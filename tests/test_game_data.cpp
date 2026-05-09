@@ -23,6 +23,7 @@ extern "C"
 #include "sdl3d/game.h"
 #include "sdl3d/game_data.h"
 #include "sdl3d/game_presentation.h"
+#include "sdl3d/image.h"
 #include "sdl3d/math.h"
 #include "sdl3d/properties.h"
 #include "sdl3d/signal_bus.h"
@@ -111,9 +112,12 @@ struct RenderPrimitiveCapture
     bool saw_doom_robot_sprite = false;
     bool saw_doom_health_sprite = false;
     bool saw_doom_crate = false;
+    bool saw_doom_dragon_model = false;
     int doom_robot_sprites = 0;
     int doom_health_sprites = 0;
     int doom_crates = 0;
+    int doom_textured_crates = 0;
+    int doom_model_primitives = 0;
     int doom_presentation_cubes = 0;
     int doom_projectile_spheres = 0;
 };
@@ -132,6 +136,7 @@ struct SectorLevelInstanceCapture
 struct SectorDoorRenderCapture
 {
     int door_primitives = 0;
+    int textured_door_primitives = 0;
     sdl3d_vec3 first_position{};
 };
 
@@ -139,6 +144,7 @@ struct DoorPrefixRenderCapture
 {
     const char *prefix = nullptr;
     int door_primitives = 0;
+    int textured_door_primitives = 0;
 };
 
 void capture_signal_payload(void *userdata, int signal_id, const sdl3d_properties *payload)
@@ -163,6 +169,7 @@ struct UiTextCapture
     bool saw_pause = false;
     bool saw_network_match_terminated = false;
     bool saw_doom_reticle = false;
+    bool saw_doom_fps = false;
 };
 
 struct UiImageCapture
@@ -1355,7 +1362,14 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
     if (entity_name.rfind("entity.doom.health.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_SPRITE)
         capture->doom_health_sprites++;
     if (entity_name.rfind("entity.doom.crate.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
+    {
         capture->doom_crates++;
+        if (primitive->texture_image != nullptr &&
+            std::string(primitive->texture_image) == "image.doom.radioactive_crate")
+            capture->doom_textured_crates++;
+    }
+    if (entity_name.rfind("entity.doom.dragon", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_MODEL)
+        capture->doom_model_primitives++;
     if (entity_name.rfind("entity.doom.presentation.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
         capture->doom_presentation_cubes++;
     if (entity_name.rfind("pool.doom.projectiles.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
@@ -1383,6 +1397,20 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
         EXPECT_NEAR(primitive->size.x, 0.9f, 0.0001f);
         EXPECT_EQ(primitive->color.g, 170);
+        EXPECT_STREQ(primitive->texture_image, "image.doom.radioactive_crate");
+    }
+    if (entity_name == "entity.doom.dragon")
+    {
+        capture->saw_doom_dragon_model = true;
+        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_MODEL);
+        EXPECT_STREQ(primitive->model_asset, "model.doom.black_dragon");
+        EXPECT_NEAR(primitive->position.x, 24.0f, 0.0001f);
+        EXPECT_NEAR(primitive->position.z, 74.0f, 0.0001f);
+        EXPECT_NEAR(primitive->model_scale.x, 2.0f, 0.0001f);
+        EXPECT_NEAR(primitive->rotation_axis.y, 1.0f, 0.0001f);
+        EXPECT_NEAR(primitive->rotation_angle, 3.1415927f, 0.0001f);
+        EXPECT_EQ(primitive->animation_clip, 0);
+        EXPECT_TRUE(primitive->animation_loop);
     }
     return true;
 }
@@ -1398,6 +1426,8 @@ bool capture_sector_door_render_primitive(void *userdata, const sdl3d_game_data_
     if (capture->door_primitives == 0)
         capture->first_position = primitive->position;
     capture->door_primitives++;
+    if (primitive->texture_image != nullptr && std::string(primitive->texture_image) == "image.doom.door_hatch")
+        capture->textured_door_primitives++;
     EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
     EXPECT_NEAR(primitive->size.x, 0.4f, 0.001f);
     EXPECT_NEAR(primitive->size.y, 2.0f, 0.001f);
@@ -1414,6 +1444,8 @@ bool capture_door_prefix_render_primitive(void *userdata, const sdl3d_game_data_
         return true;
     }
     capture->door_primitives++;
+    if (primitive->texture_image != nullptr && std::string(primitive->texture_image) == "image.doom.door_hatch")
+        capture->textured_door_primitives++;
     EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
     EXPECT_GT(primitive->size.x, 0.0f);
     EXPECT_GT(primitive->size.y, 0.0f);
@@ -1461,11 +1493,21 @@ bool capture_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
     if (std::string(text->name) == "ui.doom_level.reticle")
     {
         capture->saw_doom_reticle = true;
+        EXPECT_STREQ(text->font, "font.doom.hud");
         EXPECT_STREQ(text->text, "+");
         EXPECT_TRUE(text->centered);
         EXPECT_TRUE(text->normalized);
         EXPECT_NEAR(text->x, 0.5f, 0.0001f);
         EXPECT_NEAR(text->y, 0.5f, 0.0001f);
+    }
+    if (std::string(text->name) == "ui.doom_level.fps")
+    {
+        capture->saw_doom_fps = true;
+        EXPECT_STREQ(text->font, "font.doom.hud");
+        EXPECT_STREQ(text->format, "FPS %.0f");
+        EXPECT_TRUE(text->normalized);
+        EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_RIGHT);
+        EXPECT_NEAR(text->x, 0.985f, 0.0001f);
     }
     return true;
 }
@@ -8495,6 +8537,17 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
 {
     const std::filesystem::path doom_path = doom_level_data_path();
     ASSERT_TRUE(std::filesystem::exists(doom_path)) << doom_path;
+    for (const char *texture_name : {"rock_floor.jpg", "ceiling_metal.jpg", "wall_metal.jpg", "lava.jpg",
+                                     "door-hatch.png", "radioactive-crate.png"})
+    {
+        sdl3d_image image{};
+        const std::filesystem::path texture_path = doom_path.parent_path() / "textures" / texture_name;
+        ASSERT_TRUE(sdl3d_load_image_from_file(texture_path.string().c_str(), &image))
+            << texture_path << ": " << SDL_GetError();
+        EXPECT_GE(image.width, 256) << texture_name;
+        EXPECT_GE(image.height, 256) << texture_name;
+        sdl3d_free_image(&image);
+    }
 
     sdl3d_game_session *session = nullptr;
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
@@ -8505,6 +8558,12 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     ASSERT_NE(runtime, nullptr);
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.doom_level.play"));
+    sdl3d_game_data_scene_skybox skybox{};
+    ASSERT_TRUE(sdl3d_game_data_get_active_scene_skybox(runtime, &skybox));
+    EXPECT_STREQ(skybox.pos_x, "image.doom.skybox.px");
+    EXPECT_STREQ(skybox.neg_z, "image.doom.skybox.nz");
+    EXPECT_FLOAT_EQ(skybox.size, 400.0f);
+
     sdl3d_game_data_app_control app{};
     ASSERT_TRUE(sdl3d_game_data_get_app_control(runtime, &app));
     EXPECT_EQ(app.start_signal_id, -1);
@@ -8559,6 +8618,7 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     EXPECT_TRUE(render_settings.has_profile);
     EXPECT_STREQ(render_settings.profile_name, "modern");
     EXPECT_TRUE(render_settings.lighting_enabled);
+    EXPECT_FALSE(render_settings.ssao_enabled);
 
     const int lighting_toggle_signal = sdl3d_game_data_find_signal(runtime, "signal.render.lighting.toggle");
     ASSERT_GE(lighting_toggle_signal, 0);
@@ -8598,6 +8658,7 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     capture.prefix = "door.";
     ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_door_prefix_render_primitive, &capture));
     EXPECT_EQ(capture.door_primitives, 5);
+    EXPECT_EQ(capture.textured_door_primitives, 5);
     ParticleCapture particles{};
     ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &particles));
     EXPECT_TRUE(particles.saw_nukage_vapor);
@@ -8606,9 +8667,12 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     EXPECT_TRUE(authored_props.saw_doom_robot_sprite);
     EXPECT_TRUE(authored_props.saw_doom_health_sprite);
     EXPECT_TRUE(authored_props.saw_doom_crate);
+    EXPECT_TRUE(authored_props.saw_doom_dragon_model);
     EXPECT_EQ(authored_props.doom_robot_sprites, 5);
     EXPECT_EQ(authored_props.doom_health_sprites, 5);
     EXPECT_EQ(authored_props.doom_crates, 8);
+    EXPECT_EQ(authored_props.doom_textured_crates, 8);
+    EXPECT_EQ(authored_props.doom_model_primitives, 1);
     EXPECT_EQ(authored_props.doom_presentation_cubes, 14);
     EXPECT_GE(authored_props.sprites, 10);
     sdl3d_game_data_ambient_asset ambient{};
@@ -8620,6 +8684,11 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     UiTextCapture ui_text{};
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui_text, &ui_text));
     EXPECT_TRUE(ui_text.saw_doom_reticle);
+    EXPECT_TRUE(ui_text.saw_doom_fps);
+    sdl3d_game_data_font_asset doom_hud_font{};
+    ASSERT_TRUE(sdl3d_game_data_get_font_asset(runtime, "font.doom.hud", &doom_hud_font));
+    EXPECT_TRUE(doom_hud_font.builtin);
+    EXPECT_NEAR(doom_hud_font.size, 22.0f, 0.0001f);
     sdl3d_game_data_ui_text pause_text{};
     bool saw_pause_text = false;
     auto find_doom_pause_text = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
@@ -9047,6 +9116,7 @@ TEST(GameDataRuntime, RejectsFpsSectorControllerOnArchetypes)
 TEST(GameDataRuntime, RejectsInvalidSceneSectorLevelInstances)
 {
     const std::filesystem::path dir = unique_test_dir("sector_level_scene_invalid");
+    write_text(dir / "textures" / "sky.png", "placeholder");
     struct Case
     {
         const char *name;
@@ -9069,6 +9139,16 @@ TEST(GameDataRuntime, RejectsInvalidSceneSectorLevelInstances)
             R"json({ "sector_levels": [{ "level": "sector.test", "position": [1.0, 2.0] }] })json",
             "position",
         },
+        {
+            "unknown_skybox_image",
+            R"json({ "skybox": { "pos_x": "image.missing", "neg_x": "image.sky.nx", "pos_y": "image.sky.py", "neg_y": "image.sky.ny", "pos_z": "image.sky.pz", "neg_z": "image.sky.nz" } })json",
+            "unknown image asset",
+        },
+        {
+            "bad_skybox_size",
+            R"json({ "skybox": { "pos_x": "image.sky.px", "neg_x": "image.sky.nx", "pos_y": "image.sky.py", "neg_y": "image.sky.ny", "pos_z": "image.sky.pz", "neg_z": "image.sky.nz", "size": 1.0 } })json",
+            "skybox size",
+        },
     };
 
     for (const Case &test_case : cases)
@@ -9083,6 +9163,16 @@ TEST(GameDataRuntime, RejectsInvalidSceneSectorLevelInstances)
         const std::string game_json = std::string(R"json({
   "schema": "sdl3d.game.v0",
   "metadata": { "name": "Invalid Sector Scene" },
+  "assets": {
+    "images": [
+      { "id": "image.sky.px", "path": "asset://textures/sky.png" },
+      { "id": "image.sky.nx", "path": "asset://textures/sky.png" },
+      { "id": "image.sky.py", "path": "asset://textures/sky.png" },
+      { "id": "image.sky.ny", "path": "asset://textures/sky.png" },
+      { "id": "image.sky.pz", "path": "asset://textures/sky.png" },
+      { "id": "image.sky.nz", "path": "asset://textures/sky.png" }
+    ]
+  },
   "sector_levels": [
     {
       "name": "sector.test",

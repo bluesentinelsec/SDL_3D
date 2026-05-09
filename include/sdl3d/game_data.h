@@ -145,6 +145,34 @@ extern "C"
         const char *sprite;
     } sdl3d_game_data_image_asset;
 
+    /** @brief Authored 3D model asset descriptor. */
+    typedef struct sdl3d_game_data_model_asset
+    {
+        /** @brief Stable asset id, such as `model.dragon`. */
+        const char *id;
+        /** @brief Virtual or filesystem path to the model source. */
+        const char *path;
+    } sdl3d_game_data_model_asset;
+
+    /** @brief Authored scene skybox descriptor using six image asset ids. */
+    typedef struct sdl3d_game_data_scene_skybox
+    {
+        /** @brief +X face image asset id. */
+        const char *pos_x;
+        /** @brief -X face image asset id. */
+        const char *neg_x;
+        /** @brief +Y face image asset id. */
+        const char *pos_y;
+        /** @brief -Y face image asset id. */
+        const char *neg_y;
+        /** @brief +Z face image asset id. */
+        const char *pos_z;
+        /** @brief -Z face image asset id. */
+        const char *neg_z;
+        /** @brief Skybox cube half-size in world units. */
+        float size;
+    } sdl3d_game_data_scene_skybox;
+
     /** @brief Authored sound-effect asset descriptor. */
     typedef struct sdl3d_game_data_sound_asset
     {
@@ -369,6 +397,8 @@ extern "C"
         SDL3D_GAME_DATA_RENDER_SPHERE_BATCH = 3,
         /** @brief Billboard sprite primitive backed by an authored sprite asset. */
         SDL3D_GAME_DATA_RENDER_SPRITE = 4,
+        /** @brief 3D model primitive backed by an authored model asset. */
+        SDL3D_GAME_DATA_RENDER_MODEL = 5,
     } sdl3d_game_data_render_primitive_type;
 
     /**
@@ -408,6 +438,16 @@ extern "C"
         const char *texture_image;
         /** @brief Optional sprite asset id for SDL3D_GAME_DATA_RENDER_SPRITE. */
         const char *sprite_asset;
+        /** @brief Optional model asset id for SDL3D_GAME_DATA_RENDER_MODEL. */
+        const char *model_asset;
+        /** @brief Model scale for SDL3D_GAME_DATA_RENDER_MODEL. */
+        sdl3d_vec3 model_scale;
+        /** @brief Animation clip index for SDL3D_GAME_DATA_RENDER_MODEL, or -1 for bind/static pose. */
+        int animation_clip;
+        /** @brief Animation time in seconds for SDL3D_GAME_DATA_RENDER_MODEL. */
+        float animation_time;
+        /** @brief Whether SDL3D_GAME_DATA_RENDER_MODEL wraps animation time by the clip duration. */
+        bool animation_loop;
         /** @brief Billboard size for SDL3D_GAME_DATA_RENDER_SPRITE. */
         sdl3d_vec2 sprite_size;
         /** @brief World yaw in radians for directional sprite frame selection. */
@@ -1978,6 +2018,10 @@ extern "C"
     bool sdl3d_game_data_get_image_asset(const sdl3d_game_data_runtime *runtime, const char *id,
                                          sdl3d_game_data_image_asset *out_image);
 
+    /** @brief Read a 3D model asset descriptor by id from `assets.models`. */
+    bool sdl3d_game_data_get_model_asset(const sdl3d_game_data_runtime *runtime, const char *id,
+                                         sdl3d_game_data_model_asset *out_model);
+
     /** @brief Read a sound-effect asset descriptor by id from `assets.sounds`. */
     bool sdl3d_game_data_get_sound_asset(const sdl3d_game_data_runtime *runtime, const char *id,
                                          sdl3d_game_data_sound_asset *out_sound);
@@ -2224,6 +2268,15 @@ extern "C"
      * `renders_world`. Games without authored scenes return true.
      */
     bool sdl3d_game_data_active_scene_renders_world(const sdl3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Read the active scene's optional skybox descriptor.
+     *
+     * Scene skyboxes are authored under `world.skybox` and reference image
+     * assets by id. Returns false when the active scene has no skybox.
+     */
+    bool sdl3d_game_data_get_active_scene_skybox(const sdl3d_game_data_runtime *runtime,
+                                                 sdl3d_game_data_scene_skybox *out_skybox);
 
     /**
      * @brief Return whether an entity belongs to the active scene.

@@ -1,5 +1,10 @@
 {
   "schema": "sdl3d.fragment.v0",
+  "assets": {
+    "images": [
+      { "id": "image.doom.door_hatch", "path": "asset://textures/door-hatch.png" }
+    ]
+  },
   "signals": ["signal.door.interact"],
   "sector_doors": [
     {
@@ -19,7 +24,7 @@
           "open_offset": [2.15, 0.0, 0.0]
         }
       ],
-      "render": { "color": [145, 165, 190, 255], "lighting": true }
+      "render": { "texture": "image.doom.door_hatch", "color": [145, 165, 190, 255], "lighting": true }
     },
     {
       "name": "door.nukage.east",
@@ -34,7 +39,7 @@
           "open_offset": [0.0, 4.2, 0.0]
         }
       ],
-      "render": { "color": [145, 165, 190, 255], "lighting": true }
+      "render": { "texture": "image.doom.door_hatch", "color": [145, 165, 190, 255], "lighting": true }
     },
     {
       "name": "door.nukage.west",
@@ -53,7 +58,7 @@
           "open_offset": [0.0, 0.0, 3.15]
         }
       ],
-      "render": { "color": [145, 165, 190, 255], "lighting": true }
+      "render": { "texture": "image.doom.door_hatch", "color": [145, 165, 190, 255], "lighting": true }
     }
   ],
   "logic": {

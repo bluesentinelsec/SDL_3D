@@ -948,6 +948,51 @@ bool sdl3d_asset_resolver_read_file(const sdl3d_asset_resolver *resolver, const 
     return false;
 }
 
+bool sdl3d_asset_resolver_resolve_file_path(const sdl3d_asset_resolver *resolver, const char *asset_path,
+                                            char **out_path, char *error_buffer, int error_buffer_size)
+{
+    if (out_path != NULL)
+        *out_path = NULL;
+    if (resolver == NULL || asset_path == NULL || asset_path[0] == '\0' || out_path == NULL)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "invalid asset path resolution arguments");
+        return false;
+    }
+
+    char *normalized = normalize_asset_path(asset_path);
+    if (normalized == NULL)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "invalid asset path");
+        return false;
+    }
+
+    for (int i = resolver->mount_count - 1; i >= 0; --i)
+    {
+        const asset_mount *mount = &resolver->mounts[i];
+        if (mount->type != ASSET_MOUNT_DIRECTORY || !directory_asset_exists(mount, normalized))
+            continue;
+
+        char *path = join_directory_path(mount->directory, normalized);
+        SDL_free(normalized);
+        if (path == NULL)
+        {
+            set_asset_error(error_buffer, error_buffer_size, "failed to allocate resolved asset path");
+            return false;
+        }
+        *out_path = path;
+        return true;
+    }
+
+    SDL_free(normalized);
+    set_asset_error(error_buffer, error_buffer_size, "asset is not available from a directory mount");
+    return false;
+}
+
+void sdl3d_asset_resolver_free_path(char *path)
+{
+    SDL_free(path);
+}
+
 void sdl3d_asset_buffer_free(sdl3d_asset_buffer *buffer)
 {
     if (buffer == NULL)

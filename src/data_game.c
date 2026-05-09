@@ -19,6 +19,7 @@ struct sdl3d_data_game_runtime
     sdl3d_game_data_image_cache image_cache;
     sdl3d_game_data_particle_cache particle_cache;
     sdl3d_game_data_sprite_cache sprite_cache;
+    sdl3d_game_data_model_cache model_cache;
     sdl3d_game_data_app_flow app_flow;
     sdl3d_game_data_frame_state frame_state;
     sdl3d_game_data_input_profile_refresh_state input_profile_refresh;
@@ -956,6 +957,7 @@ bool sdl3d_data_game_runtime_create(const sdl3d_data_game_runtime_desc *desc, sd
 
     sdl3d_game_data_image_cache_init(&runtime->image_cache, runtime->assets);
     sdl3d_game_data_sprite_cache_init(&runtime->sprite_cache, runtime->assets);
+    sdl3d_game_data_model_cache_init(&runtime->model_cache, runtime->assets);
     if (!sdl3d_game_data_app_flow_start(&runtime->app_flow, runtime->data))
     {
         set_error(error_buffer, error_buffer_size, SDL_GetError());
@@ -991,6 +993,7 @@ void sdl3d_data_game_runtime_destroy(sdl3d_data_game_runtime *runtime)
     disconnect_managed_network(runtime);
     disconnect_haptics_policies(runtime);
     sdl3d_game_data_particle_cache_free(&runtime->particle_cache);
+    sdl3d_game_data_model_cache_free(&runtime->model_cache);
     sdl3d_game_data_sprite_cache_free(&runtime->sprite_cache);
     sdl3d_game_data_image_cache_free(&runtime->image_cache);
     sdl3d_game_data_font_cache_free(&runtime->font_cache);
@@ -1375,6 +1378,7 @@ void sdl3d_data_game_runtime_render(sdl3d_data_game_runtime *runtime, sdl3d_game
     frame.image_cache = &runtime->image_cache;
     frame.particle_cache = &runtime->particle_cache;
     frame.sprite_cache = &runtime->sprite_cache;
+    frame.model_cache = &runtime->model_cache;
     frame.app_flow = &runtime->app_flow;
     frame.metrics = &runtime->frame_state.metrics;
     frame.render_eval = &runtime->frame_state.render_eval;

@@ -110,7 +110,7 @@ a JSON object with schema `sdl3d.fragment.v0`.
     { "path": "fragments/assets.json", "sections": ["assets"] },
     { "path": "fragments/actors/player.json", "sections": ["entities"] },
     { "path": "fragments/world/e1m1.sectors.json", "sections": ["sector_levels"] },
-    { "path": "fragments/world/e1m1.doors.json", "sections": ["sector_doors", "signals", "logic"] },
+    { "path": "fragments/world/e1m1.doors.json", "sections": ["assets", "sector_doors", "signals", "logic"] },
     { "path": "fragments/world/e1m1.platforms.json", "sections": ["sector_platforms"] },
     { "path": "fragments/input/profiles.json", "sections": ["input"] },
     { "path": "fragments/network/replication.json", "sections": ["network"] }
@@ -207,6 +207,25 @@ Audio assets are split by playback role:
 `assets.ambient` entries map non-negative `ambient_id` values, including ids
 emitted by sector sensors, to loopable environmental streams. `ambient_id: 0`
 is reserved by convention for silence and does not need an asset entry.
+
+3D model assets are declared in `assets.models`:
+
+```json
+{
+  "assets": {
+    "models": [
+      { "id": "model.dragon", "path": "asset://models/dragon/scene.gltf" }
+    ]
+  }
+}
+```
+
+Model assets are rendered with `render.model`. Current model loading uses the
+engine's filesystem-backed model loaders, so model paths must resolve from a
+directory-mounted asset root. Source-directory development builds support GLTF,
+GLB, OBJ, and FBX; pack/embedded model loading should prefer self-contained GLB
+assets until model loaders can read every dependency directly through the asset
+resolver.
 
 ## App
 
@@ -462,6 +481,15 @@ Scenes render sector levels by declaring instances under `world.sector_levels`:
   "name": "scene.level_1",
   "camera": "camera.level_1",
   "world": {
+    "skybox": {
+      "pos_x": "image.sky.px",
+      "neg_x": "image.sky.nx",
+      "pos_y": "image.sky.py",
+      "neg_y": "image.sky.ny",
+      "pos_z": "image.sky.pz",
+      "neg_z": "image.sky.nz",
+      "size": 400.0
+    },
     "sector_levels": [
       {
         "level": "sector.e1m1",
@@ -475,6 +503,11 @@ Scenes render sector levels by declaring instances under `world.sector_levels`:
   }
 }
 ```
+
+`world.skybox` is optional and references six `assets.images` entries using
+standard cubemap face names: `pos_x`, `neg_x`, `pos_y`, `neg_y`, `pos_z`, and
+`neg_z`. The generic presentation layer draws it before sector levels and other
+world primitives. Use `asset://` image paths for pack-file and embedded builds.
 
 `level` references a top-level sector level. `variant` defaults to
 `lightmapped` and may be `lightmapped`, `vertex_baked`, or `unlit`.
@@ -969,8 +1002,15 @@ Reusable components include:
 - `particles.emitter`: actor-attached particle emitter. On pooled actors, the
   emitter is active only while the actor is active.
 - `render.cube`: renders a cube using authored `size`, or a vec3 actor property
-  named by `size_property`. The property path is useful for grid wall runs and
-  other pooled actors that need per-instance dimensions.
+  named by `size_property`. `texture` may reference an image asset id; each cube
+  face is UV-mapped to the full image and tinted by `color`. The property path
+  is useful for grid wall runs and other pooled actors that need per-instance
+  dimensions.
+- `render.model`: renders an authored `assets.models` entry with `model`,
+  optional `scale`, axis-angle rotation, `color` tint, and optional skeletal
+  animation playback via `animation_clip` and `animation_time_property`.
+  `animation_loop` defaults to `true` and wraps authored animation time by the
+  selected clip duration.
 - `render.sprite`: renders an upright billboard using an authored sprite asset.
   Use `size` for world-space width/height and optional `facing_yaw` or
   `facing_yaw_property` for directional sprite frame selection. Sprite assets

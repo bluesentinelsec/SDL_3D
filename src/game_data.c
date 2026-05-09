@@ -3657,6 +3657,19 @@ static yyjson_val *find_image_json(const sdl3d_game_data_runtime *runtime, const
     return NULL;
 }
 
+static yyjson_val *find_model_json(const sdl3d_game_data_runtime *runtime, const char *id)
+{
+    yyjson_val *models = obj_get(obj_get(runtime_root(runtime), "assets"), "models");
+    for (size_t i = 0; id != NULL && yyjson_is_arr(models) && i < yyjson_arr_size(models); ++i)
+    {
+        yyjson_val *model = yyjson_arr_get(models, i);
+        const char *model_id = json_string(model, "id", NULL);
+        if (model_id != NULL && SDL_strcmp(model_id, id) == 0)
+            return model;
+    }
+    return NULL;
+}
+
 static yyjson_val *find_sound_json(const sdl3d_game_data_runtime *runtime, const char *id)
 {
     yyjson_val *sounds = obj_get(obj_get(runtime_root(runtime), "assets"), "sounds");
@@ -5102,6 +5115,23 @@ bool sdl3d_game_data_get_image_asset(const sdl3d_game_data_runtime *runtime, con
     return out_image->id != NULL && (out_image->path != NULL || out_image->sprite != NULL);
 }
 
+bool sdl3d_game_data_get_model_asset(const sdl3d_game_data_runtime *runtime, const char *id,
+                                     sdl3d_game_data_model_asset *out_model)
+{
+    if (out_model != NULL)
+        SDL_zero(*out_model);
+    if (runtime == NULL || id == NULL || out_model == NULL)
+        return false;
+
+    yyjson_val *model = find_model_json(runtime, id);
+    if (!yyjson_is_obj(model))
+        return false;
+
+    out_model->id = json_string(model, "id", NULL);
+    out_model->path = json_string(model, "path", NULL);
+    return out_model->id != NULL && out_model->path != NULL;
+}
+
 bool sdl3d_game_data_get_sound_asset(const sdl3d_game_data_runtime *runtime, const char *id,
                                      sdl3d_game_data_sound_asset *out_sound)
 {
@@ -5924,6 +5954,19 @@ static bool emit_actor_render_primitives(const sdl3d_game_data_runtime *runtime,
             const char *facing_yaw_property = json_string(component, "facing_yaw_property", NULL);
             if (facing_yaw_property != NULL)
                 primitive.sprite_facing_yaw += sdl3d_properties_get_float(actor->props, facing_yaw_property, 0.0f);
+        }
+        else if (SDL_strcmp(type, "render.model") == 0)
+        {
+            primitive.type = SDL3D_GAME_DATA_RENDER_MODEL;
+            primitive.model_asset = json_string(component, "model", NULL);
+            primitive.model_scale = json_vec3(component, "scale", sdl3d_vec3_make(1.0f, 1.0f, 1.0f));
+            primitive.animation_clip = json_int(component, "animation_clip", -1);
+            primitive.animation_time = json_float(component, "animation_time", 0.0f);
+            primitive.animation_loop = json_bool(component, "animation_loop", true);
+            const char *animation_time_property = json_string(component, "animation_time_property", NULL);
+            if (animation_time_property != NULL)
+                primitive.animation_time =
+                    sdl3d_properties_get_float(actor->props, animation_time_property, primitive.animation_time);
         }
         else
         {
@@ -7208,6 +7251,30 @@ bool sdl3d_game_data_active_scene_renders_world(const sdl3d_game_data_runtime *r
 {
     const scene_entry *scene = active_scene_entry_const(runtime);
     return scene != NULL ? json_bool(scene->root, "renders_world", true) : true;
+}
+
+bool sdl3d_game_data_get_active_scene_skybox(const sdl3d_game_data_runtime *runtime,
+                                             sdl3d_game_data_scene_skybox *out_skybox)
+{
+    if (out_skybox != NULL)
+        SDL_zero(*out_skybox);
+    if (runtime == NULL || out_skybox == NULL)
+        return false;
+
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    yyjson_val *skybox = obj_get(obj_get(scene != NULL ? scene->root : NULL, "world"), "skybox");
+    if (!yyjson_is_obj(skybox))
+        return false;
+
+    out_skybox->pos_x = json_string(skybox, "pos_x", NULL);
+    out_skybox->neg_x = json_string(skybox, "neg_x", NULL);
+    out_skybox->pos_y = json_string(skybox, "pos_y", NULL);
+    out_skybox->neg_y = json_string(skybox, "neg_y", NULL);
+    out_skybox->pos_z = json_string(skybox, "pos_z", NULL);
+    out_skybox->neg_z = json_string(skybox, "neg_z", NULL);
+    out_skybox->size = json_float(skybox, "size", 400.0f);
+    return out_skybox->pos_x != NULL && out_skybox->neg_x != NULL && out_skybox->pos_y != NULL &&
+           out_skybox->neg_y != NULL && out_skybox->pos_z != NULL && out_skybox->neg_z != NULL;
 }
 
 bool sdl3d_game_data_active_scene_has_entity(const sdl3d_game_data_runtime *runtime, const char *entity_name)

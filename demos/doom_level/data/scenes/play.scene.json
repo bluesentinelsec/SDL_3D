@@ -12,6 +12,7 @@
     "entity.doom.robot.storage",
     "entity.doom.robot.hall",
     "entity.doom.robot.dragon",
+    "entity.doom.dragon",
     "entity.doom.health.entry",
     "entity.doom.health.hall",
     "entity.doom.health.north",
@@ -63,6 +64,15 @@
     ]
   },
   "world": {
+    "skybox": {
+      "pos_x": "image.doom.skybox.px",
+      "neg_x": "image.doom.skybox.nx",
+      "pos_y": "image.doom.skybox.py",
+      "neg_y": "image.doom.skybox.ny",
+      "pos_z": "image.doom.skybox.pz",
+      "neg_z": "image.doom.skybox.nz",
+      "size": 400.0
+    },
     "sector_levels": [
       {
         "level": "sector.doom.e1m1",
@@ -198,6 +208,7 @@
     "text": [
       {
         "name": "ui.doom_level.phase",
+        "font": "font.doom.hud",
         "text": "DATA-DRIVEN SECTOR LEVEL - WASD + MOUSE - E OPENS DOORS - CLICK/F FIRES",
         "x": 0.5,
         "y": 0.06,
@@ -208,6 +219,7 @@
       },
       {
         "name": "ui.doom_level.reticle",
+        "font": "font.doom.hud",
         "text": "+",
         "x": 0.5,
         "y": 0.5,
@@ -217,7 +229,20 @@
         "color": [255, 255, 255, 220]
       },
       {
+        "name": "ui.doom_level.fps",
+        "font": "font.doom.hud",
+        "format": "FPS %.0f",
+        "bindings": [{ "type": "metric", "metric": "fps" }],
+        "x": 0.985,
+        "y": 0.035,
+        "scale": 0.8,
+        "align": "right",
+        "normalized": true,
+        "color": [180, 235, 190, 230]
+      },
+      {
         "name": "ui.doom_level.pause.title",
+        "font": "font.doom.title",
         "text": "PAUSED",
         "x": 0.5,
         "y": 0.42,
@@ -230,6 +255,7 @@
       },
       {
         "name": "ui.doom_level.pause.help",
+        "font": "font.doom.hud",
         "text": "Press P to resume - Esc exits",
         "x": 0.5,
         "y": 0.5,

@@ -1,6 +1,12 @@
 {
   "schema": "sdl3d.fragment.v0",
   "assets": {
+    "images": [
+      { "id": "image.doom.radioactive_crate", "path": "asset://textures/radioactive-crate.png" }
+    ],
+    "models": [
+      { "id": "model.doom.black_dragon", "path": "asset://models/black_dragon/scene.gltf" }
+    ],
     "sprites": [
       {
         "id": "sprite.doom.robot.walk",
@@ -341,6 +347,38 @@
       ]
     },
     {
+      "name": "entity.doom.dragon",
+      "active": true,
+      "tags": ["npc", "dragon", "model"],
+      "transform": { "position": [24.0, 0.0, 74.0] },
+      "properties": {
+        "dragon_anim_time": { "type": "float", "value": 0.0 },
+        "classname": { "type": "string", "value": "npc_dragon" },
+        "health": { "type": "int", "value": 500 }
+      },
+      "components": [
+        {
+          "type": "motion.oscillate",
+          "time_property": "dragon_anim_time",
+          "origin": [24.0, 0.0, 74.0],
+          "amplitude": [0.0, 0.0, 0.0],
+          "rate": 1.0
+        },
+        {
+          "type": "render.model",
+          "model": "model.doom.black_dragon",
+          "scale": [2.0, 2.0, 2.0],
+          "rotation_axis": [0.0, 1.0, 0.0],
+          "rotation_angle": 3.1415927,
+          "animation_clip": 0,
+          "animation_time_property": "dragon_anim_time",
+          "animation_loop": true,
+          "color": [255, 255, 255, 255],
+          "lighting": true
+        }
+      ]
+    },
+    {
       "name": "entity.doom.crate.nukage",
       "active": true,
       "tags": ["prop", "crate"],
@@ -349,6 +387,7 @@
         {
           "type": "render.cube",
           "size": [0.9, 0.9, 0.9],
+          "texture": "image.doom.radioactive_crate",
           "color": [78, 170, 72, 255],
           "lighting": true
         }
@@ -360,7 +399,7 @@
       "tags": ["prop", "crate"],
       "transform": { "position": [3.0, 0.5, 5.0] },
       "components": [
-        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "color": [78, 170, 72, 255], "lighting": true }
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "texture": "image.doom.radioactive_crate", "color": [78, 170, 72, 255], "lighting": true }
       ]
     },
     {
@@ -369,7 +408,7 @@
       "tags": ["prop", "crate"],
       "transform": { "position": [7.0, 0.5, 5.0] },
       "components": [
-        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "color": [78, 170, 72, 255], "lighting": true }
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "texture": "image.doom.radioactive_crate", "color": [78, 170, 72, 255], "lighting": true }
       ]
     },
     {
@@ -378,7 +417,7 @@
       "tags": ["prop", "crate"],
       "transform": { "position": [3.0, 0.5, 10.0] },
       "components": [
-        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "color": [78, 170, 72, 255], "lighting": true }
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "texture": "image.doom.radioactive_crate", "color": [78, 170, 72, 255], "lighting": true }
       ]
     },
     {
@@ -387,7 +426,7 @@
       "tags": ["prop", "crate"],
       "transform": { "position": [7.0, 0.5, 10.0] },
       "components": [
-        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "color": [78, 170, 72, 255], "lighting": true }
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "texture": "image.doom.radioactive_crate", "color": [78, 170, 72, 255], "lighting": true }
       ]
     },
     {
@@ -396,7 +435,7 @@
       "tags": ["prop", "crate"],
       "transform": { "position": [14.0, 0.5, 20.0] },
       "components": [
-        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "color": [78, 170, 72, 255], "lighting": true }
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "texture": "image.doom.radioactive_crate", "color": [78, 170, 72, 255], "lighting": true }
       ]
     },
     {
@@ -405,7 +444,7 @@
       "tags": ["prop", "crate"],
       "transform": { "position": [14.0, 1.5, 20.0] },
       "components": [
-        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "color": [78, 170, 72, 255], "lighting": true }
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "texture": "image.doom.radioactive_crate", "color": [78, 170, 72, 255], "lighting": true }
       ]
     },
     {
@@ -414,7 +453,7 @@
       "tags": ["prop", "crate"],
       "transform": { "position": [22.0, 0.5, 16.0] },
       "components": [
-        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "color": [78, 170, 72, 255], "lighting": true }
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "texture": "image.doom.radioactive_crate", "color": [78, 170, 72, 255], "lighting": true }
       ]
     }
   ]

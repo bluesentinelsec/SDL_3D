@@ -6,6 +6,7 @@
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include "sdl3d/asset.h"
 #include "texture_internal.h"
 
 static bool sdl3d_texture_filter_valid(sdl3d_texture_filter filter)
@@ -520,6 +521,11 @@ static bool sdl3d_texture_path_is_absolute(const char *path)
     return false;
 }
 
+static bool sdl3d_texture_path_is_asset_uri(const char *path)
+{
+    return path != NULL && SDL_strncmp(path, "asset://", 8) == 0;
+}
+
 static char *sdl3d_texture_dirname_dup(const char *path)
 {
     const char *slash = NULL;
@@ -573,7 +579,7 @@ static bool sdl3d_texture_resolve_path(const char *source_path, const char *text
         return SDL_InvalidParamError("out_path");
     }
 
-    if (sdl3d_texture_path_is_absolute(texture_path))
+    if (sdl3d_texture_path_is_asset_uri(texture_path) || sdl3d_texture_path_is_absolute(texture_path))
     {
         resolved = sdl3d_texture_strdup(texture_path);
         if (resolved == NULL)
@@ -628,6 +634,13 @@ void sdl3d_texture_cache_destroy(sdl3d_texture_cache_entry *cache)
 bool sdl3d_texture_cache_get_or_load(sdl3d_texture_cache_entry **cache, const char *source_path,
                                      const char *texture_path, const sdl3d_texture2d **out_texture)
 {
+    return sdl3d_texture_cache_get_or_load_asset(cache, NULL, source_path, texture_path, out_texture);
+}
+
+bool sdl3d_texture_cache_get_or_load_asset(sdl3d_texture_cache_entry **cache, const sdl3d_asset_resolver *assets,
+                                           const char *source_path, const char *texture_path,
+                                           const sdl3d_texture2d **out_texture)
+{
     sdl3d_texture_cache_entry *entry = NULL;
     char *resolved_path = NULL;
 
@@ -666,7 +679,43 @@ bool sdl3d_texture_cache_get_or_load(sdl3d_texture_cache_entry **cache, const ch
         return SDL_OutOfMemory();
     }
 
-    if (!sdl3d_load_texture_from_file(resolved_path, &entry->texture))
+    if (sdl3d_texture_path_is_asset_uri(resolved_path))
+    {
+        sdl3d_asset_buffer buffer;
+        sdl3d_image image;
+        char error[256];
+        SDL_zero(buffer);
+        SDL_zero(image);
+        if (assets == NULL)
+        {
+            SDL_free(entry);
+            SDL_free(resolved_path);
+            return SDL_SetError("Cannot load asset texture '%s' without an asset resolver.", texture_path);
+        }
+        if (!sdl3d_asset_resolver_read_file(assets, resolved_path, &buffer, error, (int)sizeof(error)))
+        {
+            SDL_free(entry);
+            SDL_free(resolved_path);
+            return SDL_SetError("Failed to read texture asset '%s': %s", texture_path, error);
+        }
+        const bool decoded = sdl3d_load_image_from_memory(buffer.data, buffer.size, &image);
+        sdl3d_asset_buffer_free(&buffer);
+        if (!decoded)
+        {
+            SDL_free(entry);
+            SDL_free(resolved_path);
+            return SDL_SetError("Failed to decode texture asset '%s'.", texture_path);
+        }
+        const bool created = sdl3d_create_texture_from_image(&image, &entry->texture);
+        sdl3d_free_image(&image);
+        if (!created)
+        {
+            SDL_free(entry);
+            SDL_free(resolved_path);
+            return false;
+        }
+    }
+    else if (!sdl3d_load_texture_from_file(resolved_path, &entry->texture))
     {
         SDL_free(entry);
         SDL_free(resolved_path);
