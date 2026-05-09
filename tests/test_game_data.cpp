@@ -7904,6 +7904,100 @@ TEST(GameDataRuntime, SectorVelocityMotionDespawnsPooledActorsOnImpact)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, VolumeSensorsRunEnterAndExitActions)
+{
+    const std::filesystem::path dir = unique_test_dir("volume_sensor_actions");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.player",
+  "updates_game": true,
+  "entities": ["entity.player"]
+})json");
+    write_text(dir / "volume_sensor.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Volume Sensor Test" },
+  "world": {
+    "name": "world.volume",
+    "kind": "3d",
+    "cameras": [
+      { "name": "camera.player", "type": "perspective", "position": [0.0, 2.0, 5.0], "target": [0.0, 0.0, 0.0], "active": true },
+      { "name": "camera.zone", "type": "perspective", "position": [4.0, 3.0, 2.0], "target": [0.0, 0.0, 0.0] }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [0.0, 0.0, 0.0] },
+      "properties": {
+        "zone_entries": { "type": "int", "value": 0 },
+        "zone_exits": { "type": "int", "value": 0 }
+      }
+    }
+  ],
+  "logic": {
+    "sensors": [
+      {
+        "name": "sensor.zone.enter",
+        "type": "sensor.volume",
+        "actor": "entity.player",
+        "min": [1.0, -1.0, -1.0],
+        "max": [3.0, 1.0, 1.0],
+        "edge": "enter",
+        "actions": [
+          { "type": "camera.set", "camera": "camera.zone" },
+          { "type": "property.add", "target_from_payload": "actor_name", "key": "zone_entries", "value": 1 }
+        ]
+      },
+      {
+        "name": "sensor.zone.exit",
+        "type": "sensor.volume",
+        "actor": "entity.player",
+        "min": [1.0, -1.0, -1.0],
+        "max": [3.0, 1.0, 1.0],
+        "edge": "exit",
+        "actions": [
+          { "type": "camera.set", "camera": "camera.player" },
+          { "type": "property.add", "target_from_payload": "actor_name", "key": "zone_exits", "value": 1 }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "volume_sensor.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.player");
+
+    player->position = sdl3d_vec3_make(2.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.zone");
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "zone_entries", 0), 1);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "zone_entries", 0), 1);
+
+    player->position = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.player");
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "zone_exits", 0), 1);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RunsAuthoredSectorDoorInteractionRenderAndCollision)
 {
     const std::filesystem::path dir = unique_test_dir("sector_doors");
@@ -8224,6 +8318,14 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     RenderPrimitiveCapture projectile_capture{};
     ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &projectile_capture));
     EXPECT_EQ(projectile_capture.doom_projectile_spheres, 1);
+    sdl3d_camera3d surveillance_camera{};
+    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.doom.surveillance", &surveillance_camera));
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.doom.player");
+    player->position = sdl3d_vec3_make(43.0f, 0.5f, 89.0f);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.doom.surveillance");
     sdl3d_game_data_sprite_asset robot_sprite{};
     ASSERT_TRUE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.doom.robot.walk", &robot_sprite));
     EXPECT_EQ(robot_sprite.source_kind, SDL3D_SPRITE_ASSET_SOURCE_FILES);
@@ -9173,6 +9275,31 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json",
             "exactly one of a or a_tag",
+        },
+        {
+            "bad_volume_bounds",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "entities": [
+    { "name": "entity.player", "active": true }
+  ],
+  "logic": {
+    "sensors": [
+      {
+        "type": "sensor.volume",
+        "actor": "entity.player",
+        "min": [2.0, 0.0, 0.0],
+        "max": [1.0, 1.0, 1.0],
+        "actions": [
+          { "type": "property.add", "target": "entity.player", "key": "hits", "value": 1 }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "min must be less than or equal to max",
         },
     };
 

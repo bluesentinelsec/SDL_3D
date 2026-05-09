@@ -5549,6 +5549,55 @@ static bool validate_logic(validation_context *ctx, yyjson_val *root, validation
                 return false;
             continue;
         }
+        if (SDL_strcmp(type, "sensor.volume") == 0)
+        {
+            const char *actor = json_string(sensor, "actor");
+            if (actor == NULL)
+                actor = json_string(sensor, "entity");
+            const char *actor_tag = json_string(sensor, "actor_tag");
+            if (actor_tag == NULL)
+                actor_tag = json_string(sensor, "a_tag");
+            yyjson_val *min_value = obj_get(sensor, "min");
+            yyjson_val *max_value = obj_get(sensor, "max");
+            yyjson_val *actions = obj_get(sensor, "actions");
+            const char *edge = json_string(sensor, "edge");
+            const char *signal = json_string(sensor, "on_enter");
+            if (edge != NULL && (SDL_strcmp(edge, "stay") == 0 || SDL_strcmp(edge, "overlap") == 0))
+            {
+                const char *on_stay = json_string(sensor, "on_stay");
+                signal = on_stay != NULL ? on_stay : signal;
+            }
+            else if (edge != NULL && SDL_strcmp(edge, "exit") == 0)
+            {
+                const char *on_exit = json_string(sensor, "on_exit");
+                signal = on_exit != NULL ? on_exit : signal;
+            }
+
+            if ((actor == NULL && actor_tag == NULL) || (actor != NULL && actor_tag != NULL))
+                return validation_error(ctx, path, "sensor.volume requires exactly one of actor or actor_tag");
+            if (actor != NULL && !require_actor_ref(ctx, names, actor, path))
+                return false;
+            if (actor_tag != NULL && actor_tag[0] == '\0')
+                return validation_error(ctx, path, "sensor.volume actor_tag must be non-empty");
+            if (!is_vec_array(min_value, 3) || !is_vec_array(max_value, 3))
+                return validation_error(ctx, path, "sensor.volume min and max must be vec3 values");
+            if (yyjson_get_num(yyjson_arr_get(min_value, 0)) > yyjson_get_num(yyjson_arr_get(max_value, 0)) ||
+                yyjson_get_num(yyjson_arr_get(min_value, 1)) > yyjson_get_num(yyjson_arr_get(max_value, 1)) ||
+                yyjson_get_num(yyjson_arr_get(min_value, 2)) > yyjson_get_num(yyjson_arr_get(max_value, 2)))
+            {
+                return validation_error(ctx, path, "sensor.volume min must be less than or equal to max");
+            }
+            if (edge != NULL && SDL_strcmp(edge, "enter") != 0 && SDL_strcmp(edge, "stay") != 0 &&
+                SDL_strcmp(edge, "overlap") != 0 && SDL_strcmp(edge, "exit") != 0)
+            {
+                return validation_error(ctx, path, "sensor.volume edge must be enter, stay, overlap, or exit");
+            }
+            if (actions != NULL && !validate_action_array(ctx, actions, path, names))
+                return false;
+            if (actions == NULL && !require_ref(ctx, &names->signals, "signal", signal, path))
+                return false;
+            continue;
+        }
         return validation_error(ctx, path, "unsupported sensor type '%s'", type);
     }
 
