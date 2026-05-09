@@ -73,6 +73,31 @@ Names are stable authored handles. Use namespaces that reveal ownership:
 Loaders reject duplicate names inside namespaces and report the source file and
 JSON path when validation fails.
 
+## Render
+
+The root `render` object configures frame-level presentation defaults:
+
+```json
+{
+  "render": {
+    "clear_color": [8, 10, 14, 255],
+    "lighting": true,
+    "lighting_key": "render_lighting_enabled",
+    "bloom": true,
+    "ssao": true,
+    "profile": "modern",
+    "profile_key": "render_profile"
+  }
+}
+```
+
+`profile` may be `modern`, `ps1`, `n64`, `dos`, or `snes`. If `tonemap` is not
+authored, the selected profile supplies its tonemap mode. `tonemap` may be
+`none`, `reinhard`, or `aces` when a game wants to override the profile.
+Optional `*_key` fields read scene-state values at draw time and override the
+authored defaults. This lets games author debug/profile toggles through sensors
+and logic actions while keeping the runner game-agnostic.
+
 ## Structured Imports
 
 Imports are structured composition, not textual includes. Each imported file is
@@ -429,8 +454,10 @@ Scenes render sector levels by declaring instances under `world.sector_levels`:
       {
         "level": "sector.e1m1",
         "variant": "lightmapped",
+        "variant_key": "render_sector_variant",
         "position": [0.0, 0.0, 0.0],
-        "portal_culling": true
+        "portal_culling": true,
+        "portal_culling_key": "render_portal_culling"
       }
     ]
   }
@@ -442,6 +469,9 @@ Scenes render sector levels by declaring instances under `world.sector_levels`:
 `position` defaults to the origin and translates the level as a whole.
 `portal_culling` defaults to `true`; when enabled, generic presentation
 computes visibility from the active camera before drawing the level.
+`variant_key` and `portal_culling_key` are optional scene-state keys. When
+present, they override `variant` and `portal_culling` at runtime. This supports
+data-authored debug/profile controls without custom host-side input code.
 
 Renderer, controller, and editor phases should consume runtime descriptors
 instead of parsing JSON directly. `world.kind` remains a high-level statement
@@ -993,6 +1023,23 @@ Logic connects sensors, timers, signals, conditions, and actions:
 
 Use JSON actions for ordinary composition. Use Lua adapters only for
 game-specific calculations or policy that is not a reusable engine primitive.
+
+Scene-state actions write transient values that UI, render settings, sector
+instances, and conditions can read:
+
+```json
+{ "type": "scene_state.set", "key": "render_profile", "value": "ps1" }
+{ "type": "scene_state.toggle", "key": "render_lighting_enabled", "default": true }
+{
+  "type": "scene_state.cycle",
+  "key": "sector_variant",
+  "default": "lightmapped",
+  "values": ["lightmapped", "vertex_baked", "unlit"]
+}
+```
+
+Use `set` for fixed values, `toggle` for booleans, and `cycle` for small
+ordered sets such as render profiles or debug variants.
 
 `property.set` and `property.add` normally target a fixed actor:
 

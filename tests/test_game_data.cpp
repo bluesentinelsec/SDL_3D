@@ -8505,6 +8505,46 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     ASSERT_NE(runtime, nullptr);
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.doom_level.play"));
+    sdl3d_game_data_render_settings render_settings{};
+    ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &render_settings));
+    EXPECT_TRUE(render_settings.has_profile);
+    EXPECT_STREQ(render_settings.profile_name, "modern");
+    EXPECT_TRUE(render_settings.lighting_enabled);
+
+    const int lighting_toggle_signal = sdl3d_game_data_find_signal(runtime, "signal.render.lighting.toggle");
+    ASSERT_GE(lighting_toggle_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), lighting_toggle_signal, nullptr);
+    ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &render_settings));
+    EXPECT_FALSE(render_settings.lighting_enabled);
+
+    const int profile_ps1_signal = sdl3d_game_data_find_signal(runtime, "signal.render.profile.ps1");
+    ASSERT_GE(profile_ps1_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), profile_ps1_signal, nullptr);
+    ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &render_settings));
+    EXPECT_STREQ(render_settings.profile_name, "ps1");
+    EXPECT_TRUE(render_settings.profile.vertex_snap);
+    EXPECT_EQ(render_settings.tonemap, SDL3D_TONEMAP_NONE);
+
+    SectorLevelInstanceCapture sector_capture{};
+    ASSERT_TRUE(
+        sdl3d_game_data_for_each_sector_level_instance(runtime, capture_sector_level_instance, &sector_capture));
+    EXPECT_EQ(sector_capture.variant, SDL3D_GAME_DATA_SECTOR_LEVEL_LIGHTMAPPED);
+    EXPECT_TRUE(sector_capture.portal_culling);
+    const int variant_cycle_signal = sdl3d_game_data_find_signal(runtime, "signal.render.variant.cycle");
+    ASSERT_GE(variant_cycle_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), variant_cycle_signal, nullptr);
+    sector_capture = {};
+    ASSERT_TRUE(
+        sdl3d_game_data_for_each_sector_level_instance(runtime, capture_sector_level_instance, &sector_capture));
+    EXPECT_EQ(sector_capture.variant, SDL3D_GAME_DATA_SECTOR_LEVEL_VERTEX_BAKED);
+    const int portal_toggle_signal = sdl3d_game_data_find_signal(runtime, "signal.render.portal_culling.toggle");
+    ASSERT_GE(portal_toggle_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), portal_toggle_signal, nullptr);
+    sector_capture = {};
+    ASSERT_TRUE(
+        sdl3d_game_data_for_each_sector_level_instance(runtime, capture_sector_level_instance, &sector_capture));
+    EXPECT_FALSE(sector_capture.portal_culling);
+
     DoorPrefixRenderCapture capture{};
     capture.prefix = "door.";
     ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_door_prefix_render_primitive, &capture));

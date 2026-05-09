@@ -48,6 +48,15 @@
       "action.move.right",
       "action.jump",
       "action.interact",
+      "action.render.lighting.toggle",
+      "action.render.variant.cycle",
+      "action.render.portal_culling.toggle",
+      "action.render.profile.cycle",
+      "action.render.profile.modern",
+      "action.render.profile.ps1",
+      "action.render.profile.n64",
+      "action.render.profile.dos",
+      "action.render.profile.snes",
       "action.fire"
     ]
   },
@@ -56,8 +65,10 @@
       {
         "level": "sector.doom.e1m1",
         "variant": "lightmapped",
+        "variant_key": "doom.sector.variant",
         "position": [0.0, 0.0, 0.0],
-        "portal_culling": true
+        "portal_culling": true,
+        "portal_culling_key": "doom.sector.portal_culling"
       }
     ]
   },

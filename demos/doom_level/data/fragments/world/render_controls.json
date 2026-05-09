@@ -1,0 +1,119 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "signals": [
+    "signal.render.lighting.toggle",
+    "signal.render.variant.cycle",
+    "signal.render.portal_culling.toggle",
+    "signal.render.profile.cycle",
+    "signal.render.profile.modern",
+    "signal.render.profile.ps1",
+    "signal.render.profile.n64",
+    "signal.render.profile.dos",
+    "signal.render.profile.snes"
+  ],
+  "logic": {
+    "sensors": [
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.render.lighting.toggle",
+        "on_pressed": "signal.render.lighting.toggle"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.render.variant.cycle",
+        "on_pressed": "signal.render.variant.cycle"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.render.portal_culling.toggle",
+        "on_pressed": "signal.render.portal_culling.toggle"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.render.profile.cycle",
+        "on_pressed": "signal.render.profile.cycle"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.render.profile.modern",
+        "on_pressed": "signal.render.profile.modern"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.render.profile.ps1",
+        "on_pressed": "signal.render.profile.ps1"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.render.profile.n64",
+        "on_pressed": "signal.render.profile.n64"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.render.profile.dos",
+        "on_pressed": "signal.render.profile.dos"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.render.profile.snes",
+        "on_pressed": "signal.render.profile.snes"
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.render.lighting.toggle",
+        "actions": [
+          { "type": "scene_state.toggle", "key": "doom.render.lighting", "default": true }
+        ]
+      },
+      {
+        "signal": "signal.render.variant.cycle",
+        "actions": [
+          {
+            "type": "scene_state.cycle",
+            "key": "doom.sector.variant",
+            "default": "lightmapped",
+            "values": ["lightmapped", "vertex_baked", "unlit"]
+          }
+        ]
+      },
+      {
+        "signal": "signal.render.portal_culling.toggle",
+        "actions": [
+          { "type": "scene_state.toggle", "key": "doom.sector.portal_culling", "default": true }
+        ]
+      },
+      {
+        "signal": "signal.render.profile.cycle",
+        "actions": [
+          {
+            "type": "scene_state.cycle",
+            "key": "doom.render.profile",
+            "default": "modern",
+            "values": ["modern", "ps1", "n64", "dos", "snes"]
+          }
+        ]
+      },
+      {
+        "signal": "signal.render.profile.modern",
+        "actions": [{ "type": "scene_state.set", "key": "doom.render.profile", "value": "modern" }]
+      },
+      {
+        "signal": "signal.render.profile.ps1",
+        "actions": [{ "type": "scene_state.set", "key": "doom.render.profile", "value": "ps1" }]
+      },
+      {
+        "signal": "signal.render.profile.n64",
+        "actions": [{ "type": "scene_state.set", "key": "doom.render.profile", "value": "n64" }]
+      },
+      {
+        "signal": "signal.render.profile.dos",
+        "actions": [{ "type": "scene_state.set", "key": "doom.render.profile", "value": "dos" }]
+      },
+      {
+        "signal": "signal.render.profile.snes",
+        "actions": [{ "type": "scene_state.set", "key": "doom.render.profile", "value": "snes" }]
+      }
+    ]
+  }
+}

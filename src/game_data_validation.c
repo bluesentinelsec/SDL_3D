@@ -5238,6 +5238,34 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             return validation_error(ctx, json_path, "scene_state.set requires a scalar value");
         return true;
     }
+    if (SDL_strcmp(type, "scene_state.toggle") == 0)
+    {
+        if (!is_non_empty_string(action, "key"))
+            return validation_error(ctx, json_path, "scene_state.toggle requires a non-empty key");
+        yyjson_val *default_value = obj_get(action, "default");
+        if (default_value != NULL && !yyjson_is_bool(default_value))
+            return validation_error(ctx, json_path, "scene_state.toggle default must be a boolean");
+        return true;
+    }
+    if (SDL_strcmp(type, "scene_state.cycle") == 0)
+    {
+        if (!is_non_empty_string(action, "key"))
+            return validation_error(ctx, json_path, "scene_state.cycle requires a non-empty key");
+        yyjson_val *values = obj_get(action, "values");
+        if (!yyjson_is_arr(values) || yyjson_arr_size(values) == 0)
+            return validation_error(ctx, json_path, "scene_state.cycle requires a non-empty values array");
+        for (size_t i = 0; i < yyjson_arr_size(values); ++i)
+        {
+            yyjson_val *value = yyjson_arr_get(values, i);
+            if (!(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value)))
+                return validation_error(ctx, json_path, "scene_state.cycle values must be scalar");
+        }
+        yyjson_val *default_value = obj_get(action, "default");
+        if (default_value != NULL &&
+            !(yyjson_is_bool(default_value) || yyjson_is_num(default_value) || yyjson_is_str(default_value)))
+            return validation_error(ctx, json_path, "scene_state.cycle default must be scalar");
+        return true;
+    }
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
     {
         if (!is_non_empty_string(action, "name"))
@@ -6794,12 +6822,18 @@ static bool validate_scene_sector_levels(validation_context *ctx, yyjson_val *sc
             return validation_error(ctx, entry_path,
                                     "scene sector level variant must be lightmapped, vertex_baked, or unlit");
         }
+        yyjson_val *variant_key = obj_get(entry, "variant_key");
+        if (variant_key != NULL && !is_non_empty_string(entry, "variant_key"))
+            return validation_error(ctx, entry_path, "scene sector level variant_key must be non-empty");
         yyjson_val *position = obj_get(entry, "position");
         if (position != NULL && !is_exact_vec_array(position, 3))
             return validation_error(ctx, entry_path, "scene sector level position must be a vec3 array");
         yyjson_val *portal_culling = obj_get(entry, "portal_culling");
         if (portal_culling != NULL && !yyjson_is_bool(portal_culling))
             return validation_error(ctx, entry_path, "scene sector level portal_culling must be a boolean");
+        yyjson_val *portal_culling_key = obj_get(entry, "portal_culling_key");
+        if (portal_culling_key != NULL && !is_non_empty_string(entry, "portal_culling_key"))
+            return validation_error(ctx, entry_path, "scene sector level portal_culling_key must be non-empty");
     }
     return true;
 }
@@ -7247,6 +7281,51 @@ static bool warn_unused(validation_context *ctx, const name_table *declared, con
     return true;
 }
 
+static bool valid_render_profile_name(const char *name)
+{
+    return name != NULL &&
+           (SDL_strcasecmp(name, "modern") == 0 || SDL_strcasecmp(name, "ps1") == 0 ||
+            SDL_strcasecmp(name, "n64") == 0 || SDL_strcasecmp(name, "dos") == 0 || SDL_strcasecmp(name, "snes") == 0);
+}
+
+static bool valid_tonemap_name(const char *name)
+{
+    return name != NULL && (SDL_strcasecmp(name, "none") == 0 || SDL_strcasecmp(name, "reinhard") == 0 ||
+                            SDL_strcasecmp(name, "aces") == 0);
+}
+
+static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
+{
+    yyjson_val *render = obj_get(root, "render");
+    if (render == NULL)
+        return true;
+    if (!yyjson_is_obj(render))
+        return validation_error(ctx, "$.render", "render must be an object");
+
+    yyjson_val *lighting = obj_get(render, "lighting");
+    yyjson_val *bloom = obj_get(render, "bloom");
+    yyjson_val *ssao = obj_get(render, "ssao");
+    if ((lighting != NULL && !yyjson_is_bool(lighting)) || (bloom != NULL && !yyjson_is_bool(bloom)) ||
+        (ssao != NULL && !yyjson_is_bool(ssao)))
+        return validation_error(ctx, "$.render", "render lighting, bloom, and ssao must be booleans");
+    if (obj_get(render, "clear_color") != NULL && !is_vec_array(obj_get(render, "clear_color"), 3))
+        return validation_error(ctx, "$.render.clear_color", "render clear_color must be a vec3 or vec4 color");
+    const char *tonemap = json_string(render, "tonemap");
+    if (tonemap != NULL && !valid_tonemap_name(tonemap))
+        return validation_error(ctx, "$.render.tonemap", "render tonemap must be none, reinhard, or aces");
+    const char *profile = json_string(render, "profile");
+    if (profile != NULL && !valid_render_profile_name(profile))
+        return validation_error(ctx, "$.render.profile", "render profile is unknown");
+
+    const char *key_fields[] = {"lighting_key", "bloom_key", "ssao_key", "tonemap_key", "profile_key"};
+    for (size_t i = 0; i < SDL_arraysize(key_fields); ++i)
+    {
+        if (obj_get(render, key_fields[i]) != NULL && !is_non_empty_string(render, key_fields[i]))
+            return validation_error(ctx, "$.render", "render scene-state key fields must be non-empty strings");
+    }
+    return true;
+}
+
 static bool validate_details(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     return validate_storage(ctx, root) && validate_persistence(ctx, root, names) &&
@@ -7259,9 +7338,10 @@ static bool validate_details(validation_context *ctx, yyjson_val *root, validati
            validate_sector_doors(ctx, root, names) && validate_sector_platforms(ctx, root, names) &&
            validate_actor_archetypes_and_pools(ctx, root, names) && validate_network(ctx, root, names) &&
            validate_app_refs(ctx, root, names) && validate_cameras(ctx, root, names) && validate_ui(ctx, root, names) &&
-           validate_presentation(ctx, root, names) && validate_render_effects(ctx, root, names) &&
-           validate_lights(ctx, root, names) && validate_haptics(ctx, root, names) &&
-           validate_logic(ctx, root, names) && validate_adapters(ctx, root, names) &&
+           validate_presentation(ctx, root, names) && validate_render_settings(ctx, root) &&
+           validate_render_effects(ctx, root, names) && validate_lights(ctx, root, names) &&
+           validate_haptics(ctx, root, names) && validate_logic(ctx, root, names) &&
+           validate_adapters(ctx, root, names) &&
            warn_unused(ctx, &names->adapters, &names->used_adapters, "adapter") &&
            warn_unused(ctx, &names->scripts, &names->used_scripts, "script");
 }
