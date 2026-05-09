@@ -2812,15 +2812,15 @@ static bool is_wave_axis_value(yyjson_val *value)
 static bool is_supported_component_type(const char *type)
 {
     const char *known[] = {
-        "adapter.controller", "collision.aabb",     "collision.circle",
-        "combat.health",      "control.axis_1d",    "controller.fps_sector",
-        "lifecycle.ttl",      "light.directional",  "light.point",
-        "light.spot",         "motion.grid_agent",  "motion.oscillate",
-        "motion.patrol",      "motion.scroll_wrap", "motion.sector_velocity_3d",
-        "motion.spin",        "motion.velocity_2d", "motion.velocity_3d",
-        "particles.emitter",  "property.decay",     "render.cube",
-        "render.model",       "render.sphere",      "render.sprite",
-        "weapon.projectile",
+        "adapter.controller", "collision.aabb",      "collision.circle",
+        "combat.health",      "control.axis_1d",     "controller.fps_sector",
+        "lifecycle.ttl",      "light.directional",   "light.point",
+        "light.spot",         "motion.grid_agent",   "motion.oscillate",
+        "motion.patrol",      "motion.scroll_wrap",  "motion.sector_velocity_3d",
+        "motion.spin",        "motion.velocity_2d",  "motion.velocity_3d",
+        "particles.emitter",  "pickup.respawn",      "property.decay",
+        "render.cube",        "render.model",        "render.sphere",
+        "render.sprite",      "status_effect.timer", "weapon.projectile",
     };
 
     if (type == NULL)
@@ -2832,6 +2832,11 @@ static bool is_supported_component_type(const char *type)
     }
     return false;
 }
+
+static bool validate_non_empty_string_field(validation_context *ctx, yyjson_val *json, const char *json_path,
+                                            const char *type, const char *field);
+static bool validate_optional_signal_field(validation_context *ctx, yyjson_val *json, const char *json_path,
+                                           validation_names *names, const char *field);
 
 static bool validate_fps_sector_component(validation_context *ctx, yyjson_val *component, const char *path,
                                           validation_names *names)
@@ -2915,6 +2920,33 @@ static bool validate_combat_health_component(validation_context *ctx, yyjson_val
         return validation_error(ctx, path, "combat.health armor_absorb must be in 0..1");
     }
     return true;
+}
+
+static bool validate_pickup_respawn_component(validation_context *ctx, yyjson_val *component, const char *path)
+{
+    if (!validate_non_empty_string_field(ctx, component, path, "pickup.respawn", "timer_property") ||
+        !validate_non_empty_string_field(ctx, component, path, "pickup.respawn", "available_property"))
+    {
+        return false;
+    }
+    return true;
+}
+
+static bool validate_status_effect_timer_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                                   validation_names *names)
+{
+    (void)names;
+    if (!is_non_empty_string(component, "property"))
+        return validation_error(ctx, path, "status_effect.timer requires a non-empty property");
+    if (!validate_non_empty_string_field(ctx, component, path, "status_effect.timer", "duration_property") ||
+        !validate_non_empty_string_field(ctx, component, path, "status_effect.timer", "active_property"))
+    {
+        return false;
+    }
+    yyjson_val *expired = obj_get(component, "expired_value");
+    if (expired != NULL && !(yyjson_is_bool(expired) || yyjson_is_num(expired) || yyjson_is_str(expired)))
+        return validation_error(ctx, path, "status_effect.timer expired_value must be scalar");
+    return validate_optional_signal_field(ctx, component, path, names, "on_expire");
 }
 
 static bool validate_projectile_fire_shape(validation_context *ctx, yyjson_val *value, const char *path,
@@ -4671,6 +4703,16 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 if (!validate_combat_health_component(ctx, component, path))
                     return false;
             }
+            else if (SDL_strcmp(type, "pickup.respawn") == 0)
+            {
+                if (!validate_pickup_respawn_component(ctx, component, path))
+                    return false;
+            }
+            else if (SDL_strcmp(type, "status_effect.timer") == 0)
+            {
+                if (!validate_status_effect_timer_component(ctx, component, path, names))
+                    return false;
+            }
             else if (SDL_strcmp(type, "weapon.projectile") == 0)
             {
                 if (!require_ref(ctx, &names->actions, "input action", json_string(component, "action"), path) ||
@@ -5019,6 +5061,16 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
             else if (SDL_strcmp(type, "combat.health") == 0)
             {
                 if (!validate_combat_health_component(ctx, component, component_path))
+                    return false;
+            }
+            else if (SDL_strcmp(type, "pickup.respawn") == 0)
+            {
+                if (!validate_pickup_respawn_component(ctx, component, component_path))
+                    return false;
+            }
+            else if (SDL_strcmp(type, "status_effect.timer") == 0)
+            {
+                if (!validate_status_effect_timer_component(ctx, component, component_path, names))
                     return false;
             }
             else if (SDL_strcmp(type, "weapon.projectile") == 0)
@@ -5706,6 +5758,221 @@ static bool validate_combat_amount_action(validation_context *ctx, yyjson_val *a
     return true;
 }
 
+static bool validate_actor_target_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                         validation_names *names, const char *type, const char *target_key,
+                                         const char *payload_key)
+{
+    yyjson_val *target_value = obj_get(action, target_key);
+    yyjson_val *target_from_payload_value = obj_get(action, payload_key);
+    const char *target = json_string(action, target_key);
+    const char *target_from_payload = json_string(action, payload_key);
+    if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
+        return validation_error(ctx, json_path, "%s requires exactly one of %s or %s", type, target_key, payload_key);
+    if (target_value != NULL && !yyjson_is_str(target_value))
+        return validation_error(ctx, json_path, "%s %s must be a string", type, target_key);
+    if (target_from_payload_value != NULL && !yyjson_is_str(target_from_payload_value))
+        return validation_error(ctx, json_path, "%s %s must be a string", type, payload_key);
+    if (target != NULL && target[0] == '\0')
+        return validation_error(ctx, json_path, "%s %s must be non-empty", type, target_key);
+    if (target_from_payload != NULL && target_from_payload[0] == '\0')
+        return validation_error(ctx, json_path, "%s %s must be non-empty", type, payload_key);
+    if (target != NULL && !name_table_contains(&names->entities, target) &&
+        !name_table_contains(&names->actor_pool_actors, target))
+    {
+        return validation_error(ctx, json_path, "unknown %s %s '%s'", type, target_key, target);
+    }
+    return true;
+}
+
+static bool validate_non_empty_string_field(validation_context *ctx, yyjson_val *json, const char *json_path,
+                                            const char *type, const char *field)
+{
+    yyjson_val *value = obj_get(json, field);
+    if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s %s must be a non-empty string", type, field);
+    return true;
+}
+
+static bool validate_optional_signal_field(validation_context *ctx, yyjson_val *json, const char *json_path,
+                                           validation_names *names, const char *field)
+{
+    const char *signal = json_string(json, field);
+    return signal == NULL || require_ref(ctx, &names->signals, "signal", signal, json_path);
+}
+
+static bool validate_resource_grant(validation_context *ctx, yyjson_val *grant, const char *json_path,
+                                    validation_names *names, const char *owner_type)
+{
+    (void)names;
+    if (!yyjson_is_obj(grant))
+        return validation_error(ctx, json_path, "%s resources entries must be objects", owner_type);
+    if (!is_non_empty_string(grant, "resource"))
+        return validation_error(ctx, json_path, "%s resource grants require a non-empty resource", owner_type);
+    if (!validate_non_empty_string_field(ctx, grant, json_path, owner_type, "property") ||
+        !validate_non_empty_string_field(ctx, grant, json_path, owner_type, "max_property"))
+    {
+        return false;
+    }
+
+    yyjson_val *amount = obj_get(grant, "amount");
+    yyjson_val *amount_from_payload_value = obj_get(grant, "amount_from_payload");
+    const char *amount_from_payload = json_string(grant, "amount_from_payload");
+    if ((amount == NULL && amount_from_payload == NULL) || (amount != NULL && amount_from_payload != NULL))
+        return validation_error(ctx, json_path,
+                                "%s resource grants require exactly one of amount or amount_from_payload", owner_type);
+    if (amount != NULL && (!yyjson_is_num(amount) || yyjson_get_num(amount) < 0.0))
+        return validation_error(ctx, json_path, "%s resource grant amount must be a non-negative number", owner_type);
+    if (amount_from_payload_value != NULL &&
+        (!yyjson_is_str(amount_from_payload_value) || yyjson_get_str(amount_from_payload_value)[0] == '\0'))
+    {
+        return validation_error(ctx, json_path, "%s amount_from_payload must be a non-empty string", owner_type);
+    }
+    yyjson_val *max = obj_get(grant, "max");
+    yyjson_val *min = obj_get(grant, "min");
+    yyjson_val *clamp = obj_get(grant, "clamp");
+    if ((max != NULL && !yyjson_is_num(max)) || (min != NULL && !yyjson_is_num(min)))
+        return validation_error(ctx, json_path, "%s resource grant min/max must be numbers", owner_type);
+    if (clamp != NULL && !yyjson_is_bool(clamp))
+        return validation_error(ctx, json_path, "%s resource grant clamp must be a boolean", owner_type);
+    return true;
+}
+
+static bool validate_resource_grants(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                     validation_names *names, const char *type)
+{
+    yyjson_val *resources = obj_get(action, "resources");
+    if (!yyjson_is_arr(resources) || yyjson_arr_size(resources) == 0)
+        return validation_error(ctx, json_path, "%s requires a non-empty resources array", type);
+    for (size_t i = 0; i < yyjson_arr_size(resources); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "%s.resources[%zu]", json_path, i);
+        if (!validate_resource_grant(ctx, yyjson_arr_get(resources, i), path, names, type))
+            return false;
+    }
+    return true;
+}
+
+static bool validate_resource_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                     validation_names *names, const char *type, const char *value_key,
+                                     const char *payload_key)
+{
+    if (!validate_actor_target_action(ctx, action, json_path, names, type, "target", "target_from_payload"))
+        return false;
+    if (!is_non_empty_string(action, "resource"))
+        return validation_error(ctx, json_path, "%s requires a non-empty resource", type);
+    if (!validate_non_empty_string_field(ctx, action, json_path, type, "property") ||
+        !validate_non_empty_string_field(ctx, action, json_path, type, "max_property"))
+    {
+        return false;
+    }
+
+    yyjson_val *value = obj_get(action, value_key);
+    yyjson_val *value_from_payload_value = obj_get(action, payload_key);
+    const char *value_from_payload = json_string(action, payload_key);
+    if ((value == NULL && value_from_payload == NULL) || (value != NULL && value_from_payload != NULL))
+        return validation_error(ctx, json_path, "%s requires exactly one of %s or %s", type, value_key, payload_key);
+    if (value != NULL && (!yyjson_is_num(value) || yyjson_get_num(value) < 0.0))
+        return validation_error(ctx, json_path, "%s %s must be a non-negative number", type, value_key);
+    if (value_from_payload_value != NULL &&
+        (!yyjson_is_str(value_from_payload_value) || yyjson_get_str(value_from_payload_value)[0] == '\0'))
+    {
+        return validation_error(ctx, json_path, "%s %s must be a non-empty string", type, payload_key);
+    }
+
+    yyjson_val *max = obj_get(action, "max");
+    yyjson_val *min = obj_get(action, "min");
+    yyjson_val *clamp = obj_get(action, "clamp");
+    yyjson_val *allow_partial = obj_get(action, "allow_partial");
+    if ((max != NULL && !yyjson_is_num(max)) || (min != NULL && !yyjson_is_num(min)))
+        return validation_error(ctx, json_path, "%s min/max must be numbers", type);
+    if ((clamp != NULL && !yyjson_is_bool(clamp)) || (allow_partial != NULL && !yyjson_is_bool(allow_partial)))
+        return validation_error(ctx, json_path, "%s boolean fields must be booleans", type);
+    return validate_optional_signal_field(ctx, action, json_path, names, "on_success") &&
+           validate_optional_signal_field(ctx, action, json_path, names, "on_failure");
+}
+
+static bool validate_pickup_collect_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                           validation_names *names)
+{
+    if (!validate_actor_target_action(ctx, action, json_path, names, "pickup.collect", "target", "target_from_payload"))
+        return false;
+    if (!validate_actor_target_action(ctx, action, json_path, names, "pickup.collect", "pickup", "pickup_from_payload"))
+        return false;
+    yyjson_val *deactivate = obj_get(action, "deactivate");
+    yyjson_val *respawn = obj_get(action, "respawn_seconds");
+    if (deactivate != NULL && !yyjson_is_bool(deactivate))
+        return validation_error(ctx, json_path, "pickup.collect deactivate must be a boolean");
+    if (respawn != NULL && (!yyjson_is_num(respawn) || yyjson_get_num(respawn) < 0.0))
+        return validation_error(ctx, json_path, "pickup.collect respawn_seconds must be non-negative");
+    if (!validate_non_empty_string_field(ctx, action, json_path, "pickup.collect", "timer_property") ||
+        !validate_non_empty_string_field(ctx, action, json_path, "pickup.collect", "available_property"))
+    {
+        return false;
+    }
+    return validate_resource_grants(ctx, action, json_path, names, "pickup.collect") &&
+           validate_optional_signal_field(ctx, action, json_path, names, "on_collected");
+}
+
+static bool validate_resource_station_use_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 validation_names *names)
+{
+    if (!validate_actor_target_action(ctx, action, json_path, names, "resource.station.use", "target",
+                                      "target_from_payload"))
+        return false;
+    if (!validate_actor_target_action(ctx, action, json_path, names, "resource.station.use", "station",
+                                      "station_from_payload"))
+        return false;
+    yyjson_val *cooldown = obj_get(action, "cooldown");
+    yyjson_val *consume_charge = obj_get(action, "consume_charge");
+    if (cooldown != NULL && (!yyjson_is_num(cooldown) || yyjson_get_num(cooldown) < 0.0))
+        return validation_error(ctx, json_path, "resource.station.use cooldown must be non-negative");
+    if (consume_charge != NULL && !yyjson_is_bool(consume_charge))
+        return validation_error(ctx, json_path, "resource.station.use consume_charge must be a boolean");
+    if (!validate_non_empty_string_field(ctx, action, json_path, "resource.station.use", "cooldown_property") ||
+        !validate_non_empty_string_field(ctx, action, json_path, "resource.station.use", "charges_property"))
+    {
+        return false;
+    }
+    return validate_resource_grants(ctx, action, json_path, names, "resource.station.use") &&
+           validate_optional_signal_field(ctx, action, json_path, names, "on_success") &&
+           validate_optional_signal_field(ctx, action, json_path, names, "on_failure");
+}
+
+static bool validate_status_effect_apply_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                validation_names *names)
+{
+    if (!validate_actor_target_action(ctx, action, json_path, names, "status_effect.apply", "target",
+                                      "target_from_payload"))
+        return false;
+    if (!is_non_empty_string(action, "property"))
+        return validation_error(ctx, json_path, "status_effect.apply requires a non-empty property");
+    if (!validate_non_empty_string_field(ctx, action, json_path, "status_effect.apply", "duration_property") ||
+        !validate_non_empty_string_field(ctx, action, json_path, "status_effect.apply", "active_property"))
+    {
+        return false;
+    }
+    yyjson_val *value = obj_get(action, "value");
+    if (!(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value)))
+        return validation_error(ctx, json_path, "status_effect.apply value must be scalar");
+    yyjson_val *duration = obj_get(action, "duration");
+    yyjson_val *duration_from_payload_value = obj_get(action, "duration_from_payload");
+    const char *duration_from_payload = json_string(action, "duration_from_payload");
+    if ((duration == NULL && duration_from_payload == NULL) || (duration != NULL && duration_from_payload != NULL))
+    {
+        return validation_error(ctx, json_path,
+                                "status_effect.apply requires exactly one of duration or duration_from_payload");
+    }
+    if (duration != NULL && (!yyjson_is_num(duration) || yyjson_get_num(duration) < 0.0))
+        return validation_error(ctx, json_path, "status_effect.apply duration must be non-negative");
+    if (duration_from_payload_value != NULL &&
+        (!yyjson_is_str(duration_from_payload_value) || yyjson_get_str(duration_from_payload_value)[0] == '\0'))
+    {
+        return validation_error(ctx, json_path, "status_effect.apply duration_from_payload must be non-empty");
+    }
+    return validate_optional_signal_field(ctx, action, json_path, names, "on_apply");
+}
+
 static bool validate_one_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                 validation_names *names)
 {
@@ -5865,6 +6132,18 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         }
         return true;
     }
+    if (SDL_strcmp(type, "resource.add") == 0)
+        return validate_resource_action(ctx, action, json_path, names, type, "amount", "amount_from_payload");
+    if (SDL_strcmp(type, "resource.consume") == 0)
+        return validate_resource_action(ctx, action, json_path, names, type, "amount", "amount_from_payload");
+    if (SDL_strcmp(type, "resource.set") == 0)
+        return validate_resource_action(ctx, action, json_path, names, type, "value", "value_from_payload");
+    if (SDL_strcmp(type, "pickup.collect") == 0)
+        return validate_pickup_collect_action(ctx, action, json_path, names);
+    if (SDL_strcmp(type, "resource.station.use") == 0)
+        return validate_resource_station_use_action(ctx, action, json_path, names);
+    if (SDL_strcmp(type, "status_effect.apply") == 0)
+        return validate_status_effect_apply_action(ctx, action, json_path, names);
     if (SDL_strcmp(type, "sector_door.open") == 0 || SDL_strcmp(type, "sector_door.close") == 0 ||
         SDL_strcmp(type, "sector_door.toggle") == 0)
     {

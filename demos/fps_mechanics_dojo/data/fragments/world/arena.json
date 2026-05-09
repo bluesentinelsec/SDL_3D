@@ -87,6 +87,66 @@
         "type": "sensor.input_pressed",
         "action": "action.fire",
         "on_pressed": "signal.dojo.damage_dummy"
+      },
+      {
+        "name": "sensor.dojo.pickup.enter",
+        "type": "sensor.volume",
+        "actor": "entity.player",
+        "min": [3.4, 0.0, 13.4],
+        "max": [4.6, 2.0, 14.6],
+        "edge": "enter",
+        "actions": [
+          {
+            "type": "pickup.collect",
+            "target_from_payload": "actor_name",
+            "pickup": "entity.dojo.health_pickup",
+            "respawn_seconds": 8.0,
+            "resources": [
+              { "resource": "health", "amount": 20.0 },
+              { "resource": "ammo", "amount": 4.0 }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "sensor.dojo.station.stay",
+        "type": "sensor.volume",
+        "actor": "entity.player",
+        "min": [6.3, 0.0, 13.3],
+        "max": [7.7, 2.0, 14.7],
+        "edge": "stay",
+        "actions": [
+          {
+            "type": "resource.station.use",
+            "target_from_payload": "actor_name",
+            "station": "entity.dojo.health_station",
+            "cooldown": 1.5,
+            "consume_charge": false,
+            "resources": [
+              { "resource": "health", "amount": 8.0 }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "sensor.dojo.powerup.enter",
+        "type": "sensor.volume",
+        "actor": "entity.player",
+        "min": [12.8, 0.0, 13.3],
+        "max": [14.2, 2.0, 14.7],
+        "edge": "enter",
+        "actions": [
+          {
+            "type": "status_effect.apply",
+            "target_from_payload": "actor_name",
+            "property": "quad_damage",
+            "value": true,
+            "duration": 10.0,
+            "duration_property": "quad_damage_remaining",
+            "active_property": "quad_damage_active"
+          },
+          { "type": "entity.set_active", "target": "entity.dojo.powerup", "active": false }
+        ]
       }
     ],
     "bindings": [

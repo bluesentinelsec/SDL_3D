@@ -1143,6 +1143,12 @@ Reusable components include:
   properties so UI, Lua, replication, saves, and data actions can read the same
   values. Use properties such as `health`, `max_health`, `armor`,
   `armor_absorb`, and `alive` for defaults.
+- `pickup.respawn`: reactivates an inactive pickup actor after a respawn timer
+  reaches zero. By default it reads `pickup_respawn_remaining` and writes
+  `pickup_available`.
+- `status_effect.timer`: expires a temporary property-driven status effect.
+  It decrements a duration property such as `quad_damage_remaining`, writes an
+  `expired_value` when the timer reaches zero, and can clear an active flag.
 - `motion.scroll_wrap`: scrolls an actor along one axis and wraps to the
   opposite bound. This is intended for parallax panels, repeating stars, clouds,
   conveyor belts, and similar backgrounds.
@@ -1333,6 +1339,96 @@ Prefer combat actions over raw `property.add` for gameplay health because they
 centralize armor absorption, clamping, alive/dead state, and signal emission.
 Raw property actions remain useful for simple meters, counters, and diagnostic
 state.
+
+### Resources, Pickups, Stations, And Status Effects
+
+Generic resource actions manage numeric meters such as ammo, mana, keys, fuel,
+stamina, shields, or currency. They operate on ordinary actor properties so UI,
+Lua, persistence, and networking see the same state.
+
+```json
+{ "type": "resource.add", "target": "entity.player", "resource": "ammo", "amount": 12 }
+{ "type": "resource.consume", "target": "entity.player", "resource": "ammo", "amount": 1 }
+{ "type": "resource.set", "target": "entity.player", "resource": "stamina", "value": 100 }
+```
+
+By default, `resource: "ammo"` reads and writes the `ammo` property and clamps
+against `max_ammo` when present. Override names with `property` and
+`max_property` when a project uses different naming. `amount_from_payload` and
+`value_from_payload` allow sensors or other actions to drive the value. Consume
+actions are non-destructive on failure unless `allow_partial: true`; use
+`on_success` and `on_failure` to emit authored feedback signals.
+
+`pickup.collect` grants one or more resources to a collector actor, optionally
+deactivates the pickup, and can start a respawn timer:
+
+```json
+{
+  "type": "pickup.collect",
+  "target_from_payload": "actor_name",
+  "pickup_from_payload": "other_actor_name",
+  "respawn_seconds": 15.0,
+  "resources": [
+    { "resource": "health", "amount": 25.0 },
+    { "resource": "ammo", "amount": 8.0 }
+  ],
+  "on_collected": "signal.pickup.collected"
+}
+```
+
+Author a `pickup.respawn` component on the pickup actor when it should become
+active again after `pickup_respawn_remaining` reaches zero. This component runs
+for inactive actors in the active scene, so respawned pickups do not require Lua
+polling.
+
+Resource stations are reusable actors such as health fountains, ammo terminals,
+and recharge pads. `resource.station.use` grants resources if the station has
+charges and is off cooldown:
+
+```json
+{
+  "type": "resource.station.use",
+  "target": "entity.player",
+  "station": "entity.health_station",
+  "cooldown": 2.0,
+  "resources": [{ "resource": "health", "amount": 20.0 }]
+}
+```
+
+The station reads `charges` and `cooldown` by default. Add a `property.decay`
+component for the cooldown property so it counts down over time. Set
+`consume_charge: false` for infinite stations.
+
+Temporary power-ups can be modeled with `status_effect.apply` and
+`status_effect.timer`:
+
+```json
+{
+  "type": "status_effect.apply",
+  "target": "entity.player",
+  "property": "quad_damage",
+  "value": true,
+  "duration": 10.0,
+  "duration_property": "quad_damage_remaining",
+  "active_property": "quad_damage_active"
+}
+```
+
+The matching component resets the property when the timer expires:
+
+```json
+{
+  "type": "status_effect.timer",
+  "property": "quad_damage",
+  "duration_property": "quad_damage_remaining",
+  "active_property": "quad_damage_active",
+  "expired_value": false
+}
+```
+
+Use these primitives for reusable mechanics. Put game-specific policy, such as
+which pickups spawn in a level or how a power-up changes enemy AI, in JSON and
+Lua.
 
 `collision.on_overlap` is a data-action variant of the 2D contact sensor. It
 matches actors by fixed actor names or tags, publishes `actor_name` and

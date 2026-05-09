@@ -7176,6 +7176,314 @@ TEST(GameDataRuntime, RejectsInvalidCombatActionsAndComponents)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, ResourcesPickupsStationsAndStatusEffectsAreDataDriven)
+{
+    const std::filesystem::path dir = unique_test_dir("resources_pickups_status");
+    write_text(dir / "resources.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Resources", "id": "test.resources", "version": "0.1.0" },
+  "world": { "name": "world.resources", "kind": "fixed_screen" },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "properties": {
+        "health": { "type": "float", "value": 40.0 },
+        "max_health": { "type": "float", "value": 100.0 },
+        "ammo": { "type": "int", "value": 2 },
+        "max_ammo": { "type": "int", "value": 8 },
+        "quad_damage": { "type": "bool", "value": false },
+        "quad_damage_remaining": { "type": "float", "value": 0.0 },
+        "quad_damage_active": { "type": "bool", "value": false }
+      },
+      "components": [
+        {
+          "type": "status_effect.timer",
+          "property": "quad_damage",
+          "duration_property": "quad_damage_remaining",
+          "active_property": "quad_damage_active",
+          "expired_value": false
+        }
+      ]
+    },
+    {
+      "name": "entity.health_pickup",
+      "active": true,
+      "properties": {
+        "pickup_available": { "type": "bool", "value": true },
+        "pickup_respawn_remaining": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        { "type": "pickup.respawn" }
+      ]
+    },
+    {
+      "name": "entity.heal_station",
+      "active": true,
+      "properties": {
+        "charges": { "type": "int", "value": 2 },
+        "cooldown": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        { "type": "property.decay", "property": "cooldown", "rate": 10.0, "target": 0.0, "min": 0.0 }
+      ]
+    }
+  ],
+  "signals": [
+    "signal.resource.add",
+    "signal.resource.consume",
+    "signal.resource.consume_fail",
+    "signal.pickup.collect",
+    "signal.station.use",
+    "signal.status.apply"
+  ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.resource.add",
+        "actions": [
+          { "type": "resource.add", "target": "entity.player", "resource": "ammo", "amount": 12.0 }
+        ]
+      },
+      {
+        "signal": "signal.resource.consume",
+        "actions": [
+          { "type": "resource.consume", "target": "entity.player", "resource": "ammo", "amount": 3.0 }
+        ]
+      },
+      {
+        "signal": "signal.resource.consume_fail",
+        "actions": [
+          { "type": "resource.consume", "target": "entity.player", "resource": "ammo", "amount": 99.0 }
+        ]
+      },
+      {
+        "signal": "signal.pickup.collect",
+        "actions": [
+          {
+            "type": "pickup.collect",
+            "target": "entity.player",
+            "pickup": "entity.health_pickup",
+            "respawn_seconds": 0.5,
+            "resources": [
+              { "resource": "health", "amount": 25.0 },
+              { "resource": "ammo", "amount": 2.0 }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.station.use",
+        "actions": [
+          {
+            "type": "resource.station.use",
+            "target": "entity.player",
+            "station": "entity.heal_station",
+            "cooldown": 0.5,
+            "resources": [
+              { "resource": "health", "amount": 30.0 }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.status.apply",
+        "actions": [
+          {
+            "type": "status_effect.apply",
+            "target": "entity.player",
+            "property": "quad_damage",
+            "value": true,
+            "duration": 0.25,
+            "duration_property": "quad_damage_remaining",
+            "active_property": "quad_damage_active"
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "entities": ["entity.player", "entity.health_pickup", "entity.heal_station"]
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "resources.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    sdl3d_registered_actor *pickup = sdl3d_game_data_find_actor(runtime, "entity.health_pickup");
+    sdl3d_registered_actor *station = sdl3d_game_data_find_actor(runtime, "entity.heal_station");
+    ASSERT_NE(player, nullptr);
+    ASSERT_NE(pickup, nullptr);
+    ASSERT_NE(station, nullptr);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.resource.add"), nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "ammo", 0), 8);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.resource.consume"), nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "ammo", 0), 5);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.resource.consume_fail"), nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "ammo", 0), 5);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.pickup.collect"), nullptr);
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "health", 0.0f), 65.0f, 0.001f);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "ammo", 0), 7);
+    EXPECT_FALSE(pickup->active);
+    EXPECT_FALSE(sdl3d_properties_get_bool(pickup->props, "pickup_available", true));
+    EXPECT_NEAR(sdl3d_properties_get_float(pickup->props, "pickup_respawn_remaining", 0.0f), 0.5f, 0.001f);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    EXPECT_FALSE(pickup->active);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    EXPECT_TRUE(pickup->active);
+    EXPECT_TRUE(sdl3d_properties_get_bool(pickup->props, "pickup_available", false));
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.station.use"), nullptr);
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "health", 0.0f), 95.0f, 0.001f);
+    EXPECT_EQ(sdl3d_properties_get_int(station->props, "charges", 0), 1);
+    EXPECT_NEAR(sdl3d_properties_get_float(station->props, "cooldown", 0.0f), 0.5f, 0.001f);
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.station.use"), nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(station->props, "charges", 0), 1);
+    ASSERT_TRUE(sdl3d_game_data_update_property_effects(runtime, 0.05f));
+    EXPECT_NEAR(sdl3d_properties_get_float(station->props, "cooldown", 1.0f), 0.0f, 0.001f);
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.station.use"), nullptr);
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "health", 0.0f), 100.0f, 0.001f);
+    EXPECT_EQ(sdl3d_properties_get_int(station->props, "charges", -1), 0);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.status.apply"), nullptr);
+    EXPECT_TRUE(sdl3d_properties_get_bool(player->props, "quad_damage", false));
+    EXPECT_TRUE(sdl3d_properties_get_bool(player->props, "quad_damage_active", false));
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "quad_damage_remaining", 0.0f), 0.25f, 0.001f);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    EXPECT_FALSE(sdl3d_properties_get_bool(player->props, "quad_damage", true));
+    EXPECT_FALSE(sdl3d_properties_get_bool(player->props, "quad_damage_active", true));
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "quad_damage_remaining", 1.0f), 0.0f, 0.001f);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidResourcePickupAndStatusActions)
+{
+    const std::filesystem::path dir = unique_test_dir("invalid_resources");
+    write_text(dir / "invalid_resources.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Resources", "id": "test.invalid_resources", "version": "0.1.0" },
+  "world": { "name": "world.invalid_resources", "kind": "fixed_screen" },
+  "entities": [
+    { "name": "entity.player" },
+    { "name": "entity.pickup" }
+  ],
+  "signals": ["signal.invalid"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.invalid",
+        "actions": [
+          { "type": "resource.add", "target": "entity.player", "resource": "ammo", "amount": -1.0 }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(
+        dir / "scenes" / "play.scene.json",
+        R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.player", "entity.pickup"] })json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_resources.game.json").string().c_str(), session, &runtime,
+                                           error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("resource.add amount must be a non-negative number"), std::string::npos) << error;
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+
+    write_text(dir / "invalid_pickup.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Pickup", "id": "test.invalid_pickup", "version": "0.1.0" },
+  "world": { "name": "world.invalid_pickup", "kind": "fixed_screen" },
+  "entities": [
+    { "name": "entity.player" },
+    { "name": "entity.pickup" }
+  ],
+  "signals": ["signal.invalid"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.invalid",
+        "actions": [
+          { "type": "pickup.collect", "target": "entity.player", "pickup": "entity.pickup", "resources": [] }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    runtime = nullptr;
+    SDL_zeroa(error);
+    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_pickup.game.json").string().c_str(), session, &runtime,
+                                           error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("pickup.collect requires a non-empty resources array"), std::string::npos)
+        << error;
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+
+    write_text(dir / "invalid_status.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Status", "id": "test.invalid_status", "version": "0.1.0" },
+  "world": { "name": "world.invalid_status", "kind": "fixed_screen" },
+  "entities": [
+    {
+      "name": "entity.player",
+      "components": [
+        { "type": "status_effect.timer", "property": "haste", "expired_value": [1, 2, 3] }
+      ]
+    }
+  ],
+  "signals": ["signal.invalid"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.invalid",
+        "actions": [
+          { "type": "status_effect.apply", "target": "entity.player", "property": "haste", "value": true, "duration": -1.0 }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    runtime = nullptr;
+    SDL_zeroa(error);
+    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_status.game.json").string().c_str(), session, &runtime,
+                                           error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("status_effect.timer expired_value must be scalar"), std::string::npos) << error;
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, WeaponProjectileComponentFiresFromOwningActor)
 {
     const std::filesystem::path dir = unique_test_dir("weapon_projectile_component");
