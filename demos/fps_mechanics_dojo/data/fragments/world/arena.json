@@ -1,0 +1,98 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "sector_level_fragments": [
+    {
+      "level": "sector.dojo.arena",
+      "materials": [
+        { "name": "floor", "albedo": [0.28, 0.30, 0.34, 1.0], "roughness": 0.85, "tex_scale": 4.0 },
+        { "name": "wall", "albedo": [0.35, 0.39, 0.48, 1.0], "roughness": 0.75, "tex_scale": 4.0 },
+        { "name": "hazard", "albedo": [0.25, 0.05, 0.02, 1.0], "roughness": 0.6, "tex_scale": 3.0 },
+        { "name": "upper", "albedo": [0.22, 0.26, 0.32, 1.0], "roughness": 0.8, "tex_scale": 3.0 }
+      ],
+      "sectors": [
+        { "name": "start", "points": [[0, 0], [10, 0], [10, 10], [0, 10]], "floor_y": 0.0, "ceil_y": 4.0, "floor_material": "floor", "ceil_material": "upper", "wall_material": "wall" },
+        { "name": "teleporter_room", "points": [[10, 0], [18, 0], [18, 10], [10, 10]], "floor_y": 0.0, "ceil_y": 4.0, "floor_material": "floor", "ceil_material": "upper", "wall_material": "wall" },
+        { "name": "hazard_lane", "points": [[18, 0], [28, 0], [28, 10], [18, 10]], "floor_y": 0.0, "ceil_y": 4.0, "floor_material": "hazard", "ceil_material": "upper", "wall_material": "wall", "damage_per_second": 6.0 },
+        { "name": "lift_room", "points": [[0, 10], [10, 10], [10, 18], [0, 18]], "floor_y": 0.0, "ceil_y": 6.0, "floor_material": "floor", "ceil_material": "upper", "wall_material": "wall" }
+      ],
+      "lights": [
+        { "position": [5.0, 2.8, 5.0], "color": [0.2, 0.55, 1.0], "intensity": 2.2, "range": 12.0 },
+        { "position": [14.0, 2.8, 5.0], "color": [0.75, 0.25, 1.0], "intensity": 2.0, "range": 10.0 },
+        { "position": [23.0, 2.6, 5.0], "color": [1.0, 0.24, 0.08], "intensity": 2.4, "range": 11.0 }
+      ]
+    }
+  ],
+  "sector_doors": [
+    {
+      "name": "door.dojo.hazard_gate",
+      "scene": "scene.dojo.fps_world",
+      "panels": [
+        { "bounds": { "min": [17.75, 0.0, 3.4], "max": [18.25, 3.2, 6.6] }, "open_offset": [0.0, 3.4, 0.0] }
+      ],
+      "open_seconds": 1.0,
+      "close_seconds": 1.0,
+      "render": { "color": [190, 80, 50, 230], "lighting": true }
+    }
+  ],
+  "sector_platforms": [
+    {
+      "name": "platform.dojo.lift",
+      "scene": "scene.dojo.fps_world",
+      "sector_level": "sector.dojo.arena",
+      "sector": "lift_room",
+      "min_floor_y": 0.0,
+      "max_floor_y": 2.25,
+      "ceil_y": 6.0,
+      "cycle_seconds": 5.0,
+      "rebuild_min_delta": 0.02
+    }
+  ],
+  "logic": {
+    "sensors": [
+      {
+        "name": "sensor.dojo.launch.enter",
+        "type": "sensor.volume",
+        "actor": "entity.player",
+        "min": [5.0, 0.0, 5.0],
+        "max": [7.0, 2.2, 7.0],
+        "edge": "enter",
+        "actions": [
+          { "type": "controller.fps_sector.launch", "target": "entity.player", "vertical_velocity": 12.0 }
+        ]
+      },
+      {
+        "name": "sensor.dojo.teleporter.enter",
+        "type": "sensor.volume",
+        "actor": "entity.player",
+        "min": [12.0, 0.0, 4.0],
+        "max": [14.0, 2.2, 6.0],
+        "edge": "enter",
+        "actions": [
+          { "type": "controller.fps_sector.teleport", "target": "entity.player", "position": [22.0, 1.6, 10.0], "yaw": -1.5707964, "pitch": 0.0 }
+        ]
+      },
+      {
+        "name": "sensor.dojo.hazard.damage",
+        "type": "sensor.sector",
+        "actor": "entity.player",
+        "sector_level": "sector.dojo.arena",
+        "sector": "hazard_lane",
+        "edge": "stay",
+        "actions": [
+          { "type": "property.add", "target_from_payload": "actor_name", "key": "dojo_hazard_damage", "value_from_payload": "sector_damage_delta" }
+        ]
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.dojo.open_hazard_gate",
+        "actions": [
+          { "type": "sector_door.open", "target": "door.dojo.hazard_gate" }
+        ]
+      }
+    ]
+  },
+  "signals": [
+    "signal.dojo.open_hazard_gate"
+  ]
+}

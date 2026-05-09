@@ -1,0 +1,45 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "editor": {
+    "display_name": "FPS Mechanics Dojo",
+    "description": "Data-only testbed for reusable FPS movement and world mechanics.",
+    "category": "dojos/fps",
+    "tags": ["fps", "sector", "mechanics", "dojo"],
+    "preview": { "primitive": "sector", "color": [0.2, 0.45, 1.0, 1.0] },
+    "snap": { "grid": [0.5, 0.25, 0.5], "rotation_degrees": 15.0, "align_to_floor": true },
+    "test_scene": "scene.dojo.fps_world",
+    "templates": [
+      {
+        "name": "template.fps.launch_pad",
+        "display_name": "Launch Pad Trigger",
+        "category": "mechanics/movement",
+        "tags": ["launch", "jump_pad", "trigger"],
+        "source": "sensor.dojo.launch.enter",
+        "source_kind": "sensor",
+        "preview": { "primitive": "cube", "color": [0.25, 0.85, 1.0, 1.0] },
+        "bounds": { "size": [2.0, 0.2, 2.0] },
+        "snap": { "grid": 0.5, "align_to_floor": true },
+        "exposed_properties": [
+          { "name": "vertical_velocity", "type": "float", "display_name": "Launch Velocity", "min": 0.1, "default": 12.0 }
+        ],
+        "test_scene": "scene.dojo.fps_world"
+      },
+      {
+        "name": "template.fps.teleporter",
+        "display_name": "Teleporter Trigger",
+        "category": "mechanics/movement",
+        "tags": ["teleport", "trigger"],
+        "source": "sensor.dojo.teleporter.enter",
+        "source_kind": "sensor",
+        "preview": { "primitive": "cube", "color": [0.8, 0.25, 1.0, 1.0] },
+        "bounds": { "size": [2.0, 0.2, 2.0] },
+        "snap": { "grid": 0.5, "align_to_floor": true },
+        "exposed_properties": [
+          { "name": "position", "type": "vec3", "display_name": "Destination", "default": [22.0, 1.6, 10.0] },
+          { "name": "yaw", "type": "float", "display_name": "Facing Yaw", "default": -1.5707964 }
+        ],
+        "test_scene": "scene.dojo.fps_world"
+      }
+    ]
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "schema": "sdl3d.game.v0",
+  "metadata": {
+    "name": "SDL3D FPS Mechanics Dojo",
+    "id": "demo.fps_mechanics_dojo",
+    "version": "0.1.0"
+  },
+  "imports": [
+    { "path": "fragments/input/fps_controls.json", "sections": ["input"] },
+    { "path": "fragments/world/arena.json", "sections": ["sector_level_fragments", "sector_doors", "sector_platforms", "signals", "logic"] },
+    { "path": "fragments/actors/player.json", "sections": ["entities"] },
+    { "path": "fragments/actors/mechanic_markers.json", "sections": ["actor_archetypes", "actor_instances"] },
+    { "path": "fragments/editor/metadata.json", "sections": ["editor"] }
+  ],
+  "app": {
+    "title": "SDL3D FPS Mechanics Dojo",
+    "window": { "width": 1280, "height": 720, "renderer": "opengl", "vsync": true },
+    "pause": { "action": "action.pause" },
+    "quit": { "action": "action.exit" },
+    "input_policy": { "global_actions": ["action.exit"] }
+  },
+  "world": {
+    "name": "world.fps_mechanics_dojo",
+    "kind": "sector",
+    "ambient_light": [0.16, 0.16, 0.2],
+    "cameras": [
+      {
+        "name": "camera.dojo.player",
+        "type": "fps",
+        "target_entity": "entity.player",
+        "fovy": 68.0,
+        "active": true
+      }
+    ]
+  },
+  "assets": {
+    "fonts": [
+      { "id": "font.dojo.hud", "builtin": "Inter", "size": 22 }
+    ]
+  },
+  "render": {
+    "lighting": true,
+    "bloom": true,
+    "clear_color": [0.02, 0.025, 0.04]
+  },
+  "scenes": {
+    "initial": "scene.dojo.fps_world",
+    "files": ["scenes/fps_world.scene.json"]
+  }
+}

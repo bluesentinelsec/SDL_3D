@@ -1,0 +1,47 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "tags": ["player", "fps_actor"],
+      "transform": { "position": [3.0, 1.6, 4.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.0 },
+        "pitch": { "type": "float", "value": 0.0 },
+        "current_sector": { "type": "int", "value": -1 },
+        "dojo_hazard_damage": { "type": "float", "value": 0.0 }
+      },
+      "editor": {
+        "display_name": "FPS Player",
+        "category": "actors/player",
+        "tags": ["player", "controller"],
+        "preview": { "primitive": "capsule", "color": [0.2, 0.8, 1.0, 1.0] },
+        "bounds": { "center": [0.0, -0.8, 0.0], "size": [0.7, 1.6, 0.7] },
+        "snap": { "grid": 0.25, "align_to_floor": true },
+        "test_scene": "scene.dojo.fps_world"
+      },
+      "components": [
+        {
+          "type": "controller.fps_sector",
+          "sector_level": "sector.dojo.arena",
+          "actions": {
+            "forward": "action.move.forward",
+            "back": "action.move.back",
+            "left": "action.move.left",
+            "right": "action.move.right",
+            "jump": "action.jump"
+          },
+          "move_speed": 8.0,
+          "jump_velocity": 6.5,
+          "gravity": 14.0,
+          "player_height": 1.6,
+          "player_radius": 0.35,
+          "step_height": 0.65,
+          "ceiling_clearance": 0.1,
+          "mouse_sensitivity": 0.002
+        }
+      ]
+    }
+  ]
+}
