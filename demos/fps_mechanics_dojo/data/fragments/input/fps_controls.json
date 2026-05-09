@@ -11,6 +11,7 @@
           { "name": "action.move.right", "bindings": [{ "device": "keyboard", "key": "D" }] },
           { "name": "action.jump", "bindings": [{ "device": "keyboard", "key": "SPACE" }] },
           { "name": "action.interact", "bindings": [{ "device": "keyboard", "key": "E" }] },
+          { "name": "action.fire", "bindings": [{ "device": "mouse", "button": "LEFT" }] },
           { "name": "action.pause", "bindings": [{ "device": "keyboard", "key": "P" }] },
           { "name": "action.exit", "bindings": [{ "device": "keyboard", "key": "ESCAPE" }] }
         ]

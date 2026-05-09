@@ -222,6 +222,19 @@ struct SensorSignalCapture
     std::string other_actor_name;
 };
 
+struct CombatSignalCapture
+{
+    int calls = 0;
+    std::string actor_name;
+    std::string source_actor_name;
+    float amount = 0.0f;
+    float armor_delta = 0.0f;
+    float health_delta = 0.0f;
+    float health = 0.0f;
+    float armor = 0.0f;
+    bool alive = true;
+};
+
 bool serve_adapter(void *userdata, sdl3d_game_data_runtime *runtime, const char *adapter_name,
                    sdl3d_registered_actor *target, const sdl3d_properties *payload)
 {
@@ -311,6 +324,25 @@ void capture_sensor_signal(void *userdata, int signal_id, const sdl3d_properties
     capture->calls++;
     capture->actor_name = sdl3d_properties_get_string(payload, "actor_name", "");
     capture->other_actor_name = sdl3d_properties_get_string(payload, "other_actor_name", "");
+}
+
+void capture_combat_signal(void *userdata, int signal_id, const sdl3d_properties *payload)
+{
+    auto *capture = static_cast<CombatSignalCapture *>(userdata);
+    (void)signal_id;
+    if (capture == nullptr)
+    {
+        return;
+    }
+    capture->calls++;
+    capture->actor_name = sdl3d_properties_get_string(payload, "actor_name", "");
+    capture->source_actor_name = sdl3d_properties_get_string(payload, "source_actor_name", "");
+    capture->amount = sdl3d_properties_get_float(payload, "amount", 0.0f);
+    capture->armor_delta = sdl3d_properties_get_float(payload, "armor_delta", 0.0f);
+    capture->health_delta = sdl3d_properties_get_float(payload, "health_delta", 0.0f);
+    capture->health = sdl3d_properties_get_float(payload, "health", 0.0f);
+    capture->armor = sdl3d_properties_get_float(payload, "armor", 0.0f);
+    capture->alive = sdl3d_properties_get_bool(payload, "alive", true);
 }
 
 std::string fixture_path(const char *filename)
@@ -6882,6 +6914,263 @@ TEST(GameDataRuntime, RejectsInvalidEditorMetadata)
     EXPECT_NE(std::string(error).find("editor exposed property default does not match its type"), std::string::npos)
         << error;
 
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, CombatActionsApplyHealthArmorDeathAndRevive)
+{
+    const std::filesystem::path dir = unique_test_dir("combat_actions");
+    write_text(dir / "combat.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Combat Actions", "id": "test.combat_actions", "version": "0.1.0" },
+  "world": { "name": "world.combat_actions", "kind": "fixed_screen" },
+  "entities": [
+    {
+      "name": "entity.hero",
+      "tags": ["player"]
+    },
+    {
+      "name": "entity.monster",
+      "tags": ["enemy"],
+      "properties": {
+        "health": { "type": "float", "value": 100.0 },
+        "max_health": { "type": "float", "value": 100.0 },
+        "armor": { "type": "float", "value": 20.0 },
+        "armor_absorb": { "type": "float", "value": 0.5 },
+        "alive": { "type": "bool", "value": true }
+      },
+      "components": [
+        { "type": "combat.health" }
+      ]
+    }
+  ],
+  "signals": [
+    "signal.damage",
+    "signal.damage.lethal",
+    "signal.damage.after_death",
+    "signal.heal",
+    "signal.revive",
+    "signal.kill",
+    "signal.damaged",
+    "signal.dead",
+    "signal.healed",
+    "signal.revived"
+  ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.damage",
+        "actions": [
+          {
+            "type": "combat.damage",
+            "target": "entity.monster",
+            "source": "entity.hero",
+            "amount": 30.0,
+            "damage_type": "slash",
+            "on_damage": "signal.damaged",
+            "on_death": "signal.dead"
+          }
+        ]
+      },
+      {
+        "signal": "signal.damage.lethal",
+        "actions": [
+          {
+            "type": "combat.damage",
+            "target": "entity.monster",
+            "source": "entity.hero",
+            "amount": 200.0,
+            "on_damage": "signal.damaged",
+            "on_death": "signal.dead"
+          }
+        ]
+      },
+      {
+        "signal": "signal.damage.after_death",
+        "actions": [
+          {
+            "type": "combat.damage",
+            "target": "entity.monster",
+            "source": "entity.hero",
+            "amount": 1.0,
+            "on_damage": "signal.damaged",
+            "on_death": "signal.dead"
+          }
+        ]
+      },
+      {
+        "signal": "signal.heal",
+        "actions": [
+          { "type": "combat.heal", "target": "entity.monster", "amount": 25.0, "on_heal": "signal.healed" }
+        ]
+      },
+      {
+        "signal": "signal.revive",
+        "actions": [
+          { "type": "combat.revive", "target": "entity.monster", "health": 50.0, "on_revive": "signal.revived" }
+        ]
+      },
+      {
+        "signal": "signal.kill",
+        "actions": [
+          { "type": "combat.kill", "target": "entity.monster", "source": "entity.hero", "on_death": "signal.dead" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(
+        dir / "scenes" / "play.scene.json",
+        R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.hero", "entity.monster"] })json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        sdl3d_game_data_load_file((dir / "combat.game.json").string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    sdl3d_registered_actor *monster = sdl3d_game_data_find_actor(runtime, "entity.monster");
+    ASSERT_NE(monster, nullptr);
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+
+    CombatSignalCapture damaged{};
+    CombatSignalCapture dead{};
+    CombatSignalCapture healed{};
+    CombatSignalCapture revived{};
+    ASSERT_NE(sdl3d_signal_connect(bus, sdl3d_game_data_find_signal(runtime, "signal.damaged"), capture_combat_signal,
+                                   &damaged),
+              0);
+    ASSERT_NE(
+        sdl3d_signal_connect(bus, sdl3d_game_data_find_signal(runtime, "signal.dead"), capture_combat_signal, &dead),
+        0);
+    ASSERT_NE(sdl3d_signal_connect(bus, sdl3d_game_data_find_signal(runtime, "signal.healed"), capture_combat_signal,
+                                   &healed),
+              0);
+    ASSERT_NE(sdl3d_signal_connect(bus, sdl3d_game_data_find_signal(runtime, "signal.revived"), capture_combat_signal,
+                                   &revived),
+              0);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.damage"), nullptr);
+    EXPECT_EQ(damaged.calls, 1);
+    EXPECT_EQ(dead.calls, 0);
+    EXPECT_EQ(damaged.actor_name, "entity.monster");
+    EXPECT_EQ(damaged.source_actor_name, "entity.hero");
+    EXPECT_NEAR(damaged.amount, 30.0f, 0.001f);
+    EXPECT_NEAR(damaged.armor_delta, 15.0f, 0.001f);
+    EXPECT_NEAR(damaged.health_delta, 15.0f, 0.001f);
+    EXPECT_NEAR(damaged.health, 85.0f, 0.001f);
+    EXPECT_NEAR(damaged.armor, 5.0f, 0.001f);
+    EXPECT_TRUE(damaged.alive);
+    EXPECT_NEAR(sdl3d_properties_get_float(monster->props, "health", 0.0f), 85.0f, 0.001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(monster->props, "armor", 0.0f), 5.0f, 0.001f);
+    EXPECT_TRUE(sdl3d_properties_get_bool(monster->props, "alive", false));
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.damage.lethal"), nullptr);
+    EXPECT_EQ(damaged.calls, 2);
+    EXPECT_EQ(dead.calls, 1);
+    EXPECT_NEAR(sdl3d_properties_get_float(monster->props, "health", 1.0f), 0.0f, 0.001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(monster->props, "armor", 1.0f), 0.0f, 0.001f);
+    EXPECT_FALSE(sdl3d_properties_get_bool(monster->props, "alive", true));
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.damage.after_death"), nullptr);
+    EXPECT_EQ(damaged.calls, 3);
+    EXPECT_EQ(dead.calls, 1);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.heal"), nullptr);
+    EXPECT_EQ(healed.calls, 1);
+    EXPECT_NEAR(sdl3d_properties_get_float(monster->props, "health", 0.0f), 25.0f, 0.001f);
+    EXPECT_FALSE(sdl3d_properties_get_bool(monster->props, "alive", true));
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.revive"), nullptr);
+    EXPECT_EQ(revived.calls, 1);
+    EXPECT_NEAR(sdl3d_properties_get_float(monster->props, "health", 0.0f), 50.0f, 0.001f);
+    EXPECT_TRUE(sdl3d_properties_get_bool(monster->props, "alive", false));
+    EXPECT_TRUE(monster->active);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.kill"), nullptr);
+    EXPECT_EQ(dead.calls, 2);
+    EXPECT_NEAR(sdl3d_properties_get_float(monster->props, "health", 1.0f), 0.0f, 0.001f);
+    EXPECT_FALSE(sdl3d_properties_get_bool(monster->props, "alive", true));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidCombatActionsAndComponents)
+{
+    const std::filesystem::path dir = unique_test_dir("invalid_combat");
+    write_text(dir / "invalid_combat.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Combat", "id": "test.invalid_combat", "version": "0.1.0" },
+  "world": { "name": "world.invalid_combat", "kind": "fixed_screen" },
+  "entities": [
+    {
+      "name": "entity.actor",
+      "components": [
+        { "type": "combat.health", "armor_absorb": 1.5 }
+      ]
+    }
+  ],
+  "signals": ["signal.damage"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.damage",
+        "actions": [
+          { "type": "combat.damage", "target": "entity.actor", "amount": -1.0 }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.actor"] })json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_combat.game.json").string().c_str(), session, &runtime,
+                                           error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("combat.health armor_absorb must be in 0..1"), std::string::npos) << error;
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+
+    write_text(dir / "invalid_combat_action.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Combat Action", "id": "test.invalid_combat_action", "version": "0.1.0" },
+  "world": { "name": "world.invalid_combat_action", "kind": "fixed_screen" },
+  "entities": [{ "name": "entity.actor" }],
+  "signals": ["signal.damage"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.damage",
+        "actions": [
+          { "type": "combat.damage", "target": "entity.actor", "amount": -1.0 }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    runtime = nullptr;
+    SDL_zeroa(error);
+    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_combat_action.game.json").string().c_str(), session,
+                                           &runtime, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("combat.damage amount must be a non-negative number"), std::string::npos)
+        << error;
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
     remove_test_dir(dir);

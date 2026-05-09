@@ -81,6 +81,12 @@
         "actions": [
           { "type": "property.add", "target_from_payload": "actor_name", "key": "dojo_hazard_damage", "value_from_payload": "sector_damage_delta" }
         ]
+      },
+      {
+        "name": "sensor.dojo.combat.fire",
+        "type": "sensor.input_pressed",
+        "action": "action.fire",
+        "on_pressed": "signal.dojo.damage_dummy"
       }
     ],
     "bindings": [
@@ -89,10 +95,25 @@
         "actions": [
           { "type": "sector_door.open", "target": "door.dojo.hazard_gate" }
         ]
+      },
+      {
+        "signal": "signal.dojo.damage_dummy",
+        "actions": [
+          {
+            "type": "combat.damage",
+            "target": "entity.dojo.combat_dummy",
+            "source": "entity.player",
+            "amount": 25.0,
+            "damage_type": "dojo",
+            "on_death": "signal.dojo.dummy_dead"
+          }
+        ]
       }
     ]
   },
   "signals": [
-    "signal.dojo.open_hazard_gate"
+    "signal.dojo.open_hazard_gate",
+    "signal.dojo.damage_dummy",
+    "signal.dojo.dummy_dead"
   ]
 }

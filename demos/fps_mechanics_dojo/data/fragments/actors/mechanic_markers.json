@@ -21,6 +21,36 @@
         ],
         "test_scene": "scene.dojo.fps_world"
       }
+    },
+    {
+      "name": "archetype.dojo.combat_dummy",
+      "active": true,
+      "tags": ["dojo_marker", "combat_target"],
+      "properties": {
+        "health": { "type": "float", "value": 100.0 },
+        "max_health": { "type": "float", "value": 100.0 },
+        "armor": { "type": "float", "value": 30.0 },
+        "armor_absorb": { "type": "float", "value": 0.5 },
+        "alive": { "type": "bool", "value": true }
+      },
+      "components": [
+        { "type": "combat.health" },
+        { "type": "render.cube", "size": [1.2, 1.8, 1.2], "color": [230, 80, 70, 255], "lighting": true },
+        { "type": "light.point", "color": [1.0, 0.25, 0.15], "intensity": 1.4, "range": 4.0 }
+      ],
+      "editor": {
+        "display_name": "Combat Dummy",
+        "category": "mechanics/combat",
+        "tags": ["combat", "health", "mockup"],
+        "preview": { "primitive": "cube", "color": [1.0, 0.25, 0.15, 1.0] },
+        "bounds": { "size": [1.2, 1.8, 1.2] },
+        "snap": { "grid": 0.5, "align_to_floor": true },
+        "exposed_properties": [
+          { "name": "health", "type": "float", "display_name": "Health", "min": 0.0, "default": 100.0 },
+          { "name": "armor", "type": "float", "display_name": "Armor", "min": 0.0, "default": 30.0 }
+        ],
+        "test_scene": "scene.dojo.fps_world"
+      }
     }
   ],
   "actor_instances": [
@@ -75,6 +105,19 @@
         "tags": ["teleporter", "destination"],
         "preview": { "primitive": "cube", "color": [1.0, 0.75, 0.2, 1.0] },
         "bounds": { "size": [1.2, 0.1, 1.2] },
+        "test_scene": "scene.dojo.fps_world"
+      }
+    },
+    {
+      "name": "entity.dojo.combat_dummy",
+      "archetype": "archetype.dojo.combat_dummy",
+      "transform": { "position": [24.0, 0.9, 6.0] },
+      "editor": {
+        "display_name": "Combat Dummy Instance",
+        "category": "mechanics/combat",
+        "tags": ["combat", "health"],
+        "preview": { "primitive": "cube", "color": [1.0, 0.25, 0.15, 1.0] },
+        "bounds": { "size": [1.2, 1.8, 1.2] },
         "test_scene": "scene.dojo.fps_world"
       }
     }

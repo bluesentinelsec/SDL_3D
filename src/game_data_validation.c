@@ -2812,29 +2812,14 @@ static bool is_wave_axis_value(yyjson_val *value)
 static bool is_supported_component_type(const char *type)
 {
     const char *known[] = {
-        "adapter.controller",
-        "collision.aabb",
-        "collision.circle",
-        "control.axis_1d",
-        "controller.fps_sector",
-        "lifecycle.ttl",
-        "light.directional",
-        "light.point",
-        "light.spot",
-        "motion.grid_agent",
-        "motion.oscillate",
-        "motion.patrol",
-        "motion.scroll_wrap",
-        "motion.sector_velocity_3d",
-        "motion.spin",
-        "motion.velocity_2d",
-        "motion.velocity_3d",
-        "particles.emitter",
-        "property.decay",
-        "render.cube",
-        "render.model",
-        "render.sphere",
-        "render.sprite",
+        "adapter.controller", "collision.aabb",     "collision.circle",
+        "combat.health",      "control.axis_1d",    "controller.fps_sector",
+        "lifecycle.ttl",      "light.directional",  "light.point",
+        "light.spot",         "motion.grid_agent",  "motion.oscillate",
+        "motion.patrol",      "motion.scroll_wrap", "motion.sector_velocity_3d",
+        "motion.spin",        "motion.velocity_2d", "motion.velocity_3d",
+        "particles.emitter",  "property.decay",     "render.cube",
+        "render.model",       "render.sphere",      "render.sprite",
         "weapon.projectile",
     };
 
@@ -2899,6 +2884,35 @@ static bool validate_fps_sector_component(validation_context *ctx, yyjson_val *c
     if ((spawn_yaw != NULL && !yyjson_is_num(spawn_yaw)) || (spawn_pitch != NULL && !yyjson_is_num(spawn_pitch)))
     {
         return validation_error(ctx, path, "controller.fps_sector spawn yaw and pitch values must be numbers");
+    }
+    return true;
+}
+
+static bool validate_combat_health_component(validation_context *ctx, yyjson_val *component, const char *path)
+{
+    const char *property_keys[] = {"health_property", "max_health_property", "armor_property", "armor_absorb_property",
+                                   "alive_property"};
+    for (size_t i = 0; i < SDL_arraysize(property_keys); ++i)
+    {
+        yyjson_val *value = obj_get(component, property_keys[i]);
+        if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
+            return validation_error(ctx, path, "combat.health property names must be non-empty strings");
+    }
+
+    yyjson_val *health = obj_get(component, "health");
+    yyjson_val *max_health = obj_get(component, "max_health");
+    yyjson_val *armor = obj_get(component, "armor");
+    yyjson_val *armor_absorb = obj_get(component, "armor_absorb");
+    if ((health != NULL && (!yyjson_is_num(health) || yyjson_get_num(health) < 0.0)) ||
+        (max_health != NULL && (!yyjson_is_num(max_health) || yyjson_get_num(max_health) < 0.0)) ||
+        (armor != NULL && (!yyjson_is_num(armor) || yyjson_get_num(armor) < 0.0)))
+    {
+        return validation_error(ctx, path, "combat.health numeric values must be non-negative");
+    }
+    if (armor_absorb != NULL &&
+        (!yyjson_is_num(armor_absorb) || yyjson_get_num(armor_absorb) < 0.0 || yyjson_get_num(armor_absorb) > 1.0))
+    {
+        return validation_error(ctx, path, "combat.health armor_absorb must be in 0..1");
     }
     return true;
 }
@@ -4652,6 +4666,11 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 if (!validate_fps_sector_component(ctx, component, path, names))
                     return false;
             }
+            else if (SDL_strcmp(type, "combat.health") == 0)
+            {
+                if (!validate_combat_health_component(ctx, component, path))
+                    return false;
+            }
             else if (SDL_strcmp(type, "weapon.projectile") == 0)
             {
                 if (!require_ref(ctx, &names->actions, "input action", json_string(component, "action"), path) ||
@@ -4996,6 +5015,11 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
             {
                 return validation_error(ctx, component_path,
                                         "controller.fps_sector is only supported on static entities");
+            }
+            else if (SDL_strcmp(type, "combat.health") == 0)
+            {
+                if (!validate_combat_health_component(ctx, component, component_path))
+                    return false;
             }
             else if (SDL_strcmp(type, "weapon.projectile") == 0)
             {
@@ -5587,6 +5611,101 @@ static bool validate_audio_action(validation_context *ctx, yyjson_val *action, c
     return true;
 }
 
+static bool validate_combat_target_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                          validation_names *names, const char *type)
+{
+    yyjson_val *target_value = obj_get(action, "target");
+    yyjson_val *target_from_payload_value = obj_get(action, "target_from_payload");
+    const char *target = json_string(action, "target");
+    const char *target_from_payload = json_string(action, "target_from_payload");
+    if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
+        return validation_error(ctx, json_path, "%s requires exactly one of target or target_from_payload", type);
+    if (target_value != NULL && !yyjson_is_str(target_value))
+        return validation_error(ctx, json_path, "%s target must be a string", type);
+    if (target_from_payload_value != NULL && !yyjson_is_str(target_from_payload_value))
+        return validation_error(ctx, json_path, "%s target_from_payload must be a string", type);
+    if (target != NULL && target[0] == '\0')
+        return validation_error(ctx, json_path, "%s target must be non-empty", type);
+    if (target_from_payload != NULL && target_from_payload[0] == '\0')
+        return validation_error(ctx, json_path, "%s target_from_payload must be non-empty", type);
+    if (target != NULL && !name_table_contains(&names->entities, target) &&
+        !name_table_contains(&names->actor_pool_actors, target))
+    {
+        return validation_error(ctx, json_path, "unknown %s target '%s'", type, target);
+    }
+
+    const char *source = json_string(action, "source");
+    if (source != NULL && source[0] == '\0')
+        return validation_error(ctx, json_path, "%s source must be non-empty", type);
+    if (source != NULL && !name_table_contains(&names->entities, source) &&
+        !name_table_contains(&names->actor_pool_actors, source))
+    {
+        return validation_error(ctx, json_path, "unknown %s source '%s'", type, source);
+    }
+    yyjson_val *source_from_payload = obj_get(action, "source_from_payload");
+    if (source_from_payload != NULL &&
+        (!yyjson_is_str(source_from_payload) || yyjson_get_str(source_from_payload)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s source_from_payload must be a non-empty string", type);
+
+    const char *property_keys[] = {"health_property", "max_health_property", "armor_property", "armor_absorb_property",
+                                   "alive_property"};
+    for (size_t i = 0; i < SDL_arraysize(property_keys); ++i)
+    {
+        yyjson_val *value = obj_get(action, property_keys[i]);
+        if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
+            return validation_error(ctx, json_path, "%s property names must be non-empty strings", type);
+    }
+
+    const char *signal_keys[] = {"on_damage", "on_death", "on_heal", "on_revive"};
+    for (size_t i = 0; i < SDL_arraysize(signal_keys); ++i)
+    {
+        const char *signal = json_string(action, signal_keys[i]);
+        if (signal != NULL && !require_ref(ctx, &names->signals, "signal", signal, json_path))
+            return false;
+    }
+
+    yyjson_val *deactivate_on_death = obj_get(action, "deactivate_on_death");
+    yyjson_val *deactivate = obj_get(action, "deactivate");
+    yyjson_val *revive = obj_get(action, "revive");
+    if ((deactivate_on_death != NULL && !yyjson_is_bool(deactivate_on_death)) ||
+        (deactivate != NULL && !yyjson_is_bool(deactivate)) || (revive != NULL && !yyjson_is_bool(revive)))
+    {
+        return validation_error(ctx, json_path, "%s boolean fields must be booleans", type);
+    }
+
+    yyjson_val *armor_absorb = obj_get(action, "armor_absorb");
+    if (armor_absorb != NULL &&
+        (!yyjson_is_num(armor_absorb) || yyjson_get_num(armor_absorb) < 0.0 || yyjson_get_num(armor_absorb) > 1.0))
+    {
+        return validation_error(ctx, json_path, "%s armor_absorb must be in 0..1", type);
+    }
+    yyjson_val *damage_type = obj_get(action, "damage_type");
+    if (damage_type != NULL && !yyjson_is_str(damage_type))
+        return validation_error(ctx, json_path, "%s damage_type must be a string", type);
+    return true;
+}
+
+static bool validate_combat_amount_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                          validation_names *names, const char *type, const char *field,
+                                          const char *payload_field)
+{
+    if (!validate_combat_target_action(ctx, action, json_path, names, type))
+        return false;
+    yyjson_val *amount = obj_get(action, field);
+    yyjson_val *amount_from_payload_value = obj_get(action, payload_field);
+    const char *amount_from_payload = json_string(action, payload_field);
+    if ((amount == NULL && amount_from_payload == NULL) || (amount != NULL && amount_from_payload != NULL))
+        return validation_error(ctx, json_path, "%s requires exactly one of %s or %s", type, field, payload_field);
+    if (amount != NULL && (!yyjson_is_num(amount) || yyjson_get_num(amount) < 0.0))
+        return validation_error(ctx, json_path, "%s %s must be a non-negative number", type, field);
+    if (amount_from_payload_value != NULL &&
+        (!yyjson_is_str(amount_from_payload_value) || yyjson_get_str(amount_from_payload_value)[0] == '\0'))
+    {
+        return validation_error(ctx, json_path, "%s %s must be a non-empty string", type, payload_field);
+    }
+    return true;
+}
+
 static bool validate_one_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                 validation_names *names)
 {
@@ -5719,6 +5838,31 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *reason = obj_get(action, "reason");
         if (reason != NULL && !yyjson_is_str(reason))
             return validation_error(ctx, json_path, "actor.despawn_by_tag reason must be a string");
+        return true;
+    }
+    if (SDL_strcmp(type, "combat.damage") == 0)
+        return validate_combat_amount_action(ctx, action, json_path, names, type, "amount", "amount_from_payload");
+    if (SDL_strcmp(type, "combat.heal") == 0)
+        return validate_combat_amount_action(ctx, action, json_path, names, type, "amount", "amount_from_payload");
+    if (SDL_strcmp(type, "combat.kill") == 0)
+        return validate_combat_target_action(ctx, action, json_path, names, type);
+    if (SDL_strcmp(type, "combat.revive") == 0)
+    {
+        if (!validate_combat_target_action(ctx, action, json_path, names, type))
+            return false;
+        yyjson_val *health = obj_get(action, "health");
+        yyjson_val *health_from_payload_value = obj_get(action, "health_from_payload");
+        const char *health_from_payload = json_string(action, "health_from_payload");
+        if (health != NULL && health_from_payload != NULL)
+            return validation_error(ctx, json_path,
+                                    "combat.revive requires at most one of health or health_from_payload");
+        if (health != NULL && (!yyjson_is_num(health) || yyjson_get_num(health) < 0.0))
+            return validation_error(ctx, json_path, "combat.revive health must be a non-negative number");
+        if (health_from_payload_value != NULL &&
+            (!yyjson_is_str(health_from_payload_value) || yyjson_get_str(health_from_payload_value)[0] == '\0'))
+        {
+            return validation_error(ctx, json_path, "combat.revive health_from_payload must be a non-empty string");
+        }
         return true;
     }
     if (SDL_strcmp(type, "sector_door.open") == 0 || SDL_strcmp(type, "sector_door.close") == 0 ||

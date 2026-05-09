@@ -1138,6 +1138,11 @@ Reusable components include:
 - `controller.fps_sector`: first-person movement through a sector level using
   authored input actions, sector collision, jumping, gravity, stair stepping,
   and mouse-look.
+- `combat.health`: declares that an actor participates in generic combat
+  health/armor actions. The actual runtime state remains ordinary actor
+  properties so UI, Lua, replication, saves, and data actions can read the same
+  values. Use properties such as `health`, `max_health`, `armor`,
+  `armor_absorb`, and `alive` for defaults.
 - `motion.scroll_wrap`: scrolls an actor along one axis and wraps to the
   opposite bound. This is intended for parallax panels, repeating stars, clouds,
   conveyor belts, and similar backgrounds.
@@ -1284,6 +1289,50 @@ as a float so fractional damage, timers, and meters can accumulate correctly:
   "value_from_payload": "sector_damage_delta"
 }
 ```
+
+Generic combat actions provide reusable health, armor, death, and revival
+behavior without writing game-specific C:
+
+```json
+{
+  "type": "combat.damage",
+  "target": "entity.enemy",
+  "source": "entity.player",
+  "amount": 35.0,
+  "damage_type": "slash",
+  "on_damage": "signal.enemy.damaged",
+  "on_death": "signal.enemy.killed"
+}
+```
+
+`combat.damage` reads `health`, `max_health`, `armor`, `armor_absorb`, and
+`alive` by default. `armor_absorb` is clamped to 0..1; absorbed damage depletes
+armor first, and the remainder reduces health. Health is clamped at zero. The
+death signal is emitted only when the action transitions an actor from alive to
+dead. Set `deactivate_on_death: true` when the actor should stop rendering and
+updating immediately.
+
+`combat.heal`, `combat.kill`, and `combat.revive` use the same target and
+property conventions:
+
+```json
+{ "type": "combat.heal", "target": "entity.player", "amount": 25.0 }
+{ "type": "combat.kill", "target_from_payload": "actor_name", "on_death": "signal.actor.killed" }
+{ "type": "combat.revive", "target": "entity.player", "health": 50.0, "on_revive": "signal.player.revived" }
+```
+
+All combat actions support `target_from_payload`, optional `source` or
+`source_from_payload`, and property-name overrides such as `health_property`,
+`max_health_property`, `armor_property`, `armor_absorb_property`, and
+`alive_property`. Damage/heal amount can come from `amount_from_payload`, and
+revive health can come from `health_from_payload`. Combat event payloads include
+`actor_name`, `source_actor_name`, `damage_type`, `amount`, `armor_delta`,
+`health_delta`, `health`, `max_health`, `armor`, `alive`, and `dead`.
+
+Prefer combat actions over raw `property.add` for gameplay health because they
+centralize armor absorption, clamping, alive/dead state, and signal emission.
+Raw property actions remain useful for simple meters, counters, and diagnostic
+state.
 
 `collision.on_overlap` is a data-action variant of the 2D contact sensor. It
 matches actors by fixed actor names or tags, publishes `actor_name` and

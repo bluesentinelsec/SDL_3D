@@ -13766,6 +13766,254 @@ static bool execute_projectile_fire_action_for_actor(sdl3d_game_data_runtime *ru
     return true;
 }
 
+static bool value_as_float(const sdl3d_value *value, float *out_value)
+{
+    if (value == NULL || out_value == NULL)
+        return false;
+    if (value->type == SDL3D_VALUE_INT)
+    {
+        *out_value = (float)value->as_int;
+        return true;
+    }
+    if (value->type == SDL3D_VALUE_FLOAT)
+    {
+        *out_value = value->as_float;
+        return true;
+    }
+    return false;
+}
+
+static bool action_float_value(sdl3d_game_data_runtime *runtime, yyjson_val *action, const sdl3d_properties *payload,
+                               const char *key, const char *payload_key, float *out_value)
+{
+    (void)runtime;
+    if (action == NULL || out_value == NULL)
+        return false;
+
+    yyjson_val *value = obj_get(action, key);
+    if (yyjson_is_num(value))
+    {
+        *out_value = (float)yyjson_get_num(value);
+        return true;
+    }
+
+    const char *payload_field = json_string(action, payload_key, NULL);
+    if (payload_field != NULL && payload != NULL)
+        return value_as_float(sdl3d_properties_get_value(payload, payload_field), out_value);
+    return false;
+}
+
+static void set_actor_numeric_property(sdl3d_registered_actor *actor, const char *key, float value)
+{
+    if (actor == NULL || actor->props == NULL || key == NULL)
+        return;
+
+    const sdl3d_value *existing = sdl3d_properties_get_value(actor->props, key);
+    const float rounded = SDL_roundf(value);
+    if (existing != NULL && existing->type == SDL3D_VALUE_INT && SDL_fabsf(value - rounded) <= 0.0001f)
+        sdl3d_properties_set_int(actor->props, key, (int)rounded);
+    else
+        sdl3d_properties_set_float(actor->props, key, value);
+}
+
+static float actor_numeric_property(const sdl3d_registered_actor *actor, const char *key, float fallback)
+{
+    float value = fallback;
+    return actor != NULL && actor->props != NULL &&
+                   value_as_float(sdl3d_properties_get_value(actor->props, key), &value)
+               ? value
+               : fallback;
+}
+
+static const char *combat_action_property(yyjson_val *action, const char *key, const char *fallback)
+{
+    const char *value = json_string(action, key, NULL);
+    return value != NULL && value[0] != '\0' ? value : fallback;
+}
+
+static sdl3d_properties *combat_event_payload(sdl3d_registered_actor *target, yyjson_val *action,
+                                              const sdl3d_properties *source_payload, float amount, float armor_delta,
+                                              float health_delta, float health, float max_health, float armor,
+                                              bool alive)
+{
+    sdl3d_properties *event_payload = sdl3d_properties_create();
+    if (event_payload == NULL)
+        return NULL;
+
+    sdl3d_properties_set_string(event_payload, "actor_name",
+                                target != NULL && target->name != NULL ? target->name : "");
+    const char *source = json_string(action, "source", NULL);
+    const char *source_from_payload = json_string(action, "source_from_payload", NULL);
+    if (source_from_payload != NULL && source_payload != NULL)
+        source = sdl3d_properties_get_string(source_payload, source_from_payload, source);
+    sdl3d_properties_set_string(event_payload, "source_actor_name", source != NULL ? source : "");
+    sdl3d_properties_set_string(event_payload, "damage_type", json_string(action, "damage_type", ""));
+    sdl3d_properties_set_float(event_payload, "amount", amount);
+    sdl3d_properties_set_float(event_payload, "armor_delta", armor_delta);
+    sdl3d_properties_set_float(event_payload, "health_delta", health_delta);
+    sdl3d_properties_set_float(event_payload, "health", health);
+    sdl3d_properties_set_float(event_payload, "max_health", max_health);
+    sdl3d_properties_set_float(event_payload, "armor", armor);
+    sdl3d_properties_set_bool(event_payload, "alive", alive);
+    sdl3d_properties_set_bool(event_payload, "dead", !alive);
+    return event_payload;
+}
+
+static void emit_combat_signal(sdl3d_game_data_runtime *runtime, yyjson_val *action, const char *signal_key,
+                               const sdl3d_properties *payload)
+{
+    const int signal_id = action_signal_id(runtime, action, signal_key);
+    if (signal_id >= 0 && runtime_bus(runtime) != NULL)
+        sdl3d_signal_emit(runtime_bus(runtime), signal_id, payload);
+}
+
+static bool execute_combat_damage_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                         const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *actor = action_target_actor(runtime, action, payload);
+    float amount = 0.0f;
+    if (actor == NULL || !action_float_value(runtime, action, payload, "amount", "amount_from_payload", &amount))
+        return false;
+    amount = SDL_max(amount, 0.0f);
+
+    const char *health_key = combat_action_property(action, "health_property", "health");
+    const char *max_health_key = combat_action_property(action, "max_health_property", "max_health");
+    const char *armor_key = combat_action_property(action, "armor_property", "armor");
+    const char *armor_absorb_key = combat_action_property(action, "armor_absorb_property", "armor_absorb");
+    const char *alive_key = combat_action_property(action, "alive_property", "alive");
+
+    const float max_health = SDL_max(actor_numeric_property(actor, max_health_key, 100.0f), 0.0f);
+    const float old_health = SDL_clamp(actor_numeric_property(actor, health_key, max_health), 0.0f, max_health);
+    const float old_armor = SDL_max(actor_numeric_property(actor, armor_key, 0.0f), 0.0f);
+    const float authored_absorb =
+        json_float(action, "armor_absorb", actor_numeric_property(actor, armor_absorb_key, 1.0f));
+    const float armor_absorb = old_armor > 0.0f ? SDL_clamp(authored_absorb, 0.0f, 1.0f) : 0.0f;
+    const float armor_delta = SDL_min(old_armor, amount * armor_absorb);
+    const float health_delta = SDL_max(amount - armor_delta, 0.0f);
+    const float health = SDL_max(old_health - health_delta, 0.0f);
+    const float armor = SDL_max(old_armor - armor_delta, 0.0f);
+    const bool was_alive = sdl3d_properties_get_bool(actor->props, alive_key, old_health > 0.0f);
+    const bool alive = health > 0.0f;
+
+    set_actor_numeric_property(actor, health_key, health);
+    set_actor_numeric_property(actor, armor_key, armor);
+    sdl3d_properties_set_bool(actor->props, alive_key, alive);
+    if (!alive && json_bool(action, "deactivate_on_death", false))
+        actor->active = false;
+
+    sdl3d_properties *event_payload = combat_event_payload(actor, action, payload, amount, armor_delta, health_delta,
+                                                           health, max_health, armor, alive);
+    if (event_payload != NULL)
+    {
+        emit_combat_signal(runtime, action, "on_damage", event_payload);
+        if (was_alive && !alive)
+            emit_combat_signal(runtime, action, "on_death", event_payload);
+        sdl3d_properties_destroy(event_payload);
+    }
+    return true;
+}
+
+static bool execute_combat_heal_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                       const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *actor = action_target_actor(runtime, action, payload);
+    float amount = 0.0f;
+    if (actor == NULL || !action_float_value(runtime, action, payload, "amount", "amount_from_payload", &amount))
+        return false;
+    amount = SDL_max(amount, 0.0f);
+
+    const char *health_key = combat_action_property(action, "health_property", "health");
+    const char *max_health_key = combat_action_property(action, "max_health_property", "max_health");
+    const char *alive_key = combat_action_property(action, "alive_property", "alive");
+    const float max_health = SDL_max(actor_numeric_property(actor, max_health_key, 100.0f), 0.0f);
+    const float old_health = SDL_clamp(actor_numeric_property(actor, health_key, max_health), 0.0f, max_health);
+    const bool was_alive = sdl3d_properties_get_bool(actor->props, alive_key, old_health > 0.0f);
+    const bool can_revive = json_bool(action, "revive", false);
+    const float health = SDL_min(old_health + amount, max_health);
+    const bool alive = (was_alive || can_revive) && health > 0.0f;
+
+    set_actor_numeric_property(actor, health_key, health);
+    sdl3d_properties_set_bool(actor->props, alive_key, alive);
+
+    sdl3d_properties *event_payload = combat_event_payload(
+        actor, action, payload, amount, 0.0f, -amount, health, max_health,
+        actor_numeric_property(actor, combat_action_property(action, "armor_property", "armor"), 0.0f), alive);
+    if (event_payload != NULL)
+    {
+        emit_combat_signal(runtime, action, "on_heal", event_payload);
+        if (!was_alive && alive)
+            emit_combat_signal(runtime, action, "on_revive", event_payload);
+        sdl3d_properties_destroy(event_payload);
+    }
+    return true;
+}
+
+static bool execute_combat_kill_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                       const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *actor = action_target_actor(runtime, action, payload);
+    if (actor == NULL)
+        return false;
+
+    const char *health_key = combat_action_property(action, "health_property", "health");
+    const char *max_health_key = combat_action_property(action, "max_health_property", "max_health");
+    const char *armor_key = combat_action_property(action, "armor_property", "armor");
+    const char *alive_key = combat_action_property(action, "alive_property", "alive");
+    const float old_health =
+        actor_numeric_property(actor, health_key, actor_numeric_property(actor, max_health_key, 100.0f));
+    const bool was_alive = sdl3d_properties_get_bool(actor->props, alive_key, old_health > 0.0f);
+
+    set_actor_numeric_property(actor, health_key, 0.0f);
+    sdl3d_properties_set_bool(actor->props, alive_key, false);
+    if (json_bool(action, "deactivate", json_bool(action, "deactivate_on_death", false)))
+        actor->active = false;
+
+    if (was_alive)
+    {
+        sdl3d_properties *event_payload =
+            combat_event_payload(actor, action, payload, old_health, 0.0f, old_health, 0.0f,
+                                 actor_numeric_property(actor, max_health_key, 100.0f),
+                                 actor_numeric_property(actor, armor_key, 0.0f), false);
+        if (event_payload != NULL)
+        {
+            emit_combat_signal(runtime, action, "on_death", event_payload);
+            sdl3d_properties_destroy(event_payload);
+        }
+    }
+    return true;
+}
+
+static bool execute_combat_revive_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                         const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *actor = action_target_actor(runtime, action, payload);
+    if (actor == NULL)
+        return false;
+
+    const char *health_key = combat_action_property(action, "health_property", "health");
+    const char *max_health_key = combat_action_property(action, "max_health_property", "max_health");
+    const char *armor_key = combat_action_property(action, "armor_property", "armor");
+    const char *alive_key = combat_action_property(action, "alive_property", "alive");
+    const float max_health = SDL_max(actor_numeric_property(actor, max_health_key, 100.0f), 0.0f);
+    float health = max_health;
+    (void)action_float_value(runtime, action, payload, "health", "health_from_payload", &health);
+    health = SDL_clamp(health, 0.0f, max_health);
+
+    set_actor_numeric_property(actor, health_key, health);
+    sdl3d_properties_set_bool(actor->props, alive_key, health > 0.0f);
+    actor->active = true;
+
+    sdl3d_properties *event_payload =
+        combat_event_payload(actor, action, payload, health, 0.0f, -health, health, max_health,
+                             actor_numeric_property(actor, armor_key, 0.0f), health > 0.0f);
+    if (event_payload != NULL)
+    {
+        emit_combat_signal(runtime, action, "on_revive", event_payload);
+        sdl3d_properties_destroy(event_payload);
+    }
+    return true;
+}
+
 static bool execute_projectile_fire_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
                                            const sdl3d_properties *payload)
 {
@@ -14446,6 +14694,15 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
 
     if (SDL_strcmp(type, "actor.despawn_by_tag") == 0)
         return execute_actor_despawn_by_tag_action(runtime, action);
+
+    if (SDL_strcmp(type, "combat.damage") == 0)
+        return execute_combat_damage_action(runtime, action, payload);
+    if (SDL_strcmp(type, "combat.heal") == 0)
+        return execute_combat_heal_action(runtime, action, payload);
+    if (SDL_strcmp(type, "combat.kill") == 0)
+        return execute_combat_kill_action(runtime, action, payload);
+    if (SDL_strcmp(type, "combat.revive") == 0)
+        return execute_combat_revive_action(runtime, action, payload);
 
     if (SDL_strcmp(type, "projectile.fire") == 0)
         return execute_projectile_fire_action(runtime, action, payload);
