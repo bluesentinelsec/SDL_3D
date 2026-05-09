@@ -22,6 +22,7 @@ void sdl3d_gl_post_process(sdl3d_gl_context *ctx, int effects, float bloom_thres
 /* Read a pixel from the GL FBO at (x, y). Returns RGBA as 4 bytes.
  * Used for automated testing. */
 void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgba);
+int sdl3d_gl_active_retro_profile(const sdl3d_gl_context *ctx);
 
 /* Shadow pass control. */
 void sdl3d_gl_begin_shadow_pass(sdl3d_gl_context *ctx, const float *light_vp, float bias);

@@ -85,6 +85,7 @@ struct sdl3d_render_context
     int vertex_snap_precision;
     bool color_quantize;
     int color_depth;
+    sdl3d_display_profile display_profile;
 
     /* OpenGL backend (NULL when using software backend). */
     struct sdl3d_gl_context *gl;

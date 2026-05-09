@@ -856,6 +856,7 @@ TEST_F(SDL3DLightingFixture, SetAndGetRenderProfile)
     EXPECT_TRUE(out.vertex_snap);
     EXPECT_EQ(out.vertex_snap_precision, 1);
     EXPECT_TRUE(out.color_quantize);
+    EXPECT_EQ(out.display_profile, SDL3D_DISPLAY_PROFILE_PS1);
 }
 
 TEST_F(SDL3DLightingFixture, RuntimeProfileSwitch)
@@ -870,6 +871,7 @@ TEST_F(SDL3DLightingFixture, RuntimeProfileSwitch)
         ASSERT_TRUE(sdl3d_get_render_profile(ctx, &out));
         EXPECT_EQ(out.shading, profiles[i].shading) << "profile " << i;
         EXPECT_EQ(out.uv_mode, profiles[i].uv_mode) << "profile " << i;
+        EXPECT_EQ(out.display_profile, profiles[i].display_profile) << "profile " << i;
     }
 }
 
@@ -900,6 +902,7 @@ struct PresetCase
     sdl3d_tonemap_mode expected_tonemap;
     bool expected_snap;
     bool expected_quantize;
+    sdl3d_display_profile expected_display_profile;
 };
 
 class SDL3DPresetTable : public ::testing::TestWithParam<PresetCase>
@@ -915,19 +918,21 @@ TEST_P(SDL3DPresetTable, FieldsMatchSpec)
     EXPECT_EQ(p.tonemap, c.expected_tonemap) << c.label;
     EXPECT_EQ(p.vertex_snap, c.expected_snap) << c.label;
     EXPECT_EQ(p.color_quantize, c.expected_quantize) << c.label;
+    EXPECT_EQ(p.display_profile, c.expected_display_profile) << c.label;
 }
 
-INSTANTIATE_TEST_SUITE_P(Presets, SDL3DPresetTable,
-                         ::testing::Values(PresetCase{"modern", sdl3d_profile_modern, SDL3D_SHADING_PHONG,
-                                                      SDL3D_UV_PERSPECTIVE, SDL3D_TONEMAP_ACES, false, false},
-                                           PresetCase{"ps1", sdl3d_profile_ps1, SDL3D_SHADING_GOURAUD, SDL3D_UV_AFFINE,
-                                                      SDL3D_TONEMAP_NONE, true, true},
-                                           PresetCase{"n64", sdl3d_profile_n64, SDL3D_SHADING_GOURAUD,
-                                                      SDL3D_UV_PERSPECTIVE, SDL3D_TONEMAP_NONE, false, false},
-                                           PresetCase{"dos", sdl3d_profile_dos, SDL3D_SHADING_GOURAUD, SDL3D_UV_AFFINE,
-                                                      SDL3D_TONEMAP_NONE, false, true},
-                                           PresetCase{"snes", sdl3d_profile_snes, SDL3D_SHADING_FLAT, SDL3D_UV_AFFINE,
-                                                      SDL3D_TONEMAP_NONE, false, true}));
+INSTANTIATE_TEST_SUITE_P(
+    Presets, SDL3DPresetTable,
+    ::testing::Values(PresetCase{"modern", sdl3d_profile_modern, SDL3D_SHADING_PHONG, SDL3D_UV_PERSPECTIVE,
+                                 SDL3D_TONEMAP_ACES, false, false, SDL3D_DISPLAY_PROFILE_MODERN},
+                      PresetCase{"ps1", sdl3d_profile_ps1, SDL3D_SHADING_GOURAUD, SDL3D_UV_AFFINE, SDL3D_TONEMAP_NONE,
+                                 true, true, SDL3D_DISPLAY_PROFILE_PS1},
+                      PresetCase{"n64", sdl3d_profile_n64, SDL3D_SHADING_GOURAUD, SDL3D_UV_PERSPECTIVE,
+                                 SDL3D_TONEMAP_NONE, false, false, SDL3D_DISPLAY_PROFILE_N64},
+                      PresetCase{"dos", sdl3d_profile_dos, SDL3D_SHADING_GOURAUD, SDL3D_UV_AFFINE, SDL3D_TONEMAP_NONE,
+                                 false, true, SDL3D_DISPLAY_PROFILE_DOS},
+                      PresetCase{"snes", sdl3d_profile_snes, SDL3D_SHADING_FLAT, SDL3D_UV_AFFINE, SDL3D_TONEMAP_NONE,
+                                 false, true, SDL3D_DISPLAY_PROFILE_SNES}));
 
 /* ================================================================== */
 /* Color quantization unit tests                                      */
@@ -957,6 +962,18 @@ TEST_F(SDL3DLightingFixture, CustomProfileMixAndMatch)
     EXPECT_EQ(out.shading, SDL3D_SHADING_GOURAUD);
     EXPECT_EQ(out.uv_mode, SDL3D_UV_AFFINE);
     EXPECT_FALSE(out.vertex_snap);
+    EXPECT_EQ(out.display_profile, SDL3D_DISPLAY_PROFILE_PS1);
+}
+
+TEST_F(SDL3DLightingFixture, InvalidCustomDisplayProfileFallsBackToModern)
+{
+    sdl3d_render_profile p = sdl3d_profile_ps1();
+    p.display_profile = (sdl3d_display_profile)999;
+    ASSERT_TRUE(sdl3d_set_render_profile(ctx, &p));
+
+    sdl3d_render_profile out{};
+    ASSERT_TRUE(sdl3d_get_render_profile(ctx, &out));
+    EXPECT_EQ(out.display_profile, SDL3D_DISPLAY_PROFILE_MODERN);
 }
 
 /* ================================================================== */

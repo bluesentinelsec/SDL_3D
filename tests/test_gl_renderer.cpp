@@ -95,6 +95,28 @@ TEST_F(GLRendererTest, ClearProducesExpectedColor)
     EXPECT_LE(px[2], 30) << "Blue channel should be low after red clear";
 }
 
+TEST_F(GLRendererTest, RenderProfilesSelectRetroPostProcess)
+{
+    struct ProfileCase
+    {
+        sdl3d_render_profile (*profile)(void);
+        int expected_retro_profile;
+    };
+    const ProfileCase cases[] = {
+        {sdl3d_profile_modern, (int)SDL3D_DISPLAY_PROFILE_MODERN}, {sdl3d_profile_ps1, (int)SDL3D_DISPLAY_PROFILE_PS1},
+        {sdl3d_profile_n64, (int)SDL3D_DISPLAY_PROFILE_N64},       {sdl3d_profile_dos, (int)SDL3D_DISPLAY_PROFILE_DOS},
+        {sdl3d_profile_snes, (int)SDL3D_DISPLAY_PROFILE_SNES},
+    };
+
+    for (const ProfileCase &test_case : cases)
+    {
+        sdl3d_render_profile profile = test_case.profile();
+        ASSERT_TRUE(sdl3d_set_render_profile(ctx, &profile));
+        ASSERT_TRUE(sdl3d_clear_render_context(ctx, (sdl3d_color){4, 5, 6, 255}));
+        EXPECT_EQ(sdl3d_gl_active_retro_profile(ctx->gl), test_case.expected_retro_profile);
+    }
+}
+
 TEST_F(GLRendererTest, LitCubeProducesNonClearPixels)
 {
     ASSERT_TRUE(sdl3d_set_shading_mode(ctx, SDL3D_SHADING_PHONG));

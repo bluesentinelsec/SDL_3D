@@ -3509,17 +3509,10 @@ static bool gl_clear(sdl3d_render_context *context, sdl3d_color color)
     ctx->current_ctx = context;
     ctx->ubo_dirty = true;
 
-    /* Map shading mode to retro profile. */
-    if (context->shading_mode == SDL3D_SHADING_GOURAUD && context->vertex_snap)
-        ctx->active_retro_profile = 1; /* PS1 */
-    else if (context->shading_mode == SDL3D_SHADING_GOURAUD && context->uv_mode == SDL3D_UV_AFFINE)
-        ctx->active_retro_profile = 3; /* DOS */
-    else if (context->shading_mode == SDL3D_SHADING_GOURAUD)
-        ctx->active_retro_profile = 2; /* N64 */
-    else if (context->shading_mode == SDL3D_SHADING_FLAT)
-        ctx->active_retro_profile = 4; /* SNES */
-    else
-        ctx->active_retro_profile = 0; /* Modern */
+    ctx->active_retro_profile = (int)context->display_profile;
+    if (ctx->active_retro_profile < (int)SDL3D_DISPLAY_PROFILE_MODERN ||
+        ctx->active_retro_profile > (int)SDL3D_DISPLAY_PROFILE_SNES)
+        ctx->active_retro_profile = (int)SDL3D_DISPLAY_PROFILE_MODERN;
 
     /* Sync shadow state from render context so deferred replay works. */
     if (context->shadow_enabled[0])
@@ -4249,6 +4242,11 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
     SDL_GL_MakeCurrent(ctx->window, ctx->gl_context);
     ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
     ctx->gl.ReadPixels(x, y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+}
+
+int sdl3d_gl_active_retro_profile(const sdl3d_gl_context *ctx)
+{
+    return ctx != NULL ? ctx->active_retro_profile : (int)SDL3D_DISPLAY_PROFILE_MODERN;
 }
 
 void sdl3d_gl_backend_init(sdl3d_backend_interface *iface)

@@ -181,6 +181,21 @@ extern "C"
         SDL3D_FOG_EVAL_VERTEX = 1
     } sdl3d_fog_eval;
 
+    /**
+     * @brief Full-screen display treatment selected by a render profile.
+     *
+     * Backends that support post-processing use this to apply named display
+     * effects independently from lower-level shading, UV, and texture options.
+     */
+    typedef enum sdl3d_display_profile
+    {
+        SDL3D_DISPLAY_PROFILE_MODERN = 0,
+        SDL3D_DISPLAY_PROFILE_PS1 = 1,
+        SDL3D_DISPLAY_PROFILE_N64 = 2,
+        SDL3D_DISPLAY_PROFILE_DOS = 3,
+        SDL3D_DISPLAY_PROFILE_SNES = 4
+    } sdl3d_display_profile;
+
     /* ============================================================== */
     /* Render profile                                                 */
     /* ============================================================== */
@@ -196,6 +211,8 @@ extern "C"
         int vertex_snap_precision;
         bool color_quantize;
         int color_depth;
+        /** Named display treatment for backends with full-screen profile effects. */
+        sdl3d_display_profile display_profile;
     } sdl3d_render_profile;
 
     bool sdl3d_set_render_profile(sdl3d_render_context *context, const sdl3d_render_profile *profile);

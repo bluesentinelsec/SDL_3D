@@ -557,6 +557,13 @@ bool sdl3d_end_shadow_pass(sdl3d_render_context *context)
 /* Render profiles                                                     */
 /* ------------------------------------------------------------------ */
 
+static sdl3d_display_profile normalize_display_profile(sdl3d_display_profile profile)
+{
+    return profile >= SDL3D_DISPLAY_PROFILE_MODERN && profile <= SDL3D_DISPLAY_PROFILE_SNES
+               ? profile
+               : SDL3D_DISPLAY_PROFILE_MODERN;
+}
+
 bool sdl3d_set_render_profile(sdl3d_render_context *context, const sdl3d_render_profile *profile)
 {
     if (context == NULL)
@@ -576,6 +583,7 @@ bool sdl3d_set_render_profile(sdl3d_render_context *context, const sdl3d_render_
     context->vertex_snap_precision = profile->vertex_snap_precision > 0 ? profile->vertex_snap_precision : 1;
     context->color_quantize = profile->color_quantize;
     context->color_depth = profile->color_depth;
+    context->display_profile = normalize_display_profile(profile->display_profile);
     return true;
 }
 
@@ -598,6 +606,7 @@ bool sdl3d_get_render_profile(const sdl3d_render_context *context, sdl3d_render_
     out->color_quantize = context->color_quantize;
     out->color_depth = context->color_depth;
     out->texture_filter = context->texture_filter;
+    out->display_profile = context->display_profile;
     return true;
 }
 
@@ -610,6 +619,7 @@ sdl3d_render_profile sdl3d_profile_modern(void)
     p.uv_mode = SDL3D_UV_PERSPECTIVE;
     p.fog_eval = SDL3D_FOG_EVAL_FRAGMENT;
     p.tonemap = SDL3D_TONEMAP_ACES;
+    p.display_profile = SDL3D_DISPLAY_PROFILE_MODERN;
     return p;
 }
 
@@ -626,6 +636,7 @@ sdl3d_render_profile sdl3d_profile_ps1(void)
     p.vertex_snap_precision = 1;
     p.color_quantize = true;
     p.color_depth = 32;
+    p.display_profile = SDL3D_DISPLAY_PROFILE_PS1;
     return p;
 }
 
@@ -638,6 +649,7 @@ sdl3d_render_profile sdl3d_profile_n64(void)
     p.uv_mode = SDL3D_UV_PERSPECTIVE;
     p.fog_eval = SDL3D_FOG_EVAL_VERTEX;
     p.tonemap = SDL3D_TONEMAP_NONE;
+    p.display_profile = SDL3D_DISPLAY_PROFILE_N64;
     return p;
 }
 
@@ -652,6 +664,7 @@ sdl3d_render_profile sdl3d_profile_dos(void)
     p.tonemap = SDL3D_TONEMAP_NONE;
     p.color_quantize = true;
     p.color_depth = 6;
+    p.display_profile = SDL3D_DISPLAY_PROFILE_DOS;
     return p;
 }
 
@@ -666,5 +679,6 @@ sdl3d_render_profile sdl3d_profile_snes(void)
     p.tonemap = SDL3D_TONEMAP_NONE;
     p.color_quantize = true;
     p.color_depth = 32;
+    p.display_profile = SDL3D_DISPLAY_PROFILE_SNES;
     return p;
 }
