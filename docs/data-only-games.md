@@ -32,6 +32,8 @@ JSON is for reusable engine primitives and authored composition:
 - app, window, renderer, storage, and audio defaults
 - scenes, transitions, menus, widgets, text entry, and dynamic lists
 - actors, components, cameras, lights, sprites, materials, and effects
+- sector levels, FPS controllers, doors, platforms, hazards, skyboxes, and
+  render-profile controls for first-person sector worlds
 - input actions, bindings, profiles, and device-assignment policy
 - sensors, timers, signal bindings, and generic logic actions
 - options screens and settings reset/default behavior

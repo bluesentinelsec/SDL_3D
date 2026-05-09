@@ -8735,7 +8735,7 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     ASSERT_TRUE(saw_profile_text);
     char profile_label[64]{};
     ASSERT_TRUE(sdl3d_game_data_format_ui_text(runtime, &profile_text, nullptr, profile_label, sizeof(profile_label)));
-    EXPECT_STREQ(profile_label, "PROFILE ps1");
+    EXPECT_STREQ(profile_label, "PROFILE gameboy");
     sdl3d_game_data_ui_text pause_text{};
     bool saw_pause_text = false;
     auto find_doom_pause_text = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {

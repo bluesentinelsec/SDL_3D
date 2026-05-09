@@ -1,10 +1,10 @@
 /*
  * First-person movement controller for sector-based levels.
  *
- * Encapsulates the physics that ship in the doom_level demo: gravity,
- * jumping, stair stepping, wall sliding, ceiling collision, substepped
- * vertical integration (so a single fast frame cannot skip past a thin
- * stair), ground-trace rescue, and a last-known-good position fallback.
+ * Encapsulates reusable sector-world first-person physics: gravity, jumping,
+ * stair stepping, wall sliding, ceiling collision, substepped vertical
+ * integration (so a single fast frame cannot skip past a thin stair),
+ * ground-trace rescue, and a last-known-good position fallback.
  *
  * The caller owns the game loop and the input system. Per frame:
  *   - poll input, accumulate mouse_dx / mouse_dy and a wish direction
