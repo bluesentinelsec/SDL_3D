@@ -10,7 +10,14 @@
         "yaw": { "type": "float", "value": 0.0 },
         "pitch": { "type": "float", "value": 0.0 },
         "current_sector": { "type": "int", "value": -1 },
-        "dojo_hazard_damage": { "type": "float", "value": 0.0 }
+        "dojo_hazard_damage": { "type": "float", "value": 0.0 },
+        "health": { "type": "float", "value": 65.0 },
+        "max_health": { "type": "float", "value": 100.0 },
+        "ammo": { "type": "int", "value": 2 },
+        "max_ammo": { "type": "int", "value": 12 },
+        "quad_damage": { "type": "bool", "value": false },
+        "quad_damage_remaining": { "type": "float", "value": 0.0 },
+        "quad_damage_active": { "type": "bool", "value": false }
       },
       "editor": {
         "display_name": "FPS Player",
@@ -40,6 +47,13 @@
           "step_height": 0.65,
           "ceiling_clearance": 0.1,
           "mouse_sensitivity": 0.002
+        },
+        {
+          "type": "status_effect.timer",
+          "property": "quad_damage",
+          "duration_property": "quad_damage_remaining",
+          "active_property": "quad_damage_active",
+          "expired_value": false
         }
       ]
     }

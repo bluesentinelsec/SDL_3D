@@ -51,6 +51,72 @@
         ],
         "test_scene": "scene.dojo.fps_world"
       }
+    },
+    {
+      "name": "archetype.dojo.pickup",
+      "active": true,
+      "tags": ["dojo_marker", "pickup"],
+      "properties": {
+        "pickup_available": { "type": "bool", "value": true },
+        "pickup_respawn_remaining": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        { "type": "pickup.respawn" },
+        { "type": "render.sphere", "radius": 0.35, "color": [70, 255, 120, 240], "lighting": true, "emissive": true },
+        { "type": "light.point", "color": [0.25, 1.0, 0.45], "intensity": 1.8, "range": 5.0 },
+        { "type": "motion.spin", "property": "rotation_angle", "rate": 2.0 }
+      ],
+      "editor": {
+        "display_name": "Resource Pickup",
+        "category": "mechanics/resources",
+        "tags": ["pickup", "resource", "mockup"],
+        "preview": { "primitive": "sphere", "color": [0.25, 1.0, 0.45, 1.0] },
+        "bounds": { "size": [0.8, 0.8, 0.8] },
+        "snap": { "grid": 0.5, "align_to_floor": true },
+        "test_scene": "scene.dojo.fps_world"
+      }
+    },
+    {
+      "name": "archetype.dojo.resource_station",
+      "active": true,
+      "tags": ["dojo_marker", "resource_station"],
+      "properties": {
+        "charges": { "type": "int", "value": 99 },
+        "cooldown": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        { "type": "property.decay", "property": "cooldown", "rate": 1.0, "target": 0.0, "min": 0.0 },
+        { "type": "render.cube", "size": [1.2, 1.4, 1.2], "color": [80, 220, 255, 230], "lighting": true, "emissive": true },
+        { "type": "light.point", "color": [0.2, 0.85, 1.0], "intensity": 2.0, "range": 6.0 }
+      ],
+      "editor": {
+        "display_name": "Resource Station",
+        "category": "mechanics/resources",
+        "tags": ["station", "resource", "mockup"],
+        "preview": { "primitive": "cube", "color": [0.2, 0.85, 1.0, 1.0] },
+        "bounds": { "size": [1.2, 1.4, 1.2] },
+        "snap": { "grid": 0.5, "align_to_floor": true },
+        "test_scene": "scene.dojo.fps_world"
+      }
+    },
+    {
+      "name": "archetype.dojo.powerup",
+      "active": true,
+      "tags": ["dojo_marker", "powerup"],
+      "components": [
+        { "type": "render.sphere", "radius": 0.42, "color": [255, 210, 60, 245], "lighting": true, "emissive": true },
+        { "type": "light.point", "color": [1.0, 0.75, 0.1], "intensity": 2.2, "range": 6.0 },
+        { "type": "motion.oscillate", "amplitude": [0.0, 0.2, 0.0], "rate": 2.5 }
+      ],
+      "editor": {
+        "display_name": "Temporary Power-Up",
+        "category": "mechanics/resources",
+        "tags": ["powerup", "status", "mockup"],
+        "preview": { "primitive": "sphere", "color": [1.0, 0.75, 0.1, 1.0] },
+        "bounds": { "size": [0.9, 0.9, 0.9] },
+        "snap": { "grid": 0.5, "align_to_floor": true },
+        "test_scene": "scene.dojo.fps_world"
+      }
     }
   ],
   "actor_instances": [
@@ -118,6 +184,45 @@
         "tags": ["combat", "health"],
         "preview": { "primitive": "cube", "color": [1.0, 0.25, 0.15, 1.0] },
         "bounds": { "size": [1.2, 1.8, 1.2] },
+        "test_scene": "scene.dojo.fps_world"
+      }
+    },
+    {
+      "name": "entity.dojo.health_pickup",
+      "archetype": "archetype.dojo.pickup",
+      "transform": { "position": [4.0, 0.6, 14.0] },
+      "editor": {
+        "display_name": "Health/Ammo Pickup",
+        "category": "mechanics/resources",
+        "tags": ["pickup", "resource"],
+        "preview": { "primitive": "sphere", "color": [0.25, 1.0, 0.45, 1.0] },
+        "bounds": { "size": [0.8, 0.8, 0.8] },
+        "test_scene": "scene.dojo.fps_world"
+      }
+    },
+    {
+      "name": "entity.dojo.health_station",
+      "archetype": "archetype.dojo.resource_station",
+      "transform": { "position": [7.0, 0.7, 14.0] },
+      "editor": {
+        "display_name": "Health Station",
+        "category": "mechanics/resources",
+        "tags": ["station", "resource"],
+        "preview": { "primitive": "cube", "color": [0.2, 0.85, 1.0, 1.0] },
+        "bounds": { "size": [1.2, 1.4, 1.2] },
+        "test_scene": "scene.dojo.fps_world"
+      }
+    },
+    {
+      "name": "entity.dojo.powerup",
+      "archetype": "archetype.dojo.powerup",
+      "transform": { "position": [13.5, 0.7, 14.0] },
+      "editor": {
+        "display_name": "Quad Damage Power-Up",
+        "category": "mechanics/resources",
+        "tags": ["powerup", "status"],
+        "preview": { "primitive": "sphere", "color": [1.0, 0.75, 0.1, 1.0] },
+        "bounds": { "size": [0.9, 0.9, 0.9] },
         "test_scene": "scene.dojo.fps_world"
       }
     }

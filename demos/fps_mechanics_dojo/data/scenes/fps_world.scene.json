@@ -9,7 +9,10 @@
     "entity.dojo.launch_pad",
     "entity.dojo.teleporter_pad",
     "entity.dojo.teleporter_destination",
-    "entity.dojo.combat_dummy"
+    "entity.dojo.combat_dummy",
+    "entity.dojo.health_pickup",
+    "entity.dojo.health_station",
+    "entity.dojo.powerup"
   ],
   "input": {
     "mouse_capture": "unpaused",
@@ -61,6 +64,15 @@
         "position": [0.02, 0.11],
         "anchor": "top_left",
         "color": [255, 210, 180, 220],
+        "scale": 0.75
+      },
+      {
+        "name": "ui.dojo.resources",
+        "text": "HP {target.entity.player.health}/{target.entity.player.max_health}  Ammo {target.entity.player.ammo}/{target.entity.player.max_ammo}  Quad {target.entity.player.quad_damage_active}",
+        "font": "font.dojo.hud",
+        "position": [0.02, 0.15],
+        "anchor": "top_left",
+        "color": [190, 255, 210, 230],
         "scale": 0.75
       },
       {

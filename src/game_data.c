@@ -11743,6 +11743,34 @@ static bool json_scalar_to_value(yyjson_val *json, sdl3d_value *out_value)
     return false;
 }
 
+static bool set_property_from_value(sdl3d_properties *props, const char *key, const sdl3d_value *value)
+{
+    if (props == NULL || key == NULL || key[0] == '\0' || value == NULL)
+        return false;
+
+    switch (value->type)
+    {
+    case SDL3D_VALUE_BOOL:
+        sdl3d_properties_set_bool(props, key, value->as_bool);
+        return true;
+    case SDL3D_VALUE_INT:
+        sdl3d_properties_set_int(props, key, value->as_int);
+        return true;
+    case SDL3D_VALUE_FLOAT:
+        sdl3d_properties_set_float(props, key, value->as_float);
+        return true;
+    case SDL3D_VALUE_STRING:
+        sdl3d_properties_set_string(props, key, value->as_string != NULL ? value->as_string : "");
+        return true;
+    case SDL3D_VALUE_VEC3:
+        sdl3d_properties_set_vec3(props, key, value->as_vec3);
+        return true;
+    case SDL3D_VALUE_COLOR:
+        return false;
+    }
+    return false;
+}
+
 static yyjson_val *find_ui_text_json(const sdl3d_game_data_runtime *runtime, const char *name)
 {
     const scene_entry *scene = active_scene_entry_const(runtime);
@@ -14014,6 +14042,324 @@ static bool execute_combat_revive_action(sdl3d_game_data_runtime *runtime, yyjso
     return true;
 }
 
+static const char *resource_name(yyjson_val *action)
+{
+    const char *resource = json_string(action, "resource", NULL);
+    return resource != NULL && resource[0] != '\0' ? resource : NULL;
+}
+
+static const char *resource_property_name(yyjson_val *json, const char *fallback_resource)
+{
+    const char *property = json_string(json, "property", NULL);
+    if (property != NULL && property[0] != '\0')
+        return property;
+    return fallback_resource;
+}
+
+static const char *resource_max_property_name(yyjson_val *json, const char *resource, char *buffer, size_t buffer_size)
+{
+    const char *property = json_string(json, "max_property", NULL);
+    if (property != NULL && property[0] != '\0')
+        return property;
+    if (resource == NULL || resource[0] == '\0' || buffer == NULL || buffer_size == 0U)
+        return NULL;
+    SDL_snprintf(buffer, buffer_size, "max_%s", resource);
+    return buffer;
+}
+
+static bool resource_numeric_value(yyjson_val *json, const sdl3d_properties *payload, const char *value_key,
+                                   const char *payload_key, float *out_value)
+{
+    return action_float_value(NULL, json, payload, value_key, payload_key, out_value);
+}
+
+static sdl3d_properties *resource_event_payload(sdl3d_registered_actor *target, yyjson_val *json, const char *resource,
+                                                float old_value, float value, float max_value, float amount,
+                                                bool success)
+{
+    sdl3d_properties *event_payload = sdl3d_properties_create();
+    if (event_payload == NULL)
+        return NULL;
+    sdl3d_properties_set_string(event_payload, "actor_name",
+                                target != NULL && target->name != NULL ? target->name : "");
+    sdl3d_properties_set_string(event_payload, "resource", resource != NULL ? resource : "");
+    sdl3d_properties_set_string(event_payload, "resource_property",
+                                resource_property_name(json, resource) != NULL ? resource_property_name(json, resource)
+                                                                               : "");
+    sdl3d_properties_set_float(event_payload, "old_value", old_value);
+    sdl3d_properties_set_float(event_payload, "value", value);
+    sdl3d_properties_set_float(event_payload, "max_value", max_value);
+    sdl3d_properties_set_float(event_payload, "amount", amount);
+    sdl3d_properties_set_bool(event_payload, "success", success);
+    return event_payload;
+}
+
+static void emit_optional_signal(sdl3d_game_data_runtime *runtime, yyjson_val *json, const char *signal_key,
+                                 const sdl3d_properties *payload)
+{
+    const int signal_id = action_signal_id(runtime, json, signal_key);
+    if (signal_id >= 0 && runtime_bus(runtime) != NULL)
+        sdl3d_signal_emit(runtime_bus(runtime), signal_id, payload);
+}
+
+static bool apply_resource_delta_to_actor(sdl3d_game_data_runtime *runtime, sdl3d_registered_actor *target,
+                                          yyjson_val *json, const sdl3d_properties *payload, float amount, bool consume)
+{
+    const char *resource = resource_name(json);
+    const char *property = resource_property_name(json, resource);
+    char max_property_buffer[128];
+    const char *max_property =
+        resource_max_property_name(json, resource, max_property_buffer, sizeof(max_property_buffer));
+    if (target == NULL || resource == NULL || property == NULL)
+        return false;
+
+    const float old_value = actor_numeric_property(target, property, 0.0f);
+    const float min_value = json_float(json, "min", 0.0f);
+    float max_value = 0.0f;
+    const bool has_authored_max = yyjson_is_num(obj_get(json, "max"));
+    const bool has_max_property =
+        max_property != NULL && sdl3d_properties_get_value(target->props, max_property) != NULL;
+    if (has_authored_max)
+        max_value = json_float(json, "max", old_value);
+    else if (has_max_property)
+        max_value = actor_numeric_property(target, max_property, old_value);
+
+    bool success = true;
+    float applied = SDL_max(amount, 0.0f);
+    float value = old_value;
+    if (consume)
+    {
+        const bool allow_partial = json_bool(json, "allow_partial", false);
+        if (old_value + 0.0001f < applied && !allow_partial)
+        {
+            success = false;
+            applied = 0.0f;
+        }
+        else
+        {
+            applied = SDL_min(applied, SDL_max(old_value - min_value, 0.0f));
+            value = old_value - applied;
+        }
+    }
+    else
+    {
+        value = old_value + applied;
+    }
+
+    if (success && json_bool(json, "clamp", true))
+    {
+        value = SDL_max(value, min_value);
+        if (has_authored_max || has_max_property)
+            value = SDL_min(value, max_value);
+    }
+
+    if (success)
+        set_actor_numeric_property(target, property, value);
+
+    sdl3d_properties *event_payload =
+        resource_event_payload(target, json, resource, old_value, success ? value : old_value,
+                               (has_authored_max || has_max_property) ? max_value : old_value, applied, success);
+    if (event_payload != NULL)
+    {
+        emit_optional_signal(runtime, json, success ? "on_success" : "on_failure", event_payload);
+        sdl3d_properties_destroy(event_payload);
+    }
+    (void)payload;
+    return true;
+}
+
+static bool execute_resource_amount_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                           const sdl3d_properties *payload, bool consume)
+{
+    sdl3d_registered_actor *target = action_target_actor(runtime, action, payload);
+    float amount = 0.0f;
+    if (target == NULL || !resource_numeric_value(action, payload, "amount", "amount_from_payload", &amount))
+        return false;
+    return apply_resource_delta_to_actor(runtime, target, action, payload, amount, consume);
+}
+
+static bool execute_resource_set_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                        const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *target = action_target_actor(runtime, action, payload);
+    const char *resource = resource_name(action);
+    const char *property = resource_property_name(action, resource);
+    float value = 0.0f;
+    if (target == NULL || resource == NULL || property == NULL ||
+        !resource_numeric_value(action, payload, "value", "value_from_payload", &value))
+    {
+        return false;
+    }
+
+    char max_property_buffer[128];
+    const char *max_property =
+        resource_max_property_name(action, resource, max_property_buffer, sizeof(max_property_buffer));
+    const bool has_authored_max = yyjson_is_num(obj_get(action, "max"));
+    const bool has_max_property =
+        max_property != NULL && sdl3d_properties_get_value(target->props, max_property) != NULL;
+    const float max_value = has_authored_max   ? json_float(action, "max", value)
+                            : has_max_property ? actor_numeric_property(target, max_property, value)
+                                               : value;
+    const float min_value = json_float(action, "min", 0.0f);
+    const float old_value = actor_numeric_property(target, property, 0.0f);
+    if (json_bool(action, "clamp", true))
+    {
+        value = SDL_max(value, min_value);
+        if (has_authored_max || has_max_property)
+            value = SDL_min(value, max_value);
+    }
+    set_actor_numeric_property(target, property, value);
+
+    sdl3d_properties *event_payload =
+        resource_event_payload(target, action, resource, old_value, value,
+                               (has_authored_max || has_max_property) ? max_value : value, value - old_value, true);
+    if (event_payload != NULL)
+    {
+        emit_optional_signal(runtime, action, "on_success", event_payload);
+        sdl3d_properties_destroy(event_payload);
+    }
+    return true;
+}
+
+static bool apply_resource_grants(sdl3d_game_data_runtime *runtime, sdl3d_registered_actor *target, yyjson_val *grants,
+                                  const sdl3d_properties *payload)
+{
+    if (runtime == NULL || target == NULL || !yyjson_is_arr(grants))
+        return false;
+
+    bool ok = true;
+    for (size_t i = 0; i < yyjson_arr_size(grants); ++i)
+    {
+        yyjson_val *grant = yyjson_arr_get(grants, i);
+        float amount = 0.0f;
+        if (!resource_numeric_value(grant, payload, "amount", "amount_from_payload", &amount) ||
+            !apply_resource_delta_to_actor(runtime, target, grant, payload, amount, false))
+        {
+            ok = false;
+        }
+    }
+    return ok;
+}
+
+static bool execute_pickup_collect_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                          const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *collector = action_target_actor(runtime, action, payload);
+    sdl3d_registered_actor *pickup = sdl3d_game_data_find_actor(runtime, json_string(action, "pickup", NULL));
+    const char *pickup_from_payload = json_string(action, "pickup_from_payload", NULL);
+    if (pickup == NULL && pickup_from_payload != NULL)
+        pickup = actor_from_payload_key(runtime, payload, pickup_from_payload);
+    if (collector == NULL || pickup == NULL || !pickup->active)
+        return false;
+
+    if (!apply_resource_grants(runtime, collector, obj_get(action, "resources"), payload))
+        return false;
+
+    if (json_bool(action, "deactivate", true))
+    {
+        pickup->active = false;
+        sdl3d_properties_set_bool(pickup->props, json_string(action, "available_property", "pickup_available"), false);
+        const float respawn_seconds = json_float(action, "respawn_seconds", 0.0f);
+        if (respawn_seconds > 0.0f)
+        {
+            sdl3d_properties_set_float(pickup->props, json_string(action, "timer_property", "pickup_respawn_remaining"),
+                                       respawn_seconds);
+        }
+    }
+
+    sdl3d_properties *event_payload = sdl3d_properties_create();
+    if (event_payload != NULL)
+    {
+        sdl3d_properties_set_string(event_payload, "actor_name", collector->name != NULL ? collector->name : "");
+        sdl3d_properties_set_string(event_payload, "pickup_actor_name", pickup->name != NULL ? pickup->name : "");
+        emit_optional_signal(runtime, action, "on_collected", event_payload);
+        sdl3d_properties_destroy(event_payload);
+    }
+    return true;
+}
+
+static bool execute_resource_station_use_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                                const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *target = action_target_actor(runtime, action, payload);
+    sdl3d_registered_actor *station = sdl3d_game_data_find_actor(runtime, json_string(action, "station", NULL));
+    const char *station_from_payload = json_string(action, "station_from_payload", NULL);
+    if (station == NULL && station_from_payload != NULL)
+        station = actor_from_payload_key(runtime, payload, station_from_payload);
+    if (target == NULL || station == NULL)
+        return false;
+
+    const char *cooldown_property = json_string(action, "cooldown_property", "cooldown");
+    const char *charges_property = json_string(action, "charges_property", "charges");
+    const float cooldown = sdl3d_properties_get_float(station->props, cooldown_property, 0.0f);
+    const float charges = actor_numeric_property(station, charges_property, 1.0f);
+    const bool use_charge = json_bool(action, "consume_charge", true);
+    const bool success = cooldown <= 0.0f && (!use_charge || charges > 0.0f);
+    if (success)
+    {
+        if (!apply_resource_grants(runtime, target, obj_get(action, "resources"), payload))
+            return false;
+        if (use_charge)
+            set_actor_numeric_property(station, charges_property, SDL_max(charges - 1.0f, 0.0f));
+        sdl3d_properties_set_float(station->props, cooldown_property, json_float(action, "cooldown", cooldown));
+    }
+
+    sdl3d_properties *event_payload = sdl3d_properties_create();
+    if (event_payload != NULL)
+    {
+        sdl3d_properties_set_string(event_payload, "actor_name", target->name != NULL ? target->name : "");
+        sdl3d_properties_set_string(event_payload, "station_actor_name", station->name != NULL ? station->name : "");
+        sdl3d_properties_set_float(event_payload, "charges", actor_numeric_property(station, charges_property, 0.0f));
+        sdl3d_properties_set_float(event_payload, "cooldown",
+                                   sdl3d_properties_get_float(station->props, cooldown_property, 0.0f));
+        sdl3d_properties_set_bool(event_payload, "success", success);
+        emit_optional_signal(runtime, action, success ? "on_success" : "on_failure", event_payload);
+        sdl3d_properties_destroy(event_payload);
+    }
+    return true;
+}
+
+static bool execute_status_effect_apply_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                               const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *target = action_target_actor(runtime, action, payload);
+    const char *property = json_string(action, "property", NULL);
+    const char *duration_property = json_string(action, "duration_property", NULL);
+    char duration_buffer[128];
+    if (duration_property == NULL && property != NULL)
+    {
+        SDL_snprintf(duration_buffer, sizeof(duration_buffer), "%s_remaining", property);
+        duration_property = duration_buffer;
+    }
+
+    sdl3d_value value;
+    float duration = 0.0f;
+    if (target == NULL || property == NULL || property[0] == '\0' ||
+        !json_scalar_to_value(obj_get(action, "value"), &value) ||
+        !resource_numeric_value(action, payload, "duration", "duration_from_payload", &duration))
+    {
+        return false;
+    }
+
+    if (!set_property_from_value(target->props, property, &value))
+        return false;
+    sdl3d_properties_set_float(target->props, duration_property, SDL_max(duration, 0.0f));
+    const char *active_property = json_string(action, "active_property", NULL);
+    if (active_property != NULL && active_property[0] != '\0')
+        sdl3d_properties_set_bool(target->props, active_property, duration > 0.0f);
+
+    sdl3d_properties *event_payload = sdl3d_properties_create();
+    if (event_payload != NULL)
+    {
+        sdl3d_properties_set_string(event_payload, "actor_name", target->name != NULL ? target->name : "");
+        sdl3d_properties_set_string(event_payload, "property", property);
+        sdl3d_properties_set_float(event_payload, "duration", duration);
+        emit_optional_signal(runtime, action, "on_apply", event_payload);
+        sdl3d_properties_destroy(event_payload);
+    }
+    return true;
+}
+
 static bool execute_projectile_fire_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
                                            const sdl3d_properties *payload)
 {
@@ -14703,6 +15049,18 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
         return execute_combat_kill_action(runtime, action, payload);
     if (SDL_strcmp(type, "combat.revive") == 0)
         return execute_combat_revive_action(runtime, action, payload);
+    if (SDL_strcmp(type, "resource.add") == 0)
+        return execute_resource_amount_action(runtime, action, payload, false);
+    if (SDL_strcmp(type, "resource.consume") == 0)
+        return execute_resource_amount_action(runtime, action, payload, true);
+    if (SDL_strcmp(type, "resource.set") == 0)
+        return execute_resource_set_action(runtime, action, payload);
+    if (SDL_strcmp(type, "pickup.collect") == 0)
+        return execute_pickup_collect_action(runtime, action, payload);
+    if (SDL_strcmp(type, "resource.station.use") == 0)
+        return execute_resource_station_use_action(runtime, action, payload);
+    if (SDL_strcmp(type, "status_effect.apply") == 0)
+        return execute_status_effect_apply_action(runtime, action, payload);
 
     if (SDL_strcmp(type, "projectile.fire") == 0)
         return execute_projectile_fire_action(runtime, action, payload);
@@ -15820,6 +16178,73 @@ static bool update_sector_platforms(sdl3d_game_data_runtime *runtime, float dt)
     return true;
 }
 
+static void update_pickup_respawn_component(yyjson_val *component, sdl3d_registered_actor *actor, float dt)
+{
+    if (component == NULL || actor == NULL || actor->active)
+        return;
+
+    const char *timer_property = json_string(component, "timer_property", "pickup_respawn_remaining");
+    const char *available_property = json_string(component, "available_property", "pickup_available");
+    const float remaining = sdl3d_properties_get_float(actor->props, timer_property, 0.0f);
+    if (remaining <= 0.0f)
+        return;
+
+    const float next = SDL_max(remaining - dt, 0.0f);
+    sdl3d_properties_set_float(actor->props, timer_property, next);
+    if (next <= 0.0f)
+    {
+        actor->active = true;
+        sdl3d_properties_set_bool(actor->props, available_property, true);
+    }
+}
+
+static void update_status_effect_timer_component(sdl3d_game_data_runtime *runtime, yyjson_val *component,
+                                                 sdl3d_registered_actor *actor, float dt)
+{
+    if (runtime == NULL || component == NULL || actor == NULL || !actor->active)
+        return;
+
+    const char *property = json_string(component, "property", NULL);
+    const char *duration_property = json_string(component, "duration_property", NULL);
+    char duration_buffer[128];
+    if (duration_property == NULL && property != NULL)
+    {
+        SDL_snprintf(duration_buffer, sizeof(duration_buffer), "%s_remaining", property);
+        duration_property = duration_buffer;
+    }
+    if (property == NULL || duration_property == NULL)
+        return;
+
+    const float remaining = sdl3d_properties_get_float(actor->props, duration_property, 0.0f);
+    if (remaining <= 0.0f)
+        return;
+
+    const float next = SDL_max(remaining - dt, 0.0f);
+    sdl3d_properties_set_float(actor->props, duration_property, next);
+    if (next > 0.0f)
+        return;
+
+    sdl3d_value expired;
+    if (json_scalar_to_value(obj_get(component, "expired_value"), &expired))
+        (void)set_property_from_value(actor->props, property, &expired);
+    const char *active_property = json_string(component, "active_property", NULL);
+    if (active_property != NULL && active_property[0] != '\0')
+        sdl3d_properties_set_bool(actor->props, active_property, false);
+
+    const int signal_id = action_signal_id(runtime, component, "on_expire");
+    if (signal_id >= 0 && runtime_bus(runtime) != NULL)
+    {
+        sdl3d_properties *payload = sdl3d_properties_create();
+        if (payload != NULL)
+        {
+            sdl3d_properties_set_string(payload, "actor_name", actor->name != NULL ? actor->name : "");
+            sdl3d_properties_set_string(payload, "property", property);
+        }
+        sdl3d_signal_emit(runtime_bus(runtime), signal_id, payload);
+        sdl3d_properties_destroy(payload);
+    }
+}
+
 static void update_control_components(sdl3d_game_data_runtime *runtime, yyjson_val *root, float dt)
 {
     sdl3d_input_manager *input = runtime_input(runtime);
@@ -15922,7 +16347,17 @@ static void update_motion_components(sdl3d_game_data_runtime *runtime, yyjson_va
                 continue;
             sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, entity_name);
             yyjson_val *components = obj_get(entity, "components");
-            if (actor == NULL || !runtime_actor_is_active(runtime, actor) || !yyjson_is_arr(components))
+            if (actor == NULL || !yyjson_is_arr(components))
+                continue;
+
+            for (size_t c = 0; c < yyjson_arr_size(components); ++c)
+            {
+                yyjson_val *component = yyjson_arr_get(components, c);
+                if (SDL_strcmp(json_string(component, "type", ""), "pickup.respawn") == 0)
+                    update_pickup_respawn_component(component, actor, dt);
+            }
+
+            if (!runtime_actor_is_active(runtime, actor))
                 continue;
             if (!sdl3d_properties_get_bool(actor->props, "active_motion", true))
             {
@@ -16137,6 +16572,10 @@ static void update_motion_components(sdl3d_game_data_runtime *runtime, yyjson_va
                     if (angle > two_pi || angle < -two_pi)
                         angle = SDL_fmodf(angle, two_pi);
                     sdl3d_properties_set_float(actor->props, property, angle);
+                }
+                else if (SDL_strcmp(type, "status_effect.timer") == 0)
+                {
+                    update_status_effect_timer_component(runtime, component, actor, dt);
                 }
                 else if (SDL_strcmp(type, "lifecycle.ttl") == 0)
                 {
