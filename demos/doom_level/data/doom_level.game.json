@@ -8,6 +8,7 @@
   "imports": [
     { "path": "fragments/actors/props.json", "sections": ["assets", "entities"] },
     { "path": "fragments/actors/presentation_props.json", "sections": ["entities"] },
+    { "path": "fragments/actors/projectiles.json", "sections": ["actor_archetypes", "actor_pools", "signals", "logic"] },
     { "path": "fragments/world/sector_levels.json", "sections": ["sector_levels"] },
     { "path": "fragments/world/sector_doors.json", "sections": ["sector_doors", "signals", "logic"] },
     { "path": "fragments/world/sector_hazards.json", "sections": ["logic"] }
@@ -41,7 +42,14 @@
           { "name": "action.move.left", "bindings": [{ "device": "keyboard", "key": "A" }] },
           { "name": "action.move.right", "bindings": [{ "device": "keyboard", "key": "D" }] },
           { "name": "action.jump", "bindings": [{ "device": "keyboard", "key": "SPACE" }] },
-          { "name": "action.interact", "bindings": [{ "device": "keyboard", "key": "E" }] }
+          { "name": "action.interact", "bindings": [{ "device": "keyboard", "key": "E" }] },
+          {
+            "name": "action.fire",
+            "bindings": [
+              { "device": "mouse", "button": "LEFT" },
+              { "device": "keyboard", "key": "F" }
+            ]
+          }
         ]
       }
     ]
@@ -54,7 +62,10 @@
       "properties": {
         "yaw": { "type": "float", "value": 3.14159 },
         "pitch": { "type": "float", "value": 0.0 },
+        "camera_forward": { "type": "vec3", "value": [0.0, 0.0, -1.0] },
         "current_sector": { "type": "int", "value": -1 },
+        "fire_timer": { "type": "float", "value": 0.0 },
+        "fire_cooldown": { "type": "float", "value": 0.2 },
         "damage_taken": { "type": "float", "value": 0.0 },
         "last_damage_per_second": { "type": "float", "value": 0.0 }
       },
@@ -77,6 +88,13 @@
           "step_height": 1.1,
           "ceiling_clearance": 0.1,
           "mouse_sensitivity": 0.002
+        },
+        {
+          "type": "property.decay",
+          "property": "fire_timer",
+          "rate": 1.0,
+          "target": 0.0,
+          "min": 0.0
         }
       ]
     },

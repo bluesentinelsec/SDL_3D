@@ -1,0 +1,78 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "actor_archetypes": [
+    {
+      "name": "archetype.doom.projectile",
+      "tags": ["projectile", "player_projectile"],
+      "properties": {
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.0] },
+        "age": { "type": "float", "value": 0.0 },
+        "ttl": { "type": "float", "value": 3.0 },
+        "damage": { "type": "int", "value": 12 }
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.1,
+          "slices": 8,
+          "rings": 8,
+          "color": [255, 200, 100, 255],
+          "emissive": true,
+          "lighting": false
+        },
+        {
+          "type": "motion.velocity_3d",
+          "property": "velocity"
+        },
+        {
+          "type": "lifecycle.ttl",
+          "age_property": "age",
+          "ttl_property": "ttl",
+          "reason": "projectile expired"
+        },
+        {
+          "type": "light.point",
+          "color": [1.0, 0.6, 0.2],
+          "intensity": 4.0,
+          "range": 4.0
+        }
+      ]
+    }
+  ],
+  "actor_pools": [
+    {
+      "name": "pool.doom.projectiles",
+      "archetype": "archetype.doom.projectile",
+      "capacity": 12,
+      "scene": "scene.doom_level.play",
+      "exhaustion_policy": "reuse_oldest",
+      "on_scene_exit": "reset"
+    }
+  ],
+  "signals": ["signal.doom.fire"],
+  "logic": {
+    "sensors": [
+      {
+        "name": "logic.doom.fire_input",
+        "type": "sensor.input_pressed",
+        "action": "action.fire",
+        "on_pressed": "signal.doom.fire"
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.doom.fire",
+        "actions": [
+          {
+            "type": "projectile.fire",
+            "target": "entity.player",
+            "pool": "pool.doom.projectiles",
+            "velocity_from_property": "camera_forward",
+            "speed": 20.0,
+            "cooldown_property": "fire_timer"
+          }
+        ]
+      }
+    ]
+  }
+}

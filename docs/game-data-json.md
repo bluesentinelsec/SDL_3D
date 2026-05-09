@@ -184,7 +184,9 @@ Camera types:
 - `fps`: reads a first-person sector controller from `target_entity` and
   renders from that actor's eye position. If the controller has not updated
   yet, the camera falls back to the actor's `yaw`, `pitch`, and `view_smooth`
-  properties.
+  properties. The controller also publishes a normalized view direction to
+  `camera_forward` by default; override this with `forward_property` when a
+  game wants a different property name for projectile or camera logic.
 - `adapter`: delegates camera ownership to a native or Lua adapter.
 
 ## Storage And Persistence
@@ -588,7 +590,8 @@ Example:
   "target": "entity.player",
   "pool": "pool.player_shots",
   "offset": [0.6, 0.0, 0.1],
-  "velocity": [12.0, 0.0, 0.0],
+  "velocity_from_property": "camera_forward",
+  "speed": 12.0,
   "cooldown_property": "fire_timer",
   "properties": { "owner": 1, "damage": 1 }
 }
@@ -596,8 +599,11 @@ Example:
 
 The target actor may define `fire_cooldown`; otherwise the action's `cooldown`
 field is used. If the cooldown property is positive, no projectile is spawned.
-Use `target_from_payload` instead of `target` when the firing actor should come
-from a signal or collision payload.
+Use `velocity` for a literal projectile velocity, or
+`velocity_from_property` plus `speed` to fire along an actor-authored direction
+such as an FPS controller's `camera_forward`. Use `target_from_payload` instead
+of `target` when the firing actor should come from a signal or collision
+payload.
 
 `actor.spawn` and `actor.despawn` can also resolve actors from payload fields:
 

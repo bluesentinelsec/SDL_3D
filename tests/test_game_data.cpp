@@ -115,6 +115,7 @@ struct RenderPrimitiveCapture
     int doom_health_sprites = 0;
     int doom_crates = 0;
     int doom_presentation_cubes = 0;
+    int doom_projectile_spheres = 0;
 };
 
 struct SectorLevelInstanceCapture
@@ -1350,6 +1351,8 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         capture->doom_crates++;
     if (entity_name.rfind("entity.doom.presentation.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
         capture->doom_presentation_cubes++;
+    if (entity_name.rfind("pool.doom.projectiles.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
+        capture->doom_projectile_spheres++;
     if (entity_name == "entity.doom.robot.entry")
     {
         capture->saw_doom_robot_sprite = true;
@@ -6984,6 +6987,7 @@ TEST(GameDataRuntime, ArcadeShooterPrimitivesAreDataDriven)
       "properties": {
         "fire_timer": { "type": "float", "value": 0.0 },
         "fire_cooldown": { "type": "float", "value": 0.5 },
+        "camera_forward": { "type": "vec3", "value": [1.0, 0.0, 0.0] },
         "half_width": { "type": "float", "value": 0.25 },
         "half_height": { "type": "float", "value": 0.25 }
       },
@@ -7096,7 +7100,8 @@ TEST(GameDataRuntime, ArcadeShooterPrimitivesAreDataDriven)
             "type": "projectile.fire",
             "target": "entity.player",
             "pool": "pool.player_shots",
-            "velocity": [2.0, 0.0, 0.0],
+            "velocity_from_property": "camera_forward",
+            "speed": 2.0,
             "cooldown_property": "fire_timer"
           }
         ]
@@ -7771,6 +7776,8 @@ TEST(GameDataRuntime, RunsAuthoredFpsSectorController)
     EXPECT_NEAR(player->position.y, 1.6f, 0.001f);
     EXPECT_EQ(sdl3d_properties_get_int(player->props, "current_sector", -1), 0);
     EXPECT_TRUE(sdl3d_properties_get_bool(player->props, "on_ground", false));
+    expect_vec3_near(sdl3d_properties_get_vec3(player->props, "camera_forward", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)),
+                     sdl3d_vec3_make(0.0f, 0.0f, -1.0f));
 
     sdl3d_camera3d camera{};
     ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.player", &camera));
@@ -8092,6 +8099,19 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     UiTextCapture ui_text{};
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui_text, &ui_text));
     EXPECT_TRUE(ui_text.saw_doom_reticle);
+    sdl3d_registered_actor *projectile = sdl3d_game_data_find_actor(runtime, "pool.doom.projectiles.0");
+    ASSERT_NE(projectile, nullptr);
+    EXPECT_FALSE(projectile->active);
+    const int fire_signal = sdl3d_game_data_find_signal(runtime, "signal.doom.fire");
+    ASSERT_GE(fire_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), fire_signal, nullptr);
+    EXPECT_TRUE(projectile->active);
+    expect_vec3_near(sdl3d_properties_get_vec3(projectile->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)),
+                     sdl3d_vec3_make(0.0f, 0.0f, -20.0f));
+    EXPECT_EQ(sdl3d_game_data_world_light_count(runtime), 1);
+    RenderPrimitiveCapture projectile_capture{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &projectile_capture));
+    EXPECT_EQ(projectile_capture.doom_projectile_spheres, 1);
     sdl3d_game_data_sprite_asset robot_sprite{};
     ASSERT_TRUE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.doom.robot.walk", &robot_sprite));
     EXPECT_EQ(robot_sprite.source_kind, SDL3D_SPRITE_ASSET_SOURCE_FILES);
@@ -8854,6 +8874,41 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json",
             "unknown actor pool",
+        },
+        {
+            "bad_projectile_speed",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "entities": [
+    { "name": "entity.player", "active": true }
+  ],
+  "actor_archetypes": [
+    { "name": "archetype.shot" }
+  ],
+  "actor_pools": [
+    { "name": "pool.shots", "archetype": "archetype.shot", "capacity": 1 }
+  ],
+  "signals": ["signal.fire"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.fire",
+        "actions": [
+          {
+            "type": "projectile.fire",
+            "target": "entity.player",
+            "pool": "pool.shots",
+            "velocity_from_property": "camera_forward",
+            "speed": -1.0
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "speed must be non-negative",
         },
         {
             "bad_spawn_from",

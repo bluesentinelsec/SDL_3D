@@ -2571,9 +2571,13 @@ static bool validate_fps_sector_component(validation_context *ctx, yyjson_val *c
     if (jump != NULL && !require_ref(ctx, &names->actions, "input action", jump, path))
         return false;
 
-    const char *property_keys[] = {"yaw_property",         "pitch_property",
-                                   "view_smooth_property", "vertical_velocity_property",
-                                   "on_ground_property",   "sector_property"};
+    const char *property_keys[] = {"yaw_property",
+                                   "pitch_property",
+                                   "forward_property",
+                                   "view_smooth_property",
+                                   "vertical_velocity_property",
+                                   "on_ground_property",
+                                   "sector_property"};
     for (size_t i = 0; i < SDL_arraysize(property_keys); ++i)
     {
         yyjson_val *value = obj_get(component, property_keys[i]);
@@ -4882,6 +4886,14 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *velocity = obj_get(action, "velocity");
         if (velocity != NULL && !is_vec_array(velocity, 3))
             return validation_error(ctx, json_path, "projectile.fire velocity must be a vec3");
+        yyjson_val *velocity_from_property = obj_get(action, "velocity_from_property");
+        if (velocity_from_property != NULL &&
+            (!yyjson_is_str(velocity_from_property) || yyjson_get_str(velocity_from_property)[0] == '\0'))
+            return validation_error(ctx, json_path,
+                                    "projectile.fire velocity_from_property must be a non-empty string");
+        yyjson_val *speed = obj_get(action, "speed");
+        if (speed != NULL && (!yyjson_is_num(speed) || yyjson_get_num(speed) < 0.0))
+            return validation_error(ctx, json_path, "projectile.fire speed must be non-negative");
         yyjson_val *cooldown = obj_get(action, "cooldown");
         if (cooldown != NULL && !yyjson_is_num(cooldown))
             return validation_error(ctx, json_path, "projectile.fire cooldown must be numeric");
