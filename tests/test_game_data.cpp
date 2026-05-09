@@ -8637,6 +8637,24 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     EXPECT_EQ(render_settings.profile.display_filter, SDL3D_DISPLAY_FILTER_NEAREST);
     EXPECT_EQ(render_settings.tonemap, SDL3D_TONEMAP_NONE);
 
+    const int profile_grayscale_signal = sdl3d_game_data_find_signal(runtime, "signal.render.profile.grayscale");
+    ASSERT_GE(profile_grayscale_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), profile_grayscale_signal, nullptr);
+    ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &render_settings));
+    EXPECT_STREQ(render_settings.profile_name, "grayscale");
+    EXPECT_EQ(render_settings.profile.display_profile, SDL3D_DISPLAY_PROFILE_GRAYSCALE);
+    EXPECT_EQ(render_settings.profile.display_width, 512);
+    EXPECT_EQ(render_settings.profile.display_height, 342);
+
+    const int profile_gameboy_signal = sdl3d_game_data_find_signal(runtime, "signal.render.profile.gameboy");
+    ASSERT_GE(profile_gameboy_signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), profile_gameboy_signal, nullptr);
+    ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &render_settings));
+    EXPECT_STREQ(render_settings.profile_name, "gameboy");
+    EXPECT_EQ(render_settings.profile.display_profile, SDL3D_DISPLAY_PROFILE_GAMEBOY);
+    EXPECT_EQ(render_settings.profile.display_width, 160);
+    EXPECT_EQ(render_settings.profile.display_height, 144);
+
     SectorLevelInstanceCapture sector_capture{};
     ASSERT_TRUE(
         sdl3d_game_data_for_each_sector_level_instance(runtime, capture_sector_level_instance, &sector_capture));

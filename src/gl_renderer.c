@@ -381,7 +381,7 @@ struct sdl3d_gl_context
     GLint retro_profile_loc;
     GLint retro_virtual_resolution_loc;
     GLint retro_output_resolution_loc;
-    int active_retro_profile; /* 0=modern, 1=PS1, 2=N64, 3=DOS, 4=SNES */
+    int active_retro_profile; /* 0=modern, 1=PS1, 2=N64, 3=DOS, 4=SNES, 5=grayscale, 6=Game Boy */
     int active_retro_virtual_w;
     int active_retro_virtual_h;
     int active_retro_filter;
@@ -1001,6 +1001,31 @@ static const char k_retro_frag_main[] =
     "        color = retroQuantize(color, 31.0, (retroBayer4(outputCoord) - 0.5) / 18.0);\n"
     "        color = retroGrade(color * vec3(0.90, 0.96, 1.14), 1.12, 1.18);\n"
     "        if (mod(outputCoord.y, 2.0) < 1.0) color *= 0.82;\n"
+    "    } else if (uProfile == 5) {\n"
+    "        vec2 res = (uVirtualResolution.x > 0.0 && uVirtualResolution.y > 0.0) ? "
+    "uVirtualResolution : vec2(512.0, 342.0);\n"
+    "        color = retroSampleNearest(uv, res);\n"
+    "        float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
+    "        float dither = (retroBayer4(outputCoord) - 0.5) / 3.0;\n"
+    "        float grey = floor(clamp(lum + dither, 0.0, 1.0) * 3.0 + 0.5) / 3.0;\n"
+    "        color = vec3(grey);\n"
+    "        if (mod(outputCoord.y, 2.0) < 1.0) color *= 0.90;\n"
+    "    } else if (uProfile == 6) {\n"
+    "        vec2 res = (uVirtualResolution.x > 0.0 && uVirtualResolution.y > 0.0) ? "
+    "uVirtualResolution : vec2(160.0, 144.0);\n"
+    "        color = retroSampleNearest(uv, res);\n"
+    "        float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
+    "        float stepValue = floor(clamp(lum + (retroBayer4(outputCoord) - 0.5) / 7.0, 0.0, 1.0) * 3.0 + 0.5) / "
+    "3.0;\n"
+    "        vec3 darkest = vec3(0.055, 0.125, 0.055);\n"
+    "        vec3 dark = vec3(0.188, 0.384, 0.188);\n"
+    "        vec3 light = vec3(0.545, 0.674, 0.278);\n"
+    "        vec3 lightest = vec3(0.780, 0.855, 0.455);\n"
+    "        if (stepValue < 0.17) color = darkest;\n"
+    "        else if (stepValue < 0.50) color = dark;\n"
+    "        else if (stepValue < 0.84) color = light;\n"
+    "        else color = lightest;\n"
+    "        if (mod(outputCoord.y, 2.0) < 1.0) color *= 0.86;\n"
     "    } else {\n"
     "        color = texture(uScene, uv).rgb;\n"
     "    }\n"
@@ -3560,7 +3585,7 @@ static bool gl_clear(sdl3d_render_context *context, sdl3d_color color)
 
     ctx->active_retro_profile = (int)context->display_profile;
     if (ctx->active_retro_profile < (int)SDL3D_DISPLAY_PROFILE_MODERN ||
-        ctx->active_retro_profile > (int)SDL3D_DISPLAY_PROFILE_SNES)
+        ctx->active_retro_profile > (int)SDL3D_DISPLAY_PROFILE_GAMEBOY)
         ctx->active_retro_profile = (int)SDL3D_DISPLAY_PROFILE_MODERN;
     ctx->active_retro_virtual_w = context->display_width;
     ctx->active_retro_virtual_h = context->display_height;

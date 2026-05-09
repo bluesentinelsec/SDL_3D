@@ -111,6 +111,8 @@ TEST_F(GLRendererTest, RenderProfilesSelectRetroPostProcess)
         {sdl3d_profile_n64, (int)SDL3D_DISPLAY_PROFILE_N64, 320, 240, (int)SDL3D_DISPLAY_FILTER_LINEAR},
         {sdl3d_profile_dos, (int)SDL3D_DISPLAY_PROFILE_DOS, 320, 200, (int)SDL3D_DISPLAY_FILTER_NEAREST},
         {sdl3d_profile_snes, (int)SDL3D_DISPLAY_PROFILE_SNES, 256, 224, (int)SDL3D_DISPLAY_FILTER_NEAREST},
+        {sdl3d_profile_grayscale, (int)SDL3D_DISPLAY_PROFILE_GRAYSCALE, 512, 342, (int)SDL3D_DISPLAY_FILTER_NEAREST},
+        {sdl3d_profile_gameboy, (int)SDL3D_DISPLAY_PROFILE_GAMEBOY, 160, 144, (int)SDL3D_DISPLAY_FILTER_NEAREST},
     };
 
     for (const ProfileCase &test_case : cases)

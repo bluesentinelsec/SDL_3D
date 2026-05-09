@@ -865,7 +865,8 @@ TEST_F(SDL3DLightingFixture, SetAndGetRenderProfile)
 TEST_F(SDL3DLightingFixture, RuntimeProfileSwitch)
 {
     sdl3d_render_profile profiles[] = {
-        sdl3d_profile_modern(), sdl3d_profile_ps1(), sdl3d_profile_n64(), sdl3d_profile_dos(), sdl3d_profile_snes(),
+        sdl3d_profile_modern(), sdl3d_profile_ps1(),       sdl3d_profile_n64(),     sdl3d_profile_dos(),
+        sdl3d_profile_snes(),   sdl3d_profile_grayscale(), sdl3d_profile_gameboy(),
     };
     for (int i = 0; i < 5; ++i)
     {
@@ -935,18 +936,21 @@ TEST_P(SDL3DPresetTable, FieldsMatchSpec)
 
 INSTANTIATE_TEST_SUITE_P(
     Presets, SDL3DPresetTable,
-    ::testing::Values(PresetCase{"modern", sdl3d_profile_modern, SDL3D_SHADING_PHONG, SDL3D_UV_PERSPECTIVE,
-                                 SDL3D_TONEMAP_ACES, false, false, SDL3D_DISPLAY_PROFILE_MODERN, 0, 0,
-                                 SDL3D_DISPLAY_FILTER_LINEAR},
-                      PresetCase{"ps1", sdl3d_profile_ps1, SDL3D_SHADING_GOURAUD, SDL3D_UV_AFFINE, SDL3D_TONEMAP_NONE,
-                                 true, true, SDL3D_DISPLAY_PROFILE_PS1, 320, 240, SDL3D_DISPLAY_FILTER_NEAREST},
-                      PresetCase{"n64", sdl3d_profile_n64, SDL3D_SHADING_GOURAUD, SDL3D_UV_PERSPECTIVE,
-                                 SDL3D_TONEMAP_NONE, false, false, SDL3D_DISPLAY_PROFILE_N64, 320, 240,
-                                 SDL3D_DISPLAY_FILTER_LINEAR},
-                      PresetCase{"dos", sdl3d_profile_dos, SDL3D_SHADING_GOURAUD, SDL3D_UV_AFFINE, SDL3D_TONEMAP_NONE,
-                                 false, true, SDL3D_DISPLAY_PROFILE_DOS, 320, 200, SDL3D_DISPLAY_FILTER_NEAREST},
-                      PresetCase{"snes", sdl3d_profile_snes, SDL3D_SHADING_FLAT, SDL3D_UV_AFFINE, SDL3D_TONEMAP_NONE,
-                                 false, true, SDL3D_DISPLAY_PROFILE_SNES, 256, 224, SDL3D_DISPLAY_FILTER_NEAREST}));
+    ::testing::Values(
+        PresetCase{"modern", sdl3d_profile_modern, SDL3D_SHADING_PHONG, SDL3D_UV_PERSPECTIVE, SDL3D_TONEMAP_ACES, false,
+                   false, SDL3D_DISPLAY_PROFILE_MODERN, 0, 0, SDL3D_DISPLAY_FILTER_LINEAR},
+        PresetCase{"ps1", sdl3d_profile_ps1, SDL3D_SHADING_GOURAUD, SDL3D_UV_AFFINE, SDL3D_TONEMAP_NONE, true, true,
+                   SDL3D_DISPLAY_PROFILE_PS1, 320, 240, SDL3D_DISPLAY_FILTER_NEAREST},
+        PresetCase{"n64", sdl3d_profile_n64, SDL3D_SHADING_GOURAUD, SDL3D_UV_PERSPECTIVE, SDL3D_TONEMAP_NONE, false,
+                   false, SDL3D_DISPLAY_PROFILE_N64, 320, 240, SDL3D_DISPLAY_FILTER_LINEAR},
+        PresetCase{"dos", sdl3d_profile_dos, SDL3D_SHADING_GOURAUD, SDL3D_UV_AFFINE, SDL3D_TONEMAP_NONE, false, true,
+                   SDL3D_DISPLAY_PROFILE_DOS, 320, 200, SDL3D_DISPLAY_FILTER_NEAREST},
+        PresetCase{"snes", sdl3d_profile_snes, SDL3D_SHADING_FLAT, SDL3D_UV_AFFINE, SDL3D_TONEMAP_NONE, false, true,
+                   SDL3D_DISPLAY_PROFILE_SNES, 256, 224, SDL3D_DISPLAY_FILTER_NEAREST},
+        PresetCase{"grayscale", sdl3d_profile_grayscale, SDL3D_SHADING_FLAT, SDL3D_UV_AFFINE, SDL3D_TONEMAP_NONE, false,
+                   true, SDL3D_DISPLAY_PROFILE_GRAYSCALE, 512, 342, SDL3D_DISPLAY_FILTER_NEAREST},
+        PresetCase{"gameboy", sdl3d_profile_gameboy, SDL3D_SHADING_FLAT, SDL3D_UV_AFFINE, SDL3D_TONEMAP_NONE, false,
+                   true, SDL3D_DISPLAY_PROFILE_GAMEBOY, 160, 144, SDL3D_DISPLAY_FILTER_NEAREST}));
 
 /* ================================================================== */
 /* Color quantization unit tests                                      */

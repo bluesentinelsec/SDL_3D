@@ -193,7 +193,9 @@ extern "C"
         SDL3D_DISPLAY_PROFILE_PS1 = 1,
         SDL3D_DISPLAY_PROFILE_N64 = 2,
         SDL3D_DISPLAY_PROFILE_DOS = 3,
-        SDL3D_DISPLAY_PROFILE_SNES = 4
+        SDL3D_DISPLAY_PROFILE_SNES = 4,
+        SDL3D_DISPLAY_PROFILE_GRAYSCALE = 5,
+        SDL3D_DISPLAY_PROFILE_GAMEBOY = 6
     } sdl3d_display_profile;
 
     /**
@@ -238,6 +240,8 @@ extern "C"
     sdl3d_render_profile sdl3d_profile_n64(void);
     sdl3d_render_profile sdl3d_profile_dos(void);
     sdl3d_render_profile sdl3d_profile_snes(void);
+    sdl3d_render_profile sdl3d_profile_grayscale(void);
+    sdl3d_render_profile sdl3d_profile_gameboy(void);
 
     /* ============================================================== */
     /* Shadow mapping                                                 */

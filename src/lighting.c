@@ -559,7 +559,7 @@ bool sdl3d_end_shadow_pass(sdl3d_render_context *context)
 
 static sdl3d_display_profile normalize_display_profile(sdl3d_display_profile profile)
 {
-    return profile >= SDL3D_DISPLAY_PROFILE_MODERN && profile <= SDL3D_DISPLAY_PROFILE_SNES
+    return profile >= SDL3D_DISPLAY_PROFILE_MODERN && profile <= SDL3D_DISPLAY_PROFILE_GAMEBOY
                ? profile
                : SDL3D_DISPLAY_PROFILE_MODERN;
 }
@@ -711,6 +711,42 @@ sdl3d_render_profile sdl3d_profile_snes(void)
     p.display_profile = SDL3D_DISPLAY_PROFILE_SNES;
     p.display_width = 256;
     p.display_height = 224;
+    p.display_filter = SDL3D_DISPLAY_FILTER_NEAREST;
+    return p;
+}
+
+sdl3d_render_profile sdl3d_profile_grayscale(void)
+{
+    sdl3d_render_profile p;
+    SDL_zerop(&p);
+    p.shading = SDL3D_SHADING_FLAT;
+    p.texture_filter = SDL3D_TEXTURE_FILTER_NEAREST;
+    p.uv_mode = SDL3D_UV_AFFINE;
+    p.fog_eval = SDL3D_FOG_EVAL_VERTEX;
+    p.tonemap = SDL3D_TONEMAP_NONE;
+    p.color_quantize = true;
+    p.color_depth = 4;
+    p.display_profile = SDL3D_DISPLAY_PROFILE_GRAYSCALE;
+    p.display_width = 512;
+    p.display_height = 342;
+    p.display_filter = SDL3D_DISPLAY_FILTER_NEAREST;
+    return p;
+}
+
+sdl3d_render_profile sdl3d_profile_gameboy(void)
+{
+    sdl3d_render_profile p;
+    SDL_zerop(&p);
+    p.shading = SDL3D_SHADING_FLAT;
+    p.texture_filter = SDL3D_TEXTURE_FILTER_NEAREST;
+    p.uv_mode = SDL3D_UV_AFFINE;
+    p.fog_eval = SDL3D_FOG_EVAL_VERTEX;
+    p.tonemap = SDL3D_TONEMAP_NONE;
+    p.color_quantize = true;
+    p.color_depth = 4;
+    p.display_profile = SDL3D_DISPLAY_PROFILE_GAMEBOY;
+    p.display_width = 160;
+    p.display_height = 144;
     p.display_filter = SDL3D_DISPLAY_FILTER_NEAREST;
     return p;
 }
