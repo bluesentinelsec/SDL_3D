@@ -1,0 +1,16 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "sector_platforms": [
+    {
+      "name": "platform.doom.lift",
+      "scene": "scene.doom_level.play",
+      "sector_level": "sector.doom.e1m1",
+      "sector": "lift",
+      "min_floor_y": 0.0,
+      "max_floor_y": 2.5,
+      "ceil_y": 12.0,
+      "cycle_seconds": 6.0,
+      "rebuild_min_delta": 0.02
+    }
+  ]
+}

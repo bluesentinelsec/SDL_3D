@@ -23,12 +23,6 @@
 #define SIG_AMBIENT_FEEDBACK 2004
 #define SIG_AMBIENT_FEEDBACK_SKIP 2005
 #define SIG_DAMAGE_FLOOR_TICK 2009
-#define LIFT_FLOOR_MIN_Y 0.0f
-#define LIFT_FLOOR_MAX_Y 2.5f
-#define LIFT_CEIL_Y 12.0f
-#define LIFT_CYCLE_SECONDS 6.0f
-#define LIFT_REBUILD_MIN_DELTA 0.02f
-#define LIFT_ENTITY_ID 1
 #define AMBIENT_FADE_SECONDS 1.0f
 #define AMBIENT_FEEDBACK_SECONDS 5.0f
 #define DAMAGE_FEEDBACK_REFERENCE_DPS 30.0f
@@ -52,7 +46,6 @@ typedef struct doom_state
     sdl3d_audio_engine *audio;
     sdl3d_logic_world *logic;
     sdl3d_logic_branch ambient_feedback_branch;
-    sdl3d_logic_sector_platform dynamic_lift;
     sdl3d_logic_sector_damage_sensor damage_sensor;
     sdl3d_sector_watcher sector_watcher;
     sdl3d_backend current_backend;
@@ -221,33 +214,6 @@ static bool doom_logic_trigger_feedback(void *userdata, const char *feedback_nam
     return false;
 }
 
-static bool doom_logic_set_sector_geometry(void *userdata, int sector_index, const sdl3d_sector_geometry *geometry,
-                                           const sdl3d_properties *payload)
-{
-    (void)payload;
-    doom_state *state = (doom_state *)userdata;
-    if (state == NULL || geometry == NULL)
-    {
-        return false;
-    }
-
-    if (!level_data_set_sector_geometry(&state->level, sector_index, geometry))
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Dynamic sector geometry update failed: %s", SDL_GetError());
-        return false;
-    }
-    return true;
-}
-
-static void init_dynamic_lift(doom_state *state)
-{
-    sdl3d_logic_sector_platform_init(&state->dynamic_lift, LIFT_ENTITY_ID,
-                                     sdl3d_logic_target_sector_index(DOOM_DYNAMIC_LIFT_SECTOR), LIFT_FLOOR_MIN_Y,
-                                     LIFT_FLOOR_MAX_Y, LIFT_CEIL_Y, LIFT_CYCLE_SECONDS, LIFT_REBUILD_MIN_DELTA);
-    state->dynamic_lift.last_floor_y = g_sectors[DOOM_DYNAMIC_LIFT_SECTOR].floor_y;
-    state->dynamic_lift.has_last_floor_y = true;
-}
-
 static void init_damage_sensor(doom_state *state)
 {
     sdl3d_logic_sector_damage_sensor_init(&state->damage_sensor, 1, SIG_DAMAGE_FLOOR_TICK, 0.0f);
@@ -266,7 +232,6 @@ static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
     adapters.userdata = state;
     adapters.set_ambient = doom_logic_set_ambient;
     adapters.trigger_feedback = doom_logic_trigger_feedback;
-    adapters.set_sector_geometry = doom_logic_set_sector_geometry;
     sdl3d_logic_world_set_game_adapters(state->logic, &adapters);
 
     sdl3d_logic_target_context target_context;
@@ -389,7 +354,6 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
         return false;
     }
     state->level_ready = true;
-    init_dynamic_lift(state);
 
     if (!entities_init(&state->ent, &state->level.unlit, ctx_registry(ctx), ctx_bus(ctx)))
     {
@@ -512,34 +476,6 @@ static void apply_doom_profile_actions(sdl3d_game_context *ctx, doom_state *stat
     }
 }
 
-static void update_dynamic_lift(doom_state *state, float dt)
-{
-    static bool checked_disable_lift = false;
-    static bool disable_lift = false;
-
-    if (!checked_disable_lift)
-    {
-        disable_lift = SDL_getenv("DOOM_DISABLE_DYNAMIC_LIFT") != NULL;
-        checked_disable_lift = true;
-    }
-    if (disable_lift)
-    {
-        return;
-    }
-
-    if (state == NULL || !state->level_ready || state->logic == NULL)
-    {
-        return;
-    }
-
-    const sdl3d_logic_sector_platform_result result =
-        sdl3d_logic_sector_platform_update(state->logic, &state->dynamic_lift, dt);
-    if (result.attempted && !result.applied)
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Dynamic lift logic action failed: %s", SDL_GetError());
-    }
-}
-
 static float clamp01(float value)
 {
     if (value < 0.0f)
@@ -584,7 +520,6 @@ typedef struct doom_tick_profile
     Uint64 last_counter;
     double actions_ms;
     double transition_ms;
-    double lift_ms;
     double entities_ms;
     double player_ms;
     double sensors_ms;
@@ -608,13 +543,12 @@ static double doom_profile_elapsed_ms(Uint64 start, Uint64 end)
     return (double)(end - start) * 1000.0 / (double)SDL_GetPerformanceFrequency();
 }
 
-static void doom_tick_profile_record(double actions_ms, double transition_ms, double lift_ms, double entities_ms,
-                                     double player_ms, double sensors_ms, double frame_ms)
+static void doom_tick_profile_record(double actions_ms, double transition_ms, double entities_ms, double player_ms,
+                                     double sensors_ms, double frame_ms)
 {
     const Uint64 now = SDL_GetPerformanceCounter();
     g_tick_profile.actions_ms += actions_ms;
     g_tick_profile.transition_ms += transition_ms;
-    g_tick_profile.lift_ms += lift_ms;
     g_tick_profile.entities_ms += entities_ms;
     g_tick_profile.player_ms += player_ms;
     g_tick_profile.sensors_ms += sensors_ms;
@@ -633,16 +567,14 @@ static void doom_tick_profile_record(double actions_ms, double transition_ms, do
 
     const double ticks = g_tick_profile.ticks > 0 ? (double)g_tick_profile.ticks : 1.0;
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "Doom tick profile: tick=%.2fms actions=%.2f transition=%.2f lift=%.2f entities=%.2f player=%.2f "
+                "Doom tick profile: tick=%.2fms actions=%.2f transition=%.2f entities=%.2f player=%.2f "
                 "sensors=%.2f ticks=%d",
                 g_tick_profile.frame_ms / ticks, g_tick_profile.actions_ms / ticks,
-                g_tick_profile.transition_ms / ticks, g_tick_profile.lift_ms / ticks,
-                g_tick_profile.entities_ms / ticks, g_tick_profile.player_ms / ticks, g_tick_profile.sensors_ms / ticks,
-                g_tick_profile.ticks);
+                g_tick_profile.transition_ms / ticks, g_tick_profile.entities_ms / ticks,
+                g_tick_profile.player_ms / ticks, g_tick_profile.sensors_ms / ticks, g_tick_profile.ticks);
     g_tick_profile.last_counter = now;
     g_tick_profile.actions_ms = 0.0;
     g_tick_profile.transition_ms = 0.0;
-    g_tick_profile.lift_ms = 0.0;
     g_tick_profile.entities_ms = 0.0;
     g_tick_profile.player_ms = 0.0;
     g_tick_profile.sensors_ms = 0.0;
@@ -658,7 +590,6 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     Uint64 section_start = 0;
     double actions_ms = 0.0;
     double transition_ms = 0.0;
-    double lift_ms = 0.0;
     double entities_ms = 0.0;
     double player_ms = 0.0;
     double sensors_ms = 0.0;
@@ -695,13 +626,6 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     {
         Uint64 now = SDL_GetPerformanceCounter();
         transition_ms = doom_profile_elapsed_ms(section_start, now);
-        section_start = now;
-    }
-    update_dynamic_lift(state, dt);
-    if (profile_tick)
-    {
-        Uint64 now = SDL_GetPerformanceCounter();
-        lift_ms = doom_profile_elapsed_ms(section_start, now);
         section_start = now;
     }
     entities_update(&state->ent, &state->level.unlit, dt, state->player.mover.position);
@@ -755,7 +679,7 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     {
         Uint64 now = SDL_GetPerformanceCounter();
         sensors_ms += doom_profile_elapsed_ms(section_start, now);
-        doom_tick_profile_record(actions_ms, transition_ms, lift_ms, entities_ms, player_ms, sensors_ms,
+        doom_tick_profile_record(actions_ms, transition_ms, entities_ms, player_ms, sensors_ms,
                                  doom_profile_elapsed_ms(tick_start, now));
     }
 }

@@ -8201,6 +8201,163 @@ TEST(GameDataRuntime, RunsAuthoredSectorDoorInteractionRenderAndCollision)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, RunsAuthoredSectorPlatform)
+{
+    const std::filesystem::path dir = unique_test_dir("sector_platforms");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "world": { "sector_levels": [{ "level": "sector.test", "variant": "unlit" }] }
+})json");
+    write_text(dir / "sector_platforms.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Sector Platform Test" },
+  "world": { "name": "world.test", "kind": "sector" },
+  "sector_levels": [
+    {
+      "name": "sector.test",
+      "materials": [{ "name": "floor" }, { "name": "wall" }],
+      "sectors": [
+        {
+          "name": "lift",
+          "points": [[0, 0], [4, 0], [4, 4], [0, 4]],
+          "floor_y": 0.0,
+          "ceil_y": 4.0,
+          "floor_material": "floor",
+          "ceil_material": "wall",
+          "wall_material": "wall"
+        }
+      ]
+    }
+  ],
+  "sector_platforms": [
+    {
+      "name": "platform.test",
+      "scene": "scene.play",
+      "sector_level": "sector.test",
+      "sector": "lift",
+      "min_floor_y": 0.0,
+      "max_floor_y": 2.0,
+      "ceil_y": 4.0,
+      "cycle_seconds": 4.0,
+      "rebuild_min_delta": 0.0
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "sector_platforms.game.json").string().c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+
+    sdl3d_game_data_sector_level level{};
+    ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.test", &level));
+    ASSERT_EQ(level.sector_count, 1);
+    EXPECT_NEAR(level.sectors[0].floor_y, 0.0f, 0.001f);
+
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f));
+    ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.test", &level));
+    EXPECT_NEAR(level.sectors[0].floor_y, 1.0f, 0.001f);
+    ASSERT_NE(level.unlit, nullptr);
+    ASSERT_EQ(level.unlit->sector_count, 1);
+
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f));
+    ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.test", &level));
+    EXPECT_NEAR(level.sectors[0].floor_y, 2.0f, 0.001f);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidSectorPlatforms)
+{
+    const std::filesystem::path dir = unique_test_dir("sector_platforms_invalid");
+    write_text(dir / "scenes" / "play.scene.json", R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play" })json");
+
+    struct Case
+    {
+        const char *name;
+        const char *platform_json;
+        const char *expected_error;
+    };
+    const Case cases[] = {
+        {
+            "unknown_sector",
+            R"json([
+              {
+                "name": "platform.bad",
+                "sector_level": "sector.test",
+                "sector": "missing",
+                "min_floor_y": 0.0,
+                "max_floor_y": 2.0,
+                "ceil_y": 4.0,
+                "cycle_seconds": 4.0
+              }
+            ])json",
+            "unknown sector platform sector",
+        },
+        {
+            "bad_timing",
+            R"json([
+              {
+                "name": "platform.bad",
+                "sector_level": "sector.test",
+                "sector": "lift",
+                "min_floor_y": 0.0,
+                "max_floor_y": 2.0,
+                "ceil_y": 4.0,
+                "cycle_seconds": 0.0
+              }
+            ])json",
+            "cycle_seconds must be positive",
+        },
+    };
+
+    for (const Case &test_case : cases)
+    {
+        const std::filesystem::path game_path = dir / (std::string(test_case.name) + ".game.json");
+        const std::string game_json = std::string(R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Sector Platform" },
+  "world": { "name": "world.test", "kind": "sector" },
+  "sector_levels": [
+    {
+      "name": "sector.test",
+      "materials": [{ "name": "floor" }],
+      "sectors": [{
+        "name": "lift",
+        "points": [[0, 0], [4, 0], [4, 4], [0, 4]],
+        "floor_y": 0,
+        "ceil_y": 4,
+        "wall_material": "floor"
+      }]
+    }
+  ],
+  "sector_platforms": )json") + test_case.platform_json +
+                                      R"json(,
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json";
+        write_text(game_path, game_json.c_str());
+
+        char error[512]{};
+        EXPECT_FALSE(sdl3d_game_data_validate_file(game_path.string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
+            << test_case.name << ": " << error;
+    }
+
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidFpsSectorController)
 {
     const std::filesystem::path dir = unique_test_dir("fps_sector_controller_invalid");
