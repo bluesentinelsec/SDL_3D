@@ -13,8 +13,13 @@ data/
     actors/
       player.json
       enemies.json
-      world.json
+      props.json
+      projectiles.json
       effects.json
+    world/
+      level_1.materials.json
+      level_1.rooms.json
+      level_1.lights.json
     input/
       actions.json
       device_assignments.json
@@ -73,6 +78,10 @@ Fragments use `sdl3d.fragment.v0` and contribute only mergeable sections. Split
 fragments by editing purpose:
 
 - Actor fragments answer "what exists in the world?"
+- Archetype/instance actor fragments answer "what repeated placed actors share
+  a template?"
+- Sector world fragments answer "which materials, sectors, lights, doors, and
+  platforms define this level?"
 - Grid fragments answer "what tile, maze, or board layout drives this level?"
 - Input fragments answer "what can the player do and with which devices?"
 - Logic fragments answer "what happens when a signal, timer, or sensor fires?"
@@ -121,6 +130,23 @@ Imports are structured composition, not textual includes.
 
 Keep the import list in intentional order. If order matters, document it near
 the affected data rather than relying on accidental filename sorting.
+
+Composition-time helpers should still preserve clear ownership. Use
+`actor_instances` to place repeated static actors from archetypes rather than
+duplicating component JSON for every crate, pickup, or lamp. Use
+`sector_level_fragments` to split large sector worlds into materials, sectors,
+and lights while still producing one validated `sector_levels` entry.
+
+## Templates
+
+Reusable project templates live under `templates/`. They are not magic engine
+imports; they are copyable, project-agnostic fragments that show standard
+naming and composition patterns for common genres.
+
+Use templates as starting points, then rename ids to match the game. Prefer
+templates for reusable primitives such as FPS controls, render profile toggles,
+pause/HUD widgets, reticles, and sector interactions. Keep game-specific rules
+in the game project's fragments and Lua scripts.
 
 ## Lua Placement
 

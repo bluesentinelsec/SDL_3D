@@ -1,0 +1,180 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "assets": {
+    "sprites": [
+      {
+        "id": "sprite.doom.robot.walk",
+        "kind": "files",
+        "base_paths": [
+          "asset://sprites/skeletal_robot/south.png",
+          "asset://sprites/skeletal_robot/south-east.png",
+          "asset://sprites/skeletal_robot/east.png",
+          "asset://sprites/skeletal_robot/north-east.png",
+          "asset://sprites/skeletal_robot/north.png",
+          "asset://sprites/skeletal_robot/north-west.png",
+          "asset://sprites/skeletal_robot/west.png",
+          "asset://sprites/skeletal_robot/south-west.png"
+        ],
+        "frame_paths": [
+          "asset://sprites/skeletal_robot/walking_frames/south_00.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-east_00.png",
+          "asset://sprites/skeletal_robot/walking_frames/east_00.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-east_00.png",
+          "asset://sprites/skeletal_robot/walking_frames/north_00.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-west_00.png",
+          "asset://sprites/skeletal_robot/walking_frames/west_00.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-west_00.png",
+          "asset://sprites/skeletal_robot/walking_frames/south_01.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-east_01.png",
+          "asset://sprites/skeletal_robot/walking_frames/east_01.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-east_01.png",
+          "asset://sprites/skeletal_robot/walking_frames/north_01.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-west_01.png",
+          "asset://sprites/skeletal_robot/walking_frames/west_01.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-west_01.png",
+          "asset://sprites/skeletal_robot/walking_frames/south_02.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-east_02.png",
+          "asset://sprites/skeletal_robot/walking_frames/east_02.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-east_02.png",
+          "asset://sprites/skeletal_robot/walking_frames/north_02.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-west_02.png",
+          "asset://sprites/skeletal_robot/walking_frames/west_02.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-west_02.png",
+          "asset://sprites/skeletal_robot/walking_frames/south_03.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-east_03.png",
+          "asset://sprites/skeletal_robot/walking_frames/east_03.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-east_03.png",
+          "asset://sprites/skeletal_robot/walking_frames/north_03.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-west_03.png",
+          "asset://sprites/skeletal_robot/walking_frames/west_03.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-west_03.png",
+          "asset://sprites/skeletal_robot/walking_frames/south_04.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-east_04.png",
+          "asset://sprites/skeletal_robot/walking_frames/east_04.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-east_04.png",
+          "asset://sprites/skeletal_robot/walking_frames/north_04.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-west_04.png",
+          "asset://sprites/skeletal_robot/walking_frames/west_04.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-west_04.png",
+          "asset://sprites/skeletal_robot/walking_frames/south_05.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-east_05.png",
+          "asset://sprites/skeletal_robot/walking_frames/east_05.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-east_05.png",
+          "asset://sprites/skeletal_robot/walking_frames/north_05.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-west_05.png",
+          "asset://sprites/skeletal_robot/walking_frames/west_05.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-west_05.png"
+        ],
+        "frame_count": 6,
+        "direction_count": 8,
+        "fps": 8.0,
+        "loop": true,
+        "lighting": true,
+        "emissive": false,
+        "visual_ground_offset": 0.56
+      }
+    ]
+  },
+  "actor_archetypes": [
+    {
+      "name": "archetype.doom.robot",
+      "active": true,
+      "tags": ["npc", "robot", "billboard"],
+      "properties": {
+        "sprite_yaw": { "type": "float", "value": 0.0 }
+      }
+    }
+  ],
+  "actor_instances": [
+    {
+      "name": "entity.doom.robot.entry",
+      "archetype": "archetype.doom.robot",
+      "transform": { "position": [5.8, 0.0, 6.8] },
+      "components": [
+        { "type": "render.sprite", "sprite": "sprite.doom.robot.walk", "size": [3.4, 5.2], "facing_yaw_property": "sprite_yaw" },
+        {
+          "type": "motion.patrol",
+          "waypoints": [[5.8, 0.0, 6.8], [9.2, 0.0, 6.8]],
+          "speed": 1.2,
+          "wait_time": 0.6,
+          "arrival_radius": 0.08,
+          "mode": "ping_pong",
+          "start_idle": false,
+          "yaw_property": "sprite_yaw"
+        }
+      ]
+    },
+    {
+      "name": "entity.doom.robot.nukage",
+      "archetype": "archetype.doom.robot",
+      "transform": { "position": [4.2, 0.0, 21.5] },
+      "components": [
+        { "type": "render.sprite", "sprite": "sprite.doom.robot.walk", "size": [3.2, 4.8], "facing_yaw_property": "sprite_yaw" },
+        {
+          "type": "motion.patrol",
+          "waypoints": [[4.2, 0.0, 21.5], [4.2, 0.0, 24.5]],
+          "speed": 0.9,
+          "wait_time": 0.8,
+          "arrival_radius": 0.08,
+          "mode": "ping_pong",
+          "start_idle": false,
+          "yaw_property": "sprite_yaw"
+        }
+      ]
+    },
+    {
+      "name": "entity.doom.robot.storage",
+      "archetype": "archetype.doom.robot",
+      "transform": { "position": [24.0, 0.0, 19.0] },
+      "components": [
+        { "type": "render.sprite", "sprite": "sprite.doom.robot.walk", "size": [3.6, 5.6], "facing_yaw_property": "sprite_yaw" },
+        {
+          "type": "motion.patrol",
+          "waypoints": [[24.0, 0.0, 19.0], [24.0, 0.0, 23.0]],
+          "speed": 0.8,
+          "wait_time": 1.2,
+          "arrival_radius": 0.08,
+          "mode": "ping_pong",
+          "start_idle": false,
+          "yaw_property": "sprite_yaw"
+        }
+      ]
+    },
+    {
+      "name": "entity.doom.robot.hall",
+      "archetype": "archetype.doom.robot",
+      "transform": { "position": [24.0, 0.0, 37.5] },
+      "components": [
+        { "type": "render.sprite", "sprite": "sprite.doom.robot.walk", "size": [3.4, 5.2], "facing_yaw_property": "sprite_yaw" },
+        {
+          "type": "motion.patrol",
+          "waypoints": [[24.0, 0.0, 37.5], [24.0, 0.0, 41.5]],
+          "speed": 0.7,
+          "wait_time": 1.6,
+          "arrival_radius": 0.08,
+          "mode": "ping_pong",
+          "start_idle": false,
+          "yaw_property": "sprite_yaw"
+        }
+      ]
+    },
+    {
+      "name": "entity.doom.robot.dragon",
+      "archetype": "archetype.doom.robot",
+      "transform": { "position": [24.0, 0.0, 72.0] },
+      "components": [
+        { "type": "render.sprite", "sprite": "sprite.doom.robot.walk", "size": [3.6, 5.6], "facing_yaw_property": "sprite_yaw" },
+        {
+          "type": "motion.patrol",
+          "waypoints": [[24.0, 0.0, 72.0], [32.0, 0.0, 72.0]],
+          "speed": 1.0,
+          "wait_time": 1.5,
+          "arrival_radius": 0.08,
+          "mode": "ping_pong",
+          "start_idle": false,
+          "yaw_property": "sprite_yaw"
+        }
+      ]
+    }
+  ]
+}

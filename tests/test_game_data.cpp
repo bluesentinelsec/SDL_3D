@@ -6708,6 +6708,196 @@ TEST(GameDataRuntime, ActorPoolsSpawnDespawnAndResetActors)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, ActorInstancesExpandArchetypesBeforeValidation)
+{
+    const std::filesystem::path dir = unique_test_dir("actor_instances");
+    write_text(dir / "fragments" / "props.json",
+               R"json({
+  "schema": "sdl3d.fragment.v0",
+  "actor_archetypes": [
+    {
+      "name": "archetype.crate",
+      "active": true,
+      "tags": ["prop", "crate"],
+      "properties": {
+        "health": { "type": "int", "value": 10 }
+      },
+      "components": [
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "color": [40, 160, 70, 255], "lighting": true }
+      ]
+    }
+  ],
+  "actor_instances": [
+    {
+      "name": "entity.crate.a",
+      "archetype": "archetype.crate",
+      "transform": { "position": [1.0, 2.0, 3.0] },
+      "properties": { "health": { "type": "int", "value": 7 } }
+    },
+    {
+      "name": "entity.crate.b",
+      "archetype": "archetype.crate",
+      "transform": { "position": [4.0, 5.0, 6.0] }
+    }
+  ]
+})json");
+    write_text(
+        dir / "scenes" / "play.scene.json",
+        R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.crate.a", "entity.crate.b"] })json");
+    write_text(dir / "actor_instances.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Actor Instances", "id": "test.actor_instances", "version": "0.1.0" },
+  "imports": [
+    { "path": "fragments/props.json", "sections": ["actor_archetypes", "actor_instances"] }
+  ],
+  "world": { "name": "world.actor_instances", "kind": "fixed_screen" },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "actor_instances.game.json").string().c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+
+    sdl3d_registered_actor *crate_a = sdl3d_game_data_find_actor(runtime, "entity.crate.a");
+    sdl3d_registered_actor *crate_b = sdl3d_game_data_find_actor(runtime, "entity.crate.b");
+    ASSERT_NE(crate_a, nullptr);
+    ASSERT_NE(crate_b, nullptr);
+    EXPECT_TRUE(crate_a->active);
+    EXPECT_TRUE(crate_b->active);
+    expect_vec3_near(crate_a->position, sdl3d_vec3_make(1.0f, 2.0f, 3.0f));
+    expect_vec3_near(crate_b->position, sdl3d_vec3_make(4.0f, 5.0f, 6.0f));
+    EXPECT_EQ(sdl3d_properties_get_int(crate_a->props, "health", 0), 7);
+    EXPECT_EQ(sdl3d_properties_get_int(crate_b->props, "health", 0), 10);
+
+    RenderPrimitiveCapture render{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &render));
+    EXPECT_EQ(render.cubes, 2);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+
+    write_text(dir / "bad_instances.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad Actor Instances" },
+  "world": { "name": "world.bad_actor_instances", "kind": "fixed_screen" },
+  "actor_instances": [
+    { "name": "entity.bad", "archetype": "archetype.missing" }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    runtime = nullptr;
+    SDL_zeroa(error);
+    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "bad_instances.game.json").string().c_str(), session, &runtime, error,
+                                           sizeof(error)));
+    EXPECT_NE(std::string(error).find("unknown actor archetype"), std::string::npos) << error;
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, WeaponProjectileComponentFiresFromOwningActor)
+{
+    const std::filesystem::path dir = unique_test_dir("weapon_projectile_component");
+    write_text(dir / "weapon_projectile.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Weapon Projectile", "id": "test.weapon_projectile", "version": "0.1.0" },
+  "world": { "name": "world.weapon_projectile", "kind": "fixed_screen" },
+  "input": {
+    "contexts": [
+      { "name": "gameplay", "actions": [{ "name": "action.fire" }] }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [1.0, 2.0, 3.0] },
+      "properties": {
+        "camera_forward": { "type": "vec3", "value": [0.0, 0.0, -1.0] },
+        "fire_timer": { "type": "float", "value": 0.0 },
+        "fire_cooldown": { "type": "float", "value": 0.25 }
+      },
+      "components": [
+        {
+          "type": "weapon.projectile",
+          "action": "action.fire",
+          "pool": "pool.shots",
+          "offset": [0.0, 0.1, -0.5],
+          "velocity_from_property": "camera_forward",
+          "speed": 12.0,
+          "cooldown": 0.25,
+          "properties": { "damage": 5 }
+        }
+      ]
+    }
+  ],
+  "actor_archetypes": [
+    {
+      "name": "archetype.shot",
+      "tags": ["projectile"],
+      "properties": {
+        "damage": { "type": "int", "value": 1 },
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.0] }
+      },
+      "components": [
+        { "type": "render.sphere", "radius": 0.1, "color": [255, 220, 80, 255], "lighting": true }
+      ]
+    }
+  ],
+  "actor_pools": [
+    { "name": "pool.shots", "archetype": "archetype.shot", "capacity": 2, "scene": "scene.play" }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(
+        dir / "scenes" / "play.scene.json",
+        R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "input": { "actions": ["action.fire"] } })json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "weapon_projectile.game.json").string().c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    const int fire_action = sdl3d_game_data_find_action(runtime, "action.fire");
+    ASSERT_GE(fire_action, 0);
+    sdl3d_input_set_action_override(input, fire_action, 1.0f);
+    ASSERT_NE(sdl3d_input_update(input, 10), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+
+    sdl3d_registered_actor *shot0 = sdl3d_game_data_find_actor(runtime, "pool.shots.0");
+    ASSERT_NE(shot0, nullptr);
+    EXPECT_TRUE(shot0->active);
+    expect_vec3_near(shot0->position, sdl3d_vec3_make(1.0f, 2.1f, 2.5f));
+    expect_vec3_near(sdl3d_properties_get_vec3(shot0->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)),
+                     sdl3d_vec3_make(0.0f, 0.0f, -12.0f));
+    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 5);
+
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "fire_timer", 0.0f), 0.25f, 0.0001f);
+    ASSERT_NE(sdl3d_input_update(input, 11), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    sdl3d_registered_actor *shot1 = sdl3d_game_data_find_actor(runtime, "pool.shots.1");
+    ASSERT_NE(shot1, nullptr);
+    EXPECT_FALSE(shot1->active);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, ActivePooledActorsRenderAndEmitParticles)
 {
     const std::filesystem::path dir = unique_test_dir("actor_pool_render");
@@ -7709,6 +7899,90 @@ TEST(GameDataRuntime, ResolvesActiveSceneSectorLevelInstances)
     EXPECT_EQ(capture.level, level.unlit);
     expect_vec3_near(capture.position, sdl3d_vec3_make(1.0f, 2.0f, 3.0f));
     EXPECT_FALSE(capture.portal_culling);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, SectorLevelFragmentsComposeIntoNamedLevels)
+{
+    const std::filesystem::path dir = unique_test_dir("sector_level_fragments");
+    write_text(dir / "fragments" / "materials.json",
+               R"json({
+  "schema": "sdl3d.fragment.v0",
+  "sector_level_fragments": [
+    {
+      "level": "sector.test",
+      "materials": [
+        { "name": "floor", "albedo": [0.7, 0.7, 0.7, 1.0] },
+        { "name": "wall", "albedo": [0.2, 0.25, 0.35, 1.0] }
+      ]
+    }
+  ]
+})json");
+    write_text(dir / "fragments" / "sectors.json",
+               R"json({
+  "schema": "sdl3d.fragment.v0",
+  "sector_level_fragments": [
+    {
+      "level": "sector.test",
+      "sectors": [
+        {
+          "name": "room",
+          "points": [[0, 0], [4, 0], [4, 4], [0, 4]],
+          "floor_y": 0.0,
+          "ceil_y": 3.0,
+          "floor_material": "floor",
+          "ceil_material": "wall",
+          "wall_material": "wall"
+        }
+      ]
+    }
+  ]
+})json");
+    write_text(dir / "fragments" / "lights.json",
+               R"json({
+  "schema": "sdl3d.fragment.v0",
+  "sector_level_fragments": [
+    {
+      "level": "sector.test",
+      "lights": [
+        { "position": [2.0, 2.5, 2.0], "color": [1.0, 0.8, 0.6], "intensity": 1.5, "range": 5.0 }
+      ]
+    }
+  ]
+})json");
+    write_text(dir / "sector_fragments.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Sector Fragments", "id": "test.sector_fragments", "version": "0.1.0" },
+  "imports": [
+    { "path": "fragments/materials.json", "sections": ["sector_level_fragments"] },
+    { "path": "fragments/sectors.json", "sections": ["sector_level_fragments"] },
+    { "path": "fragments/lights.json", "sections": ["sector_level_fragments"] }
+  ],
+  "world": { "name": "world.sector_fragments", "kind": "sector" },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json", R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play" })json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "sector_fragments.game.json").string().c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+
+    sdl3d_game_data_sector_level level{};
+    ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.test", &level));
+    ASSERT_EQ(level.material_count, 2);
+    ASSERT_EQ(level.sector_count, 1);
+    ASSERT_EQ(level.light_count, 1);
+    EXPECT_NEAR(level.materials[0].albedo[0], 0.7f, 0.0001f);
+    EXPECT_STREQ(level.sector_names[0], "room");
+    EXPECT_FLOAT_EQ(level.lights[0].intensity, 1.5f);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
@@ -8772,25 +9046,29 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     EXPECT_TRUE(damage_rect_visible);
     EXPECT_GT(resolved_damage_rect.color.a, 90);
     EXPECT_LT(resolved_damage_rect.color.a, 120);
-    sdl3d_registered_actor *projectile = sdl3d_game_data_find_actor(runtime, "pool.doom.projectiles.0");
-    ASSERT_NE(projectile, nullptr);
-    EXPECT_FALSE(projectile->active);
-    const int fire_signal = sdl3d_game_data_find_signal(runtime, "signal.doom.fire");
-    ASSERT_GE(fire_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), fire_signal, nullptr);
-    EXPECT_TRUE(projectile->active);
-    expect_vec3_near(sdl3d_properties_get_vec3(projectile->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)),
-                     sdl3d_vec3_make(0.0f, 0.0f, -20.0f));
-    EXPECT_EQ(sdl3d_game_data_world_light_count(runtime), 1);
-    RenderPrimitiveCapture projectile_capture{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &projectile_capture));
-    EXPECT_EQ(projectile_capture.doom_projectile_spheres, 1);
     sdl3d_camera3d surveillance_camera{};
     ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.doom.surveillance", &surveillance_camera));
     EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.doom.player");
     player->position = sdl3d_vec3_make(43.0f, 0.5f, 89.0f);
     ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
     EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.doom.surveillance");
+
+    sdl3d_registered_actor *projectile = sdl3d_game_data_find_actor(runtime, "pool.doom.projectiles.0");
+    ASSERT_NE(projectile, nullptr);
+    EXPECT_FALSE(projectile->active);
+    const int fire_action = sdl3d_game_data_find_action(runtime, "action.fire");
+    ASSERT_GE(fire_action, 0);
+    ASSERT_NE(input, nullptr);
+    sdl3d_input_set_action_override(input, fire_action, 1.0f);
+    ASSERT_NE(sdl3d_input_update(input, 100), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_TRUE(projectile->active);
+    expect_vec3_near(sdl3d_properties_get_vec3(projectile->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)),
+                     sdl3d_vec3_make(0.0f, 0.0f, 20.0f));
+    EXPECT_EQ(sdl3d_game_data_world_light_count(runtime), 1);
+    RenderPrimitiveCapture projectile_capture{};
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &projectile_capture));
+    EXPECT_EQ(projectile_capture.doom_projectile_spheres, 1);
     sdl3d_game_data_sprite_asset robot_sprite{};
     ASSERT_TRUE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.doom.robot.walk", &robot_sprite));
     EXPECT_EQ(robot_sprite.source_kind, SDL3D_SPRITE_ASSET_SOURCE_FILES);

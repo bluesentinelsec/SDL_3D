@@ -13692,11 +13692,13 @@ static bool execute_actor_despawn_by_tag_action(sdl3d_game_data_runtime *runtime
     return true;
 }
 
-static bool execute_projectile_fire_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
-                                           const sdl3d_properties *payload)
+static bool execute_projectile_fire_action_for_actor(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                                     const sdl3d_properties *payload,
+                                                     sdl3d_registered_actor *source_actor)
 {
     const char *target_name = json_string(action, "target", NULL);
-    sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, target_name);
+    sdl3d_registered_actor *target =
+        source_actor != NULL ? source_actor : sdl3d_game_data_find_actor(runtime, target_name);
     if (target == NULL)
         target = actor_from_payload_key(runtime, payload, json_string(action, "target_from_payload", NULL));
     if (target == NULL || !runtime_actor_is_active(runtime, target))
@@ -13762,6 +13764,12 @@ static bool execute_projectile_fire_action(sdl3d_game_data_runtime *runtime, yyj
         sdl3d_properties_set_float(target->props, cooldown_property, cooldown);
     }
     return true;
+}
+
+static bool execute_projectile_fire_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                           const sdl3d_properties *payload)
+{
+    return execute_projectile_fire_action_for_actor(runtime, action, payload, NULL);
 }
 
 static bool grid_spawn_rule_matches(yyjson_val *rule, char glyph)
@@ -15619,6 +15627,15 @@ static void update_control_components(sdl3d_game_data_runtime *runtime, yyjson_v
             else if (SDL_strcmp(type, "controller.fps_sector") == 0)
             {
                 update_fps_sector_controller(runtime, component, actor, input, dt);
+            }
+            else if (SDL_strcmp(type, "weapon.projectile") == 0 && input != NULL)
+            {
+                const int action_id = sdl3d_game_data_find_action(runtime, json_string(component, "action", NULL));
+                if (action_id >= 0 && sdl3d_game_data_active_scene_allows_action(runtime, action_id) &&
+                    sdl3d_input_is_held(input, action_id))
+                {
+                    (void)execute_projectile_fire_action_for_actor(runtime, component, NULL, actor);
+                }
             }
         }
     }

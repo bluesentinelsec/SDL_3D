@@ -42,9 +42,11 @@ Every root game file is a JSON object.
 | `grid_maps` | no | Authored tile grids for maze, board, and grid-locked games. |
 | `grid_pickup_layers` | no | Dense grid-indexed pickup layers rendered and collected without one actor per pickup. |
 | `sector_levels` | no | Authored sector/portal worlds for Doom/Quake-style indoor levels. |
+| `sector_level_fragments` | no | Composition-only material/sector/light fragments merged into named sector levels before validation. |
 | `sector_doors` | no | Runtime sliding doors for sector/FPS worlds. |
 | `sector_platforms` | no | Runtime moving floor/ceiling sectors for lifts, elevators, and oscillating platforms. |
-| `actor_archetypes` | no | Templates used by runtime actor pools. |
+| `actor_archetypes` | no | Templates used by placed actor instances and runtime actor pools. |
+| `actor_instances` | no | Composition-time placed actors generated from archetypes. |
 | `actor_pools` | no | Preallocated spawn/despawn pools. |
 | `signals` | no | Authored signal names. |
 | `logic` | no | Sensors, timers, signal bindings, conditions, and actions. |
@@ -118,7 +120,8 @@ a JSON object with schema `sdl3d.fragment.v0`.
   "imports": [
     { "path": "fragments/assets.json", "sections": ["assets"] },
     { "path": "fragments/actors/player.json", "sections": ["entities"] },
-    { "path": "fragments/world/e1m1.sectors.json", "sections": ["sector_levels"] },
+    { "path": "fragments/world/e1m1.materials.json", "sections": ["sector_level_fragments"] },
+    { "path": "fragments/world/e1m1.sectors.json", "sections": ["sector_level_fragments"] },
     { "path": "fragments/world/e1m1.doors.json", "sections": ["assets", "sector_doors", "signals", "logic"] },
     { "path": "fragments/world/e1m1.platforms.json", "sections": ["sector_platforms"] },
     { "path": "fragments/input/profiles.json", "sections": ["input"] },
@@ -157,6 +160,9 @@ Import rules:
 - arrays concatenate in authored import order
 - objects merge recursively
 - scalar/type conflicts fail validation
+- `actor_instances` and `sector_level_fragments` are composition-time authoring
+  helpers; they are expanded into normal `entities` and `sector_levels` before
+  ordinary validation and runtime loading
 
 See [Project Layout Guidance](project-layout.md) for recommended fragment
 organization.
@@ -763,7 +769,41 @@ Actors describe runtime objects:
 Properties support scalar and vector values used by logic, UI, persistence,
 network replication, and Lua adapters.
 
-## Actor Archetypes And Pools
+## Actor Archetypes, Instances, And Pools
+
+`actor_archetypes` describe reusable actor templates. `actor_instances` place
+static actors from those templates at composition time, while `actor_pools`
+preallocate runtime spawn/despawn actors from the same template shape.
+
+Placed instances are useful for crates, lamps, pickups, enemies, decorations,
+and other authored actors that repeat across a level:
+
+```json
+{
+  "actor_archetypes": [
+    {
+      "name": "archetype.crate",
+      "active": true,
+      "tags": ["prop", "crate"],
+      "components": [
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "texture": "image.crate" }
+      ]
+    }
+  ],
+  "actor_instances": [
+    {
+      "name": "entity.crate.storage.0",
+      "archetype": "archetype.crate",
+      "transform": { "position": [14.0, 0.5, 20.0] }
+    }
+  ]
+}
+```
+
+Instances expand into `entities` before validation. The instance object is a
+recursive override over the archetype: object fields merge, and scalar/array
+fields replace the archetype value. Generated actors are ordinary entities for
+scene membership, sensors, render primitives, Lua lookup, and action targets.
 
 Runtime spawning uses preallocated pools:
 
@@ -844,6 +884,52 @@ Use `velocity` for a literal projectile velocity, or
 such as an FPS controller's `camera_forward`. Use `target_from_payload` instead
 of `target` when the firing actor should come from a signal or collision
 payload.
+
+`weapon.projectile` is the component form for actors that fire while an input
+action is held:
+
+```json
+{
+  "type": "weapon.projectile",
+  "action": "action.fire",
+  "pool": "pool.player_shots",
+  "offset": [0.0, 0.1, -0.5],
+  "velocity_from_property": "camera_forward",
+  "speed": 20.0,
+  "cooldown_property": "fire_timer"
+}
+```
+
+Unlike `projectile.fire`, the component fires from its owning actor and does
+not accept `target` or `target_from_payload`. This is the preferred shape for
+FPS and shooter player weapons because it keeps input-to-projectile behavior
+declarative.
+
+## Sector Level Fragments
+
+Large sector worlds can be split by authoring concern without duplicating a
+full `sector_levels` object in every file:
+
+```json
+{
+  "schema": "sdl3d.fragment.v0",
+  "sector_level_fragments": [
+    {
+      "level": "sector.e1m1",
+      "materials": [{ "name": "floor", "texture": "asset://textures/floor.png" }]
+    }
+  ]
+}
+```
+
+Each `sector_level_fragments` entry names a target `level` and may append
+`materials`, `sectors`, and/or `lights`. Composition creates or finds the named
+sector level, appends those arrays in import order, then the normal
+`sector_levels` validator checks material references, duplicate sectors,
+geometry, and light shape. Use this for files such as
+`world/e1m1.materials.json`, `world/e1m1.rooms.json`, and
+`world/e1m1.lights.json`. Keep each fragment logically cohesive; do not scatter
+one room across unrelated files unless an editor owns that layout.
 
 `actor.spawn` and `actor.despawn` can also resolve actors from payload fields:
 

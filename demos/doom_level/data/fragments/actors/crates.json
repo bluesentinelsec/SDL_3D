@@ -1,0 +1,34 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "assets": {
+    "images": [
+      { "id": "image.doom.radioactive_crate", "path": "asset://textures/radioactive-crate.png" }
+    ]
+  },
+  "actor_archetypes": [
+    {
+      "name": "archetype.doom.radioactive_crate",
+      "active": true,
+      "tags": ["prop", "crate"],
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [1.0, 1.0, 1.0],
+          "texture": "image.doom.radioactive_crate",
+          "color": [78, 170, 72, 255],
+          "lighting": true
+        }
+      ]
+    }
+  ],
+  "actor_instances": [
+    { "name": "entity.doom.crate.nukage", "archetype": "archetype.doom.radioactive_crate", "transform": { "position": [7.2, 0.45, 19.0] }, "components": [{ "type": "render.cube", "size": [0.9, 0.9, 0.9], "texture": "image.doom.radioactive_crate", "color": [78, 170, 72, 255], "lighting": true }] },
+    { "name": "entity.doom.crate.entry.0", "archetype": "archetype.doom.radioactive_crate", "transform": { "position": [3.0, 0.5, 5.0] } },
+    { "name": "entity.doom.crate.entry.1", "archetype": "archetype.doom.radioactive_crate", "transform": { "position": [7.0, 0.5, 5.0] } },
+    { "name": "entity.doom.crate.entry.2", "archetype": "archetype.doom.radioactive_crate", "transform": { "position": [3.0, 0.5, 10.0] } },
+    { "name": "entity.doom.crate.entry.3", "archetype": "archetype.doom.radioactive_crate", "transform": { "position": [7.0, 0.5, 10.0] } },
+    { "name": "entity.doom.crate.storage.0", "archetype": "archetype.doom.radioactive_crate", "transform": { "position": [14.0, 0.5, 20.0] } },
+    { "name": "entity.doom.crate.storage.1", "archetype": "archetype.doom.radioactive_crate", "transform": { "position": [14.0, 1.5, 20.0] } },
+    { "name": "entity.doom.crate.storage.2", "archetype": "archetype.doom.radioactive_crate", "transform": { "position": [22.0, 0.5, 16.0] } }
+  ]
+}

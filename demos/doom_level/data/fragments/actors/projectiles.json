@@ -50,31 +50,5 @@
       "exhaustion_policy": "reuse_oldest",
       "on_scene_exit": "reset"
     }
-  ],
-  "signals": ["signal.doom.fire"],
-  "logic": {
-    "sensors": [
-      {
-        "name": "logic.doom.fire_input",
-        "type": "sensor.input_pressed",
-        "action": "action.fire",
-        "on_pressed": "signal.doom.fire"
-      }
-    ],
-    "bindings": [
-      {
-        "signal": "signal.doom.fire",
-        "actions": [
-          {
-            "type": "projectile.fire",
-            "target": "entity.player",
-            "pool": "pool.doom.projectiles",
-            "velocity_from_property": "camera_forward",
-            "speed": 20.0,
-            "cooldown_property": "fire_timer"
-          }
-        ]
-      }
-    ]
-  }
+  ]
 }

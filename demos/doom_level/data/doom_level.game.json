@@ -6,10 +6,16 @@
     "version": "0.1.0"
   },
   "imports": [
-    { "path": "fragments/actors/props.json", "sections": ["assets", "entities"] },
+    { "path": "fragments/actors/robots.json", "sections": ["assets", "actor_archetypes", "actor_instances"] },
+    { "path": "fragments/actors/health.json", "sections": ["assets", "actor_archetypes", "actor_instances"] },
+    { "path": "fragments/actors/crates.json", "sections": ["assets", "actor_archetypes", "actor_instances"] },
+    { "path": "fragments/actors/dragon.json", "sections": ["assets", "actor_archetypes", "actor_instances"] },
     { "path": "fragments/actors/presentation_props.json", "sections": ["entities"] },
-    { "path": "fragments/actors/projectiles.json", "sections": ["actor_archetypes", "actor_pools", "signals", "logic"] },
-    { "path": "fragments/world/sector_levels.json", "sections": ["sector_levels"] },
+    { "path": "fragments/actors/projectiles.json", "sections": ["actor_archetypes", "actor_pools"] },
+    { "path": "fragments/world/sector_materials.json", "sections": ["sector_level_fragments"] },
+    { "path": "fragments/world/sector_rooms.json", "sections": ["sector_level_fragments"] },
+    { "path": "fragments/world/sector_verticality.json", "sections": ["sector_level_fragments"] },
+    { "path": "fragments/world/sector_lights.json", "sections": ["sector_level_fragments"] },
     { "path": "fragments/world/sector_doors.json", "sections": ["assets", "sector_doors", "signals", "logic"] },
     { "path": "fragments/world/sector_platforms.json", "sections": ["sector_platforms"] },
     { "path": "fragments/world/sector_ambient.json", "sections": ["assets", "logic"] },
@@ -140,6 +146,14 @@
           "rate": 1.0,
           "target": 0.0,
           "min": 0.0
+        },
+        {
+          "type": "weapon.projectile",
+          "action": "action.fire",
+          "pool": "pool.doom.projectiles",
+          "velocity_from_property": "camera_forward",
+          "speed": 20.0,
+          "cooldown_property": "fire_timer"
         }
       ]
     },
