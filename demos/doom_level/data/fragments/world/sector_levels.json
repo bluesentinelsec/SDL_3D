@@ -355,6 +355,7 @@
           "points": [[68, 57], [78, 57], [78, 69], [68, 69]],
           "floor_y": 2.5,
           "ceil_y": 12.0,
+          "ambient_sound_id": 1,
           "floor_material": "rock_floor_alt",
           "ceil_material": "none",
           "wall_material": "wall_metal"

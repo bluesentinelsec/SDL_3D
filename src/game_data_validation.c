@@ -94,6 +94,7 @@ typedef struct validation_names
     name_table sprites;
     name_table sounds;
     name_table music;
+    name_table ambient;
     name_table scenes;
     name_table sensors;
     name_table persistence;
@@ -3147,6 +3148,34 @@ static bool collect_audio_assets(validation_context *ctx, yyjson_val *root, vali
         if (!asset_path_exists(ctx, json_string(track, "path"), path, "music"))
             return false;
     }
+
+    yyjson_val *ambient = obj_get(assets, "ambient");
+    if (ambient != NULL && !yyjson_is_arr(ambient))
+        return validation_error(ctx, "$.assets.ambient", "ambient assets must be an array");
+    for (size_t i = 0; yyjson_is_arr(ambient) && i < yyjson_arr_size(ambient); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.assets.ambient[%zu]", i);
+        yyjson_val *zone = yyjson_arr_get(ambient, i);
+        if (!yyjson_is_obj(zone))
+            return validation_error(ctx, path, "ambient asset entries must be objects");
+        if (!require_unique_name(ctx, &names->ambient, "ambient asset", json_string(zone, "id"), path))
+            return false;
+        yyjson_val *ambient_id = obj_get(zone, "ambient_id");
+        if (!yyjson_is_int(ambient_id) || yyjson_get_int(ambient_id) < 0)
+            return validation_error(ctx, path, "ambient asset requires a non-negative ambient_id");
+        for (size_t previous = 0; previous < i; ++previous)
+        {
+            yyjson_val *previous_id = obj_get(yyjson_arr_get(ambient, previous), "ambient_id");
+            if (yyjson_is_int(previous_id) && yyjson_get_int(previous_id) == yyjson_get_int(ambient_id))
+                return validation_error(ctx, path, "duplicate ambient asset ambient_id %d",
+                                        (int)yyjson_get_int(ambient_id));
+        }
+        if (!is_non_empty_string(zone, "path"))
+            return validation_error(ctx, path, "ambient asset requires a non-empty path");
+        if (!asset_path_exists(ctx, json_string(zone, "path"), path, "ambient"))
+            return false;
+    }
     return true;
 }
 
@@ -4798,6 +4827,18 @@ static bool validate_audio_action(validation_context *ctx, yyjson_val *action, c
             return validation_error(ctx, json_path, "audio.play_music requires music, asset, or path");
         if (path != NULL && !asset_path_exists(ctx, path, json_path, "music"))
             return false;
+    }
+    else if (SDL_strcmp(type, "audio.set_ambient") == 0)
+    {
+        yyjson_val *ambient_id = obj_get(action, "ambient_id");
+        const char *ambient_id_from_payload = json_string(action, "ambient_id_from_payload");
+        if ((ambient_id == NULL) == (ambient_id_from_payload == NULL))
+            return validation_error(ctx, json_path,
+                                    "audio.set_ambient requires exactly one of ambient_id or ambient_id_from_payload");
+        if (ambient_id != NULL && (!yyjson_is_int(ambient_id) || yyjson_get_int(ambient_id) < 0))
+            return validation_error(ctx, json_path, "audio.set_ambient ambient_id must be non-negative");
+        if (ambient_id_from_payload != NULL && ambient_id_from_payload[0] == '\0')
+            return validation_error(ctx, json_path, "audio.set_ambient ambient_id_from_payload must be non-empty");
     }
     else if (SDL_strcmp(type, "audio.stop_sfx") != 0 && SDL_strcmp(type, "audio.stop_music") != 0 &&
              SDL_strcmp(type, "audio.fade_music") != 0 && SDL_strcmp(type, "audio.set_bus_volume") != 0)
@@ -7182,6 +7223,7 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->sprites);
     name_table_destroy(&names->sounds);
     name_table_destroy(&names->music);
+    name_table_destroy(&names->ambient);
     name_table_destroy(&names->scenes);
     name_table_destroy(&names->sensors);
     name_table_destroy(&names->persistence);

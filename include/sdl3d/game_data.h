@@ -175,6 +175,21 @@ extern "C"
         bool loop;
     } sdl3d_game_data_music_asset;
 
+    /** @brief Authored ambient-zone asset descriptor. */
+    typedef struct sdl3d_game_data_ambient_asset
+    {
+        /** @brief Stable asset id, such as `ambient.sewer.loop`. */
+        const char *id;
+        /** @brief Non-negative ambient zone id used by sector payloads. */
+        int ambient_id;
+        /** @brief Virtual or filesystem path to the ambient stream bytes. */
+        const char *path;
+        /** @brief Default authored gain before bus volume. */
+        float volume;
+        /** @brief Whether playback should loop by default. */
+        bool loop;
+    } sdl3d_game_data_ambient_asset;
+
     /** @brief Authored sprite asset descriptor. */
     typedef struct sdl3d_game_data_sprite_asset
     {
@@ -1912,6 +1927,10 @@ extern "C"
     /** @brief Read a music asset descriptor by id from `assets.music`. */
     bool sdl3d_game_data_get_music_asset(const sdl3d_game_data_runtime *runtime, const char *id,
                                          sdl3d_game_data_music_asset *out_music);
+
+    /** @brief Read an ambient-zone asset descriptor by id from `assets.ambient`. */
+    bool sdl3d_game_data_get_ambient_asset(const sdl3d_game_data_runtime *runtime, const char *id,
+                                           sdl3d_game_data_ambient_asset *out_ambient);
 
     /** @brief Read a sprite asset descriptor by id from `assets.sprites`. */
     bool sdl3d_game_data_get_sprite_asset(const sdl3d_game_data_runtime *runtime, const char *id,

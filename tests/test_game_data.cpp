@@ -8498,6 +8498,12 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     EXPECT_EQ(authored_props.doom_crates, 8);
     EXPECT_EQ(authored_props.doom_presentation_cubes, 14);
     EXPECT_GE(authored_props.sprites, 10);
+    sdl3d_game_data_ambient_asset ambient{};
+    ASSERT_TRUE(sdl3d_game_data_get_ambient_asset(runtime, "ambient.doom.upper_deck", &ambient));
+    EXPECT_EQ(ambient.ambient_id, 1);
+    EXPECT_STREQ(ambient.path, "asset://audio/ambient_zone.wav");
+    EXPECT_TRUE(ambient.loop);
+    EXPECT_NEAR(ambient.volume, 0.45f, 0.0001f);
     UiTextCapture ui_text{};
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui_text, &ui_text));
     EXPECT_TRUE(ui_text.saw_doom_reticle);

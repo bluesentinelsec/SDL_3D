@@ -1,0 +1,40 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "assets": {
+    "ambient": [
+      {
+        "id": "ambient.doom.upper_deck",
+        "ambient_id": 1,
+        "path": "asset://audio/ambient_zone.wav",
+        "volume": 0.45,
+        "loop": true
+      }
+    ]
+  },
+  "logic": {
+    "sensors": [
+      {
+        "name": "sensor.doom.upper_deck.ambient.enter",
+        "type": "sensor.sector",
+        "actor": "entity.player",
+        "sector_level": "sector.doom.e1m1",
+        "sector": "upper_deck",
+        "edge": "enter",
+        "actions": [
+          { "type": "audio.set_ambient", "ambient_id_from_payload": "ambient_sound_id", "fade": 1.0 }
+        ]
+      },
+      {
+        "name": "sensor.doom.upper_deck.ambient.exit",
+        "type": "sensor.sector",
+        "actor": "entity.player",
+        "sector_level": "sector.doom.e1m1",
+        "sector": "upper_deck",
+        "edge": "exit",
+        "actions": [
+          { "type": "audio.set_ambient", "ambient_id": 0, "fade": 1.0 }
+        ]
+      }
+    ]
+  }
+}
