@@ -20,17 +20,12 @@
 #include "renderer.h"
 
 #define SIG_FADE_OUT_DONE 2001
-#define SIG_AMBIENT_FEEDBACK 2004
-#define SIG_AMBIENT_FEEDBACK_SKIP 2005
 #define SIG_DAMAGE_FLOOR_TICK 2009
-#define AMBIENT_FADE_SECONDS 1.0f
-#define AMBIENT_FEEDBACK_SECONDS 5.0f
 #define DAMAGE_FEEDBACK_REFERENCE_DPS 30.0f
 #define DAMAGE_FEEDBACK_MIN_STRENGTH 0.35f
 #define DAMAGE_FEEDBACK_ATTACK_RATE 10.0f
 #define DAMAGE_FEEDBACK_DECAY_RATE 4.0f
 #define DAMAGE_FEEDBACK_PULSE_HZ 2.8f
-#define FEEDBACK_AMBIENT_ZONE "ambient_zone"
 #define FEEDBACK_DAMAGE_FLOOR "damage_floor"
 
 typedef struct doom_state
@@ -43,14 +38,10 @@ typedef struct doom_state
     sdl3d_font debug_font;
     sdl3d_ui_context *ui;
     sdl3d_demo_player *demo_player;
-    sdl3d_audio_engine *audio;
     sdl3d_logic_world *logic;
-    sdl3d_logic_branch ambient_feedback_branch;
     sdl3d_logic_sector_damage_sensor damage_sensor;
-    sdl3d_sector_watcher sector_watcher;
     sdl3d_backend current_backend;
     doom_render_profile render_profile;
-    float ambient_feedback_timer;
     float damage_feedback_strength;
     float damage_feedback_target_strength;
     float damage_pulse_timer;
@@ -84,11 +75,6 @@ static sdl3d_signal_bus *ctx_bus(const sdl3d_game_context *ctx)
 static sdl3d_input_manager *ctx_input(const sdl3d_game_context *ctx)
 {
     return sdl3d_game_session_get_input(ctx != NULL ? ctx->session : NULL);
-}
-
-static sdl3d_audio_engine *ctx_audio(const sdl3d_game_context *ctx)
-{
-    return sdl3d_game_session_get_audio(ctx != NULL ? ctx->session : NULL);
 }
 
 static sdl3d_logic_world *ctx_logic(const sdl3d_game_context *ctx)
@@ -150,36 +136,6 @@ static void on_fade_out_done(void *userdata, int signal_id, const sdl3d_properti
     ctx->quit_requested = true;
 }
 
-static bool doom_logic_set_ambient(void *userdata, int ambient_id, float fade_seconds, const sdl3d_properties *payload)
-{
-    (void)payload;
-    doom_state *state = (doom_state *)userdata;
-    static const sdl3d_audio_ambient ambient_zones[] = {
-        {0, NULL, 0.0f, false},
-        {DOOM_AMBIENT_DEMO_SOUND_ID, SDL3D_MEDIA_DIR "/audio/ambient_zone.wav", 0.45f, true},
-    };
-
-    if (state == NULL)
-    {
-        return false;
-    }
-
-    if (state->audio == NULL)
-    {
-        return true;
-    }
-
-    if (!sdl3d_audio_set_ambient(state->audio, ambient_zones, (int)SDL_arraysize(ambient_zones), ambient_id,
-                                 fade_seconds))
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Ambient transition failed: %s", SDL_GetError());
-        SDL_ClearError();
-        return false;
-    }
-
-    return true;
-}
-
 static bool doom_logic_trigger_feedback(void *userdata, const char *feedback_name, float duration_seconds,
                                         const sdl3d_properties *payload)
 {
@@ -187,12 +143,6 @@ static bool doom_logic_trigger_feedback(void *userdata, const char *feedback_nam
     if (state == NULL || feedback_name == NULL)
     {
         return false;
-    }
-
-    if (SDL_strcmp(feedback_name, FEEDBACK_AMBIENT_ZONE) == 0)
-    {
-        state->ambient_feedback_timer = duration_seconds;
-        return true;
     }
 
     if (SDL_strcmp(feedback_name, FEEDBACK_DAMAGE_FLOOR) == 0)
@@ -230,7 +180,6 @@ static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
     sdl3d_logic_game_adapters adapters;
     SDL_zero(adapters);
     adapters.userdata = state;
-    adapters.set_ambient = doom_logic_set_ambient;
     adapters.trigger_feedback = doom_logic_trigger_feedback;
     sdl3d_logic_world_set_game_adapters(state->logic, &adapters);
 
@@ -240,31 +189,6 @@ static bool bind_doom_logic(sdl3d_game_context *ctx, doom_state *state)
     target_context.sectors = g_sectors;
     target_context.sector_count = g_sector_count;
     sdl3d_logic_world_set_target_context(state->logic, &target_context);
-
-    sdl3d_logic_action ambient_action =
-        sdl3d_logic_action_make_set_ambient_from_payload("ambient_sound_id", AMBIENT_FADE_SECONDS);
-    if (sdl3d_logic_world_bind_logic_action(state->logic, SDL3D_SIGNAL_ENTERED_SECTOR, &ambient_action) == 0)
-    {
-        return false;
-    }
-
-    sdl3d_value ambient_expected;
-    SDL_zero(ambient_expected);
-    ambient_expected.type = SDL3D_VALUE_INT;
-    ambient_expected.as_int = DOOM_AMBIENT_DEMO_SOUND_ID;
-    sdl3d_logic_branch_init_payload(&state->ambient_feedback_branch, 1, "ambient_sound_id", ambient_expected,
-                                    SIG_AMBIENT_FEEDBACK, SIG_AMBIENT_FEEDBACK_SKIP);
-    if (sdl3d_logic_world_bind_branch(state->logic, SDL3D_SIGNAL_ENTERED_SECTOR, &state->ambient_feedback_branch) == 0)
-    {
-        return false;
-    }
-
-    sdl3d_logic_action ambient_feedback_action =
-        sdl3d_logic_action_make_trigger_feedback(FEEDBACK_AMBIENT_ZONE, AMBIENT_FEEDBACK_SECONDS);
-    if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_AMBIENT_FEEDBACK, &ambient_feedback_action) == 0)
-    {
-        return false;
-    }
 
     sdl3d_logic_action damage_feedback_action = sdl3d_logic_action_make_trigger_feedback(FEEDBACK_DAMAGE_FLOOR, 0.0f);
     if (sdl3d_logic_world_bind_logic_action(state->logic, SIG_DAMAGE_FLOOR_TICK, &damage_feedback_action) == 0)
@@ -332,8 +256,6 @@ static bool game_init(sdl3d_game_context *ctx, void *userdata)
 
     state->current_backend = sdl3d_get_render_context_backend(ctx->renderer);
     state->render_profile = DOOM_RENDER_PROFILE_MODERN;
-    state->audio = ctx_audio(ctx);
-    sdl3d_sector_watcher_init(&state->sector_watcher);
     bind_doom_actions(ctx_input(ctx), state);
     apply_window_defaults(ctx, state);
 
@@ -662,19 +584,6 @@ static void game_tick(sdl3d_game_context *ctx, void *userdata, float dt)
         }
     }
 
-    if (state->ambient_feedback_timer > 0.0f)
-    {
-        state->ambient_feedback_timer -= dt;
-        if (state->ambient_feedback_timer < 0.0f)
-        {
-            state->ambient_feedback_timer = 0.0f;
-        }
-    }
-    sdl3d_sector_watcher_update(&state->sector_watcher, &state->level.unlit, g_sectors,
-                                sdl3d_vec3_make(state->player.mover.position.x,
-                                                state->player.mover.position.y - PLAYER_HEIGHT,
-                                                state->player.mover.position.z),
-                                ctx_bus(ctx));
     if (profile_tick)
     {
         Uint64 now = SDL_GetPerformanceCounter();

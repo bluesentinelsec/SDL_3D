@@ -150,6 +150,39 @@ data/
 Split by developer intent, not by schema mechanics alone. A file named
 `fragments/logic/scoring.json` is better than a generic `logic2.json`.
 
+## Assets
+
+The optional `assets` object gives reusable ids to media. Logic and UI should
+refer to these ids instead of hard-coded paths where possible.
+
+Audio assets are split by playback role:
+
+```json
+{
+  "assets": {
+    "sounds": [
+      { "id": "sound.ui.select", "path": "asset://audio/select.wav", "volume": 0.7, "bus": "sfx" }
+    ],
+    "music": [
+      { "id": "music.title", "path": "asset://audio/title.ogg", "volume": 0.5, "loop": true }
+    ],
+    "ambient": [
+      {
+        "id": "ambient.zone.upper_deck",
+        "ambient_id": 1,
+        "path": "asset://audio/upper-deck-loop.ogg",
+        "volume": 0.45,
+        "loop": true
+      }
+    ]
+  }
+}
+```
+
+`assets.ambient` entries map non-negative `ambient_id` values, including ids
+emitted by sector sensors, to loopable environmental streams. `ambient_id: 0`
+is reserved by convention for silence and does not need an asset entry.
+
 ## App
 
 The optional `app` object configures the managed loop before the window exists:
@@ -963,7 +996,8 @@ authors can use separate sensors for different edges. The payload includes
 `actor_name`, `sector_level`, `sector_name`, `sector_index`,
 `sector_damage_per_second`, `sector_damage_delta`, and `ambient_sound_id`.
 `sector_damage_delta` is `damage_per_second * dt`, so damage-over-time sectors
-can be authored without Lua:
+can be authored without Lua. `ambient_sound_id` can drive authored ambient-zone
+audio with `audio.set_ambient`:
 
 ```json
 {
@@ -980,6 +1014,20 @@ can be authored without Lua:
       "key": "damage_taken",
       "value_from_payload": "sector_damage_delta"
     }
+  ]
+}
+```
+
+```json
+{
+  "name": "sensor.upper_deck.ambient",
+  "type": "sensor.sector",
+  "actor": "entity.player",
+  "sector_level": "sector.doom.e1m1",
+  "sector": "upper_deck",
+  "edge": "enter",
+  "actions": [
+    { "type": "audio.set_ambient", "ambient_id_from_payload": "ambient_sound_id", "fade": 1.0 }
   ]
 }
 ```

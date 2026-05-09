@@ -3683,6 +3683,19 @@ static yyjson_val *find_music_json(const sdl3d_game_data_runtime *runtime, const
     return NULL;
 }
 
+static yyjson_val *find_ambient_json(const sdl3d_game_data_runtime *runtime, const char *id)
+{
+    yyjson_val *ambient_assets = obj_get(obj_get(runtime_root(runtime), "assets"), "ambient");
+    for (size_t i = 0; id != NULL && yyjson_is_arr(ambient_assets) && i < yyjson_arr_size(ambient_assets); ++i)
+    {
+        yyjson_val *ambient = yyjson_arr_get(ambient_assets, i);
+        const char *ambient_id = json_string(ambient, "id", NULL);
+        if (ambient_id != NULL && SDL_strcmp(ambient_id, id) == 0)
+            return ambient;
+    }
+    return NULL;
+}
+
 static yyjson_val *find_sprite_json(const sdl3d_game_data_runtime *runtime, const char *id)
 {
     yyjson_val *sprites = obj_get(obj_get(runtime_root(runtime), "assets"), "sprites");
@@ -5091,6 +5104,30 @@ bool sdl3d_game_data_get_music_asset(const sdl3d_game_data_runtime *runtime, con
     out_music->volume = json_float(music, "volume", out_music->volume);
     out_music->loop = json_bool(music, "loop", out_music->loop);
     return out_music->id != NULL && out_music->path != NULL;
+}
+
+bool sdl3d_game_data_get_ambient_asset(const sdl3d_game_data_runtime *runtime, const char *id,
+                                       sdl3d_game_data_ambient_asset *out_ambient)
+{
+    if (out_ambient != NULL)
+    {
+        SDL_zero(*out_ambient);
+        out_ambient->volume = 1.0f;
+        out_ambient->loop = true;
+    }
+    if (runtime == NULL || id == NULL || out_ambient == NULL)
+        return false;
+
+    yyjson_val *ambient = find_ambient_json(runtime, id);
+    if (!yyjson_is_obj(ambient))
+        return false;
+
+    out_ambient->id = json_string(ambient, "id", NULL);
+    out_ambient->ambient_id = json_int(ambient, "ambient_id", -1);
+    out_ambient->path = json_string(ambient, "path", NULL);
+    out_ambient->volume = json_float(ambient, "volume", out_ambient->volume);
+    out_ambient->loop = json_bool(ambient, "loop", out_ambient->loop);
+    return out_ambient->id != NULL && out_ambient->ambient_id >= 0 && out_ambient->path != NULL;
 }
 
 bool sdl3d_game_data_get_sprite_asset(const sdl3d_game_data_runtime *runtime, const char *id,
@@ -12739,6 +12776,91 @@ static bool execute_audio_play_music(sdl3d_game_data_runtime *runtime, yyjson_va
     return ok;
 }
 
+static bool execute_audio_set_ambient(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                      const sdl3d_properties *payload)
+{
+    sdl3d_audio_engine *audio = sdl3d_game_session_get_audio(runtime != NULL ? runtime->session : NULL);
+    if (audio == NULL)
+    {
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                     "SDL3D audio.set_ambient ignored because audio engine is unavailable");
+        return true;
+    }
+
+    int ambient_id = json_int(action, "ambient_id", 0);
+    const char *ambient_id_from_payload = json_string(action, "ambient_id_from_payload", NULL);
+    if (ambient_id_from_payload != NULL)
+    {
+        const sdl3d_value *value =
+            payload != NULL ? sdl3d_properties_get_value(payload, ambient_id_from_payload) : NULL;
+        if (value == NULL || value->type != SDL3D_VALUE_INT || value->as_int < 0)
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "SDL3D audio.set_ambient missing non-negative int payload value: %s", ambient_id_from_payload);
+            return false;
+        }
+        ambient_id = value->as_int;
+    }
+
+    yyjson_val *ambient_assets = obj_get(obj_get(runtime_root(runtime), "assets"), "ambient");
+    const int authored_count = yyjson_is_arr(ambient_assets) ? (int)yyjson_arr_size(ambient_assets) : 0;
+    const int zone_count = authored_count + 1;
+    sdl3d_audio_ambient *zones = (sdl3d_audio_ambient *)SDL_calloc((size_t)zone_count, sizeof(*zones));
+    char **resolved_paths = (char **)SDL_calloc((size_t)zone_count, sizeof(*resolved_paths));
+    if (zones == NULL || resolved_paths == NULL)
+    {
+        SDL_free(zones);
+        SDL_free(resolved_paths);
+        return false;
+    }
+
+    zones[0].ambient_id = 0;
+    zones[0].path = NULL;
+    zones[0].volume = 0.0f;
+    zones[0].loop = false;
+
+    bool ok = true;
+    for (int i = 0; i < authored_count; ++i)
+    {
+        yyjson_val *zone = yyjson_arr_get(ambient_assets, (size_t)i);
+        const char *path = json_string(zone, "path", NULL);
+        char file_path[4096];
+        if (path == NULL || !sdl3d_game_data_prepare_audio_file(runtime, path, file_path, sizeof(file_path)))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio.set_ambient failed to resolve: %s",
+                        path != NULL ? path : "<none>");
+            ok = false;
+            break;
+        }
+
+        resolved_paths[i + 1] = SDL_strdup(file_path);
+        if (resolved_paths[i + 1] == NULL)
+        {
+            ok = false;
+            break;
+        }
+        zones[i + 1].ambient_id = json_int(zone, "ambient_id", 0);
+        zones[i + 1].path = resolved_paths[i + 1];
+        zones[i + 1].volume = json_float(zone, "volume", 1.0f);
+        zones[i + 1].loop = json_bool(zone, "loop", true);
+    }
+
+    if (ok)
+    {
+        const float fade = json_float(action, "fade", json_float(action, "fade_seconds", 0.0f));
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio.set_ambient ambient_id=%d fade=%.3f", ambient_id, fade);
+        ok = sdl3d_audio_set_ambient(audio, zones, zone_count, ambient_id, fade);
+        if (!ok)
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio.set_ambient failed: %s", SDL_GetError());
+    }
+
+    for (int i = 0; i < zone_count; ++i)
+        SDL_free(resolved_paths[i]);
+    SDL_free(resolved_paths);
+    SDL_free(zones);
+    return ok;
+}
+
 static float action_float_or_property(sdl3d_game_data_runtime *runtime, yyjson_val *action, const char *key,
                                       float fallback)
 {
@@ -12757,13 +12879,16 @@ static float action_float_or_property(sdl3d_game_data_runtime *runtime, yyjson_v
     return json_float(action, key, fallback);
 }
 
-static bool execute_audio_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const char *type)
+static bool execute_audio_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const sdl3d_properties *payload,
+                                 const char *type)
 {
     sdl3d_audio_engine *audio = sdl3d_game_session_get_audio(runtime != NULL ? runtime->session : NULL);
     if (SDL_strcmp(type, "audio.play_sfx") == 0)
         return execute_audio_play_sfx(runtime, action);
     if (SDL_strcmp(type, "audio.play_music") == 0)
         return execute_audio_play_music(runtime, action);
+    if (SDL_strcmp(type, "audio.set_ambient") == 0)
+        return execute_audio_set_ambient(runtime, action, payload);
     if (audio == NULL)
     {
         SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D %s ignored because audio engine is unavailable", type);
@@ -13941,7 +14066,7 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
         return start_ui_animation_from_json(runtime, action);
 
     if (SDL_strncmp(type, "audio.", 6) == 0)
-        return execute_audio_action(runtime, action, type);
+        return execute_audio_action(runtime, action, payload, type);
 
     if (SDL_strncmp(type, "persistence.", 12) == 0)
         return execute_persistence_action(runtime, action, type);
