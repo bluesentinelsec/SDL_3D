@@ -767,7 +767,16 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
                        primitive->emissive_color.z);
     if (primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
     {
-        sdl3d_draw_cube(context->renderer, primitive->position, primitive->size, primitive->color);
+        const sdl3d_texture2d *texture = NULL;
+        if (primitive->texture_image != NULL && context->image_cache != NULL)
+        {
+            sdl3d_game_data_image_cache_entry *entry =
+                find_or_load_image_entry(context->runtime, context->image_cache, primitive->texture_image);
+            texture = entry != NULL ? &entry->texture : NULL;
+        }
+        if (!sdl3d_draw_cube_textured(context->renderer, primitive->position, primitive->size, primitive->rotation_axis,
+                                      primitive->rotation_angle, texture, primitive->color))
+            return false;
     }
     else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
     {
@@ -778,9 +787,10 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
                 find_or_load_image_entry(context->runtime, context->image_cache, primitive->texture_image);
             texture = entry != NULL ? &entry->texture : NULL;
         }
-        sdl3d_draw_sphere_textured(context->renderer, primitive->position, primitive->radius, primitive->rings,
-                                   primitive->slices, primitive->rotation_axis, primitive->rotation_angle, texture,
-                                   primitive->color);
+        if (!sdl3d_draw_sphere_textured(context->renderer, primitive->position, primitive->radius, primitive->rings,
+                                        primitive->slices, primitive->rotation_axis, primitive->rotation_angle, texture,
+                                        primitive->color))
+            return false;
     }
     else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE_BATCH)
     {

@@ -110,7 +110,7 @@ a JSON object with schema `sdl3d.fragment.v0`.
     { "path": "fragments/assets.json", "sections": ["assets"] },
     { "path": "fragments/actors/player.json", "sections": ["entities"] },
     { "path": "fragments/world/e1m1.sectors.json", "sections": ["sector_levels"] },
-    { "path": "fragments/world/e1m1.doors.json", "sections": ["sector_doors", "signals", "logic"] },
+    { "path": "fragments/world/e1m1.doors.json", "sections": ["assets", "sector_doors", "signals", "logic"] },
     { "path": "fragments/world/e1m1.platforms.json", "sections": ["sector_platforms"] },
     { "path": "fragments/input/profiles.json", "sections": ["input"] },
     { "path": "fragments/network/replication.json", "sections": ["network"] }
@@ -983,8 +983,10 @@ Reusable components include:
 - `particles.emitter`: actor-attached particle emitter. On pooled actors, the
   emitter is active only while the actor is active.
 - `render.cube`: renders a cube using authored `size`, or a vec3 actor property
-  named by `size_property`. The property path is useful for grid wall runs and
-  other pooled actors that need per-instance dimensions.
+  named by `size_property`. `texture` may reference an image asset id; each cube
+  face is UV-mapped to the full image and tinted by `color`. The property path
+  is useful for grid wall runs and other pooled actors that need per-instance
+  dimensions.
 - `render.sprite`: renders an upright billboard using an authored sprite asset.
   Use `size` for world-space width/height and optional `facing_yaw` or
   `facing_yaw_property` for directional sprite frame selection. Sprite assets

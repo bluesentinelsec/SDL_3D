@@ -115,6 +115,7 @@ struct RenderPrimitiveCapture
     int doom_robot_sprites = 0;
     int doom_health_sprites = 0;
     int doom_crates = 0;
+    int doom_textured_crates = 0;
     int doom_presentation_cubes = 0;
     int doom_projectile_spheres = 0;
 };
@@ -133,6 +134,7 @@ struct SectorLevelInstanceCapture
 struct SectorDoorRenderCapture
 {
     int door_primitives = 0;
+    int textured_door_primitives = 0;
     sdl3d_vec3 first_position{};
 };
 
@@ -140,6 +142,7 @@ struct DoorPrefixRenderCapture
 {
     const char *prefix = nullptr;
     int door_primitives = 0;
+    int textured_door_primitives = 0;
 };
 
 void capture_signal_payload(void *userdata, int signal_id, const sdl3d_properties *payload)
@@ -1356,7 +1359,12 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
     if (entity_name.rfind("entity.doom.health.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_SPRITE)
         capture->doom_health_sprites++;
     if (entity_name.rfind("entity.doom.crate.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
+    {
         capture->doom_crates++;
+        if (primitive->texture_image != nullptr &&
+            std::string(primitive->texture_image) == "image.doom.radioactive_crate")
+            capture->doom_textured_crates++;
+    }
     if (entity_name.rfind("entity.doom.presentation.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
         capture->doom_presentation_cubes++;
     if (entity_name.rfind("pool.doom.projectiles.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
@@ -1384,6 +1392,7 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
         EXPECT_NEAR(primitive->size.x, 0.9f, 0.0001f);
         EXPECT_EQ(primitive->color.g, 170);
+        EXPECT_STREQ(primitive->texture_image, "image.doom.radioactive_crate");
     }
     return true;
 }
@@ -1399,6 +1408,8 @@ bool capture_sector_door_render_primitive(void *userdata, const sdl3d_game_data_
     if (capture->door_primitives == 0)
         capture->first_position = primitive->position;
     capture->door_primitives++;
+    if (primitive->texture_image != nullptr && std::string(primitive->texture_image) == "image.doom.door_hatch")
+        capture->textured_door_primitives++;
     EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
     EXPECT_NEAR(primitive->size.x, 0.4f, 0.001f);
     EXPECT_NEAR(primitive->size.y, 2.0f, 0.001f);
@@ -1415,6 +1426,8 @@ bool capture_door_prefix_render_primitive(void *userdata, const sdl3d_game_data_
         return true;
     }
     capture->door_primitives++;
+    if (primitive->texture_image != nullptr && std::string(primitive->texture_image) == "image.doom.door_hatch")
+        capture->textured_door_primitives++;
     EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
     EXPECT_GT(primitive->size.x, 0.0f);
     EXPECT_GT(primitive->size.y, 0.0f);
@@ -8496,7 +8509,8 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
 {
     const std::filesystem::path doom_path = doom_level_data_path();
     ASSERT_TRUE(std::filesystem::exists(doom_path)) << doom_path;
-    for (const char *texture_name : {"rock_floor.jpg", "ceiling_metal.jpg", "wall_metal.jpg", "lava.jpg"})
+    for (const char *texture_name : {"rock_floor.jpg", "ceiling_metal.jpg", "wall_metal.jpg", "lava.jpg",
+                                     "door-hatch.png", "radioactive-crate.png"})
     {
         sdl3d_image image{};
         const std::filesystem::path texture_path = doom_path.parent_path() / "textures" / texture_name;
@@ -8576,6 +8590,7 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     EXPECT_TRUE(render_settings.has_profile);
     EXPECT_STREQ(render_settings.profile_name, "modern");
     EXPECT_TRUE(render_settings.lighting_enabled);
+    EXPECT_FALSE(render_settings.ssao_enabled);
 
     const int lighting_toggle_signal = sdl3d_game_data_find_signal(runtime, "signal.render.lighting.toggle");
     ASSERT_GE(lighting_toggle_signal, 0);
@@ -8615,6 +8630,7 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     capture.prefix = "door.";
     ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_door_prefix_render_primitive, &capture));
     EXPECT_EQ(capture.door_primitives, 5);
+    EXPECT_EQ(capture.textured_door_primitives, 5);
     ParticleCapture particles{};
     ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &particles));
     EXPECT_TRUE(particles.saw_nukage_vapor);
@@ -8626,6 +8642,7 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     EXPECT_EQ(authored_props.doom_robot_sprites, 5);
     EXPECT_EQ(authored_props.doom_health_sprites, 5);
     EXPECT_EQ(authored_props.doom_crates, 8);
+    EXPECT_EQ(authored_props.doom_textured_crates, 8);
     EXPECT_EQ(authored_props.doom_presentation_cubes, 14);
     EXPECT_GE(authored_props.sprites, 10);
     sdl3d_game_data_ambient_asset ambient{};

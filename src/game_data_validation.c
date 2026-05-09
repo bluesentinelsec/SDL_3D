@@ -4443,6 +4443,16 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 yyjson_val *lighting = obj_get(component, "lighting");
                 if (lighting != NULL && !yyjson_is_bool(lighting))
                     return validation_error(ctx, path, "render primitive lighting must be a boolean");
+                if (SDL_strcmp(type, "render.cube") == 0 || SDL_strcmp(type, "render.sphere") == 0)
+                {
+                    yyjson_val *texture_value = obj_get(component, "texture");
+                    if (texture_value != NULL && !is_non_empty_string(component, "texture"))
+                        return validation_error(ctx, path,
+                                                "render primitive texture must be a non-empty image asset id");
+                    const char *texture = json_string(component, "texture");
+                    if (texture != NULL && !require_ref(ctx, &names->images, "image asset", texture, path))
+                        return false;
+                }
                 if (SDL_strcmp(type, "render.cube") == 0)
                 {
                     yyjson_val *size = obj_get(component, "size");
@@ -4463,12 +4473,6 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                     yyjson_val *rotation_property = obj_get(component, "rotation_property");
                     if (rotation_property != NULL && !is_non_empty_string(component, "rotation_property"))
                         return validation_error(ctx, path, "render.sphere rotation_property must be non-empty");
-                    yyjson_val *texture_value = obj_get(component, "texture");
-                    if (texture_value != NULL && !is_non_empty_string(component, "texture"))
-                        return validation_error(ctx, path, "render.sphere texture must be a non-empty image asset id");
-                    const char *texture = json_string(component, "texture");
-                    if (texture != NULL && !require_ref(ctx, &names->images, "image asset", texture, path))
-                        return false;
                 }
                 if (SDL_strcmp(type, "render.sprite") == 0)
                 {
@@ -4670,6 +4674,13 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                 yyjson_val *size_property = obj_get(component, "size_property");
                 if (size_property != NULL && !is_non_empty_string(component, "size_property"))
                     return validation_error(ctx, component_path, "render.cube size_property must be non-empty");
+                yyjson_val *texture_value = obj_get(component, "texture");
+                if (texture_value != NULL && !is_non_empty_string(component, "texture"))
+                    return validation_error(ctx, component_path,
+                                            "render.cube texture must be a non-empty image asset id");
+                const char *texture = json_string(component, "texture");
+                if (texture != NULL && !require_ref(ctx, &names->images, "image asset", texture, component_path))
+                    return false;
             }
             else if (SDL_strcmp(type, "render.sprite") == 0)
             {

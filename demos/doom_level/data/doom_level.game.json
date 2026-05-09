@@ -10,7 +10,7 @@
     { "path": "fragments/actors/presentation_props.json", "sections": ["entities"] },
     { "path": "fragments/actors/projectiles.json", "sections": ["actor_archetypes", "actor_pools", "signals", "logic"] },
     { "path": "fragments/world/sector_levels.json", "sections": ["sector_levels"] },
-    { "path": "fragments/world/sector_doors.json", "sections": ["sector_doors", "signals", "logic"] },
+    { "path": "fragments/world/sector_doors.json", "sections": ["assets", "sector_doors", "signals", "logic"] },
     { "path": "fragments/world/sector_platforms.json", "sections": ["sector_platforms"] },
     { "path": "fragments/world/sector_ambient.json", "sections": ["assets", "logic"] },
     { "path": "fragments/world/sector_hazards.json", "sections": ["logic"] },
@@ -172,7 +172,7 @@
     "lighting": true,
     "lighting_key": "doom.render.lighting",
     "bloom": true,
-    "ssao": true,
+    "ssao": false,
     "profile": "modern",
     "profile_key": "doom.render.profile"
   },
