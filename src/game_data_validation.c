@@ -5218,6 +5218,32 @@ static bool editor_exposed_property_type_valid(const char *type)
     return false;
 }
 
+static bool editor_exposed_property_default_valid(yyjson_val *value, const char *type)
+{
+    if (value == NULL)
+        return true;
+    if (type == NULL)
+    {
+        return yyjson_is_str(value) || yyjson_is_int(value) || yyjson_is_real(value) || yyjson_is_bool(value) ||
+               is_exact_vec_array(value, 2) || is_exact_vec_array(value, 3) || is_exact_vec_array(value, 4);
+    }
+    if (SDL_strcmp(type, "bool") == 0)
+        return yyjson_is_bool(value);
+    if (SDL_strcmp(type, "int") == 0)
+        return yyjson_is_int(value);
+    if (SDL_strcmp(type, "float") == 0)
+        return yyjson_is_num(value);
+    if (SDL_strcmp(type, "string") == 0 || SDL_strcmp(type, "enum") == 0)
+        return yyjson_is_str(value);
+    if (SDL_strcmp(type, "vec2") == 0)
+        return is_exact_vec_array(value, 2);
+    if (SDL_strcmp(type, "vec3") == 0)
+        return is_exact_vec_array(value, 3);
+    if (SDL_strcmp(type, "color") == 0)
+        return is_exact_vec_array(value, 3) || is_exact_vec_array(value, 4);
+    return false;
+}
+
 static bool validate_editor_preview(validation_context *ctx, yyjson_val *preview, const char *json_path)
 {
     if (preview == NULL)
@@ -5317,11 +5343,8 @@ static bool validate_editor_exposed_properties(validation_context *ctx, yyjson_v
             ((min_value != NULL && !yyjson_is_num(min_value)) || (max_value != NULL && !yyjson_is_num(max_value))))
             ok = validation_error(ctx, path, "editor exposed property min and max must be numbers");
         yyjson_val *default_value = obj_get(property, "default");
-        if (ok && default_value != NULL && !yyjson_is_str(default_value) && !yyjson_is_int(default_value) &&
-            !yyjson_is_real(default_value) && !yyjson_is_bool(default_value) && !is_vec_array(default_value, 2))
-        {
-            ok = validation_error(ctx, path, "editor exposed property default must be scalar or vector");
-        }
+        if (ok && !editor_exposed_property_default_valid(default_value, type))
+            ok = validation_error(ctx, path, "editor exposed property default does not match its type");
     }
     name_table_destroy(&names);
     return ok;

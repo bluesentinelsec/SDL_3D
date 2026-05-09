@@ -872,7 +872,7 @@ Supported editor fields:
 - `exposed_properties`: tool-facing property controls with unique `name`,
   optional display text, optional `type` (`bool`, `int`, `float`, `string`,
   `vec2`, `vec3`, `color`, or `enum`), numeric `min`/`max`, and scalar/vector
-  default
+  default matching the declared type; `color` defaults may be RGB or RGBA
 - `test_scene`: optional scene reference that tools can launch through the
   runner for isolated tuning
 

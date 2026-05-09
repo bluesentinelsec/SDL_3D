@@ -6860,6 +6860,30 @@ TEST(GameDataRuntime, RejectsInvalidEditorMetadata)
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
+
+    write_text(dir / "bad_editor_default.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad Editor Default", "id": "test.bad_editor_default", "version": "0.1.0" },
+  "world": { "name": "world.bad_editor_default", "kind": "fixed_screen" },
+  "editor": {
+    "display_name": "Bad Editor Default",
+    "exposed_properties": [
+      { "name": "position", "type": "vec3", "default": [1.0, 2.0, 3.0, 4.0] }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    runtime = nullptr;
+    SDL_zeroa(error);
+    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "bad_editor_default.game.json").string().c_str(), session, &runtime,
+                                           error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("editor exposed property default does not match its type"), std::string::npos)
+        << error;
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
