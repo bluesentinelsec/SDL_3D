@@ -483,7 +483,24 @@ sector metadata, and baked lights are authored in JSON and loaded into runtime
           "ceil_y": 4.0,
           "floor_material": "rock_floor",
           "ceil_material": "wall_metal",
-          "wall_material": "wall_metal"
+          "wall_material": "wall_metal",
+          "lighting": {
+            "level": 176,
+            "color": [1.0, 0.72, 0.45, 0.65]
+          }
+        },
+        {
+          "name": "blue_hallway",
+          "points": [[10, 2], [18, 2], [18, 6], [10, 6]],
+          "floor_y": 0.0,
+          "ceil_y": 4.0,
+          "floor_material": "rock_floor",
+          "ceil_material": "wall_metal",
+          "wall_material": "wall_metal",
+          "lighting": {
+            "level": 96,
+            "color": [0.25, 0.45, 1.0, 1.0]
+          }
         },
         {
           "name": "hazard_basin",
@@ -526,14 +543,51 @@ Validation requires:
 - valid material references
 - optional `floor_normal`, `ceil_normal`, and `push_velocity` as vec3 arrays
 - non-negative `ambient_sound_id` and `damage_per_second`
+- optional `lighting` as an object with `level` integer in `[0, 255]` and
+  optional `color` vec3/vec4 values in `[0, 1]`
 - optional lights with `position` vec3, optional `color` vec3, non-negative
   `intensity`, and positive `range`
 
+Sector `lighting` is a Doom/Build-style local brightness and tint term. Missing
+`lighting` preserves the legacy sector look. When present, `level` defaults to
+`255` and `color` defaults to white. `color[3]`, when supplied, is tint
+influence rather than transparency: `0` applies brightness only, `1` fully
+applies the RGB tint, and values between them blend between white and the
+authored RGB. Sector-local lighting is baked cheaply into sector floor, ceiling,
+wall, step, and portal surfaces. Lit actor render components inside the active
+scene's sector levels also receive the same sector-local modulation for sprites,
+3D models, and mesh primitives. Components with `"lighting": false` are left
+unchanged. Batched pickup layers and particles currently keep their authored
+colors; use per-actor primitives when per-sector tint correctness matters for
+those effects. Sector-local lighting composes with authored baked/static lights
+and dynamic scene lights; it does not affect UI.
+
 At load time Slayer 3D builds three runtime variants per sector level:
 
-- `lightmapped`: baked lights plus lightmap atlas data
-- `vertex_baked`: baked vertex lighting without a lightmap atlas
-- `unlit`: raw material color/texture without baked lights
+- `lightmapped`: sector-local lighting plus baked static lights in a lightmap
+  atlas
+- `vertex_baked`: sector-local lighting plus baked static lights in vertex
+  colors, without a lightmap atlas
+- `unlit`: material color/texture modulated by sector-local lighting, without
+  baked static lights
+
+Tools and data logic can update a sector at runtime with `sector_lighting.set`:
+
+```json
+{
+  "type": "sector_lighting.set",
+  "sector_level": "sector.level_1",
+  "sector": "red_hallway",
+  "level": 128,
+  "color": [1.0, 0.1, 0.05, 1.0]
+}
+```
+
+Use either `sector` or `sector_index`. Runtime updates rebuild the affected
+level's render variants atomically, so they are suitable for editor preview and
+occasional scripted changes. Avoid changing many large sectors every frame;
+prefer authored sector values plus dynamic lights for high-frequency lighting
+effects.
 
 Scenes render sector levels by declaring instances under `world.sector_levels`:
 

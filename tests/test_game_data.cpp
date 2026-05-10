@@ -382,6 +382,11 @@ std::filesystem::path mesh_primitives_dojo_data_path()
     return demo_data_path("mesh_primitives_dojo", "mesh_primitives_dojo.game.json");
 }
 
+std::filesystem::path lighting_dojo_data_path()
+{
+    return demo_data_path("lighting_dojo", "lighting_dojo.game.json");
+}
+
 std::filesystem::path fps_template_data_path()
 {
     return demo_data_path("templates/fps", "fps_template.game.json");
@@ -7179,6 +7184,86 @@ TEST(GameDataRuntime, MeshPrimitivesDojoLoadsGrayboxShowcase)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, LightingDojoLoadsSectorLocalLightingShowcase)
+{
+    const std::filesystem::path dojo_path = lighting_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_config config{};
+    char title[128]{};
+    char app_error[512]{};
+    ASSERT_TRUE(slayer3d_game_data_load_app_config_file(dojo_path.string().c_str(), &config, title, sizeof(title),
+                                                        app_error, sizeof(app_error)))
+        << app_error;
+    EXPECT_STREQ(config.title, "Slayer 3D Lighting Dojo");
+    EXPECT_EQ(config.logical_width, SLAYER3D_GAME_DEFAULT_LOGICAL_WIDTH);
+    EXPECT_EQ(config.logical_height, SLAYER3D_GAME_DEFAULT_LOGICAL_HEIGHT);
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.lighting_dojo.showcase"));
+    EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.player"), nullptr);
+    EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.mock.lab_robot"), nullptr);
+
+    slayer3d_game_data_sector_level level{};
+    ASSERT_TRUE(slayer3d_game_data_get_sector_level(runtime, "sector.lighting_dojo.showcase", &level));
+    ASSERT_GE(level.sector_count, 12);
+    bool saw_dark = false;
+    bool saw_green = false;
+    for (int i = 0; i < level.sector_count; ++i)
+    {
+        const std::string name = level.sector_names[i] != nullptr ? level.sector_names[i] : "";
+        if (name == "dark_room")
+        {
+            saw_dark = true;
+            EXPECT_TRUE(level.sectors[i].has_lighting);
+            EXPECT_LT(level.sectors[i].lighting_level, 64.0f);
+        }
+        if (name == "green_toxic_room")
+        {
+            saw_green = true;
+            EXPECT_TRUE(level.sectors[i].has_lighting);
+            EXPECT_GT(level.sectors[i].lighting_color[1], level.sectors[i].lighting_color[0]);
+        }
+    }
+    EXPECT_TRUE(saw_dark);
+    EXPECT_TRUE(saw_green);
+
+    ASSERT_GE(slayer3d_game_data_world_light_count(runtime), 5);
+
+    struct LightingDojoCapture
+    {
+        bool saw_green_sample = false;
+        bool saw_lab_robot = false;
+        slayer3d_color green_sample{};
+    } capture;
+    auto capture_lighting_dojo = [](void *userdata, const slayer3d_game_data_render_primitive *primitive) -> bool {
+        auto *data = static_cast<LightingDojoCapture *>(userdata);
+        const std::string name = primitive->entity_name != nullptr ? primitive->entity_name : "";
+        if (name == "entity.sample.green")
+        {
+            data->saw_green_sample = true;
+            data->green_sample = primitive->color;
+        }
+        if (name == "entity.mock.lab_robot" && primitive->type == SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
+            data->saw_lab_robot = true;
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_lighting_dojo, &capture));
+    EXPECT_TRUE(capture.saw_green_sample);
+    EXPECT_TRUE(capture.saw_lab_robot);
+    EXPECT_GT(capture.green_sample.g, capture.green_sample.r);
+    EXPECT_GT(capture.green_sample.g, capture.green_sample.b);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, UsesDefaultWorldUnitsAndPerspectiveFovy)
 {
     const std::filesystem::path dir = unique_test_dir("world_camera_defaults");
@@ -10114,7 +10199,8 @@ TEST(GameDataRuntime, LoadsAuthoredSectorLevels)
           "ceil_material": "wall",
           "wall_material": "wall",
           "ambient_sound_id": 2,
-          "damage_per_second": 1.5
+          "damage_per_second": 1.5,
+          "lighting": { "level": 176, "color": [1.0, 0.2, 0.1, 0.75] }
         },
         {
           "name": "hall",
@@ -10155,6 +10241,11 @@ TEST(GameDataRuntime, LoadsAuthoredSectorLevels)
     EXPECT_STREQ(level.sector_names[1], "hall");
     EXPECT_EQ(level.sectors[0].ambient_sound_id, 2);
     EXPECT_FLOAT_EQ(slayer3d_sector_damage_per_second(&level.sectors[0]), 1.5f);
+    EXPECT_TRUE(level.sectors[0].has_lighting);
+    EXPECT_FLOAT_EQ(level.sectors[0].lighting_level, 176.0f);
+    EXPECT_FLOAT_EQ(level.sectors[0].lighting_color[1], 0.2f);
+    EXPECT_FLOAT_EQ(level.sectors[0].lighting_color[3], 0.75f);
+    EXPECT_FALSE(level.sectors[1].has_lighting);
     expect_vec3_near(slayer3d_sector_push_velocity(&level.sectors[1]), slayer3d_vec3_make(1.0f, 0.0f, 0.0f));
     ASSERT_EQ(level.light_count, 1);
     EXPECT_FLOAT_EQ(level.lights[0].intensity, 2.0f);
@@ -10175,6 +10266,129 @@ TEST(GameDataRuntime, LoadsAuthoredSectorLevels)
     slayer3d_game_data_sector_level missing{};
     EXPECT_FALSE(slayer3d_game_data_get_sector_level(runtime, "sector.missing", &missing));
     EXPECT_EQ(missing.name, nullptr);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, SectorLightingModulatesLitActorsAndCanUpdateAtRuntime)
+{
+    const std::filesystem::path dir = unique_test_dir("sector_lighting_runtime");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "entities": ["entity.lit", "entity.unlit"],
+  "world": {
+    "sector_levels": [
+      { "level": "sector.lighting", "variant": "lightmapped" }
+    ]
+  }
+})json");
+    write_text(dir / "sector_lighting_runtime.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Sector Lighting Runtime Test" },
+  "world": { "name": "world.sector_lighting", "kind": "sector" },
+  "sector_levels": [
+    {
+      "name": "sector.lighting",
+      "materials": [{ "name": "mat", "albedo": [1.0, 1.0, 1.0, 1.0] }],
+      "sectors": [
+        {
+          "name": "room",
+          "points": [[0, 0], [5, 0], [5, 5], [0, 5]],
+          "floor_y": 0.0,
+          "ceil_y": 4.0,
+          "floor_material": "mat",
+          "ceil_material": "mat",
+          "wall_material": "mat",
+          "lighting": { "level": 128, "color": [1.0, 0.0, 0.0, 1.0] }
+        }
+      ]
+    }
+  ],
+  "entities": [
+    {
+      "name": "entity.lit",
+      "active": true,
+      "transform": { "position": [2.0, 1.0, 2.0] },
+      "components": [
+        { "type": "render.cube", "size": [1.0, 1.0, 1.0], "color": [200, 100, 50, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.unlit",
+      "active": true,
+      "transform": { "position": [3.0, 1.0, 2.0] },
+      "components": [
+        { "type": "render.sphere", "radius": 0.5, "color": [200, 100, 50, 255], "lighting": false }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "sector_lighting_runtime.game.json").string().c_str(), session,
+                                             &runtime, error, sizeof(error)))
+        << error;
+
+    struct SectorActorCapture
+    {
+        slayer3d_color lit{};
+        slayer3d_color unlit{};
+        bool saw_lit = false;
+        bool saw_unlit = false;
+    } capture;
+    auto capture_actor = [](void *userdata, const slayer3d_game_data_render_primitive *primitive) -> bool {
+        auto *data = static_cast<SectorActorCapture *>(userdata);
+        const std::string name = primitive->entity_name != nullptr ? primitive->entity_name : "";
+        if (name == "entity.lit")
+        {
+            data->lit = primitive->color;
+            data->saw_lit = true;
+        }
+        if (name == "entity.unlit")
+        {
+            data->unlit = primitive->color;
+            data->saw_unlit = true;
+        }
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_actor, &capture));
+    ASSERT_TRUE(capture.saw_lit);
+    ASSERT_TRUE(capture.saw_unlit);
+    EXPECT_EQ(capture.lit.r, 100);
+    EXPECT_EQ(capture.lit.g, 0);
+    EXPECT_EQ(capture.lit.b, 0);
+    EXPECT_EQ(capture.unlit.r, 200);
+    EXPECT_EQ(capture.unlit.g, 100);
+    EXPECT_EQ(capture.unlit.b, 50);
+
+    float level = 0.0f;
+    float color[4]{};
+    ASSERT_TRUE(
+        slayer3d_game_data_get_sector_lighting(runtime, "sector.lighting", "room", &level, color, error, sizeof(error)))
+        << error;
+    EXPECT_FLOAT_EQ(level, 128.0f);
+    EXPECT_FLOAT_EQ(color[0], 1.0f);
+    EXPECT_FLOAT_EQ(color[3], 1.0f);
+
+    const float green[4] = {0.0f, 1.0f, 0.0f, 1.0f};
+    ASSERT_TRUE(
+        slayer3d_game_data_set_sector_lighting(runtime, "sector.lighting", "room", 255.0f, green, error, sizeof(error)))
+        << error;
+    capture = {};
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_actor, &capture));
+    ASSERT_TRUE(capture.saw_lit);
+    EXPECT_EQ(capture.lit.r, 0);
+    EXPECT_EQ(capture.lit.g, 100);
+    EXPECT_EQ(capture.lit.b, 0);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -12415,6 +12629,27 @@ TEST(GameDataRuntime, RejectsInvalidSectorDoorsAndActions)
             })json",
             "noise.emit radius",
         },
+        {
+            "invalid_sector_lighting_action",
+            R"json([])json",
+            R"json({
+              "bindings": [
+                {
+                  "signal": "signal.run",
+                  "actions": [
+                    {
+                      "type": "sector_lighting.set",
+                      "sector_level": "sector.test",
+                      "sector": "room",
+                      "level": 300,
+                      "color": [1.0, 1.0, 1.0, 1.0]
+                    }
+                  ]
+                }
+              ]
+            })json",
+            "sector_lighting.set level",
+        },
     };
 
     for (const Case &test_case : cases)
@@ -12708,6 +12943,36 @@ TEST(GameDataRuntime, RejectsInvalidAuthoredSectorLevels)
               }]
             })json",
             "ceil_y",
+        },
+        {
+            "bad_lighting_level",
+            R"json({
+              "name": "sector.bad",
+              "materials": [{ "name": "floor" }],
+              "sectors": [{
+                "points": [[0,0], [2,0], [2,2], [0,2]],
+                "floor_y": 0,
+                "ceil_y": 3,
+                "wall_material": "floor",
+                "lighting": { "level": 300, "color": [1.0, 1.0, 1.0, 1.0] }
+              }]
+            })json",
+            "lighting level",
+        },
+        {
+            "bad_lighting_color",
+            R"json({
+              "name": "sector.bad",
+              "materials": [{ "name": "floor" }],
+              "sectors": [{
+                "points": [[0,0], [2,0], [2,2], [0,2]],
+                "floor_y": 0,
+                "ceil_y": 3,
+                "wall_material": "floor",
+                "lighting": { "level": 128, "color": [1.0, -0.1, 1.0, 1.0] }
+              }]
+            })json",
+            "lighting color",
         },
     };
 

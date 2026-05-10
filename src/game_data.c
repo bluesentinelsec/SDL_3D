@@ -669,7 +669,10 @@ static bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjso
                                 const slayer3d_game_data_ui_metrics *metrics);
 static bool runtime_actor_is_active(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *actor);
 static sector_level_runtime *find_sector_level_runtime_mutable(slayer3d_game_data_runtime *runtime, const char *name);
+static const sector_level_runtime *find_sector_level_runtime(const slayer3d_game_data_runtime *runtime,
+                                                             const char *name);
 static int sector_level_find_sector_name(const sector_level_runtime *level, const char *sector_name);
+static void modulate_color_by_sector_lighting(slayer3d_color *color, const slayer3d_sector *sector);
 static int menu_runtime_item_count(const slayer3d_game_data_runtime *runtime, const scene_menu_state *menu);
 static void update_dynamic_list_selection_state(slayer3d_game_data_runtime *runtime, scene_menu_state *menu);
 
@@ -3298,6 +3301,23 @@ static bool load_sector_level_sectors(sector_level_runtime *level, yyjson_val *m
         sector->ambient_sound_id = json_int(sector_json, "ambient_sound_id", 0);
         json_float_array(obj_get(sector_json, "push_velocity"), sector->push_velocity, 3, NULL);
         sector->damage_per_second = json_float(sector_json, "damage_per_second", 0.0f);
+        yyjson_val *lighting = obj_get(sector_json, "lighting");
+        if (yyjson_is_obj(lighting))
+        {
+            static const float default_lighting_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+            yyjson_val *color = obj_get(lighting, "color");
+            sector->has_lighting = true;
+            sector->lighting_level = json_float(lighting, "level", 255.0f);
+            if (yyjson_is_arr(color) && yyjson_arr_size(color) == 3U &&
+                json_float_array(color, sector->lighting_color, 3, default_lighting_color))
+            {
+                sector->lighting_color[3] = 1.0f;
+            }
+            else
+            {
+                json_float_array(color, sector->lighting_color, 4, default_lighting_color);
+            }
+        }
     }
     return true;
 }
@@ -6262,6 +6282,40 @@ static void populate_mesh_primitive_descriptor(const slayer3d_registered_actor *
         primitive->radius_top = json_float(component, "radius_top", 0.0f);
 }
 
+static const slayer3d_sector *active_scene_sector_for_position(const slayer3d_game_data_runtime *runtime,
+                                                               slayer3d_vec3 position)
+{
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    yyjson_val *instances = obj_get(obj_get(scene != NULL ? scene->root : NULL, "world"), "sector_levels");
+    if (!yyjson_is_arr(instances))
+        return NULL;
+
+    for (size_t i = 0; i < yyjson_arr_size(instances); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(instances, i);
+        const sector_level_runtime *level = find_sector_level_runtime(runtime, json_string(entry, "level", NULL));
+        if (level == NULL)
+            continue;
+        const slayer3d_vec3 origin = json_vec3(entry, "position", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        const slayer3d_vec3 local =
+            slayer3d_vec3_make(position.x - origin.x, position.y - origin.y, position.z - origin.z);
+        const int sector_index =
+            slayer3d_level_find_sector_at(&level->lightmapped, level->sectors, local.x, local.z, local.y);
+        if (sector_index >= 0 && sector_index < level->sector_count && level->sectors[sector_index].has_lighting)
+            return &level->sectors[sector_index];
+    }
+    return NULL;
+}
+
+static void apply_sector_lighting_to_render_primitive(const slayer3d_game_data_runtime *runtime,
+                                                      slayer3d_game_data_render_primitive *primitive)
+{
+    if (runtime == NULL || primitive == NULL || !primitive->lighting_enabled || primitive->instances != NULL)
+        return;
+    modulate_color_by_sector_lighting(&primitive->color,
+                                      active_scene_sector_for_position(runtime, primitive->position));
+}
+
 static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runtime,
                                          const slayer3d_game_data_render_eval *eval,
                                          const slayer3d_registered_actor *actor, yyjson_val *components,
@@ -6358,6 +6412,7 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
                     apply_render_effects(runtime, component, eval, &part_primitive);
                     apply_render_effects(runtime, part, eval, &part_primitive);
                 }
+                apply_sector_lighting_to_render_primitive(runtime, &part_primitive);
                 if (!callback(userdata, &part_primitive))
                     return false;
             }
@@ -6394,6 +6449,7 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
 
         if (eval != NULL)
             apply_render_effects(runtime, component, eval, &primitive);
+        apply_sector_lighting_to_render_primitive(runtime, &primitive);
         if (!callback(userdata, &primitive))
             return false;
     }
@@ -6500,6 +6556,7 @@ static bool emit_sector_door_render_primitives(const slayer3d_game_data_runtime 
                                    : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
             if (eval != NULL)
                 apply_render_effects(runtime, render, eval, &primitive);
+            apply_sector_lighting_to_render_primitive(runtime, &primitive);
             if (!callback(userdata, &primitive))
                 return false;
         }
@@ -6825,6 +6882,206 @@ static int sector_level_find_sector_name(const sector_level_runtime *level, cons
             return i;
     }
     return -1;
+}
+
+static int sector_level_resolve_sector_index(const sector_level_runtime *level, const char *sector)
+{
+    if (level == NULL || sector == NULL || sector[0] == '\0')
+        return -1;
+    const int named_index = sector_level_find_sector_name(level, sector);
+    if (named_index >= 0)
+        return named_index;
+
+    char *end = NULL;
+    const long parsed = SDL_strtol(sector, &end, 10);
+    if (end != NULL && *end == '\0' && parsed >= 0 && parsed < level->sector_count)
+        return (int)parsed;
+    return -1;
+}
+
+static float clamp01(float value)
+{
+    if (value <= 0.0f)
+        return 0.0f;
+    if (value >= 1.0f)
+        return 1.0f;
+    return value;
+}
+
+static void sector_lighting_rgb(const slayer3d_sector *sector, float out_rgb[3])
+{
+    if (out_rgb == NULL)
+        return;
+    out_rgb[0] = 1.0f;
+    out_rgb[1] = 1.0f;
+    out_rgb[2] = 1.0f;
+    if (sector == NULL || !sector->has_lighting)
+        return;
+
+    const float level = SDL_clamp(sector->lighting_level, 0.0f, 255.0f) / 255.0f;
+    const float influence = clamp01(sector->lighting_color[3]);
+    for (int i = 0; i < 3; ++i)
+    {
+        const float tint = 1.0f + (clamp01(sector->lighting_color[i]) - 1.0f) * influence;
+        out_rgb[i] = level * tint;
+    }
+}
+
+static Uint8 color_channel_from_float(float value)
+{
+    value = SDL_clamp(value, 0.0f, 255.0f);
+    return (Uint8)(value + 0.5f);
+}
+
+static void modulate_color_by_sector_lighting(slayer3d_color *color, const slayer3d_sector *sector)
+{
+    if (color == NULL || sector == NULL || !sector->has_lighting)
+        return;
+    float lighting[3];
+    sector_lighting_rgb(sector, lighting);
+    color->r = color_channel_from_float((float)color->r * lighting[0]);
+    color->g = color_channel_from_float((float)color->g * lighting[1]);
+    color->b = color_channel_from_float((float)color->b * lighting[2]);
+}
+
+static bool rebuild_sector_level_variants_atomic(sector_level_runtime *level, char *error_buffer, int error_buffer_size)
+{
+    if (level == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "sector level is invalid");
+        return false;
+    }
+
+    slayer3d_level lightmapped;
+    slayer3d_level vertex_baked;
+    slayer3d_level unlit;
+    SDL_zero(lightmapped);
+    SDL_zero(vertex_baked);
+    SDL_zero(unlit);
+
+    bool ok = true;
+    if (!slayer3d_build_level(level->sectors, level->sector_count, level->materials, level->material_count,
+                              level->lights, level->light_count, &lightmapped))
+    {
+        set_errorf(error_buffer, error_buffer_size, "sector level '%s' lightmapped rebuild failed: %s", level->name,
+                   SDL_GetError());
+        ok = false;
+    }
+    if (ok && !slayer3d_build_level(level->sectors, level->sector_count, level->materials, level->material_count,
+                                    level->lights, level->light_count, &vertex_baked))
+    {
+        set_errorf(error_buffer, error_buffer_size, "sector level '%s' vertex-baked rebuild failed: %s", level->name,
+                   SDL_GetError());
+        ok = false;
+    }
+    if (ok)
+        strip_sector_level_lightmap(&vertex_baked);
+    if (ok && !slayer3d_build_level(level->sectors, level->sector_count, level->materials, level->material_count, NULL,
+                                    0, &unlit))
+    {
+        set_errorf(error_buffer, error_buffer_size, "sector level '%s' unlit rebuild failed: %s", level->name,
+                   SDL_GetError());
+        ok = false;
+    }
+
+    if (!ok)
+    {
+        slayer3d_free_level(&lightmapped);
+        slayer3d_free_level(&vertex_baked);
+        slayer3d_free_level(&unlit);
+        return false;
+    }
+
+    slayer3d_free_level(&level->lightmapped);
+    slayer3d_free_level(&level->vertex_baked);
+    slayer3d_free_level(&level->unlit);
+    level->lightmapped = lightmapped;
+    level->vertex_baked = vertex_baked;
+    level->unlit = unlit;
+    return true;
+}
+
+bool slayer3d_game_data_get_sector_lighting(const slayer3d_game_data_runtime *runtime, const char *sector_level,
+                                            const char *sector, float *out_level, float out_color[4],
+                                            char *error_buffer, int error_buffer_size)
+{
+    if (out_level != NULL)
+        *out_level = 0.0f;
+    if (out_color != NULL)
+        SDL_memset(out_color, 0, sizeof(float) * 4U);
+    const sector_level_runtime *level = find_sector_level_runtime(runtime, sector_level);
+    const int sector_index = sector_level_resolve_sector_index(level, sector);
+    if (level == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "sector level '%s' not found",
+                   sector_level != NULL ? sector_level : "<null>");
+        return false;
+    }
+    if (sector_index < 0)
+    {
+        set_errorf(error_buffer, error_buffer_size, "sector '%s' not found", sector != NULL ? sector : "<null>");
+        return false;
+    }
+
+    const slayer3d_sector *resolved = &level->sectors[sector_index];
+    if (!resolved->has_lighting)
+    {
+        set_errorf(error_buffer, error_buffer_size, "sector '%s' has no authored lighting", sector);
+        return false;
+    }
+    if (out_level == NULL || out_color == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "sector lighting output pointers are required");
+        return false;
+    }
+    *out_level = resolved->lighting_level;
+    SDL_memcpy(out_color, resolved->lighting_color, sizeof(resolved->lighting_color));
+    return true;
+}
+
+bool slayer3d_game_data_set_sector_lighting(slayer3d_game_data_runtime *runtime, const char *sector_level,
+                                            const char *sector, float level, const float color[4], char *error_buffer,
+                                            int error_buffer_size)
+{
+    sector_level_runtime *resolved_level = find_sector_level_runtime_mutable(runtime, sector_level);
+    const int sector_index = sector_level_resolve_sector_index(resolved_level, sector);
+    if (resolved_level == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "sector level '%s' not found",
+                   sector_level != NULL ? sector_level : "<null>");
+        return false;
+    }
+    if (sector_index < 0)
+    {
+        set_errorf(error_buffer, error_buffer_size, "sector '%s' not found", sector != NULL ? sector : "<null>");
+        return false;
+    }
+    if (color == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "sector lighting color is required");
+        return false;
+    }
+
+    slayer3d_sector *target = &resolved_level->sectors[sector_index];
+    const bool old_has_lighting = target->has_lighting;
+    const float old_level = target->lighting_level;
+    float old_color[4];
+    SDL_memcpy(old_color, target->lighting_color, sizeof(old_color));
+
+    target->has_lighting = true;
+    target->lighting_level = SDL_clamp(level, 0.0f, 255.0f);
+    for (int i = 0; i < 4; ++i)
+        target->lighting_color[i] = clamp01(color[i]);
+
+    if (!rebuild_sector_level_variants_atomic(resolved_level, error_buffer, error_buffer_size))
+    {
+        target->has_lighting = old_has_lighting;
+        target->lighting_level = old_level;
+        SDL_memcpy(target->lighting_color, old_color, sizeof(target->lighting_color));
+        (void)rebuild_sector_level_variants_atomic(resolved_level, NULL, 0);
+        return false;
+    }
+    return true;
 }
 
 static yyjson_val *find_sector_navigation_graph(const slayer3d_game_data_runtime *runtime, const char *graph_name)
@@ -16948,6 +17205,36 @@ static bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *
         return execute_sector_door_state_action(runtime, action, payload, "toggle");
     if (SDL_strcmp(type, "sector_door.interact") == 0)
         return execute_sector_door_interact_action(runtime, action);
+    if (SDL_strcmp(type, "sector_lighting.set") == 0)
+    {
+        float color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+        yyjson_val *color_json = obj_get(action, "color");
+        if (yyjson_is_arr(color_json) && yyjson_arr_size(color_json) == 3U)
+        {
+            (void)json_float_array(color_json, color, 3, color);
+            color[3] = 1.0f;
+        }
+        else
+        {
+            (void)json_float_array(color_json, color, 4, color);
+        }
+        char error[256] = {0};
+        char sector_index_text[32];
+        const char *sector = json_string(action, "sector", NULL);
+        yyjson_val *sector_index_value = obj_get(action, "sector_index");
+        if (sector == NULL && yyjson_is_int(sector_index_value))
+        {
+            SDL_snprintf(sector_index_text, sizeof(sector_index_text), "%d", (int)yyjson_get_int(sector_index_value));
+            sector = sector_index_text;
+        }
+        const bool ok = slayer3d_game_data_set_sector_lighting(runtime, json_string(action, "sector_level", NULL),
+                                                               sector, json_float(action, "level", 255.0f), color,
+                                                               error, (int)sizeof(error));
+        if (!ok)
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "sector_lighting.set failed: %s",
+                        error[0] != '\0' ? error : "unknown error");
+        return ok;
+    }
 
     if (SDL_strcmp(type, "transform.set_position") == 0)
     {

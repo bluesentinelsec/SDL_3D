@@ -1125,6 +1125,30 @@ extern "C"
                                                  slayer3d_game_data_sector_nav_node *out_node);
 
     /**
+     * @brief Read authored or runtime-edited sector-local lighting.
+     *
+     * @p sector may be either a sector name or a decimal sector index. Returns
+     * false when the level/sector cannot be resolved, when the sector has no
+     * authored lighting, or when the output pointers are invalid. @p out_color
+     * receives RGB tint plus alpha/influence in [0, 1].
+     */
+    bool slayer3d_game_data_get_sector_lighting(const slayer3d_game_data_runtime *runtime, const char *sector_level,
+                                                const char *sector, float *out_level, float out_color[4],
+                                                char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Set sector-local lighting and rebuild the level's render variants.
+     *
+     * @p sector may be either a sector name or a decimal sector index. @p level
+     * is clamped to [0, 255]. @p color is clamped per channel to [0, 1] and
+     * uses color[3] as tint influence, not transparency. The update is atomic:
+     * if rebuilding fails, the previous runtime level data remains active.
+     */
+    bool slayer3d_game_data_set_sector_lighting(slayer3d_game_data_runtime *runtime, const char *sector_level,
+                                                const char *sector, float level, const float color[4],
+                                                char *error_buffer, int error_buffer_size);
+
+    /**
      * @brief Iterate sector levels declared by the active scene.
      *
      * The active scene owns placement and variant selection through

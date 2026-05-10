@@ -2806,6 +2806,24 @@ static bool is_exact_vec_array(yyjson_val *value, size_t count)
     return yyjson_is_arr(value) && yyjson_arr_size(value) == count && is_vec_array(value, count);
 }
 
+static bool is_exact_vec3_or_vec4_array(yyjson_val *value)
+{
+    return is_exact_vec_array(value, 3) || is_exact_vec_array(value, 4);
+}
+
+static bool numeric_array_values_in_range(yyjson_val *value, double min_value, double max_value)
+{
+    if (!yyjson_is_arr(value))
+        return false;
+    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(value, i);
+        if (!yyjson_is_num(entry) || yyjson_get_num(entry) < min_value || yyjson_get_num(entry) > max_value)
+            return false;
+    }
+    return true;
+}
+
 static bool is_wave_axis_value(yyjson_val *value)
 {
     if (value == NULL || yyjson_is_num(value))
@@ -4776,6 +4794,30 @@ static bool validate_sector_levels(validation_context *ctx, yyjson_val *root)
             {
                 ok = validation_error(ctx, sector_path, "sector damage_per_second must be non-negative");
                 break;
+            }
+            yyjson_val *lighting = obj_get(sector, "lighting");
+            if (lighting != NULL)
+            {
+                if (!yyjson_is_obj(lighting))
+                {
+                    ok = validation_error(ctx, sector_path, "sector lighting must be an object");
+                    break;
+                }
+                yyjson_val *lighting_level = obj_get(lighting, "level");
+                if (lighting_level != NULL && (!yyjson_is_int(lighting_level) || yyjson_get_int(lighting_level) < 0 ||
+                                               yyjson_get_int(lighting_level) > 255))
+                {
+                    ok = validation_error(ctx, sector_path, "sector lighting level must be an integer in [0, 255]");
+                    break;
+                }
+                yyjson_val *color = obj_get(lighting, "color");
+                if (color != NULL &&
+                    (!is_exact_vec3_or_vec4_array(color) || !numeric_array_values_in_range(color, 0.0, 1.0)))
+                {
+                    ok = validation_error(ctx, sector_path,
+                                          "sector lighting color must be a vec3 or vec4 with values in [0, 1]");
+                    break;
+                }
             }
         }
 
@@ -7049,6 +7091,31 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (actions != NULL)
             return validate_action_array(ctx, actions, json_path, names);
         return require_ref(ctx, &names->signals, "signal", signal, json_path);
+    }
+    if (SDL_strcmp(type, "sector_lighting.set") == 0)
+    {
+        const char *sector_level = json_string(action, "sector_level");
+        const char *sector = json_string(action, "sector");
+        yyjson_val *sector_index = obj_get(action, "sector_index");
+        if (!require_ref(ctx, &names->sector_levels, "sector level", sector_level, json_path))
+            return false;
+        if ((sector == NULL && sector_index == NULL) || (sector != NULL && sector_index != NULL))
+            return validation_error(ctx, json_path,
+                                    "sector_lighting.set requires exactly one of sector or sector_index");
+        if (sector != NULL && sector[0] == '\0')
+            return validation_error(ctx, json_path, "sector_lighting.set sector must be non-empty");
+        if (sector_index != NULL && (!yyjson_is_int(sector_index) || yyjson_get_int(sector_index) < 0))
+            return validation_error(ctx, json_path, "sector_lighting.set sector_index must be non-negative");
+        yyjson_val *level = obj_get(action, "level");
+        if (level != NULL && (!yyjson_is_num(level) || yyjson_get_num(level) < 0.0 || yyjson_get_num(level) > 255.0))
+            return validation_error(ctx, json_path, "sector_lighting.set level must be in [0, 255]");
+        yyjson_val *color = obj_get(action, "color");
+        if (color != NULL && (!is_exact_vec3_or_vec4_array(color) || !numeric_array_values_in_range(color, 0.0, 1.0)))
+        {
+            return validation_error(ctx, json_path,
+                                    "sector_lighting.set color must be a vec3 or vec4 with values in [0, 1]");
+        }
+        return true;
     }
     if (SDL_strcmp(type, "projectile.fire") == 0)
     {

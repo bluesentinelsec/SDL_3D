@@ -1,0 +1,152 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "sector_level_fragments": [
+    {
+      "level": "sector.lighting_dojo.showcase",
+      "materials": [
+        { "name": "floor.concrete", "albedo": [0.36, 0.36, 0.38, 1.0], "roughness": 0.9, "tex_scale": 5.0 },
+        { "name": "wall.panel", "albedo": [0.52, 0.54, 0.58, 1.0], "roughness": 0.8, "tex_scale": 4.0 },
+        { "name": "ceiling.dark", "albedo": [0.20, 0.21, 0.24, 1.0], "roughness": 0.95, "tex_scale": 4.0 },
+        { "name": "floor.warning", "albedo": [0.45, 0.38, 0.18, 1.0], "roughness": 0.88, "tex_scale": 3.0 }
+      ],
+      "sectors": [
+        {
+          "name": "neutral_room",
+          "points": [[0, 0], [8, 0], [8, 8], [0, 8]],
+          "floor_y": 0.0,
+          "ceil_y": 4.0,
+          "floor_material": "floor.concrete",
+          "ceil_material": "ceiling.dark",
+          "wall_material": "wall.panel",
+          "lighting": { "level": 192, "color": [1.0, 1.0, 1.0, 0.0] }
+        },
+        {
+          "name": "dark_room",
+          "points": [[10, 0], [18, 0], [18, 8], [10, 8]],
+          "floor_y": 0.0,
+          "ceil_y": 4.0,
+          "floor_material": "floor.concrete",
+          "ceil_material": "ceiling.dark",
+          "wall_material": "wall.panel",
+          "lighting": { "level": 48, "color": [0.45, 0.50, 0.65, 0.3] }
+        },
+        {
+          "name": "fullbright_room",
+          "points": [[20, 0], [28, 0], [28, 8], [20, 8]],
+          "floor_y": 0.0,
+          "ceil_y": 4.0,
+          "floor_material": "floor.concrete",
+          "ceil_material": "ceiling.dark",
+          "wall_material": "wall.panel",
+          "lighting": { "level": 255, "color": [1.0, 1.0, 1.0, 0.0] }
+        },
+        {
+          "name": "warm_hall",
+          "points": [[0, 10], [8, 10], [8, 16], [0, 16]],
+          "floor_y": 0.0,
+          "ceil_y": 3.4,
+          "floor_material": "floor.warning",
+          "ceil_material": "ceiling.dark",
+          "wall_material": "wall.panel",
+          "lighting": { "level": 176, "color": [1.0, 0.46, 0.14, 0.85] }
+        },
+        {
+          "name": "blue_hall",
+          "points": [[10, 10], [18, 10], [18, 16], [10, 16]],
+          "floor_y": 0.0,
+          "ceil_y": 3.4,
+          "floor_material": "floor.concrete",
+          "ceil_material": "ceiling.dark",
+          "wall_material": "wall.panel",
+          "lighting": { "level": 142, "color": [0.20, 0.42, 1.0, 1.0] }
+        },
+        {
+          "name": "red_alarm_room",
+          "points": [[20, 10], [28, 10], [28, 16], [20, 16]],
+          "floor_y": 0.0,
+          "ceil_y": 3.4,
+          "floor_material": "floor.warning",
+          "ceil_material": "ceiling.dark",
+          "wall_material": "wall.panel",
+          "lighting": { "level": 160, "color": [1.0, 0.08, 0.05, 1.0] }
+        },
+        {
+          "name": "green_toxic_room",
+          "points": [[30, 10], [38, 10], [38, 16], [30, 16]],
+          "floor_y": -0.15,
+          "ceil_y": 3.4,
+          "floor_material": "floor.warning",
+          "ceil_material": "ceiling.dark",
+          "wall_material": "wall.panel",
+          "lighting": { "level": 150, "color": [0.18, 1.0, 0.35, 1.0] }
+        },
+        {
+          "name": "mixed_light_lab",
+          "points": [[40, 8], [50, 8], [50, 18], [40, 18]],
+          "floor_y": 0.0,
+          "ceil_y": 5.0,
+          "floor_material": "floor.concrete",
+          "ceil_material": "ceiling.dark",
+          "wall_material": "wall.panel",
+          "lighting": { "level": 126, "color": [0.72, 0.64, 1.0, 0.45] }
+        },
+        {
+          "name": "connector_a",
+          "points": [[8, 3], [10, 3], [10, 5], [8, 5]],
+          "floor_y": 0.0,
+          "ceil_y": 4.0,
+          "floor_material": "floor.concrete",
+          "ceil_material": "ceiling.dark",
+          "wall_material": "wall.panel",
+          "lighting": { "level": 128, "color": [1.0, 1.0, 1.0, 0.0] }
+        },
+        {
+          "name": "connector_b",
+          "points": [[18, 3], [20, 3], [20, 5], [18, 5]],
+          "floor_y": 0.0,
+          "ceil_y": 4.0,
+          "floor_material": "floor.concrete",
+          "ceil_material": "ceiling.dark",
+          "wall_material": "wall.panel",
+          "lighting": { "level": 144, "color": [0.7, 0.85, 1.0, 0.35] }
+        },
+        {
+          "name": "connector_c",
+          "points": [[26, 8], [28, 8], [28, 10], [26, 10]],
+          "floor_y": 0.0,
+          "ceil_y": 3.6,
+          "floor_material": "floor.warning",
+          "ceil_material": "ceiling.dark",
+          "wall_material": "wall.panel",
+          "lighting": { "level": 150, "color": [1.0, 0.2, 0.1, 0.85] }
+        },
+        {
+          "name": "connector_d",
+          "points": [[28, 13], [30, 13], [30, 15], [28, 15]],
+          "floor_y": -0.15,
+          "ceil_y": 3.4,
+          "floor_material": "floor.warning",
+          "ceil_material": "ceiling.dark",
+          "wall_material": "wall.panel",
+          "lighting": { "level": 146, "color": [0.45, 1.0, 0.35, 0.8] }
+        },
+        {
+          "name": "connector_e",
+          "points": [[38, 12], [40, 12], [40, 14], [38, 14]],
+          "floor_y": 0.0,
+          "ceil_y": 4.0,
+          "floor_material": "floor.concrete",
+          "ceil_material": "ceiling.dark",
+          "wall_material": "wall.panel",
+          "lighting": { "level": 130, "color": [0.65, 0.8, 1.0, 0.5] }
+        }
+      ],
+      "lights": [
+        { "position": [4.0, 2.8, 4.0], "color": [1.0, 0.95, 0.85], "intensity": 0.8, "range": 6.0 },
+        { "position": [4.0, 2.4, 13.0], "color": [1.0, 0.55, 0.18], "intensity": 1.4, "range": 7.0 },
+        { "position": [14.0, 2.4, 13.0], "color": [0.25, 0.55, 1.0], "intensity": 1.2, "range": 7.0 },
+        { "position": [45.0, 3.2, 13.0], "color": [1.0, 0.95, 0.55], "intensity": 1.8, "range": 8.0 }
+      ]
+    }
+  ]
+}

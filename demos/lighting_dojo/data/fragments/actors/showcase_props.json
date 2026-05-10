@@ -1,0 +1,110 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "entities": [
+    {
+      "name": "entity.light.neutral",
+      "active": true,
+      "transform": { "position": [4.0, 2.8, 4.0] },
+      "components": [
+        { "type": "light.point", "color": [1.0, 0.95, 0.82], "intensity": 0.6, "range": 5.0 },
+        { "type": "render.mesh_primitive", "primitive": "sphere", "radius": 0.18, "segments": 16, "rings": 8, "color": [255, 235, 175, 255], "lighting": false, "emissive": true }
+      ]
+    },
+    {
+      "name": "entity.light.warm",
+      "active": true,
+      "transform": { "position": [4.0, 2.2, 13.0] },
+      "components": [
+        { "type": "light.point", "color": [1.0, 0.42, 0.12], "intensity": 1.8, "range": 6.5 },
+        { "type": "render.mesh_primitive", "primitive": "sphere", "radius": 0.20, "segments": 16, "rings": 8, "color": [255, 120, 45, 255], "lighting": false, "emissive": true }
+      ]
+    },
+    {
+      "name": "entity.light.blue",
+      "active": true,
+      "transform": { "position": [14.0, 2.2, 13.0] },
+      "components": [
+        { "type": "light.point", "color": [0.25, 0.48, 1.0], "intensity": 1.7, "range": 6.5 },
+        { "type": "render.mesh_primitive", "primitive": "sphere", "radius": 0.20, "segments": 16, "rings": 8, "color": [70, 135, 255, 255], "lighting": false, "emissive": true }
+      ]
+    },
+    {
+      "name": "entity.light.lab.left",
+      "active": true,
+      "transform": { "position": [43.0, 2.1, 11.0] },
+      "components": [
+        { "type": "light.point", "color": [1.0, 0.18, 0.12], "intensity": 1.5, "range": 5.5 },
+        { "type": "render.mesh_primitive", "primitive": "disc", "radius": 0.18, "segments": 20, "color": [255, 65, 40, 255], "lighting": false, "emissive": true }
+      ]
+    },
+    {
+      "name": "entity.light.lab.right",
+      "active": true,
+      "transform": { "position": [47.0, 2.1, 15.0] },
+      "components": [
+        { "type": "light.point", "color": [0.15, 0.7, 1.0], "intensity": 1.5, "range": 5.5 },
+        { "type": "render.mesh_primitive", "primitive": "disc", "radius": 0.18, "segments": 20, "color": [45, 190, 255, 255], "lighting": false, "emissive": true }
+      ]
+    },
+    {
+      "name": "entity.sample.neutral",
+      "active": true,
+      "transform": { "position": [4.0, 1.0, 5.7] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "rounded_box", "size": [1.3, 1.5, 1.0], "bevel_radius": 0.18, "rings": 4, "color": [210, 220, 235, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.sample.dark",
+      "active": true,
+      "transform": { "position": [14.0, 1.0, 5.7] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "sphere", "radius": 0.75, "segments": 24, "rings": 10, "color": [210, 220, 235, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.sample.bright",
+      "active": true,
+      "transform": { "position": [24.0, 1.0, 5.7] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "capsule", "radius": 0.42, "height": 1.8, "segments": 20, "rings": 8, "color": [210, 220, 235, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.sample.red",
+      "active": true,
+      "transform": { "position": [24.0, 0.95, 13.2] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "torus", "major_radius": 0.65, "minor_radius": 0.16, "segments": 28, "tube_segments": 8, "rotation_axis": [1.0, 0.0, 0.0], "rotation_angle": 1.5707964, "color": [220, 225, 235, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.sample.green",
+      "active": true,
+      "transform": { "position": [34.0, 0.9, 13.2] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "hemisphere", "radius": 0.9, "segments": 24, "rings": 8, "color": [220, 225, 235, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.mock.lab_robot",
+      "active": true,
+      "transform": { "position": [45.0, 0.8, 13.0] },
+      "components": [
+        {
+          "type": "render.composite",
+          "lighting": true,
+          "wire_color": [16, 18, 22, 220],
+          "parts": [
+            { "primitive": "rounded_box", "offset": [0.0, 0.85, 0.0], "size": [1.1, 1.45, 0.8], "bevel_radius": 0.18, "rings": 4, "color": [160, 180, 235, 255] },
+            { "primitive": "sphere", "offset": [0.0, 1.78, 0.0], "radius": 0.38, "segments": 18, "rings": 8, "color": [225, 230, 240, 255] },
+            { "primitive": "disc", "offset": [-0.15, 1.80, 0.35], "radius": 0.08, "segments": 16, "color": [255, 55, 55, 255], "lighting": false, "emissive": true },
+            { "primitive": "disc", "offset": [0.15, 1.80, 0.35], "radius": 0.08, "segments": 16, "color": [70, 190, 255, 255], "lighting": false, "emissive": true },
+            { "primitive": "capsule", "offset": [-0.78, 0.75, 0.0], "radius": 0.15, "height": 1.1, "segments": 14, "rings": 6, "color": [85, 100, 130, 255] },
+            { "primitive": "capsule", "offset": [0.78, 0.75, 0.0], "radius": 0.15, "height": 1.1, "segments": 14, "rings": 6, "color": [85, 100, 130, 255] }
+          ]
+        }
+      ]
+    }
+  ]
+}

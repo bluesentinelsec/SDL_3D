@@ -173,6 +173,16 @@ build/debug/slayer3d_runner \
   --data asset://mesh_primitives_dojo.game.json
 ```
 
+`demos/lighting_dojo` is a data-only sector lighting showcase. It demonstrates
+Doom/Build-style sector brightness, RGB tint influence, lit mesh primitives,
+composite mock actors, and dynamic point lights in connected rooms:
+
+```sh
+build/debug/slayer3d_runner \
+  --root demos/lighting_dojo/data \
+  --data asset://lighting_dojo.game.json
+```
+
 ## Data-Only Parity Checklist
 
 Before treating a game as data-only, validate the runner-backed game path:

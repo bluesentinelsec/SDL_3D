@@ -63,6 +63,9 @@ extern "C"
         int ambient_sound_id;    /**< Ambient zone id. Zero means no ambient zone. */
         float push_velocity[3];  /**< World-space sector velocity in units per second. */
         float damage_per_second; /**< Sector floor damage rate in game health units per second. */
+        bool has_lighting;       /**< True when authored sector-local lighting should override default brightness. */
+        float lighting_level;    /**< Doom-style brightness value in [0, 255]. */
+        float lighting_color[4]; /**< RGB tint plus alpha/influence in [0, 1]. */
     } slayer3d_sector;
 
     /**
