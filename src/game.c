@@ -1,38 +1,38 @@
 #define SDL_MAIN_HANDLED
-#include "sdl3d/game.h"
+#include "slayer3d/game.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_stdinc.h>
 
-#include "sdl3d/logic.h"
-#include "sdl3d/time.h"
+#include "slayer3d/logic.h"
+#include "slayer3d/time.h"
 
-#define SDL3D_GAME_DEFAULT_FIXED_DT (1.0f / 60.0f)
-#define SDL3D_GAME_DEFAULT_MAX_TICKS 8
+#define SLAYER3D_GAME_DEFAULT_FIXED_DT (1.0f / 60.0f)
+#define SLAYER3D_GAME_DEFAULT_MAX_TICKS 8
 
-#if defined(SDL3D_PRODUCTION_BUILD)
-#define SDL3D_GAME_DEFAULT_WINDOW_MODE SDL3D_WINDOW_MODE_FULLSCREEN_BORDERLESS
+#if defined(SLAYER3D_PRODUCTION_BUILD)
+#define SLAYER3D_GAME_DEFAULT_WINDOW_MODE SLAYER3D_WINDOW_MODE_FULLSCREEN_BORDERLESS
 #else
-#define SDL3D_GAME_DEFAULT_WINDOW_MODE SDL3D_WINDOW_MODE_WINDOWED
+#define SLAYER3D_GAME_DEFAULT_WINDOW_MODE SLAYER3D_WINDOW_MODE_WINDOWED
 #endif
 
 #if defined(__ANDROID__) || defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__) ||                                 \
     defined(__ENVIRONMENT_TV_OS_VERSION_MIN_REQUIRED__)
-#define SDL3D_GAME_ENABLE_GLOBAL_TEXT_INPUT 0
+#define SLAYER3D_GAME_ENABLE_GLOBAL_TEXT_INPUT 0
 #else
-#define SDL3D_GAME_ENABLE_GLOBAL_TEXT_INPUT 1
+#define SLAYER3D_GAME_ENABLE_GLOBAL_TEXT_INPUT 1
 #endif
 
-struct sdl3d_game_session
+struct slayer3d_game_session
 {
-    sdl3d_actor_registry *registry;
-    sdl3d_signal_bus *bus;
-    sdl3d_timer_pool *timers;
-    sdl3d_logic_world *logic;
-    sdl3d_input_manager *input;
-    sdl3d_audio_engine *audio;
+    slayer3d_actor_registry *registry;
+    slayer3d_signal_bus *bus;
+    slayer3d_timer_pool *timers;
+    slayer3d_logic_world *logic;
+    slayer3d_input_manager *input;
+    slayer3d_audio_engine *audio;
     void *world;
     char *profile_name;
     unsigned int owned_services;
@@ -40,27 +40,27 @@ struct sdl3d_game_session
     int tick_count;
 };
 
-static bool session_owns_service(const sdl3d_game_session_desc *desc, unsigned int service)
+static bool session_owns_service(const slayer3d_game_session_desc *desc, unsigned int service)
 {
     return desc != NULL && (desc->create_services & service) != 0;
 }
 
-static bool session_has_ambiguous_ownership(const sdl3d_game_session_desc *desc)
+static bool session_has_ambiguous_ownership(const slayer3d_game_session_desc *desc)
 {
     if (desc == NULL)
     {
         return false;
     }
 
-    return (session_owns_service(desc, SDL3D_GAME_SESSION_SERVICE_REGISTRY) && desc->registry != NULL) ||
-           (session_owns_service(desc, SDL3D_GAME_SESSION_SERVICE_SIGNAL_BUS) && desc->bus != NULL) ||
-           (session_owns_service(desc, SDL3D_GAME_SESSION_SERVICE_TIMER_POOL) && desc->timers != NULL) ||
-           (session_owns_service(desc, SDL3D_GAME_SESSION_SERVICE_LOGIC_WORLD) && desc->logic != NULL) ||
-           (session_owns_service(desc, SDL3D_GAME_SESSION_SERVICE_INPUT) && desc->input != NULL) ||
-           (session_owns_service(desc, SDL3D_GAME_SESSION_SERVICE_AUDIO) && desc->audio != NULL);
+    return (session_owns_service(desc, SLAYER3D_GAME_SESSION_SERVICE_REGISTRY) && desc->registry != NULL) ||
+           (session_owns_service(desc, SLAYER3D_GAME_SESSION_SERVICE_SIGNAL_BUS) && desc->bus != NULL) ||
+           (session_owns_service(desc, SLAYER3D_GAME_SESSION_SERVICE_TIMER_POOL) && desc->timers != NULL) ||
+           (session_owns_service(desc, SLAYER3D_GAME_SESSION_SERVICE_LOGIC_WORLD) && desc->logic != NULL) ||
+           (session_owns_service(desc, SLAYER3D_GAME_SESSION_SERVICE_INPUT) && desc->input != NULL) ||
+           (session_owns_service(desc, SLAYER3D_GAME_SESSION_SERVICE_AUDIO) && desc->audio != NULL);
 }
 
-static bool session_copy_profile_name(sdl3d_game_session *session, const char *profile_name)
+static bool session_copy_profile_name(slayer3d_game_session *session, const char *profile_name)
 {
     if (profile_name == NULL)
     {
@@ -77,20 +77,20 @@ static bool session_copy_profile_name(sdl3d_game_session *session, const char *p
     return true;
 }
 
-static void session_configure_logic_targets(sdl3d_game_session *session)
+static void session_configure_logic_targets(slayer3d_game_session *session)
 {
     if (session == NULL || session->logic == NULL || session->registry == NULL)
     {
         return;
     }
 
-    sdl3d_logic_target_context context;
+    slayer3d_logic_target_context context;
     SDL_zero(context);
     context.registry = session->registry;
-    sdl3d_logic_world_set_target_context(session->logic, &context);
+    slayer3d_logic_world_set_target_context(session->logic, &context);
 }
 
-void sdl3d_game_session_desc_init(sdl3d_game_session_desc *desc)
+void slayer3d_game_session_desc_init(slayer3d_game_session_desc *desc)
 {
     if (desc == NULL)
     {
@@ -98,14 +98,14 @@ void sdl3d_game_session_desc_init(sdl3d_game_session_desc *desc)
     }
 
     SDL_zero(*desc);
-    desc->create_services = SDL3D_GAME_SESSION_SERVICE_CORE;
+    desc->create_services = SLAYER3D_GAME_SESSION_SERVICE_CORE;
 }
 
-bool sdl3d_game_session_create(const sdl3d_game_session_desc *desc, sdl3d_game_session **out_session)
+bool slayer3d_game_session_create(const slayer3d_game_session_desc *desc, slayer3d_game_session **out_session)
 {
-    sdl3d_game_session_desc defaults;
-    const sdl3d_game_session_desc *effective = desc;
-    sdl3d_game_session *session = NULL;
+    slayer3d_game_session_desc defaults;
+    const slayer3d_game_session_desc *effective = desc;
+    slayer3d_game_session *session = NULL;
 
     if (out_session == NULL)
     {
@@ -115,7 +115,7 @@ bool sdl3d_game_session_create(const sdl3d_game_session_desc *desc, sdl3d_game_s
 
     if (effective == NULL)
     {
-        sdl3d_game_session_desc_init(&defaults);
+        slayer3d_game_session_desc_init(&defaults);
         effective = &defaults;
     }
 
@@ -125,7 +125,7 @@ bool sdl3d_game_session_create(const sdl3d_game_session_desc *desc, sdl3d_game_s
         return false;
     }
 
-    session = (sdl3d_game_session *)SDL_calloc(1, sizeof(*session));
+    session = (slayer3d_game_session *)SDL_calloc(1, sizeof(*session));
     if (session == NULL)
     {
         SDL_OutOfMemory();
@@ -143,82 +143,82 @@ bool sdl3d_game_session_create(const sdl3d_game_session_desc *desc, sdl3d_game_s
 
     if (!session_copy_profile_name(session, effective->profile_name))
     {
-        sdl3d_game_session_destroy(session);
+        slayer3d_game_session_destroy(session);
         return false;
     }
 
-    if (session_owns_service(effective, SDL3D_GAME_SESSION_SERVICE_REGISTRY))
+    if (session_owns_service(effective, SLAYER3D_GAME_SESSION_SERVICE_REGISTRY))
     {
-        session->registry = sdl3d_actor_registry_create();
+        session->registry = slayer3d_actor_registry_create();
         if (session->registry == NULL)
         {
-            sdl3d_game_session_destroy(session);
+            slayer3d_game_session_destroy(session);
             return false;
         }
     }
 
-    if (session_owns_service(effective, SDL3D_GAME_SESSION_SERVICE_SIGNAL_BUS))
+    if (session_owns_service(effective, SLAYER3D_GAME_SESSION_SERVICE_SIGNAL_BUS))
     {
-        session->bus = sdl3d_signal_bus_create();
+        session->bus = slayer3d_signal_bus_create();
         if (session->bus == NULL)
         {
-            sdl3d_game_session_destroy(session);
+            slayer3d_game_session_destroy(session);
             return false;
         }
     }
 
-    if (session_owns_service(effective, SDL3D_GAME_SESSION_SERVICE_TIMER_POOL))
+    if (session_owns_service(effective, SLAYER3D_GAME_SESSION_SERVICE_TIMER_POOL))
     {
-        session->timers = sdl3d_timer_pool_create();
+        session->timers = slayer3d_timer_pool_create();
         if (session->timers == NULL)
         {
-            sdl3d_game_session_destroy(session);
+            slayer3d_game_session_destroy(session);
             return false;
         }
     }
 
-    if (session_owns_service(effective, SDL3D_GAME_SESSION_SERVICE_INPUT))
+    if (session_owns_service(effective, SLAYER3D_GAME_SESSION_SERVICE_INPUT))
     {
-        session->input = sdl3d_input_create();
+        session->input = slayer3d_input_create();
         if (session->input == NULL)
         {
-            sdl3d_game_session_destroy(session);
+            slayer3d_game_session_destroy(session);
             return false;
         }
-        sdl3d_input_bind_ui_defaults(session->input);
+        slayer3d_input_bind_ui_defaults(session->input);
     }
 
-    if (session_owns_service(effective, SDL3D_GAME_SESSION_SERVICE_AUDIO))
+    if (session_owns_service(effective, SLAYER3D_GAME_SESSION_SERVICE_AUDIO))
     {
-        if (!sdl3d_audio_create(&session->audio))
+        if (!slayer3d_audio_create(&session->audio))
         {
             if (effective->optional_audio)
             {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio disabled: %s", SDL_GetError());
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D audio disabled: %s", SDL_GetError());
                 SDL_ClearError();
-                session->owned_services &= ~(unsigned int)SDL3D_GAME_SESSION_SERVICE_AUDIO;
+                session->owned_services &= ~(unsigned int)SLAYER3D_GAME_SESSION_SERVICE_AUDIO;
             }
             else
             {
-                sdl3d_game_session_destroy(session);
+                slayer3d_game_session_destroy(session);
                 return false;
             }
         }
     }
 
-    if (session_owns_service(effective, SDL3D_GAME_SESSION_SERVICE_LOGIC_WORLD))
+    if (session_owns_service(effective, SLAYER3D_GAME_SESSION_SERVICE_LOGIC_WORLD))
     {
         if (session->bus == NULL)
         {
             SDL_SetError("Game session logic world requires a signal bus.");
-            sdl3d_game_session_destroy(session);
+            slayer3d_game_session_destroy(session);
             return false;
         }
 
-        session->logic = sdl3d_logic_world_create(session->bus, session->timers);
+        session->logic = slayer3d_logic_world_create(session->bus, session->timers);
         if (session->logic == NULL)
         {
-            sdl3d_game_session_destroy(session);
+            slayer3d_game_session_destroy(session);
             return false;
         }
     }
@@ -228,65 +228,65 @@ bool sdl3d_game_session_create(const sdl3d_game_session_desc *desc, sdl3d_game_s
     return true;
 }
 
-void sdl3d_game_session_destroy(sdl3d_game_session *session)
+void slayer3d_game_session_destroy(slayer3d_game_session *session)
 {
     if (session == NULL)
     {
         return;
     }
 
-    if ((session->owned_services & SDL3D_GAME_SESSION_SERVICE_LOGIC_WORLD) != 0)
+    if ((session->owned_services & SLAYER3D_GAME_SESSION_SERVICE_LOGIC_WORLD) != 0)
     {
-        sdl3d_logic_world_destroy(session->logic);
+        slayer3d_logic_world_destroy(session->logic);
     }
-    if ((session->owned_services & SDL3D_GAME_SESSION_SERVICE_AUDIO) != 0)
+    if ((session->owned_services & SLAYER3D_GAME_SESSION_SERVICE_AUDIO) != 0)
     {
-        sdl3d_audio_destroy(session->audio);
+        slayer3d_audio_destroy(session->audio);
     }
-    if ((session->owned_services & SDL3D_GAME_SESSION_SERVICE_INPUT) != 0)
+    if ((session->owned_services & SLAYER3D_GAME_SESSION_SERVICE_INPUT) != 0)
     {
-        sdl3d_input_destroy(session->input);
+        slayer3d_input_destroy(session->input);
     }
-    if ((session->owned_services & SDL3D_GAME_SESSION_SERVICE_TIMER_POOL) != 0)
+    if ((session->owned_services & SLAYER3D_GAME_SESSION_SERVICE_TIMER_POOL) != 0)
     {
-        sdl3d_timer_pool_destroy(session->timers);
+        slayer3d_timer_pool_destroy(session->timers);
     }
-    if ((session->owned_services & SDL3D_GAME_SESSION_SERVICE_SIGNAL_BUS) != 0)
+    if ((session->owned_services & SLAYER3D_GAME_SESSION_SERVICE_SIGNAL_BUS) != 0)
     {
-        sdl3d_signal_bus_destroy(session->bus);
+        slayer3d_signal_bus_destroy(session->bus);
     }
-    if ((session->owned_services & SDL3D_GAME_SESSION_SERVICE_REGISTRY) != 0)
+    if ((session->owned_services & SLAYER3D_GAME_SESSION_SERVICE_REGISTRY) != 0)
     {
-        sdl3d_actor_registry_destroy(session->registry);
+        slayer3d_actor_registry_destroy(session->registry);
     }
 
     SDL_free(session->profile_name);
     SDL_free(session);
 }
 
-bool sdl3d_game_session_begin_frame(sdl3d_game_session *session, float real_dt)
+bool slayer3d_game_session_begin_frame(slayer3d_game_session *session, float real_dt)
 {
     if (session == NULL)
     {
         return false;
     }
 
-    sdl3d_audio_update(session->audio, real_dt > 0.0f ? real_dt : 0.0f);
+    slayer3d_audio_update(session->audio, real_dt > 0.0f ? real_dt : 0.0f);
     return true;
 }
 
-bool sdl3d_game_session_update_input(sdl3d_game_session *session)
+bool slayer3d_game_session_update_input(slayer3d_game_session *session)
 {
     if (session == NULL || session->input == NULL)
     {
         return false;
     }
 
-    sdl3d_input_update(session->input, session->tick_count);
+    slayer3d_input_update(session->input, session->tick_count);
     return true;
 }
 
-bool sdl3d_game_session_begin_tick(sdl3d_game_session *session, float dt)
+bool slayer3d_game_session_begin_tick(slayer3d_game_session *session, float dt)
 {
     if (session == NULL)
     {
@@ -294,12 +294,12 @@ bool sdl3d_game_session_begin_tick(sdl3d_game_session *session, float dt)
     }
 
     const float clamped_dt = dt > 0.0f ? dt : 0.0f;
-    sdl3d_game_session_update_input(session);
-    sdl3d_timer_pool_update(session->timers, session->bus, clamped_dt);
+    slayer3d_game_session_update_input(session);
+    slayer3d_timer_pool_update(session->timers, session->bus, clamped_dt);
     return true;
 }
 
-bool sdl3d_game_session_end_tick(sdl3d_game_session *session, float dt)
+bool slayer3d_game_session_end_tick(slayer3d_game_session *session, float dt)
 {
     if (session == NULL)
     {
@@ -312,96 +312,96 @@ bool sdl3d_game_session_end_tick(sdl3d_game_session *session, float dt)
     return true;
 }
 
-bool sdl3d_game_session_tick(sdl3d_game_session *session, float dt)
+bool slayer3d_game_session_tick(slayer3d_game_session *session, float dt)
 {
-    if (!sdl3d_game_session_begin_tick(session, dt))
+    if (!slayer3d_game_session_begin_tick(session, dt))
     {
         return false;
     }
-    return sdl3d_game_session_end_tick(session, dt);
+    return slayer3d_game_session_end_tick(session, dt);
 }
 
-sdl3d_actor_registry *sdl3d_game_session_get_registry(const sdl3d_game_session *session)
+slayer3d_actor_registry *slayer3d_game_session_get_registry(const slayer3d_game_session *session)
 {
     return session != NULL ? session->registry : NULL;
 }
 
-sdl3d_signal_bus *sdl3d_game_session_get_signal_bus(const sdl3d_game_session *session)
+slayer3d_signal_bus *slayer3d_game_session_get_signal_bus(const slayer3d_game_session *session)
 {
     return session != NULL ? session->bus : NULL;
 }
 
-sdl3d_timer_pool *sdl3d_game_session_get_timer_pool(const sdl3d_game_session *session)
+slayer3d_timer_pool *slayer3d_game_session_get_timer_pool(const slayer3d_game_session *session)
 {
     return session != NULL ? session->timers : NULL;
 }
 
-sdl3d_logic_world *sdl3d_game_session_get_logic_world(const sdl3d_game_session *session)
+slayer3d_logic_world *slayer3d_game_session_get_logic_world(const slayer3d_game_session *session)
 {
     return session != NULL ? session->logic : NULL;
 }
 
-sdl3d_input_manager *sdl3d_game_session_get_input(const sdl3d_game_session *session)
+slayer3d_input_manager *slayer3d_game_session_get_input(const slayer3d_game_session *session)
 {
     return session != NULL ? session->input : NULL;
 }
 
-sdl3d_audio_engine *sdl3d_game_session_get_audio(const sdl3d_game_session *session)
+slayer3d_audio_engine *slayer3d_game_session_get_audio(const slayer3d_game_session *session)
 {
     return session != NULL ? session->audio : NULL;
 }
 
-void *sdl3d_game_session_get_world(const sdl3d_game_session *session)
+void *slayer3d_game_session_get_world(const slayer3d_game_session *session)
 {
     return session != NULL ? session->world : NULL;
 }
 
-const char *sdl3d_game_session_get_profile_name(const sdl3d_game_session *session)
+const char *slayer3d_game_session_get_profile_name(const slayer3d_game_session *session)
 {
     return session != NULL ? session->profile_name : NULL;
 }
 
-float sdl3d_game_session_get_time(const sdl3d_game_session *session)
+float slayer3d_game_session_get_time(const slayer3d_game_session *session)
 {
     return session != NULL ? session->time : 0.0f;
 }
 
-int sdl3d_game_session_get_tick_count(const sdl3d_game_session *session)
+int slayer3d_game_session_get_tick_count(const slayer3d_game_session *session)
 {
     return session != NULL ? session->tick_count : 0;
 }
 
-static float sdl3d_game_fixed_dt(const sdl3d_game_config *config)
+static float slayer3d_game_fixed_dt(const slayer3d_game_config *config)
 {
-    return (config != NULL && config->tick_rate > 0.0f) ? config->tick_rate : SDL3D_GAME_DEFAULT_FIXED_DT;
+    return (config != NULL && config->tick_rate > 0.0f) ? config->tick_rate : SLAYER3D_GAME_DEFAULT_FIXED_DT;
 }
 
-static int sdl3d_game_max_ticks_per_frame(const sdl3d_game_config *config)
+static int slayer3d_game_max_ticks_per_frame(const slayer3d_game_config *config)
 {
     return (config != NULL && config->max_ticks_per_frame > 0) ? config->max_ticks_per_frame
-                                                               : SDL3D_GAME_DEFAULT_MAX_TICKS;
+                                                               : SLAYER3D_GAME_DEFAULT_MAX_TICKS;
 }
 
-static bool sdl3d_game_create_context(const sdl3d_game_config *config, sdl3d_game_context *ctx)
+static bool slayer3d_game_create_context(const slayer3d_game_config *config, slayer3d_game_context *ctx)
 {
-    sdl3d_window_config window_config;
-    sdl3d_game_session_desc session_desc;
+    slayer3d_window_config window_config;
+    slayer3d_game_session_desc session_desc;
     const int logical_width =
-        (config != NULL && config->logical_width > 0) ? config->logical_width : SDL3D_GAME_DEFAULT_LOGICAL_WIDTH;
+        (config != NULL && config->logical_width > 0) ? config->logical_width : SLAYER3D_GAME_DEFAULT_LOGICAL_WIDTH;
     const int logical_height =
-        (config != NULL && config->logical_height > 0) ? config->logical_height : SDL3D_GAME_DEFAULT_LOGICAL_HEIGHT;
+        (config != NULL && config->logical_height > 0) ? config->logical_height : SLAYER3D_GAME_DEFAULT_LOGICAL_HEIGHT;
 
-    sdl3d_init_window_config(&window_config);
+    slayer3d_init_window_config(&window_config);
     window_config.width = (config != NULL && config->width > 0) ? config->width : logical_width;
     window_config.height = (config != NULL && config->height > 0) ? config->height : logical_height;
     window_config.logical_width = logical_width;
     window_config.logical_height = logical_height;
-    window_config.title = (config != NULL && config->title != NULL) ? config->title : "SDL3D";
+    window_config.title = (config != NULL && config->title != NULL) ? config->title : "SLAYER3D";
     window_config.icon_path = config != NULL ? config->icon_path : NULL;
-    window_config.backend = (config != NULL) ? config->backend : SDL3D_BACKEND_AUTO;
-    window_config.display_mode = (config != NULL && config->display_mode != SDL3D_WINDOW_MODE_DEFAULT)
+    window_config.backend = (config != NULL) ? config->backend : SLAYER3D_BACKEND_AUTO;
+    window_config.display_mode = (config != NULL && config->display_mode != SLAYER3D_WINDOW_MODE_DEFAULT)
                                      ? config->display_mode
-                                     : SDL3D_GAME_DEFAULT_WINDOW_MODE;
+                                     : SLAYER3D_GAME_DEFAULT_WINDOW_MODE;
     if (config != NULL && config->vsync != 0)
         window_config.vsync = config->vsync > 0;
     if (config != NULL && config->maximized != 0)
@@ -409,40 +409,40 @@ static bool sdl3d_game_create_context(const sdl3d_game_config *config, sdl3d_gam
     else
         window_config.maximized = true;
 
-    if (!sdl3d_create_window(&window_config, &ctx->window, &ctx->renderer))
+    if (!slayer3d_create_window(&window_config, &ctx->window, &ctx->renderer))
     {
         return false;
     }
 
-    sdl3d_game_session_desc_init(&session_desc);
+    slayer3d_game_session_desc_init(&session_desc);
     if (config != NULL && config->enable_audio)
     {
-        session_desc.create_services |= SDL3D_GAME_SESSION_SERVICE_AUDIO;
+        session_desc.create_services |= SLAYER3D_GAME_SESSION_SERVICE_AUDIO;
         session_desc.optional_audio = true;
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio requested by game config");
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D audio requested by game config");
     }
     else
     {
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio not requested by game config");
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D audio not requested by game config");
     }
-    if (!sdl3d_game_session_create(&session_desc, &ctx->session))
+    if (!slayer3d_game_session_create(&session_desc, &ctx->session))
     {
         return false;
     }
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D audio engine %s",
-                sdl3d_game_session_get_audio(ctx->session) != NULL ? "created" : "unavailable");
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D audio engine %s",
+                slayer3d_game_session_get_audio(ctx->session) != NULL ? "created" : "unavailable");
 
     return true;
 }
 
-static void sdl3d_game_cleanup_context(sdl3d_game_context *ctx)
+static void slayer3d_game_cleanup_context(slayer3d_game_context *ctx)
 {
-    sdl3d_game_session_destroy(ctx->session);
-    sdl3d_destroy_window(ctx->window, ctx->renderer);
+    slayer3d_game_session_destroy(ctx->session);
+    slayer3d_destroy_window(ctx->window, ctx->renderer);
     SDL_zero(*ctx);
 }
 
-static float sdl3d_game_frame_delta(Uint64 now, Uint64 last)
+static float slayer3d_game_frame_delta(Uint64 now, Uint64 last)
 {
     const Uint64 frequency = SDL_GetPerformanceFrequency();
     if (frequency == 0 || now < last)
@@ -453,12 +453,12 @@ static float sdl3d_game_frame_delta(Uint64 now, Uint64 last)
     return (float)(now - last) / (float)frequency;
 }
 
-int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *callbacks, void *userdata)
+int slayer3d_run_game(const slayer3d_game_config *config, const slayer3d_game_callbacks *callbacks, void *userdata)
 {
-    sdl3d_game_context ctx;
-    const float fixed_dt = sdl3d_game_fixed_dt(config);
-    const int max_ticks_per_frame = sdl3d_game_max_ticks_per_frame(config);
-    const bool profile_frames = SDL_getenv("SDL3D_PROFILE_FRAMES") != NULL;
+    slayer3d_game_context ctx;
+    const float fixed_dt = slayer3d_game_fixed_dt(config);
+    const int max_ticks_per_frame = slayer3d_game_max_ticks_per_frame(config);
+    const bool profile_frames = SDL_getenv("SLAYER3D_PROFILE_FRAMES") != NULL;
     float accumulator = 0.0f;
     Uint64 last_counter = 0;
     Uint64 profile_last_counter = 0;
@@ -480,21 +480,21 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
         return 1;
     }
 
-    if (!sdl3d_game_create_context(config, &ctx))
+    if (!slayer3d_game_create_context(config, &ctx))
     {
-        sdl3d_game_cleanup_context(&ctx);
+        slayer3d_game_cleanup_context(&ctx);
         SDL_Quit();
         return 1;
     }
-#if SDL3D_GAME_ENABLE_GLOBAL_TEXT_INPUT
+#if SLAYER3D_GAME_ENABLE_GLOBAL_TEXT_INPUT
     SDL_StartTextInput(ctx.window);
 #endif
 
-    sdl3d_time_reset();
+    slayer3d_time_reset();
 
     if (callbacks != NULL && callbacks->init != NULL && !callbacks->init(&ctx, userdata))
     {
-        sdl3d_game_cleanup_context(&ctx);
+        slayer3d_game_cleanup_context(&ctx);
         SDL_Quit();
         return 1;
     }
@@ -531,7 +531,7 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
 
             if (!ctx.input_event_consumed)
             {
-                sdl3d_input_process_event(sdl3d_game_session_get_input(ctx.session), &event);
+                slayer3d_input_process_event(slayer3d_game_session_get_input(ctx.session), &event);
             }
         }
         poll_end_counter = SDL_GetPerformanceCounter();
@@ -542,18 +542,18 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
         }
 
         const Uint64 now = SDL_GetPerformanceCounter();
-        const float frame_dt = sdl3d_game_frame_delta(now, last_counter);
+        const float frame_dt = slayer3d_game_frame_delta(now, last_counter);
         int ticks_this_frame = 0;
         last_counter = now;
 
         ctx.real_time += frame_dt;
-        sdl3d_time_update();
-        sdl3d_game_session_begin_frame(ctx.session, frame_dt);
+        slayer3d_time_update();
+        slayer3d_game_session_begin_frame(ctx.session, frame_dt);
 
         if (ctx.paused)
         {
             tick_start_counter = SDL_GetPerformanceCounter();
-            sdl3d_game_session_update_input(ctx.session);
+            slayer3d_game_session_update_input(ctx.session);
             if (callbacks != NULL && callbacks->pause_tick != NULL)
             {
                 callbacks->pause_tick(&ctx, userdata, frame_dt);
@@ -568,14 +568,14 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
             while (!ctx.quit_requested && !ctx.paused && accumulator >= fixed_dt &&
                    ticks_this_frame < max_ticks_per_frame)
             {
-                sdl3d_game_session_begin_tick(ctx.session, fixed_dt);
+                slayer3d_game_session_begin_tick(ctx.session, fixed_dt);
 
                 if (callbacks != NULL && callbacks->tick != NULL)
                 {
                     callbacks->tick(&ctx, userdata, fixed_dt);
                 }
 
-                sdl3d_game_session_end_tick(ctx.session, fixed_dt);
+                slayer3d_game_session_end_tick(ctx.session, fixed_dt);
                 accumulator -= fixed_dt;
                 ticks_this_frame++;
             }
@@ -610,9 +610,9 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
         }
 
         present_start_counter = SDL_GetPerformanceCounter();
-        if (!sdl3d_present_render_context(ctx.renderer))
+        if (!slayer3d_present_render_context(ctx.renderer))
         {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D present failed: %s", SDL_GetError());
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D present failed: %s", SDL_GetError());
             result = 1;
             ctx.quit_requested = true;
         }
@@ -642,7 +642,7 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
             {
                 const double frames = profile_frames_count > 0 ? (double)profile_frames_count : 1.0;
                 SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                            "SDL3D profile: fps=%.1f frame=%.2fms poll=%.2f tick=%.2f render=%.2f present=%.2f "
+                            "SLAYER3D profile: fps=%.1f frame=%.2fms poll=%.2f tick=%.2f render=%.2f present=%.2f "
                             "ticks/frame=%.2f max_ticks=%d",
                             frames * (double)SDL_GetPerformanceFrequency() /
                                 (double)(present_end_counter - profile_last_counter),
@@ -667,10 +667,10 @@ int sdl3d_run_game(const sdl3d_game_config *config, const sdl3d_game_callbacks *
         callbacks->shutdown(&ctx, userdata);
     }
 
-#if SDL3D_GAME_ENABLE_GLOBAL_TEXT_INPUT
+#if SLAYER3D_GAME_ENABLE_GLOBAL_TEXT_INPUT
     SDL_StopTextInput(ctx.window);
 #endif
-    sdl3d_game_cleanup_context(&ctx);
+    slayer3d_game_cleanup_context(&ctx);
     SDL_Quit();
     return result;
 }

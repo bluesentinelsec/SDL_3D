@@ -1,8 +1,8 @@
 /*
- * SDL3D time system — frame timing, time scaling, fixed timestep.
+ * SLAYER3D time system — frame timing, time scaling, fixed timestep.
  */
 
-#include "sdl3d/time.h"
+#include "slayer3d/time.h"
 
 #include <SDL3/SDL_timer.h>
 
@@ -10,9 +10,9 @@
 /* Internal state                                                      */
 /* ------------------------------------------------------------------ */
 
-#define SDL3D_TIME_MAX_FIXED_STEPS 8
-#define SDL3D_TIME_DEFAULT_FIXED_DT (1.0f / 60.0f)
-#define SDL3D_TIME_MAX_FRAME_DT 0.25f /* clamp to avoid spiral of death */
+#define SLAYER3D_TIME_MAX_FIXED_STEPS 8
+#define SLAYER3D_TIME_DEFAULT_FIXED_DT (1.0f / 60.0f)
+#define SLAYER3D_TIME_MAX_FRAME_DT 0.25f /* clamp to avoid spiral of death */
 
 static struct
 {
@@ -29,14 +29,14 @@ static struct
     bool initialized;
 } s_time = {
     .time_scale = 1.0f,
-    .fixed_dt = SDL3D_TIME_DEFAULT_FIXED_DT,
+    .fixed_dt = SLAYER3D_TIME_DEFAULT_FIXED_DT,
 };
 
 /* ------------------------------------------------------------------ */
 /* Public API                                                          */
 /* ------------------------------------------------------------------ */
 
-void sdl3d_time_update(void)
+void slayer3d_time_update(void)
 {
     Uint64 now = SDL_GetPerformanceCounter();
 
@@ -55,8 +55,8 @@ void sdl3d_time_update(void)
     s_time.last_ticks = now;
 
     /* Clamp to avoid spiral of death after breakpoints or long stalls. */
-    if (raw_dt > SDL3D_TIME_MAX_FRAME_DT)
-        raw_dt = SDL3D_TIME_MAX_FRAME_DT;
+    if (raw_dt > SLAYER3D_TIME_MAX_FRAME_DT)
+        raw_dt = SLAYER3D_TIME_MAX_FRAME_DT;
     if (raw_dt < 0.0f)
         raw_dt = 0.0f;
 
@@ -71,7 +71,7 @@ void sdl3d_time_update(void)
 
     if (s_time.fixed_dt > 0.0f)
     {
-        while (s_time.fixed_accum >= s_time.fixed_dt && s_time.fixed_step_count < SDL3D_TIME_MAX_FIXED_STEPS)
+        while (s_time.fixed_accum >= s_time.fixed_dt && s_time.fixed_step_count < SLAYER3D_TIME_MAX_FIXED_STEPS)
         {
             s_time.fixed_accum -= s_time.fixed_dt;
             s_time.fixed_step_count++;
@@ -89,58 +89,58 @@ void sdl3d_time_update(void)
     }
 }
 
-float sdl3d_time_get_delta_time(void)
+float slayer3d_time_get_delta_time(void)
 {
     return s_time.scaled_dt;
 }
 
-float sdl3d_time_get_unscaled_delta_time(void)
+float slayer3d_time_get_unscaled_delta_time(void)
 {
     return s_time.delta_time;
 }
 
-float sdl3d_time_get_time(void)
+float slayer3d_time_get_time(void)
 {
     return s_time.elapsed_game;
 }
 
-float sdl3d_time_get_real_time(void)
+float slayer3d_time_get_real_time(void)
 {
     return s_time.elapsed_real;
 }
 
-void sdl3d_time_set_scale(float scale)
+void slayer3d_time_set_scale(float scale)
 {
     s_time.time_scale = (scale < 0.0f) ? 0.0f : scale;
 }
 
-float sdl3d_time_get_scale(void)
+float slayer3d_time_get_scale(void)
 {
     return s_time.time_scale;
 }
 
-void sdl3d_time_set_fixed_delta_time(float dt)
+void slayer3d_time_set_fixed_delta_time(float dt)
 {
     if (dt > 0.0f)
         s_time.fixed_dt = dt;
 }
 
-float sdl3d_time_get_fixed_delta_time(void)
+float slayer3d_time_get_fixed_delta_time(void)
 {
     return s_time.fixed_dt;
 }
 
-int sdl3d_time_get_fixed_step_count(void)
+int slayer3d_time_get_fixed_step_count(void)
 {
     return s_time.fixed_step_count;
 }
 
-float sdl3d_time_get_fixed_interpolation(void)
+float slayer3d_time_get_fixed_interpolation(void)
 {
     return s_time.fixed_alpha;
 }
 
-void sdl3d_time_reset(void)
+void slayer3d_time_reset(void)
 {
     s_time.last_ticks = SDL_GetPerformanceCounter();
     s_time.delta_time = 0.0f;
@@ -148,7 +148,7 @@ void sdl3d_time_reset(void)
     s_time.elapsed_game = 0.0f;
     s_time.elapsed_real = 0.0f;
     s_time.time_scale = 1.0f;
-    s_time.fixed_dt = SDL3D_TIME_DEFAULT_FIXED_DT;
+    s_time.fixed_dt = SLAYER3D_TIME_DEFAULT_FIXED_DT;
     s_time.fixed_accum = 0.0f;
     s_time.fixed_step_count = 0;
     s_time.fixed_alpha = 0.0f;

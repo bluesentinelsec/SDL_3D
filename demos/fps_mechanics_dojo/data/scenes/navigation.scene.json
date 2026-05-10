@@ -1,5 +1,5 @@
 {
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.dojo.navigation",
   "on_enter_signal": "signal.dojo.scene.navigation.enter",
   "camera": "camera.dojo.player",

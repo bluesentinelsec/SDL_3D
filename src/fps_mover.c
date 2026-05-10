@@ -1,30 +1,30 @@
-#include "sdl3d/fps_mover.h"
+#include "slayer3d/fps_mover.h"
 
 #include <SDL3/SDL_stdinc.h>
 
-#include "sdl3d/math.h"
+#include "slayer3d/math.h"
 
 /* Hard limits / tuning constants kept private. The pitch limit prevents
  * gimbal lock at the poles. The view-smooth decay rate keeps stair movement
  * responsive without snapping the camera instantly. */
-#define SDL3D_FPS_PITCH_LIMIT 1.4f
-#define SDL3D_FPS_VIEW_SMOOTH_SPEED 12.0f
-#define SDL3D_FPS_WALKABLE_NORMAL_Y 0.7f
-#define SDL3D_FPS_COLLISION_EPSILON 0.001f
-#define SDL3D_FPS_EDGE_SAMPLE_EPSILON 0.02f
+#define SLAYER3D_FPS_PITCH_LIMIT 1.4f
+#define SLAYER3D_FPS_VIEW_SMOOTH_SPEED 12.0f
+#define SLAYER3D_FPS_WALKABLE_NORMAL_Y 0.7f
+#define SLAYER3D_FPS_COLLISION_EPSILON 0.001f
+#define SLAYER3D_FPS_EDGE_SAMPLE_EPSILON 0.02f
 
 /* Stop polling smoothing once the residual is below this threshold; keeps
  * the eye from oscillating around 0 when dt is small. */
-#define SDL3D_FPS_VIEW_SMOOTH_EPSILON 0.01f
+#define SLAYER3D_FPS_VIEW_SMOOTH_EPSILON 0.01f
 
-static float fps_min_headroom(const sdl3d_fps_mover *mover)
+static float fps_min_headroom(const slayer3d_fps_mover *mover)
 {
     return mover->config.player_height + mover->config.ceiling_clearance;
 }
 
-static bool sector_floor_is_walkable(const sdl3d_sector *sector)
+static bool sector_floor_is_walkable(const slayer3d_sector *sector)
 {
-    return sdl3d_sector_floor_normal(sector).y >= SDL3D_FPS_WALKABLE_NORMAL_Y;
+    return slayer3d_sector_floor_normal(sector).y >= SLAYER3D_FPS_WALKABLE_NORMAL_Y;
 }
 
 static float clampf(float value, float min_value, float max_value)
@@ -36,19 +36,20 @@ static float clampf(float value, float min_value, float max_value)
     return value;
 }
 
-static bool position_has_air_space(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
-                                   float x, float z, float feet_y, int *out_sector);
-static bool find_blocking_edge(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
-                               float x, float z, float feet_y, bool grounded, sdl3d_vec2 *out_normal);
+static bool position_has_air_space(const slayer3d_fps_mover *mover, const slayer3d_level *level,
+                                   const slayer3d_sector *sectors, float x, float z, float feet_y, int *out_sector);
+static bool find_blocking_edge(const slayer3d_fps_mover *mover, const slayer3d_level *level,
+                               const slayer3d_sector *sectors, float x, float z, float feet_y, bool grounded,
+                               slayer3d_vec2 *out_normal);
 
-static bool position_has_ground_support(const sdl3d_fps_mover *mover, const sdl3d_level *level,
-                                        const sdl3d_sector *sectors, float x, float z, float feet_y, int *out_sector,
+static bool position_has_ground_support(const slayer3d_fps_mover *mover, const slayer3d_level *level,
+                                        const slayer3d_sector *sectors, float x, float z, float feet_y, int *out_sector,
                                         float *out_collision_feet_y)
 {
     const float headroom = fps_min_headroom(mover);
     const float step = mover->config.step_height;
 
-    int center = sdl3d_level_find_walkable_sector(level, sectors, x, z, feet_y, step, headroom);
+    int center = slayer3d_level_find_walkable_sector(level, sectors, x, z, feet_y, step, headroom);
     if (center < 0)
     {
         return false;
@@ -63,7 +64,7 @@ static bool position_has_ground_support(const sdl3d_fps_mover *mover, const sdl3
      * player radius is used only to test whether the body has room. This
      * permits normal ledge overhang on raised slopes/ramparts without
      * weakening steep-slope or wall collision. */
-    const float target_floor = sdl3d_sector_floor_at(&sectors[center], x, z);
+    const float target_floor = slayer3d_sector_floor_at(&sectors[center], x, z);
     const float collision_feet_y = SDL_max(feet_y, target_floor);
 
     if (out_sector)
@@ -77,8 +78,8 @@ static bool position_has_ground_support(const sdl3d_fps_mover *mover, const sdl3
     return true;
 }
 
-static bool position_is_walkable(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
-                                 float x, float z, float feet_y, int *out_sector)
+static bool position_is_walkable(const slayer3d_fps_mover *mover, const slayer3d_level *level,
+                                 const slayer3d_sector *sectors, float x, float z, float feet_y, int *out_sector)
 {
     float collision_feet_y = feet_y;
     if (!position_has_ground_support(mover, level, sectors, x, z, feet_y, out_sector, &collision_feet_y))
@@ -94,19 +95,19 @@ static bool position_is_walkable(const sdl3d_fps_mover *mover, const sdl3d_level
     return true;
 }
 
-static bool edge_has_passable_neighbor(const sdl3d_fps_mover *mover, const sdl3d_level *level,
-                                       const sdl3d_sector *sectors, float edge_x, float edge_z, float outward_x,
+static bool edge_has_passable_neighbor(const slayer3d_fps_mover *mover, const slayer3d_level *level,
+                                       const slayer3d_sector *sectors, float edge_x, float edge_z, float outward_x,
                                        float outward_z, float feet_y, bool grounded)
 {
-    const float sample_x = edge_x + outward_x * SDL3D_FPS_EDGE_SAMPLE_EPSILON;
-    const float sample_z = edge_z + outward_z * SDL3D_FPS_EDGE_SAMPLE_EPSILON;
+    const float sample_x = edge_x + outward_x * SLAYER3D_FPS_EDGE_SAMPLE_EPSILON;
+    const float sample_z = edge_z + outward_z * SLAYER3D_FPS_EDGE_SAMPLE_EPSILON;
     const float head_y = feet_y + fps_min_headroom(mover);
     int sector = -1;
 
     if (grounded)
     {
-        sector = sdl3d_level_find_walkable_sector(level, sectors, sample_x, sample_z, feet_y, mover->config.step_height,
-                                                  fps_min_headroom(mover));
+        sector = slayer3d_level_find_walkable_sector(level, sectors, sample_x, sample_z, feet_y,
+                                                     mover->config.step_height, fps_min_headroom(mover));
         if (sector < 0 || !sector_floor_is_walkable(&sectors[sector]))
         {
             return false;
@@ -114,22 +115,23 @@ static bool edge_has_passable_neighbor(const sdl3d_fps_mover *mover, const sdl3d
     }
     else
     {
-        sector = sdl3d_level_find_sector_at(level, sectors, sample_x, sample_z, feet_y);
+        sector = slayer3d_level_find_sector_at(level, sectors, sample_x, sample_z, feet_y);
         if (sector < 0)
         {
             return false;
         }
     }
 
-    return sdl3d_level_point_inside(level, sectors, sample_x, head_y, sample_z);
+    return slayer3d_level_point_inside(level, sectors, sample_x, head_y, sample_z);
 }
 
-static bool find_blocking_edge(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
-                               float x, float z, float feet_y, bool grounded, sdl3d_vec2 *out_normal)
+static bool find_blocking_edge(const slayer3d_fps_mover *mover, const slayer3d_level *level,
+                               const slayer3d_sector *sectors, float x, float z, float feet_y, bool grounded,
+                               slayer3d_vec2 *out_normal)
 {
     bool blocked = false;
     float deepest_penetration = 0.0f;
-    sdl3d_vec2 best_normal = {0.0f, 0.0f};
+    slayer3d_vec2 best_normal = {0.0f, 0.0f};
 
     if (level == NULL || sectors == NULL)
     {
@@ -138,7 +140,7 @@ static bool find_blocking_edge(const sdl3d_fps_mover *mover, const sdl3d_level *
 
     for (int s = 0; s < level->sector_count; ++s)
     {
-        const sdl3d_sector *sector = &sectors[s];
+        const slayer3d_sector *sector = &sectors[s];
         for (int e = 0; e < sector->num_points; ++e)
         {
             const int next = (e + 1) % sector->num_points;
@@ -149,7 +151,7 @@ static bool find_blocking_edge(const sdl3d_fps_mover *mover, const sdl3d_level *
             const float edge_x = bx - ax;
             const float edge_z = bz - az;
             const float edge_len_sq = edge_x * edge_x + edge_z * edge_z;
-            if (edge_len_sq <= SDL3D_FPS_COLLISION_EPSILON)
+            if (edge_len_sq <= SLAYER3D_FPS_COLLISION_EPSILON)
             {
                 continue;
             }
@@ -159,7 +161,7 @@ static bool find_blocking_edge(const sdl3d_fps_mover *mover, const sdl3d_level *
             const float left_normal_x = -edge_z * inv_edge_len;
             const float left_normal_z = edge_x * inv_edge_len;
             const float signed_dist = ((x - ax) * left_normal_x) + ((z - az) * left_normal_z);
-            if (signed_dist >= mover->config.player_radius - SDL3D_FPS_COLLISION_EPSILON)
+            if (signed_dist >= mover->config.player_radius - SLAYER3D_FPS_COLLISION_EPSILON)
             {
                 continue;
             }
@@ -201,13 +203,13 @@ static bool find_blocking_edge(const sdl3d_fps_mover *mover, const sdl3d_level *
     return blocked;
 }
 
-static bool position_has_air_space(const sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
-                                   float x, float z, float feet_y, int *out_sector)
+static bool position_has_air_space(const slayer3d_fps_mover *mover, const slayer3d_level *level,
+                                   const slayer3d_sector *sectors, float x, float z, float feet_y, int *out_sector)
 {
     const float head_y = feet_y + fps_min_headroom(mover);
-    int center = sdl3d_level_find_sector_at(level, sectors, x, z, feet_y);
+    int center = slayer3d_level_find_sector_at(level, sectors, x, z, feet_y);
 
-    if (center < 0 || !sdl3d_level_point_inside(level, sectors, x, head_y, z))
+    if (center < 0 || !slayer3d_level_point_inside(level, sectors, x, head_y, z))
     {
         return false;
     }
@@ -225,8 +227,8 @@ static bool position_has_air_space(const sdl3d_fps_mover *mover, const sdl3d_lev
     return true;
 }
 
-static bool position_has_center_support(const sdl3d_fps_mover *mover, const sdl3d_level *level,
-                                        const sdl3d_sector *sectors, float x, float z, float feet_y, bool grounded,
+static bool position_has_center_support(const slayer3d_fps_mover *mover, const slayer3d_level *level,
+                                        const slayer3d_sector *sectors, float x, float z, float feet_y, bool grounded,
                                         int *out_sector, float *out_collision_feet_y)
 {
     if (grounded)
@@ -235,8 +237,8 @@ static bool position_has_center_support(const sdl3d_fps_mover *mover, const sdl3
     }
 
     const float head_y = feet_y + fps_min_headroom(mover);
-    int center = sdl3d_level_find_sector_at(level, sectors, x, z, feet_y);
-    if (center < 0 || !sdl3d_level_point_inside(level, sectors, x, head_y, z))
+    int center = slayer3d_level_find_sector_at(level, sectors, x, z, feet_y);
+    if (center < 0 || !slayer3d_level_point_inside(level, sectors, x, head_y, z))
     {
         return false;
     }
@@ -252,28 +254,28 @@ static bool position_has_center_support(const sdl3d_fps_mover *mover, const sdl3
     return true;
 }
 
-static sdl3d_vec2 project_wish_to_walkable_floor(sdl3d_vec2 wish_dir, const sdl3d_sector *sector)
+static slayer3d_vec2 project_wish_to_walkable_floor(slayer3d_vec2 wish_dir, const slayer3d_sector *sector)
 {
-    sdl3d_vec3 normal = sdl3d_sector_floor_normal(sector);
+    slayer3d_vec3 normal = slayer3d_sector_floor_normal(sector);
     float dot = wish_dir.x * normal.x + wish_dir.y * normal.z;
-    sdl3d_vec2 projected = {
+    slayer3d_vec2 projected = {
         wish_dir.x - normal.x * dot,
         wish_dir.y - normal.z * dot,
     };
     return projected;
 }
 
-static sdl3d_vec2 sector_push_velocity_xz(const sdl3d_sector *sector)
+static slayer3d_vec2 sector_push_velocity_xz(const slayer3d_sector *sector)
 {
-    sdl3d_vec3 push = sdl3d_sector_push_velocity(sector);
-    return (sdl3d_vec2){push.x, push.z};
+    slayer3d_vec3 push = slayer3d_sector_push_velocity(sector);
+    return (slayer3d_vec2){push.x, push.z};
 }
 
-static bool try_horizontal_move(sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
+static bool try_horizontal_move(slayer3d_fps_mover *mover, const slayer3d_level *level, const slayer3d_sector *sectors,
                                 float feet_y, bool grounded, float move_x, float move_z, int *out_sector)
 {
-    bool (*position_is_valid)(const sdl3d_fps_mover *, const sdl3d_level *, const sdl3d_sector *, float, float, float,
-                              int *) = grounded ? position_is_walkable : position_has_air_space;
+    bool (*position_is_valid)(const slayer3d_fps_mover *, const slayer3d_level *, const slayer3d_sector *, float, float,
+                              float, int *) = grounded ? position_is_walkable : position_has_air_space;
     float clipped_x = move_x;
     float clipped_z = move_z;
 
@@ -300,14 +302,14 @@ static bool try_horizontal_move(sdl3d_fps_mover *mover, const sdl3d_level *level
             return false;
         }
 
-        sdl3d_vec2 wall_normal = {0.0f, 0.0f};
+        slayer3d_vec2 wall_normal = {0.0f, 0.0f};
         if (!find_blocking_edge(mover, level, sectors, next_x, next_z, collision_feet_y, grounded, &wall_normal))
         {
             return false;
         }
 
         const float into_wall = clipped_x * wall_normal.x + clipped_z * wall_normal.y;
-        if (into_wall >= -SDL3D_FPS_COLLISION_EPSILON)
+        if (into_wall >= -SLAYER3D_FPS_COLLISION_EPSILON)
         {
             mover->position.x = next_x;
             mover->position.z = next_z;
@@ -320,7 +322,7 @@ static bool try_horizontal_move(sdl3d_fps_mover *mover, const sdl3d_level *level
 
         clipped_x -= wall_normal.x * into_wall;
         clipped_z -= wall_normal.y * into_wall;
-        if (clipped_x * clipped_x + clipped_z * clipped_z <= SDL3D_FPS_COLLISION_EPSILON)
+        if (clipped_x * clipped_x + clipped_z * clipped_z <= SLAYER3D_FPS_COLLISION_EPSILON)
         {
             return false;
         }
@@ -329,8 +331,8 @@ static bool try_horizontal_move(sdl3d_fps_mover *mover, const sdl3d_level *level
     return false;
 }
 
-void sdl3d_fps_mover_init(sdl3d_fps_mover *mover, const sdl3d_fps_mover_config *config, sdl3d_vec3 spawn_position,
-                          float spawn_yaw)
+void slayer3d_fps_mover_init(slayer3d_fps_mover *mover, const slayer3d_fps_mover_config *config,
+                             slayer3d_vec3 spawn_position, float spawn_yaw)
 {
     if (mover == NULL || config == NULL)
     {
@@ -349,7 +351,7 @@ void sdl3d_fps_mover_init(sdl3d_fps_mover *mover, const sdl3d_fps_mover_config *
     mover->has_last_good = true;
 }
 
-void sdl3d_fps_mover_jump(sdl3d_fps_mover *mover)
+void slayer3d_fps_mover_jump(slayer3d_fps_mover *mover)
 {
     if (mover == NULL || !mover->on_ground)
     {
@@ -359,7 +361,7 @@ void sdl3d_fps_mover_jump(sdl3d_fps_mover *mover)
     mover->on_ground = false;
 }
 
-void sdl3d_fps_mover_launch(sdl3d_fps_mover *mover, float vertical_velocity)
+void slayer3d_fps_mover_launch(slayer3d_fps_mover *mover, float vertical_velocity)
 {
     if (mover == NULL || vertical_velocity <= 0.0f)
     {
@@ -370,8 +372,8 @@ void sdl3d_fps_mover_launch(sdl3d_fps_mover *mover, float vertical_velocity)
     mover->on_ground = false;
 }
 
-void sdl3d_fps_mover_teleport(sdl3d_fps_mover *mover, sdl3d_vec3 eye_position, bool set_yaw, float yaw, bool set_pitch,
-                              float pitch)
+void slayer3d_fps_mover_teleport(slayer3d_fps_mover *mover, slayer3d_vec3 eye_position, bool set_yaw, float yaw,
+                                 bool set_pitch, float pitch)
 {
     if (mover == NULL)
     {
@@ -395,16 +397,16 @@ void sdl3d_fps_mover_teleport(sdl3d_fps_mover *mover, sdl3d_vec3 eye_position, b
     mover->has_last_good = true;
 }
 
-sdl3d_camera3d sdl3d_fps_mover_camera(const sdl3d_fps_mover *mover, float fov)
+slayer3d_camera3d slayer3d_fps_mover_camera(const slayer3d_fps_mover *mover, float fov)
 {
-    sdl3d_camera3d cam;
+    slayer3d_camera3d cam;
     SDL_zero(cam);
 
     if (mover == NULL)
     {
-        cam.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+        cam.up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
         cam.fovy = fov;
-        cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+        cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
         return cam;
     }
 
@@ -413,16 +415,17 @@ sdl3d_camera3d sdl3d_fps_mover_camera(const sdl3d_fps_mover *mover, float fov)
     float fy = SDL_sinf(mover->pitch);
 
     float eye_y = mover->position.y + mover->view_smooth;
-    cam.position = sdl3d_vec3_make(mover->position.x, eye_y, mover->position.z);
-    cam.target = sdl3d_vec3_make(mover->position.x + fx, eye_y + fy, mover->position.z + fz);
-    cam.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.position = slayer3d_vec3_make(mover->position.x, eye_y, mover->position.z);
+    cam.target = slayer3d_vec3_make(mover->position.x + fx, eye_y + fy, mover->position.z + fz);
+    cam.up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
     cam.fovy = fov;
-    cam.projection = SDL3D_CAMERA_PERSPECTIVE;
+    cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
     return cam;
 }
 
-void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, const sdl3d_sector *sectors,
-                            sdl3d_vec2 wish_dir, float mouse_dx, float mouse_dy, float mouse_sensitivity, float dt)
+void slayer3d_fps_mover_update(slayer3d_fps_mover *mover, const slayer3d_level *level, const slayer3d_sector *sectors,
+                               slayer3d_vec2 wish_dir, float mouse_dx, float mouse_dy, float mouse_sensitivity,
+                               float dt)
 {
     if (mover == NULL || level == NULL || sectors == NULL || dt <= 0.0f)
     {
@@ -437,15 +440,15 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
     /* ---- Mouse look ---- */
     mover->yaw += mouse_dx * mouse_sensitivity;
     mover->pitch -= mouse_dy * mouse_sensitivity;
-    if (mover->pitch > SDL3D_FPS_PITCH_LIMIT)
-        mover->pitch = SDL3D_FPS_PITCH_LIMIT;
-    if (mover->pitch < -SDL3D_FPS_PITCH_LIMIT)
-        mover->pitch = -SDL3D_FPS_PITCH_LIMIT;
+    if (mover->pitch > SLAYER3D_FPS_PITCH_LIMIT)
+        mover->pitch = SLAYER3D_FPS_PITCH_LIMIT;
+    if (mover->pitch < -SLAYER3D_FPS_PITCH_LIMIT)
+        mover->pitch = -SLAYER3D_FPS_PITCH_LIMIT;
 
     /* ---- View smoothing decay ---- */
-    if (SDL_fabsf(mover->view_smooth) > SDL3D_FPS_VIEW_SMOOTH_EPSILON)
+    if (SDL_fabsf(mover->view_smooth) > SLAYER3D_FPS_VIEW_SMOOTH_EPSILON)
     {
-        mover->view_smooth -= mover->view_smooth * SDL3D_FPS_VIEW_SMOOTH_SPEED * dt;
+        mover->view_smooth -= mover->view_smooth * SLAYER3D_FPS_VIEW_SMOOTH_SPEED * dt;
     }
     else
     {
@@ -457,19 +460,20 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
     /* ---- Horizontal movement with sliding collision ---- */
     {
         float feet_y = mover->position.y - player_height;
-        int current_sector = sdl3d_level_find_sector_at(level, sectors, mover->position.x, mover->position.z, feet_y);
+        int current_sector =
+            slayer3d_level_find_sector_at(level, sectors, mover->position.x, mover->position.z, feet_y);
         float current_floor = feet_y;
         if (current_sector < 0)
         {
-            current_sector = sdl3d_level_find_walkable_sector(level, sectors, mover->position.x, mover->position.z,
-                                                              feet_y, step_height, headroom);
+            current_sector = slayer3d_level_find_walkable_sector(level, sectors, mover->position.x, mover->position.z,
+                                                                 feet_y, step_height, headroom);
         }
         if (current_sector >= 0)
         {
-            current_floor = sdl3d_sector_floor_at(&sectors[current_sector], mover->position.x, mover->position.z);
+            current_floor = slayer3d_sector_floor_at(&sectors[current_sector], mover->position.x, mover->position.z);
         }
 
-        sdl3d_vec2 sector_push = {0.0f, 0.0f};
+        slayer3d_vec2 sector_push = {0.0f, 0.0f};
         if (current_sector >= 0)
         {
             sector_push = sector_push_velocity_xz(&sectors[current_sector]);
@@ -497,7 +501,7 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
 
         float move_x = (input_velocity_x + sector_push.x) * dt;
         float move_z = (input_velocity_z + sector_push.y) * dt;
-        if (move_x * move_x + move_z * move_z > SDL3D_FPS_COLLISION_EPSILON)
+        if (move_x * move_x + move_z * move_z > SLAYER3D_FPS_COLLISION_EPSILON)
         {
             int candidate = -1;
             if (try_horizontal_move(mover, level, sectors, feet_y, mover->on_ground, move_x, move_z, &candidate))
@@ -506,18 +510,18 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
 
         /* Step-up onto a higher floor when on solid ground. */
         feet_y = mover->position.y - player_height;
-        current_sector = sdl3d_level_find_sector_at(level, sectors, mover->position.x, mover->position.z, feet_y);
+        current_sector = slayer3d_level_find_sector_at(level, sectors, mover->position.x, mover->position.z, feet_y);
         if (current_sector < 0)
         {
-            current_sector = sdl3d_level_find_walkable_sector(level, sectors, mover->position.x, mover->position.z,
-                                                              feet_y, step_height, headroom);
+            current_sector = slayer3d_level_find_walkable_sector(level, sectors, mover->position.x, mover->position.z,
+                                                                 feet_y, step_height, headroom);
         }
         if (mover->on_ground)
         {
             if (current_sector >= 0)
             {
                 float target_floor =
-                    sdl3d_sector_floor_at(&sectors[current_sector], mover->position.x, mover->position.z);
+                    slayer3d_sector_floor_at(&sectors[current_sector], mover->position.x, mover->position.z);
                 if (target_floor < current_floor - step_height)
                 {
                     mover->on_ground = false;
@@ -561,11 +565,11 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
             float feet_y = mover->position.y - player_height;
 
             /* Ceiling: head crossed downward into ceiling plane. */
-            int containing = sdl3d_level_find_sector_at(level, sectors, mover->position.x, mover->position.z,
-                                                        SDL_max(prev_feet_y, feet_y));
+            int containing = slayer3d_level_find_sector_at(level, sectors, mover->position.x, mover->position.z,
+                                                           SDL_max(prev_feet_y, feet_y));
             if (containing >= 0)
             {
-                float ceiling_y = sdl3d_sector_ceil_at(&sectors[containing], mover->position.x, mover->position.z) -
+                float ceiling_y = slayer3d_sector_ceil_at(&sectors[containing], mover->position.x, mover->position.z) -
                                   ceiling_clearance;
                 if (prev_py <= ceiling_y && mover->position.y > ceiling_y)
                 {
@@ -579,11 +583,11 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
             /* Floor: feet crossed any support floor going down. */
             if (mover->vertical_velocity <= 0.0f)
             {
-                int support = sdl3d_level_find_support_sector(level, sectors, mover->position.x, mover->position.z,
-                                                              SDL_max(prev_feet_y, feet_y) + step_height, headroom);
+                int support = slayer3d_level_find_support_sector(level, sectors, mover->position.x, mover->position.z,
+                                                                 SDL_max(prev_feet_y, feet_y) + step_height, headroom);
                 if (support >= 0)
                 {
-                    float floor_y = sdl3d_sector_floor_at(&sectors[support], mover->position.x, mover->position.z);
+                    float floor_y = slayer3d_sector_floor_at(&sectors[support], mover->position.x, mover->position.z);
                     if (sector_floor_is_walkable(&sectors[support]) && prev_feet_y >= floor_y && feet_y <= floor_y)
                     {
                         mover->position.y = floor_y + player_height;
@@ -601,14 +605,14 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
         {
             float feet_y = mover->position.y - player_height;
             int containing_now =
-                sdl3d_level_find_sector_at(level, sectors, mover->position.x, mover->position.z, feet_y);
+                slayer3d_level_find_sector_at(level, sectors, mover->position.x, mover->position.z, feet_y);
             if (containing_now < 0)
             {
-                int rescue = sdl3d_level_find_support_sector(level, sectors, mover->position.x, mover->position.z,
-                                                             feet_y + step_height, headroom);
+                int rescue = slayer3d_level_find_support_sector(level, sectors, mover->position.x, mover->position.z,
+                                                                feet_y + step_height, headroom);
                 if (rescue >= 0)
                 {
-                    float floor_y = sdl3d_sector_floor_at(&sectors[rescue], mover->position.x, mover->position.z);
+                    float floor_y = slayer3d_sector_floor_at(&sectors[rescue], mover->position.x, mover->position.z);
                     if (sector_floor_is_walkable(&sectors[rescue]) && floor_y >= feet_y &&
                         (floor_y - feet_y) <= step_height)
                     {
@@ -634,11 +638,11 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
      * walking / step-up). ---- */
     {
         float feet_y = mover->position.y - player_height;
-        int containing = sdl3d_level_find_sector_at(level, sectors, mover->position.x, mover->position.z, feet_y);
+        int containing = slayer3d_level_find_sector_at(level, sectors, mover->position.x, mover->position.z, feet_y);
         if (containing >= 0)
         {
             float ceiling_y =
-                sdl3d_sector_ceil_at(&sectors[containing], mover->position.x, mover->position.z) - ceiling_clearance;
+                slayer3d_sector_ceil_at(&sectors[containing], mover->position.x, mover->position.z) - ceiling_clearance;
             if (mover->position.y > ceiling_y)
             {
                 mover->position.y = ceiling_y;
@@ -651,7 +655,7 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
     /* ---- View smoothing: accumulate from floor-snap delta (not jumps). ---- */
     {
         float py_delta = mover->position.y - py_before_collision;
-        if (mover->on_ground && SDL_fabsf(py_delta) > SDL3D_FPS_VIEW_SMOOTH_EPSILON)
+        if (mover->on_ground && SDL_fabsf(py_delta) > SLAYER3D_FPS_VIEW_SMOOTH_EPSILON)
         {
             mover->view_smooth -= py_delta;
         }
@@ -661,7 +665,7 @@ void sdl3d_fps_mover_update(sdl3d_fps_mover *mover, const sdl3d_level *level, co
     {
         float feet_y = mover->position.y - player_height;
         mover->current_sector =
-            sdl3d_level_find_sector_at(level, sectors, mover->position.x, mover->position.z, feet_y);
+            slayer3d_level_find_sector_at(level, sectors, mover->position.x, mover->position.z, feet_y);
         if (mover->on_ground && mover->current_sector >= 0)
         {
             mover->last_good_position = mover->position;

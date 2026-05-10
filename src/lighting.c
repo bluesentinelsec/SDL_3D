@@ -1,14 +1,14 @@
-#include "sdl3d/lighting.h"
+#include "slayer3d/lighting.h"
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_stdinc.h>
 
-#include "sdl3d/model.h"
+#include "slayer3d/model.h"
 
 #include "gl_renderer.h"
 #include "render_context_internal.h"
 
-bool sdl3d_add_light(sdl3d_render_context *context, const sdl3d_light *light)
+bool slayer3d_add_light(slayer3d_render_context *context, const slayer3d_light *light)
 {
     if (context == NULL)
     {
@@ -18,9 +18,9 @@ bool sdl3d_add_light(sdl3d_render_context *context, const sdl3d_light *light)
     {
         return SDL_InvalidParamError("light");
     }
-    if (context->light_count >= SDL3D_MAX_LIGHTS)
+    if (context->light_count >= SLAYER3D_MAX_LIGHTS)
     {
-        return SDL_SetError("Light list is full (max %d).", SDL3D_MAX_LIGHTS);
+        return SDL_SetError("Light list is full (max %d).", SLAYER3D_MAX_LIGHTS);
     }
 
     context->lights[context->light_count] = *light;
@@ -28,7 +28,7 @@ bool sdl3d_add_light(sdl3d_render_context *context, const sdl3d_light *light)
     return true;
 }
 
-bool sdl3d_clear_lights(sdl3d_render_context *context)
+bool slayer3d_clear_lights(slayer3d_render_context *context)
 {
     if (context == NULL)
     {
@@ -39,27 +39,27 @@ bool sdl3d_clear_lights(sdl3d_render_context *context)
     return true;
 }
 
-bool sdl3d_set_lighting_enabled(sdl3d_render_context *context, bool enabled)
+bool slayer3d_set_lighting_enabled(slayer3d_render_context *context, bool enabled)
 {
     if (context == NULL)
     {
         return SDL_InvalidParamError("context");
     }
 
-    context->shading_mode = enabled ? SDL3D_SHADING_PHONG : SDL3D_SHADING_UNLIT;
+    context->shading_mode = enabled ? SLAYER3D_SHADING_PHONG : SLAYER3D_SHADING_UNLIT;
     return true;
 }
 
-bool sdl3d_is_lighting_enabled(const sdl3d_render_context *context)
+bool slayer3d_is_lighting_enabled(const slayer3d_render_context *context)
 {
     if (context == NULL)
     {
         return false;
     }
-    return context->shading_mode != SDL3D_SHADING_UNLIT;
+    return context->shading_mode != SLAYER3D_SHADING_UNLIT;
 }
 
-bool sdl3d_set_shading_mode(sdl3d_render_context *context, sdl3d_shading_mode mode)
+bool slayer3d_set_shading_mode(slayer3d_render_context *context, slayer3d_shading_mode mode)
 {
     if (context == NULL)
     {
@@ -69,16 +69,16 @@ bool sdl3d_set_shading_mode(sdl3d_render_context *context, sdl3d_shading_mode mo
     return true;
 }
 
-sdl3d_shading_mode sdl3d_get_shading_mode(const sdl3d_render_context *context)
+slayer3d_shading_mode slayer3d_get_shading_mode(const slayer3d_render_context *context)
 {
     if (context == NULL)
     {
-        return SDL3D_SHADING_UNLIT;
+        return SLAYER3D_SHADING_UNLIT;
     }
     return context->shading_mode;
 }
 
-bool sdl3d_set_ambient_light(sdl3d_render_context *context, float r, float g, float b)
+bool slayer3d_set_ambient_light(slayer3d_render_context *context, float r, float g, float b)
 {
     if (context == NULL)
     {
@@ -91,7 +91,7 @@ bool sdl3d_set_ambient_light(sdl3d_render_context *context, float r, float g, fl
     return true;
 }
 
-bool sdl3d_set_emissive(sdl3d_render_context *context, float r, float g, float b)
+bool slayer3d_set_emissive(slayer3d_render_context *context, float r, float g, float b)
 {
     if (context == NULL)
     {
@@ -103,7 +103,7 @@ bool sdl3d_set_emissive(sdl3d_render_context *context, float r, float g, float b
     return true;
 }
 
-bool sdl3d_set_bloom_enabled(sdl3d_render_context *context, bool enabled)
+bool slayer3d_set_bloom_enabled(slayer3d_render_context *context, bool enabled)
 {
     if (context == NULL)
     {
@@ -113,7 +113,7 @@ bool sdl3d_set_bloom_enabled(sdl3d_render_context *context, bool enabled)
     return true;
 }
 
-bool sdl3d_set_ssao_enabled(sdl3d_render_context *context, bool enabled)
+bool slayer3d_set_ssao_enabled(slayer3d_render_context *context, bool enabled)
 {
     if (context == NULL)
     {
@@ -123,7 +123,7 @@ bool sdl3d_set_ssao_enabled(sdl3d_render_context *context, bool enabled)
     return true;
 }
 
-bool sdl3d_set_point_shadows_enabled(sdl3d_render_context *context, bool enabled)
+bool slayer3d_set_point_shadows_enabled(slayer3d_render_context *context, bool enabled)
 {
     if (context == NULL)
     {
@@ -133,7 +133,7 @@ bool sdl3d_set_point_shadows_enabled(sdl3d_render_context *context, bool enabled
     return true;
 }
 
-bool sdl3d_set_zfight_callback(sdl3d_render_context *context, sdl3d_zfight_callback callback, void *userdata)
+bool slayer3d_set_zfight_callback(slayer3d_render_context *context, slayer3d_zfight_callback callback, void *userdata)
 {
     if (context == NULL)
     {
@@ -144,7 +144,7 @@ bool sdl3d_set_zfight_callback(sdl3d_render_context *context, sdl3d_zfight_callb
     return true;
 }
 
-bool sdl3d_load_environment_map(sdl3d_render_context *context, const char *hdr_path)
+bool slayer3d_load_environment_map(slayer3d_render_context *context, const char *hdr_path)
 {
     if (context == NULL)
     {
@@ -158,10 +158,10 @@ bool sdl3d_load_environment_map(sdl3d_render_context *context, const char *hdr_p
     {
         return SDL_SetError("IBL requires the GL backend.");
     }
-    return sdl3d_gl_load_environment_map(context->gl, hdr_path);
+    return slayer3d_gl_load_environment_map(context->gl, hdr_path);
 }
 
-int sdl3d_get_light_count(const sdl3d_render_context *context)
+int slayer3d_get_light_count(const slayer3d_render_context *context)
 {
     if (context == NULL)
     {
@@ -174,7 +174,7 @@ int sdl3d_get_light_count(const sdl3d_render_context *context)
 /* Fog                                                                 */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_set_fog(sdl3d_render_context *context, const sdl3d_fog *fog)
+bool slayer3d_set_fog(slayer3d_render_context *context, const slayer3d_fog *fog)
 {
     if (context == NULL)
     {
@@ -188,13 +188,13 @@ bool sdl3d_set_fog(sdl3d_render_context *context, const sdl3d_fog *fog)
     return true;
 }
 
-bool sdl3d_clear_fog(sdl3d_render_context *context)
+bool slayer3d_clear_fog(slayer3d_render_context *context)
 {
     if (context == NULL)
     {
         return SDL_InvalidParamError("context");
     }
-    context->fog.mode = SDL3D_FOG_NONE;
+    context->fog.mode = SLAYER3D_FOG_NONE;
     return true;
 }
 
@@ -202,7 +202,7 @@ bool sdl3d_clear_fog(sdl3d_render_context *context)
 /* Tonemapping                                                         */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_set_tonemap_mode(sdl3d_render_context *context, sdl3d_tonemap_mode mode)
+bool slayer3d_set_tonemap_mode(slayer3d_render_context *context, slayer3d_tonemap_mode mode)
 {
     if (context == NULL)
     {
@@ -212,11 +212,11 @@ bool sdl3d_set_tonemap_mode(sdl3d_render_context *context, sdl3d_tonemap_mode mo
     return true;
 }
 
-sdl3d_tonemap_mode sdl3d_get_tonemap_mode(const sdl3d_render_context *context)
+slayer3d_tonemap_mode slayer3d_get_tonemap_mode(const slayer3d_render_context *context)
 {
     if (context == NULL)
     {
-        return SDL3D_TONEMAP_NONE;
+        return SLAYER3D_TONEMAP_NONE;
     }
     return context->tonemap_mode;
 }
@@ -225,12 +225,13 @@ sdl3d_tonemap_mode sdl3d_get_tonemap_mode(const sdl3d_render_context *context)
 /* Shadow mapping                                                      */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_enable_shadow(sdl3d_render_context *context, int light_index, sdl3d_vec3 scene_center, float scene_radius)
+bool slayer3d_enable_shadow(slayer3d_render_context *context, int light_index, slayer3d_vec3 scene_center,
+                            float scene_radius)
 {
-    sdl3d_mat4 light_view;
-    sdl3d_mat4 light_proj;
-    sdl3d_vec3 light_pos;
-    sdl3d_vec3 light_dir;
+    slayer3d_mat4 light_view;
+    slayer3d_mat4 light_proj;
+    slayer3d_vec3 light_pos;
+    slayer3d_vec3 light_dir;
     float len;
     size_t map_bytes;
 
@@ -242,7 +243,7 @@ bool sdl3d_enable_shadow(sdl3d_render_context *context, int light_index, sdl3d_v
     {
         return SDL_SetError("Light index %d out of range (count=%d).", light_index, context->light_count);
     }
-    if (context->lights[light_index].type != SDL3D_LIGHT_DIRECTIONAL)
+    if (context->lights[light_index].type != SLAYER3D_LIGHT_DIRECTIONAL)
     {
         return SDL_SetError("Shadow mapping is only supported for directional lights.");
     }
@@ -254,15 +255,15 @@ bool sdl3d_enable_shadow(sdl3d_render_context *context, int light_index, sdl3d_v
     /* Allocate shadow depth buffer if not already allocated. */
     if (context->shadow_depth[light_index] == NULL)
     {
-        map_bytes = (size_t)SDL3D_SHADOW_MAP_SIZE * SDL3D_SHADOW_MAP_SIZE * sizeof(float);
+        map_bytes = (size_t)SLAYER3D_SHADOW_MAP_SIZE * SLAYER3D_SHADOW_MAP_SIZE * sizeof(float);
         context->shadow_depth[light_index] = (float *)SDL_malloc(map_bytes);
         if (context->shadow_depth[light_index] == NULL)
         {
             return SDL_OutOfMemory();
         }
         /* Initialize to 1.0 (far plane = no shadow) so the map is safe
-         * to sample before sdl3d_render_shadow_map is first called. */
-        for (size_t p = 0; p < (size_t)SDL3D_SHADOW_MAP_SIZE * SDL3D_SHADOW_MAP_SIZE; ++p)
+         * to sample before slayer3d_render_shadow_map is first called. */
+        for (size_t p = 0; p < (size_t)SLAYER3D_SHADOW_MAP_SIZE * SLAYER3D_SHADOW_MAP_SIZE; ++p)
         {
             context->shadow_depth[light_index][p] = 1.0f;
         }
@@ -284,33 +285,33 @@ bool sdl3d_enable_shadow(sdl3d_render_context *context, int light_index, sdl3d_v
     light_pos.y = scene_center.y - light_dir.y * scene_radius * 2.0f;
     light_pos.z = scene_center.z - light_dir.z * scene_radius * 2.0f;
 
-    if (!sdl3d_mat4_look_at(light_pos, scene_center, sdl3d_vec3_make(0.0f, 1.0f, 0.0f), &light_view))
+    if (!slayer3d_mat4_look_at(light_pos, scene_center, slayer3d_vec3_make(0.0f, 1.0f, 0.0f), &light_view))
     {
         /* If up is parallel to direction, try a different up vector. */
-        if (!sdl3d_mat4_look_at(light_pos, scene_center, sdl3d_vec3_make(1.0f, 0.0f, 0.0f), &light_view))
+        if (!slayer3d_mat4_look_at(light_pos, scene_center, slayer3d_vec3_make(1.0f, 0.0f, 0.0f), &light_view))
         {
             return SDL_SetError("Cannot compute light view matrix.");
         }
     }
 
-    if (!sdl3d_mat4_orthographic(-scene_radius, scene_radius, -scene_radius, scene_radius, 0.01f, scene_radius * 4.0f,
-                                 &light_proj))
+    if (!slayer3d_mat4_orthographic(-scene_radius, scene_radius, -scene_radius, scene_radius, 0.01f,
+                                    scene_radius * 4.0f, &light_proj))
     {
         return SDL_SetError("Cannot compute light projection matrix.");
     }
 
-    context->shadow_vp[light_index] = sdl3d_mat4_multiply(light_proj, light_view);
+    context->shadow_vp[light_index] = slayer3d_mat4_multiply(light_proj, light_view);
     context->shadow_enabled[light_index] = true;
     return true;
 }
 
-bool sdl3d_disable_shadow(sdl3d_render_context *context, int light_index)
+bool slayer3d_disable_shadow(slayer3d_render_context *context, int light_index)
 {
     if (context == NULL)
     {
         return SDL_InvalidParamError("context");
     }
-    if (light_index < 0 || light_index >= SDL3D_MAX_LIGHTS)
+    if (light_index < 0 || light_index >= SLAYER3D_MAX_LIGHTS)
     {
         return SDL_SetError("Light index %d out of range.", light_index);
     }
@@ -320,8 +321,8 @@ bool sdl3d_disable_shadow(sdl3d_render_context *context, int light_index)
     return true;
 }
 
-bool sdl3d_render_shadow_map(sdl3d_render_context *context, const sdl3d_mesh *meshes, int mesh_count,
-                             const sdl3d_mat4 *model_matrices)
+bool slayer3d_render_shadow_map(slayer3d_render_context *context, const slayer3d_mesh *meshes, int mesh_count,
+                                const slayer3d_mat4 *model_matrices)
 {
     if (context == NULL)
     {
@@ -336,7 +337,7 @@ bool sdl3d_render_shadow_map(sdl3d_render_context *context, const sdl3d_mesh *me
     {
         float *depth_buf;
         size_t map_pixels;
-        sdl3d_mat4 light_mvp;
+        slayer3d_mat4 light_mvp;
 
         if (!context->shadow_enabled[li] || context->shadow_depth[li] == NULL)
         {
@@ -344,7 +345,7 @@ bool sdl3d_render_shadow_map(sdl3d_render_context *context, const sdl3d_mesh *me
         }
 
         depth_buf = context->shadow_depth[li];
-        map_pixels = (size_t)SDL3D_SHADOW_MAP_SIZE * SDL3D_SHADOW_MAP_SIZE;
+        map_pixels = (size_t)SLAYER3D_SHADOW_MAP_SIZE * SLAYER3D_SHADOW_MAP_SIZE;
 
         /* Clear shadow depth buffer to 1.0 (far). */
         for (size_t p = 0; p < map_pixels; ++p)
@@ -355,9 +356,9 @@ bool sdl3d_render_shadow_map(sdl3d_render_context *context, const sdl3d_mesh *me
         /* Render each mesh into the shadow map. */
         for (int mi = 0; mi < mesh_count; ++mi)
         {
-            const sdl3d_mesh *mesh = &meshes[mi];
-            sdl3d_mat4 model_mat = (model_matrices != NULL) ? model_matrices[mi] : sdl3d_mat4_identity();
-            light_mvp = sdl3d_mat4_multiply(context->shadow_vp[li], model_mat);
+            const slayer3d_mesh *mesh = &meshes[mi];
+            slayer3d_mat4 model_mat = (model_matrices != NULL) ? model_matrices[mi] : slayer3d_mat4_identity();
+            light_mvp = slayer3d_mat4_multiply(context->shadow_vp[li], model_mat);
 
             if (mesh->positions == NULL || mesh->vertex_count <= 0)
             {
@@ -384,12 +385,12 @@ bool sdl3d_render_shadow_map(sdl3d_render_context *context, const sdl3d_mesh *me
                         const float *p1 = &mesh->positions[i1 * 3];
                         const float *p2 = &mesh->positions[i2 * 3];
 
-                        sdl3d_vec4 c0 =
-                            sdl3d_mat4_transform_vec4(light_mvp, sdl3d_vec4_make(p0[0], p0[1], p0[2], 1.0f));
-                        sdl3d_vec4 c1 =
-                            sdl3d_mat4_transform_vec4(light_mvp, sdl3d_vec4_make(p1[0], p1[1], p1[2], 1.0f));
-                        sdl3d_vec4 c2 =
-                            sdl3d_mat4_transform_vec4(light_mvp, sdl3d_vec4_make(p2[0], p2[1], p2[2], 1.0f));
+                        slayer3d_vec4 c0 =
+                            slayer3d_mat4_transform_vec4(light_mvp, slayer3d_vec4_make(p0[0], p0[1], p0[2], 1.0f));
+                        slayer3d_vec4 c1 =
+                            slayer3d_mat4_transform_vec4(light_mvp, slayer3d_vec4_make(p1[0], p1[1], p1[2], 1.0f));
+                        slayer3d_vec4 c2 =
+                            slayer3d_mat4_transform_vec4(light_mvp, slayer3d_vec4_make(p2[0], p2[1], p2[2], 1.0f));
 
                         /* Perspective divide → NDC. */
                         if (c0.w <= 0.0f || c1.w <= 0.0f || c2.w <= 0.0f)
@@ -415,8 +416,8 @@ bool sdl3d_render_shadow_map(sdl3d_render_context *context, const sdl3d_mesh *me
 
                             for (int v = 0; v < 3; ++v)
                             {
-                                sx[v] = (int)((ndc[v][0] * 0.5f + 0.5f) * (float)SDL3D_SHADOW_MAP_SIZE);
-                                sy[v] = (int)((ndc[v][1] * 0.5f + 0.5f) * (float)SDL3D_SHADOW_MAP_SIZE);
+                                sx[v] = (int)((ndc[v][0] * 0.5f + 0.5f) * (float)SLAYER3D_SHADOW_MAP_SIZE);
+                                sy[v] = (int)((ndc[v][1] * 0.5f + 0.5f) * (float)SLAYER3D_SHADOW_MAP_SIZE);
                                 sz[v] = ndc[v][2] * 0.5f + 0.5f;
                             }
 
@@ -438,13 +439,13 @@ bool sdl3d_render_shadow_map(sdl3d_render_context *context, const sdl3d_mesh *me
                             {
                                 min_y = 0;
                             }
-                            if (max_x >= SDL3D_SHADOW_MAP_SIZE)
+                            if (max_x >= SLAYER3D_SHADOW_MAP_SIZE)
                             {
-                                max_x = SDL3D_SHADOW_MAP_SIZE - 1;
+                                max_x = SLAYER3D_SHADOW_MAP_SIZE - 1;
                             }
-                            if (max_y >= SDL3D_SHADOW_MAP_SIZE)
+                            if (max_y >= SLAYER3D_SHADOW_MAP_SIZE)
                             {
-                                max_y = SDL3D_SHADOW_MAP_SIZE - 1;
+                                max_y = SLAYER3D_SHADOW_MAP_SIZE - 1;
                             }
 
                             for (int py = min_y; py <= max_y; ++py)
@@ -473,7 +474,7 @@ bool sdl3d_render_shadow_map(sdl3d_render_context *context, const sdl3d_mesh *me
                                     }
                                     depth = w0 * sz[0] + w1 * sz[1] + w2 * sz[2];
                                     {
-                                        int idx = py * SDL3D_SHADOW_MAP_SIZE + px;
+                                        int idx = py * SLAYER3D_SHADOW_MAP_SIZE + px;
                                         if (depth < depth_buf[idx])
                                         {
                                             depth_buf[idx] = depth;
@@ -491,7 +492,7 @@ bool sdl3d_render_shadow_map(sdl3d_render_context *context, const sdl3d_mesh *me
     return true;
 }
 
-bool sdl3d_begin_shadow_pass(sdl3d_render_context *context)
+bool slayer3d_begin_shadow_pass(slayer3d_render_context *context)
 {
     if (context == NULL)
     {
@@ -511,7 +512,7 @@ bool sdl3d_begin_shadow_pass(sdl3d_render_context *context)
     /* Set up model stack for shadow pass draws. */
     if (!context->model_stack)
     {
-        context->model_stack = (sdl3d_mat4 *)SDL_malloc(8 * sizeof(sdl3d_mat4));
+        context->model_stack = (slayer3d_mat4 *)SDL_malloc(8 * sizeof(slayer3d_mat4));
         if (!context->model_stack)
         {
             return SDL_OutOfMemory();
@@ -520,25 +521,25 @@ bool sdl3d_begin_shadow_pass(sdl3d_render_context *context)
     }
     context->view_projection = context->shadow_vp[0];
     context->model_stack_depth = 1;
-    context->model_stack[0] = sdl3d_mat4_identity();
-    context->model = sdl3d_mat4_identity();
+    context->model_stack[0] = slayer3d_mat4_identity();
+    context->model = slayer3d_mat4_identity();
     context->model_view_projection = context->shadow_vp[0];
     context->in_mode_3d = true;
 
     /* Reuse Phase 1's per-actor frustum culling for the shadow pass by
      * pointing the cached planes at the light's view-projection. Skips
      * actors and meshes that cannot cast shadows into the depth buffer. */
-    sdl3d_internal_extract_frustum_planes(context, context->shadow_vp[0]);
+    slayer3d_internal_extract_frustum_planes(context, context->shadow_vp[0]);
 
     if (context->gl)
     {
-        sdl3d_gl_begin_shadow_pass(context->gl, context->shadow_vp[0].m,
-                                   context->shadow_bias > 0 ? context->shadow_bias : 0.005f);
+        slayer3d_gl_begin_shadow_pass(context->gl, context->shadow_vp[0].m,
+                                      context->shadow_bias > 0 ? context->shadow_bias : 0.005f);
     }
     return true;
 }
 
-bool sdl3d_end_shadow_pass(sdl3d_render_context *context)
+bool slayer3d_end_shadow_pass(slayer3d_render_context *context)
 {
     if (context == NULL)
     {
@@ -548,7 +549,7 @@ bool sdl3d_end_shadow_pass(sdl3d_render_context *context)
     context->in_mode_3d = false;
     if (context->gl)
     {
-        sdl3d_gl_end_shadow_pass(context->gl);
+        slayer3d_gl_end_shadow_pass(context->gl);
     }
     return true;
 }
@@ -557,19 +558,19 @@ bool sdl3d_end_shadow_pass(sdl3d_render_context *context)
 /* Render profiles                                                     */
 /* ------------------------------------------------------------------ */
 
-static sdl3d_display_profile normalize_display_profile(sdl3d_display_profile profile)
+static slayer3d_display_profile normalize_display_profile(slayer3d_display_profile profile)
 {
-    return profile >= SDL3D_DISPLAY_PROFILE_MODERN && profile <= SDL3D_DISPLAY_PROFILE_GAMEBOY
+    return profile >= SLAYER3D_DISPLAY_PROFILE_MODERN && profile <= SLAYER3D_DISPLAY_PROFILE_GAMEBOY
                ? profile
-               : SDL3D_DISPLAY_PROFILE_MODERN;
+               : SLAYER3D_DISPLAY_PROFILE_MODERN;
 }
 
-static sdl3d_display_filter normalize_display_filter(sdl3d_display_filter filter)
+static slayer3d_display_filter normalize_display_filter(slayer3d_display_filter filter)
 {
-    return filter == SDL3D_DISPLAY_FILTER_NEAREST ? SDL3D_DISPLAY_FILTER_NEAREST : SDL3D_DISPLAY_FILTER_LINEAR;
+    return filter == SLAYER3D_DISPLAY_FILTER_NEAREST ? SLAYER3D_DISPLAY_FILTER_NEAREST : SLAYER3D_DISPLAY_FILTER_LINEAR;
 }
 
-bool sdl3d_set_render_profile(sdl3d_render_context *context, const sdl3d_render_profile *profile)
+bool slayer3d_set_render_profile(slayer3d_render_context *context, const slayer3d_render_profile *profile)
 {
     if (context == NULL)
     {
@@ -603,7 +604,7 @@ bool sdl3d_set_render_profile(sdl3d_render_context *context, const sdl3d_render_
     return true;
 }
 
-bool sdl3d_get_render_profile(const sdl3d_render_context *context, sdl3d_render_profile *out)
+bool slayer3d_get_render_profile(const slayer3d_render_context *context, slayer3d_render_profile *out)
 {
     if (context == NULL)
     {
@@ -629,124 +630,124 @@ bool sdl3d_get_render_profile(const sdl3d_render_context *context, sdl3d_render_
     return true;
 }
 
-sdl3d_render_profile sdl3d_profile_modern(void)
+slayer3d_render_profile slayer3d_profile_modern(void)
 {
-    sdl3d_render_profile p;
+    slayer3d_render_profile p;
     SDL_zerop(&p);
-    p.shading = SDL3D_SHADING_PHONG;
-    p.texture_filter = SDL3D_TEXTURE_FILTER_BILINEAR;
-    p.uv_mode = SDL3D_UV_PERSPECTIVE;
-    p.fog_eval = SDL3D_FOG_EVAL_FRAGMENT;
-    p.tonemap = SDL3D_TONEMAP_ACES;
-    p.display_profile = SDL3D_DISPLAY_PROFILE_MODERN;
-    p.display_filter = SDL3D_DISPLAY_FILTER_LINEAR;
+    p.shading = SLAYER3D_SHADING_PHONG;
+    p.texture_filter = SLAYER3D_TEXTURE_FILTER_BILINEAR;
+    p.uv_mode = SLAYER3D_UV_PERSPECTIVE;
+    p.fog_eval = SLAYER3D_FOG_EVAL_FRAGMENT;
+    p.tonemap = SLAYER3D_TONEMAP_ACES;
+    p.display_profile = SLAYER3D_DISPLAY_PROFILE_MODERN;
+    p.display_filter = SLAYER3D_DISPLAY_FILTER_LINEAR;
     return p;
 }
 
-sdl3d_render_profile sdl3d_profile_ps1(void)
+slayer3d_render_profile slayer3d_profile_ps1(void)
 {
-    sdl3d_render_profile p;
+    slayer3d_render_profile p;
     SDL_zerop(&p);
-    p.shading = SDL3D_SHADING_GOURAUD;
-    p.texture_filter = SDL3D_TEXTURE_FILTER_NEAREST;
-    p.uv_mode = SDL3D_UV_AFFINE;
-    p.fog_eval = SDL3D_FOG_EVAL_VERTEX;
-    p.tonemap = SDL3D_TONEMAP_NONE;
+    p.shading = SLAYER3D_SHADING_GOURAUD;
+    p.texture_filter = SLAYER3D_TEXTURE_FILTER_NEAREST;
+    p.uv_mode = SLAYER3D_UV_AFFINE;
+    p.fog_eval = SLAYER3D_FOG_EVAL_VERTEX;
+    p.tonemap = SLAYER3D_TONEMAP_NONE;
     p.vertex_snap = true;
     p.vertex_snap_precision = 1;
     p.color_quantize = true;
     p.color_depth = 32;
-    p.display_profile = SDL3D_DISPLAY_PROFILE_PS1;
+    p.display_profile = SLAYER3D_DISPLAY_PROFILE_PS1;
     p.display_width = 320;
     p.display_height = 240;
-    p.display_filter = SDL3D_DISPLAY_FILTER_NEAREST;
+    p.display_filter = SLAYER3D_DISPLAY_FILTER_NEAREST;
     return p;
 }
 
-sdl3d_render_profile sdl3d_profile_n64(void)
+slayer3d_render_profile slayer3d_profile_n64(void)
 {
-    sdl3d_render_profile p;
+    slayer3d_render_profile p;
     SDL_zerop(&p);
-    p.shading = SDL3D_SHADING_GOURAUD;
-    p.texture_filter = SDL3D_TEXTURE_FILTER_BILINEAR;
-    p.uv_mode = SDL3D_UV_PERSPECTIVE;
-    p.fog_eval = SDL3D_FOG_EVAL_VERTEX;
-    p.tonemap = SDL3D_TONEMAP_NONE;
-    p.display_profile = SDL3D_DISPLAY_PROFILE_N64;
+    p.shading = SLAYER3D_SHADING_GOURAUD;
+    p.texture_filter = SLAYER3D_TEXTURE_FILTER_BILINEAR;
+    p.uv_mode = SLAYER3D_UV_PERSPECTIVE;
+    p.fog_eval = SLAYER3D_FOG_EVAL_VERTEX;
+    p.tonemap = SLAYER3D_TONEMAP_NONE;
+    p.display_profile = SLAYER3D_DISPLAY_PROFILE_N64;
     p.display_width = 320;
     p.display_height = 240;
-    p.display_filter = SDL3D_DISPLAY_FILTER_LINEAR;
+    p.display_filter = SLAYER3D_DISPLAY_FILTER_LINEAR;
     return p;
 }
 
-sdl3d_render_profile sdl3d_profile_dos(void)
+slayer3d_render_profile slayer3d_profile_dos(void)
 {
-    sdl3d_render_profile p;
+    slayer3d_render_profile p;
     SDL_zerop(&p);
-    p.shading = SDL3D_SHADING_GOURAUD;
-    p.texture_filter = SDL3D_TEXTURE_FILTER_NEAREST;
-    p.uv_mode = SDL3D_UV_AFFINE;
-    p.fog_eval = SDL3D_FOG_EVAL_VERTEX;
-    p.tonemap = SDL3D_TONEMAP_NONE;
+    p.shading = SLAYER3D_SHADING_GOURAUD;
+    p.texture_filter = SLAYER3D_TEXTURE_FILTER_NEAREST;
+    p.uv_mode = SLAYER3D_UV_AFFINE;
+    p.fog_eval = SLAYER3D_FOG_EVAL_VERTEX;
+    p.tonemap = SLAYER3D_TONEMAP_NONE;
     p.color_quantize = true;
     p.color_depth = 6;
-    p.display_profile = SDL3D_DISPLAY_PROFILE_DOS;
+    p.display_profile = SLAYER3D_DISPLAY_PROFILE_DOS;
     p.display_width = 320;
     p.display_height = 200;
-    p.display_filter = SDL3D_DISPLAY_FILTER_NEAREST;
+    p.display_filter = SLAYER3D_DISPLAY_FILTER_NEAREST;
     return p;
 }
 
-sdl3d_render_profile sdl3d_profile_snes(void)
+slayer3d_render_profile slayer3d_profile_snes(void)
 {
-    sdl3d_render_profile p;
+    slayer3d_render_profile p;
     SDL_zerop(&p);
-    p.shading = SDL3D_SHADING_FLAT;
-    p.texture_filter = SDL3D_TEXTURE_FILTER_NEAREST;
-    p.uv_mode = SDL3D_UV_AFFINE;
-    p.fog_eval = SDL3D_FOG_EVAL_VERTEX;
-    p.tonemap = SDL3D_TONEMAP_NONE;
+    p.shading = SLAYER3D_SHADING_FLAT;
+    p.texture_filter = SLAYER3D_TEXTURE_FILTER_NEAREST;
+    p.uv_mode = SLAYER3D_UV_AFFINE;
+    p.fog_eval = SLAYER3D_FOG_EVAL_VERTEX;
+    p.tonemap = SLAYER3D_TONEMAP_NONE;
     p.color_quantize = true;
     p.color_depth = 32;
-    p.display_profile = SDL3D_DISPLAY_PROFILE_SNES;
+    p.display_profile = SLAYER3D_DISPLAY_PROFILE_SNES;
     p.display_width = 256;
     p.display_height = 224;
-    p.display_filter = SDL3D_DISPLAY_FILTER_NEAREST;
+    p.display_filter = SLAYER3D_DISPLAY_FILTER_NEAREST;
     return p;
 }
 
-sdl3d_render_profile sdl3d_profile_grayscale(void)
+slayer3d_render_profile slayer3d_profile_grayscale(void)
 {
-    sdl3d_render_profile p;
+    slayer3d_render_profile p;
     SDL_zerop(&p);
-    p.shading = SDL3D_SHADING_FLAT;
-    p.texture_filter = SDL3D_TEXTURE_FILTER_NEAREST;
-    p.uv_mode = SDL3D_UV_AFFINE;
-    p.fog_eval = SDL3D_FOG_EVAL_VERTEX;
-    p.tonemap = SDL3D_TONEMAP_NONE;
+    p.shading = SLAYER3D_SHADING_FLAT;
+    p.texture_filter = SLAYER3D_TEXTURE_FILTER_NEAREST;
+    p.uv_mode = SLAYER3D_UV_AFFINE;
+    p.fog_eval = SLAYER3D_FOG_EVAL_VERTEX;
+    p.tonemap = SLAYER3D_TONEMAP_NONE;
     p.color_quantize = true;
     p.color_depth = 4;
-    p.display_profile = SDL3D_DISPLAY_PROFILE_GRAYSCALE;
+    p.display_profile = SLAYER3D_DISPLAY_PROFILE_GRAYSCALE;
     p.display_width = 512;
     p.display_height = 342;
-    p.display_filter = SDL3D_DISPLAY_FILTER_NEAREST;
+    p.display_filter = SLAYER3D_DISPLAY_FILTER_NEAREST;
     return p;
 }
 
-sdl3d_render_profile sdl3d_profile_gameboy(void)
+slayer3d_render_profile slayer3d_profile_gameboy(void)
 {
-    sdl3d_render_profile p;
+    slayer3d_render_profile p;
     SDL_zerop(&p);
-    p.shading = SDL3D_SHADING_FLAT;
-    p.texture_filter = SDL3D_TEXTURE_FILTER_NEAREST;
-    p.uv_mode = SDL3D_UV_AFFINE;
-    p.fog_eval = SDL3D_FOG_EVAL_VERTEX;
-    p.tonemap = SDL3D_TONEMAP_NONE;
+    p.shading = SLAYER3D_SHADING_FLAT;
+    p.texture_filter = SLAYER3D_TEXTURE_FILTER_NEAREST;
+    p.uv_mode = SLAYER3D_UV_AFFINE;
+    p.fog_eval = SLAYER3D_FOG_EVAL_VERTEX;
+    p.tonemap = SLAYER3D_TONEMAP_NONE;
     p.color_quantize = true;
     p.color_depth = 4;
-    p.display_profile = SDL3D_DISPLAY_PROFILE_GAMEBOY;
+    p.display_profile = SLAYER3D_DISPLAY_PROFILE_GAMEBOY;
     p.display_width = 160;
     p.display_height = 144;
-    p.display_filter = SDL3D_DISPLAY_FILTER_NEAREST;
+    p.display_filter = SLAYER3D_DISPLAY_FILTER_NEAREST;
     return p;
 }

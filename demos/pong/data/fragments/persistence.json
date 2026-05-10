@@ -1,8 +1,8 @@
 {
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "storage": {
     "organization": "Blue Sentinel Security",
-    "application": "SDL3D Pong",
+    "application": "Slayer 3D Pong",
     "profile": "default"
   },
   "persistence": {
@@ -10,7 +10,7 @@
       {
         "name": "persistence.options",
         "path": "user://settings/options.json",
-        "schema": "sdl3d.options.v1",
+        "schema": "slayer3d.options.v1",
         "version": 1,
         "target": "entity.settings",
         "enabled_if": {

@@ -1,5 +1,5 @@
 {
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "imports": [
     { "path": "fragments/assets.json", "sections": ["assets"] },
     { "path": "fragments/scripts.json", "sections": ["scripts", "adapters"] },
@@ -15,7 +15,7 @@
     "description": "Data-authored horizontal side-scroller shoot 'em up using 3D geometry, actor pools, Lua gameplay, particles, and dynamic lighting."
   },
   "app": {
-    "title": "SDL3D ArmaLite PoC",
+    "title": "Slayer 3D ArmaLite PoC",
     "logical_width": 1280,
     "logical_height": 720,
     "backend": "opengl",

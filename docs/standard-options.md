@@ -1,7 +1,7 @@
 # Standard Options Package
 
 Most games need the same baseline options screens: display, audio, keyboard,
-mouse, and gamepad. SDL3D provides a `standard_options` scene package so a game
+mouse, and gamepad. Slayer 3D provides a `standard_options` scene package so a game
 can reuse those screens while keeping game-specific choices in JSON.
 
 The package is data-driven. The engine generates option scenes from

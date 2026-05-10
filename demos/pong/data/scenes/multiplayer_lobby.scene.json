@@ -1,5 +1,5 @@
 {
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.multiplayer.lobby",
   "updates_game": false,
   "renders_world": true,
@@ -32,7 +32,7 @@
         "type": "network.host.start",
         "name": "host",
         "default_port": 27183,
-        "session_name": "SDL3D Pong",
+        "session_name": "Slayer 3D Pong",
         "status_key": "multiplayer_host_status",
         "endpoint_key": "multiplayer_host_endpoint",
         "peer_key": "multiplayer_host_client",

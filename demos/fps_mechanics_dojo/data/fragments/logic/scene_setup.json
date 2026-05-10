@@ -1,5 +1,5 @@
 {
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "signals": [
     "signal.dojo.scene.overview.enter",
     "signal.dojo.scene.movement.enter",

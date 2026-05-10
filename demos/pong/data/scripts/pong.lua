@@ -162,11 +162,11 @@ local function read_json(ctx, path)
     if text == nil or text == "" then
         return nil
     end
-    return sdl3d.json.decode(text)
+    return slayer3d.json.decode(text)
 end
 
 local function write_json(ctx, path, value)
-    local text = sdl3d.json.encode(value)
+    local text = slayer3d.json.encode(value)
     if text == nil then
         return false
     end
@@ -187,7 +187,7 @@ end
 
 local function current_scores(scores)
     return {
-        schema = "sdl3d.pong.scores.v1",
+        schema = "slayer3d.pong.scores.v1",
         player_wins = scores:get_int("player_wins", 0),
         cpu_wins = scores:get_int("cpu_wins", 0),
         matches_played = scores:get_int("matches_played", 0),

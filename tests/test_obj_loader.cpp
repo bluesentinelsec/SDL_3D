@@ -6,14 +6,14 @@
 
 #include <SDL3/SDL_error.h>
 
-#include "sdl3d/model.h"
+#include "slayer3d/model.h"
 
 namespace
 {
 
 std::string asset(const char *rel)
 {
-    return std::string(SDL3D_TEST_ASSETS_DIR) + "/" + rel;
+    return std::string(SLAYER3D_TEST_ASSETS_DIR) + "/" + rel;
 }
 
 float minf(float a, float b)
@@ -27,11 +27,11 @@ float maxf(float a, float b)
 
 } // namespace
 
-TEST(SDL3DObjLoader, LoadsCubeWithExpectedShape)
+TEST(SLAYER3DObjLoader, LoadsCubeWithExpectedShape)
 {
-    sdl3d_model model{};
+    slayer3d_model model{};
     const std::string path = asset("models/cube_obj/cube.obj");
-    ASSERT_TRUE(sdl3d_load_model_from_file(path.c_str(), &model)) << SDL_GetError();
+    ASSERT_TRUE(slayer3d_load_model_from_file(path.c_str(), &model)) << SDL_GetError();
 
     // The fixture is one object with one material, 6 quads → 12 triangles →
     // 36 expanded vertices.
@@ -72,14 +72,14 @@ TEST(SDL3DObjLoader, LoadsCubeWithExpectedShape)
         EXPECT_NEAR(len, 1.0f, 1e-5f);
     }
 
-    sdl3d_free_model(&model);
+    slayer3d_free_model(&model);
 }
 
-TEST(SDL3DObjLoader, PicksUpMaterialFromSiblingMtl)
+TEST(SLAYER3DObjLoader, PicksUpMaterialFromSiblingMtl)
 {
-    sdl3d_model model{};
+    slayer3d_model model{};
     const std::string path = asset("models/cube_obj/cube.obj");
-    ASSERT_TRUE(sdl3d_load_model_from_file(path.c_str(), &model)) << SDL_GetError();
+    ASSERT_TRUE(slayer3d_load_model_from_file(path.c_str(), &model)) << SDL_GetError();
 
     ASSERT_EQ(model.material_count, 1);
     ASSERT_NE(model.materials[0].name, nullptr);
@@ -97,35 +97,35 @@ TEST(SDL3DObjLoader, PicksUpMaterialFromSiblingMtl)
 
     EXPECT_EQ(model.meshes[0].material_index, 0);
 
-    sdl3d_free_model(&model);
+    slayer3d_free_model(&model);
 }
 
-TEST(SDL3DObjLoader, RejectsUnknownExtension)
+TEST(SLAYER3DObjLoader, RejectsUnknownExtension)
 {
-    sdl3d_model model{};
-    EXPECT_FALSE(sdl3d_load_model_from_file("whatever.xyz", &model));
+    slayer3d_model model{};
+    EXPECT_FALSE(slayer3d_load_model_from_file("whatever.xyz", &model));
     EXPECT_EQ(model.mesh_count, 0);
     EXPECT_EQ(model.meshes, nullptr);
 }
 
-TEST(SDL3DObjLoader, GltfAndFbxRejectMissingFiles)
+TEST(SLAYER3DObjLoader, GltfAndFbxRejectMissingFiles)
 {
-    sdl3d_model m{};
-    EXPECT_FALSE(sdl3d_load_model_from_file("foo.gltf", &m));
-    EXPECT_FALSE(sdl3d_load_model_from_file("foo.glb", &m));
-    EXPECT_FALSE(sdl3d_load_model_from_file("foo.fbx", &m));
+    slayer3d_model m{};
+    EXPECT_FALSE(slayer3d_load_model_from_file("foo.gltf", &m));
+    EXPECT_FALSE(slayer3d_load_model_from_file("foo.glb", &m));
+    EXPECT_FALSE(slayer3d_load_model_from_file("foo.fbx", &m));
 }
 
-TEST(SDL3DObjLoader, MissingFileFails)
+TEST(SLAYER3DObjLoader, MissingFileFails)
 {
-    sdl3d_model m{};
-    EXPECT_FALSE(sdl3d_load_model_from_file("/nonexistent/does-not-exist.obj", &m));
+    slayer3d_model m{};
+    EXPECT_FALSE(slayer3d_load_model_from_file("/nonexistent/does-not-exist.obj", &m));
     EXPECT_EQ(m.mesh_count, 0);
 }
 
-TEST(SDL3DObjLoader, FreeIsIdempotent)
+TEST(SLAYER3DObjLoader, FreeIsIdempotent)
 {
-    sdl3d_model m{};
-    sdl3d_free_model(&m);
-    sdl3d_free_model(&m);
+    slayer3d_model m{};
+    slayer3d_free_model(&m);
+    slayer3d_free_model(&m);
 }

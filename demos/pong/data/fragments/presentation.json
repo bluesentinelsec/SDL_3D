@@ -1,5 +1,5 @@
 {
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "presentation": {
     "metrics": {
       "fps_sample_seconds": 0.25

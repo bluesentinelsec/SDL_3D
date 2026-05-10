@@ -18,16 +18,16 @@ extern "C"
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
-#include "sdl3d/asset.h"
-#include "sdl3d/data_game.h"
-#include "sdl3d/game.h"
-#include "sdl3d/game_data.h"
-#include "sdl3d/game_presentation.h"
-#include "sdl3d/image.h"
-#include "sdl3d/math.h"
-#include "sdl3d/properties.h"
-#include "sdl3d/signal_bus.h"
-#include "sdl3d/timer_pool.h"
+#include "slayer3d/asset.h"
+#include "slayer3d/data_game.h"
+#include "slayer3d/game.h"
+#include "slayer3d/game_data.h"
+#include "slayer3d/game_presentation.h"
+#include "slayer3d/image.h"
+#include "slayer3d/math.h"
+#include "slayer3d/properties.h"
+#include "slayer3d/signal_bus.h"
+#include "slayer3d/timer_pool.h"
 }
 
 namespace
@@ -40,7 +40,7 @@ struct AdapterCapture
 
 struct CapturedDiagnostic
 {
-    sdl3d_game_data_diagnostic_severity severity = SDL3D_GAME_DATA_DIAGNOSTIC_WARNING;
+    slayer3d_game_data_diagnostic_severity severity = SLAYER3D_GAME_DATA_DIAGNOSTIC_WARNING;
     std::string path;
     std::string message;
 };
@@ -127,9 +127,9 @@ struct SectorLevelInstanceCapture
     int count = 0;
     std::string level_name;
     std::string variant_name;
-    sdl3d_game_data_sector_level_variant variant = static_cast<sdl3d_game_data_sector_level_variant>(0);
-    const sdl3d_level *level = nullptr;
-    sdl3d_vec3 position{};
+    slayer3d_game_data_sector_level_variant variant = static_cast<slayer3d_game_data_sector_level_variant>(0);
+    const slayer3d_level *level = nullptr;
+    slayer3d_vec3 position{};
     bool portal_culling = true;
 };
 
@@ -137,7 +137,7 @@ struct SectorDoorRenderCapture
 {
     int door_primitives = 0;
     int textured_door_primitives = 0;
-    sdl3d_vec3 first_position{};
+    slayer3d_vec3 first_position{};
 };
 
 struct DoorPrefixRenderCapture
@@ -147,7 +147,7 @@ struct DoorPrefixRenderCapture
     int textured_door_primitives = 0;
 };
 
-void capture_signal_payload(void *userdata, int signal_id, const sdl3d_properties *payload)
+void capture_signal_payload(void *userdata, int signal_id, const slayer3d_properties *payload)
 {
     auto *capture = static_cast<NetworkSignalCapture *>(userdata);
     if (capture == nullptr)
@@ -157,9 +157,9 @@ void capture_signal_payload(void *userdata, int signal_id, const sdl3d_propertie
 
     capture->calls++;
     capture->signal_id = signal_id;
-    capture->network_control = sdl3d_properties_get_string(payload, "network_control", "");
-    capture->network_direction = sdl3d_properties_get_string(payload, "network_direction", "");
-    capture->network_tick = sdl3d_properties_get_int(payload, "network_tick", 0);
+    capture->network_control = slayer3d_properties_get_string(payload, "network_control", "");
+    capture->network_direction = slayer3d_properties_get_string(payload, "network_direction", "");
+    capture->network_tick = slayer3d_properties_get_int(payload, "network_tick", 0);
 }
 
 struct UiTextCapture
@@ -183,7 +183,7 @@ struct UiRectCapture
 {
     int count = 0;
     bool saw_doom_damage_feedback = false;
-    sdl3d_game_data_ui_rect damage_rect{};
+    slayer3d_game_data_ui_rect damage_rect{};
 };
 
 struct ParticleCapture
@@ -235,59 +235,61 @@ struct CombatSignalCapture
     bool alive = true;
 };
 
-bool serve_adapter(void *userdata, sdl3d_game_data_runtime *runtime, const char *adapter_name,
-                   sdl3d_registered_actor *target, const sdl3d_properties *payload)
+bool serve_adapter(void *userdata, slayer3d_game_data_runtime *runtime, const char *adapter_name,
+                   slayer3d_registered_actor *target, const slayer3d_properties *payload)
 {
     auto *capture = static_cast<AdapterCapture *>(userdata);
     EXPECT_STREQ(adapter_name, "adapter.pong.serve_random");
     EXPECT_NE(runtime, nullptr);
     EXPECT_NE(target, nullptr);
     EXPECT_EQ(payload, nullptr);
-    sdl3d_properties_set_vec3(target->props, "velocity", sdl3d_vec3_make(3.0f, 1.0f, 0.0f));
+    slayer3d_properties_set_vec3(target->props, "velocity", slayer3d_vec3_make(3.0f, 1.0f, 0.0f));
     capture->calls++;
     return true;
 }
 
-bool configure_play_input_adapter(void *, sdl3d_game_data_runtime *runtime, const char *adapter_name,
-                                  sdl3d_registered_actor *, const sdl3d_properties *payload)
+bool configure_play_input_adapter(void *, slayer3d_game_data_runtime *runtime, const char *adapter_name,
+                                  slayer3d_registered_actor *, const slayer3d_properties *payload)
 {
     EXPECT_STREQ(adapter_name, "adapter.pong.configure_play_input");
     EXPECT_NE(runtime, nullptr);
     if (payload != nullptr)
     {
-        const char *match_mode = sdl3d_properties_get_string(payload, "match_mode", nullptr);
-        const char *network_role = sdl3d_properties_get_string(payload, "network_role", nullptr);
-        const char *network_flow = sdl3d_properties_get_string(payload, "network_flow", nullptr);
+        const char *match_mode = slayer3d_properties_get_string(payload, "match_mode", nullptr);
+        const char *network_role = slayer3d_properties_get_string(payload, "network_role", nullptr);
+        const char *network_flow = slayer3d_properties_get_string(payload, "network_flow", nullptr);
         if (match_mode != nullptr)
         {
-            sdl3d_properties_set_string(sdl3d_game_data_mutable_scene_state(runtime), "match_mode", match_mode);
+            slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "match_mode", match_mode);
         }
         if (network_role != nullptr)
         {
-            sdl3d_properties_set_string(sdl3d_game_data_mutable_scene_state(runtime), "network_role", network_role);
+            slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "network_role",
+                                           network_role);
         }
         if (network_flow != nullptr)
         {
-            sdl3d_properties_set_string(sdl3d_game_data_mutable_scene_state(runtime), "network_flow", network_flow);
+            slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "network_flow",
+                                           network_flow);
         }
     }
     return true;
 }
 
-bool reload_native_adapter(void *userdata, sdl3d_game_data_runtime *runtime, const char *adapter_name,
-                           sdl3d_registered_actor *target, const sdl3d_properties *payload)
+bool reload_native_adapter(void *userdata, slayer3d_game_data_runtime *runtime, const char *adapter_name,
+                           slayer3d_registered_actor *target, const slayer3d_properties *payload)
 {
     auto *capture = static_cast<AdapterCapture *>(userdata);
     EXPECT_NE(runtime, nullptr);
     EXPECT_STREQ(adapter_name, "adapter.reload.run");
     EXPECT_NE(target, nullptr);
     EXPECT_EQ(payload, nullptr);
-    sdl3d_properties_set_int(target->props, "value", 99);
+    slayer3d_properties_set_int(target->props, "value", 99);
     capture->calls++;
     return true;
 }
 
-void capture_diagnostic(void *userdata, sdl3d_game_data_diagnostic_severity severity, const char *json_path,
+void capture_diagnostic(void *userdata, slayer3d_game_data_diagnostic_severity severity, const char *json_path,
                         const char *message)
 {
     auto *capture = static_cast<DiagnosticCapture *>(userdata);
@@ -295,17 +297,17 @@ void capture_diagnostic(void *userdata, sdl3d_game_data_diagnostic_severity seve
         {severity, json_path != nullptr ? json_path : "", message != nullptr ? message : ""});
 }
 
-void capture_scene_payload(void *userdata, int signal_id, const sdl3d_properties *payload)
+void capture_scene_payload(void *userdata, int signal_id, const slayer3d_properties *payload)
 {
     auto *capture = static_cast<ScenePayloadCapture *>(userdata);
     (void)signal_id;
     capture->called = true;
-    capture->from_scene = sdl3d_properties_get_string(payload, "from_scene", "");
-    capture->to_scene = sdl3d_properties_get_string(payload, "to_scene", "");
-    capture->selected_level = sdl3d_properties_get_string(payload, "selected_level", "");
+    capture->from_scene = slayer3d_properties_get_string(payload, "from_scene", "");
+    capture->to_scene = slayer3d_properties_get_string(payload, "to_scene", "");
+    capture->selected_level = slayer3d_properties_get_string(payload, "selected_level", "");
 }
 
-void count_signal(void *userdata, int signal_id, const sdl3d_properties *payload)
+void count_signal(void *userdata, int signal_id, const slayer3d_properties *payload)
 {
     auto *capture = static_cast<SignalCapture *>(userdata);
     (void)signal_id;
@@ -313,7 +315,7 @@ void count_signal(void *userdata, int signal_id, const sdl3d_properties *payload
     capture->calls++;
 }
 
-void capture_sensor_signal(void *userdata, int signal_id, const sdl3d_properties *payload)
+void capture_sensor_signal(void *userdata, int signal_id, const slayer3d_properties *payload)
 {
     auto *capture = static_cast<SensorSignalCapture *>(userdata);
     (void)signal_id;
@@ -322,11 +324,11 @@ void capture_sensor_signal(void *userdata, int signal_id, const sdl3d_properties
         return;
     }
     capture->calls++;
-    capture->actor_name = sdl3d_properties_get_string(payload, "actor_name", "");
-    capture->other_actor_name = sdl3d_properties_get_string(payload, "other_actor_name", "");
+    capture->actor_name = slayer3d_properties_get_string(payload, "actor_name", "");
+    capture->other_actor_name = slayer3d_properties_get_string(payload, "other_actor_name", "");
 }
 
-void capture_combat_signal(void *userdata, int signal_id, const sdl3d_properties *payload)
+void capture_combat_signal(void *userdata, int signal_id, const slayer3d_properties *payload)
 {
     auto *capture = static_cast<CombatSignalCapture *>(userdata);
     (void)signal_id;
@@ -335,24 +337,24 @@ void capture_combat_signal(void *userdata, int signal_id, const sdl3d_properties
         return;
     }
     capture->calls++;
-    capture->actor_name = sdl3d_properties_get_string(payload, "actor_name", "");
-    capture->source_actor_name = sdl3d_properties_get_string(payload, "source_actor_name", "");
-    capture->amount = sdl3d_properties_get_float(payload, "amount", 0.0f);
-    capture->armor_delta = sdl3d_properties_get_float(payload, "armor_delta", 0.0f);
-    capture->health_delta = sdl3d_properties_get_float(payload, "health_delta", 0.0f);
-    capture->health = sdl3d_properties_get_float(payload, "health", 0.0f);
-    capture->armor = sdl3d_properties_get_float(payload, "armor", 0.0f);
-    capture->alive = sdl3d_properties_get_bool(payload, "alive", true);
+    capture->actor_name = slayer3d_properties_get_string(payload, "actor_name", "");
+    capture->source_actor_name = slayer3d_properties_get_string(payload, "source_actor_name", "");
+    capture->amount = slayer3d_properties_get_float(payload, "amount", 0.0f);
+    capture->armor_delta = slayer3d_properties_get_float(payload, "armor_delta", 0.0f);
+    capture->health_delta = slayer3d_properties_get_float(payload, "health_delta", 0.0f);
+    capture->health = slayer3d_properties_get_float(payload, "health", 0.0f);
+    capture->armor = slayer3d_properties_get_float(payload, "armor", 0.0f);
+    capture->alive = slayer3d_properties_get_bool(payload, "alive", true);
 }
 
 std::string fixture_path(const char *filename)
 {
-    return std::string(SDL3D_GAME_DATA_FIXTURE_DIR) + "/" + filename;
+    return std::string(SLAYER3D_GAME_DATA_FIXTURE_DIR) + "/" + filename;
 }
 
 std::filesystem::path demo_data_path(const char *demo_name, const char *data_file)
 {
-    return std::filesystem::path(SDL3D_DEMOS_ROOT) / demo_name / "data" / data_file;
+    return std::filesystem::path(SLAYER3D_DEMOS_ROOT) / demo_name / "data" / data_file;
 }
 
 std::filesystem::path pong_data_path()
@@ -403,7 +405,7 @@ std::filesystem::path unique_test_dir(const char *name)
     const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
     for (int attempt = 0; attempt < 100; ++attempt)
     {
-        const std::filesystem::path dir = root / ("sdl3d_game_data_test_" + std::string(name) + "_" +
+        const std::filesystem::path dir = root / ("slayer3d_game_data_test_" + std::string(name) + "_" +
                                                   std::to_string(now) + "_" + std::to_string(attempt));
         std::error_code error;
         if (std::filesystem::create_directories(dir, error))
@@ -428,7 +430,7 @@ void write_text(const std::filesystem::path &path, const char *text)
 std::string network_schema_game_json(const std::string &network_json, const char *metadata_name = "Network Schema")
 {
     return std::string(R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": ")json") +
            metadata_name + R"json(", "id": "test.network_schema", "version": "0.1.0" },
   "world": { "name": "world.network_schema", "kind": "fixed_screen" },
@@ -463,7 +465,7 @@ std::string valid_network_schema_json(const char *ball_velocity_type = "vec3")
 {
     return std::string(R"json({
     "protocol": {
-      "id": "sdl3d.test.network.v1",
+      "id": "slayer3d.test.network.v1",
       "version": 1,
       "transport": "udp",
       "tick_rate": 60
@@ -511,7 +513,7 @@ std::string valid_network_schema_json(const char *ball_velocity_type = "vec3")
 std::string actor_pool_replication_game_json(int pool_capacity)
 {
     return std::string(R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Actor Pool Replication", "id": "test.actor_pool_replication", "version": "0.1.0" },
   "world": { "name": "world.actor_pool_replication", "kind": "fixed_screen" },
   "entities": [],
@@ -563,7 +565,7 @@ std::string actor_pool_replication_game_json(int pool_capacity)
     ]
   },
   "network": {
-    "protocol": { "id": "sdl3d.test.pool.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.pool.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "replication": [
       {
         "name": "pool_state",
@@ -586,47 +588,47 @@ std::string actor_pool_replication_game_json(int pool_capacity)
 })json";
 }
 
-std::array<Uint8, SDL3D_REPLICATION_SCHEMA_HASH_SIZE> load_network_schema_hash(const std::filesystem::path &path)
+std::array<Uint8, SLAYER3D_REPLICATION_SCHEMA_HASH_SIZE> load_network_schema_hash(const std::filesystem::path &path)
 {
-    sdl3d_game_session *session = nullptr;
-    EXPECT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    EXPECT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    EXPECT_TRUE(sdl3d_game_data_load_file(path.string().c_str(), session, &runtime, error, sizeof(error))) << error;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    EXPECT_TRUE(slayer3d_game_data_load_file(path.string().c_str(), session, &runtime, error, sizeof(error))) << error;
     EXPECT_NE(runtime, nullptr);
-    EXPECT_TRUE(sdl3d_game_data_has_network_schema(runtime));
+    EXPECT_TRUE(slayer3d_game_data_has_network_schema(runtime));
 
-    std::array<Uint8, SDL3D_REPLICATION_SCHEMA_HASH_SIZE> hash{};
-    EXPECT_TRUE(sdl3d_game_data_get_network_schema_hash(runtime, hash.data()));
+    std::array<Uint8, SLAYER3D_REPLICATION_SCHEMA_HASH_SIZE> hash{};
+    EXPECT_TRUE(slayer3d_game_data_get_network_schema_hash(runtime, hash.data()));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     return hash;
 }
 
-void load_pong_runtime(sdl3d_game_session **out_session, sdl3d_game_data_runtime **out_runtime)
+void load_pong_runtime(slayer3d_game_session **out_session, slayer3d_game_data_runtime **out_runtime)
 {
     ASSERT_NE(out_session, nullptr);
     ASSERT_NE(out_runtime, nullptr);
     *out_session = nullptr;
     *out_runtime = nullptr;
 
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, out_session));
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, out_session));
     char error[512]{};
-    ASSERT_TRUE(
-        sdl3d_game_data_load_file(pong_data_path().string().c_str(), *out_session, out_runtime, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_load_file(pong_data_path().string().c_str(), *out_session, out_runtime, error,
+                                             sizeof(error)))
         << error;
     ASSERT_NE(*out_runtime, nullptr);
 }
 
-void destroy_runtime_session(sdl3d_game_session *session, sdl3d_game_data_runtime *runtime)
+void destroy_runtime_session(slayer3d_game_session *session, slayer3d_game_data_runtime *runtime)
 {
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
-void expect_vec3_near(sdl3d_vec3 actual, sdl3d_vec3 expected, float tolerance = 0.0001f)
+void expect_vec3_near(slayer3d_vec3 actual, slayer3d_vec3 expected, float tolerance = 0.0001f)
 {
     EXPECT_NEAR(actual.x, expected.x, tolerance);
     EXPECT_NEAR(actual.y, expected.y, tolerance);
@@ -663,7 +665,7 @@ void write_hot_reload_json(const std::filesystem::path &dir)
 {
     write_text(dir / "reload.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Reload", "id": "test.reload", "version": "0.1.0" },
   "scripts": [
     { "id": "script.rules", "path": "scripts/rules.lua", "module": "reload.rules" }
@@ -698,7 +700,7 @@ void write_direct_start_json(const std::filesystem::path &dir)
 {
     write_text(dir / "direct_start.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Direct Start", "id": "test.direct_start", "version": "0.1.0" },
   "world": { "name": "world.direct_start", "kind": "fixed_screen" },
   "signals": ["signal.intro.enter", "signal.level.enter"],
@@ -738,13 +740,13 @@ void write_direct_start_json(const std::filesystem::path &dir)
 })json");
     write_text(dir / "scenes" / "intro.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.intro",
   "on_enter_signal": "signal.intro.enter"
 })json");
     write_text(dir / "scenes" / "level1.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.level1",
   "on_enter_signal": "signal.level.enter"
 })json");
@@ -754,7 +756,7 @@ void write_timeline_json(const std::filesystem::path &dir)
 {
     write_text(dir / "timeline.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Timeline", "id": "test.timeline", "version": "0.1.0" },
   "transitions": {
     "scene_out": { "type": "fade", "direction": "out", "color": [0, 0, 0, 255], "duration": 0.10 },
@@ -780,7 +782,7 @@ void write_timeline_json(const std::filesystem::path &dir)
 })json");
     write_text(dir / "scenes" / "intro.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.intro",
   "updates_game": false,
   "renders_world": false,
@@ -806,7 +808,7 @@ void write_timeline_json(const std::filesystem::path &dir)
 })json");
     write_text(dir / "scenes" / "title.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.title",
   "updates_game": false,
   "renders_world": false,
@@ -819,7 +821,7 @@ void write_skip_policy_json(const std::filesystem::path &dir)
 {
     write_text(dir / "skip.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Skip", "id": "test.skip", "version": "0.1.0" },
   "transitions": {
     "scene_out": { "type": "fade", "direction": "out", "color": [0, 0, 0, 255], "duration": 0.10 },
@@ -871,7 +873,7 @@ void write_skip_policy_json(const std::filesystem::path &dir)
 })json");
     write_text(dir / "scenes" / "intro.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.intro",
   "updates_game": false,
   "renders_world": false,
@@ -893,7 +895,7 @@ void write_skip_policy_json(const std::filesystem::path &dir)
 })json");
     write_text(dir / "scenes" / "title.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.title",
   "updates_game": false,
   "renders_world": false,
@@ -914,7 +916,7 @@ void write_skip_policy_json(const std::filesystem::path &dir)
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "renders_world": true,
@@ -928,7 +930,7 @@ void write_scene_flow_policy_json(const std::filesystem::path &dir, bool block_m
     const char *block_menus_text = block_menus ? "true" : "false";
     const char *block_shortcuts_text = block_scene_shortcuts ? "true" : "false";
     const std::string game_json = R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Scene Flow Policy", "id": "test.scene_flow_policy", "version": "0.1.0" },
   "app": {
     "scene_shortcuts": [
@@ -983,7 +985,7 @@ void write_scene_flow_policy_json(const std::filesystem::path &dir, bool block_m
     write_text(dir / "flow_policy.game.json", game_json.c_str());
 
     std::string intro_json = R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.intro",
   "updates_game": false,
   "renders_world": false,
@@ -1019,7 +1021,7 @@ void write_scene_flow_policy_json(const std::filesystem::path &dir, bool block_m
     write_text(dir / "scenes" / "intro.scene.json", intro_json.c_str());
     write_text(dir / "scenes" / "title.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.title",
   "updates_game": false,
   "renders_world": false,
@@ -1027,7 +1029,7 @@ void write_scene_flow_policy_json(const std::filesystem::path &dir, bool block_m
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "renders_world": true,
@@ -1039,7 +1041,7 @@ void write_scene_activity_json(const std::filesystem::path &dir)
 {
     write_text(dir / "activity.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Activity", "id": "test.activity", "version": "0.1.0" },
   "input": {
     "contexts": [
@@ -1116,7 +1118,7 @@ void write_scene_activity_json(const std::filesystem::path &dir)
 })json");
     write_text(dir / "scenes" / "title.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.title",
   "updates_game": false,
   "renders_world": false,
@@ -1165,7 +1167,7 @@ void write_scene_activity_json(const std::filesystem::path &dir)
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "renders_world": false,
@@ -1177,7 +1179,7 @@ void write_animation_json(const std::filesystem::path &dir)
 {
     write_text(dir / "animation.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Animation", "id": "test.animation", "version": "0.1.0" },
   "entities": [
     {
@@ -1202,7 +1204,7 @@ void write_animation_json(const std::filesystem::path &dir)
 })json");
     write_text(dir / "scenes" / "intro.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.intro",
   "updates_game": false,
   "renders_world": false,
@@ -1299,7 +1301,7 @@ void write_animation_json(const std::filesystem::path &dir)
 })json");
     write_text(dir / "scenes" / "title.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.title",
   "updates_game": false,
   "renders_world": false,
@@ -1320,23 +1322,23 @@ void write_hot_reload_script(const std::filesystem::path &dir, int value)
     write_text(dir / "scripts" / "rules.lua", script.c_str());
 }
 
-void emit_reload_signal(sdl3d_game_session *session, sdl3d_game_data_runtime *runtime)
+void emit_reload_signal(slayer3d_game_session *session, slayer3d_game_data_runtime *runtime)
 {
-    const int signal = sdl3d_game_data_find_signal(runtime, "signal.run");
+    const int signal = slayer3d_game_data_find_signal(runtime, "signal.run");
     ASSERT_GE(signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), signal, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), signal, nullptr);
 }
 
-bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primitive *primitive)
+bool capture_render_primitive(void *userdata, const slayer3d_game_data_render_primitive *primitive)
 {
     auto *capture = static_cast<RenderPrimitiveCapture *>(userdata);
-    if (primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
+    if (primitive->type == SLAYER3D_GAME_DATA_RENDER_CUBE)
         capture->cubes++;
-    else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
+    else if (primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE)
         capture->spheres++;
-    else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE_BATCH)
+    else if (primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE_BATCH)
         capture->spheres++;
-    else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPRITE)
+    else if (primitive->type == SLAYER3D_GAME_DATA_RENDER_SPRITE)
         capture->sprites++;
 
     if (std::string(primitive->entity_name) == "entity.paddle.player")
@@ -1365,7 +1367,7 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
     if (std::string(primitive->entity_name) == "entity.options.background.base")
     {
         capture->saw_options_background = true;
-        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
+        EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_CUBE);
         EXPECT_NEAR(primitive->position.z, -0.65f, 0.0001f);
         EXPECT_NEAR(primitive->size.x, 22.0f, 0.0001f);
         EXPECT_EQ(primitive->color.r, 0);
@@ -1378,26 +1380,28 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
     if (std::string(primitive->entity_name) == "entity.options.glow.magenta")
     {
         capture->saw_options_glow = true;
-        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_SPHERE);
+        EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_SPHERE);
         EXPECT_NEAR(primitive->radius, 1.05f, 0.0001f);
         EXPECT_TRUE(primitive->emissive);
     }
-    if (std::string(primitive->entity_name) == "pool.renderables.0" && primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
+    if (std::string(primitive->entity_name) == "pool.renderables.0" &&
+        primitive->type == SLAYER3D_GAME_DATA_RENDER_CUBE)
     {
         capture->saw_pooled_cube = true;
-        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
+        EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_CUBE);
         EXPECT_NEAR(primitive->position.x, 2.0f, 0.0001f);
         EXPECT_NEAR(primitive->size.x, 0.5f, 0.0001f);
     }
-    if (std::string(primitive->entity_name) == "pool.renderables.0" && primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
+    if (std::string(primitive->entity_name) == "pool.renderables.0" &&
+        primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE)
     {
         capture->saw_pooled_sphere = true;
-        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_SPHERE);
+        EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_SPHERE);
         EXPECT_NEAR(primitive->position.y, 3.0f, 0.0001f);
         EXPECT_NEAR(primitive->radius, 0.2f, 0.0001f);
     }
     if (std::string(primitive->entity_name).rfind("pickup.", 0) == 0 &&
-        primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE_BATCH)
+        primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE_BATCH)
     {
         capture->saw_pickup_batch = true;
         capture->pickup_batch_instances += primitive->instance_count;
@@ -1405,27 +1409,27 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
         EXPECT_NE(primitive->instances, nullptr);
     }
     const std::string entity_name = primitive->entity_name != nullptr ? primitive->entity_name : "";
-    if (entity_name.rfind("entity.doom.robot.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_SPRITE)
+    if (entity_name.rfind("entity.doom.robot.", 0) == 0 && primitive->type == SLAYER3D_GAME_DATA_RENDER_SPRITE)
         capture->doom_robot_sprites++;
-    if (entity_name.rfind("entity.doom.health.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_SPRITE)
+    if (entity_name.rfind("entity.doom.health.", 0) == 0 && primitive->type == SLAYER3D_GAME_DATA_RENDER_SPRITE)
         capture->doom_health_sprites++;
-    if (entity_name.rfind("entity.doom.crate.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
+    if (entity_name.rfind("entity.doom.crate.", 0) == 0 && primitive->type == SLAYER3D_GAME_DATA_RENDER_CUBE)
     {
         capture->doom_crates++;
         if (primitive->texture_image != nullptr &&
             std::string(primitive->texture_image) == "image.doom.radioactive_crate")
             capture->doom_textured_crates++;
     }
-    if (entity_name.rfind("entity.doom.dragon", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_MODEL)
+    if (entity_name.rfind("entity.doom.dragon", 0) == 0 && primitive->type == SLAYER3D_GAME_DATA_RENDER_MODEL)
         capture->doom_model_primitives++;
-    if (entity_name.rfind("entity.doom.presentation.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
+    if (entity_name.rfind("entity.doom.presentation.", 0) == 0 && primitive->type == SLAYER3D_GAME_DATA_RENDER_CUBE)
         capture->doom_presentation_cubes++;
-    if (entity_name.rfind("pool.doom.projectiles.", 0) == 0 && primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
+    if (entity_name.rfind("pool.doom.projectiles.", 0) == 0 && primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE)
         capture->doom_projectile_spheres++;
     if (entity_name == "entity.doom.robot.entry")
     {
         capture->saw_doom_robot_sprite = true;
-        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_SPRITE);
+        EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_SPRITE);
         EXPECT_STREQ(primitive->sprite_asset, "sprite.doom.robot.walk");
         EXPECT_NEAR(primitive->sprite_size.x, 3.4f, 0.0001f);
         EXPECT_NEAR(primitive->sprite_size.y, 5.2f, 0.0001f);
@@ -1434,7 +1438,7 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
     if (entity_name == "entity.doom.health.entry")
     {
         capture->saw_doom_health_sprite = true;
-        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_SPRITE);
+        EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_SPRITE);
         EXPECT_STREQ(primitive->sprite_asset, "sprite.doom.health_pack");
         EXPECT_NEAR(primitive->sprite_size.x, 1.0f, 0.0001f);
         EXPECT_NEAR(primitive->sprite_size.y, 1.0f, 0.0001f);
@@ -1442,7 +1446,7 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
     if (entity_name == "entity.doom.crate.nukage")
     {
         capture->saw_doom_crate = true;
-        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
+        EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_CUBE);
         EXPECT_NEAR(primitive->size.x, 0.9f, 0.0001f);
         EXPECT_EQ(primitive->color.g, 170);
         EXPECT_STREQ(primitive->texture_image, "image.doom.radioactive_crate");
@@ -1450,7 +1454,7 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
     if (entity_name == "entity.doom.dragon")
     {
         capture->saw_doom_dragon_model = true;
-        EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_MODEL);
+        EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_MODEL);
         EXPECT_STREQ(primitive->model_asset, "model.doom.black_dragon");
         EXPECT_NEAR(primitive->position.x, 24.0f, 0.0001f);
         EXPECT_NEAR(primitive->position.z, 74.0f, 0.0001f);
@@ -1463,7 +1467,7 @@ bool capture_render_primitive(void *userdata, const sdl3d_game_data_render_primi
     return true;
 }
 
-bool capture_sector_door_render_primitive(void *userdata, const sdl3d_game_data_render_primitive *primitive)
+bool capture_sector_door_render_primitive(void *userdata, const slayer3d_game_data_render_primitive *primitive)
 {
     auto *capture = static_cast<SectorDoorRenderCapture *>(userdata);
     if (capture == nullptr || primitive == nullptr || primitive->entity_name == nullptr ||
@@ -1476,14 +1480,14 @@ bool capture_sector_door_render_primitive(void *userdata, const sdl3d_game_data_
     capture->door_primitives++;
     if (primitive->texture_image != nullptr && std::string(primitive->texture_image) == "image.doom.door_hatch")
         capture->textured_door_primitives++;
-    EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
+    EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_CUBE);
     EXPECT_NEAR(primitive->size.x, 0.4f, 0.001f);
     EXPECT_NEAR(primitive->size.y, 2.0f, 0.001f);
     EXPECT_NEAR(primitive->size.z, 0.4f, 0.001f);
     return true;
 }
 
-bool capture_door_prefix_render_primitive(void *userdata, const sdl3d_game_data_render_primitive *primitive)
+bool capture_door_prefix_render_primitive(void *userdata, const slayer3d_game_data_render_primitive *primitive)
 {
     auto *capture = static_cast<DoorPrefixRenderCapture *>(userdata);
     if (capture == nullptr || primitive == nullptr || primitive->entity_name == nullptr || capture->prefix == nullptr ||
@@ -1494,14 +1498,14 @@ bool capture_door_prefix_render_primitive(void *userdata, const sdl3d_game_data_
     capture->door_primitives++;
     if (primitive->texture_image != nullptr && std::string(primitive->texture_image) == "image.doom.door_hatch")
         capture->textured_door_primitives++;
-    EXPECT_EQ(primitive->type, SDL3D_GAME_DATA_RENDER_CUBE);
+    EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_CUBE);
     EXPECT_GT(primitive->size.x, 0.0f);
     EXPECT_GT(primitive->size.y, 0.0f);
     EXPECT_GT(primitive->size.z, 0.0f);
     return true;
 }
 
-bool capture_sector_level_instance(void *userdata, const sdl3d_game_data_sector_level_instance *instance)
+bool capture_sector_level_instance(void *userdata, const slayer3d_game_data_sector_level_instance *instance)
 {
     auto *capture = static_cast<SectorLevelInstanceCapture *>(userdata);
     capture->count++;
@@ -1514,7 +1518,7 @@ bool capture_sector_level_instance(void *userdata, const sdl3d_game_data_sector_
     return true;
 }
 
-bool capture_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
+bool capture_ui_text(void *userdata, const slayer3d_game_data_ui_text *text)
 {
     auto *capture = static_cast<UiTextCapture *>(userdata);
     capture->count++;
@@ -1554,7 +1558,7 @@ bool capture_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
         EXPECT_STREQ(text->font, "font.doom.hud");
         EXPECT_STREQ(text->format, "FPS %.0f");
         EXPECT_TRUE(text->normalized);
-        EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_RIGHT);
+        EXPECT_EQ(text->align, SLAYER3D_GAME_DATA_UI_ALIGN_RIGHT);
         EXPECT_NEAR(text->x, 0.985f, 0.0001f);
     }
     if (std::string(text->name) == "ui.doom_level.profile")
@@ -1563,12 +1567,12 @@ bool capture_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
         EXPECT_STREQ(text->font, "font.doom.hud");
         EXPECT_STREQ(text->format, "PROFILE %s");
         EXPECT_TRUE(text->normalized);
-        EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
+        EXPECT_EQ(text->align, SLAYER3D_GAME_DATA_UI_ALIGN_LEFT);
     }
     return true;
 }
 
-bool capture_ui_rect(void *userdata, const sdl3d_game_data_ui_rect *rect)
+bool capture_ui_rect(void *userdata, const slayer3d_game_data_ui_rect *rect)
 {
     auto *capture = static_cast<UiRectCapture *>(userdata);
     capture->count++;
@@ -1585,7 +1589,7 @@ bool capture_ui_rect(void *userdata, const sdl3d_game_data_ui_rect *rect)
     return true;
 }
 
-bool capture_particle(void *userdata, const sdl3d_game_data_particle_emitter *emitter)
+bool capture_particle(void *userdata, const slayer3d_game_data_particle_emitter *emitter)
 {
     auto *capture = static_cast<ParticleCapture *>(userdata);
     ++capture->count;
@@ -1621,7 +1625,7 @@ bool capture_particle(void *userdata, const sdl3d_game_data_particle_emitter *em
     return true;
 }
 
-bool capture_evaluated_primitive(void *userdata, const sdl3d_game_data_render_primitive *primitive)
+bool capture_evaluated_primitive(void *userdata, const slayer3d_game_data_render_primitive *primitive)
 {
     auto *capture = static_cast<EvaluatedPrimitiveCapture *>(userdata);
     if (std::string(primitive->entity_name) == "entity.field.border.top")
@@ -1692,202 +1696,210 @@ std::vector<std::uint8_t> make_pack(const std::vector<std::pair<std::string, std
     return bytes;
 }
 
-bool mount_test_directory_assets(sdl3d_asset_resolver *assets, void *userdata, char *error_buffer,
+bool mount_test_directory_assets(slayer3d_asset_resolver *assets, void *userdata, char *error_buffer,
                                  int error_buffer_size)
 {
-    return sdl3d_asset_resolver_mount_directory(assets, static_cast<const char *>(userdata), error_buffer,
-                                                error_buffer_size);
+    return slayer3d_asset_resolver_mount_directory(assets, static_cast<const char *>(userdata), error_buffer,
+                                                   error_buffer_size);
 }
 
 } // namespace
 
 TEST(GameDataRuntime, LoadsPongDataIntoGenericSessionServices)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.ball"), nullptr);
-    EXPECT_NE(sdl3d_game_data_find_actor_with_tag(runtime, "ball"), nullptr);
+    EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.ball"), nullptr);
+    EXPECT_NE(slayer3d_game_data_find_actor_with_tag(runtime, "ball"), nullptr);
     const char *paddle_tags[] = {"paddle", "player"};
-    EXPECT_NE(sdl3d_game_data_find_actor_with_tags(runtime, paddle_tags, 2), nullptr);
-    EXPECT_GE(sdl3d_game_data_find_signal(runtime, "signal.ball.serve"), 0);
-    EXPECT_GE(sdl3d_game_data_find_signal(runtime, "signal.multiplayer.lobby.start"), 0);
-    EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.paddle.up"), 0);
-    EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.paddle.local.up"), 0);
-    EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.paddle.local.down"), 0);
-    EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.scene.title"), 0);
-    EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.scene.options"), 0);
-    EXPECT_GE(sdl3d_game_data_find_action(runtime, "action.scene.play"), 0);
+    EXPECT_NE(slayer3d_game_data_find_actor_with_tags(runtime, paddle_tags, 2), nullptr);
+    EXPECT_GE(slayer3d_game_data_find_signal(runtime, "signal.ball.serve"), 0);
+    EXPECT_GE(slayer3d_game_data_find_signal(runtime, "signal.multiplayer.lobby.start"), 0);
+    EXPECT_GE(slayer3d_game_data_find_action(runtime, "action.paddle.up"), 0);
+    EXPECT_GE(slayer3d_game_data_find_action(runtime, "action.paddle.local.up"), 0);
+    EXPECT_GE(slayer3d_game_data_find_action(runtime, "action.paddle.local.down"), 0);
+    EXPECT_GE(slayer3d_game_data_find_action(runtime, "action.scene.title"), 0);
+    EXPECT_GE(slayer3d_game_data_find_action(runtime, "action.scene.options"), 0);
+    EXPECT_GE(slayer3d_game_data_find_action(runtime, "action.scene.play"), 0);
     const char *network_scene_state_key = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_get_network_scene_state_key(runtime, "host", "status", &network_scene_state_key));
+    ASSERT_TRUE(slayer3d_game_data_get_network_scene_state_key(runtime, "host", "status", &network_scene_state_key));
     EXPECT_STREQ(network_scene_state_key, "multiplayer_host_status");
-    ASSERT_TRUE(sdl3d_game_data_get_network_scene_state_key(runtime, "host", "connected", &network_scene_state_key));
+    ASSERT_TRUE(slayer3d_game_data_get_network_scene_state_key(runtime, "host", "connected", &network_scene_state_key));
     EXPECT_STREQ(network_scene_state_key, "multiplayer_host_connected");
-    ASSERT_TRUE(sdl3d_game_data_get_network_scene_state_key(runtime, "discovery", "count", &network_scene_state_key));
+    ASSERT_TRUE(
+        slayer3d_game_data_get_network_scene_state_key(runtime, "discovery", "count", &network_scene_state_key));
     EXPECT_STREQ(network_scene_state_key, "multiplayer_discovery_count");
     ASSERT_TRUE(
-        sdl3d_game_data_get_network_scene_state_key(runtime, "discovery", "result_0", &network_scene_state_key));
+        slayer3d_game_data_get_network_scene_state_key(runtime, "discovery", "result_0", &network_scene_state_key));
     EXPECT_STREQ(network_scene_state_key, "session_0");
-    EXPECT_FALSE(sdl3d_game_data_get_network_scene_state_key(runtime, "host", "missing", &network_scene_state_key));
+    EXPECT_FALSE(slayer3d_game_data_get_network_scene_state_key(runtime, "host", "missing", &network_scene_state_key));
     EXPECT_EQ(network_scene_state_key, nullptr);
     const char *network_session_value = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_get_network_session_scene(runtime, "play", &network_session_value));
+    ASSERT_TRUE(slayer3d_game_data_get_network_session_scene(runtime, "play", &network_session_value));
     EXPECT_STREQ(network_session_value, "scene.play");
-    ASSERT_TRUE(sdl3d_game_data_get_network_session_scene(runtime, "join", &network_session_value));
+    ASSERT_TRUE(slayer3d_game_data_get_network_session_scene(runtime, "join", &network_session_value));
     EXPECT_STREQ(network_session_value, "scene.multiplayer.join");
-    ASSERT_TRUE(sdl3d_game_data_get_network_session_state_key(runtime, "match_mode", &network_session_value));
+    ASSERT_TRUE(slayer3d_game_data_get_network_session_state_key(runtime, "match_mode", &network_session_value));
     EXPECT_STREQ(network_session_value, "match_mode");
     ASSERT_TRUE(
-        sdl3d_game_data_get_network_session_state_value(runtime, "match_mode", "network", &network_session_value));
+        slayer3d_game_data_get_network_session_state_value(runtime, "match_mode", "network", &network_session_value));
     EXPECT_STREQ(network_session_value, "lan");
     ASSERT_TRUE(
-        sdl3d_game_data_get_network_session_state_value(runtime, "network_role", "client", &network_session_value));
+        slayer3d_game_data_get_network_session_state_value(runtime, "network_role", "client", &network_session_value));
     EXPECT_STREQ(network_session_value, "client");
-    ASSERT_TRUE(sdl3d_game_data_get_network_session_message(runtime, "disconnect_reasons", "host_exited",
-                                                            &network_session_value));
+    ASSERT_TRUE(slayer3d_game_data_get_network_session_message(runtime, "disconnect_reasons", "host_exited",
+                                                               &network_session_value));
     EXPECT_STREQ(network_session_value, "Host exited");
-    ASSERT_TRUE(sdl3d_game_data_get_network_session_message(runtime, "disconnect_prompts", "match_terminated",
-                                                            &network_session_value));
+    ASSERT_TRUE(slayer3d_game_data_get_network_session_message(runtime, "disconnect_prompts", "match_terminated",
+                                                               &network_session_value));
     EXPECT_STREQ(network_session_value, "Match terminated: {reason} - Press Enter to return to title screen.");
-    EXPECT_FALSE(
-        sdl3d_game_data_get_network_session_message(runtime, "disconnect_reasons", "missing", &network_session_value));
+    EXPECT_FALSE(slayer3d_game_data_get_network_session_message(runtime, "disconnect_reasons", "missing",
+                                                                &network_session_value));
     EXPECT_EQ(network_session_value, nullptr);
-    EXPECT_TRUE(sdl3d_game_data_network_managed_runtime_enabled(runtime));
+    EXPECT_TRUE(slayer3d_game_data_network_managed_runtime_enabled(runtime));
     float managed_ack_delay = 0.0f;
-    ASSERT_TRUE(sdl3d_game_data_get_network_managed_termination_ack_delay(runtime, &managed_ack_delay));
+    ASSERT_TRUE(slayer3d_game_data_get_network_managed_termination_ack_delay(runtime, &managed_ack_delay));
     EXPECT_FLOAT_EQ(managed_ack_delay, 3.0f);
-    EXPECT_TRUE(sdl3d_game_data_network_managed_keep_alive_scene_matches(runtime, "host", "scene.multiplayer.lobby"));
-    EXPECT_TRUE(sdl3d_game_data_network_managed_keep_alive_scene_matches(runtime, "host", "scene.play"));
-    EXPECT_FALSE(sdl3d_game_data_network_managed_keep_alive_scene_matches(runtime, "host", "scene.title"));
-    EXPECT_TRUE(sdl3d_game_data_network_managed_keep_alive_scene_matches(runtime, "direct_connect",
-                                                                         "scene.multiplayer.discovery"));
-    EXPECT_TRUE(sdl3d_game_data_network_managed_keep_alive_scene_matches(runtime, "direct_connect", "scene.play"));
+    EXPECT_TRUE(
+        slayer3d_game_data_network_managed_keep_alive_scene_matches(runtime, "host", "scene.multiplayer.lobby"));
+    EXPECT_TRUE(slayer3d_game_data_network_managed_keep_alive_scene_matches(runtime, "host", "scene.play"));
+    EXPECT_FALSE(slayer3d_game_data_network_managed_keep_alive_scene_matches(runtime, "host", "scene.title"));
+    EXPECT_TRUE(slayer3d_game_data_network_managed_keep_alive_scene_matches(runtime, "direct_connect",
+                                                                            "scene.multiplayer.discovery"));
+    EXPECT_TRUE(slayer3d_game_data_network_managed_keep_alive_scene_matches(runtime, "direct_connect", "scene.play"));
     const char *network_runtime_value = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_replication(runtime, "state_snapshot", &network_runtime_value));
+    ASSERT_TRUE(slayer3d_game_data_get_network_runtime_replication(runtime, "state_snapshot", &network_runtime_value));
     EXPECT_STREQ(network_runtime_value, "play_state");
-    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_replication(runtime, "client_input", &network_runtime_value));
+    ASSERT_TRUE(slayer3d_game_data_get_network_runtime_replication(runtime, "client_input", &network_runtime_value));
     EXPECT_STREQ(network_runtime_value, "client_input");
-    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_control(runtime, "pause_request", &network_runtime_value));
+    ASSERT_TRUE(slayer3d_game_data_get_network_runtime_control(runtime, "pause_request", &network_runtime_value));
     EXPECT_STREQ(network_runtime_value, "pause_request");
-    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_control(runtime, "disconnect", &network_runtime_value));
+    ASSERT_TRUE(slayer3d_game_data_get_network_runtime_control(runtime, "disconnect", &network_runtime_value));
     EXPECT_STREQ(network_runtime_value, "disconnect");
-    EXPECT_FALSE(sdl3d_game_data_get_network_runtime_control(runtime, "missing", &network_runtime_value));
+    EXPECT_FALSE(slayer3d_game_data_get_network_runtime_control(runtime, "missing", &network_runtime_value));
     EXPECT_EQ(network_runtime_value, nullptr);
     int network_runtime_id = -1;
-    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_action(runtime, "client_up", &network_runtime_id));
-    EXPECT_EQ(network_runtime_id, sdl3d_game_data_find_action(runtime, "action.paddle.local.up"));
-    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_action(runtime, "menu_back", &network_runtime_id));
-    EXPECT_EQ(network_runtime_id, sdl3d_game_data_find_action(runtime, "action.menu.back"));
-    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_signal(runtime, "lobby_start", &network_runtime_id));
-    EXPECT_EQ(network_runtime_id, sdl3d_game_data_find_signal(runtime, "signal.multiplayer.lobby.start"));
-    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_signal(runtime, "ui_select", &network_runtime_id));
-    EXPECT_EQ(network_runtime_id, sdl3d_game_data_find_signal(runtime, "signal.ui.menu.select"));
+    ASSERT_TRUE(slayer3d_game_data_get_network_runtime_action(runtime, "client_up", &network_runtime_id));
+    EXPECT_EQ(network_runtime_id, slayer3d_game_data_find_action(runtime, "action.paddle.local.up"));
+    ASSERT_TRUE(slayer3d_game_data_get_network_runtime_action(runtime, "menu_back", &network_runtime_id));
+    EXPECT_EQ(network_runtime_id, slayer3d_game_data_find_action(runtime, "action.menu.back"));
+    ASSERT_TRUE(slayer3d_game_data_get_network_runtime_signal(runtime, "lobby_start", &network_runtime_id));
+    EXPECT_EQ(network_runtime_id, slayer3d_game_data_find_signal(runtime, "signal.multiplayer.lobby.start"));
+    ASSERT_TRUE(slayer3d_game_data_get_network_runtime_signal(runtime, "ui_select", &network_runtime_id));
+    EXPECT_EQ(network_runtime_id, slayer3d_game_data_find_signal(runtime, "signal.ui.menu.select"));
     int network_pause_action = -1;
-    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_pause_action(runtime, &network_pause_action));
-    EXPECT_EQ(network_pause_action, sdl3d_game_data_find_action(runtime, "action.pause"));
+    ASSERT_TRUE(slayer3d_game_data_get_network_runtime_pause_action(runtime, &network_pause_action));
+    EXPECT_EQ(network_pause_action, slayer3d_game_data_find_action(runtime, "action.pause"));
     bool network_paused = true;
-    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_pause_state(runtime, &network_paused, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_get_network_runtime_pause_state(runtime, &network_paused, error, sizeof(error)))
         << error;
     EXPECT_FALSE(network_paused);
-    ASSERT_TRUE(sdl3d_game_data_set_network_runtime_pause_state(runtime, true, error, sizeof(error))) << error;
-    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_pause_state(runtime, &network_paused, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_set_network_runtime_pause_state(runtime, true, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_game_data_get_network_runtime_pause_state(runtime, &network_paused, error, sizeof(error)))
         << error;
     EXPECT_TRUE(network_paused);
-    ASSERT_EQ(sdl3d_game_data_haptics_policy_count(runtime), 2);
-    sdl3d_game_data_haptics_policy haptics_policy{};
-    ASSERT_TRUE(sdl3d_game_data_get_haptics_policy_at(runtime, 0, &haptics_policy));
+    ASSERT_EQ(slayer3d_game_data_haptics_policy_count(runtime), 2);
+    slayer3d_game_data_haptics_policy haptics_policy{};
+    ASSERT_TRUE(slayer3d_game_data_get_haptics_policy_at(runtime, 0, &haptics_policy));
     EXPECT_STREQ(haptics_policy.name, "haptics.gamepad.vibration_test");
-    EXPECT_EQ(haptics_policy.signal_id, sdl3d_game_data_find_signal(runtime, "signal.settings.vibration"));
+    EXPECT_EQ(haptics_policy.signal_id, slayer3d_game_data_find_signal(runtime, "signal.settings.vibration"));
     EXPECT_FLOAT_EQ(haptics_policy.low_frequency, 0.30f);
     EXPECT_FLOAT_EQ(haptics_policy.high_frequency, 0.70f);
     EXPECT_EQ(haptics_policy.duration_ms, 100U);
-    ASSERT_TRUE(sdl3d_game_data_get_haptics_policy_at(runtime, 1, &haptics_policy));
+    ASSERT_TRUE(slayer3d_game_data_get_haptics_policy_at(runtime, 1, &haptics_policy));
     EXPECT_STREQ(haptics_policy.name, "haptics.gamepad.paddle_hit");
-    EXPECT_EQ(haptics_policy.signal_id, sdl3d_game_data_find_signal(runtime, "signal.ball.hit_paddle"));
+    EXPECT_EQ(haptics_policy.signal_id, slayer3d_game_data_find_signal(runtime, "signal.ball.hit_paddle"));
 
-    sdl3d_properties *haptics_payload = sdl3d_properties_create();
+    slayer3d_properties *haptics_payload = slayer3d_properties_create();
     ASSERT_NE(haptics_payload, nullptr);
-    const int paddle_hit_signal = sdl3d_game_data_find_signal(runtime, "signal.ball.hit_paddle");
-    sdl3d_properties_set_string(haptics_payload, "other_actor_name", "entity.paddle.player");
-    EXPECT_TRUE(sdl3d_game_data_match_haptics_policy(runtime, 1, paddle_hit_signal, haptics_payload, &haptics_policy));
-    sdl3d_properties_set_string(haptics_payload, "other_actor_name", "entity.paddle.cpu");
-    EXPECT_FALSE(sdl3d_game_data_match_haptics_policy(runtime, 1, paddle_hit_signal, haptics_payload, &haptics_policy));
-    sdl3d_properties_set_string(sdl3d_game_data_mutable_scene_state(runtime), "match_mode", "local");
-    EXPECT_TRUE(sdl3d_game_data_match_haptics_policy(runtime, 1, paddle_hit_signal, haptics_payload, &haptics_policy));
-    sdl3d_properties_set_string(haptics_payload, "other_actor_name", "entity.paddle.attract_left");
-    EXPECT_FALSE(sdl3d_game_data_match_haptics_policy(runtime, 1, paddle_hit_signal, haptics_payload, &haptics_policy));
-    sdl3d_registered_actor *settings_for_haptics = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    const int paddle_hit_signal = slayer3d_game_data_find_signal(runtime, "signal.ball.hit_paddle");
+    slayer3d_properties_set_string(haptics_payload, "other_actor_name", "entity.paddle.player");
+    EXPECT_TRUE(
+        slayer3d_game_data_match_haptics_policy(runtime, 1, paddle_hit_signal, haptics_payload, &haptics_policy));
+    slayer3d_properties_set_string(haptics_payload, "other_actor_name", "entity.paddle.cpu");
+    EXPECT_FALSE(
+        slayer3d_game_data_match_haptics_policy(runtime, 1, paddle_hit_signal, haptics_payload, &haptics_policy));
+    slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "match_mode", "local");
+    EXPECT_TRUE(
+        slayer3d_game_data_match_haptics_policy(runtime, 1, paddle_hit_signal, haptics_payload, &haptics_policy));
+    slayer3d_properties_set_string(haptics_payload, "other_actor_name", "entity.paddle.attract_left");
+    EXPECT_FALSE(
+        slayer3d_game_data_match_haptics_policy(runtime, 1, paddle_hit_signal, haptics_payload, &haptics_policy));
+    slayer3d_registered_actor *settings_for_haptics = slayer3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings_for_haptics, nullptr);
-    sdl3d_properties_set_bool(settings_for_haptics->props, "vibration", false);
-    sdl3d_properties_set_string(haptics_payload, "other_actor_name", "entity.paddle.player");
-    EXPECT_FALSE(sdl3d_game_data_match_haptics_policy(runtime, 1, paddle_hit_signal, haptics_payload, &haptics_policy));
-    sdl3d_properties_destroy(haptics_payload);
-    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead");
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.splash");
-    EXPECT_EQ(sdl3d_game_data_scene_count(runtime), 15);
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 0), "scene.splash");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 1), "scene.title");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 2), "scene.multiplayer");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 3), "scene.multiplayer.lan");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 4), "scene.multiplayer.lobby");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 5), "scene.multiplayer.join");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 6), "scene.multiplayer.direct_connect");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 7), "scene.multiplayer.discovery");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 8), "scene.options");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 9), "scene.options.display");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 10), "scene.options.keyboard");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 11), "scene.options.mouse");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 12), "scene.options.gamepad");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 13), "scene.options.audio");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 14), "scene.play");
-    EXPECT_EQ(sdl3d_game_data_scene_name_at(runtime, -1), nullptr);
-    EXPECT_EQ(sdl3d_game_data_scene_name_at(runtime, 15), nullptr);
-    EXPECT_FALSE(sdl3d_game_data_active_scene_updates_game(runtime));
-    EXPECT_FALSE(sdl3d_game_data_active_scene_renders_world(runtime));
-    EXPECT_FALSE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.ball"));
-    EXPECT_EQ(sdl3d_timer_pool_active_count(sdl3d_game_session_get_timer_pool(session)), 0);
+    slayer3d_properties_set_bool(settings_for_haptics->props, "vibration", false);
+    slayer3d_properties_set_string(haptics_payload, "other_actor_name", "entity.paddle.player");
+    EXPECT_FALSE(
+        slayer3d_game_data_match_haptics_policy(runtime, 1, paddle_hit_signal, haptics_payload, &haptics_policy));
+    slayer3d_properties_destroy(haptics_payload);
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.overhead");
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.splash");
+    EXPECT_EQ(slayer3d_game_data_scene_count(runtime), 15);
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 0), "scene.splash");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 1), "scene.title");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 2), "scene.multiplayer");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 3), "scene.multiplayer.lan");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 4), "scene.multiplayer.lobby");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 5), "scene.multiplayer.join");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 6), "scene.multiplayer.direct_connect");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 7), "scene.multiplayer.discovery");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 8), "scene.options");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 9), "scene.options.display");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 10), "scene.options.keyboard");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 11), "scene.options.mouse");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 12), "scene.options.gamepad");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 13), "scene.options.audio");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 14), "scene.play");
+    EXPECT_EQ(slayer3d_game_data_scene_name_at(runtime, -1), nullptr);
+    EXPECT_EQ(slayer3d_game_data_scene_name_at(runtime, 15), nullptr);
+    EXPECT_FALSE(slayer3d_game_data_active_scene_updates_game(runtime));
+    EXPECT_FALSE(slayer3d_game_data_active_scene_renders_world(runtime));
+    EXPECT_FALSE(slayer3d_game_data_active_scene_has_entity(runtime, "entity.ball"));
+    EXPECT_EQ(slayer3d_timer_pool_active_count(slayer3d_game_session_get_timer_pool(session)), 0);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, DataGameRuntimeOwnsGenericPongLifecycle)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     const std::filesystem::path data_path = pong_data_path();
     const std::string root = data_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + data_path.filename().string();
 
-    sdl3d_data_game_runtime_desc desc{};
-    sdl3d_data_game_runtime_desc_init(&desc);
+    slayer3d_data_game_runtime_desc desc{};
+    slayer3d_data_game_runtime_desc_init(&desc);
     desc.session = session;
-    desc.media_dir = SDL3D_MEDIA_DIR;
+    desc.media_dir = SLAYER3D_MEDIA_DIR;
     desc.data_asset_path = asset_path.c_str();
     desc.mount_assets = mount_test_directory_assets;
     desc.mount_userdata = const_cast<char *>(root.c_str());
 
     char error[512]{};
-    sdl3d_data_game_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error))) << error;
+    slayer3d_data_game_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error))) << error;
     ASSERT_NE(runtime, nullptr);
-    ASSERT_NE(sdl3d_data_game_runtime_assets(runtime), nullptr);
-    sdl3d_game_data_runtime *data = sdl3d_data_game_runtime_data(runtime);
+    ASSERT_NE(slayer3d_data_game_runtime_assets(runtime), nullptr);
+    slayer3d_game_data_runtime *data = slayer3d_data_game_runtime_data(runtime);
     ASSERT_NE(data, nullptr);
-    EXPECT_STREQ(sdl3d_game_data_active_scene(data), "scene.splash");
-    EXPECT_NE(sdl3d_game_data_find_actor(data, "entity.ball"), nullptr);
+    EXPECT_STREQ(slayer3d_game_data_active_scene(data), "scene.splash");
+    EXPECT_NE(slayer3d_game_data_find_actor(data, "entity.ball"), nullptr);
 
-    sdl3d_game_context ctx{};
+    slayer3d_game_context ctx{};
     ctx.session = session;
-    EXPECT_TRUE(sdl3d_data_game_runtime_update_frame(runtime, &ctx, 0.016f));
-    sdl3d_data_game_runtime_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    EXPECT_TRUE(slayer3d_data_game_runtime_update_frame(runtime, &ctx, 0.016f));
+    slayer3d_data_game_runtime_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, DirectStartEntersRequestedSceneBeforeInitialSceneRuns)
@@ -1895,51 +1907,51 @@ TEST(GameDataRuntime, DirectStartEntersRequestedSceneBeforeInitialSceneRuns)
     const std::filesystem::path dir = unique_test_dir("direct_start");
     write_direct_start_json(dir);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
-    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
     ASSERT_NE(assets, nullptr);
     char error[512]{};
-    ASSERT_TRUE(sdl3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
 
-    sdl3d_properties *initial_state = sdl3d_properties_create();
-    sdl3d_properties *initial_payload = sdl3d_properties_create();
+    slayer3d_properties *initial_state = slayer3d_properties_create();
+    slayer3d_properties *initial_payload = slayer3d_properties_create();
     ASSERT_NE(initial_state, nullptr);
     ASSERT_NE(initial_payload, nullptr);
-    sdl3d_properties_set_string(initial_state, "checkpoint", "midboss");
-    sdl3d_properties_set_int(initial_state, "lives", 3);
-    sdl3d_properties_set_string(initial_payload, "selected_level", "level1");
+    slayer3d_properties_set_string(initial_state, "checkpoint", "midboss");
+    slayer3d_properties_set_int(initial_state, "lives", 3);
+    slayer3d_properties_set_string(initial_payload, "selected_level", "level1");
 
-    sdl3d_game_data_load_options options{};
+    slayer3d_game_data_load_options options{};
     options.session = session;
     options.initial_scene_override = "scene.level1";
     options.initial_scene_state = initial_state;
     options.initial_scene_payload = initial_payload;
 
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_asset_with_options(assets, "asset://direct_start.game.json", &options, &runtime,
-                                                        error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_asset_with_options(assets, "asset://direct_start.game.json", &options, &runtime,
+                                                           error, sizeof(error)))
         << error;
     ASSERT_NE(runtime, nullptr);
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.level1");
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.level1");
 
-    const sdl3d_properties *scene_state = sdl3d_game_data_scene_state(runtime);
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
-    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "intro_entered", false));
-    EXPECT_TRUE(sdl3d_properties_get_bool(scene_state, "level_entered", false));
-    EXPECT_TRUE(sdl3d_properties_get_bool(scene_state, "checkpoint_visible_on_enter", false));
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "checkpoint", ""), "midboss");
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "lives", 0), 3);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "payload_level", ""), "level1");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "payload_from_scene", "missing"), "");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "payload_to_scene", ""), "scene.level1");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "intro_entered", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "level_entered", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "checkpoint_visible_on_enter", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "checkpoint", ""), "midboss");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "lives", 0), 3);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "payload_level", ""), "level1");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "payload_from_scene", "missing"), "");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "payload_to_scene", ""), "scene.level1");
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_properties_destroy(initial_payload);
-    sdl3d_properties_destroy(initial_state);
-    sdl3d_asset_resolver_destroy(assets);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_properties_destroy(initial_payload);
+    slayer3d_properties_destroy(initial_state);
+    slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -1948,26 +1960,26 @@ TEST(GameDataRuntime, DirectStartRejectsUnknownScene)
     const std::filesystem::path dir = unique_test_dir("direct_start_bad_scene");
     write_direct_start_json(dir);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
-    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
     ASSERT_NE(assets, nullptr);
     char error[512]{};
-    ASSERT_TRUE(sdl3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
 
-    sdl3d_game_data_load_options options{};
+    slayer3d_game_data_load_options options{};
     options.session = session;
     options.initial_scene_override = "scene.missing";
 
-    sdl3d_game_data_runtime *runtime = nullptr;
-    EXPECT_FALSE(sdl3d_game_data_load_asset_with_options(assets, "asset://direct_start.game.json", &options, &runtime,
-                                                         error, sizeof(error)));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(slayer3d_game_data_load_asset_with_options(assets, "asset://direct_start.game.json", &options,
+                                                            &runtime, error, sizeof(error)));
     EXPECT_EQ(runtime, nullptr);
     EXPECT_NE(std::string(error).find("initial scene override"), std::string::npos);
 
-    sdl3d_asset_resolver_destroy(assets);
-    sdl3d_game_session_destroy(session);
+    slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -1976,16 +1988,16 @@ TEST(GameDataRuntime, DataGameRuntimeDirectStartPassesSceneState)
     const std::filesystem::path dir = unique_test_dir("data_runtime_direct_start");
     write_direct_start_json(dir);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
-    sdl3d_properties *initial_state = sdl3d_properties_create();
+    slayer3d_properties *initial_state = slayer3d_properties_create();
     ASSERT_NE(initial_state, nullptr);
-    sdl3d_properties_set_string(initial_state, "checkpoint", "midboss");
+    slayer3d_properties_set_string(initial_state, "checkpoint", "midboss");
 
-    sdl3d_data_game_runtime_desc desc{};
+    slayer3d_data_game_runtime_desc desc{};
     const std::string root = dir.string();
-    sdl3d_data_game_runtime_desc_init(&desc);
+    slayer3d_data_game_runtime_desc_init(&desc);
     desc.session = session;
     desc.data_asset_path = "asset://direct_start.game.json";
     desc.mount_assets = mount_test_directory_assets;
@@ -1995,16 +2007,17 @@ TEST(GameDataRuntime, DataGameRuntimeDirectStartPassesSceneState)
     desc.skip_app_flow_startup = true;
 
     char error[512]{};
-    sdl3d_data_game_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error))) << error;
-    sdl3d_game_data_runtime *data = sdl3d_data_game_runtime_data(runtime);
+    slayer3d_data_game_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error))) << error;
+    slayer3d_game_data_runtime *data = slayer3d_data_game_runtime_data(runtime);
     ASSERT_NE(data, nullptr);
-    EXPECT_STREQ(sdl3d_game_data_active_scene(data), "scene.level1");
-    EXPECT_TRUE(sdl3d_properties_get_bool(sdl3d_game_data_scene_state(data), "checkpoint_visible_on_enter", false));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(data), "scene.level1");
+    EXPECT_TRUE(
+        slayer3d_properties_get_bool(slayer3d_game_data_scene_state(data), "checkpoint_visible_on_enter", false));
 
-    sdl3d_data_game_runtime_destroy(runtime);
-    sdl3d_properties_destroy(initial_state);
-    sdl3d_game_session_destroy(session);
+    slayer3d_data_game_runtime_destroy(runtime);
+    slayer3d_properties_destroy(initial_state);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -2019,26 +2032,26 @@ TEST(GameDataRuntime, DataGameRuntimeDirectStartsFocusedFpsDojoScenes)
     {
         const char *scene;
         const char *scene_key;
-        sdl3d_vec3 expected_position;
+        slayer3d_vec3 expected_position;
         const char *ui_title;
     };
     const DojoDirectStartCase scenes[] = {
-        {"scene.dojo.movement", "movement", sdl3d_vec3_make(3.0f, 1.6f, 4.0f), "ui.dojo.movement.title"},
-        {"scene.dojo.combat_resources", "combat_resources", sdl3d_vec3_make(21.0f, 1.6f, 5.0f),
+        {"scene.dojo.movement", "movement", slayer3d_vec3_make(3.0f, 1.6f, 4.0f), "ui.dojo.movement.title"},
+        {"scene.dojo.combat_resources", "combat_resources", slayer3d_vec3_make(21.0f, 1.6f, 5.0f),
          "ui.dojo.combat_resources.title"},
-        {"scene.dojo.hazards", "hazards", sdl3d_vec3_make(16.0f, 1.6f, 5.0f), "ui.dojo.hazards.title"},
-        {"scene.dojo.navigation", "navigation", sdl3d_vec3_make(4.0f, 1.6f, 14.0f), "ui.dojo.navigation.title"},
+        {"scene.dojo.hazards", "hazards", slayer3d_vec3_make(16.0f, 1.6f, 5.0f), "ui.dojo.hazards.title"},
+        {"scene.dojo.navigation", "navigation", slayer3d_vec3_make(4.0f, 1.6f, 14.0f), "ui.dojo.navigation.title"},
     };
 
     for (const DojoDirectStartCase &scene : scenes)
     {
-        sdl3d_game_session *session = nullptr;
-        ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+        slayer3d_game_session *session = nullptr;
+        ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
-        sdl3d_data_game_runtime_desc desc{};
-        sdl3d_data_game_runtime_desc_init(&desc);
+        slayer3d_data_game_runtime_desc desc{};
+        slayer3d_data_game_runtime_desc_init(&desc);
         desc.session = session;
-        desc.media_dir = SDL3D_MEDIA_DIR;
+        desc.media_dir = SLAYER3D_MEDIA_DIR;
         desc.data_asset_path = asset_path.c_str();
         desc.mount_assets = mount_test_directory_assets;
         desc.mount_userdata = const_cast<char *>(root.c_str());
@@ -2046,20 +2059,20 @@ TEST(GameDataRuntime, DataGameRuntimeDirectStartsFocusedFpsDojoScenes)
         desc.skip_app_flow_startup = true;
 
         char error[512]{};
-        sdl3d_data_game_runtime *runtime = nullptr;
-        ASSERT_TRUE(sdl3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error)))
+        slayer3d_data_game_runtime *runtime = nullptr;
+        ASSERT_TRUE(slayer3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error)))
             << scene.scene << ": " << error;
-        sdl3d_game_data_runtime *data = sdl3d_data_game_runtime_data(runtime);
+        slayer3d_game_data_runtime *data = slayer3d_data_game_runtime_data(runtime);
         ASSERT_NE(data, nullptr);
-        EXPECT_STREQ(sdl3d_game_data_active_scene(data), scene.scene);
+        EXPECT_STREQ(slayer3d_game_data_active_scene(data), scene.scene);
 
-        sdl3d_registered_actor *player = sdl3d_game_data_find_actor(data, "entity.player");
+        slayer3d_registered_actor *player = slayer3d_game_data_find_actor(data, "entity.player");
         ASSERT_NE(player, nullptr);
-        EXPECT_STREQ(sdl3d_properties_get_string(player->props, "dojo_scene", ""), scene.scene_key);
+        EXPECT_STREQ(slayer3d_properties_get_string(player->props, "dojo_scene", ""), scene.scene_key);
         expect_vec3_near(player->position, scene.expected_position);
 
         bool saw_title = false;
-        auto find_direct_start_dojo_title = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        auto find_direct_start_dojo_title = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
             auto *args = static_cast<std::pair<const char *, bool *> *>(userdata);
             if (std::string(text->name) == args->first)
             {
@@ -2069,28 +2082,28 @@ TEST(GameDataRuntime, DataGameRuntimeDirectStartsFocusedFpsDojoScenes)
             return true;
         };
         std::pair<const char *, bool *> title_args{scene.ui_title, &saw_title};
-        ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(data, find_direct_start_dojo_title, &title_args));
+        ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(data, find_direct_start_dojo_title, &title_args));
         EXPECT_TRUE(saw_title) << scene.ui_title;
 
-        sdl3d_game_context ctx{};
+        slayer3d_game_context ctx{};
         ctx.session = session;
-        EXPECT_TRUE(sdl3d_data_game_runtime_update_frame(runtime, &ctx, 0.016f));
+        EXPECT_TRUE(slayer3d_data_game_runtime_update_frame(runtime, &ctx, 0.016f));
 
-        sdl3d_data_game_runtime_destroy(runtime);
-        sdl3d_game_session_destroy(session);
+        slayer3d_data_game_runtime_destroy(runtime);
+        slayer3d_game_session_destroy(session);
     }
 }
 
 TEST(GameDataRuntime, DataGameRuntimeRefreshesInputProfilesOnGamepadHotplug)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    if (sdl3d_input_gamepad_count(input) != 0)
+    if (slayer3d_input_gamepad_count(input) != 0)
     {
-        sdl3d_game_session_destroy(session);
+        slayer3d_game_session_destroy(session);
         GTEST_SKIP() << "requires no pre-connected gamepads";
     }
 
@@ -2098,106 +2111,106 @@ TEST(GameDataRuntime, DataGameRuntimeRefreshesInputProfilesOnGamepadHotplug)
     const std::string root = data_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + data_path.filename().string();
 
-    sdl3d_data_game_runtime_desc desc{};
-    sdl3d_data_game_runtime_desc_init(&desc);
+    slayer3d_data_game_runtime_desc desc{};
+    slayer3d_data_game_runtime_desc_init(&desc);
     desc.session = session;
-    desc.media_dir = SDL3D_MEDIA_DIR;
+    desc.media_dir = SLAYER3D_MEDIA_DIR;
     desc.data_asset_path = asset_path.c_str();
     desc.mount_assets = mount_test_directory_assets;
     desc.mount_userdata = const_cast<char *>(root.c_str());
 
     char error[512]{};
-    sdl3d_data_game_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error))) << error;
-    sdl3d_game_data_runtime *data = sdl3d_data_game_runtime_data(runtime);
+    slayer3d_data_game_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error))) << error;
+    slayer3d_game_data_runtime *data = slayer3d_data_game_runtime_data(runtime);
     ASSERT_NE(data, nullptr);
 
-    const int p1_up = sdl3d_game_data_find_action(data, "action.paddle.up");
-    const int p2_up = sdl3d_game_data_find_action(data, "action.paddle.local.up");
+    const int p1_up = slayer3d_game_data_find_action(data, "action.paddle.up");
+    const int p2_up = slayer3d_game_data_find_action(data, "action.paddle.local.up");
     ASSERT_GE(p1_up, 0);
     ASSERT_GE(p2_up, 0);
 
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(data);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(data);
     ASSERT_NE(scene_state, nullptr);
-    sdl3d_properties_set_string(scene_state, "match_mode", "local");
-    sdl3d_properties_set_string(scene_state, "network_role", "none");
-    sdl3d_properties_set_string(scene_state, "network_flow", "none");
+    slayer3d_properties_set_string(scene_state, "match_mode", "local");
+    slayer3d_properties_set_string(scene_state, "network_role", "none");
+    slayer3d_properties_set_string(scene_state, "network_flow", "none");
 
-    sdl3d_game_context ctx{};
+    slayer3d_game_context ctx{};
     ctx.session = session;
-    ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(runtime, &ctx, 0.016f));
+    ASSERT_TRUE(slayer3d_data_game_runtime_update_frame(runtime, &ctx, 0.016f));
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p1_up), 1.0f);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p2_up), 0.0f);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, p1_up), 1.0f);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, p2_up), 0.0f);
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 2);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 2);
 
     SDL_Event event{};
     event.type = SDL_EVENT_GAMEPAD_ADDED;
     event.gdevice.which = 7301;
-    sdl3d_input_process_event(input, &event);
-    ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(runtime, &ctx, 0.016f));
+    slayer3d_input_process_event(input, &event);
+    ASSERT_TRUE(slayer3d_data_game_runtime_update_frame(runtime, &ctx, 0.016f));
 
     event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
     event.gbutton.which = 7301;
     event.gbutton.button = SDL_GAMEPAD_BUTTON_DPAD_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 3);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p1_up), 0.0f);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p2_up), 1.0f);
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 3);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, p1_up), 0.0f);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, p2_up), 1.0f);
 
-    sdl3d_data_game_runtime_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_data_game_runtime_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, DataGameRuntimeNetworkLoopReplicatesPongInputStateAndControls)
 {
-    sdl3d_game_session *host_session = nullptr;
-    sdl3d_game_session *client_session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &host_session));
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &client_session));
+    slayer3d_game_session *host_session = nullptr;
+    slayer3d_game_session *client_session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &host_session));
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &client_session));
 
     const std::filesystem::path data_path = pong_data_path();
     const std::string root = data_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + data_path.filename().string();
 
-    sdl3d_data_game_runtime_desc host_desc{};
-    sdl3d_data_game_runtime_desc_init(&host_desc);
+    slayer3d_data_game_runtime_desc host_desc{};
+    slayer3d_data_game_runtime_desc_init(&host_desc);
     host_desc.session = host_session;
-    host_desc.media_dir = SDL3D_MEDIA_DIR;
+    host_desc.media_dir = SLAYER3D_MEDIA_DIR;
     host_desc.data_asset_path = asset_path.c_str();
     host_desc.mount_assets = mount_test_directory_assets;
     host_desc.mount_userdata = const_cast<char *>(root.c_str());
 
-    sdl3d_data_game_runtime_desc client_desc = host_desc;
+    slayer3d_data_game_runtime_desc client_desc = host_desc;
     client_desc.session = client_session;
 
     char error[512]{};
-    sdl3d_data_game_runtime *host_runtime = nullptr;
-    sdl3d_data_game_runtime *client_runtime = nullptr;
-    ASSERT_TRUE(sdl3d_data_game_runtime_create(&host_desc, &host_runtime, error, sizeof(error))) << error;
-    ASSERT_TRUE(sdl3d_data_game_runtime_create(&client_desc, &client_runtime, error, sizeof(error))) << error;
-    sdl3d_game_data_runtime *host_data = sdl3d_data_game_runtime_data(host_runtime);
-    sdl3d_game_data_runtime *client_data = sdl3d_data_game_runtime_data(client_runtime);
+    slayer3d_data_game_runtime *host_runtime = nullptr;
+    slayer3d_data_game_runtime *client_runtime = nullptr;
+    ASSERT_TRUE(slayer3d_data_game_runtime_create(&host_desc, &host_runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_data_game_runtime_create(&client_desc, &client_runtime, error, sizeof(error))) << error;
+    slayer3d_game_data_runtime *host_data = slayer3d_data_game_runtime_data(host_runtime);
+    slayer3d_game_data_runtime *client_data = slayer3d_data_game_runtime_data(client_runtime);
     ASSERT_NE(host_data, nullptr);
     ASSERT_NE(client_data, nullptr);
 
-    auto enter_play = [](sdl3d_game_data_runtime *runtime, const char *role) {
-        sdl3d_properties *payload = sdl3d_properties_create();
+    auto enter_play = [](slayer3d_game_data_runtime *runtime, const char *role) {
+        slayer3d_properties *payload = slayer3d_properties_create();
         if (payload == nullptr)
             return false;
-        sdl3d_properties_set_string(payload, "match_mode", "lan");
-        sdl3d_properties_set_string(payload, "network_role", role);
-        sdl3d_properties_set_string(payload, "network_flow", SDL_strcmp(role, "host") == 0 ? "host" : "direct");
-        const bool ok = sdl3d_game_data_set_active_scene_with_payload(runtime, "scene.play", payload);
-        sdl3d_properties_destroy(payload);
+        slayer3d_properties_set_string(payload, "match_mode", "lan");
+        slayer3d_properties_set_string(payload, "network_role", role);
+        slayer3d_properties_set_string(payload, "network_flow", SDL_strcmp(role, "host") == 0 ? "host" : "direct");
+        const bool ok = slayer3d_game_data_set_active_scene_with_payload(runtime, "scene.play", payload);
+        slayer3d_properties_destroy(payload);
         return ok;
     };
     ASSERT_TRUE(enter_play(host_data, "host"));
@@ -2207,101 +2220,102 @@ TEST(GameDataRuntime, DataGameRuntimeNetworkLoopReplicatesPongInputStateAndContr
     const std::string test_name =
         test_info != nullptr ? std::string(test_info->test_suite_name()) + "." + test_info->name() : "runtime_net";
     const int port = 30000 + (int)(std::hash<std::string>{}(test_name) % 20000U);
-    if (!sdl3d_game_data_network_host_start(host_data, "host", port, "SDL3D Test", "host_status", "host_endpoint",
-                                            "host_peer", "host_connected"))
+    if (!slayer3d_game_data_network_host_start(host_data, "host", port, "SLAYER3D Test", "host_status", "host_endpoint",
+                                               "host_peer", "host_connected"))
     {
-        sdl3d_data_game_runtime_destroy(client_runtime);
-        sdl3d_data_game_runtime_destroy(host_runtime);
-        sdl3d_game_session_destroy(client_session);
-        sdl3d_game_session_destroy(host_session);
+        slayer3d_data_game_runtime_destroy(client_runtime);
+        slayer3d_data_game_runtime_destroy(host_runtime);
+        slayer3d_game_session_destroy(client_session);
+        slayer3d_game_session_destroy(host_session);
         GTEST_SKIP() << "network host unavailable: " << SDL_GetError();
     }
-    ASSERT_TRUE(sdl3d_game_data_network_direct_connect_start(client_data, "direct_connect", "127.0.0.1", port,
-                                                             "direct_status", "direct_state", "direct_connected"));
+    ASSERT_TRUE(slayer3d_game_data_network_direct_connect_start(client_data, "direct_connect", "127.0.0.1", port,
+                                                                "direct_status", "direct_state", "direct_connected"));
 
-    const sdl3d_data_game_network_bindings bindings = {"state_snapshot", "client_input",   "start_game",
-                                                       "pause_request",  "resume_request", "disconnect"};
-    sdl3d_game_context host_ctx{};
+    const slayer3d_data_game_network_bindings bindings = {"state_snapshot", "client_input",   "start_game",
+                                                          "pause_request",  "resume_request", "disconnect"};
+    slayer3d_game_context host_ctx{};
     host_ctx.session = host_session;
-    sdl3d_game_context client_ctx{};
+    slayer3d_game_context client_ctx{};
     client_ctx.session = client_session;
-    sdl3d_data_game_network_loop_result host_result{};
-    sdl3d_data_game_network_loop_result client_result{};
+    slayer3d_data_game_network_loop_result host_result{};
+    slayer3d_data_game_network_loop_result client_result{};
 
-    sdl3d_network_session *host_net = sdl3d_game_data_get_network_host_session(host_data, "host");
-    sdl3d_network_session *client_net =
-        sdl3d_game_data_get_network_direct_connect_session(client_data, "direct_connect");
+    slayer3d_network_session *host_net = slayer3d_game_data_get_network_host_session(host_data, "host");
+    slayer3d_network_session *client_net =
+        slayer3d_game_data_get_network_direct_connect_session(client_data, "direct_connect");
     ASSERT_NE(host_net, nullptr);
     ASSERT_NE(client_net, nullptr);
     bool connected = false;
     for (int i = 0; i < 1200 && !connected; ++i)
     {
-        ASSERT_TRUE(sdl3d_data_game_runtime_update_network_host_session(
+        ASSERT_TRUE(slayer3d_data_game_runtime_update_network_host_session(
             host_runtime, &host_ctx, "host", &bindings, false, 0.01f, &host_result, error, sizeof(error)))
             << error;
-        ASSERT_TRUE(sdl3d_data_game_runtime_update_network_client_session(client_runtime, &client_ctx, "direct_connect",
-                                                                          &bindings, false, false, 0.01f,
-                                                                          &client_result, error, sizeof(error)))
+        ASSERT_TRUE(slayer3d_data_game_runtime_update_network_client_session(
+            client_runtime, &client_ctx, "direct_connect", &bindings, false, false, 0.01f, &client_result, error,
+            sizeof(error)))
             << error;
-        connected = sdl3d_network_session_is_connected(host_net) && sdl3d_network_session_is_connected(client_net);
+        connected =
+            slayer3d_network_session_is_connected(host_net) && slayer3d_network_session_is_connected(client_net);
     }
     ASSERT_TRUE(connected);
 
-    sdl3d_input_manager *client_input = sdl3d_game_session_get_input(client_session);
-    sdl3d_input_manager *host_input = sdl3d_game_session_get_input(host_session);
+    slayer3d_input_manager *client_input = slayer3d_game_session_get_input(client_session);
+    slayer3d_input_manager *host_input = slayer3d_game_session_get_input(host_session);
     ASSERT_NE(client_input, nullptr);
     ASSERT_NE(host_input, nullptr);
-    const int client_up = sdl3d_game_data_find_action(client_data, "action.paddle.local.up");
-    const int host_up = sdl3d_game_data_find_action(host_data, "action.paddle.local.up");
+    const int client_up = slayer3d_game_data_find_action(client_data, "action.paddle.local.up");
+    const int host_up = slayer3d_game_data_find_action(host_data, "action.paddle.local.up");
     ASSERT_GE(client_up, 0);
     ASSERT_GE(host_up, 0);
-    sdl3d_input_set_action_override(client_input, client_up, 1.0f);
-    ASSERT_NE(sdl3d_input_update(client_input, 101), nullptr);
-    ASSERT_TRUE(sdl3d_data_game_runtime_update_network_client_session(client_runtime, &client_ctx, "direct_connect",
-                                                                      &bindings, true, false, 0.016f, &client_result,
-                                                                      error, sizeof(error)))
+    slayer3d_input_set_action_override(client_input, client_up, 1.0f);
+    ASSERT_NE(slayer3d_input_update(client_input, 101), nullptr);
+    ASSERT_TRUE(slayer3d_data_game_runtime_update_network_client_session(client_runtime, &client_ctx, "direct_connect",
+                                                                         &bindings, true, false, 0.016f, &client_result,
+                                                                         error, sizeof(error)))
         << error;
     EXPECT_TRUE(client_result.sent_input);
     for (int i = 0; i < 120 && !host_result.applied_input; ++i)
     {
-        ASSERT_TRUE(sdl3d_data_game_runtime_update_network_host_session(
+        ASSERT_TRUE(slayer3d_data_game_runtime_update_network_host_session(
             host_runtime, &host_ctx, "host", &bindings, true, 0.01f, &host_result, error, sizeof(error)))
             << error;
     }
     ASSERT_TRUE(host_result.applied_input);
-    ASSERT_NE(sdl3d_input_update(host_input, 102), nullptr);
-    EXPECT_NEAR(sdl3d_input_get_value(host_input, host_up), 1.0f, 0.0001f);
+    ASSERT_NE(slayer3d_input_update(host_input, 102), nullptr);
+    EXPECT_NEAR(slayer3d_input_get_value(host_input, host_up), 1.0f, 0.0001f);
 
-    ASSERT_TRUE(sdl3d_game_data_send_network_runtime_control(client_data, client_net, "pause_request", 202U, error,
-                                                             sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_send_network_runtime_control(client_data, client_net, "pause_request", 202U, error,
+                                                                sizeof(error)))
         << error;
     host_ctx.paused = false;
     host_result = {};
     for (int i = 0; i < 120 && !host_result.received_pause_request; ++i)
     {
-        ASSERT_TRUE(sdl3d_data_game_runtime_update_network_host_session(
+        ASSERT_TRUE(slayer3d_data_game_runtime_update_network_host_session(
             host_runtime, &host_ctx, "host", &bindings, true, 0.01f, &host_result, error, sizeof(error)))
             << error;
     }
     EXPECT_TRUE(host_result.received_pause_request);
     EXPECT_TRUE(host_ctx.paused);
 
-    sdl3d_registered_actor *host_ball = sdl3d_game_data_find_actor(host_data, "entity.ball");
-    sdl3d_registered_actor *client_ball = sdl3d_game_data_find_actor(client_data, "entity.ball");
+    slayer3d_registered_actor *host_ball = slayer3d_game_data_find_actor(host_data, "entity.ball");
+    slayer3d_registered_actor *client_ball = slayer3d_game_data_find_actor(client_data, "entity.ball");
     ASSERT_NE(host_ball, nullptr);
     ASSERT_NE(client_ball, nullptr);
-    host_ball->position = sdl3d_vec3_make(3.0f, 2.0f, 0.0f);
-    ASSERT_TRUE(sdl3d_data_game_runtime_publish_network_host_snapshot(host_runtime, &host_ctx, "host", &bindings,
-                                                                      &host_result, error, sizeof(error)))
+    host_ball->position = slayer3d_vec3_make(3.0f, 2.0f, 0.0f);
+    ASSERT_TRUE(slayer3d_data_game_runtime_publish_network_host_snapshot(host_runtime, &host_ctx, "host", &bindings,
+                                                                         &host_result, error, sizeof(error)))
         << error;
     EXPECT_TRUE(host_result.sent_snapshot);
     client_ctx.paused = false;
     client_result = {};
     for (int i = 0; i < 120 && !client_result.applied_snapshot; ++i)
     {
-        ASSERT_TRUE(sdl3d_data_game_runtime_update_network_client_session(client_runtime, &client_ctx, "direct_connect",
-                                                                          &bindings, true, false, 0.01f, &client_result,
-                                                                          error, sizeof(error)))
+        ASSERT_TRUE(slayer3d_data_game_runtime_update_network_client_session(
+            client_runtime, &client_ctx, "direct_connect", &bindings, true, false, 0.01f, &client_result, error,
+            sizeof(error)))
             << error;
     }
     ASSERT_TRUE(client_result.applied_snapshot);
@@ -2310,64 +2324,64 @@ TEST(GameDataRuntime, DataGameRuntimeNetworkLoopReplicatesPongInputStateAndContr
     EXPECT_TRUE(client_ctx.paused);
 
     ASSERT_TRUE(
-        sdl3d_game_data_send_network_runtime_control(host_data, host_net, "start_game", 303U, error, sizeof(error)))
+        slayer3d_game_data_send_network_runtime_control(host_data, host_net, "start_game", 303U, error, sizeof(error)))
         << error;
     client_result = {};
     for (int i = 0; i < 120 && !client_result.received_start_game; ++i)
     {
-        ASSERT_TRUE(sdl3d_data_game_runtime_update_network_client_session(client_runtime, &client_ctx, "direct_connect",
-                                                                          &bindings, true, false, 0.01f, &client_result,
-                                                                          error, sizeof(error)))
+        ASSERT_TRUE(slayer3d_data_game_runtime_update_network_client_session(
+            client_runtime, &client_ctx, "direct_connect", &bindings, true, false, 0.01f, &client_result, error,
+            sizeof(error)))
             << error;
     }
     EXPECT_TRUE(client_result.received_start_game);
 
-    sdl3d_data_game_runtime_destroy(client_runtime);
-    sdl3d_data_game_runtime_destroy(host_runtime);
-    sdl3d_game_session_destroy(client_session);
-    sdl3d_game_session_destroy(host_session);
+    slayer3d_data_game_runtime_destroy(client_runtime);
+    slayer3d_data_game_runtime_destroy(host_runtime);
+    slayer3d_game_session_destroy(client_session);
+    slayer3d_game_session_destroy(host_session);
 }
 
 TEST(GameDataRuntime, ManagedNetworkRuntimeStartsPongMatchAndReplicatesState)
 {
-    sdl3d_game_session *host_session = nullptr;
-    sdl3d_game_session *client_session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &host_session));
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &client_session));
+    slayer3d_game_session *host_session = nullptr;
+    slayer3d_game_session *client_session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &host_session));
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &client_session));
 
     const std::filesystem::path data_path = pong_data_path();
     const std::string root = data_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + data_path.filename().string();
 
-    sdl3d_data_game_runtime_desc host_desc{};
-    sdl3d_data_game_runtime_desc_init(&host_desc);
+    slayer3d_data_game_runtime_desc host_desc{};
+    slayer3d_data_game_runtime_desc_init(&host_desc);
     host_desc.session = host_session;
-    host_desc.media_dir = SDL3D_MEDIA_DIR;
+    host_desc.media_dir = SLAYER3D_MEDIA_DIR;
     host_desc.data_asset_path = asset_path.c_str();
     host_desc.mount_assets = mount_test_directory_assets;
     host_desc.mount_userdata = const_cast<char *>(root.c_str());
     host_desc.enable_managed_network = true;
 
-    sdl3d_data_game_runtime_desc client_desc = host_desc;
+    slayer3d_data_game_runtime_desc client_desc = host_desc;
     client_desc.session = client_session;
 
     char error[512]{};
-    sdl3d_data_game_runtime *host_runtime = nullptr;
-    sdl3d_data_game_runtime *client_runtime = nullptr;
-    ASSERT_TRUE(sdl3d_data_game_runtime_create(&host_desc, &host_runtime, error, sizeof(error))) << error;
-    ASSERT_TRUE(sdl3d_data_game_runtime_create(&client_desc, &client_runtime, error, sizeof(error))) << error;
-    sdl3d_game_data_runtime *host_data = sdl3d_data_game_runtime_data(host_runtime);
-    sdl3d_game_data_runtime *client_data = sdl3d_data_game_runtime_data(client_runtime);
+    slayer3d_data_game_runtime *host_runtime = nullptr;
+    slayer3d_data_game_runtime *client_runtime = nullptr;
+    ASSERT_TRUE(slayer3d_data_game_runtime_create(&host_desc, &host_runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_data_game_runtime_create(&client_desc, &client_runtime, error, sizeof(error))) << error;
+    slayer3d_game_data_runtime *host_data = slayer3d_data_game_runtime_data(host_runtime);
+    slayer3d_game_data_runtime *client_data = slayer3d_data_game_runtime_data(client_runtime);
     ASSERT_NE(host_data, nullptr);
     ASSERT_NE(client_data, nullptr);
 
-    auto enter_scene = [](sdl3d_game_data_runtime *runtime, const char *scene, const char *network_flow) {
-        sdl3d_properties *payload = sdl3d_properties_create();
+    auto enter_scene = [](slayer3d_game_data_runtime *runtime, const char *scene, const char *network_flow) {
+        slayer3d_properties *payload = slayer3d_properties_create();
         if (payload == nullptr)
             return false;
-        sdl3d_properties_set_string(payload, "network_flow", network_flow);
-        const bool ok = sdl3d_game_data_set_active_scene_with_payload(runtime, scene, payload);
-        sdl3d_properties_destroy(payload);
+        slayer3d_properties_set_string(payload, "network_flow", network_flow);
+        const bool ok = slayer3d_game_data_set_active_scene_with_payload(runtime, scene, payload);
+        slayer3d_properties_destroy(payload);
         return ok;
     };
     ASSERT_TRUE(enter_scene(host_data, "scene.multiplayer.lobby", "host"));
@@ -2377,187 +2391,188 @@ TEST(GameDataRuntime, ManagedNetworkRuntimeStartsPongMatchAndReplicatesState)
     const std::string test_name =
         test_info != nullptr ? std::string(test_info->test_suite_name()) + "." + test_info->name() : "managed_net";
     const int port = 30000 + (int)(std::hash<std::string>{}(test_name) % 20000U);
-    if (!sdl3d_game_data_network_host_start(host_data, "host", port, "SDL3D Test", "host_status", "host_endpoint",
-                                            "host_peer", "host_connected"))
+    if (!slayer3d_game_data_network_host_start(host_data, "host", port, "SLAYER3D Test", "host_status", "host_endpoint",
+                                               "host_peer", "host_connected"))
     {
-        sdl3d_data_game_runtime_destroy(client_runtime);
-        sdl3d_data_game_runtime_destroy(host_runtime);
-        sdl3d_game_session_destroy(client_session);
-        sdl3d_game_session_destroy(host_session);
+        slayer3d_data_game_runtime_destroy(client_runtime);
+        slayer3d_data_game_runtime_destroy(host_runtime);
+        slayer3d_game_session_destroy(client_session);
+        slayer3d_game_session_destroy(host_session);
         GTEST_SKIP() << "network host unavailable: " << SDL_GetError();
     }
-    ASSERT_TRUE(sdl3d_game_data_network_direct_connect_start(client_data, "direct_connect", "127.0.0.1", port,
-                                                             "direct_connect_status", "direct_connect_state",
-                                                             "direct_connect_connected"));
+    ASSERT_TRUE(slayer3d_game_data_network_direct_connect_start(client_data, "direct_connect", "127.0.0.1", port,
+                                                                "direct_connect_status", "direct_connect_state",
+                                                                "direct_connect_connected"));
 
-    sdl3d_game_context host_ctx{};
+    slayer3d_game_context host_ctx{};
     host_ctx.session = host_session;
-    sdl3d_game_context client_ctx{};
+    slayer3d_game_context client_ctx{};
     client_ctx.session = client_session;
 
-    sdl3d_network_session *host_net = sdl3d_game_data_get_network_host_session(host_data, "host");
-    sdl3d_network_session *client_net =
-        sdl3d_game_data_get_network_direct_connect_session(client_data, "direct_connect");
+    slayer3d_network_session *host_net = slayer3d_game_data_get_network_host_session(host_data, "host");
+    slayer3d_network_session *client_net =
+        slayer3d_game_data_get_network_direct_connect_session(client_data, "direct_connect");
     ASSERT_NE(host_net, nullptr);
     ASSERT_NE(client_net, nullptr);
     bool connected = false;
     for (int i = 0; i < 1200 && !connected; ++i)
     {
-        ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(host_runtime, &host_ctx, 0.01f));
-        ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 0.01f));
-        connected = sdl3d_network_session_is_connected(host_net) && sdl3d_network_session_is_connected(client_net);
+        ASSERT_TRUE(slayer3d_data_game_runtime_update_frame(host_runtime, &host_ctx, 0.01f));
+        ASSERT_TRUE(slayer3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 0.01f));
+        connected =
+            slayer3d_network_session_is_connected(host_net) && slayer3d_network_session_is_connected(client_net);
     }
     ASSERT_TRUE(connected);
 
     int lobby_start_signal = -1;
-    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_signal(host_data, "lobby_start", &lobby_start_signal));
+    ASSERT_TRUE(slayer3d_game_data_get_network_runtime_signal(host_data, "lobby_start", &lobby_start_signal));
     ASSERT_GE(lobby_start_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(host_session), lobby_start_signal, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(host_session), lobby_start_signal, nullptr);
 
     bool started = false;
     for (int i = 0; i < 240 && !started; ++i)
     {
-        ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(host_runtime, &host_ctx, 0.016f));
-        ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 0.016f));
-        started = SDL_strcmp(sdl3d_game_data_active_scene(host_data), "scene.play") == 0 &&
-                  SDL_strcmp(sdl3d_game_data_active_scene(client_data), "scene.play") == 0;
+        ASSERT_TRUE(slayer3d_data_game_runtime_update_frame(host_runtime, &host_ctx, 0.016f));
+        ASSERT_TRUE(slayer3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 0.016f));
+        started = SDL_strcmp(slayer3d_game_data_active_scene(host_data), "scene.play") == 0 &&
+                  SDL_strcmp(slayer3d_game_data_active_scene(client_data), "scene.play") == 0;
     }
     ASSERT_TRUE(started);
-    const sdl3d_properties *host_scene_state = sdl3d_game_data_scene_state(host_data);
-    const sdl3d_properties *client_scene_state = sdl3d_game_data_scene_state(client_data);
+    const slayer3d_properties *host_scene_state = slayer3d_game_data_scene_state(host_data);
+    const slayer3d_properties *client_scene_state = slayer3d_game_data_scene_state(client_data);
     ASSERT_NE(host_scene_state, nullptr);
     ASSERT_NE(client_scene_state, nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(host_scene_state, "match_mode", ""), "lan");
-    EXPECT_STREQ(sdl3d_properties_get_string(host_scene_state, "network_role", ""), "host");
-    EXPECT_STREQ(sdl3d_properties_get_string(client_scene_state, "match_mode", ""), "lan");
-    EXPECT_STREQ(sdl3d_properties_get_string(client_scene_state, "network_role", ""), "client");
+    EXPECT_STREQ(slayer3d_properties_get_string(host_scene_state, "match_mode", ""), "lan");
+    EXPECT_STREQ(slayer3d_properties_get_string(host_scene_state, "network_role", ""), "host");
+    EXPECT_STREQ(slayer3d_properties_get_string(client_scene_state, "match_mode", ""), "lan");
+    EXPECT_STREQ(slayer3d_properties_get_string(client_scene_state, "network_role", ""), "client");
 
-    sdl3d_registered_actor *host_ball = sdl3d_game_data_find_actor(host_data, "entity.ball");
-    sdl3d_registered_actor *client_ball = sdl3d_game_data_find_actor(client_data, "entity.ball");
+    slayer3d_registered_actor *host_ball = slayer3d_game_data_find_actor(host_data, "entity.ball");
+    slayer3d_registered_actor *client_ball = slayer3d_game_data_find_actor(client_data, "entity.ball");
     ASSERT_NE(host_ball, nullptr);
     ASSERT_NE(client_ball, nullptr);
     host_ctx.paused = true;
     client_ctx.paused = false;
-    host_ball->position = sdl3d_vec3_make(4.0f, 1.5f, 0.0f);
+    host_ball->position = slayer3d_vec3_make(4.0f, 1.5f, 0.0f);
     bool snapshot_applied = false;
     for (int i = 0; i < 240 && !snapshot_applied; ++i)
     {
-        ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(host_runtime, &host_ctx, 0.016f));
-        ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 0.016f));
+        ASSERT_TRUE(slayer3d_data_game_runtime_update_frame(host_runtime, &host_ctx, 0.016f));
+        ASSERT_TRUE(slayer3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 0.016f));
         snapshot_applied = SDL_fabsf(client_ball->position.x - host_ball->position.x) < 0.0001f &&
                            SDL_fabsf(client_ball->position.y - host_ball->position.y) < 0.0001f;
     }
     EXPECT_TRUE(snapshot_applied);
     EXPECT_TRUE(client_ctx.paused);
 
-    sdl3d_properties *termination_payload = sdl3d_properties_create();
+    slayer3d_properties *termination_payload = slayer3d_properties_create();
     ASSERT_NE(termination_payload, nullptr);
-    sdl3d_properties_set_string(termination_payload, "reason", "Test disconnect");
-    ASSERT_TRUE(sdl3d_game_data_run_network_session_flow_event(client_data, &client_ctx, "client_match_terminated",
-                                                               termination_payload, error, sizeof(error)))
+    slayer3d_properties_set_string(termination_payload, "reason", "Test disconnect");
+    ASSERT_TRUE(slayer3d_game_data_run_network_session_flow_event(client_data, &client_ctx, "client_match_terminated",
+                                                                  termination_payload, error, sizeof(error)))
         << error;
-    sdl3d_properties_destroy(termination_payload);
-    client_scene_state = sdl3d_game_data_scene_state(client_data);
+    slayer3d_properties_destroy(termination_payload);
+    client_scene_state = slayer3d_game_data_scene_state(client_data);
     ASSERT_NE(client_scene_state, nullptr);
-    EXPECT_TRUE(sdl3d_properties_get_bool(client_scene_state, "network_match_termination_active", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(client_scene_state, "network_match_termination_active", false));
 
     int select_action = -1;
-    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_action(client_data, "menu_select", &select_action));
-    sdl3d_input_manager *client_input = sdl3d_game_session_get_input(client_session);
+    ASSERT_TRUE(slayer3d_game_data_get_network_runtime_action(client_data, "menu_select", &select_action));
+    slayer3d_input_manager *client_input = slayer3d_game_session_get_input(client_session);
     ASSERT_NE(client_input, nullptr);
-    sdl3d_input_set_action_override(client_input, select_action, 1.0f);
-    ASSERT_NE(sdl3d_input_update(client_input, 5000), nullptr);
-    ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 0.25f));
-    client_scene_state = sdl3d_game_data_scene_state(client_data);
+    slayer3d_input_set_action_override(client_input, select_action, 1.0f);
+    ASSERT_NE(slayer3d_input_update(client_input, 5000), nullptr);
+    ASSERT_TRUE(slayer3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 0.25f));
+    client_scene_state = slayer3d_game_data_scene_state(client_data);
     ASSERT_NE(client_scene_state, nullptr);
-    EXPECT_TRUE(sdl3d_properties_get_bool(client_scene_state, "network_match_termination_active", false));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(client_data), "scene.play");
+    EXPECT_TRUE(slayer3d_properties_get_bool(client_scene_state, "network_match_termination_active", false));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(client_data), "scene.play");
 
-    sdl3d_input_set_action_override(client_input, select_action, 0.0f);
-    ASSERT_NE(sdl3d_input_update(client_input, 5001), nullptr);
-    ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 2.74f));
-    EXPECT_TRUE(sdl3d_properties_get_bool(client_scene_state, "network_match_termination_active", false));
+    slayer3d_input_set_action_override(client_input, select_action, 0.0f);
+    ASSERT_NE(slayer3d_input_update(client_input, 5001), nullptr);
+    ASSERT_TRUE(slayer3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 2.74f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(client_scene_state, "network_match_termination_active", false));
 
-    sdl3d_input_set_action_override(client_input, select_action, 1.0f);
-    ASSERT_NE(sdl3d_input_update(client_input, 5002), nullptr);
-    ASSERT_TRUE(sdl3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 0.02f));
-    client_scene_state = sdl3d_game_data_scene_state(client_data);
+    slayer3d_input_set_action_override(client_input, select_action, 1.0f);
+    ASSERT_NE(slayer3d_input_update(client_input, 5002), nullptr);
+    ASSERT_TRUE(slayer3d_data_game_runtime_update_frame(client_runtime, &client_ctx, 0.02f));
+    client_scene_state = slayer3d_game_data_scene_state(client_data);
     ASSERT_NE(client_scene_state, nullptr);
-    EXPECT_FALSE(sdl3d_properties_get_bool(client_scene_state, "network_match_termination_active", true));
+    EXPECT_FALSE(slayer3d_properties_get_bool(client_scene_state, "network_match_termination_active", true));
     EXPECT_FALSE(client_ctx.paused);
-    EXPECT_STREQ(sdl3d_game_data_active_scene(client_data), "scene.title");
+    EXPECT_STREQ(slayer3d_game_data_active_scene(client_data), "scene.title");
 
-    sdl3d_data_game_runtime_destroy(client_runtime);
-    sdl3d_data_game_runtime_destroy(host_runtime);
-    sdl3d_game_session_destroy(client_session);
-    sdl3d_game_session_destroy(host_session);
+    slayer3d_data_game_runtime_destroy(client_runtime);
+    slayer3d_data_game_runtime_destroy(host_runtime);
+    slayer3d_game_session_destroy(client_session);
+    slayer3d_game_session_destroy(host_session);
 }
 
 TEST(GameDataRuntime, AuthoredNetworkSessionFlowEventsDriveSceneTransitions)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     const std::filesystem::path data_path = pong_data_path();
     const std::string root = data_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + data_path.filename().string();
 
-    sdl3d_data_game_runtime_desc desc{};
-    sdl3d_data_game_runtime_desc_init(&desc);
+    slayer3d_data_game_runtime_desc desc{};
+    slayer3d_data_game_runtime_desc_init(&desc);
     desc.session = session;
-    desc.media_dir = SDL3D_MEDIA_DIR;
+    desc.media_dir = SLAYER3D_MEDIA_DIR;
     desc.data_asset_path = asset_path.c_str();
     desc.mount_assets = mount_test_directory_assets;
     desc.mount_userdata = const_cast<char *>(root.c_str());
 
     char error[512]{};
-    sdl3d_data_game_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error))) << error;
-    sdl3d_game_data_runtime *data = sdl3d_data_game_runtime_data(runtime);
+    slayer3d_data_game_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error))) << error;
+    slayer3d_game_data_runtime *data = slayer3d_data_game_runtime_data(runtime);
     ASSERT_NE(data, nullptr);
 
-    sdl3d_game_context ctx{};
+    slayer3d_game_context ctx{};
     ctx.session = session;
 
-    ASSERT_TRUE(
-        sdl3d_game_data_run_network_session_flow_event(data, &ctx, "client_start_game", nullptr, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_run_network_session_flow_event(data, &ctx, "client_start_game", nullptr, error,
+                                                                  sizeof(error)))
         << error;
-    EXPECT_STREQ(sdl3d_game_data_active_scene(data), "scene.play");
-    const sdl3d_properties *scene_state = sdl3d_game_data_scene_state(data);
+    EXPECT_STREQ(slayer3d_game_data_active_scene(data), "scene.play");
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(data);
     ASSERT_NE(scene_state, nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "match_mode", ""), "lan");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "network_role", ""), "client");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "network_flow", ""), "direct");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "match_mode", ""), "lan");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "network_role", ""), "client");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "network_flow", ""), "direct");
 
-    sdl3d_properties *payload = sdl3d_properties_create();
+    slayer3d_properties *payload = slayer3d_properties_create();
     ASSERT_NE(payload, nullptr);
-    sdl3d_properties_set_string(payload, "reason", "Cable unplugged");
+    slayer3d_properties_set_string(payload, "reason", "Cable unplugged");
     ctx.paused = false;
-    ASSERT_TRUE(sdl3d_game_data_run_network_session_flow_event(data, &ctx, "client_match_terminated", payload, error,
-                                                               sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_run_network_session_flow_event(data, &ctx, "client_match_terminated", payload, error,
+                                                                  sizeof(error)))
         << error;
-    sdl3d_properties_destroy(payload);
-    scene_state = sdl3d_game_data_scene_state(data);
+    slayer3d_properties_destroy(payload);
+    scene_state = slayer3d_game_data_scene_state(data);
     ASSERT_NE(scene_state, nullptr);
     EXPECT_TRUE(ctx.paused);
-    EXPECT_TRUE(sdl3d_properties_get_bool(scene_state, "network_match_termination_active", false));
-    EXPECT_NE(SDL_strstr(sdl3d_properties_get_string(scene_state, "network_match_termination_message", ""),
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "network_match_termination_active", false));
+    EXPECT_NE(SDL_strstr(slayer3d_properties_get_string(scene_state, "network_match_termination_message", ""),
                          "Cable unplugged"),
               nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""), "Cable unplugged");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "direct_connect_status", ""), "Cable unplugged");
 
-    ASSERT_TRUE(sdl3d_game_data_run_network_session_flow_event(data, &ctx, "network_match_termination_ack", nullptr,
-                                                               error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_run_network_session_flow_event(data, &ctx, "network_match_termination_ack", nullptr,
+                                                                  error, sizeof(error)))
         << error;
-    scene_state = sdl3d_game_data_scene_state(data);
+    scene_state = slayer3d_game_data_scene_state(data);
     ASSERT_NE(scene_state, nullptr);
     EXPECT_FALSE(ctx.paused);
-    EXPECT_STREQ(sdl3d_game_data_active_scene(data), "scene.title");
-    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "network_match_termination_active", true));
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "network_match_termination_message", "x"), "");
+    EXPECT_STREQ(slayer3d_game_data_active_scene(data), "scene.title");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "network_match_termination_active", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "network_match_termination_message", "x"), "");
 
-    sdl3d_data_game_runtime_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_data_game_runtime_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, NetworkSessionFlowPlaceholderMalformedBraceIsLiteral)
@@ -2587,40 +2602,40 @@ TEST(GameDataRuntime, NetworkSessionFlowPlaceholderMalformedBraceIsLiteral)
 )json");
     write_text(network_path, network_json.c_str());
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(game_path.string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(game_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
     ASSERT_NE(runtime, nullptr);
 
-    ASSERT_TRUE(sdl3d_game_data_run_network_session_flow_event(runtime, nullptr, "malformed_placeholder", nullptr,
-                                                               error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_run_network_session_flow_event(runtime, nullptr, "malformed_placeholder", nullptr,
+                                                                  error, sizeof(error)))
         << error;
-    const sdl3d_properties *scene_state = sdl3d_game_data_scene_state(runtime);
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "malformed_placeholder_result", ""), "literal {reason");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "malformed_placeholder_result", ""), "literal {reason");
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, ReadsSpriteAssetMetadata)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(fixture_path("sprite_asset_fixture.game.json").c_str(), session, &runtime,
-                                          error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(fixture_path("sprite_asset_fixture.game.json").c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
-    sdl3d_game_data_sprite_asset sprite{};
-    ASSERT_TRUE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.robot.walk", &sprite));
+    slayer3d_game_data_sprite_asset sprite{};
+    ASSERT_TRUE(slayer3d_game_data_get_sprite_asset(runtime, "sprite.robot.walk", &sprite));
     EXPECT_STREQ(sprite.id, "sprite.robot.walk");
     EXPECT_STREQ(sprite.path, "asset://sprites/robot/walk.png");
     EXPECT_EQ(sprite.frame_width, 32);
@@ -2635,10 +2650,10 @@ TEST(GameDataRuntime, ReadsSpriteAssetMetadata)
     EXPECT_FALSE(sprite.emissive);
     EXPECT_FLOAT_EQ(sprite.visual_ground_offset, 0.125f);
 
-    EXPECT_FALSE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.missing", &sprite));
+    EXPECT_FALSE(slayer3d_game_data_get_sprite_asset(runtime, "sprite.missing", &sprite));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
@@ -2648,116 +2663,116 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     const std::filesystem::path cache_root = dir / "cache";
     const std::filesystem::path game_path = copy_pong_data_with_storage_overrides(dir, user_root, cache_root);
 
-    sdl3d_game_config config{};
+    slayer3d_game_config config{};
     char title[128]{};
     char app_error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_load_app_config_file(game_path.string().c_str(), &config, title, sizeof(title),
-                                                     app_error, sizeof(app_error)))
+    ASSERT_TRUE(slayer3d_game_data_load_app_config_file(game_path.string().c_str(), &config, title, sizeof(title),
+                                                        app_error, sizeof(app_error)))
         << app_error;
-    EXPECT_STREQ(config.title, "SDL3D Pong");
+    EXPECT_STREQ(config.title, "Slayer 3D Pong");
     EXPECT_EQ(config.width, 0);
     EXPECT_EQ(config.height, 0);
     EXPECT_EQ(config.logical_width, 1280);
     EXPECT_EQ(config.logical_height, 720);
-    EXPECT_EQ(config.backend, SDL3D_BACKEND_OPENGL);
-    EXPECT_EQ(config.display_mode, SDL3D_WINDOW_MODE_WINDOWED);
+    EXPECT_EQ(config.backend, SLAYER3D_BACKEND_OPENGL);
+    EXPECT_EQ(config.display_mode, SLAYER3D_WINDOW_MODE_WINDOWED);
     EXPECT_GT(config.vsync, 0);
     EXPECT_GT(config.maximized, 0);
     EXPECT_NEAR(config.tick_rate, 1.0f / 120.0f, 0.00001f);
     EXPECT_EQ(config.max_ticks_per_frame, 12);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(game_path.string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(game_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_storage_config storage{};
-    ASSERT_TRUE(sdl3d_game_data_get_storage_config(runtime, &storage));
+    slayer3d_storage_config storage{};
+    ASSERT_TRUE(slayer3d_game_data_get_storage_config(runtime, &storage));
     EXPECT_STREQ(storage.organization, "Blue Sentinel Security");
-    EXPECT_STREQ(storage.application, "SDL3D Pong");
+    EXPECT_STREQ(storage.application, "Slayer 3D Pong");
     EXPECT_STREQ(storage.profile, "default");
     const std::string user_root_text = user_root.generic_string();
     const std::string cache_root_text = cache_root.generic_string();
     EXPECT_STREQ(storage.user_root_override, user_root_text.c_str());
     EXPECT_STREQ(storage.cache_root_override, cache_root_text.c_str());
     char storage_root[256]{};
-    ASSERT_TRUE(sdl3d_storage_build_root_path(&storage, SDL3D_STORAGE_PLATFORM_UNIX, SDL3D_STORAGE_ROOT_USER,
-                                              "/home/player/.local/share", storage_root, sizeof(storage_root)));
-    EXPECT_STREQ(storage_root, "/home/player/.local/share/Blue Sentinel Security/SDL3D Pong/profiles/default");
+    ASSERT_TRUE(slayer3d_storage_build_root_path(&storage, SLAYER3D_STORAGE_PLATFORM_UNIX, SLAYER3D_STORAGE_ROOT_USER,
+                                                 "/home/player/.local/share", storage_root, sizeof(storage_root)));
+    EXPECT_STREQ(storage_root, "/home/player/.local/share/Blue Sentinel Security/Slayer 3D Pong/profiles/default");
 
-    sdl3d_camera3d camera{};
-    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.overhead", &camera));
-    EXPECT_EQ(camera.projection, SDL3D_CAMERA_ORTHOGRAPHIC);
+    slayer3d_camera3d camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.overhead", &camera));
+    EXPECT_EQ(camera.projection, SLAYER3D_CAMERA_ORTHOGRAPHIC);
     EXPECT_NEAR(camera.position.z, 16.0f, 0.0001f);
     EXPECT_NEAR(camera.fovy, 11.4f, 0.0001f);
 
-    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.ball_chase", &camera));
-    EXPECT_EQ(camera.projection, SDL3D_CAMERA_PERSPECTIVE);
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.ball_chase", &camera));
+    EXPECT_EQ(camera.projection, SLAYER3D_CAMERA_PERSPECTIVE);
     EXPECT_NEAR(camera.fovy, 68.0f, 0.0001f);
     EXPECT_NEAR(camera.position.x, -2.6f, 0.0001f);
     EXPECT_NEAR(camera.position.z, 1.91f, 0.0001f);
     float chase_fovy = 0.0f;
-    ASSERT_TRUE(sdl3d_game_data_get_camera_float(runtime, "camera.ball_chase", "fovy", &chase_fovy));
+    ASSERT_TRUE(slayer3d_game_data_get_camera_float(runtime, "camera.ball_chase", "fovy", &chase_fovy));
     EXPECT_NEAR(chase_fovy, 68.0f, 0.0001f);
 
-    sdl3d_game_data_app_control app{};
-    ASSERT_TRUE(sdl3d_game_data_get_app_control(runtime, &app));
+    slayer3d_game_data_app_control app{};
+    ASSERT_TRUE(slayer3d_game_data_get_app_control(runtime, &app));
     EXPECT_EQ(app.start_signal_id, -1);
     EXPECT_GE(app.quit_action_id, 0);
     EXPECT_GE(app.pause_action_id, 0);
     EXPECT_EQ(app.startup_transition, nullptr);
     EXPECT_STREQ(app.quit_transition, "quit");
     EXPECT_GE(app.quit_signal_id, 0);
-    EXPECT_EQ(app.window_apply_signal_id, sdl3d_game_data_find_signal(runtime, "signal.settings.apply"));
+    EXPECT_EQ(app.window_apply_signal_id, slayer3d_game_data_find_signal(runtime, "signal.settings.apply"));
     EXPECT_STREQ(app.window_settings_target, "entity.settings");
     EXPECT_STREQ(app.window_display_mode_key, "display_mode");
     EXPECT_STREQ(app.window_renderer_key, "renderer");
     EXPECT_STREQ(app.window_vsync_key, "vsync");
 
-    sdl3d_registered_actor *match = sdl3d_game_data_find_actor(runtime, "entity.match");
+    slayer3d_registered_actor *match = slayer3d_game_data_find_actor(runtime, "entity.match");
     ASSERT_NE(match, nullptr);
-    EXPECT_TRUE(sdl3d_game_data_app_pause_allowed(runtime, nullptr));
-    sdl3d_properties_set_bool(match->props, "finished", true);
-    EXPECT_FALSE(sdl3d_game_data_app_pause_allowed(runtime, nullptr));
-    sdl3d_properties_set_bool(match->props, "finished", false);
+    EXPECT_TRUE(slayer3d_game_data_app_pause_allowed(runtime, nullptr));
+    slayer3d_properties_set_bool(match->props, "finished", true);
+    EXPECT_FALSE(slayer3d_game_data_app_pause_allowed(runtime, nullptr));
+    slayer3d_properties_set_bool(match->props, "finished", false);
 
-    sdl3d_game_data_font_asset font{};
-    ASSERT_TRUE(sdl3d_game_data_get_font_asset(runtime, "font.hud", &font));
+    slayer3d_game_data_font_asset font{};
+    ASSERT_TRUE(slayer3d_game_data_get_font_asset(runtime, "font.hud", &font));
     EXPECT_TRUE(font.builtin);
-    EXPECT_EQ(font.builtin_id, SDL3D_BUILTIN_FONT_INTER);
+    EXPECT_EQ(font.builtin_id, SLAYER3D_BUILTIN_FONT_INTER);
     EXPECT_NEAR(font.size, 34.0f, 0.0001f);
-    ASSERT_TRUE(sdl3d_game_data_get_font_asset(runtime, "font.title", &font));
+    ASSERT_TRUE(slayer3d_game_data_get_font_asset(runtime, "font.title", &font));
     EXPECT_TRUE(font.builtin);
     EXPECT_NEAR(font.size, 96.0f, 0.0001f);
 
     float ambient[3]{};
-    ASSERT_TRUE(sdl3d_game_data_get_world_ambient_light(runtime, ambient));
+    ASSERT_TRUE(slayer3d_game_data_get_world_ambient_light(runtime, ambient));
     EXPECT_NEAR(ambient[0], 0.015f, 0.0001f);
     EXPECT_NEAR(ambient[1], 0.018f, 0.0001f);
     EXPECT_NEAR(ambient[2], 0.026f, 0.0001f);
 
-    EXPECT_EQ(sdl3d_game_data_world_light_count(runtime), 3);
-    sdl3d_light red_light{};
-    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 0, &red_light));
-    EXPECT_EQ(red_light.type, SDL3D_LIGHT_SPOT);
+    EXPECT_EQ(slayer3d_game_data_world_light_count(runtime), 3);
+    slayer3d_light red_light{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 0, &red_light));
+    EXPECT_EQ(red_light.type, SLAYER3D_LIGHT_SPOT);
     EXPECT_NEAR(red_light.position.x, -8.15f, 0.0001f);
     EXPECT_NEAR(red_light.position.y, 0.0f, 0.0001f);
     EXPECT_NEAR(red_light.direction.x, 0.0f, 0.0001f);
     EXPECT_NEAR(red_light.direction.z, -1.0f, 0.0001f);
     EXPECT_NEAR(red_light.color[0], 1.0f, 0.0001f);
     EXPECT_NEAR(red_light.color[1], 0.06f, 0.0001f);
-    sdl3d_light red_eval{};
-    sdl3d_game_data_render_eval red_light_eval{};
+    slayer3d_light red_eval{};
+    slayer3d_game_data_render_eval red_light_eval{};
     red_light_eval.time = 1.0f;
-    ASSERT_TRUE(sdl3d_game_data_get_world_light_evaluated(runtime, 0, &red_light_eval, &red_eval));
+    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 0, &red_light_eval, &red_eval));
     EXPECT_GT(red_eval.color[1], red_light.color[1]);
 
-    sdl3d_light blue_light{};
-    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 2, &blue_light));
-    EXPECT_EQ(blue_light.type, SDL3D_LIGHT_SPOT);
+    slayer3d_light blue_light{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 2, &blue_light));
+    EXPECT_EQ(blue_light.type, SLAYER3D_LIGHT_SPOT);
     EXPECT_NEAR(blue_light.position.x, 8.15f, 0.0001f);
     EXPECT_NEAR(blue_light.position.y, 0.0f, 0.0001f);
     EXPECT_NEAR(blue_light.position.z, 3.35f, 0.0001f);
@@ -2766,203 +2781,204 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_NEAR(blue_light.color[0], 0.08f, 0.0001f);
     EXPECT_NEAR(blue_light.color[1], 0.28f, 0.0001f);
     EXPECT_NEAR(blue_light.color[2], 1.0f, 0.0001f);
-    sdl3d_light blue_eval{};
-    sdl3d_game_data_render_eval blue_light_eval{};
+    slayer3d_light blue_eval{};
+    slayer3d_game_data_render_eval blue_light_eval{};
     blue_light_eval.time = 1.0f;
-    ASSERT_TRUE(sdl3d_game_data_get_world_light_evaluated(runtime, 2, &blue_light_eval, &blue_eval));
+    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 2, &blue_light_eval, &blue_eval));
     EXPECT_GT(blue_eval.color[1], blue_light.color[1]);
 
-    sdl3d_light lamp_light{};
-    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 1, &lamp_light));
-    EXPECT_EQ(lamp_light.type, SDL3D_LIGHT_SPOT);
+    slayer3d_light lamp_light{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 1, &lamp_light));
+    EXPECT_EQ(lamp_light.type, SLAYER3D_LIGHT_SPOT);
     EXPECT_NEAR(lamp_light.position.x, 0.0f, 0.0001f);
     EXPECT_NEAR(lamp_light.position.y, 0.0f, 0.0001f);
     EXPECT_NEAR(lamp_light.position.z, 2.92f, 0.0001f);
     EXPECT_NEAR(lamp_light.direction.z, -1.0f, 0.0001f);
     EXPECT_NEAR(lamp_light.range, 5.8f, 0.0001f);
 
-    sdl3d_particle_config particles{};
-    ASSERT_TRUE(sdl3d_game_data_get_particle_emitter(runtime, "entity.effect.ambient_particles", &particles));
-    EXPECT_EQ(particles.shape, SDL3D_PARTICLE_EMITTER_BOX);
+    slayer3d_particle_config particles{};
+    ASSERT_TRUE(slayer3d_game_data_get_particle_emitter(runtime, "entity.effect.ambient_particles", &particles));
+    EXPECT_EQ(particles.shape, SLAYER3D_PARTICLE_EMITTER_BOX);
     EXPECT_EQ(particles.max_particles, 360);
     EXPECT_NEAR(particles.emit_rate, 95.0f, 0.0001f);
     EXPECT_EQ(particles.color_start.a, 105);
-    sdl3d_vec3 particle_emissive{};
-    ASSERT_TRUE(sdl3d_game_data_get_particle_emitter_draw_emissive(runtime, "entity.effect.ambient_particles",
-                                                                   &particle_emissive));
+    slayer3d_vec3 particle_emissive{};
+    ASSERT_TRUE(slayer3d_game_data_get_particle_emitter_draw_emissive(runtime, "entity.effect.ambient_particles",
+                                                                      &particle_emissive));
     EXPECT_NEAR(particle_emissive.x, 0.8f, 0.0001f);
 
     ParticleCapture title_particles{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &title_particles));
+    ASSERT_TRUE(slayer3d_game_data_for_each_particle_emitter(runtime, capture_particle, &title_particles));
     EXPECT_EQ(title_particles.count, 0);
 
-    sdl3d_game_data_render_settings render{};
-    ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &render));
+    slayer3d_game_data_render_settings render{};
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render));
     EXPECT_EQ(render.clear_color.r, 3);
     EXPECT_EQ(render.clear_color.g, 4);
     EXPECT_EQ(render.clear_color.b, 8);
     EXPECT_TRUE(render.lighting_enabled);
     EXPECT_TRUE(render.bloom_enabled);
     EXPECT_TRUE(render.ssao_enabled);
-    EXPECT_EQ(render.tonemap, SDL3D_TONEMAP_ACES);
+    EXPECT_EQ(render.tonemap, SLAYER3D_TONEMAP_ACES);
 
-    sdl3d_game_data_transition_desc transition{};
-    ASSERT_TRUE(sdl3d_game_data_get_transition(runtime, "quit", &transition));
-    EXPECT_EQ(transition.type, SDL3D_TRANSITION_FADE);
-    EXPECT_EQ(transition.direction, SDL3D_TRANSITION_OUT);
+    slayer3d_game_data_transition_desc transition{};
+    ASSERT_TRUE(slayer3d_game_data_get_transition(runtime, "quit", &transition));
+    EXPECT_EQ(transition.type, SLAYER3D_TRANSITION_FADE);
+    EXPECT_EQ(transition.direction, SLAYER3D_TRANSITION_OUT);
     EXPECT_NEAR(transition.duration, 0.45f, 0.0001f);
     EXPECT_GE(transition.done_signal_id, 0);
 
     RenderPrimitiveCapture title_capture{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &title_capture));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &title_capture));
     EXPECT_EQ(title_capture.cubes, 0);
     EXPECT_EQ(title_capture.spheres, 0);
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.play");
-    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead");
-    EXPECT_TRUE(sdl3d_game_data_active_scene_updates_game(runtime));
-    EXPECT_TRUE(sdl3d_game_data_active_scene_renders_world(runtime));
-    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.ball"));
-    EXPECT_EQ(sdl3d_timer_pool_active_count(sdl3d_game_session_get_timer_pool(session)), 1);
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.play"));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.play");
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.overhead");
+    EXPECT_TRUE(slayer3d_game_data_active_scene_updates_game(runtime));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_renders_world(runtime));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_has_entity(runtime, "entity.ball"));
+    EXPECT_EQ(slayer3d_timer_pool_active_count(slayer3d_game_session_get_timer_pool(session)), 1);
 
     ParticleCapture play_particles{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &play_particles));
+    ASSERT_TRUE(slayer3d_game_data_for_each_particle_emitter(runtime, capture_particle, &play_particles));
     EXPECT_EQ(play_particles.count, 1);
     EXPECT_TRUE(play_particles.saw_ambient);
 
-    sdl3d_game_data_particle_cache particle_cache{};
-    sdl3d_game_data_particle_cache_init(&particle_cache);
-    ASSERT_TRUE(sdl3d_game_data_update_particles(runtime, &particle_cache, 0.1f));
+    slayer3d_game_data_particle_cache particle_cache{};
+    slayer3d_game_data_particle_cache_init(&particle_cache);
+    ASSERT_TRUE(slayer3d_game_data_update_particles(runtime, &particle_cache, 0.1f));
     EXPECT_EQ(particle_cache.count, 1);
     EXPECT_TRUE(particle_cache.entries[0].visible);
-    sdl3d_game_data_particle_cache_free(&particle_cache);
+    slayer3d_game_data_particle_cache_free(&particle_cache);
 
     RenderPrimitiveCapture capture{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &capture));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &capture));
     EXPECT_EQ(capture.cubes, 16);
     EXPECT_EQ(capture.spheres, 1);
     EXPECT_TRUE(capture.saw_player_paddle);
     EXPECT_TRUE(capture.saw_ball);
     EXPECT_NEAR(capture.ball_rotation_angle, 0.0f, 0.0001f);
 
-    sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
+    slayer3d_registered_actor *ball = slayer3d_game_data_find_actor(runtime, "entity.ball");
     ASSERT_NE(ball, nullptr);
-    sdl3d_properties_set_bool(ball->props, "active_motion", true);
-    sdl3d_properties_set_float(ball->props, "spin_angle", 0.0f);
-    sdl3d_game_context spin_context{};
+    slayer3d_properties_set_bool(ball->props, "active_motion", true);
+    slayer3d_properties_set_float(ball->props, "spin_angle", 0.0f);
+    slayer3d_game_context spin_context{};
     spin_context.session = session;
-    sdl3d_game_data_frame_state spin_frame_state{};
-    sdl3d_game_data_frame_state_init(&spin_frame_state);
-    sdl3d_game_data_update_frame_desc spin_update{};
+    slayer3d_game_data_frame_state spin_frame_state{};
+    slayer3d_game_data_frame_state_init(&spin_frame_state);
+    slayer3d_game_data_update_frame_desc spin_update{};
     spin_update.ctx = &spin_context;
     spin_update.runtime = runtime;
     spin_update.dt = 0.5f;
-    ASSERT_TRUE(sdl3d_game_data_update_frame(&spin_frame_state, &spin_update));
-    EXPECT_NEAR(sdl3d_properties_get_float(ball->props, "spin_angle", -1.0f), 2.7f, 0.0001f);
+    ASSERT_TRUE(slayer3d_game_data_update_frame(&spin_frame_state, &spin_update));
+    EXPECT_NEAR(slayer3d_properties_get_float(ball->props, "spin_angle", -1.0f), 2.7f, 0.0001f);
 
     RenderPrimitiveCapture spun_capture{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &spun_capture));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &spun_capture));
     EXPECT_TRUE(spun_capture.saw_ball);
     EXPECT_NEAR(spun_capture.ball_rotation_angle, 2.7f, 0.0001f);
 
-    sdl3d_registered_actor *presentation = sdl3d_game_data_find_actor(runtime, "entity.presentation");
+    slayer3d_registered_actor *presentation = slayer3d_game_data_find_actor(runtime, "entity.presentation");
     ASSERT_NE(presentation, nullptr);
-    EXPECT_NEAR(sdl3d_properties_get_float(presentation->props, "border_flash_decay", 0.0f), 2.8f, 0.0001f);
-    sdl3d_properties_set_float(presentation->props, "border_flash", 1.0f);
-    ASSERT_TRUE(sdl3d_game_data_update_property_effects(runtime, 0.25f));
-    EXPECT_NEAR(sdl3d_properties_get_float(presentation->props, "border_flash", -1.0f), 0.3f, 0.0001f);
-    sdl3d_properties_set_float(presentation->props, "border_flash", 1.0f);
+    EXPECT_NEAR(slayer3d_properties_get_float(presentation->props, "border_flash_decay", 0.0f), 2.8f, 0.0001f);
+    slayer3d_properties_set_float(presentation->props, "border_flash", 1.0f);
+    ASSERT_TRUE(slayer3d_game_data_update_property_effects(runtime, 0.25f));
+    EXPECT_NEAR(slayer3d_properties_get_float(presentation->props, "border_flash", -1.0f), 0.3f, 0.0001f);
+    slayer3d_properties_set_float(presentation->props, "border_flash", 1.0f);
 
-    sdl3d_light base_light{};
-    sdl3d_light flashed_light{};
-    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 1, &base_light));
-    sdl3d_game_data_render_eval light_eval{};
-    ASSERT_TRUE(sdl3d_game_data_get_world_light_evaluated(runtime, 1, &light_eval, &flashed_light));
+    slayer3d_light base_light{};
+    slayer3d_light flashed_light{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 1, &base_light));
+    slayer3d_game_data_render_eval light_eval{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 1, &light_eval, &flashed_light));
     EXPECT_GT(flashed_light.intensity, base_light.intensity);
     EXPECT_GT(flashed_light.range, base_light.range);
-    sdl3d_game_data_render_eval render_eval{};
+    slayer3d_game_data_render_eval render_eval{};
     render_eval.time = 0.25f;
     EvaluatedPrimitiveCapture evaluated{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive_evaluated(runtime, &render_eval, capture_evaluated_primitive,
-                                                                    &evaluated));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive_evaluated(runtime, &render_eval,
+                                                                       capture_evaluated_primitive, &evaluated));
     EXPECT_TRUE(evaluated.saw_border);
     EXPECT_TRUE(evaluated.saw_ball);
 
     UiTextCapture ui{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui_text, &ui));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, capture_ui_text, &ui));
     EXPECT_EQ(ui.count, 8);
     EXPECT_TRUE(ui.saw_score);
     EXPECT_TRUE(ui.saw_pause);
     EXPECT_TRUE(ui.saw_network_match_terminated);
 
-    sdl3d_game_data_ui_metrics metrics{};
+    slayer3d_game_data_ui_metrics metrics{};
     metrics.fps = 119.5f;
     metrics.frame = 42;
     char ui_buffer[128]{};
-    auto format_score = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+    auto format_score = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         if (std::string(text->name) != "ui.score")
             return true;
-        auto *args = static_cast<std::pair<sdl3d_game_data_runtime *, char *> *>(userdata);
-        sdl3d_game_data_ui_metrics local_metrics{};
-        EXPECT_TRUE(sdl3d_game_data_format_ui_text(args->first, text, &local_metrics, args->second, 128));
+        auto *args = static_cast<std::pair<slayer3d_game_data_runtime *, char *> *>(userdata);
+        slayer3d_game_data_ui_metrics local_metrics{};
+        EXPECT_TRUE(slayer3d_game_data_format_ui_text(args->first, text, &local_metrics, args->second, 128));
         return false;
     };
-    std::pair<sdl3d_game_data_runtime *, char *> score_args{runtime, ui_buffer};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, format_score, &score_args));
+    std::pair<slayer3d_game_data_runtime *, char *> score_args{runtime, ui_buffer};
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, format_score, &score_args));
     EXPECT_STREQ(ui_buffer, "00   00");
-    auto find_pause_visible = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+    auto find_pause_visible = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         if (std::string(text->name) != "ui.pause")
             return true;
         auto *args =
-            static_cast<std::tuple<sdl3d_game_data_runtime *, sdl3d_game_data_ui_metrics *, bool *> *>(userdata);
-        *std::get<2>(*args) = sdl3d_game_data_ui_text_is_visible(std::get<0>(*args), text, std::get<1>(*args));
+            static_cast<std::tuple<slayer3d_game_data_runtime *, slayer3d_game_data_ui_metrics *, bool *> *>(userdata);
+        *std::get<2>(*args) = slayer3d_game_data_ui_text_is_visible(std::get<0>(*args), text, std::get<1>(*args));
         return false;
     };
     bool pause_visible = false;
     metrics.paused = true;
-    std::tuple<sdl3d_game_data_runtime *, sdl3d_game_data_ui_metrics *, bool *> pause_args{runtime, &metrics,
-                                                                                           &pause_visible};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_pause_visible, &pause_args));
+    std::tuple<slayer3d_game_data_runtime *, slayer3d_game_data_ui_metrics *, bool *> pause_args{runtime, &metrics,
+                                                                                                 &pause_visible};
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_pause_visible, &pause_args));
     EXPECT_TRUE(pause_visible);
 
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
-    sdl3d_properties_set_bool(scene_state, "network_match_termination_active", true);
-    sdl3d_properties_set_string(scene_state, "network_match_termination_message",
-                                "Match terminated: Client exited - Press Enter to return to title screen.");
+    slayer3d_properties_set_bool(scene_state, "network_match_termination_active", true);
+    slayer3d_properties_set_string(scene_state, "network_match_termination_message",
+                                   "Match terminated: Client exited - Press Enter to return to title screen.");
     bool termination_visible = false;
     char termination_buffer[192]{};
-    auto find_termination_visible = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+    auto find_termination_visible = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         if (std::string(text->name) != "ui.network.match_terminated")
             return true;
-        auto *args = static_cast<std::tuple<sdl3d_game_data_runtime *, sdl3d_game_data_ui_metrics *, bool *, char *> *>(
-            userdata);
-        *std::get<2>(*args) = sdl3d_game_data_ui_text_is_visible(std::get<0>(*args), text, std::get<1>(*args));
+        auto *args =
+            static_cast<std::tuple<slayer3d_game_data_runtime *, slayer3d_game_data_ui_metrics *, bool *, char *> *>(
+                userdata);
+        *std::get<2>(*args) = slayer3d_game_data_ui_text_is_visible(std::get<0>(*args), text, std::get<1>(*args));
         EXPECT_TRUE(
-            sdl3d_game_data_format_ui_text(std::get<0>(*args), text, std::get<1>(*args), std::get<3>(*args), 192));
+            slayer3d_game_data_format_ui_text(std::get<0>(*args), text, std::get<1>(*args), std::get<3>(*args), 192));
         return false;
     };
-    std::tuple<sdl3d_game_data_runtime *, sdl3d_game_data_ui_metrics *, bool *, char *> termination_args{
+    std::tuple<slayer3d_game_data_runtime *, slayer3d_game_data_ui_metrics *, bool *, char *> termination_args{
         runtime, &metrics, &termination_visible, termination_buffer};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_termination_visible, &termination_args));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_termination_visible, &termination_args));
     EXPECT_TRUE(termination_visible);
     EXPECT_STREQ(termination_buffer, "Match terminated: Client exited - Press Enter to return to title screen.");
 
     bool pause_hidden = true;
-    std::tuple<sdl3d_game_data_runtime *, sdl3d_game_data_ui_metrics *, bool *> pause_hidden_args{runtime, &metrics,
-                                                                                                  &pause_hidden};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_pause_visible, &pause_hidden_args));
+    std::tuple<slayer3d_game_data_runtime *, slayer3d_game_data_ui_metrics *, bool *> pause_hidden_args{
+        runtime, &metrics, &pause_hidden};
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_pause_visible, &pause_hidden_args));
     EXPECT_FALSE(pause_hidden);
 
-    sdl3d_properties_set_bool(scene_state, "network_match_termination_active", false);
+    slayer3d_properties_set_bool(scene_state, "network_match_termination_active", false);
 
     struct PauseMenuTextArgs
     {
         bool saw_resume = false;
         bool saw_options = false;
     } pause_menu_text;
-    auto find_pause_menu_text = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+    auto find_pause_menu_text = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         auto *args = static_cast<PauseMenuTextArgs *>(userdata);
         if (std::string(text->name) != "ui.pause.menu")
             return true;
@@ -2972,45 +2988,46 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
         return !(args->saw_resume && args->saw_options);
     };
     ASSERT_TRUE(
-        sdl3d_game_data_for_each_ui_text_for_metrics(runtime, &metrics, find_pause_menu_text, &pause_menu_text));
+        slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &metrics, find_pause_menu_text, &pause_menu_text));
     EXPECT_TRUE(pause_menu_text.saw_resume);
     EXPECT_TRUE(pause_menu_text.saw_options);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_game_data_skip_policy skip{};
-    ASSERT_TRUE(sdl3d_game_data_get_active_skip_policy(runtime, &skip));
+    slayer3d_game_data_skip_policy skip{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_skip_policy(runtime, &skip));
     EXPECT_TRUE(skip.enabled);
-    EXPECT_EQ(skip.input, SDL3D_GAME_DATA_SKIP_INPUT_ANY);
+    EXPECT_EQ(skip.input, SLAYER3D_GAME_DATA_SKIP_INPUT_ANY);
     EXPECT_STREQ(skip.scene, "scene.title");
     EXPECT_TRUE(skip.preserve_exit_transition);
     EXPECT_TRUE(skip.consume_input);
 
-    sdl3d_game_data_image_asset image_asset{};
-    ASSERT_TRUE(sdl3d_game_data_get_image_asset(runtime, "image.splash.logo", &image_asset));
+    slayer3d_game_data_image_asset image_asset{};
+    ASSERT_TRUE(slayer3d_game_data_get_image_asset(runtime, "image.splash.logo", &image_asset));
     EXPECT_STREQ(image_asset.sprite, "sprite.splash.logo");
     EXPECT_EQ(image_asset.path, nullptr);
 
-    sdl3d_game_data_image_asset ball_image_asset{};
-    ASSERT_TRUE(sdl3d_game_data_get_image_asset(runtime, "image.ball.texture", &ball_image_asset));
+    slayer3d_game_data_image_asset ball_image_asset{};
+    ASSERT_TRUE(slayer3d_game_data_get_image_asset(runtime, "image.ball.texture", &ball_image_asset));
     EXPECT_STREQ(ball_image_asset.path, "asset://images/ball-texture.png");
     EXPECT_EQ(ball_image_asset.sprite, nullptr);
 
-    sdl3d_game_data_sprite_asset sprite_asset{};
-    ASSERT_TRUE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.splash.logo", &sprite_asset));
+    slayer3d_game_data_sprite_asset sprite_asset{};
+    ASSERT_TRUE(slayer3d_game_data_get_sprite_asset(runtime, "sprite.splash.logo", &sprite_asset));
     EXPECT_STREQ(sprite_asset.path, "asset://images/splash-logo.jpg");
     EXPECT_EQ(sprite_asset.frame_width, 784);
     EXPECT_EQ(sprite_asset.frame_height, 1168);
@@ -3026,44 +3043,44 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_EQ(sprite_asset.shader_vertex_path, nullptr);
     EXPECT_STREQ(sprite_asset.shader_fragment_path, "asset://shaders/splash_logo_melt.frag.glsl");
 
-    sdl3d_game_data_sound_asset sound_asset{};
-    ASSERT_TRUE(sdl3d_game_data_get_sound_asset(runtime, "sound.pong.hit", &sound_asset));
+    slayer3d_game_data_sound_asset sound_asset{};
+    ASSERT_TRUE(slayer3d_game_data_get_sound_asset(runtime, "sound.pong.hit", &sound_asset));
     EXPECT_STREQ(sound_asset.path, "asset://audio/ui/click3.wav");
-    EXPECT_EQ(sound_asset.bus, SDL3D_AUDIO_BUS_SOUND_EFFECTS);
+    EXPECT_EQ(sound_asset.bus, SLAYER3D_AUDIO_BUS_SOUND_EFFECTS);
     EXPECT_GT(sound_asset.volume, 0.0f);
 
-    sdl3d_game_data_music_asset music_asset{};
-    ASSERT_TRUE(sdl3d_game_data_get_music_asset(runtime, "music.title", &music_asset));
+    slayer3d_game_data_music_asset music_asset{};
+    ASSERT_TRUE(slayer3d_game_data_get_music_asset(runtime, "music.title", &music_asset));
     EXPECT_STREQ(music_asset.path, "asset://audio/music/moonlight-sonata-allegretto.ogg");
     EXPECT_TRUE(music_asset.loop);
     EXPECT_GT(music_asset.volume, 0.0f);
 
     UiImageCapture images{};
-    auto capture_image = [](void *userdata, const sdl3d_game_data_ui_image *image) -> bool {
+    auto capture_image = [](void *userdata, const slayer3d_game_data_ui_image *image) -> bool {
         auto *capture = static_cast<UiImageCapture *>(userdata);
         capture->count++;
         if (image->name != nullptr && std::string(image->name) == "ui.splash.logo")
         {
             capture->saw_splash_logo = true;
             EXPECT_STREQ(image->image, "image.splash.logo");
-            EXPECT_EQ(image->align, SDL3D_GAME_DATA_UI_ALIGN_CENTER);
-            EXPECT_EQ(image->valign, SDL3D_GAME_DATA_UI_VALIGN_CENTER);
+            EXPECT_EQ(image->align, SLAYER3D_GAME_DATA_UI_ALIGN_CENTER);
+            EXPECT_EQ(image->valign, SLAYER3D_GAME_DATA_UI_VALIGN_CENTER);
             EXPECT_TRUE(image->preserve_aspect);
         }
         return true;
     };
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_image(runtime, capture_image, &images));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_image(runtime, capture_image, &images));
     EXPECT_EQ(images.count, 1);
     EXPECT_TRUE(images.saw_splash_logo);
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
-    EXPECT_TRUE(sdl3d_game_data_active_scene_updates_game(runtime));
-    EXPECT_TRUE(sdl3d_game_data_active_scene_renders_world(runtime));
-    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.ball.attract"));
-    EXPECT_FALSE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.ball"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.title"));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_updates_game(runtime));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_renders_world(runtime));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_has_entity(runtime, "entity.ball.attract"));
+    EXPECT_FALSE(slayer3d_game_data_active_scene_has_entity(runtime, "entity.ball"));
 
-    sdl3d_game_data_menu menu{};
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    slayer3d_game_data_menu menu{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.title");
     EXPECT_EQ(menu.item_count, 4);
     EXPECT_EQ(menu.selected_index, 0);
@@ -3071,60 +3088,60 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
     EXPECT_GE(menu.down_action_id, 0);
     EXPECT_GE(menu.select_action_id, 0);
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    EXPECT_TRUE(sdl3d_game_data_active_menu_input_is_idle(runtime, input));
+    EXPECT_TRUE(slayer3d_game_data_active_menu_input_is_idle(runtime, input));
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
-    EXPECT_FALSE(sdl3d_game_data_active_menu_input_is_idle(runtime, input));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
+    EXPECT_FALSE(slayer3d_game_data_active_menu_input_is_idle(runtime, input));
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 2);
-    EXPECT_TRUE(sdl3d_game_data_active_menu_input_is_idle(runtime, input));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 2);
+    EXPECT_TRUE(slayer3d_game_data_active_menu_input_is_idle(runtime, input));
 
-    sdl3d_game_data_menu_item item{};
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    slayer3d_game_data_menu_item item{};
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Single Player");
     EXPECT_STREQ(item.scene, "scene.play");
     EXPECT_STREQ(item.scene_state_key, "match_mode");
     EXPECT_STREQ(item.scene_state_value, "single");
 
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
     EXPECT_STREQ(item.label, "Multiplayer");
     EXPECT_STREQ(item.scene, "scene.multiplayer");
     EXPECT_STREQ(item.scene_state_key, "match_mode");
     EXPECT_STREQ(item.scene_state_value, "multiplayer");
 
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
     EXPECT_STREQ(item.label, "Options");
     EXPECT_STREQ(item.scene, "scene.options");
     EXPECT_FALSE(item.quit);
 
-    ASSERT_TRUE(sdl3d_game_data_menu_move(runtime, menu.name, -1));
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_menu_move(runtime, menu.name, -1));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_EQ(menu.selected_index, 3);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, menu.selected_index, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, menu.selected_index, &item));
     EXPECT_STREQ(item.label, "Exit");
     EXPECT_TRUE(item.quit);
 
-    ASSERT_EQ(sdl3d_game_data_scene_shortcut_count(runtime), 3);
-    sdl3d_game_data_scene_shortcut shortcut{};
-    ASSERT_TRUE(sdl3d_game_data_scene_shortcut_at(runtime, 2, &shortcut));
+    ASSERT_EQ(slayer3d_game_data_scene_shortcut_count(runtime), 3);
+    slayer3d_game_data_scene_shortcut shortcut{};
+    ASSERT_TRUE(slayer3d_game_data_scene_shortcut_at(runtime, 2, &shortcut));
     EXPECT_STREQ(shortcut.action, "action.scene.play");
     EXPECT_STREQ(shortcut.scene, "scene.play");
     EXPECT_GE(shortcut.action_id, 0);
 
-    sdl3d_game_data_transition_desc transition{};
-    ASSERT_TRUE(sdl3d_game_data_get_scene_transition(runtime, "scene.title", "exit", &transition));
-    EXPECT_EQ(transition.type, SDL3D_TRANSITION_FADE);
-    EXPECT_EQ(transition.direction, SDL3D_TRANSITION_OUT);
+    slayer3d_game_data_transition_desc transition{};
+    ASSERT_TRUE(slayer3d_game_data_get_scene_transition(runtime, "scene.title", "exit", &transition));
+    EXPECT_EQ(transition.type, SLAYER3D_TRANSITION_FADE);
+    EXPECT_EQ(transition.direction, SLAYER3D_TRANSITION_OUT);
 
     bool saw_title_cursor = false;
     bool saw_title_exit = false;
-    auto find_title_menu_ui = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+    auto find_title_menu_ui = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         auto *flags = static_cast<std::pair<bool *, bool *> *>(userdata);
         const std::string name = text->name != nullptr ? text->name : "";
         const std::string value = text->text != nullptr ? text->text : "";
@@ -3136,7 +3153,7 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
         {
             *flags->second = true;
             EXPECT_FLOAT_EQ(text->x, 0.45f);
-            EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
+            EXPECT_EQ(text->align, SLAYER3D_GAME_DATA_UI_ALIGN_LEFT);
             EXPECT_TRUE(text->pulse_alpha);
         }
         if (*flags->first && *flags->second)
@@ -3144,164 +3161,164 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
         return true;
     };
     std::pair<bool *, bool *> title_menu_flags{&saw_title_cursor, &saw_title_exit};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_title_menu_ui, &title_menu_flags));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_title_menu_ui, &title_menu_flags));
     EXPECT_TRUE(saw_title_cursor);
     EXPECT_TRUE(saw_title_exit);
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer"));
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.multiplayer"));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.multiplayer");
     EXPECT_EQ(menu.item_count, 3);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Local");
     EXPECT_STREQ(item.scene, "scene.play");
     EXPECT_STREQ(item.scene_state_key, "match_mode");
     EXPECT_STREQ(item.scene_state_value, "local");
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
     EXPECT_STREQ(item.label, "LAN");
     EXPECT_STREQ(item.scene, "scene.multiplayer.lan");
     EXPECT_STREQ(item.scene_state_key, "match_mode");
     EXPECT_STREQ(item.scene_state_value, "lan");
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer.lan"));
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.multiplayer.lan"));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.multiplayer.lan");
     EXPECT_EQ(menu.item_count, 3);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Create Match");
     EXPECT_STREQ(item.scene, "scene.multiplayer.lobby");
     EXPECT_STREQ(item.scene_state_key, "network_flow");
     EXPECT_STREQ(item.scene_state_value, "host");
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
     EXPECT_STREQ(item.label, "Join Match");
     EXPECT_STREQ(item.scene, "scene.multiplayer.join");
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
     EXPECT_STREQ(item.label, "Back");
     EXPECT_STREQ(item.scene, "scene.multiplayer");
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer.lobby"));
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.multiplayer.lobby"));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.multiplayer.lobby.waiting");
     EXPECT_EQ(menu.item_count, 1);
-    const int lobby_start_signal = sdl3d_game_data_find_signal(runtime, "signal.multiplayer.lobby.start");
+    const int lobby_start_signal = slayer3d_game_data_find_signal(runtime, "signal.multiplayer.lobby.start");
     ASSERT_GE(lobby_start_signal, 0);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Back");
     EXPECT_STREQ(item.scene, "scene.multiplayer.lan");
-    sdl3d_properties_set_bool(sdl3d_game_data_mutable_scene_state(runtime), "multiplayer_host_connected", true);
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "multiplayer_host_connected", true);
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.multiplayer.lobby.connected");
     EXPECT_EQ(menu.item_count, 2);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Client 1");
     EXPECT_EQ(item.signal_id, lobby_start_signal);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
     EXPECT_STREQ(item.label, "Back");
     EXPECT_STREQ(item.scene, "scene.multiplayer.lan");
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer.join"));
-    EXPECT_TRUE(sdl3d_game_data_active_scene_renders_world(runtime));
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.multiplayer.join"));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_renders_world(runtime));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.multiplayer.join");
     EXPECT_EQ(menu.item_count, 3);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Search for local matches");
     EXPECT_STREQ(item.scene, "scene.multiplayer.discovery");
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
     EXPECT_STREQ(item.label, "Join match with IP address or hostname");
     EXPECT_STREQ(item.scene, "scene.multiplayer.direct_connect");
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
     EXPECT_STREQ(item.label, "Back");
     EXPECT_STREQ(item.scene, "scene.multiplayer.lan");
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer.direct_connect"));
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.multiplayer.direct_connect"));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.multiplayer.direct");
     EXPECT_EQ(menu.item_count, 5);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Host");
-    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_TEXT);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_TEXT);
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
     EXPECT_STREQ(item.label, "Port");
-    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_TEXT);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_TEXT);
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
     EXPECT_STREQ(item.label, "Connect");
-    EXPECT_EQ(item.signal_id, sdl3d_game_data_find_signal(runtime, "signal.multiplayer.direct.connect"));
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 3, &item));
+    EXPECT_EQ(item.signal_id, slayer3d_game_data_find_signal(runtime, "signal.multiplayer.direct.connect"));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 3, &item));
     EXPECT_STREQ(item.label, "Disconnect");
-    EXPECT_EQ(item.signal_id, sdl3d_game_data_find_signal(runtime, "signal.multiplayer.direct.disconnect"));
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 4, &item));
+    EXPECT_EQ(item.signal_id, slayer3d_game_data_find_signal(runtime, "signal.multiplayer.direct.disconnect"));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 4, &item));
     EXPECT_STREQ(item.label, "Back");
     EXPECT_STREQ(item.scene, "scene.multiplayer.join");
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.multiplayer.discovery"));
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.multiplayer.discovery"));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.multiplayer.discovery");
     EXPECT_EQ(menu.item_count, 2);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_TRUE(item.dynamic_list_item);
     EXPECT_EQ(item.dynamic_list_index, -1);
     EXPECT_STREQ(item.label, "Searching local network...");
     EXPECT_EQ(item.signal_id, -1);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
     EXPECT_STREQ(item.label, "Back");
     EXPECT_STREQ(item.scene, "scene.multiplayer.join");
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
-    EXPECT_FALSE(sdl3d_game_data_active_scene_updates_game(runtime));
-    EXPECT_TRUE(sdl3d_game_data_active_scene_renders_world(runtime));
-    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead");
-    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.options.background.base"));
-    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.options.flow.magenta"));
-    EXPECT_FALSE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.ball"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options"));
+    EXPECT_FALSE(slayer3d_game_data_active_scene_updates_game(runtime));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_renders_world(runtime));
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.overhead");
+    EXPECT_TRUE(slayer3d_game_data_active_scene_has_entity(runtime, "entity.options.background.base"));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_has_entity(runtime, "entity.options.flow.magenta"));
+    EXPECT_FALSE(slayer3d_game_data_active_scene_has_entity(runtime, "entity.ball"));
 
     RenderPrimitiveCapture options_render{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &options_render));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &options_render));
     EXPECT_EQ(options_render.cubes, 1);
     EXPECT_EQ(options_render.spheres, 3);
     EXPECT_TRUE(options_render.saw_options_background);
     EXPECT_TRUE(options_render.saw_options_glow);
 
     ParticleCapture options_particles{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &options_particles));
+    ASSERT_TRUE(slayer3d_game_data_for_each_particle_emitter(runtime, capture_particle, &options_particles));
     EXPECT_EQ(options_particles.count, 3);
     EXPECT_TRUE(options_particles.saw_options_flow);
 
-    sdl3d_game_data_render_eval options_eval{};
+    slayer3d_game_data_render_eval options_eval{};
     options_eval.time = 1.0f;
     EvaluatedPrimitiveCapture options_evaluated{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive_evaluated(runtime, &options_eval, capture_evaluated_primitive,
-                                                                    &options_evaluated));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive_evaluated(
+        runtime, &options_eval, capture_evaluated_primitive, &options_evaluated));
     EXPECT_TRUE(options_evaluated.saw_options_drift);
 
     const char *option_submenus[] = {"scene.options.display", "scene.options.keyboard", "scene.options.mouse",
                                      "scene.options.gamepad", "scene.options.audio"};
     for (const char *scene : option_submenus)
     {
-        ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, scene));
-        EXPECT_TRUE(sdl3d_game_data_active_scene_renders_world(runtime)) << scene;
-        EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead") << scene;
-        EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.options.background.base")) << scene;
-        EXPECT_FALSE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.ball")) << scene;
+        ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, scene));
+        EXPECT_TRUE(slayer3d_game_data_active_scene_renders_world(runtime)) << scene;
+        EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.overhead") << scene;
+        EXPECT_TRUE(slayer3d_game_data_active_scene_has_entity(runtime, "entity.options.background.base")) << scene;
+        EXPECT_FALSE(slayer3d_game_data_active_scene_has_entity(runtime, "entity.ball")) << scene;
     }
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options"));
 
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options");
     EXPECT_EQ(menu.item_count, 6);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Display");
     EXPECT_EQ(item.scene, nullptr);
     EXPECT_STREQ(item.scene_state_key, "options_menu");
     EXPECT_STREQ(item.scene_state_value, "display");
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
     EXPECT_STREQ(item.label, "Mouse");
     EXPECT_EQ(item.scene, nullptr);
     EXPECT_STREQ(item.scene_state_key, "options_menu");
     EXPECT_STREQ(item.scene_state_value, "mouse");
     bool saw_options_display = false;
     bool saw_options_divider = false;
-    auto find_options_display = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+    auto find_options_display = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         auto *flags = static_cast<std::pair<bool *, bool *> *>(userdata);
         const std::string name = text->name != nullptr ? text->name : "";
         const std::string value = text->text != nullptr ? text->text : "";
@@ -3310,7 +3327,7 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
             *flags->first = true;
             EXPECT_FLOAT_EQ(text->x, 0.43f);
             EXPECT_FLOAT_EQ(text->y, 0.36f);
-            EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
+            EXPECT_EQ(text->align, SLAYER3D_GAME_DATA_UI_ALIGN_LEFT);
             EXPECT_TRUE(text->pulse_alpha);
         }
         if (name == "ui.options.title.divider" && value == "----------------")
@@ -3322,26 +3339,26 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
         return !*flags->first || !*flags->second;
     };
     std::pair<bool *, bool *> options_display_flags{&saw_options_display, &saw_options_divider};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_options_display, &options_display_flags));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_options_display, &options_display_flags));
     EXPECT_TRUE(saw_options_display);
     EXPECT_TRUE(saw_options_divider);
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.keyboard"));
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.keyboard"));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options.keyboard");
     EXPECT_EQ(menu.item_count, 9);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Up");
-    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING);
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING);
     EXPECT_EQ(item.input_binding_count, 2);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 5, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 5, &item));
     EXPECT_STREQ(item.label, "Cancel");
-    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING);
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING);
     EXPECT_EQ(item.input_binding_count, 1);
 
     bool saw_keyboard_up = false;
     bool saw_keyboard_cancel = false;
-    auto find_keyboard_up = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+    auto find_keyboard_up = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         auto *saw = static_cast<std::pair<bool *, bool *> *>(userdata);
         const std::string name = text->name != nullptr ? text->name : "";
         const std::string value = text->text != nullptr ? text->text : "";
@@ -3357,26 +3374,26 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
         return !*saw->first || !*saw->second;
     };
     std::pair<bool *, bool *> keyboard_binding_labels{&saw_keyboard_up, &saw_keyboard_cancel};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_keyboard_up, &keyboard_binding_labels));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_keyboard_up, &keyboard_binding_labels));
     EXPECT_TRUE(saw_keyboard_up);
     EXPECT_TRUE(saw_keyboard_cancel);
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.display"));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options.display");
     EXPECT_EQ(menu.item_count, 5);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Display Mode");
-    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_CHOICE);
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_CHOICE);
     EXPECT_STREQ(item.control_target, "entity.settings");
     EXPECT_STREQ(item.control_key, "display_mode");
     EXPECT_EQ(item.choice_count, 3);
-    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    slayer3d_registered_actor *settings = slayer3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings, nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
+    EXPECT_STREQ(slayer3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
 
     bool saw_options_value = false;
-    auto find_options_value = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+    auto find_options_value = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         auto *saw = static_cast<bool *>(userdata);
         const std::string name = text->name != nullptr ? text->name : "";
         const std::string value = text->text != nullptr ? text->text : "";
@@ -3384,39 +3401,39 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
         {
             *saw = true;
             EXPECT_FLOAT_EQ(text->x, 0.3f);
-            EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
+            EXPECT_EQ(text->align, SLAYER3D_GAME_DATA_UI_ALIGN_LEFT);
             return false;
         }
         return true;
     };
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_options_value, &saw_options_value));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_options_value, &saw_options_value));
     EXPECT_TRUE(saw_options_value);
 
-    ASSERT_TRUE(sdl3d_game_data_apply_menu_item_control(runtime, &item));
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "fullscreen_exclusive");
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 3, &item));
+    ASSERT_TRUE(slayer3d_game_data_apply_menu_item_control(runtime, &item));
+    EXPECT_STREQ(slayer3d_properties_get_string(settings->props, "display_mode", ""), "fullscreen_exclusive");
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 3, &item));
     EXPECT_STREQ(item.label, "Reset Settings");
-    EXPECT_TRUE(sdl3d_game_data_app_signal_applies_window_settings(runtime, item.signal_id));
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 4, &item));
+    EXPECT_TRUE(slayer3d_game_data_app_signal_applies_window_settings(runtime, item.signal_id));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 4, &item));
     EXPECT_STREQ(item.scene, "scene.options");
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.audio"));
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.audio"));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options.audio");
     EXPECT_EQ(menu.item_count, 4);
     EXPECT_GE(menu.left_action_id, 0);
     EXPECT_GE(menu.right_action_id, 0);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Sound Effects");
-    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_RANGE);
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_RANGE);
     EXPECT_STREQ(item.control_target, "entity.settings");
     EXPECT_STREQ(item.control_key, "sfx_volume");
-    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
-    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "music_volume", 0), 7);
+    EXPECT_EQ(slayer3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
+    EXPECT_EQ(slayer3d_properties_get_int(settings->props, "music_volume", 0), 7);
 
     bool saw_sfx_slider = false;
     bool saw_music_slider = false;
-    auto find_audio_sliders = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+    auto find_audio_sliders = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         auto *flags = static_cast<std::pair<bool *, bool *> *>(userdata);
         const std::string name = text->name != nullptr ? text->name : "";
         const std::string value = text->text != nullptr ? text->text : "";
@@ -3424,7 +3441,7 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
         {
             *flags->first = true;
             EXPECT_FLOAT_EQ(text->x, 0.34f);
-            EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
+            EXPECT_EQ(text->align, SLAYER3D_GAME_DATA_UI_ALIGN_LEFT);
         }
         if (name == "ui.options.audio.menu" && value == "Music  [#######---] 7/10")
             *flags->second = true;
@@ -3433,78 +3450,80 @@ TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
         return true;
     };
     std::pair<bool *, bool *> audio_slider_flags{&saw_sfx_slider, &saw_music_slider};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_audio_sliders, &audio_slider_flags));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_audio_sliders, &audio_slider_flags));
     EXPECT_TRUE(saw_sfx_slider);
     EXPECT_TRUE(saw_music_slider);
 
     ScenePayloadCapture payload_capture{};
-    const int start_signal = sdl3d_game_data_find_signal(runtime, "signal.game.start");
+    const int start_signal = slayer3d_game_data_find_signal(runtime, "signal.game.start");
     ASSERT_GE(start_signal, 0);
-    ASSERT_NE(sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(session), start_signal, capture_scene_payload,
-                                   &payload_capture),
+    ASSERT_NE(slayer3d_signal_connect(slayer3d_game_session_get_signal_bus(session), start_signal,
+                                      capture_scene_payload, &payload_capture),
               0);
 
-    sdl3d_properties *payload = sdl3d_properties_create();
+    slayer3d_properties *payload = slayer3d_properties_create();
     ASSERT_NE(payload, nullptr);
-    sdl3d_properties_set_string(payload, "from_scene", "scene.options");
-    sdl3d_properties_set_string(payload, "selected_level", "level.test");
-    sdl3d_input_manager *play_input = sdl3d_game_session_get_input(session);
+    slayer3d_properties_set_string(payload, "from_scene", "scene.options");
+    slayer3d_properties_set_string(payload, "selected_level", "level.test");
+    slayer3d_input_manager *play_input = slayer3d_game_session_get_input(session);
     ASSERT_NE(play_input, nullptr);
-    const int remote_up_action = sdl3d_game_data_find_action(runtime, "action.paddle.local.up");
+    const int remote_up_action = slayer3d_game_data_find_action(runtime, "action.paddle.local.up");
     ASSERT_GE(remote_up_action, 0);
-    sdl3d_input_set_action_override(play_input, remote_up_action, 1.0f);
-    ASSERT_NE(sdl3d_input_update(play_input, 10), nullptr);
-    EXPECT_NEAR(sdl3d_input_get_value(play_input, remote_up_action), 1.0f, 0.0001f);
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene_with_payload(runtime, "scene.play", payload));
-    ASSERT_NE(sdl3d_input_update(play_input, 11), nullptr);
-    EXPECT_NEAR(sdl3d_input_get_value(play_input, remote_up_action), 0.0f, 0.0001f);
+    slayer3d_input_set_action_override(play_input, remote_up_action, 1.0f);
+    ASSERT_NE(slayer3d_input_update(play_input, 10), nullptr);
+    EXPECT_NEAR(slayer3d_input_get_value(play_input, remote_up_action), 1.0f, 0.0001f);
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene_with_payload(runtime, "scene.play", payload));
+    ASSERT_NE(slayer3d_input_update(play_input, 11), nullptr);
+    EXPECT_NEAR(slayer3d_input_get_value(play_input, remote_up_action), 0.0f, 0.0001f);
     EXPECT_TRUE(payload_capture.called);
     EXPECT_EQ(payload_capture.from_scene, "scene.options");
     EXPECT_EQ(payload_capture.to_scene, "scene.play");
     EXPECT_EQ(payload_capture.selected_level, "level.test");
-    sdl3d_properties_destroy(payload);
+    slayer3d_properties_destroy(payload);
 
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "match_mode", ""), "single");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "network_role", ""), "none");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "network_flow", ""), "none");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "match_mode", ""), "single");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "network_role", ""), "none");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "network_flow", ""), "none");
 
-    sdl3d_properties *lan_payload = sdl3d_properties_create();
+    slayer3d_properties *lan_payload = slayer3d_properties_create();
     ASSERT_NE(lan_payload, nullptr);
-    sdl3d_properties_set_string(lan_payload, "match_mode", "lan");
-    sdl3d_properties_set_string(lan_payload, "network_role", "client");
-    sdl3d_properties_set_string(lan_payload, "network_flow", "direct");
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene_with_payload(runtime, "scene.play", lan_payload));
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "match_mode", ""), "lan");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "network_role", ""), "client");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "network_flow", ""), "direct");
-    sdl3d_properties_destroy(lan_payload);
+    slayer3d_properties_set_string(lan_payload, "match_mode", "lan");
+    slayer3d_properties_set_string(lan_payload, "network_role", "client");
+    slayer3d_properties_set_string(lan_payload, "network_flow", "direct");
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.title"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene_with_payload(runtime, "scene.play", lan_payload));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "match_mode", ""), "lan");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "network_role", ""), "client");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "network_flow", ""), "direct");
+    slayer3d_properties_destroy(lan_payload);
 
-    sdl3d_properties_set_string(scene_state, "selected_level", "level.002");
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
-    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "selected_level", ""), "level.002");
+    slayer3d_properties_set_string(scene_state, "selected_level", "level.002");
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.title"));
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "selected_level", ""),
+                 "level.002");
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, ResolvesRuntimeUiStateForTextAndImages)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_game_data_ui_image logo{};
+    slayer3d_game_data_ui_image logo{};
     bool saw_logo = false;
-    auto find_logo = [](void *userdata, const sdl3d_game_data_ui_image *image) -> bool {
-        auto *args = static_cast<std::pair<sdl3d_game_data_ui_image *, bool *> *>(userdata);
+    auto find_logo = [](void *userdata, const slayer3d_game_data_ui_image *image) -> bool {
+        auto *args = static_cast<std::pair<slayer3d_game_data_ui_image *, bool *> *>(userdata);
         if (image->name != nullptr && std::string(image->name) == "ui.splash.logo")
         {
             *args->first = *image;
@@ -3513,31 +3532,31 @@ TEST(GameDataRuntime, ResolvesRuntimeUiStateForTextAndImages)
         }
         return true;
     };
-    std::pair<sdl3d_game_data_ui_image *, bool *> logo_args{&logo, &saw_logo};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_image(runtime, find_logo, &logo_args));
+    std::pair<slayer3d_game_data_ui_image *, bool *> logo_args{&logo, &saw_logo};
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_image(runtime, find_logo, &logo_args));
     ASSERT_TRUE(saw_logo);
     EXPECT_EQ(logo.effect, nullptr);
     EXPECT_NEAR(logo.effect_speed, 1.0f, 0.0001f);
 
-    sdl3d_game_data_ui_state image_state{};
-    sdl3d_game_data_ui_state_init(&image_state);
-    image_state.flags = SDL3D_GAME_DATA_UI_STATE_OFFSET | SDL3D_GAME_DATA_UI_STATE_SCALE |
-                        SDL3D_GAME_DATA_UI_STATE_ALPHA | SDL3D_GAME_DATA_UI_STATE_TINT;
+    slayer3d_game_data_ui_state image_state{};
+    slayer3d_game_data_ui_state_init(&image_state);
+    image_state.flags = SLAYER3D_GAME_DATA_UI_STATE_OFFSET | SLAYER3D_GAME_DATA_UI_STATE_SCALE |
+                        SLAYER3D_GAME_DATA_UI_STATE_ALPHA | SLAYER3D_GAME_DATA_UI_STATE_TINT;
     image_state.offset_x = 0.10f;
     image_state.offset_y = -0.05f;
     image_state.scale = 0.5f;
     image_state.alpha = 0.25f;
     image_state.tint = {128, 64, 255, 200};
-    ASSERT_TRUE(sdl3d_game_data_set_ui_state(runtime, "ui.splash.logo", &image_state));
+    ASSERT_TRUE(slayer3d_game_data_set_ui_state(runtime, "ui.splash.logo", &image_state));
 
-    sdl3d_game_data_ui_state stored_image_state{};
-    ASSERT_TRUE(sdl3d_game_data_get_ui_state(runtime, "ui.splash.logo", &stored_image_state));
+    slayer3d_game_data_ui_state stored_image_state{};
+    ASSERT_TRUE(slayer3d_game_data_get_ui_state(runtime, "ui.splash.logo", &stored_image_state));
     EXPECT_EQ(stored_image_state.flags, image_state.flags);
     EXPECT_NEAR(stored_image_state.scale, 0.5f, 0.0001f);
 
-    sdl3d_game_data_ui_image resolved_logo{};
+    slayer3d_game_data_ui_image resolved_logo{};
     bool logo_visible = false;
-    ASSERT_TRUE(sdl3d_game_data_resolve_ui_image(runtime, &logo, nullptr, &resolved_logo, &logo_visible));
+    ASSERT_TRUE(slayer3d_game_data_resolve_ui_image(runtime, &logo, nullptr, &resolved_logo, &logo_visible));
     EXPECT_TRUE(logo_visible);
     EXPECT_NEAR(resolved_logo.x, 0.60f, 0.0001f);
     EXPECT_NEAR(resolved_logo.y, 0.45f, 0.0001f);
@@ -3548,12 +3567,12 @@ TEST(GameDataRuntime, ResolvesRuntimeUiStateForTextAndImages)
     EXPECT_EQ(resolved_logo.color.a, 50);
     EXPECT_EQ(resolved_logo.effect, nullptr);
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.play"));
 
-    sdl3d_game_data_ui_text pause{};
+    slayer3d_game_data_ui_text pause{};
     bool saw_pause = false;
-    auto find_pause = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
-        auto *args = static_cast<std::pair<sdl3d_game_data_ui_text *, bool *> *>(userdata);
+    auto find_pause = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+        auto *args = static_cast<std::pair<slayer3d_game_data_ui_text *, bool *> *>(userdata);
         if (text->name != nullptr && std::string(text->name) == "ui.pause")
         {
             *args->first = *text;
@@ -3562,29 +3581,30 @@ TEST(GameDataRuntime, ResolvesRuntimeUiStateForTextAndImages)
         }
         return true;
     };
-    std::pair<sdl3d_game_data_ui_text *, bool *> pause_args{&pause, &saw_pause};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_pause, &pause_args));
+    std::pair<slayer3d_game_data_ui_text *, bool *> pause_args{&pause, &saw_pause};
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_pause, &pause_args));
     ASSERT_TRUE(saw_pause);
 
-    sdl3d_game_data_ui_metrics metrics{};
+    slayer3d_game_data_ui_metrics metrics{};
     metrics.paused = false;
-    EXPECT_FALSE(sdl3d_game_data_ui_text_is_visible(runtime, &pause, &metrics));
+    EXPECT_FALSE(slayer3d_game_data_ui_text_is_visible(runtime, &pause, &metrics));
 
-    sdl3d_game_data_ui_state text_state{};
-    sdl3d_game_data_ui_state_init(&text_state);
-    text_state.flags = SDL3D_GAME_DATA_UI_STATE_VISIBLE | SDL3D_GAME_DATA_UI_STATE_OFFSET |
-                       SDL3D_GAME_DATA_UI_STATE_SCALE | SDL3D_GAME_DATA_UI_STATE_ALPHA | SDL3D_GAME_DATA_UI_STATE_TINT;
+    slayer3d_game_data_ui_state text_state{};
+    slayer3d_game_data_ui_state_init(&text_state);
+    text_state.flags = SLAYER3D_GAME_DATA_UI_STATE_VISIBLE | SLAYER3D_GAME_DATA_UI_STATE_OFFSET |
+                       SLAYER3D_GAME_DATA_UI_STATE_SCALE | SLAYER3D_GAME_DATA_UI_STATE_ALPHA |
+                       SLAYER3D_GAME_DATA_UI_STATE_TINT;
     text_state.visible = true;
     text_state.offset_x = 0.02f;
     text_state.offset_y = -0.03f;
     text_state.scale = 2.0f;
     text_state.alpha = 0.5f;
     text_state.tint = {128, 255, 64, 128};
-    ASSERT_TRUE(sdl3d_game_data_set_ui_state(runtime, "ui.pause", &text_state));
+    ASSERT_TRUE(slayer3d_game_data_set_ui_state(runtime, "ui.pause", &text_state));
 
-    sdl3d_game_data_ui_text resolved_pause{};
+    slayer3d_game_data_ui_text resolved_pause{};
     bool pause_visible = false;
-    ASSERT_TRUE(sdl3d_game_data_resolve_ui_text(runtime, &pause, &metrics, &resolved_pause, &pause_visible));
+    ASSERT_TRUE(slayer3d_game_data_resolve_ui_text(runtime, &pause, &metrics, &resolved_pause, &pause_visible));
     EXPECT_TRUE(pause_visible);
     EXPECT_NEAR(resolved_pause.x, 0.52f, 0.0001f);
     EXPECT_NEAR(resolved_pause.y, 0.32f, 0.0001f);
@@ -3595,274 +3615,279 @@ TEST(GameDataRuntime, ResolvesRuntimeUiStateForTextAndImages)
     EXPECT_EQ(resolved_pause.color.a, 64);
 
     text_state.visible = false;
-    ASSERT_TRUE(sdl3d_game_data_set_ui_state(runtime, "ui.pause", &text_state));
-    EXPECT_FALSE(sdl3d_game_data_ui_text_is_visible(runtime, &pause, &metrics));
+    ASSERT_TRUE(slayer3d_game_data_set_ui_state(runtime, "ui.pause", &text_state));
+    EXPECT_FALSE(slayer3d_game_data_ui_text_is_visible(runtime, &pause, &metrics));
 
-    EXPECT_TRUE(sdl3d_game_data_clear_ui_state(runtime, "ui.pause"));
-    EXPECT_FALSE(sdl3d_game_data_get_ui_state(runtime, "ui.pause", &text_state));
-    sdl3d_game_data_clear_ui_states(runtime);
-    EXPECT_FALSE(sdl3d_game_data_get_ui_state(runtime, "ui.splash.logo", &image_state));
+    EXPECT_TRUE(slayer3d_game_data_clear_ui_state(runtime, "ui.pause"));
+    EXPECT_FALSE(slayer3d_game_data_get_ui_state(runtime, "ui.pause", &text_state));
+    slayer3d_game_data_clear_ui_states(runtime);
+    EXPECT_FALSE(slayer3d_game_data_get_ui_state(runtime, "ui.splash.logo", &image_state));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, DataAuthoredInputPolicyUpdatePhasesAndPresentationClocks)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    const int pause = sdl3d_game_data_find_action(runtime, "action.pause");
-    const int scene_play = sdl3d_game_data_find_action(runtime, "action.scene.play");
+    const int pause = slayer3d_game_data_find_action(runtime, "action.pause");
+    const int scene_play = slayer3d_game_data_find_action(runtime, "action.scene.play");
     ASSERT_GE(pause, 0);
     ASSERT_GE(scene_play, 0);
-    EXPECT_FALSE(sdl3d_game_data_active_scene_allows_action(runtime, pause));
-    EXPECT_TRUE(sdl3d_game_data_active_scene_allows_action(runtime, scene_play));
+    EXPECT_FALSE(slayer3d_game_data_active_scene_allows_action(runtime, pause));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_allows_action(runtime, scene_play));
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
-    EXPECT_TRUE(sdl3d_game_data_active_scene_allows_action(runtime, pause));
-    EXPECT_TRUE(sdl3d_game_data_active_scene_allows_action(
-        runtime, sdl3d_game_data_find_action(runtime, "action.paddle.local.up")));
-    EXPECT_TRUE(sdl3d_game_data_active_scene_allows_action(
-        runtime, sdl3d_game_data_find_action(runtime, "action.paddle.local.down")));
-    EXPECT_TRUE(sdl3d_game_data_active_scene_update_phase(runtime, "presentation", true));
-    EXPECT_FALSE(sdl3d_game_data_active_scene_update_phase(runtime, "simulation", true));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.play"));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_allows_action(runtime, pause));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_allows_action(
+        runtime, slayer3d_game_data_find_action(runtime, "action.paddle.local.up")));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_allows_action(
+        runtime, slayer3d_game_data_find_action(runtime, "action.paddle.local.down")));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_update_phase(runtime, "presentation", true));
+    EXPECT_FALSE(slayer3d_game_data_active_scene_update_phase(runtime, "simulation", true));
 
-    sdl3d_registered_actor *presentation = sdl3d_game_data_find_actor(runtime, "entity.presentation");
+    slayer3d_registered_actor *presentation = slayer3d_game_data_find_actor(runtime, "entity.presentation");
     ASSERT_NE(presentation, nullptr);
-    sdl3d_game_context ctx{};
+    slayer3d_game_context ctx{};
     ctx.session = session;
 
-    sdl3d_game_data_frame_state frame_state{};
-    sdl3d_game_data_frame_state_init(&frame_state);
-    sdl3d_game_data_update_frame_desc update{};
+    slayer3d_game_data_frame_state frame_state{};
+    slayer3d_game_data_frame_state_init(&frame_state);
+    slayer3d_game_data_update_frame_desc update{};
     update.ctx = &ctx;
     update.runtime = runtime;
     update.dt = 0.25f;
-    ASSERT_TRUE(sdl3d_game_data_update_frame(&frame_state, &update));
+    ASSERT_TRUE(slayer3d_game_data_update_frame(&frame_state, &update));
     EXPECT_NEAR(frame_state.time, 0.25f, 0.0001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(presentation->props, "pause_flash", -1.0f), 0.0f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(presentation->props, "pause_flash", -1.0f), 0.0f, 0.0001f);
 
     ctx.paused = true;
     update.dt = 0.1f;
-    ASSERT_TRUE(sdl3d_game_data_update_frame(&frame_state, &update));
-    EXPECT_NEAR(sdl3d_properties_get_float(presentation->props, "pause_flash", -1.0f), 0.3f, 0.0001f);
-    EXPECT_NEAR(sdl3d_game_data_ui_pulse_phase(runtime, -1.0f), 0.3f, 0.0001f);
+    ASSERT_TRUE(slayer3d_game_data_update_frame(&frame_state, &update));
+    EXPECT_NEAR(slayer3d_properties_get_float(presentation->props, "pause_flash", -1.0f), 0.3f, 0.0001f);
+    EXPECT_NEAR(slayer3d_game_data_ui_pulse_phase(runtime, -1.0f), 0.3f, 0.0001f);
 
-    sdl3d_game_data_scene_transition_policy policy{};
-    ASSERT_TRUE(sdl3d_game_data_get_scene_transition_policy(runtime, &policy));
+    slayer3d_game_data_scene_transition_policy policy{};
+    ASSERT_TRUE(slayer3d_game_data_get_scene_transition_policy(runtime, &policy));
     EXPECT_FALSE(policy.allow_same_scene);
     EXPECT_FALSE(policy.allow_interrupt);
     EXPECT_TRUE(policy.reset_menu_input_on_request);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, AppliesAuthoredPongPlayInputProfiles)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    const int p1_up = sdl3d_game_data_find_action(runtime, "action.paddle.up");
-    const int p2_up = sdl3d_game_data_find_action(runtime, "action.paddle.local.up");
+    const int p1_up = slayer3d_game_data_find_action(runtime, "action.paddle.up");
+    const int p2_up = slayer3d_game_data_find_action(runtime, "action.paddle.local.up");
     ASSERT_GE(p1_up, 0);
     ASSERT_GE(p2_up, 0);
 
-    ASSERT_TRUE(sdl3d_game_data_apply_input_profile(runtime, input, "profile.pong.play.single", error, sizeof(error)))
+    ASSERT_TRUE(
+        slayer3d_game_data_apply_input_profile(runtime, input, "profile.pong.play.single", error, sizeof(error)))
         << error;
     error[0] = '\0';
     EXPECT_FALSE(
-        sdl3d_game_data_apply_input_profile(runtime, input, "profile.pong.play.missing", error, sizeof(error)));
+        slayer3d_game_data_apply_input_profile(runtime, input, "profile.pong.play.missing", error, sizeof(error)));
     EXPECT_NE(std::string(error).find("profile.pong.play.missing"), std::string::npos);
     error[0] = '\0';
 
     const char *profile_name = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error, sizeof(error)))
         << error;
     ASSERT_STREQ(profile_name, "profile.pong.play.single");
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p1_up), 1.0f);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p2_up), 0.0f);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, p1_up), 1.0f);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, p2_up), 0.0f);
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 2);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 2);
 
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
-    sdl3d_properties_set_string(scene_state, "match_mode", "lan");
-    sdl3d_properties_set_string(scene_state, "network_role", "client");
-    sdl3d_properties_set_string(scene_state, "network_flow", "direct");
-    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error, sizeof(error)))
+    slayer3d_properties_set_string(scene_state, "match_mode", "lan");
+    slayer3d_properties_set_string(scene_state, "network_role", "client");
+    slayer3d_properties_set_string(scene_state, "network_flow", "direct");
+    ASSERT_TRUE(slayer3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error, sizeof(error)))
         << error;
     ASSERT_STREQ(profile_name, "profile.pong.play.lan.client");
 
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 3);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p1_up), 0.0f);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p2_up), 1.0f);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 3);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, p1_up), 0.0f);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, p2_up), 1.0f);
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 4);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 4);
 
-    sdl3d_properties_set_string(scene_state, "match_mode", "local");
-    sdl3d_properties_set_string(scene_state, "network_role", "none");
-    sdl3d_properties_set_string(scene_state, "network_flow", "none");
-    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error, sizeof(error)))
+    slayer3d_properties_set_string(scene_state, "match_mode", "local");
+    slayer3d_properties_set_string(scene_state, "network_role", "none");
+    slayer3d_properties_set_string(scene_state, "network_flow", "none");
+    ASSERT_TRUE(slayer3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error, sizeof(error)))
         << error;
     ASSERT_STREQ(profile_name, "profile.pong.play.local.keyboard_only");
 
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 5);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p1_up), 1.0f);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p2_up), 0.0f);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 5);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, p1_up), 1.0f);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, p2_up), 0.0f);
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 6);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 6);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, AppliesAuthoredPongGamepadAssignmentPolicies)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    if (sdl3d_input_gamepad_count(input) != 0)
+    if (slayer3d_input_gamepad_count(input) != 0)
     {
-        sdl3d_game_data_destroy(runtime);
-        sdl3d_game_session_destroy(session);
+        slayer3d_game_data_destroy(runtime);
+        slayer3d_game_session_destroy(session);
         GTEST_SKIP() << "requires no pre-connected gamepads";
     }
 
-    const int p1_up = sdl3d_game_data_find_action(runtime, "action.paddle.up");
-    const int p2_up = sdl3d_game_data_find_action(runtime, "action.paddle.local.up");
+    const int p1_up = slayer3d_game_data_find_action(runtime, "action.paddle.up");
+    const int p2_up = slayer3d_game_data_find_action(runtime, "action.paddle.local.up");
     ASSERT_GE(p1_up, 0);
     ASSERT_GE(p2_up, 0);
 
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
-    sdl3d_properties_set_string(scene_state, "match_mode", "local");
-    sdl3d_properties_set_string(scene_state, "network_role", "none");
-    sdl3d_properties_set_string(scene_state, "network_flow", "none");
+    slayer3d_properties_set_string(scene_state, "match_mode", "local");
+    slayer3d_properties_set_string(scene_state, "network_role", "none");
+    slayer3d_properties_set_string(scene_state, "network_flow", "none");
 
     SDL_Event event{};
     event.type = SDL_EVENT_GAMEPAD_ADDED;
     event.gdevice.which = 7101;
-    sdl3d_input_process_event(input, &event);
+    slayer3d_input_process_event(input, &event);
 
     const char *profile_name = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error, sizeof(error)))
         << error;
     EXPECT_STREQ(profile_name, "profile.pong.play.local.one_gamepad");
 
     event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
     event.gbutton.which = 7101;
     event.gbutton.button = SDL_GAMEPAD_BUTTON_DPAD_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 1);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p1_up), 0.0f);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p2_up), 1.0f);
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 1);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, p1_up), 0.0f);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, p2_up), 1.0f);
 
     event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 2);
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 2);
 
     event.type = SDL_EVENT_GAMEPAD_ADDED;
     event.gdevice.which = 7102;
-    sdl3d_input_process_event(input, &event);
-    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error, sizeof(error)))
+    slayer3d_input_process_event(input, &event);
+    ASSERT_TRUE(slayer3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error, sizeof(error)))
         << error;
     EXPECT_STREQ(profile_name, "profile.pong.play.local.two_gamepads");
 
     event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
     event.gbutton.which = 7101;
     event.gbutton.button = SDL_GAMEPAD_BUTTON_DPAD_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 3);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p1_up), 1.0f);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p2_up), 0.0f);
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 3);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, p1_up), 1.0f);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, p2_up), 0.0f);
 
     event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 4);
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 4);
 
     event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
     event.gbutton.which = 7102;
     event.gbutton.button = SDL_GAMEPAD_BUTTON_DPAD_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 5);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p1_up), 0.0f);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, p2_up), 1.0f);
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 5);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, p1_up), 0.0f);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, p2_up), 1.0f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, RefreshesActiveInputProfileWhenGamepadCountChanges)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    if (sdl3d_input_gamepad_count(input) != 0)
+    if (slayer3d_input_gamepad_count(input) != 0)
     {
-        sdl3d_game_data_destroy(runtime);
-        sdl3d_game_session_destroy(session);
+        slayer3d_game_data_destroy(runtime);
+        slayer3d_game_session_destroy(session);
         GTEST_SKIP() << "requires no pre-connected gamepads";
     }
 
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
-    sdl3d_properties_set_string(scene_state, "match_mode", "local");
-    sdl3d_properties_set_string(scene_state, "network_role", "none");
-    sdl3d_properties_set_string(scene_state, "network_flow", "none");
+    slayer3d_properties_set_string(scene_state, "match_mode", "local");
+    slayer3d_properties_set_string(scene_state, "network_role", "none");
+    slayer3d_properties_set_string(scene_state, "network_flow", "none");
 
-    sdl3d_game_data_input_profile_refresh_state refresh{};
-    sdl3d_game_data_input_profile_refresh_state_init(&refresh);
+    slayer3d_game_data_input_profile_refresh_state refresh{};
+    slayer3d_game_data_input_profile_refresh_state_init(&refresh);
 
     const char *profile_name = nullptr;
     bool applied = false;
-    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile_on_device_change(runtime, input, &refresh, &profile_name,
-                                                                            &applied, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_apply_active_input_profile_on_device_change(runtime, input, &refresh, &profile_name,
+                                                                               &applied, error, sizeof(error)))
         << error;
     EXPECT_TRUE(applied);
     EXPECT_STREQ(profile_name, "profile.pong.play.local.keyboard_only");
@@ -3870,8 +3895,8 @@ TEST(GameDataRuntime, RefreshesActiveInputProfileWhenGamepadCountChanges)
 
     profile_name = "unchanged";
     applied = true;
-    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile_on_device_change(runtime, input, &refresh, &profile_name,
-                                                                            &applied, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_apply_active_input_profile_on_device_change(runtime, input, &refresh, &profile_name,
+                                                                               &applied, error, sizeof(error)))
         << error;
     EXPECT_FALSE(applied);
     EXPECT_EQ(profile_name, nullptr);
@@ -3879,10 +3904,10 @@ TEST(GameDataRuntime, RefreshesActiveInputProfileWhenGamepadCountChanges)
     SDL_Event event{};
     event.type = SDL_EVENT_GAMEPAD_ADDED;
     event.gdevice.which = 7201;
-    sdl3d_input_process_event(input, &event);
+    slayer3d_input_process_event(input, &event);
 
-    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile_on_device_change(runtime, input, &refresh, &profile_name,
-                                                                            &applied, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_apply_active_input_profile_on_device_change(runtime, input, &refresh, &profile_name,
+                                                                               &applied, error, sizeof(error)))
         << error;
     EXPECT_TRUE(applied);
     EXPECT_STREQ(profile_name, "profile.pong.play.local.one_gamepad");
@@ -3890,17 +3915,17 @@ TEST(GameDataRuntime, RefreshesActiveInputProfileWhenGamepadCountChanges)
 
     event.type = SDL_EVENT_GAMEPAD_ADDED;
     event.gdevice.which = 7202;
-    sdl3d_input_process_event(input, &event);
+    slayer3d_input_process_event(input, &event);
 
-    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile_on_device_change(runtime, input, &refresh, &profile_name,
-                                                                            &applied, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_apply_active_input_profile_on_device_change(runtime, input, &refresh, &profile_name,
+                                                                               &applied, error, sizeof(error)))
         << error;
     EXPECT_TRUE(applied);
     EXPECT_STREQ(profile_name, "profile.pong.play.local.two_gamepads");
     EXPECT_EQ(refresh.gamepad_count, 2);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, AppliesFallbackAndMouseInputProfiles)
@@ -3908,7 +3933,7 @@ TEST(GameDataRuntime, AppliesFallbackAndMouseInputProfiles)
     const std::filesystem::path dir = unique_test_dir("input_profile_mouse");
     write_text(dir / "mouse_profile.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Mouse Profile", "id": "test.mouse_profile", "version": "0.1.0" },
   "world": { "name": "world.mouse_profile", "kind": "fixed_screen" },
   "input": {
@@ -3940,59 +3965,60 @@ TEST(GameDataRuntime, AppliesFallbackAndMouseInputProfiles)
   "entities": []
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "mouse_profile.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "mouse_profile.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    const int action = sdl3d_game_data_find_action(runtime, "action.pointer.primary");
+    const int action = slayer3d_game_data_find_action(runtime, "action.pointer.primary");
     ASSERT_GE(action, 0);
 
     const char *profile_name = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_apply_active_input_profile(runtime, input, &profile_name, error, sizeof(error)))
         << error;
     EXPECT_STREQ(profile_name, "profile.fallback.mouse");
 
     SDL_Event mouse{};
     mouse.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     mouse.button.button = SDL_BUTTON_LEFT;
-    sdl3d_input_process_event(input, &mouse);
-    sdl3d_input_update(input, 1);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, action), 1.0f);
+    slayer3d_input_process_event(input, &mouse);
+    slayer3d_input_update(input, 1);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, action), 1.0f);
 
     mouse.type = SDL_EVENT_MOUSE_BUTTON_UP;
-    sdl3d_input_process_event(input, &mouse);
-    sdl3d_input_update(input, 2);
-    EXPECT_FLOAT_EQ(sdl3d_input_get_value(input, action), 0.0f);
+    slayer3d_input_process_event(input, &mouse);
+    slayer3d_input_update(input, 2);
+    EXPECT_FLOAT_EQ(slayer3d_input_get_value(input, action), 0.0f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, MenuControllerConsumesAuthoredMenuInput)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.title"));
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
 
     bool armed = false;
-    sdl3d_game_data_menu_update_result result{};
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_game_data_menu_update_result result{};
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(armed);
     EXPECT_FALSE(result.handled_input);
     EXPECT_FALSE(result.selected);
@@ -4001,18 +4027,18 @@ TEST(GameDataRuntime, MenuControllerConsumesAuthoredMenuInput)
     EXPECT_EQ(result.move_signal_id, -1);
     EXPECT_EQ(result.select_signal_id, -1);
 
-    const int menu_move_signal = sdl3d_game_data_find_signal(runtime, "signal.ui.menu.move");
-    const int menu_select_signal = sdl3d_game_data_find_signal(runtime, "signal.ui.menu.select");
+    const int menu_move_signal = slayer3d_game_data_find_signal(runtime, "signal.ui.menu.move");
+    const int menu_select_signal = slayer3d_game_data_find_signal(runtime, "signal.ui.menu.select");
     ASSERT_GE(menu_move_signal, 0);
     ASSERT_GE(menu_select_signal, 0);
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_DOWN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
 
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.handled_input);
     EXPECT_FALSE(result.selected);
     EXPECT_STREQ(result.menu, "menu.title");
@@ -4021,14 +4047,14 @@ TEST(GameDataRuntime, MenuControllerConsumesAuthoredMenuInput)
     EXPECT_EQ(result.select_signal_id, -1);
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 2);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 2);
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 3);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 3);
 
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.handled_input);
     EXPECT_TRUE(result.selected);
     EXPECT_FALSE(result.quit);
@@ -4039,8 +4065,8 @@ TEST(GameDataRuntime, MenuControllerConsumesAuthoredMenuInput)
     EXPECT_EQ(result.move_signal_id, -1);
     EXPECT_EQ(result.select_signal_id, menu_select_signal);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, MenuTextEntryCapturesEditingInput)
@@ -4048,7 +4074,7 @@ TEST(GameDataRuntime, MenuTextEntryCapturesEditingInput)
     const std::filesystem::path dir = unique_test_dir("menu_text_entry");
     write_text(dir / "text_entry.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Text Entry", "id": "test.text_entry", "version": "0.1.0" },
   "world": { "name": "world.text_entry", "kind": "fixed_screen" },
   "input": {
@@ -4069,7 +4095,7 @@ TEST(GameDataRuntime, MenuTextEntryCapturesEditingInput)
 })json");
     write_text(dir / "scenes" / "form.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.form",
   "input": { "actions": ["action.menu.select", "action.menu.back", "action.menu.up", "action.menu.down"] },
   "menus": [
@@ -4098,38 +4124,38 @@ TEST(GameDataRuntime, MenuTextEntryCapturesEditingInput)
   ]
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "text_entry.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "text_entry.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
 
-    sdl3d_game_data_menu menu{};
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    slayer3d_game_data_menu menu{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     ASSERT_STREQ(menu.name, "menu.form");
-    sdl3d_game_data_menu_item item{};
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
-    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_TEXT);
+    slayer3d_game_data_menu_item item{};
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_TEXT);
 
     bool armed = true;
-    sdl3d_game_data_menu_update_result result{};
+    slayer3d_game_data_menu_update_result result{};
     SDL_Event event{};
     event.type = SDL_EVENT_KEY_DOWN;
     event.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 1);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.text_entry_capture_started);
-    EXPECT_TRUE(sdl3d_game_data_menu_text_entry_capture_active(runtime));
+    EXPECT_TRUE(slayer3d_game_data_menu_text_entry_capture_active(runtime));
 
     event.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 2);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     event = {};
     event.type = SDL_EVENT_TEXT_INPUT;
@@ -4140,100 +4166,101 @@ TEST(GameDataRuntime, MenuTextEntryCapturesEditingInput)
                       "\x9F"
                       "\x98"
                       "\x80";
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 3);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.text_entry_changed);
-    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "host", ""), "hostlocal1");
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "host", ""), "hostlocal1");
 
     event = {};
     event.type = SDL_EVENT_KEY_DOWN;
     event.key.scancode = SDL_SCANCODE_DOWN;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 4);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.handled_input);
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_EQ(menu.selected_index, 0);
 
     event.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 5);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 5);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     event = {};
     event.type = SDL_EVENT_KEY_DOWN;
     event.key.scancode = SDL_SCANCODE_BACKSPACE;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 6);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
-    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "host", ""), "hostlocal");
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 6);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "host", ""), "hostlocal");
 
     event.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 7);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 7);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     event = {};
     event.type = SDL_EVENT_KEY_DOWN;
     event.key.scancode = SDL_SCANCODE_DELETE;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 8);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
-    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "host", ""), "hostloca");
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 8);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "host", ""), "hostloca");
 
     event.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 9);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 9);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     event = {};
     event.type = SDL_EVENT_KEY_DOWN;
     event.key.scancode = SDL_SCANCODE_ESCAPE;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 10);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 10);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.text_entry_canceled);
-    EXPECT_FALSE(sdl3d_game_data_menu_text_entry_capture_active(runtime));
-    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "host", ""), "");
+    EXPECT_FALSE(slayer3d_game_data_menu_text_entry_capture_active(runtime));
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "host", ""), "");
 
     event.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 11);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 11);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     event = {};
     event.type = SDL_EVENT_KEY_DOWN;
     event.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 12);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 12);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.text_entry_capture_started);
 
     event.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 13);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 13);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     event = {};
     event.type = SDL_EVENT_TEXT_INPUT;
     event.text.text = "192.168.1.20:27183";
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 14);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 14);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     event = {};
     event.type = SDL_EVENT_KEY_DOWN;
     event.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 15);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 15);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.text_entry_submitted);
-    EXPECT_FALSE(sdl3d_game_data_menu_text_entry_capture_active(runtime));
-    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "host", ""), "192.168.1.20:27183");
+    EXPECT_FALSE(slayer3d_game_data_menu_text_entry_capture_active(runtime));
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "host", ""),
+                 "192.168.1.20:27183");
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -4243,7 +4270,7 @@ TEST(GameDataRuntime, RejectsInvalidMenuTextControlSchema)
     const auto write_case = [&](const char *name, const char *control_json) {
         write_text(dir / (std::string(name) + ".game.json"),
                    R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Text Entry Validation", "id": "test.text_entry_validation", "version": "0.1.0" },
   "world": { "name": "world.text_entry_validation", "kind": "fixed_screen" },
   "input": {
@@ -4262,7 +4289,7 @@ TEST(GameDataRuntime, RejectsInvalidMenuTextControlSchema)
   "scenes": { "initial": "scene.form", "files": ["scenes/form.scene.json"] }
 })json");
         write_text(dir / "scenes" / "form.scene.json", (std::string(R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.form",
   "input": { "actions": ["action.menu.select", "action.menu.up", "action.menu.down"] },
   "menus": [
@@ -4284,13 +4311,13 @@ TEST(GameDataRuntime, RejectsInvalidMenuTextControlSchema)
     char error[512]{};
     write_case("alias", R"json({ "type": "text_entry", "target": "scene_state", "key": "host" })json");
     EXPECT_FALSE(
-        sdl3d_game_data_validate_file((dir / "alias.game.json").string().c_str(), nullptr, error, sizeof(error)));
+        slayer3d_game_data_validate_file((dir / "alias.game.json").string().c_str(), nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("menu item control requires type"), std::string::npos) << error;
 
     error[0] = '\0';
     write_case("too_long", R"json({ "type": "text", "target": "scene_state", "key": "host", "max_length": 256 })json");
     EXPECT_FALSE(
-        sdl3d_game_data_validate_file((dir / "too_long.game.json").string().c_str(), nullptr, error, sizeof(error)));
+        slayer3d_game_data_validate_file((dir / "too_long.game.json").string().c_str(), nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("max_length must be 255 bytes or fewer"), std::string::npos) << error;
 
     remove_test_dir(dir);
@@ -4301,7 +4328,7 @@ TEST(GameDataRuntime, DynamicListMenuUsesIndexedSceneStateEntries)
     const std::filesystem::path dir = unique_test_dir("menu_dynamic_list");
     write_text(dir / "dynamic_list.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Dynamic List", "id": "test.dynamic_list", "version": "0.1.0" },
   "world": { "name": "world.dynamic_list", "kind": "fixed_screen" },
   "assets": { "fonts": [{ "id": "font.hud", "builtin": "Inter", "size": 18 }] },
@@ -4324,7 +4351,7 @@ TEST(GameDataRuntime, DynamicListMenuUsesIndexedSceneStateEntries)
 })json");
     write_text(dir / "scenes" / "browser.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.browser",
   "input": {
     "actions": ["action.menu.select", "action.menu.back", "action.menu.up", "action.menu.down"]
@@ -4373,50 +4400,50 @@ TEST(GameDataRuntime, DynamicListMenuUsesIndexedSceneStateEntries)
   }
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "dynamic_list.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "dynamic_list.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
-    sdl3d_game_data_menu menu{};
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    slayer3d_game_data_menu menu{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.sessions");
     EXPECT_EQ(menu.item_count, 2);
 
-    sdl3d_game_data_menu_item item{};
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    slayer3d_game_data_menu_item item{};
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_TRUE(item.dynamic_list_item);
     EXPECT_EQ(item.dynamic_list_index, -1);
     EXPECT_STREQ(item.label, "No sessions discovered");
     EXPECT_EQ(item.signal_id, -1);
 
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
-    sdl3d_properties_set_int(scene_state, "session_count", 4);
-    sdl3d_properties_set_string(scene_state, "session_0_label", "Alpha");
-    sdl3d_properties_set_string(scene_state, "session_0_value", "10.0.0.1:27183");
-    sdl3d_properties_set_string(scene_state, "session_1_label", "Beta");
-    sdl3d_properties_set_string(scene_state, "session_1_value", "10.0.0.2:27183");
-    sdl3d_properties_set_string(scene_state, "session_2_label", "Gamma");
-    sdl3d_properties_set_string(scene_state, "session_2_value", "10.0.0.3:27183");
-    sdl3d_properties_set_string(scene_state, "session_3_label", "Delta");
-    sdl3d_properties_set_string(scene_state, "session_3_value", "10.0.0.4:27183");
+    slayer3d_properties_set_int(scene_state, "session_count", 4);
+    slayer3d_properties_set_string(scene_state, "session_0_label", "Alpha");
+    slayer3d_properties_set_string(scene_state, "session_0_value", "10.0.0.1:27183");
+    slayer3d_properties_set_string(scene_state, "session_1_label", "Beta");
+    slayer3d_properties_set_string(scene_state, "session_1_value", "10.0.0.2:27183");
+    slayer3d_properties_set_string(scene_state, "session_2_label", "Gamma");
+    slayer3d_properties_set_string(scene_state, "session_2_value", "10.0.0.3:27183");
+    slayer3d_properties_set_string(scene_state, "session_3_label", "Delta");
+    slayer3d_properties_set_string(scene_state, "session_3_value", "10.0.0.4:27183");
 
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_EQ(menu.item_count, 5);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
     EXPECT_TRUE(item.dynamic_list_item);
     EXPECT_STREQ(item.dynamic_list_name, "list.sessions");
     EXPECT_EQ(item.dynamic_list_index, 1);
     EXPECT_STREQ(item.dynamic_list_value, "10.0.0.2:27183");
     EXPECT_STREQ(item.label, "Join Beta");
-    sdl3d_game_data_menu_item first_dynamic_item{};
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &first_dynamic_item));
-    sdl3d_game_data_menu_item second_dynamic_item{};
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &second_dynamic_item));
+    slayer3d_game_data_menu_item first_dynamic_item{};
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &first_dynamic_item));
+    slayer3d_game_data_menu_item second_dynamic_item{};
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 1, &second_dynamic_item));
     EXPECT_STREQ(first_dynamic_item.label, "Join Alpha");
     EXPECT_STREQ(second_dynamic_item.label, "Join Beta");
     EXPECT_STREQ(first_dynamic_item.dynamic_list_value, "10.0.0.1:27183");
@@ -4426,57 +4453,57 @@ TEST(GameDataRuntime, DynamicListMenuUsesIndexedSceneStateEntries)
     {
         std::vector<std::string> labels;
     } labels;
-    auto collect_menu_labels = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+    auto collect_menu_labels = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         auto *capture = static_cast<MenuLabels *>(userdata);
         if (std::string(text->name) == "ui.sessions")
             capture->labels.emplace_back(text->text);
         return true;
     };
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, collect_menu_labels, &labels));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, collect_menu_labels, &labels));
     ASSERT_EQ(labels.labels.size(), 2U);
     EXPECT_EQ(labels.labels[0], "Join Alpha");
     EXPECT_EQ(labels.labels[1], "Join Beta");
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
     bool armed = true;
-    sdl3d_game_data_menu_update_result result{};
+    slayer3d_game_data_menu_update_result result{};
     SDL_Event event{};
     event.type = SDL_EVENT_KEY_DOWN;
     event.key.scancode = SDL_SCANCODE_DOWN;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 1);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.handled_input);
     EXPECT_FALSE(result.selected);
     EXPECT_EQ(result.selected_index, 1);
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "selected_session_index", -1), 1);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "selected_session_live", ""), "10.0.0.2:27183");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "selected_session_index", -1), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "selected_session_live", ""), "10.0.0.2:27183");
 
     event.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 2);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     event = {};
     event.type = SDL_EVENT_KEY_DOWN;
     event.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 3);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.handled_input);
     EXPECT_TRUE(result.selected);
-    EXPECT_EQ(result.signal_id, sdl3d_game_data_find_signal(runtime, "signal.session.join"));
+    EXPECT_EQ(result.signal_id, slayer3d_game_data_find_signal(runtime, "signal.session.join"));
     EXPECT_STREQ(result.scene_state_key, "selected_session");
     EXPECT_STREQ(result.scene_state_value, "10.0.0.2:27183");
 
-    sdl3d_properties_set_int(scene_state, "session_count", 1);
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    slayer3d_properties_set_int(scene_state, "session_count", 1);
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_EQ(menu.item_count, 2);
     EXPECT_EQ(menu.selected_index, 1);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -4485,7 +4512,7 @@ TEST(GameDataRuntime, DynamicListMenuReadsRuntimeCollections)
     const std::filesystem::path dir = unique_test_dir("menu_dynamic_runtime_collection");
     write_text(dir / "dynamic_collection.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Dynamic Runtime Collection", "id": "test.dynamic_runtime_collection", "version": "0.1.0" },
   "world": { "name": "world.dynamic_runtime_collection", "kind": "fixed_screen" },
   "assets": { "fonts": [{ "id": "font.hud", "builtin": "Inter", "size": 18 }] },
@@ -4507,7 +4534,7 @@ TEST(GameDataRuntime, DynamicListMenuReadsRuntimeCollections)
 })json");
     write_text(dir / "scenes" / "browser.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.browser",
   "input": { "actions": ["action.menu.select", "action.menu.up", "action.menu.down"] },
   "menus": [
@@ -4539,83 +4566,83 @@ TEST(GameDataRuntime, DynamicListMenuReadsRuntimeCollections)
   ]
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "dynamic_collection.game.json").string().c_str(), session, &runtime,
-                                          error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "dynamic_collection.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
-    EXPECT_FALSE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 2, "name", "Sparse"));
-    EXPECT_EQ(sdl3d_game_data_runtime_collection_count(runtime, "local_matches"), 0);
+    EXPECT_FALSE(slayer3d_game_data_runtime_collection_set_string(runtime, "local_matches", 2, "name", "Sparse"));
+    EXPECT_EQ(slayer3d_game_data_runtime_collection_count(runtime, "local_matches"), 0);
 
-    sdl3d_game_data_menu menu{};
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    slayer3d_game_data_menu menu{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_EQ(menu.item_count, 2);
 
-    sdl3d_game_data_menu_item item{};
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    slayer3d_game_data_menu_item item{};
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_TRUE(item.dynamic_list_item);
     EXPECT_EQ(item.dynamic_list_index, -1);
     EXPECT_STREQ(item.label, "No runtime rows");
 
-    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "name", "Alpha"));
-    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_int(runtime, "local_matches", 0, "latency_ms", 42));
-    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 1, "name", "Beta"));
-    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_float(runtime, "local_matches", 1, "latency_ms", 19.5f));
-    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_bool(runtime, "local_matches", 1, "secure", true));
-    EXPECT_EQ(sdl3d_game_data_runtime_collection_count(runtime, "local_matches"), 2);
+    ASSERT_TRUE(slayer3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "name", "Alpha"));
+    ASSERT_TRUE(slayer3d_game_data_runtime_collection_set_int(runtime, "local_matches", 0, "latency_ms", 42));
+    ASSERT_TRUE(slayer3d_game_data_runtime_collection_set_string(runtime, "local_matches", 1, "name", "Beta"));
+    ASSERT_TRUE(slayer3d_game_data_runtime_collection_set_float(runtime, "local_matches", 1, "latency_ms", 19.5f));
+    ASSERT_TRUE(slayer3d_game_data_runtime_collection_set_bool(runtime, "local_matches", 1, "secure", true));
+    EXPECT_EQ(slayer3d_game_data_runtime_collection_count(runtime, "local_matches"), 2);
 
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_EQ(menu.item_count, 3);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Alpha");
     EXPECT_STREQ(item.dynamic_list_value, "42");
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 1, &item));
     EXPECT_STREQ(item.label, "Beta");
     EXPECT_STREQ(item.dynamic_list_value, "19.500");
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
     bool armed = true;
-    sdl3d_game_data_menu_update_result result{};
+    slayer3d_game_data_menu_update_result result{};
     SDL_Event event{};
     event.type = SDL_EVENT_KEY_DOWN;
     event.key.scancode = SDL_SCANCODE_DOWN;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 1);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_EQ(result.selected_index, 1);
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "selected_runtime_index", -1), 1);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "selected_runtime_latency", ""), "19.500");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "selected_runtime_index", -1), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "selected_runtime_latency", ""), "19.500");
 
     event.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 2);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     event = {};
     event.type = SDL_EVENT_KEY_DOWN;
     event.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 3);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.selected);
     EXPECT_STREQ(result.scene_state_key, "selected_runtime_latency_on_accept");
     EXPECT_STREQ(result.scene_state_value, "19.500");
 
-    EXPECT_TRUE(sdl3d_game_data_runtime_collection_clear(runtime, "local_matches"));
-    EXPECT_EQ(sdl3d_game_data_runtime_collection_count(runtime, "local_matches"), 0);
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_TRUE(slayer3d_game_data_runtime_collection_clear(runtime, "local_matches"));
+    EXPECT_EQ(slayer3d_game_data_runtime_collection_count(runtime, "local_matches"), 0);
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_EQ(menu.item_count, 2);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "No runtime rows");
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -4625,7 +4652,7 @@ TEST(GameDataRuntime, RejectsInvalidDynamicListMenuSchema)
     const auto write_case = [&](const char *name, const char *item_json) {
         write_text(dir / (std::string(name) + ".game.json"),
                    R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Dynamic List Validation", "id": "test.dynamic_list_validation", "version": "0.1.0" },
   "world": { "name": "world.dynamic_list_validation", "kind": "fixed_screen" },
   "input": {
@@ -4645,7 +4672,7 @@ TEST(GameDataRuntime, RejectsInvalidDynamicListMenuSchema)
   "scenes": { "initial": "scene.browser", "files": ["scenes/browser.scene.json"] }
 })json");
         write_text(dir / "scenes" / "browser.scene.json", (std::string(R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.browser",
   "input": { "actions": ["action.menu.select", "action.menu.up", "action.menu.down"] },
   "menus": [
@@ -4664,8 +4691,8 @@ TEST(GameDataRuntime, RejectsInvalidDynamicListMenuSchema)
 
     char error[512]{};
     write_case("missing_source", R"json({ "type": "dynamic_list", "name": "list.sessions" })json");
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "missing_source.game.json").string().c_str(), nullptr, error,
-                                               sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "missing_source.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
     EXPECT_NE(std::string(error).find("requires a source object"), std::string::npos) << error;
 
     error[0] = '\0';
@@ -4680,8 +4707,8 @@ TEST(GameDataRuntime, RejectsInvalidDynamicListMenuSchema)
       },
       "scene_state": { "key": "selected_session", "value_from": "endpoint" }
     })json");
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_value_from.game.json").string().c_str(), nullptr, error,
-                                               sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_value_from.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
     EXPECT_NE(std::string(error).find("value_from must be value, label, or index"), std::string::npos) << error;
 
     error[0] = '\0';
@@ -4695,8 +4722,8 @@ TEST(GameDataRuntime, RejectsInvalidDynamicListMenuSchema)
         "label_key_format": "session_%s_label"
       }
     })json");
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_label_format.game.json").string().c_str(), nullptr, error,
-                                               sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_label_format.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
     EXPECT_NE(std::string(error).find("label_key_format must contain exactly one %d token"), std::string::npos)
         << error;
 
@@ -4712,8 +4739,8 @@ TEST(GameDataRuntime, RejectsInvalidDynamicListMenuSchema)
         "value_key_format": "session_%d_%d_value"
       }
     })json");
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_value_format.game.json").string().c_str(), nullptr, error,
-                                               sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_value_format.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
     EXPECT_NE(std::string(error).find("value_key_format must contain exactly one %d token"), std::string::npos)
         << error;
 
@@ -4727,8 +4754,8 @@ TEST(GameDataRuntime, RejectsInvalidDynamicListMenuSchema)
         "label_field": "name"
       }
     })json");
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "missing_runtime_collection.game.json").string().c_str(), nullptr,
-                                               error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "missing_runtime_collection.game.json").string().c_str(),
+                                                  nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("runtime_collection source requires a non-empty collection"), std::string::npos)
         << error;
 
@@ -4742,8 +4769,8 @@ TEST(GameDataRuntime, RejectsInvalidDynamicListMenuSchema)
         "collection": "local_matches"
       }
     })json");
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "missing_runtime_label_field.game.json").string().c_str(),
-                                               nullptr, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "missing_runtime_label_field.game.json").string().c_str(),
+                                                  nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("runtime_collection source requires a non-empty label_field"), std::string::npos)
         << error;
 
@@ -4752,293 +4779,299 @@ TEST(GameDataRuntime, RejectsInvalidDynamicListMenuSchema)
 
 TEST(GameDataRuntime, PlaySceneMenusAreSelectedByAuthoredConditions)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.play"));
 
-    sdl3d_game_data_ui_metrics metrics{};
-    sdl3d_game_data_menu menu{};
-    EXPECT_FALSE(sdl3d_game_data_get_active_menu_for_metrics(runtime, &metrics, &menu));
+    slayer3d_game_data_ui_metrics metrics{};
+    slayer3d_game_data_menu menu{};
+    EXPECT_FALSE(slayer3d_game_data_get_active_menu_for_metrics(runtime, &metrics, &menu));
 
     metrics.paused = true;
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu_for_metrics(runtime, &metrics, &menu));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu_for_metrics(runtime, &metrics, &menu));
     EXPECT_STREQ(menu.name, "menu.pause");
     EXPECT_EQ(menu.item_count, 3);
 
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
-    sdl3d_properties_set_string(scene_state, "match_mode", "lan");
-    sdl3d_properties_set_string(scene_state, "network_role", "host");
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu_for_metrics(runtime, &metrics, &menu));
+    slayer3d_properties_set_string(scene_state, "match_mode", "lan");
+    slayer3d_properties_set_string(scene_state, "network_role", "host");
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu_for_metrics(runtime, &metrics, &menu));
     EXPECT_STREQ(menu.name, "menu.pause.network");
     EXPECT_EQ(menu.item_count, 2);
 
-    sdl3d_properties_set_bool(scene_state, "network_match_termination_active", true);
-    EXPECT_FALSE(sdl3d_game_data_get_active_menu_for_metrics(runtime, &metrics, &menu));
-    sdl3d_properties_set_bool(scene_state, "network_match_termination_active", false);
+    slayer3d_properties_set_bool(scene_state, "network_match_termination_active", true);
+    EXPECT_FALSE(slayer3d_game_data_get_active_menu_for_metrics(runtime, &metrics, &menu));
+    slayer3d_properties_set_bool(scene_state, "network_match_termination_active", false);
 
-    sdl3d_registered_actor *match = sdl3d_game_data_find_actor(runtime, "entity.match");
+    slayer3d_registered_actor *match = slayer3d_game_data_find_actor(runtime, "entity.match");
     ASSERT_NE(match, nullptr);
-    sdl3d_properties_set_bool(match->props, "finished", true);
+    slayer3d_properties_set_bool(match->props, "finished", true);
     metrics.paused = false;
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu_for_metrics(runtime, &metrics, &menu));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu_for_metrics(runtime, &metrics, &menu));
     EXPECT_STREQ(menu.name, "menu.match_over");
     EXPECT_EQ(menu.item_count, 2);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, PauseMenuResumeConsumesSharedEnterWithoutRepausing)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
-    sdl3d_game_context ctx{};
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_context ctx{};
     ctx.session = session;
     ctx.paused = true;
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.play"));
 
-    sdl3d_game_data_app_flow flow{};
-    sdl3d_game_data_app_flow_init(&flow);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
+    slayer3d_game_data_app_flow flow{};
+    slayer3d_game_data_app_flow_init(&flow);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_start(&flow, runtime));
     flow.scene_input_armed = true;
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
     EXPECT_FALSE(ctx.paused);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, OptionsMenuCanReturnToAuthoredScene)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options"));
 
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
-    sdl3d_properties_set_string(scene_state, "return_scene", "scene.play");
-    sdl3d_properties_set_bool(scene_state, "return_paused", true);
+    slayer3d_properties_set_string(scene_state, "return_scene", "scene.play");
+    slayer3d_properties_set_bool(scene_state, "return_paused", true);
 
-    sdl3d_game_data_menu_item item{};
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options", 5, &item));
+    slayer3d_game_data_menu_item item{};
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, "menu.options", 5, &item));
     EXPECT_TRUE(item.return_scene);
     EXPECT_STREQ(item.scene, "scene.title");
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
     bool armed = true;
-    sdl3d_game_data_ui_metrics metrics{};
-    sdl3d_game_data_menu_update_result result{};
+    slayer3d_game_data_ui_metrics metrics{};
+    slayer3d_game_data_menu_update_result result{};
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
-    ASSERT_TRUE(sdl3d_game_data_update_menus_for_metrics(runtime, input, &armed, &metrics, &result));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_menus_for_metrics(runtime, input, &armed, &metrics, &result));
     EXPECT_EQ(result.selected_index, 5);
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 2);
-    ASSERT_TRUE(sdl3d_game_data_update_menus_for_metrics(runtime, input, &armed, &metrics, &result));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_menus_for_metrics(runtime, input, &armed, &metrics, &result));
 
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 3);
-    ASSERT_TRUE(sdl3d_game_data_update_menus_for_metrics(runtime, input, &armed, &metrics, &result));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_menus_for_metrics(runtime, input, &armed, &metrics, &result));
     EXPECT_TRUE(result.selected);
     EXPECT_TRUE(result.return_scene);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "return_scene", ""), "scene.play");
-    EXPECT_TRUE(sdl3d_properties_get_bool(scene_state, "return_paused", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "return_scene", ""), "scene.play");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "return_paused", false));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, OptionsSubmenusDoNotOverwriteCallerReturnScene)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
-    sdl3d_properties_set_string(scene_state, "return_scene", "scene.title");
-    sdl3d_properties_set_bool(scene_state, "return_paused", false);
+    slayer3d_properties_set_string(scene_state, "return_scene", "scene.title");
+    slayer3d_properties_set_bool(scene_state, "return_paused", false);
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
-    sdl3d_game_data_menu_item item{};
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options", 0, &item));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options"));
+    slayer3d_game_data_menu_item item{};
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, "menu.options", 0, &item));
     EXPECT_STREQ(item.label, "Display");
     EXPECT_EQ(item.scene, nullptr);
     EXPECT_STREQ(item.scene_state_key, "options_menu");
     EXPECT_STREQ(item.scene_state_value, "display");
     EXPECT_EQ(item.return_to, nullptr);
 
-    sdl3d_properties_set_string(scene_state, "options_menu", "display");
-    sdl3d_game_data_menu menu{};
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    slayer3d_properties_set_string(scene_state, "options_menu", "display");
+    slayer3d_game_data_menu menu{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options.display");
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options.display", 4, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, "menu.options.display", 4, &item));
     EXPECT_STREQ(item.label, "Back");
     EXPECT_EQ(item.scene, nullptr);
     EXPECT_STREQ(item.scene_state_key, "options_menu");
     EXPECT_STREQ(item.scene_state_value, "root");
     EXPECT_FALSE(item.return_scene);
 
-    sdl3d_properties_set_string(scene_state, "options_menu", "root");
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    slayer3d_properties_set_string(scene_state, "options_menu", "root");
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options");
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options", 5, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, "menu.options", 5, &item));
     EXPECT_STREQ(item.label, "Back");
     EXPECT_TRUE(item.return_scene);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "return_scene", ""), "scene.title");
-    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "return_paused", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "return_scene", ""), "scene.title");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "return_paused", true));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, DisplayOptionControlsApplyImmediately)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.display"));
 
-    const int menu_select_signal = sdl3d_game_data_find_signal(runtime, "signal.ui.menu.select");
+    const int menu_select_signal = slayer3d_game_data_find_signal(runtime, "signal.ui.menu.select");
     ASSERT_GE(menu_select_signal, 0);
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
 
     bool armed = true;
-    sdl3d_game_data_menu_update_result result{};
+    slayer3d_game_data_menu_update_result result{};
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
 
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.selected);
     EXPECT_TRUE(result.control_changed);
     EXPECT_EQ(result.select_signal_id, menu_select_signal);
-    EXPECT_EQ(result.signal_id, sdl3d_game_data_find_signal(runtime, "signal.settings.apply"));
-    EXPECT_TRUE(sdl3d_game_data_app_signal_applies_window_settings(runtime, result.signal_id));
+    EXPECT_EQ(result.signal_id, slayer3d_game_data_find_signal(runtime, "signal.settings.apply"));
+    EXPECT_TRUE(slayer3d_game_data_app_signal_applies_window_settings(runtime, result.signal_id));
     EXPECT_EQ(result.scene, nullptr);
 
-    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    slayer3d_registered_actor *settings = slayer3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings, nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "fullscreen_exclusive");
+    EXPECT_STREQ(slayer3d_properties_get_string(settings->props, "display_mode", ""), "fullscreen_exclusive");
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, AudioOptionSlidersApplyImmediatelyWithLeftRightInput)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.audio"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.audio"));
 
-    const int menu_select_signal = sdl3d_game_data_find_signal(runtime, "signal.ui.menu.select");
-    const int apply_audio_signal = sdl3d_game_data_find_signal(runtime, "signal.settings.apply_audio");
+    const int menu_select_signal = slayer3d_game_data_find_signal(runtime, "signal.ui.menu.select");
+    const int apply_audio_signal = slayer3d_game_data_find_signal(runtime, "signal.settings.apply_audio");
     ASSERT_GE(menu_select_signal, 0);
     ASSERT_GE(apply_audio_signal, 0);
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    slayer3d_registered_actor *settings = slayer3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings, nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
+    EXPECT_EQ(slayer3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
 
     bool armed = true;
-    sdl3d_game_data_menu_update_result result{};
+    slayer3d_game_data_menu_update_result result{};
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_LEFT;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
 
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.handled_input);
     EXPECT_TRUE(result.selected);
     EXPECT_TRUE(result.control_changed);
     EXPECT_EQ(result.select_signal_id, menu_select_signal);
     EXPECT_EQ(result.signal_id, apply_audio_signal);
     EXPECT_EQ(result.scene, nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 7);
+    EXPECT_EQ(slayer3d_properties_get_int(settings->props, "sfx_volume", 0), 7);
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 2);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RIGHT;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 3);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 3);
 
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.handled_input);
     EXPECT_TRUE(result.selected);
     EXPECT_TRUE(result.control_changed);
     EXPECT_EQ(result.signal_id, apply_audio_signal);
-    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
+    EXPECT_EQ(slayer3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 4);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
-    ASSERT_TRUE(sdl3d_game_data_menu_move(runtime, "menu.options.audio", 3));
+    ASSERT_TRUE(slayer3d_game_data_menu_move(runtime, "menu.options.audio", 3));
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_LEFT;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 5);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 5);
 
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.handled_input);
     EXPECT_FALSE(result.selected);
     EXPECT_FALSE(result.control_changed);
@@ -5046,166 +5079,168 @@ TEST(GameDataRuntime, AudioOptionSlidersApplyImmediatelyWithLeftRightInput)
     EXPECT_EQ(result.signal_id, -1);
     EXPECT_EQ(result.scene, nullptr);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, KeyboardOptionsCaptureAndApplyAuthoredInputBindings)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.keyboard"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.keyboard"));
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    const int paddle_up = sdl3d_game_data_find_action(runtime, "action.paddle.up");
+    const int paddle_up = slayer3d_game_data_find_action(runtime, "action.paddle.up");
     ASSERT_GE(paddle_up, 0);
-    const int menu_up = sdl3d_game_data_find_action(runtime, "action.menu.up");
+    const int menu_up = slayer3d_game_data_find_action(runtime, "action.menu.up");
     ASSERT_GE(menu_up, 0);
-    const int exit_action = sdl3d_game_data_find_action(runtime, "action.exit");
+    const int exit_action = slayer3d_game_data_find_action(runtime, "action.exit");
     ASSERT_GE(exit_action, 0);
 
     bool armed = true;
-    sdl3d_game_data_menu_update_result result{};
+    slayer3d_game_data_menu_update_result result{};
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
 
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.handled_input);
     EXPECT_TRUE(result.selected);
     EXPECT_TRUE(result.input_binding_capture_started);
-    EXPECT_TRUE(sdl3d_game_data_menu_input_binding_capture_active(runtime));
+    EXPECT_TRUE(slayer3d_game_data_menu_input_binding_capture_active(runtime));
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 2);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_I;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 3);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.handled_input);
     EXPECT_TRUE(result.input_binding_changed);
-    EXPECT_FALSE(sdl3d_game_data_menu_input_binding_capture_active(runtime));
+    EXPECT_FALSE(slayer3d_game_data_menu_input_binding_capture_active(runtime));
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 4);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_I;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 5);
-    EXPECT_TRUE(sdl3d_input_is_pressed(input, paddle_up));
-    EXPECT_TRUE(sdl3d_input_is_pressed(input, menu_up));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 5);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, paddle_up));
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, menu_up));
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 6);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 6);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
-    ASSERT_TRUE(sdl3d_game_data_menu_move(runtime, "menu.options.keyboard", 1));
+    ASSERT_TRUE(slayer3d_game_data_menu_move(runtime, "menu.options.keyboard", 1));
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 7);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 7);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.input_binding_capture_started);
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 8);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 8);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_I;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 9);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 9);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.handled_input);
     EXPECT_TRUE(result.input_binding_conflict);
-    EXPECT_TRUE(sdl3d_game_data_menu_input_binding_capture_active(runtime));
+    EXPECT_TRUE(slayer3d_game_data_menu_input_binding_capture_active(runtime));
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 10);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 10);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_ESCAPE;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 11);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
-    EXPECT_FALSE(sdl3d_game_data_menu_input_binding_capture_active(runtime));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 11);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_FALSE(slayer3d_game_data_menu_input_binding_capture_active(runtime));
 
-    const int reset_keyboard = sdl3d_game_data_find_signal(runtime, "signal.settings.reset_keyboard");
+    const int reset_keyboard = slayer3d_game_data_find_signal(runtime, "signal.settings.reset_keyboard");
     ASSERT_GE(reset_keyboard, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), reset_keyboard, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), reset_keyboard, nullptr);
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 12);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 12);
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 13);
-    EXPECT_TRUE(sdl3d_input_is_pressed(input, paddle_up));
-    EXPECT_TRUE(sdl3d_input_is_pressed(input, menu_up));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 13);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, paddle_up));
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, menu_up));
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 14);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 14);
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_BACKSPACE;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 15);
-    EXPECT_TRUE(sdl3d_input_is_pressed(input, exit_action));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 15);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, exit_action));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, GamepadOptionsCaptureAndApplyAuthoredInputBindings)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.gamepad"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.gamepad"));
 
-    sdl3d_game_data_menu menu{};
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    slayer3d_game_data_menu menu{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options.gamepad");
     EXPECT_EQ(menu.item_count, 12);
 
-    sdl3d_game_data_menu_item item{};
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    slayer3d_game_data_menu_item item{};
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Button Icons");
-    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_CHOICE);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_CHOICE);
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
     EXPECT_STREQ(item.label, "Up");
-    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING);
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING);
     EXPECT_EQ(item.input_binding_count, 2);
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 10, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 10, &item));
     EXPECT_STREQ(item.label, "Reset Settings");
 
     bool saw_button_icons = false;
     bool saw_ball_camera = false;
-    auto find_gamepad_labels = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+    auto find_gamepad_labels = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         auto *flags = static_cast<std::pair<bool *, bool *> *>(userdata);
         const std::string name = text->name != nullptr ? text->name : "";
         const std::string value = text->text != nullptr ? text->text : "";
@@ -5214,249 +5249,251 @@ TEST(GameDataRuntime, GamepadOptionsCaptureAndApplyAuthoredInputBindings)
             *flags->first = true;
             EXPECT_FLOAT_EQ(text->x, 0.34f);
             EXPECT_FLOAT_EQ(text->y, 0.24f);
-            EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
+            EXPECT_EQ(text->align, SLAYER3D_GAME_DATA_UI_ALIGN_LEFT);
         }
         if (name == "ui.options.gamepad.menu" && value.rfind("Ball Camera:", 0) == 0)
         {
             *flags->second = true;
             EXPECT_FLOAT_EQ(text->x, 0.34f);
             EXPECT_NEAR(text->y, 0.735f, 0.0001f);
-            EXPECT_EQ(text->align, SDL3D_GAME_DATA_UI_ALIGN_LEFT);
+            EXPECT_EQ(text->align, SLAYER3D_GAME_DATA_UI_ALIGN_LEFT);
         }
         return !*flags->first || !*flags->second;
     };
     std::pair<bool *, bool *> gamepad_label_flags{&saw_button_icons, &saw_ball_camera};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_gamepad_labels, &gamepad_label_flags));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_gamepad_labels, &gamepad_label_flags));
     EXPECT_TRUE(saw_button_icons);
     EXPECT_TRUE(saw_ball_camera);
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    const int paddle_up = sdl3d_game_data_find_action(runtime, "action.paddle.up");
+    const int paddle_up = slayer3d_game_data_find_action(runtime, "action.paddle.up");
     ASSERT_GE(paddle_up, 0);
-    const int menu_up = sdl3d_game_data_find_action(runtime, "action.menu.up");
+    const int menu_up = slayer3d_game_data_find_action(runtime, "action.menu.up");
     ASSERT_GE(menu_up, 0);
-    const int exit_action = sdl3d_game_data_find_action(runtime, "action.exit");
+    const int exit_action = slayer3d_game_data_find_action(runtime, "action.exit");
     ASSERT_GE(exit_action, 0);
 
-    ASSERT_TRUE(sdl3d_game_data_menu_move(runtime, "menu.options.gamepad", 2));
+    ASSERT_TRUE(slayer3d_game_data_menu_move(runtime, "menu.options.gamepad", 2));
     bool armed = true;
-    sdl3d_game_data_menu_update_result result{};
+    slayer3d_game_data_menu_update_result result{};
     SDL_Event event{};
     event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
     event.gbutton.button = SDL_GAMEPAD_BUTTON_SOUTH;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 1);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.input_binding_capture_started);
-    EXPECT_TRUE(sdl3d_game_data_menu_input_binding_capture_active(runtime));
+    EXPECT_TRUE(slayer3d_game_data_menu_input_binding_capture_active(runtime));
 
     event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 2);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
     event.gbutton.button = SDL_GAMEPAD_BUTTON_WEST;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 3);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.input_binding_changed);
-    EXPECT_FALSE(sdl3d_game_data_menu_input_binding_capture_active(runtime));
+    EXPECT_FALSE(slayer3d_game_data_menu_input_binding_capture_active(runtime));
 
     event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 4);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
     event.gbutton.button = SDL_GAMEPAD_BUTTON_WEST;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 5);
-    EXPECT_TRUE(sdl3d_input_is_pressed(input, paddle_up));
-    EXPECT_TRUE(sdl3d_input_is_pressed(input, menu_up));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 5);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, paddle_up));
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, menu_up));
 
     event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 6);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 6);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
-    ASSERT_TRUE(sdl3d_game_data_menu_move(runtime, "menu.options.gamepad", 1));
+    ASSERT_TRUE(slayer3d_game_data_menu_move(runtime, "menu.options.gamepad", 1));
     event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
     event.gbutton.button = SDL_GAMEPAD_BUTTON_SOUTH;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 7);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 7);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.input_binding_capture_started);
 
     event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 8);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 8);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
     event.gbutton.button = SDL_GAMEPAD_BUTTON_WEST;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 9);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 9);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.input_binding_conflict);
-    EXPECT_TRUE(sdl3d_game_data_menu_input_binding_capture_active(runtime));
+    EXPECT_TRUE(slayer3d_game_data_menu_input_binding_capture_active(runtime));
 
     event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 10);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 10);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     event.type = SDL_EVENT_KEY_DOWN;
     event.key.scancode = SDL_SCANCODE_ESCAPE;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 11);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
-    EXPECT_FALSE(sdl3d_game_data_menu_input_binding_capture_active(runtime));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 11);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
+    EXPECT_FALSE(slayer3d_game_data_menu_input_binding_capture_active(runtime));
 
-    const int reset_gamepad = sdl3d_game_data_find_signal(runtime, "signal.settings.reset_gamepad");
+    const int reset_gamepad = slayer3d_game_data_find_signal(runtime, "signal.settings.reset_gamepad");
     ASSERT_GE(reset_gamepad, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), reset_gamepad, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), reset_gamepad, nullptr);
 
     event.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 12);
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 12);
     event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
     event.gbutton.button = SDL_GAMEPAD_BUTTON_DPAD_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 13);
-    EXPECT_TRUE(sdl3d_input_is_pressed(input, paddle_up));
-    EXPECT_TRUE(sdl3d_input_is_pressed(input, menu_up));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 13);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, paddle_up));
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, menu_up));
 
     event.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 14);
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 14);
     event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
     event.gbutton.button = SDL_GAMEPAD_BUTTON_BACK;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 15);
-    EXPECT_TRUE(sdl3d_input_is_pressed(input, exit_action));
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 15);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, exit_action));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, OptionsMenusUseGamepadAxesAndBack)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.display"));
 
-    sdl3d_game_data_menu menu{};
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    slayer3d_game_data_menu menu{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_GE(menu.back_action_id, 0);
 
-    sdl3d_game_data_menu_item item{};
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
-    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_CHOICE);
+    slayer3d_game_data_menu_item item{};
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_CHOICE);
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
 
     SDL_Event event{};
     event.type = SDL_EVENT_GAMEPAD_ADDED;
     event.gdevice.which = 2041;
-    sdl3d_input_process_event(input, &event);
+    slayer3d_input_process_event(input, &event);
 
     event.type = SDL_EVENT_GAMEPAD_AXIS_MOTION;
     event.gaxis.which = 2041;
     event.gaxis.axis = SDL_GAMEPAD_AXIS_LEFTX;
     event.gaxis.value = -30000;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 1);
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 1);
 
     bool armed = true;
-    sdl3d_game_data_menu_update_result result{};
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_game_data_menu_update_result result{};
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.control_changed);
-    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    slayer3d_registered_actor *settings = slayer3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings, nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "fullscreen_borderless");
+    EXPECT_STREQ(slayer3d_properties_get_string(settings->props, "display_mode", ""), "fullscreen_borderless");
 
     event.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
     event.gbutton.which = 2041;
     event.gbutton.button = SDL_GAMEPAD_BUTTON_EAST;
-    sdl3d_input_process_event(input, &event);
-    sdl3d_input_update(input, 2);
+    slayer3d_input_process_event(input, &event);
+    slayer3d_input_update(input, 2);
 
     SDL_zero(result);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_FALSE(result.return_scene);
     EXPECT_STREQ(result.scene, "scene.options");
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, MouseOptionsCaptureAndApplyAuthoredInputBindings)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.mouse"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.mouse"));
 
-    sdl3d_game_data_menu menu{};
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    slayer3d_game_data_menu menu{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options.mouse");
     EXPECT_EQ(menu.item_count, 3);
 
-    sdl3d_game_data_menu_item item{};
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    slayer3d_game_data_menu_item item{};
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Accept");
-    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING);
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING);
     EXPECT_EQ(item.input_binding_count, 1);
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    const int menu_select = sdl3d_game_data_find_action(runtime, "action.menu.select");
+    const int menu_select = slayer3d_game_data_find_action(runtime, "action.menu.select");
     ASSERT_GE(menu_select, 0);
 
     bool armed = true;
-    sdl3d_game_data_menu_update_result result{};
+    slayer3d_game_data_menu_update_result result{};
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.input_binding_capture_started);
-    EXPECT_TRUE(sdl3d_game_data_menu_input_binding_capture_active(runtime));
+    EXPECT_TRUE(slayer3d_game_data_menu_input_binding_capture_active(runtime));
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 2);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     SDL_Event mouse{};
     mouse.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     mouse.button.button = SDL_BUTTON_MIDDLE;
-    sdl3d_input_process_event(input, &mouse);
-    sdl3d_input_update(input, 3);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &mouse);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
     EXPECT_TRUE(result.input_binding_changed);
-    EXPECT_FALSE(sdl3d_game_data_menu_input_binding_capture_active(runtime));
+    EXPECT_FALSE(slayer3d_game_data_menu_input_binding_capture_active(runtime));
 
     mouse.type = SDL_EVENT_MOUSE_BUTTON_UP;
-    sdl3d_input_process_event(input, &mouse);
-    sdl3d_input_update(input, 4);
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &armed, &result));
+    slayer3d_input_process_event(input, &mouse);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &armed, &result));
 
     bool saw_mouse_label = false;
-    auto find_mouse_accept = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+    auto find_mouse_accept = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         auto *saw = static_cast<bool *>(userdata);
         const std::string name = text->name != nullptr ? text->name : "";
         const std::string value = text->text != nullptr ? text->text : "";
@@ -5467,261 +5504,265 @@ TEST(GameDataRuntime, MouseOptionsCaptureAndApplyAuthoredInputBindings)
         }
         return true;
     };
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_mouse_accept, &saw_mouse_label));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_mouse_accept, &saw_mouse_label));
     EXPECT_TRUE(saw_mouse_label);
 
     mouse.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     mouse.button.button = SDL_BUTTON_LEFT;
-    sdl3d_input_process_event(input, &mouse);
-    sdl3d_input_update(input, 5);
-    EXPECT_FALSE(sdl3d_input_is_pressed(input, menu_select));
+    slayer3d_input_process_event(input, &mouse);
+    slayer3d_input_update(input, 5);
+    EXPECT_FALSE(slayer3d_input_is_pressed(input, menu_select));
     mouse.type = SDL_EVENT_MOUSE_BUTTON_UP;
-    sdl3d_input_process_event(input, &mouse);
-    sdl3d_input_update(input, 6);
+    slayer3d_input_process_event(input, &mouse);
+    slayer3d_input_update(input, 6);
 
     mouse.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     mouse.button.button = SDL_BUTTON_MIDDLE;
-    sdl3d_input_process_event(input, &mouse);
-    sdl3d_input_update(input, 7);
-    EXPECT_TRUE(sdl3d_input_is_pressed(input, menu_select));
+    slayer3d_input_process_event(input, &mouse);
+    slayer3d_input_update(input, 7);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, menu_select));
 
-    const int reset_mouse = sdl3d_game_data_find_signal(runtime, "signal.settings.reset_mouse");
+    const int reset_mouse = slayer3d_game_data_find_signal(runtime, "signal.settings.reset_mouse");
     ASSERT_GE(reset_mouse, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), reset_mouse, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), reset_mouse, nullptr);
     mouse.type = SDL_EVENT_MOUSE_BUTTON_UP;
-    sdl3d_input_process_event(input, &mouse);
-    sdl3d_input_update(input, 8);
+    slayer3d_input_process_event(input, &mouse);
+    slayer3d_input_update(input, 8);
     mouse.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     mouse.button.button = SDL_BUTTON_LEFT;
-    sdl3d_input_process_event(input, &mouse);
-    sdl3d_input_update(input, 9);
-    EXPECT_TRUE(sdl3d_input_is_pressed(input, menu_select));
+    slayer3d_input_process_event(input, &mouse);
+    slayer3d_input_update(input, 9);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, menu_select));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, AuthoredSettingsResetRestoresSelectedDefaults)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    slayer3d_registered_actor *settings = slayer3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings, nullptr);
-    sdl3d_properties_set_string(settings->props, "display_mode", "fullscreen_exclusive");
-    sdl3d_properties_set_bool(settings->props, "vsync", false);
-    sdl3d_properties_set_string(settings->props, "renderer", "software");
-    sdl3d_properties_set_int(settings->props, "sfx_volume", 2);
-    sdl3d_properties_set_int(settings->props, "music_volume", 3);
+    slayer3d_properties_set_string(settings->props, "display_mode", "fullscreen_exclusive");
+    slayer3d_properties_set_bool(settings->props, "vsync", false);
+    slayer3d_properties_set_string(settings->props, "renderer", "software");
+    slayer3d_properties_set_int(settings->props, "sfx_volume", 2);
+    slayer3d_properties_set_int(settings->props, "music_volume", 3);
 
-    const int reset_display = sdl3d_game_data_find_signal(runtime, "signal.settings.reset_display");
+    const int reset_display = slayer3d_game_data_find_signal(runtime, "signal.settings.reset_display");
     ASSERT_GE(reset_display, 0);
-    EXPECT_TRUE(sdl3d_game_data_app_signal_applies_window_settings(runtime, reset_display));
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), reset_display, nullptr);
+    EXPECT_TRUE(slayer3d_game_data_app_signal_applies_window_settings(runtime, reset_display));
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), reset_display, nullptr);
 
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
-    EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vsync", false));
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "renderer", ""), "opengl");
+    EXPECT_STREQ(slayer3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
+    EXPECT_TRUE(slayer3d_properties_get_bool(settings->props, "vsync", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(settings->props, "renderer", ""), "opengl");
 
-    const int reset_audio = sdl3d_game_data_find_signal(runtime, "signal.settings.reset_audio");
+    const int reset_audio = slayer3d_game_data_find_signal(runtime, "signal.settings.reset_audio");
     ASSERT_GE(reset_audio, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), reset_audio, nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
-    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "music_volume", 0), 7);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), reset_audio, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
+    EXPECT_EQ(slayer3d_properties_get_int(settings->props, "music_volume", 0), 7);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, PongStandardOptionsUseImmediateApplyContract)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    slayer3d_registered_actor *settings = slayer3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings, nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
-    EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vsync", false));
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "renderer", ""), "opengl");
-    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
-    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "music_volume", 0), 7);
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "gamepad_icons", ""), "xbox");
-    EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vibration", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
+    EXPECT_TRUE(slayer3d_properties_get_bool(settings->props, "vsync", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(settings->props, "renderer", ""), "opengl");
+    EXPECT_EQ(slayer3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
+    EXPECT_EQ(slayer3d_properties_get_int(settings->props, "music_volume", 0), 7);
+    EXPECT_STREQ(slayer3d_properties_get_string(settings->props, "gamepad_icons", ""), "xbox");
+    EXPECT_TRUE(slayer3d_properties_get_bool(settings->props, "vibration", false));
 
-    EXPECT_LT(sdl3d_game_data_find_signal(runtime, "signal.settings.snapshot_display"), 0);
-    EXPECT_LT(sdl3d_game_data_find_signal(runtime, "signal.settings.snapshot_audio"), 0);
-    EXPECT_LT(sdl3d_game_data_find_signal(runtime, "signal.settings.snapshot_gamepad"), 0);
-    EXPECT_LT(sdl3d_game_data_find_signal(runtime, "signal.settings.cancel_display"), 0);
-    EXPECT_LT(sdl3d_game_data_find_signal(runtime, "signal.settings.cancel_audio"), 0);
-    EXPECT_LT(sdl3d_game_data_find_signal(runtime, "signal.settings.cancel_gamepad"), 0);
-    EXPECT_GE(sdl3d_game_data_find_signal(runtime, "signal.settings.vibration"), 0);
+    EXPECT_LT(slayer3d_game_data_find_signal(runtime, "signal.settings.snapshot_display"), 0);
+    EXPECT_LT(slayer3d_game_data_find_signal(runtime, "signal.settings.snapshot_audio"), 0);
+    EXPECT_LT(slayer3d_game_data_find_signal(runtime, "signal.settings.snapshot_gamepad"), 0);
+    EXPECT_LT(slayer3d_game_data_find_signal(runtime, "signal.settings.cancel_display"), 0);
+    EXPECT_LT(slayer3d_game_data_find_signal(runtime, "signal.settings.cancel_audio"), 0);
+    EXPECT_LT(slayer3d_game_data_find_signal(runtime, "signal.settings.cancel_gamepad"), 0);
+    EXPECT_GE(slayer3d_game_data_find_signal(runtime, "signal.settings.vibration"), 0);
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.display"));
-    sdl3d_game_data_menu_item display_mode{};
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options.display", 0, &display_mode));
-    EXPECT_EQ(display_mode.control_type, SDL3D_GAME_DATA_MENU_CONTROL_CHOICE);
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.display"));
+    slayer3d_game_data_menu_item display_mode{};
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, "menu.options.display", 0, &display_mode));
+    EXPECT_EQ(display_mode.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_CHOICE);
     EXPECT_STREQ(display_mode.control_target, "entity.settings");
     EXPECT_STREQ(display_mode.control_key, "display_mode");
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.keyboard"));
-    sdl3d_game_data_menu_item up_binding{};
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, "menu.options.keyboard", 0, &up_binding));
-    EXPECT_EQ(up_binding.control_type, SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING);
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.keyboard"));
+    slayer3d_game_data_menu_item up_binding{};
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, "menu.options.keyboard", 0, &up_binding));
+    EXPECT_EQ(up_binding.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING);
     EXPECT_EQ(up_binding.input_binding_count, 2);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, AppFlowConsumesAuthoredLifecycleAndSceneShortcutControls)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_game_context ctx{};
+    slayer3d_game_context ctx{};
     ctx.session = session;
 
-    sdl3d_game_data_app_flow flow{};
-    sdl3d_game_data_app_flow_init(&flow);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
-    EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+    slayer3d_game_data_app_flow flow{};
+    slayer3d_game_data_app_flow_init(&flow);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_start(&flow, runtime));
+    EXPECT_FALSE(slayer3d_game_data_app_flow_is_transitioning(&flow));
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.8f));
-    EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.8f));
+    EXPECT_FALSE(slayer3d_game_data_app_flow_is_transitioning(&flow));
     EXPECT_FALSE(ctx.quit_requested);
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.splash");
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.splash");
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_F9;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
-    EXPECT_TRUE(sdl3d_game_data_app_flow_is_transitioning(&flow));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.splash");
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_TRUE(slayer3d_game_data_app_flow_is_transitioning(&flow));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.splash");
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.29f));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.29f));
-    EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.29f));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.title");
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.29f));
+    EXPECT_FALSE(slayer3d_game_data_app_flow_is_transitioning(&flow));
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 2);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 2);
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_3;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 3);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
-    EXPECT_TRUE(sdl3d_game_data_app_flow_is_transitioning(&flow));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_TRUE(slayer3d_game_data_app_flow_is_transitioning(&flow));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.title");
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.29f));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.play");
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.29f));
-    EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.29f));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.play");
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.29f));
+    EXPECT_FALSE(slayer3d_game_data_app_flow_is_transitioning(&flow));
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 4);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 4);
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 5);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 5);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
     EXPECT_TRUE(ctx.paused);
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 6);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 6);
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 7);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 7);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
     EXPECT_FALSE(ctx.paused);
 
-    sdl3d_registered_actor *match = sdl3d_game_data_find_actor(runtime, "entity.match");
+    slayer3d_registered_actor *match = slayer3d_game_data_find_actor(runtime, "entity.match");
     ASSERT_NE(match, nullptr);
-    sdl3d_properties_set_bool(match->props, "finished", true);
+    slayer3d_properties_set_bool(match->props, "finished", true);
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 8);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 8);
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 9);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 9);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
     EXPECT_FALSE(ctx.paused);
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 10);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 10);
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_BACKSPACE;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 11);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
-    EXPECT_TRUE(sdl3d_game_data_app_flow_quit_pending(&flow));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 11);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_TRUE(slayer3d_game_data_app_flow_quit_pending(&flow));
     EXPECT_FALSE(ctx.quit_requested);
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.5f));
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.5f));
     EXPECT_TRUE(ctx.quit_requested);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, SceneFlowRunsAuthoredExitAndEnterTransitions)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.title"));
 
-    sdl3d_game_data_scene_flow flow{};
-    sdl3d_game_data_scene_flow_init(&flow);
-    ASSERT_TRUE(sdl3d_game_data_scene_flow_request(&flow, runtime, "scene.play"));
-    EXPECT_TRUE(sdl3d_game_data_scene_flow_is_transitioning(&flow));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
-    EXPECT_FALSE(sdl3d_game_data_scene_flow_request(&flow, runtime, "scene.options"));
+    slayer3d_game_data_scene_flow flow{};
+    slayer3d_game_data_scene_flow_init(&flow);
+    ASSERT_TRUE(slayer3d_game_data_scene_flow_request(&flow, runtime, "scene.play"));
+    EXPECT_TRUE(slayer3d_game_data_scene_flow_is_transitioning(&flow));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.title");
+    EXPECT_FALSE(slayer3d_game_data_scene_flow_request(&flow, runtime, "scene.options"));
 
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
-    sdl3d_game_data_scene_flow_update(&flow, runtime, bus, 0.29f);
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.play");
-    EXPECT_TRUE(sdl3d_game_data_scene_flow_is_transitioning(&flow));
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    slayer3d_game_data_scene_flow_update(&flow, runtime, bus, 0.29f);
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.play");
+    EXPECT_TRUE(slayer3d_game_data_scene_flow_is_transitioning(&flow));
 
-    sdl3d_game_data_scene_flow_update(&flow, runtime, bus, 0.29f);
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.play");
-    EXPECT_FALSE(sdl3d_game_data_scene_flow_is_transitioning(&flow));
-    EXPECT_FALSE(sdl3d_game_data_scene_flow_request(&flow, runtime, "scene.play"));
+    slayer3d_game_data_scene_flow_update(&flow, runtime, bus, 0.29f);
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.play");
+    EXPECT_FALSE(slayer3d_game_data_scene_flow_is_transitioning(&flow));
+    EXPECT_FALSE(slayer3d_game_data_scene_flow_request(&flow, runtime, "scene.play"));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, AppFlowRunsAuthoredSceneTimelineActions)
@@ -5729,56 +5770,56 @@ TEST(GameDataRuntime, AppFlowRunsAuthoredSceneTimelineActions)
     const std::filesystem::path dir = unique_test_dir("timeline");
     write_timeline_json(dir);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "timeline.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "timeline.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
 
-    const int timeline_signal = sdl3d_game_data_find_signal(runtime, "signal.timeline");
+    const int timeline_signal = slayer3d_game_data_find_signal(runtime, "signal.timeline");
     ASSERT_GE(timeline_signal, 0);
     SignalCapture signal_capture{};
-    ASSERT_NE(sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(session), timeline_signal, count_signal,
-                                   &signal_capture),
+    ASSERT_NE(slayer3d_signal_connect(slayer3d_game_session_get_signal_bus(session), timeline_signal, count_signal,
+                                      &signal_capture),
               0);
 
-    sdl3d_registered_actor *flag = sdl3d_game_data_find_actor(runtime, "entity.flag");
+    slayer3d_registered_actor *flag = slayer3d_game_data_find_actor(runtime, "entity.flag");
     ASSERT_NE(flag, nullptr);
-    EXPECT_FALSE(sdl3d_properties_get_bool(flag->props, "ready", true));
+    EXPECT_FALSE(slayer3d_properties_get_bool(flag->props, "ready", true));
 
-    sdl3d_game_context ctx{};
+    slayer3d_game_context ctx{};
     ctx.session = session;
-    sdl3d_game_data_app_flow flow{};
-    sdl3d_game_data_app_flow_init(&flow);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.intro");
+    slayer3d_game_data_app_flow flow{};
+    slayer3d_game_data_app_flow_init(&flow);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_start(&flow, runtime));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.intro");
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.05f));
-    EXPECT_FALSE(sdl3d_properties_get_bool(flag->props, "ready", true));
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.05f));
+    EXPECT_FALSE(slayer3d_properties_get_bool(flag->props, "ready", true));
     EXPECT_EQ(signal_capture.calls, 0);
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.06f));
-    EXPECT_TRUE(sdl3d_properties_get_bool(flag->props, "ready", false));
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.06f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(flag->props, "ready", false));
     EXPECT_EQ(signal_capture.calls, 0);
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.09f));
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.09f));
     EXPECT_EQ(signal_capture.calls, 1);
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.10f));
-    EXPECT_TRUE(sdl3d_game_data_app_flow_is_transitioning(&flow));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.intro");
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.10f));
+    EXPECT_TRUE(slayer3d_game_data_app_flow_is_transitioning(&flow));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.intro");
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.11f));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.11f));
-    EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.11f));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.title");
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.11f));
+    EXPECT_FALSE(slayer3d_game_data_app_flow_is_transitioning(&flow));
     EXPECT_EQ(signal_capture.calls, 1);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -5787,78 +5828,78 @@ TEST(GameDataRuntime, AppFlowAppliesAuthoredSkipPolicyWithoutMenuBleedThrough)
     const std::filesystem::path dir = unique_test_dir("skip_policy");
     write_skip_policy_json(dir);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(
-        sdl3d_game_data_load_file((dir / "skip.game.json").string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "skip.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
 
-    sdl3d_game_context ctx{};
+    slayer3d_game_context ctx{};
     ctx.session = session;
-    sdl3d_game_data_app_flow flow{};
-    sdl3d_game_data_app_flow_init(&flow);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.intro");
+    slayer3d_game_data_app_flow flow{};
+    slayer3d_game_data_app_flow_init(&flow);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_start(&flow, runtime));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.intro");
 
-    sdl3d_game_data_skip_policy policy{};
-    ASSERT_TRUE(sdl3d_game_data_get_active_skip_policy(runtime, &policy));
-    EXPECT_EQ(policy.input, SDL3D_GAME_DATA_SKIP_INPUT_ACTION);
+    slayer3d_game_data_skip_policy policy{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_skip_policy(runtime, &policy));
+    EXPECT_EQ(policy.input, SLAYER3D_GAME_DATA_SKIP_INPUT_ACTION);
     EXPECT_STREQ(policy.action, "action.skip");
     EXPECT_STREQ(policy.scene, "scene.title");
     EXPECT_TRUE(policy.preserve_exit_transition);
     EXPECT_TRUE(policy.block_menus);
     EXPECT_TRUE(policy.block_scene_shortcuts);
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
 
-    sdl3d_input_update(input, 0);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    slayer3d_input_update(input, 0);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
-    EXPECT_TRUE(sdl3d_game_data_app_flow_is_transitioning(&flow));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.intro");
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_TRUE(slayer3d_game_data_app_flow_is_transitioning(&flow));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.intro");
 
-    sdl3d_input_update(input, 2);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.11f));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.11f));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.title");
 
-    sdl3d_input_update(input, 3);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.11f));
-    EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.11f));
+    EXPECT_FALSE(slayer3d_game_data_app_flow_is_transitioning(&flow));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.title");
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.title");
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 4);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.title");
 
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 5);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
-    EXPECT_TRUE(sdl3d_game_data_app_flow_is_transitioning(&flow));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 5);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_TRUE(slayer3d_game_data_app_flow_is_transitioning(&flow));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.title");
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.11f));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.play");
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.11f));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.play");
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -5867,53 +5908,53 @@ TEST(GameDataRuntime, TimelinePolicyCanBlockMenusAndSceneShortcuts)
     const std::filesystem::path dir = unique_test_dir("timeline_blocks_input");
     write_scene_flow_policy_json(dir, true, true);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "flow_policy.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "flow_policy.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
 
-    sdl3d_game_data_timeline_policy policy{};
-    ASSERT_TRUE(sdl3d_game_data_get_active_timeline_policy(runtime, &policy));
+    slayer3d_game_data_timeline_policy policy{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_timeline_policy(runtime, &policy));
     EXPECT_TRUE(policy.block_menus);
     EXPECT_TRUE(policy.block_scene_shortcuts);
 
-    sdl3d_game_context ctx{};
+    slayer3d_game_context ctx{};
     ctx.session = session;
-    sdl3d_game_data_app_flow flow{};
-    sdl3d_game_data_app_flow_init(&flow);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
+    slayer3d_game_data_app_flow flow{};
+    slayer3d_game_data_app_flow_init(&flow);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_start(&flow, runtime));
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
 
-    sdl3d_input_update(input, 0);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    slayer3d_input_update(input, 0);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
+    slayer3d_input_process_event(input, &key);
     key.key.scancode = SDL_SCANCODE_3;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
-    EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.intro");
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_FALSE(slayer3d_game_data_app_flow_is_transitioning(&flow));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.intro");
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 1.0f));
-    EXPECT_TRUE(sdl3d_game_data_app_flow_is_transitioning(&flow));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.intro");
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 1.0f));
+    EXPECT_TRUE(slayer3d_game_data_app_flow_is_transitioning(&flow));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.intro");
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.title");
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -5922,51 +5963,51 @@ TEST(GameDataRuntime, TimelinePolicyCanAllowInteractiveIntroMenus)
     const std::filesystem::path dir = unique_test_dir("timeline_allows_input");
     write_scene_flow_policy_json(dir, false, false);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "flow_policy.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "flow_policy.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
 
-    sdl3d_game_data_timeline_policy policy{};
-    ASSERT_TRUE(sdl3d_game_data_get_active_timeline_policy(runtime, &policy));
+    slayer3d_game_data_timeline_policy policy{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_timeline_policy(runtime, &policy));
     EXPECT_FALSE(policy.block_menus);
     EXPECT_FALSE(policy.block_scene_shortcuts);
 
-    sdl3d_game_context ctx{};
+    slayer3d_game_context ctx{};
     ctx.session = session;
-    sdl3d_game_data_app_flow flow{};
-    sdl3d_game_data_app_flow_init(&flow);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
+    slayer3d_game_data_app_flow flow{};
+    slayer3d_game_data_app_flow_init(&flow);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_start(&flow, runtime));
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
 
-    sdl3d_input_update(input, 0);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    slayer3d_input_update(input, 0);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
     EXPECT_TRUE(flow.scene_input_armed);
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
 
     bool menu_armed = true;
-    sdl3d_game_data_menu_update_result menu_result{};
-    ASSERT_TRUE(sdl3d_game_data_update_menus(runtime, input, &menu_armed, &menu_result));
+    slayer3d_game_data_menu_update_result menu_result{};
+    ASSERT_TRUE(slayer3d_game_data_update_menus(runtime, input, &menu_armed, &menu_result));
     EXPECT_TRUE(menu_result.selected);
     EXPECT_STREQ(menu_result.scene, "scene.play");
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
-    EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.play");
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_FALSE(slayer3d_game_data_app_flow_is_transitioning(&flow));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.play");
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -5975,55 +6016,55 @@ TEST(GameDataRuntime, SceneActivityDrivesIdleWakeAndPeriodicActions)
     const std::filesystem::path dir = unique_test_dir("scene_activity");
     write_scene_activity_json(dir);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "activity.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "activity.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *state = sdl3d_game_data_find_actor(runtime, "entity.state");
+    slayer3d_registered_actor *state = slayer3d_game_data_find_actor(runtime, "entity.state");
     ASSERT_NE(state, nullptr);
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
 
-    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.overhead");
-    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 0.0f));
-    EXPECT_TRUE(sdl3d_properties_get_bool(state->props, "entered", false));
-    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.close");
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.overhead");
+    ASSERT_TRUE(slayer3d_game_data_update_scene_activity(runtime, input, 0.0f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(state->props, "entered", false));
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.close");
 
-    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 0.75f));
-    EXPECT_FALSE(sdl3d_properties_get_bool(state->props, "idle", false));
-    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 0.30f));
-    EXPECT_TRUE(sdl3d_properties_get_bool(state->props, "idle", false));
+    ASSERT_TRUE(slayer3d_game_data_update_scene_activity(runtime, input, 0.75f));
+    EXPECT_FALSE(slayer3d_properties_get_bool(state->props, "idle", false));
+    ASSERT_TRUE(slayer3d_game_data_update_scene_activity(runtime, input, 0.30f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(state->props, "idle", false));
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_SPACE;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
     bool block_menus = false;
     bool block_shortcuts = false;
-    EXPECT_TRUE(sdl3d_game_data_scene_activity_consumes_wake_input(runtime, input, &block_menus, &block_shortcuts));
+    EXPECT_TRUE(slayer3d_game_data_scene_activity_consumes_wake_input(runtime, input, &block_menus, &block_shortcuts));
     EXPECT_TRUE(block_menus);
     EXPECT_TRUE(block_shortcuts);
-    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 0.0f));
-    EXPECT_FALSE(sdl3d_properties_get_bool(state->props, "idle", true));
+    ASSERT_TRUE(slayer3d_game_data_update_scene_activity(runtime, input, 0.0f));
+    EXPECT_FALSE(slayer3d_properties_get_bool(state->props, "idle", true));
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 2);
-    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 2.1f));
-    EXPECT_EQ(sdl3d_properties_get_int(state->props, "periodic", 0), 1);
-    EXPECT_FALSE(sdl3d_properties_get_bool(state->props, "idle", true));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_scene_activity(runtime, input, 2.1f));
+    EXPECT_EQ(slayer3d_properties_get_int(state->props, "periodic", 0), 1);
+    EXPECT_FALSE(slayer3d_properties_get_bool(state->props, "idle", true));
 
-    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 1.1f));
-    EXPECT_TRUE(sdl3d_properties_get_bool(state->props, "idle", false));
+    ASSERT_TRUE(slayer3d_game_data_update_scene_activity(runtime, input, 1.1f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(state->props, "idle", false));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -6032,58 +6073,58 @@ TEST(GameDataRuntime, AppFlowConsumesActivityWakeInputBeforeMenus)
     const std::filesystem::path dir = unique_test_dir("scene_activity_app_flow");
     write_scene_activity_json(dir);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "activity.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "activity.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
 
-    sdl3d_game_context ctx{};
+    slayer3d_game_context ctx{};
     ctx.session = session;
-    sdl3d_game_data_app_flow flow{};
-    sdl3d_game_data_app_flow_init(&flow);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
+    slayer3d_game_data_app_flow flow{};
+    slayer3d_game_data_app_flow_init(&flow);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_start(&flow, runtime));
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    sdl3d_registered_actor *state = sdl3d_game_data_find_actor(runtime, "entity.state");
+    slayer3d_registered_actor *state = slayer3d_game_data_find_actor(runtime, "entity.state");
     ASSERT_NE(state, nullptr);
 
-    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 0.0f));
-    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 1.1f));
-    ASSERT_TRUE(sdl3d_properties_get_bool(state->props, "idle", false));
+    ASSERT_TRUE(slayer3d_game_data_update_scene_activity(runtime, input, 0.0f));
+    ASSERT_TRUE(slayer3d_game_data_update_scene_activity(runtime, input, 1.1f));
+    ASSERT_TRUE(slayer3d_properties_get_bool(state->props, "idle", false));
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
 
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
-    EXPECT_FALSE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.title");
+    EXPECT_FALSE(slayer3d_game_data_app_flow_is_transitioning(&flow));
 
-    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, input, 0.0f));
-    EXPECT_FALSE(sdl3d_properties_get_bool(state->props, "idle", true));
+    ASSERT_TRUE(slayer3d_game_data_update_scene_activity(runtime, input, 0.0f));
+    EXPECT_FALSE(slayer3d_properties_get_bool(state->props, "idle", true));
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 2);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.title");
 
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RETURN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 3);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.play");
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.play");
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -6092,29 +6133,29 @@ TEST(GameDataRuntime, MotionOscillateMovesActiveSceneActors)
     const std::filesystem::path dir = unique_test_dir("motion_oscillate");
     write_scene_activity_json(dir);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "activity.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "activity.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *lamp = sdl3d_game_data_find_actor(runtime, "entity.lamp");
+    slayer3d_registered_actor *lamp = slayer3d_game_data_find_actor(runtime, "entity.lamp");
     ASSERT_NE(lamp, nullptr);
     EXPECT_NEAR(lamp->position.x, 2.0f, 0.0001f);
 
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 1.0f));
     EXPECT_NEAR(lamp->position.x, 2.0f + 3.0f * SDL_sinf(1.0f), 0.0001f);
     EXPECT_NEAR(lamp->position.y, 0.0f, 0.0001f);
     EXPECT_NEAR(lamp->position.z, 0.0f, 0.0001f);
 
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 1.0f));
     EXPECT_NEAR(lamp->position.x, 2.0f + 3.0f * SDL_sinf(2.0f), 0.0001f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -6123,48 +6164,49 @@ TEST(GameDataRuntime, AppFlowRunsAuthoredTweenActions)
     const std::filesystem::path dir = unique_test_dir("animation");
     write_animation_json(dir);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "animation.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "animation.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
 
-    const int property_done = sdl3d_game_data_find_signal(runtime, "signal.property.done");
-    const int ui_done = sdl3d_game_data_find_signal(runtime, "signal.ui.done");
+    const int property_done = slayer3d_game_data_find_signal(runtime, "signal.property.done");
+    const int ui_done = slayer3d_game_data_find_signal(runtime, "signal.ui.done");
     ASSERT_GE(property_done, 0);
     ASSERT_GE(ui_done, 0);
     SignalCapture property_capture{};
     SignalCapture ui_capture{};
-    ASSERT_NE(sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(session), property_done, count_signal,
-                                   &property_capture),
+    ASSERT_NE(slayer3d_signal_connect(slayer3d_game_session_get_signal_bus(session), property_done, count_signal,
+                                      &property_capture),
               0);
-    ASSERT_NE(sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(session), ui_done, count_signal, &ui_capture), 0);
+    ASSERT_NE(
+        slayer3d_signal_connect(slayer3d_game_session_get_signal_bus(session), ui_done, count_signal, &ui_capture), 0);
 
-    sdl3d_game_context ctx{};
+    slayer3d_game_context ctx{};
     ctx.session = session;
-    sdl3d_game_data_app_flow flow{};
-    sdl3d_game_data_app_flow_init(&flow);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    slayer3d_game_data_app_flow flow{};
+    slayer3d_game_data_app_flow_init(&flow);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_start(&flow, runtime));
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
 
-    sdl3d_registered_actor *box = sdl3d_game_data_find_actor(runtime, "entity.box");
+    slayer3d_registered_actor *box = slayer3d_game_data_find_actor(runtime, "entity.box");
     ASSERT_NE(box, nullptr);
 
-    ASSERT_TRUE(sdl3d_game_data_update_animations(runtime, 0.5f));
-    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "x", -1.0f), 5.0f, 0.0001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "ease", -1.0f), 0.75f, 0.0001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "loop", -1.0f), 0.5f, 0.0001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "ping", -1.0f), 0.5f, 0.0001f);
+    ASSERT_TRUE(slayer3d_game_data_update_animations(runtime, 0.5f));
+    EXPECT_NEAR(slayer3d_properties_get_float(box->props, "x", -1.0f), 5.0f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(box->props, "ease", -1.0f), 0.75f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(box->props, "loop", -1.0f), 0.5f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(box->props, "ping", -1.0f), 0.5f, 0.0001f);
     EXPECT_EQ(property_capture.calls, 0);
     EXPECT_EQ(ui_capture.calls, 0);
 
-    sdl3d_game_data_ui_text logo{};
+    slayer3d_game_data_ui_text logo{};
     bool saw_logo = false;
-    auto find_logo = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
-        auto *args = static_cast<std::pair<sdl3d_game_data_ui_text *, bool *> *>(userdata);
+    auto find_logo = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+        auto *args = static_cast<std::pair<slayer3d_game_data_ui_text *, bool *> *>(userdata);
         if (text->name != nullptr && std::string(text->name) == "ui.logo")
         {
             *args->first = *text;
@@ -6173,422 +6215,438 @@ TEST(GameDataRuntime, AppFlowRunsAuthoredTweenActions)
         }
         return true;
     };
-    std::pair<sdl3d_game_data_ui_text *, bool *> logo_args{&logo, &saw_logo};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_logo, &logo_args));
+    std::pair<slayer3d_game_data_ui_text *, bool *> logo_args{&logo, &saw_logo};
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_logo, &logo_args));
     ASSERT_TRUE(saw_logo);
 
-    sdl3d_game_data_ui_text resolved_logo{};
+    slayer3d_game_data_ui_text resolved_logo{};
     bool logo_visible = false;
-    ASSERT_TRUE(sdl3d_game_data_resolve_ui_text(runtime, &logo, nullptr, &resolved_logo, &logo_visible));
+    ASSERT_TRUE(slayer3d_game_data_resolve_ui_text(runtime, &logo, nullptr, &resolved_logo, &logo_visible));
     EXPECT_TRUE(logo_visible);
     EXPECT_EQ(resolved_logo.color.a, 128);
     EXPECT_NEAR(resolved_logo.scale, 1.5f, 0.0001f);
 
-    ASSERT_TRUE(sdl3d_game_data_update_animations(runtime, 0.5f));
-    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "x", -1.0f), 10.0f, 0.0001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "ease", -1.0f), 1.0f, 0.0001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "loop", -1.0f), 0.0f, 0.0001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "ping", -1.0f), 1.0f, 0.0001f);
+    ASSERT_TRUE(slayer3d_game_data_update_animations(runtime, 0.5f));
+    EXPECT_NEAR(slayer3d_properties_get_float(box->props, "x", -1.0f), 10.0f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(box->props, "ease", -1.0f), 1.0f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(box->props, "loop", -1.0f), 0.0f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(box->props, "ping", -1.0f), 1.0f, 0.0001f);
     EXPECT_EQ(property_capture.calls, 1);
     EXPECT_EQ(ui_capture.calls, 1);
 
-    ASSERT_TRUE(sdl3d_game_data_resolve_ui_text(runtime, &logo, nullptr, &resolved_logo, &logo_visible));
+    ASSERT_TRUE(slayer3d_game_data_resolve_ui_text(runtime, &logo, nullptr, &resolved_logo, &logo_visible));
     EXPECT_TRUE(logo_visible);
     EXPECT_EQ(resolved_logo.color.a, 255);
     EXPECT_NEAR(resolved_logo.scale, 2.0f, 0.0001f);
 
-    ASSERT_TRUE(sdl3d_game_data_update_animations(runtime, 0.25f));
-    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "loop", -1.0f), 0.25f, 0.0001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "ping", -1.0f), 0.75f, 0.0001f);
+    ASSERT_TRUE(slayer3d_game_data_update_animations(runtime, 0.25f));
+    EXPECT_NEAR(slayer3d_properties_get_float(box->props, "loop", -1.0f), 0.25f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(box->props, "ping", -1.0f), 0.75f, 0.0001f);
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
-    ASSERT_TRUE(sdl3d_game_data_update_animations(runtime, 1.0f));
-    EXPECT_NEAR(sdl3d_properties_get_float(box->props, "loop", -1.0f), 0.25f, 0.0001f);
-    sdl3d_game_data_ui_state logo_state{};
-    EXPECT_FALSE(sdl3d_game_data_get_ui_state(runtime, "ui.logo", &logo_state));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.title"));
+    ASSERT_TRUE(slayer3d_game_data_update_animations(runtime, 1.0f));
+    EXPECT_NEAR(slayer3d_properties_get_float(box->props, "loop", -1.0f), 0.25f, 0.0001f);
+    slayer3d_game_data_ui_state logo_state{};
+    EXPECT_FALSE(slayer3d_game_data_get_ui_state(runtime, "ui.logo", &logo_state));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, SignalBindingsResolveLuaAdaptersDeclaredInJson)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    const int serve_signal = sdl3d_game_data_find_signal(runtime, "signal.ball.serve");
+    const int serve_signal = slayer3d_game_data_find_signal(runtime, "signal.ball.serve");
     ASSERT_GE(serve_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), serve_signal, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), serve_signal, nullptr);
 
-    sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
+    slayer3d_registered_actor *ball = slayer3d_game_data_find_actor(runtime, "entity.ball");
     ASSERT_NE(ball, nullptr);
-    const sdl3d_vec3 velocity = sdl3d_properties_get_vec3(ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 velocity =
+        slayer3d_properties_get_vec3(ball->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     EXPECT_NEAR(ball->position.x, 0.0f, 0.0001f);
     EXPECT_NEAR(ball->position.y, 0.0f, 0.0001f);
     EXPECT_GT(SDL_sqrtf(velocity.x * velocity.x + velocity.y * velocity.y), 5.0f);
     EXPECT_GT(SDL_fabsf(velocity.x), 4.8f);
     EXPECT_GT(SDL_fabsf(velocity.y), 0.70f);
-    EXPECT_TRUE(sdl3d_properties_get_bool(ball->props, "active_motion", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(ball->props, "active_motion", false));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, PongTitleAttractServeHasJitterAndMovesCpuPaddles)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
-    ASSERT_TRUE(sdl3d_game_data_update_scene_activity(runtime, sdl3d_game_session_get_input(session), 0.0f));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.title"));
+    ASSERT_TRUE(slayer3d_game_data_update_scene_activity(runtime, slayer3d_game_session_get_input(session), 0.0f));
 
-    sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball.attract");
-    sdl3d_registered_actor *left = sdl3d_game_data_find_actor(runtime, "entity.paddle.attract_left");
-    sdl3d_registered_actor *right = sdl3d_game_data_find_actor(runtime, "entity.paddle.attract_right");
+    slayer3d_registered_actor *ball = slayer3d_game_data_find_actor(runtime, "entity.ball.attract");
+    slayer3d_registered_actor *left = slayer3d_game_data_find_actor(runtime, "entity.paddle.attract_left");
+    slayer3d_registered_actor *right = slayer3d_game_data_find_actor(runtime, "entity.paddle.attract_right");
     ASSERT_NE(ball, nullptr);
     ASSERT_NE(left, nullptr);
     ASSERT_NE(right, nullptr);
 
-    const sdl3d_vec3 velocity = sdl3d_properties_get_vec3(ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
-    EXPECT_TRUE(sdl3d_properties_get_bool(ball->props, "active_motion", false));
+    const slayer3d_vec3 velocity =
+        slayer3d_properties_get_vec3(ball->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(ball->props, "active_motion", false));
     EXPECT_GT(SDL_fabsf(velocity.x), 4.8f);
     EXPECT_GT(SDL_fabsf(velocity.y), 1.0f);
 
     const float initial_left_y = left->position.y;
     const float initial_right_y = right->position.y;
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
 
     EXPECT_NE(left->position.y, initial_left_y);
     EXPECT_NE(right->position.y, initial_right_y);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, LuaAdapterReflectsBallFromPaddle)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
-    sdl3d_registered_actor *paddle = sdl3d_game_data_find_actor(runtime, "entity.paddle.player");
+    slayer3d_registered_actor *ball = slayer3d_game_data_find_actor(runtime, "entity.ball");
+    slayer3d_registered_actor *paddle = slayer3d_game_data_find_actor(runtime, "entity.paddle.player");
     ASSERT_NE(ball, nullptr);
     ASSERT_NE(paddle, nullptr);
-    ball->position = sdl3d_vec3_make(paddle->position.x + 0.10f, paddle->position.y + 0.40f, 0.12f);
-    sdl3d_properties_set_vec3(ball->props, "origin", ball->position);
-    sdl3d_properties_set_vec3(ball->props, "velocity", sdl3d_vec3_make(-5.6f, 0.0f, 0.0f));
+    ball->position = slayer3d_vec3_make(paddle->position.x + 0.10f, paddle->position.y + 0.40f, 0.12f);
+    slayer3d_properties_set_vec3(ball->props, "origin", ball->position);
+    slayer3d_properties_set_vec3(ball->props, "velocity", slayer3d_vec3_make(-5.6f, 0.0f, 0.0f));
 
-    sdl3d_properties *payload = sdl3d_properties_create();
+    slayer3d_properties *payload = slayer3d_properties_create();
     ASSERT_NE(payload, nullptr);
-    sdl3d_properties_set_string(payload, "actor_name", "entity.ball");
-    sdl3d_properties_set_string(payload, "other_actor_name", "entity.paddle.player");
-    const int hit_signal = sdl3d_game_data_find_signal(runtime, "signal.ball.hit_paddle");
+    slayer3d_properties_set_string(payload, "actor_name", "entity.ball");
+    slayer3d_properties_set_string(payload, "other_actor_name", "entity.paddle.player");
+    const int hit_signal = slayer3d_game_data_find_signal(runtime, "signal.ball.hit_paddle");
     ASSERT_GE(hit_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), hit_signal, payload);
-    sdl3d_properties_destroy(payload);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), hit_signal, payload);
+    slayer3d_properties_destroy(payload);
 
-    const sdl3d_vec3 velocity = sdl3d_properties_get_vec3(ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 velocity =
+        slayer3d_properties_get_vec3(ball->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     EXPECT_GT(velocity.x, 0.0f);
     EXPECT_GT(SDL_sqrtf(velocity.x * velocity.x + velocity.y * velocity.y), 5.6f);
     EXPECT_GT(ball->position.x, paddle->position.x);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, LuaAdapterAddsJitterAfterRepeatedFlatPaddleReflects)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
-    sdl3d_registered_actor *left = sdl3d_game_data_find_actor(runtime, "entity.paddle.player");
-    sdl3d_registered_actor *right = sdl3d_game_data_find_actor(runtime, "entity.paddle.cpu");
+    slayer3d_registered_actor *ball = slayer3d_game_data_find_actor(runtime, "entity.ball");
+    slayer3d_registered_actor *left = slayer3d_game_data_find_actor(runtime, "entity.paddle.player");
+    slayer3d_registered_actor *right = slayer3d_game_data_find_actor(runtime, "entity.paddle.cpu");
     ASSERT_NE(ball, nullptr);
     ASSERT_NE(left, nullptr);
     ASSERT_NE(right, nullptr);
 
-    const int hit_signal = sdl3d_game_data_find_signal(runtime, "signal.ball.hit_paddle");
+    const int hit_signal = slayer3d_game_data_find_signal(runtime, "signal.ball.hit_paddle");
     ASSERT_GE(hit_signal, 0);
 
     auto emit_center_hit = [&](const char *paddle_name, float ball_x) {
-        ball->position = sdl3d_vec3_make(ball_x, 0.0f, 0.12f);
-        sdl3d_properties_set_vec3(ball->props, "origin", ball->position);
+        ball->position = slayer3d_vec3_make(ball_x, 0.0f, 0.12f);
+        slayer3d_properties_set_vec3(ball->props, "origin", ball->position);
 
-        sdl3d_properties *payload = sdl3d_properties_create();
+        slayer3d_properties *payload = slayer3d_properties_create();
         ASSERT_NE(payload, nullptr);
-        sdl3d_properties_set_string(payload, "actor_name", "entity.ball");
-        sdl3d_properties_set_string(payload, "other_actor_name", paddle_name);
-        sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), hit_signal, payload);
-        sdl3d_properties_destroy(payload);
+        slayer3d_properties_set_string(payload, "actor_name", "entity.ball");
+        slayer3d_properties_set_string(payload, "other_actor_name", paddle_name);
+        slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), hit_signal, payload);
+        slayer3d_properties_destroy(payload);
     };
 
     emit_center_hit("entity.paddle.player", left->position.x + 0.10f);
-    sdl3d_vec3 velocity = sdl3d_properties_get_vec3(ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_vec3 velocity =
+        slayer3d_properties_get_vec3(ball->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     EXPECT_NEAR(velocity.y, 0.0f, 0.0001f);
-    EXPECT_EQ(sdl3d_properties_get_int(ball->props, "stagnant_reflect_count", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(ball->props, "stagnant_reflect_count", -1), 1);
 
     emit_center_hit("entity.paddle.cpu", right->position.x - 0.10f);
-    velocity = sdl3d_properties_get_vec3(ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    velocity = slayer3d_properties_get_vec3(ball->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     EXPECT_GT(SDL_fabsf(velocity.y), 1.0f);
-    EXPECT_EQ(sdl3d_properties_get_int(ball->props, "stagnant_reflect_count", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(ball->props, "stagnant_reflect_count", -1), 0);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, AttractBallReflectsApplyAuthoredRandomJitter)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball.attract");
-    sdl3d_registered_actor *left = sdl3d_game_data_find_actor(runtime, "entity.paddle.attract_left");
-    sdl3d_registered_actor *right = sdl3d_game_data_find_actor(runtime, "entity.paddle.attract_right");
+    slayer3d_registered_actor *ball = slayer3d_game_data_find_actor(runtime, "entity.ball.attract");
+    slayer3d_registered_actor *left = slayer3d_game_data_find_actor(runtime, "entity.paddle.attract_left");
+    slayer3d_registered_actor *right = slayer3d_game_data_find_actor(runtime, "entity.paddle.attract_right");
     ASSERT_NE(ball, nullptr);
     ASSERT_NE(left, nullptr);
     ASSERT_NE(right, nullptr);
 
-    const int hit_signal = sdl3d_game_data_find_signal(runtime, "signal.ball.hit_paddle");
+    const int hit_signal = slayer3d_game_data_find_signal(runtime, "signal.ball.hit_paddle");
     ASSERT_GE(hit_signal, 0);
 
     auto emit_center_attract_hit = [&](const char *paddle_name, float ball_x) {
-        ball->position = sdl3d_vec3_make(ball_x, 0.0f, 0.12f);
-        sdl3d_properties_set_vec3(ball->props, "origin", ball->position);
+        ball->position = slayer3d_vec3_make(ball_x, 0.0f, 0.12f);
+        slayer3d_properties_set_vec3(ball->props, "origin", ball->position);
 
-        sdl3d_properties *payload = sdl3d_properties_create();
+        slayer3d_properties *payload = slayer3d_properties_create();
         ASSERT_NE(payload, nullptr);
-        sdl3d_properties_set_string(payload, "actor_name", "entity.ball.attract");
-        sdl3d_properties_set_string(payload, "other_actor_name", paddle_name);
-        sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), hit_signal, payload);
-        sdl3d_properties_destroy(payload);
+        slayer3d_properties_set_string(payload, "actor_name", "entity.ball.attract");
+        slayer3d_properties_set_string(payload, "other_actor_name", paddle_name);
+        slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), hit_signal, payload);
+        slayer3d_properties_destroy(payload);
     };
 
     emit_center_attract_hit("entity.paddle.attract_left", left->position.x + 0.10f);
-    sdl3d_vec3 velocity = sdl3d_properties_get_vec3(ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_vec3 velocity =
+        slayer3d_properties_get_vec3(ball->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     EXPECT_GT(velocity.x, 0.0f);
     EXPECT_GT(SDL_fabsf(velocity.y), 0.55f);
 
     emit_center_attract_hit("entity.paddle.attract_right", right->position.x - 0.10f);
-    velocity = sdl3d_properties_get_vec3(ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    velocity = slayer3d_properties_get_vec3(ball->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     EXPECT_LT(velocity.x, 0.0f);
     EXPECT_GT(SDL_fabsf(velocity.y), 0.55f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, LuaControllerMovesCpuPaddleTowardBall)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
-    sdl3d_registered_actor *cpu = sdl3d_game_data_find_actor(runtime, "entity.paddle.cpu");
+    slayer3d_registered_actor *ball = slayer3d_game_data_find_actor(runtime, "entity.ball");
+    slayer3d_registered_actor *cpu = slayer3d_game_data_find_actor(runtime, "entity.paddle.cpu");
     ASSERT_NE(ball, nullptr);
     ASSERT_NE(cpu, nullptr);
     ball->position.y = 2.0f;
     cpu->position.y = 0.0f;
-    sdl3d_properties_set_vec3(ball->props, "origin", ball->position);
-    sdl3d_properties_set_vec3(cpu->props, "origin", cpu->position);
-    sdl3d_properties *payload = sdl3d_properties_create();
+    slayer3d_properties_set_vec3(ball->props, "origin", ball->position);
+    slayer3d_properties_set_vec3(cpu->props, "origin", cpu->position);
+    slayer3d_properties *payload = slayer3d_properties_create();
     ASSERT_NE(payload, nullptr);
-    sdl3d_properties_set_string(payload, "match_mode", "single");
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene_with_payload(runtime, "scene.play", payload));
-    sdl3d_properties_destroy(payload);
-    sdl3d_properties_set_string(sdl3d_game_data_mutable_scene_state(runtime), "match_mode", "single");
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.1f));
+    slayer3d_properties_set_string(payload, "match_mode", "single");
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene_with_payload(runtime, "scene.play", payload));
+    slayer3d_properties_destroy(payload);
+    slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "match_mode", "single");
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.1f));
 
     EXPECT_GT(cpu->position.y, 0.0f);
     EXPECT_LE(cpu->position.y, 0.55f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, PongClientDoesNotStartServeTimer)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-    ASSERT_TRUE(sdl3d_game_data_register_adapter(runtime, "adapter.pong.configure_play_input",
-                                                 configure_play_input_adapter, nullptr));
+    ASSERT_TRUE(slayer3d_game_data_register_adapter(runtime, "adapter.pong.configure_play_input",
+                                                    configure_play_input_adapter, nullptr));
 
-    sdl3d_properties *payload = sdl3d_properties_create();
+    slayer3d_properties *payload = slayer3d_properties_create();
     ASSERT_NE(payload, nullptr);
-    sdl3d_properties_set_string(payload, "match_mode", "lan");
-    sdl3d_properties_set_string(payload, "network_role", "client");
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene_with_payload(runtime, "scene.play", payload));
-    sdl3d_properties_destroy(payload);
+    slayer3d_properties_set_string(payload, "match_mode", "lan");
+    slayer3d_properties_set_string(payload, "network_role", "client");
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene_with_payload(runtime, "scene.play", payload));
+    slayer3d_properties_destroy(payload);
 
-    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "network_role", ""), "client");
-    EXPECT_FALSE(sdl3d_game_data_active_scene_update_phase(runtime, "simulation", false));
-    EXPECT_EQ(sdl3d_timer_pool_active_count(sdl3d_game_session_get_timer_pool(session)), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "network_role", ""), "client");
+    EXPECT_FALSE(slayer3d_game_data_active_scene_update_phase(runtime, "simulation", false));
+    EXPECT_EQ(slayer3d_timer_pool_active_count(slayer3d_game_session_get_timer_pool(session)), 0);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, PongMatchStateAndRestartAreAuthoredLogic)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *player_score = sdl3d_game_data_find_actor(runtime, "entity.score.player");
-    sdl3d_registered_actor *cpu_score = sdl3d_game_data_find_actor(runtime, "entity.score.cpu");
-    sdl3d_registered_actor *match = sdl3d_game_data_find_actor(runtime, "entity.match");
-    sdl3d_registered_actor *presentation = sdl3d_game_data_find_actor(runtime, "entity.presentation");
-    sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
+    slayer3d_registered_actor *player_score = slayer3d_game_data_find_actor(runtime, "entity.score.player");
+    slayer3d_registered_actor *cpu_score = slayer3d_game_data_find_actor(runtime, "entity.score.cpu");
+    slayer3d_registered_actor *match = slayer3d_game_data_find_actor(runtime, "entity.match");
+    slayer3d_registered_actor *presentation = slayer3d_game_data_find_actor(runtime, "entity.presentation");
+    slayer3d_registered_actor *ball = slayer3d_game_data_find_actor(runtime, "entity.ball");
     ASSERT_NE(player_score, nullptr);
     ASSERT_NE(cpu_score, nullptr);
     ASSERT_NE(match, nullptr);
     ASSERT_NE(presentation, nullptr);
     ASSERT_NE(ball, nullptr);
 
-    sdl3d_properties_set_int(player_score->props, "value", 9);
-    const int player_score_signal = sdl3d_game_data_find_signal(runtime, "signal.score.player");
+    slayer3d_properties_set_int(player_score->props, "value", 9);
+    const int player_score_signal = slayer3d_game_data_find_signal(runtime, "signal.score.player");
     ASSERT_GE(player_score_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), player_score_signal, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), player_score_signal, nullptr);
 
-    EXPECT_EQ(sdl3d_properties_get_int(player_score->props, "value", 0), 10);
-    EXPECT_TRUE(sdl3d_properties_get_bool(match->props, "finished", false));
-    EXPECT_STREQ(sdl3d_properties_get_string(match->props, "winner", ""), "player");
+    EXPECT_EQ(slayer3d_properties_get_int(player_score->props, "value", 0), 10);
+    EXPECT_TRUE(slayer3d_properties_get_bool(match->props, "finished", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(match->props, "winner", ""), "player");
     EXPECT_FALSE(ball->active);
-    EXPECT_FALSE(sdl3d_properties_get_bool(ball->props, "active_motion", true));
+    EXPECT_FALSE(slayer3d_properties_get_bool(ball->props, "active_motion", true));
 
-    sdl3d_properties_set_float(presentation->props, "border_flash", 1.0f);
-    sdl3d_properties_set_float(presentation->props, "paddle_flash", 1.0f);
-    const int restart_signal = sdl3d_game_data_find_signal(runtime, "signal.match.restart");
+    slayer3d_properties_set_float(presentation->props, "border_flash", 1.0f);
+    slayer3d_properties_set_float(presentation->props, "paddle_flash", 1.0f);
+    const int restart_signal = slayer3d_game_data_find_signal(runtime, "signal.match.restart");
     ASSERT_GE(restart_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), restart_signal, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), restart_signal, nullptr);
 
-    EXPECT_EQ(sdl3d_properties_get_int(player_score->props, "value", -1), 0);
-    EXPECT_EQ(sdl3d_properties_get_int(cpu_score->props, "value", -1), 0);
-    EXPECT_FALSE(sdl3d_properties_get_bool(match->props, "finished", true));
-    EXPECT_STREQ(sdl3d_properties_get_string(match->props, "winner", ""), "none");
+    EXPECT_EQ(slayer3d_properties_get_int(player_score->props, "value", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(cpu_score->props, "value", -1), 0);
+    EXPECT_FALSE(slayer3d_properties_get_bool(match->props, "finished", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(match->props, "winner", ""), "none");
     EXPECT_TRUE(ball->active);
-    EXPECT_FLOAT_EQ(sdl3d_properties_get_float(presentation->props, "border_flash", -1.0f), 0.0f);
-    EXPECT_FLOAT_EQ(sdl3d_properties_get_float(presentation->props, "paddle_flash", -1.0f), 0.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(presentation->props, "border_flash", -1.0f), 0.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(presentation->props, "paddle_flash", -1.0f), 0.0f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, RegisteredCAdaptersOverrideLuaAdapters)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
     AdapterCapture capture{};
-    ASSERT_TRUE(sdl3d_game_data_register_adapter(runtime, "adapter.pong.serve_random", serve_adapter, &capture));
+    ASSERT_TRUE(slayer3d_game_data_register_adapter(runtime, "adapter.pong.serve_random", serve_adapter, &capture));
 
-    const int serve_signal = sdl3d_game_data_find_signal(runtime, "signal.ball.serve");
+    const int serve_signal = slayer3d_game_data_find_signal(runtime, "signal.ball.serve");
     ASSERT_GE(serve_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), serve_signal, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), serve_signal, nullptr);
 
-    sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
+    slayer3d_registered_actor *ball = slayer3d_game_data_find_actor(runtime, "entity.ball");
     ASSERT_NE(ball, nullptr);
-    const sdl3d_vec3 velocity = sdl3d_properties_get_vec3(ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 velocity =
+        slayer3d_properties_get_vec3(ball->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     EXPECT_EQ(capture.calls, 1);
     EXPECT_FLOAT_EQ(velocity.x, 3.0f);
-    EXPECT_TRUE(sdl3d_properties_get_bool(ball->props, "active_motion", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(ball->props, "active_motion", false));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, LoadsLuaScriptDependenciesBeforeDependentAdapters)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
     const std::string path = fixture_path("module_success.game.json");
-    ASSERT_TRUE(sdl3d_game_data_load_file(path.c_str(), session, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_game_data_load_file(path.c_str(), session, &runtime, error, sizeof(error))) << error;
 
-    const int run_signal = sdl3d_game_data_find_signal(runtime, "signal.run");
+    const int run_signal = slayer3d_game_data_find_signal(runtime, "signal.run");
     ASSERT_GE(run_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), run_signal, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), run_signal, nullptr);
 
-    sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, "entity.target");
+    slayer3d_registered_actor *target = slayer3d_game_data_find_actor(runtime, "entity.target");
     ASSERT_NE(target, nullptr);
-    const sdl3d_vec3 velocity = sdl3d_properties_get_vec3(target->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
-    const float speed_length = sdl3d_properties_get_float(target->props, "speed_length", 0.0f);
-    const float random_value = sdl3d_properties_get_float(target->props, "random_value", -1.0f);
+    const slayer3d_vec3 velocity =
+        slayer3d_properties_get_vec3(target->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const float speed_length = slayer3d_properties_get_float(target->props, "speed_length", 0.0f);
+    const float random_value = slayer3d_properties_get_float(target->props, "random_value", -1.0f);
     EXPECT_FLOAT_EQ(target->position.x, 1.0f);
     EXPECT_FLOAT_EQ(target->position.y, 2.0f);
     EXPECT_FLOAT_EQ(target->position.z, 3.0f);
     EXPECT_FLOAT_EQ(velocity.x, 7.0f);
     EXPECT_FLOAT_EQ(velocity.y, 2.0f);
     EXPECT_NEAR(speed_length, SDL_sqrtf(53.0f), 0.0001f);
-    EXPECT_TRUE(sdl3d_properties_get_bool(target->props, "ctx_ok", false));
-    EXPECT_TRUE(sdl3d_properties_get_bool(target->props, "state_ok", false));
-    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "last_adapter", ""),
+    EXPECT_TRUE(slayer3d_properties_get_bool(target->props, "ctx_ok", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(target->props, "state_ok", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "last_adapter", ""),
                  "adapter.test.run");
     EXPECT_GE(random_value, 0.0f);
     EXPECT_LT(random_value, 1.0f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(path.c_str(), session, &runtime, error, sizeof(error))) << error;
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), sdl3d_game_data_find_signal(runtime, "signal.run"),
-                      nullptr);
-    target = sdl3d_game_data_find_actor(runtime, "entity.target");
+    ASSERT_TRUE(slayer3d_game_data_load_file(path.c_str(), session, &runtime, error, sizeof(error))) << error;
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session),
+                         slayer3d_game_data_find_signal(runtime, "signal.run"), nullptr);
+    target = slayer3d_game_data_find_actor(runtime, "entity.target");
     ASSERT_NE(target, nullptr);
-    EXPECT_FLOAT_EQ(sdl3d_properties_get_float(target->props, "random_value", -1.0f), random_value);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(target->props, "random_value", -1.0f), random_value);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, ActorPoolsSpawnDespawnAndResetActors)
@@ -6597,7 +6655,7 @@ TEST(GameDataRuntime, ActorPoolsSpawnDespawnAndResetActors)
     write_text(dir / "shot.png", "test sprite placeholder");
     write_text(dir / "actor_pools.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Actor Pools", "id": "test.actor_pools", "version": "0.1.0" },
   "assets": {
     "sprites": [
@@ -6728,24 +6786,24 @@ TEST(GameDataRuntime, ActorPoolsSpawnDespawnAndResetActors)
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "renders_world": true
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "actor_pools.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "actor_pools.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *shot0 = sdl3d_game_data_find_actor(runtime, "pool.player_shots.0");
-    sdl3d_registered_actor *shot1 = sdl3d_game_data_find_actor(runtime, "pool.player_shots.1");
-    sdl3d_registered_actor *reusable_shot0 = sdl3d_game_data_find_actor(runtime, "pool.reusable_shots.0");
-    sdl3d_registered_actor *reusable_shot1 = sdl3d_game_data_find_actor(runtime, "pool.reusable_shots.1");
+    slayer3d_registered_actor *shot0 = slayer3d_game_data_find_actor(runtime, "pool.player_shots.0");
+    slayer3d_registered_actor *shot1 = slayer3d_game_data_find_actor(runtime, "pool.player_shots.1");
+    slayer3d_registered_actor *reusable_shot0 = slayer3d_game_data_find_actor(runtime, "pool.reusable_shots.0");
+    slayer3d_registered_actor *reusable_shot1 = slayer3d_game_data_find_actor(runtime, "pool.reusable_shots.1");
     ASSERT_NE(shot0, nullptr);
     ASSERT_NE(shot1, nullptr);
     ASSERT_NE(reusable_shot0, nullptr);
@@ -6754,77 +6812,77 @@ TEST(GameDataRuntime, ActorPoolsSpawnDespawnAndResetActors)
     EXPECT_FALSE(shot1->active);
     EXPECT_FALSE(reusable_shot0->active);
     EXPECT_FALSE(reusable_shot1->active);
-    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 1);
-    EXPECT_STREQ(sdl3d_properties_get_string(shot0->props, "pool", ""), "pool.player_shots");
-    EXPECT_STREQ(sdl3d_properties_get_string(shot0->props, "pool_scene", ""), "scene.play");
-    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "pool_index", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(shot0->props, "damage", 0), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(shot0->props, "pool", ""), "pool.player_shots");
+    EXPECT_STREQ(slayer3d_properties_get_string(shot0->props, "pool_scene", ""), "scene.play");
+    EXPECT_EQ(slayer3d_properties_get_int(shot0->props, "pool_index", -1), 0);
 
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.spawn"), nullptr);
     EXPECT_TRUE(shot0->active);
     EXPECT_FALSE(shot1->active);
-    expect_vec3_near(shot0->position, sdl3d_vec3_make(1.5f, 2.0f, 3.0f));
-    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 7);
-    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "last_actor", ""),
+    expect_vec3_near(shot0->position, slayer3d_vec3_make(1.5f, 2.0f, 3.0f));
+    EXPECT_EQ(slayer3d_properties_get_int(shot0->props, "damage", 0), 7);
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "last_actor", ""),
                  "pool.player_shots.0");
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "last_actor_id", -1), shot0->id);
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "last_actor_pool_index", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "last_actor_id", -1), shot0->id);
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "last_actor_pool_index", -1), 0);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.second"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.spawn.second"), nullptr);
     EXPECT_TRUE(shot1->active);
-    expect_vec3_near(shot1->position, sdl3d_vec3_make(4.0f, 5.0f, 6.0f));
+    expect_vec3_near(shot1->position, slayer3d_vec3_make(4.0f, 5.0f, 6.0f));
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.reuse"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.spawn.reuse"), nullptr);
     EXPECT_TRUE(reusable_shot0->active);
     EXPECT_FALSE(reusable_shot1->active);
-    expect_vec3_near(reusable_shot0->position, sdl3d_vec3_make(7.0f, 8.0f, 9.0f));
+    expect_vec3_near(reusable_shot0->position, slayer3d_vec3_make(7.0f, 8.0f, 9.0f));
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.reuse.second"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.spawn.reuse.second"), nullptr);
     EXPECT_TRUE(reusable_shot0->active);
     EXPECT_TRUE(reusable_shot1->active);
-    expect_vec3_near(reusable_shot1->position, sdl3d_vec3_make(8.0f, 9.0f, 10.0f));
+    expect_vec3_near(reusable_shot1->position, slayer3d_vec3_make(8.0f, 9.0f, 10.0f));
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.despawn.reuse.first"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.despawn.reuse.first"), nullptr);
     EXPECT_FALSE(reusable_shot0->active);
     EXPECT_TRUE(reusable_shot1->active);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.reuse.again"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.spawn.reuse.again"), nullptr);
     EXPECT_TRUE(reusable_shot0->active);
     EXPECT_TRUE(reusable_shot1->active);
-    expect_vec3_near(reusable_shot0->position, sdl3d_vec3_make(10.0f, 11.0f, 12.0f));
-    EXPECT_EQ(sdl3d_properties_get_int(reusable_shot0->props, "damage", 0), 99);
+    expect_vec3_near(reusable_shot0->position, slayer3d_vec3_make(10.0f, 11.0f, 12.0f));
+    EXPECT_EQ(slayer3d_properties_get_int(reusable_shot0->props, "damage", 0), 99);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.reuse.exhausted"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.spawn.reuse.exhausted"), nullptr);
     EXPECT_TRUE(reusable_shot0->active);
     EXPECT_TRUE(reusable_shot1->active);
-    expect_vec3_near(reusable_shot0->position, sdl3d_vec3_make(10.0f, 11.0f, 12.0f));
-    expect_vec3_near(reusable_shot1->position, sdl3d_vec3_make(13.0f, 14.0f, 15.0f));
+    expect_vec3_near(reusable_shot0->position, slayer3d_vec3_make(10.0f, 11.0f, 12.0f));
+    expect_vec3_near(reusable_shot1->position, slayer3d_vec3_make(13.0f, 14.0f, 15.0f));
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.despawn.first"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.despawn.first"), nullptr);
     EXPECT_FALSE(shot0->active);
     EXPECT_TRUE(shot1->active);
-    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 1);
-    expect_vec3_near(shot0->position, sdl3d_vec3_make(0.0f, 0.0f, 0.25f));
+    EXPECT_EQ(slayer3d_properties_get_int(shot0->props, "damage", 0), 1);
+    expect_vec3_near(shot0->position, slayer3d_vec3_make(0.0f, 0.0f, 0.25f));
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.second"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.spawn.second"), nullptr);
     EXPECT_TRUE(shot0->active);
-    expect_vec3_near(shot0->position, sdl3d_vec3_make(4.0f, 5.0f, 6.0f));
+    expect_vec3_near(shot0->position, slayer3d_vec3_make(4.0f, 5.0f, 6.0f));
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.despawn.projectiles"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.despawn.projectiles"), nullptr);
     EXPECT_FALSE(shot0->active);
     EXPECT_FALSE(shot1->active);
     EXPECT_FALSE(reusable_shot0->active);
     EXPECT_FALSE(reusable_shot1->active);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.despawn.projectiles"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.despawn.projectiles"), nullptr);
     EXPECT_FALSE(shot0->active);
     EXPECT_FALSE(shot1->active);
     EXPECT_FALSE(reusable_shot0->active);
     EXPECT_FALSE(reusable_shot1->active);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -6833,7 +6891,7 @@ TEST(GameDataRuntime, ActorInstancesExpandArchetypesBeforeValidation)
     const std::filesystem::path dir = unique_test_dir("actor_instances");
     write_text(dir / "fragments" / "props.json",
                R"json({
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "actor_archetypes": [
     {
       "name": "archetype.crate",
@@ -6863,10 +6921,10 @@ TEST(GameDataRuntime, ActorInstancesExpandArchetypesBeforeValidation)
 })json");
     write_text(
         dir / "scenes" / "play.scene.json",
-        R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.crate.a", "entity.crate.b"] })json");
+        R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play", "entities": ["entity.crate.a", "entity.crate.b"] })json");
     write_text(dir / "actor_instances.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Actor Instances", "id": "test.actor_instances", "version": "0.1.0" },
   "imports": [
     { "path": "fragments/props.json", "sections": ["actor_archetypes", "actor_instances"] }
@@ -6875,35 +6933,35 @@ TEST(GameDataRuntime, ActorInstancesExpandArchetypesBeforeValidation)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "actor_instances.game.json").string().c_str(), session, &runtime,
-                                          error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "actor_instances.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *crate_a = sdl3d_game_data_find_actor(runtime, "entity.crate.a");
-    sdl3d_registered_actor *crate_b = sdl3d_game_data_find_actor(runtime, "entity.crate.b");
+    slayer3d_registered_actor *crate_a = slayer3d_game_data_find_actor(runtime, "entity.crate.a");
+    slayer3d_registered_actor *crate_b = slayer3d_game_data_find_actor(runtime, "entity.crate.b");
     ASSERT_NE(crate_a, nullptr);
     ASSERT_NE(crate_b, nullptr);
     EXPECT_TRUE(crate_a->active);
     EXPECT_TRUE(crate_b->active);
-    expect_vec3_near(crate_a->position, sdl3d_vec3_make(1.0f, 2.0f, 3.0f));
-    expect_vec3_near(crate_b->position, sdl3d_vec3_make(4.0f, 5.0f, 6.0f));
-    EXPECT_EQ(sdl3d_properties_get_int(crate_a->props, "health", 0), 7);
-    EXPECT_EQ(sdl3d_properties_get_int(crate_b->props, "health", 0), 10);
+    expect_vec3_near(crate_a->position, slayer3d_vec3_make(1.0f, 2.0f, 3.0f));
+    expect_vec3_near(crate_b->position, slayer3d_vec3_make(4.0f, 5.0f, 6.0f));
+    EXPECT_EQ(slayer3d_properties_get_int(crate_a->props, "health", 0), 7);
+    EXPECT_EQ(slayer3d_properties_get_int(crate_b->props, "health", 0), 10);
 
     RenderPrimitiveCapture render{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &render));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &render));
     EXPECT_EQ(render.cubes, 2);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 
     write_text(dir / "bad_instances.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Actor Instances" },
   "world": { "name": "world.bad_actor_instances", "kind": "fixed_screen" },
   "actor_instances": [
@@ -6911,14 +6969,14 @@ TEST(GameDataRuntime, ActorInstancesExpandArchetypesBeforeValidation)
   ],
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     runtime = nullptr;
     SDL_zeroa(error);
-    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "bad_instances.game.json").string().c_str(), session, &runtime, error,
-                                           sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "bad_instances.game.json").string().c_str(), session, &runtime,
+                                              error, sizeof(error)));
     EXPECT_NE(std::string(error).find("unknown actor archetype"), std::string::npos) << error;
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -6927,73 +6985,73 @@ TEST(GameDataRuntime, EditorMetadataValidatesAndFpsMechanicsDojoLoads)
     const std::filesystem::path dojo_path = fps_mechanics_dojo_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
-    sdl3d_game_config config{};
+    slayer3d_game_config config{};
     char title[128]{};
     char app_error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_load_app_config_file(dojo_path.string().c_str(), &config, title, sizeof(title),
-                                                     app_error, sizeof(app_error)))
+    ASSERT_TRUE(slayer3d_game_data_load_app_config_file(dojo_path.string().c_str(), &config, title, sizeof(title),
+                                                        app_error, sizeof(app_error)))
         << app_error;
-    EXPECT_STREQ(config.title, "SDL3D FPS Mechanics Dojo");
-    EXPECT_EQ(config.logical_width, SDL3D_GAME_DEFAULT_LOGICAL_WIDTH);
-    EXPECT_EQ(config.logical_height, SDL3D_GAME_DEFAULT_LOGICAL_HEIGHT);
-    EXPECT_EQ(config.backend, SDL3D_BACKEND_OPENGL);
+    EXPECT_STREQ(config.title, "Slayer 3D FPS Mechanics Dojo");
+    EXPECT_EQ(config.logical_width, SLAYER3D_GAME_DEFAULT_LOGICAL_WIDTH);
+    EXPECT_EQ(config.logical_height, SLAYER3D_GAME_DEFAULT_LOGICAL_HEIGHT);
+    EXPECT_EQ(config.backend, SLAYER3D_BACKEND_OPENGL);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.dojo.fps_world"));
-    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.player"), nullptr);
-    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.launch_pad"), nullptr);
-    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.teleporter_pad"), nullptr);
-    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.teleporter_destination"), nullptr);
-    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.combat_dummy"), nullptr);
-    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.health_pickup"), nullptr);
-    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.health_station"), nullptr);
-    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.powerup"), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.dojo.fps_world"));
+    EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.player"), nullptr);
+    EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.dojo.launch_pad"), nullptr);
+    EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.dojo.teleporter_pad"), nullptr);
+    EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.dojo.teleporter_destination"), nullptr);
+    EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.dojo.combat_dummy"), nullptr);
+    EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.dojo.health_pickup"), nullptr);
+    EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.dojo.health_station"), nullptr);
+    EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.dojo.powerup"), nullptr);
 
     const char *units = nullptr;
     float meters_per_unit = 0.0f;
-    ASSERT_TRUE(sdl3d_game_data_get_world_units(runtime, &units, &meters_per_unit));
-    EXPECT_STREQ(units, SDL3D_GAME_DATA_DEFAULT_WORLD_UNITS);
-    EXPECT_FLOAT_EQ(meters_per_unit, SDL3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
-    sdl3d_camera3d camera{};
-    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.dojo.player", &camera));
-    EXPECT_EQ(camera.projection, SDL3D_CAMERA_PERSPECTIVE);
-    EXPECT_FLOAT_EQ(camera.fovy, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+    ASSERT_TRUE(slayer3d_game_data_get_world_units(runtime, &units, &meters_per_unit));
+    EXPECT_STREQ(units, SLAYER3D_GAME_DATA_DEFAULT_WORLD_UNITS);
+    EXPECT_FLOAT_EQ(meters_per_unit, SLAYER3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
+    slayer3d_camera3d camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.dojo.player", &camera));
+    EXPECT_EQ(camera.projection, SLAYER3D_CAMERA_PERSPECTIVE);
+    EXPECT_FLOAT_EQ(camera.fovy, SLAYER3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
 
     RenderPrimitiveCapture render{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &render));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &render));
     EXPECT_GE(render.cubes, 3);
 
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
     ASSERT_NE(player, nullptr);
     struct DojoSceneCase
     {
         const char *scene;
         const char *scene_key;
-        sdl3d_vec3 expected_position;
+        slayer3d_vec3 expected_position;
         const char *ui_title;
     };
     const DojoSceneCase scenes[] = {
-        {"scene.dojo.movement", "movement", sdl3d_vec3_make(3.0f, 1.6f, 4.0f), "ui.dojo.movement.title"},
-        {"scene.dojo.combat_resources", "combat_resources", sdl3d_vec3_make(21.0f, 1.6f, 5.0f),
+        {"scene.dojo.movement", "movement", slayer3d_vec3_make(3.0f, 1.6f, 4.0f), "ui.dojo.movement.title"},
+        {"scene.dojo.combat_resources", "combat_resources", slayer3d_vec3_make(21.0f, 1.6f, 5.0f),
          "ui.dojo.combat_resources.title"},
-        {"scene.dojo.hazards", "hazards", sdl3d_vec3_make(16.0f, 1.6f, 5.0f), "ui.dojo.hazards.title"},
-        {"scene.dojo.navigation", "navigation", sdl3d_vec3_make(4.0f, 1.6f, 14.0f), "ui.dojo.navigation.title"},
+        {"scene.dojo.hazards", "hazards", slayer3d_vec3_make(16.0f, 1.6f, 5.0f), "ui.dojo.hazards.title"},
+        {"scene.dojo.navigation", "navigation", slayer3d_vec3_make(4.0f, 1.6f, 14.0f), "ui.dojo.navigation.title"},
     };
     for (const DojoSceneCase &scene : scenes)
     {
-        ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, scene.scene)) << scene.scene;
-        EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), scene.scene);
-        EXPECT_STREQ(sdl3d_properties_get_string(player->props, "dojo_scene", ""), scene.scene_key);
+        ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, scene.scene)) << scene.scene;
+        EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), scene.scene);
+        EXPECT_STREQ(slayer3d_properties_get_string(player->props, "dojo_scene", ""), scene.scene_key);
         expect_vec3_near(player->position, scene.expected_position);
 
         bool saw_title = false;
-        auto find_dojo_scene_title = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        auto find_dojo_scene_title = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
             auto *args = static_cast<std::pair<const char *, bool *> *>(userdata);
             if (std::string(text->name) == args->first)
             {
@@ -7003,15 +7061,15 @@ TEST(GameDataRuntime, EditorMetadataValidatesAndFpsMechanicsDojoLoads)
             return true;
         };
         std::pair<const char *, bool *> title_args{scene.ui_title, &saw_title};
-        ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_dojo_scene_title, &title_args));
+        ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_dojo_scene_title, &title_args));
         EXPECT_TRUE(saw_title) << scene.ui_title;
     }
 
-    EXPECT_TRUE(sdl3d_game_data_sector_nav_path_available(runtime, "nav.dojo.arena", sdl3d_vec3_make(4.0f, 1.0f, 4.0f),
-                                                          sdl3d_vec3_make(24.0f, 1.0f, 6.0f)));
+    EXPECT_TRUE(slayer3d_game_data_sector_nav_path_available(
+        runtime, "nav.dojo.arena", slayer3d_vec3_make(4.0f, 1.0f, 4.0f), slayer3d_vec3_make(24.0f, 1.0f, 6.0f)));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, MeshPrimitivesDojoLoadsGrayboxShowcase)
@@ -7019,74 +7077,75 @@ TEST(GameDataRuntime, MeshPrimitivesDojoLoadsGrayboxShowcase)
     const std::filesystem::path dojo_path = mesh_primitives_dojo_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
-    sdl3d_game_config config{};
+    slayer3d_game_config config{};
     char title[128]{};
     char app_error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_load_app_config_file(dojo_path.string().c_str(), &config, title, sizeof(title),
-                                                     app_error, sizeof(app_error)))
+    ASSERT_TRUE(slayer3d_game_data_load_app_config_file(dojo_path.string().c_str(), &config, title, sizeof(title),
+                                                        app_error, sizeof(app_error)))
         << app_error;
-    EXPECT_STREQ(config.title, "SDL3D Mesh Primitives Dojo");
-    EXPECT_EQ(config.logical_width, SDL3D_GAME_DEFAULT_LOGICAL_WIDTH);
-    EXPECT_EQ(config.logical_height, SDL3D_GAME_DEFAULT_LOGICAL_HEIGHT);
-    EXPECT_EQ(config.backend, SDL3D_BACKEND_OPENGL);
+    EXPECT_STREQ(config.title, "Slayer 3D Mesh Primitives Dojo");
+    EXPECT_EQ(config.logical_width, SLAYER3D_GAME_DEFAULT_LOGICAL_WIDTH);
+    EXPECT_EQ(config.logical_height, SLAYER3D_GAME_DEFAULT_LOGICAL_HEIGHT);
+    EXPECT_EQ(config.backend, SLAYER3D_BACKEND_OPENGL);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.mesh_primitives.showcase"));
-    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.player"), nullptr);
-    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.sun"), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.mesh_primitives.showcase"));
+    EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.player"), nullptr);
+    EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.sun"), nullptr);
 
     const char *units = nullptr;
     float meters_per_unit = 0.0f;
-    ASSERT_TRUE(sdl3d_game_data_get_world_units(runtime, &units, &meters_per_unit));
-    EXPECT_STREQ(units, SDL3D_GAME_DATA_DEFAULT_WORLD_UNITS);
-    EXPECT_FLOAT_EQ(meters_per_unit, SDL3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
+    ASSERT_TRUE(slayer3d_game_data_get_world_units(runtime, &units, &meters_per_unit));
+    EXPECT_STREQ(units, SLAYER3D_GAME_DATA_DEFAULT_WORLD_UNITS);
+    EXPECT_FLOAT_EQ(meters_per_unit, SLAYER3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
 
-    sdl3d_camera3d camera{};
-    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.mesh_primitives.player", &camera));
-    EXPECT_EQ(camera.projection, SDL3D_CAMERA_PERSPECTIVE);
+    slayer3d_camera3d camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.mesh_primitives.player", &camera));
+    EXPECT_EQ(camera.projection, SLAYER3D_CAMERA_PERSPECTIVE);
     EXPECT_FLOAT_EQ(camera.fovy, 90.0f);
-    EXPECT_EQ(camera.fov_axis, SDL3D_CAMERA_FOV_HORIZONTAL);
+    EXPECT_EQ(camera.fov_axis, SLAYER3D_CAMERA_FOV_HORIZONTAL);
 
-    ASSERT_EQ(sdl3d_game_data_world_light_count(runtime), 1);
-    sdl3d_light sun{};
-    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 0, &sun));
-    EXPECT_EQ(sun.type, SDL3D_LIGHT_DIRECTIONAL);
+    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 1);
+    slayer3d_light sun{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 0, &sun));
+    EXPECT_EQ(sun.type, SLAYER3D_LIGHT_DIRECTIONAL);
     EXPECT_NEAR(sun.direction.y, -1.0f, 0.0001f);
     EXPECT_NEAR(sun.color[0], 1.0f, 0.0001f);
 
     struct MeshDojoCapture
     {
         int count = 0;
-        bool seen[SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE + 1] = {};
+        bool seen[SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE + 1] = {};
         bool saw_solid_wire = false;
     } capture;
-    auto capture_mesh = [](void *userdata, const sdl3d_game_data_render_primitive *primitive) -> bool {
+    auto capture_mesh = [](void *userdata, const slayer3d_game_data_render_primitive *primitive) -> bool {
         auto *mesh_capture = static_cast<MeshDojoCapture *>(userdata);
-        if (primitive->type != SDL3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
+        if (primitive->type != SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
             return true;
         mesh_capture->count++;
         EXPECT_TRUE(primitive->lighting_enabled) << primitive->entity_name;
-        EXPECT_GT(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID);
-        EXPECT_LE(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE);
-        if (primitive->mesh_primitive > SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID &&
-            primitive->mesh_primitive <= SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE)
+        EXPECT_GT(primitive->mesh_primitive, SLAYER3D_GAME_DATA_MESH_PRIMITIVE_INVALID);
+        EXPECT_LE(primitive->mesh_primitive, SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE);
+        if (primitive->mesh_primitive > SLAYER3D_GAME_DATA_MESH_PRIMITIVE_INVALID &&
+            primitive->mesh_primitive <= SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE)
         {
             mesh_capture->seen[primitive->mesh_primitive] = true;
         }
-        if (primitive->draw_mode == SDL3D_GAME_DATA_RENDER_DRAW_SOLID_WIRE)
+        if (primitive->draw_mode == SLAYER3D_GAME_DATA_RENDER_DRAW_SOLID_WIRE)
             mesh_capture->saw_solid_wire = true;
         return true;
     };
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_mesh, &capture));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_mesh, &capture));
     EXPECT_GE(capture.count, 15);
     EXPECT_TRUE(capture.saw_solid_wire);
-    for (int kind = SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE; kind <= SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE; ++kind)
+    for (int kind = SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CUBE; kind <= SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE;
+         ++kind)
         EXPECT_TRUE(capture.seen[kind]) << kind;
 
     struct UiCapture
@@ -7094,7 +7153,7 @@ TEST(GameDataRuntime, MeshPrimitivesDojoLoadsGrayboxShowcase)
         bool saw_fps = false;
         int label_count = 0;
     } ui_capture;
-    auto capture_ui = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+    auto capture_ui = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         auto *capture = static_cast<UiCapture *>(userdata);
         if (std::string(text->name) == "ui.mesh_primitives.fps")
         {
@@ -7112,12 +7171,12 @@ TEST(GameDataRuntime, MeshPrimitivesDojoLoadsGrayboxShowcase)
         }
         return true;
     };
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui, &ui_capture));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, capture_ui, &ui_capture));
     EXPECT_TRUE(ui_capture.saw_fps);
     EXPECT_EQ(ui_capture.label_count, 3);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, UsesDefaultWorldUnitsAndPerspectiveFovy)
@@ -7125,7 +7184,7 @@ TEST(GameDataRuntime, UsesDefaultWorldUnitsAndPerspectiveFovy)
     const std::filesystem::path dir = unique_test_dir("world_camera_defaults");
     write_text(dir / "game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "World Camera Defaults" },
   "world": {
     "name": "world.defaults",
@@ -7151,39 +7210,39 @@ TEST(GameDataRuntime, UsesDefaultWorldUnitsAndPerspectiveFovy)
   }
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(
-        sdl3d_game_data_load_file((dir / "game.json").string().c_str(), session, &runtime, error, sizeof(error)))
+        slayer3d_game_data_load_file((dir / "game.json").string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
     const char *units = nullptr;
     float meters_per_unit = 0.0f;
-    ASSERT_TRUE(sdl3d_game_data_get_world_units(runtime, &units, &meters_per_unit));
-    EXPECT_STREQ(units, SDL3D_GAME_DATA_DEFAULT_WORLD_UNITS);
-    EXPECT_FLOAT_EQ(meters_per_unit, SDL3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
-    sdl3d_camera3d camera{};
-    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.default", &camera));
-    EXPECT_EQ(camera.projection, SDL3D_CAMERA_PERSPECTIVE);
-    EXPECT_FLOAT_EQ(camera.fovy, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
-    EXPECT_EQ(camera.fov_axis, SDL3D_CAMERA_FOV_VERTICAL);
+    ASSERT_TRUE(slayer3d_game_data_get_world_units(runtime, &units, &meters_per_unit));
+    EXPECT_STREQ(units, SLAYER3D_GAME_DATA_DEFAULT_WORLD_UNITS);
+    EXPECT_FLOAT_EQ(meters_per_unit, SLAYER3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
+    slayer3d_camera3d camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.default", &camera));
+    EXPECT_EQ(camera.projection, SLAYER3D_CAMERA_PERSPECTIVE);
+    EXPECT_FLOAT_EQ(camera.fovy, SLAYER3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+    EXPECT_EQ(camera.fov_axis, SLAYER3D_CAMERA_FOV_VERTICAL);
 
-    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.runtime_fov", &camera));
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.runtime_fov", &camera));
     EXPECT_FLOAT_EQ(camera.fovy, 75.0f);
-    EXPECT_EQ(camera.fov_axis, SDL3D_CAMERA_FOV_VERTICAL);
+    EXPECT_EQ(camera.fov_axis, SLAYER3D_CAMERA_FOV_VERTICAL);
 
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
-    sdl3d_properties_set_float(scene_state, "camera.fov", 90.0f);
-    sdl3d_properties_set_string(scene_state, "camera.fov_axis", "horizontal");
-    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.runtime_fov", &camera));
+    slayer3d_properties_set_float(scene_state, "camera.fov", 90.0f);
+    slayer3d_properties_set_string(scene_state, "camera.fov_axis", "horizontal");
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.runtime_fov", &camera));
     EXPECT_FLOAT_EQ(camera.fovy, 90.0f);
-    EXPECT_EQ(camera.fov_axis, SDL3D_CAMERA_FOV_HORIZONTAL);
+    EXPECT_EQ(camera.fov_axis, SLAYER3D_CAMERA_FOV_HORIZONTAL);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -7200,7 +7259,7 @@ TEST(GameDataRuntime, RejectsInvalidWorldDisplayAndCameraConventions)
         {
             "bad_logical_width",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Logical Width" },
   "app": { "logical_width": 0 },
   "world": { "name": "world.bad", "kind": "3d" }
@@ -7210,7 +7269,7 @@ TEST(GameDataRuntime, RejectsInvalidWorldDisplayAndCameraConventions)
         {
             "bad_world_scale",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad World Scale" },
   "world": { "name": "world.bad", "kind": "3d", "units": "meters", "meters_per_unit": 0.0 }
 })json",
@@ -7219,7 +7278,7 @@ TEST(GameDataRuntime, RejectsInvalidWorldDisplayAndCameraConventions)
         {
             "bad_fovy",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad FOV" },
   "world": {
     "name": "world.bad",
@@ -7234,7 +7293,7 @@ TEST(GameDataRuntime, RejectsInvalidWorldDisplayAndCameraConventions)
         {
             "bad_fov_axis",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad FOV Axis" },
   "world": {
     "name": "world.bad",
@@ -7249,7 +7308,7 @@ TEST(GameDataRuntime, RejectsInvalidWorldDisplayAndCameraConventions)
         {
             "ambiguous_fov",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Ambiguous FOV" },
   "world": {
     "name": "world.bad",
@@ -7268,7 +7327,7 @@ TEST(GameDataRuntime, RejectsInvalidWorldDisplayAndCameraConventions)
         const std::filesystem::path path = dir / (std::string(test_case.name) + ".game.json");
         write_text(path, test_case.json);
         char error[512]{};
-        EXPECT_FALSE(sdl3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
+        EXPECT_FALSE(slayer3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
             << test_case.name;
         EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
             << test_case.name << ": " << error;
@@ -7281,7 +7340,7 @@ TEST(GameDataRuntime, RejectsInvalidEditorMetadata)
     const std::filesystem::path dir = unique_test_dir("editor_metadata");
     write_text(dir / "bad_editor.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Editor Metadata", "id": "test.bad_editor", "version": "0.1.0" },
   "world": { "name": "world.bad_editor", "kind": "fixed_screen" },
   "editor": {
@@ -7291,22 +7350,23 @@ TEST(GameDataRuntime, RejectsInvalidEditorMetadata)
   },
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
-    write_text(dir / "scenes" / "play.scene.json", R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play" })json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "bad_editor.game.json").string().c_str(), session, &runtime, error,
-                                           sizeof(error)));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "bad_editor.game.json").string().c_str(), session, &runtime, error,
+                                              sizeof(error)));
     EXPECT_NE(std::string(error).find("editor tag entries must be non-empty strings"), std::string::npos) << error;
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 
     write_text(dir / "bad_editor_default.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Editor Default", "id": "test.bad_editor_default", "version": "0.1.0" },
   "world": { "name": "world.bad_editor_default", "kind": "fixed_screen" },
   "editor": {
@@ -7317,16 +7377,16 @@ TEST(GameDataRuntime, RejectsInvalidEditorMetadata)
   },
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     runtime = nullptr;
     SDL_zeroa(error);
-    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "bad_editor_default.game.json").string().c_str(), session, &runtime,
-                                           error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "bad_editor_default.game.json").string().c_str(), session,
+                                              &runtime, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("editor exposed property default does not match its type"), std::string::npos)
         << error;
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -7335,7 +7395,7 @@ TEST(GameDataRuntime, CombatActionsApplyHealthArmorDeathAndRevive)
     const std::filesystem::path dir = unique_test_dir("combat_actions");
     write_text(dir / "combat.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Combat Actions", "id": "test.combat_actions", "version": "0.1.0" },
   "world": { "name": "world.combat_actions", "kind": "fixed_screen" },
   "entities": [
@@ -7436,38 +7496,38 @@ TEST(GameDataRuntime, CombatActionsApplyHealthArmorDeathAndRevive)
 })json");
     write_text(
         dir / "scenes" / "play.scene.json",
-        R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.hero", "entity.monster"] })json");
+        R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play", "entities": ["entity.hero", "entity.monster"] })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(
-        sdl3d_game_data_load_file((dir / "combat.game.json").string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "combat.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
-    sdl3d_registered_actor *monster = sdl3d_game_data_find_actor(runtime, "entity.monster");
+    slayer3d_registered_actor *monster = slayer3d_game_data_find_actor(runtime, "entity.monster");
     ASSERT_NE(monster, nullptr);
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
 
     CombatSignalCapture damaged{};
     CombatSignalCapture dead{};
     CombatSignalCapture healed{};
     CombatSignalCapture revived{};
-    ASSERT_NE(sdl3d_signal_connect(bus, sdl3d_game_data_find_signal(runtime, "signal.damaged"), capture_combat_signal,
-                                   &damaged),
+    ASSERT_NE(slayer3d_signal_connect(bus, slayer3d_game_data_find_signal(runtime, "signal.damaged"),
+                                      capture_combat_signal, &damaged),
               0);
-    ASSERT_NE(
-        sdl3d_signal_connect(bus, sdl3d_game_data_find_signal(runtime, "signal.dead"), capture_combat_signal, &dead),
-        0);
-    ASSERT_NE(sdl3d_signal_connect(bus, sdl3d_game_data_find_signal(runtime, "signal.healed"), capture_combat_signal,
-                                   &healed),
+    ASSERT_NE(slayer3d_signal_connect(bus, slayer3d_game_data_find_signal(runtime, "signal.dead"),
+                                      capture_combat_signal, &dead),
               0);
-    ASSERT_NE(sdl3d_signal_connect(bus, sdl3d_game_data_find_signal(runtime, "signal.revived"), capture_combat_signal,
-                                   &revived),
+    ASSERT_NE(slayer3d_signal_connect(bus, slayer3d_game_data_find_signal(runtime, "signal.healed"),
+                                      capture_combat_signal, &healed),
+              0);
+    ASSERT_NE(slayer3d_signal_connect(bus, slayer3d_game_data_find_signal(runtime, "signal.revived"),
+                                      capture_combat_signal, &revived),
               0);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.damage"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.damage"), nullptr);
     EXPECT_EQ(damaged.calls, 1);
     EXPECT_EQ(dead.calls, 0);
     EXPECT_EQ(damaged.actor_name, "entity.monster");
@@ -7478,39 +7538,39 @@ TEST(GameDataRuntime, CombatActionsApplyHealthArmorDeathAndRevive)
     EXPECT_NEAR(damaged.health, 85.0f, 0.001f);
     EXPECT_NEAR(damaged.armor, 5.0f, 0.001f);
     EXPECT_TRUE(damaged.alive);
-    EXPECT_NEAR(sdl3d_properties_get_float(monster->props, "health", 0.0f), 85.0f, 0.001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(monster->props, "armor", 0.0f), 5.0f, 0.001f);
-    EXPECT_TRUE(sdl3d_properties_get_bool(monster->props, "alive", false));
+    EXPECT_NEAR(slayer3d_properties_get_float(monster->props, "health", 0.0f), 85.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(monster->props, "armor", 0.0f), 5.0f, 0.001f);
+    EXPECT_TRUE(slayer3d_properties_get_bool(monster->props, "alive", false));
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.damage.lethal"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.damage.lethal"), nullptr);
     EXPECT_EQ(damaged.calls, 2);
     EXPECT_EQ(dead.calls, 1);
-    EXPECT_NEAR(sdl3d_properties_get_float(monster->props, "health", 1.0f), 0.0f, 0.001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(monster->props, "armor", 1.0f), 0.0f, 0.001f);
-    EXPECT_FALSE(sdl3d_properties_get_bool(monster->props, "alive", true));
+    EXPECT_NEAR(slayer3d_properties_get_float(monster->props, "health", 1.0f), 0.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(monster->props, "armor", 1.0f), 0.0f, 0.001f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(monster->props, "alive", true));
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.damage.after_death"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.damage.after_death"), nullptr);
     EXPECT_EQ(damaged.calls, 3);
     EXPECT_EQ(dead.calls, 1);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.heal"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.heal"), nullptr);
     EXPECT_EQ(healed.calls, 1);
-    EXPECT_NEAR(sdl3d_properties_get_float(monster->props, "health", 0.0f), 25.0f, 0.001f);
-    EXPECT_FALSE(sdl3d_properties_get_bool(monster->props, "alive", true));
+    EXPECT_NEAR(slayer3d_properties_get_float(monster->props, "health", 0.0f), 25.0f, 0.001f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(monster->props, "alive", true));
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.revive"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.revive"), nullptr);
     EXPECT_EQ(revived.calls, 1);
-    EXPECT_NEAR(sdl3d_properties_get_float(monster->props, "health", 0.0f), 50.0f, 0.001f);
-    EXPECT_TRUE(sdl3d_properties_get_bool(monster->props, "alive", false));
+    EXPECT_NEAR(slayer3d_properties_get_float(monster->props, "health", 0.0f), 50.0f, 0.001f);
+    EXPECT_TRUE(slayer3d_properties_get_bool(monster->props, "alive", false));
     EXPECT_TRUE(monster->active);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.kill"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.kill"), nullptr);
     EXPECT_EQ(dead.calls, 2);
-    EXPECT_NEAR(sdl3d_properties_get_float(monster->props, "health", 1.0f), 0.0f, 0.001f);
-    EXPECT_FALSE(sdl3d_properties_get_bool(monster->props, "alive", true));
+    EXPECT_NEAR(slayer3d_properties_get_float(monster->props, "health", 1.0f), 0.0f, 0.001f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(monster->props, "alive", true));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -7519,7 +7579,7 @@ TEST(GameDataRuntime, RejectsInvalidCombatActionsAndComponents)
     const std::filesystem::path dir = unique_test_dir("invalid_combat");
     write_text(dir / "invalid_combat.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Combat", "id": "test.invalid_combat", "version": "0.1.0" },
   "world": { "name": "world.invalid_combat", "kind": "fixed_screen" },
   "entities": [
@@ -7544,21 +7604,21 @@ TEST(GameDataRuntime, RejectsInvalidCombatActionsAndComponents)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
     write_text(dir / "scenes" / "play.scene.json",
-               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.actor"] })json");
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play", "entities": ["entity.actor"] })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_combat.game.json").string().c_str(), session, &runtime,
-                                           error, sizeof(error)));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "invalid_combat.game.json").string().c_str(), session, &runtime,
+                                              error, sizeof(error)));
     EXPECT_NE(std::string(error).find("combat.health armor_absorb must be in 0..1"), std::string::npos) << error;
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 
     write_text(dir / "invalid_combat_action.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Combat Action", "id": "test.invalid_combat_action", "version": "0.1.0" },
   "world": { "name": "world.invalid_combat_action", "kind": "fixed_screen" },
   "entities": [{ "name": "entity.actor" }],
@@ -7575,15 +7635,15 @@ TEST(GameDataRuntime, RejectsInvalidCombatActionsAndComponents)
   },
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     runtime = nullptr;
     SDL_zeroa(error);
-    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_combat_action.game.json").string().c_str(), session,
-                                           &runtime, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "invalid_combat_action.game.json").string().c_str(), session,
+                                              &runtime, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("combat.damage amount must be a non-negative number"), std::string::npos)
         << error;
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -7592,7 +7652,7 @@ TEST(GameDataRuntime, EffectExplosionAppliesRadialDamageImpulseAndActions)
     const std::filesystem::path dir = unique_test_dir("effect_explosion");
     write_text(dir / "explosion.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Explosion", "id": "test.effect_explosion", "version": "0.1.0" },
   "world": { "name": "world.explosion", "kind": "fixed_screen" },
   "entities": [
@@ -7678,7 +7738,7 @@ TEST(GameDataRuntime, EffectExplosionAppliesRadialDamageImpulseAndActions)
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "entities": [
@@ -7690,46 +7750,46 @@ TEST(GameDataRuntime, EffectExplosionAppliesRadialDamageImpulseAndActions)
   ]
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "explosion.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "explosion.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
-    ASSERT_GE(sdl3d_game_data_find_signal(runtime, "signal.blast"), 0);
+    ASSERT_GE(slayer3d_game_data_find_signal(runtime, "signal.blast"), 0);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.blast"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.blast"), nullptr);
 
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
-    sdl3d_registered_actor *near_enemy = sdl3d_game_data_find_actor(runtime, "entity.enemy.near");
-    sdl3d_registered_actor *mid_enemy = sdl3d_game_data_find_actor(runtime, "entity.enemy.mid");
-    sdl3d_registered_actor *outside_enemy = sdl3d_game_data_find_actor(runtime, "entity.enemy.outside");
-    sdl3d_registered_actor *ally = sdl3d_game_data_find_actor(runtime, "entity.ally");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *near_enemy = slayer3d_game_data_find_actor(runtime, "entity.enemy.near");
+    slayer3d_registered_actor *mid_enemy = slayer3d_game_data_find_actor(runtime, "entity.enemy.mid");
+    slayer3d_registered_actor *outside_enemy = slayer3d_game_data_find_actor(runtime, "entity.enemy.outside");
+    slayer3d_registered_actor *ally = slayer3d_game_data_find_actor(runtime, "entity.ally");
     ASSERT_NE(player, nullptr);
     ASSERT_NE(near_enemy, nullptr);
     ASSERT_NE(mid_enemy, nullptr);
     ASSERT_NE(outside_enemy, nullptr);
     ASSERT_NE(ally, nullptr);
 
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "health", 0.0f), 100.0f, 0.001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(near_enemy->props, "health", 0.0f), 60.0f, 0.001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(mid_enemy->props, "health", 0.0f), 80.0f, 0.001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(outside_enemy->props, "health", 0.0f), 100.0f, 0.001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(ally->props, "health", 0.0f), 100.0f, 0.001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(near_enemy->props, "last_explosion_falloff", 0.0f), 1.0f, 0.001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(mid_enemy->props, "last_explosion_falloff", 0.0f), 0.5f, 0.001f);
-    const sdl3d_vec3 near_velocity =
-        sdl3d_properties_get_vec3(near_enemy->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
-    const sdl3d_vec3 mid_velocity =
-        sdl3d_properties_get_vec3(mid_enemy->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "health", 0.0f), 100.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(near_enemy->props, "health", 0.0f), 60.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(mid_enemy->props, "health", 0.0f), 80.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(outside_enemy->props, "health", 0.0f), 100.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(ally->props, "health", 0.0f), 100.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(near_enemy->props, "last_explosion_falloff", 0.0f), 1.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(mid_enemy->props, "last_explosion_falloff", 0.0f), 0.5f, 0.001f);
+    const slayer3d_vec3 near_velocity =
+        slayer3d_properties_get_vec3(near_enemy->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 mid_velocity =
+        slayer3d_properties_get_vec3(mid_enemy->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     EXPECT_NEAR(near_velocity.x, 2.0f, 0.001f);
     EXPECT_NEAR(mid_velocity.x, 1.0f, 0.001f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -7738,7 +7798,7 @@ TEST(GameDataRuntime, TargetFiltersApplyFactionAndOwnerRules)
     const std::filesystem::path dir = unique_test_dir("target_filters");
     write_text(dir / "target_filters.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Target Filters", "id": "test.target_filters", "version": "0.1.0" },
   "world": { "name": "world.target_filters", "kind": "fixed_screen" },
   "factions": {
@@ -7841,41 +7901,41 @@ TEST(GameDataRuntime, TargetFiltersApplyFactionAndOwnerRules)
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "entities": ["entity.player", "entity.projectile", "entity.enemy", "entity.ally", "entity.neutral"]
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "target_filters.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "target_filters.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.blast"), nullptr);
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.filtered_damage"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.blast"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.filtered_damage"), nullptr);
 
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
-    sdl3d_registered_actor *enemy = sdl3d_game_data_find_actor(runtime, "entity.enemy");
-    sdl3d_registered_actor *ally = sdl3d_game_data_find_actor(runtime, "entity.ally");
-    sdl3d_registered_actor *neutral = sdl3d_game_data_find_actor(runtime, "entity.neutral");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *enemy = slayer3d_game_data_find_actor(runtime, "entity.enemy");
+    slayer3d_registered_actor *ally = slayer3d_game_data_find_actor(runtime, "entity.ally");
+    slayer3d_registered_actor *neutral = slayer3d_game_data_find_actor(runtime, "entity.neutral");
     ASSERT_NE(player, nullptr);
     ASSERT_NE(enemy, nullptr);
     ASSERT_NE(ally, nullptr);
     ASSERT_NE(neutral, nullptr);
 
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "health", 0.0f), 100.0f, 0.001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(enemy->props, "health", 0.0f), 80.0f, 0.001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(ally->props, "health", 0.0f), 100.0f, 0.001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(neutral->props, "health", 0.0f), 100.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "health", 0.0f), 100.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(enemy->props, "health", 0.0f), 80.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(ally->props, "health", 0.0f), 100.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(neutral->props, "health", 0.0f), 100.0f, 0.001f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -7884,7 +7944,7 @@ TEST(GameDataRuntime, RejectsInvalidFactionAndTargetFilterData)
     const std::filesystem::path dir = unique_test_dir("invalid_target_filters");
     write_text(dir / "invalid_target_filters.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Target Filters", "id": "test.invalid_target_filters", "version": "0.1.0" },
   "world": { "name": "world.invalid_target_filters", "kind": "fixed_screen" },
   "factions": {
@@ -7910,11 +7970,11 @@ TEST(GameDataRuntime, RejectsInvalidFactionAndTargetFilterData)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
     write_text(dir / "scenes" / "play.scene.json",
-               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.actor"] })json");
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play", "entities": ["entity.actor"] })json");
 
     char error[512]{};
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "invalid_target_filters.game.json").string().c_str(), nullptr,
-                                               error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "invalid_target_filters.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
     EXPECT_NE(std::string(error).find("faction relationships"), std::string::npos) << error;
     remove_test_dir(dir);
 }
@@ -7924,7 +7984,7 @@ TEST(GameDataRuntime, EffectExplosionSupportsBoundedChainReactions)
     const std::filesystem::path dir = unique_test_dir("effect_explosion_chain");
     write_text(dir / "explosion_chain.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Explosion Chain", "id": "test.effect_explosion_chain", "version": "0.1.0" },
   "world": { "name": "world.explosion_chain", "kind": "fixed_screen" },
   "entities": [
@@ -7979,32 +8039,32 @@ TEST(GameDataRuntime, EffectExplosionSupportsBoundedChainReactions)
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "entities": ["entity.player", "entity.barrel", "entity.enemy"]
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "explosion_chain.game.json").string().c_str(), session, &runtime,
-                                          error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "explosion_chain.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.blast"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.blast"), nullptr);
 
-    sdl3d_registered_actor *barrel = sdl3d_game_data_find_actor(runtime, "entity.barrel");
-    sdl3d_registered_actor *enemy = sdl3d_game_data_find_actor(runtime, "entity.enemy");
+    slayer3d_registered_actor *barrel = slayer3d_game_data_find_actor(runtime, "entity.barrel");
+    slayer3d_registered_actor *enemy = slayer3d_game_data_find_actor(runtime, "entity.enemy");
     ASSERT_NE(barrel, nullptr);
     ASSERT_NE(enemy, nullptr);
-    EXPECT_NEAR(sdl3d_properties_get_float(barrel->props, "health", 0.0f), 100.0f, 0.001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(enemy->props, "health", 0.0f), 75.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(barrel->props, "health", 0.0f), 100.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(enemy->props, "health", 0.0f), 75.0f, 0.001f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -8013,7 +8073,7 @@ TEST(GameDataRuntime, RejectsInvalidExplosionActions)
     const std::filesystem::path dir = unique_test_dir("invalid_explosion_action");
     write_text(dir / "invalid_explosion.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Explosion", "id": "test.invalid_explosion", "version": "0.1.0" },
   "world": { "name": "world.invalid_explosion", "kind": "fixed_screen" },
   "entities": [{ "name": "entity.actor" }],
@@ -8031,18 +8091,18 @@ TEST(GameDataRuntime, RejectsInvalidExplosionActions)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
     write_text(dir / "scenes" / "play.scene.json",
-               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.actor"] })json");
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play", "entities": ["entity.actor"] })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_explosion.game.json").string().c_str(), session, &runtime,
-                                           error, sizeof(error)));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "invalid_explosion.game.json").string().c_str(), session, &runtime,
+                                              error, sizeof(error)));
     EXPECT_NE(std::string(error).find("effect.explosion radius must be a non-negative number"), std::string::npos)
         << error;
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -8051,7 +8111,7 @@ TEST(GameDataRuntime, ResourcesPickupsStationsAndStatusEffectsAreDataDriven)
     const std::filesystem::path dir = unique_test_dir("resources_pickups_status");
     write_text(dir / "resources.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Resources", "id": "test.resources", "version": "0.1.0" },
   "world": { "name": "world.resources", "kind": "fixed_screen" },
   "entities": [
@@ -8177,72 +8237,72 @@ TEST(GameDataRuntime, ResourcesPickupsStationsAndStatusEffectsAreDataDriven)
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "entities": ["entity.player", "entity.health_pickup", "entity.heal_station"]
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "resources.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "resources.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
-    sdl3d_registered_actor *pickup = sdl3d_game_data_find_actor(runtime, "entity.health_pickup");
-    sdl3d_registered_actor *station = sdl3d_game_data_find_actor(runtime, "entity.heal_station");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *pickup = slayer3d_game_data_find_actor(runtime, "entity.health_pickup");
+    slayer3d_registered_actor *station = slayer3d_game_data_find_actor(runtime, "entity.heal_station");
     ASSERT_NE(player, nullptr);
     ASSERT_NE(pickup, nullptr);
     ASSERT_NE(station, nullptr);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.resource.add"), nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "ammo", 0), 8);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.resource.add"), nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "ammo", 0), 8);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.resource.consume"), nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "ammo", 0), 5);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.resource.consume"), nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "ammo", 0), 5);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.resource.consume_fail"), nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "ammo", 0), 5);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.resource.consume_fail"), nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "ammo", 0), 5);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.pickup.collect"), nullptr);
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "health", 0.0f), 65.0f, 0.001f);
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "ammo", 0), 7);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.pickup.collect"), nullptr);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "health", 0.0f), 65.0f, 0.001f);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "ammo", 0), 7);
     EXPECT_FALSE(pickup->active);
-    EXPECT_FALSE(sdl3d_properties_get_bool(pickup->props, "pickup_available", true));
-    EXPECT_NEAR(sdl3d_properties_get_float(pickup->props, "pickup_respawn_remaining", 0.0f), 0.5f, 0.001f);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    EXPECT_FALSE(slayer3d_properties_get_bool(pickup->props, "pickup_available", true));
+    EXPECT_NEAR(slayer3d_properties_get_float(pickup->props, "pickup_respawn_remaining", 0.0f), 0.5f, 0.001f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
     EXPECT_FALSE(pickup->active);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
     EXPECT_TRUE(pickup->active);
-    EXPECT_TRUE(sdl3d_properties_get_bool(pickup->props, "pickup_available", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(pickup->props, "pickup_available", false));
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.station.use"), nullptr);
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "health", 0.0f), 95.0f, 0.001f);
-    EXPECT_EQ(sdl3d_properties_get_int(station->props, "charges", 0), 1);
-    EXPECT_NEAR(sdl3d_properties_get_float(station->props, "cooldown", 0.0f), 0.5f, 0.001f);
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.station.use"), nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(station->props, "charges", 0), 1);
-    ASSERT_TRUE(sdl3d_game_data_update_property_effects(runtime, 0.05f));
-    EXPECT_NEAR(sdl3d_properties_get_float(station->props, "cooldown", 1.0f), 0.0f, 0.001f);
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.station.use"), nullptr);
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "health", 0.0f), 100.0f, 0.001f);
-    EXPECT_EQ(sdl3d_properties_get_int(station->props, "charges", -1), 0);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.station.use"), nullptr);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "health", 0.0f), 95.0f, 0.001f);
+    EXPECT_EQ(slayer3d_properties_get_int(station->props, "charges", 0), 1);
+    EXPECT_NEAR(slayer3d_properties_get_float(station->props, "cooldown", 0.0f), 0.5f, 0.001f);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.station.use"), nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(station->props, "charges", 0), 1);
+    ASSERT_TRUE(slayer3d_game_data_update_property_effects(runtime, 0.05f));
+    EXPECT_NEAR(slayer3d_properties_get_float(station->props, "cooldown", 1.0f), 0.0f, 0.001f);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.station.use"), nullptr);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "health", 0.0f), 100.0f, 0.001f);
+    EXPECT_EQ(slayer3d_properties_get_int(station->props, "charges", -1), 0);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.status.apply"), nullptr);
-    EXPECT_TRUE(sdl3d_properties_get_bool(player->props, "quad_damage", false));
-    EXPECT_TRUE(sdl3d_properties_get_bool(player->props, "quad_damage_active", false));
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "quad_damage_remaining", 0.0f), 0.25f, 0.001f);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
-    EXPECT_FALSE(sdl3d_properties_get_bool(player->props, "quad_damage", true));
-    EXPECT_FALSE(sdl3d_properties_get_bool(player->props, "quad_damage_active", true));
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "quad_damage_remaining", 1.0f), 0.0f, 0.001f);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.status.apply"), nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "quad_damage", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "quad_damage_active", false));
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "quad_damage_remaining", 0.0f), 0.25f, 0.001f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    EXPECT_FALSE(slayer3d_properties_get_bool(player->props, "quad_damage", true));
+    EXPECT_FALSE(slayer3d_properties_get_bool(player->props, "quad_damage_active", true));
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "quad_damage_remaining", 1.0f), 0.0f, 0.001f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -8251,7 +8311,7 @@ TEST(GameDataRuntime, RejectsInvalidResourcePickupAndStatusActions)
     const std::filesystem::path dir = unique_test_dir("invalid_resources");
     write_text(dir / "invalid_resources.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Resources", "id": "test.invalid_resources", "version": "0.1.0" },
   "world": { "name": "world.invalid_resources", "kind": "fixed_screen" },
   "entities": [
@@ -8273,21 +8333,21 @@ TEST(GameDataRuntime, RejectsInvalidResourcePickupAndStatusActions)
 })json");
     write_text(
         dir / "scenes" / "play.scene.json",
-        R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.player", "entity.pickup"] })json");
+        R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play", "entities": ["entity.player", "entity.pickup"] })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_resources.game.json").string().c_str(), session, &runtime,
-                                           error, sizeof(error)));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "invalid_resources.game.json").string().c_str(), session, &runtime,
+                                              error, sizeof(error)));
     EXPECT_NE(std::string(error).find("resource.add amount must be a non-negative number"), std::string::npos) << error;
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 
     write_text(dir / "invalid_pickup.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Pickup", "id": "test.invalid_pickup", "version": "0.1.0" },
   "world": { "name": "world.invalid_pickup", "kind": "fixed_screen" },
   "entities": [
@@ -8307,19 +8367,19 @@ TEST(GameDataRuntime, RejectsInvalidResourcePickupAndStatusActions)
   },
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     runtime = nullptr;
     SDL_zeroa(error);
-    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_pickup.game.json").string().c_str(), session, &runtime,
-                                           error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "invalid_pickup.game.json").string().c_str(), session, &runtime,
+                                              error, sizeof(error)));
     EXPECT_NE(std::string(error).find("pickup.collect requires a non-empty resources array"), std::string::npos)
         << error;
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 
     write_text(dir / "invalid_status.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Status", "id": "test.invalid_status", "version": "0.1.0" },
   "world": { "name": "world.invalid_status", "kind": "fixed_screen" },
   "entities": [
@@ -8343,14 +8403,14 @@ TEST(GameDataRuntime, RejectsInvalidResourcePickupAndStatusActions)
   },
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     runtime = nullptr;
     SDL_zeroa(error);
-    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_status.game.json").string().c_str(), session, &runtime,
-                                           error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "invalid_status.game.json").string().c_str(), session, &runtime,
+                                              error, sizeof(error)));
     EXPECT_NE(std::string(error).find("status_effect.timer expired_value must be scalar"), std::string::npos) << error;
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -8359,7 +8419,7 @@ TEST(GameDataRuntime, WeaponProjectileComponentFiresFromOwningActor)
     const std::filesystem::path dir = unique_test_dir("weapon_projectile_component");
     write_text(dir / "weapon_projectile.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Weapon Projectile", "id": "test.weapon_projectile", "version": "0.1.0" },
   "world": { "name": "world.weapon_projectile", "kind": "fixed_screen" },
   "input": {
@@ -8411,42 +8471,42 @@ TEST(GameDataRuntime, WeaponProjectileComponentFiresFromOwningActor)
 })json");
     write_text(
         dir / "scenes" / "play.scene.json",
-        R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "input": { "actions": ["action.fire"] } })json");
+        R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play", "input": { "actions": ["action.fire"] } })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "weapon_projectile.game.json").string().c_str(), session, &runtime,
-                                          error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "weapon_projectile.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
-    const int fire_action = sdl3d_game_data_find_action(runtime, "action.fire");
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    const int fire_action = slayer3d_game_data_find_action(runtime, "action.fire");
     ASSERT_GE(fire_action, 0);
-    sdl3d_input_set_action_override(input, fire_action, 1.0f);
-    ASSERT_NE(sdl3d_input_update(input, 10), nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    slayer3d_input_set_action_override(input, fire_action, 1.0f);
+    ASSERT_NE(slayer3d_input_update(input, 10), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
 
-    sdl3d_registered_actor *shot0 = sdl3d_game_data_find_actor(runtime, "pool.shots.0");
+    slayer3d_registered_actor *shot0 = slayer3d_game_data_find_actor(runtime, "pool.shots.0");
     ASSERT_NE(shot0, nullptr);
     EXPECT_TRUE(shot0->active);
-    expect_vec3_near(shot0->position, sdl3d_vec3_make(1.0f, 2.1f, 2.5f));
-    expect_vec3_near(sdl3d_properties_get_vec3(shot0->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)),
-                     sdl3d_vec3_make(0.0f, 0.0f, -12.0f));
-    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 5);
+    expect_vec3_near(shot0->position, slayer3d_vec3_make(1.0f, 2.1f, 2.5f));
+    expect_vec3_near(slayer3d_properties_get_vec3(shot0->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)),
+                     slayer3d_vec3_make(0.0f, 0.0f, -12.0f));
+    EXPECT_EQ(slayer3d_properties_get_int(shot0->props, "damage", 0), 5);
 
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
     ASSERT_NE(player, nullptr);
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "fire_timer", 0.0f), 0.25f, 0.0001f);
-    ASSERT_NE(sdl3d_input_update(input, 11), nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
-    sdl3d_registered_actor *shot1 = sdl3d_game_data_find_actor(runtime, "pool.shots.1");
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "fire_timer", 0.0f), 0.25f, 0.0001f);
+    ASSERT_NE(slayer3d_input_update(input, 11), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    slayer3d_registered_actor *shot1 = slayer3d_game_data_find_actor(runtime, "pool.shots.1");
     ASSERT_NE(shot1, nullptr);
     EXPECT_FALSE(shot1->active);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -8455,7 +8515,7 @@ TEST(GameDataRuntime, WeaponStateReloadsAndProjectileFireConsumesClips)
     const std::filesystem::path dir = unique_test_dir("weapon_state_projectile");
     write_text(dir / "weapon_state.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Weapon State", "id": "test.weapon_state", "version": "0.1.0" },
   "world": { "name": "world.weapon_state", "kind": "fixed_screen" },
   "entities": [
@@ -8536,57 +8596,57 @@ TEST(GameDataRuntime, WeaponStateReloadsAndProjectileFireConsumesClips)
 })json");
     write_text(
         dir / "scenes" / "play.scene.json",
-        R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "updates_game": true, "entities": ["entity.player"] })json");
+        R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play", "updates_game": true, "entities": ["entity.player"] })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "weapon_state.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "weapon_state.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
-    const int fire = sdl3d_game_data_find_signal(runtime, "signal.fire");
-    const int reload = sdl3d_game_data_find_signal(runtime, "signal.reload");
+    const int fire = slayer3d_game_data_find_signal(runtime, "signal.fire");
+    const int reload = slayer3d_game_data_find_signal(runtime, "signal.reload");
     ASSERT_GE(fire, 0);
     ASSERT_GE(reload, 0);
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
-    sdl3d_registered_actor *shot0 = sdl3d_game_data_find_actor(runtime, "pool.shots.0");
-    sdl3d_registered_actor *shot1 = sdl3d_game_data_find_actor(runtime, "pool.shots.1");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *shot0 = slayer3d_game_data_find_actor(runtime, "pool.shots.0");
+    slayer3d_registered_actor *shot1 = slayer3d_game_data_find_actor(runtime, "pool.shots.1");
     ASSERT_NE(player, nullptr);
     ASSERT_NE(shot0, nullptr);
     ASSERT_NE(shot1, nullptr);
 
-    sdl3d_signal_emit(bus, fire, nullptr);
+    slayer3d_signal_emit(bus, fire, nullptr);
     EXPECT_TRUE(shot0->active);
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "clip", -1), 0);
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "fire_timer", 0.0f), 0.1f, 0.0001f);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "clip", -1), 0);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "fire_timer", 0.0f), 0.1f, 0.0001f);
 
-    sdl3d_signal_emit(bus, fire, nullptr);
+    slayer3d_signal_emit(bus, fire, nullptr);
     EXPECT_FALSE(shot1->active);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.1f));
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "fire_timer", 1.0f), 0.0f, 0.0001f);
-    sdl3d_signal_emit(bus, fire, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.1f));
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "fire_timer", 1.0f), 0.0f, 0.0001f);
+    slayer3d_signal_emit(bus, fire, nullptr);
     EXPECT_FALSE(shot1->active);
 
-    sdl3d_signal_emit(bus, reload, nullptr);
-    EXPECT_TRUE(sdl3d_properties_get_bool(player->props, "reload_pending", false));
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "reload_timer", 0.0f), 0.2f, 0.0001f);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.1f));
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "clip", -1), 0);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.1f));
-    EXPECT_FALSE(sdl3d_properties_get_bool(player->props, "reload_pending", true));
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "clip", -1), 2);
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "ammo_reserve", -1), 1);
+    slayer3d_signal_emit(bus, reload, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "reload_pending", false));
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "reload_timer", 0.0f), 0.2f, 0.0001f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.1f));
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "clip", -1), 0);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.1f));
+    EXPECT_FALSE(slayer3d_properties_get_bool(player->props, "reload_pending", true));
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "clip", -1), 2);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "ammo_reserve", -1), 1);
 
-    sdl3d_signal_emit(bus, fire, nullptr);
+    slayer3d_signal_emit(bus, fire, nullptr);
     EXPECT_TRUE(shot1->active);
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "clip", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "clip", -1), 1);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -8595,7 +8655,7 @@ TEST(GameDataRuntime, WeaponHitscanTracesSectorAndRunsImpactActions)
     const std::filesystem::path dir = unique_test_dir("weapon_hitscan");
     write_text(dir / "weapon_hitscan.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Weapon Hitscan", "id": "test.weapon_hitscan", "version": "0.1.0" },
   "world": { "name": "world.weapon_hitscan", "kind": "sector" },
   "entities": [
@@ -8676,40 +8736,40 @@ TEST(GameDataRuntime, WeaponHitscanTracesSectorAndRunsImpactActions)
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "entities": ["entity.player", "entity.enemy"],
   "world": { "sector_levels": [{ "level": "sector.test", "variant": "unlit" }] }
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "weapon_hitscan.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "weapon_hitscan.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
-    const int fire = sdl3d_game_data_find_signal(runtime, "signal.fire");
+    const int fire = slayer3d_game_data_find_signal(runtime, "signal.fire");
     ASSERT_GE(fire, 0);
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
-    sdl3d_registered_actor *enemy = sdl3d_game_data_find_actor(runtime, "entity.enemy");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *enemy = slayer3d_game_data_find_actor(runtime, "entity.enemy");
     ASSERT_NE(player, nullptr);
     ASSERT_NE(enemy, nullptr);
 
-    sdl3d_signal_emit(bus, fire, nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "energy", -1), 0);
-    EXPECT_NEAR(sdl3d_properties_get_float(enemy->props, "health", 0.0f), 35.0f, 0.001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "last_hit_distance", 0.0f), 3.5f, 0.251f);
+    slayer3d_signal_emit(bus, fire, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "energy", -1), 0);
+    EXPECT_NEAR(slayer3d_properties_get_float(enemy->props, "health", 0.0f), 35.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "last_hit_distance", 0.0f), 3.5f, 0.251f);
 
-    sdl3d_signal_emit(bus, fire, nullptr);
-    EXPECT_NEAR(sdl3d_properties_get_float(enemy->props, "health", 0.0f), 35.0f, 0.001f);
+    slayer3d_signal_emit(bus, fire, nullptr);
+    EXPECT_NEAR(slayer3d_properties_get_float(enemy->props, "health", 0.0f), 35.0f, 0.001f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -8718,7 +8778,7 @@ TEST(GameDataRuntime, RejectsInvalidWeaponPrimitives)
     const std::filesystem::path dir = unique_test_dir("invalid_weapon_primitives");
     write_text(dir / "invalid_weapon.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Weapon", "id": "test.invalid_weapon", "version": "0.1.0" },
   "world": { "name": "world.invalid_weapon", "kind": "fixed_screen" },
   "entities": [
@@ -8743,21 +8803,21 @@ TEST(GameDataRuntime, RejectsInvalidWeaponPrimitives)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
     write_text(dir / "scenes" / "play.scene.json",
-               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.player"] })json");
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play", "entities": ["entity.player"] })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_weapon.game.json").string().c_str(), session, &runtime,
-                                           error, sizeof(error)));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "invalid_weapon.game.json").string().c_str(), session, &runtime,
+                                              error, sizeof(error)));
     EXPECT_NE(std::string(error).find("weapon.state numeric values must be non-negative"), std::string::npos) << error;
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 
     write_text(dir / "invalid_hitscan.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Hitscan", "id": "test.invalid_hitscan", "version": "0.1.0" },
   "world": { "name": "world.invalid_hitscan", "kind": "fixed_screen" },
   "entities": [{ "name": "entity.player" }],
@@ -8774,15 +8834,15 @@ TEST(GameDataRuntime, RejectsInvalidWeaponPrimitives)
   },
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     runtime = nullptr;
     SDL_zeroa(error);
-    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_hitscan.game.json").string().c_str(), session, &runtime,
-                                           error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "invalid_hitscan.game.json").string().c_str(), session, &runtime,
+                                              error, sizeof(error)));
     EXPECT_NE(std::string(error).find("weapon.hitscan range and hit_radius must be non-negative"), std::string::npos)
         << error;
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -8791,7 +8851,7 @@ TEST(GameDataRuntime, GenericInteractionUseRunsLockedCooldownAndSuccessActions)
     const std::filesystem::path dir = unique_test_dir("generic_interaction_use");
     write_text(dir / "interaction.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Interaction", "id": "test.interaction", "version": "0.1.0" },
   "world": { "name": "world.interaction", "kind": "sector" },
   "entities": [
@@ -8852,54 +8912,54 @@ TEST(GameDataRuntime, GenericInteractionUseRunsLockedCooldownAndSuccessActions)
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "entities": ["entity.player", "entity.switch"]
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "interaction.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "interaction.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
 
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
-    const int use = sdl3d_game_data_find_signal(runtime, "signal.use");
+    const int use = slayer3d_game_data_find_signal(runtime, "signal.use");
     ASSERT_GE(use, 0);
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
-    sdl3d_registered_actor *sw = sdl3d_game_data_find_actor(runtime, "entity.switch");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *sw = slayer3d_game_data_find_actor(runtime, "entity.switch");
     ASSERT_NE(player, nullptr);
     ASSERT_NE(sw, nullptr);
 
-    sdl3d_signal_emit(bus, use, nullptr);
-    EXPECT_TRUE(sdl3d_properties_get_bool(player->props, "locked_feedback", false));
-    EXPECT_EQ(sdl3d_properties_get_int(sw->props, "use_count", -1), 0);
+    slayer3d_signal_emit(bus, use, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "locked_feedback", false));
+    EXPECT_EQ(slayer3d_properties_get_int(sw->props, "use_count", -1), 0);
 
-    sdl3d_properties_set_bool(player->props, "locked_feedback", false);
-    sdl3d_properties_set_int(player->props, "keycard", 1);
-    sdl3d_signal_emit(bus, use, nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(sw->props, "use_count", -1), 1);
-    EXPECT_NEAR(sdl3d_properties_get_float(sw->props, "interaction_cooldown", 0.0f), 0.25f, 0.0001f);
+    slayer3d_properties_set_bool(player->props, "locked_feedback", false);
+    slayer3d_properties_set_int(player->props, "keycard", 1);
+    slayer3d_signal_emit(bus, use, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(sw->props, "use_count", -1), 1);
+    EXPECT_NEAR(slayer3d_properties_get_float(sw->props, "interaction_cooldown", 0.0f), 0.25f, 0.0001f);
 
-    sdl3d_signal_emit(bus, use, nullptr);
-    EXPECT_TRUE(sdl3d_properties_get_bool(player->props, "cooldown_feedback", false));
-    EXPECT_EQ(sdl3d_properties_get_int(sw->props, "use_count", -1), 1);
+    slayer3d_signal_emit(bus, use, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "cooldown_feedback", false));
+    EXPECT_EQ(slayer3d_properties_get_int(sw->props, "use_count", -1), 1);
 
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
-    sdl3d_signal_emit(bus, use, nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(sw->props, "use_count", -1), 2);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    slayer3d_signal_emit(bus, use, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(sw->props, "use_count", -1), 2);
 
-    sdl3d_properties_set_float(player->props, "yaw", 3.14159f);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
-    sdl3d_signal_emit(bus, use, nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(sw->props, "use_count", -1), 2);
+    slayer3d_properties_set_float(player->props, "yaw", 3.14159f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    slayer3d_signal_emit(bus, use, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(sw->props, "use_count", -1), 2);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -8907,10 +8967,10 @@ TEST(GameDataRuntime, RejectsInvalidInteractionPrimitives)
 {
     const std::filesystem::path dir = unique_test_dir("invalid_interaction");
     write_text(dir / "scenes" / "play.scene.json",
-               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.player"] })json");
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play", "entities": ["entity.player"] })json");
     write_text(dir / "invalid_interactable.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Interaction", "id": "test.invalid_interaction", "version": "0.1.0" },
   "world": { "name": "world.invalid_interaction", "kind": "fixed_screen" },
   "entities": [
@@ -8924,21 +8984,21 @@ TEST(GameDataRuntime, RejectsInvalidInteractionPrimitives)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_interactable.game.json").string().c_str(), session, &runtime,
-                                           error, sizeof(error)));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "invalid_interactable.game.json").string().c_str(), session,
+                                              &runtime, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("interactable range, min_dot, and cooldown values are invalid"),
               std::string::npos)
         << error;
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 
     write_text(dir / "invalid_use.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Use", "id": "test.invalid_use", "version": "0.1.0" },
   "world": { "name": "world.invalid_use", "kind": "fixed_screen" },
   "entities": [{ "name": "entity.player" }],
@@ -8955,14 +9015,14 @@ TEST(GameDataRuntime, RejectsInvalidInteractionPrimitives)
   },
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     runtime = nullptr;
     SDL_zeroa(error);
-    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_use.game.json").string().c_str(), session, &runtime, error,
-                                           sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "invalid_use.game.json").string().c_str(), session, &runtime,
+                                              error, sizeof(error)));
     EXPECT_NE(std::string(error).find("interaction.use range/min_dot are invalid"), std::string::npos) << error;
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -8971,7 +9031,7 @@ TEST(GameDataRuntime, ActivePooledActorsRenderAndEmitParticles)
     const std::filesystem::path dir = unique_test_dir("actor_pool_render");
     write_text(dir / "actor_pool_render.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Actor Pool Render", "id": "test.actor_pool_render", "version": "0.1.0" },
   "world": { "name": "world.actor_pool_render", "kind": "fixed_screen" },
   "actor_archetypes": [
@@ -9024,48 +9084,48 @@ TEST(GameDataRuntime, ActivePooledActorsRenderAndEmitParticles)
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "renders_world": true
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "actor_pool_render.game.json").string().c_str(), session, &runtime,
-                                          error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "actor_pool_render.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
     RenderPrimitiveCapture inactive_render{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &inactive_render));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &inactive_render));
     EXPECT_EQ(inactive_render.cubes, 0);
     EXPECT_EQ(inactive_render.spheres, 0);
 
     ParticleCapture inactive_particles{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &inactive_particles));
+    ASSERT_TRUE(slayer3d_game_data_for_each_particle_emitter(runtime, capture_particle, &inactive_particles));
     EXPECT_EQ(inactive_particles.count, 0);
 
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.one"), nullptr);
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.two"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.spawn.one"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.spawn.two"), nullptr);
 
     RenderPrimitiveCapture active_render{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &active_render));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &active_render));
     EXPECT_EQ(active_render.cubes, 2);
     EXPECT_EQ(active_render.spheres, 2);
     EXPECT_TRUE(active_render.saw_pooled_cube);
     EXPECT_TRUE(active_render.saw_pooled_sphere);
 
     ParticleCapture active_particles{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &active_particles));
+    ASSERT_TRUE(slayer3d_game_data_for_each_particle_emitter(runtime, capture_particle, &active_particles));
     EXPECT_EQ(active_particles.count, 2);
     EXPECT_TRUE(active_particles.saw_pooled_emitter);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -9074,7 +9134,7 @@ TEST(GameDataRuntime, EmitsAuthoredMeshPrimitiveDescriptors)
     const std::filesystem::path dir = unique_test_dir("mesh_primitives");
     write_text(dir / "mesh_primitives.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Mesh Primitives", "id": "test.mesh_primitives", "version": "0.1.0" },
   "world": { "name": "world.mesh_primitives", "kind": "fixed_screen" },
   "entities": [
@@ -9158,48 +9218,49 @@ TEST(GameDataRuntime, EmitsAuthoredMeshPrimitiveDescriptors)
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "renders_world": true
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "mesh_primitives.game.json").string().c_str(), session, &runtime,
-                                          error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "mesh_primitives.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
     struct MeshCapture
     {
         int count = 0;
-        bool seen[SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE + 1] = {};
+        bool seen[SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE + 1] = {};
     } capture;
-    auto capture_mesh = [](void *userdata, const sdl3d_game_data_render_primitive *primitive) -> bool {
+    auto capture_mesh = [](void *userdata, const slayer3d_game_data_render_primitive *primitive) -> bool {
         auto *mesh_capture = static_cast<MeshCapture *>(userdata);
-        if (primitive->type != SDL3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
+        if (primitive->type != SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
             return true;
         mesh_capture->count++;
-        EXPECT_GT(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID);
-        EXPECT_LE(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE);
-        if (primitive->mesh_primitive <= SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID ||
-            primitive->mesh_primitive > SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE)
+        EXPECT_GT(primitive->mesh_primitive, SLAYER3D_GAME_DATA_MESH_PRIMITIVE_INVALID);
+        EXPECT_LE(primitive->mesh_primitive, SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE);
+        if (primitive->mesh_primitive <= SLAYER3D_GAME_DATA_MESH_PRIMITIVE_INVALID ||
+            primitive->mesh_primitive > SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE)
         {
             return false;
         }
         mesh_capture->seen[primitive->mesh_primitive] = true;
-        EXPECT_TRUE(primitive->lighting_enabled || primitive->mesh_primitive == SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE);
+        EXPECT_TRUE(primitive->lighting_enabled ||
+                    primitive->mesh_primitive == SLAYER3D_GAME_DATA_MESH_PRIMITIVE_WEDGE);
         if (std::string(primitive->entity_name) == "entity.mesh.cube")
         {
-            EXPECT_EQ(primitive->draw_mode, SDL3D_GAME_DATA_RENDER_DRAW_SOLID_WIRE);
+            EXPECT_EQ(primitive->draw_mode, SLAYER3D_GAME_DATA_RENDER_DRAW_SOLID_WIRE);
             EXPECT_NEAR(primitive->size.y, 2.0f, 0.0001f);
             EXPECT_EQ(primitive->wire_color.r, 255);
         }
         if (std::string(primitive->entity_name) == "entity.mesh.cylinder")
         {
-            EXPECT_EQ(primitive->draw_mode, SDL3D_GAME_DATA_RENDER_DRAW_WIRE);
+            EXPECT_EQ(primitive->draw_mode, SLAYER3D_GAME_DATA_RENDER_DRAW_WIRE);
             EXPECT_NEAR(primitive->radius_top, 0.4f, 0.0001f);
             EXPECT_NEAR(primitive->radius_bottom, 0.6f, 0.0001f);
             EXPECT_NEAR(primitive->height, 1.5f, 0.0001f);
@@ -9218,13 +9279,14 @@ TEST(GameDataRuntime, EmitsAuthoredMeshPrimitiveDescriptors)
         return true;
     };
 
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_mesh, &capture));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_mesh, &capture));
     EXPECT_EQ(capture.count, 15);
-    for (int kind = SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE; kind <= SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE; ++kind)
+    for (int kind = SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CUBE; kind <= SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE;
+         ++kind)
         EXPECT_TRUE(capture.seen[kind]) << kind;
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -9233,7 +9295,7 @@ TEST(GameDataValidation, RejectsInvalidMeshPrimitiveComponents)
     const std::filesystem::path dir = unique_test_dir("invalid_mesh_primitive");
     write_text(dir / "bad_kind.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Mesh Primitive", "id": "test.bad_mesh_primitive", "version": "0.1.0" },
   "world": { "name": "world.bad_mesh_primitive", "kind": "fixed_screen" },
   "entities": [
@@ -9248,7 +9310,7 @@ TEST(GameDataValidation, RejectsInvalidMeshPrimitiveComponents)
 })json");
     write_text(dir / "bad_segments.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Mesh Primitive", "id": "test.bad_mesh_primitive", "version": "0.1.0" },
   "world": { "name": "world.bad_mesh_primitive", "kind": "fixed_screen" },
   "entities": [
@@ -9263,7 +9325,7 @@ TEST(GameDataValidation, RejectsInvalidMeshPrimitiveComponents)
 })json");
     write_text(dir / "bad_draw_mode.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Mesh Primitive", "id": "test.bad_mesh_primitive", "version": "0.1.0" },
   "world": { "name": "world.bad_mesh_primitive", "kind": "fixed_screen" },
   "entities": [
@@ -9278,7 +9340,7 @@ TEST(GameDataValidation, RejectsInvalidMeshPrimitiveComponents)
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "renders_world": true
@@ -9286,17 +9348,17 @@ TEST(GameDataValidation, RejectsInvalidMeshPrimitiveComponents)
 
     char error[512]{};
     EXPECT_FALSE(
-        sdl3d_game_data_validate_file((dir / "bad_kind.game.json").string().c_str(), nullptr, error, sizeof(error)));
+        slayer3d_game_data_validate_file((dir / "bad_kind.game.json").string().c_str(), nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("render.mesh_primitive primitive is unknown"), std::string::npos) << error;
     SDL_zeroa(error);
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_segments.game.json").string().c_str(), nullptr, error,
-                                               sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_segments.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
     EXPECT_NE(std::string(error).find("render.mesh_primitive tessellation values must be integers >= 3"),
               std::string::npos)
         << error;
     SDL_zeroa(error);
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_draw_mode.game.json").string().c_str(), nullptr, error,
-                                               sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_draw_mode.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
     EXPECT_NE(std::string(error).find("render.mesh_primitive draw_mode is unknown"), std::string::npos) << error;
 
     remove_test_dir(dir);
@@ -9307,7 +9369,7 @@ TEST(GameDataRuntime, ActorPoolsApplySceneExitPolicies)
     const std::filesystem::path dir = unique_test_dir("actor_pool_scene_policy");
     write_text(dir / "actor_pool_scene_policy.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Actor Pool Scene Policy", "id": "test.actor_pool_scene_policy", "version": "0.1.0" },
   "world": { "name": "world.actor_pool_scene_policy", "kind": "fixed_screen" },
   "actor_archetypes": [
@@ -9369,26 +9431,26 @@ TEST(GameDataRuntime, ActorPoolsApplySceneExitPolicies)
   }
 })json");
     write_text(dir / "scenes" / "play.scene.json",
-               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": [] })json");
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play", "entities": [] })json");
     write_text(dir / "scenes" / "shop.scene.json",
-               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.shop", "entities": [] })json");
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.shop", "entities": [] })json");
     write_text(dir / "scenes" / "title.scene.json",
-               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.title", "entities": [] })json");
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.title", "entities": [] })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "actor_pool_scene_policy.game.json").string().c_str(), session,
-                                          &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "actor_pool_scene_policy.game.json").string().c_str(), session,
+                                             &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), sdl3d_game_data_find_signal(runtime, "signal.spawn"),
-                      nullptr);
-    sdl3d_registered_actor *reset = sdl3d_game_data_find_actor(runtime, "pool.reset_shots.0");
-    sdl3d_registered_actor *preserved = sdl3d_game_data_find_actor(runtime, "pool.preserved_shots.0");
-    sdl3d_registered_actor *shared = sdl3d_game_data_find_actor(runtime, "pool.shared_shots.0");
-    sdl3d_registered_actor *despawned = sdl3d_game_data_find_actor(runtime, "pool.despawned_shots.0");
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session),
+                         slayer3d_game_data_find_signal(runtime, "signal.spawn"), nullptr);
+    slayer3d_registered_actor *reset = slayer3d_game_data_find_actor(runtime, "pool.reset_shots.0");
+    slayer3d_registered_actor *preserved = slayer3d_game_data_find_actor(runtime, "pool.preserved_shots.0");
+    slayer3d_registered_actor *shared = slayer3d_game_data_find_actor(runtime, "pool.shared_shots.0");
+    slayer3d_registered_actor *despawned = slayer3d_game_data_find_actor(runtime, "pool.despawned_shots.0");
     ASSERT_NE(reset, nullptr);
     ASSERT_NE(preserved, nullptr);
     ASSERT_NE(shared, nullptr);
@@ -9397,30 +9459,30 @@ TEST(GameDataRuntime, ActorPoolsApplySceneExitPolicies)
     EXPECT_TRUE(preserved->active);
     EXPECT_TRUE(shared->active);
     EXPECT_TRUE(despawned->active);
-    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "pool.shared_shots.0"));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_has_entity(runtime, "pool.shared_shots.0"));
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.shop"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.shop"));
     EXPECT_FALSE(reset->active);
-    EXPECT_EQ(sdl3d_properties_get_int(reset->props, "damage", 0), 1);
-    expect_vec3_near(reset->position, sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_EQ(slayer3d_properties_get_int(reset->props, "damage", 0), 1);
+    expect_vec3_near(reset->position, slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     EXPECT_TRUE(preserved->active);
-    EXPECT_EQ(sdl3d_properties_get_int(preserved->props, "damage", 0), 9);
-    expect_vec3_near(preserved->position, sdl3d_vec3_make(2.0f, 0.0f, 0.0f));
+    EXPECT_EQ(slayer3d_properties_get_int(preserved->props, "damage", 0), 9);
+    expect_vec3_near(preserved->position, slayer3d_vec3_make(2.0f, 0.0f, 0.0f));
     EXPECT_TRUE(shared->active);
-    EXPECT_EQ(sdl3d_properties_get_int(shared->props, "damage", 0), 11);
-    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "pool.shared_shots.0"));
+    EXPECT_EQ(slayer3d_properties_get_int(shared->props, "damage", 0), 11);
+    EXPECT_TRUE(slayer3d_game_data_active_scene_has_entity(runtime, "pool.shared_shots.0"));
     EXPECT_FALSE(despawned->active);
-    EXPECT_EQ(sdl3d_properties_get_int(despawned->props, "damage", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(despawned->props, "damage", 0), 1);
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.title"));
     EXPECT_TRUE(preserved->active);
-    EXPECT_EQ(sdl3d_properties_get_int(preserved->props, "damage", 0), 9);
+    EXPECT_EQ(slayer3d_properties_get_int(preserved->props, "damage", 0), 9);
     EXPECT_FALSE(shared->active);
-    EXPECT_EQ(sdl3d_properties_get_int(shared->props, "damage", 0), 1);
-    EXPECT_FALSE(sdl3d_game_data_active_scene_has_entity(runtime, "pool.shared_shots.0"));
+    EXPECT_EQ(slayer3d_properties_get_int(shared->props, "damage", 0), 1);
+    EXPECT_FALSE(slayer3d_game_data_active_scene_has_entity(runtime, "pool.shared_shots.0"));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -9429,7 +9491,7 @@ TEST(GameDataRuntime, ContactSensorsMatchActivePooledActorTags)
     const std::filesystem::path dir = unique_test_dir("actor_pool_tag_sensors");
     write_text(dir / "actor_pool_tag_sensors.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Actor Pool Tag Sensors", "id": "test.actor_pool_tag_sensors", "version": "0.1.0" },
   "world": { "name": "world.actor_pool_tag_sensors", "kind": "fixed_screen" },
   "actor_archetypes": [
@@ -9493,46 +9555,47 @@ TEST(GameDataRuntime, ContactSensorsMatchActivePooledActorTags)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json", "scenes.title.scene.json"] }
 })json");
     write_text(dir / "scenes" / "play.scene.json",
-               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": [] })json");
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play", "entities": [] })json");
     write_text(dir / "scenes.title.scene.json",
-               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.title", "entities": [] })json");
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.title", "entities": [] })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "actor_pool_tag_sensors.game.json").string().c_str(), session,
-                                          &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "actor_pool_tag_sensors.game.json").string().c_str(), session,
+                                             &runtime, error, sizeof(error)))
         << error;
 
     SensorSignalCapture capture{};
-    ASSERT_NE(sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(session),
-                                   sdl3d_game_data_find_signal(runtime, "signal.hit"), capture_sensor_signal, &capture),
+    ASSERT_NE(slayer3d_signal_connect(slayer3d_game_session_get_signal_bus(session),
+                                      slayer3d_game_data_find_signal(runtime, "signal.hit"), capture_sensor_signal,
+                                      &capture),
               0);
 
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session),
-                      sdl3d_game_data_find_signal(runtime, "signal.spawn.first"), nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session),
+                         slayer3d_game_data_find_signal(runtime, "signal.spawn.first"), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_EQ(capture.calls, 1);
     EXPECT_EQ(capture.actor_name, "pool.player_shots.0");
     EXPECT_EQ(capture.other_actor_name, "pool.invaders.0");
 
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_EQ(capture.calls, 1);
 
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session),
-                      sdl3d_game_data_find_signal(runtime, "signal.spawn.second"), nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session),
+                         slayer3d_game_data_find_signal(runtime, "signal.spawn.second"), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_EQ(capture.calls, 2);
     EXPECT_EQ(capture.actor_name, "pool.player_shots.1");
     EXPECT_EQ(capture.other_actor_name, "pool.invaders.0");
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.title"));
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.title"));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_EQ(capture.calls, 2);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -9541,7 +9604,7 @@ TEST(GameDataRuntime, ArcadeShooterPrimitivesAreDataDriven)
     const std::filesystem::path dir = unique_test_dir("arcade_shooter_primitives");
     write_text(dir / "arcade_shooter_primitives.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Arcade Shooter Primitives", "id": "test.arcade_shooter_primitives", "version": "0.1.0" },
   "world": { "name": "world.arcade_shooter_primitives", "kind": "fixed_screen" },
   "entities": [
@@ -9678,77 +9741,77 @@ TEST(GameDataRuntime, ArcadeShooterPrimitivesAreDataDriven)
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "entities": ["entity.player", "entity.game", "entity.parallax"]
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "arcade_shooter_primitives.game.json").string().c_str(), session,
-                                          &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "arcade_shooter_primitives.game.json").string().c_str(), session,
+                                             &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *parallax = sdl3d_game_data_find_actor(runtime, "entity.parallax");
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
-    sdl3d_registered_actor *shot0 = sdl3d_game_data_find_actor(runtime, "pool.player_shots.0");
-    sdl3d_registered_actor *shot1 = sdl3d_game_data_find_actor(runtime, "pool.player_shots.1");
-    sdl3d_registered_actor *invader = sdl3d_game_data_find_actor(runtime, "pool.invaders.0");
-    sdl3d_registered_actor *explosion = sdl3d_game_data_find_actor(runtime, "pool.explosions.0");
+    slayer3d_registered_actor *parallax = slayer3d_game_data_find_actor(runtime, "entity.parallax");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *shot0 = slayer3d_game_data_find_actor(runtime, "pool.player_shots.0");
+    slayer3d_registered_actor *shot1 = slayer3d_game_data_find_actor(runtime, "pool.player_shots.1");
+    slayer3d_registered_actor *invader = slayer3d_game_data_find_actor(runtime, "pool.invaders.0");
+    slayer3d_registered_actor *explosion = slayer3d_game_data_find_actor(runtime, "pool.explosions.0");
     ASSERT_NE(parallax, nullptr);
     ASSERT_NE(player, nullptr);
     ASSERT_NE(shot0, nullptr);
     ASSERT_NE(shot1, nullptr);
     ASSERT_NE(invader, nullptr);
     ASSERT_NE(explosion, nullptr);
-    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "entity.parallax"));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_has_entity(runtime, "entity.parallax"));
     EXPECT_TRUE(parallax->active);
 
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.3f));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.3f));
     EXPECT_TRUE(invader->active);
-    expect_vec3_near(parallax->position, sdl3d_vec3_make(1.0f, 0.0f, -0.2f));
+    expect_vec3_near(parallax->position, slayer3d_vec3_make(1.0f, 0.0f, -0.2f));
 
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), sdl3d_game_data_find_signal(runtime, "signal.fire"),
-                      nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session),
+                         slayer3d_game_data_find_signal(runtime, "signal.fire"), nullptr);
     EXPECT_TRUE(shot0->active);
     EXPECT_FALSE(shot1->active);
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "fire_timer", 0.0f), 0.5f, 0.0001f);
-    expect_vec3_near(sdl3d_properties_get_vec3(shot0->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)),
-                     sdl3d_vec3_make(2.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "fire_timer", 0.0f), 0.5f, 0.0001f);
+    expect_vec3_near(slayer3d_properties_get_vec3(shot0->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)),
+                     slayer3d_vec3_make(2.0f, 0.0f, 0.0f));
 
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), sdl3d_game_data_find_signal(runtime, "signal.fire"),
-                      nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session),
+                         slayer3d_game_data_find_signal(runtime, "signal.fire"), nullptr);
     EXPECT_FALSE(shot1->active);
 
-    EXPECT_EQ(sdl3d_game_data_world_light_count(runtime), 1);
-    sdl3d_light projectile_light{};
-    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 0, &projectile_light));
-    EXPECT_EQ(projectile_light.type, SDL3D_LIGHT_POINT);
+    EXPECT_EQ(slayer3d_game_data_world_light_count(runtime), 1);
+    slayer3d_light projectile_light{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 0, &projectile_light));
+    EXPECT_EQ(projectile_light.type, SLAYER3D_LIGHT_POINT);
     EXPECT_NEAR(projectile_light.position.x, shot0->position.x, 0.0001f);
 
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_FALSE(shot0->active);
     EXPECT_FALSE(invader->active);
     EXPECT_TRUE(explosion->active);
-    sdl3d_registered_actor *game = sdl3d_game_data_find_actor(runtime, "entity.game");
+    slayer3d_registered_actor *game = slayer3d_game_data_find_actor(runtime, "entity.game");
     ASSERT_NE(game, nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(game->props, "score", 0), 10);
-    EXPECT_EQ(sdl3d_game_data_world_light_count(runtime), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(game->props, "score", 0), 10);
+    EXPECT_EQ(slayer3d_game_data_world_light_count(runtime), 1);
 
     ParticleCapture particles{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &particles));
+    ASSERT_TRUE(slayer3d_game_data_for_each_particle_emitter(runtime, capture_particle, &particles));
     EXPECT_EQ(particles.count, 1);
     const float explosion_z = explosion->position.z;
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.05f));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.05f));
     EXPECT_TRUE(explosion->active);
     EXPECT_GT(explosion->position.z, explosion_z);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.06f));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.06f));
     EXPECT_FALSE(explosion->active);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -9794,7 +9857,7 @@ return rules
 )lua");
     write_text(dir / "maze_primitives.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Maze Primitives", "id": "test.maze_primitives", "version": "0.1.0" },
   "world": { "name": "world.maze_primitives", "kind": "fixed_screen" },
   "scripts": [
@@ -9934,96 +9997,96 @@ return rules
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
     write_text(dir / "scenes" / "play.scene.json",
-               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.player"] })json");
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play", "entities": ["entity.player"] })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "maze_primitives.game.json").string().c_str(), session, &runtime,
-                                          error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "maze_primitives.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.inspect"), nullptr);
-    const sdl3d_properties *state = sdl3d_game_data_scene_state(runtime);
-    EXPECT_FLOAT_EQ(sdl3d_properties_get_float(state, "cell_world_x", -99.0f), 1.0f);
-    EXPECT_FLOAT_EQ(sdl3d_properties_get_float(state, "cell_world_y", -99.0f), -1.0f);
-    EXPECT_EQ(sdl3d_properties_get_int(state, "cell_col", -1), 1);
-    EXPECT_EQ(sdl3d_properties_get_int(state, "cell_row", -1), 1);
-    EXPECT_STREQ(sdl3d_properties_get_string(state, "wall_tile", ""), "#");
-    EXPECT_TRUE(sdl3d_properties_get_bool(state, "player_walkable", false));
-    EXPECT_FALSE(sdl3d_properties_get_bool(state, "wall_walkable", true));
-    EXPECT_EQ(sdl3d_properties_get_int(state, "neighbor_count", 0), 2);
-    EXPECT_TRUE(sdl3d_properties_get_bool(state, "path_found", false));
-    EXPECT_GE(sdl3d_properties_get_int(state, "path_step_col", -1), 1);
-    EXPECT_GE(sdl3d_properties_get_int(state, "path_step_row", -1), 1);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.inspect"), nullptr);
+    const slayer3d_properties *state = slayer3d_game_data_scene_state(runtime);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "cell_world_x", -99.0f), 1.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "cell_world_y", -99.0f), -1.0f);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "cell_col", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "cell_row", -1), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(state, "wall_tile", ""), "#");
+    EXPECT_TRUE(slayer3d_properties_get_bool(state, "player_walkable", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(state, "wall_walkable", true));
+    EXPECT_EQ(slayer3d_properties_get_int(state, "neighbor_count", 0), 2);
+    EXPECT_TRUE(slayer3d_properties_get_bool(state, "path_found", false));
+    EXPECT_GE(slayer3d_properties_get_int(state, "path_step_col", -1), 1);
+    EXPECT_GE(slayer3d_properties_get_int(state, "path_step_row", -1), 1);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.collectibles"), nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(state, "spawned_collectibles", 0), 4);
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.reset.pickups"), nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(state, "pickup_count", 0), 4);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.spawn.collectibles"), nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "spawned_collectibles", 0), 4);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.reset.pickups"), nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "pickup_count", 0), 4);
     RenderPrimitiveCapture pickup_render{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &pickup_render));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &pickup_render));
     EXPECT_TRUE(pickup_render.saw_pickup_batch);
     EXPECT_EQ(pickup_render.pickup_batch_instances, 4);
-    sdl3d_registered_actor *pellet0 = sdl3d_game_data_find_actor(runtime, "pool.pellets.0");
-    sdl3d_registered_actor *pellet2 = sdl3d_game_data_find_actor(runtime, "pool.pellets.2");
-    sdl3d_registered_actor *power = sdl3d_game_data_find_actor(runtime, "pool.power_pellets.0");
+    slayer3d_registered_actor *pellet0 = slayer3d_game_data_find_actor(runtime, "pool.pellets.0");
+    slayer3d_registered_actor *pellet2 = slayer3d_game_data_find_actor(runtime, "pool.pellets.2");
+    slayer3d_registered_actor *power = slayer3d_game_data_find_actor(runtime, "pool.power_pellets.0");
     ASSERT_NE(pellet0, nullptr);
     ASSERT_NE(pellet2, nullptr);
     ASSERT_NE(power, nullptr);
     EXPECT_TRUE(pellet0->active);
     EXPECT_TRUE(pellet2->active);
     EXPECT_TRUE(power->active);
-    EXPECT_EQ(sdl3d_properties_get_int(pellet0->props, "grid_col", -1), 2);
-    EXPECT_EQ(sdl3d_properties_get_int(pellet0->props, "grid_row", -1), 1);
-    EXPECT_STREQ(sdl3d_properties_get_string(power->props, "kind", ""), "power");
-    expect_vec3_near(power->position, sdl3d_vec3_make(3.0f, -1.0f, 0.0f));
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.inspect"), nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(state, "lookup_pellet", ""), "pool.pellets.0");
-    EXPECT_STREQ(sdl3d_properties_get_string(state, "pickup_kind", ""), "power");
-    EXPECT_STREQ(sdl3d_properties_get_string(state, "collected_kind", ""), "power");
-    EXPECT_EQ(sdl3d_properties_get_int(state, "pickup_remaining", 0), 3);
+    EXPECT_EQ(slayer3d_properties_get_int(pellet0->props, "grid_col", -1), 2);
+    EXPECT_EQ(slayer3d_properties_get_int(pellet0->props, "grid_row", -1), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(power->props, "kind", ""), "power");
+    expect_vec3_near(power->position, slayer3d_vec3_make(3.0f, -1.0f, 0.0f));
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.inspect"), nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(state, "lookup_pellet", ""), "pool.pellets.0");
+    EXPECT_STREQ(slayer3d_properties_get_string(state, "pickup_kind", ""), "power");
+    EXPECT_STREQ(slayer3d_properties_get_string(state, "collected_kind", ""), "power");
+    EXPECT_EQ(slayer3d_properties_get_int(state, "pickup_remaining", 0), 3);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn.walls"), nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(state, "spawned_wall_runs", 0), 9);
-    sdl3d_registered_actor *wall0 = sdl3d_game_data_find_actor(runtime, "pool.walls.0");
-    sdl3d_registered_actor *wall1 = sdl3d_game_data_find_actor(runtime, "pool.walls.1");
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.spawn.walls"), nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "spawned_wall_runs", 0), 9);
+    slayer3d_registered_actor *wall0 = slayer3d_game_data_find_actor(runtime, "pool.walls.0");
+    slayer3d_registered_actor *wall1 = slayer3d_game_data_find_actor(runtime, "pool.walls.1");
     ASSERT_NE(wall0, nullptr);
     ASSERT_NE(wall1, nullptr);
     EXPECT_TRUE(wall0->active);
-    EXPECT_EQ(sdl3d_properties_get_int(wall0->props, "grid_run_length", 0), 5);
-    EXPECT_STREQ(sdl3d_properties_get_string(wall0->props, "grid_run_axis", ""), "x");
-    expect_vec3_near(sdl3d_properties_get_vec3(wall0->props, "grid_run_size", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)),
-                     sdl3d_vec3_make(5.0f, 1.0f, 0.3f));
-    expect_vec3_near(wall0->position, sdl3d_vec3_make(2.0f, 0.0f, 0.0f));
-    EXPECT_EQ(sdl3d_properties_get_int(wall1->props, "grid_run_length", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(wall0->props, "grid_run_length", 0), 5);
+    EXPECT_STREQ(slayer3d_properties_get_string(wall0->props, "grid_run_axis", ""), "x");
+    expect_vec3_near(slayer3d_properties_get_vec3(wall0->props, "grid_run_size", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)),
+                     slayer3d_vec3_make(5.0f, 1.0f, 0.3f));
+    expect_vec3_near(wall0->position, slayer3d_vec3_make(2.0f, 0.0f, 0.0f));
+    EXPECT_EQ(slayer3d_properties_get_int(wall1->props, "grid_run_length", 0), 1);
 
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
     ASSERT_NE(player, nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_col", -1), 2);
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_row", -1), 1);
-    expect_vec3_near(player->position, sdl3d_vec3_make(2.0f, -1.0f, 0.25f));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "grid_col", -1), 2);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "grid_row", -1), 1);
+    expect_vec3_near(player->position, slayer3d_vec3_make(2.0f, -1.0f, 0.25f));
 
-    sdl3d_properties_set_int(player->props, "grid_next_dir_x", 0);
-    sdl3d_properties_set_int(player->props, "grid_next_dir_y", 1);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_col", -1), 3);
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_row", -1), 1);
+    slayer3d_properties_set_int(player->props, "grid_next_dir_x", 0);
+    slayer3d_properties_set_int(player->props, "grid_next_dir_y", 1);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "grid_col", -1), 3);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "grid_row", -1), 1);
 
-    sdl3d_properties_set_int(player->props, "grid_dir_x", 0);
-    sdl3d_properties_set_int(player->props, "grid_dir_y", -1);
-    sdl3d_properties_set_int(player->props, "grid_next_dir_x", 0);
-    sdl3d_properties_set_int(player->props, "grid_next_dir_y", -1);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_col", -1), 3);
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "grid_row", -1), 1);
+    slayer3d_properties_set_int(player->props, "grid_dir_x", 0);
+    slayer3d_properties_set_int(player->props, "grid_dir_y", -1);
+    slayer3d_properties_set_int(player->props, "grid_next_dir_x", 0);
+    slayer3d_properties_set_int(player->props, "grid_next_dir_y", -1);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "grid_col", -1), 3);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "grid_row", -1), 1);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -10032,7 +10095,7 @@ TEST(GameDataRuntime, LoadsAuthoredSectorLevels)
     const std::filesystem::path dir = unique_test_dir("sector_levels");
     write_text(dir / "sector_level.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Sector Level Test" },
   "sector_levels": [
     {
@@ -10071,17 +10134,17 @@ TEST(GameDataRuntime, LoadsAuthoredSectorLevels)
   ]
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "sector_level.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "sector_level.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
-    sdl3d_game_data_sector_level level{};
-    ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.test", &level));
+    slayer3d_game_data_sector_level level{};
+    ASSERT_TRUE(slayer3d_game_data_get_sector_level(runtime, "sector.test", &level));
     EXPECT_STREQ(level.name, "sector.test");
     ASSERT_EQ(level.material_count, 2);
     EXPECT_FLOAT_EQ(level.materials[0].tex_scale, 2.0f);
@@ -10091,8 +10154,8 @@ TEST(GameDataRuntime, LoadsAuthoredSectorLevels)
     EXPECT_STREQ(level.sector_names[0], "room");
     EXPECT_STREQ(level.sector_names[1], "hall");
     EXPECT_EQ(level.sectors[0].ambient_sound_id, 2);
-    EXPECT_FLOAT_EQ(sdl3d_sector_damage_per_second(&level.sectors[0]), 1.5f);
-    expect_vec3_near(sdl3d_sector_push_velocity(&level.sectors[1]), sdl3d_vec3_make(1.0f, 0.0f, 0.0f));
+    EXPECT_FLOAT_EQ(slayer3d_sector_damage_per_second(&level.sectors[0]), 1.5f);
+    expect_vec3_near(slayer3d_sector_push_velocity(&level.sectors[1]), slayer3d_vec3_make(1.0f, 0.0f, 0.0f));
     ASSERT_EQ(level.light_count, 1);
     EXPECT_FLOAT_EQ(level.lights[0].intensity, 2.0f);
 
@@ -10106,15 +10169,15 @@ TEST(GameDataRuntime, LoadsAuthoredSectorLevels)
     EXPECT_GT(level.lightmapped->lightmap_height, 0);
     EXPECT_EQ(level.vertex_baked->lightmap_width, 0);
     EXPECT_EQ(level.vertex_baked->lightmap_height, 0);
-    EXPECT_EQ(sdl3d_level_find_sector(level.lightmapped, level.sectors, 1.0f, 1.0f), 0);
-    EXPECT_EQ(sdl3d_level_find_sector(level.lightmapped, level.sectors, 5.0f, 2.0f), 1);
+    EXPECT_EQ(slayer3d_level_find_sector(level.lightmapped, level.sectors, 1.0f, 1.0f), 0);
+    EXPECT_EQ(slayer3d_level_find_sector(level.lightmapped, level.sectors, 5.0f, 2.0f), 1);
 
-    sdl3d_game_data_sector_level missing{};
-    EXPECT_FALSE(sdl3d_game_data_get_sector_level(runtime, "sector.missing", &missing));
+    slayer3d_game_data_sector_level missing{};
+    EXPECT_FALSE(slayer3d_game_data_get_sector_level(runtime, "sector.missing", &missing));
     EXPECT_EQ(missing.name, nullptr);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -10137,7 +10200,7 @@ return nav
 )lua");
     write_text(dir / "sector_navigation.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Sector Navigation Test" },
   "scripts": [
     { "id": "script.nav", "path": "scripts/nav.lua", "module": "test.nav" }
@@ -10184,49 +10247,49 @@ return nav
   ]
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "sector_navigation.game.json").string().c_str(), session, &runtime,
-                                          error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "sector_navigation.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
-    sdl3d_game_data_sector_nav_node nearest{};
-    ASSERT_TRUE(
-        sdl3d_game_data_sector_nav_nearest_node(runtime, "nav.test", sdl3d_vec3_make(1.0f, 1.0f, 1.0f), &nearest));
+    slayer3d_game_data_sector_nav_node nearest{};
+    ASSERT_TRUE(slayer3d_game_data_sector_nav_nearest_node(runtime, "nav.test", slayer3d_vec3_make(1.0f, 1.0f, 1.0f),
+                                                           &nearest));
     EXPECT_STREQ(nearest.name, "room.center");
     EXPECT_EQ(nearest.sector_index, 0);
 
-    sdl3d_game_data_sector_nav_node path[4]{};
+    slayer3d_game_data_sector_nav_node path[4]{};
     int node_count = 0;
     float cost = 0.0f;
-    ASSERT_TRUE(sdl3d_game_data_sector_nav_path(runtime, "nav.test", sdl3d_vec3_make(1.0f, 1.0f, 1.0f),
-                                                sdl3d_vec3_make(9.0f, 1.0f, 1.0f), path, 4, &node_count, &cost));
+    ASSERT_TRUE(slayer3d_game_data_sector_nav_path(runtime, "nav.test", slayer3d_vec3_make(1.0f, 1.0f, 1.0f),
+                                                   slayer3d_vec3_make(9.0f, 1.0f, 1.0f), path, 4, &node_count, &cost));
     ASSERT_EQ(node_count, 3);
     EXPECT_STREQ(path[0].name, "room.center");
     EXPECT_STREQ(path[1].name, "hall.center");
     EXPECT_STREQ(path[2].name, "goal.center");
     EXPECT_GT(cost, 0.0f);
 
-    sdl3d_game_data_sector_nav_node next{};
-    ASSERT_TRUE(sdl3d_game_data_sector_nav_next_node(runtime, "nav.test", sdl3d_vec3_make(1.0f, 1.0f, 1.0f),
-                                                     sdl3d_vec3_make(9.0f, 1.0f, 1.0f), &next));
+    slayer3d_game_data_sector_nav_node next{};
+    ASSERT_TRUE(slayer3d_game_data_sector_nav_next_node(runtime, "nav.test", slayer3d_vec3_make(1.0f, 1.0f, 1.0f),
+                                                        slayer3d_vec3_make(9.0f, 1.0f, 1.0f), &next));
     EXPECT_STREQ(next.name, "hall.center");
-    EXPECT_FALSE(sdl3d_game_data_sector_nav_path_available(runtime, "nav.test", sdl3d_vec3_make(1.0f, 1.0f, 1.0f),
-                                                           sdl3d_vec3_make(22.0f, 1.0f, 2.0f)));
+    EXPECT_FALSE(slayer3d_game_data_sector_nav_path_available(runtime, "nav.test", slayer3d_vec3_make(1.0f, 1.0f, 1.0f),
+                                                              slayer3d_vec3_make(22.0f, 1.0f, 2.0f)));
 
-    const int signal = sdl3d_game_data_find_signal(runtime, "signal.nav.inspect");
+    const int signal = slayer3d_game_data_find_signal(runtime, "signal.nav.inspect");
     ASSERT_GE(signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), signal, nullptr);
-    const sdl3d_properties *scene_state = sdl3d_game_data_scene_state(runtime);
-    EXPECT_TRUE(sdl3d_properties_get_bool(scene_state, "lua_path_available", false));
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "lua_next_node", ""), "hall.center");
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "lua_path_count", 0), 3);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), signal, nullptr);
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "lua_path_available", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "lua_next_node", ""), "hall.center");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "lua_path_count", 0), 3);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -10236,49 +10299,49 @@ TEST(GameDataRuntime, FpsTemplateLoadsDataOnlyStarter)
     ASSERT_TRUE(std::filesystem::exists(template_path)) << template_path;
 
     char validate_error[512]{};
-    ASSERT_TRUE(
-        sdl3d_game_data_validate_file(template_path.string().c_str(), nullptr, validate_error, sizeof(validate_error)))
+    ASSERT_TRUE(slayer3d_game_data_validate_file(template_path.string().c_str(), nullptr, validate_error,
+                                                 sizeof(validate_error)))
         << validate_error;
 
-    sdl3d_game_config config{};
+    slayer3d_game_config config{};
     char title[128]{};
     char config_error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_load_app_config_file(template_path.string().c_str(), &config, title, sizeof(title),
-                                                     config_error, sizeof(config_error)))
+    ASSERT_TRUE(slayer3d_game_data_load_app_config_file(template_path.string().c_str(), &config, title, sizeof(title),
+                                                        config_error, sizeof(config_error)))
         << config_error;
-    EXPECT_STREQ(config.title, "SDL3D FPS Template");
-    EXPECT_EQ(config.logical_width, SDL3D_GAME_DEFAULT_LOGICAL_WIDTH);
-    EXPECT_EQ(config.logical_height, SDL3D_GAME_DEFAULT_LOGICAL_HEIGHT);
+    EXPECT_STREQ(config.title, "Slayer 3D FPS Template");
+    EXPECT_EQ(config.logical_width, SLAYER3D_GAME_DEFAULT_LOGICAL_WIDTH);
+    EXPECT_EQ(config.logical_height, SLAYER3D_GAME_DEFAULT_LOGICAL_HEIGHT);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(template_path.string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(template_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
     ASSERT_NE(runtime, nullptr);
 
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.fps.play");
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.fps.play");
     const char *units = nullptr;
     float meters_per_unit = 0.0f;
-    ASSERT_TRUE(sdl3d_game_data_get_world_units(runtime, &units, &meters_per_unit));
-    EXPECT_STREQ(units, SDL3D_GAME_DATA_DEFAULT_WORLD_UNITS);
-    EXPECT_FLOAT_EQ(meters_per_unit, SDL3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
+    ASSERT_TRUE(slayer3d_game_data_get_world_units(runtime, &units, &meters_per_unit));
+    EXPECT_STREQ(units, SLAYER3D_GAME_DATA_DEFAULT_WORLD_UNITS);
+    EXPECT_FLOAT_EQ(meters_per_unit, SLAYER3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
 
-    sdl3d_game_data_sector_level level{};
-    ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.fps.template_room", &level));
+    slayer3d_game_data_sector_level level{};
+    ASSERT_TRUE(slayer3d_game_data_get_sector_level(runtime, "sector.fps.template_room", &level));
     ASSERT_EQ(level.sector_count, 2);
     ASSERT_NE(level.sector_names, nullptr);
     EXPECT_STREQ(level.sector_names[0], "spawn_room");
     EXPECT_STREQ(level.sector_names[1], "test_lane");
     EXPECT_EQ(level.light_count, 2);
-    EXPECT_TRUE(sdl3d_game_data_sector_nav_path_available(
-        runtime, "nav.fps.template_room", sdl3d_vec3_make(4.0f, 1.0f, 5.0f), sdl3d_vec3_make(22.0f, 1.0f, 5.0f)));
+    EXPECT_TRUE(slayer3d_game_data_sector_nav_path_available(
+        runtime, "nav.fps.template_room", slayer3d_vec3_make(4.0f, 1.0f, 5.0f), slayer3d_vec3_make(22.0f, 1.0f, 5.0f)));
 
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
-    sdl3d_registered_actor *pickup = sdl3d_game_data_find_actor(runtime, "entity.fps.health_pickup");
-    sdl3d_registered_actor *station = sdl3d_game_data_find_actor(runtime, "entity.fps.resource_station");
-    sdl3d_registered_actor *projectile = sdl3d_game_data_find_actor(runtime, "pool.fps.player_projectiles.0");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *pickup = slayer3d_game_data_find_actor(runtime, "entity.fps.health_pickup");
+    slayer3d_registered_actor *station = slayer3d_game_data_find_actor(runtime, "entity.fps.resource_station");
+    slayer3d_registered_actor *projectile = slayer3d_game_data_find_actor(runtime, "pool.fps.player_projectiles.0");
     ASSERT_NE(player, nullptr);
     ASSERT_NE(pickup, nullptr);
     ASSERT_NE(station, nullptr);
@@ -10295,7 +10358,7 @@ TEST(GameDataRuntime, FpsTemplateLoadsDataOnlyStarter)
         bool saw_resources = false;
         bool saw_pause = false;
     } ui_capture;
-    auto capture_fps_template_ui = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+    auto capture_fps_template_ui = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         auto *capture = static_cast<FpsTemplateUiCapture *>(userdata);
         if (std::string(text->name) == "ui.fps.reticle")
             capture->saw_reticle = true;
@@ -10307,27 +10370,27 @@ TEST(GameDataRuntime, FpsTemplateLoadsDataOnlyStarter)
             capture->saw_pause = true;
         return true;
     };
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_fps_template_ui, &ui_capture));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, capture_fps_template_ui, &ui_capture));
     EXPECT_TRUE(ui_capture.saw_reticle);
     EXPECT_TRUE(ui_capture.saw_fps);
     EXPECT_TRUE(ui_capture.saw_resources);
     EXPECT_TRUE(ui_capture.saw_pause);
 
-    const int fire_action = sdl3d_game_data_find_action(runtime, "action.fire");
+    const int fire_action = slayer3d_game_data_find_action(runtime, "action.fire");
     ASSERT_GE(fire_action, 0);
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    sdl3d_input_set_action_override(input, fire_action, 1.0f);
-    ASSERT_NE(sdl3d_input_update(input, 1), nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    slayer3d_input_set_action_override(input, fire_action, 1.0f);
+    ASSERT_NE(slayer3d_input_update(input, 1), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_TRUE(projectile->active);
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "ammo", -1), 23);
-    const sdl3d_vec3 projectile_velocity =
-        sdl3d_properties_get_vec3(projectile->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
-    EXPECT_NEAR(sdl3d_vec3_length(projectile_velocity), 22.0f, 0.001f);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "ammo", -1), 23);
+    const slayer3d_vec3 projectile_velocity =
+        slayer3d_properties_get_vec3(projectile->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(slayer3d_vec3_length(projectile_velocity), 22.0f, 0.001f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, ResolvesActiveSceneSectorLevelInstances)
@@ -10335,7 +10398,7 @@ TEST(GameDataRuntime, ResolvesActiveSceneSectorLevelInstances)
     const std::filesystem::path dir = unique_test_dir("sector_level_scene");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "camera": "camera.fixed",
   "world": {
@@ -10351,7 +10414,7 @@ TEST(GameDataRuntime, ResolvesActiveSceneSectorLevelInstances)
 })json");
     write_text(dir / "sector_scene.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Sector Scene Test" },
   "world": {
     "name": "world.sector_scene",
@@ -10391,30 +10454,30 @@ TEST(GameDataRuntime, ResolvesActiveSceneSectorLevelInstances)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "sector_scene.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "sector_scene.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
-    sdl3d_game_data_sector_level level{};
-    ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.test", &level));
+    slayer3d_game_data_sector_level level{};
+    ASSERT_TRUE(slayer3d_game_data_get_sector_level(runtime, "sector.test", &level));
 
     SectorLevelInstanceCapture capture{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_sector_level_instance(runtime, capture_sector_level_instance, &capture));
+    ASSERT_TRUE(slayer3d_game_data_for_each_sector_level_instance(runtime, capture_sector_level_instance, &capture));
     EXPECT_EQ(capture.count, 1);
     EXPECT_EQ(capture.level_name, "sector.test");
     EXPECT_EQ(capture.variant_name, "unlit");
-    EXPECT_EQ(capture.variant, SDL3D_GAME_DATA_SECTOR_LEVEL_UNLIT);
+    EXPECT_EQ(capture.variant, SLAYER3D_GAME_DATA_SECTOR_LEVEL_UNLIT);
     EXPECT_EQ(capture.level, level.unlit);
-    expect_vec3_near(capture.position, sdl3d_vec3_make(1.0f, 2.0f, 3.0f));
+    expect_vec3_near(capture.position, slayer3d_vec3_make(1.0f, 2.0f, 3.0f));
     EXPECT_FALSE(capture.portal_culling);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -10459,7 +10522,7 @@ TEST(GameDataRuntime, RejectsInvalidSectorNavigationGraphs)
     for (const auto &test_case : cases)
     {
         const std::string game_json = std::string(R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Sector Navigation" },
   "sector_levels": [
     {
@@ -10483,7 +10546,7 @@ TEST(GameDataRuntime, RejectsInvalidSectorNavigationGraphs)
                                       "\n}\n";
         write_text(dir / (std::string(test_case.name) + ".game.json"), game_json.c_str());
         char error[512]{};
-        EXPECT_FALSE(sdl3d_game_data_validate_file(
+        EXPECT_FALSE(slayer3d_game_data_validate_file(
             (dir / (std::string(test_case.name) + ".game.json")).string().c_str(), nullptr, error, sizeof(error)))
             << test_case.name;
         EXPECT_NE(std::string(error).find(test_case.error_substring), std::string::npos) << error;
@@ -10496,7 +10559,7 @@ TEST(GameDataRuntime, SectorLevelFragmentsComposeIntoNamedLevels)
     const std::filesystem::path dir = unique_test_dir("sector_level_fragments");
     write_text(dir / "fragments" / "materials.json",
                R"json({
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "sector_level_fragments": [
     {
       "level": "sector.test",
@@ -10509,7 +10572,7 @@ TEST(GameDataRuntime, SectorLevelFragmentsComposeIntoNamedLevels)
 })json");
     write_text(dir / "fragments" / "sectors.json",
                R"json({
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "sector_level_fragments": [
     {
       "level": "sector.test",
@@ -10529,7 +10592,7 @@ TEST(GameDataRuntime, SectorLevelFragmentsComposeIntoNamedLevels)
 })json");
     write_text(dir / "fragments" / "lights.json",
                R"json({
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "sector_level_fragments": [
     {
       "level": "sector.test",
@@ -10541,7 +10604,7 @@ TEST(GameDataRuntime, SectorLevelFragmentsComposeIntoNamedLevels)
 })json");
     write_text(dir / "sector_fragments.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Sector Fragments", "id": "test.sector_fragments", "version": "0.1.0" },
   "imports": [
     { "path": "fragments/materials.json", "sections": ["sector_level_fragments"] },
@@ -10551,18 +10614,19 @@ TEST(GameDataRuntime, SectorLevelFragmentsComposeIntoNamedLevels)
   "world": { "name": "world.sector_fragments", "kind": "sector" },
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
-    write_text(dir / "scenes" / "play.scene.json", R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play" })json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "sector_fragments.game.json").string().c_str(), session, &runtime,
-                                          error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "sector_fragments.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
-    sdl3d_game_data_sector_level level{};
-    ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.test", &level));
+    slayer3d_game_data_sector_level level{};
+    ASSERT_TRUE(slayer3d_game_data_get_sector_level(runtime, "sector.test", &level));
     ASSERT_EQ(level.material_count, 2);
     ASSERT_EQ(level.sector_count, 1);
     ASSERT_EQ(level.light_count, 1);
@@ -10570,8 +10634,8 @@ TEST(GameDataRuntime, SectorLevelFragmentsComposeIntoNamedLevels)
     EXPECT_STREQ(level.sector_names[0], "room");
     EXPECT_FLOAT_EQ(level.lights[0].intensity, 1.5f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -10580,7 +10644,7 @@ TEST(GameDataRuntime, RunsAuthoredFpsSectorController)
     const std::filesystem::path dir = unique_test_dir("fps_sector_controller");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "camera": "camera.player",
   "updates_game": true,
@@ -10602,7 +10666,7 @@ TEST(GameDataRuntime, RunsAuthoredFpsSectorController)
 })json");
     write_text(dir / "fps_sector.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "FPS Sector Controller Test" },
   "world": {
     "name": "world.test",
@@ -10714,55 +10778,56 @@ TEST(GameDataRuntime, RunsAuthoredFpsSectorController)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "fps_sector.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "fps_sector.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
     ASSERT_NE(player, nullptr);
     const float initial_z = player->position.z;
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    const int forward = sdl3d_game_data_find_action(runtime, "action.move.forward");
+    const int forward = slayer3d_game_data_find_action(runtime, "action.move.forward");
     ASSERT_GE(forward, 0);
-    sdl3d_input_set_action_override(input, forward, 1.0f);
-    ASSERT_NE(sdl3d_input_update(input, 1000), nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.1f));
+    slayer3d_input_set_action_override(input, forward, 1.0f);
+    ASSERT_NE(slayer3d_input_update(input, 1000), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.1f));
 
     EXPECT_LT(player->position.z, initial_z);
     EXPECT_NEAR(player->position.y, 1.6f, 0.001f);
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "current_sector", -1), 0);
-    EXPECT_TRUE(sdl3d_properties_get_bool(player->props, "on_ground", false));
-    expect_vec3_near(sdl3d_properties_get_vec3(player->props, "camera_forward", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)),
-                     sdl3d_vec3_make(0.0f, 0.0f, -1.0f));
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "current_sector", -1), 0);
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "on_ground", false));
+    expect_vec3_near(
+        slayer3d_properties_get_vec3(player->props, "camera_forward", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)),
+        slayer3d_vec3_make(0.0f, 0.0f, -1.0f));
 
-    sdl3d_camera3d camera{};
-    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.player", &camera));
-    EXPECT_EQ(camera.projection, SDL3D_CAMERA_PERSPECTIVE);
+    slayer3d_camera3d camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.player", &camera));
+    EXPECT_EQ(camera.projection, SLAYER3D_CAMERA_PERSPECTIVE);
     EXPECT_NEAR(camera.position.x, player->position.x, 0.001f);
     EXPECT_NEAR(camera.position.y, player->position.y, 0.001f);
     EXPECT_NEAR(camera.position.z, player->position.z, 0.001f);
     EXPECT_LT(camera.target.z, camera.position.z);
 
-    const int launch_signal = sdl3d_game_data_find_signal(runtime, "signal.launch");
+    const int launch_signal = slayer3d_game_data_find_signal(runtime, "signal.launch");
     ASSERT_GE(launch_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), launch_signal, nullptr);
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "vertical_velocity", 0.0f), 5.0f, 0.001f);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), launch_signal, nullptr);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "vertical_velocity", 0.0f), 5.0f, 0.001f);
 
-    const int teleport_signal = sdl3d_game_data_find_signal(runtime, "signal.teleport");
+    const int teleport_signal = slayer3d_game_data_find_signal(runtime, "signal.teleport");
     ASSERT_GE(teleport_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), teleport_signal, nullptr);
-    expect_vec3_near(player->position, sdl3d_vec3_make(3.0f, 1.8f, 3.0f));
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "yaw", 0.0f), 1.25f, 0.001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "pitch", 0.0f), -0.25f, 0.001f);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), teleport_signal, nullptr);
+    expect_vec3_near(player->position, slayer3d_vec3_make(3.0f, 1.8f, 3.0f));
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "yaw", 0.0f), 1.25f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "pitch", 0.0f), -0.25f, 0.001f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -10771,7 +10836,7 @@ TEST(GameDataRuntime, SectorVelocityMotionDespawnsPooledActorsOnImpact)
     const std::filesystem::path dir = unique_test_dir("sector_velocity_motion");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "entities": ["entity.player"],
@@ -10783,7 +10848,7 @@ TEST(GameDataRuntime, SectorVelocityMotionDespawnsPooledActorsOnImpact)
 })json");
     write_text(dir / "sector_velocity.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Sector Velocity Motion Test" },
   "world": { "name": "world.test", "kind": "sector" },
   "entities": [
@@ -10851,30 +10916,30 @@ TEST(GameDataRuntime, SectorVelocityMotionDespawnsPooledActorsOnImpact)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "sector_velocity.game.json").string().c_str(), session, &runtime,
-                                          error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "sector_velocity.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *shot = sdl3d_game_data_find_actor(runtime, "pool.shots.0");
+    slayer3d_registered_actor *shot = slayer3d_game_data_find_actor(runtime, "pool.shots.0");
     ASSERT_NE(shot, nullptr);
     ASSERT_FALSE(shot->active);
-    const int fire_signal = sdl3d_game_data_find_signal(runtime, "signal.fire");
+    const int fire_signal = slayer3d_game_data_find_signal(runtime, "signal.fire");
     ASSERT_GE(fire_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), fire_signal, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), fire_signal, nullptr);
     ASSERT_TRUE(shot->active);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.05f));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.05f));
     EXPECT_TRUE(shot->active);
     EXPECT_NEAR(shot->position.x, 3.0f, 0.3f);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.1f));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.1f));
     EXPECT_FALSE(shot->active);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -10883,7 +10948,7 @@ TEST(GameDataRuntime, VolumeSensorsRunEnterAndExitActions)
     const std::filesystem::path dir = unique_test_dir("volume_sensor_actions");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "camera": "camera.player",
   "updates_game": true,
@@ -10891,7 +10956,7 @@ TEST(GameDataRuntime, VolumeSensorsRunEnterAndExitActions)
 })json");
     write_text(dir / "volume_sensor.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Volume Sensor Test" },
   "world": {
     "name": "world.volume",
@@ -10943,32 +11008,32 @@ TEST(GameDataRuntime, VolumeSensorsRunEnterAndExitActions)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "volume_sensor.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "volume_sensor.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
     ASSERT_NE(player, nullptr);
-    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.player");
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.player");
 
-    player->position = sdl3d_vec3_make(2.0f, 0.0f, 0.0f);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
-    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.zone");
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "zone_entries", 0), 1);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "zone_entries", 0), 1);
+    player->position = slayer3d_vec3_make(2.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.zone");
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "zone_entries", 0), 1);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "zone_entries", 0), 1);
 
-    player->position = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
-    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.player");
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "zone_exits", 0), 1);
+    player->position = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.player");
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "zone_exits", 0), 1);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -10977,7 +11042,7 @@ TEST(GameDataRuntime, RunsAuthoredSectorDoorInteractionRenderAndCollision)
     const std::filesystem::path dir = unique_test_dir("sector_doors");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "camera": "camera.player",
   "updates_game": true,
@@ -10987,7 +11052,7 @@ TEST(GameDataRuntime, RunsAuthoredSectorDoorInteractionRenderAndCollision)
 })json");
     write_text(dir / "sector_doors.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Sector Door Test" },
   "world": {
     "name": "world.test",
@@ -11096,43 +11161,44 @@ TEST(GameDataRuntime, RunsAuthoredSectorDoorInteractionRenderAndCollision)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "sector_doors.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "sector_doors.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
     ASSERT_NE(player, nullptr);
 
     SectorDoorRenderCapture closed_render{};
     ASSERT_TRUE(
-        sdl3d_game_data_for_each_render_primitive(runtime, capture_sector_door_render_primitive, &closed_render));
+        slayer3d_game_data_for_each_render_primitive(runtime, capture_sector_door_render_primitive, &closed_render));
     ASSERT_EQ(closed_render.door_primitives, 1);
     EXPECT_NEAR(closed_render.first_position.y, 1.0f, 0.001f);
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    const int forward = sdl3d_game_data_find_action(runtime, "action.move.forward");
+    const int forward = slayer3d_game_data_find_action(runtime, "action.move.forward");
     ASSERT_GE(forward, 0);
-    sdl3d_input_set_action_override(input, forward, 1.0f);
-    ASSERT_NE(sdl3d_input_update(input, 1000), nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.2f));
+    slayer3d_input_set_action_override(input, forward, 1.0f);
+    ASSERT_NE(slayer3d_input_update(input, 1000), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.2f));
     EXPECT_GT(player->position.z, 1.2f);
 
-    sdl3d_input_set_action_override(input, forward, 0.0f);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session),
-                      sdl3d_game_data_find_signal(runtime, "signal.interact"), nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f));
+    slayer3d_input_set_action_override(input, forward, 0.0f);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session),
+                         slayer3d_game_data_find_signal(runtime, "signal.interact"), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 1.0f));
     SectorDoorRenderCapture open_render{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_sector_door_render_primitive, &open_render));
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_render_primitive(runtime, capture_sector_door_render_primitive, &open_render));
     ASSERT_EQ(open_render.door_primitives, 1);
     EXPECT_NEAR(open_render.first_position.y, 3.1f, 0.001f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -11141,7 +11207,7 @@ TEST(GameDataRuntime, RunsAuthoredSectorPlatform)
     const std::filesystem::path dir = unique_test_dir("sector_platforms");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "entities": ["entity.player"],
@@ -11149,7 +11215,7 @@ TEST(GameDataRuntime, RunsAuthoredSectorPlatform)
 })json");
     write_text(dir / "sector_platforms.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Sector Platform Test" },
   "world": { "name": "world.test", "kind": "sector" },
   "entities": [
@@ -11210,45 +11276,46 @@ TEST(GameDataRuntime, RunsAuthoredSectorPlatform)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "sector_platforms.game.json").string().c_str(), session, &runtime,
-                                          error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "sector_platforms.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
-    sdl3d_game_data_sector_level level{};
-    ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.test", &level));
+    slayer3d_game_data_sector_level level{};
+    ASSERT_TRUE(slayer3d_game_data_get_sector_level(runtime, "sector.test", &level));
     ASSERT_EQ(level.sector_count, 1);
     EXPECT_NEAR(level.sectors[0].floor_y, 0.0f, 0.001f);
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
     ASSERT_NE(player, nullptr);
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "health", 0.0f), 100.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "health", 0.0f), 100.0f, 0.001f);
 
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f));
-    ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.test", &level));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 1.0f));
+    ASSERT_TRUE(slayer3d_game_data_get_sector_level(runtime, "sector.test", &level));
     EXPECT_NEAR(level.sectors[0].floor_y, 1.0f, 0.001f);
     ASSERT_NE(level.unlit, nullptr);
     ASSERT_EQ(level.unlit->sector_count, 1);
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "health", 0.0f), 90.0f, 0.001f);
-    EXPECT_STREQ(sdl3d_properties_get_string(player->props, "last_platform", ""), "platform.test");
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "health", 0.0f), 90.0f, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(player->props, "last_platform", ""), "platform.test");
 
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f));
-    ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.test", &level));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 1.0f));
+    ASSERT_TRUE(slayer3d_game_data_get_sector_level(runtime, "sector.test", &level));
     EXPECT_NEAR(level.sectors[0].floor_y, 2.0f, 0.001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "health", 0.0f), 80.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "health", 0.0f), 80.0f, 0.001f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, RejectsInvalidSectorPlatforms)
 {
     const std::filesystem::path dir = unique_test_dir("sector_platforms_invalid");
-    write_text(dir / "scenes" / "play.scene.json", R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play" })json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
 
     struct Case
     {
@@ -11309,7 +11376,7 @@ TEST(GameDataRuntime, RejectsInvalidSectorPlatforms)
     {
         const std::filesystem::path game_path = dir / (std::string(test_case.name) + ".game.json");
         const std::string game_json = std::string(R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Sector Platform" },
   "world": { "name": "world.test", "kind": "sector" },
   "sector_levels": [
@@ -11332,7 +11399,7 @@ TEST(GameDataRuntime, RejectsInvalidSectorPlatforms)
         write_text(game_path, game_json.c_str());
 
         char error[512]{};
-        EXPECT_FALSE(sdl3d_game_data_validate_file(game_path.string().c_str(), nullptr, error, sizeof(error)))
+        EXPECT_FALSE(slayer3d_game_data_validate_file(game_path.string().c_str(), nullptr, error, sizeof(error)))
             << test_case.name;
         EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
             << test_case.name << ": " << error;
@@ -11346,7 +11413,7 @@ TEST(GameDataRuntime, RejectsInvalidFpsSectorController)
     const std::filesystem::path dir = unique_test_dir("fps_sector_controller_invalid");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "entities": ["entity.player"]
 })json");
@@ -11400,7 +11467,7 @@ TEST(GameDataRuntime, RejectsInvalidFpsSectorController)
     {
         const std::filesystem::path game_path = dir / (std::string(test_case.name) + ".game.json");
         const std::string game_json = std::string(R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid FPS Sector Controller" },
   "input": {
     "contexts": [
@@ -11441,7 +11508,7 @@ TEST(GameDataRuntime, RejectsInvalidFpsSectorController)
         write_text(game_path, game_json.c_str());
 
         char error[512]{};
-        EXPECT_FALSE(sdl3d_game_data_validate_file(game_path.string().c_str(), nullptr, error, sizeof(error)))
+        EXPECT_FALSE(slayer3d_game_data_validate_file(game_path.string().c_str(), nullptr, error, sizeof(error)))
             << test_case.name;
         EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
             << test_case.name << ": " << error;
@@ -11457,167 +11524,167 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     for (const char *texture_name : {"rock_floor.jpg", "ceiling_metal.jpg", "wall_metal.jpg", "lava.jpg",
                                      "door-hatch.png", "radioactive-crate.png"})
     {
-        sdl3d_image image{};
+        slayer3d_image image{};
         const std::filesystem::path texture_path = doom_path.parent_path() / "textures" / texture_name;
-        ASSERT_TRUE(sdl3d_load_image_from_file(texture_path.string().c_str(), &image))
+        ASSERT_TRUE(slayer3d_load_image_from_file(texture_path.string().c_str(), &image))
             << texture_path << ": " << SDL_GetError();
         EXPECT_GE(image.width, 256) << texture_name;
         EXPECT_GE(image.height, 256) << texture_name;
-        sdl3d_free_image(&image);
+        slayer3d_free_image(&image);
     }
 
-    sdl3d_game_config config{};
+    slayer3d_game_config config{};
     char title[128]{};
     char app_error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_load_app_config_file(doom_path.string().c_str(), &config, title, sizeof(title),
-                                                     app_error, sizeof(app_error)))
+    ASSERT_TRUE(slayer3d_game_data_load_app_config_file(doom_path.string().c_str(), &config, title, sizeof(title),
+                                                        app_error, sizeof(app_error)))
         << app_error;
-    EXPECT_STREQ(config.title, "SDL3D Doom Level");
-    EXPECT_EQ(config.logical_width, SDL3D_GAME_DEFAULT_LOGICAL_WIDTH);
-    EXPECT_EQ(config.logical_height, SDL3D_GAME_DEFAULT_LOGICAL_HEIGHT);
-    EXPECT_EQ(config.backend, SDL3D_BACKEND_OPENGL);
+    EXPECT_STREQ(config.title, "Slayer 3D Doom Level");
+    EXPECT_EQ(config.logical_width, SLAYER3D_GAME_DEFAULT_LOGICAL_WIDTH);
+    EXPECT_EQ(config.logical_height, SLAYER3D_GAME_DEFAULT_LOGICAL_HEIGHT);
+    EXPECT_EQ(config.backend, SLAYER3D_BACKEND_OPENGL);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(doom_path.string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(doom_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
     ASSERT_NE(runtime, nullptr);
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.doom_level.play"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.doom_level.play"));
     const char *units = nullptr;
     float meters_per_unit = 0.0f;
-    ASSERT_TRUE(sdl3d_game_data_get_world_units(runtime, &units, &meters_per_unit));
-    EXPECT_STREQ(units, SDL3D_GAME_DATA_DEFAULT_WORLD_UNITS);
-    EXPECT_FLOAT_EQ(meters_per_unit, SDL3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
-    sdl3d_game_data_scene_skybox skybox{};
-    ASSERT_TRUE(sdl3d_game_data_get_active_scene_skybox(runtime, &skybox));
+    ASSERT_TRUE(slayer3d_game_data_get_world_units(runtime, &units, &meters_per_unit));
+    EXPECT_STREQ(units, SLAYER3D_GAME_DATA_DEFAULT_WORLD_UNITS);
+    EXPECT_FLOAT_EQ(meters_per_unit, SLAYER3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
+    slayer3d_game_data_scene_skybox skybox{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_scene_skybox(runtime, &skybox));
     EXPECT_STREQ(skybox.pos_x, "image.doom.skybox.px");
     EXPECT_STREQ(skybox.neg_z, "image.doom.skybox.nz");
     EXPECT_FLOAT_EQ(skybox.size, 400.0f);
 
-    sdl3d_game_data_app_control app{};
-    ASSERT_TRUE(sdl3d_game_data_get_app_control(runtime, &app));
+    slayer3d_game_data_app_control app{};
+    ASSERT_TRUE(slayer3d_game_data_get_app_control(runtime, &app));
     EXPECT_EQ(app.start_signal_id, -1);
     EXPECT_GE(app.pause_action_id, 0);
     EXPECT_GE(app.quit_action_id, 0);
     EXPECT_STREQ(app.startup_transition, "startup");
     EXPECT_STREQ(app.quit_transition, "quit");
 
-    sdl3d_game_context ctx{};
+    slayer3d_game_context ctx{};
     ctx.session = session;
-    sdl3d_game_data_app_flow flow{};
-    sdl3d_game_data_app_flow_init(&flow);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_start(&flow, runtime));
-    EXPECT_TRUE(sdl3d_game_data_app_flow_is_transitioning(&flow));
+    slayer3d_game_data_app_flow flow{};
+    slayer3d_game_data_app_flow_init(&flow);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_start(&flow, runtime));
+    EXPECT_TRUE(slayer3d_game_data_app_flow_is_transitioning(&flow));
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_P;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 1);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
     EXPECT_TRUE(ctx.paused);
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 2);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 2);
     key.type = SDL_EVENT_KEY_DOWN;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 3);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
     EXPECT_FALSE(ctx.paused);
 
     key.type = SDL_EVENT_KEY_UP;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 4);
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 4);
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_ESCAPE;
-    sdl3d_input_process_event(input, &key);
-    sdl3d_input_update(input, 5);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
-    EXPECT_TRUE(sdl3d_game_data_app_flow_quit_pending(&flow));
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 5);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_TRUE(slayer3d_game_data_app_flow_quit_pending(&flow));
     EXPECT_FALSE(ctx.quit_requested);
-    ASSERT_TRUE(sdl3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.36f));
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.36f));
     EXPECT_TRUE(ctx.quit_requested);
-    EXPECT_TRUE(sdl3d_game_data_active_scene_mouse_capture(runtime, false));
-    EXPECT_FALSE(sdl3d_game_data_active_scene_mouse_capture(runtime, true));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_mouse_capture(runtime, false));
+    EXPECT_FALSE(slayer3d_game_data_active_scene_mouse_capture(runtime, true));
 
-    sdl3d_game_data_render_settings render_settings{};
-    ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &render_settings));
+    slayer3d_game_data_render_settings render_settings{};
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render_settings));
     EXPECT_TRUE(render_settings.has_profile);
     EXPECT_STREQ(render_settings.profile_name, "modern");
     EXPECT_TRUE(render_settings.lighting_enabled);
     EXPECT_FALSE(render_settings.ssao_enabled);
 
-    const int lighting_toggle_signal = sdl3d_game_data_find_signal(runtime, "signal.render.lighting.toggle");
+    const int lighting_toggle_signal = slayer3d_game_data_find_signal(runtime, "signal.render.lighting.toggle");
     ASSERT_GE(lighting_toggle_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), lighting_toggle_signal, nullptr);
-    ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &render_settings));
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), lighting_toggle_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render_settings));
     EXPECT_FALSE(render_settings.lighting_enabled);
 
-    const int profile_ps1_signal = sdl3d_game_data_find_signal(runtime, "signal.render.profile.ps1");
+    const int profile_ps1_signal = slayer3d_game_data_find_signal(runtime, "signal.render.profile.ps1");
     ASSERT_GE(profile_ps1_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), profile_ps1_signal, nullptr);
-    ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &render_settings));
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), profile_ps1_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render_settings));
     EXPECT_STREQ(render_settings.profile_name, "ps1");
     EXPECT_TRUE(render_settings.profile.vertex_snap);
     EXPECT_EQ(render_settings.profile.display_width, 320);
     EXPECT_EQ(render_settings.profile.display_height, 240);
-    EXPECT_EQ(render_settings.profile.display_filter, SDL3D_DISPLAY_FILTER_NEAREST);
-    EXPECT_EQ(render_settings.tonemap, SDL3D_TONEMAP_NONE);
+    EXPECT_EQ(render_settings.profile.display_filter, SLAYER3D_DISPLAY_FILTER_NEAREST);
+    EXPECT_EQ(render_settings.tonemap, SLAYER3D_TONEMAP_NONE);
 
-    const int profile_grayscale_signal = sdl3d_game_data_find_signal(runtime, "signal.render.profile.grayscale");
+    const int profile_grayscale_signal = slayer3d_game_data_find_signal(runtime, "signal.render.profile.grayscale");
     ASSERT_GE(profile_grayscale_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), profile_grayscale_signal, nullptr);
-    ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &render_settings));
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), profile_grayscale_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render_settings));
     EXPECT_STREQ(render_settings.profile_name, "grayscale");
-    EXPECT_EQ(render_settings.profile.display_profile, SDL3D_DISPLAY_PROFILE_GRAYSCALE);
+    EXPECT_EQ(render_settings.profile.display_profile, SLAYER3D_DISPLAY_PROFILE_GRAYSCALE);
     EXPECT_EQ(render_settings.profile.display_width, 512);
     EXPECT_EQ(render_settings.profile.display_height, 342);
 
-    const int profile_gameboy_signal = sdl3d_game_data_find_signal(runtime, "signal.render.profile.gameboy");
+    const int profile_gameboy_signal = slayer3d_game_data_find_signal(runtime, "signal.render.profile.gameboy");
     ASSERT_GE(profile_gameboy_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), profile_gameboy_signal, nullptr);
-    ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &render_settings));
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), profile_gameboy_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render_settings));
     EXPECT_STREQ(render_settings.profile_name, "gameboy");
-    EXPECT_EQ(render_settings.profile.display_profile, SDL3D_DISPLAY_PROFILE_GAMEBOY);
+    EXPECT_EQ(render_settings.profile.display_profile, SLAYER3D_DISPLAY_PROFILE_GAMEBOY);
     EXPECT_EQ(render_settings.profile.display_width, 160);
     EXPECT_EQ(render_settings.profile.display_height, 144);
 
     SectorLevelInstanceCapture sector_capture{};
     ASSERT_TRUE(
-        sdl3d_game_data_for_each_sector_level_instance(runtime, capture_sector_level_instance, &sector_capture));
-    EXPECT_EQ(sector_capture.variant, SDL3D_GAME_DATA_SECTOR_LEVEL_LIGHTMAPPED);
+        slayer3d_game_data_for_each_sector_level_instance(runtime, capture_sector_level_instance, &sector_capture));
+    EXPECT_EQ(sector_capture.variant, SLAYER3D_GAME_DATA_SECTOR_LEVEL_LIGHTMAPPED);
     EXPECT_TRUE(sector_capture.portal_culling);
-    const int variant_cycle_signal = sdl3d_game_data_find_signal(runtime, "signal.render.variant.cycle");
+    const int variant_cycle_signal = slayer3d_game_data_find_signal(runtime, "signal.render.variant.cycle");
     ASSERT_GE(variant_cycle_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), variant_cycle_signal, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), variant_cycle_signal, nullptr);
     sector_capture = {};
     ASSERT_TRUE(
-        sdl3d_game_data_for_each_sector_level_instance(runtime, capture_sector_level_instance, &sector_capture));
-    EXPECT_EQ(sector_capture.variant, SDL3D_GAME_DATA_SECTOR_LEVEL_VERTEX_BAKED);
-    const int portal_toggle_signal = sdl3d_game_data_find_signal(runtime, "signal.render.portal_culling.toggle");
+        slayer3d_game_data_for_each_sector_level_instance(runtime, capture_sector_level_instance, &sector_capture));
+    EXPECT_EQ(sector_capture.variant, SLAYER3D_GAME_DATA_SECTOR_LEVEL_VERTEX_BAKED);
+    const int portal_toggle_signal = slayer3d_game_data_find_signal(runtime, "signal.render.portal_culling.toggle");
     ASSERT_GE(portal_toggle_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), portal_toggle_signal, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), portal_toggle_signal, nullptr);
     sector_capture = {};
     ASSERT_TRUE(
-        sdl3d_game_data_for_each_sector_level_instance(runtime, capture_sector_level_instance, &sector_capture));
+        slayer3d_game_data_for_each_sector_level_instance(runtime, capture_sector_level_instance, &sector_capture));
     EXPECT_FALSE(sector_capture.portal_culling);
 
     DoorPrefixRenderCapture capture{};
     capture.prefix = "door.";
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_door_prefix_render_primitive, &capture));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_door_prefix_render_primitive, &capture));
     EXPECT_EQ(capture.door_primitives, 5);
     EXPECT_EQ(capture.textured_door_primitives, 5);
     ParticleCapture particles{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_particle_emitter(runtime, capture_particle, &particles));
+    ASSERT_TRUE(slayer3d_game_data_for_each_particle_emitter(runtime, capture_particle, &particles));
     EXPECT_TRUE(particles.saw_nukage_vapor);
     RenderPrimitiveCapture authored_props{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &authored_props));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &authored_props));
     EXPECT_TRUE(authored_props.saw_doom_robot_sprite);
     EXPECT_TRUE(authored_props.saw_doom_health_sprite);
     EXPECT_TRUE(authored_props.saw_doom_crate);
@@ -11629,123 +11696,124 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     EXPECT_EQ(authored_props.doom_model_primitives, 1);
     EXPECT_EQ(authored_props.doom_presentation_cubes, 14);
     EXPECT_GE(authored_props.sprites, 10);
-    sdl3d_game_data_ambient_asset ambient{};
-    ASSERT_TRUE(sdl3d_game_data_get_ambient_asset(runtime, "ambient.doom.upper_deck", &ambient));
+    slayer3d_game_data_ambient_asset ambient{};
+    ASSERT_TRUE(slayer3d_game_data_get_ambient_asset(runtime, "ambient.doom.upper_deck", &ambient));
     EXPECT_EQ(ambient.ambient_id, 1);
     EXPECT_STREQ(ambient.path, "asset://audio/ambient_zone.wav");
     EXPECT_TRUE(ambient.loop);
     EXPECT_NEAR(ambient.volume, 0.45f, 0.0001f);
     UiTextCapture ui_text{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui_text, &ui_text));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, capture_ui_text, &ui_text));
     EXPECT_TRUE(ui_text.saw_doom_reticle);
     EXPECT_TRUE(ui_text.saw_doom_profile);
     EXPECT_TRUE(ui_text.saw_doom_fps);
-    sdl3d_game_data_font_asset doom_hud_font{};
-    ASSERT_TRUE(sdl3d_game_data_get_font_asset(runtime, "font.doom.hud", &doom_hud_font));
+    slayer3d_game_data_font_asset doom_hud_font{};
+    ASSERT_TRUE(slayer3d_game_data_get_font_asset(runtime, "font.doom.hud", &doom_hud_font));
     EXPECT_TRUE(doom_hud_font.builtin);
     EXPECT_NEAR(doom_hud_font.size, 22.0f, 0.0001f);
-    sdl3d_game_data_ui_text profile_text{};
+    slayer3d_game_data_ui_text profile_text{};
     bool saw_profile_text = false;
-    auto find_doom_profile_text = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+    auto find_doom_profile_text = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         if (std::string(text->name) != "ui.doom_level.profile")
             return true;
-        auto *args = static_cast<std::pair<sdl3d_game_data_ui_text *, bool *> *>(userdata);
+        auto *args = static_cast<std::pair<slayer3d_game_data_ui_text *, bool *> *>(userdata);
         *args->first = *text;
         *args->second = true;
         return false;
     };
-    std::pair<sdl3d_game_data_ui_text *, bool *> profile_text_args{&profile_text, &saw_profile_text};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_doom_profile_text, &profile_text_args));
+    std::pair<slayer3d_game_data_ui_text *, bool *> profile_text_args{&profile_text, &saw_profile_text};
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_doom_profile_text, &profile_text_args));
     ASSERT_TRUE(saw_profile_text);
     char profile_label[64]{};
-    ASSERT_TRUE(sdl3d_game_data_format_ui_text(runtime, &profile_text, nullptr, profile_label, sizeof(profile_label)));
+    ASSERT_TRUE(
+        slayer3d_game_data_format_ui_text(runtime, &profile_text, nullptr, profile_label, sizeof(profile_label)));
     EXPECT_STREQ(profile_label, "PROFILE gameboy");
-    sdl3d_game_data_ui_text pause_text{};
+    slayer3d_game_data_ui_text pause_text{};
     bool saw_pause_text = false;
-    auto find_doom_pause_text = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+    auto find_doom_pause_text = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         if (std::string(text->name) != "ui.doom_level.pause.title")
             return true;
-        auto *args = static_cast<std::pair<sdl3d_game_data_ui_text *, bool *> *>(userdata);
+        auto *args = static_cast<std::pair<slayer3d_game_data_ui_text *, bool *> *>(userdata);
         *args->first = *text;
         *args->second = true;
         return false;
     };
-    std::pair<sdl3d_game_data_ui_text *, bool *> pause_text_args{&pause_text, &saw_pause_text};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_doom_pause_text, &pause_text_args));
+    std::pair<slayer3d_game_data_ui_text *, bool *> pause_text_args{&pause_text, &saw_pause_text};
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_doom_pause_text, &pause_text_args));
     ASSERT_TRUE(saw_pause_text);
-    sdl3d_game_data_ui_metrics ui_metrics{};
+    slayer3d_game_data_ui_metrics ui_metrics{};
     ui_metrics.paused = false;
-    EXPECT_FALSE(sdl3d_game_data_ui_text_is_visible(runtime, &pause_text, &ui_metrics));
+    EXPECT_FALSE(slayer3d_game_data_ui_text_is_visible(runtime, &pause_text, &ui_metrics));
     ui_metrics.paused = true;
-    EXPECT_TRUE(sdl3d_game_data_ui_text_is_visible(runtime, &pause_text, &ui_metrics));
+    EXPECT_TRUE(slayer3d_game_data_ui_text_is_visible(runtime, &pause_text, &ui_metrics));
 
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
     ASSERT_NE(player, nullptr);
     UiRectCapture ui_rects{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_ui_rect(runtime, capture_ui_rect, &ui_rects));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_ui_rect, &ui_rects));
     EXPECT_EQ(ui_rects.count, 5);
     EXPECT_TRUE(ui_rects.saw_doom_damage_feedback);
-    sdl3d_game_data_ui_rect resolved_damage_rect{};
+    slayer3d_game_data_ui_rect resolved_damage_rect{};
     bool damage_rect_visible = true;
-    ASSERT_TRUE(sdl3d_game_data_resolve_ui_rect(runtime, &ui_rects.damage_rect, nullptr, &resolved_damage_rect,
-                                                &damage_rect_visible));
+    ASSERT_TRUE(slayer3d_game_data_resolve_ui_rect(runtime, &ui_rects.damage_rect, nullptr, &resolved_damage_rect,
+                                                   &damage_rect_visible));
     EXPECT_FALSE(damage_rect_visible);
-    sdl3d_properties_set_float(player->props, "last_damage_per_second", 18.0f);
-    ASSERT_TRUE(sdl3d_game_data_resolve_ui_rect(runtime, &ui_rects.damage_rect, nullptr, &resolved_damage_rect,
-                                                &damage_rect_visible));
+    slayer3d_properties_set_float(player->props, "last_damage_per_second", 18.0f);
+    ASSERT_TRUE(slayer3d_game_data_resolve_ui_rect(runtime, &ui_rects.damage_rect, nullptr, &resolved_damage_rect,
+                                                   &damage_rect_visible));
     EXPECT_TRUE(damage_rect_visible);
     EXPECT_GT(resolved_damage_rect.color.a, 90);
     EXPECT_LT(resolved_damage_rect.color.a, 120);
-    sdl3d_camera3d player_camera{};
-    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.doom.player", &player_camera));
-    EXPECT_EQ(player_camera.projection, SDL3D_CAMERA_PERSPECTIVE);
-    EXPECT_FLOAT_EQ(player_camera.fovy, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
-    sdl3d_camera3d surveillance_camera{};
-    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.doom.surveillance", &surveillance_camera));
-    EXPECT_FLOAT_EQ(surveillance_camera.fovy, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
-    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.doom.player");
-    player->position = sdl3d_vec3_make(43.0f, 0.5f, 89.0f);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
-    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.doom.surveillance");
+    slayer3d_camera3d player_camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.doom.player", &player_camera));
+    EXPECT_EQ(player_camera.projection, SLAYER3D_CAMERA_PERSPECTIVE);
+    EXPECT_FLOAT_EQ(player_camera.fovy, SLAYER3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+    slayer3d_camera3d surveillance_camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.doom.surveillance", &surveillance_camera));
+    EXPECT_FLOAT_EQ(surveillance_camera.fovy, SLAYER3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.doom.player");
+    player->position = slayer3d_vec3_make(43.0f, 0.5f, 89.0f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.doom.surveillance");
 
-    sdl3d_registered_actor *projectile = sdl3d_game_data_find_actor(runtime, "pool.doom.projectiles.0");
+    slayer3d_registered_actor *projectile = slayer3d_game_data_find_actor(runtime, "pool.doom.projectiles.0");
     ASSERT_NE(projectile, nullptr);
     EXPECT_FALSE(projectile->active);
-    const int fire_action = sdl3d_game_data_find_action(runtime, "action.fire");
+    const int fire_action = slayer3d_game_data_find_action(runtime, "action.fire");
     ASSERT_GE(fire_action, 0);
     ASSERT_NE(input, nullptr);
-    sdl3d_input_set_action_override(input, fire_action, 1.0f);
-    ASSERT_NE(sdl3d_input_update(input, 100), nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    slayer3d_input_set_action_override(input, fire_action, 1.0f);
+    ASSERT_NE(slayer3d_input_update(input, 100), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_TRUE(projectile->active);
-    expect_vec3_near(sdl3d_properties_get_vec3(projectile->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)),
-                     sdl3d_vec3_make(0.0f, 0.0f, 20.0f));
-    EXPECT_EQ(sdl3d_game_data_world_light_count(runtime), 1);
+    expect_vec3_near(slayer3d_properties_get_vec3(projectile->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)),
+                     slayer3d_vec3_make(0.0f, 0.0f, 20.0f));
+    EXPECT_EQ(slayer3d_game_data_world_light_count(runtime), 1);
     RenderPrimitiveCapture projectile_capture{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &projectile_capture));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &projectile_capture));
     EXPECT_EQ(projectile_capture.doom_projectile_spheres, 1);
-    sdl3d_game_data_sprite_asset robot_sprite{};
-    ASSERT_TRUE(sdl3d_game_data_get_sprite_asset(runtime, "sprite.doom.robot.walk", &robot_sprite));
-    EXPECT_EQ(robot_sprite.source_kind, SDL3D_SPRITE_ASSET_SOURCE_FILES);
+    slayer3d_game_data_sprite_asset robot_sprite{};
+    ASSERT_TRUE(slayer3d_game_data_get_sprite_asset(runtime, "sprite.doom.robot.walk", &robot_sprite));
+    EXPECT_EQ(robot_sprite.source_kind, SLAYER3D_SPRITE_ASSET_SOURCE_FILES);
     EXPECT_EQ(robot_sprite.frame_count, 6);
     EXPECT_EQ(robot_sprite.direction_count, 8);
-    sdl3d_sprite_asset_runtime robot_sprite_runtime{};
-    ASSERT_TRUE(sdl3d_game_data_load_sprite_asset(runtime, "sprite.doom.robot.walk", &robot_sprite_runtime, error,
-                                                  sizeof(error)))
+    slayer3d_sprite_asset_runtime robot_sprite_runtime{};
+    ASSERT_TRUE(slayer3d_game_data_load_sprite_asset(runtime, "sprite.doom.robot.walk", &robot_sprite_runtime, error,
+                                                     sizeof(error)))
         << error;
     EXPECT_EQ(robot_sprite_runtime.animation_frame_count, 6);
     EXPECT_EQ(robot_sprite_runtime.direction_count, 8);
-    sdl3d_sprite_asset_free(&robot_sprite_runtime);
+    slayer3d_sprite_asset_free(&robot_sprite_runtime);
 
-    sdl3d_registered_actor *robot = sdl3d_game_data_find_actor(runtime, "entity.doom.robot.entry");
+    slayer3d_registered_actor *robot = slayer3d_game_data_find_actor(runtime, "entity.doom.robot.entry");
     ASSERT_NE(robot, nullptr);
     const float robot_start_x = robot->position.x;
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.5f));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.5f));
     EXPECT_GT(robot->position.x, robot_start_x);
-    EXPECT_GT(sdl3d_properties_get_float(robot->props, "sprite_yaw", 0.0f), 1.0f);
+    EXPECT_GT(slayer3d_properties_get_float(robot->props, "sprite_yaw", 0.0f), 1.0f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, DoomLevelNumberKeysSwitchRenderProfiles)
@@ -11753,16 +11821,16 @@ TEST(GameDataRuntime, DoomLevelNumberKeysSwitchRenderProfiles)
     const std::filesystem::path doom_path = doom_level_data_path();
     ASSERT_TRUE(std::filesystem::exists(doom_path)) << doom_path;
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(doom_path.string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(doom_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
     ASSERT_NE(runtime, nullptr);
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.doom_level.play"));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.doom_level.play"));
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
 
     struct ProfileKeyCase
@@ -11771,14 +11839,14 @@ TEST(GameDataRuntime, DoomLevelNumberKeysSwitchRenderProfiles)
         const char *expected_name;
         bool expected_vertex_snap;
         bool expected_quantize;
-        sdl3d_tonemap_mode expected_tonemap;
+        slayer3d_tonemap_mode expected_tonemap;
     };
     const ProfileKeyCase cases[] = {
-        {SDL_SCANCODE_1, "modern", false, false, SDL3D_TONEMAP_ACES},
-        {SDL_SCANCODE_2, "ps1", true, true, SDL3D_TONEMAP_NONE},
-        {SDL_SCANCODE_3, "n64", false, false, SDL3D_TONEMAP_NONE},
-        {SDL_SCANCODE_4, "dos", false, true, SDL3D_TONEMAP_NONE},
-        {SDL_SCANCODE_5, "snes", false, true, SDL3D_TONEMAP_NONE},
+        {SDL_SCANCODE_1, "modern", false, false, SLAYER3D_TONEMAP_ACES},
+        {SDL_SCANCODE_2, "ps1", true, true, SLAYER3D_TONEMAP_NONE},
+        {SDL_SCANCODE_3, "n64", false, false, SLAYER3D_TONEMAP_NONE},
+        {SDL_SCANCODE_4, "dos", false, true, SLAYER3D_TONEMAP_NONE},
+        {SDL_SCANCODE_5, "snes", false, true, SLAYER3D_TONEMAP_NONE},
     };
 
     Uint64 tick = 1;
@@ -11787,12 +11855,12 @@ TEST(GameDataRuntime, DoomLevelNumberKeysSwitchRenderProfiles)
         SDL_Event event{};
         event.type = SDL_EVENT_KEY_DOWN;
         event.key.scancode = test_case.scancode;
-        sdl3d_input_process_event(input, &event);
-        sdl3d_input_update(input, tick++);
-        ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+        slayer3d_input_process_event(input, &event);
+        slayer3d_input_update(input, tick++);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
 
-        sdl3d_game_data_render_settings settings{};
-        ASSERT_TRUE(sdl3d_game_data_get_render_settings(runtime, &settings));
+        slayer3d_game_data_render_settings settings{};
+        ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &settings));
         ASSERT_TRUE(settings.has_profile);
         EXPECT_STREQ(settings.profile_name, test_case.expected_name);
         EXPECT_EQ(settings.profile.vertex_snap, test_case.expected_vertex_snap) << test_case.expected_name;
@@ -11800,13 +11868,13 @@ TEST(GameDataRuntime, DoomLevelNumberKeysSwitchRenderProfiles)
         EXPECT_EQ(settings.tonemap, test_case.expected_tonemap) << test_case.expected_name;
 
         event.type = SDL_EVENT_KEY_UP;
-        sdl3d_input_process_event(input, &event);
-        sdl3d_input_update(input, tick++);
-        ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+        slayer3d_input_process_event(input, &event);
+        slayer3d_input_update(input, tick++);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     }
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, RunsAuthoredSectorHazardSensors)
@@ -11814,7 +11882,7 @@ TEST(GameDataRuntime, RunsAuthoredSectorHazardSensors)
     const std::filesystem::path dir = unique_test_dir("sector_hazard_sensors");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "entities": ["entity.player", "entity.bot"],
@@ -11822,7 +11890,7 @@ TEST(GameDataRuntime, RunsAuthoredSectorHazardSensors)
 })json");
     write_text(dir / "sector_hazard_sensors.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Sector Hazard Sensor Test" },
   "world": { "name": "world.test", "kind": "sector" },
   "entities": [
@@ -11923,40 +11991,40 @@ TEST(GameDataRuntime, RunsAuthoredSectorHazardSensors)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "sector_hazard_sensors.game.json").string().c_str(), session, &runtime,
-                                          error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "sector_hazard_sensors.game.json").string().c_str(), session,
+                                             &runtime, error, sizeof(error)))
         << error;
-    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
     ASSERT_NE(player, nullptr);
-    sdl3d_registered_actor *bot = sdl3d_game_data_find_actor(runtime, "entity.bot");
+    slayer3d_registered_actor *bot = slayer3d_game_data_find_actor(runtime, "entity.bot");
     ASSERT_NE(bot, nullptr);
 
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
-    EXPECT_FALSE(sdl3d_properties_get_bool(player->props, "entered_hazard", true));
-    EXPECT_EQ(sdl3d_properties_get_int(player->props, "damage_taken", -1), 0);
-    EXPECT_NEAR(sdl3d_properties_get_float(bot->props, "tag_damage", 0.0f), 2.5f, 0.0001f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    EXPECT_FALSE(slayer3d_properties_get_bool(player->props, "entered_hazard", true));
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "damage_taken", -1), 0);
+    EXPECT_NEAR(slayer3d_properties_get_float(bot->props, "tag_damage", 0.0f), 2.5f, 0.0001f);
 
-    sdl3d_properties_set_int(player->props, "current_sector", 1);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
-    EXPECT_TRUE(sdl3d_properties_get_bool(player->props, "entered_hazard", false));
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "damage_taken", 0.0f), 2.5f, 0.0001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "last_damage_per_second", 0.0f), 10.0f, 0.0001f);
+    slayer3d_properties_set_int(player->props, "current_sector", 1);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "entered_hazard", false));
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "damage_taken", 0.0f), 2.5f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "last_damage_per_second", 0.0f), 10.0f, 0.0001f);
 
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.1f));
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "damage_taken", 0.0f), 3.5f, 0.0001f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.1f));
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "damage_taken", 0.0f), 3.5f, 0.0001f);
 
-    sdl3d_properties_set_int(player->props, "current_sector", 0);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "damage_taken", 0.0f), 3.5f, 0.0001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "last_damage_per_second", -1.0f), 0.0f, 0.0001f);
+    slayer3d_properties_set_int(player->props, "current_sector", 0);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "damage_taken", 0.0f), 3.5f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "last_damage_per_second", -1.0f), 0.0f, 0.0001f);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -11965,13 +12033,13 @@ TEST(GameDataRuntime, RunsAuthoredPerceptionSensorsWithSectorLineOfSightAndTarge
     const std::filesystem::path dir = unique_test_dir("perception_sensors");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "entities": ["entity.player", "entity.enemy.visible", "entity.enemy.blocked", "entity.friend"]
 })json");
     write_text(dir / "perception_sensors.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Perception Sensor Test" },
   "world": { "name": "world.test", "kind": "sector" },
   "factions": {
@@ -12073,35 +12141,35 @@ TEST(GameDataRuntime, RunsAuthoredPerceptionSensorsWithSectorLineOfSightAndTarge
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "perception_sensors.game.json").string().c_str(), session, &runtime,
-                                          error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "perception_sensors.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
-    sdl3d_registered_actor *visible = sdl3d_game_data_find_actor(runtime, "entity.enemy.visible");
+    slayer3d_registered_actor *visible = slayer3d_game_data_find_actor(runtime, "entity.enemy.visible");
     ASSERT_NE(visible, nullptr);
-    sdl3d_registered_actor *blocked = sdl3d_game_data_find_actor(runtime, "entity.enemy.blocked");
+    slayer3d_registered_actor *blocked = slayer3d_game_data_find_actor(runtime, "entity.enemy.blocked");
     ASSERT_NE(blocked, nullptr);
-    sdl3d_registered_actor *friendly = sdl3d_game_data_find_actor(runtime, "entity.friend");
+    slayer3d_registered_actor *friendly = slayer3d_game_data_find_actor(runtime, "entity.friend");
     ASSERT_NE(friendly, nullptr);
 
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
-    EXPECT_EQ(sdl3d_properties_get_int(visible->props, "spotted", 0), 1);
-    EXPECT_GT(sdl3d_properties_get_float(visible->props, "last_distance", 0.0f), 1.0f);
-    EXPECT_EQ(sdl3d_properties_get_int(blocked->props, "spotted", 0), 0);
-    EXPECT_EQ(sdl3d_properties_get_int(friendly->props, "spotted", 0), 0);
-    EXPECT_FALSE(sdl3d_properties_get_bool(visible->props, "lost", false));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(slayer3d_properties_get_int(visible->props, "spotted", 0), 1);
+    EXPECT_GT(slayer3d_properties_get_float(visible->props, "last_distance", 0.0f), 1.0f);
+    EXPECT_EQ(slayer3d_properties_get_int(blocked->props, "spotted", 0), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(friendly->props, "spotted", 0), 0);
+    EXPECT_FALSE(slayer3d_properties_get_bool(visible->props, "lost", false));
 
-    visible->position = sdl3d_vec3_make(2.0f, 1.0f, 3.5f);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
-    EXPECT_EQ(sdl3d_properties_get_int(visible->props, "spotted", 0), 1);
-    EXPECT_TRUE(sdl3d_properties_get_bool(visible->props, "lost", false));
+    visible->position = slayer3d_vec3_make(2.0f, 1.0f, 3.5f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(slayer3d_properties_get_int(visible->props, "spotted", 0), 1);
+    EXPECT_TRUE(slayer3d_properties_get_bool(visible->props, "lost", false));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -12110,13 +12178,13 @@ TEST(GameDataRuntime, RunsAuthoredHearingSensorsForNoiseEventsAndTargetFilters)
     const std::filesystem::path dir = unique_test_dir("hearing_sensors");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "entities": ["entity.listener", "entity.enemy", "entity.friend", "entity.far_enemy"]
 })json");
     write_text(dir / "hearing_sensors.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Hearing Sensor Test" },
   "world": { "name": "world.test", "kind": "sector" },
   "signals": ["signal.enemy.noise", "signal.friend.noise", "signal.far.noise"],
@@ -12194,41 +12262,41 @@ TEST(GameDataRuntime, RunsAuthoredHearingSensorsForNoiseEventsAndTargetFilters)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "hearing_sensors.game.json").string().c_str(), session, &runtime,
-                                          error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "hearing_sensors.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
-    sdl3d_registered_actor *listener = sdl3d_game_data_find_actor(runtime, "entity.listener");
+    slayer3d_registered_actor *listener = slayer3d_game_data_find_actor(runtime, "entity.listener");
     ASSERT_NE(listener, nullptr);
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.enemy.noise"), nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
-    EXPECT_EQ(sdl3d_properties_get_int(listener->props, "heard_count", 0), 1);
-    EXPECT_STREQ(sdl3d_properties_get_string(listener->props, "last_source", ""), "entity.enemy");
-    EXPECT_GT(sdl3d_properties_get_float(listener->props, "last_audibility", 0.0f), 0.0f);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.enemy.noise"), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(slayer3d_properties_get_int(listener->props, "heard_count", 0), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(listener->props, "last_source", ""), "entity.enemy");
+    EXPECT_GT(slayer3d_properties_get_float(listener->props, "last_audibility", 0.0f), 0.0f);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.friend.noise"), nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
-    EXPECT_EQ(sdl3d_properties_get_int(listener->props, "heard_count", 0), 1);
-    EXPECT_STREQ(sdl3d_properties_get_string(listener->props, "last_source", ""), "entity.enemy");
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.friend.noise"), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(slayer3d_properties_get_int(listener->props, "heard_count", 0), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(listener->props, "last_source", ""), "entity.enemy");
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.far.noise"), nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
-    EXPECT_EQ(sdl3d_properties_get_int(listener->props, "heard_count", 0), 1);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.far.noise"), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(slayer3d_properties_get_int(listener->props, "heard_count", 0), 1);
 
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.enemy.noise"), nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
-    EXPECT_EQ(sdl3d_properties_get_int(listener->props, "heard_count", 0), 2);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.enemy.noise"), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(slayer3d_properties_get_int(listener->props, "heard_count", 0), 2);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -12236,7 +12304,7 @@ TEST(GameDataRuntime, RejectsInvalidSectorDoorsAndActions)
 {
     const std::filesystem::path dir = unique_test_dir("sector_doors_invalid");
     write_text(dir / "scenes" / "play.scene.json",
-               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.player"] })json");
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play", "entities": ["entity.player"] })json");
 
     struct Case
     {
@@ -12353,7 +12421,7 @@ TEST(GameDataRuntime, RejectsInvalidSectorDoorsAndActions)
     {
         const std::filesystem::path game_path = dir / (std::string(test_case.name) + ".game.json");
         const std::string game_json = std::string(R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Sector Door" },
   "signals": ["signal.run"],
   "input": {
@@ -12407,7 +12475,7 @@ TEST(GameDataRuntime, RejectsInvalidSectorDoorsAndActions)
         write_text(game_path, game_json.c_str());
 
         char error[512]{};
-        EXPECT_FALSE(sdl3d_game_data_validate_file(game_path.string().c_str(), nullptr, error, sizeof(error)))
+        EXPECT_FALSE(slayer3d_game_data_validate_file(game_path.string().c_str(), nullptr, error, sizeof(error)))
             << test_case.name;
         EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
             << test_case.name << ": " << error;
@@ -12421,7 +12489,7 @@ TEST(GameDataRuntime, RejectsFpsSectorControllerOnArchetypes)
     const std::filesystem::path dir = unique_test_dir("fps_sector_controller_archetype_invalid");
     write_text(dir / "fps_sector_archetype.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid FPS Sector Archetype Controller" },
   "input": {
     "contexts": [
@@ -12468,8 +12536,8 @@ TEST(GameDataRuntime, RejectsFpsSectorControllerOnArchetypes)
 })json");
 
     char error[512]{};
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "fps_sector_archetype.game.json").string().c_str(), nullptr,
-                                               error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "fps_sector_archetype.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
     EXPECT_NE(std::string(error).find("only supported on static entities"), std::string::npos) << error;
 
     remove_test_dir(dir);
@@ -12517,13 +12585,13 @@ TEST(GameDataRuntime, RejectsInvalidSceneSectorLevelInstances)
     {
         const std::filesystem::path game_path = dir / (std::string(test_case.name) + ".game.json");
         write_text(dir / "scenes" / (std::string(test_case.name) + ".scene.json"), (std::string(R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "world": )json") + test_case.scene_world_json + R"json(
 })json")
                                                                                        .c_str());
         const std::string game_json = std::string(R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Sector Scene" },
   "assets": {
     "images": [
@@ -12553,7 +12621,7 @@ TEST(GameDataRuntime, RejectsInvalidSceneSectorLevelInstances)
         write_text(game_path, game_json.c_str());
 
         char error[512]{};
-        EXPECT_FALSE(sdl3d_game_data_validate_file(game_path.string().c_str(), nullptr, error, sizeof(error)))
+        EXPECT_FALSE(slayer3d_game_data_validate_file(game_path.string().c_str(), nullptr, error, sizeof(error)))
             << test_case.name;
         EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
             << test_case.name << ": " << error;
@@ -12567,19 +12635,19 @@ TEST(GameDataRuntime, RejectsInvalidSceneMouseCapturePolicy)
     const std::filesystem::path dir = unique_test_dir("scene_mouse_capture_invalid");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "input": { "mouse_capture": "relative" }
 })json");
     write_text(dir / "game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Scene Mouse Capture" },
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
 
     char error[512]{};
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "game.json").string().c_str(), nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("scene input.mouse_capture must be never, unpaused, or always"),
               std::string::npos)
         << error;
@@ -12647,7 +12715,7 @@ TEST(GameDataRuntime, RejectsInvalidAuthoredSectorLevels)
     {
         const std::filesystem::path path = dir / (std::string(test_case.name) + ".game.json");
         const std::string json = std::string(R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid Sector Level" },
   "sector_levels": [
 )json") + test_case.sector_json +
@@ -12657,7 +12725,7 @@ TEST(GameDataRuntime, RejectsInvalidAuthoredSectorLevels)
         write_text(path, json.c_str());
 
         char error[512]{};
-        EXPECT_FALSE(sdl3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
+        EXPECT_FALSE(slayer3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
             << test_case.name;
         EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
             << test_case.name << ": " << error;
@@ -12671,90 +12739,92 @@ TEST(GameDataRuntime, PacmanDemoLoadsAndRunsMazeCollection)
     const std::filesystem::path pacman_path = pacman_data_path();
     ASSERT_TRUE(std::filesystem::exists(pacman_path)) << pacman_path;
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pacman_path.string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(pacman_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
     ASSERT_NE(runtime, nullptr);
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
-    const sdl3d_properties *state = sdl3d_game_data_scene_state(runtime);
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.play"));
+    const slayer3d_properties *state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(state, nullptr);
-    EXPECT_GT(sdl3d_properties_get_int(state, "pacman_spawned_collectibles", 0), 0);
+    EXPECT_GT(slayer3d_properties_get_int(state, "pacman_spawned_collectibles", 0), 0);
 
-    sdl3d_registered_actor *pac = sdl3d_game_data_find_actor(runtime, "entity.pacman");
-    sdl3d_registered_actor *wall = sdl3d_game_data_find_actor(runtime, "pool.walls.0");
-    sdl3d_registered_actor *game = sdl3d_game_data_find_actor(runtime, "entity.game");
-    sdl3d_registered_actor *red_ghost = sdl3d_game_data_find_actor(runtime, "entity.ghost.red");
+    slayer3d_registered_actor *pac = slayer3d_game_data_find_actor(runtime, "entity.pacman");
+    slayer3d_registered_actor *wall = slayer3d_game_data_find_actor(runtime, "pool.walls.0");
+    slayer3d_registered_actor *game = slayer3d_game_data_find_actor(runtime, "entity.game");
+    slayer3d_registered_actor *red_ghost = slayer3d_game_data_find_actor(runtime, "entity.ghost.red");
     ASSERT_NE(pac, nullptr);
     ASSERT_NE(wall, nullptr);
     ASSERT_NE(game, nullptr);
     ASSERT_NE(red_ghost, nullptr);
     EXPECT_TRUE(wall->active);
-    EXPECT_TRUE(sdl3d_game_data_active_scene_has_entity(runtime, "pool.walls.0"));
-    EXPECT_GT(sdl3d_properties_get_int(state, "pacman_spawned_wall_runs", 0), 0);
-    EXPECT_LT(sdl3d_properties_get_int(state, "pacman_spawned_wall_runs", 999), 180);
+    EXPECT_TRUE(slayer3d_game_data_active_scene_has_entity(runtime, "pool.walls.0"));
+    EXPECT_GT(slayer3d_properties_get_int(state, "pacman_spawned_wall_runs", 0), 0);
+    EXPECT_LT(slayer3d_properties_get_int(state, "pacman_spawned_wall_runs", 999), 180);
     RenderPrimitiveCapture pickup_render{};
-    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &pickup_render));
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &pickup_render));
     EXPECT_TRUE(pickup_render.saw_pickup_batch);
     EXPECT_GT(pickup_render.pickup_batch_instances, 0);
 
-    const int spawned_collectibles = sdl3d_properties_get_int(state, "pacman_spawned_collectibles", 0);
-    EXPECT_EQ(sdl3d_properties_get_int(game->props, "pellets_remaining", -1), spawned_collectibles);
-    EXPECT_EQ(sdl3d_properties_get_int(pac->props, "grid_col", -1), 1);
-    EXPECT_EQ(sdl3d_properties_get_int(pac->props, "grid_row", -1), 1);
-    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.maze");
+    const int spawned_collectibles = slayer3d_properties_get_int(state, "pacman_spawned_collectibles", 0);
+    EXPECT_EQ(slayer3d_properties_get_int(game->props, "pellets_remaining", -1), spawned_collectibles);
+    EXPECT_EQ(slayer3d_properties_get_int(pac->props, "grid_col", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(pac->props, "grid_row", -1), 1);
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.maze");
 
-    sdl3d_camera3d player_camera{};
-    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.player.first_person", &player_camera));
-    EXPECT_EQ(player_camera.projection, SDL3D_CAMERA_PERSPECTIVE);
+    slayer3d_camera3d player_camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.player.first_person", &player_camera));
+    EXPECT_EQ(player_camera.projection, SLAYER3D_CAMERA_PERSPECTIVE);
     EXPECT_NEAR(player_camera.position.x, pac->position.x, 0.0001f);
     EXPECT_NEAR(player_camera.position.y, pac->position.y, 0.0001f);
     EXPECT_GT(player_camera.target.x, player_camera.position.x);
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    const int camera_toggle = sdl3d_game_data_find_action(runtime, "action.camera.toggle");
+    const int camera_toggle = slayer3d_game_data_find_action(runtime, "action.camera.toggle");
     ASSERT_GE(camera_toggle, 0);
-    EXPECT_TRUE(sdl3d_game_data_active_scene_allows_action(runtime, camera_toggle));
-    sdl3d_input_set_action_override(input, camera_toggle, 1.0f);
-    ASSERT_NE(sdl3d_input_update(input, 9100), nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f / 60.0f));
-    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.player.first_person");
-    sdl3d_input_set_action_override(input, camera_toggle, 0.0f);
-    ASSERT_NE(sdl3d_input_update(input, 9101), nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f / 60.0f));
-    sdl3d_input_set_action_override(input, camera_toggle, 1.0f);
-    ASSERT_NE(sdl3d_input_update(input, 9102), nullptr);
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f / 60.0f));
-    EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.maze");
-    sdl3d_input_set_action_override(input, camera_toggle, 0.0f);
-    ASSERT_NE(sdl3d_input_update(input, 9103), nullptr);
+    EXPECT_TRUE(slayer3d_game_data_active_scene_allows_action(runtime, camera_toggle));
+    slayer3d_input_set_action_override(input, camera_toggle, 1.0f);
+    ASSERT_NE(slayer3d_input_update(input, 9100), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 1.0f / 60.0f));
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.player.first_person");
+    slayer3d_input_set_action_override(input, camera_toggle, 0.0f);
+    ASSERT_NE(slayer3d_input_update(input, 9101), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 1.0f / 60.0f));
+    slayer3d_input_set_action_override(input, camera_toggle, 1.0f);
+    ASSERT_NE(slayer3d_input_update(input, 9102), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 1.0f / 60.0f));
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.maze");
+    slayer3d_input_set_action_override(input, camera_toggle, 0.0f);
+    ASSERT_NE(slayer3d_input_update(input, 9103), nullptr);
 
     for (int i = 0; i < 24; ++i)
     {
-        ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f / 60.0f));
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 1.0f / 60.0f));
     }
 
-    EXPECT_GT(sdl3d_properties_get_int(pac->props, "grid_col", -1), 1);
-    EXPECT_LT(sdl3d_properties_get_int(game->props, "pellets_remaining", spawned_collectibles), spawned_collectibles);
-    EXPECT_GT(sdl3d_properties_get_int(game->props, "score", 0), 0);
+    EXPECT_GT(slayer3d_properties_get_int(pac->props, "grid_col", -1), 1);
+    EXPECT_LT(slayer3d_properties_get_int(game->props, "pellets_remaining", spawned_collectibles),
+              spawned_collectibles);
+    EXPECT_GT(slayer3d_properties_get_int(game->props, "score", 0), 0);
     EXPECT_TRUE(red_ghost->active);
-    EXPECT_LT(sdl3d_properties_get_int(red_ghost->props, "grid_row", 99), 7);
-    EXPECT_TRUE(sdl3d_game_data_find_actor(runtime, "entity.ghost.pink")->active);
-    EXPECT_TRUE(sdl3d_game_data_find_actor(runtime, "entity.ghost.cyan")->active);
-    EXPECT_TRUE(sdl3d_game_data_find_actor(runtime, "entity.ghost.orange")->active);
+    EXPECT_LT(slayer3d_properties_get_int(red_ghost->props, "grid_row", 99), 7);
+    EXPECT_TRUE(slayer3d_game_data_find_actor(runtime, "entity.ghost.pink")->active);
+    EXPECT_TRUE(slayer3d_game_data_find_actor(runtime, "entity.ghost.cyan")->active);
+    EXPECT_TRUE(slayer3d_game_data_find_actor(runtime, "entity.ghost.orange")->active);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, RejectsInvalidMazePrimitiveData)
 {
     const std::filesystem::path dir = unique_test_dir("maze_primitive_validation");
-    write_text(dir / "scenes" / "play.scene.json", R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play" })json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
 
     struct Case
     {
@@ -12767,7 +12837,7 @@ TEST(GameDataRuntime, RejectsInvalidMazePrimitiveData)
         {
             "ragged_rows",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "world": { "name": "world.invalid", "kind": "fixed_screen" },
   "grid_maps": [
@@ -12780,7 +12850,7 @@ TEST(GameDataRuntime, RejectsInvalidMazePrimitiveData)
         {
             "bad_grid_agent_map",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "world": { "name": "world.invalid", "kind": "fixed_screen" },
   "entities": [
@@ -12793,7 +12863,7 @@ TEST(GameDataRuntime, RejectsInvalidMazePrimitiveData)
         {
             "bad_spawn_glyph",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "world": { "name": "world.invalid", "kind": "fixed_screen" },
   "grid_maps": [
@@ -12827,7 +12897,7 @@ TEST(GameDataRuntime, RejectsInvalidMazePrimitiveData)
         {
             "bad_pickup_layer_map",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "grid_pickup_layers": [
     { "name": "pickup.bad", "map": "map.missing", "kinds": [{ "glyph": ".", "kind": "pellet" }] }
@@ -12843,7 +12913,7 @@ TEST(GameDataRuntime, RejectsInvalidMazePrimitiveData)
         const std::filesystem::path path = dir / (std::string(test_case.name) + ".game.json");
         write_text(path, test_case.json);
         char error[512]{};
-        EXPECT_FALSE(sdl3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
+        EXPECT_FALSE(slayer3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
             << test_case.name;
         EXPECT_NE(std::string(error).find(test_case.message), std::string::npos) << test_case.name << ": " << error;
     }
@@ -12856,7 +12926,7 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
     const std::filesystem::path dir = unique_test_dir("actor_pool_validation");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play"
 })json");
 
@@ -12871,7 +12941,7 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
         {
             "missing_archetype",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "actor_pools": [
     { "name": "pool.bad", "archetype": "archetype.missing", "capacity": 1 }
@@ -12883,7 +12953,7 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
         {
             "bad_capacity",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "actor_archetypes": [
     { "name": "archetype.shot" }
@@ -12898,7 +12968,7 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
         {
             "bad_spawn_pool",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "signals": ["signal.spawn"],
   "logic": {
@@ -12918,7 +12988,7 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
         {
             "bad_projectile_speed",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "entities": [
     { "name": "entity.player", "active": true }
@@ -12953,7 +13023,7 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
         {
             "bad_sector_velocity_level",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "actor_archetypes": [
     {
@@ -12973,7 +13043,7 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
         {
             "bad_spawn_from",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "actor_archetypes": [
     { "name": "archetype.shot" }
@@ -12999,7 +13069,7 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
         {
             "bad_despawn_target",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "signals": ["signal.despawn"],
   "logic": {
@@ -13019,7 +13089,7 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
         {
             "pool_actor_collision",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "entities": [
     { "name": "pool.shots.0" }
@@ -13037,7 +13107,7 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
         {
             "bad_pool_scenes",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "actor_archetypes": [
     { "name": "archetype.shot" }
@@ -13057,7 +13127,7 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
         {
             "bad_scene_exit_policy",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "actor_archetypes": [
     { "name": "archetype.shot" }
@@ -13078,7 +13148,7 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
         {
             "bad_contact_sensor_endpoint",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "actor_archetypes": [
     { "name": "archetype.shot", "tags": ["projectile"] }
@@ -13105,7 +13175,7 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
         {
             "bad_volume_bounds",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "entities": [
     { "name": "entity.player", "active": true }
@@ -13130,7 +13200,7 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
         {
             "bad_fps_launch_velocity",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
   "entities": [
     { "name": "entity.player", "active": true }
@@ -13161,7 +13231,7 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
         const std::filesystem::path path = dir / (std::string(test_case.name) + ".game.json");
         write_text(path, test_case.json);
         char error[512]{};
-        EXPECT_FALSE(sdl3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
+        EXPECT_FALSE(slayer3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
             << test_case.name;
         EXPECT_NE(std::string(error).find(test_case.message), std::string::npos) << test_case.name << ": " << error;
     }
@@ -13174,7 +13244,7 @@ TEST(GameDataRuntime, ValidatesStructuredJsonImportsAndFragments)
     const std::filesystem::path dir = unique_test_dir("json_imports_valid");
     write_text(dir / "game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "imports": [
     { "path": "fragments/assets.json", "sections": ["assets"] },
     { "path": "fragments/actors.json" }
@@ -13182,7 +13252,7 @@ TEST(GameDataRuntime, ValidatesStructuredJsonImportsAndFragments)
 })json");
     write_text(dir / "fragments" / "assets.json",
                R"json({
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "assets": {
     "images": [
       { "id": "image.player", "path": "asset://images/player.png" }
@@ -13191,7 +13261,7 @@ TEST(GameDataRuntime, ValidatesStructuredJsonImportsAndFragments)
 })json");
     write_text(dir / "fragments" / "actors.json",
                R"json({
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "imports": [
     { "path": "shared/signals.json", "sections": ["signals"] }
   ],
@@ -13204,13 +13274,13 @@ TEST(GameDataRuntime, ValidatesStructuredJsonImportsAndFragments)
 })json");
     write_text(dir / "fragments" / "shared" / "signals.json",
                R"json({
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "signals": ["signal.wave.start"]
 })json");
     write_text(dir / "images" / "player.png", "placeholder");
 
     char error[512]{};
-    EXPECT_TRUE(sdl3d_game_data_validate_file((dir / "game.json").string().c_str(), nullptr, error, sizeof(error)))
+    EXPECT_TRUE(slayer3d_game_data_validate_file((dir / "game.json").string().c_str(), nullptr, error, sizeof(error)))
         << error;
     remove_test_dir(dir);
 }
@@ -13220,7 +13290,7 @@ TEST(GameDataRuntime, LoadsComposedStructuredJsonImports)
     const std::filesystem::path dir = unique_test_dir("json_imports_composed");
     write_text(dir / "game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Imports", "id": "test.imports", "version": "0.1.0" },
   "imports": [
     { "path": "fragments/entities.json", "sections": ["entities"] },
@@ -13242,7 +13312,7 @@ TEST(GameDataRuntime, LoadsComposedStructuredJsonImports)
 })json");
     write_text(dir / "fragments" / "entities.json",
                R"json({
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "entities": [
     {
       "name": "entity.imported",
@@ -13256,12 +13326,12 @@ TEST(GameDataRuntime, LoadsComposedStructuredJsonImports)
 })json");
     write_text(dir / "fragments" / "signals.json",
                R"json({
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "signals": ["signal.imported"]
 })json");
     write_text(dir / "fragments" / "logic.json",
                R"json({
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "logic": {
     "bindings": [
       {
@@ -13275,31 +13345,31 @@ TEST(GameDataRuntime, LoadsComposedStructuredJsonImports)
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "entities": ["entity.imported"]
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
-    sdl3d_game_data_runtime *runtime = nullptr;
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
     char error[512]{};
     ASSERT_TRUE(
-        sdl3d_game_data_load_file((dir / "game.json").string().c_str(), session, &runtime, error, sizeof(error)))
+        slayer3d_game_data_load_file((dir / "game.json").string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, "entity.imported");
+    slayer3d_registered_actor *actor = slayer3d_game_data_find_actor(runtime, "entity.imported");
     ASSERT_NE(actor, nullptr);
-    EXPECT_NE(sdl3d_game_data_find_actor_with_tag(runtime, "imported"), nullptr);
+    EXPECT_NE(slayer3d_game_data_find_actor_with_tag(runtime, "imported"), nullptr);
 
-    const int root_signal = sdl3d_game_data_find_signal(runtime, "signal.root");
-    const int imported_signal = sdl3d_game_data_find_signal(runtime, "signal.imported");
+    const int root_signal = slayer3d_game_data_find_signal(runtime, "signal.root");
+    const int imported_signal = slayer3d_game_data_find_signal(runtime, "signal.imported");
     ASSERT_GE(root_signal, 0);
     ASSERT_GE(imported_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), root_signal, nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(actor->props, "count", 0), 7);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), imported_signal, nullptr);
-    EXPECT_TRUE(sdl3d_properties_get_bool(actor->props, "ready", false));
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), root_signal, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(actor->props, "count", 0), 7);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), imported_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(actor->props, "ready", false));
 
     destroy_runtime_session(session, runtime);
     remove_test_dir(dir);
@@ -13310,7 +13380,7 @@ TEST(GameDataRuntime, ImportDiagnosticsReportFragmentSource)
     const std::filesystem::path dir = unique_test_dir("json_imports_source_diagnostics");
     write_text(dir / "game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "imports": [
     { "path": "fragments/logic.json", "sections": ["logic"] }
   ],
@@ -13318,7 +13388,7 @@ TEST(GameDataRuntime, ImportDiagnosticsReportFragmentSource)
 })json");
     write_text(dir / "fragments" / "logic.json",
                R"json({
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "logic": {
     "bindings": [
       {
@@ -13332,7 +13402,7 @@ TEST(GameDataRuntime, ImportDiagnosticsReportFragmentSource)
 })json");
 
     char error[512]{};
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "game.json").string().c_str(), nullptr, error, sizeof(error)));
     const std::string message = error;
     EXPECT_NE(message.find("fragments/logic.json"), std::string::npos) << message;
     EXPECT_NE(message.find("$.logic.bindings[0].actions[0]"), std::string::npos) << message;
@@ -13357,7 +13427,7 @@ TEST(GameDataRuntime, RejectsInvalidStructuredJsonImports)
     const Case cases[] = {
         {
             "unsafe_path",
-            R"json({ "schema": "sdl3d.game.v0", "imports": [{ "path": "../fragment.json" }] })json",
+            R"json({ "schema": "slayer3d.game.v0", "imports": [{ "path": "../fragment.json" }] })json",
             NULL,
             NULL,
             NULL,
@@ -13366,19 +13436,19 @@ TEST(GameDataRuntime, RejectsInvalidStructuredJsonImports)
         },
         {
             "bad_schema",
-            R"json({ "schema": "sdl3d.game.v0", "imports": [{ "path": "fragment.json" }] })json",
+            R"json({ "schema": "slayer3d.game.v0", "imports": [{ "path": "fragment.json" }] })json",
             "fragment.json",
-            R"json({ "schema": "sdl3d.game.v0" })json",
+            R"json({ "schema": "slayer3d.game.v0" })json",
             NULL,
             NULL,
-            "must use schema sdl3d.fragment.v0",
+            "must use schema slayer3d.fragment.v0",
         },
         {
             "root_only_key",
-            R"json({ "schema": "sdl3d.game.v0", "imports": [{ "path": "fragment.json" }] })json",
+            R"json({ "schema": "slayer3d.game.v0", "imports": [{ "path": "fragment.json" }] })json",
             "fragment.json",
             R"json({
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "metadata": { "name": "Bad Fragment" }
 })json",
             NULL,
@@ -13388,11 +13458,11 @@ TEST(GameDataRuntime, RejectsInvalidStructuredJsonImports)
         {
             "bad_section",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "imports": [{ "path": "fragment.json", "sections": ["metadata"] }]
 })json",
             "fragment.json",
-            R"json({ "schema": "sdl3d.fragment.v0", "assets": {} })json",
+            R"json({ "schema": "slayer3d.fragment.v0", "assets": {} })json",
             NULL,
             NULL,
             "not mergeable",
@@ -13400,11 +13470,11 @@ TEST(GameDataRuntime, RejectsInvalidStructuredJsonImports)
         {
             "missing_selected_section",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "imports": [{ "path": "fragment.json", "sections": ["assets"] }]
 })json",
             "fragment.json",
-            R"json({ "schema": "sdl3d.fragment.v0", "signals": [] })json",
+            R"json({ "schema": "slayer3d.fragment.v0", "signals": [] })json",
             NULL,
             NULL,
             "not present in fragment",
@@ -13412,37 +13482,37 @@ TEST(GameDataRuntime, RejectsInvalidStructuredJsonImports)
         {
             "unselected_section",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "imports": [{ "path": "fragment.json", "sections": ["assets"] }]
 })json",
             "fragment.json",
-            R"json({ "schema": "sdl3d.fragment.v0", "assets": {}, "signals": [] })json",
+            R"json({ "schema": "slayer3d.fragment.v0", "assets": {}, "signals": [] })json",
             NULL,
             NULL,
             "not selected by the import filter",
         },
         {
             "cycle",
-            R"json({ "schema": "sdl3d.game.v0", "imports": [{ "path": "a.json" }] })json",
+            R"json({ "schema": "slayer3d.game.v0", "imports": [{ "path": "a.json" }] })json",
             "a.json",
-            R"json({ "schema": "sdl3d.fragment.v0", "imports": [{ "path": "b.json" }], "signals": [] })json",
+            R"json({ "schema": "slayer3d.fragment.v0", "imports": [{ "path": "b.json" }], "signals": [] })json",
             "b.json",
-            R"json({ "schema": "sdl3d.fragment.v0", "imports": [{ "path": "a.json" }], "signals": [] })json",
+            R"json({ "schema": "slayer3d.fragment.v0", "imports": [{ "path": "a.json" }], "signals": [] })json",
             "cycle",
         },
         {
             "merge_conflict",
             R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "imports": [
     { "path": "a.json", "sections": ["storage"] },
     { "path": "b.json", "sections": ["storage"] }
   ]
 })json",
             "a.json",
-            R"json({ "schema": "sdl3d.fragment.v0", "storage": { "organization": "A" } })json",
+            R"json({ "schema": "slayer3d.fragment.v0", "storage": { "organization": "A" } })json",
             "b.json",
-            R"json({ "schema": "sdl3d.fragment.v0", "storage": { "organization": "B" } })json",
+            R"json({ "schema": "slayer3d.fragment.v0", "storage": { "organization": "B" } })json",
             "merge conflict",
         },
     };
@@ -13458,7 +13528,7 @@ TEST(GameDataRuntime, RejectsInvalidStructuredJsonImports)
 
         char error[512]{};
         EXPECT_FALSE(
-            sdl3d_game_data_validate_file((case_dir / "game.json").string().c_str(), nullptr, error, sizeof(error)))
+            slayer3d_game_data_validate_file((case_dir / "game.json").string().c_str(), nullptr, error, sizeof(error)))
             << test_case.name;
         EXPECT_NE(std::string(error).find(test_case.message), std::string::npos) << test_case.name << ": " << error;
     }
@@ -13539,7 +13609,7 @@ return rules
 )lua");
     write_text(dir / "lua_actor_pools.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Lua Actor Pools", "id": "test.lua_actor_pools", "version": "0.1.0" },
   "world": { "name": "world.lua_actor_pools", "kind": "fixed_screen" },
   "scripts": [
@@ -13618,75 +13688,76 @@ return rules
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play"
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "lua_actor_pools.game.json").string().c_str(), session, &runtime,
-                                          error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "lua_actor_pools.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
         << error;
 
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.spawn"), nullptr);
 
-    sdl3d_registered_actor *shot0 = sdl3d_game_data_find_actor(runtime, "pool.projectiles.0");
+    slayer3d_registered_actor *shot0 = slayer3d_game_data_find_actor(runtime, "pool.projectiles.0");
     ASSERT_NE(shot0, nullptr);
     EXPECT_TRUE(shot0->active);
-    expect_vec3_near(shot0->position, sdl3d_vec3_make(1.25f, 2.5f, 3.0f));
-    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 5);
-    EXPECT_TRUE(sdl3d_properties_get_bool(shot0->props, "critical", false));
-    EXPECT_STREQ(sdl3d_properties_get_string(shot0->props, "owner", ""), "player");
-    expect_vec3_near(sdl3d_properties_get_vec3(shot0->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f)),
-                     sdl3d_vec3_make(1.0f, 2.0f, 0.0f));
-    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "touched", 0), 1);
-    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "spawn_name", ""),
+    expect_vec3_near(shot0->position, slayer3d_vec3_make(1.25f, 2.5f, 3.0f));
+    EXPECT_EQ(slayer3d_properties_get_int(shot0->props, "damage", 0), 5);
+    EXPECT_TRUE(slayer3d_properties_get_bool(shot0->props, "critical", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(shot0->props, "owner", ""), "player");
+    expect_vec3_near(slayer3d_properties_get_vec3(shot0->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)),
+                     slayer3d_vec3_make(1.0f, 2.0f, 0.0f));
+    EXPECT_EQ(slayer3d_properties_get_int(shot0->props, "touched", 0), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "spawn_name", ""),
                  "pool.projectiles.0");
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "spawn_actor_id", -1), shot0->id);
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "spawn_pool_index", -1), 0);
-    EXPECT_TRUE(sdl3d_properties_get_bool(sdl3d_game_data_scene_state(runtime), "spawn_active", false));
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "pool_capacity", -1), 2);
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "pool_active", -1), 1);
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "pool_available", -1), 1);
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "active_projectiles", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "spawn_actor_id", -1), shot0->id);
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "spawn_pool_index", -1), 0);
+    EXPECT_TRUE(slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime), "spawn_active", false));
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "pool_capacity", -1), 2);
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "pool_active", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "pool_available", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "active_projectiles", -1), 1);
 
-    EXPECT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_FALSE(shot0->active);
-    EXPECT_FALSE(sdl3d_properties_get_bool(sdl3d_game_data_scene_state(runtime), "sensor_during_active", true));
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "sensor_during_damage", -1), 5);
-    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "sensor_during_lifecycle", ""),
+    EXPECT_FALSE(slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime), "sensor_during_active", true));
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "sensor_during_damage", -1), 5);
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "sensor_during_lifecycle", ""),
                  "despawning");
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "sensor_during_available", -1), 1);
-    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 1);
-    EXPECT_STREQ(sdl3d_properties_get_string(shot0->props, "pool_lifecycle", ""), "inactive");
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "sensor_during_available", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(shot0->props, "damage", 0), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(shot0->props, "pool_lifecycle", ""), "inactive");
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.spawn"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.spawn"), nullptr);
     EXPECT_TRUE(shot0->active);
-    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 5);
+    EXPECT_EQ(slayer3d_properties_get_int(shot0->props, "damage", 0), 5);
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.despawn.first"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.despawn.first"), nullptr);
     EXPECT_FALSE(shot0->active);
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "before_despawn", -1), 1);
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "after_despawn", -1), 0);
-    EXPECT_FALSE(sdl3d_properties_get_bool(sdl3d_game_data_scene_state(runtime), "during_despawn_active", true));
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "during_despawn_damage", -1), 5);
-    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "during_despawn_lifecycle", ""),
-                 "despawning");
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "during_despawn_available", -1), 1);
-    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "damage", 0), 1);
-    EXPECT_EQ(sdl3d_properties_get_int(shot0->props, "touched", -1), 0);
-    EXPECT_STREQ(sdl3d_properties_get_string(shot0->props, "pool_lifecycle", ""), "inactive");
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "before_despawn", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "after_despawn", -1), 0);
+    EXPECT_FALSE(slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime), "during_despawn_active", true));
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "during_despawn_damage", -1), 5);
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "during_despawn_lifecycle", ""),
+        "despawning");
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "during_despawn_available", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(shot0->props, "damage", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(shot0->props, "touched", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(shot0->props, "pool_lifecycle", ""), "inactive");
 
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.despawn.all"), nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_scene_state(runtime), "despawned_count", -1), 1);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.despawn.all"), nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "despawned_count", -1), 1);
     EXPECT_FALSE(shot0->active);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -13735,7 +13806,7 @@ return rules
 )lua");
     write_text(dir / "actor_pool_diagnostics.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Actor Pool Diagnostics", "id": "test.actor_pool_diagnostics", "version": "0.1.0" },
   "world": { "name": "world.actor_pool_diagnostics", "kind": "fixed_screen" },
   "scripts": [
@@ -13784,16 +13855,16 @@ return rules
 })json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play"
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "actor_pool_diagnostics.game.json").string().c_str(), session,
-                                          &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "actor_pool_diagnostics.game.json").string().c_str(), session,
+                                             &runtime, error, sizeof(error)))
         << error;
 
     SDLLogOutputGuard log_guard;
@@ -13801,45 +13872,45 @@ return rules
     SDL_SetLogPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_VERBOSE);
     SDL_SetLogOutputFunction(capture_log_output, &captured_log);
 
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
-    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.run"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.run"), nullptr);
 
-    const sdl3d_properties *scene_state = sdl3d_game_data_scene_state(runtime);
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_first_index", -1), 0);
-    EXPECT_TRUE(sdl3d_properties_get_bool(scene_state, "fail_second_missing", false));
-    EXPECT_NE(std::string(sdl3d_properties_get_string(scene_state, "fail_error", "")).find("exhausted"),
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "fail_first_index", -1), 0);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "fail_second_missing", false));
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "fail_error", "")).find("exhausted"),
               std::string::npos);
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_attempts", -1), 2);
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_success", -1), 1);
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_failures", -1), 1);
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_exhaustion", -1), 1);
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_peak", -1), 1);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "fail_last_failure", ""), "exhausted");
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_active", -1), 1);
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_available", -1), 0);
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "fail_despawns", -1), 1);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "fail_last_despawn", ""), "hit_enemy");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "fail_attempts", -1), 2);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "fail_success", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "fail_failures", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "fail_exhaustion", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "fail_peak", -1), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "fail_last_failure", ""), "exhausted");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "fail_active", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "fail_available", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "fail_despawns", -1), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "fail_last_despawn", ""), "hit_enemy");
 
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "reuse_attempts", -1), 2);
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "reuse_success", -1), 2);
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "reuse_failures", -1), 0);
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "reuse_exhaustion", -1), 1);
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "reuse_count", -1), 1);
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "reuse_despawns", -1), 1);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "reuse_last_despawn", ""), "reuse_oldest");
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "reuse_peak", -1), 1);
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "reuse_active", -1), 1);
-    sdl3d_registered_actor *reused = sdl3d_game_data_find_actor(runtime, "pool.reuse.0");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "reuse_attempts", -1), 2);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "reuse_success", -1), 2);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "reuse_failures", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "reuse_exhaustion", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "reuse_count", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "reuse_despawns", -1), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "reuse_last_despawn", ""), "reuse_oldest");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "reuse_peak", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "reuse_active", -1), 1);
+    slayer3d_registered_actor *reused = slayer3d_game_data_find_actor(runtime, "pool.reuse.0");
     ASSERT_NE(reused, nullptr);
-    EXPECT_EQ(sdl3d_properties_get_int(reused->props, "generation", -1), 2);
+    EXPECT_EQ(slayer3d_properties_get_int(reused->props, "generation", -1), 2);
 
     EXPECT_EQ(captured_log.category, SDL_LOG_CATEGORY_APPLICATION);
     EXPECT_EQ(captured_log.priority, SDL_LOG_PRIORITY_WARN);
-    EXPECT_NE(captured_log.message.find("SDL3D actor pool exhausted"), std::string::npos);
+    EXPECT_NE(captured_log.message.find("SLAYER3D actor pool exhausted"), std::string::npos);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -13858,38 +13929,38 @@ TEST(GameDataRuntime, LoadsLuaBackedGameDataFromMemoryPack)
         {"scripts/rules.lua", rules_lua},
     });
 
-    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
     ASSERT_NE(assets, nullptr);
     char error[512]{};
-    ASSERT_TRUE(sdl3d_asset_resolver_mount_memory_pack(assets, pack.data(), pack.size(), "module-fixture", error,
-                                                       sizeof(error)))
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_memory_pack(assets, pack.data(), pack.size(), "module-fixture", error,
+                                                          sizeof(error)))
         << error;
     EXPECT_TRUE(
-        sdl3d_game_data_validate_asset(assets, "asset://module_success.game.json", nullptr, error, sizeof(error)))
+        slayer3d_game_data_validate_asset(assets, "asset://module_success.game.json", nullptr, error, sizeof(error)))
         << error;
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(
-        sdl3d_game_data_load_asset(assets, "asset://module_success.game.json", session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_asset(assets, "asset://module_success.game.json", session, &runtime, error,
+                                              sizeof(error)))
         << error;
 
-    const int run_signal = sdl3d_game_data_find_signal(runtime, "signal.run");
+    const int run_signal = slayer3d_game_data_find_signal(runtime, "signal.run");
     ASSERT_GE(run_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), run_signal, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), run_signal, nullptr);
 
-    sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, "entity.target");
+    slayer3d_registered_actor *target = slayer3d_game_data_find_actor(runtime, "entity.target");
     ASSERT_NE(target, nullptr);
     EXPECT_FLOAT_EQ(target->position.x, 1.0f);
     EXPECT_FLOAT_EQ(target->position.y, 2.0f);
-    EXPECT_TRUE(sdl3d_properties_get_bool(target->props, "ctx_ok", false));
-    EXPECT_TRUE(sdl3d_properties_get_bool(target->props, "state_ok", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(target->props, "ctx_ok", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(target->props, "state_ok", false));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
-    sdl3d_asset_resolver_destroy(assets);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    slayer3d_asset_resolver_destroy(assets);
 }
 
 TEST(GameDataRuntime, ReloadScriptsCommitsUpdatedLuaAdapters)
@@ -13898,33 +13969,33 @@ TEST(GameDataRuntime, ReloadScriptsCommitsUpdatedLuaAdapters)
     write_hot_reload_json(dir);
     write_hot_reload_script(dir, 1);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(
-        sdl3d_game_data_load_file((dir / "reload.game.json").string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "reload.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, "entity.target");
+    slayer3d_registered_actor *target = slayer3d_game_data_find_actor(runtime, "entity.target");
     ASSERT_NE(target, nullptr);
     emit_reload_signal(session, runtime);
-    EXPECT_EQ(sdl3d_properties_get_int(target->props, "value", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(target->props, "value", 0), 1);
 
     write_hot_reload_script(dir, 2);
-    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
     ASSERT_NE(assets, nullptr);
-    ASSERT_TRUE(sdl3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
-    ASSERT_TRUE(sdl3d_game_data_reload_scripts(runtime, assets, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_game_data_reload_scripts(runtime, assets, error, sizeof(error))) << error;
 
-    sdl3d_properties_set_int(target->props, "value", 0);
+    slayer3d_properties_set_int(target->props, "value", 0);
     emit_reload_signal(session, runtime);
-    EXPECT_EQ(sdl3d_properties_get_int(target->props, "value", 0), 2);
+    EXPECT_EQ(slayer3d_properties_get_int(target->props, "value", 0), 2);
 
-    sdl3d_asset_resolver_destroy(assets);
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -13934,34 +14005,34 @@ TEST(GameDataRuntime, ReloadScriptsPreservesLastGoodAdapterOnSyntaxFailure)
     write_hot_reload_json(dir);
     write_hot_reload_script(dir, 7);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(
-        sdl3d_game_data_load_file((dir / "reload.game.json").string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "reload.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, "entity.target");
+    slayer3d_registered_actor *target = slayer3d_game_data_find_actor(runtime, "entity.target");
     ASSERT_NE(target, nullptr);
     emit_reload_signal(session, runtime);
-    EXPECT_EQ(sdl3d_properties_get_int(target->props, "value", 0), 7);
+    EXPECT_EQ(slayer3d_properties_get_int(target->props, "value", 0), 7);
 
     write_text(dir / "scripts" / "rules.lua", "local rules = \n");
-    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
     ASSERT_NE(assets, nullptr);
-    ASSERT_TRUE(sdl3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
-    EXPECT_FALSE(sdl3d_game_data_reload_scripts(runtime, assets, error, sizeof(error)));
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+    EXPECT_FALSE(slayer3d_game_data_reload_scripts(runtime, assets, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("script.rules"), std::string::npos);
 
-    sdl3d_properties_set_int(target->props, "value", 0);
+    slayer3d_properties_set_int(target->props, "value", 0);
     emit_reload_signal(session, runtime);
-    EXPECT_EQ(sdl3d_properties_get_int(target->props, "value", 0), 7);
+    EXPECT_EQ(slayer3d_properties_get_int(target->props, "value", 0), 7);
 
-    sdl3d_asset_resolver_destroy(assets);
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -13971,32 +14042,32 @@ TEST(GameDataRuntime, ReloadScriptsPreservesLastGoodAdapterOnMissingFunction)
     write_hot_reload_json(dir);
     write_hot_reload_script(dir, 3);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(
-        sdl3d_game_data_load_file((dir / "reload.game.json").string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "reload.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, "entity.target");
+    slayer3d_registered_actor *target = slayer3d_game_data_find_actor(runtime, "entity.target");
     ASSERT_NE(target, nullptr);
     write_text(dir / "scripts" / "rules.lua", "return {}\n");
 
-    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
     ASSERT_NE(assets, nullptr);
-    ASSERT_TRUE(sdl3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
-    EXPECT_FALSE(sdl3d_game_data_reload_scripts(runtime, assets, error, sizeof(error)));
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+    EXPECT_FALSE(slayer3d_game_data_reload_scripts(runtime, assets, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("adapter.reload.run"), std::string::npos);
 
-    sdl3d_properties_set_int(target->props, "value", 0);
+    slayer3d_properties_set_int(target->props, "value", 0);
     emit_reload_signal(session, runtime);
-    EXPECT_EQ(sdl3d_properties_get_int(target->props, "value", 0), 3);
+    EXPECT_EQ(slayer3d_properties_get_int(target->props, "value", 0), 3);
 
-    sdl3d_asset_resolver_destroy(assets);
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -14006,45 +14077,45 @@ TEST(GameDataRuntime, ReloadScriptsKeepsNativeAdapterOverrides)
     write_hot_reload_json(dir);
     write_hot_reload_script(dir, 1);
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(
-        sdl3d_game_data_load_file((dir / "reload.game.json").string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "reload.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
 
     AdapterCapture capture{};
-    ASSERT_TRUE(sdl3d_game_data_register_adapter(runtime, "adapter.reload.run", reload_native_adapter, &capture));
+    ASSERT_TRUE(slayer3d_game_data_register_adapter(runtime, "adapter.reload.run", reload_native_adapter, &capture));
     write_hot_reload_script(dir, 2);
 
-    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
     ASSERT_NE(assets, nullptr);
-    ASSERT_TRUE(sdl3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
-    ASSERT_TRUE(sdl3d_game_data_reload_scripts(runtime, assets, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_game_data_reload_scripts(runtime, assets, error, sizeof(error))) << error;
 
-    sdl3d_registered_actor *target = sdl3d_game_data_find_actor(runtime, "entity.target");
+    slayer3d_registered_actor *target = slayer3d_game_data_find_actor(runtime, "entity.target");
     ASSERT_NE(target, nullptr);
     emit_reload_signal(session, runtime);
     EXPECT_EQ(capture.calls, 1);
-    EXPECT_EQ(sdl3d_properties_get_int(target->props, "value", 0), 99);
+    EXPECT_EQ(slayer3d_properties_get_int(target->props, "value", 0), 99);
 
-    sdl3d_asset_resolver_destroy(assets);
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, ValidatesPongDataWithoutDiagnostics)
 {
     DiagnosticCapture capture;
-    sdl3d_game_data_validation_options options{};
+    slayer3d_game_data_validation_options options{};
     options.diagnostic = capture_diagnostic;
     options.userdata = &capture;
 
     char error[512]{};
-    EXPECT_TRUE(sdl3d_game_data_validate_file(pong_data_path().string().c_str(), &options, error, sizeof(error)))
+    EXPECT_TRUE(slayer3d_game_data_validate_file(pong_data_path().string().c_str(), &options, error, sizeof(error)))
         << error;
     EXPECT_TRUE(capture.diagnostics.empty());
     EXPECT_EQ(error[0], '\0');
@@ -14055,7 +14126,7 @@ TEST(GameDataRuntime, RejectsInvalidHapticsPolicies)
     const std::filesystem::path dir = unique_test_dir("haptics_policy_validation");
     write_text(dir / "bad_haptics.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Haptics", "id": "test.bad_haptics", "version": "0.1.0" },
   "world": { "name": "world.bad_haptics", "kind": "fixed_screen" },
   "entities": [
@@ -14081,8 +14152,8 @@ TEST(GameDataRuntime, RejectsInvalidHapticsPolicies)
 })json");
 
     char error[512]{};
-    EXPECT_FALSE(
-        sdl3d_game_data_validate_file((dir / "bad_haptics.game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_haptics.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
     EXPECT_NE(std::string(error).find("haptics low_frequency must be a number from 0 to 1"), std::string::npos)
         << error;
     remove_test_dir(dir);
@@ -14093,7 +14164,7 @@ TEST(GameDataRuntime, RejectsInvalidInputProfiles)
     const std::filesystem::path dir = unique_test_dir("input_profiles");
     write_text(dir / "bad_input_profile.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Input Profile", "id": "test.bad_input_profile", "version": "0.1.0" },
   "world": { "name": "world.bad_input_profile", "kind": "fixed_screen" },
   "input": {
@@ -14120,13 +14191,13 @@ TEST(GameDataRuntime, RejectsInvalidInputProfiles)
 })json");
 
     char error[512]{};
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_input_profile.game.json").string().c_str(), nullptr, error,
-                                               sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_input_profile.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
     EXPECT_NE(std::string(error).find("$.input.profiles[0]"), std::string::npos);
 
     write_text(dir / "bad_input_assignment.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Input Assignment", "id": "test.bad_input_assignment", "version": "0.1.0" },
   "world": { "name": "world.bad_input_assignment", "kind": "fixed_screen" },
   "input": {
@@ -14160,13 +14231,13 @@ TEST(GameDataRuntime, RejectsInvalidInputProfiles)
 })json");
 
     error[0] = '\0';
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_input_assignment.game.json").string().c_str(), nullptr,
-                                               error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_input_assignment.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
     EXPECT_NE(std::string(error).find("$.input.device_assignment_sets[0].bindings[0]"), std::string::npos);
 
     write_text(dir / "mixed_input_profile.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Mixed Input Profile", "id": "test.mixed_input_profile", "version": "0.1.0" },
   "world": { "name": "world.mixed_input_profile", "kind": "fixed_screen" },
   "input": {
@@ -14203,13 +14274,13 @@ TEST(GameDataRuntime, RejectsInvalidInputProfiles)
 })json");
 
     error[0] = '\0';
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "mixed_input_profile.game.json").string().c_str(), nullptr, error,
-                                               sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "mixed_input_profile.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
     EXPECT_NE(std::string(error).find("$.input.profiles[0]"), std::string::npos);
 
     write_text(dir / "extra_assignment_semantic.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Extra Assignment Semantic", "id": "test.extra_assignment_semantic", "version": "0.1.0" },
   "world": { "name": "world.extra_assignment_semantic", "kind": "fixed_screen" },
   "input": {
@@ -14243,13 +14314,13 @@ TEST(GameDataRuntime, RejectsInvalidInputProfiles)
 })json");
 
     error[0] = '\0';
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "extra_assignment_semantic.game.json").string().c_str(), nullptr,
-                                               error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "extra_assignment_semantic.game.json").string().c_str(),
+                                                  nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("$.input.profiles[0].assignments[0].actions.fire"), std::string::npos);
 
     write_text(dir / "nongamepad_assignment_slot.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Nongamepad Assignment Slot", "id": "test.nongamepad_assignment_slot", "version": "0.1.0" },
   "world": { "name": "world.nongamepad_assignment_slot", "kind": "fixed_screen" },
   "input": {
@@ -14283,8 +14354,8 @@ TEST(GameDataRuntime, RejectsInvalidInputProfiles)
 })json");
 
     error[0] = '\0';
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "nongamepad_assignment_slot.game.json").string().c_str(), nullptr,
-                                               error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "nongamepad_assignment_slot.game.json").string().c_str(),
+                                                  nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("$.input.profiles[0].assignments[0]"), std::string::npos);
     remove_test_dir(dir);
 }
@@ -14293,77 +14364,77 @@ TEST(GameDataRuntime, StandardOptionsAdoptionFixtureLoadsReusablePackage)
 {
     const std::string path = fixture_path("standard_options_minimal.game.json");
     char error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_validate_file(path.c_str(), nullptr, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_game_data_validate_file(path.c_str(), nullptr, error, sizeof(error))) << error;
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(path.c_str(), session, &runtime, error, sizeof(error))) << error;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(path.c_str(), session, &runtime, error, sizeof(error))) << error;
 
-    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.title");
-    EXPECT_EQ(sdl3d_game_data_scene_count(runtime), 7);
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 0), "scene.title");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 1), "scene.options");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 2), "scene.options.display");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 3), "scene.options.keyboard");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 4), "scene.options.mouse");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 5), "scene.options.gamepad");
-    EXPECT_STREQ(sdl3d_game_data_scene_name_at(runtime, 6), "scene.options.audio");
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.title");
+    EXPECT_EQ(slayer3d_game_data_scene_count(runtime), 7);
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 0), "scene.title");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 1), "scene.options");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 2), "scene.options.display");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 3), "scene.options.keyboard");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 4), "scene.options.mouse");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 5), "scene.options.gamepad");
+    EXPECT_STREQ(slayer3d_game_data_scene_name_at(runtime, 6), "scene.options.audio");
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options"));
-    sdl3d_game_data_menu menu{};
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options"));
+    slayer3d_game_data_menu menu{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options");
     EXPECT_EQ(menu.item_count, 6);
 
-    sdl3d_game_data_menu_item item{};
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    slayer3d_game_data_menu_item item{};
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Display");
     EXPECT_STREQ(item.scene, "scene.options.display");
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 2, &item));
     EXPECT_STREQ(item.label, "Mouse");
     EXPECT_STREQ(item.scene, "scene.options.mouse");
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.keyboard"));
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.keyboard"));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options.keyboard");
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Up");
-    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING);
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING);
     EXPECT_EQ(item.input_binding_count, 2);
 
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.options.audio"));
-    ASSERT_TRUE(sdl3d_game_data_get_active_menu(runtime, &menu));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.audio"));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options.audio");
-    ASSERT_TRUE(sdl3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 0, &item));
     EXPECT_STREQ(item.label, "Sound Effects");
-    EXPECT_EQ(item.control_type, SDL3D_GAME_DATA_MENU_CONTROL_RANGE);
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_RANGE);
     EXPECT_STREQ(item.control_target, "entity.settings");
     EXPECT_STREQ(item.control_key, "sfx_volume");
 
-    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+    slayer3d_registered_actor *settings = slayer3d_game_data_find_actor(runtime, "entity.settings");
     ASSERT_NE(settings, nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
-    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
-    EXPECT_EQ(sdl3d_properties_get_int(settings->props, "music_volume", 0), 7);
+    EXPECT_STREQ(slayer3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
+    EXPECT_EQ(slayer3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
+    EXPECT_EQ(slayer3d_properties_get_int(settings->props, "music_volume", 0), 7);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, ValidationReportsJsonPathAndMissingReference)
 {
     DiagnosticCapture capture;
-    sdl3d_game_data_validation_options options{};
+    slayer3d_game_data_validation_options options{};
     options.diagnostic = capture_diagnostic;
     options.userdata = &capture;
 
     char error[512]{};
     const std::string path = fixture_path("bad_reference.game.json");
-    EXPECT_FALSE(sdl3d_game_data_validate_file(path.c_str(), &options, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file(path.c_str(), &options, error, sizeof(error)));
     ASSERT_FALSE(capture.diagnostics.empty());
-    EXPECT_EQ(capture.diagnostics[0].severity, SDL3D_GAME_DATA_DIAGNOSTIC_ERROR);
+    EXPECT_EQ(capture.diagnostics[0].severity, SLAYER3D_GAME_DATA_DIAGNOSTIC_ERROR);
     EXPECT_NE(capture.diagnostics[0].path.find("$.logic.bindings[0].actions[0]"), std::string::npos);
     EXPECT_NE(capture.diagnostics[0].message.find("entity.missing"), std::string::npos);
     EXPECT_NE(std::string(error).find("$.logic.bindings[0].actions[0]"), std::string::npos);
@@ -14374,7 +14445,7 @@ TEST(GameDataRuntime, ValidatesAuthoredStorageConfig)
     const std::filesystem::path dir = unique_test_dir("storage_validation");
     write_text(dir / "bad_storage.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Storage", "id": "test.bad_storage", "version": "0.1.0" },
   "storage": { "organization": "Bad/Org", "application": "Pong" },
   "world": { "name": "world.bad_storage", "kind": "fixed_screen" },
@@ -14382,13 +14453,13 @@ TEST(GameDataRuntime, ValidatesAuthoredStorageConfig)
 })json");
 
     char error[512]{};
-    EXPECT_FALSE(
-        sdl3d_game_data_validate_file((dir / "bad_storage.game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_storage.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
     EXPECT_NE(std::string(error).find("$.storage.organization"), std::string::npos);
 
     write_text(dir / "good_storage.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Good Storage", "id": "test.good_storage", "version": "0.1.0" },
   "storage": {
     "organization": "Blue Sentinel Security",
@@ -14399,8 +14470,8 @@ TEST(GameDataRuntime, ValidatesAuthoredStorageConfig)
   "entities": []
 })json");
     error[0] = '\0';
-    EXPECT_TRUE(
-        sdl3d_game_data_validate_file((dir / "good_storage.game.json").string().c_str(), nullptr, error, sizeof(error)))
+    EXPECT_TRUE(slayer3d_game_data_validate_file((dir / "good_storage.game.json").string().c_str(), nullptr, error,
+                                                 sizeof(error)))
         << error;
     EXPECT_EQ(error[0], '\0');
     remove_test_dir(dir);
@@ -14487,7 +14558,7 @@ TEST(GameDataRuntime, ValidatesNetworkReplicationSchemaAndComputesStableHash)
 
     char error[512]{};
     ASSERT_TRUE(
-        sdl3d_game_data_validate_file((dir / "network_a.game.json").string().c_str(), nullptr, error, sizeof(error)))
+        slayer3d_game_data_validate_file((dir / "network_a.game.json").string().c_str(), nullptr, error, sizeof(error)))
         << error;
 
     const auto hash_a = load_network_schema_hash(dir / "network_a.game.json");
@@ -14511,50 +14582,50 @@ TEST(GameDataRuntime, LocalOnlyGameHasNoNetworkSchemaHash)
     const std::filesystem::path dir = unique_test_dir("no_network_schema");
     write_text(dir / "local_only.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Local Only", "id": "test.local_only", "version": "0.1.0" },
   "world": { "name": "world.local_only", "kind": "fixed_screen" },
   "entities": []
 })json");
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "local_only.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "local_only.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
     ASSERT_NE(runtime, nullptr);
 
-    std::array<Uint8, SDL3D_REPLICATION_SCHEMA_HASH_SIZE> hash{};
-    EXPECT_FALSE(sdl3d_game_data_has_network_schema(runtime));
-    EXPECT_FALSE(sdl3d_game_data_get_network_schema_hash(runtime, hash.data()));
+    std::array<Uint8, SLAYER3D_REPLICATION_SCHEMA_HASH_SIZE> hash{};
+    EXPECT_FALSE(slayer3d_game_data_has_network_schema(runtime));
+    EXPECT_FALSE(slayer3d_game_data_get_network_schema_hash(runtime, hash.data()));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, EncodesAndAppliesPongNetworkSnapshotFromAuthoredSchema)
 {
-    sdl3d_game_session *host_session = nullptr;
-    sdl3d_game_data_runtime *host = nullptr;
+    slayer3d_game_session *host_session = nullptr;
+    slayer3d_game_data_runtime *host = nullptr;
     load_pong_runtime(&host_session, &host);
-    ASSERT_TRUE(sdl3d_game_data_has_network_schema(host));
+    ASSERT_TRUE(slayer3d_game_data_has_network_schema(host));
 
-    sdl3d_game_session *client_session = nullptr;
-    sdl3d_game_data_runtime *client = nullptr;
+    slayer3d_game_session *client_session = nullptr;
+    slayer3d_game_data_runtime *client = nullptr;
     load_pong_runtime(&client_session, &client);
-    ASSERT_TRUE(sdl3d_game_data_has_network_schema(client));
+    ASSERT_TRUE(slayer3d_game_data_has_network_schema(client));
 
-    sdl3d_registered_actor *host_player = sdl3d_game_data_find_actor(host, "entity.paddle.player");
-    sdl3d_registered_actor *host_cpu = sdl3d_game_data_find_actor(host, "entity.paddle.cpu");
-    sdl3d_registered_actor *host_ball = sdl3d_game_data_find_actor(host, "entity.ball");
-    sdl3d_registered_actor *host_player_score = sdl3d_game_data_find_actor(host, "entity.score.player");
-    sdl3d_registered_actor *host_cpu_score = sdl3d_game_data_find_actor(host, "entity.score.cpu");
-    sdl3d_registered_actor *host_match = sdl3d_game_data_find_actor(host, "entity.match");
-    sdl3d_registered_actor *host_presentation = sdl3d_game_data_find_actor(host, "entity.presentation");
+    slayer3d_registered_actor *host_player = slayer3d_game_data_find_actor(host, "entity.paddle.player");
+    slayer3d_registered_actor *host_cpu = slayer3d_game_data_find_actor(host, "entity.paddle.cpu");
+    slayer3d_registered_actor *host_ball = slayer3d_game_data_find_actor(host, "entity.ball");
+    slayer3d_registered_actor *host_player_score = slayer3d_game_data_find_actor(host, "entity.score.player");
+    slayer3d_registered_actor *host_cpu_score = slayer3d_game_data_find_actor(host, "entity.score.cpu");
+    slayer3d_registered_actor *host_match = slayer3d_game_data_find_actor(host, "entity.match");
+    slayer3d_registered_actor *host_presentation = slayer3d_game_data_find_actor(host, "entity.presentation");
     ASSERT_NE(host_player, nullptr);
     ASSERT_NE(host_cpu, nullptr);
     ASSERT_NE(host_ball, nullptr);
@@ -14566,68 +14637,73 @@ TEST(GameDataRuntime, EncodesAndAppliesPongNetworkSnapshotFromAuthoredSchema)
     host_player->position = {-7.5f, 1.25f, 0.0f};
     host_cpu->position = {7.5f, -2.0f, 0.0f};
     host_ball->position = {1.5f, 2.5f, 0.12f};
-    sdl3d_properties_set_vec3(host_ball->props, "velocity", {3.25f, -1.75f, 9.0f});
-    sdl3d_properties_set_bool(host_ball->props, "active_motion", true);
-    sdl3d_properties_set_bool(host_ball->props, "has_last_reflect_y", true);
-    sdl3d_properties_set_float(host_ball->props, "last_reflect_y", 1.5f);
-    sdl3d_properties_set_int(host_ball->props, "stagnant_reflect_count", 2);
-    sdl3d_properties_set_int(host_player_score->props, "value", 4);
-    sdl3d_properties_set_int(host_cpu_score->props, "value", 6);
-    sdl3d_properties_set_bool(host_match->props, "finished", true);
-    sdl3d_properties_set_int(host_match->props, "winner_id", 2);
-    sdl3d_properties_set_bool(host_match->props, "paused", true);
-    sdl3d_properties_set_float(host_presentation->props, "border_flash", 0.75f);
-    sdl3d_properties_set_float(host_presentation->props, "paddle_flash", 0.5f);
+    slayer3d_properties_set_vec3(host_ball->props, "velocity", {3.25f, -1.75f, 9.0f});
+    slayer3d_properties_set_bool(host_ball->props, "active_motion", true);
+    slayer3d_properties_set_bool(host_ball->props, "has_last_reflect_y", true);
+    slayer3d_properties_set_float(host_ball->props, "last_reflect_y", 1.5f);
+    slayer3d_properties_set_int(host_ball->props, "stagnant_reflect_count", 2);
+    slayer3d_properties_set_int(host_player_score->props, "value", 4);
+    slayer3d_properties_set_int(host_cpu_score->props, "value", 6);
+    slayer3d_properties_set_bool(host_match->props, "finished", true);
+    slayer3d_properties_set_int(host_match->props, "winner_id", 2);
+    slayer3d_properties_set_bool(host_match->props, "paused", true);
+    slayer3d_properties_set_float(host_presentation->props, "border_flash", 0.75f);
+    slayer3d_properties_set_float(host_presentation->props, "paddle_flash", 0.5f);
 
-    sdl3d_registered_actor *client_ball = sdl3d_game_data_find_actor(client, "entity.ball");
+    slayer3d_registered_actor *client_ball = slayer3d_game_data_find_actor(client, "entity.ball");
     ASSERT_NE(client_ball, nullptr);
-    sdl3d_properties_set_vec3(client_ball->props, "velocity", {0.0f, 0.0f, 42.0f});
+    slayer3d_properties_set_vec3(client_ball->props, "velocity", {0.0f, 0.0f, 42.0f});
 
     std::array<Uint8, 512> packet{};
     size_t packet_size = 0U;
     char error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_encode_network_snapshot(host, "play_state", 12345U, packet.data(), packet.size(),
-                                                        &packet_size, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_encode_network_snapshot(host, "play_state", 12345U, packet.data(), packet.size(),
+                                                           &packet_size, error, sizeof(error)))
         << error;
     ASSERT_GT(packet_size, 0U);
 
     Uint32 tick = 0U;
-    ASSERT_TRUE(sdl3d_game_data_apply_network_snapshot(client, packet.data(), packet_size, &tick, error, sizeof(error)))
+    ASSERT_TRUE(
+        slayer3d_game_data_apply_network_snapshot(client, packet.data(), packet_size, &tick, error, sizeof(error)))
         << error;
     EXPECT_EQ(tick, 12345U);
 
-    expect_vec3_near(sdl3d_game_data_find_actor(client, "entity.paddle.player")->position, host_player->position);
-    expect_vec3_near(sdl3d_game_data_find_actor(client, "entity.paddle.cpu")->position, host_cpu->position);
+    expect_vec3_near(slayer3d_game_data_find_actor(client, "entity.paddle.player")->position, host_player->position);
+    expect_vec3_near(slayer3d_game_data_find_actor(client, "entity.paddle.cpu")->position, host_cpu->position);
     expect_vec3_near(client_ball->position, host_ball->position);
-    const sdl3d_vec3 client_velocity =
-        sdl3d_properties_get_vec3(client_ball->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 client_velocity =
+        slayer3d_properties_get_vec3(client_ball->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     EXPECT_NEAR(client_velocity.x, 3.25f, 0.0001f);
     EXPECT_NEAR(client_velocity.y, -1.75f, 0.0001f);
     EXPECT_NEAR(client_velocity.z, 42.0f, 0.0001f);
-    EXPECT_TRUE(sdl3d_properties_get_bool(client_ball->props, "active_motion", false));
-    EXPECT_TRUE(sdl3d_properties_get_bool(client_ball->props, "has_last_reflect_y", false));
-    EXPECT_NEAR(sdl3d_properties_get_float(client_ball->props, "last_reflect_y", 0.0f), 1.5f, 0.0001f);
-    EXPECT_EQ(sdl3d_properties_get_int(client_ball->props, "stagnant_reflect_count", 0), 2);
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_find_actor(client, "entity.score.player")->props, "value", 0),
-              4);
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_find_actor(client, "entity.score.cpu")->props, "value", 0), 6);
+    EXPECT_TRUE(slayer3d_properties_get_bool(client_ball->props, "active_motion", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(client_ball->props, "has_last_reflect_y", false));
+    EXPECT_NEAR(slayer3d_properties_get_float(client_ball->props, "last_reflect_y", 0.0f), 1.5f, 0.0001f);
+    EXPECT_EQ(slayer3d_properties_get_int(client_ball->props, "stagnant_reflect_count", 0), 2);
+    EXPECT_EQ(
+        slayer3d_properties_get_int(slayer3d_game_data_find_actor(client, "entity.score.player")->props, "value", 0),
+        4);
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_find_actor(client, "entity.score.cpu")->props, "value", 0),
+              6);
     EXPECT_TRUE(
-        sdl3d_properties_get_bool(sdl3d_game_data_find_actor(client, "entity.match")->props, "finished", false));
-    EXPECT_EQ(sdl3d_properties_get_int(sdl3d_game_data_find_actor(client, "entity.match")->props, "winner_id", 0), 2);
-    EXPECT_TRUE(sdl3d_properties_get_bool(sdl3d_game_data_find_actor(client, "entity.match")->props, "paused", false));
-    EXPECT_NEAR(sdl3d_properties_get_float(sdl3d_game_data_find_actor(client, "entity.presentation")->props,
-                                           "border_flash", 0.0f),
+        slayer3d_properties_get_bool(slayer3d_game_data_find_actor(client, "entity.match")->props, "finished", false));
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_find_actor(client, "entity.match")->props, "winner_id", 0),
+              2);
+    EXPECT_TRUE(
+        slayer3d_properties_get_bool(slayer3d_game_data_find_actor(client, "entity.match")->props, "paused", false));
+    EXPECT_NEAR(slayer3d_properties_get_float(slayer3d_game_data_find_actor(client, "entity.presentation")->props,
+                                              "border_flash", 0.0f),
                 0.75f, 0.0001f);
-    EXPECT_NEAR(sdl3d_properties_get_float(sdl3d_game_data_find_actor(client, "entity.presentation")->props,
-                                           "paddle_flash", 0.0f),
+    EXPECT_NEAR(slayer3d_properties_get_float(slayer3d_game_data_find_actor(client, "entity.presentation")->props,
+                                              "paddle_flash", 0.0f),
                 0.5f, 0.0001f);
 
-    sdl3d_properties_set_string(sdl3d_game_data_mutable_scene_state(host), "match_mode", "lan");
-    sdl3d_properties_set_string(sdl3d_game_data_mutable_scene_state(host), "network_role", "host");
-    sdl3d_properties_set_string(sdl3d_game_data_mutable_scene_state(host), "network_flow", "direct");
+    slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(host), "match_mode", "lan");
+    slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(host), "network_role", "host");
+    slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(host), "network_flow", "direct");
     char description[4096]{};
-    ASSERT_TRUE(sdl3d_game_data_describe_network_snapshot(host, "play_state", 12345U, description, sizeof(description),
-                                                          error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_describe_network_snapshot(host, "play_state", 12345U, description,
+                                                             sizeof(description), error, sizeof(error)))
         << error;
     const std::string text(description);
     EXPECT_NE(text.find("tick=12345"), std::string::npos);
@@ -14640,8 +14716,8 @@ TEST(GameDataRuntime, EncodesAndAppliesPongNetworkSnapshotFromAuthoredSchema)
     EXPECT_NE(text.find("entity.match.properties.paused=true"), std::string::npos);
 
     char tiny_description[16]{};
-    EXPECT_FALSE(sdl3d_game_data_describe_network_snapshot(host, "play_state", 12345U, tiny_description,
-                                                           sizeof(tiny_description), error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_describe_network_snapshot(host, "play_state", 12345U, tiny_description,
+                                                              sizeof(tiny_description), error, sizeof(error)));
     EXPECT_NE(std::string(error).find("buffer is too small"), std::string::npos);
 
     SDLLogOutputGuard log_guard;
@@ -14650,8 +14726,8 @@ TEST(GameDataRuntime, EncodesAndAppliesPongNetworkSnapshotFromAuthoredSchema)
     SDL_SetLogOutputFunction(capture_log_output, &captured_log);
 
     bool logged = false;
-    ASSERT_TRUE(sdl3d_game_data_log_network_snapshot_diagnostic(host, "multiplayer_state", 12346U, "test_event",
-                                                                "first", &logged, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_log_network_snapshot_diagnostic(host, "multiplayer_state", 12346U, "test_event",
+                                                                   "first", &logged, error, sizeof(error)))
         << error;
     EXPECT_TRUE(logged);
     EXPECT_EQ(captured_log.category, SDL_LOG_CATEGORY_APPLICATION);
@@ -14663,8 +14739,8 @@ TEST(GameDataRuntime, EncodesAndAppliesPongNetworkSnapshotFromAuthoredSchema)
 
     captured_log = {};
     logged = true;
-    ASSERT_TRUE(sdl3d_game_data_log_network_snapshot_diagnostic(host, "multiplayer_state", 12347U, "test_event",
-                                                                "second", &logged, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_log_network_snapshot_diagnostic(host, "multiplayer_state", 12347U, "test_event",
+                                                                   "second", &logged, error, sizeof(error)))
         << error;
     EXPECT_FALSE(logged);
     EXPECT_TRUE(captured_log.message.empty());
@@ -14675,36 +14751,36 @@ TEST(GameDataRuntime, EncodesAndAppliesPongNetworkSnapshotFromAuthoredSchema)
 
 TEST(GameDataRuntime, RejectsPongNetworkSnapshotsWithMismatchedSchemaOrTruncation)
 {
-    sdl3d_game_session *host_session = nullptr;
-    sdl3d_game_data_runtime *host = nullptr;
+    slayer3d_game_session *host_session = nullptr;
+    slayer3d_game_data_runtime *host = nullptr;
     load_pong_runtime(&host_session, &host);
-    sdl3d_game_session *client_session = nullptr;
-    sdl3d_game_data_runtime *client = nullptr;
+    slayer3d_game_session *client_session = nullptr;
+    slayer3d_game_data_runtime *client = nullptr;
     load_pong_runtime(&client_session, &client);
 
     std::array<Uint8, 512> packet{};
     size_t packet_size = 0U;
     char error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_encode_network_snapshot(host, "play_state", 10U, packet.data(), packet.size(),
-                                                        &packet_size, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_encode_network_snapshot(host, "play_state", 10U, packet.data(), packet.size(),
+                                                           &packet_size, error, sizeof(error)))
         << error;
     ASSERT_GT(packet_size, 24U);
 
     std::array<Uint8, 8> too_small{};
     size_t too_small_size = 0U;
-    EXPECT_FALSE(sdl3d_game_data_encode_network_snapshot(host, "play_state", 10U, too_small.data(), too_small.size(),
-                                                         &too_small_size, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_encode_network_snapshot(host, "play_state", 10U, too_small.data(), too_small.size(),
+                                                            &too_small_size, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("requires"), std::string::npos) << error;
     EXPECT_EQ(too_small_size, 0U);
 
     std::array<Uint8, 512> corrupted = packet;
     corrupted[16] ^= 0xffU;
-    EXPECT_FALSE(
-        sdl3d_game_data_apply_network_snapshot(client, corrupted.data(), packet_size, nullptr, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_apply_network_snapshot(client, corrupted.data(), packet_size, nullptr, error,
+                                                           sizeof(error)));
     EXPECT_NE(std::string(error).find("schema hash"), std::string::npos) << error;
 
-    EXPECT_FALSE(
-        sdl3d_game_data_apply_network_snapshot(client, packet.data(), packet_size - 1U, nullptr, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_apply_network_snapshot(client, packet.data(), packet_size - 1U, nullptr, error,
+                                                           sizeof(error)));
     EXPECT_NE(std::string(error).find("field data"), std::string::npos) << error;
 
     destroy_runtime_session(host_session, host);
@@ -14717,31 +14793,31 @@ TEST(GameDataRuntime, EncodesAndAppliesPooledActorNetworkSnapshots)
     write_text(dir / "pool.game.json", actor_pool_replication_game_json(2).c_str());
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "renders_world": true
 })json");
 
-    sdl3d_game_session *host_session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &host_session));
-    sdl3d_game_data_runtime *host = nullptr;
+    slayer3d_game_session *host_session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &host_session));
+    slayer3d_game_data_runtime *host = nullptr;
     char error[512]{};
-    ASSERT_TRUE(
-        sdl3d_game_data_load_file((dir / "pool.game.json").string().c_str(), host_session, &host, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "pool.game.json").string().c_str(), host_session, &host, error,
+                                             sizeof(error)))
         << error;
 
-    sdl3d_game_session *client_session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &client_session));
-    sdl3d_game_data_runtime *client = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "pool.game.json").string().c_str(), client_session, &client, error,
-                                          sizeof(error)))
+    slayer3d_game_session *client_session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &client_session));
+    slayer3d_game_data_runtime *client = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "pool.game.json").string().c_str(), client_session, &client, error,
+                                             sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *host_shot0 = sdl3d_game_data_find_actor(host, "pool.shots.0");
-    sdl3d_registered_actor *host_shot1 = sdl3d_game_data_find_actor(host, "pool.shots.1");
-    sdl3d_registered_actor *client_shot0 = sdl3d_game_data_find_actor(client, "pool.shots.0");
-    sdl3d_registered_actor *client_shot1 = sdl3d_game_data_find_actor(client, "pool.shots.1");
+    slayer3d_registered_actor *host_shot0 = slayer3d_game_data_find_actor(host, "pool.shots.0");
+    slayer3d_registered_actor *host_shot1 = slayer3d_game_data_find_actor(host, "pool.shots.1");
+    slayer3d_registered_actor *client_shot0 = slayer3d_game_data_find_actor(client, "pool.shots.0");
+    slayer3d_registered_actor *client_shot1 = slayer3d_game_data_find_actor(client, "pool.shots.1");
     ASSERT_NE(host_shot0, nullptr);
     ASSERT_NE(host_shot1, nullptr);
     ASSERT_NE(client_shot0, nullptr);
@@ -14749,47 +14825,49 @@ TEST(GameDataRuntime, EncodesAndAppliesPooledActorNetworkSnapshots)
     EXPECT_FALSE(host_shot0->active);
     EXPECT_FALSE(client_shot0->active);
 
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(host_session),
-                      sdl3d_game_data_find_signal(host, "signal.spawn"), nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(host_session),
+                         slayer3d_game_data_find_signal(host, "signal.spawn"), nullptr);
     ASSERT_TRUE(host_shot0->active);
     EXPECT_FALSE(host_shot1->active);
-    host_shot0->position = sdl3d_vec3_make(5.0f, 6.0f, 7.0f);
-    sdl3d_properties_set_int(host_shot0->props, "damage", 11);
+    host_shot0->position = slayer3d_vec3_make(5.0f, 6.0f, 7.0f);
+    slayer3d_properties_set_int(host_shot0->props, "damage", 11);
 
     std::array<Uint8, 256> packet{};
     size_t packet_size = 0U;
-    ASSERT_TRUE(sdl3d_game_data_encode_network_snapshot(host, "pool_state", 55U, packet.data(), packet.size(),
-                                                        &packet_size, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_encode_network_snapshot(host, "pool_state", 55U, packet.data(), packet.size(),
+                                                           &packet_size, error, sizeof(error)))
         << error;
     Uint32 tick = 0U;
-    ASSERT_TRUE(sdl3d_game_data_apply_network_snapshot(client, packet.data(), packet_size, &tick, error, sizeof(error)))
+    ASSERT_TRUE(
+        slayer3d_game_data_apply_network_snapshot(client, packet.data(), packet_size, &tick, error, sizeof(error)))
         << error;
     EXPECT_EQ(tick, 55U);
     EXPECT_TRUE(client_shot0->active);
     EXPECT_FALSE(client_shot1->active);
     expect_vec3_near(client_shot0->position, host_shot0->position);
-    EXPECT_EQ(sdl3d_properties_get_int(client_shot0->props, "damage", 0), 11);
-    EXPECT_STREQ(sdl3d_properties_get_string(client_shot0->props, "pool_lifecycle", ""), "active");
+    EXPECT_EQ(slayer3d_properties_get_int(client_shot0->props, "damage", 0), 11);
+    EXPECT_STREQ(slayer3d_properties_get_string(client_shot0->props, "pool_lifecycle", ""), "active");
 
     char description[1024]{};
-    ASSERT_TRUE(sdl3d_game_data_describe_network_snapshot(host, "pool_state", 56U, description, sizeof(description),
-                                                          error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_describe_network_snapshot(host, "pool_state", 56U, description, sizeof(description),
+                                                             error, sizeof(error)))
         << error;
     EXPECT_NE(std::string(description).find("pool.shots.0.active=true"), std::string::npos);
     EXPECT_NE(std::string(description).find("pool.shots.0.properties.damage=11"), std::string::npos);
 
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(host_session),
-                      sdl3d_game_data_find_signal(host, "signal.despawn"), nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(host_session),
+                         slayer3d_game_data_find_signal(host, "signal.despawn"), nullptr);
     ASSERT_FALSE(host_shot0->active);
-    ASSERT_TRUE(sdl3d_game_data_encode_network_snapshot(host, "pool_state", 56U, packet.data(), packet.size(),
-                                                        &packet_size, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_encode_network_snapshot(host, "pool_state", 56U, packet.data(), packet.size(),
+                                                           &packet_size, error, sizeof(error)))
         << error;
-    ASSERT_TRUE(sdl3d_game_data_apply_network_snapshot(client, packet.data(), packet_size, &tick, error, sizeof(error)))
+    ASSERT_TRUE(
+        slayer3d_game_data_apply_network_snapshot(client, packet.data(), packet_size, &tick, error, sizeof(error)))
         << error;
     EXPECT_FALSE(client_shot0->active);
-    EXPECT_STREQ(sdl3d_properties_get_string(client_shot0->props, "pool_lifecycle", ""), "inactive");
-    EXPECT_EQ(sdl3d_properties_get_int(client_shot0->props, "damage", 0), 1);
-    expect_vec3_near(client_shot0->position, sdl3d_vec3_make(0.0f, 0.0f, 0.25f));
+    EXPECT_STREQ(slayer3d_properties_get_string(client_shot0->props, "pool_lifecycle", ""), "inactive");
+    EXPECT_EQ(slayer3d_properties_get_int(client_shot0->props, "damage", 0), 1);
+    expect_vec3_near(client_shot0->position, slayer3d_vec3_make(0.0f, 0.0f, 0.25f));
 
     destroy_runtime_session(host_session, host);
     destroy_runtime_session(client_session, client);
@@ -14803,18 +14881,18 @@ TEST(GameDataRuntime, PooledActorNetworkSchemaHashIncludesPoolCapacity)
     write_text(dir / "capacity_3.game.json", actor_pool_replication_game_json(3).c_str());
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
   "renders_world": true
 })json");
 
     char error[512]{};
-    ASSERT_TRUE(
-        sdl3d_game_data_validate_file((dir / "capacity_2.game.json").string().c_str(), nullptr, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_validate_file((dir / "capacity_2.game.json").string().c_str(), nullptr, error,
+                                                 sizeof(error)))
         << error;
-    ASSERT_TRUE(
-        sdl3d_game_data_validate_file((dir / "capacity_3.game.json").string().c_str(), nullptr, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_validate_file((dir / "capacity_3.game.json").string().c_str(), nullptr, error,
+                                                 sizeof(error)))
         << error;
 
     EXPECT_NE(load_network_schema_hash(dir / "capacity_2.game.json"),
@@ -14826,7 +14904,7 @@ TEST(GameDataRuntime, RejectsUnknownPooledActorNetworkReplicationRefs)
 {
     const std::filesystem::path dir = unique_test_dir("bad_actor_pool_replication");
     const std::string network_json = R"json({
-    "protocol": { "id": "sdl3d.test.pool.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.pool.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "replication": [
       {
         "name": "pool_state",
@@ -14844,65 +14922,66 @@ TEST(GameDataRuntime, RejectsUnknownPooledActorNetworkReplicationRefs)
     write_text(dir / "bad_pool_ref.game.json", network_schema_game_json(network_json).c_str());
 
     char error[512]{};
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_pool_ref.game.json").string().c_str(), nullptr, error,
-                                               sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_pool_ref.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
     EXPECT_NE(std::string(error).find("actor pool"), std::string::npos) << error;
     remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, EncodesAndAppliesPongNetworkInputFromAuthoredSchema)
 {
-    sdl3d_game_session *client_session = nullptr;
-    sdl3d_game_data_runtime *client = nullptr;
+    slayer3d_game_session *client_session = nullptr;
+    slayer3d_game_data_runtime *client = nullptr;
     load_pong_runtime(&client_session, &client);
-    ASSERT_TRUE(sdl3d_game_data_has_network_schema(client));
+    ASSERT_TRUE(slayer3d_game_data_has_network_schema(client));
 
-    sdl3d_game_session *host_session = nullptr;
-    sdl3d_game_data_runtime *host = nullptr;
+    slayer3d_game_session *host_session = nullptr;
+    slayer3d_game_data_runtime *host = nullptr;
     load_pong_runtime(&host_session, &host);
-    ASSERT_TRUE(sdl3d_game_data_has_network_schema(host));
+    ASSERT_TRUE(slayer3d_game_data_has_network_schema(host));
 
-    sdl3d_input_manager *client_input = sdl3d_game_session_get_input(client_session);
-    sdl3d_input_manager *host_input = sdl3d_game_session_get_input(host_session);
+    slayer3d_input_manager *client_input = slayer3d_game_session_get_input(client_session);
+    slayer3d_input_manager *host_input = slayer3d_game_session_get_input(host_session);
     ASSERT_NE(client_input, nullptr);
     ASSERT_NE(host_input, nullptr);
 
-    const int up_action = sdl3d_game_data_find_action(client, "action.paddle.local.up");
-    const int down_action = sdl3d_game_data_find_action(client, "action.paddle.local.down");
+    const int up_action = slayer3d_game_data_find_action(client, "action.paddle.local.up");
+    const int down_action = slayer3d_game_data_find_action(client, "action.paddle.local.down");
     ASSERT_GE(up_action, 0);
     ASSERT_GE(down_action, 0);
 
-    sdl3d_input_set_action_override(client_input, up_action, 0.75f);
-    sdl3d_input_set_action_override(client_input, down_action, -0.25f);
-    ASSERT_NE(sdl3d_input_update(client_input, 44), nullptr);
+    slayer3d_input_set_action_override(client_input, up_action, 0.75f);
+    slayer3d_input_set_action_override(client_input, down_action, -0.25f);
+    ASSERT_NE(slayer3d_input_update(client_input, 44), nullptr);
 
     std::array<Uint8, 128> packet{};
     size_t packet_size = 0U;
     char error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_encode_network_input(client, "client_input", client_input, 44U, packet.data(),
-                                                     packet.size(), &packet_size, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_encode_network_input(client, "client_input", client_input, 44U, packet.data(),
+                                                        packet.size(), &packet_size, error, sizeof(error)))
         << error;
     ASSERT_GT(packet_size, 0U);
 
     Uint32 tick = 0U;
-    ASSERT_TRUE(
-        sdl3d_game_data_apply_network_input(host, host_input, packet.data(), packet_size, &tick, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_apply_network_input(host, host_input, packet.data(), packet_size, &tick, error,
+                                                       sizeof(error)))
         << error;
     EXPECT_EQ(tick, 44U);
 
-    ASSERT_NE(sdl3d_input_update(host_input, 45), nullptr);
-    const int host_up_action = sdl3d_game_data_find_action(host, "action.paddle.local.up");
-    const int host_down_action = sdl3d_game_data_find_action(host, "action.paddle.local.down");
+    ASSERT_NE(slayer3d_input_update(host_input, 45), nullptr);
+    const int host_up_action = slayer3d_game_data_find_action(host, "action.paddle.local.up");
+    const int host_down_action = slayer3d_game_data_find_action(host, "action.paddle.local.down");
     ASSERT_GE(host_up_action, 0);
     ASSERT_GE(host_down_action, 0);
-    EXPECT_NEAR(sdl3d_input_get_value(host_input, host_up_action), 0.75f, 0.0001f);
-    EXPECT_NEAR(sdl3d_input_get_value(host_input, host_down_action), -0.25f, 0.0001f);
+    EXPECT_NEAR(slayer3d_input_get_value(host_input, host_up_action), 0.75f, 0.0001f);
+    EXPECT_NEAR(slayer3d_input_get_value(host_input, host_down_action), -0.25f, 0.0001f);
 
-    ASSERT_TRUE(sdl3d_game_data_clear_network_input_overrides(host, "client_input", host_input, error, sizeof(error)))
+    ASSERT_TRUE(
+        slayer3d_game_data_clear_network_input_overrides(host, "client_input", host_input, error, sizeof(error)))
         << error;
-    ASSERT_NE(sdl3d_input_update(host_input, 46), nullptr);
-    EXPECT_NEAR(sdl3d_input_get_value(host_input, host_up_action), 0.0f, 0.0001f);
-    EXPECT_NEAR(sdl3d_input_get_value(host_input, host_down_action), 0.0f, 0.0001f);
+    ASSERT_NE(slayer3d_input_update(host_input, 46), nullptr);
+    EXPECT_NEAR(slayer3d_input_get_value(host_input, host_up_action), 0.0f, 0.0001f);
+    EXPECT_NEAR(slayer3d_input_get_value(host_input, host_down_action), 0.0f, 0.0001f);
 
     destroy_runtime_session(client_session, client);
     destroy_runtime_session(host_session, host);
@@ -14910,18 +14989,18 @@ TEST(GameDataRuntime, EncodesAndAppliesPongNetworkInputFromAuthoredSchema)
 
 TEST(GameDataRuntime, RuntimeReplicationBindingsEncodeAndApplyPongPackets)
 {
-    sdl3d_game_session *host_session = nullptr;
-    sdl3d_game_data_runtime *host = nullptr;
+    slayer3d_game_session *host_session = nullptr;
+    slayer3d_game_data_runtime *host = nullptr;
     load_pong_runtime(&host_session, &host);
-    ASSERT_TRUE(sdl3d_game_data_has_network_schema(host));
+    ASSERT_TRUE(slayer3d_game_data_has_network_schema(host));
 
-    sdl3d_game_session *client_session = nullptr;
-    sdl3d_game_data_runtime *client = nullptr;
+    slayer3d_game_session *client_session = nullptr;
+    slayer3d_game_data_runtime *client = nullptr;
     load_pong_runtime(&client_session, &client);
-    ASSERT_TRUE(sdl3d_game_data_has_network_schema(client));
+    ASSERT_TRUE(slayer3d_game_data_has_network_schema(client));
 
-    sdl3d_registered_actor *host_ball = sdl3d_game_data_find_actor(host, "entity.ball");
-    sdl3d_registered_actor *client_ball = sdl3d_game_data_find_actor(client, "entity.ball");
+    slayer3d_registered_actor *host_ball = slayer3d_game_data_find_actor(host, "entity.ball");
+    slayer3d_registered_actor *client_ball = slayer3d_game_data_find_actor(client, "entity.ball");
     ASSERT_NE(host_ball, nullptr);
     ASSERT_NE(client_ball, nullptr);
     host_ball->position = {2.0f, 3.0f, 0.25f};
@@ -14929,45 +15008,45 @@ TEST(GameDataRuntime, RuntimeReplicationBindingsEncodeAndApplyPongPackets)
     std::array<Uint8, 512> packet{};
     size_t packet_size = 0U;
     char error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_encode_network_runtime_snapshot(host, "state_snapshot", 123U, packet.data(),
-                                                                packet.size(), &packet_size, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_encode_network_runtime_snapshot(host, "state_snapshot", 123U, packet.data(),
+                                                                   packet.size(), &packet_size, error, sizeof(error)))
         << error;
 
     Uint32 tick = 0U;
-    ASSERT_TRUE(sdl3d_game_data_apply_network_runtime_snapshot(client, "state_snapshot", packet.data(), packet_size,
-                                                               &tick, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_apply_network_runtime_snapshot(client, "state_snapshot", packet.data(), packet_size,
+                                                                  &tick, error, sizeof(error)))
         << error;
     EXPECT_EQ(tick, 123U);
     expect_vec3_near(client_ball->position, host_ball->position);
 
-    EXPECT_FALSE(sdl3d_game_data_apply_network_runtime_input(host, "client_input",
-                                                             sdl3d_game_session_get_input(host_session), packet.data(),
-                                                             packet_size, nullptr, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_apply_network_runtime_input(
+        host, "client_input", slayer3d_game_session_get_input(host_session), packet.data(), packet_size, nullptr, error,
+        sizeof(error)));
     EXPECT_NE(std::string(error).find("unsupported header"), std::string::npos) << error;
 
-    sdl3d_input_manager *client_input = sdl3d_game_session_get_input(client_session);
-    sdl3d_input_manager *host_input = sdl3d_game_session_get_input(host_session);
+    slayer3d_input_manager *client_input = slayer3d_game_session_get_input(client_session);
+    slayer3d_input_manager *host_input = slayer3d_game_session_get_input(host_session);
     ASSERT_NE(client_input, nullptr);
     ASSERT_NE(host_input, nullptr);
-    const int client_up_action = sdl3d_game_data_find_action(client, "action.paddle.local.up");
-    const int host_up_action = sdl3d_game_data_find_action(host, "action.paddle.local.up");
+    const int client_up_action = slayer3d_game_data_find_action(client, "action.paddle.local.up");
+    const int host_up_action = slayer3d_game_data_find_action(host, "action.paddle.local.up");
     ASSERT_GE(client_up_action, 0);
     ASSERT_GE(host_up_action, 0);
-    sdl3d_input_set_action_override(client_input, client_up_action, 0.5f);
-    ASSERT_NE(sdl3d_input_update(client_input, 321), nullptr);
+    slayer3d_input_set_action_override(client_input, client_up_action, 0.5f);
+    ASSERT_NE(slayer3d_input_update(client_input, 321), nullptr);
 
-    ASSERT_TRUE(sdl3d_game_data_encode_network_runtime_input(client, "client_input", client_input, 321U, packet.data(),
-                                                             packet.size(), &packet_size, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_encode_network_runtime_input(
+        client, "client_input", client_input, 321U, packet.data(), packet.size(), &packet_size, error, sizeof(error)))
         << error;
-    ASSERT_TRUE(sdl3d_game_data_apply_network_runtime_input(host, "client_input", host_input, packet.data(),
-                                                            packet_size, &tick, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_apply_network_runtime_input(host, "client_input", host_input, packet.data(),
+                                                               packet_size, &tick, error, sizeof(error)))
         << error;
     EXPECT_EQ(tick, 321U);
-    ASSERT_NE(sdl3d_input_update(host_input, 322), nullptr);
-    EXPECT_NEAR(sdl3d_input_get_value(host_input, host_up_action), 0.5f, 0.0001f);
+    ASSERT_NE(slayer3d_input_update(host_input, 322), nullptr);
+    EXPECT_NEAR(slayer3d_input_get_value(host_input, host_up_action), 0.5f, 0.0001f);
 
-    EXPECT_FALSE(sdl3d_game_data_apply_network_runtime_snapshot(client, "state_snapshot", packet.data(), packet_size,
-                                                                nullptr, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_apply_network_runtime_snapshot(client, "state_snapshot", packet.data(), packet_size,
+                                                                   nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("unsupported header"), std::string::npos) << error;
 
     destroy_runtime_session(host_session, host);
@@ -14976,42 +15055,42 @@ TEST(GameDataRuntime, RuntimeReplicationBindingsEncodeAndApplyPongPackets)
 
 TEST(GameDataRuntime, RejectsPongNetworkInputWithMismatchedSchemaOrTruncation)
 {
-    sdl3d_game_session *client_session = nullptr;
-    sdl3d_game_data_runtime *client = nullptr;
+    slayer3d_game_session *client_session = nullptr;
+    slayer3d_game_data_runtime *client = nullptr;
     load_pong_runtime(&client_session, &client);
-    sdl3d_game_session *host_session = nullptr;
-    sdl3d_game_data_runtime *host = nullptr;
+    slayer3d_game_session *host_session = nullptr;
+    slayer3d_game_data_runtime *host = nullptr;
     load_pong_runtime(&host_session, &host);
 
-    sdl3d_input_manager *client_input = sdl3d_game_session_get_input(client_session);
-    sdl3d_input_manager *host_input = sdl3d_game_session_get_input(host_session);
+    slayer3d_input_manager *client_input = slayer3d_game_session_get_input(client_session);
+    slayer3d_input_manager *host_input = slayer3d_game_session_get_input(host_session);
     ASSERT_NE(client_input, nullptr);
     ASSERT_NE(host_input, nullptr);
-    ASSERT_NE(sdl3d_input_update(client_input, 10), nullptr);
+    ASSERT_NE(slayer3d_input_update(client_input, 10), nullptr);
 
     std::array<Uint8, 128> packet{};
     size_t packet_size = 0U;
     char error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_encode_network_input(client, "client_input", client_input, 10U, packet.data(),
-                                                     packet.size(), &packet_size, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_encode_network_input(client, "client_input", client_input, 10U, packet.data(),
+                                                        packet.size(), &packet_size, error, sizeof(error)))
         << error;
     ASSERT_GT(packet_size, 24U);
 
     std::array<Uint8, 8> too_small{};
     size_t too_small_size = 0U;
-    EXPECT_FALSE(sdl3d_game_data_encode_network_input(client, "client_input", client_input, 10U, too_small.data(),
-                                                      too_small.size(), &too_small_size, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_encode_network_input(client, "client_input", client_input, 10U, too_small.data(),
+                                                         too_small.size(), &too_small_size, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("requires"), std::string::npos) << error;
     EXPECT_EQ(too_small_size, 0U);
 
     std::array<Uint8, 128> corrupted = packet;
     corrupted[16] ^= 0xffU;
-    EXPECT_FALSE(sdl3d_game_data_apply_network_input(host, host_input, corrupted.data(), packet_size, nullptr, error,
-                                                     sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_apply_network_input(host, host_input, corrupted.data(), packet_size, nullptr, error,
+                                                        sizeof(error)));
     EXPECT_NE(std::string(error).find("schema hash"), std::string::npos) << error;
 
-    EXPECT_FALSE(sdl3d_game_data_apply_network_input(host, host_input, packet.data(), packet_size - 1U, nullptr, error,
-                                                     sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_apply_network_input(host, host_input, packet.data(), packet_size - 1U, nullptr,
+                                                        error, sizeof(error)));
     EXPECT_NE(std::string(error).find("action data"), std::string::npos) << error;
 
     destroy_runtime_session(client_session, client);
@@ -15020,40 +15099,40 @@ TEST(GameDataRuntime, RejectsPongNetworkInputWithMismatchedSchemaOrTruncation)
 
 TEST(GameDataRuntime, EncodesDecodesAndAppliesPongNetworkControlFromAuthoredSchema)
 {
-    sdl3d_game_session *sender_session = nullptr;
-    sdl3d_game_data_runtime *sender = nullptr;
+    slayer3d_game_session *sender_session = nullptr;
+    slayer3d_game_data_runtime *sender = nullptr;
     load_pong_runtime(&sender_session, &sender);
-    ASSERT_TRUE(sdl3d_game_data_has_network_schema(sender));
+    ASSERT_TRUE(slayer3d_game_data_has_network_schema(sender));
 
-    sdl3d_game_session *receiver_session = nullptr;
-    sdl3d_game_data_runtime *receiver = nullptr;
+    slayer3d_game_session *receiver_session = nullptr;
+    slayer3d_game_data_runtime *receiver = nullptr;
     load_pong_runtime(&receiver_session, &receiver);
-    ASSERT_TRUE(sdl3d_game_data_has_network_schema(receiver));
+    ASSERT_TRUE(slayer3d_game_data_has_network_schema(receiver));
 
     std::array<Uint8, 128> packet{};
     size_t packet_size = 0U;
     char error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_encode_network_control(sender, "pause_request", 77U, packet.data(), packet.size(),
-                                                       &packet_size, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_encode_network_control(sender, "pause_request", 77U, packet.data(), packet.size(),
+                                                          &packet_size, error, sizeof(error)))
         << error;
     ASSERT_GT(packet_size, 0U);
 
-    sdl3d_game_data_network_control control{};
+    slayer3d_game_data_network_control control{};
     ASSERT_TRUE(
-        sdl3d_game_data_decode_network_control(receiver, packet.data(), packet_size, &control, error, sizeof(error)))
+        slayer3d_game_data_decode_network_control(receiver, packet.data(), packet_size, &control, error, sizeof(error)))
         << error;
     EXPECT_STREQ(control.name, "pause_request");
-    EXPECT_EQ(control.direction, SDL3D_GAME_DATA_NETWORK_DIRECTION_BIDIRECTIONAL);
-    EXPECT_EQ(control.signal_id, sdl3d_game_data_find_signal(receiver, "signal.network.pause_changed"));
+    EXPECT_EQ(control.direction, SLAYER3D_GAME_DATA_NETWORK_DIRECTION_BIDIRECTIONAL);
+    EXPECT_EQ(control.signal_id, slayer3d_game_data_find_signal(receiver, "signal.network.pause_changed"));
     EXPECT_EQ(control.tick, 77U);
 
     NetworkSignalCapture capture;
-    const int connection = sdl3d_signal_connect(sdl3d_game_session_get_signal_bus(receiver_session), control.signal_id,
-                                                capture_signal_payload, &capture);
+    const int connection = slayer3d_signal_connect(slayer3d_game_session_get_signal_bus(receiver_session),
+                                                   control.signal_id, capture_signal_payload, &capture);
     ASSERT_GT(connection, 0);
-    sdl3d_game_data_network_control applied{};
+    slayer3d_game_data_network_control applied{};
     ASSERT_TRUE(
-        sdl3d_game_data_apply_network_control(receiver, packet.data(), packet_size, &applied, error, sizeof(error)))
+        slayer3d_game_data_apply_network_control(receiver, packet.data(), packet_size, &applied, error, sizeof(error)))
         << error;
     EXPECT_STREQ(applied.name, "pause_request");
     EXPECT_EQ(capture.calls, 1);
@@ -15061,7 +15140,7 @@ TEST(GameDataRuntime, EncodesDecodesAndAppliesPongNetworkControlFromAuthoredSche
     EXPECT_EQ(capture.network_control, "pause_request");
     EXPECT_EQ(capture.network_direction, "bidirectional");
     EXPECT_EQ(capture.network_tick, 77);
-    sdl3d_signal_disconnect(sdl3d_game_session_get_signal_bus(receiver_session), connection);
+    slayer3d_signal_disconnect(slayer3d_game_session_get_signal_bus(receiver_session), connection);
 
     destroy_runtime_session(sender_session, sender);
     destroy_runtime_session(receiver_session, receiver);
@@ -15081,48 +15160,48 @@ TEST(GameDataRuntime, ResolvesRuntimeControlBindingsForGenericNetworkLoops)
     })json");
     write_text(dir / "network_runtime_controls.game.json", network_schema_game_json(network_json).c_str());
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "network_runtime_controls.game.json").string().c_str(), session,
-                                          &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "network_runtime_controls.game.json").string().c_str(), session,
+                                             &runtime, error, sizeof(error)))
         << error;
 
     const char *control_name = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_control(runtime, "semantic_pause", &control_name));
+    ASSERT_TRUE(slayer3d_game_data_get_network_runtime_control(runtime, "semantic_pause", &control_name));
     EXPECT_STREQ(control_name, "pause");
 
     const char *binding_name = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_get_network_runtime_control_binding(runtime, "pause", &binding_name));
+    ASSERT_TRUE(slayer3d_game_data_get_network_runtime_control_binding(runtime, "pause", &binding_name));
     EXPECT_STREQ(binding_name, "semantic_pause");
 
-    std::array<Uint8, SDL3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE> packet{};
+    std::array<Uint8, SLAYER3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE> packet{};
     size_t packet_size = 0U;
-    ASSERT_TRUE(sdl3d_game_data_encode_network_runtime_control(runtime, "semantic_pause", 99U, packet.data(),
-                                                               packet.size(), &packet_size, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_encode_network_runtime_control(runtime, "semantic_pause", 99U, packet.data(),
+                                                                  packet.size(), &packet_size, error, sizeof(error)))
         << error;
-    EXPECT_EQ(packet_size, SDL3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE);
+    EXPECT_EQ(packet_size, SLAYER3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE);
 
-    sdl3d_game_data_network_control control{};
+    slayer3d_game_data_network_control control{};
     const char *decoded_binding = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_decode_network_runtime_control(runtime, packet.data(), packet_size, &decoded_binding,
-                                                               &control, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_decode_network_runtime_control(runtime, packet.data(), packet_size, &decoded_binding,
+                                                                  &control, error, sizeof(error)))
         << error;
     EXPECT_STREQ(decoded_binding, "semantic_pause");
     EXPECT_STREQ(control.name, "pause");
     EXPECT_EQ(control.tick, 99U);
 
-    EXPECT_FALSE(sdl3d_game_data_encode_network_runtime_control(runtime, "missing", 1U, packet.data(), packet.size(),
-                                                                &packet_size, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_encode_network_runtime_control(runtime, "missing", 1U, packet.data(), packet.size(),
+                                                                   &packet_size, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("network runtime control binding 'missing' not found"), std::string::npos)
         << error;
 
-    ASSERT_TRUE(sdl3d_game_data_encode_network_control(runtime, "start_game", 100U, packet.data(), packet.size(),
-                                                       &packet_size, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_encode_network_control(runtime, "start_game", 100U, packet.data(), packet.size(),
+                                                          &packet_size, error, sizeof(error)))
         << error;
-    EXPECT_FALSE(sdl3d_game_data_decode_network_runtime_control(runtime, packet.data(), packet_size, &decoded_binding,
-                                                                &control, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_decode_network_runtime_control(runtime, packet.data(), packet_size,
+                                                                   &decoded_binding, &control, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("network runtime control binding for 'start_game' not found"), std::string::npos)
         << error;
 
@@ -15132,37 +15211,37 @@ TEST(GameDataRuntime, ResolvesRuntimeControlBindingsForGenericNetworkLoops)
 
 TEST(GameDataRuntime, RejectsPongNetworkControlWithMismatchedSchemaOrBadSize)
 {
-    sdl3d_game_session *sender_session = nullptr;
-    sdl3d_game_data_runtime *sender = nullptr;
+    slayer3d_game_session *sender_session = nullptr;
+    slayer3d_game_data_runtime *sender = nullptr;
     load_pong_runtime(&sender_session, &sender);
-    sdl3d_game_session *receiver_session = nullptr;
-    sdl3d_game_data_runtime *receiver = nullptr;
+    slayer3d_game_session *receiver_session = nullptr;
+    slayer3d_game_data_runtime *receiver = nullptr;
     load_pong_runtime(&receiver_session, &receiver);
 
     std::array<Uint8, 128> packet{};
     size_t packet_size = 0U;
     char error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_encode_network_control(sender, "disconnect", 88U, packet.data(), packet.size(),
-                                                       &packet_size, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_encode_network_control(sender, "disconnect", 88U, packet.data(), packet.size(),
+                                                          &packet_size, error, sizeof(error)))
         << error;
-    ASSERT_EQ(packet_size, SDL3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE);
+    ASSERT_EQ(packet_size, SLAYER3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE);
     ASSERT_GT(packet_size, 32U);
 
     std::array<Uint8, 8> too_small{};
     size_t too_small_size = 0U;
-    EXPECT_FALSE(sdl3d_game_data_encode_network_control(sender, "disconnect", 88U, too_small.data(), too_small.size(),
-                                                        &too_small_size, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_encode_network_control(sender, "disconnect", 88U, too_small.data(),
+                                                           too_small.size(), &too_small_size, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("requires"), std::string::npos) << error;
     EXPECT_EQ(too_small_size, 0U);
 
     std::array<Uint8, 128> corrupted = packet;
     corrupted[16] ^= 0xffU;
-    EXPECT_FALSE(
-        sdl3d_game_data_decode_network_control(receiver, corrupted.data(), packet_size, nullptr, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_decode_network_control(receiver, corrupted.data(), packet_size, nullptr, error,
+                                                           sizeof(error)));
     EXPECT_NE(std::string(error).find("schema hash"), std::string::npos) << error;
 
-    EXPECT_FALSE(sdl3d_game_data_decode_network_control(receiver, packet.data(), packet_size - 1U, nullptr, error,
-                                                        sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_decode_network_control(receiver, packet.data(), packet_size - 1U, nullptr, error,
+                                                           sizeof(error)));
     EXPECT_NE(std::string(error).find("requires"), std::string::npos) << error;
 
     destroy_runtime_session(sender_session, sender);
@@ -15171,169 +15250,177 @@ TEST(GameDataRuntime, RejectsPongNetworkControlWithMismatchedSchemaOrBadSize)
 
 TEST(GameDataRuntime, AuthoredDirectConnectActionsUpdateSceneState)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
-    sdl3d_properties_set_string(scene_state, "direct_connect_host", "");
-    sdl3d_properties_set_string(scene_state, "direct_connect_port", "27183");
-    sdl3d_properties_set_string(scene_state, "direct_connect_status", "Ready");
-    sdl3d_properties_set_string(scene_state, "direct_connect_state", "disconnected");
-    sdl3d_properties_set_bool(scene_state, "direct_connect_connected", true);
+    slayer3d_properties_set_string(scene_state, "direct_connect_host", "");
+    slayer3d_properties_set_string(scene_state, "direct_connect_port", "27183");
+    slayer3d_properties_set_string(scene_state, "direct_connect_status", "Ready");
+    slayer3d_properties_set_string(scene_state, "direct_connect_state", "disconnected");
+    slayer3d_properties_set_bool(scene_state, "direct_connect_connected", true);
 
-    const int connect_signal = sdl3d_game_data_find_signal(runtime, "signal.multiplayer.direct.connect");
+    const int connect_signal = slayer3d_game_data_find_signal(runtime, "signal.multiplayer.direct.connect");
     ASSERT_GE(connect_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), connect_signal, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), connect_signal, nullptr);
 
-    EXPECT_EQ(sdl3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""), "Invalid host");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_state", ""), "error");
-    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "direct_connect_connected", true));
+    EXPECT_EQ(slayer3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "direct_connect_status", ""), "Invalid host");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "direct_connect_state", ""), "error");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "direct_connect_connected", true));
 
-    sdl3d_properties_set_string(scene_state, "direct_connect_host", "127.0.0.1");
-    sdl3d_properties_set_string(scene_state, "direct_connect_port", "0");
-    sdl3d_properties_set_bool(scene_state, "direct_connect_connected", true);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), connect_signal, nullptr);
+    slayer3d_properties_set_string(scene_state, "direct_connect_host", "127.0.0.1");
+    slayer3d_properties_set_string(scene_state, "direct_connect_port", "0");
+    slayer3d_properties_set_bool(scene_state, "direct_connect_connected", true);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), connect_signal, nullptr);
 
-    EXPECT_EQ(sdl3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""), "Invalid port");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_state", ""), "error");
-    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "direct_connect_connected", true));
+    EXPECT_EQ(slayer3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "direct_connect_status", ""), "Invalid port");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "direct_connect_state", ""), "error");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "direct_connect_connected", true));
 
-    const int disconnect_signal = sdl3d_game_data_find_signal(runtime, "signal.multiplayer.direct.disconnect");
+    const int disconnect_signal = slayer3d_game_data_find_signal(runtime, "signal.multiplayer.direct.disconnect");
     ASSERT_GE(disconnect_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), disconnect_signal, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), disconnect_signal, nullptr);
 
-    EXPECT_EQ(sdl3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""), "Disconnected");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_state", ""), "disconnected");
-    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "direct_connect_connected", true));
+    EXPECT_EQ(slayer3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "direct_connect_status", ""), "Disconnected");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "direct_connect_state", ""), "disconnected");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "direct_connect_connected", true));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, RuntimeOwnedHostSessionPublishesSceneState)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
 
     const ::testing::TestInfo *test_info = ::testing::UnitTest::GetInstance()->current_test_info();
     const std::string test_name =
         test_info != nullptr ? std::string(test_info->test_suite_name()) + "." + test_info->name() : "host";
     const int port = 30000 + (int)(std::hash<std::string>{}(test_name) % 20000U);
-    if (!sdl3d_game_data_network_host_start(runtime, "test_host", port, "SDL3D Test", "host_status", "host_endpoint",
-                                            "host_peer", "host_connected"))
+    if (!slayer3d_game_data_network_host_start(runtime, "test_host", port, "SLAYER3D Test", "host_status",
+                                               "host_endpoint", "host_peer", "host_connected"))
     {
-        sdl3d_game_data_destroy(runtime);
-        sdl3d_game_session_destroy(session);
+        slayer3d_game_data_destroy(runtime);
+        slayer3d_game_session_destroy(session);
         GTEST_SKIP() << "network host session unavailable: " << SDL_GetError();
     }
 
-    sdl3d_network_session *host = sdl3d_game_data_get_network_host_session(runtime, "test_host");
+    slayer3d_network_session *host = slayer3d_game_data_get_network_host_session(runtime, "test_host");
     ASSERT_NE(host, nullptr);
-    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "host_connected", true));
-    EXPECT_NE(std::string(sdl3d_properties_get_string(scene_state, "host_endpoint", "")).find("UDP "),
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "host_connected", true));
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "host_endpoint", "")).find("UDP "),
               std::string::npos);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "host_peer", ""), "Waiting for client");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "host_peer", ""), "Waiting for client");
 
-    ASSERT_TRUE(sdl3d_game_data_network_host_publish_status(runtime, "test_host", "host_status", "host_endpoint",
-                                                            "host_peer", "host_connected"));
-    ASSERT_TRUE(sdl3d_game_data_network_host_cancel(runtime, "test_host", "host_status", "host_endpoint", "host_peer",
-                                                    "host_connected", "Not hosting"));
-    EXPECT_EQ(sdl3d_game_data_get_network_host_session(runtime, "test_host"), nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "host_status", ""), "Not hosting");
-    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "host_connected", true));
+    ASSERT_TRUE(slayer3d_game_data_network_host_publish_status(runtime, "test_host", "host_status", "host_endpoint",
+                                                               "host_peer", "host_connected"));
+    ASSERT_TRUE(slayer3d_game_data_network_host_cancel(runtime, "test_host", "host_status", "host_endpoint",
+                                                       "host_peer", "host_connected", "Not hosting"));
+    EXPECT_EQ(slayer3d_game_data_get_network_host_session(runtime, "test_host"), nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "host_status", ""), "Not hosting");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "host_connected", true));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, AuthoredDiscoveryConnectActionsUpdateSceneState)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
-    const int connect_signal = sdl3d_game_data_find_signal(runtime, "signal.multiplayer.discovery.connect");
+    const int connect_signal = slayer3d_game_data_find_signal(runtime, "signal.multiplayer.discovery.connect");
     ASSERT_GE(connect_signal, 0);
 
-    sdl3d_properties_set_int(scene_state, "local_match_index", 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), connect_signal, nullptr);
+    slayer3d_properties_set_int(scene_state, "local_match_index", 0);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), connect_signal, nullptr);
 
-    EXPECT_EQ(sdl3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""), "No session selected");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_state", ""), "error");
-    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "direct_connect_connected", true));
+    EXPECT_EQ(slayer3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "direct_connect_status", ""), "No session selected");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "direct_connect_state", ""), "error");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "direct_connect_connected", true));
 
-    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "label", "Local Pong Host"));
-    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "name", "Local Pong Host"));
-    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "host", "127.0.0.1"));
-    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_int(runtime, "local_matches", 0, "port", 0));
-    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "endpoint", "127.0.0.1:0"));
-    EXPECT_EQ(sdl3d_game_data_runtime_collection_count(runtime, "local_matches"), 1);
-
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), connect_signal, nullptr);
-
-    EXPECT_EQ(sdl3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_host", ""), "127.0.0.1");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_port", ""), "0");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""), "Invalid port");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_state", ""), "error");
-    EXPECT_FALSE(sdl3d_properties_get_bool(scene_state, "direct_connect_connected", true));
-    EXPECT_EQ(sdl3d_game_data_runtime_collection_count(runtime, "local_matches"), 0);
-
-    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "label", "Valid Pong Host"));
-    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "name", "Valid Pong Host"));
-    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "host", "127.0.0.1"));
-    ASSERT_TRUE(sdl3d_game_data_runtime_collection_set_int(runtime, "local_matches", 0, "port", 65535));
     ASSERT_TRUE(
-        sdl3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "endpoint", "127.0.0.1:65535"));
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), connect_signal, nullptr);
+        slayer3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "label", "Local Pong Host"));
+    ASSERT_TRUE(
+        slayer3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "name", "Local Pong Host"));
+    ASSERT_TRUE(slayer3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "host", "127.0.0.1"));
+    ASSERT_TRUE(slayer3d_game_data_runtime_collection_set_int(runtime, "local_matches", 0, "port", 0));
+    ASSERT_TRUE(
+        slayer3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "endpoint", "127.0.0.1:0"));
+    EXPECT_EQ(slayer3d_game_data_runtime_collection_count(runtime, "local_matches"), 1);
 
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_host", ""), "127.0.0.1");
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_port", ""), "65535");
-    EXPECT_EQ(sdl3d_game_data_runtime_collection_count(runtime, "local_matches"), 0);
-    if (sdl3d_game_data_get_network_direct_connect_session(runtime, "direct_connect") != nullptr)
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), connect_signal, nullptr);
+
+    EXPECT_EQ(slayer3d_game_data_get_network_direct_connect_session(runtime, "direct_connect"), nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "direct_connect_host", ""), "127.0.0.1");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "direct_connect_port", ""), "0");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "direct_connect_status", ""), "Invalid port");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "direct_connect_state", ""), "error");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "direct_connect_connected", true));
+    EXPECT_EQ(slayer3d_game_data_runtime_collection_count(runtime, "local_matches"), 0);
+
+    ASSERT_TRUE(
+        slayer3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "label", "Valid Pong Host"));
+    ASSERT_TRUE(
+        slayer3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "name", "Valid Pong Host"));
+    ASSERT_TRUE(slayer3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "host", "127.0.0.1"));
+    ASSERT_TRUE(slayer3d_game_data_runtime_collection_set_int(runtime, "local_matches", 0, "port", 65535));
+    ASSERT_TRUE(
+        slayer3d_game_data_runtime_collection_set_string(runtime, "local_matches", 0, "endpoint", "127.0.0.1:65535"));
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), connect_signal, nullptr);
+
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "direct_connect_host", ""), "127.0.0.1");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "direct_connect_port", ""), "65535");
+    EXPECT_EQ(slayer3d_game_data_runtime_collection_count(runtime, "local_matches"), 0);
+    if (slayer3d_game_data_get_network_direct_connect_session(runtime, "direct_connect") != nullptr)
     {
-        EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""),
+        EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "direct_connect_status", ""),
                      "Match found. Connecting...");
     }
     else
     {
-        EXPECT_NE(std::string(sdl3d_properties_get_string(scene_state, "direct_connect_status", ""))
+        EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "direct_connect_status", ""))
                       .find("networking is disabled"),
                   std::string::npos);
     }
 
-    const int cancel_signal = sdl3d_game_data_find_signal(runtime, "signal.multiplayer.discovery.cancel");
+    const int cancel_signal = slayer3d_game_data_find_signal(runtime, "signal.multiplayer.discovery.cancel");
     ASSERT_GE(cancel_signal, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), cancel_signal, nullptr);
-    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "local_match_status", ""), "Discovery canceled");
-    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "local_match_count", -1), 0);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), cancel_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "local_match_status", ""), "Discovery canceled");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "local_match_count", -1), 0);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, RejectsInvalidDirectConnectActions)
@@ -15341,7 +15428,7 @@ TEST(GameDataRuntime, RejectsInvalidDirectConnectActions)
     const std::filesystem::path dir = unique_test_dir("bad_direct_connect_actions");
     write_text(dir / "bad_direct_connect.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Direct Connect", "id": "test.bad_direct_connect", "version": "0.1.0" },
   "world": { "name": "world.bad_direct_connect", "kind": "fixed_screen" },
   "entities": [],
@@ -15359,8 +15446,8 @@ TEST(GameDataRuntime, RejectsInvalidDirectConnectActions)
 })json");
 
     char error[512]{};
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_direct_connect.game.json").string().c_str(), nullptr, error,
-                                               sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_direct_connect.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
     EXPECT_NE(
         std::string(error).find("network.direct_connect.start port must be a non-empty string or integer 1..65535"),
         std::string::npos)
@@ -15373,7 +15460,7 @@ TEST(GameDataRuntime, RejectsInvalidHostActions)
     const std::filesystem::path dir = unique_test_dir("bad_host_actions");
     write_text(dir / "bad_host.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Host", "id": "test.bad_host", "version": "0.1.0" },
   "world": { "name": "world.bad_host", "kind": "fixed_screen" },
   "entities": [],
@@ -15392,7 +15479,7 @@ TEST(GameDataRuntime, RejectsInvalidHostActions)
 
     char error[512]{};
     EXPECT_FALSE(
-        sdl3d_game_data_validate_file((dir / "bad_host.game.json").string().c_str(), nullptr, error, sizeof(error)));
+        slayer3d_game_data_validate_file((dir / "bad_host.game.json").string().c_str(), nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("network.host.start port must be a non-empty string or integer 1..65535"),
               std::string::npos)
         << error;
@@ -15430,7 +15517,7 @@ TEST(GameDataRuntime, RejectsInvalidDiscoveryActions)
     for (const Case &test_case : cases)
     {
         const std::string json = std::string(R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Discovery", "id": "test.bad_discovery", "version": "0.1.0" },
   "world": { "name": "world.bad_discovery", "kind": "fixed_screen" },
   "entities": [],
@@ -15450,7 +15537,7 @@ TEST(GameDataRuntime, RejectsInvalidDiscoveryActions)
         write_text(dir / (std::string(test_case.name) + ".game.json"), json.c_str());
 
         char error[512]{};
-        EXPECT_FALSE(sdl3d_game_data_validate_file(
+        EXPECT_FALSE(slayer3d_game_data_validate_file(
             (dir / (std::string(test_case.name) + ".game.json")).string().c_str(), nullptr, error, sizeof(error)))
             << test_case.name;
         EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
@@ -15473,7 +15560,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "unknown_entity",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "replication": [
       {
         "name": "play_state",
@@ -15490,7 +15577,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "duplicate_field",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "replication": [
       {
         "name": "play_state",
@@ -15513,7 +15600,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "unsupported_field_type",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "replication": [
       {
         "name": "play_state",
@@ -15535,7 +15622,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "number_alias_is_not_a_network_field_type",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "replication": [
       {
         "name": "play_state",
@@ -15557,7 +15644,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "unknown_action",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "replication": [
       {
         "name": "client_input",
@@ -15574,7 +15661,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "bad_direction",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "replication": [
       {
         "name": "play_state",
@@ -15591,7 +15678,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "duplicate_replication_channel",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "replication": [
       {
         "name": "play_state",
@@ -15616,7 +15703,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "duplicate_control_message",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "replication": [
       {
         "name": "play_state",
@@ -15637,7 +15724,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "host_to_client_missing_actors",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "replication": [
       {
         "name": "play_state",
@@ -15651,7 +15738,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "client_to_host_missing_inputs",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "replication": [
       {
         "name": "client_input",
@@ -15665,7 +15752,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "bad_scene_state_key",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "scene_state": {
       "host": {
         "status": ""
@@ -15690,7 +15777,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "bad_session_flow_state_key",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "session_flow": {
       "state_keys": {
         "match_mode": ""
@@ -15715,7 +15802,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "bad_session_flow_message",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "session_flow": {
       "messages": {
         "disconnect_reasons": {
@@ -15742,7 +15829,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "bad_session_flow_event",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "session_flow": {
       "events": {
         "disconnect": {
@@ -15772,7 +15859,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "bad_managed_network_missing_scene_semantic",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "session_flow": {
       "managed_runtime": {
         "enabled": true,
@@ -15798,7 +15885,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "bad_managed_network_keep_alive_scene",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "session_flow": {
       "managed_runtime": {
         "enabled": false,
@@ -15826,7 +15913,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "bad_runtime_replication_binding",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "runtime_bindings": {
       "replication": {
         "state_snapshot": "missing_channel"
@@ -15851,7 +15938,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "bad_snapshot_diagnostic_replication",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "diagnostics": {
       "snapshots": [
         {
@@ -15879,7 +15966,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "bad_snapshot_diagnostic_level",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "diagnostics": {
       "snapshots": [
         {
@@ -15908,7 +15995,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "bad_runtime_control_binding",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "runtime_bindings": {
       "controls": {
         "pause_request": "missing_control"
@@ -15936,7 +16023,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "duplicate_runtime_control_binding_value",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "runtime_bindings": {
       "controls": {
         "pause_request": "pause",
@@ -15965,7 +16052,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "bad_runtime_action_binding",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "runtime_bindings": {
       "actions": {
         "menu_select": "action.missing"
@@ -15990,7 +16077,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "bad_runtime_signal_binding",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "runtime_bindings": {
       "signals": {
         "ui_select": "signal.missing"
@@ -16015,7 +16102,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "bad_runtime_pause_action_binding",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "runtime_bindings": {
       "pause": {
         "action": "action.missing.pause",
@@ -16041,7 +16128,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "bad_runtime_pause_state_actor_binding",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "runtime_bindings": {
       "pause": {
         "action": "action.pause",
@@ -16067,7 +16154,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         {
             "bad_runtime_pause_state_property_binding",
             R"json({
-    "protocol": { "id": "sdl3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
+    "protocol": { "id": "slayer3d.test.network.v1", "version": 1, "transport": "udp", "tick_rate": 60 },
     "runtime_bindings": {
       "pause": {
         "action": "action.pause",
@@ -16098,7 +16185,7 @@ TEST(GameDataRuntime, RejectsInvalidNetworkReplicationSchemas)
         const std::filesystem::path path = dir / (std::string(test_case.name) + ".game.json");
         write_text(path, network_schema_game_json(test_case.network_json, test_case.name).c_str());
         char error[512]{};
-        EXPECT_FALSE(sdl3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
+        EXPECT_FALSE(slayer3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
             << test_case.name;
         EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
             << test_case.name << ": " << error;
@@ -16114,7 +16201,7 @@ TEST(GameDataRuntime, MaterializesAudioAssetsThroughAuthoredCacheStorage)
     write_text(dir / "tone.wav", "audio bytes");
 
     const std::string game_json = std::string(R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Audio Cache", "id": "test.audio_cache", "version": "0.1.0" },
   "storage": {
     "organization": "Blue Sentinel Security",
@@ -16129,18 +16216,18 @@ TEST(GameDataRuntime, MaterializesAudioAssetsThroughAuthoredCacheStorage)
 })json";
     write_text(dir / "audio_cache.game.json", game_json.c_str());
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "audio_cache.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "audio_cache.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
 
     char materialized_path[4096]{};
-    ASSERT_TRUE(
-        sdl3d_game_data_prepare_audio_file(runtime, "asset://tone.wav", materialized_path, sizeof(materialized_path)));
+    ASSERT_TRUE(slayer3d_game_data_prepare_audio_file(runtime, "asset://tone.wav", materialized_path,
+                                                      sizeof(materialized_path)));
     const std::filesystem::path materialized(materialized_path);
     EXPECT_TRUE(std::filesystem::exists(materialized));
     EXPECT_EQ(materialized.parent_path().filename().string(), "audio");
@@ -16153,11 +16240,11 @@ TEST(GameDataRuntime, MaterializesAudioAssetsThroughAuthoredCacheStorage)
     EXPECT_EQ(contents, "audio bytes");
 
     char cached_path[4096]{};
-    ASSERT_TRUE(sdl3d_game_data_prepare_audio_file(runtime, "asset://tone.wav", cached_path, sizeof(cached_path)));
+    ASSERT_TRUE(slayer3d_game_data_prepare_audio_file(runtime, "asset://tone.wav", cached_path, sizeof(cached_path)));
     EXPECT_STREQ(cached_path, materialized_path);
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -16177,7 +16264,7 @@ function storage.roundtrip(_, _, ctx)
     end
 
     local ghost = { _name = "entity.missing" }
-    local gx, gy, gz = sdl3d.get_vec3(ghost, "velocity")
+    local gx, gy, gz = slayer3d.get_vec3(ghost, "velocity")
     if gx ~= nil or gy ~= nil or gz ~= nil then
         return false
     end
@@ -16188,12 +16275,12 @@ function storage.roundtrip(_, _, ctx)
     end
 
     local data = ctx.storage.read("user://settings/options.json")
-    local decoded, decode_error = sdl3d.json.decode(data)
+    local decoded, decode_error = slayer3d.json.decode(data)
     if decoded == nil or decode_error ~= nil or decoded.difficulty ~= "hard" then
         return false
     end
-    local encoded = sdl3d.json.encode({ difficulty = decoded.difficulty, enabled = true, values = { 1, 2, 3 } })
-    local roundtrip = sdl3d.json.decode(encoded)
+    local encoded = slayer3d.json.encode({ difficulty = decoded.difficulty, enabled = true, values = { 1, 2, 3 } })
+    local roundtrip = slayer3d.json.decode(encoded)
     if roundtrip == nil or roundtrip.enabled ~= true or roundtrip.values[2] ~= 2 then
         return false
     end
@@ -16213,7 +16300,7 @@ return storage
 )lua");
 
     const std::string game_json = std::string(R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Lua Storage", "id": "test.lua_storage", "version": "0.1.0" },
   "storage": {
     "organization": "Blue Sentinel Security",
@@ -16250,27 +16337,27 @@ return storage
 })json";
     write_text(dir / "lua_storage.game.json", game_json.c_str());
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "lua_storage.game.json").string().c_str(), session, &runtime, error,
-                                          sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "lua_storage.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
         << error;
 
-    const int signal_id = sdl3d_game_data_find_signal(runtime, "signal.storage.roundtrip");
+    const int signal_id = slayer3d_game_data_find_signal(runtime, "signal.storage.roundtrip");
     ASSERT_GE(signal_id, 0);
-    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), signal_id, nullptr);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), signal_id, nullptr);
 
-    EXPECT_STREQ(sdl3d_properties_get_string(sdl3d_game_data_scene_state(runtime), "loaded_options", ""),
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "loaded_options", ""),
                  "hard:2:true");
     EXPECT_TRUE(std::filesystem::exists(user_root / "settings" / "options.json"));
     EXPECT_TRUE(std::filesystem::exists(cache_root / "script" / "status.txt"));
     EXPECT_FALSE(std::filesystem::exists(dir / "escape.txt"));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -16281,117 +16368,117 @@ TEST(GameDataRuntime, GenericPersistenceSavesOptionsAndPongLuaLoadsHighScores)
     const std::filesystem::path cache_root = dir / "cache";
     const std::filesystem::path game_path = copy_pong_data_with_storage_overrides(dir, user_root, cache_root);
 
-    auto emit = [](sdl3d_game_session *session, sdl3d_game_data_runtime *runtime, const char *signal) {
-        const int signal_id = sdl3d_game_data_find_signal(runtime, signal);
+    auto emit = [](slayer3d_game_session *session, slayer3d_game_data_runtime *runtime, const char *signal) {
+        const int signal_id = slayer3d_game_data_find_signal(runtime, signal);
         EXPECT_GE(signal_id, 0) << signal;
         if (signal_id >= 0)
-            sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), signal_id, nullptr);
+            slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), signal_id, nullptr);
     };
 
     {
-        sdl3d_game_session *session = nullptr;
-        ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+        slayer3d_game_session *session = nullptr;
+        ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
         char error[512]{};
-        sdl3d_game_data_runtime *runtime = nullptr;
-        ASSERT_TRUE(sdl3d_game_data_load_file(game_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        slayer3d_game_data_runtime *runtime = nullptr;
+        ASSERT_TRUE(slayer3d_game_data_load_file(game_path.string().c_str(), session, &runtime, error, sizeof(error)))
             << error;
 
-        sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+        slayer3d_registered_actor *settings = slayer3d_game_data_find_actor(runtime, "entity.settings");
         ASSERT_NE(settings, nullptr);
-        EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "options_persistence_enabled", true));
-        EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "score_persistence_enabled", false));
+        EXPECT_FALSE(slayer3d_properties_get_bool(settings->props, "options_persistence_enabled", true));
+        EXPECT_TRUE(slayer3d_properties_get_bool(settings->props, "score_persistence_enabled", false));
 
         emit(session, runtime, "signal.persistence.save_options");
         EXPECT_FALSE(std::filesystem::exists(user_root / "settings" / "options.json"));
 
         emit(session, runtime, "signal.persistence.load");
-        EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "options_persistence_enabled", true));
+        EXPECT_FALSE(slayer3d_properties_get_bool(settings->props, "options_persistence_enabled", true));
 
-        sdl3d_properties_set_string(settings->props, "display_mode", "windowed");
-        sdl3d_properties_set_bool(settings->props, "vsync", false);
-        sdl3d_properties_set_string(settings->props, "renderer", "opengl");
-        sdl3d_properties_set_string(settings->props, "gamepad_icons", "playstation");
-        sdl3d_properties_set_bool(settings->props, "vibration", false);
-        sdl3d_properties_set_int(settings->props, "sfx_volume", 4);
-        sdl3d_properties_set_int(settings->props, "music_volume", 7);
-        sdl3d_properties_set_bool(settings->props, "options_persistence_enabled", true);
+        slayer3d_properties_set_string(settings->props, "display_mode", "windowed");
+        slayer3d_properties_set_bool(settings->props, "vsync", false);
+        slayer3d_properties_set_string(settings->props, "renderer", "opengl");
+        slayer3d_properties_set_string(settings->props, "gamepad_icons", "playstation");
+        slayer3d_properties_set_bool(settings->props, "vibration", false);
+        slayer3d_properties_set_int(settings->props, "sfx_volume", 4);
+        slayer3d_properties_set_int(settings->props, "music_volume", 7);
+        slayer3d_properties_set_bool(settings->props, "options_persistence_enabled", true);
         emit(session, runtime, "signal.persistence.save_options");
 
         emit(session, runtime, "signal.match.player_won");
-        sdl3d_registered_actor *scores = sdl3d_game_data_find_actor(runtime, "entity.high_scores");
+        slayer3d_registered_actor *scores = slayer3d_game_data_find_actor(runtime, "entity.high_scores");
         ASSERT_NE(scores, nullptr);
-        EXPECT_EQ(sdl3d_properties_get_int(scores->props, "player_wins", 0), 1);
-        EXPECT_EQ(sdl3d_properties_get_int(scores->props, "matches_played", 0), 1);
-        EXPECT_STREQ(sdl3d_properties_get_string(scores->props, "latest_winner", ""), "player");
+        EXPECT_EQ(slayer3d_properties_get_int(scores->props, "player_wins", 0), 1);
+        EXPECT_EQ(slayer3d_properties_get_int(scores->props, "matches_played", 0), 1);
+        EXPECT_STREQ(slayer3d_properties_get_string(scores->props, "latest_winner", ""), "player");
 
-        sdl3d_game_data_destroy(runtime);
-        sdl3d_game_session_destroy(session);
+        slayer3d_game_data_destroy(runtime);
+        slayer3d_game_session_destroy(session);
     }
 
     EXPECT_TRUE(std::filesystem::exists(user_root / "settings" / "options.json"));
     EXPECT_TRUE(std::filesystem::exists(user_root / "scores" / "pong_scores.json"));
     const std::string options_text = read_text(user_root / "settings" / "options.json");
-    EXPECT_NE(options_text.find("\"schema\": \"sdl3d.options.v1\""), std::string::npos);
+    EXPECT_NE(options_text.find("\"schema\": \"slayer3d.options.v1\""), std::string::npos);
     EXPECT_NE(options_text.find("\"version\": 1"), std::string::npos);
     EXPECT_NE(options_text.find("\"display_mode\": \"windowed\""), std::string::npos);
     EXPECT_NE(options_text.find("\"gamepad_icons\": \"playstation\""), std::string::npos);
 
-    sdl3d_game_config persisted_config{};
+    slayer3d_game_config persisted_config{};
     char title[128]{};
     char app_error[512]{};
-    ASSERT_TRUE(sdl3d_game_data_load_app_config_file(game_path.string().c_str(), &persisted_config, title,
-                                                     sizeof(title), app_error, sizeof(app_error)))
+    ASSERT_TRUE(slayer3d_game_data_load_app_config_file(game_path.string().c_str(), &persisted_config, title,
+                                                        sizeof(title), app_error, sizeof(app_error)))
         << app_error;
-    EXPECT_EQ(persisted_config.display_mode, SDL3D_WINDOW_MODE_WINDOWED);
-    EXPECT_EQ(persisted_config.backend, SDL3D_BACKEND_OPENGL);
+    EXPECT_EQ(persisted_config.display_mode, SLAYER3D_WINDOW_MODE_WINDOWED);
+    EXPECT_EQ(persisted_config.backend, SLAYER3D_BACKEND_OPENGL);
     EXPECT_GT(persisted_config.vsync, 0);
 
     {
-        sdl3d_game_session *session = nullptr;
-        ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+        slayer3d_game_session *session = nullptr;
+        ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
         char error[512]{};
-        sdl3d_game_data_runtime *runtime = nullptr;
-        ASSERT_TRUE(sdl3d_game_data_load_file(game_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        slayer3d_game_data_runtime *runtime = nullptr;
+        ASSERT_TRUE(slayer3d_game_data_load_file(game_path.string().c_str(), session, &runtime, error, sizeof(error)))
             << error;
 
         emit(session, runtime, "signal.persistence.load");
 
-        sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, "entity.settings");
+        slayer3d_registered_actor *settings = slayer3d_game_data_find_actor(runtime, "entity.settings");
         ASSERT_NE(settings, nullptr);
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
-        EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vsync", false));
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "renderer", ""), "opengl");
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "gamepad_icons", ""), "xbox");
-        EXPECT_TRUE(sdl3d_properties_get_bool(settings->props, "vibration", false));
-        EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
-        EXPECT_EQ(sdl3d_properties_get_int(settings->props, "music_volume", 0), 7);
+        EXPECT_STREQ(slayer3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
+        EXPECT_TRUE(slayer3d_properties_get_bool(settings->props, "vsync", false));
+        EXPECT_STREQ(slayer3d_properties_get_string(settings->props, "renderer", ""), "opengl");
+        EXPECT_STREQ(slayer3d_properties_get_string(settings->props, "gamepad_icons", ""), "xbox");
+        EXPECT_TRUE(slayer3d_properties_get_bool(settings->props, "vibration", false));
+        EXPECT_EQ(slayer3d_properties_get_int(settings->props, "sfx_volume", 0), 8);
+        EXPECT_EQ(slayer3d_properties_get_int(settings->props, "music_volume", 0), 7);
 
-        sdl3d_properties_set_bool(settings->props, "options_persistence_enabled", true);
+        slayer3d_properties_set_bool(settings->props, "options_persistence_enabled", true);
         emit(session, runtime, "signal.persistence.load");
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
-        EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "vsync", true));
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "renderer", ""), "opengl");
-        EXPECT_STREQ(sdl3d_properties_get_string(settings->props, "gamepad_icons", ""), "playstation");
-        EXPECT_FALSE(sdl3d_properties_get_bool(settings->props, "vibration", true));
-        EXPECT_EQ(sdl3d_properties_get_int(settings->props, "sfx_volume", 0), 4);
-        EXPECT_EQ(sdl3d_properties_get_int(settings->props, "music_volume", 0), 7);
+        EXPECT_STREQ(slayer3d_properties_get_string(settings->props, "display_mode", ""), "windowed");
+        EXPECT_FALSE(slayer3d_properties_get_bool(settings->props, "vsync", true));
+        EXPECT_STREQ(slayer3d_properties_get_string(settings->props, "renderer", ""), "opengl");
+        EXPECT_STREQ(slayer3d_properties_get_string(settings->props, "gamepad_icons", ""), "playstation");
+        EXPECT_FALSE(slayer3d_properties_get_bool(settings->props, "vibration", true));
+        EXPECT_EQ(slayer3d_properties_get_int(settings->props, "sfx_volume", 0), 4);
+        EXPECT_EQ(slayer3d_properties_get_int(settings->props, "music_volume", 0), 7);
 
-        sdl3d_registered_actor *scores = sdl3d_game_data_find_actor(runtime, "entity.high_scores");
+        slayer3d_registered_actor *scores = slayer3d_game_data_find_actor(runtime, "entity.high_scores");
         ASSERT_NE(scores, nullptr);
-        EXPECT_EQ(sdl3d_properties_get_int(scores->props, "player_wins", 0), 1);
-        EXPECT_EQ(sdl3d_properties_get_int(scores->props, "cpu_wins", -1), 0);
-        EXPECT_EQ(sdl3d_properties_get_int(scores->props, "matches_played", 0), 1);
-        EXPECT_STREQ(sdl3d_properties_get_string(scores->props, "latest_winner", ""), "player");
+        EXPECT_EQ(slayer3d_properties_get_int(scores->props, "player_wins", 0), 1);
+        EXPECT_EQ(slayer3d_properties_get_int(scores->props, "cpu_wins", -1), 0);
+        EXPECT_EQ(slayer3d_properties_get_int(scores->props, "matches_played", 0), 1);
+        EXPECT_STREQ(slayer3d_properties_get_string(scores->props, "latest_winner", ""), "player");
 
         emit(session, runtime, "signal.match.cpu_won");
-        EXPECT_EQ(sdl3d_properties_get_int(scores->props, "cpu_wins", 0), 1);
-        EXPECT_EQ(sdl3d_properties_get_int(scores->props, "matches_played", 0), 2);
-        EXPECT_STREQ(sdl3d_properties_get_string(scores->props, "latest_winner", ""), "cpu");
+        EXPECT_EQ(slayer3d_properties_get_int(scores->props, "cpu_wins", 0), 1);
+        EXPECT_EQ(slayer3d_properties_get_int(scores->props, "matches_played", 0), 2);
+        EXPECT_STREQ(slayer3d_properties_get_string(scores->props, "latest_winner", ""), "cpu");
 
-        sdl3d_game_data_destroy(runtime);
-        sdl3d_game_session_destroy(session);
+        slayer3d_game_data_destroy(runtime);
+        slayer3d_game_session_destroy(session);
     }
 
     remove_test_dir(dir);
@@ -16400,20 +16487,20 @@ TEST(GameDataRuntime, GenericPersistenceSavesOptionsAndPongLuaLoadsHighScores)
 TEST(GameDataRuntime, ValidationReportsWarningsWithoutFailingByDefault)
 {
     DiagnosticCapture capture;
-    sdl3d_game_data_validation_options options{};
+    slayer3d_game_data_validation_options options{};
     options.diagnostic = capture_diagnostic;
     options.userdata = &capture;
 
     char error[512]{};
     const std::string path = fixture_path("warning_unsupported_component.game.json");
-    EXPECT_TRUE(sdl3d_game_data_validate_file(path.c_str(), &options, error, sizeof(error))) << error;
+    EXPECT_TRUE(slayer3d_game_data_validate_file(path.c_str(), &options, error, sizeof(error))) << error;
     ASSERT_EQ(capture.diagnostics.size(), 1u);
-    EXPECT_EQ(capture.diagnostics[0].severity, SDL3D_GAME_DATA_DIAGNOSTIC_WARNING);
+    EXPECT_EQ(capture.diagnostics[0].severity, SLAYER3D_GAME_DATA_DIAGNOSTIC_WARNING);
     EXPECT_NE(capture.diagnostics[0].message.find("unsupported component type"), std::string::npos);
     EXPECT_EQ(error[0], '\0');
 
     options.treat_warnings_as_errors = true;
-    EXPECT_FALSE(sdl3d_game_data_validate_file(path.c_str(), &options, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file(path.c_str(), &options, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("unsupported component type"), std::string::npos);
 }
 
@@ -16426,18 +16513,18 @@ TEST(GameDataRuntime, RejectsLuaScriptManifestErrorsBeforeGameplay)
 
     for (const char *file : bad_files)
     {
-        sdl3d_game_session *session = nullptr;
-        ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+        slayer3d_game_session *session = nullptr;
+        ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
         char error[512]{};
-        sdl3d_game_data_runtime *runtime = nullptr;
+        slayer3d_game_data_runtime *runtime = nullptr;
         const std::string path = fixture_path(file);
-        EXPECT_FALSE(sdl3d_game_data_load_file(path.c_str(), session, &runtime, error, sizeof(error))) << file;
+        EXPECT_FALSE(slayer3d_game_data_load_file(path.c_str(), session, &runtime, error, sizeof(error))) << file;
         EXPECT_NE(error[0], '\0') << file;
         EXPECT_EQ(runtime, nullptr);
 
-        sdl3d_game_data_destroy(runtime);
-        sdl3d_game_session_destroy(session);
+        slayer3d_game_data_destroy(runtime);
+        slayer3d_game_session_destroy(session);
     }
 }
 
@@ -16446,7 +16533,7 @@ TEST(GameDataRuntime, RejectsLegacySplashSceneBlock)
     const std::filesystem::path dir = unique_test_dir("legacy_splash");
     write_text(dir / "legacy_splash.game.json",
                R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Legacy Splash", "id": "test.legacy_splash", "version": "0.1.0" },
   "scenes": {
     "initial": "scene.splash",
@@ -16458,7 +16545,7 @@ TEST(GameDataRuntime, RejectsLegacySplashSceneBlock)
 })json");
     write_text(dir / "scenes" / "splash.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.splash",
   "updates_game": false,
   "renders_world": false,
@@ -16470,22 +16557,22 @@ TEST(GameDataRuntime, RejectsLegacySplashSceneBlock)
 })json");
     write_text(dir / "scenes" / "title.scene.json",
                R"json({
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.title",
   "updates_game": false,
   "renders_world": false
 })json");
 
     DiagnosticCapture capture;
-    sdl3d_game_data_validation_options options{};
+    slayer3d_game_data_validation_options options{};
     options.diagnostic = capture_diagnostic;
     options.userdata = &capture;
 
     char error[512]{};
-    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "legacy_splash.game.json").string().c_str(), &options, error,
-                                               sizeof(error)));
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "legacy_splash.game.json").string().c_str(), &options, error,
+                                                  sizeof(error)));
     ASSERT_FALSE(capture.diagnostics.empty());
-    EXPECT_EQ(capture.diagnostics[0].severity, SDL3D_GAME_DATA_DIAGNOSTIC_ERROR);
+    EXPECT_EQ(capture.diagnostics[0].severity, SLAYER3D_GAME_DATA_DIAGNOSTIC_ERROR);
     EXPECT_NE(capture.diagnostics[0].message.find("scene.timeline"), std::string::npos);
     EXPECT_NE(std::string(error).find("scene splash is no longer supported"), std::string::npos);
 
@@ -16494,27 +16581,28 @@ TEST(GameDataRuntime, RejectsLegacySplashSceneBlock)
 
 TEST(GameDataRuntime, AuthoredGoalSensorDrivesScoreBinding)
 {
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char error[512]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(sdl3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(pong_data_path().string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    sdl3d_registered_actor *ball = sdl3d_game_data_find_actor(runtime, "entity.ball");
-    sdl3d_registered_actor *cpu_score = sdl3d_game_data_find_actor(runtime, "entity.score.cpu");
+    slayer3d_registered_actor *ball = slayer3d_game_data_find_actor(runtime, "entity.ball");
+    slayer3d_registered_actor *cpu_score = slayer3d_game_data_find_actor(runtime, "entity.score.cpu");
     ASSERT_NE(ball, nullptr);
     ASSERT_NE(cpu_score, nullptr);
 
     ball->position.x = -10.0f;
-    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.play"));
-    ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f / 60.0f));
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.play"));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 1.0f / 60.0f));
 
-    EXPECT_EQ(sdl3d_properties_get_int(cpu_score->props, "value", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(cpu_score->props, "value", 0), 1);
     EXPECT_FLOAT_EQ(ball->position.x, 0.0f);
-    EXPECT_FALSE(sdl3d_properties_get_bool(ball->props, "active_motion", true));
+    EXPECT_FALSE(slayer3d_properties_get_bool(ball->props, "active_motion", true));
 
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }

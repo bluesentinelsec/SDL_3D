@@ -9,7 +9,7 @@
  * are compacted lazily when not inside an emission.
  */
 
-#include "sdl3d/signal_bus.h"
+#include "slayer3d/signal_bus.h"
 
 #include <SDL3/SDL_stdinc.h>
 
@@ -21,12 +21,12 @@ typedef struct connection
 {
     int id;
     int signal_id;
-    sdl3d_signal_handler handler;
+    slayer3d_signal_handler handler;
     void *userdata;
     bool alive;
 } connection;
 
-struct sdl3d_signal_bus
+struct slayer3d_signal_bus
 {
     connection *connections;
     int count;
@@ -44,7 +44,7 @@ struct sdl3d_signal_bus
  * Remove dead connections by compacting the array. Only safe when
  * emit_depth == 0 (not inside any emission).
  */
-static void compact(sdl3d_signal_bus *bus)
+static void compact(slayer3d_signal_bus *bus)
 {
     if (bus->dead_count == 0)
         return;
@@ -63,7 +63,7 @@ static void compact(sdl3d_signal_bus *bus)
     bus->dead_count = 0;
 }
 
-static bool ensure_capacity(sdl3d_signal_bus *bus)
+static bool ensure_capacity(slayer3d_signal_bus *bus)
 {
     if (bus->count < bus->capacity)
         return true;
@@ -81,15 +81,15 @@ static bool ensure_capacity(sdl3d_signal_bus *bus)
 /* Lifecycle                                                          */
 /* ================================================================== */
 
-sdl3d_signal_bus *sdl3d_signal_bus_create(void)
+slayer3d_signal_bus *slayer3d_signal_bus_create(void)
 {
-    sdl3d_signal_bus *bus = (sdl3d_signal_bus *)SDL_calloc(1, sizeof(sdl3d_signal_bus));
+    slayer3d_signal_bus *bus = (slayer3d_signal_bus *)SDL_calloc(1, sizeof(slayer3d_signal_bus));
     if (bus != NULL)
         bus->next_id = 1;
     return bus;
 }
 
-void sdl3d_signal_bus_destroy(sdl3d_signal_bus *bus)
+void slayer3d_signal_bus_destroy(slayer3d_signal_bus *bus)
 {
     if (bus == NULL)
         return;
@@ -101,7 +101,7 @@ void sdl3d_signal_bus_destroy(sdl3d_signal_bus *bus)
 /* Connection management                                              */
 /* ================================================================== */
 
-int sdl3d_signal_connect(sdl3d_signal_bus *bus, int signal_id, sdl3d_signal_handler handler, void *userdata)
+int slayer3d_signal_connect(slayer3d_signal_bus *bus, int signal_id, slayer3d_signal_handler handler, void *userdata)
 {
     if (bus == NULL || handler == NULL)
         return 0;
@@ -123,7 +123,7 @@ int sdl3d_signal_connect(sdl3d_signal_bus *bus, int signal_id, sdl3d_signal_hand
     return id;
 }
 
-void sdl3d_signal_disconnect(sdl3d_signal_bus *bus, int connection_id)
+void slayer3d_signal_disconnect(slayer3d_signal_bus *bus, int connection_id)
 {
     if (bus == NULL || connection_id <= 0)
         return;
@@ -143,7 +143,7 @@ void sdl3d_signal_disconnect(sdl3d_signal_bus *bus, int connection_id)
         compact(bus);
 }
 
-void sdl3d_signal_disconnect_all(sdl3d_signal_bus *bus, int signal_id)
+void slayer3d_signal_disconnect_all(slayer3d_signal_bus *bus, int signal_id)
 {
     if (bus == NULL)
         return;
@@ -166,7 +166,7 @@ void sdl3d_signal_disconnect_all(sdl3d_signal_bus *bus, int signal_id)
 /* Emission                                                           */
 /* ================================================================== */
 
-void sdl3d_signal_emit(sdl3d_signal_bus *bus, int signal_id, const sdl3d_properties *payload)
+void slayer3d_signal_emit(slayer3d_signal_bus *bus, int signal_id, const slayer3d_properties *payload)
 {
     if (bus == NULL)
         return;
@@ -197,7 +197,7 @@ void sdl3d_signal_emit(sdl3d_signal_bus *bus, int signal_id, const sdl3d_propert
 /* Query                                                              */
 /* ================================================================== */
 
-int sdl3d_signal_bus_connection_count(const sdl3d_signal_bus *bus)
+int slayer3d_signal_bus_connection_count(const slayer3d_signal_bus *bus)
 {
     if (bus == NULL)
         return 0;

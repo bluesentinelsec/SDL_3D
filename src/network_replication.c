@@ -1,18 +1,18 @@
-#include "sdl3d/network_replication.h"
+#include "slayer3d/network_replication.h"
 
 #include <string.h>
 
-_Static_assert(sizeof(Sint32) == sizeof(Uint32), "SDL3D replication requires 32-bit signed integers");
-_Static_assert(sizeof(float) == sizeof(Uint32), "SDL3D replication requires 32-bit floats");
+_Static_assert(sizeof(Sint32) == sizeof(Uint32), "SLAYER3D replication requires 32-bit signed integers");
+_Static_assert(sizeof(float) == sizeof(Uint32), "SLAYER3D replication requires 32-bit floats");
 
-static bool sdl3d_replication_field_type_is_valid(sdl3d_replication_field_type type)
+static bool slayer3d_replication_field_type_is_valid(slayer3d_replication_field_type type)
 {
-    return type == SDL3D_REPLICATION_FIELD_BOOL || type == SDL3D_REPLICATION_FIELD_INT32 ||
-           type == SDL3D_REPLICATION_FIELD_FLOAT32 || type == SDL3D_REPLICATION_FIELD_ENUM_ID ||
-           type == SDL3D_REPLICATION_FIELD_VEC2 || type == SDL3D_REPLICATION_FIELD_VEC3;
+    return type == SLAYER3D_REPLICATION_FIELD_BOOL || type == SLAYER3D_REPLICATION_FIELD_INT32 ||
+           type == SLAYER3D_REPLICATION_FIELD_FLOAT32 || type == SLAYER3D_REPLICATION_FIELD_ENUM_ID ||
+           type == SLAYER3D_REPLICATION_FIELD_VEC2 || type == SLAYER3D_REPLICATION_FIELD_VEC3;
 }
 
-static bool sdl3d_replication_can_write(const sdl3d_replication_writer *writer, size_t byte_count)
+static bool slayer3d_replication_can_write(const slayer3d_replication_writer *writer, size_t byte_count)
 {
     if (writer == NULL || (writer->buffer == NULL && writer->capacity > 0) || writer->offset > writer->capacity)
     {
@@ -21,7 +21,7 @@ static bool sdl3d_replication_can_write(const sdl3d_replication_writer *writer, 
     return byte_count <= writer->capacity - writer->offset;
 }
 
-static bool sdl3d_replication_can_read(const sdl3d_replication_reader *reader, size_t byte_count)
+static bool slayer3d_replication_can_read(const slayer3d_replication_reader *reader, size_t byte_count)
 {
     if (reader == NULL || (reader->buffer == NULL && reader->size > 0) || reader->offset > reader->size)
     {
@@ -30,9 +30,9 @@ static bool sdl3d_replication_can_read(const sdl3d_replication_reader *reader, s
     return byte_count <= reader->size - reader->offset;
 }
 
-static bool sdl3d_replication_write_u8(sdl3d_replication_writer *writer, Uint8 value)
+static bool slayer3d_replication_write_u8(slayer3d_replication_writer *writer, Uint8 value)
 {
-    if (!sdl3d_replication_can_write(writer, 1U))
+    if (!slayer3d_replication_can_write(writer, 1U))
     {
         return false;
     }
@@ -42,9 +42,9 @@ static bool sdl3d_replication_write_u8(sdl3d_replication_writer *writer, Uint8 v
     return true;
 }
 
-static bool sdl3d_replication_read_u8(sdl3d_replication_reader *reader, Uint8 *out_value)
+static bool slayer3d_replication_read_u8(slayer3d_replication_reader *reader, Uint8 *out_value)
 {
-    if (out_value == NULL || !sdl3d_replication_can_read(reader, 1U))
+    if (out_value == NULL || !slayer3d_replication_can_read(reader, 1U))
     {
         return false;
     }
@@ -54,9 +54,9 @@ static bool sdl3d_replication_read_u8(sdl3d_replication_reader *reader, Uint8 *o
     return true;
 }
 
-static bool sdl3d_replication_write_u32(sdl3d_replication_writer *writer, Uint32 value)
+static bool slayer3d_replication_write_u32(slayer3d_replication_writer *writer, Uint32 value)
 {
-    if (!sdl3d_replication_can_write(writer, 4U))
+    if (!slayer3d_replication_can_write(writer, 4U))
     {
         return false;
     }
@@ -69,9 +69,9 @@ static bool sdl3d_replication_write_u32(sdl3d_replication_writer *writer, Uint32
     return true;
 }
 
-static bool sdl3d_replication_read_u32(sdl3d_replication_reader *reader, Uint32 *out_value)
+static bool slayer3d_replication_read_u32(slayer3d_replication_reader *reader, Uint32 *out_value)
 {
-    if (out_value == NULL || !sdl3d_replication_can_read(reader, 4U))
+    if (out_value == NULL || !slayer3d_replication_can_read(reader, 4U))
     {
         return false;
     }
@@ -83,7 +83,7 @@ static bool sdl3d_replication_read_u32(sdl3d_replication_reader *reader, Uint32 
     return true;
 }
 
-void sdl3d_replication_writer_init(sdl3d_replication_writer *writer, void *buffer, size_t capacity)
+void slayer3d_replication_writer_init(slayer3d_replication_writer *writer, void *buffer, size_t capacity)
 {
     if (writer == NULL)
     {
@@ -95,12 +95,12 @@ void sdl3d_replication_writer_init(sdl3d_replication_writer *writer, void *buffe
     writer->offset = 0U;
 }
 
-size_t sdl3d_replication_writer_offset(const sdl3d_replication_writer *writer)
+size_t slayer3d_replication_writer_offset(const slayer3d_replication_writer *writer)
 {
     return writer != NULL ? writer->offset : 0U;
 }
 
-size_t sdl3d_replication_writer_remaining(const sdl3d_replication_writer *writer)
+size_t slayer3d_replication_writer_remaining(const slayer3d_replication_writer *writer)
 {
     if (writer == NULL || writer->offset > writer->capacity)
     {
@@ -109,41 +109,41 @@ size_t sdl3d_replication_writer_remaining(const sdl3d_replication_writer *writer
     return writer->capacity - writer->offset;
 }
 
-size_t sdl3d_replication_field_wire_size(sdl3d_replication_field_type type)
+size_t slayer3d_replication_field_wire_size(slayer3d_replication_field_type type)
 {
     switch (type)
     {
-    case SDL3D_REPLICATION_FIELD_BOOL:
+    case SLAYER3D_REPLICATION_FIELD_BOOL:
         return 1U;
-    case SDL3D_REPLICATION_FIELD_INT32:
-    case SDL3D_REPLICATION_FIELD_FLOAT32:
-    case SDL3D_REPLICATION_FIELD_ENUM_ID:
+    case SLAYER3D_REPLICATION_FIELD_INT32:
+    case SLAYER3D_REPLICATION_FIELD_FLOAT32:
+    case SLAYER3D_REPLICATION_FIELD_ENUM_ID:
         return 4U;
-    case SDL3D_REPLICATION_FIELD_VEC2:
+    case SLAYER3D_REPLICATION_FIELD_VEC2:
         return 8U;
-    case SDL3D_REPLICATION_FIELD_VEC3:
+    case SLAYER3D_REPLICATION_FIELD_VEC3:
         return 12U;
     default:
         return 0U;
     }
 }
 
-bool sdl3d_replication_write_field_type(sdl3d_replication_writer *writer, sdl3d_replication_field_type type)
+bool slayer3d_replication_write_field_type(slayer3d_replication_writer *writer, slayer3d_replication_field_type type)
 {
-    if (!sdl3d_replication_field_type_is_valid(type))
+    if (!slayer3d_replication_field_type_is_valid(type))
     {
         return false;
     }
-    return sdl3d_replication_write_u8(writer, (Uint8)type);
+    return slayer3d_replication_write_u8(writer, (Uint8)type);
 }
 
-bool sdl3d_replication_write_bytes(sdl3d_replication_writer *writer, const void *bytes, size_t byte_count)
+bool slayer3d_replication_write_bytes(slayer3d_replication_writer *writer, const void *bytes, size_t byte_count)
 {
     if (byte_count == 0U)
     {
         return writer != NULL;
     }
-    if (bytes == NULL || !sdl3d_replication_can_write(writer, byte_count))
+    if (bytes == NULL || !slayer3d_replication_can_write(writer, byte_count))
     {
         return false;
     }
@@ -153,43 +153,43 @@ bool sdl3d_replication_write_bytes(sdl3d_replication_writer *writer, const void 
     return true;
 }
 
-bool sdl3d_replication_write_bool(sdl3d_replication_writer *writer, bool value)
+bool slayer3d_replication_write_bool(slayer3d_replication_writer *writer, bool value)
 {
-    return sdl3d_replication_write_u8(writer, value ? 1U : 0U);
+    return slayer3d_replication_write_u8(writer, value ? 1U : 0U);
 }
 
-bool sdl3d_replication_write_int32(sdl3d_replication_writer *writer, Sint32 value)
-{
-    Uint32 bits = 0U;
-    memcpy(&bits, &value, sizeof(bits));
-    return sdl3d_replication_write_u32(writer, bits);
-}
-
-bool sdl3d_replication_write_uint32(sdl3d_replication_writer *writer, Uint32 value)
-{
-    return sdl3d_replication_write_u32(writer, value);
-}
-
-bool sdl3d_replication_write_float32(sdl3d_replication_writer *writer, float value)
+bool slayer3d_replication_write_int32(slayer3d_replication_writer *writer, Sint32 value)
 {
     Uint32 bits = 0U;
     memcpy(&bits, &value, sizeof(bits));
-    return sdl3d_replication_write_u32(writer, bits);
+    return slayer3d_replication_write_u32(writer, bits);
 }
 
-bool sdl3d_replication_write_enum_id(sdl3d_replication_writer *writer, Sint32 value)
+bool slayer3d_replication_write_uint32(slayer3d_replication_writer *writer, Uint32 value)
 {
-    return sdl3d_replication_write_int32(writer, value);
+    return slayer3d_replication_write_u32(writer, value);
 }
 
-bool sdl3d_replication_write_vec2(sdl3d_replication_writer *writer, sdl3d_vec2 value)
+bool slayer3d_replication_write_float32(slayer3d_replication_writer *writer, float value)
+{
+    Uint32 bits = 0U;
+    memcpy(&bits, &value, sizeof(bits));
+    return slayer3d_replication_write_u32(writer, bits);
+}
+
+bool slayer3d_replication_write_enum_id(slayer3d_replication_writer *writer, Sint32 value)
+{
+    return slayer3d_replication_write_int32(writer, value);
+}
+
+bool slayer3d_replication_write_vec2(slayer3d_replication_writer *writer, slayer3d_vec2 value)
 {
     const size_t offset = writer != NULL ? writer->offset : 0U;
-    if (!sdl3d_replication_can_write(writer, 8U))
+    if (!slayer3d_replication_can_write(writer, 8U))
     {
         return false;
     }
-    if (!sdl3d_replication_write_float32(writer, value.x) || !sdl3d_replication_write_float32(writer, value.y))
+    if (!slayer3d_replication_write_float32(writer, value.x) || !slayer3d_replication_write_float32(writer, value.y))
     {
         writer->offset = offset;
         return false;
@@ -197,15 +197,15 @@ bool sdl3d_replication_write_vec2(sdl3d_replication_writer *writer, sdl3d_vec2 v
     return true;
 }
 
-bool sdl3d_replication_write_vec3(sdl3d_replication_writer *writer, sdl3d_vec3 value)
+bool slayer3d_replication_write_vec3(slayer3d_replication_writer *writer, slayer3d_vec3 value)
 {
     const size_t offset = writer != NULL ? writer->offset : 0U;
-    if (!sdl3d_replication_can_write(writer, 12U))
+    if (!slayer3d_replication_can_write(writer, 12U))
     {
         return false;
     }
-    if (!sdl3d_replication_write_float32(writer, value.x) || !sdl3d_replication_write_float32(writer, value.y) ||
-        !sdl3d_replication_write_float32(writer, value.z))
+    if (!slayer3d_replication_write_float32(writer, value.x) || !slayer3d_replication_write_float32(writer, value.y) ||
+        !slayer3d_replication_write_float32(writer, value.z))
     {
         writer->offset = offset;
         return false;
@@ -213,7 +213,7 @@ bool sdl3d_replication_write_vec3(sdl3d_replication_writer *writer, sdl3d_vec3 v
     return true;
 }
 
-void sdl3d_replication_reader_init(sdl3d_replication_reader *reader, const void *buffer, size_t size)
+void slayer3d_replication_reader_init(slayer3d_replication_reader *reader, const void *buffer, size_t size)
 {
     if (reader == NULL)
     {
@@ -225,12 +225,12 @@ void sdl3d_replication_reader_init(sdl3d_replication_reader *reader, const void 
     reader->offset = 0U;
 }
 
-size_t sdl3d_replication_reader_offset(const sdl3d_replication_reader *reader)
+size_t slayer3d_replication_reader_offset(const slayer3d_replication_reader *reader)
 {
     return reader != NULL ? reader->offset : 0U;
 }
 
-size_t sdl3d_replication_reader_remaining(const sdl3d_replication_reader *reader)
+size_t slayer3d_replication_reader_remaining(const slayer3d_replication_reader *reader)
 {
     if (reader == NULL || reader->offset > reader->size)
     {
@@ -239,22 +239,23 @@ size_t sdl3d_replication_reader_remaining(const sdl3d_replication_reader *reader
     return reader->size - reader->offset;
 }
 
-bool sdl3d_replication_read_field_type(sdl3d_replication_reader *reader, sdl3d_replication_field_type *out_type)
+bool slayer3d_replication_read_field_type(slayer3d_replication_reader *reader,
+                                          slayer3d_replication_field_type *out_type)
 {
-    if (out_type == NULL || !sdl3d_replication_can_read(reader, 1U))
+    if (out_type == NULL || !slayer3d_replication_can_read(reader, 1U))
     {
         return false;
     }
 
     const size_t offset = reader->offset;
     Uint8 value = 0U;
-    if (!sdl3d_replication_read_u8(reader, &value))
+    if (!slayer3d_replication_read_u8(reader, &value))
     {
         return false;
     }
 
-    const sdl3d_replication_field_type type = (sdl3d_replication_field_type)value;
-    if (!sdl3d_replication_field_type_is_valid(type))
+    const slayer3d_replication_field_type type = (slayer3d_replication_field_type)value;
+    if (!slayer3d_replication_field_type_is_valid(type))
     {
         reader->offset = offset;
         return false;
@@ -264,13 +265,13 @@ bool sdl3d_replication_read_field_type(sdl3d_replication_reader *reader, sdl3d_r
     return true;
 }
 
-bool sdl3d_replication_read_bytes(sdl3d_replication_reader *reader, void *out_bytes, size_t byte_count)
+bool slayer3d_replication_read_bytes(slayer3d_replication_reader *reader, void *out_bytes, size_t byte_count)
 {
     if (byte_count == 0U)
     {
         return reader != NULL;
     }
-    if (out_bytes == NULL || !sdl3d_replication_can_read(reader, byte_count))
+    if (out_bytes == NULL || !slayer3d_replication_can_read(reader, byte_count))
     {
         return false;
     }
@@ -280,16 +281,16 @@ bool sdl3d_replication_read_bytes(sdl3d_replication_reader *reader, void *out_by
     return true;
 }
 
-bool sdl3d_replication_read_bool(sdl3d_replication_reader *reader, bool *out_value)
+bool slayer3d_replication_read_bool(slayer3d_replication_reader *reader, bool *out_value)
 {
-    if (out_value == NULL || !sdl3d_replication_can_read(reader, 1U))
+    if (out_value == NULL || !slayer3d_replication_can_read(reader, 1U))
     {
         return false;
     }
 
     const size_t offset = reader->offset;
     Uint8 value = 0U;
-    if (!sdl3d_replication_read_u8(reader, &value))
+    if (!slayer3d_replication_read_u8(reader, &value))
     {
         return false;
     }
@@ -303,7 +304,7 @@ bool sdl3d_replication_read_bool(sdl3d_replication_reader *reader, bool *out_val
     return true;
 }
 
-bool sdl3d_replication_read_int32(sdl3d_replication_reader *reader, Sint32 *out_value)
+bool slayer3d_replication_read_int32(slayer3d_replication_reader *reader, Sint32 *out_value)
 {
     if (out_value == NULL)
     {
@@ -311,7 +312,7 @@ bool sdl3d_replication_read_int32(sdl3d_replication_reader *reader, Sint32 *out_
     }
 
     Uint32 value = 0U;
-    if (!sdl3d_replication_read_u32(reader, &value))
+    if (!slayer3d_replication_read_u32(reader, &value))
     {
         return false;
     }
@@ -320,12 +321,12 @@ bool sdl3d_replication_read_int32(sdl3d_replication_reader *reader, Sint32 *out_
     return true;
 }
 
-bool sdl3d_replication_read_uint32(sdl3d_replication_reader *reader, Uint32 *out_value)
+bool slayer3d_replication_read_uint32(slayer3d_replication_reader *reader, Uint32 *out_value)
 {
-    return sdl3d_replication_read_u32(reader, out_value);
+    return slayer3d_replication_read_u32(reader, out_value);
 }
 
-bool sdl3d_replication_read_float32(sdl3d_replication_reader *reader, float *out_value)
+bool slayer3d_replication_read_float32(slayer3d_replication_reader *reader, float *out_value)
 {
     if (out_value == NULL)
     {
@@ -333,7 +334,7 @@ bool sdl3d_replication_read_float32(sdl3d_replication_reader *reader, float *out
     }
 
     Uint32 bits = 0U;
-    if (!sdl3d_replication_read_u32(reader, &bits))
+    if (!slayer3d_replication_read_u32(reader, &bits))
     {
         return false;
     }
@@ -342,21 +343,21 @@ bool sdl3d_replication_read_float32(sdl3d_replication_reader *reader, float *out
     return true;
 }
 
-bool sdl3d_replication_read_enum_id(sdl3d_replication_reader *reader, Sint32 *out_value)
+bool slayer3d_replication_read_enum_id(slayer3d_replication_reader *reader, Sint32 *out_value)
 {
-    return sdl3d_replication_read_int32(reader, out_value);
+    return slayer3d_replication_read_int32(reader, out_value);
 }
 
-bool sdl3d_replication_read_vec2(sdl3d_replication_reader *reader, sdl3d_vec2 *out_value)
+bool slayer3d_replication_read_vec2(slayer3d_replication_reader *reader, slayer3d_vec2 *out_value)
 {
-    if (out_value == NULL || !sdl3d_replication_can_read(reader, 8U))
+    if (out_value == NULL || !slayer3d_replication_can_read(reader, 8U))
     {
         return false;
     }
 
     const size_t offset = reader->offset;
-    sdl3d_vec2 value = {0.0f, 0.0f};
-    if (!sdl3d_replication_read_float32(reader, &value.x) || !sdl3d_replication_read_float32(reader, &value.y))
+    slayer3d_vec2 value = {0.0f, 0.0f};
+    if (!slayer3d_replication_read_float32(reader, &value.x) || !slayer3d_replication_read_float32(reader, &value.y))
     {
         reader->offset = offset;
         return false;
@@ -366,17 +367,17 @@ bool sdl3d_replication_read_vec2(sdl3d_replication_reader *reader, sdl3d_vec2 *o
     return true;
 }
 
-bool sdl3d_replication_read_vec3(sdl3d_replication_reader *reader, sdl3d_vec3 *out_value)
+bool slayer3d_replication_read_vec3(slayer3d_replication_reader *reader, slayer3d_vec3 *out_value)
 {
-    if (out_value == NULL || !sdl3d_replication_can_read(reader, 12U))
+    if (out_value == NULL || !slayer3d_replication_can_read(reader, 12U))
     {
         return false;
     }
 
     const size_t offset = reader->offset;
-    sdl3d_vec3 value = {0.0f, 0.0f, 0.0f};
-    if (!sdl3d_replication_read_float32(reader, &value.x) || !sdl3d_replication_read_float32(reader, &value.y) ||
-        !sdl3d_replication_read_float32(reader, &value.z))
+    slayer3d_vec3 value = {0.0f, 0.0f, 0.0f};
+    if (!slayer3d_replication_read_float32(reader, &value.x) || !slayer3d_replication_read_float32(reader, &value.y) ||
+        !slayer3d_replication_read_float32(reader, &value.z))
     {
         reader->offset = offset;
         return false;

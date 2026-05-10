@@ -1,6 +1,6 @@
 # Generic Game Data Model
 
-SDL3D's data model separates reusable engine concepts from game-specific
+Slayer 3D's data model separates reusable engine concepts from game-specific
 rules. The same core should support fixed-screen arcade games, sprite-heavy 2D
 games, platformers, RPGs, sector/portal worlds, brush-style worlds, and general
 3D scenes.
@@ -65,7 +65,7 @@ engine system.
 
 ## Logic
 
-SDL3D logic is signal-oriented:
+Slayer 3D logic is signal-oriented:
 
 - sensors observe state and emit signals
 - timers emit signals after delays or intervals

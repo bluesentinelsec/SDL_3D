@@ -1,6 +1,6 @@
 # Data-Only Games
 
-SDL3D's data-only target is that a game can ship as JSON, Lua, and assets
+Slayer 3D's data-only target is that a game can ship as JSON, Lua, and assets
 loaded by the generic engine runner. The game should not need a custom
 `my_game/main.c` unless it is proving a new engine feature or integrating a
 platform service the engine does not yet expose.
@@ -10,7 +10,7 @@ platform service the engine does not yet expose.
 The generic runner owns process-level behavior:
 
 - SDL window and renderer creation from authored app/window config.
-- Asset mounting from a development directory, `.sdl3dpak`, embedded pack, or
+- Asset mounting from a development directory, `.slayer3dpak`, embedded pack, or
   fused executable.
 - Root game JSON loading.
 - Fixed/update/pause/render callback ownership.
@@ -81,20 +81,20 @@ that need it.
 Run a data-authored game through the generic runner from a directory:
 
 ```sh
-build/debug/sdl3d_runner --root path/to/game/data --data asset://game.game.json
+build/debug/slayer3d_runner --root path/to/game/data --data asset://game.game.json
 ```
 
 Run through a pack file:
 
 ```sh
-build/debug/sdl3d_runner --pack path/to/game.sdl3dpak --data asset://game.game.json
+build/debug/slayer3d_runner --pack path/to/game.slayer3dpak --data asset://game.game.json
 ```
 
 Bundle as a renamed single-file executable:
 
 ```sh
-build/debug/sdl3d_bundle \
-  --runner build/debug/sdl3d_runner \
+build/debug/slayer3d_bundle \
+  --runner build/debug/slayer3d_runner \
   --root path/to/game/data \
   --data asset://game.game.json \
   --output build/MyGame
@@ -108,7 +108,7 @@ content is the appended pack plus the footer's default data entry point.
 Start directly in a scene while play-testing:
 
 ```sh
-build/debug/sdl3d_runner \
+build/debug/slayer3d_runner \
   --root path/to/game/data \
   --data asset://game.game.json \
   --scene scene.level_1 \
@@ -132,7 +132,7 @@ designed to be copied into a new project rather than imported as a hidden engine
 dependency. The template loads through the generic runner:
 
 ```sh
-build/debug/sdl3d_runner \
+build/debug/slayer3d_runner \
   --root demos/templates/fps/data \
   --data asset://fps_template.game.json
 ```
@@ -151,7 +151,7 @@ sector/FPS primitives. It can be launched normally or direct-started into a
 focused scene:
 
 ```sh
-build/debug/sdl3d_runner \
+build/debug/slayer3d_runner \
   --root demos/fps_mechanics_dojo/data \
   --data asset://fps_mechanics_dojo.game.json \
   --scene scene.dojo.hazards
@@ -168,7 +168,7 @@ composite mock actors assembled from primitive parts, and spaced HUD labels plus
 an FPS counter for quick performance checks:
 
 ```sh
-build/debug/sdl3d_runner \
+build/debug/slayer3d_runner \
   --root demos/mesh_primitives_dojo/data \
   --data asset://mesh_primitives_dojo.game.json
 ```

@@ -14,7 +14,7 @@ extern "C"
 {
 #include <SDL3/SDL_stdinc.h>
 
-#include "sdl3d/asset.h"
+#include "slayer3d/asset.h"
 }
 
 namespace
@@ -65,7 +65,7 @@ std::vector<std::uint8_t> make_pack(const std::vector<std::pair<std::string, std
     return bytes;
 }
 
-std::string buffer_string(const sdl3d_asset_buffer &buffer)
+std::string buffer_string(const slayer3d_asset_buffer &buffer)
 {
     return std::string(static_cast<const char *>(buffer.data), buffer.size);
 }
@@ -76,8 +76,8 @@ std::filesystem::path unique_test_dir(const char *name)
     const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
     for (int attempt = 0; attempt < 100; ++attempt)
     {
-        const std::filesystem::path dir = root / ("sdl3d_asset_test_" + std::string(name) + "_" + std::to_string(now) +
-                                                  "_" + std::to_string(attempt));
+        const std::filesystem::path dir = root / ("slayer3d_asset_test_" + std::string(name) + "_" +
+                                                  std::to_string(now) + "_" + std::to_string(attempt));
         std::error_code error;
         if (std::filesystem::create_directories(dir, error))
             return dir;
@@ -108,86 +108,88 @@ std::string read_binary_file(const std::filesystem::path &path)
 
 TEST(AssetResolver, ReadsFromMountedDirectory)
 {
-    sdl3d_asset_resolver *resolver = sdl3d_asset_resolver_create();
+    slayer3d_asset_resolver *resolver = slayer3d_asset_resolver_create();
     ASSERT_NE(resolver, nullptr);
 
     char error[256]{};
-    ASSERT_TRUE(sdl3d_asset_resolver_mount_directory(resolver, SDL3D_TEST_ASSETS_DIR, error, sizeof(error))) << error;
-    EXPECT_TRUE(sdl3d_asset_resolver_exists(resolver, "asset://game_data/module_success.game.json"));
-    EXPECT_FALSE(sdl3d_asset_resolver_exists(resolver, "asset://../CMakeLists.txt"));
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(resolver, SLAYER3D_TEST_ASSETS_DIR, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(slayer3d_asset_resolver_exists(resolver, "asset://game_data/module_success.game.json"));
+    EXPECT_FALSE(slayer3d_asset_resolver_exists(resolver, "asset://../CMakeLists.txt"));
 
-    sdl3d_asset_buffer buffer{};
-    ASSERT_TRUE(sdl3d_asset_resolver_read_file(resolver, "game_data/scripts/shared.lua", &buffer, error, sizeof(error)))
+    slayer3d_asset_buffer buffer{};
+    ASSERT_TRUE(
+        slayer3d_asset_resolver_read_file(resolver, "game_data/scripts/shared.lua", &buffer, error, sizeof(error)))
         << error;
     EXPECT_NE(buffer_string(buffer).find("function shared.speed"), std::string::npos);
-    sdl3d_asset_buffer_free(&buffer);
+    slayer3d_asset_buffer_free(&buffer);
 
-    sdl3d_asset_resolver_destroy(resolver);
+    slayer3d_asset_resolver_destroy(resolver);
 }
 
 TEST(AssetResolver, ReadsFromMemoryPack)
 {
     const std::vector<std::uint8_t> pack =
         make_pack({{"scripts/rules.lua", "return { value = 42 }\n"}, {"data/config.json", "{\"ok\":true}\n"}});
-    sdl3d_asset_resolver *resolver = sdl3d_asset_resolver_create();
+    slayer3d_asset_resolver *resolver = slayer3d_asset_resolver_create();
     ASSERT_NE(resolver, nullptr);
 
     char error[256]{};
-    ASSERT_TRUE(
-        sdl3d_asset_resolver_mount_memory_pack(resolver, pack.data(), pack.size(), "unit-pack", error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_memory_pack(resolver, pack.data(), pack.size(), "unit-pack", error,
+                                                          sizeof(error)))
         << error;
-    EXPECT_TRUE(sdl3d_asset_resolver_exists(resolver, "asset://scripts/rules.lua"));
+    EXPECT_TRUE(slayer3d_asset_resolver_exists(resolver, "asset://scripts/rules.lua"));
 
-    sdl3d_asset_buffer buffer{};
-    ASSERT_TRUE(sdl3d_asset_resolver_read_file(resolver, "asset://data/config.json", &buffer, error, sizeof(error)))
+    slayer3d_asset_buffer buffer{};
+    ASSERT_TRUE(slayer3d_asset_resolver_read_file(resolver, "asset://data/config.json", &buffer, error, sizeof(error)))
         << error;
     EXPECT_EQ(buffer_string(buffer), "{\"ok\":true}\n");
-    sdl3d_asset_buffer_free(&buffer);
+    slayer3d_asset_buffer_free(&buffer);
 
-    sdl3d_asset_resolver_destroy(resolver);
+    slayer3d_asset_resolver_destroy(resolver);
 }
 
 TEST(AssetResolver, LaterMountsOverrideEarlierMounts)
 {
     const std::vector<std::uint8_t> base_pack = make_pack({{"data/value.txt", "base"}});
     const std::vector<std::uint8_t> patch_pack = make_pack({{"data/value.txt", "patch"}});
-    sdl3d_asset_resolver *resolver = sdl3d_asset_resolver_create();
+    slayer3d_asset_resolver *resolver = slayer3d_asset_resolver_create();
     ASSERT_NE(resolver, nullptr);
 
     char error[256]{};
-    ASSERT_TRUE(sdl3d_asset_resolver_mount_memory_pack(resolver, base_pack.data(), base_pack.size(), "base", error,
-                                                       sizeof(error)))
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_memory_pack(resolver, base_pack.data(), base_pack.size(), "base", error,
+                                                          sizeof(error)))
         << error;
-    ASSERT_TRUE(sdl3d_asset_resolver_mount_memory_pack(resolver, patch_pack.data(), patch_pack.size(), "patch", error,
-                                                       sizeof(error)))
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_memory_pack(resolver, patch_pack.data(), patch_pack.size(), "patch",
+                                                          error, sizeof(error)))
         << error;
 
-    sdl3d_asset_buffer buffer{};
-    ASSERT_TRUE(sdl3d_asset_resolver_read_file(resolver, "data/value.txt", &buffer, error, sizeof(error))) << error;
+    slayer3d_asset_buffer buffer{};
+    ASSERT_TRUE(slayer3d_asset_resolver_read_file(resolver, "data/value.txt", &buffer, error, sizeof(error))) << error;
     EXPECT_EQ(buffer_string(buffer), "patch");
-    sdl3d_asset_buffer_free(&buffer);
+    slayer3d_asset_buffer_free(&buffer);
 
-    sdl3d_asset_resolver_destroy(resolver);
+    slayer3d_asset_resolver_destroy(resolver);
 }
 
 TEST(AssetResolver, RejectsUnsafeAndUnknownSchemePaths)
 {
     const std::vector<std::uint8_t> pack = make_pack({{"safe.txt", "ok"}});
-    sdl3d_asset_resolver *resolver = sdl3d_asset_resolver_create();
+    slayer3d_asset_resolver *resolver = slayer3d_asset_resolver_create();
     ASSERT_NE(resolver, nullptr);
 
     char error[256]{};
     ASSERT_TRUE(
-        sdl3d_asset_resolver_mount_memory_pack(resolver, pack.data(), pack.size(), "safe", error, sizeof(error)))
+        slayer3d_asset_resolver_mount_memory_pack(resolver, pack.data(), pack.size(), "safe", error, sizeof(error)))
         << error;
 
-    sdl3d_asset_buffer buffer{};
-    EXPECT_FALSE(sdl3d_asset_resolver_read_file(resolver, "asset://../safe.txt", &buffer, error, sizeof(error)));
+    slayer3d_asset_buffer buffer{};
+    EXPECT_FALSE(slayer3d_asset_resolver_read_file(resolver, "asset://../safe.txt", &buffer, error, sizeof(error)));
     EXPECT_FALSE(
-        sdl3d_asset_resolver_read_file(resolver, "http://example.com/safe.txt", &buffer, error, sizeof(error)));
-    EXPECT_FALSE(sdl3d_asset_resolver_read_file(resolver, "C:/safe.txt", &buffer, error, sizeof(error)));
+        slayer3d_asset_resolver_read_file(resolver, "http://example.com/safe.txt", &buffer, error, sizeof(error)));
+    EXPECT_FALSE(slayer3d_asset_resolver_read_file(resolver, "C:/safe.txt", &buffer, error, sizeof(error)));
 
-    sdl3d_asset_resolver_destroy(resolver);
+    slayer3d_asset_resolver_destroy(resolver);
 }
 
 TEST(AssetPackWriter, WritesDeterministicPackReadableByResolver)
@@ -196,18 +198,18 @@ TEST(AssetPackWriter, WritesDeterministicPackReadableByResolver)
     write_text(dir / "sources" / "a.txt", "alpha");
     write_text(dir / "sources" / "b.txt", "bravo");
 
-    const std::filesystem::path pack_a = dir / "a.sdl3dpak";
-    const std::filesystem::path pack_b = dir / "b.sdl3dpak";
+    const std::filesystem::path pack_a = dir / "a.slayer3dpak";
+    const std::filesystem::path pack_b = dir / "b.slayer3dpak";
     const std::string source_a = (dir / "sources" / "a.txt").string();
     const std::string source_b = (dir / "sources" / "b.txt").string();
-    const sdl3d_asset_pack_source sources[] = {
+    const slayer3d_asset_pack_source sources[] = {
         {"text/b.txt", source_b.c_str()},
         {"text/a.txt", source_a.c_str()},
     };
 
     char error[256]{};
-    ASSERT_TRUE(sdl3d_asset_pack_write_file(pack_a.string().c_str(), sources, 2, error, sizeof(error))) << error;
-    ASSERT_TRUE(sdl3d_asset_pack_write_file(pack_b.string().c_str(), sources, 2, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_asset_pack_write_file(pack_a.string().c_str(), sources, 2, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_asset_pack_write_file(pack_b.string().c_str(), sources, 2, error, sizeof(error))) << error;
 
     const std::string bytes_a = read_binary_file(pack_a);
     const std::string bytes_b = read_binary_file(pack_b);
@@ -219,27 +221,30 @@ TEST(AssetPackWriter, WritesDeterministicPackReadableByResolver)
     EXPECT_TRUE(magic == "S3DPAK1" || magic == "S3DCPK1" || magic == "S3DOPK1");
     EXPECT_EQ(bytes_a[7], '\0');
 
-    sdl3d_asset_resolver *resolver = sdl3d_asset_resolver_create();
+    slayer3d_asset_resolver *resolver = slayer3d_asset_resolver_create();
     ASSERT_NE(resolver, nullptr);
-    ASSERT_TRUE(sdl3d_asset_resolver_mount_pack_file(resolver, pack_a.string().c_str(), error, sizeof(error))) << error;
-
-    sdl3d_asset_buffer buffer{};
-    ASSERT_TRUE(sdl3d_asset_resolver_read_file(resolver, "asset://text/a.txt", &buffer, error, sizeof(error))) << error;
-    EXPECT_EQ(buffer_string(buffer), "alpha");
-    sdl3d_asset_buffer_free(&buffer);
-
-    sdl3d_asset_resolver_destroy(resolver);
-
-    resolver = sdl3d_asset_resolver_create();
-    ASSERT_NE(resolver, nullptr);
-    ASSERT_TRUE(sdl3d_asset_resolver_mount_memory_pack(resolver, bytes_a.data(), bytes_a.size(), "embedded", error,
-                                                       sizeof(error)))
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_pack_file(resolver, pack_a.string().c_str(), error, sizeof(error)))
         << error;
-    ASSERT_TRUE(sdl3d_asset_resolver_read_file(resolver, "asset://text/b.txt", &buffer, error, sizeof(error))) << error;
-    EXPECT_EQ(buffer_string(buffer), "bravo");
-    sdl3d_asset_buffer_free(&buffer);
 
-    sdl3d_asset_resolver_destroy(resolver);
+    slayer3d_asset_buffer buffer{};
+    ASSERT_TRUE(slayer3d_asset_resolver_read_file(resolver, "asset://text/a.txt", &buffer, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(buffer_string(buffer), "alpha");
+    slayer3d_asset_buffer_free(&buffer);
+
+    slayer3d_asset_resolver_destroy(resolver);
+
+    resolver = slayer3d_asset_resolver_create();
+    ASSERT_NE(resolver, nullptr);
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_memory_pack(resolver, bytes_a.data(), bytes_a.size(), "embedded", error,
+                                                          sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_asset_resolver_read_file(resolver, "asset://text/b.txt", &buffer, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(buffer_string(buffer), "bravo");
+    slayer3d_asset_buffer_free(&buffer);
+
+    slayer3d_asset_resolver_destroy(resolver);
     remove_test_dir(dir);
 }
 
@@ -251,14 +256,14 @@ TEST(AssetPackWriter, RejectsDuplicateNormalizedPaths)
 
     const std::string one = (dir / "one.txt").string();
     const std::string two = (dir / "two.txt").string();
-    const sdl3d_asset_pack_source sources[] = {
+    const slayer3d_asset_pack_source sources[] = {
         {"text/one.txt", one.c_str()},
         {"asset://text/./one.txt", two.c_str()},
     };
 
     char error[256]{};
     EXPECT_FALSE(
-        sdl3d_asset_pack_write_file((dir / "bad.sdl3dpak").string().c_str(), sources, 2, error, sizeof(error)));
+        slayer3d_asset_pack_write_file((dir / "bad.slayer3dpak").string().c_str(), sources, 2, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("duplicate"), std::string::npos);
     remove_test_dir(dir);
 }
@@ -269,13 +274,13 @@ TEST(AssetPackWriter, RejectsUnsafeAssetPaths)
     write_text(dir / "source.txt", "source");
 
     const std::string source = (dir / "source.txt").string();
-    const sdl3d_asset_pack_source sources[] = {
+    const slayer3d_asset_pack_source sources[] = {
         {"../outside.txt", source.c_str()},
     };
 
     char error[256]{};
     EXPECT_FALSE(
-        sdl3d_asset_pack_write_file((dir / "bad.sdl3dpak").string().c_str(), sources, 1, error, sizeof(error)));
+        slayer3d_asset_pack_write_file((dir / "bad.slayer3dpak").string().c_str(), sources, 1, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("invalid"), std::string::npos);
     remove_test_dir(dir);
 }

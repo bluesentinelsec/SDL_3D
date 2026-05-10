@@ -6,7 +6,7 @@
 
 extern "C"
 {
-#include "sdl3d/sdl3d.h"
+#include "slayer3d/slayer3d.h"
 }
 
 #include <memory>
@@ -19,10 +19,10 @@ bool SetBackendOverride(const char *value)
 {
     if (value == nullptr)
     {
-        return SDL_unsetenv_unsafe("SDL3D_BACKEND") == 0;
+        return SDL_unsetenv_unsafe("SLAYER3D_BACKEND") == 0;
     }
 
-    return SDL_setenv_unsafe("SDL3D_BACKEND", value, 1) == 0;
+    return SDL_setenv_unsafe("SLAYER3D_BACKEND", value, 1) == 0;
 }
 
 struct SDLQuitGuard
@@ -57,7 +57,7 @@ class SDLWindowRendererPair
         SDL_Window *raw_window = nullptr;
         SDL_Renderer *raw_renderer = nullptr;
 
-        if (!SDL_CreateWindowAndRenderer("SDL3D Context Test", 128, 72, 0, &raw_window, &raw_renderer))
+        if (!SDL_CreateWindowAndRenderer("SLAYER3D Context Test", 128, 72, 0, &raw_window, &raw_renderer))
         {
             ADD_FAILURE() << SDL_GetError();
             return;
@@ -87,12 +87,12 @@ class SDLWindowRendererPair
     std::unique_ptr<SDL_Renderer, decltype(&SDL_DestroyRenderer)> renderer_;
 };
 
-class SDL3DBackendOverrideGuard
+class SLAYER3DBackendOverrideGuard
 {
   public:
-    explicit SDL3DBackendOverrideGuard(const char *value)
+    explicit SLAYER3DBackendOverrideGuard(const char *value)
     {
-        const char *existing = SDL_getenv("SDL3D_BACKEND");
+        const char *existing = SDL_getenv("SLAYER3D_BACKEND");
         if (existing != nullptr)
         {
             had_existing_ = true;
@@ -101,11 +101,11 @@ class SDL3DBackendOverrideGuard
 
         if (!SetBackendOverride(value))
         {
-            ADD_FAILURE() << "Failed to set SDL3D_BACKEND test override";
+            ADD_FAILURE() << "Failed to set SLAYER3D_BACKEND test override";
         }
     }
 
-    ~SDL3DBackendOverrideGuard()
+    ~SLAYER3DBackendOverrideGuard()
     {
         if (had_existing_)
         {
@@ -128,14 +128,14 @@ TEST_F(SDLVideoFixture, DefaultConfigUsesSoftwareBackend)
     SDLWindowRendererPair pair;
     ASSERT_TRUE(pair.is_valid()) << SDL_GetError();
 
-    sdl3d_render_context *context = nullptr;
-    ASSERT_TRUE(sdl3d_create_render_context(pair.window(), pair.renderer(), nullptr, &context)) << SDL_GetError();
+    slayer3d_render_context *context = nullptr;
+    ASSERT_TRUE(slayer3d_create_render_context(pair.window(), pair.renderer(), nullptr, &context)) << SDL_GetError();
     ASSERT_NE(context, nullptr);
-    EXPECT_EQ(SDL3D_BACKEND_SOFTWARE, sdl3d_get_render_context_backend(context));
-    EXPECT_GT(sdl3d_get_render_context_width(context), 0);
-    EXPECT_GT(sdl3d_get_render_context_height(context), 0);
+    EXPECT_EQ(SLAYER3D_BACKEND_SOFTWARE, slayer3d_get_render_context_backend(context));
+    EXPECT_GT(slayer3d_get_render_context_width(context), 0);
+    EXPECT_GT(slayer3d_get_render_context_height(context), 0);
 
-    sdl3d_destroy_render_context(context);
+    slayer3d_destroy_render_context(context);
 }
 
 TEST_F(SDLVideoFixture, LogicalPresentationConfigIsApplied)
@@ -143,17 +143,17 @@ TEST_F(SDLVideoFixture, LogicalPresentationConfigIsApplied)
     SDLWindowRendererPair pair;
     ASSERT_TRUE(pair.is_valid()) << SDL_GetError();
 
-    sdl3d_render_context_config config;
-    sdl3d_init_render_context_config(&config);
+    slayer3d_render_context_config config;
+    slayer3d_init_render_context_config(&config);
     config.logical_width = 320;
     config.logical_height = 180;
     config.logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
 
-    sdl3d_render_context *context = nullptr;
-    ASSERT_TRUE(sdl3d_create_render_context(pair.window(), pair.renderer(), &config, &context)) << SDL_GetError();
+    slayer3d_render_context *context = nullptr;
+    ASSERT_TRUE(slayer3d_create_render_context(pair.window(), pair.renderer(), &config, &context)) << SDL_GetError();
     ASSERT_NE(context, nullptr);
-    EXPECT_EQ(320, sdl3d_get_render_context_width(context));
-    EXPECT_EQ(180, sdl3d_get_render_context_height(context));
+    EXPECT_EQ(320, slayer3d_get_render_context_width(context));
+    EXPECT_EQ(180, slayer3d_get_render_context_height(context));
 
     int logical_width = 0;
     int logical_height = 0;
@@ -163,28 +163,28 @@ TEST_F(SDLVideoFixture, LogicalPresentationConfigIsApplied)
     EXPECT_EQ(320, logical_width);
     EXPECT_EQ(180, logical_height);
     EXPECT_EQ(SDL_LOGICAL_PRESENTATION_LETTERBOX, mode);
-    ASSERT_TRUE(sdl3d_clear_render_context(context, {16, 32, 64, 255})) << SDL_GetError();
-    ASSERT_TRUE(sdl3d_present_render_context(context)) << SDL_GetError();
+    ASSERT_TRUE(slayer3d_clear_render_context(context, {16, 32, 64, 255})) << SDL_GetError();
+    ASSERT_TRUE(slayer3d_present_render_context(context)) << SDL_GetError();
 
-    sdl3d_destroy_render_context(context);
+    slayer3d_destroy_render_context(context);
 }
 
 TEST_F(SDLVideoFixture, HighLevelSoftwareWindowLetterboxesLogicalPresentation)
 {
-    SDL3DBackendOverrideGuard backend_override("software");
-    sdl3d_window_config config;
-    sdl3d_init_window_config(&config);
+    SLAYER3DBackendOverrideGuard backend_override("software");
+    slayer3d_window_config config;
+    slayer3d_init_window_config(&config);
     config.width = 640;
     config.height = 480;
     config.logical_width = 320;
     config.logical_height = 180;
-    config.backend = SDL3D_BACKEND_SOFTWARE;
+    config.backend = SLAYER3D_BACKEND_SOFTWARE;
     config.allow_backend_fallback = false;
     config.vsync = false;
 
     SDL_Window *window = nullptr;
-    sdl3d_render_context *context = nullptr;
-    ASSERT_TRUE(sdl3d_create_window(&config, &window, &context)) << SDL_GetError();
+    slayer3d_render_context *context = nullptr;
+    ASSERT_TRUE(slayer3d_create_window(&config, &window, &context)) << SDL_GetError();
     ASSERT_NE(window, nullptr);
     ASSERT_NE(context, nullptr);
     SDL_Renderer *renderer = SDL_GetRenderer(window);
@@ -198,21 +198,21 @@ TEST_F(SDLVideoFixture, HighLevelSoftwareWindowLetterboxesLogicalPresentation)
     EXPECT_EQ(180, logical_height);
     EXPECT_EQ(SDL_LOGICAL_PRESENTATION_LETTERBOX, mode);
 
-    sdl3d_destroy_window(window, context);
+    slayer3d_destroy_window(window, context);
 }
 
 TEST_F(SDLVideoFixture, HighLevelSoftwareWindowAppliesVSyncAtRuntime)
 {
-    SDL3DBackendOverrideGuard backend_override("software");
-    sdl3d_window_config config;
-    sdl3d_init_window_config(&config);
-    config.backend = SDL3D_BACKEND_SOFTWARE;
+    SLAYER3DBackendOverrideGuard backend_override("software");
+    slayer3d_window_config config;
+    slayer3d_init_window_config(&config);
+    config.backend = SLAYER3D_BACKEND_SOFTWARE;
     config.allow_backend_fallback = false;
     config.vsync = false;
 
     SDL_Window *window = nullptr;
-    sdl3d_render_context *context = nullptr;
-    ASSERT_TRUE(sdl3d_create_window(&config, &window, &context)) << SDL_GetError();
+    slayer3d_render_context *context = nullptr;
+    ASSERT_TRUE(slayer3d_create_window(&config, &window, &context)) << SDL_GetError();
     SDL_Renderer *renderer = SDL_GetRenderer(window);
     ASSERT_NE(renderer, nullptr);
 
@@ -221,20 +221,20 @@ TEST_F(SDLVideoFixture, HighLevelSoftwareWindowAppliesVSyncAtRuntime)
     EXPECT_EQ(SDL_RENDERER_VSYNC_DISABLED, vsync);
 
     config.vsync = true;
-    ASSERT_TRUE(sdl3d_apply_window_config(&window, &context, &config)) << SDL_GetError();
+    ASSERT_TRUE(slayer3d_apply_window_config(&window, &context, &config)) << SDL_GetError();
     renderer = SDL_GetRenderer(window);
     ASSERT_NE(renderer, nullptr);
     ASSERT_TRUE(SDL_GetRenderVSync(renderer, &vsync)) << SDL_GetError();
     EXPECT_EQ(1, vsync);
 
     config.vsync = false;
-    ASSERT_TRUE(sdl3d_apply_window_config(&window, &context, &config)) << SDL_GetError();
+    ASSERT_TRUE(slayer3d_apply_window_config(&window, &context, &config)) << SDL_GetError();
     renderer = SDL_GetRenderer(window);
     ASSERT_NE(renderer, nullptr);
     ASSERT_TRUE(SDL_GetRenderVSync(renderer, &vsync)) << SDL_GetError();
     EXPECT_EQ(SDL_RENDERER_VSYNC_DISABLED, vsync);
 
-    sdl3d_destroy_window(window, context);
+    slayer3d_destroy_window(window, context);
 }
 
 TEST_F(SDLVideoFixture, OpenGLBackendAcceptsRequest)
@@ -242,13 +242,13 @@ TEST_F(SDLVideoFixture, OpenGLBackendAcceptsRequest)
     SDLWindowRendererPair pair;
     ASSERT_TRUE(pair.is_valid()) << SDL_GetError();
 
-    sdl3d_render_context_config config;
-    sdl3d_init_render_context_config(&config);
-    config.backend = SDL3D_BACKEND_OPENGL;
+    slayer3d_render_context_config config;
+    slayer3d_init_render_context_config(&config);
+    config.backend = SLAYER3D_BACKEND_OPENGL;
     config.allow_backend_fallback = false;
 
-    sdl3d_render_context *context = nullptr;
-    bool ok = sdl3d_create_render_context(pair.window(), pair.renderer(), &config, &context);
+    slayer3d_render_context *context = nullptr;
+    bool ok = slayer3d_create_render_context(pair.window(), pair.renderer(), &config, &context);
     /* GL context creation may fail in headless CI, but should not say "not implemented". */
     if (!ok)
     {
@@ -257,7 +257,7 @@ TEST_F(SDLVideoFixture, OpenGLBackendAcceptsRequest)
     }
     if (context != nullptr)
     {
-        sdl3d_destroy_render_context(context);
+        slayer3d_destroy_render_context(context);
     }
 }
 
@@ -266,18 +266,18 @@ TEST_F(SDLVideoFixture, EnvironmentOverrideCanForceSoftwareBackend)
     SDLWindowRendererPair pair;
     ASSERT_TRUE(pair.is_valid()) << SDL_GetError();
 
-    SDL3DBackendOverrideGuard backend_override("software");
-    sdl3d_render_context_config config;
-    sdl3d_init_render_context_config(&config);
-    config.backend = SDL3D_BACKEND_OPENGL;
+    SLAYER3DBackendOverrideGuard backend_override("software");
+    slayer3d_render_context_config config;
+    slayer3d_init_render_context_config(&config);
+    config.backend = SLAYER3D_BACKEND_OPENGL;
     config.allow_backend_fallback = false;
 
-    sdl3d_render_context *context = nullptr;
-    ASSERT_TRUE(sdl3d_create_render_context(pair.window(), pair.renderer(), &config, &context)) << SDL_GetError();
+    slayer3d_render_context *context = nullptr;
+    ASSERT_TRUE(slayer3d_create_render_context(pair.window(), pair.renderer(), &config, &context)) << SDL_GetError();
     ASSERT_NE(context, nullptr);
-    EXPECT_EQ(SDL3D_BACKEND_SOFTWARE, sdl3d_get_render_context_backend(context));
+    EXPECT_EQ(SLAYER3D_BACKEND_SOFTWARE, slayer3d_get_render_context_backend(context));
 
-    sdl3d_destroy_render_context(context);
+    slayer3d_destroy_render_context(context);
 }
 
 TEST_F(SDLVideoFixture, InvalidEnvironmentOverrideFails)
@@ -285,13 +285,13 @@ TEST_F(SDLVideoFixture, InvalidEnvironmentOverrideFails)
     SDLWindowRendererPair pair;
     ASSERT_TRUE(pair.is_valid()) << SDL_GetError();
 
-    SDL3DBackendOverrideGuard backend_override("bogus");
-    sdl3d_render_context *context = nullptr;
+    SLAYER3DBackendOverrideGuard backend_override("bogus");
+    slayer3d_render_context *context = nullptr;
 
     SDL_ClearError();
-    EXPECT_FALSE(sdl3d_create_render_context(pair.window(), pair.renderer(), nullptr, &context));
+    EXPECT_FALSE(slayer3d_create_render_context(pair.window(), pair.renderer(), nullptr, &context));
     EXPECT_EQ(nullptr, context);
-    EXPECT_NE(std::string_view(SDL_GetError()).find("Unsupported SDL3D backend override"), std::string_view::npos);
+    EXPECT_NE(std::string_view(SDL_GetError()).find("Unsupported SLAYER3D backend override"), std::string_view::npos);
 }
 
 /* ------------------------------------------------------------------ */
@@ -303,16 +303,16 @@ TEST_F(SDLVideoFixture, SoftwareBackendClearAndPresentSucceed)
     SDLWindowRendererPair pair;
     ASSERT_TRUE(pair.is_valid());
 
-    SDL3DBackendOverrideGuard guard("software");
-    sdl3d_render_context *context = nullptr;
-    ASSERT_TRUE(sdl3d_create_render_context(pair.window(), pair.renderer(), nullptr, &context)) << SDL_GetError();
+    SLAYER3DBackendOverrideGuard guard("software");
+    slayer3d_render_context *context = nullptr;
+    ASSERT_TRUE(slayer3d_create_render_context(pair.window(), pair.renderer(), nullptr, &context)) << SDL_GetError();
     ASSERT_NE(nullptr, context);
 
-    sdl3d_color black = {0, 0, 0, 255};
-    EXPECT_TRUE(sdl3d_clear_render_context(context, black));
-    EXPECT_TRUE(sdl3d_present_render_context(context));
+    slayer3d_color black = {0, 0, 0, 255};
+    EXPECT_TRUE(slayer3d_clear_render_context(context, black));
+    EXPECT_TRUE(slayer3d_present_render_context(context));
 
-    sdl3d_destroy_render_context(context);
+    slayer3d_destroy_render_context(context);
 }
 
 TEST_F(SDLVideoFixture, SoftwareBackendVtableIsFullyPopulated)
@@ -320,14 +320,14 @@ TEST_F(SDLVideoFixture, SoftwareBackendVtableIsFullyPopulated)
     SDLWindowRendererPair pair;
     ASSERT_TRUE(pair.is_valid());
 
-    SDL3DBackendOverrideGuard guard("software");
-    sdl3d_render_context *context = nullptr;
-    ASSERT_TRUE(sdl3d_create_render_context(pair.window(), pair.renderer(), nullptr, &context)) << SDL_GetError();
+    SLAYER3DBackendOverrideGuard guard("software");
+    slayer3d_render_context *context = nullptr;
+    ASSERT_TRUE(slayer3d_create_render_context(pair.window(), pair.renderer(), nullptr, &context)) << SDL_GetError();
     ASSERT_NE(nullptr, context);
 
-    EXPECT_EQ(SDL3D_BACKEND_SOFTWARE, sdl3d_get_render_context_backend(context));
+    EXPECT_EQ(SLAYER3D_BACKEND_SOFTWARE, slayer3d_get_render_context_backend(context));
 
-    sdl3d_destroy_render_context(context);
+    slayer3d_destroy_render_context(context);
 }
 
 TEST_F(SDLVideoFixture, OpenGLBackendClearAndPresentSucceedWhenAvailable)
@@ -335,13 +335,13 @@ TEST_F(SDLVideoFixture, OpenGLBackendClearAndPresentSucceedWhenAvailable)
     SDLWindowRendererPair pair;
     ASSERT_TRUE(pair.is_valid());
 
-    sdl3d_render_context_config config;
-    sdl3d_init_render_context_config(&config);
-    config.backend = SDL3D_BACKEND_OPENGL;
+    slayer3d_render_context_config config;
+    slayer3d_init_render_context_config(&config);
+    config.backend = SLAYER3D_BACKEND_OPENGL;
     config.allow_backend_fallback = false;
 
-    sdl3d_render_context *context = nullptr;
-    bool ok = sdl3d_create_render_context(pair.window(), pair.renderer(), &config, &context);
+    slayer3d_render_context *context = nullptr;
+    bool ok = slayer3d_create_render_context(pair.window(), pair.renderer(), &config, &context);
     if (!ok)
     {
         /* GL not available in this environment — skip. */
@@ -349,13 +349,13 @@ TEST_F(SDLVideoFixture, OpenGLBackendClearAndPresentSucceedWhenAvailable)
     }
     ASSERT_NE(nullptr, context);
 
-    sdl3d_color red = {255, 0, 0, 255};
-    EXPECT_TRUE(sdl3d_clear_render_context(context, red));
-    EXPECT_TRUE(sdl3d_present_render_context(context));
+    slayer3d_color red = {255, 0, 0, 255};
+    EXPECT_TRUE(slayer3d_clear_render_context(context, red));
+    EXPECT_TRUE(slayer3d_present_render_context(context));
 
-    EXPECT_EQ(SDL3D_BACKEND_OPENGL, sdl3d_get_render_context_backend(context));
+    EXPECT_EQ(SLAYER3D_BACKEND_OPENGL, slayer3d_get_render_context_backend(context));
 
-    sdl3d_destroy_render_context(context);
+    slayer3d_destroy_render_context(context);
 }
 
 TEST_F(SDLVideoFixture, BothBackendsReportCorrectDimensions)
@@ -365,11 +365,11 @@ TEST_F(SDLVideoFixture, BothBackendsReportCorrectDimensions)
 
     /* Software backend. */
     {
-        SDL3DBackendOverrideGuard guard("software");
-        sdl3d_render_context *ctx = nullptr;
-        ASSERT_TRUE(sdl3d_create_render_context(pair.window(), pair.renderer(), nullptr, &ctx)) << SDL_GetError();
-        EXPECT_GT(sdl3d_get_render_context_width(ctx), 0);
-        EXPECT_GT(sdl3d_get_render_context_height(ctx), 0);
-        sdl3d_destroy_render_context(ctx);
+        SLAYER3DBackendOverrideGuard guard("software");
+        slayer3d_render_context *ctx = nullptr;
+        ASSERT_TRUE(slayer3d_create_render_context(pair.window(), pair.renderer(), nullptr, &ctx)) << SDL_GetError();
+        EXPECT_GT(slayer3d_get_render_context_width(ctx), 0);
+        EXPECT_GT(slayer3d_get_render_context_height(ctx), 0);
+        slayer3d_destroy_render_context(ctx);
     }
 }

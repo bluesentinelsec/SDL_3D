@@ -1,6 +1,6 @@
-# SDL3D Storage
+# Slayer 3D Storage
 
-`sdl3d_storage` is the writable companion to the read-only asset resolver.
+`slayer3d_storage` is the writable companion to the read-only asset resolver.
 Shipped files should continue to use `asset://`; persistent and generated files
 should use storage paths:
 
@@ -20,17 +20,17 @@ The storage root is derived from stable metadata:
 ```
 
 Game-data runtimes expose this authored block through
-`sdl3d_game_data_get_storage_config()`, so a managed app can create storage from
+`slayer3d_game_data_get_storage_config()`, so a managed app can create storage from
 the same data file that declares its window, assets, scenes, and gameplay.
 
 The organization and application identifiers are part of the root path on every
-SDL3D platform policy. This intentionally differs from some older PhysicsFS
+Slayer 3D platform policy. This intentionally differs from some older PhysicsFS
 Unix examples that used only the application name; keeping both identifiers
 reduces collisions and matches the Windows/macOS convention.
 
 ## Platform Policy
 
-SDL3D uses `SDL_GetPrefPath(organization, application)` for native runtime
+Slayer 3D uses `SDL_GetPrefPath(organization, application)` for native runtime
 storage. The deterministic planner used by tests and tools follows this shape:
 
 | Platform policy | Example user root |
@@ -41,20 +41,20 @@ storage. The deterministic planner used by tests and tools follows this shape:
 | Android | app-private root plus `Example Studio/Example Game` |
 | Emscripten | persistent virtual root plus `Example Studio/Example Game` |
 
-If a profile is configured, SDL3D appends `profiles/<profile>`. The cache root
+If a profile is configured, Slayer 3D appends `profiles/<profile>`. The cache root
 then appends `cache`.
 
 Game-data audio actions materialize resolver-backed audio assets into
 `cache://audio`. Hosts that need to preload or inspect the resolved path can use
-`sdl3d_game_data_prepare_audio_file()`, which applies the same cache policy as
+`slayer3d_game_data_prepare_audio_file()`, which applies the same cache policy as
 `audio.play_sfx` and `audio.play_music`.
 
 Lua game scripts can use the same safe roots through the gameplay API:
 
 ```lua
-local ok, err = sdl3d.storage.write("user://settings/options.json", json_text)
-local text, read_err = sdl3d.storage.read("user://settings/options.json")
-local exists = sdl3d.storage.exists("cache://generated/status.txt")
+local ok, err = slayer3d.storage.write("user://settings/options.json", json_text)
+local text, read_err = slayer3d.storage.read("user://settings/options.json")
+local exists = slayer3d.storage.exists("cache://generated/status.txt")
 ```
 
 See [docs/game-data-lua.md](game-data-lua.md) for the full Lua helper reference, including the storage return contract and error behavior.
@@ -63,9 +63,9 @@ Scripts can pair storage with the gameplay JSON helpers when persisting
 structured settings, saves, scores, or generated cache metadata:
 
 ```lua
-local options = sdl3d.json.decode(ctx.storage.read("user://settings/options.json") or "{}")
+local options = slayer3d.json.decode(ctx.storage.read("user://settings/options.json") or "{}")
 options.fullscreen = true
-ctx.storage.write("user://settings/options.json", sdl3d.json.encode(options))
+ctx.storage.write("user://settings/options.json", slayer3d.json.encode(options))
 ```
 
 The adapter context exposes the same table as `ctx.storage`. These bindings use

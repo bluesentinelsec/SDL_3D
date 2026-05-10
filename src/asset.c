@@ -3,7 +3,7 @@
  * @brief Virtual asset resolver implementation.
  */
 
-#include "sdl3d/asset.h"
+#include "slayer3d/asset.h"
 
 #include <limits.h>
 #include <stdint.h>
@@ -13,18 +13,18 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "miniz.h"
-#include "sdl3d_crypto.h"
+#include "slayer3d_crypto.h"
 
-#define SDL3D_PACK_MAGIC "S3DPAK1"
-#define SDL3D_PACK_MAGIC_SIZE 8u
-#define SDL3D_PACK_VERSION 1u
-#define SDL3D_PACK_HEADER_SIZE 24u
-#define SDL3D_PACK_ENTRY_FIXED_SIZE 18u
-#define SDL3D_PACK_COMPRESSED_MAGIC "S3DCPK1"
-#define SDL3D_PACK_COMPRESSED_HEADER_SIZE 32u
-#define SDL3D_PACK_COMPRESSION_LEVEL MZ_DEFAULT_LEVEL
-#define SDL3D_PACK_OBFUSCATED_MAGIC "S3DOPK1"
-#define SDL3D_PACK_OBFUSCATED_HEADER_SIZE 76u
+#define SLAYER3D_PACK_MAGIC "S3DPAK1"
+#define SLAYER3D_PACK_MAGIC_SIZE 8u
+#define SLAYER3D_PACK_VERSION 1u
+#define SLAYER3D_PACK_HEADER_SIZE 24u
+#define SLAYER3D_PACK_ENTRY_FIXED_SIZE 18u
+#define SLAYER3D_PACK_COMPRESSED_MAGIC "S3DCPK1"
+#define SLAYER3D_PACK_COMPRESSED_HEADER_SIZE 32u
+#define SLAYER3D_PACK_COMPRESSION_LEVEL MZ_DEFAULT_LEVEL
+#define SLAYER3D_PACK_OBFUSCATED_MAGIC "S3DOPK1"
+#define SLAYER3D_PACK_OBFUSCATED_HEADER_SIZE 76u
 
 typedef enum asset_mount_type
 {
@@ -64,7 +64,7 @@ typedef struct asset_mount
     asset_pack pack;
 } asset_mount;
 
-struct sdl3d_asset_resolver
+struct slayer3d_asset_resolver
 {
     asset_mount *mounts;
     int mount_count;
@@ -113,8 +113,8 @@ static void write_u64le(uint8_t *data, uint64_t value)
 
 static bool pack_magic_matches(const uint8_t *data, const char *magic)
 {
-    return data != NULL && magic != NULL && SDL_memcmp(data, magic, SDL3D_PACK_MAGIC_SIZE - 1u) == 0 &&
-           data[SDL3D_PACK_MAGIC_SIZE - 1u] == '\0';
+    return data != NULL && magic != NULL && SDL_memcmp(data, magic, SLAYER3D_PACK_MAGIC_SIZE - 1u) == 0 &&
+           data[SLAYER3D_PACK_MAGIC_SIZE - 1u] == '\0';
 }
 
 static bool has_uri_scheme(const char *path)
@@ -255,15 +255,15 @@ static bool build_raw_pack_bytes(const asset_pack_write_entry *entries, int entr
             set_asset_error(error_buffer, error_buffer_size, "asset pack entry path is too long");
             return false;
         }
-        if (table_size > UINT64_MAX - (uint64_t)SDL3D_PACK_ENTRY_FIXED_SIZE - (uint64_t)path_len)
+        if (table_size > UINT64_MAX - (uint64_t)SLAYER3D_PACK_ENTRY_FIXED_SIZE - (uint64_t)path_len)
         {
             set_asset_error(error_buffer, error_buffer_size, "asset pack table is too large");
             return false;
         }
-        table_size += (uint64_t)SDL3D_PACK_ENTRY_FIXED_SIZE + (uint64_t)path_len;
+        table_size += (uint64_t)SLAYER3D_PACK_ENTRY_FIXED_SIZE + (uint64_t)path_len;
     }
 
-    uint64_t data_offset = SDL3D_PACK_HEADER_SIZE + table_size;
+    uint64_t data_offset = SLAYER3D_PACK_HEADER_SIZE + table_size;
     if (data_offset > (uint64_t)SIZE_MAX)
     {
         set_asset_error(error_buffer, error_buffer_size, "asset pack is too large");
@@ -287,21 +287,21 @@ static bool build_raw_pack_bytes(const asset_pack_write_entry *entries, int entr
         return false;
     }
 
-    uint64_t cursor = SDL3D_PACK_HEADER_SIZE;
-    SDL_memcpy(data, SDL3D_PACK_MAGIC, SDL3D_PACK_MAGIC_SIZE - 1u);
-    data[SDL3D_PACK_MAGIC_SIZE - 1u] = '\0';
-    write_u32le(data + 8, SDL3D_PACK_VERSION);
+    uint64_t cursor = SLAYER3D_PACK_HEADER_SIZE;
+    SDL_memcpy(data, SLAYER3D_PACK_MAGIC, SLAYER3D_PACK_MAGIC_SIZE - 1u);
+    data[SLAYER3D_PACK_MAGIC_SIZE - 1u] = '\0';
+    write_u32le(data + 8, SLAYER3D_PACK_VERSION);
     write_u32le(data + 12, (uint32_t)entry_count);
-    write_u64le(data + 16, SDL3D_PACK_HEADER_SIZE);
+    write_u64le(data + 16, SLAYER3D_PACK_HEADER_SIZE);
 
-    uint64_t data_cursor = SDL3D_PACK_HEADER_SIZE + table_size;
+    uint64_t data_cursor = SLAYER3D_PACK_HEADER_SIZE + table_size;
     for (int i = 0; i < entry_count; ++i)
     {
         const size_t path_len = SDL_strlen(entries[i].asset_path);
         write_u16le(data + (size_t)cursor, (uint16_t)path_len);
         write_u64le(data + (size_t)cursor + 2u, data_cursor);
         write_u64le(data + (size_t)cursor + 10u, (uint64_t)entries[i].size);
-        cursor += SDL3D_PACK_ENTRY_FIXED_SIZE;
+        cursor += SLAYER3D_PACK_ENTRY_FIXED_SIZE;
 
         SDL_memcpy(data + (size_t)cursor, entries[i].asset_path, path_len);
         cursor += (uint64_t)path_len;
@@ -336,13 +336,13 @@ static bool build_compressed_pack_bytes(const uint8_t *raw_data, size_t raw_size
     }
 
     const mz_ulong compressed_bound = mz_compressBound((mz_ulong)raw_size);
-    if (compressed_bound > (mz_ulong)(SIZE_MAX - SDL3D_PACK_COMPRESSED_HEADER_SIZE))
+    if (compressed_bound > (mz_ulong)(SIZE_MAX - SLAYER3D_PACK_COMPRESSED_HEADER_SIZE))
     {
         set_asset_error(error_buffer, error_buffer_size, "asset pack is too large");
         return false;
     }
 
-    uint8_t *data = (uint8_t *)SDL_malloc(SDL3D_PACK_COMPRESSED_HEADER_SIZE + (size_t)compressed_bound);
+    uint8_t *data = (uint8_t *)SDL_malloc(SLAYER3D_PACK_COMPRESSED_HEADER_SIZE + (size_t)compressed_bound);
     if (data == NULL)
     {
         set_asset_error(error_buffer, error_buffer_size, "failed to allocate compressed asset pack");
@@ -350,8 +350,8 @@ static bool build_compressed_pack_bytes(const uint8_t *raw_data, size_t raw_size
     }
 
     mz_ulong compressed_size = compressed_bound;
-    const int status = mz_compress2(data + SDL3D_PACK_COMPRESSED_HEADER_SIZE, &compressed_size, raw_data,
-                                    (mz_ulong)raw_size, SDL3D_PACK_COMPRESSION_LEVEL);
+    const int status = mz_compress2(data + SLAYER3D_PACK_COMPRESSED_HEADER_SIZE, &compressed_size, raw_data,
+                                    (mz_ulong)raw_size, SLAYER3D_PACK_COMPRESSION_LEVEL);
     if (status != MZ_OK)
     {
         SDL_free(data);
@@ -359,60 +359,60 @@ static bool build_compressed_pack_bytes(const uint8_t *raw_data, size_t raw_size
         return false;
     }
 
-    SDL_memcpy(data, SDL3D_PACK_COMPRESSED_MAGIC, SDL3D_PACK_MAGIC_SIZE - 1u);
-    data[SDL3D_PACK_MAGIC_SIZE - 1u] = '\0';
-    write_u32le(data + 8, SDL3D_PACK_VERSION);
+    SDL_memcpy(data, SLAYER3D_PACK_COMPRESSED_MAGIC, SLAYER3D_PACK_MAGIC_SIZE - 1u);
+    data[SLAYER3D_PACK_MAGIC_SIZE - 1u] = '\0';
+    write_u32le(data + 8, SLAYER3D_PACK_VERSION);
     write_u32le(data + 12, 0u);
     write_u64le(data + 16, (uint64_t)raw_size);
     write_u64le(data + 24, (uint64_t)compressed_size);
 
     *out_data = data;
-    *out_size = SDL3D_PACK_COMPRESSED_HEADER_SIZE + (size_t)compressed_size;
+    *out_size = SLAYER3D_PACK_COMPRESSED_HEADER_SIZE + (size_t)compressed_size;
     return true;
 }
 
-static void derive_pack_salt(const uint8_t *data, size_t size, uint8_t salt[SDL3D_CRYPTO_SALT_SIZE])
+static void derive_pack_salt(const uint8_t *data, size_t size, uint8_t salt[SLAYER3D_CRYPTO_SALT_SIZE])
 {
-    uint8_t digest[SDL3D_CRYPTO_HASH_SIZE];
-    sdl3d_crypto_hash32(data, size, digest);
-    SDL_memcpy(salt, digest, SDL3D_CRYPTO_SALT_SIZE);
+    uint8_t digest[SLAYER3D_CRYPTO_HASH_SIZE];
+    slayer3d_crypto_hash32(data, size, digest);
+    SDL_memcpy(salt, digest, SLAYER3D_CRYPTO_SALT_SIZE);
 }
 
-static void derive_pack_nonce(const uint8_t *data, size_t size, uint8_t nonce[SDL3D_CRYPTO_NONCE_SIZE])
+static void derive_pack_nonce(const uint8_t *data, size_t size, uint8_t nonce[SLAYER3D_CRYPTO_NONCE_SIZE])
 {
-    static const char label[] = "SDL3D pack nonce";
-    sdl3d_crypto_hash32_state state;
-    uint8_t digest[SDL3D_CRYPTO_HASH_SIZE];
+    static const char label[] = "SLAYER3D pack nonce";
+    slayer3d_crypto_hash32_state state;
+    uint8_t digest[SLAYER3D_CRYPTO_HASH_SIZE];
 
-    sdl3d_crypto_hash32_init(&state);
-    sdl3d_crypto_hash32_update(&state, label, sizeof(label) - 1u);
-    sdl3d_crypto_hash32_update(&state, data, size);
-    sdl3d_crypto_hash32_final(&state, digest);
-    SDL_memcpy(nonce, digest, SDL3D_CRYPTO_NONCE_SIZE);
+    slayer3d_crypto_hash32_init(&state);
+    slayer3d_crypto_hash32_update(&state, label, sizeof(label) - 1u);
+    slayer3d_crypto_hash32_update(&state, data, size);
+    slayer3d_crypto_hash32_final(&state, digest);
+    SDL_memcpy(nonce, digest, SLAYER3D_CRYPTO_NONCE_SIZE);
 }
 
-static void derive_pack_key(const char *password, const uint8_t salt[SDL3D_CRYPTO_SALT_SIZE],
-                            uint8_t key[SDL3D_CRYPTO_HASH_SIZE])
+static void derive_pack_key(const char *password, const uint8_t salt[SLAYER3D_CRYPTO_SALT_SIZE],
+                            uint8_t key[SLAYER3D_CRYPTO_HASH_SIZE])
 {
-    sdl3d_crypto_hash32_state state;
-    sdl3d_crypto_hash32_init(&state);
+    slayer3d_crypto_hash32_state state;
+    slayer3d_crypto_hash32_init(&state);
     if (password != NULL && password[0] != '\0')
-        sdl3d_crypto_hash32_update(&state, password, SDL_strlen(password));
-    sdl3d_crypto_hash32_update(&state, salt, SDL3D_CRYPTO_SALT_SIZE);
-    sdl3d_crypto_hash32_final(&state, key);
+        slayer3d_crypto_hash32_update(&state, password, SDL_strlen(password));
+    slayer3d_crypto_hash32_update(&state, salt, SLAYER3D_CRYPTO_SALT_SIZE);
+    slayer3d_crypto_hash32_final(&state, key);
 }
 
-static void derive_pack_tag(const uint8_t key[SDL3D_CRYPTO_HASH_SIZE], const uint8_t *header, size_t header_size,
-                            const uint8_t *payload, size_t payload_size, uint8_t tag[SDL3D_CRYPTO_TAG_SIZE])
+static void derive_pack_tag(const uint8_t key[SLAYER3D_CRYPTO_HASH_SIZE], const uint8_t *header, size_t header_size,
+                            const uint8_t *payload, size_t payload_size, uint8_t tag[SLAYER3D_CRYPTO_TAG_SIZE])
 {
-    sdl3d_crypto_hash32_state state;
-    uint8_t digest[SDL3D_CRYPTO_HASH_SIZE];
+    slayer3d_crypto_hash32_state state;
+    uint8_t digest[SLAYER3D_CRYPTO_HASH_SIZE];
 
-    sdl3d_crypto_hash32_init_keyed(&state, key, SDL3D_CRYPTO_HASH_SIZE);
-    sdl3d_crypto_hash32_update(&state, header, header_size);
-    sdl3d_crypto_hash32_update(&state, payload, payload_size);
-    sdl3d_crypto_hash32_final(&state, digest);
-    SDL_memcpy(tag, digest, SDL3D_CRYPTO_TAG_SIZE);
+    slayer3d_crypto_hash32_init_keyed(&state, key, SLAYER3D_CRYPTO_HASH_SIZE);
+    slayer3d_crypto_hash32_update(&state, header, header_size);
+    slayer3d_crypto_hash32_update(&state, payload, payload_size);
+    slayer3d_crypto_hash32_final(&state, digest);
+    SDL_memcpy(tag, digest, SLAYER3D_CRYPTO_TAG_SIZE);
 }
 
 static bool build_obfuscated_pack_bytes(const uint8_t *plain_data, size_t plain_size, uint8_t **out_data,
@@ -434,44 +434,44 @@ static bool build_obfuscated_pack_bytes(const uint8_t *plain_data, size_t plain_
         return false;
     }
 
-    uint8_t salt[SDL3D_CRYPTO_SALT_SIZE];
-    uint8_t nonce[SDL3D_CRYPTO_NONCE_SIZE];
-    uint8_t key[SDL3D_CRYPTO_HASH_SIZE];
+    uint8_t salt[SLAYER3D_CRYPTO_SALT_SIZE];
+    uint8_t nonce[SLAYER3D_CRYPTO_NONCE_SIZE];
+    uint8_t key[SLAYER3D_CRYPTO_HASH_SIZE];
     derive_pack_salt(plain_data, plain_size, salt);
     derive_pack_nonce(plain_data, plain_size, nonce);
-    derive_pack_key(SDL3D_PACK_PASSWORD, salt, key);
+    derive_pack_key(SLAYER3D_PACK_PASSWORD, salt, key);
 
-    if (SDL3D_PACK_OBFUSCATED_HEADER_SIZE > (size_t)(SIZE_MAX - plain_size))
+    if (SLAYER3D_PACK_OBFUSCATED_HEADER_SIZE > (size_t)(SIZE_MAX - plain_size))
     {
         set_asset_error(error_buffer, error_buffer_size, "asset pack is too large");
         return false;
     }
 
-    uint8_t *data = (uint8_t *)SDL_malloc(SDL3D_PACK_OBFUSCATED_HEADER_SIZE + plain_size);
+    uint8_t *data = (uint8_t *)SDL_malloc(SLAYER3D_PACK_OBFUSCATED_HEADER_SIZE + plain_size);
     if (data == NULL)
     {
         set_asset_error(error_buffer, error_buffer_size, "failed to allocate obfuscated asset pack");
         return false;
     }
 
-    SDL_memcpy(data + SDL3D_PACK_OBFUSCATED_HEADER_SIZE, plain_data, plain_size);
+    SDL_memcpy(data + SLAYER3D_PACK_OBFUSCATED_HEADER_SIZE, plain_data, plain_size);
 
-    SDL_memcpy(data, SDL3D_PACK_OBFUSCATED_MAGIC, SDL3D_PACK_MAGIC_SIZE - 1u);
-    data[SDL3D_PACK_MAGIC_SIZE - 1u] = '\0';
-    write_u32le(data + 8, SDL3D_PACK_VERSION);
+    SDL_memcpy(data, SLAYER3D_PACK_OBFUSCATED_MAGIC, SLAYER3D_PACK_MAGIC_SIZE - 1u);
+    data[SLAYER3D_PACK_MAGIC_SIZE - 1u] = '\0';
+    write_u32le(data + 8, SLAYER3D_PACK_VERSION);
     write_u64le(data + 12, (uint64_t)plain_size);
     write_u64le(data + 20, (uint64_t)plain_size);
-    SDL_memcpy(data + 28, salt, SDL3D_CRYPTO_SALT_SIZE);
-    SDL_memcpy(data + 44, nonce, SDL3D_CRYPTO_NONCE_SIZE);
+    SDL_memcpy(data + 28, salt, SLAYER3D_CRYPTO_SALT_SIZE);
+    SDL_memcpy(data + 44, nonce, SLAYER3D_CRYPTO_NONCE_SIZE);
 
-    sdl3d_crypto_xor_stream(data + SDL3D_PACK_OBFUSCATED_HEADER_SIZE, plain_size, key, nonce);
+    slayer3d_crypto_xor_stream(data + SLAYER3D_PACK_OBFUSCATED_HEADER_SIZE, plain_size, key, nonce);
 
-    uint8_t tag[SDL3D_CRYPTO_TAG_SIZE];
-    derive_pack_tag(key, data, 60u, data + SDL3D_PACK_OBFUSCATED_HEADER_SIZE, plain_size, tag);
-    SDL_memcpy(data + 60, tag, SDL3D_CRYPTO_TAG_SIZE);
+    uint8_t tag[SLAYER3D_CRYPTO_TAG_SIZE];
+    derive_pack_tag(key, data, 60u, data + SLAYER3D_PACK_OBFUSCATED_HEADER_SIZE, plain_size, tag);
+    SDL_memcpy(data + 60, tag, SLAYER3D_CRYPTO_TAG_SIZE);
 
     *out_data = data;
-    *out_size = SDL3D_PACK_OBFUSCATED_HEADER_SIZE + plain_size;
+    *out_size = SLAYER3D_PACK_OBFUSCATED_HEADER_SIZE + plain_size;
     return true;
 }
 
@@ -484,13 +484,14 @@ static bool normalize_pack_blob(uint8_t **data_ptr, size_t *size_ptr, const char
         return false;
     }
 
-    if (*size_ptr >= SDL3D_PACK_HEADER_SIZE && pack_magic_matches(*data_ptr, SDL3D_PACK_MAGIC))
+    if (*size_ptr >= SLAYER3D_PACK_HEADER_SIZE && pack_magic_matches(*data_ptr, SLAYER3D_PACK_MAGIC))
         return true;
 
-    if (*size_ptr < SDL3D_PACK_COMPRESSED_HEADER_SIZE || !pack_magic_matches(*data_ptr, SDL3D_PACK_COMPRESSED_MAGIC))
+    if (*size_ptr < SLAYER3D_PACK_COMPRESSED_HEADER_SIZE ||
+        !pack_magic_matches(*data_ptr, SLAYER3D_PACK_COMPRESSED_MAGIC))
     {
-        if (*size_ptr < SDL3D_PACK_OBFUSCATED_HEADER_SIZE ||
-            !pack_magic_matches(*data_ptr, SDL3D_PACK_OBFUSCATED_MAGIC))
+        if (*size_ptr < SLAYER3D_PACK_OBFUSCATED_HEADER_SIZE ||
+            !pack_magic_matches(*data_ptr, SLAYER3D_PACK_OBFUSCATED_MAGIC))
         {
             set_asset_error(error_buffer, error_buffer_size, "pack has invalid magic");
             return false;
@@ -499,35 +500,35 @@ static bool normalize_pack_blob(uint8_t **data_ptr, size_t *size_ptr, const char
         const uint32_t version = read_u32le(*data_ptr + 8);
         const uint64_t plain_size = read_u64le(*data_ptr + 12);
         const uint64_t payload_size = read_u64le(*data_ptr + 20);
-        if (version != SDL3D_PACK_VERSION)
+        if (version != SLAYER3D_PACK_VERSION)
         {
             set_asset_error(error_buffer, error_buffer_size, "unsupported obfuscated pack version");
             return false;
         }
         if (plain_size == 0u || payload_size == 0u || plain_size > (uint64_t)SIZE_MAX ||
-            payload_size > (uint64_t)SIZE_MAX || SDL3D_PACK_OBFUSCATED_HEADER_SIZE + payload_size != *size_ptr)
+            payload_size > (uint64_t)SIZE_MAX || SLAYER3D_PACK_OBFUSCATED_HEADER_SIZE + payload_size != *size_ptr)
         {
             set_asset_error(error_buffer, error_buffer_size, "obfuscated pack header is invalid");
             return false;
         }
-        if (SDL3D_PACK_PASSWORD[0] == '\0')
+        if (SLAYER3D_PACK_PASSWORD[0] == '\0')
         {
             set_asset_error(error_buffer, error_buffer_size, "obfuscated pack requires a password");
             return false;
         }
 
-        uint8_t salt[SDL3D_CRYPTO_SALT_SIZE];
-        uint8_t nonce[SDL3D_CRYPTO_NONCE_SIZE];
-        uint8_t key[SDL3D_CRYPTO_HASH_SIZE];
-        uint8_t expected_tag[SDL3D_CRYPTO_TAG_SIZE];
-        uint8_t actual_tag[SDL3D_CRYPTO_TAG_SIZE];
-        SDL_memcpy(salt, *data_ptr + 28, SDL3D_CRYPTO_SALT_SIZE);
-        SDL_memcpy(nonce, *data_ptr + 44, SDL3D_CRYPTO_NONCE_SIZE);
-        SDL_memcpy(actual_tag, *data_ptr + 60, SDL3D_CRYPTO_TAG_SIZE);
-        derive_pack_key(SDL3D_PACK_PASSWORD, salt, key);
-        derive_pack_tag(key, *data_ptr, 60u, *data_ptr + SDL3D_PACK_OBFUSCATED_HEADER_SIZE, (size_t)payload_size,
+        uint8_t salt[SLAYER3D_CRYPTO_SALT_SIZE];
+        uint8_t nonce[SLAYER3D_CRYPTO_NONCE_SIZE];
+        uint8_t key[SLAYER3D_CRYPTO_HASH_SIZE];
+        uint8_t expected_tag[SLAYER3D_CRYPTO_TAG_SIZE];
+        uint8_t actual_tag[SLAYER3D_CRYPTO_TAG_SIZE];
+        SDL_memcpy(salt, *data_ptr + 28, SLAYER3D_CRYPTO_SALT_SIZE);
+        SDL_memcpy(nonce, *data_ptr + 44, SLAYER3D_CRYPTO_NONCE_SIZE);
+        SDL_memcpy(actual_tag, *data_ptr + 60, SLAYER3D_CRYPTO_TAG_SIZE);
+        derive_pack_key(SLAYER3D_PACK_PASSWORD, salt, key);
+        derive_pack_tag(key, *data_ptr, 60u, *data_ptr + SLAYER3D_PACK_OBFUSCATED_HEADER_SIZE, (size_t)payload_size,
                         expected_tag);
-        if (SDL_memcmp(actual_tag, expected_tag, SDL3D_CRYPTO_TAG_SIZE) != 0)
+        if (SDL_memcmp(actual_tag, expected_tag, SLAYER3D_CRYPTO_TAG_SIZE) != 0)
         {
             set_asset_error(error_buffer, error_buffer_size, "obfuscated pack password or tag is invalid");
             return false;
@@ -540,8 +541,8 @@ static bool normalize_pack_blob(uint8_t **data_ptr, size_t *size_ptr, const char
             return false;
         }
 
-        SDL_memcpy(payload, *data_ptr + SDL3D_PACK_OBFUSCATED_HEADER_SIZE, (size_t)payload_size);
-        sdl3d_crypto_xor_stream(payload, (size_t)payload_size, key, nonce);
+        SDL_memcpy(payload, *data_ptr + SLAYER3D_PACK_OBFUSCATED_HEADER_SIZE, (size_t)payload_size);
+        slayer3d_crypto_xor_stream(payload, (size_t)payload_size, key, nonce);
 
         SDL_free(*data_ptr);
         *data_ptr = payload;
@@ -552,13 +553,13 @@ static bool normalize_pack_blob(uint8_t **data_ptr, size_t *size_ptr, const char
     const uint32_t version = read_u32le(*data_ptr + 8);
     const uint64_t uncompressed_size = read_u64le(*data_ptr + 16);
     const uint64_t compressed_size = read_u64le(*data_ptr + 24);
-    if (version != SDL3D_PACK_VERSION)
+    if (version != SLAYER3D_PACK_VERSION)
     {
         set_asset_error(error_buffer, error_buffer_size, "unsupported compressed pack version");
         return false;
     }
     if (uncompressed_size == 0u || compressed_size == 0u || uncompressed_size > (uint64_t)SIZE_MAX ||
-        compressed_size > (uint64_t)SIZE_MAX || SDL3D_PACK_COMPRESSED_HEADER_SIZE + compressed_size != *size_ptr ||
+        compressed_size > (uint64_t)SIZE_MAX || SLAYER3D_PACK_COMPRESSED_HEADER_SIZE + compressed_size != *size_ptr ||
         uncompressed_size > (uint64_t)ULONG_MAX || compressed_size > (uint64_t)ULONG_MAX)
     {
         set_asset_error(error_buffer, error_buffer_size, "compressed pack header is invalid");
@@ -574,7 +575,7 @@ static bool normalize_pack_blob(uint8_t **data_ptr, size_t *size_ptr, const char
 
     mz_ulong raw_size = (mz_ulong)uncompressed_size;
     const int status =
-        mz_uncompress(raw, &raw_size, *data_ptr + SDL3D_PACK_COMPRESSED_HEADER_SIZE, (mz_ulong)compressed_size);
+        mz_uncompress(raw, &raw_size, *data_ptr + SLAYER3D_PACK_COMPRESSED_HEADER_SIZE, (mz_ulong)compressed_size);
     if (status != MZ_OK || raw_size != (mz_ulong)uncompressed_size)
     {
         SDL_free(raw);
@@ -589,7 +590,7 @@ static bool normalize_pack_blob(uint8_t **data_ptr, size_t *size_ptr, const char
     return true;
 }
 
-static bool append_mount(sdl3d_asset_resolver *resolver, asset_mount **out_mount)
+static bool append_mount(slayer3d_asset_resolver *resolver, asset_mount **out_mount)
 {
     if (out_mount != NULL)
         *out_mount = NULL;
@@ -618,12 +619,12 @@ static bool write_all(SDL_IOStream *io, const void *data, size_t size)
 
 static bool parse_pack_entries(asset_pack *pack, char *error_buffer, int error_buffer_size)
 {
-    if (pack == NULL || pack->data == NULL || pack->size < SDL3D_PACK_HEADER_SIZE)
+    if (pack == NULL || pack->data == NULL || pack->size < SLAYER3D_PACK_HEADER_SIZE)
     {
         set_asset_error(error_buffer, error_buffer_size, "pack is too small");
         return false;
     }
-    if (SDL_memcmp(pack->data, SDL3D_PACK_MAGIC, SDL3D_PACK_MAGIC_SIZE - 1u) != 0 || pack->data[7] != '\0')
+    if (SDL_memcmp(pack->data, SLAYER3D_PACK_MAGIC, SLAYER3D_PACK_MAGIC_SIZE - 1u) != 0 || pack->data[7] != '\0')
     {
         set_asset_error(error_buffer, error_buffer_size, "pack has invalid magic");
         return false;
@@ -632,12 +633,12 @@ static bool parse_pack_entries(asset_pack *pack, char *error_buffer, int error_b
     const uint32_t version = read_u32le(pack->data + 8);
     const uint32_t entry_count = read_u32le(pack->data + 12);
     const uint64_t table_offset = read_u64le(pack->data + 16);
-    if (version != SDL3D_PACK_VERSION)
+    if (version != SLAYER3D_PACK_VERSION)
     {
         set_asset_error(error_buffer, error_buffer_size, "unsupported pack version");
         return false;
     }
-    if (entry_count > (uint32_t)INT32_MAX || table_offset < SDL3D_PACK_HEADER_SIZE ||
+    if (entry_count > (uint32_t)INT32_MAX || table_offset < SLAYER3D_PACK_HEADER_SIZE ||
         table_offset > (uint64_t)pack->size)
     {
         set_asset_error(error_buffer, error_buffer_size, "pack table header is invalid");
@@ -655,7 +656,7 @@ static bool parse_pack_entries(asset_pack *pack, char *error_buffer, int error_b
     size_t cursor = (size_t)table_offset;
     for (int i = 0; i < pack->entry_count; ++i)
     {
-        if (cursor > pack->size || pack->size - cursor < SDL3D_PACK_ENTRY_FIXED_SIZE)
+        if (cursor > pack->size || pack->size - cursor < SLAYER3D_PACK_ENTRY_FIXED_SIZE)
         {
             set_asset_error(error_buffer, error_buffer_size, "pack table is truncated");
             return false;
@@ -664,7 +665,7 @@ static bool parse_pack_entries(asset_pack *pack, char *error_buffer, int error_b
         const uint16_t path_len = read_u16le(pack->data + cursor);
         const uint64_t offset = read_u64le(pack->data + cursor + 2u);
         const uint64_t size = read_u64le(pack->data + cursor + 10u);
-        cursor += SDL3D_PACK_ENTRY_FIXED_SIZE;
+        cursor += SLAYER3D_PACK_ENTRY_FIXED_SIZE;
 
         if (path_len == 0u || cursor > pack->size || pack->size - cursor < (size_t)path_len ||
             offset > (uint64_t)pack->size || size > (uint64_t)pack->size || offset > (uint64_t)pack->size - size ||
@@ -700,7 +701,7 @@ static bool parse_pack_entries(asset_pack *pack, char *error_buffer, int error_b
     return true;
 }
 
-static bool mount_owned_pack(sdl3d_asset_resolver *resolver, uint8_t *data, size_t size, const char *debug_name,
+static bool mount_owned_pack(slayer3d_asset_resolver *resolver, uint8_t *data, size_t size, const char *debug_name,
                              char *error_buffer, int error_buffer_size)
 {
     asset_mount *mount = NULL;
@@ -743,7 +744,8 @@ static const asset_pack_entry *find_pack_entry(const asset_pack *pack, const cha
     return NULL;
 }
 
-static bool read_directory_asset(const asset_mount *mount, const char *normalized_path, sdl3d_asset_buffer *out_buffer)
+static bool read_directory_asset(const asset_mount *mount, const char *normalized_path,
+                                 slayer3d_asset_buffer *out_buffer)
 {
     char *path = join_directory_path(mount->directory, normalized_path);
     if (path == NULL)
@@ -775,12 +777,12 @@ static bool directory_asset_exists(const asset_mount *mount, const char *normali
     return true;
 }
 
-sdl3d_asset_resolver *sdl3d_asset_resolver_create(void)
+slayer3d_asset_resolver *slayer3d_asset_resolver_create(void)
 {
-    return (sdl3d_asset_resolver *)SDL_calloc(1, sizeof(sdl3d_asset_resolver));
+    return (slayer3d_asset_resolver *)SDL_calloc(1, sizeof(slayer3d_asset_resolver));
 }
 
-void sdl3d_asset_resolver_destroy(sdl3d_asset_resolver *resolver)
+void slayer3d_asset_resolver_destroy(slayer3d_asset_resolver *resolver)
 {
     if (resolver == NULL)
         return;
@@ -795,8 +797,8 @@ void sdl3d_asset_resolver_destroy(sdl3d_asset_resolver *resolver)
     SDL_free(resolver);
 }
 
-bool sdl3d_asset_resolver_mount_directory(sdl3d_asset_resolver *resolver, const char *root_directory,
-                                          char *error_buffer, int error_buffer_size)
+bool slayer3d_asset_resolver_mount_directory(slayer3d_asset_resolver *resolver, const char *root_directory,
+                                             char *error_buffer, int error_buffer_size)
 {
     if (resolver == NULL || root_directory == NULL || root_directory[0] == '\0')
     {
@@ -821,8 +823,8 @@ bool sdl3d_asset_resolver_mount_directory(sdl3d_asset_resolver *resolver, const 
     return true;
 }
 
-bool sdl3d_asset_resolver_mount_pack_file(sdl3d_asset_resolver *resolver, const char *pack_path, char *error_buffer,
-                                          int error_buffer_size)
+bool slayer3d_asset_resolver_mount_pack_file(slayer3d_asset_resolver *resolver, const char *pack_path,
+                                             char *error_buffer, int error_buffer_size)
 {
     if (resolver == NULL || pack_path == NULL || pack_path[0] == '\0')
     {
@@ -845,8 +847,8 @@ bool sdl3d_asset_resolver_mount_pack_file(sdl3d_asset_resolver *resolver, const 
     return mount_owned_pack(resolver, data, bytes, pack_path, error_buffer, error_buffer_size);
 }
 
-bool sdl3d_asset_resolver_mount_memory_pack(sdl3d_asset_resolver *resolver, const void *data, size_t size,
-                                            const char *debug_name, char *error_buffer, int error_buffer_size)
+bool slayer3d_asset_resolver_mount_memory_pack(slayer3d_asset_resolver *resolver, const void *data, size_t size,
+                                               const char *debug_name, char *error_buffer, int error_buffer_size)
 {
     if (resolver == NULL || data == NULL || size == 0u)
     {
@@ -869,7 +871,7 @@ bool sdl3d_asset_resolver_mount_memory_pack(sdl3d_asset_resolver *resolver, cons
     return mount_owned_pack(resolver, copy, size, debug_name, error_buffer, error_buffer_size);
 }
 
-bool sdl3d_asset_resolver_exists(const sdl3d_asset_resolver *resolver, const char *asset_path)
+bool slayer3d_asset_resolver_exists(const slayer3d_asset_resolver *resolver, const char *asset_path)
 {
     if (resolver == NULL)
         return false;
@@ -894,8 +896,8 @@ bool sdl3d_asset_resolver_exists(const sdl3d_asset_resolver *resolver, const cha
     return false;
 }
 
-bool sdl3d_asset_resolver_read_file(const sdl3d_asset_resolver *resolver, const char *asset_path,
-                                    sdl3d_asset_buffer *out_buffer, char *error_buffer, int error_buffer_size)
+bool slayer3d_asset_resolver_read_file(const slayer3d_asset_resolver *resolver, const char *asset_path,
+                                       slayer3d_asset_buffer *out_buffer, char *error_buffer, int error_buffer_size)
 {
     if (out_buffer != NULL)
         SDL_zero(*out_buffer);
@@ -948,8 +950,8 @@ bool sdl3d_asset_resolver_read_file(const sdl3d_asset_resolver *resolver, const 
     return false;
 }
 
-bool sdl3d_asset_resolver_resolve_file_path(const sdl3d_asset_resolver *resolver, const char *asset_path,
-                                            char **out_path, char *error_buffer, int error_buffer_size)
+bool slayer3d_asset_resolver_resolve_file_path(const slayer3d_asset_resolver *resolver, const char *asset_path,
+                                               char **out_path, char *error_buffer, int error_buffer_size)
 {
     if (out_path != NULL)
         *out_path = NULL;
@@ -988,12 +990,12 @@ bool sdl3d_asset_resolver_resolve_file_path(const sdl3d_asset_resolver *resolver
     return false;
 }
 
-void sdl3d_asset_resolver_free_path(char *path)
+void slayer3d_asset_resolver_free_path(char *path)
 {
     SDL_free(path);
 }
 
-void sdl3d_asset_buffer_free(sdl3d_asset_buffer *buffer)
+void slayer3d_asset_buffer_free(slayer3d_asset_buffer *buffer)
 {
     if (buffer == NULL)
         return;
@@ -1002,8 +1004,8 @@ void sdl3d_asset_buffer_free(sdl3d_asset_buffer *buffer)
     buffer->size = 0u;
 }
 
-bool sdl3d_asset_pack_write_file(const char *pack_path, const sdl3d_asset_pack_source *entries, int entry_count,
-                                 char *error_buffer, int error_buffer_size)
+bool slayer3d_asset_pack_write_file(const char *pack_path, const slayer3d_asset_pack_source *entries, int entry_count,
+                                    char *error_buffer, int error_buffer_size)
 {
     if (error_buffer != NULL && error_buffer_size > 0)
         error_buffer[0] = '\0';
@@ -1090,7 +1092,7 @@ bool sdl3d_asset_pack_write_file(const char *pack_path, const sdl3d_asset_pack_s
     uint8_t *obfuscated_data = NULL;
     if (ok)
     {
-#if SDL3D_PACK_COMPRESSION_ENABLED
+#if SLAYER3D_PACK_COMPRESSION_ENABLED
         if (raw_size <= (size_t)ULONG_MAX)
         {
             ok = build_compressed_pack_bytes(raw_data, raw_size, &compressed_data, &output_size, error_buffer,
@@ -1103,7 +1105,7 @@ bool sdl3d_asset_pack_write_file(const char *pack_path, const sdl3d_asset_pack_s
 #endif
     }
 
-    if (ok && SDL3D_PACK_PASSWORD[0] != '\0')
+    if (ok && SLAYER3D_PACK_PASSWORD[0] != '\0')
     {
         ok = build_obfuscated_pack_bytes(output_data, output_size, &obfuscated_data, &output_size, error_buffer,
                                          error_buffer_size);

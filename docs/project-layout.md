@@ -1,6 +1,6 @@
 # Project Layout Guidance
 
-SDL3D games should keep one root game file and split implementation detail into
+Slayer 3D games should keep one root game file and split implementation detail into
 structured JSON fragments, scene files, Lua scripts, and assets. The goal is
 that a developer can infer where to make a change from the path.
 
@@ -60,7 +60,7 @@ and add folders only when they make ownership clearer.
 
 ## Root File Responsibilities
 
-The root `sdl3d.game.v0` file is the game entry point. It should contain:
+The root `slayer3d.game.v0` file is the game entry point. It should contain:
 
 - `schema`
 - `imports`
@@ -76,7 +76,7 @@ presentation should usually live in fragments.
 
 ## Fragment Responsibilities
 
-Fragments use `sdl3d.fragment.v0` and contribute only mergeable sections. Split
+Fragments use `slayer3d.fragment.v0` and contribute only mergeable sections. Split
 fragments by editing purpose:
 
 - Actor fragments answer "what exists in the world?"
@@ -177,7 +177,7 @@ custom C host.
 Mechanic dojos are small data-only projects or scenes used to tune reusable
 primitives in isolation. Prefer mock geometry, colored lights, particles, and
 clear UI indicators over finished media while the mechanic is still evolving.
-Launch dojos through `sdl3d_runner` and direct scene selection so mechanics can
+Launch dojos through `slayer3d_runner` and direct scene selection so mechanics can
 be tested without walking through splash, title, or campaign flow.
 
 `demos/fps_mechanics_dojo` is the reference shape for FPS/sector mechanics. It
@@ -213,7 +213,7 @@ JSON signals, sensors, timers, conditions, and actions, keep it in JSON.
 
 ## Asset Packaging
 
-Use the same data tree for development directories, `.sdl3dpak` files, and
+Use the same data tree for development directories, `.slayer3dpak` files, and
 embedded packs. Build files should include all authored JSON, Lua, shaders, and
 media that the game can load through `asset://` paths.
 

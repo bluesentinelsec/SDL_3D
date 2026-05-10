@@ -1,5 +1,5 @@
 {
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.splash",
   "updates_game": true,
   "renders_world": true,
@@ -35,7 +35,7 @@
       {
         "name": "ui.splash.title",
         "font": "font.title",
-        "text": "SDL3D",
+        "text": "Slayer 3D",
         "x": 0.5,
         "y": 0.39,
         "normalized": true,

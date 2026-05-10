@@ -1,6 +1,6 @@
 # Testing Strategy
 
-SDL3D uses two complementary test layers.
+Slayer 3D uses two complementary test layers.
 
 ## Unit Tests
 

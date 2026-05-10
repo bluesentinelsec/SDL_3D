@@ -1,8 +1,8 @@
-# SDL3D Gameplay Lua API
+# Slayer 3D Gameplay Lua API
 
-SDL3D exposes a compact Lua API for game-specific rules that should remain data-driven and reloadable. The runtime owns the Lua state, loads script modules from authored game data, and injects a small helper surface that is stable across games.
+Slayer 3D exposes a compact Lua API for game-specific rules that should remain data-driven and reloadable. The runtime owns the Lua state, loads script modules from authored game data, and injects a small helper surface that is stable across games.
 
-The API version is currently `sdl3d.lua.v1`.
+The API version is currently `slayer3d.lua.v1`.
 
 ## Script Model
 
@@ -98,7 +98,7 @@ The `ctx` table provides:
 
 ## Actor Wrapper
 
-`sdl3d.actor(name)` returns a lightweight wrapper for the named actor. The wrapper does not own the actor and does not copy its state. It is just a convenient handle for property access.
+`slayer3d.actor(name)` returns a lightweight wrapper for the named actor. The wrapper does not own the actor and does not copy its state. It is just a convenient handle for property access.
 
 The wrapper exposes:
 
@@ -122,11 +122,11 @@ And helper methods:
 
 Behavior notes:
 
-- Missing actor names return `nil` from `sdl3d.actor(name)`.
+- Missing actor names return `nil` from `slayer3d.actor(name)`.
 - `get_position()` returns `nil` if the actor is missing.
 - `get_vec3()` returns `nil` if the actor is missing.
 - `active` and `is_active()` read the actor's current runtime active flag.
-- `despawn()` is shorthand for `sdl3d.despawn(actor)`.
+- `despawn()` is shorthand for `slayer3d.despawn(actor)`.
 - Property getters fall back to authored defaults when the property is absent.
 - `position` and `velocity` are convenience fields backed by the same property accessors.
 
@@ -140,60 +140,60 @@ if ball ~= nil then
 end
 ```
 
-## `sdl3d` Global Helpers
+## `slayer3d` Global Helpers
 
-The runtime installs a small `sdl3d` table for low-level access and utility helpers:
+The runtime installs a small `slayer3d` table for low-level access and utility helpers:
 
-- `sdl3d.api` - current API version string
-- `sdl3d.actor(name)` - create an actor wrapper
-- `sdl3d.get_position(actor)`
-- `sdl3d.set_position(actor, x, y, z)`
-- `sdl3d.get_float(actor, key, fallback)`
-- `sdl3d.set_float(actor, key, value)`
-- `sdl3d.get_int(actor, key, fallback)`
-- `sdl3d.set_int(actor, key, value)`
-- `sdl3d.get_bool(actor, key, fallback)`
-- `sdl3d.set_bool(actor, key, value)`
-- `sdl3d.get_string(actor, key, fallback)`
-- `sdl3d.set_string(actor, key, value)`
-- `sdl3d.get_vec3(actor, key)`
-- `sdl3d.set_vec3(actor, key, x, y, z)`
-- `sdl3d.dt()`
-- `sdl3d.state_get(key, fallback)`
-- `sdl3d.state_set(key, value)`
-- `sdl3d.random()`
-- `sdl3d.actor_with_tags(...)`
-- `sdl3d.active_actors_with_tags(...)`
-- `sdl3d.spawn(pool, options)`
-- `sdl3d.despawn(actor_or_name)`
-- `sdl3d.despawn_by_tag(tag)`
-- `sdl3d.pool_capacity(pool)`
-- `sdl3d.pool_active_count(pool)`
-- `sdl3d.pool_available_count(pool)`
-- `sdl3d.pool_peak_active_count(pool)`
-- `sdl3d.pool_spawn_attempt_count(pool)`
-- `sdl3d.pool_spawn_success_count(pool)`
-- `sdl3d.pool_spawn_failure_count(pool)`
-- `sdl3d.pool_exhaustion_count(pool)`
-- `sdl3d.pool_reuse_count(pool)`
-- `sdl3d.pool_despawn_count(pool)`
-- `sdl3d.pool_last_spawn_failure_reason(pool)`
-- `sdl3d.pool_last_despawn_reason(pool)`
-- `sdl3d.grid_cell_to_world(map, col, row)`
-- `sdl3d.grid_world_to_cell(map, x, y)`
-- `sdl3d.grid_tile(map, col, row)`
-- `sdl3d.grid_walkable(map, col, row)`
-- `sdl3d.grid_neighbors(map, col, row)`
-- `sdl3d.grid_next_step(map, start_col, start_row, goal_col, goal_row)`
-- `sdl3d.sector_nav_nearest(graph, x, y, z)`
-- `sdl3d.sector_nav_path_available(graph, sx, sy, sz, gx, gy, gz)`
-- `sdl3d.sector_nav_next_node(graph, sx, sy, sz, gx, gy, gz)`
-- `sdl3d.sector_nav_path(graph, sx, sy, sz, gx, gy, gz)`
-- `sdl3d.log(message)`
-- `sdl3d.storage.*`
-- `sdl3d.json.*`
+- `slayer3d.api` - current API version string
+- `slayer3d.actor(name)` - create an actor wrapper
+- `slayer3d.get_position(actor)`
+- `slayer3d.set_position(actor, x, y, z)`
+- `slayer3d.get_float(actor, key, fallback)`
+- `slayer3d.set_float(actor, key, value)`
+- `slayer3d.get_int(actor, key, fallback)`
+- `slayer3d.set_int(actor, key, value)`
+- `slayer3d.get_bool(actor, key, fallback)`
+- `slayer3d.set_bool(actor, key, value)`
+- `slayer3d.get_string(actor, key, fallback)`
+- `slayer3d.set_string(actor, key, value)`
+- `slayer3d.get_vec3(actor, key)`
+- `slayer3d.set_vec3(actor, key, x, y, z)`
+- `slayer3d.dt()`
+- `slayer3d.state_get(key, fallback)`
+- `slayer3d.state_set(key, value)`
+- `slayer3d.random()`
+- `slayer3d.actor_with_tags(...)`
+- `slayer3d.active_actors_with_tags(...)`
+- `slayer3d.spawn(pool, options)`
+- `slayer3d.despawn(actor_or_name)`
+- `slayer3d.despawn_by_tag(tag)`
+- `slayer3d.pool_capacity(pool)`
+- `slayer3d.pool_active_count(pool)`
+- `slayer3d.pool_available_count(pool)`
+- `slayer3d.pool_peak_active_count(pool)`
+- `slayer3d.pool_spawn_attempt_count(pool)`
+- `slayer3d.pool_spawn_success_count(pool)`
+- `slayer3d.pool_spawn_failure_count(pool)`
+- `slayer3d.pool_exhaustion_count(pool)`
+- `slayer3d.pool_reuse_count(pool)`
+- `slayer3d.pool_despawn_count(pool)`
+- `slayer3d.pool_last_spawn_failure_reason(pool)`
+- `slayer3d.pool_last_despawn_reason(pool)`
+- `slayer3d.grid_cell_to_world(map, col, row)`
+- `slayer3d.grid_world_to_cell(map, x, y)`
+- `slayer3d.grid_tile(map, col, row)`
+- `slayer3d.grid_walkable(map, col, row)`
+- `slayer3d.grid_neighbors(map, col, row)`
+- `slayer3d.grid_next_step(map, start_col, start_row, goal_col, goal_row)`
+- `slayer3d.sector_nav_nearest(graph, x, y, z)`
+- `slayer3d.sector_nav_path_available(graph, sx, sy, sz, gx, gy, gz)`
+- `slayer3d.sector_nav_next_node(graph, sx, sy, sz, gx, gy, gz)`
+- `slayer3d.sector_nav_path(graph, sx, sy, sz, gx, gy, gz)`
+- `slayer3d.log(message)`
+- `slayer3d.storage.*`
+- `slayer3d.json.*`
 
-The low-level `sdl3d.get_*` and `sdl3d.set_*` helpers are useful for compact scripts and host integration. Gameplay scripts should generally prefer the `Actor` wrapper for readability.
+The low-level `slayer3d.get_*` and `slayer3d.set_*` helpers are useful for compact scripts and host integration. Gameplay scripts should generally prefer the `Actor` wrapper for readability.
 
 ## Grid Maps
 
@@ -323,7 +323,7 @@ the callback. Pooled actors expose `pool_lifecycle` as `inactive`, `spawning`,
 
 ## `Vec3`
 
-`Vec3` is available both as `sdl3d.Vec3` and as a global `Vec3` constructor.
+`Vec3` is available both as `slayer3d.Vec3` and as a global `Vec3` constructor.
 
 It supports:
 
@@ -339,9 +339,9 @@ current/fallback `z` value.
 
 ## JSON Helpers
 
-`sdl3d.json.decode(text)` parses JSON text and returns the equivalent Lua value. On failure it returns `nil, error_message`.
+`slayer3d.json.decode(text)` parses JSON text and returns the equivalent Lua value. On failure it returns `nil, error_message`.
 
-`sdl3d.json.encode(value)` converts Lua values to JSON text. On failure it returns `nil, error_message`.
+`slayer3d.json.encode(value)` converts Lua values to JSON text. On failure it returns `nil, error_message`.
 
 Supported values:
 
@@ -362,7 +362,7 @@ Performance note: JSON encode/decode allocates and validates data. Use it for sa
 
 ## Storage Helpers
 
-`ctx.storage` exposes the same safe storage API as `sdl3d.storage`:
+`ctx.storage` exposes the same safe storage API as `slayer3d.storage`:
 
 - `read(path)` -> `text` on success, or `nil, error` on failure
 - `write(path, text)` -> `true` on success, or `false, error`
@@ -379,15 +379,15 @@ Paths must use `user://` or `cache://`. Absolute paths, `..`, empty segments, ba
 - Missing or exhausted actor pool: `ctx:spawn()` returns `nil, error_message`.
 - Missing despawn target: `ctx:despawn()` returns `false`.
 - Missing state key: `ctx:state_get()` returns the authored fallback.
-- Missing JSON data: `sdl3d.json.decode()` returns `nil, error`.
-- Unsupported JSON value: `sdl3d.json.encode()` returns `nil, error`.
+- Missing JSON data: `slayer3d.json.decode()` returns `nil, error`.
+- Unsupported JSON value: `slayer3d.json.encode()` returns `nil, error`.
 - Storage path violation: storage helpers return `false, error` or `nil, error` depending on the call.
 
 ## Recommended Usage
 
 - Use exact actor names for deterministic gameplay rules when the name is stable.
 - Use tags for authored role discovery during scene setup or adapter initialization.
-- Use `ctx.storage` and `sdl3d.json` for persistent data, not transient gameplay state.
+- Use `ctx.storage` and `slayer3d.json` for persistent data, not transient gameplay state.
 - Keep per-frame Lua small and declarative; move heavy math or broad searches into C helpers when a rule becomes hot.
 
 ## Adapter Example
@@ -398,7 +398,7 @@ composition in JSON:
 - choose a constrained random spawn or serve direction
 - apply game-specific collision response math
 - steer an enemy, companion, or CPU-controlled actor
-- interpret game-specific save data with `ctx.storage` and `sdl3d.json`
+- interpret game-specific save data with `ctx.storage` and `slayer3d.json`
 
 If a behavior can be expressed with signals, conditions, timers, property
 actions, scene actions, or persistence actions, keep it in JSON instead of Lua.

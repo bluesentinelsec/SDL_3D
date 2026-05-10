@@ -1,4 +1,4 @@
-# SDL3D FPS Template
+# Slayer 3D FPS Template
 
 This template is a data-only starter for sector/FPS projects. It is intended to
 be copied into a new game project and customized through JSON and Lua.
@@ -6,7 +6,7 @@ be copied into a new game project and customized through JSON and Lua.
 Run it with:
 
 ```sh
-./build/debug/sdl3d_runner --root demos/templates/fps/data --data asset://fps_template.game.json
+./build/debug/slayer3d_runner --root demos/templates/fps/data --data asset://fps_template.game.json
 ```
 
 The fragments demonstrate common project-agnostic conventions:

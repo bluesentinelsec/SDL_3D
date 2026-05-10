@@ -16,7 +16,7 @@ namespace
 
 std::filesystem::path demo_data_path(const char *demo_name, const char *data_file)
 {
-    return std::filesystem::path(SDL3D_DEMOS_ROOT) / demo_name / "data" / data_file;
+    return std::filesystem::path(SLAYER3D_DEMOS_ROOT) / demo_name / "data" / data_file;
 }
 
 const std::string kPongDataPath = demo_data_path("pong", "pong.game.json").string();
@@ -293,7 +293,7 @@ TEST(GameDataJson, PongDataDeclaresGenericTopLevelModel)
     JsonDoc doc(kPongDataPath.c_str());
     ASSERT_NE(doc.root(), nullptr) << doc.error();
 
-    EXPECT_EQ(required_string(doc.root(), "schema"), "sdl3d.game.v0");
+    EXPECT_EQ(required_string(doc.root(), "schema"), "slayer3d.game.v0");
     EXPECT_TRUE(yyjson_is_obj(yyjson_obj_get(doc.root(), "metadata")));
     EXPECT_TRUE(yyjson_is_obj(yyjson_obj_get(doc.root(), "world")));
     EXPECT_TRUE(yyjson_is_arr(doc.section("entities")));

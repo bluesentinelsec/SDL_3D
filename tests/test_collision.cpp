@@ -8,8 +8,8 @@
 
 extern "C"
 {
-#include "sdl3d/collision.h"
-#include "sdl3d/math.h"
+#include "slayer3d/collision.h"
+#include "slayer3d/math.h"
 }
 
 /* ================================================================== */
@@ -19,30 +19,30 @@ extern "C"
 struct AABBCase
 {
     const char *label;
-    sdl3d_bounding_box a, b;
+    slayer3d_bounding_box a, b;
     bool expected;
 };
 
-class SDL3DAABBAABB : public ::testing::TestWithParam<AABBCase>
+class SLAYER3DAABBAABB : public ::testing::TestWithParam<AABBCase>
 {
 };
 
-TEST_P(SDL3DAABBAABB, Check)
+TEST_P(SLAYER3DAABBAABB, Check)
 {
     const auto &c = GetParam();
-    EXPECT_EQ(sdl3d_check_aabb_aabb(c.a, c.b), c.expected) << c.label;
-    EXPECT_EQ(sdl3d_check_aabb_aabb(c.b, c.a), c.expected) << c.label << " (reversed)";
+    EXPECT_EQ(slayer3d_check_aabb_aabb(c.a, c.b), c.expected) << c.label;
+    EXPECT_EQ(slayer3d_check_aabb_aabb(c.b, c.a), c.expected) << c.label << " (reversed)";
 }
 
-static sdl3d_bounding_box bb(float x0, float y0, float z0, float x1, float y1, float z1)
+static slayer3d_bounding_box bb(float x0, float y0, float z0, float x1, float y1, float z1)
 {
-    sdl3d_bounding_box b;
-    b.min = sdl3d_vec3_make(x0, y0, z0);
-    b.max = sdl3d_vec3_make(x1, y1, z1);
+    slayer3d_bounding_box b;
+    b.min = slayer3d_vec3_make(x0, y0, z0);
+    b.max = slayer3d_vec3_make(x1, y1, z1);
     return b;
 }
 
-INSTANTIATE_TEST_SUITE_P(Collision, SDL3DAABBAABB,
+INSTANTIATE_TEST_SUITE_P(Collision, SLAYER3DAABBAABB,
                          ::testing::Values(AABBCase{"overlap", bb(-1, -1, -1, 1, 1, 1), bb(0, 0, 0, 2, 2, 2), true},
                                            AABBCase{"touching", bb(0, 0, 0, 1, 1, 1), bb(1, 0, 0, 2, 1, 1), true},
                                            AABBCase{"separated x", bb(0, 0, 0, 1, 1, 1), bb(2, 0, 0, 3, 1, 1), false},
@@ -60,29 +60,29 @@ INSTANTIATE_TEST_SUITE_P(Collision, SDL3DAABBAABB,
 struct SphereSphereCase
 {
     const char *label;
-    sdl3d_sphere a, b;
+    slayer3d_sphere a, b;
     bool expected;
 };
 
-class SDL3DSphereSphere : public ::testing::TestWithParam<SphereSphereCase>
+class SLAYER3DSphereSphere : public ::testing::TestWithParam<SphereSphereCase>
 {
 };
 
-TEST_P(SDL3DSphereSphere, Check)
+TEST_P(SLAYER3DSphereSphere, Check)
 {
     const auto &c = GetParam();
-    EXPECT_EQ(sdl3d_check_sphere_sphere(c.a, c.b), c.expected) << c.label;
+    EXPECT_EQ(slayer3d_check_sphere_sphere(c.a, c.b), c.expected) << c.label;
 }
 
-static sdl3d_sphere sp(float x, float y, float z, float r)
+static slayer3d_sphere sp(float x, float y, float z, float r)
 {
-    sdl3d_sphere s;
-    s.center = sdl3d_vec3_make(x, y, z);
+    slayer3d_sphere s;
+    s.center = slayer3d_vec3_make(x, y, z);
     s.radius = r;
     return s;
 }
 
-INSTANTIATE_TEST_SUITE_P(Collision, SDL3DSphereSphere,
+INSTANTIATE_TEST_SUITE_P(Collision, SLAYER3DSphereSphere,
                          ::testing::Values(SphereSphereCase{"overlap", sp(0, 0, 0, 1), sp(1, 0, 0, 1), true},
                                            SphereSphereCase{"touching", sp(0, 0, 0, 1), sp(2, 0, 0, 1), true},
                                            SphereSphereCase{"separated", sp(0, 0, 0, 1), sp(3, 0, 0, 1), false},
@@ -98,23 +98,23 @@ INSTANTIATE_TEST_SUITE_P(Collision, SDL3DSphereSphere,
 struct AABBSphereCase
 {
     const char *label;
-    sdl3d_bounding_box box;
-    sdl3d_sphere sphere;
+    slayer3d_bounding_box box;
+    slayer3d_sphere sphere;
     bool expected;
 };
 
-class SDL3DAABBSphere : public ::testing::TestWithParam<AABBSphereCase>
+class SLAYER3DAABBSphere : public ::testing::TestWithParam<AABBSphereCase>
 {
 };
 
-TEST_P(SDL3DAABBSphere, Check)
+TEST_P(SLAYER3DAABBSphere, Check)
 {
     const auto &c = GetParam();
-    EXPECT_EQ(sdl3d_check_aabb_sphere(c.box, c.sphere), c.expected) << c.label;
+    EXPECT_EQ(slayer3d_check_aabb_sphere(c.box, c.sphere), c.expected) << c.label;
 }
 
 INSTANTIATE_TEST_SUITE_P(
-    Collision, SDL3DAABBSphere,
+    Collision, SLAYER3DAABBSphere,
     ::testing::Values(AABBSphereCase{"inside", bb(-1, -1, -1, 1, 1, 1), sp(0, 0, 0, 0.5f), true},
                       AABBSphereCase{"touching face", bb(0, 0, 0, 1, 1, 1), sp(2, 0.5f, 0.5f, 1), true},
                       AABBSphereCase{"separated", bb(0, 0, 0, 1, 1, 1), sp(3, 0.5f, 0.5f, 1), false},
@@ -164,15 +164,15 @@ TEST(SphereFrustum, CenterInsideIsVisible)
 {
     float planes[6][4];
     make_unit_frustum(planes);
-    EXPECT_TRUE(sdl3d_sphere_intersects_frustum(sp(0, 0, 0, 0.1f), planes));
+    EXPECT_TRUE(slayer3d_sphere_intersects_frustum(sp(0, 0, 0, 0.1f), planes));
 }
 
 TEST(SphereFrustum, FarOutsideIsCulled)
 {
     float planes[6][4];
     make_unit_frustum(planes);
-    EXPECT_FALSE(sdl3d_sphere_intersects_frustum(sp(10, 0, 0, 1), planes));
-    EXPECT_FALSE(sdl3d_sphere_intersects_frustum(sp(0, -10, 0, 1), planes));
+    EXPECT_FALSE(slayer3d_sphere_intersects_frustum(sp(10, 0, 0, 1), planes));
+    EXPECT_FALSE(slayer3d_sphere_intersects_frustum(sp(0, -10, 0, 1), planes));
 }
 
 TEST(SphereFrustum, StraddlingPlaneIsVisible)
@@ -180,14 +180,14 @@ TEST(SphereFrustum, StraddlingPlaneIsVisible)
     float planes[6][4];
     make_unit_frustum(planes);
     /* Center is just outside +x plane but radius reaches inside. */
-    EXPECT_TRUE(sdl3d_sphere_intersects_frustum(sp(1.5f, 0, 0, 0.6f), planes));
+    EXPECT_TRUE(slayer3d_sphere_intersects_frustum(sp(1.5f, 0, 0, 0.6f), planes));
 }
 
 TEST(SphereFrustum, JustOutsidePlaneIsCulled)
 {
     float planes[6][4];
     make_unit_frustum(planes);
-    EXPECT_FALSE(sdl3d_sphere_intersects_frustum(sp(2.0f, 0, 0, 0.9f), planes));
+    EXPECT_FALSE(slayer3d_sphere_intersects_frustum(sp(2.0f, 0, 0, 0.9f), planes));
 }
 
 /* ================================================================== */
@@ -197,27 +197,27 @@ TEST(SphereFrustum, JustOutsidePlaneIsCulled)
 struct RayAABBCase
 {
     const char *label;
-    sdl3d_ray ray;
-    sdl3d_bounding_box box;
+    slayer3d_ray ray;
+    slayer3d_bounding_box box;
     bool expect_hit;
 };
 
-class SDL3DRayAABB : public ::testing::TestWithParam<RayAABBCase>
+class SLAYER3DRayAABB : public ::testing::TestWithParam<RayAABBCase>
 {
 };
 
-static sdl3d_ray make_ray(float ox, float oy, float oz, float dx, float dy, float dz)
+static slayer3d_ray make_ray(float ox, float oy, float oz, float dx, float dy, float dz)
 {
-    sdl3d_ray r;
-    r.position = sdl3d_vec3_make(ox, oy, oz);
-    r.direction = sdl3d_vec3_make(dx, dy, dz);
+    slayer3d_ray r;
+    r.position = slayer3d_vec3_make(ox, oy, oz);
+    r.direction = slayer3d_vec3_make(dx, dy, dz);
     return r;
 }
 
-TEST_P(SDL3DRayAABB, HitOrMiss)
+TEST_P(SLAYER3DRayAABB, HitOrMiss)
 {
     const auto &c = GetParam();
-    sdl3d_ray_hit h = sdl3d_ray_vs_aabb(c.ray, c.box);
+    slayer3d_ray_hit h = slayer3d_ray_vs_aabb(c.ray, c.box);
     EXPECT_EQ(h.hit, c.expect_hit) << c.label;
     if (h.hit)
     {
@@ -226,7 +226,7 @@ TEST_P(SDL3DRayAABB, HitOrMiss)
 }
 
 INSTANTIATE_TEST_SUITE_P(
-    Collision, SDL3DRayAABB,
+    Collision, SLAYER3DRayAABB,
     ::testing::Values(RayAABBCase{"direct hit", make_ray(-5, 0.5f, 0.5f, 1, 0, 0), bb(0, 0, 0, 1, 1, 1), true},
                       RayAABBCase{"miss above", make_ray(-5, 2, 0.5f, 1, 0, 0), bb(0, 0, 0, 1, 1, 1), false},
                       RayAABBCase{"miss behind", make_ray(5, 0.5f, 0.5f, 1, 0, 0), bb(0, 0, 0, 1, 1, 1), false},
@@ -242,19 +242,19 @@ INSTANTIATE_TEST_SUITE_P(
 struct RaySphereCase
 {
     const char *label;
-    sdl3d_ray ray;
-    sdl3d_sphere sphere;
+    slayer3d_ray ray;
+    slayer3d_sphere sphere;
     bool expect_hit;
 };
 
-class SDL3DRaySphere : public ::testing::TestWithParam<RaySphereCase>
+class SLAYER3DRaySphere : public ::testing::TestWithParam<RaySphereCase>
 {
 };
 
-TEST_P(SDL3DRaySphere, HitOrMiss)
+TEST_P(SLAYER3DRaySphere, HitOrMiss)
 {
     const auto &c = GetParam();
-    sdl3d_ray_hit h = sdl3d_ray_vs_sphere(c.ray, c.sphere);
+    slayer3d_ray_hit h = slayer3d_ray_vs_sphere(c.ray, c.sphere);
     EXPECT_EQ(h.hit, c.expect_hit) << c.label;
     if (h.hit)
     {
@@ -269,7 +269,7 @@ TEST_P(SDL3DRaySphere, HitOrMiss)
 }
 
 INSTANTIATE_TEST_SUITE_P(
-    Collision, SDL3DRaySphere,
+    Collision, SLAYER3DRaySphere,
     ::testing::Values(RaySphereCase{"direct hit", make_ray(-5, 0, 0, 1, 0, 0), sp(0, 0, 0, 1), true},
                       RaySphereCase{"miss above", make_ray(-5, 2, 0, 1, 0, 0), sp(0, 0, 0, 1), false},
                       RaySphereCase{"miss behind", make_ray(5, 0, 0, 1, 0, 0), sp(0, 0, 0, 1), false},
@@ -281,49 +281,49 @@ INSTANTIATE_TEST_SUITE_P(
 /* Ray-Triangle (Möller–Trumbore)                                     */
 /* ================================================================== */
 
-TEST(SDL3DRayTriangle, HitsFrontFace)
+TEST(SLAYER3DRayTriangle, HitsFrontFace)
 {
-    sdl3d_vec3 v0 = sdl3d_vec3_make(-1, -1, 0);
-    sdl3d_vec3 v1 = sdl3d_vec3_make(1, -1, 0);
-    sdl3d_vec3 v2 = sdl3d_vec3_make(0, 1, 0);
-    sdl3d_ray ray = make_ray(0, 0, -5, 0, 0, 1);
+    slayer3d_vec3 v0 = slayer3d_vec3_make(-1, -1, 0);
+    slayer3d_vec3 v1 = slayer3d_vec3_make(1, -1, 0);
+    slayer3d_vec3 v2 = slayer3d_vec3_make(0, 1, 0);
+    slayer3d_ray ray = make_ray(0, 0, -5, 0, 0, 1);
 
-    sdl3d_ray_hit h = sdl3d_ray_vs_triangle(ray, v0, v1, v2);
+    slayer3d_ray_hit h = slayer3d_ray_vs_triangle(ray, v0, v1, v2);
     EXPECT_TRUE(h.hit);
     EXPECT_NEAR(h.distance, 5.0f, 0.01f);
     EXPECT_NEAR(h.point.z, 0.0f, 0.01f);
 }
 
-TEST(SDL3DRayTriangle, MissesOutside)
+TEST(SLAYER3DRayTriangle, MissesOutside)
 {
-    sdl3d_vec3 v0 = sdl3d_vec3_make(-1, -1, 0);
-    sdl3d_vec3 v1 = sdl3d_vec3_make(1, -1, 0);
-    sdl3d_vec3 v2 = sdl3d_vec3_make(0, 1, 0);
-    sdl3d_ray ray = make_ray(5, 5, -5, 0, 0, 1);
+    slayer3d_vec3 v0 = slayer3d_vec3_make(-1, -1, 0);
+    slayer3d_vec3 v1 = slayer3d_vec3_make(1, -1, 0);
+    slayer3d_vec3 v2 = slayer3d_vec3_make(0, 1, 0);
+    slayer3d_ray ray = make_ray(5, 5, -5, 0, 0, 1);
 
-    sdl3d_ray_hit h = sdl3d_ray_vs_triangle(ray, v0, v1, v2);
+    slayer3d_ray_hit h = slayer3d_ray_vs_triangle(ray, v0, v1, v2);
     EXPECT_FALSE(h.hit);
 }
 
-TEST(SDL3DRayTriangle, MissesBehind)
+TEST(SLAYER3DRayTriangle, MissesBehind)
 {
-    sdl3d_vec3 v0 = sdl3d_vec3_make(-1, -1, 0);
-    sdl3d_vec3 v1 = sdl3d_vec3_make(1, -1, 0);
-    sdl3d_vec3 v2 = sdl3d_vec3_make(0, 1, 0);
-    sdl3d_ray ray = make_ray(0, 0, 5, 0, 0, 1);
+    slayer3d_vec3 v0 = slayer3d_vec3_make(-1, -1, 0);
+    slayer3d_vec3 v1 = slayer3d_vec3_make(1, -1, 0);
+    slayer3d_vec3 v2 = slayer3d_vec3_make(0, 1, 0);
+    slayer3d_ray ray = make_ray(0, 0, 5, 0, 0, 1);
 
-    sdl3d_ray_hit h = sdl3d_ray_vs_triangle(ray, v0, v1, v2);
+    slayer3d_ray_hit h = slayer3d_ray_vs_triangle(ray, v0, v1, v2);
     EXPECT_FALSE(h.hit);
 }
 
-TEST(SDL3DRayTriangle, ParallelMisses)
+TEST(SLAYER3DRayTriangle, ParallelMisses)
 {
-    sdl3d_vec3 v0 = sdl3d_vec3_make(-1, -1, 0);
-    sdl3d_vec3 v1 = sdl3d_vec3_make(1, -1, 0);
-    sdl3d_vec3 v2 = sdl3d_vec3_make(0, 1, 0);
-    sdl3d_ray ray = make_ray(0, 0, -5, 1, 0, 0);
+    slayer3d_vec3 v0 = slayer3d_vec3_make(-1, -1, 0);
+    slayer3d_vec3 v1 = slayer3d_vec3_make(1, -1, 0);
+    slayer3d_vec3 v2 = slayer3d_vec3_make(0, 1, 0);
+    slayer3d_ray ray = make_ray(0, 0, -5, 1, 0, 0);
 
-    sdl3d_ray_hit h = sdl3d_ray_vs_triangle(ray, v0, v1, v2);
+    slayer3d_ray_hit h = slayer3d_ray_vs_triangle(ray, v0, v1, v2);
     EXPECT_FALSE(h.hit);
 }
 
@@ -331,7 +331,7 @@ TEST(SDL3DRayTriangle, ParallelMisses)
 /* Ray-Mesh                                                           */
 /* ================================================================== */
 
-TEST(SDL3DRayMesh, HitsClosestTriangle)
+TEST(SLAYER3DRayMesh, HitsClosestTriangle)
 {
     /* Two triangles: one at z=0, one at z=2. Ray from z=-5 along +z. */
     float positions[] = {
@@ -339,23 +339,23 @@ TEST(SDL3DRayMesh, HitsClosestTriangle)
         -1, -1, 2, 1, -1, 2, 0, 1, 2, /* tri 1 at z=2 */
     };
     unsigned int indices[] = {0, 1, 2, 3, 4, 5};
-    sdl3d_mesh mesh{};
+    slayer3d_mesh mesh{};
     mesh.positions = positions;
     mesh.vertex_count = 6;
     mesh.indices = indices;
     mesh.index_count = 6;
 
-    sdl3d_ray ray = make_ray(0, 0, -5, 0, 0, 1);
-    sdl3d_ray_hit h = sdl3d_ray_vs_mesh(ray, &mesh);
+    slayer3d_ray ray = make_ray(0, 0, -5, 0, 0, 1);
+    slayer3d_ray_hit h = slayer3d_ray_vs_mesh(ray, &mesh);
     EXPECT_TRUE(h.hit);
     EXPECT_NEAR(h.distance, 5.0f, 0.01f);
     EXPECT_NEAR(h.point.z, 0.0f, 0.01f);
 }
 
-TEST(SDL3DRayMesh, MissesEmptyMesh)
+TEST(SLAYER3DRayMesh, MissesEmptyMesh)
 {
-    sdl3d_ray ray = make_ray(0, 0, -5, 0, 0, 1);
-    sdl3d_ray_hit h = sdl3d_ray_vs_mesh(ray, nullptr);
+    slayer3d_ray ray = make_ray(0, 0, -5, 0, 0, 1);
+    slayer3d_ray_hit h = slayer3d_ray_vs_mesh(ray, nullptr);
     EXPECT_FALSE(h.hit);
 }
 
@@ -363,14 +363,14 @@ TEST(SDL3DRayMesh, MissesEmptyMesh)
 /* Compute mesh AABB                                                  */
 /* ================================================================== */
 
-TEST(SDL3DMeshAABB, ComputesCorrectBounds)
+TEST(SLAYER3DMeshAABB, ComputesCorrectBounds)
 {
     float positions[] = {-1, -2, -3, 4, 5, 6, 0, 0, 0};
-    sdl3d_mesh mesh{};
+    slayer3d_mesh mesh{};
     mesh.positions = positions;
     mesh.vertex_count = 3;
 
-    sdl3d_bounding_box aabb = sdl3d_compute_mesh_aabb(&mesh);
+    slayer3d_bounding_box aabb = slayer3d_compute_mesh_aabb(&mesh);
     EXPECT_FLOAT_EQ(aabb.min.x, -1);
     EXPECT_FLOAT_EQ(aabb.min.y, -2);
     EXPECT_FLOAT_EQ(aabb.min.z, -3);
@@ -379,9 +379,9 @@ TEST(SDL3DMeshAABB, ComputesCorrectBounds)
     EXPECT_FLOAT_EQ(aabb.max.z, 6);
 }
 
-TEST(SDL3DMeshAABB, NullMeshReturnsZero)
+TEST(SLAYER3DMeshAABB, NullMeshReturnsZero)
 {
-    sdl3d_bounding_box aabb = sdl3d_compute_mesh_aabb(nullptr);
+    slayer3d_bounding_box aabb = slayer3d_compute_mesh_aabb(nullptr);
     EXPECT_FLOAT_EQ(aabb.min.x, 0);
     EXPECT_FLOAT_EQ(aabb.max.x, 0);
 }
@@ -390,73 +390,73 @@ TEST(SDL3DMeshAABB, NullMeshReturnsZero)
 /* Scene raycast                                                      */
 /* ================================================================== */
 
-TEST(SDL3DSceneRaycast, NullSceneReturnsNoHit)
+TEST(SLAYER3DSceneRaycast, NullSceneReturnsNoHit)
 {
-    sdl3d_ray ray = make_ray(0, 0, -5, 0, 0, 1);
-    sdl3d_scene_hit h = sdl3d_scene_raycast(nullptr, ray);
+    slayer3d_ray ray = make_ray(0, 0, -5, 0, 0, 1);
+    slayer3d_scene_hit h = slayer3d_scene_raycast(nullptr, ray);
     EXPECT_FALSE(h.hit);
 }
 
-TEST(SDL3DSceneRaycast, EmptySceneReturnsNoHit)
+TEST(SLAYER3DSceneRaycast, EmptySceneReturnsNoHit)
 {
-    sdl3d_scene *scene = sdl3d_create_scene();
-    sdl3d_ray ray = make_ray(0, 0, -5, 0, 0, 1);
-    sdl3d_scene_hit h = sdl3d_scene_raycast(scene, ray);
+    slayer3d_scene *scene = slayer3d_create_scene();
+    slayer3d_ray ray = make_ray(0, 0, -5, 0, 0, 1);
+    slayer3d_scene_hit h = slayer3d_scene_raycast(scene, ray);
     EXPECT_FALSE(h.hit);
-    sdl3d_destroy_scene(scene);
+    slayer3d_destroy_scene(scene);
 }
 
-TEST(SDL3DSceneRaycast, HitsActorMesh)
+TEST(SLAYER3DSceneRaycast, HitsActorMesh)
 {
     float positions[] = {-1, -1, 0, 1, -1, 0, 0, 1, 0};
     unsigned int indices[] = {0, 1, 2};
-    sdl3d_mesh meshes[1] = {};
+    slayer3d_mesh meshes[1] = {};
     meshes[0].positions = positions;
     meshes[0].vertex_count = 3;
     meshes[0].indices = indices;
     meshes[0].index_count = 3;
     meshes[0].material_index = -1;
 
-    sdl3d_model model{};
+    slayer3d_model model{};
     model.meshes = meshes;
     model.mesh_count = 1;
 
-    sdl3d_scene *scene = sdl3d_create_scene();
-    sdl3d_actor *actor = sdl3d_scene_add_actor(scene, &model);
-    sdl3d_actor_set_position(actor, sdl3d_vec3_make(0, 0, 5));
+    slayer3d_scene *scene = slayer3d_create_scene();
+    slayer3d_actor *actor = slayer3d_scene_add_actor(scene, &model);
+    slayer3d_actor_set_position(actor, slayer3d_vec3_make(0, 0, 5));
 
     /* Ray from origin along +z should hit the triangle at z=5. */
-    sdl3d_ray ray = make_ray(0, 0, 0, 0, 0, 1);
-    sdl3d_scene_hit h = sdl3d_scene_raycast(scene, ray);
+    slayer3d_ray ray = make_ray(0, 0, 0, 0, 0, 1);
+    slayer3d_scene_hit h = slayer3d_scene_raycast(scene, ray);
     EXPECT_TRUE(h.hit);
     EXPECT_NEAR(h.point.z, 5.0f, 0.01f);
     EXPECT_EQ(h.actor, actor);
 
-    sdl3d_destroy_scene(scene);
+    slayer3d_destroy_scene(scene);
 }
 
-TEST(SDL3DSceneRaycast, InvisibleActorSkipped)
+TEST(SLAYER3DSceneRaycast, InvisibleActorSkipped)
 {
     float positions[] = {-1, -1, 0, 1, -1, 0, 0, 1, 0};
     unsigned int indices[] = {0, 1, 2};
-    sdl3d_mesh meshes[1] = {};
+    slayer3d_mesh meshes[1] = {};
     meshes[0].positions = positions;
     meshes[0].vertex_count = 3;
     meshes[0].indices = indices;
     meshes[0].index_count = 3;
     meshes[0].material_index = -1;
 
-    sdl3d_model model{};
+    slayer3d_model model{};
     model.meshes = meshes;
     model.mesh_count = 1;
 
-    sdl3d_scene *scene = sdl3d_create_scene();
-    sdl3d_actor *actor = sdl3d_scene_add_actor(scene, &model);
-    sdl3d_actor_set_visible(actor, false);
+    slayer3d_scene *scene = slayer3d_create_scene();
+    slayer3d_actor *actor = slayer3d_scene_add_actor(scene, &model);
+    slayer3d_actor_set_visible(actor, false);
 
-    sdl3d_ray ray = make_ray(0, 0, -5, 0, 0, 1);
-    sdl3d_scene_hit h = sdl3d_scene_raycast(scene, ray);
+    slayer3d_ray ray = make_ray(0, 0, -5, 0, 0, 1);
+    slayer3d_scene_hit h = slayer3d_scene_raycast(scene, ray);
     EXPECT_FALSE(h.hit);
 
-    sdl3d_destroy_scene(scene);
+    slayer3d_destroy_scene(scene);
 }

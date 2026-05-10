@@ -2,8 +2,8 @@
  * cgltf-backed glTF 2.0 / GLB loader.
  *
  * Loads meshes, materials, and texture-path references from .gltf and
- * .glb files. Each cgltf_primitive becomes one sdl3d_mesh; each
- * cgltf_material becomes one sdl3d_material. Only triangle primitives
+ * .glb files. Each cgltf_primitive becomes one slayer3d_mesh; each
+ * cgltf_material becomes one slayer3d_material. Only triangle primitives
  * are imported; non-triangle primitives are silently skipped.
  */
 
@@ -13,7 +13,7 @@
 
 #include <cgltf.h>
 
-#include "sdl3d/animation.h"
+#include "slayer3d/animation.h"
 
 #include "model_internal.h"
 
@@ -21,7 +21,7 @@
 /* String helpers                                                      */
 /* ------------------------------------------------------------------ */
 
-static char *sdl3d_gltf_strdup(const char *s)
+static char *slayer3d_gltf_strdup(const char *s)
 {
     size_t len;
     char *copy;
@@ -44,7 +44,7 @@ static char *sdl3d_gltf_strdup(const char *s)
 /* Material conversion                                                 */
 /* ------------------------------------------------------------------ */
 
-static void sdl3d_gltf_material_init(sdl3d_material *mat)
+static void slayer3d_gltf_material_init(slayer3d_material *mat)
 {
     SDL_zerop(mat);
     mat->albedo[0] = 1.0f;
@@ -56,7 +56,7 @@ static void sdl3d_gltf_material_init(sdl3d_material *mat)
 }
 
 /* Store the cgltf_data pointer so we can resolve image indices. */
-static char *sdl3d_gltf_texture_ref(const cgltf_texture_view *view, const cgltf_data *data)
+static char *slayer3d_gltf_texture_ref(const cgltf_texture_view *view, const cgltf_data *data)
 {
     if (view->texture == NULL || view->texture->image == NULL)
     {
@@ -64,7 +64,7 @@ static char *sdl3d_gltf_texture_ref(const cgltf_texture_view *view, const cgltf_
     }
     if (view->texture->image->uri != NULL)
     {
-        return sdl3d_gltf_strdup(view->texture->image->uri);
+        return slayer3d_gltf_strdup(view->texture->image->uri);
     }
     /* Embedded buffer_view texture: reference by image index "#N". */
     if (view->texture->image->buffer_view != NULL)
@@ -72,15 +72,15 @@ static char *sdl3d_gltf_texture_ref(const cgltf_texture_view *view, const cgltf_
         char buf[16];
         int idx = (int)cgltf_image_index(data, view->texture->image);
         SDL_snprintf(buf, sizeof(buf), "#%d", idx);
-        return sdl3d_gltf_strdup(buf);
+        return slayer3d_gltf_strdup(buf);
     }
     return NULL;
 }
 
-static bool sdl3d_gltf_convert_material(const cgltf_data *data, const cgltf_material *src, sdl3d_material *dst)
+static bool slayer3d_gltf_convert_material(const cgltf_data *data, const cgltf_material *src, slayer3d_material *dst)
 {
-    sdl3d_gltf_material_init(dst);
-    dst->name = sdl3d_gltf_strdup(src->name);
+    slayer3d_gltf_material_init(dst);
+    dst->name = slayer3d_gltf_strdup(src->name);
 
     if (src->has_pbr_metallic_roughness)
     {
@@ -91,8 +91,8 @@ static bool sdl3d_gltf_convert_material(const cgltf_data *data, const cgltf_mate
         dst->albedo[3] = pbr->base_color_factor[3];
         dst->metallic = pbr->metallic_factor;
         dst->roughness = pbr->roughness_factor;
-        dst->albedo_map = sdl3d_gltf_texture_ref(&pbr->base_color_texture, data);
-        dst->metallic_roughness_map = sdl3d_gltf_texture_ref(&pbr->metallic_roughness_texture, data);
+        dst->albedo_map = slayer3d_gltf_texture_ref(&pbr->base_color_texture, data);
+        dst->metallic_roughness_map = slayer3d_gltf_texture_ref(&pbr->metallic_roughness_texture, data);
     }
 
     dst->emissive[0] = src->emissive_factor[0];
@@ -106,8 +106,8 @@ static bool sdl3d_gltf_convert_material(const cgltf_data *data, const cgltf_mate
         dst->emissive[2] *= src->emissive_strength.emissive_strength;
     }
 
-    dst->normal_map = sdl3d_gltf_texture_ref(&src->normal_texture, data);
-    dst->emissive_map = sdl3d_gltf_texture_ref(&src->emissive_texture, data);
+    dst->normal_map = slayer3d_gltf_texture_ref(&src->normal_texture, data);
+    dst->emissive_map = slayer3d_gltf_texture_ref(&src->emissive_texture, data);
 
     return true;
 }
@@ -116,7 +116,7 @@ static bool sdl3d_gltf_convert_material(const cgltf_data *data, const cgltf_mate
 /* Mesh conversion                                                     */
 /* ------------------------------------------------------------------ */
 
-static int sdl3d_gltf_find_material_index(const cgltf_data *data, const cgltf_material *mat)
+static int slayer3d_gltf_find_material_index(const cgltf_data *data, const cgltf_material *mat)
 {
     if (mat == NULL)
     {
@@ -125,8 +125,8 @@ static int sdl3d_gltf_find_material_index(const cgltf_data *data, const cgltf_ma
     return (int)(mat - data->materials);
 }
 
-static bool sdl3d_gltf_convert_primitive(const cgltf_data *data, const cgltf_primitive *prim, const char *mesh_name,
-                                         int prim_index, sdl3d_mesh *dst)
+static bool slayer3d_gltf_convert_primitive(const cgltf_data *data, const cgltf_primitive *prim, const char *mesh_name,
+                                            int prim_index, slayer3d_mesh *dst)
 {
     const cgltf_accessor *pos_accessor = NULL;
     const cgltf_accessor *norm_accessor = NULL;
@@ -149,7 +149,7 @@ static bool sdl3d_gltf_convert_primitive(const cgltf_data *data, const cgltf_pri
         {
             SDL_snprintf(buf, sizeof(buf), "primitive_%d", prim_index);
         }
-        dst->name = sdl3d_gltf_strdup(buf);
+        dst->name = slayer3d_gltf_strdup(buf);
     }
 
     /* Find attribute accessors. */
@@ -200,7 +200,7 @@ static bool sdl3d_gltf_convert_primitive(const cgltf_data *data, const cgltf_pri
 
     vertex_count = (int)pos_accessor->count;
     dst->vertex_count = vertex_count;
-    dst->material_index = sdl3d_gltf_find_material_index(data, prim->material);
+    dst->material_index = slayer3d_gltf_find_material_index(data, prim->material);
 
     /* Unpack positions. */
     dst->positions = (float *)SDL_malloc((size_t)vertex_count * 3 * sizeof(float));
@@ -346,7 +346,7 @@ static bool sdl3d_gltf_convert_primitive(const cgltf_data *data, const cgltf_pri
 /* Count total triangle primitives across all meshes.                  */
 /* ------------------------------------------------------------------ */
 
-static int sdl3d_gltf_count_triangle_primitives(const cgltf_data *data)
+static int slayer3d_gltf_count_triangle_primitives(const cgltf_data *data)
 {
     int count = 0;
     for (cgltf_size m = 0; m < data->meshes_count; ++m)
@@ -367,7 +367,7 @@ static int sdl3d_gltf_count_triangle_primitives(const cgltf_data *data)
 /* Public entry point                                                  */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
+bool slayer3d_load_model_gltf(const char *path, slayer3d_model *out)
 {
     cgltf_options options;
     cgltf_data *data = NULL;
@@ -402,7 +402,7 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
     }
 
     /* Store source path. */
-    out->source_path = sdl3d_gltf_strdup(path);
+    out->source_path = slayer3d_gltf_strdup(path);
     if (out->source_path == NULL)
     {
         cgltf_free(data);
@@ -413,26 +413,26 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
     if (data->materials_count > 0)
     {
         out->material_count = (int)data->materials_count;
-        out->materials = (sdl3d_material *)SDL_calloc(data->materials_count, sizeof(sdl3d_material));
+        out->materials = (slayer3d_material *)SDL_calloc(data->materials_count, sizeof(slayer3d_material));
         if (out->materials == NULL)
         {
             cgltf_free(data);
-            sdl3d_free_model(out);
+            slayer3d_free_model(out);
             return SDL_OutOfMemory();
         }
         for (cgltf_size i = 0; i < data->materials_count; ++i)
         {
-            if (!sdl3d_gltf_convert_material(data, &data->materials[i], &out->materials[i]))
+            if (!slayer3d_gltf_convert_material(data, &data->materials[i], &out->materials[i]))
             {
                 cgltf_free(data);
-                sdl3d_free_model(out);
+                slayer3d_free_model(out);
                 return false;
             }
         }
     }
 
     /* Count triangle primitives to allocate mesh array. */
-    total_prims = sdl3d_gltf_count_triangle_primitives(data);
+    total_prims = slayer3d_gltf_count_triangle_primitives(data);
     if (total_prims == 0)
     {
         cgltf_free(data);
@@ -440,15 +440,15 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
     }
 
     out->mesh_count = total_prims;
-    out->meshes = (sdl3d_mesh *)SDL_calloc((size_t)total_prims, sizeof(sdl3d_mesh));
+    out->meshes = (slayer3d_mesh *)SDL_calloc((size_t)total_prims, sizeof(slayer3d_mesh));
     if (out->meshes == NULL)
     {
         cgltf_free(data);
-        sdl3d_free_model(out);
+        slayer3d_free_model(out);
         return SDL_OutOfMemory();
     }
 
-    /* Convert each triangle primitive into an sdl3d_mesh. */
+    /* Convert each triangle primitive into an slayer3d_mesh. */
     for (cgltf_size m = 0; m < data->meshes_count; ++m)
     {
         const cgltf_mesh *mesh = &data->meshes[m];
@@ -459,10 +459,10 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
             {
                 continue;
             }
-            if (!sdl3d_gltf_convert_primitive(data, prim, mesh->name, (int)p, &out->meshes[mesh_index]))
+            if (!slayer3d_gltf_convert_primitive(data, prim, mesh->name, (int)p, &out->meshes[mesh_index]))
             {
                 cgltf_free(data);
-                sdl3d_free_model(out);
+                slayer3d_free_model(out);
                 return false;
             }
             ++mesh_index;
@@ -472,7 +472,7 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
     /* Decode embedded images (buffer_view textures in GLB files). */
     if (data->images_count > 0)
     {
-        out->embedded_textures = (sdl3d_image *)SDL_calloc(data->images_count, sizeof(sdl3d_image));
+        out->embedded_textures = (slayer3d_image *)SDL_calloc(data->images_count, sizeof(slayer3d_image));
         if (out->embedded_textures != NULL)
         {
             out->embedded_texture_count = (int)data->images_count;
@@ -483,7 +483,7 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
                     img->buffer_view->buffer->data != NULL)
                 {
                     const void *img_data = (const char *)img->buffer_view->buffer->data + img->buffer_view->offset;
-                    sdl3d_load_image_from_memory(img_data, img->buffer_view->size, &out->embedded_textures[i]);
+                    slayer3d_load_image_from_memory(img_data, img->buffer_view->size, &out->embedded_textures[i]);
                 }
             }
         }
@@ -493,18 +493,18 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
     if (data->skins_count > 0)
     {
         const cgltf_skin *skin = &data->skins[0];
-        sdl3d_skeleton *skel = (sdl3d_skeleton *)SDL_calloc(1, sizeof(sdl3d_skeleton));
+        slayer3d_skeleton *skel = (slayer3d_skeleton *)SDL_calloc(1, sizeof(slayer3d_skeleton));
         if (skel != NULL && skin->joints_count > 0)
         {
             skel->joint_count = (int)skin->joints_count;
-            skel->joints = (sdl3d_joint *)SDL_calloc(skin->joints_count, sizeof(sdl3d_joint));
+            skel->joints = (slayer3d_joint *)SDL_calloc(skin->joints_count, sizeof(slayer3d_joint));
             if (skel->joints != NULL)
             {
                 for (cgltf_size j = 0; j < skin->joints_count; ++j)
                 {
                     const cgltf_node *node = skin->joints[j];
-                    sdl3d_joint *jt = &skel->joints[j];
-                    jt->name = sdl3d_gltf_strdup(node->name);
+                    slayer3d_joint *jt = &skel->joints[j];
+                    jt->name = slayer3d_gltf_strdup(node->name);
                     jt->parent_index = -1;
                     if (node->parent != NULL)
                     {
@@ -523,7 +523,7 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
                     }
                     else
                     {
-                        jt->inverse_bind_matrix = sdl3d_mat4_identity();
+                        jt->inverse_bind_matrix = slayer3d_mat4_identity();
                     }
                     if (node->has_translation)
                     {
@@ -563,16 +563,18 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
     if (data->animations_count > 0 && out->skeleton != NULL)
     {
         out->animation_count = (int)data->animations_count;
-        out->animations = (sdl3d_animation_clip *)SDL_calloc(data->animations_count, sizeof(sdl3d_animation_clip));
+        out->animations =
+            (slayer3d_animation_clip *)SDL_calloc(data->animations_count, sizeof(slayer3d_animation_clip));
         if (out->animations != NULL)
         {
             for (cgltf_size ai = 0; ai < data->animations_count; ++ai)
             {
                 const cgltf_animation *anim = &data->animations[ai];
-                sdl3d_animation_clip *clip = &out->animations[ai];
-                clip->name = sdl3d_gltf_strdup(anim->name);
+                slayer3d_animation_clip *clip = &out->animations[ai];
+                clip->name = slayer3d_gltf_strdup(anim->name);
                 clip->channel_count = (int)anim->channels_count;
-                clip->channels = (sdl3d_anim_channel *)SDL_calloc(anim->channels_count, sizeof(sdl3d_anim_channel));
+                clip->channels =
+                    (slayer3d_anim_channel *)SDL_calloc(anim->channels_count, sizeof(slayer3d_anim_channel));
                 if (clip->channels == NULL)
                 {
                     continue;
@@ -580,7 +582,7 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
                 for (cgltf_size ci = 0; ci < anim->channels_count; ++ci)
                 {
                     const cgltf_animation_channel *src_ch = &anim->channels[ci];
-                    sdl3d_anim_channel *dst_ch = &clip->channels[ci];
+                    slayer3d_anim_channel *dst_ch = &clip->channels[ci];
                     const cgltf_animation_sampler *sampler = src_ch->sampler;
                     int kf_count;
                     dst_ch->joint_index = -1;
@@ -599,13 +601,13 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
                     switch (src_ch->target_path)
                     {
                     case cgltf_animation_path_type_translation:
-                        dst_ch->path = SDL3D_ANIM_TRANSLATION;
+                        dst_ch->path = SLAYER3D_ANIM_TRANSLATION;
                         break;
                     case cgltf_animation_path_type_rotation:
-                        dst_ch->path = SDL3D_ANIM_ROTATION;
+                        dst_ch->path = SLAYER3D_ANIM_ROTATION;
                         break;
                     case cgltf_animation_path_type_scale:
-                        dst_ch->path = SDL3D_ANIM_SCALE;
+                        dst_ch->path = SLAYER3D_ANIM_SCALE;
                         break;
                     default:
                         continue;
@@ -616,7 +618,7 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
                     }
                     kf_count = (int)sampler->input->count;
                     dst_ch->keyframe_count = kf_count;
-                    dst_ch->keyframes = (sdl3d_keyframe *)SDL_calloc((size_t)kf_count, sizeof(sdl3d_keyframe));
+                    dst_ch->keyframes = (slayer3d_keyframe *)SDL_calloc((size_t)kf_count, sizeof(slayer3d_keyframe));
                     if (dst_ch->keyframes == NULL)
                     {
                         continue;
@@ -640,7 +642,7 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
     /* ------------------------------------------------------------------ */
     if (data->nodes_count > 0)
     {
-        /* Build a mapping from cgltf mesh pointer → first sdl3d_mesh index.
+        /* Build a mapping from cgltf mesh pointer → first slayer3d_mesh index.
          * Our mesh array is ordered: for each cgltf mesh, its triangle
          * primitives appear consecutively starting at mesh_start[m]. */
         int *mesh_start = (int *)SDL_calloc(data->meshes_count, sizeof(int));
@@ -660,13 +662,13 @@ bool sdl3d_load_model_gltf(const char *path, sdl3d_model *out)
             }
 
             out->node_count = (int)data->nodes_count;
-            out->nodes = (sdl3d_model_node *)SDL_calloc(data->nodes_count, sizeof(sdl3d_model_node));
+            out->nodes = (slayer3d_model_node *)SDL_calloc(data->nodes_count, sizeof(slayer3d_model_node));
             if (out->nodes != NULL)
             {
                 for (cgltf_size n = 0; n < data->nodes_count; ++n)
                 {
                     const cgltf_node *src = &data->nodes[n];
-                    sdl3d_model_node *dst = &out->nodes[n];
+                    slayer3d_model_node *dst = &out->nodes[n];
 
                     /* Default TRS. */
                     dst->translation[0] = dst->translation[1] = dst->translation[2] = 0.0f;

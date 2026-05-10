@@ -3,7 +3,7 @@
  * @brief Timer pool implementation — flat dynamic array of countdown timers.
  */
 
-#include "sdl3d/timer_pool.h"
+#include "slayer3d/timer_pool.h"
 
 #include <SDL3/SDL_stdinc.h>
 
@@ -21,7 +21,7 @@ typedef struct timer_entry
     bool active;
 } timer_entry;
 
-struct sdl3d_timer_pool
+struct slayer3d_timer_pool
 {
     timer_entry *timers;
     int count;
@@ -33,7 +33,7 @@ struct sdl3d_timer_pool
 /* Internal helpers                                                   */
 /* ================================================================== */
 
-static bool ensure_capacity(sdl3d_timer_pool *pool)
+static bool ensure_capacity(slayer3d_timer_pool *pool)
 {
     if (pool->count < pool->capacity)
         return true;
@@ -50,15 +50,15 @@ static bool ensure_capacity(sdl3d_timer_pool *pool)
 /* Lifecycle                                                          */
 /* ================================================================== */
 
-sdl3d_timer_pool *sdl3d_timer_pool_create(void)
+slayer3d_timer_pool *slayer3d_timer_pool_create(void)
 {
-    sdl3d_timer_pool *pool = (sdl3d_timer_pool *)SDL_calloc(1, sizeof(sdl3d_timer_pool));
+    slayer3d_timer_pool *pool = (slayer3d_timer_pool *)SDL_calloc(1, sizeof(slayer3d_timer_pool));
     if (pool != NULL)
         pool->next_id = 1;
     return pool;
 }
 
-void sdl3d_timer_pool_destroy(sdl3d_timer_pool *pool)
+void slayer3d_timer_pool_destroy(slayer3d_timer_pool *pool)
 {
     if (pool == NULL)
         return;
@@ -70,7 +70,7 @@ void sdl3d_timer_pool_destroy(sdl3d_timer_pool *pool)
 /* Timer management                                                   */
 /* ================================================================== */
 
-int sdl3d_timer_start(sdl3d_timer_pool *pool, float delay, int signal_id, bool repeating, float interval)
+int slayer3d_timer_start(slayer3d_timer_pool *pool, float delay, int signal_id, bool repeating, float interval)
 {
     if (pool == NULL || delay <= 0.0f)
         return 0;
@@ -91,7 +91,7 @@ int sdl3d_timer_start(sdl3d_timer_pool *pool, float delay, int signal_id, bool r
     return id;
 }
 
-void sdl3d_timer_cancel(sdl3d_timer_pool *pool, int timer_id)
+void slayer3d_timer_cancel(slayer3d_timer_pool *pool, int timer_id)
 {
     if (pool == NULL || timer_id <= 0)
         return;
@@ -109,7 +109,7 @@ void sdl3d_timer_cancel(sdl3d_timer_pool *pool, int timer_id)
 /* Per-frame update                                                   */
 /* ================================================================== */
 
-void sdl3d_timer_pool_update(sdl3d_timer_pool *pool, sdl3d_signal_bus *bus, float dt)
+void slayer3d_timer_pool_update(slayer3d_timer_pool *pool, slayer3d_signal_bus *bus, float dt)
 {
     if (pool == NULL || bus == NULL || dt < 0.0f)
         return;
@@ -123,7 +123,7 @@ void sdl3d_timer_pool_update(sdl3d_timer_pool *pool, sdl3d_signal_bus *bus, floa
         t->remaining -= dt;
         if (t->remaining <= 0.0f)
         {
-            sdl3d_signal_emit(bus, t->signal_id, NULL);
+            slayer3d_signal_emit(bus, t->signal_id, NULL);
             if (t->repeating)
             {
                 t->remaining += t->interval;
@@ -158,7 +158,7 @@ void sdl3d_timer_pool_update(sdl3d_timer_pool *pool, sdl3d_signal_bus *bus, floa
 /* Query                                                              */
 /* ================================================================== */
 
-int sdl3d_timer_pool_active_count(const sdl3d_timer_pool *pool)
+int slayer3d_timer_pool_active_count(const slayer3d_timer_pool *pool)
 {
     if (pool == NULL)
         return 0;

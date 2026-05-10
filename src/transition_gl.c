@@ -5,7 +5,7 @@
 #include "gl_renderer.h"
 #include "render_context_internal.h"
 
-bool sdl3d_transition_draw_gl(const sdl3d_transition *transition, sdl3d_render_context *context)
+bool slayer3d_transition_draw_gl(const slayer3d_transition *transition, slayer3d_render_context *context)
 {
     if (transition == NULL)
     {
@@ -20,5 +20,5 @@ bool sdl3d_transition_draw_gl(const sdl3d_transition *transition, sdl3d_render_c
         return SDL_SetError("GL transition draw requires the GL backend.");
     }
 
-    return sdl3d_gl_queue_transition(context->gl, transition);
+    return slayer3d_gl_queue_transition(context->gl, transition);
 }

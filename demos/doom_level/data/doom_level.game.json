@@ -1,7 +1,7 @@
 {
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": {
-    "name": "SDL3D Doom Level",
+    "name": "Slayer 3D Doom Level",
     "id": "demo.doom_level",
     "version": "0.1.0"
   },
@@ -25,7 +25,7 @@
     { "path": "fragments/world/render_controls.json", "sections": ["signals", "logic"] }
   ],
   "app": {
-    "title": "SDL3D Doom Level",
+    "title": "Slayer 3D Doom Level",
     "logical_width": 1280,
     "logical_height": 720,
     "backend": "opengl",

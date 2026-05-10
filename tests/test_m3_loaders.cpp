@@ -16,9 +16,9 @@
 
 extern "C"
 {
-#include "sdl3d/image.h"
-#include "sdl3d/model.h"
-#include "sdl3d/texture.h"
+#include "slayer3d/image.h"
+#include "slayer3d/model.h"
+#include "slayer3d/texture.h"
 #include "texture_internal.h"
 }
 
@@ -27,23 +27,23 @@ namespace
 
 std::string asset(const char *rel)
 {
-    return std::string(SDL3D_TEST_ASSETS_DIR) + "/" + rel;
+    return std::string(SLAYER3D_TEST_ASSETS_DIR) + "/" + rel;
 }
 
 /* Helper: create a texture from raw pixel data. */
-sdl3d_texture2d make_texture(Uint8 *pixels, int w, int h)
+slayer3d_texture2d make_texture(Uint8 *pixels, int w, int h)
 {
-    sdl3d_image img{};
+    slayer3d_image img{};
     img.pixels = pixels;
     img.width = w;
     img.height = h;
-    sdl3d_texture2d tex{};
-    sdl3d_create_texture_from_image(&img, &tex);
+    slayer3d_texture2d tex{};
+    slayer3d_create_texture_from_image(&img, &tex);
     return tex;
 }
 
 /* Helper: validate every mesh in a model has sane invariants. */
-void assert_model_valid(const sdl3d_model &m, const char *label)
+void assert_model_valid(const slayer3d_model &m, const char *label)
 {
     SCOPED_TRACE(label);
     EXPECT_GT(m.mesh_count, 0);
@@ -53,7 +53,7 @@ void assert_model_valid(const sdl3d_model &m, const char *label)
     for (int i = 0; i < m.mesh_count; ++i)
     {
         SCOPED_TRACE(std::string("mesh ") + std::to_string(i));
-        const sdl3d_mesh &mesh = m.meshes[i];
+        const slayer3d_mesh &mesh = m.meshes[i];
         ASSERT_NE(mesh.positions, nullptr);
         ASSERT_NE(mesh.indices, nullptr);
         EXPECT_GT(mesh.vertex_count, 0);
@@ -72,7 +72,7 @@ void assert_model_valid(const sdl3d_model &m, const char *label)
 } // namespace
 
 /* ================================================================== */
-/* Model dispatch: sdl3d_load_model_from_file                         */
+/* Model dispatch: slayer3d_load_model_from_file                         */
 /* ================================================================== */
 
 struct LoadModelErrorCase
@@ -83,17 +83,17 @@ struct LoadModelErrorCase
     bool out_is_null;
 };
 
-class SDL3DLoadModelErrors : public ::testing::TestWithParam<LoadModelErrorCase>
+class SLAYER3DLoadModelErrors : public ::testing::TestWithParam<LoadModelErrorCase>
 {
 };
 
-TEST_P(SDL3DLoadModelErrors, ReturnsFailure)
+TEST_P(SLAYER3DLoadModelErrors, ReturnsFailure)
 {
     const auto &c = GetParam();
-    sdl3d_model m{};
+    slayer3d_model m{};
     const char *p = c.path_is_null ? nullptr : c.path;
-    sdl3d_model *o = c.out_is_null ? nullptr : &m;
-    EXPECT_FALSE(sdl3d_load_model_from_file(p, o)) << c.label;
+    slayer3d_model *o = c.out_is_null ? nullptr : &m;
+    EXPECT_FALSE(slayer3d_load_model_from_file(p, o)) << c.label;
     if (!c.out_is_null)
     {
         EXPECT_EQ(m.mesh_count, 0);
@@ -101,7 +101,7 @@ TEST_P(SDL3DLoadModelErrors, ReturnsFailure)
     }
 }
 
-INSTANTIATE_TEST_SUITE_P(Dispatch, SDL3DLoadModelErrors,
+INSTANTIATE_TEST_SUITE_P(Dispatch, SLAYER3DLoadModelErrors,
                          ::testing::Values(LoadModelErrorCase{"null path", nullptr, true, false},
                                            LoadModelErrorCase{"null out", "foo.obj", false, true},
                                            LoadModelErrorCase{"missing .obj", "/no/such.obj", false, false},
@@ -120,55 +120,55 @@ struct CaseInsensitiveCase
     const char *path;
 };
 
-class SDL3DExtensionCaseInsensitive : public ::testing::TestWithParam<CaseInsensitiveCase>
+class SLAYER3DExtensionCaseInsensitive : public ::testing::TestWithParam<CaseInsensitiveCase>
 {
 };
 
-TEST_P(SDL3DExtensionCaseInsensitive, DispatchesCorrectly)
+TEST_P(SLAYER3DExtensionCaseInsensitive, DispatchesCorrectly)
 {
-    sdl3d_model m{};
-    EXPECT_FALSE(sdl3d_load_model_from_file(GetParam().path, &m));
+    slayer3d_model m{};
+    EXPECT_FALSE(slayer3d_load_model_from_file(GetParam().path, &m));
     /* Should NOT contain "Unrecognized" — it should reach the loader. */
     std::string err = SDL_GetError();
     EXPECT_EQ(err.find("Unrecognized"), std::string::npos) << "path: " << GetParam().path << " err: " << err;
 }
 
-INSTANTIATE_TEST_SUITE_P(Dispatch, SDL3DExtensionCaseInsensitive,
+INSTANTIATE_TEST_SUITE_P(Dispatch, SLAYER3DExtensionCaseInsensitive,
                          ::testing::Values(CaseInsensitiveCase{"/no/FILE.OBJ"}, CaseInsensitiveCase{"/no/FILE.GLB"},
                                            CaseInsensitiveCase{"/no/FILE.GLTF"}, CaseInsensitiveCase{"/no/FILE.FBX"},
                                            CaseInsensitiveCase{"/no/File.Obj"}, CaseInsensitiveCase{"/no/Model.gLtF"}));
 
 /* ================================================================== */
-/* sdl3d_free_model edge cases                                        */
+/* slayer3d_free_model edge cases                                        */
 /* ================================================================== */
 
-TEST(SDL3DFreeModel, NullPointerIsSafe)
+TEST(SLAYER3DFreeModel, NullPointerIsSafe)
 {
-    sdl3d_free_model(nullptr);
+    slayer3d_free_model(nullptr);
 }
 
-TEST(SDL3DFreeModel, ZeroInitializedIsIdempotent)
+TEST(SLAYER3DFreeModel, ZeroInitializedIsIdempotent)
 {
-    sdl3d_model m{};
-    sdl3d_free_model(&m);
-    sdl3d_free_model(&m);
+    slayer3d_model m{};
+    slayer3d_free_model(&m);
+    slayer3d_free_model(&m);
 }
 
-TEST(SDL3DFreeModel, PopulatedModelThenDoubleFree)
+TEST(SLAYER3DFreeModel, PopulatedModelThenDoubleFree)
 {
-    sdl3d_model m{};
-    ASSERT_TRUE(sdl3d_load_model_from_file(asset("models/cube_obj/cube.obj").c_str(), &m));
+    slayer3d_model m{};
+    ASSERT_TRUE(slayer3d_load_model_from_file(asset("models/cube_obj/cube.obj").c_str(), &m));
     EXPECT_GT(m.mesh_count, 0);
-    sdl3d_free_model(&m);
+    slayer3d_free_model(&m);
     EXPECT_EQ(m.mesh_count, 0);
     EXPECT_EQ(m.meshes, nullptr);
     EXPECT_EQ(m.materials, nullptr);
     EXPECT_EQ(m.source_path, nullptr);
     /* Second free on zeroed struct must be safe. */
-    sdl3d_free_model(&m);
+    slayer3d_free_model(&m);
 }
 
-TEST(SDL3DFreeModel, AllThreeFormatsFreeSafely)
+TEST(SLAYER3DFreeModel, AllThreeFormatsFreeSafely)
 {
     const char *paths[] = {
         "models/cube_obj/cube.obj",
@@ -178,10 +178,10 @@ TEST(SDL3DFreeModel, AllThreeFormatsFreeSafely)
     for (const char *rel : paths)
     {
         SCOPED_TRACE(rel);
-        sdl3d_model m{};
-        ASSERT_TRUE(sdl3d_load_model_from_file(asset(rel).c_str(), &m));
-        sdl3d_free_model(&m);
-        sdl3d_free_model(&m); /* double-free */
+        slayer3d_model m{};
+        ASSERT_TRUE(slayer3d_load_model_from_file(asset(rel).c_str(), &m));
+        slayer3d_free_model(&m);
+        slayer3d_free_model(&m); /* double-free */
     }
 }
 
@@ -189,10 +189,10 @@ TEST(SDL3DFreeModel, AllThreeFormatsFreeSafely)
 /* glTF / GLB loader                                                  */
 /* ================================================================== */
 
-TEST(SDL3DGltfLoader, BoxGlbFullValidation)
+TEST(SLAYER3DGltfLoader, BoxGlbFullValidation)
 {
-    sdl3d_model model{};
-    ASSERT_TRUE(sdl3d_load_model_from_file(asset("models/box_glb/Box.glb").c_str(), &model)) << SDL_GetError();
+    slayer3d_model model{};
+    ASSERT_TRUE(slayer3d_load_model_from_file(asset("models/box_glb/Box.glb").c_str(), &model)) << SDL_GetError();
     assert_model_valid(model, "Box.glb");
 
     /* Normals present and unit-length. */
@@ -207,16 +207,16 @@ TEST(SDL3DGltfLoader, BoxGlbFullValidation)
     /* Mesh has a name. */
     EXPECT_NE(model.meshes[0].name, nullptr);
 
-    sdl3d_free_model(&model);
+    slayer3d_free_model(&model);
 }
 
-TEST(SDL3DGltfLoader, BoxGlbMaterialProperties)
+TEST(SLAYER3DGltfLoader, BoxGlbMaterialProperties)
 {
-    sdl3d_model model{};
-    ASSERT_TRUE(sdl3d_load_model_from_file(asset("models/box_glb/Box.glb").c_str(), &model)) << SDL_GetError();
+    slayer3d_model model{};
+    ASSERT_TRUE(slayer3d_load_model_from_file(asset("models/box_glb/Box.glb").c_str(), &model)) << SDL_GetError();
     ASSERT_GE(model.material_count, 1);
 
-    const sdl3d_material &mat = model.materials[0];
+    const slayer3d_material &mat = model.materials[0];
 
     /* Albedo RGBA all in [0,1]. */
     for (int c = 0; c < 4; ++c)
@@ -240,13 +240,13 @@ TEST(SDL3DGltfLoader, BoxGlbMaterialProperties)
     /* Mesh references this material. */
     EXPECT_EQ(model.meshes[0].material_index, 0);
 
-    sdl3d_free_model(&model);
+    slayer3d_free_model(&model);
 }
 
-TEST(SDL3DGltfLoader, MissingFileErrorContainsPath)
+TEST(SLAYER3DGltfLoader, MissingFileErrorContainsPath)
 {
-    sdl3d_model m{};
-    EXPECT_FALSE(sdl3d_load_model_from_file("/nonexistent/model.glb", &m));
+    slayer3d_model m{};
+    EXPECT_FALSE(slayer3d_load_model_from_file("/nonexistent/model.glb", &m));
     std::string err = SDL_GetError();
     EXPECT_NE(err.find("model.glb"), std::string::npos) << "error: " << err;
 }
@@ -255,10 +255,10 @@ TEST(SDL3DGltfLoader, MissingFileErrorContainsPath)
 /* FBX loader                                                         */
 /* ================================================================== */
 
-TEST(SDL3DFbxLoader, CubeFullValidation)
+TEST(SLAYER3DFbxLoader, CubeFullValidation)
 {
-    sdl3d_model model{};
-    ASSERT_TRUE(sdl3d_load_model_from_file(asset("models/cube_fbx/cube.fbx").c_str(), &model)) << SDL_GetError();
+    slayer3d_model model{};
+    ASSERT_TRUE(slayer3d_load_model_from_file(asset("models/cube_fbx/cube.fbx").c_str(), &model)) << SDL_GetError();
     assert_model_valid(model, "cube.fbx");
 
     /* Normals present and unit-length. */
@@ -273,17 +273,17 @@ TEST(SDL3DFbxLoader, CubeFullValidation)
     /* Mesh has a name. */
     EXPECT_NE(model.meshes[0].name, nullptr);
 
-    sdl3d_free_model(&model);
+    slayer3d_free_model(&model);
 }
 
-TEST(SDL3DFbxLoader, CubeMaterialProperties)
+TEST(SLAYER3DFbxLoader, CubeMaterialProperties)
 {
-    sdl3d_model model{};
-    ASSERT_TRUE(sdl3d_load_model_from_file(asset("models/cube_fbx/cube.fbx").c_str(), &model)) << SDL_GetError();
+    slayer3d_model model{};
+    ASSERT_TRUE(slayer3d_load_model_from_file(asset("models/cube_fbx/cube.fbx").c_str(), &model)) << SDL_GetError();
 
     if (model.material_count > 0)
     {
-        const sdl3d_material &mat = model.materials[0];
+        const slayer3d_material &mat = model.materials[0];
         for (int c = 0; c < 4; ++c)
         {
             EXPECT_GE(mat.albedo[c], 0.0f) << "albedo[" << c << "]";
@@ -295,22 +295,22 @@ TEST(SDL3DFbxLoader, CubeMaterialProperties)
         EXPECT_LE(mat.roughness, 1.0f);
     }
 
-    sdl3d_free_model(&model);
+    slayer3d_free_model(&model);
 }
 
-TEST(SDL3DFbxLoader, MissingFileErrorContainsPath)
+TEST(SLAYER3DFbxLoader, MissingFileErrorContainsPath)
 {
-    sdl3d_model m{};
-    EXPECT_FALSE(sdl3d_load_model_from_file("/nonexistent/model.fbx", &m));
+    slayer3d_model m{};
+    EXPECT_FALSE(slayer3d_load_model_from_file("/nonexistent/model.fbx", &m));
     std::string err = SDL_GetError();
     EXPECT_NE(err.find("model.fbx"), std::string::npos) << "error: " << err;
 }
 
-TEST(SDL3DFbxLoader, FreeIsIdempotent)
+TEST(SLAYER3DFbxLoader, FreeIsIdempotent)
 {
-    sdl3d_model m{};
-    sdl3d_free_model(&m);
-    sdl3d_free_model(&m);
+    slayer3d_model m{};
+    slayer3d_free_model(&m);
+    slayer3d_free_model(&m);
 }
 
 /* ================================================================== */
@@ -323,20 +323,20 @@ struct FormatCase
     const char *rel_path;
 };
 
-class SDL3DMaterialParityTable : public ::testing::TestWithParam<FormatCase>
+class SLAYER3DMaterialParityTable : public ::testing::TestWithParam<FormatCase>
 {
 };
 
-TEST_P(SDL3DMaterialParityTable, MaterialFieldsInValidRanges)
+TEST_P(SLAYER3DMaterialParityTable, MaterialFieldsInValidRanges)
 {
     const auto &c = GetParam();
-    sdl3d_model m{};
-    ASSERT_TRUE(sdl3d_load_model_from_file(asset(c.rel_path).c_str(), &m)) << SDL_GetError();
+    slayer3d_model m{};
+    ASSERT_TRUE(slayer3d_load_model_from_file(asset(c.rel_path).c_str(), &m)) << SDL_GetError();
 
     for (int i = 0; i < m.material_count; ++i)
     {
         SCOPED_TRACE(std::string(c.label) + " material " + std::to_string(i));
-        const sdl3d_material &mat = m.materials[i];
+        const slayer3d_material &mat = m.materials[i];
 
         for (int ch = 0; ch < 4; ++ch)
         {
@@ -361,10 +361,10 @@ TEST_P(SDL3DMaterialParityTable, MaterialFieldsInValidRanges)
             << c.label << " mesh " << i << " material_index=" << mi;
     }
 
-    sdl3d_free_model(&m);
+    slayer3d_free_model(&m);
 }
 
-INSTANTIATE_TEST_SUITE_P(Parity, SDL3DMaterialParityTable,
+INSTANTIATE_TEST_SUITE_P(Parity, SLAYER3DMaterialParityTable,
                          ::testing::Values(FormatCase{"OBJ", "models/cube_obj/cube.obj"},
                                            FormatCase{"GLB", "models/box_glb/Box.glb"},
                                            FormatCase{"FBX", "models/cube_fbx/cube.fbx"}));
@@ -381,16 +381,16 @@ struct MipCountCase
     int expected_levels;
 };
 
-class SDL3DMipCount : public ::testing::TestWithParam<MipCountCase>
+class SLAYER3DMipCount : public ::testing::TestWithParam<MipCountCase>
 {
 };
 
-TEST_P(SDL3DMipCount, GeneratesExpectedLevelCount)
+TEST_P(SLAYER3DMipCount, GeneratesExpectedLevelCount)
 {
     const auto &c = GetParam();
     std::vector<Uint8> pixels((size_t)c.width * c.height * 4, 128);
-    sdl3d_texture2d tex = make_texture(pixels.data(), c.width, c.height);
-    ASSERT_TRUE(sdl3d_set_texture_filter(&tex, SDL3D_TEXTURE_FILTER_TRILINEAR));
+    slayer3d_texture2d tex = make_texture(pixels.data(), c.width, c.height);
+    ASSERT_TRUE(slayer3d_set_texture_filter(&tex, SLAYER3D_TEXTURE_FILTER_TRILINEAR));
 
     EXPECT_EQ(tex.mip_count, c.expected_levels) << c.label;
 
@@ -412,17 +412,17 @@ TEST_P(SDL3DMipCount, GeneratesExpectedLevelCount)
     /* Level 0 aliases base pixels. */
     EXPECT_EQ(tex.mip_levels[0].pixels, tex.pixels);
 
-    sdl3d_free_texture(&tex);
+    slayer3d_free_texture(&tex);
 }
 
-INSTANTIATE_TEST_SUITE_P(Mipmap, SDL3DMipCount,
+INSTANTIATE_TEST_SUITE_P(Mipmap, SLAYER3DMipCount,
                          ::testing::Values(MipCountCase{"1x1", 1, 1, 1}, MipCountCase{"2x2", 2, 2, 2},
                                            MipCountCase{"4x4", 4, 4, 3}, MipCountCase{"8x8", 8, 8, 4},
                                            MipCountCase{"16x16", 16, 16, 5}, MipCountCase{"256x256", 256, 256, 9},
                                            MipCountCase{"3x5 NPOT", 3, 5, 3}, MipCountCase{"1x8 tall", 1, 8, 4},
                                            MipCountCase{"8x1 wide", 8, 1, 4}, MipCountCase{"7x3 NPOT", 7, 3, 3}));
 
-TEST(SDL3DMipmap, BoxFilterAveragesCorrectly)
+TEST(SLAYER3DMipmap, BoxFilterAveragesCorrectly)
 {
     Uint8 pixels[] = {
         255, 0,   0,   255, /* red */
@@ -430,8 +430,8 @@ TEST(SDL3DMipmap, BoxFilterAveragesCorrectly)
         0,   0,   255, 255, /* blue */
         255, 255, 255, 255, /* white */
     };
-    sdl3d_texture2d tex = make_texture(pixels, 2, 2);
-    ASSERT_TRUE(sdl3d_set_texture_filter(&tex, SDL3D_TEXTURE_FILTER_TRILINEAR));
+    slayer3d_texture2d tex = make_texture(pixels, 2, 2);
+    ASSERT_TRUE(slayer3d_set_texture_filter(&tex, SLAYER3D_TEXTURE_FILTER_TRILINEAR));
     ASSERT_EQ(tex.mip_count, 2);
 
     const Uint8 *mip1 = tex.mip_levels[1].pixels;
@@ -441,18 +441,18 @@ TEST(SDL3DMipmap, BoxFilterAveragesCorrectly)
     EXPECT_NEAR(mip1[2], 128, 1);
     EXPECT_EQ(mip1[3], 255);
 
-    sdl3d_free_texture(&tex);
+    slayer3d_free_texture(&tex);
 }
 
-TEST(SDL3DMipmap, BoxFilterAsymmetric1xN)
+TEST(SLAYER3DMipmap, BoxFilterAsymmetric1xN)
 {
     /* 1x4 texture: when width is already 1, the box filter samples
      * the same column twice for the x-axis. */
     Uint8 pixels[] = {
         100, 100, 100, 255, 200, 200, 200, 255, 100, 100, 100, 255, 200, 200, 200, 255,
     };
-    sdl3d_texture2d tex = make_texture(pixels, 1, 4);
-    ASSERT_TRUE(sdl3d_set_texture_filter(&tex, SDL3D_TEXTURE_FILTER_TRILINEAR));
+    slayer3d_texture2d tex = make_texture(pixels, 1, 4);
+    ASSERT_TRUE(slayer3d_set_texture_filter(&tex, SLAYER3D_TEXTURE_FILTER_TRILINEAR));
 
     /* 1x4 → 1x2 → 1x1 = 3 levels. */
     ASSERT_EQ(tex.mip_count, 3);
@@ -464,39 +464,39 @@ TEST(SDL3DMipmap, BoxFilterAsymmetric1xN)
     /* Level 1, pixel 1: avg of rows 2,3 = (100+200)/2 = 150. */
     EXPECT_NEAR(tex.mip_levels[1].pixels[4], 150, 1);
 
-    sdl3d_free_texture(&tex);
+    slayer3d_free_texture(&tex);
 }
 
 /* ================================================================== */
 /* set_texture_filter edge cases                                      */
 /* ================================================================== */
 
-TEST(SDL3DTextureFilter, NullTextureRejected)
+TEST(SLAYER3DTextureFilter, NullTextureRejected)
 {
-    EXPECT_FALSE(sdl3d_set_texture_filter(nullptr, SDL3D_TEXTURE_FILTER_BILINEAR));
-    EXPECT_FALSE(sdl3d_set_texture_filter(nullptr, SDL3D_TEXTURE_FILTER_TRILINEAR));
+    EXPECT_FALSE(slayer3d_set_texture_filter(nullptr, SLAYER3D_TEXTURE_FILTER_BILINEAR));
+    EXPECT_FALSE(slayer3d_set_texture_filter(nullptr, SLAYER3D_TEXTURE_FILTER_TRILINEAR));
 }
 
 struct FilterSwitchCase
 {
     const char *label;
-    sdl3d_texture_filter from;
-    sdl3d_texture_filter to;
+    slayer3d_texture_filter from;
+    slayer3d_texture_filter to;
     bool expect_mips_after;
 };
 
-class SDL3DFilterSwitch : public ::testing::TestWithParam<FilterSwitchCase>
+class SLAYER3DFilterSwitch : public ::testing::TestWithParam<FilterSwitchCase>
 {
 };
 
-TEST_P(SDL3DFilterSwitch, MipStateCorrectAfterSwitch)
+TEST_P(SLAYER3DFilterSwitch, MipStateCorrectAfterSwitch)
 {
     const auto &c = GetParam();
     std::vector<Uint8> pixels(4 * 4 * 4, 128);
-    sdl3d_texture2d tex = make_texture(pixels.data(), 4, 4);
+    slayer3d_texture2d tex = make_texture(pixels.data(), 4, 4);
 
-    ASSERT_TRUE(sdl3d_set_texture_filter(&tex, c.from));
-    ASSERT_TRUE(sdl3d_set_texture_filter(&tex, c.to));
+    ASSERT_TRUE(slayer3d_set_texture_filter(&tex, c.from));
+    ASSERT_TRUE(slayer3d_set_texture_filter(&tex, c.to));
 
     if (c.expect_mips_after)
     {
@@ -509,62 +509,67 @@ TEST_P(SDL3DFilterSwitch, MipStateCorrectAfterSwitch)
         EXPECT_EQ(tex.mip_levels, nullptr) << c.label;
     }
 
-    sdl3d_free_texture(&tex);
+    slayer3d_free_texture(&tex);
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    Filter, SDL3DFilterSwitch,
-    ::testing::Values(
-        FilterSwitchCase{"bilinear→trilinear", SDL3D_TEXTURE_FILTER_BILINEAR, SDL3D_TEXTURE_FILTER_TRILINEAR, true},
-        FilterSwitchCase{"nearest→trilinear", SDL3D_TEXTURE_FILTER_NEAREST, SDL3D_TEXTURE_FILTER_TRILINEAR, true},
-        FilterSwitchCase{"trilinear→bilinear", SDL3D_TEXTURE_FILTER_TRILINEAR, SDL3D_TEXTURE_FILTER_BILINEAR, false},
-        FilterSwitchCase{"trilinear→nearest", SDL3D_TEXTURE_FILTER_TRILINEAR, SDL3D_TEXTURE_FILTER_NEAREST, false},
-        FilterSwitchCase{"trilinear→trilinear (idempotent)", SDL3D_TEXTURE_FILTER_TRILINEAR,
-                         SDL3D_TEXTURE_FILTER_TRILINEAR, true},
-        FilterSwitchCase{"bilinear→bilinear", SDL3D_TEXTURE_FILTER_BILINEAR, SDL3D_TEXTURE_FILTER_BILINEAR, false},
-        FilterSwitchCase{"nearest→nearest", SDL3D_TEXTURE_FILTER_NEAREST, SDL3D_TEXTURE_FILTER_NEAREST, false}));
+INSTANTIATE_TEST_SUITE_P(Filter, SLAYER3DFilterSwitch,
+                         ::testing::Values(FilterSwitchCase{"bilinear→trilinear", SLAYER3D_TEXTURE_FILTER_BILINEAR,
+                                                            SLAYER3D_TEXTURE_FILTER_TRILINEAR, true},
+                                           FilterSwitchCase{"nearest→trilinear", SLAYER3D_TEXTURE_FILTER_NEAREST,
+                                                            SLAYER3D_TEXTURE_FILTER_TRILINEAR, true},
+                                           FilterSwitchCase{"trilinear→bilinear", SLAYER3D_TEXTURE_FILTER_TRILINEAR,
+                                                            SLAYER3D_TEXTURE_FILTER_BILINEAR, false},
+                                           FilterSwitchCase{"trilinear→nearest", SLAYER3D_TEXTURE_FILTER_TRILINEAR,
+                                                            SLAYER3D_TEXTURE_FILTER_NEAREST, false},
+                                           FilterSwitchCase{"trilinear→trilinear (idempotent)",
+                                                            SLAYER3D_TEXTURE_FILTER_TRILINEAR,
+                                                            SLAYER3D_TEXTURE_FILTER_TRILINEAR, true},
+                                           FilterSwitchCase{"bilinear→bilinear", SLAYER3D_TEXTURE_FILTER_BILINEAR,
+                                                            SLAYER3D_TEXTURE_FILTER_BILINEAR, false},
+                                           FilterSwitchCase{"nearest→nearest", SLAYER3D_TEXTURE_FILTER_NEAREST,
+                                                            SLAYER3D_TEXTURE_FILTER_NEAREST, false}));
 
-TEST(SDL3DTextureFilter, RepeatedCycleDoesNotLeak)
+TEST(SLAYER3DTextureFilter, RepeatedCycleDoesNotLeak)
 {
     std::vector<Uint8> pixels(4 * 4 * 4, 128);
-    sdl3d_texture2d tex = make_texture(pixels.data(), 4, 4);
+    slayer3d_texture2d tex = make_texture(pixels.data(), 4, 4);
 
     for (int i = 0; i < 5; ++i)
     {
-        ASSERT_TRUE(sdl3d_set_texture_filter(&tex, SDL3D_TEXTURE_FILTER_TRILINEAR));
+        ASSERT_TRUE(slayer3d_set_texture_filter(&tex, SLAYER3D_TEXTURE_FILTER_TRILINEAR));
         EXPECT_GT(tex.mip_count, 0);
-        ASSERT_TRUE(sdl3d_set_texture_filter(&tex, SDL3D_TEXTURE_FILTER_NEAREST));
+        ASSERT_TRUE(slayer3d_set_texture_filter(&tex, SLAYER3D_TEXTURE_FILTER_NEAREST));
         EXPECT_EQ(tex.mip_count, 0);
     }
 
-    sdl3d_free_texture(&tex);
+    slayer3d_free_texture(&tex);
 }
 
-TEST(SDL3DTextureFilter, InvalidFilterValueRejected)
+TEST(SLAYER3DTextureFilter, InvalidFilterValueRejected)
 {
     std::vector<Uint8> pixels(4, 255);
-    sdl3d_texture2d tex = make_texture(pixels.data(), 1, 1);
-    EXPECT_FALSE(sdl3d_set_texture_filter(&tex, (sdl3d_texture_filter)-1));
-    EXPECT_FALSE(sdl3d_set_texture_filter(&tex, (sdl3d_texture_filter)3));
-    EXPECT_FALSE(sdl3d_set_texture_filter(&tex, (sdl3d_texture_filter)99));
-    sdl3d_free_texture(&tex);
+    slayer3d_texture2d tex = make_texture(pixels.data(), 1, 1);
+    EXPECT_FALSE(slayer3d_set_texture_filter(&tex, (slayer3d_texture_filter)-1));
+    EXPECT_FALSE(slayer3d_set_texture_filter(&tex, (slayer3d_texture_filter)3));
+    EXPECT_FALSE(slayer3d_set_texture_filter(&tex, (slayer3d_texture_filter)99));
+    slayer3d_free_texture(&tex);
 }
 
-TEST(SDL3DTextureFilter, FreeWithActiveMipChain)
+TEST(SLAYER3DTextureFilter, FreeWithActiveMipChain)
 {
     std::vector<Uint8> pixels(8 * 8 * 4, 200);
-    sdl3d_texture2d tex = make_texture(pixels.data(), 8, 8);
-    ASSERT_TRUE(sdl3d_set_texture_filter(&tex, SDL3D_TEXTURE_FILTER_TRILINEAR));
+    slayer3d_texture2d tex = make_texture(pixels.data(), 8, 8);
+    ASSERT_TRUE(slayer3d_set_texture_filter(&tex, SLAYER3D_TEXTURE_FILTER_TRILINEAR));
     EXPECT_EQ(tex.mip_count, 4);
     /* Free while mips are active — must not leak. */
-    sdl3d_free_texture(&tex);
+    slayer3d_free_texture(&tex);
     EXPECT_EQ(tex.pixels, nullptr);
     EXPECT_EQ(tex.mip_levels, nullptr);
     EXPECT_EQ(tex.mip_count, 0);
 }
 
 /* ================================================================== */
-/* Trilinear sampling via sdl3d_texture_sample_rgba                   */
+/* Trilinear sampling via slayer3d_texture_sample_rgba                   */
 /* ================================================================== */
 
 /*
@@ -572,7 +577,7 @@ TEST(SDL3DTextureFilter, FreeWithActiveMipChain)
  * level 1 (2x2) will be solid red, level 2 (1x1) will be solid red.
  * This lets us verify sampling returns red at any LOD.
  */
-TEST(SDL3DTrilinearSampling, SolidColorSameAtAllLODs)
+TEST(SLAYER3DTrilinearSampling, SolidColorSameAtAllLODs)
 {
     std::vector<Uint8> pixels(4 * 4 * 4);
     for (size_t i = 0; i < pixels.size(); i += 4)
@@ -582,21 +587,21 @@ TEST(SDL3DTrilinearSampling, SolidColorSameAtAllLODs)
         pixels[i + 2] = 0;
         pixels[i + 3] = 255;
     }
-    sdl3d_texture2d tex = make_texture(pixels.data(), 4, 4);
-    ASSERT_TRUE(sdl3d_set_texture_filter(&tex, SDL3D_TEXTURE_FILTER_TRILINEAR));
+    slayer3d_texture2d tex = make_texture(pixels.data(), 4, 4);
+    ASSERT_TRUE(slayer3d_set_texture_filter(&tex, SLAYER3D_TEXTURE_FILTER_TRILINEAR));
 
     float lods[] = {0.0f, 0.5f, 1.0f, 1.5f, 2.0f};
     for (float lod : lods)
     {
         float r, g, b, a;
-        sdl3d_texture_sample_rgba(&tex, 0.5f, 0.5f, lod, &r, &g, &b, &a);
+        slayer3d_texture_sample_rgba(&tex, 0.5f, 0.5f, lod, &r, &g, &b, &a);
         EXPECT_NEAR(r, 1.0f, 0.02f) << "LOD=" << lod;
         EXPECT_NEAR(g, 0.0f, 0.02f) << "LOD=" << lod;
         EXPECT_NEAR(b, 0.0f, 0.02f) << "LOD=" << lod;
         EXPECT_NEAR(a, 1.0f, 0.02f) << "LOD=" << lod;
     }
 
-    sdl3d_free_texture(&tex);
+    slayer3d_free_texture(&tex);
 }
 
 struct LODClampCase
@@ -605,19 +610,19 @@ struct LODClampCase
     float lod;
 };
 
-class SDL3DTrilinearLODClamp : public ::testing::TestWithParam<LODClampCase>
+class SLAYER3DTrilinearLODClamp : public ::testing::TestWithParam<LODClampCase>
 {
 };
 
-TEST_P(SDL3DTrilinearLODClamp, ClampedLODDoesNotCrash)
+TEST_P(SLAYER3DTrilinearLODClamp, ClampedLODDoesNotCrash)
 {
     const auto &c = GetParam();
     std::vector<Uint8> pixels(4 * 4 * 4, 128);
-    sdl3d_texture2d tex = make_texture(pixels.data(), 4, 4);
-    ASSERT_TRUE(sdl3d_set_texture_filter(&tex, SDL3D_TEXTURE_FILTER_TRILINEAR));
+    slayer3d_texture2d tex = make_texture(pixels.data(), 4, 4);
+    ASSERT_TRUE(slayer3d_set_texture_filter(&tex, SLAYER3D_TEXTURE_FILTER_TRILINEAR));
 
     float r, g, b, a;
-    sdl3d_texture_sample_rgba(&tex, 0.5f, 0.5f, c.lod, &r, &g, &b, &a);
+    slayer3d_texture_sample_rgba(&tex, 0.5f, 0.5f, c.lod, &r, &g, &b, &a);
 
     /* All channels should be ~0.502 (128/255). Just verify no crash and sane range. */
     EXPECT_GE(r, 0.0f) << c.label;
@@ -625,17 +630,17 @@ TEST_P(SDL3DTrilinearLODClamp, ClampedLODDoesNotCrash)
     EXPECT_GE(a, 0.0f) << c.label;
     EXPECT_LE(a, 1.0f) << c.label;
 
-    sdl3d_free_texture(&tex);
+    slayer3d_free_texture(&tex);
 }
 
-INSTANTIATE_TEST_SUITE_P(Sampling, SDL3DTrilinearLODClamp,
+INSTANTIATE_TEST_SUITE_P(Sampling, SLAYER3DTrilinearLODClamp,
                          ::testing::Values(LODClampCase{"LOD -1.0", -1.0f}, LODClampCase{"LOD -100.0", -100.0f},
                                            LODClampCase{"LOD 0.0", 0.0f}, LODClampCase{"LOD 0.5", 0.5f},
                                            LODClampCase{"LOD 1.0", 1.0f}, LODClampCase{"LOD 1.999", 1.999f},
                                            LODClampCase{"LOD 2.0 (max)", 2.0f}, LODClampCase{"LOD 10.0 (over)", 10.0f},
                                            LODClampCase{"LOD 1000.0", 1000.0f}));
 
-TEST(SDL3DTrilinearSampling, LODInterpolatesBetweenLevels)
+TEST(SLAYER3DTrilinearSampling, LODInterpolatesBetweenLevels)
 {
     /*
      * 2x2 texture: level 0 is solid white (255,255,255,255),
@@ -654,21 +659,21 @@ TEST(SDL3DTrilinearSampling, LODInterpolatesBetweenLevels)
             pixels[idx + 3] = 255;
         }
 
-    sdl3d_texture2d tex = make_texture(pixels, 4, 4);
-    ASSERT_TRUE(sdl3d_set_texture_filter(&tex, SDL3D_TEXTURE_FILTER_TRILINEAR));
+    slayer3d_texture2d tex = make_texture(pixels, 4, 4);
+    ASSERT_TRUE(slayer3d_set_texture_filter(&tex, SLAYER3D_TEXTURE_FILTER_TRILINEAR));
     ASSERT_EQ(tex.mip_count, 3);
 
     /* Sample center at LOD 0 — should be near the boundary of black/white. */
     float r0, g0, b0, a0;
-    sdl3d_texture_sample_rgba(&tex, 0.5f, 0.5f, 0.0f, &r0, &g0, &b0, &a0);
+    slayer3d_texture_sample_rgba(&tex, 0.5f, 0.5f, 0.0f, &r0, &g0, &b0, &a0);
 
     /* Sample center at LOD 1 — level 1 is 2x2, more averaged. */
     float r1, g1, b1, a1;
-    sdl3d_texture_sample_rgba(&tex, 0.5f, 0.5f, 1.0f, &r1, &g1, &b1, &a1);
+    slayer3d_texture_sample_rgba(&tex, 0.5f, 0.5f, 1.0f, &r1, &g1, &b1, &a1);
 
     /* Sample at LOD 0.5 — should be between LOD 0 and LOD 1 results. */
     float rh, gh, bh, ah;
-    sdl3d_texture_sample_rgba(&tex, 0.5f, 0.5f, 0.5f, &rh, &gh, &bh, &ah);
+    slayer3d_texture_sample_rgba(&tex, 0.5f, 0.5f, 0.5f, &rh, &gh, &bh, &ah);
 
     /* The interpolated value should be between the two endpoints (or equal). */
     float lo = std::min(r0, r1);
@@ -676,26 +681,26 @@ TEST(SDL3DTrilinearSampling, LODInterpolatesBetweenLevels)
     EXPECT_GE(rh, lo - 0.02f);
     EXPECT_LE(rh, hi + 0.02f);
 
-    sdl3d_free_texture(&tex);
+    slayer3d_free_texture(&tex);
 }
 
-TEST(SDL3DTrilinearSampling, FallsBackToNonTrilinearFor1x1)
+TEST(SLAYER3DTrilinearSampling, FallsBackToNonTrilinearFor1x1)
 {
     /* 1x1 texture with trilinear: mip_count=1, so the trilinear path
      * should fall through to bilinear/nearest. */
     Uint8 pixels[] = {42, 84, 126, 255};
-    sdl3d_texture2d tex = make_texture(pixels, 1, 1);
-    ASSERT_TRUE(sdl3d_set_texture_filter(&tex, SDL3D_TEXTURE_FILTER_TRILINEAR));
+    slayer3d_texture2d tex = make_texture(pixels, 1, 1);
+    ASSERT_TRUE(slayer3d_set_texture_filter(&tex, SLAYER3D_TEXTURE_FILTER_TRILINEAR));
     EXPECT_EQ(tex.mip_count, 1);
 
     float r, g, b, a;
-    sdl3d_texture_sample_rgba(&tex, 0.5f, 0.5f, 0.0f, &r, &g, &b, &a);
+    slayer3d_texture_sample_rgba(&tex, 0.5f, 0.5f, 0.0f, &r, &g, &b, &a);
     EXPECT_NEAR(r, 42.0f / 255.0f, 0.02f);
     EXPECT_NEAR(g, 84.0f / 255.0f, 0.02f);
     EXPECT_NEAR(b, 126.0f / 255.0f, 0.02f);
     EXPECT_NEAR(a, 1.0f, 0.02f);
 
-    sdl3d_free_texture(&tex);
+    slayer3d_free_texture(&tex);
 }
 
 /* ================================================================== */
@@ -705,27 +710,27 @@ TEST(SDL3DTrilinearSampling, FallsBackToNonTrilinearFor1x1)
 struct SamplerCase
 {
     const char *label;
-    sdl3d_texture_filter filter;
+    slayer3d_texture_filter filter;
     float u;
     float v;
 };
 
-class SDL3DSamplerPaths : public ::testing::TestWithParam<SamplerCase>
+class SLAYER3DSamplerPaths : public ::testing::TestWithParam<SamplerCase>
 {
 };
 
-TEST_P(SDL3DSamplerPaths, ReturnsValidColor)
+TEST_P(SLAYER3DSamplerPaths, ReturnsValidColor)
 {
     const auto &c = GetParam();
     /* 2x2 checkerboard: (0,0)=red, (1,0)=green, (0,1)=blue, (1,1)=white. */
     Uint8 pixels[] = {
         255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
     };
-    sdl3d_texture2d tex = make_texture(pixels, 2, 2);
-    ASSERT_TRUE(sdl3d_set_texture_filter(&tex, c.filter));
+    slayer3d_texture2d tex = make_texture(pixels, 2, 2);
+    ASSERT_TRUE(slayer3d_set_texture_filter(&tex, c.filter));
 
     float r, g, b, a;
-    sdl3d_texture_sample_rgba(&tex, c.u, c.v, 0.0f, &r, &g, &b, &a);
+    slayer3d_texture_sample_rgba(&tex, c.u, c.v, 0.0f, &r, &g, &b, &a);
     EXPECT_GE(r, 0.0f) << c.label;
     EXPECT_LE(r, 1.0f) << c.label;
     EXPECT_GE(g, 0.0f) << c.label;
@@ -735,27 +740,27 @@ TEST_P(SDL3DSamplerPaths, ReturnsValidColor)
     EXPECT_GE(a, 0.0f) << c.label;
     EXPECT_LE(a, 1.0f) << c.label;
 
-    sdl3d_free_texture(&tex);
+    slayer3d_free_texture(&tex);
 }
 
 INSTANTIATE_TEST_SUITE_P(
-    Sampling, SDL3DSamplerPaths,
-    ::testing::Values(SamplerCase{"nearest center", SDL3D_TEXTURE_FILTER_NEAREST, 0.5f, 0.5f},
-                      SamplerCase{"nearest origin", SDL3D_TEXTURE_FILTER_NEAREST, 0.0f, 0.0f},
-                      SamplerCase{"nearest (1,1)", SDL3D_TEXTURE_FILTER_NEAREST, 1.0f, 1.0f},
-                      SamplerCase{"bilinear center", SDL3D_TEXTURE_FILTER_BILINEAR, 0.5f, 0.5f},
-                      SamplerCase{"bilinear origin", SDL3D_TEXTURE_FILTER_BILINEAR, 0.0f, 0.0f},
-                      SamplerCase{"bilinear (1,1)", SDL3D_TEXTURE_FILTER_BILINEAR, 1.0f, 1.0f},
-                      SamplerCase{"bilinear negative UV", SDL3D_TEXTURE_FILTER_BILINEAR, -0.5f, -0.5f},
-                      SamplerCase{"bilinear UV > 1", SDL3D_TEXTURE_FILTER_BILINEAR, 1.5f, 1.5f},
-                      SamplerCase{"nearest negative UV", SDL3D_TEXTURE_FILTER_NEAREST, -0.25f, -0.25f},
-                      SamplerCase{"nearest UV > 1", SDL3D_TEXTURE_FILTER_NEAREST, 2.0f, 2.0f}));
+    Sampling, SLAYER3DSamplerPaths,
+    ::testing::Values(SamplerCase{"nearest center", SLAYER3D_TEXTURE_FILTER_NEAREST, 0.5f, 0.5f},
+                      SamplerCase{"nearest origin", SLAYER3D_TEXTURE_FILTER_NEAREST, 0.0f, 0.0f},
+                      SamplerCase{"nearest (1,1)", SLAYER3D_TEXTURE_FILTER_NEAREST, 1.0f, 1.0f},
+                      SamplerCase{"bilinear center", SLAYER3D_TEXTURE_FILTER_BILINEAR, 0.5f, 0.5f},
+                      SamplerCase{"bilinear origin", SLAYER3D_TEXTURE_FILTER_BILINEAR, 0.0f, 0.0f},
+                      SamplerCase{"bilinear (1,1)", SLAYER3D_TEXTURE_FILTER_BILINEAR, 1.0f, 1.0f},
+                      SamplerCase{"bilinear negative UV", SLAYER3D_TEXTURE_FILTER_BILINEAR, -0.5f, -0.5f},
+                      SamplerCase{"bilinear UV > 1", SLAYER3D_TEXTURE_FILTER_BILINEAR, 1.5f, 1.5f},
+                      SamplerCase{"nearest negative UV", SLAYER3D_TEXTURE_FILTER_NEAREST, -0.25f, -0.25f},
+                      SamplerCase{"nearest UV > 1", SLAYER3D_TEXTURE_FILTER_NEAREST, 2.0f, 2.0f}));
 
 /* ================================================================== */
 /* Wrap mode interaction with sampling                                */
 /* ================================================================== */
 
-TEST(SDL3DTextureSampling, RepeatWrapWithTrilinear)
+TEST(SLAYER3DTextureSampling, RepeatWrapWithTrilinear)
 {
     /* 4x4 solid green texture with REPEAT wrap. */
     std::vector<Uint8> pixels(4 * 4 * 4);
@@ -766,20 +771,20 @@ TEST(SDL3DTextureSampling, RepeatWrapWithTrilinear)
         pixels[i + 2] = 0;
         pixels[i + 3] = 255;
     }
-    sdl3d_texture2d tex = make_texture(pixels.data(), 4, 4);
-    ASSERT_TRUE(sdl3d_set_texture_wrap(&tex, SDL3D_TEXTURE_WRAP_REPEAT, SDL3D_TEXTURE_WRAP_REPEAT));
-    ASSERT_TRUE(sdl3d_set_texture_filter(&tex, SDL3D_TEXTURE_FILTER_TRILINEAR));
+    slayer3d_texture2d tex = make_texture(pixels.data(), 4, 4);
+    ASSERT_TRUE(slayer3d_set_texture_wrap(&tex, SLAYER3D_TEXTURE_WRAP_REPEAT, SLAYER3D_TEXTURE_WRAP_REPEAT));
+    ASSERT_TRUE(slayer3d_set_texture_filter(&tex, SLAYER3D_TEXTURE_FILTER_TRILINEAR));
 
     /* Sample with UV outside [0,1] — repeat should wrap. */
     float r, g, b, a;
-    sdl3d_texture_sample_rgba(&tex, 2.5f, -0.5f, 0.5f, &r, &g, &b, &a);
+    slayer3d_texture_sample_rgba(&tex, 2.5f, -0.5f, 0.5f, &r, &g, &b, &a);
     EXPECT_NEAR(g, 200.0f / 255.0f, 0.05f);
     EXPECT_NEAR(r, 0.0f, 0.05f);
 
-    sdl3d_free_texture(&tex);
+    slayer3d_free_texture(&tex);
 }
 
-TEST(SDL3DTextureSampling, ClampWrapWithTrilinear)
+TEST(SLAYER3DTextureSampling, ClampWrapWithTrilinear)
 {
     /* 4x4 solid blue texture with CLAMP wrap. */
     std::vector<Uint8> pixels(4 * 4 * 4);
@@ -790,15 +795,15 @@ TEST(SDL3DTextureSampling, ClampWrapWithTrilinear)
         pixels[i + 2] = 200;
         pixels[i + 3] = 255;
     }
-    sdl3d_texture2d tex = make_texture(pixels.data(), 4, 4);
+    slayer3d_texture2d tex = make_texture(pixels.data(), 4, 4);
     /* Clamp is the default, but be explicit. */
-    ASSERT_TRUE(sdl3d_set_texture_wrap(&tex, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP));
-    ASSERT_TRUE(sdl3d_set_texture_filter(&tex, SDL3D_TEXTURE_FILTER_TRILINEAR));
+    ASSERT_TRUE(slayer3d_set_texture_wrap(&tex, SLAYER3D_TEXTURE_WRAP_CLAMP, SLAYER3D_TEXTURE_WRAP_CLAMP));
+    ASSERT_TRUE(slayer3d_set_texture_filter(&tex, SLAYER3D_TEXTURE_FILTER_TRILINEAR));
 
     float r, g, b, a;
-    sdl3d_texture_sample_rgba(&tex, 5.0f, -3.0f, 1.0f, &r, &g, &b, &a);
+    slayer3d_texture_sample_rgba(&tex, 5.0f, -3.0f, 1.0f, &r, &g, &b, &a);
     EXPECT_NEAR(b, 200.0f / 255.0f, 0.05f);
     EXPECT_NEAR(r, 0.0f, 0.05f);
 
-    sdl3d_free_texture(&tex);
+    slayer3d_free_texture(&tex);
 }

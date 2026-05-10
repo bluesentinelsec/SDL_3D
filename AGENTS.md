@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file gives working guidance for AI agents maintaining SDL_3D.
+This file gives working guidance for AI agents maintaining Slayer3D.
 
 ## Core expectations
 

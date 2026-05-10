@@ -16,13 +16,13 @@ not have a demo-specific C host; gameplay, presentation, controls, interactions,
 and scene flow are authored in JSON and Lua.
 
 ```sh
-./build/debug/sdl3d_runner --root demos/doom_level/data --data asset://doom_level.game.json
+./build/debug/slayer3d_runner --root demos/doom_level/data --data asset://doom_level.game.json
 ```
 
 To start directly in the play scene while iterating:
 
 ```sh
-./build/debug/sdl3d_runner \
+./build/debug/slayer3d_runner \
   --root demos/doom_level/data \
   --data asset://doom_level.game.json \
   --scene scene.doom_level.play

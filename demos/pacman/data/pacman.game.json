@@ -1,5 +1,5 @@
 {
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "imports": [
     { "path": "fragments/assets.json", "sections": ["assets"] },
     { "path": "fragments/scripts.json", "sections": ["scripts", "adapters"] },
@@ -16,7 +16,7 @@
     "description": "Data-authored 3D maze chase demo using grid maps, pooled actors, Lua gameplay rules, dynamic lighting, and particles."
   },
   "app": {
-    "title": "SDL3D Pac-Man",
+    "title": "Slayer 3D Pac-Man",
     "logical_width": 1280,
     "logical_height": 720,
     "backend": "opengl",

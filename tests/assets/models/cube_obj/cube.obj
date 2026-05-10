@@ -1,5 +1,5 @@
 # Unit cube centered at the origin (side length 1).
-# Authored for SDL3D tests. Licensed under the SDL3D repository license.
+# Authored for SLAYER3D tests. Licensed under the SLAYER3D repository license.
 mtllib cube.mtl
 
 o Cube

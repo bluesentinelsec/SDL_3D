@@ -1,15 +1,15 @@
-#include "sdl3d/collision.h"
+#include "slayer3d/collision.h"
 
 #include <SDL3/SDL_stdinc.h>
 
-#include "sdl3d/math.h"
+#include "slayer3d/math.h"
 
-static float sdl3d_col_minf(float a, float b)
+static float slayer3d_col_minf(float a, float b)
 {
     return a < b ? a : b;
 }
 
-static float sdl3d_col_maxf(float a, float b)
+static float slayer3d_col_maxf(float a, float b)
 {
     return a > b ? a : b;
 }
@@ -18,13 +18,13 @@ static float sdl3d_col_maxf(float a, float b)
 /* Primitive-primitive tests                                           */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_check_aabb_aabb(sdl3d_bounding_box a, sdl3d_bounding_box b)
+bool slayer3d_check_aabb_aabb(slayer3d_bounding_box a, slayer3d_bounding_box b)
 {
     return a.min.x <= b.max.x && a.max.x >= b.min.x && a.min.y <= b.max.y && a.max.y >= b.min.y && a.min.z <= b.max.z &&
            a.max.z >= b.min.z;
 }
 
-bool sdl3d_check_sphere_sphere(sdl3d_sphere a, sdl3d_sphere b)
+bool slayer3d_check_sphere_sphere(slayer3d_sphere a, slayer3d_sphere b)
 {
     float dx = a.center.x - b.center.x;
     float dy = a.center.y - b.center.y;
@@ -34,7 +34,7 @@ bool sdl3d_check_sphere_sphere(sdl3d_sphere a, sdl3d_sphere b)
     return dist_sq <= r_sum * r_sum;
 }
 
-bool sdl3d_sphere_intersects_frustum(sdl3d_sphere sphere, float planes[6][4])
+bool slayer3d_sphere_intersects_frustum(slayer3d_sphere sphere, float planes[6][4])
 {
     if (planes == NULL)
     {
@@ -52,12 +52,12 @@ bool sdl3d_sphere_intersects_frustum(sdl3d_sphere sphere, float planes[6][4])
     return true;
 }
 
-bool sdl3d_check_aabb_sphere(sdl3d_bounding_box box, sdl3d_sphere sphere)
+bool slayer3d_check_aabb_sphere(slayer3d_bounding_box box, slayer3d_sphere sphere)
 {
     /* Find the closest point on the AABB to the sphere center. */
-    float cx = sdl3d_col_maxf(box.min.x, sdl3d_col_minf(sphere.center.x, box.max.x));
-    float cy = sdl3d_col_maxf(box.min.y, sdl3d_col_minf(sphere.center.y, box.max.y));
-    float cz = sdl3d_col_maxf(box.min.z, sdl3d_col_minf(sphere.center.z, box.max.z));
+    float cx = slayer3d_col_maxf(box.min.x, slayer3d_col_minf(sphere.center.x, box.max.x));
+    float cy = slayer3d_col_maxf(box.min.y, slayer3d_col_minf(sphere.center.y, box.max.y));
+    float cz = slayer3d_col_maxf(box.min.z, slayer3d_col_minf(sphere.center.z, box.max.z));
     float dx = cx - sphere.center.x;
     float dy = cy - sphere.center.y;
     float dz = cz - sphere.center.z;
@@ -68,14 +68,14 @@ bool sdl3d_check_aabb_sphere(sdl3d_bounding_box box, sdl3d_sphere sphere)
 /* Ray tests                                                           */
 /* ------------------------------------------------------------------ */
 
-static sdl3d_ray_hit sdl3d_no_hit(void)
+static slayer3d_ray_hit slayer3d_no_hit(void)
 {
-    sdl3d_ray_hit h;
+    slayer3d_ray_hit h;
     SDL_zerop(&h);
     return h;
 }
 
-sdl3d_ray_hit sdl3d_ray_vs_aabb(sdl3d_ray ray, sdl3d_bounding_box box)
+slayer3d_ray_hit slayer3d_ray_vs_aabb(slayer3d_ray ray, slayer3d_bounding_box box)
 {
     float tmin, tmax, tymin, tymax, tzmin, tzmax;
     float inv_dx = (ray.direction.x != 0.0f) ? 1.0f / ray.direction.x : 1e30f;
@@ -106,10 +106,10 @@ sdl3d_ray_hit sdl3d_ray_vs_aabb(sdl3d_ray ray, sdl3d_bounding_box box)
 
     if (tmin > tymax || tymin > tmax)
     {
-        return sdl3d_no_hit();
+        return slayer3d_no_hit();
     }
-    tmin = sdl3d_col_maxf(tmin, tymin);
-    tmax = sdl3d_col_minf(tmax, tymax);
+    tmin = slayer3d_col_maxf(tmin, tymin);
+    tmax = slayer3d_col_minf(tmax, tymax);
 
     if (inv_dz >= 0.0f)
     {
@@ -124,18 +124,18 @@ sdl3d_ray_hit sdl3d_ray_vs_aabb(sdl3d_ray ray, sdl3d_bounding_box box)
 
     if (tmin > tzmax || tzmin > tmax)
     {
-        return sdl3d_no_hit();
+        return slayer3d_no_hit();
     }
-    tmin = sdl3d_col_maxf(tmin, tzmin);
-    tmax = sdl3d_col_minf(tmax, tzmax);
+    tmin = slayer3d_col_maxf(tmin, tzmin);
+    tmax = slayer3d_col_minf(tmax, tzmax);
 
     if (tmax < 0.0f)
     {
-        return sdl3d_no_hit();
+        return slayer3d_no_hit();
     }
 
     {
-        sdl3d_ray_hit h;
+        slayer3d_ray_hit h;
         float t = tmin >= 0.0f ? tmin : tmax;
         h.hit = true;
         h.distance = t;
@@ -143,12 +143,12 @@ sdl3d_ray_hit sdl3d_ray_vs_aabb(sdl3d_ray ray, sdl3d_bounding_box box)
         h.point.y = ray.position.y + ray.direction.y * t;
         h.point.z = ray.position.z + ray.direction.z * t;
         /* Approximate normal from which face was hit. */
-        h.normal = sdl3d_vec3_make(0, 0, 0);
+        h.normal = slayer3d_vec3_make(0, 0, 0);
         return h;
     }
 }
 
-sdl3d_ray_hit sdl3d_ray_vs_sphere(sdl3d_ray ray, sdl3d_sphere sphere)
+slayer3d_ray_hit slayer3d_ray_vs_sphere(slayer3d_ray ray, slayer3d_sphere sphere)
 {
     float ox = ray.position.x - sphere.center.x;
     float oy = ray.position.y - sphere.center.y;
@@ -160,7 +160,7 @@ sdl3d_ray_hit sdl3d_ray_vs_sphere(sdl3d_ray ray, sdl3d_sphere sphere)
 
     if (disc < 0.0f)
     {
-        return sdl3d_no_hit();
+        return slayer3d_no_hit();
     }
 
     {
@@ -168,7 +168,7 @@ sdl3d_ray_hit sdl3d_ray_vs_sphere(sdl3d_ray ray, sdl3d_sphere sphere)
         float t0 = (-b - sqrt_disc) / (2.0f * a);
         float t1 = (-b + sqrt_disc) / (2.0f * a);
         float t;
-        sdl3d_ray_hit h;
+        slayer3d_ray_hit h;
 
         if (t0 >= 0.0f)
         {
@@ -180,7 +180,7 @@ sdl3d_ray_hit sdl3d_ray_vs_sphere(sdl3d_ray ray, sdl3d_sphere sphere)
         }
         else
         {
-            return sdl3d_no_hit();
+            return slayer3d_no_hit();
         }
 
         h.hit = true;
@@ -188,48 +188,48 @@ sdl3d_ray_hit sdl3d_ray_vs_sphere(sdl3d_ray ray, sdl3d_sphere sphere)
         h.point.x = ray.position.x + ray.direction.x * t;
         h.point.y = ray.position.y + ray.direction.y * t;
         h.point.z = ray.position.z + ray.direction.z * t;
-        h.normal = sdl3d_vec3_normalize(sdl3d_vec3_sub(h.point, sphere.center));
+        h.normal = slayer3d_vec3_normalize(slayer3d_vec3_sub(h.point, sphere.center));
         return h;
     }
 }
 
-sdl3d_ray_hit sdl3d_ray_vs_triangle(sdl3d_ray ray, sdl3d_vec3 v0, sdl3d_vec3 v1, sdl3d_vec3 v2)
+slayer3d_ray_hit slayer3d_ray_vs_triangle(slayer3d_ray ray, slayer3d_vec3 v0, slayer3d_vec3 v1, slayer3d_vec3 v2)
 {
     /* Möller–Trumbore intersection algorithm. */
-    sdl3d_vec3 e1 = sdl3d_vec3_sub(v1, v0);
-    sdl3d_vec3 e2 = sdl3d_vec3_sub(v2, v0);
-    sdl3d_vec3 h = sdl3d_vec3_cross(ray.direction, e2);
-    float a = sdl3d_vec3_dot(e1, h);
+    slayer3d_vec3 e1 = slayer3d_vec3_sub(v1, v0);
+    slayer3d_vec3 e2 = slayer3d_vec3_sub(v2, v0);
+    slayer3d_vec3 h = slayer3d_vec3_cross(ray.direction, e2);
+    float a = slayer3d_vec3_dot(e1, h);
 
     if (a > -1e-7f && a < 1e-7f)
     {
-        return sdl3d_no_hit();
+        return slayer3d_no_hit();
     }
 
     {
         float f = 1.0f / a;
-        sdl3d_vec3 s = sdl3d_vec3_sub(ray.position, v0);
-        float u = f * sdl3d_vec3_dot(s, h);
-        sdl3d_vec3 q;
+        slayer3d_vec3 s = slayer3d_vec3_sub(ray.position, v0);
+        float u = f * slayer3d_vec3_dot(s, h);
+        slayer3d_vec3 q;
         float v, t;
-        sdl3d_ray_hit hit;
+        slayer3d_ray_hit hit;
 
         if (u < 0.0f || u > 1.0f)
         {
-            return sdl3d_no_hit();
+            return slayer3d_no_hit();
         }
 
-        q = sdl3d_vec3_cross(s, e1);
-        v = f * sdl3d_vec3_dot(ray.direction, q);
+        q = slayer3d_vec3_cross(s, e1);
+        v = f * slayer3d_vec3_dot(ray.direction, q);
         if (v < 0.0f || u + v > 1.0f)
         {
-            return sdl3d_no_hit();
+            return slayer3d_no_hit();
         }
 
-        t = f * sdl3d_vec3_dot(e2, q);
+        t = f * slayer3d_vec3_dot(e2, q);
         if (t < 0.0f)
         {
-            return sdl3d_no_hit();
+            return slayer3d_no_hit();
         }
 
         hit.hit = true;
@@ -237,7 +237,7 @@ sdl3d_ray_hit sdl3d_ray_vs_triangle(sdl3d_ray ray, sdl3d_vec3 v0, sdl3d_vec3 v1,
         hit.point.x = ray.position.x + ray.direction.x * t;
         hit.point.y = ray.position.y + ray.direction.y * t;
         hit.point.z = ray.position.z + ray.direction.z * t;
-        hit.normal = sdl3d_vec3_normalize(sdl3d_vec3_cross(e1, e2));
+        hit.normal = slayer3d_vec3_normalize(slayer3d_vec3_cross(e1, e2));
         return hit;
     }
 }
@@ -246,9 +246,9 @@ sdl3d_ray_hit sdl3d_ray_vs_triangle(sdl3d_ray ray, sdl3d_vec3 v0, sdl3d_vec3 v1,
 /* Ray-mesh (brute-force)                                              */
 /* ------------------------------------------------------------------ */
 
-sdl3d_ray_hit sdl3d_ray_vs_mesh(sdl3d_ray ray, const sdl3d_mesh *mesh)
+slayer3d_ray_hit slayer3d_ray_vs_mesh(slayer3d_ray ray, const slayer3d_mesh *mesh)
 {
-    sdl3d_ray_hit closest = sdl3d_no_hit();
+    slayer3d_ray_hit closest = slayer3d_no_hit();
     int tri_count;
     bool indexed;
 
@@ -265,19 +265,19 @@ sdl3d_ray_hit sdl3d_ray_vs_mesh(sdl3d_ray ray, const sdl3d_mesh *mesh)
         unsigned int i0 = indexed ? mesh->indices[i * 3 + 0] : (unsigned int)(i * 3 + 0);
         unsigned int i1 = indexed ? mesh->indices[i * 3 + 1] : (unsigned int)(i * 3 + 1);
         unsigned int i2 = indexed ? mesh->indices[i * 3 + 2] : (unsigned int)(i * 3 + 2);
-        sdl3d_vec3 v0, v1, v2;
-        sdl3d_ray_hit h;
+        slayer3d_vec3 v0, v1, v2;
+        slayer3d_ray_hit h;
 
         if ((int)i0 >= mesh->vertex_count || (int)i1 >= mesh->vertex_count || (int)i2 >= mesh->vertex_count)
         {
             continue;
         }
 
-        v0 = sdl3d_vec3_make(mesh->positions[i0 * 3], mesh->positions[i0 * 3 + 1], mesh->positions[i0 * 3 + 2]);
-        v1 = sdl3d_vec3_make(mesh->positions[i1 * 3], mesh->positions[i1 * 3 + 1], mesh->positions[i1 * 3 + 2]);
-        v2 = sdl3d_vec3_make(mesh->positions[i2 * 3], mesh->positions[i2 * 3 + 1], mesh->positions[i2 * 3 + 2]);
+        v0 = slayer3d_vec3_make(mesh->positions[i0 * 3], mesh->positions[i0 * 3 + 1], mesh->positions[i0 * 3 + 2]);
+        v1 = slayer3d_vec3_make(mesh->positions[i1 * 3], mesh->positions[i1 * 3 + 1], mesh->positions[i1 * 3 + 2]);
+        v2 = slayer3d_vec3_make(mesh->positions[i2 * 3], mesh->positions[i2 * 3 + 1], mesh->positions[i2 * 3 + 2]);
 
-        h = sdl3d_ray_vs_triangle(ray, v0, v1, v2);
+        h = slayer3d_ray_vs_triangle(ray, v0, v1, v2);
         if (h.hit && (!closest.hit || h.distance < closest.distance))
         {
             closest = h;
@@ -291,18 +291,18 @@ sdl3d_ray_hit sdl3d_ray_vs_mesh(sdl3d_ray ray, const sdl3d_mesh *mesh)
 /* Bounding volume helpers                                             */
 /* ------------------------------------------------------------------ */
 
-sdl3d_bounding_box sdl3d_compute_mesh_aabb(const sdl3d_mesh *mesh)
+slayer3d_bounding_box slayer3d_compute_mesh_aabb(const slayer3d_mesh *mesh)
 {
-    sdl3d_bounding_box box;
-    box.min = sdl3d_vec3_make(0, 0, 0);
-    box.max = sdl3d_vec3_make(0, 0, 0);
+    slayer3d_bounding_box box;
+    box.min = slayer3d_vec3_make(0, 0, 0);
+    box.max = slayer3d_vec3_make(0, 0, 0);
 
     if (mesh == NULL || mesh->positions == NULL || mesh->vertex_count <= 0)
     {
         return box;
     }
 
-    box.min = sdl3d_vec3_make(mesh->positions[0], mesh->positions[1], mesh->positions[2]);
+    box.min = slayer3d_vec3_make(mesh->positions[0], mesh->positions[1], mesh->positions[2]);
     box.max = box.min;
 
     for (int i = 1; i < mesh->vertex_count; ++i)
@@ -343,9 +343,9 @@ sdl3d_bounding_box sdl3d_compute_mesh_aabb(const sdl3d_mesh *mesh)
 /* Scene-level raycast                                                 */
 /* ------------------------------------------------------------------ */
 
-sdl3d_scene_hit sdl3d_scene_raycast(const sdl3d_scene *scene, sdl3d_ray ray)
+slayer3d_scene_hit slayer3d_scene_raycast(const slayer3d_scene *scene, slayer3d_ray ray)
 {
-    sdl3d_scene_hit result;
+    slayer3d_scene_hit result;
     int count;
     int i;
 
@@ -356,28 +356,28 @@ sdl3d_scene_hit sdl3d_scene_raycast(const sdl3d_scene *scene, sdl3d_ray ray)
         return result;
     }
 
-    count = sdl3d_scene_get_actor_count(scene);
+    count = slayer3d_scene_get_actor_count(scene);
 
     for (i = 0; i < count; ++i)
     {
-        const sdl3d_actor *actor = sdl3d_scene_get_actor_at(scene, i);
-        const sdl3d_model *model;
+        const slayer3d_actor *actor = slayer3d_scene_get_actor_at(scene, i);
+        const slayer3d_model *model;
         int m;
 
-        if (actor == NULL || !sdl3d_actor_is_visible(actor))
+        if (actor == NULL || !slayer3d_actor_is_visible(actor))
         {
             continue;
         }
 
-        model = sdl3d_actor_get_model(actor);
+        model = slayer3d_actor_get_model(actor);
         if (model == NULL || model->meshes == NULL)
         {
             continue;
         }
 
         {
-            sdl3d_vec3 actor_pos = sdl3d_actor_get_position(actor);
-            sdl3d_ray local_ray;
+            slayer3d_vec3 actor_pos = slayer3d_actor_get_position(actor);
+            slayer3d_ray local_ray;
             local_ray.position.x = ray.position.x - actor_pos.x;
             local_ray.position.y = ray.position.y - actor_pos.y;
             local_ray.position.z = ray.position.z - actor_pos.z;
@@ -385,16 +385,16 @@ sdl3d_scene_hit sdl3d_scene_raycast(const sdl3d_scene *scene, sdl3d_ray ray)
 
             for (m = 0; m < model->mesh_count; ++m)
             {
-                sdl3d_bounding_box aabb = sdl3d_compute_mesh_aabb(&model->meshes[m]);
-                sdl3d_ray_hit aabb_hit = sdl3d_ray_vs_aabb(local_ray, aabb);
-                sdl3d_ray_hit mesh_hit;
+                slayer3d_bounding_box aabb = slayer3d_compute_mesh_aabb(&model->meshes[m]);
+                slayer3d_ray_hit aabb_hit = slayer3d_ray_vs_aabb(local_ray, aabb);
+                slayer3d_ray_hit mesh_hit;
 
                 if (!aabb_hit.hit)
                 {
                     continue;
                 }
 
-                mesh_hit = sdl3d_ray_vs_mesh(local_ray, &model->meshes[m]);
+                mesh_hit = slayer3d_ray_vs_mesh(local_ray, &model->meshes[m]);
                 if (mesh_hit.hit && (!result.hit || mesh_hit.distance < result.distance))
                 {
                     result.hit = true;

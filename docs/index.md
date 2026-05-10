@@ -1,6 +1,6 @@
-# SDL3D Documentation
+# Slayer 3D Documentation
 
-SDL3D documentation is organized around the engine's current direction:
+Slayer 3D documentation is organized around the engine's current direction:
 data-authored games running on a generic SDL-powered runtime.
 
 ## Start Here
@@ -21,7 +21,7 @@ data-authored games running on a generic SDL-powered runtime.
 - [Standard Options Package](standard-options.md): reusable display, audio,
   keyboard, mouse, and gamepad options screens.
 - [Storage](storage.md): `user://` and `cache://` writable data policy.
-- [Assets And Packs](assets.md): asset resolver, `.sdl3dpak`, embedded packs,
+- [Assets And Packs](assets.md): asset resolver, `.slayer3dpak`, embedded packs,
   compression, and obfuscation.
 
 ## Runtime And Engine Systems

@@ -1,5 +1,5 @@
 {
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "imports": [
     { "path": "fragments/assets.json", "sections": ["assets"] },
     { "path": "fragments/scripts.json", "sections": ["scripts"] },
@@ -38,10 +38,10 @@
     "name": "Pong",
     "id": "demo.pong",
     "version": "0.1.0",
-    "description": "Fixed-screen arcade proof that SDL3D gameplay rules can be authored through generic entities, sensors, signals, timers, and actions."
+    "description": "Fixed-screen arcade proof that Slayer 3D gameplay rules can be authored through generic entities, sensors, signals, timers, and actions."
   },
   "app": {
-    "title": "SDL3D Pong",
+    "title": "Slayer 3D Pong",
     "logical_width": 1280,
     "logical_height": 720,
     "backend": "opengl",

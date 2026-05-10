@@ -14,7 +14,7 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "SDL3D_BUILD_TESTS": "ON"
+                "SLAYER3D_BUILD_TESTS": "ON"
             }
         },
         {
@@ -33,7 +33,7 @@
             "binaryDir": "${sourceDir}/build/sanitizers",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "SDL3D_ENABLE_SANITIZERS": "ON"
+                "SLAYER3D_ENABLE_SANITIZERS": "ON"
             }
         }
     ],

@@ -1,10 +1,10 @@
-#include "sdl3d/effects.h"
+#include "slayer3d/effects.h"
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_stdinc.h>
 
-#include "sdl3d/drawing3d.h"
-#include "sdl3d/math.h"
+#include "slayer3d/drawing3d.h"
+#include "slayer3d/math.h"
 
 #include "render_context_internal.h"
 
@@ -15,40 +15,40 @@
 /* Particle system                                                     */
 /* ------------------------------------------------------------------ */
 
-typedef struct sdl3d_particle
+typedef struct slayer3d_particle
 {
-    sdl3d_vec3 position;
-    sdl3d_vec3 velocity;
+    slayer3d_vec3 position;
+    slayer3d_vec3 velocity;
     float lifetime;
     float max_lifetime;
     bool alive;
-} sdl3d_particle;
+} slayer3d_particle;
 
-struct sdl3d_particle_emitter
+struct slayer3d_particle_emitter
 {
-    sdl3d_particle_config config;
-    sdl3d_particle *particles;
+    slayer3d_particle_config config;
+    slayer3d_particle *particles;
     int count;
     float emit_accumulator;
     Uint32 rng_state;
     bool deterministic_rng;
 };
 
-static sdl3d_vec3 sdl3d_effects_camera_right(const sdl3d_render_context *context);
-static sdl3d_vec3 sdl3d_effects_camera_up(const sdl3d_render_context *context);
-static sdl3d_vec3 sdl3d_effects_camera_forward(const sdl3d_render_context *context);
+static slayer3d_vec3 slayer3d_effects_camera_right(const slayer3d_render_context *context);
+static slayer3d_vec3 slayer3d_effects_camera_up(const slayer3d_render_context *context);
+static slayer3d_vec3 slayer3d_effects_camera_forward(const slayer3d_render_context *context);
 
-static float sdl3d_effects_absf(float value)
+static float slayer3d_effects_absf(float value)
 {
     return value < 0.0f ? -value : value;
 }
 
-static float sdl3d_effects_maxf(float a, float b)
+static float slayer3d_effects_maxf(float a, float b)
 {
     return a > b ? a : b;
 }
 
-static float sdl3d_effects_clampf(float value, float lo, float hi)
+static float slayer3d_effects_clampf(float value, float lo, float hi)
 {
     if (value < lo)
     {
@@ -61,12 +61,12 @@ static float sdl3d_effects_clampf(float value, float lo, float hi)
     return value;
 }
 
-static float sdl3d_randf(void)
+static float slayer3d_randf(void)
 {
     return (float)SDL_rand(1000000) / 1000000.0f;
 }
 
-static Uint32 sdl3d_particle_next_random_u32(sdl3d_particle_emitter *emitter)
+static Uint32 slayer3d_particle_next_random_u32(slayer3d_particle_emitter *emitter)
 {
     if (emitter == NULL || !emitter->deterministic_rng)
     {
@@ -77,24 +77,24 @@ static Uint32 sdl3d_particle_next_random_u32(sdl3d_particle_emitter *emitter)
     return emitter->rng_state;
 }
 
-static float sdl3d_particle_randf(sdl3d_particle_emitter *emitter)
+static float slayer3d_particle_randf(slayer3d_particle_emitter *emitter)
 {
     if (emitter == NULL || !emitter->deterministic_rng)
     {
-        return sdl3d_randf();
+        return slayer3d_randf();
     }
 
-    return (float)(sdl3d_particle_next_random_u32(emitter) >> 8) * (1.0f / 16777216.0f);
+    return (float)(slayer3d_particle_next_random_u32(emitter) >> 8) * (1.0f / 16777216.0f);
 }
 
-static float sdl3d_randf_range(sdl3d_particle_emitter *emitter, float lo, float hi)
+static float slayer3d_randf_range(slayer3d_particle_emitter *emitter, float lo, float hi)
 {
-    return lo + sdl3d_particle_randf(emitter) * (hi - lo);
+    return lo + slayer3d_particle_randf(emitter) * (hi - lo);
 }
 
-static sdl3d_particle_config sdl3d_particle_config_normalized(const sdl3d_particle_config *config)
+static slayer3d_particle_config slayer3d_particle_config_normalized(const slayer3d_particle_config *config)
 {
-    sdl3d_particle_config normalized = *config;
+    slayer3d_particle_config normalized = *config;
 
     if (normalized.max_particles <= 0)
     {
@@ -112,29 +112,29 @@ static sdl3d_particle_config sdl3d_particle_config_normalized(const sdl3d_partic
         normalized.lifetime_min = normalized.lifetime_max;
         normalized.lifetime_max = tmp;
     }
-    normalized.lifetime_min = sdl3d_effects_maxf(normalized.lifetime_min, 0.001f);
-    normalized.lifetime_max = sdl3d_effects_maxf(normalized.lifetime_max, normalized.lifetime_min);
-    normalized.size_start = sdl3d_effects_maxf(normalized.size_start, 0.0f);
-    normalized.size_end = sdl3d_effects_maxf(normalized.size_end, 0.0f);
-    normalized.emit_rate = sdl3d_effects_maxf(normalized.emit_rate, 0.0f);
-    normalized.spread = sdl3d_effects_clampf(normalized.spread, 0.0f, SDL_PI_F);
-    normalized.extents.x = sdl3d_effects_absf(normalized.extents.x);
-    normalized.extents.y = sdl3d_effects_absf(normalized.extents.y);
-    normalized.extents.z = sdl3d_effects_absf(normalized.extents.z);
-    normalized.radius = sdl3d_effects_absf(normalized.radius);
-    normalized.emissive_intensity = sdl3d_effects_maxf(normalized.emissive_intensity, 0.0f);
-    if (normalized.shape < SDL3D_PARTICLE_EMITTER_POINT || normalized.shape > SDL3D_PARTICLE_EMITTER_CIRCLE)
+    normalized.lifetime_min = slayer3d_effects_maxf(normalized.lifetime_min, 0.001f);
+    normalized.lifetime_max = slayer3d_effects_maxf(normalized.lifetime_max, normalized.lifetime_min);
+    normalized.size_start = slayer3d_effects_maxf(normalized.size_start, 0.0f);
+    normalized.size_end = slayer3d_effects_maxf(normalized.size_end, 0.0f);
+    normalized.emit_rate = slayer3d_effects_maxf(normalized.emit_rate, 0.0f);
+    normalized.spread = slayer3d_effects_clampf(normalized.spread, 0.0f, SDL_PI_F);
+    normalized.extents.x = slayer3d_effects_absf(normalized.extents.x);
+    normalized.extents.y = slayer3d_effects_absf(normalized.extents.y);
+    normalized.extents.z = slayer3d_effects_absf(normalized.extents.z);
+    normalized.radius = slayer3d_effects_absf(normalized.radius);
+    normalized.emissive_intensity = slayer3d_effects_maxf(normalized.emissive_intensity, 0.0f);
+    if (normalized.shape < SLAYER3D_PARTICLE_EMITTER_POINT || normalized.shape > SLAYER3D_PARTICLE_EMITTER_CIRCLE)
     {
-        normalized.shape = SDL3D_PARTICLE_EMITTER_POINT;
+        normalized.shape = SLAYER3D_PARTICLE_EMITTER_POINT;
     }
     return normalized;
 }
 
-static bool sdl3d_particle_emitter_apply_config(sdl3d_particle_emitter *emitter, const sdl3d_particle_config *config,
-                                                bool preserve_particles)
+static bool slayer3d_particle_emitter_apply_config(slayer3d_particle_emitter *emitter,
+                                                   const slayer3d_particle_config *config, bool preserve_particles)
 {
-    sdl3d_particle_config normalized;
-    sdl3d_particle *particles = NULL;
+    slayer3d_particle_config normalized;
+    slayer3d_particle *particles = NULL;
 
     if (emitter == NULL)
     {
@@ -145,10 +145,10 @@ static bool sdl3d_particle_emitter_apply_config(sdl3d_particle_emitter *emitter,
         return SDL_InvalidParamError("config");
     }
 
-    normalized = sdl3d_particle_config_normalized(config);
+    normalized = slayer3d_particle_config_normalized(config);
     if (normalized.max_particles != emitter->config.max_particles)
     {
-        particles = (sdl3d_particle *)SDL_calloc((size_t)normalized.max_particles, sizeof(*particles));
+        particles = (slayer3d_particle *)SDL_calloc((size_t)normalized.max_particles, sizeof(*particles));
         if (particles == NULL)
         {
             return SDL_OutOfMemory();
@@ -191,9 +191,9 @@ static bool sdl3d_particle_emitter_apply_config(sdl3d_particle_emitter *emitter,
     return true;
 }
 
-sdl3d_particle_emitter *sdl3d_create_particle_emitter(const sdl3d_particle_config *config)
+slayer3d_particle_emitter *slayer3d_create_particle_emitter(const slayer3d_particle_config *config)
 {
-    sdl3d_particle_emitter *em;
+    slayer3d_particle_emitter *em;
 
     if (config == NULL)
     {
@@ -201,14 +201,14 @@ sdl3d_particle_emitter *sdl3d_create_particle_emitter(const sdl3d_particle_confi
         return NULL;
     }
 
-    em = (sdl3d_particle_emitter *)SDL_calloc(1, sizeof(*em));
+    em = (slayer3d_particle_emitter *)SDL_calloc(1, sizeof(*em));
     if (em == NULL)
     {
         SDL_OutOfMemory();
         return NULL;
     }
 
-    if (!sdl3d_particle_emitter_apply_config(em, config, false))
+    if (!slayer3d_particle_emitter_apply_config(em, config, false))
     {
         SDL_free(em);
         return NULL;
@@ -217,7 +217,7 @@ sdl3d_particle_emitter *sdl3d_create_particle_emitter(const sdl3d_particle_confi
     return em;
 }
 
-void sdl3d_destroy_particle_emitter(sdl3d_particle_emitter *emitter)
+void slayer3d_destroy_particle_emitter(slayer3d_particle_emitter *emitter)
 {
     if (emitter == NULL)
     {
@@ -227,7 +227,7 @@ void sdl3d_destroy_particle_emitter(sdl3d_particle_emitter *emitter)
     SDL_free(emitter);
 }
 
-void sdl3d_particle_emitter_set_position(sdl3d_particle_emitter *emitter, sdl3d_vec3 position)
+void slayer3d_particle_emitter_set_position(slayer3d_particle_emitter *emitter, slayer3d_vec3 position)
 {
     if (emitter != NULL)
     {
@@ -235,17 +235,17 @@ void sdl3d_particle_emitter_set_position(sdl3d_particle_emitter *emitter, sdl3d_
     }
 }
 
-bool sdl3d_particle_emitter_set_config(sdl3d_particle_emitter *emitter, const sdl3d_particle_config *config)
+bool slayer3d_particle_emitter_set_config(slayer3d_particle_emitter *emitter, const slayer3d_particle_config *config)
 {
-    return sdl3d_particle_emitter_apply_config(emitter, config, true);
+    return slayer3d_particle_emitter_apply_config(emitter, config, true);
 }
 
-const sdl3d_particle_config *sdl3d_particle_emitter_get_config(const sdl3d_particle_emitter *emitter)
+const slayer3d_particle_config *slayer3d_particle_emitter_get_config(const slayer3d_particle_emitter *emitter)
 {
     return emitter != NULL ? &emitter->config : NULL;
 }
 
-void sdl3d_particle_emitter_clear(sdl3d_particle_emitter *emitter)
+void slayer3d_particle_emitter_clear(slayer3d_particle_emitter *emitter)
 {
     if (emitter == NULL)
     {
@@ -257,25 +257,25 @@ void sdl3d_particle_emitter_clear(sdl3d_particle_emitter *emitter)
     emitter->emit_accumulator = 0.0f;
 }
 
-static sdl3d_vec3 sdl3d_particle_spawn_position(sdl3d_particle_emitter *em)
+static slayer3d_vec3 slayer3d_particle_spawn_position(slayer3d_particle_emitter *em)
 {
-    sdl3d_vec3 position = em->config.position;
+    slayer3d_vec3 position = em->config.position;
 
     switch (em->config.shape)
     {
-    case SDL3D_PARTICLE_EMITTER_BOX:
-        position.x += sdl3d_randf_range(em, -em->config.extents.x, em->config.extents.x);
-        position.y += sdl3d_randf_range(em, -em->config.extents.y, em->config.extents.y);
-        position.z += sdl3d_randf_range(em, -em->config.extents.z, em->config.extents.z);
+    case SLAYER3D_PARTICLE_EMITTER_BOX:
+        position.x += slayer3d_randf_range(em, -em->config.extents.x, em->config.extents.x);
+        position.y += slayer3d_randf_range(em, -em->config.extents.y, em->config.extents.y);
+        position.z += slayer3d_randf_range(em, -em->config.extents.z, em->config.extents.z);
         break;
-    case SDL3D_PARTICLE_EMITTER_CIRCLE: {
-        const float angle = sdl3d_particle_randf(em) * SDL_PI_F * 2.0f;
-        const float radius = SDL_sqrtf(sdl3d_particle_randf(em)) * em->config.radius;
+    case SLAYER3D_PARTICLE_EMITTER_CIRCLE: {
+        const float angle = slayer3d_particle_randf(em) * SDL_PI_F * 2.0f;
+        const float radius = SDL_sqrtf(slayer3d_particle_randf(em)) * em->config.radius;
         position.x += SDL_cosf(angle) * radius;
         position.z += SDL_sinf(angle) * radius;
         break;
     }
-    case SDL3D_PARTICLE_EMITTER_POINT:
+    case SLAYER3D_PARTICLE_EMITTER_POINT:
     default:
         break;
     }
@@ -283,7 +283,7 @@ static sdl3d_vec3 sdl3d_particle_spawn_position(sdl3d_particle_emitter *em)
     return position;
 }
 
-static void sdl3d_emit_one(sdl3d_particle_emitter *em)
+static void slayer3d_emit_one(slayer3d_particle_emitter *em)
 {
     int i;
     for (i = 0; i < em->config.max_particles; ++i)
@@ -299,31 +299,31 @@ static void sdl3d_emit_one(sdl3d_particle_emitter *em)
     }
 
     {
-        sdl3d_particle *p = &em->particles[i];
-        float speed = sdl3d_randf_range(em, em->config.speed_min, em->config.speed_max);
-        float theta = sdl3d_particle_randf(em) * SDL_PI_F * 2.0f;
-        float phi = sdl3d_particle_randf(em) * em->config.spread;
+        slayer3d_particle *p = &em->particles[i];
+        float speed = slayer3d_randf_range(em, em->config.speed_min, em->config.speed_max);
+        float theta = slayer3d_particle_randf(em) * SDL_PI_F * 2.0f;
+        float phi = slayer3d_particle_randf(em) * em->config.spread;
         float sp = SDL_sinf(phi);
 
-        sdl3d_vec3 dir = sdl3d_vec3_normalize(em->config.direction);
-        if (sdl3d_vec3_length_squared(dir) <= 0.000001f)
+        slayer3d_vec3 dir = slayer3d_vec3_normalize(em->config.direction);
+        if (slayer3d_vec3_length_squared(dir) <= 0.000001f)
         {
-            dir = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+            dir = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
         }
         /* Build a random direction within the cone. */
-        sdl3d_vec3 up = (SDL_fabsf(dir.y) < 0.99f) ? sdl3d_vec3_make(0, 1, 0) : sdl3d_vec3_make(1, 0, 0);
-        sdl3d_vec3 right = sdl3d_vec3_normalize(sdl3d_vec3_cross(up, dir));
-        sdl3d_vec3 fwd = sdl3d_vec3_cross(dir, right);
+        slayer3d_vec3 up = (SDL_fabsf(dir.y) < 0.99f) ? slayer3d_vec3_make(0, 1, 0) : slayer3d_vec3_make(1, 0, 0);
+        slayer3d_vec3 right = slayer3d_vec3_normalize(slayer3d_vec3_cross(up, dir));
+        slayer3d_vec3 fwd = slayer3d_vec3_cross(dir, right);
 
-        sdl3d_vec3 offset;
+        slayer3d_vec3 offset;
         offset.x = dir.x * SDL_cosf(phi) + right.x * sp * SDL_cosf(theta) + fwd.x * sp * SDL_sinf(theta);
         offset.y = dir.y * SDL_cosf(phi) + right.y * sp * SDL_cosf(theta) + fwd.y * sp * SDL_sinf(theta);
         offset.z = dir.z * SDL_cosf(phi) + right.z * sp * SDL_cosf(theta) + fwd.z * sp * SDL_sinf(theta);
 
-        p->position = sdl3d_particle_spawn_position(em);
-        p->velocity = sdl3d_vec3_scale(offset, speed);
+        p->position = slayer3d_particle_spawn_position(em);
+        p->velocity = slayer3d_vec3_scale(offset, speed);
         p->lifetime = 0.0f;
-        p->max_lifetime = sdl3d_randf_range(em, em->config.lifetime_min, em->config.lifetime_max);
+        p->max_lifetime = slayer3d_randf_range(em, em->config.lifetime_min, em->config.lifetime_max);
         if (p->max_lifetime < 0.001f)
         {
             p->max_lifetime = 0.001f;
@@ -336,7 +336,7 @@ static void sdl3d_emit_one(sdl3d_particle_emitter *em)
     }
 }
 
-void sdl3d_particle_emitter_emit(sdl3d_particle_emitter *emitter, int count)
+void slayer3d_particle_emitter_emit(slayer3d_particle_emitter *emitter, int count)
 {
     if (emitter == NULL)
     {
@@ -344,11 +344,11 @@ void sdl3d_particle_emitter_emit(sdl3d_particle_emitter *emitter, int count)
     }
     for (int i = 0; i < count; ++i)
     {
-        sdl3d_emit_one(emitter);
+        slayer3d_emit_one(emitter);
     }
 }
 
-void sdl3d_particle_emitter_update(sdl3d_particle_emitter *emitter, float delta_time)
+void slayer3d_particle_emitter_update(slayer3d_particle_emitter *emitter, float delta_time)
 {
     if (emitter == NULL || delta_time <= 0.0f)
     {
@@ -358,7 +358,7 @@ void sdl3d_particle_emitter_update(sdl3d_particle_emitter *emitter, float delta_
     /* Update existing particles. */
     for (int i = 0; i < emitter->count; ++i)
     {
-        sdl3d_particle *p = &emitter->particles[i];
+        slayer3d_particle *p = &emitter->particles[i];
         if (!p->alive)
         {
             continue;
@@ -381,13 +381,13 @@ void sdl3d_particle_emitter_update(sdl3d_particle_emitter *emitter, float delta_
         emitter->emit_accumulator += delta_time * emitter->config.emit_rate;
         while (emitter->emit_accumulator >= 1.0f)
         {
-            sdl3d_emit_one(emitter);
+            slayer3d_emit_one(emitter);
             emitter->emit_accumulator -= 1.0f;
         }
     }
 }
 
-int sdl3d_particle_emitter_get_count(const sdl3d_particle_emitter *emitter)
+int slayer3d_particle_emitter_get_count(const slayer3d_particle_emitter *emitter)
 {
     int live = 0;
     if (emitter == NULL)
@@ -404,8 +404,8 @@ int sdl3d_particle_emitter_get_count(const sdl3d_particle_emitter *emitter)
     return live;
 }
 
-int sdl3d_particle_emitter_snapshot(const sdl3d_particle_emitter *emitter, sdl3d_particle_snapshot *out_particles,
-                                    int max_particles)
+int slayer3d_particle_emitter_snapshot(const slayer3d_particle_emitter *emitter,
+                                       slayer3d_particle_snapshot *out_particles, int max_particles)
 {
     int live = 0;
     int copied = 0;
@@ -417,7 +417,7 @@ int sdl3d_particle_emitter_snapshot(const sdl3d_particle_emitter *emitter, sdl3d
 
     for (int i = 0; i < emitter->count; ++i)
     {
-        const sdl3d_particle *p = &emitter->particles[i];
+        const slayer3d_particle *p = &emitter->particles[i];
         if (!p->alive)
         {
             continue;
@@ -438,12 +438,12 @@ int sdl3d_particle_emitter_snapshot(const sdl3d_particle_emitter *emitter, sdl3d
     return live;
 }
 
-static Uint8 sdl3d_particle_lerp_u8(Uint8 a, Uint8 b, float t)
+static Uint8 slayer3d_particle_lerp_u8(Uint8 a, Uint8 b, float t)
 {
     return (Uint8)((float)a + ((float)b - (float)a) * t + 0.5f);
 }
 
-static Uint8 sdl3d_particle_scale_u8(Uint8 value, float scale)
+static Uint8 slayer3d_particle_scale_u8(Uint8 value, float scale)
 {
     const float scaled = (float)value * scale;
     if (scaled <= 0.0f)
@@ -457,17 +457,17 @@ static Uint8 sdl3d_particle_scale_u8(Uint8 value, float scale)
     return (Uint8)(scaled + 0.5f);
 }
 
-static bool sdl3d_draw_particle_quad(sdl3d_render_context *context, const sdl3d_particle_config *config,
-                                     const sdl3d_particle *particle, float size, sdl3d_color color)
+static bool slayer3d_draw_particle_quad(slayer3d_render_context *context, const slayer3d_particle_config *config,
+                                        const slayer3d_particle *particle, float size, slayer3d_color color)
 {
-    sdl3d_vec3 right = sdl3d_effects_camera_right(context);
-    sdl3d_vec3 up;
+    slayer3d_vec3 right = slayer3d_effects_camera_right(context);
+    slayer3d_vec3 up;
     const float half = size * 0.5f;
     float positions[12];
     float uvs[8] = {0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f};
     float colors[16];
     unsigned int indices[12] = {0, 1, 2, 2, 1, 3, 2, 1, 0, 3, 1, 2};
-    sdl3d_mesh mesh;
+    slayer3d_mesh mesh;
 
     if (size <= 0.0f || color.a == 0)
     {
@@ -476,37 +476,37 @@ static bool sdl3d_draw_particle_quad(sdl3d_render_context *context, const sdl3d_
 
     if (config->camera_facing)
     {
-        up = sdl3d_effects_camera_up(context);
+        up = slayer3d_effects_camera_up(context);
     }
     else
     {
-        const sdl3d_vec3 world_up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
-        sdl3d_vec3 forward = sdl3d_effects_camera_forward(context);
+        const slayer3d_vec3 world_up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+        slayer3d_vec3 forward = slayer3d_effects_camera_forward(context);
         forward.y = 0.0f;
-        if (sdl3d_vec3_length_squared(forward) <= 0.000001f)
+        if (slayer3d_vec3_length_squared(forward) <= 0.000001f)
         {
-            forward = sdl3d_vec3_make(0.0f, 0.0f, -1.0f);
+            forward = slayer3d_vec3_make(0.0f, 0.0f, -1.0f);
         }
         else
         {
-            forward = sdl3d_vec3_normalize(forward);
+            forward = slayer3d_vec3_normalize(forward);
         }
-        right = sdl3d_vec3_normalize(sdl3d_vec3_cross(forward, world_up));
-        if (sdl3d_vec3_length_squared(right) <= 0.000001f)
+        right = slayer3d_vec3_normalize(slayer3d_vec3_cross(forward, world_up));
+        if (slayer3d_vec3_length_squared(right) <= 0.000001f)
         {
-            right = sdl3d_vec3_make(1.0f, 0.0f, 0.0f);
+            right = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
         }
         up = world_up;
     }
 
     {
-        const sdl3d_vec3 scaled_right = sdl3d_vec3_scale(right, half);
-        const sdl3d_vec3 scaled_up = sdl3d_vec3_scale(up, half);
-        const sdl3d_vec3 verts[4] = {
-            sdl3d_vec3_sub(sdl3d_vec3_sub(particle->position, scaled_right), scaled_up),
-            sdl3d_vec3_add(sdl3d_vec3_sub(particle->position, scaled_right), scaled_up),
-            sdl3d_vec3_sub(sdl3d_vec3_add(particle->position, scaled_right), scaled_up),
-            sdl3d_vec3_add(sdl3d_vec3_add(particle->position, scaled_right), scaled_up),
+        const slayer3d_vec3 scaled_right = slayer3d_vec3_scale(right, half);
+        const slayer3d_vec3 scaled_up = slayer3d_vec3_scale(up, half);
+        const slayer3d_vec3 verts[4] = {
+            slayer3d_vec3_sub(slayer3d_vec3_sub(particle->position, scaled_right), scaled_up),
+            slayer3d_vec3_add(slayer3d_vec3_sub(particle->position, scaled_right), scaled_up),
+            slayer3d_vec3_sub(slayer3d_vec3_add(particle->position, scaled_right), scaled_up),
+            slayer3d_vec3_add(slayer3d_vec3_add(particle->position, scaled_right), scaled_up),
         };
 
         for (int i = 0; i < 4; ++i)
@@ -529,10 +529,10 @@ static bool sdl3d_draw_particle_quad(sdl3d_render_context *context, const sdl3d_
     mesh.indices = indices;
     mesh.index_count = 12;
 
-    return sdl3d_draw_mesh(context, &mesh, config->texture, (sdl3d_color){255, 255, 255, 255});
+    return slayer3d_draw_mesh(context, &mesh, config->texture, (slayer3d_color){255, 255, 255, 255});
 }
 
-bool sdl3d_draw_particles(sdl3d_render_context *context, const sdl3d_particle_emitter *emitter)
+bool slayer3d_draw_particles(slayer3d_render_context *context, const slayer3d_particle_emitter *emitter)
 {
     if (context == NULL)
     {
@@ -546,9 +546,9 @@ bool sdl3d_draw_particles(sdl3d_render_context *context, const sdl3d_particle_em
     bool ok = true;
     for (int i = 0; i < emitter->count; ++i)
     {
-        const sdl3d_particle *p = &emitter->particles[i];
+        const slayer3d_particle *p = &emitter->particles[i];
         float t, size;
-        sdl3d_color color;
+        slayer3d_color color;
 
         if (!p->alive)
         {
@@ -556,22 +556,22 @@ bool sdl3d_draw_particles(sdl3d_render_context *context, const sdl3d_particle_em
         }
 
         t = p->lifetime / p->max_lifetime;
-        t = sdl3d_effects_clampf(t, 0.0f, 1.0f);
+        t = slayer3d_effects_clampf(t, 0.0f, 1.0f);
         size = emitter->config.size_start + (emitter->config.size_end - emitter->config.size_start) * t;
 
-        color.r = sdl3d_particle_lerp_u8(emitter->config.color_start.r, emitter->config.color_end.r, t);
-        color.g = sdl3d_particle_lerp_u8(emitter->config.color_start.g, emitter->config.color_end.g, t);
-        color.b = sdl3d_particle_lerp_u8(emitter->config.color_start.b, emitter->config.color_end.b, t);
-        color.a = sdl3d_particle_lerp_u8(emitter->config.color_start.a, emitter->config.color_end.a, t);
+        color.r = slayer3d_particle_lerp_u8(emitter->config.color_start.r, emitter->config.color_end.r, t);
+        color.g = slayer3d_particle_lerp_u8(emitter->config.color_start.g, emitter->config.color_end.g, t);
+        color.b = slayer3d_particle_lerp_u8(emitter->config.color_start.b, emitter->config.color_end.b, t);
+        color.a = slayer3d_particle_lerp_u8(emitter->config.color_start.a, emitter->config.color_end.a, t);
         if (emitter->config.emissive_intensity > 0.0f)
         {
             const float scale = 1.0f + emitter->config.emissive_intensity;
-            color.r = sdl3d_particle_scale_u8(color.r, scale);
-            color.g = sdl3d_particle_scale_u8(color.g, scale);
-            color.b = sdl3d_particle_scale_u8(color.b, scale);
+            color.r = slayer3d_particle_scale_u8(color.r, scale);
+            color.g = slayer3d_particle_scale_u8(color.g, scale);
+            color.b = slayer3d_particle_scale_u8(color.b, scale);
         }
 
-        ok = sdl3d_draw_particle_quad(context, &emitter->config, p, size, color) && ok;
+        ok = slayer3d_draw_particle_quad(context, &emitter->config, p, size, color) && ok;
     }
 
     return ok;
@@ -581,7 +581,8 @@ bool sdl3d_draw_particles(sdl3d_render_context *context, const sdl3d_particle_em
 /* Skybox                                                              */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_draw_skybox_gradient(sdl3d_render_context *context, sdl3d_color top_color, sdl3d_color bottom_color)
+bool slayer3d_draw_skybox_gradient(slayer3d_render_context *context, slayer3d_color top_color,
+                                   slayer3d_color bottom_color)
 {
     const int rings = 8;
     const int slices = 12;
@@ -605,7 +606,7 @@ bool sdl3d_draw_skybox_gradient(sdl3d_render_context *context, sdl3d_color top_c
         float r1 = SDL_sinf(phi1) * radius;
 
         /* Interpolate color from top to bottom. */
-        sdl3d_color c0, c1;
+        slayer3d_color c0, c1;
         c0.r = (Uint8)((float)top_color.r + (float)(bottom_color.r - top_color.r) * t0);
         c0.g = (Uint8)((float)top_color.g + (float)(bottom_color.g - top_color.g) * t0);
         c0.b = (Uint8)((float)top_color.b + (float)(bottom_color.b - top_color.b) * t0);
@@ -616,7 +617,7 @@ bool sdl3d_draw_skybox_gradient(sdl3d_render_context *context, sdl3d_color top_c
         c1.a = 255;
 
         /* Use the average color for this ring band. */
-        sdl3d_color avg;
+        slayer3d_color avg;
         avg.r = (Uint8)(((int)c0.r + (int)c1.r) / 2);
         avg.g = (Uint8)(((int)c0.g + (int)c1.g) / 2);
         avg.b = (Uint8)(((int)c0.b + (int)c1.b) / 2);
@@ -627,44 +628,44 @@ bool sdl3d_draw_skybox_gradient(sdl3d_render_context *context, sdl3d_color top_c
             float theta0 = (float)s / (float)slices * 6.28318f;
             float theta1 = (float)(s + 1) / (float)slices * 6.28318f;
 
-            sdl3d_vec3 v00 = sdl3d_vec3_make(SDL_cosf(theta0) * r0, y0, SDL_sinf(theta0) * r0);
-            sdl3d_vec3 v10 = sdl3d_vec3_make(SDL_cosf(theta1) * r0, y0, SDL_sinf(theta1) * r0);
-            sdl3d_vec3 v01 = sdl3d_vec3_make(SDL_cosf(theta0) * r1, y1, SDL_sinf(theta0) * r1);
-            sdl3d_vec3 v11 = sdl3d_vec3_make(SDL_cosf(theta1) * r1, y1, SDL_sinf(theta1) * r1);
+            slayer3d_vec3 v00 = slayer3d_vec3_make(SDL_cosf(theta0) * r0, y0, SDL_sinf(theta0) * r0);
+            slayer3d_vec3 v10 = slayer3d_vec3_make(SDL_cosf(theta1) * r0, y0, SDL_sinf(theta1) * r0);
+            slayer3d_vec3 v01 = slayer3d_vec3_make(SDL_cosf(theta0) * r1, y1, SDL_sinf(theta0) * r1);
+            slayer3d_vec3 v11 = slayer3d_vec3_make(SDL_cosf(theta1) * r1, y1, SDL_sinf(theta1) * r1);
 
             /* Inward-facing triangles (we're inside the sphere). */
-            sdl3d_draw_triangle_3d(context, v00, v01, v10, avg);
-            sdl3d_draw_triangle_3d(context, v10, v01, v11, avg);
+            slayer3d_draw_triangle_3d(context, v00, v01, v10, avg);
+            slayer3d_draw_triangle_3d(context, v10, v01, v11, avg);
         }
     }
 
     return true;
 }
 
-static sdl3d_vec3 sdl3d_effects_camera_position(const sdl3d_render_context *context)
+static slayer3d_vec3 slayer3d_effects_camera_position(const slayer3d_render_context *context)
 {
-    const sdl3d_mat4 v = context->view;
-    return sdl3d_vec3_make(-(v.m[0] * v.m[12] + v.m[1] * v.m[13] + v.m[2] * v.m[14]),
-                           -(v.m[4] * v.m[12] + v.m[5] * v.m[13] + v.m[6] * v.m[14]),
-                           -(v.m[8] * v.m[12] + v.m[9] * v.m[13] + v.m[10] * v.m[14]));
+    const slayer3d_mat4 v = context->view;
+    return slayer3d_vec3_make(-(v.m[0] * v.m[12] + v.m[1] * v.m[13] + v.m[2] * v.m[14]),
+                              -(v.m[4] * v.m[12] + v.m[5] * v.m[13] + v.m[6] * v.m[14]),
+                              -(v.m[8] * v.m[12] + v.m[9] * v.m[13] + v.m[10] * v.m[14]));
 }
 
-static sdl3d_vec3 sdl3d_effects_camera_right(const sdl3d_render_context *context)
+static slayer3d_vec3 slayer3d_effects_camera_right(const slayer3d_render_context *context)
 {
-    return sdl3d_vec3_normalize(sdl3d_vec3_make(context->view.m[0], context->view.m[4], context->view.m[8]));
+    return slayer3d_vec3_normalize(slayer3d_vec3_make(context->view.m[0], context->view.m[4], context->view.m[8]));
 }
 
-static sdl3d_vec3 sdl3d_effects_camera_up(const sdl3d_render_context *context)
+static slayer3d_vec3 slayer3d_effects_camera_up(const slayer3d_render_context *context)
 {
-    return sdl3d_vec3_normalize(sdl3d_vec3_make(context->view.m[1], context->view.m[5], context->view.m[9]));
+    return slayer3d_vec3_normalize(slayer3d_vec3_make(context->view.m[1], context->view.m[5], context->view.m[9]));
 }
 
-static sdl3d_vec3 sdl3d_effects_camera_forward(const sdl3d_render_context *context)
+static slayer3d_vec3 slayer3d_effects_camera_forward(const slayer3d_render_context *context)
 {
-    return sdl3d_vec3_normalize(sdl3d_vec3_make(-context->view.m[2], -context->view.m[6], -context->view.m[10]));
+    return slayer3d_vec3_normalize(slayer3d_vec3_make(-context->view.m[2], -context->view.m[6], -context->view.m[10]));
 }
 
-static Uint8 sdl3d_effects_float_to_byte(float value)
+static Uint8 slayer3d_effects_float_to_byte(float value)
 {
     if (value <= 0.0f)
     {
@@ -677,13 +678,13 @@ static Uint8 sdl3d_effects_float_to_byte(float value)
     return (Uint8)(value * 255.0f + 0.5f);
 }
 
-static void sdl3d_effects_sample_textured_skybox(const sdl3d_skybox_textured *skybox, sdl3d_vec3 direction,
-                                                 float *out_r, float *out_g, float *out_b, float *out_a)
+static void slayer3d_effects_sample_textured_skybox(const slayer3d_skybox_textured *skybox, slayer3d_vec3 direction,
+                                                    float *out_r, float *out_g, float *out_b, float *out_a)
 {
     const float abs_x = SDL_fabsf(direction.x);
     const float abs_y = SDL_fabsf(direction.y);
     const float abs_z = SDL_fabsf(direction.z);
-    const sdl3d_texture2d *face = NULL;
+    const slayer3d_texture2d *face = NULL;
     float major_axis = 1.0f;
     float u = 0.5f;
     float v = 0.5f;
@@ -737,15 +738,16 @@ static void sdl3d_effects_sample_textured_skybox(const sdl3d_skybox_textured *sk
         }
     }
 
-    sdl3d_texture_sample_rgba(face, u, v, 0.0f, out_r, out_g, out_b, out_a);
+    slayer3d_texture_sample_rgba(face, u, v, 0.0f, out_r, out_g, out_b, out_a);
 }
 
-static bool sdl3d_draw_skybox_textured_software(sdl3d_render_context *context, const sdl3d_skybox_textured *skybox)
+static bool slayer3d_draw_skybox_textured_software(slayer3d_render_context *context,
+                                                   const slayer3d_skybox_textured *skybox)
 {
-    sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
-    const sdl3d_vec3 right = sdl3d_effects_camera_right(context);
-    const sdl3d_vec3 up = sdl3d_effects_camera_up(context);
-    const sdl3d_vec3 forward = sdl3d_effects_camera_forward(context);
+    slayer3d_framebuffer framebuffer = slayer3d_framebuffer_from_context(context);
+    const slayer3d_vec3 right = slayer3d_effects_camera_right(context);
+    const slayer3d_vec3 up = slayer3d_effects_camera_up(context);
+    const slayer3d_vec3 forward = slayer3d_effects_camera_forward(context);
     const int min_x = framebuffer.scissor_enabled ? framebuffer.scissor_rect.x : 0;
     const int min_y = framebuffer.scissor_enabled ? framebuffer.scissor_rect.y : 0;
     const int max_x =
@@ -761,7 +763,7 @@ static bool sdl3d_draw_skybox_textured_software(sdl3d_render_context *context, c
     if (context->projection.m[15] == 1.0f)
     {
         float r, g, b, a;
-        sdl3d_effects_sample_textured_skybox(skybox, forward, &r, &g, &b, &a);
+        slayer3d_effects_sample_textured_skybox(skybox, forward, &r, &g, &b, &a);
         for (int y = min_y; y < max_y; ++y)
         {
             for (int x = min_x; x < max_x; ++x)
@@ -772,10 +774,10 @@ static bool sdl3d_draw_skybox_textured_software(sdl3d_render_context *context, c
                 {
                     continue;
                 }
-                pixel[0] = sdl3d_effects_float_to_byte(r);
-                pixel[1] = sdl3d_effects_float_to_byte(g);
-                pixel[2] = sdl3d_effects_float_to_byte(b);
-                pixel[3] = sdl3d_effects_float_to_byte(a);
+                pixel[0] = slayer3d_effects_float_to_byte(r);
+                pixel[1] = slayer3d_effects_float_to_byte(g);
+                pixel[2] = slayer3d_effects_float_to_byte(b);
+                pixel[3] = slayer3d_effects_float_to_byte(a);
                 if (framebuffer.depth_pixels != NULL)
                 {
                     framebuffer.depth_pixels[index] = 1.0f;
@@ -790,13 +792,13 @@ static bool sdl3d_draw_skybox_textured_software(sdl3d_render_context *context, c
         const float inv_proj_y = 1.0f / context->projection.m[5];
         const float ndc_x_start = ((2.0f * 0.5f) / (float)framebuffer.width) - 1.0f;
         const float ndc_x_step = 2.0f / (float)framebuffer.width;
-        const sdl3d_vec3 x_step = sdl3d_vec3_scale(right, ndc_x_step * inv_proj_x);
+        const slayer3d_vec3 x_step = slayer3d_vec3_scale(right, ndc_x_step * inv_proj_x);
 
         for (int y = min_y; y < max_y; ++y)
         {
             const float ndc_y = 1.0f - ((2.0f * ((float)y + 0.5f)) / (float)framebuffer.height);
-            const sdl3d_vec3 row_base = sdl3d_vec3_add(forward, sdl3d_vec3_scale(up, ndc_y * inv_proj_y));
-            sdl3d_vec3 ray = sdl3d_vec3_add(row_base, sdl3d_vec3_scale(right, ndc_x_start * inv_proj_x));
+            const slayer3d_vec3 row_base = slayer3d_vec3_add(forward, slayer3d_vec3_scale(up, ndc_y * inv_proj_y));
+            slayer3d_vec3 ray = slayer3d_vec3_add(row_base, slayer3d_vec3_scale(right, ndc_x_start * inv_proj_x));
 
             for (int x = min_x; x < max_x; ++x)
             {
@@ -806,21 +808,21 @@ static bool sdl3d_draw_skybox_textured_software(sdl3d_render_context *context, c
 
                 if (framebuffer.depth_pixels != NULL && framebuffer.depth_pixels[index] < 1.0f)
                 {
-                    ray = sdl3d_vec3_add(ray, x_step);
+                    ray = slayer3d_vec3_add(ray, x_step);
                     continue;
                 }
 
-                sdl3d_effects_sample_textured_skybox(skybox, sdl3d_vec3_normalize(ray), &r, &g, &b, &a);
-                pixel[0] = sdl3d_effects_float_to_byte(r);
-                pixel[1] = sdl3d_effects_float_to_byte(g);
-                pixel[2] = sdl3d_effects_float_to_byte(b);
-                pixel[3] = sdl3d_effects_float_to_byte(a);
+                slayer3d_effects_sample_textured_skybox(skybox, slayer3d_vec3_normalize(ray), &r, &g, &b, &a);
+                pixel[0] = slayer3d_effects_float_to_byte(r);
+                pixel[1] = slayer3d_effects_float_to_byte(g);
+                pixel[2] = slayer3d_effects_float_to_byte(b);
+                pixel[3] = slayer3d_effects_float_to_byte(a);
                 if (framebuffer.depth_pixels != NULL)
                 {
                     framebuffer.depth_pixels[index] = 1.0f;
                 }
 
-                ray = sdl3d_vec3_add(ray, x_step);
+                ray = slayer3d_vec3_add(ray, x_step);
             }
         }
     }
@@ -828,13 +830,13 @@ static bool sdl3d_draw_skybox_textured_software(sdl3d_render_context *context, c
     return true;
 }
 
-static bool sdl3d_draw_skybox_face(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 v0,
-                                   sdl3d_vec3 v1, sdl3d_vec3 v2, sdl3d_vec3 v3)
+static bool slayer3d_draw_skybox_face(slayer3d_render_context *context, const slayer3d_texture2d *texture,
+                                      slayer3d_vec3 v0, slayer3d_vec3 v1, slayer3d_vec3 v2, slayer3d_vec3 v3)
 {
     float positions[] = {v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, v2.x, v2.y, v2.z, v3.x, v3.y, v3.z};
     float uvs[] = {0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f};
     unsigned int indices[] = {0, 1, 2, 2, 1, 3};
-    sdl3d_mesh mesh;
+    slayer3d_mesh mesh;
 
     SDL_zero(mesh);
     mesh.positions = positions;
@@ -842,12 +844,12 @@ static bool sdl3d_draw_skybox_face(sdl3d_render_context *context, const sdl3d_te
     mesh.vertex_count = 4;
     mesh.indices = indices;
     mesh.index_count = 6;
-    return sdl3d_draw_mesh(context, &mesh, texture, (sdl3d_color){255, 255, 255, 255});
+    return slayer3d_draw_mesh(context, &mesh, texture, (slayer3d_color){255, 255, 255, 255});
 }
 
-bool sdl3d_draw_skybox_textured(sdl3d_render_context *context, const sdl3d_skybox_textured *skybox)
+bool slayer3d_draw_skybox_textured(slayer3d_render_context *context, const slayer3d_skybox_textured *skybox)
 {
-    sdl3d_vec3 c;
+    slayer3d_vec3 c;
     float s;
 
     if (context == NULL)
@@ -864,51 +866,51 @@ bool sdl3d_draw_skybox_textured(sdl3d_render_context *context, const sdl3d_skybo
         return SDL_SetError("Textured skybox requires all six face textures.");
     }
 
-    if (context->backend == SDL3D_BACKEND_SOFTWARE)
+    if (context->backend == SLAYER3D_BACKEND_SOFTWARE)
     {
-        return sdl3d_draw_skybox_textured_software(context, skybox);
+        return slayer3d_draw_skybox_textured_software(context, skybox);
     }
 
-    c = sdl3d_effects_camera_position(context);
+    c = slayer3d_effects_camera_position(context);
     s = skybox->size > 1.0f ? skybox->size : 400.0f;
 
     /* Inward-facing cube centered on the camera. */
-    return sdl3d_draw_skybox_face(context, skybox->pos_x, sdl3d_vec3_make(c.x - s, c.y - s, c.z + s),
-                                  sdl3d_vec3_make(c.x - s, c.y + s, c.z + s),
-                                  sdl3d_vec3_make(c.x + s, c.y - s, c.z + s),
-                                  sdl3d_vec3_make(c.x + s, c.y + s, c.z + s)) &&
-           sdl3d_draw_skybox_face(context, skybox->neg_x, sdl3d_vec3_make(c.x + s, c.y - s, c.z - s),
-                                  sdl3d_vec3_make(c.x + s, c.y + s, c.z - s),
-                                  sdl3d_vec3_make(c.x - s, c.y - s, c.z - s),
-                                  sdl3d_vec3_make(c.x - s, c.y + s, c.z - s)) &&
-           sdl3d_draw_skybox_face(context, skybox->neg_z, sdl3d_vec3_make(c.x + s, c.y - s, c.z + s),
-                                  sdl3d_vec3_make(c.x + s, c.y + s, c.z + s),
-                                  sdl3d_vec3_make(c.x + s, c.y - s, c.z - s),
-                                  sdl3d_vec3_make(c.x + s, c.y + s, c.z - s)) &&
-           sdl3d_draw_skybox_face(context, skybox->pos_z, sdl3d_vec3_make(c.x - s, c.y - s, c.z - s),
-                                  sdl3d_vec3_make(c.x - s, c.y + s, c.z - s),
-                                  sdl3d_vec3_make(c.x - s, c.y - s, c.z + s),
-                                  sdl3d_vec3_make(c.x - s, c.y + s, c.z + s)) &&
-           sdl3d_draw_skybox_face(context, skybox->pos_y, sdl3d_vec3_make(c.x - s, c.y + s, c.z - s),
-                                  sdl3d_vec3_make(c.x + s, c.y + s, c.z - s),
-                                  sdl3d_vec3_make(c.x - s, c.y + s, c.z + s),
-                                  sdl3d_vec3_make(c.x + s, c.y + s, c.z + s)) &&
-           sdl3d_draw_skybox_face(context, skybox->neg_y, sdl3d_vec3_make(c.x - s, c.y - s, c.z + s),
-                                  sdl3d_vec3_make(c.x + s, c.y - s, c.z + s),
-                                  sdl3d_vec3_make(c.x - s, c.y - s, c.z - s),
-                                  sdl3d_vec3_make(c.x + s, c.y - s, c.z - s));
+    return slayer3d_draw_skybox_face(context, skybox->pos_x, slayer3d_vec3_make(c.x - s, c.y - s, c.z + s),
+                                     slayer3d_vec3_make(c.x - s, c.y + s, c.z + s),
+                                     slayer3d_vec3_make(c.x + s, c.y - s, c.z + s),
+                                     slayer3d_vec3_make(c.x + s, c.y + s, c.z + s)) &&
+           slayer3d_draw_skybox_face(context, skybox->neg_x, slayer3d_vec3_make(c.x + s, c.y - s, c.z - s),
+                                     slayer3d_vec3_make(c.x + s, c.y + s, c.z - s),
+                                     slayer3d_vec3_make(c.x - s, c.y - s, c.z - s),
+                                     slayer3d_vec3_make(c.x - s, c.y + s, c.z - s)) &&
+           slayer3d_draw_skybox_face(context, skybox->neg_z, slayer3d_vec3_make(c.x + s, c.y - s, c.z + s),
+                                     slayer3d_vec3_make(c.x + s, c.y + s, c.z + s),
+                                     slayer3d_vec3_make(c.x + s, c.y - s, c.z - s),
+                                     slayer3d_vec3_make(c.x + s, c.y + s, c.z - s)) &&
+           slayer3d_draw_skybox_face(context, skybox->pos_z, slayer3d_vec3_make(c.x - s, c.y - s, c.z - s),
+                                     slayer3d_vec3_make(c.x - s, c.y + s, c.z - s),
+                                     slayer3d_vec3_make(c.x - s, c.y - s, c.z + s),
+                                     slayer3d_vec3_make(c.x - s, c.y + s, c.z + s)) &&
+           slayer3d_draw_skybox_face(context, skybox->pos_y, slayer3d_vec3_make(c.x - s, c.y + s, c.z - s),
+                                     slayer3d_vec3_make(c.x + s, c.y + s, c.z - s),
+                                     slayer3d_vec3_make(c.x - s, c.y + s, c.z + s),
+                                     slayer3d_vec3_make(c.x + s, c.y + s, c.z + s)) &&
+           slayer3d_draw_skybox_face(context, skybox->neg_y, slayer3d_vec3_make(c.x - s, c.y - s, c.z + s),
+                                     slayer3d_vec3_make(c.x + s, c.y - s, c.z + s),
+                                     slayer3d_vec3_make(c.x - s, c.y - s, c.z - s),
+                                     slayer3d_vec3_make(c.x + s, c.y - s, c.z - s));
 }
 
 /* ------------------------------------------------------------------ */
 /* Post-process effects                                                */
 /* ------------------------------------------------------------------ */
 
-static float sdl3d_luminance(Uint8 r, Uint8 g, Uint8 b)
+static float slayer3d_luminance(Uint8 r, Uint8 g, Uint8 b)
 {
     return 0.2126f * (float)r / 255.0f + 0.7152f * (float)g / 255.0f + 0.0722f * (float)b / 255.0f;
 }
 
-static Uint8 sdl3d_clamp_byte(float v)
+static Uint8 slayer3d_clamp_byte(float v)
 {
     if (v < 0.0f)
     {
@@ -921,7 +923,7 @@ static Uint8 sdl3d_clamp_byte(float v)
     return (Uint8)(v + 0.5f);
 }
 
-bool sdl3d_apply_post_process(sdl3d_render_context *context, const sdl3d_post_process_config *config)
+bool slayer3d_apply_post_process(slayer3d_render_context *context, const slayer3d_post_process_config *config)
 {
     int w, h, total;
     Uint8 *pixels;
@@ -934,7 +936,7 @@ bool sdl3d_apply_post_process(sdl3d_render_context *context, const sdl3d_post_pr
     {
         return SDL_InvalidParamError("config");
     }
-    if (config->effects == SDL3D_POST_NONE)
+    if (config->effects == SLAYER3D_POST_NONE)
     {
         return true;
     }
@@ -944,9 +946,9 @@ bool sdl3d_apply_post_process(sdl3d_render_context *context, const sdl3d_post_pr
     {
         if (context->gl != NULL)
         {
-            sdl3d_gl_post_process(context->gl, config->effects, config->bloom_threshold, config->bloom_intensity,
-                                  config->vignette_intensity, config->color_grade_contrast,
-                                  config->color_grade_brightness, config->color_grade_saturation);
+            slayer3d_gl_post_process(context->gl, config->effects, config->bloom_threshold, config->bloom_intensity,
+                                     config->vignette_intensity, config->color_grade_contrast,
+                                     config->color_grade_brightness, config->color_grade_saturation);
         }
         return true;
     }
@@ -957,7 +959,7 @@ bool sdl3d_apply_post_process(sdl3d_render_context *context, const sdl3d_post_pr
     pixels = context->color_buffer;
 
     /* Bloom: simple box-blur of bright pixels added back. */
-    if (config->effects & SDL3D_POST_BLOOM)
+    if (config->effects & SLAYER3D_POST_BLOOM)
     {
         Uint8 *bloom_buf = (Uint8 *)SDL_calloc((size_t)total * 4, 1);
         if (bloom_buf != NULL)
@@ -966,7 +968,7 @@ bool sdl3d_apply_post_process(sdl3d_render_context *context, const sdl3d_post_pr
             for (int i = 0; i < total; ++i)
             {
                 Uint8 *px = &pixels[i * 4];
-                float lum = sdl3d_luminance(px[0], px[1], px[2]);
+                float lum = slayer3d_luminance(px[0], px[1], px[2]);
                 if (lum > config->bloom_threshold)
                 {
                     bloom_buf[i * 4 + 0] = px[0];
@@ -994,9 +996,9 @@ bool sdl3d_apply_post_process(sdl3d_render_context *context, const sdl3d_post_pr
                     {
                         int idx = (y * w + x) * 4;
                         float intensity = config->bloom_intensity;
-                        pixels[idx + 0] = sdl3d_clamp_byte((float)pixels[idx + 0] + (float)sr / 25.0f * intensity);
-                        pixels[idx + 1] = sdl3d_clamp_byte((float)pixels[idx + 1] + (float)sg / 25.0f * intensity);
-                        pixels[idx + 2] = sdl3d_clamp_byte((float)pixels[idx + 2] + (float)sb / 25.0f * intensity);
+                        pixels[idx + 0] = slayer3d_clamp_byte((float)pixels[idx + 0] + (float)sr / 25.0f * intensity);
+                        pixels[idx + 1] = slayer3d_clamp_byte((float)pixels[idx + 1] + (float)sg / 25.0f * intensity);
+                        pixels[idx + 2] = slayer3d_clamp_byte((float)pixels[idx + 2] + (float)sb / 25.0f * intensity);
                     }
                 }
             }
@@ -1005,7 +1007,7 @@ bool sdl3d_apply_post_process(sdl3d_render_context *context, const sdl3d_post_pr
     }
 
     /* Vignette: darken corners based on distance from center. */
-    if (config->effects & SDL3D_POST_VIGNETTE)
+    if (config->effects & SLAYER3D_POST_VIGNETTE)
     {
         float cx = (float)w * 0.5f;
         float cy = (float)h * 0.5f;
@@ -1033,7 +1035,7 @@ bool sdl3d_apply_post_process(sdl3d_render_context *context, const sdl3d_post_pr
     }
 
     /* Color grading: contrast, brightness, saturation. */
-    if (config->effects & SDL3D_POST_COLOR_GRADE)
+    if (config->effects & SLAYER3D_POST_COLOR_GRADE)
     {
         for (int i = 0; i < total; ++i)
         {
@@ -1060,9 +1062,9 @@ bool sdl3d_apply_post_process(sdl3d_render_context *context, const sdl3d_post_pr
                 b = lum + (b - lum) * config->color_grade_saturation;
             }
 
-            px[0] = sdl3d_clamp_byte(r * 255.0f);
-            px[1] = sdl3d_clamp_byte(g * 255.0f);
-            px[2] = sdl3d_clamp_byte(b * 255.0f);
+            px[0] = slayer3d_clamp_byte(r * 255.0f);
+            px[1] = slayer3d_clamp_byte(g * 255.0f);
+            px[2] = slayer3d_clamp_byte(b * 255.0f);
         }
     }
 

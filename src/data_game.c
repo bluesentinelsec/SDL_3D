@@ -1,30 +1,30 @@
-#include "sdl3d/data_game.h"
+#include "slayer3d/data_game.h"
 
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_timer.h>
 #include <SDL3/SDL_video.h>
 
-#include "sdl3d/game_presentation.h"
-#include "sdl3d/input.h"
-#include "sdl3d/properties.h"
-#include "sdl3d/signal_bus.h"
-#include "sdl3d/transition.h"
+#include "slayer3d/game_presentation.h"
+#include "slayer3d/input.h"
+#include "slayer3d/properties.h"
+#include "slayer3d/signal_bus.h"
+#include "slayer3d/transition.h"
 
-struct sdl3d_data_game_runtime
+struct slayer3d_data_game_runtime
 {
-    sdl3d_asset_resolver *assets;
-    sdl3d_game_data_runtime *data;
-    sdl3d_game_data_font_cache font_cache;
-    sdl3d_game_data_image_cache image_cache;
-    sdl3d_game_data_particle_cache particle_cache;
-    sdl3d_game_data_sprite_cache sprite_cache;
-    sdl3d_game_data_model_cache model_cache;
-    sdl3d_game_data_mesh_primitive_cache mesh_primitive_cache;
-    sdl3d_game_data_app_flow app_flow;
-    sdl3d_game_data_frame_state frame_state;
-    sdl3d_game_data_input_profile_refresh_state input_profile_refresh;
-    sdl3d_game_session *session;
+    slayer3d_asset_resolver *assets;
+    slayer3d_game_data_runtime *data;
+    slayer3d_game_data_font_cache font_cache;
+    slayer3d_game_data_image_cache image_cache;
+    slayer3d_game_data_particle_cache particle_cache;
+    slayer3d_game_data_sprite_cache sprite_cache;
+    slayer3d_game_data_model_cache model_cache;
+    slayer3d_game_data_mesh_primitive_cache mesh_primitive_cache;
+    slayer3d_game_data_app_flow app_flow;
+    slayer3d_game_data_frame_state frame_state;
+    slayer3d_game_data_input_profile_refresh_state input_profile_refresh;
+    slayer3d_game_session *session;
     int *haptics_signal_ids;
     int *haptics_connections;
     int haptics_connection_count;
@@ -38,18 +38,18 @@ struct sdl3d_data_game_runtime
     bool mouse_capture_enabled;
 };
 
-static const char SDL3D_MANAGED_NETWORK_HOST_SESSION[] = "host";
-static const char SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION[] = "direct_connect";
-static const char SDL3D_MANAGED_NETWORK_BINDING_STATE_SNAPSHOT[] = "state_snapshot";
-static const char SDL3D_MANAGED_NETWORK_BINDING_CLIENT_INPUT[] = "client_input";
-static const char SDL3D_MANAGED_NETWORK_BINDING_START_GAME[] = "start_game";
-static const char SDL3D_MANAGED_NETWORK_BINDING_PAUSE_REQUEST[] = "pause_request";
-static const char SDL3D_MANAGED_NETWORK_BINDING_RESUME_REQUEST[] = "resume_request";
-static const char SDL3D_MANAGED_NETWORK_BINDING_DISCONNECT[] = "disconnect";
-static const char SDL3D_MANAGED_NETWORK_BINDING_MENU_SELECT[] = "menu_select";
-static const char SDL3D_MANAGED_NETWORK_BINDING_CAMERA_TOGGLE[] = "camera_toggle";
-static const char SDL3D_MANAGED_NETWORK_BINDING_LOBBY_START[] = "lobby_start";
-static const char SDL3D_MANAGED_NETWORK_DIAGNOSTIC_SNAPSHOT[] = "multiplayer_state";
+static const char SLAYER3D_MANAGED_NETWORK_HOST_SESSION[] = "host";
+static const char SLAYER3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION[] = "direct_connect";
+static const char SLAYER3D_MANAGED_NETWORK_BINDING_STATE_SNAPSHOT[] = "state_snapshot";
+static const char SLAYER3D_MANAGED_NETWORK_BINDING_CLIENT_INPUT[] = "client_input";
+static const char SLAYER3D_MANAGED_NETWORK_BINDING_START_GAME[] = "start_game";
+static const char SLAYER3D_MANAGED_NETWORK_BINDING_PAUSE_REQUEST[] = "pause_request";
+static const char SLAYER3D_MANAGED_NETWORK_BINDING_RESUME_REQUEST[] = "resume_request";
+static const char SLAYER3D_MANAGED_NETWORK_BINDING_DISCONNECT[] = "disconnect";
+static const char SLAYER3D_MANAGED_NETWORK_BINDING_MENU_SELECT[] = "menu_select";
+static const char SLAYER3D_MANAGED_NETWORK_BINDING_CAMERA_TOGGLE[] = "camera_toggle";
+static const char SLAYER3D_MANAGED_NETWORK_BINDING_LOBBY_START[] = "lobby_start";
+static const char SLAYER3D_MANAGED_NETWORK_DIAGNOSTIC_SNAPSHOT[] = "multiplayer_state";
 
 static void set_error(char *error_buffer, int error_buffer_size, const char *message)
 {
@@ -67,7 +67,7 @@ static void set_errorf(char *error_buffer, int error_buffer_size, const char *fm
     }
 }
 
-static void network_loop_result_init(sdl3d_data_game_network_loop_result *result, sdl3d_network_session *session)
+static void network_loop_result_init(slayer3d_data_game_network_loop_result *result, slayer3d_network_session *session)
 {
     if (result == NULL)
     {
@@ -75,18 +75,19 @@ static void network_loop_result_init(sdl3d_data_game_network_loop_result *result
     }
 
     SDL_zero(*result);
-    result->session_state = session != NULL ? sdl3d_network_session_state(session) : SDL3D_NETWORK_STATE_DISCONNECTED;
+    result->session_state =
+        session != NULL ? slayer3d_network_session_state(session) : SLAYER3D_NETWORK_STATE_DISCONNECTED;
 }
 
-static Uint32 data_game_input_tick(const sdl3d_data_game_runtime *runtime)
+static Uint32 data_game_input_tick(const slayer3d_data_game_runtime *runtime)
 {
-    sdl3d_input_manager *input =
-        runtime != NULL && runtime->session != NULL ? sdl3d_game_session_get_input(runtime->session) : NULL;
-    const sdl3d_input_snapshot *snapshot = input != NULL ? sdl3d_input_get_snapshot(input) : NULL;
+    slayer3d_input_manager *input =
+        runtime != NULL && runtime->session != NULL ? slayer3d_game_session_get_input(runtime->session) : NULL;
+    const slayer3d_input_snapshot *snapshot = input != NULL ? slayer3d_input_get_snapshot(input) : NULL;
     return snapshot != NULL ? (Uint32)SDL_max(snapshot->tick, 0) : (Uint32)SDL_GetTicks();
 }
 
-static void data_game_release_mouse_capture(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx)
+static void data_game_release_mouse_capture(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx)
 {
     if (runtime == NULL || ctx == NULL || ctx->window == NULL || !runtime->mouse_capture_applied ||
         !runtime->mouse_capture_enabled)
@@ -98,12 +99,12 @@ static void data_game_release_mouse_capture(sdl3d_data_game_runtime *runtime, sd
     runtime->mouse_capture_enabled = false;
 }
 
-static void data_game_apply_scene_mouse_capture(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx)
+static void data_game_apply_scene_mouse_capture(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx)
 {
     if (runtime == NULL || runtime->data == NULL || ctx == NULL || ctx->window == NULL)
         return;
 
-    const bool capture = sdl3d_game_data_active_scene_mouse_capture(runtime->data, ctx->paused);
+    const bool capture = slayer3d_game_data_active_scene_mouse_capture(runtime->data, ctx->paused);
     if (runtime->mouse_capture_applied && runtime->mouse_capture_enabled == capture)
         return;
 
@@ -117,8 +118,8 @@ static bool data_game_binding_matches(const char *actual, const char *expected)
     return actual != NULL && expected != NULL && expected[0] != '\0' && SDL_strcmp(actual, expected) == 0;
 }
 
-static bool data_game_decode_runtime_control(sdl3d_data_game_runtime *runtime, const Uint8 *packet, int packet_size,
-                                             const char **out_binding, sdl3d_game_data_network_control *out_control)
+static bool data_game_decode_runtime_control(slayer3d_data_game_runtime *runtime, const Uint8 *packet, int packet_size,
+                                             const char **out_binding, slayer3d_game_data_network_control *out_control)
 {
     char error[160] = {0};
     if (out_binding != NULL)
@@ -128,11 +129,11 @@ static bool data_game_decode_runtime_control(sdl3d_data_game_runtime *runtime, c
         return false;
     }
 
-    return sdl3d_game_data_decode_network_runtime_control(runtime->data, packet, (size_t)packet_size, out_binding,
-                                                          out_control, error, (int)sizeof(error));
+    return slayer3d_game_data_decode_network_runtime_control(runtime->data, packet, (size_t)packet_size, out_binding,
+                                                             out_control, error, (int)sizeof(error));
 }
 
-static bool data_game_send_runtime_control(sdl3d_data_game_runtime *runtime, sdl3d_network_session *session,
+static bool data_game_send_runtime_control(slayer3d_data_game_runtime *runtime, slayer3d_network_session *session,
                                            const char *binding_name, Uint32 tick, char *error_buffer,
                                            int error_buffer_size)
 {
@@ -142,11 +143,11 @@ static bool data_game_send_runtime_control(sdl3d_data_game_runtime *runtime, sdl
         return false;
     }
 
-    return sdl3d_game_data_send_network_runtime_control(runtime->data, session, binding_name, tick, error_buffer,
-                                                        error_buffer_size);
+    return slayer3d_game_data_send_network_runtime_control(runtime->data, session, binding_name, tick, error_buffer,
+                                                           error_buffer_size);
 }
 
-static bool data_game_sync_network_pause_from_context(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx,
+static bool data_game_sync_network_pause_from_context(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx,
                                                       char *error_buffer, int error_buffer_size)
 {
     if (runtime == NULL || runtime->data == NULL || ctx == NULL)
@@ -155,10 +156,11 @@ static bool data_game_sync_network_pause_from_context(sdl3d_data_game_runtime *r
         return false;
     }
 
-    return sdl3d_game_data_set_network_runtime_pause_state(runtime->data, ctx->paused, error_buffer, error_buffer_size);
+    return slayer3d_game_data_set_network_runtime_pause_state(runtime->data, ctx->paused, error_buffer,
+                                                              error_buffer_size);
 }
 
-static bool data_game_sync_context_pause_from_network(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx,
+static bool data_game_sync_context_pause_from_network(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx,
                                                       char *error_buffer, int error_buffer_size)
 {
     bool paused = false;
@@ -167,7 +169,7 @@ static bool data_game_sync_context_pause_from_network(sdl3d_data_game_runtime *r
         set_error(error_buffer, error_buffer_size, "network pause sync requires runtime and context");
         return false;
     }
-    if (!sdl3d_game_data_get_network_runtime_pause_state(runtime->data, &paused, error_buffer, error_buffer_size))
+    if (!slayer3d_game_data_get_network_runtime_pause_state(runtime->data, &paused, error_buffer, error_buffer_size))
     {
         return false;
     }
@@ -175,7 +177,7 @@ static bool data_game_sync_context_pause_from_network(sdl3d_data_game_runtime *r
     return true;
 }
 
-static bool haptics_signal_connected(const sdl3d_data_game_runtime *runtime, int signal_id)
+static bool haptics_signal_connected(const slayer3d_data_game_runtime *runtime, int signal_id)
 {
     if (runtime == NULL || signal_id < 0)
     {
@@ -192,47 +194,47 @@ static bool haptics_signal_connected(const sdl3d_data_game_runtime *runtime, int
     return false;
 }
 
-static void on_haptics_policy_signal(void *userdata, int signal_id, const sdl3d_properties *payload)
+static void on_haptics_policy_signal(void *userdata, int signal_id, const slayer3d_properties *payload)
 {
-    sdl3d_data_game_runtime *runtime = (sdl3d_data_game_runtime *)userdata;
-    sdl3d_input_manager *input =
-        runtime != NULL && runtime->session != NULL ? sdl3d_game_session_get_input(runtime->session) : NULL;
+    slayer3d_data_game_runtime *runtime = (slayer3d_data_game_runtime *)userdata;
+    slayer3d_input_manager *input =
+        runtime != NULL && runtime->session != NULL ? slayer3d_game_session_get_input(runtime->session) : NULL;
     if (runtime == NULL || runtime->data == NULL || input == NULL)
     {
         return;
     }
 
-    const int policy_count = sdl3d_game_data_haptics_policy_count(runtime->data);
+    const int policy_count = slayer3d_game_data_haptics_policy_count(runtime->data);
     for (int i = 0; i < policy_count; ++i)
     {
-        sdl3d_game_data_haptics_policy policy;
-        if (!sdl3d_game_data_match_haptics_policy(runtime->data, i, signal_id, payload, &policy))
+        slayer3d_game_data_haptics_policy policy;
+        if (!slayer3d_game_data_match_haptics_policy(runtime->data, i, signal_id, payload, &policy))
         {
             continue;
         }
-        if (!sdl3d_input_rumble_all_gamepads(input, policy.low_frequency, policy.high_frequency, policy.duration_ms))
+        if (!slayer3d_input_rumble_all_gamepads(input, policy.low_frequency, policy.high_frequency, policy.duration_ms))
         {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                        "SDL3D haptics policy '%s' requested rumble but no gamepad accepted it",
+                        "SLAYER3D haptics policy '%s' requested rumble but no gamepad accepted it",
                         policy.name != NULL ? policy.name : "<unnamed>");
         }
     }
 }
 
-static bool connect_haptics_policies(sdl3d_data_game_runtime *runtime)
+static bool connect_haptics_policies(slayer3d_data_game_runtime *runtime)
 {
     if (runtime == NULL || runtime->data == NULL || runtime->session == NULL)
     {
         return true;
     }
 
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(runtime->session);
-    if (bus == NULL || sdl3d_game_session_get_input(runtime->session) == NULL)
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(runtime->session);
+    if (bus == NULL || slayer3d_game_session_get_input(runtime->session) == NULL)
     {
         return true;
     }
 
-    const int policy_count = sdl3d_game_data_haptics_policy_count(runtime->data);
+    const int policy_count = slayer3d_game_data_haptics_policy_count(runtime->data);
     if (policy_count <= 0)
     {
         return true;
@@ -252,14 +254,14 @@ static bool connect_haptics_policies(sdl3d_data_game_runtime *runtime)
 
     for (int i = 0; i < policy_count; ++i)
     {
-        sdl3d_game_data_haptics_policy policy;
-        if (!sdl3d_game_data_get_haptics_policy_at(runtime->data, i, &policy) ||
+        slayer3d_game_data_haptics_policy policy;
+        if (!slayer3d_game_data_get_haptics_policy_at(runtime->data, i, &policy) ||
             haptics_signal_connected(runtime, policy.signal_id))
         {
             continue;
         }
 
-        const int connection = sdl3d_signal_connect(bus, policy.signal_id, on_haptics_policy_signal, runtime);
+        const int connection = slayer3d_signal_connect(bus, policy.signal_id, on_haptics_policy_signal, runtime);
         if (connection > 0)
         {
             runtime->haptics_signal_ids[runtime->haptics_connection_count] = policy.signal_id;
@@ -270,21 +272,21 @@ static bool connect_haptics_policies(sdl3d_data_game_runtime *runtime)
     return true;
 }
 
-static void disconnect_haptics_policies(sdl3d_data_game_runtime *runtime)
+static void disconnect_haptics_policies(slayer3d_data_game_runtime *runtime)
 {
     if (runtime == NULL || runtime->session == NULL)
     {
         return;
     }
 
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(runtime->session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(runtime->session);
     if (bus != NULL)
     {
         for (int i = 0; i < runtime->haptics_connection_count; ++i)
         {
             if (runtime->haptics_connections != NULL && runtime->haptics_connections[i] > 0)
             {
-                sdl3d_signal_disconnect(bus, runtime->haptics_connections[i]);
+                slayer3d_signal_disconnect(bus, runtime->haptics_connections[i]);
             }
         }
     }
@@ -295,118 +297,119 @@ static void disconnect_haptics_policies(sdl3d_data_game_runtime *runtime)
     runtime->haptics_connection_count = 0;
 }
 
-static sdl3d_data_game_network_bindings managed_network_bindings(void)
+static slayer3d_data_game_network_bindings managed_network_bindings(void)
 {
-    sdl3d_data_game_network_bindings bindings;
+    slayer3d_data_game_network_bindings bindings;
     SDL_zero(bindings);
-    bindings.state_snapshot = SDL3D_MANAGED_NETWORK_BINDING_STATE_SNAPSHOT;
-    bindings.client_input = SDL3D_MANAGED_NETWORK_BINDING_CLIENT_INPUT;
-    bindings.start_game = SDL3D_MANAGED_NETWORK_BINDING_START_GAME;
-    bindings.pause_request = SDL3D_MANAGED_NETWORK_BINDING_PAUSE_REQUEST;
-    bindings.resume_request = SDL3D_MANAGED_NETWORK_BINDING_RESUME_REQUEST;
-    bindings.disconnect = SDL3D_MANAGED_NETWORK_BINDING_DISCONNECT;
+    bindings.state_snapshot = SLAYER3D_MANAGED_NETWORK_BINDING_STATE_SNAPSHOT;
+    bindings.client_input = SLAYER3D_MANAGED_NETWORK_BINDING_CLIENT_INPUT;
+    bindings.start_game = SLAYER3D_MANAGED_NETWORK_BINDING_START_GAME;
+    bindings.pause_request = SLAYER3D_MANAGED_NETWORK_BINDING_PAUSE_REQUEST;
+    bindings.resume_request = SLAYER3D_MANAGED_NETWORK_BINDING_RESUME_REQUEST;
+    bindings.disconnect = SLAYER3D_MANAGED_NETWORK_BINDING_DISCONNECT;
     return bindings;
 }
 
-static const char *managed_network_session_scene(const sdl3d_data_game_runtime *runtime, const char *name,
+static const char *managed_network_session_scene(const slayer3d_data_game_runtime *runtime, const char *name,
                                                  const char *fallback)
 {
     const char *scene = NULL;
     if (runtime != NULL && runtime->data != NULL &&
-        sdl3d_game_data_get_network_session_scene(runtime->data, name, &scene))
+        slayer3d_game_data_get_network_session_scene(runtime->data, name, &scene))
     {
         return scene;
     }
     return fallback;
 }
 
-static const char *managed_network_session_state_key(const sdl3d_data_game_runtime *runtime, const char *name,
+static const char *managed_network_session_state_key(const slayer3d_data_game_runtime *runtime, const char *name,
                                                      const char *fallback)
 {
     const char *key = NULL;
     if (runtime != NULL && runtime->data != NULL &&
-        sdl3d_game_data_get_network_session_state_key(runtime->data, name, &key))
+        slayer3d_game_data_get_network_session_state_key(runtime->data, name, &key))
     {
         return key;
     }
     return fallback;
 }
 
-static const char *managed_network_session_state_value(const sdl3d_data_game_runtime *runtime, const char *group,
+static const char *managed_network_session_state_value(const slayer3d_data_game_runtime *runtime, const char *group,
                                                        const char *name, const char *fallback)
 {
     const char *value = NULL;
     if (runtime != NULL && runtime->data != NULL &&
-        sdl3d_game_data_get_network_session_state_value(runtime->data, group, name, &value))
+        slayer3d_game_data_get_network_session_state_value(runtime->data, group, name, &value))
     {
         return value;
     }
     return fallback;
 }
 
-static const char *managed_network_message(const sdl3d_data_game_runtime *runtime, const char *group, const char *name,
-                                           const char *fallback)
+static const char *managed_network_message(const slayer3d_data_game_runtime *runtime, const char *group,
+                                           const char *name, const char *fallback)
 {
     const char *message = NULL;
     if (runtime != NULL && runtime->data != NULL &&
-        sdl3d_game_data_get_network_session_message(runtime->data, group, name, &message))
+        slayer3d_game_data_get_network_session_message(runtime->data, group, name, &message))
     {
         return message;
     }
     return fallback;
 }
 
-static const char *managed_network_scene_state_key(const sdl3d_data_game_runtime *runtime, const char *scope,
+static const char *managed_network_scene_state_key(const slayer3d_data_game_runtime *runtime, const char *scope,
                                                    const char *name, const char *fallback)
 {
     const char *key = NULL;
     if (runtime != NULL && runtime->data != NULL &&
-        sdl3d_game_data_get_network_scene_state_key(runtime->data, scope, name, &key))
+        slayer3d_game_data_get_network_scene_state_key(runtime->data, scope, name, &key))
     {
         return key;
     }
     return fallback;
 }
 
-static const char *managed_network_scene_state_string(const sdl3d_data_game_runtime *runtime, const char *key_name,
+static const char *managed_network_scene_state_string(const slayer3d_data_game_runtime *runtime, const char *key_name,
                                                       const char *fallback)
 {
-    const sdl3d_properties *scene_state =
-        runtime != NULL && runtime->data != NULL ? sdl3d_game_data_scene_state(runtime->data) : NULL;
+    const slayer3d_properties *scene_state =
+        runtime != NULL && runtime->data != NULL ? slayer3d_game_data_scene_state(runtime->data) : NULL;
     const char *key = managed_network_session_state_key(runtime, key_name, NULL);
-    return scene_state != NULL && key != NULL ? sdl3d_properties_get_string(scene_state, key, fallback) : fallback;
+    return scene_state != NULL && key != NULL ? slayer3d_properties_get_string(scene_state, key, fallback) : fallback;
 }
 
-static bool managed_network_active_scene_is(const sdl3d_data_game_runtime *runtime, const char *scene_name,
+static bool managed_network_active_scene_is(const slayer3d_data_game_runtime *runtime, const char *scene_name,
                                             const char *fallback)
 {
     const char *active_scene =
-        runtime != NULL && runtime->data != NULL ? sdl3d_game_data_active_scene(runtime->data) : NULL;
+        runtime != NULL && runtime->data != NULL ? slayer3d_game_data_active_scene(runtime->data) : NULL;
     const char *expected_scene = managed_network_session_scene(runtime, scene_name, fallback);
     return active_scene != NULL && expected_scene != NULL && SDL_strcmp(active_scene, expected_scene) == 0;
 }
 
-static bool managed_network_is_play_scene(const sdl3d_data_game_runtime *runtime)
+static bool managed_network_is_play_scene(const slayer3d_data_game_runtime *runtime)
 {
     return managed_network_active_scene_is(runtime, "play", NULL);
 }
 
-static bool managed_network_keep_alive_scene_matches(const sdl3d_data_game_runtime *runtime, const char *session_name)
+static bool managed_network_keep_alive_scene_matches(const slayer3d_data_game_runtime *runtime,
+                                                     const char *session_name)
 {
     const char *active_scene =
-        runtime != NULL && runtime->data != NULL ? sdl3d_game_data_active_scene(runtime->data) : NULL;
-    return sdl3d_game_data_network_managed_keep_alive_scene_matches(runtime != NULL ? runtime->data : NULL,
-                                                                    session_name, active_scene);
+        runtime != NULL && runtime->data != NULL ? slayer3d_game_data_active_scene(runtime->data) : NULL;
+    return slayer3d_game_data_network_managed_keep_alive_scene_matches(runtime != NULL ? runtime->data : NULL,
+                                                                       session_name, active_scene);
 }
 
-static bool managed_network_is_network_match(const sdl3d_data_game_runtime *runtime)
+static bool managed_network_is_network_match(const slayer3d_data_game_runtime *runtime)
 {
     const char *match_mode = managed_network_scene_state_string(runtime, "match_mode", NULL);
     const char *network_value = managed_network_session_state_value(runtime, "match_mode", "network", NULL);
     return match_mode != NULL && network_value != NULL && SDL_strcmp(match_mode, network_value) == 0;
 }
 
-static bool managed_network_is_role_host(const sdl3d_data_game_runtime *runtime)
+static bool managed_network_is_role_host(const slayer3d_data_game_runtime *runtime)
 {
     const char *network_role = managed_network_scene_state_string(runtime, "network_role", NULL);
     const char *host_value = managed_network_session_state_value(runtime, "network_role", "host", NULL);
@@ -414,7 +417,7 @@ static bool managed_network_is_role_host(const sdl3d_data_game_runtime *runtime)
            SDL_strcmp(network_role, host_value) == 0;
 }
 
-static bool managed_network_is_role_client(const sdl3d_data_game_runtime *runtime)
+static bool managed_network_is_role_client(const slayer3d_data_game_runtime *runtime)
 {
     const char *network_role = managed_network_scene_state_string(runtime, "network_role", NULL);
     const char *client_value = managed_network_session_state_value(runtime, "network_role", "client", NULL);
@@ -422,63 +425,64 @@ static bool managed_network_is_role_client(const sdl3d_data_game_runtime *runtim
            SDL_strcmp(network_role, client_value) == 0;
 }
 
-static int managed_network_action_id(const sdl3d_data_game_runtime *runtime, const char *binding_name)
+static int managed_network_action_id(const slayer3d_data_game_runtime *runtime, const char *binding_name)
 {
     int action_id = -1;
     if (runtime != NULL && runtime->data != NULL &&
-        sdl3d_game_data_get_network_runtime_action(runtime->data, binding_name, &action_id))
+        slayer3d_game_data_get_network_runtime_action(runtime->data, binding_name, &action_id))
     {
         return action_id;
     }
     return -1;
 }
 
-static bool managed_network_run_flow_event(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx,
+static bool managed_network_run_flow_event(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx,
                                            const char *event_name, const char *reason)
 {
     char error[192] = {0};
-    sdl3d_properties *payload = NULL;
+    slayer3d_properties *payload = NULL;
     bool ok = false;
 
     if (runtime == NULL || runtime->data == NULL || event_name == NULL || event_name[0] == '\0')
         return false;
 
-    payload = sdl3d_properties_create();
+    payload = slayer3d_properties_create();
     if (payload == NULL)
         return false;
-    sdl3d_properties_set_string(payload, "event", event_name);
-    sdl3d_properties_set_string(payload, "reason", reason != NULL ? reason : "");
+    slayer3d_properties_set_string(payload, "event", event_name);
+    slayer3d_properties_set_string(payload, "reason", reason != NULL ? reason : "");
 
-    ok = sdl3d_game_data_run_network_session_flow_event(runtime->data, ctx, event_name, payload, error,
-                                                        (int)sizeof(error));
-    sdl3d_properties_destroy(payload);
+    ok = slayer3d_game_data_run_network_session_flow_event(runtime->data, ctx, event_name, payload, error,
+                                                           (int)sizeof(error));
+    slayer3d_properties_destroy(payload);
     if (!ok)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D managed network event '%s' failed: %s", event_name,
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D managed network event '%s' failed: %s", event_name,
                     error[0] != '\0' ? error : "unknown error");
     }
     return ok;
 }
 
-static bool managed_network_send_control(sdl3d_data_game_runtime *runtime, sdl3d_network_session *session,
+static bool managed_network_send_control(slayer3d_data_game_runtime *runtime, slayer3d_network_session *session,
                                          const char *binding_name, const char *label)
 {
     char error[160] = {0};
     const Uint32 tick = data_game_input_tick(runtime);
     if (!data_game_send_runtime_control(runtime, session, binding_name, tick, error, (int)sizeof(error)))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D managed network control send failed: %s",
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D managed network control send failed: %s",
                     error[0] != '\0' ? error : "unknown error");
         return false;
     }
 
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D managed network sent control: %s binding=%s",
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D managed network sent control: %s binding=%s",
                 label != NULL ? label : "control", binding_name != NULL ? binding_name : "<null>");
     return true;
 }
 
-static bool managed_network_send_control_repeated(sdl3d_data_game_runtime *runtime, sdl3d_network_session *session,
-                                                  const char *binding_name, const char *label, int count)
+static bool managed_network_send_control_repeated(slayer3d_data_game_runtime *runtime,
+                                                  slayer3d_network_session *session, const char *binding_name,
+                                                  const char *label, int count)
 {
     bool sent_any = false;
     const int attempts = SDL_max(count, 1);
@@ -487,81 +491,81 @@ static bool managed_network_send_control_repeated(sdl3d_data_game_runtime *runti
         if (managed_network_send_control(runtime, session, binding_name, label))
             sent_any = true;
         if (session != NULL)
-            (void)sdl3d_network_session_update(session, 0.0f);
+            (void)slayer3d_network_session_update(session, 0.0f);
     }
     return sent_any;
 }
 
-static void managed_network_publish_host_status(sdl3d_data_game_runtime *runtime)
+static void managed_network_publish_host_status(slayer3d_data_game_runtime *runtime)
 {
     if (runtime == NULL || runtime->data == NULL)
         return;
 
-    (void)sdl3d_game_data_network_host_publish_status(
-        runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION,
+    (void)slayer3d_game_data_network_host_publish_status(
+        runtime->data, SLAYER3D_MANAGED_NETWORK_HOST_SESSION,
         managed_network_scene_state_key(runtime, "host", "status", NULL),
         managed_network_scene_state_key(runtime, "host", "endpoint", NULL),
         managed_network_scene_state_key(runtime, "host", "peer", NULL),
         managed_network_scene_state_key(runtime, "host", "connected", NULL));
 }
 
-static void managed_network_cancel_host(sdl3d_data_game_runtime *runtime, bool notify_peer, const char *status)
+static void managed_network_cancel_host(slayer3d_data_game_runtime *runtime, bool notify_peer, const char *status)
 {
-    sdl3d_network_session *session =
+    slayer3d_network_session *session =
         runtime != NULL && runtime->data != NULL
-            ? sdl3d_game_data_get_network_host_session(runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION)
+            ? slayer3d_game_data_get_network_host_session(runtime->data, SLAYER3D_MANAGED_NETWORK_HOST_SESSION)
             : NULL;
     if (runtime == NULL || runtime->data == NULL)
         return;
-    if (session != NULL && notify_peer && sdl3d_network_session_is_connected(session))
+    if (session != NULL && notify_peer && slayer3d_network_session_is_connected(session))
     {
-        (void)managed_network_send_control_repeated(runtime, session, SDL3D_MANAGED_NETWORK_BINDING_DISCONNECT,
+        (void)managed_network_send_control_repeated(runtime, session, SLAYER3D_MANAGED_NETWORK_BINDING_DISCONNECT,
                                                     "host disconnect", 5);
     }
-    (void)sdl3d_game_data_network_host_cancel(runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION,
-                                              managed_network_scene_state_key(runtime, "host", "status", NULL),
-                                              managed_network_scene_state_key(runtime, "host", "endpoint", NULL),
-                                              managed_network_scene_state_key(runtime, "host", "peer", NULL),
-                                              managed_network_scene_state_key(runtime, "host", "connected", NULL),
-                                              status != NULL ? status : "Not hosting");
+    (void)slayer3d_game_data_network_host_cancel(runtime->data, SLAYER3D_MANAGED_NETWORK_HOST_SESSION,
+                                                 managed_network_scene_state_key(runtime, "host", "status", NULL),
+                                                 managed_network_scene_state_key(runtime, "host", "endpoint", NULL),
+                                                 managed_network_scene_state_key(runtime, "host", "peer", NULL),
+                                                 managed_network_scene_state_key(runtime, "host", "connected", NULL),
+                                                 status != NULL ? status : "Not hosting");
 }
 
-static void managed_network_publish_direct_connect_status(sdl3d_data_game_runtime *runtime)
+static void managed_network_publish_direct_connect_status(slayer3d_data_game_runtime *runtime)
 {
     if (runtime == NULL || runtime->data == NULL)
         return;
 
-    (void)sdl3d_game_data_network_direct_connect_publish_status(
-        runtime->data, SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION,
+    (void)slayer3d_game_data_network_direct_connect_publish_status(
+        runtime->data, SLAYER3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION,
         managed_network_scene_state_key(runtime, "direct_connect", "status", NULL),
         managed_network_scene_state_key(runtime, "direct_connect", "state", NULL),
         managed_network_scene_state_key(runtime, "direct_connect", "connected", NULL));
 }
 
-static void managed_network_cancel_direct_connect(sdl3d_data_game_runtime *runtime, bool notify_peer,
+static void managed_network_cancel_direct_connect(slayer3d_data_game_runtime *runtime, bool notify_peer,
                                                   const char *status)
 {
-    sdl3d_network_session *session = runtime != NULL && runtime->data != NULL
-                                         ? sdl3d_game_data_get_network_direct_connect_session(
-                                               runtime->data, SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION)
-                                         : NULL;
+    slayer3d_network_session *session = runtime != NULL && runtime->data != NULL
+                                            ? slayer3d_game_data_get_network_direct_connect_session(
+                                                  runtime->data, SLAYER3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION)
+                                            : NULL;
     if (runtime == NULL || runtime->data == NULL)
         return;
-    if (session != NULL && notify_peer && sdl3d_network_session_is_connected(session))
+    if (session != NULL && notify_peer && slayer3d_network_session_is_connected(session))
     {
-        (void)managed_network_send_control_repeated(runtime, session, SDL3D_MANAGED_NETWORK_BINDING_DISCONNECT,
+        (void)managed_network_send_control_repeated(runtime, session, SLAYER3D_MANAGED_NETWORK_BINDING_DISCONNECT,
                                                     "client disconnect", 5);
     }
-    (void)sdl3d_game_data_network_direct_connect_cancel(
-        runtime->data, SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION,
+    (void)slayer3d_game_data_network_direct_connect_cancel(
+        runtime->data, SLAYER3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION,
         managed_network_scene_state_key(runtime, "direct_connect", "status", NULL),
         managed_network_scene_state_key(runtime, "direct_connect", "state", NULL),
         managed_network_scene_state_key(runtime, "direct_connect", "connected", NULL),
         status != NULL ? status : "Disconnected");
 }
 
-static void managed_network_disconnect_flow(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx, bool local_host,
-                                            const char *reason)
+static void managed_network_disconnect_flow(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx,
+                                            bool local_host, const char *reason)
 {
     const char *event_name = NULL;
     if (runtime == NULL || runtime->data == NULL)
@@ -584,34 +588,34 @@ static void managed_network_disconnect_flow(sdl3d_data_game_runtime *runtime, sd
             : managed_network_message(runtime, "disconnect_reasons", "peer_disconnected", "Peer disconnected"));
 }
 
-static void managed_network_lobby_signal(void *userdata, int signal_id, const sdl3d_properties *payload)
+static void managed_network_lobby_signal(void *userdata, int signal_id, const slayer3d_properties *payload)
 {
-    sdl3d_data_game_runtime *runtime = (sdl3d_data_game_runtime *)userdata;
+    slayer3d_data_game_runtime *runtime = (slayer3d_data_game_runtime *)userdata;
     (void)payload;
     if (runtime == NULL || signal_id != runtime->managed_network_lobby_start_signal_id)
         return;
     runtime->managed_network_lobby_start_requested = true;
 }
 
-static bool connect_managed_network(sdl3d_data_game_runtime *runtime)
+static bool connect_managed_network(slayer3d_data_game_runtime *runtime)
 {
     if (runtime == NULL || runtime->data == NULL || runtime->session == NULL || !runtime->managed_network_enabled)
         return true;
 
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(runtime->session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(runtime->session);
     if (bus == NULL)
         return true;
 
     runtime->managed_network_lobby_start_signal_id = -1;
     runtime->managed_network_camera_toggle_signal_id = -1;
-    (void)sdl3d_game_data_get_network_runtime_signal(runtime->data, SDL3D_MANAGED_NETWORK_BINDING_LOBBY_START,
-                                                     &runtime->managed_network_lobby_start_signal_id);
-    (void)sdl3d_game_data_get_network_runtime_signal(runtime->data, SDL3D_MANAGED_NETWORK_BINDING_CAMERA_TOGGLE,
-                                                     &runtime->managed_network_camera_toggle_signal_id);
+    (void)slayer3d_game_data_get_network_runtime_signal(runtime->data, SLAYER3D_MANAGED_NETWORK_BINDING_LOBBY_START,
+                                                        &runtime->managed_network_lobby_start_signal_id);
+    (void)slayer3d_game_data_get_network_runtime_signal(runtime->data, SLAYER3D_MANAGED_NETWORK_BINDING_CAMERA_TOGGLE,
+                                                        &runtime->managed_network_camera_toggle_signal_id);
 
     if (runtime->managed_network_lobby_start_signal_id >= 0)
     {
-        runtime->managed_network_lobby_start_connection = sdl3d_signal_connect(
+        runtime->managed_network_lobby_start_connection = slayer3d_signal_connect(
             bus, runtime->managed_network_lobby_start_signal_id, managed_network_lobby_signal, runtime);
         if (runtime->managed_network_lobby_start_connection == 0)
             return false;
@@ -619,17 +623,17 @@ static bool connect_managed_network(sdl3d_data_game_runtime *runtime)
     return true;
 }
 
-static void disconnect_managed_network(sdl3d_data_game_runtime *runtime)
+static void disconnect_managed_network(slayer3d_data_game_runtime *runtime)
 {
     if (runtime == NULL)
         return;
 
     if (runtime->managed_network_enabled && runtime->data != NULL)
     {
-        if (sdl3d_game_data_get_network_host_session(runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION) != NULL)
+        if (slayer3d_game_data_get_network_host_session(runtime->data, SLAYER3D_MANAGED_NETWORK_HOST_SESSION) != NULL)
             managed_network_cancel_host(runtime, true, "Not hosting");
-        if (sdl3d_game_data_get_network_direct_connect_session(runtime->data,
-                                                               SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION) != NULL)
+        if (slayer3d_game_data_get_network_direct_connect_session(
+                runtime->data, SLAYER3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION) != NULL)
         {
             managed_network_cancel_direct_connect(runtime, true, "Disconnected");
         }
@@ -637,8 +641,8 @@ static void disconnect_managed_network(sdl3d_data_game_runtime *runtime)
 
     if (runtime->session != NULL && runtime->managed_network_lobby_start_connection > 0)
     {
-        sdl3d_signal_disconnect(sdl3d_game_session_get_signal_bus(runtime->session),
-                                runtime->managed_network_lobby_start_connection);
+        slayer3d_signal_disconnect(slayer3d_game_session_get_signal_bus(runtime->session),
+                                   runtime->managed_network_lobby_start_connection);
     }
     runtime->managed_network_lobby_start_connection = 0;
     runtime->managed_network_lobby_start_signal_id = -1;
@@ -646,13 +650,15 @@ static void disconnect_managed_network(sdl3d_data_game_runtime *runtime)
     runtime->managed_network_lobby_start_requested = false;
 }
 
-static void managed_network_update_termination_ack(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx, float dt)
+static void managed_network_update_termination_ack(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx,
+                                                   float dt)
 {
-    const sdl3d_properties *scene_state =
-        runtime != NULL && runtime->data != NULL ? sdl3d_game_data_scene_state(runtime->data) : NULL;
+    const slayer3d_properties *scene_state =
+        runtime != NULL && runtime->data != NULL ? slayer3d_game_data_scene_state(runtime->data) : NULL;
     const char *active_key = managed_network_session_state_key(runtime, "match_termination_active", NULL);
-    const bool active =
-        scene_state != NULL && active_key != NULL ? sdl3d_properties_get_bool(scene_state, active_key, false) : false;
+    const bool active = scene_state != NULL && active_key != NULL
+                            ? slayer3d_properties_get_bool(scene_state, active_key, false)
+                            : false;
 
     if (runtime == NULL || !active)
     {
@@ -666,57 +672,57 @@ static void managed_network_update_termination_ack(sdl3d_data_game_runtime *runt
 
     runtime->managed_network_termination_timer += SDL_max(dt, 0.0f);
     float acknowledge_delay = 3.0f;
-    (void)sdl3d_game_data_get_network_managed_termination_ack_delay(runtime->data, &acknowledge_delay);
+    (void)slayer3d_game_data_get_network_managed_termination_ack_delay(runtime->data, &acknowledge_delay);
     if (runtime->managed_network_termination_timer < acknowledge_delay)
         return;
 
-    sdl3d_input_manager *input = runtime->session != NULL ? sdl3d_game_session_get_input(runtime->session) : NULL;
-    const int select_action = managed_network_action_id(runtime, SDL3D_MANAGED_NETWORK_BINDING_MENU_SELECT);
-    if (input == NULL || select_action < 0 || !sdl3d_input_is_pressed(input, select_action))
+    slayer3d_input_manager *input = runtime->session != NULL ? slayer3d_game_session_get_input(runtime->session) : NULL;
+    const int select_action = managed_network_action_id(runtime, SLAYER3D_MANAGED_NETWORK_BINDING_MENU_SELECT);
+    if (input == NULL || select_action < 0 || !slayer3d_input_is_pressed(input, select_action))
         return;
 
     runtime->managed_network_termination_timer = 0.0f;
     (void)managed_network_run_flow_event(runtime, ctx, "network_match_termination_ack", NULL);
 }
 
-static void managed_network_process_lobby_start(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx)
+static void managed_network_process_lobby_start(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx)
 {
     if (runtime == NULL || runtime->data == NULL || !runtime->managed_network_lobby_start_requested)
         return;
 
     runtime->managed_network_lobby_start_requested = false;
-    sdl3d_network_session *session =
-        sdl3d_game_data_get_network_host_session(runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION);
-    if (session == NULL || !sdl3d_network_session_is_connected(session))
+    slayer3d_network_session *session =
+        slayer3d_game_data_get_network_host_session(runtime->data, SLAYER3D_MANAGED_NETWORK_HOST_SESSION);
+    if (session == NULL || !slayer3d_network_session_is_connected(session))
     {
         managed_network_publish_host_status(runtime);
         return;
     }
 
-    if (managed_network_send_control(runtime, session, SDL3D_MANAGED_NETWORK_BINDING_START_GAME, "start game"))
+    if (managed_network_send_control(runtime, session, SLAYER3D_MANAGED_NETWORK_BINDING_START_GAME, "start game"))
     {
         (void)managed_network_run_flow_event(runtime, ctx, "host_start_game", NULL);
     }
 }
 
-static void managed_network_update_host(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx, float dt)
+static void managed_network_update_host(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx, float dt)
 {
     if (runtime == NULL || runtime->data == NULL)
         return;
 
-    sdl3d_network_session *session =
-        sdl3d_game_data_get_network_host_session(runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION);
+    slayer3d_network_session *session =
+        slayer3d_game_data_get_network_host_session(runtime->data, SLAYER3D_MANAGED_NETWORK_HOST_SESSION);
     if (session == NULL)
         return;
 
-    const sdl3d_data_game_network_bindings bindings = managed_network_bindings();
-    sdl3d_data_game_network_loop_result result;
+    const slayer3d_data_game_network_bindings bindings = managed_network_bindings();
+    slayer3d_data_game_network_loop_result result;
     char error[192] = {0};
-    if (!sdl3d_data_game_runtime_update_network_host_session(runtime, ctx, SDL3D_MANAGED_NETWORK_HOST_SESSION,
-                                                             &bindings, managed_network_is_play_scene(runtime), dt,
-                                                             &result, error, (int)sizeof(error)))
+    if (!slayer3d_data_game_runtime_update_network_host_session(runtime, ctx, SLAYER3D_MANAGED_NETWORK_HOST_SESSION,
+                                                                &bindings, managed_network_is_play_scene(runtime), dt,
+                                                                &result, error, (int)sizeof(error)))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D managed host session update failed: %s",
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D managed host session update failed: %s",
                     error[0] != '\0' ? error : SDL_GetError());
     }
 
@@ -726,7 +732,7 @@ static void managed_network_update_host(sdl3d_data_game_runtime *runtime, sdl3d_
             runtime, ctx, true,
             managed_network_message(runtime, "disconnect_reasons", "client_exited", "Client exited"));
     }
-    else if (managed_network_is_play_scene(runtime) && result.session_state != SDL3D_NETWORK_STATE_CONNECTED)
+    else if (managed_network_is_play_scene(runtime) && result.session_state != SLAYER3D_NETWORK_STATE_CONNECTED)
     {
         managed_network_disconnect_flow(
             runtime, ctx, true,
@@ -735,31 +741,32 @@ static void managed_network_update_host(sdl3d_data_game_runtime *runtime, sdl3d_
 
     managed_network_publish_host_status(runtime);
 
-    session = sdl3d_game_data_get_network_host_session(runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION);
+    session = slayer3d_game_data_get_network_host_session(runtime->data, SLAYER3D_MANAGED_NETWORK_HOST_SESSION);
     if (session == NULL)
         return;
 
     const bool keep_host_session =
-        managed_network_keep_alive_scene_matches(runtime, SDL3D_MANAGED_NETWORK_HOST_SESSION) &&
+        managed_network_keep_alive_scene_matches(runtime, SLAYER3D_MANAGED_NETWORK_HOST_SESSION) &&
         (!managed_network_is_play_scene(runtime) || managed_network_is_role_host(runtime));
     if (!keep_host_session)
         managed_network_cancel_host(runtime, true, "Not hosting");
 }
 
-static void managed_network_update_direct_connect(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx, float dt)
+static void managed_network_update_direct_connect(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx,
+                                                  float dt)
 {
     if (runtime == NULL || runtime->data == NULL)
         return;
 
-    sdl3d_network_session *session =
-        sdl3d_game_data_get_network_direct_connect_session(runtime->data, SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION);
+    slayer3d_network_session *session = slayer3d_game_data_get_network_direct_connect_session(
+        runtime->data, SLAYER3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION);
     if (session == NULL)
         return;
 
     const bool was_playing = managed_network_is_play_scene(runtime);
     const bool playing = was_playing && managed_network_is_role_client(runtime);
     const bool keep_direct_connect_session =
-        managed_network_keep_alive_scene_matches(runtime, SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION) &&
+        managed_network_keep_alive_scene_matches(runtime, SLAYER3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION) &&
         (!managed_network_is_play_scene(runtime) || managed_network_is_role_client(runtime));
     if (!keep_direct_connect_session)
     {
@@ -769,20 +776,20 @@ static void managed_network_update_direct_connect(sdl3d_data_game_runtime *runti
 
     managed_network_publish_direct_connect_status(runtime);
 
-    const sdl3d_data_game_network_bindings bindings = managed_network_bindings();
-    sdl3d_data_game_network_loop_result result;
+    const slayer3d_data_game_network_bindings bindings = managed_network_bindings();
+    slayer3d_data_game_network_loop_result result;
     char error[192] = {0};
-    if (!sdl3d_data_game_runtime_update_network_client_session(runtime, ctx,
-                                                               SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION, &bindings,
-                                                               playing, true, dt, &result, error, (int)sizeof(error)))
+    if (!slayer3d_data_game_runtime_update_network_client_session(
+            runtime, ctx, SLAYER3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION, &bindings, playing, true, dt, &result, error,
+            (int)sizeof(error)))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D managed direct-connect update failed: %s",
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D managed direct-connect update failed: %s",
                     error[0] != '\0' ? error : "unknown error");
     }
 
     if (result.received_start_game)
     {
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D managed client received start-game control");
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D managed client received start-game control");
         (void)managed_network_run_flow_event(runtime, ctx, "client_start_game", NULL);
     }
     if (result.received_disconnect)
@@ -795,24 +802,24 @@ static void managed_network_update_direct_connect(sdl3d_data_game_runtime *runti
     {
         if (!was_playing)
             (void)managed_network_run_flow_event(runtime, ctx, "client_state_before_start", NULL);
-        (void)sdl3d_game_data_log_network_snapshot_diagnostic(runtime->data, SDL3D_MANAGED_NETWORK_DIAGNOSTIC_SNAPSHOT,
-                                                              result.last_tick, "client_snapshot_applied", "applied",
-                                                              NULL, error, (int)sizeof(error));
+        (void)slayer3d_game_data_log_network_snapshot_diagnostic(
+            runtime->data, SLAYER3D_MANAGED_NETWORK_DIAGNOSTIC_SNAPSHOT, result.last_tick, "client_snapshot_applied",
+            "applied", NULL, error, (int)sizeof(error));
     }
 
-    session =
-        sdl3d_game_data_get_network_direct_connect_session(runtime->data, SDL3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION);
+    session = slayer3d_game_data_get_network_direct_connect_session(runtime->data,
+                                                                    SLAYER3D_MANAGED_NETWORK_DIRECT_CONNECT_SESSION);
     if (session == NULL)
         return;
 
-    const sdl3d_network_state state = result.session_state;
-    if (state == SDL3D_NETWORK_STATE_REJECTED || state == SDL3D_NETWORK_STATE_TIMED_OUT ||
-        state == SDL3D_NETWORK_STATE_ERROR)
+    const slayer3d_network_state state = result.session_state;
+    if (state == SLAYER3D_NETWORK_STATE_REJECTED || state == SLAYER3D_NETWORK_STATE_TIMED_OUT ||
+        state == SLAYER3D_NETWORK_STATE_ERROR)
     {
         const char *reason =
-            state == SDL3D_NETWORK_STATE_TIMED_OUT
+            state == SLAYER3D_NETWORK_STATE_TIMED_OUT
                 ? managed_network_message(runtime, "disconnect_reasons", "host_timed_out", "Host timed out")
-            : state == SDL3D_NETWORK_STATE_REJECTED
+            : state == SLAYER3D_NETWORK_STATE_REJECTED
                 ? managed_network_message(runtime, "disconnect_reasons", "host_rejected", "Host rejected connection")
                 : managed_network_message(runtime, "disconnect_reasons", "host_error", "Host connection error");
         if (was_playing)
@@ -822,7 +829,7 @@ static void managed_network_update_direct_connect(sdl3d_data_game_runtime *runti
     }
 }
 
-static void managed_network_update_client_sensors(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx)
+static void managed_network_update_client_sensors(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx)
 {
     if (runtime == NULL || runtime->data == NULL || ctx == NULL || !managed_network_is_play_scene(runtime) ||
         !managed_network_is_role_client(runtime) || runtime->managed_network_camera_toggle_signal_id < 0)
@@ -830,16 +837,17 @@ static void managed_network_update_client_sensors(sdl3d_data_game_runtime *runti
         return;
     }
 
-    sdl3d_input_manager *input = runtime->session != NULL ? sdl3d_game_session_get_input(runtime->session) : NULL;
-    const int camera_toggle_action = managed_network_action_id(runtime, SDL3D_MANAGED_NETWORK_BINDING_CAMERA_TOGGLE);
-    if (input != NULL && camera_toggle_action >= 0 && sdl3d_input_is_pressed(input, camera_toggle_action))
+    slayer3d_input_manager *input = runtime->session != NULL ? slayer3d_game_session_get_input(runtime->session) : NULL;
+    const int camera_toggle_action = managed_network_action_id(runtime, SLAYER3D_MANAGED_NETWORK_BINDING_CAMERA_TOGGLE);
+    if (input != NULL && camera_toggle_action >= 0 && slayer3d_input_is_pressed(input, camera_toggle_action))
     {
-        sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(ctx->session),
-                          runtime->managed_network_camera_toggle_signal_id, NULL);
+        slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(ctx->session),
+                             runtime->managed_network_camera_toggle_signal_id, NULL);
     }
 }
 
-static void managed_network_update_before_frame(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx, float dt)
+static void managed_network_update_before_frame(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx,
+                                                float dt)
 {
     if (runtime == NULL || !runtime->managed_network_enabled)
         return;
@@ -851,35 +859,35 @@ static void managed_network_update_before_frame(sdl3d_data_game_runtime *runtime
     managed_network_update_client_sensors(runtime, ctx);
 }
 
-static void managed_network_update_after_frame(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx)
+static void managed_network_update_after_frame(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx)
 {
     if (runtime == NULL || runtime->data == NULL || !runtime->managed_network_enabled)
         return;
 
-    sdl3d_network_session *session =
-        sdl3d_game_data_get_network_host_session(runtime->data, SDL3D_MANAGED_NETWORK_HOST_SESSION);
-    if (session == NULL || !sdl3d_network_session_is_connected(session) || !managed_network_is_play_scene(runtime) ||
+    slayer3d_network_session *session =
+        slayer3d_game_data_get_network_host_session(runtime->data, SLAYER3D_MANAGED_NETWORK_HOST_SESSION);
+    if (session == NULL || !slayer3d_network_session_is_connected(session) || !managed_network_is_play_scene(runtime) ||
         !managed_network_is_role_host(runtime))
     {
         return;
     }
 
-    const sdl3d_data_game_network_bindings bindings = managed_network_bindings();
-    sdl3d_data_game_network_loop_result result;
+    const slayer3d_data_game_network_bindings bindings = managed_network_bindings();
+    slayer3d_data_game_network_loop_result result;
     char error[192] = {0};
-    if (!sdl3d_data_game_runtime_publish_network_host_snapshot(runtime, ctx, SDL3D_MANAGED_NETWORK_HOST_SESSION,
-                                                               &bindings, &result, error, (int)sizeof(error)))
+    if (!slayer3d_data_game_runtime_publish_network_host_snapshot(runtime, ctx, SLAYER3D_MANAGED_NETWORK_HOST_SESSION,
+                                                                  &bindings, &result, error, (int)sizeof(error)))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D managed host snapshot publish failed: %s",
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D managed host snapshot publish failed: %s",
                     error[0] != '\0' ? error : "unknown error");
         return;
     }
-    (void)sdl3d_game_data_log_network_snapshot_diagnostic(runtime->data, SDL3D_MANAGED_NETWORK_DIAGNOSTIC_SNAPSHOT,
-                                                          result.last_tick, "host_snapshot_sent", "sent", NULL, error,
-                                                          (int)sizeof(error));
+    (void)slayer3d_game_data_log_network_snapshot_diagnostic(
+        runtime->data, SLAYER3D_MANAGED_NETWORK_DIAGNOSTIC_SNAPSHOT, result.last_tick, "host_snapshot_sent", "sent",
+        NULL, error, (int)sizeof(error));
 }
 
-void sdl3d_data_game_runtime_desc_init(sdl3d_data_game_runtime_desc *desc)
+void slayer3d_data_game_runtime_desc_init(slayer3d_data_game_runtime_desc *desc)
 {
     if (desc == NULL)
     {
@@ -888,11 +896,12 @@ void sdl3d_data_game_runtime_desc_init(sdl3d_data_game_runtime_desc *desc)
     SDL_zero(*desc);
 }
 
-bool sdl3d_data_game_runtime_create(const sdl3d_data_game_runtime_desc *desc, sdl3d_data_game_runtime **out_runtime,
-                                    char *error_buffer, int error_buffer_size)
+bool slayer3d_data_game_runtime_create(const slayer3d_data_game_runtime_desc *desc,
+                                       slayer3d_data_game_runtime **out_runtime, char *error_buffer,
+                                       int error_buffer_size)
 {
     char load_error[512] = {0};
-    sdl3d_data_game_runtime *runtime = NULL;
+    slayer3d_data_game_runtime *runtime = NULL;
 
     if (out_runtime == NULL)
     {
@@ -907,7 +916,7 @@ bool sdl3d_data_game_runtime_create(const sdl3d_data_game_runtime_desc *desc, sd
         return false;
     }
 
-    runtime = (sdl3d_data_game_runtime *)SDL_calloc(1, sizeof(*runtime));
+    runtime = (slayer3d_data_game_runtime *)SDL_calloc(1, sizeof(*runtime));
     if (runtime == NULL)
     {
         SDL_OutOfMemory();
@@ -918,17 +927,17 @@ bool sdl3d_data_game_runtime_create(const sdl3d_data_game_runtime_desc *desc, sd
     runtime->managed_network_enabled = desc->enable_managed_network;
     runtime->managed_network_lobby_start_signal_id = -1;
     runtime->managed_network_camera_toggle_signal_id = -1;
-    sdl3d_game_data_font_cache_init(&runtime->font_cache, desc->media_dir);
-    sdl3d_game_data_particle_cache_init(&runtime->particle_cache);
-    sdl3d_game_data_app_flow_init(&runtime->app_flow);
-    sdl3d_game_data_frame_state_init(&runtime->frame_state);
-    sdl3d_game_data_input_profile_refresh_state_init(&runtime->input_profile_refresh);
+    slayer3d_game_data_font_cache_init(&runtime->font_cache, desc->media_dir);
+    slayer3d_game_data_particle_cache_init(&runtime->particle_cache);
+    slayer3d_game_data_app_flow_init(&runtime->app_flow);
+    slayer3d_game_data_frame_state_init(&runtime->frame_state);
+    slayer3d_game_data_input_profile_refresh_state_init(&runtime->input_profile_refresh);
 
-    runtime->assets = sdl3d_asset_resolver_create();
+    runtime->assets = slayer3d_asset_resolver_create();
     if (runtime->assets == NULL)
     {
         set_error(error_buffer, error_buffer_size, SDL_GetError());
-        sdl3d_data_game_runtime_destroy(runtime);
+        slayer3d_data_game_runtime_destroy(runtime);
         return false;
     }
 
@@ -936,48 +945,48 @@ bool sdl3d_data_game_runtime_create(const sdl3d_data_game_runtime_desc *desc, sd
         !desc->mount_assets(runtime->assets, desc->mount_userdata, load_error, (int)sizeof(load_error)))
     {
         set_error(error_buffer, error_buffer_size, load_error[0] != '\0' ? load_error : "asset mount failed");
-        sdl3d_data_game_runtime_destroy(runtime);
+        slayer3d_data_game_runtime_destroy(runtime);
         return false;
     }
 
-    sdl3d_game_data_load_options load_options;
+    slayer3d_game_data_load_options load_options;
     SDL_zero(load_options);
     load_options.session = desc->session;
     load_options.initial_scene_override = desc->initial_scene_override;
     load_options.initial_scene_state = desc->initial_scene_state;
     load_options.initial_scene_payload = desc->initial_scene_payload;
-    if (!sdl3d_game_data_load_asset_with_options(runtime->assets, desc->data_asset_path, &load_options, &runtime->data,
-                                                 load_error, (int)sizeof(load_error)))
+    if (!slayer3d_game_data_load_asset_with_options(runtime->assets, desc->data_asset_path, &load_options,
+                                                    &runtime->data, load_error, (int)sizeof(load_error)))
     {
         set_error(error_buffer, error_buffer_size, load_error[0] != '\0' ? load_error : "game data load failed");
-        sdl3d_data_game_runtime_destroy(runtime);
+        slayer3d_data_game_runtime_destroy(runtime);
         return false;
     }
     runtime->managed_network_enabled =
-        runtime->managed_network_enabled && sdl3d_game_data_network_managed_runtime_enabled(runtime->data);
+        runtime->managed_network_enabled && slayer3d_game_data_network_managed_runtime_enabled(runtime->data);
 
-    sdl3d_game_data_image_cache_init(&runtime->image_cache, runtime->assets);
-    sdl3d_game_data_sprite_cache_init(&runtime->sprite_cache, runtime->assets);
-    sdl3d_game_data_model_cache_init(&runtime->model_cache, runtime->assets);
-    sdl3d_game_data_mesh_primitive_cache_init(&runtime->mesh_primitive_cache);
-    if (!sdl3d_game_data_app_flow_start(&runtime->app_flow, runtime->data))
+    slayer3d_game_data_image_cache_init(&runtime->image_cache, runtime->assets);
+    slayer3d_game_data_sprite_cache_init(&runtime->sprite_cache, runtime->assets);
+    slayer3d_game_data_model_cache_init(&runtime->model_cache, runtime->assets);
+    slayer3d_game_data_mesh_primitive_cache_init(&runtime->mesh_primitive_cache);
+    if (!slayer3d_game_data_app_flow_start(&runtime->app_flow, runtime->data))
     {
         set_error(error_buffer, error_buffer_size, SDL_GetError());
-        sdl3d_data_game_runtime_destroy(runtime);
+        slayer3d_data_game_runtime_destroy(runtime);
         return false;
     }
     if (desc->skip_app_flow_startup)
-        sdl3d_transition_reset(&runtime->app_flow.transition);
+        slayer3d_transition_reset(&runtime->app_flow.transition);
     if (!connect_haptics_policies(runtime))
     {
         set_error(error_buffer, error_buffer_size, SDL_GetError());
-        sdl3d_data_game_runtime_destroy(runtime);
+        slayer3d_data_game_runtime_destroy(runtime);
         return false;
     }
     if (!connect_managed_network(runtime))
     {
         set_error(error_buffer, error_buffer_size, SDL_GetError());
-        sdl3d_data_game_runtime_destroy(runtime);
+        slayer3d_data_game_runtime_destroy(runtime);
         return false;
     }
 
@@ -985,7 +994,7 @@ bool sdl3d_data_game_runtime_create(const sdl3d_data_game_runtime_desc *desc, sd
     return true;
 }
 
-void sdl3d_data_game_runtime_destroy(sdl3d_data_game_runtime *runtime)
+void slayer3d_data_game_runtime_destroy(slayer3d_data_game_runtime *runtime)
 {
     if (runtime == NULL)
     {
@@ -994,57 +1003,58 @@ void sdl3d_data_game_runtime_destroy(sdl3d_data_game_runtime *runtime)
 
     disconnect_managed_network(runtime);
     disconnect_haptics_policies(runtime);
-    sdl3d_game_data_particle_cache_free(&runtime->particle_cache);
-    sdl3d_game_data_mesh_primitive_cache_free(&runtime->mesh_primitive_cache);
-    sdl3d_game_data_model_cache_free(&runtime->model_cache);
-    sdl3d_game_data_sprite_cache_free(&runtime->sprite_cache);
-    sdl3d_game_data_image_cache_free(&runtime->image_cache);
-    sdl3d_game_data_font_cache_free(&runtime->font_cache);
-    sdl3d_game_data_destroy(runtime->data);
-    sdl3d_asset_resolver_destroy(runtime->assets);
+    slayer3d_game_data_particle_cache_free(&runtime->particle_cache);
+    slayer3d_game_data_mesh_primitive_cache_free(&runtime->mesh_primitive_cache);
+    slayer3d_game_data_model_cache_free(&runtime->model_cache);
+    slayer3d_game_data_sprite_cache_free(&runtime->sprite_cache);
+    slayer3d_game_data_image_cache_free(&runtime->image_cache);
+    slayer3d_game_data_font_cache_free(&runtime->font_cache);
+    slayer3d_game_data_destroy(runtime->data);
+    slayer3d_asset_resolver_destroy(runtime->assets);
     SDL_free(runtime);
 }
 
-void sdl3d_data_game_runtime_release_mouse_capture(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx)
+void slayer3d_data_game_runtime_release_mouse_capture(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx)
 {
     data_game_release_mouse_capture(runtime, ctx);
 }
 
-sdl3d_asset_resolver *sdl3d_data_game_runtime_assets(const sdl3d_data_game_runtime *runtime)
+slayer3d_asset_resolver *slayer3d_data_game_runtime_assets(const slayer3d_data_game_runtime *runtime)
 {
     return runtime != NULL ? runtime->assets : NULL;
 }
 
-sdl3d_game_data_runtime *sdl3d_data_game_runtime_data(const sdl3d_data_game_runtime *runtime)
+slayer3d_game_data_runtime *slayer3d_data_game_runtime_data(const slayer3d_data_game_runtime *runtime)
 {
     return runtime != NULL ? runtime->data : NULL;
 }
 
-bool sdl3d_data_game_runtime_refresh_input_profile_on_device_change(sdl3d_data_game_runtime *runtime,
-                                                                    sdl3d_input_manager *input,
-                                                                    const char **out_profile_name, bool *out_applied,
-                                                                    char *error_buffer, int error_buffer_size)
+bool slayer3d_data_game_runtime_refresh_input_profile_on_device_change(slayer3d_data_game_runtime *runtime,
+                                                                       slayer3d_input_manager *input,
+                                                                       const char **out_profile_name, bool *out_applied,
+                                                                       char *error_buffer, int error_buffer_size)
 {
     if (runtime == NULL || runtime->data == NULL)
     {
         set_error(error_buffer, error_buffer_size, "input profile refresh requires data-game runtime");
         return false;
     }
-    return sdl3d_game_data_apply_active_input_profile_on_device_change(
+    return slayer3d_game_data_apply_active_input_profile_on_device_change(
         runtime->data, input, &runtime->input_profile_refresh, out_profile_name, out_applied, error_buffer,
         error_buffer_size);
 }
 
-bool sdl3d_data_game_runtime_update_network_host_session(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx,
-                                                         const char *session_name,
-                                                         const sdl3d_data_game_network_bindings *bindings, bool playing,
-                                                         float dt, sdl3d_data_game_network_loop_result *out_result,
-                                                         char *error_buffer, int error_buffer_size)
+bool slayer3d_data_game_runtime_update_network_host_session(slayer3d_data_game_runtime *runtime,
+                                                            slayer3d_game_context *ctx, const char *session_name,
+                                                            const slayer3d_data_game_network_bindings *bindings,
+                                                            bool playing, float dt,
+                                                            slayer3d_data_game_network_loop_result *out_result,
+                                                            char *error_buffer, int error_buffer_size)
 {
-    Uint8 packet[SDL3D_NETWORK_MAX_PACKET_SIZE];
-    sdl3d_network_session *session = runtime != NULL && runtime->data != NULL
-                                         ? sdl3d_game_data_get_network_host_session(runtime->data, session_name)
-                                         : NULL;
+    Uint8 packet[SLAYER3D_NETWORK_MAX_PACKET_SIZE];
+    slayer3d_network_session *session = runtime != NULL && runtime->data != NULL
+                                            ? slayer3d_game_data_get_network_host_session(runtime->data, session_name)
+                                            : NULL;
     network_loop_result_init(out_result, session);
     if (runtime == NULL || runtime->data == NULL || bindings == NULL)
     {
@@ -1058,7 +1068,7 @@ bool sdl3d_data_game_runtime_update_network_host_session(sdl3d_data_game_runtime
         return false;
     }
 
-    if (!sdl3d_network_session_update(session, dt))
+    if (!slayer3d_network_session_update(session, dt))
     {
         set_errorf(error_buffer, error_buffer_size, "network host session update failed: %s", SDL_GetError());
         network_loop_result_init(out_result, session);
@@ -1066,13 +1076,13 @@ bool sdl3d_data_game_runtime_update_network_host_session(sdl3d_data_game_runtime
     }
 
     int packet_size = 0;
-    while ((packet_size = sdl3d_network_session_receive(session, packet, (int)sizeof(packet))) > 0)
+    while ((packet_size = slayer3d_network_session_receive(session, packet, (int)sizeof(packet))) > 0)
     {
         if (out_result != NULL)
             ++out_result->packets_received;
 
         const char *control_binding = NULL;
-        sdl3d_game_data_network_control control;
+        slayer3d_game_data_network_control control;
         if (data_game_decode_runtime_control(runtime, packet, packet_size, &control_binding, &control))
         {
             if (out_result != NULL)
@@ -1106,11 +1116,11 @@ bool sdl3d_data_game_runtime_update_network_host_session(sdl3d_data_game_runtime
         {
             Uint32 tick = 0U;
             char apply_error[160] = {0};
-            sdl3d_input_manager *input =
-                runtime->session != NULL ? sdl3d_game_session_get_input(runtime->session) : NULL;
-            if (sdl3d_game_data_apply_network_runtime_input(runtime->data, bindings->client_input, input, packet,
-                                                            (size_t)packet_size, &tick, apply_error,
-                                                            (int)sizeof(apply_error)))
+            slayer3d_input_manager *input =
+                runtime->session != NULL ? slayer3d_game_session_get_input(runtime->session) : NULL;
+            if (slayer3d_game_data_apply_network_runtime_input(runtime->data, bindings->client_input, input, packet,
+                                                               (size_t)packet_size, &tick, apply_error,
+                                                               (int)sizeof(apply_error)))
             {
                 if (out_result != NULL)
                 {
@@ -1122,19 +1132,19 @@ bool sdl3d_data_game_runtime_update_network_host_session(sdl3d_data_game_runtime
     }
 
     if (out_result != NULL)
-        out_result->session_state = sdl3d_network_session_state(session);
+        out_result->session_state = slayer3d_network_session_state(session);
     return true;
 }
 
-bool sdl3d_data_game_runtime_publish_network_host_snapshot(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx,
-                                                           const char *session_name,
-                                                           const sdl3d_data_game_network_bindings *bindings,
-                                                           sdl3d_data_game_network_loop_result *out_result,
-                                                           char *error_buffer, int error_buffer_size)
+bool slayer3d_data_game_runtime_publish_network_host_snapshot(slayer3d_data_game_runtime *runtime,
+                                                              slayer3d_game_context *ctx, const char *session_name,
+                                                              const slayer3d_data_game_network_bindings *bindings,
+                                                              slayer3d_data_game_network_loop_result *out_result,
+                                                              char *error_buffer, int error_buffer_size)
 {
-    sdl3d_network_session *session = runtime != NULL && runtime->data != NULL
-                                         ? sdl3d_game_data_get_network_host_session(runtime->data, session_name)
-                                         : NULL;
+    slayer3d_network_session *session = runtime != NULL && runtime->data != NULL
+                                            ? slayer3d_game_data_get_network_host_session(runtime->data, session_name)
+                                            : NULL;
     network_loop_result_init(out_result, session);
     if (runtime == NULL || runtime->data == NULL || bindings == NULL || bindings->state_snapshot == NULL ||
         bindings->state_snapshot[0] == '\0')
@@ -1142,7 +1152,7 @@ bool sdl3d_data_game_runtime_publish_network_host_snapshot(sdl3d_data_game_runti
         set_error(error_buffer, error_buffer_size, "network host snapshot publish requires runtime and binding");
         return false;
     }
-    if (session == NULL || !sdl3d_network_session_is_connected(session))
+    if (session == NULL || !slayer3d_network_session_is_connected(session))
     {
         set_error(error_buffer, error_buffer_size, "network host snapshot publish requires connected host session");
         return false;
@@ -1153,8 +1163,8 @@ bool sdl3d_data_game_runtime_publish_network_host_snapshot(sdl3d_data_game_runti
     }
 
     const Uint32 tick = data_game_input_tick(runtime);
-    if (!sdl3d_game_data_send_network_runtime_snapshot(runtime->data, session, bindings->state_snapshot, tick,
-                                                       error_buffer, error_buffer_size))
+    if (!slayer3d_game_data_send_network_runtime_snapshot(runtime->data, session, bindings->state_snapshot, tick,
+                                                          error_buffer, error_buffer_size))
     {
         return false;
     }
@@ -1162,22 +1172,22 @@ bool sdl3d_data_game_runtime_publish_network_host_snapshot(sdl3d_data_game_runti
     {
         out_result->sent_snapshot = true;
         out_result->last_tick = tick;
-        out_result->session_state = sdl3d_network_session_state(session);
+        out_result->session_state = slayer3d_network_session_state(session);
     }
     return true;
 }
 
-bool sdl3d_data_game_runtime_update_network_client_session(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx,
-                                                           const char *session_name,
-                                                           const sdl3d_data_game_network_bindings *bindings,
-                                                           bool playing, bool allow_pause_requests, float dt,
-                                                           sdl3d_data_game_network_loop_result *out_result,
-                                                           char *error_buffer, int error_buffer_size)
+bool slayer3d_data_game_runtime_update_network_client_session(slayer3d_data_game_runtime *runtime,
+                                                              slayer3d_game_context *ctx, const char *session_name,
+                                                              const slayer3d_data_game_network_bindings *bindings,
+                                                              bool playing, bool allow_pause_requests, float dt,
+                                                              slayer3d_data_game_network_loop_result *out_result,
+                                                              char *error_buffer, int error_buffer_size)
 {
-    Uint8 packet[SDL3D_NETWORK_MAX_PACKET_SIZE];
-    sdl3d_network_session *session =
+    Uint8 packet[SLAYER3D_NETWORK_MAX_PACKET_SIZE];
+    slayer3d_network_session *session =
         runtime != NULL && runtime->data != NULL
-            ? sdl3d_game_data_get_network_direct_connect_session(runtime->data, session_name)
+            ? slayer3d_game_data_get_network_direct_connect_session(runtime->data, session_name)
             : NULL;
     network_loop_result_init(out_result, session);
     if (runtime == NULL || runtime->data == NULL || bindings == NULL)
@@ -1192,7 +1202,7 @@ bool sdl3d_data_game_runtime_update_network_client_session(sdl3d_data_game_runti
         return false;
     }
 
-    if (!sdl3d_network_session_update(session, dt))
+    if (!slayer3d_network_session_update(session, dt))
     {
         set_errorf(error_buffer, error_buffer_size, "network client session update failed: %s", SDL_GetError());
         network_loop_result_init(out_result, session);
@@ -1200,13 +1210,13 @@ bool sdl3d_data_game_runtime_update_network_client_session(sdl3d_data_game_runti
     }
 
     int packet_size = 0;
-    while ((packet_size = sdl3d_network_session_receive(session, packet, (int)sizeof(packet))) > 0)
+    while ((packet_size = slayer3d_network_session_receive(session, packet, (int)sizeof(packet))) > 0)
     {
         if (out_result != NULL)
             ++out_result->packets_received;
 
         const char *control_binding = NULL;
-        sdl3d_game_data_network_control control;
+        slayer3d_game_data_network_control control;
         if (data_game_decode_runtime_control(runtime, packet, packet_size, &control_binding, &control))
         {
             if (out_result != NULL)
@@ -1246,9 +1256,9 @@ bool sdl3d_data_game_runtime_update_network_client_session(sdl3d_data_game_runti
         {
             Uint32 tick = 0U;
             char apply_error[160] = {0};
-            if (sdl3d_game_data_apply_network_runtime_snapshot(runtime->data, bindings->state_snapshot, packet,
-                                                               (size_t)packet_size, &tick, apply_error,
-                                                               (int)sizeof(apply_error)))
+            if (slayer3d_game_data_apply_network_runtime_snapshot(runtime->data, bindings->state_snapshot, packet,
+                                                                  (size_t)packet_size, &tick, apply_error,
+                                                                  (int)sizeof(apply_error)))
             {
                 (void)data_game_sync_context_pause_from_network(runtime, ctx, apply_error, (int)sizeof(apply_error));
                 if (out_result != NULL)
@@ -1260,15 +1270,16 @@ bool sdl3d_data_game_runtime_update_network_client_session(sdl3d_data_game_runti
         }
     }
 
-    if (playing && sdl3d_network_session_is_connected(session))
+    if (playing && slayer3d_network_session_is_connected(session))
     {
-        sdl3d_input_manager *input = runtime->session != NULL ? sdl3d_game_session_get_input(runtime->session) : NULL;
+        slayer3d_input_manager *input =
+            runtime->session != NULL ? slayer3d_game_session_get_input(runtime->session) : NULL;
         const Uint32 tick = data_game_input_tick(runtime);
         if (allow_pause_requests && ctx != NULL)
         {
             int pause_action = -1;
-            if (sdl3d_game_data_get_network_runtime_pause_action(runtime->data, &pause_action) && input != NULL &&
-                sdl3d_input_is_pressed(input, pause_action))
+            if (slayer3d_game_data_get_network_runtime_pause_action(runtime->data, &pause_action) && input != NULL &&
+                slayer3d_input_is_pressed(input, pause_action))
             {
                 const bool want_resume = ctx->paused;
                 const char *control_binding = want_resume ? bindings->resume_request : bindings->pause_request;
@@ -1293,8 +1304,8 @@ bool sdl3d_data_game_runtime_update_network_client_session(sdl3d_data_game_runti
 
         if (bindings->client_input != NULL && bindings->client_input[0] != '\0' && input != NULL)
         {
-            if (!sdl3d_game_data_send_network_runtime_input(runtime->data, session, bindings->client_input, input, tick,
-                                                            error_buffer, error_buffer_size))
+            if (!slayer3d_game_data_send_network_runtime_input(runtime->data, session, bindings->client_input, input,
+                                                               tick, error_buffer, error_buffer_size))
             {
                 return false;
             }
@@ -1307,39 +1318,39 @@ bool sdl3d_data_game_runtime_update_network_client_session(sdl3d_data_game_runti
     }
 
     if (out_result != NULL)
-        out_result->session_state = sdl3d_network_session_state(session);
+        out_result->session_state = slayer3d_network_session_state(session);
     return true;
 }
 
-static bool refresh_active_input_profile_if_available(sdl3d_data_game_runtime *runtime)
+static bool refresh_active_input_profile_if_available(slayer3d_data_game_runtime *runtime)
 {
-    sdl3d_input_manager *input =
-        runtime != NULL && runtime->session != NULL ? sdl3d_game_session_get_input(runtime->session) : NULL;
+    slayer3d_input_manager *input =
+        runtime != NULL && runtime->session != NULL ? slayer3d_game_session_get_input(runtime->session) : NULL;
     if (runtime == NULL || runtime->data == NULL || input == NULL)
     {
         return true;
     }
 
-    if (!sdl3d_game_data_get_active_input_profile_name(runtime->data, input, NULL))
+    if (!slayer3d_game_data_get_active_input_profile_name(runtime->data, input, NULL))
     {
-        sdl3d_game_data_input_profile_refresh_state_init(&runtime->input_profile_refresh);
+        slayer3d_game_data_input_profile_refresh_state_init(&runtime->input_profile_refresh);
         return true;
     }
 
     char error[256] = "";
     const char *profile_name = NULL;
     bool applied = false;
-    if (!sdl3d_data_game_runtime_refresh_input_profile_on_device_change(runtime, input, &profile_name, &applied, error,
-                                                                        (int)sizeof(error)))
+    if (!slayer3d_data_game_runtime_refresh_input_profile_on_device_change(runtime, input, &profile_name, &applied,
+                                                                           error, (int)sizeof(error)))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D input profile hotplug refresh failed: %s",
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D input profile hotplug refresh failed: %s",
                     error[0] != '\0' ? error : "unknown error");
         return false;
     }
     return true;
 }
 
-bool sdl3d_data_game_runtime_update_frame(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx, float dt)
+bool slayer3d_data_game_runtime_update_frame(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx, float dt)
 {
     if (runtime == NULL || runtime->data == NULL)
     {
@@ -1351,12 +1362,12 @@ bool sdl3d_data_game_runtime_update_frame(sdl3d_data_game_runtime *runtime, sdl3
 
     managed_network_update_before_frame(runtime, ctx, dt);
 
-    const sdl3d_game_data_update_frame_desc frame = {.ctx = ctx,
-                                                     .runtime = runtime->data,
-                                                     .app_flow = &runtime->app_flow,
-                                                     .particle_cache = &runtime->particle_cache,
-                                                     .dt = dt};
-    if (!sdl3d_game_data_update_frame(&runtime->frame_state, &frame))
+    const slayer3d_game_data_update_frame_desc frame = {.ctx = ctx,
+                                                        .runtime = runtime->data,
+                                                        .app_flow = &runtime->app_flow,
+                                                        .particle_cache = &runtime->particle_cache,
+                                                        .dt = dt};
+    if (!slayer3d_game_data_update_frame(&runtime->frame_state, &frame))
         return false;
 
     managed_network_update_after_frame(runtime, ctx);
@@ -1364,16 +1375,16 @@ bool sdl3d_data_game_runtime_update_frame(sdl3d_data_game_runtime *runtime, sdl3
     return true;
 }
 
-void sdl3d_data_game_runtime_render(sdl3d_data_game_runtime *runtime, sdl3d_game_context *ctx)
+void slayer3d_data_game_runtime_render(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx)
 {
     if (runtime == NULL || runtime->data == NULL || ctx == NULL)
     {
         return;
     }
 
-    sdl3d_game_data_frame_state_record_render(&runtime->frame_state, ctx, runtime->data);
+    slayer3d_game_data_frame_state_record_render(&runtime->frame_state, ctx, runtime->data);
 
-    sdl3d_game_data_frame_desc frame;
+    slayer3d_game_data_frame_desc frame;
     SDL_zero(frame);
     frame.runtime = runtime->data;
     frame.renderer = ctx->renderer;
@@ -1387,5 +1398,5 @@ void sdl3d_data_game_runtime_render(sdl3d_data_game_runtime *runtime, sdl3d_game
     frame.metrics = &runtime->frame_state.metrics;
     frame.render_eval = &runtime->frame_state.render_eval;
     frame.pulse_phase = runtime->frame_state.ui_pulse_phase;
-    sdl3d_game_data_draw_frame(&frame);
+    slayer3d_game_data_draw_frame(&frame);
 }

@@ -1,4 +1,4 @@
-# SDL3D — Top-level Makefile wrapping CMake
+# Slayer 3D — Top-level Makefile wrapping CMake
 #
 # Usage:
 #   make              Build library + tests
@@ -23,23 +23,23 @@ all: debug
 debug:
 	@cmake -B $(BUILD_DIR)/debug \
 		-DCMAKE_BUILD_TYPE=Debug \
-		-DSDL3D_BUILD_TESTS=ON \
+		-DSLAYER3D_BUILD_TESTS=ON \
 		$(CMAKE_FLAGS)
 	@cmake --build $(BUILD_DIR)/debug
 
 release:
 	@cmake -B $(BUILD_DIR)/release \
 		-DCMAKE_BUILD_TYPE=Release \
-		-DSDL3D_BUILD_TESTS=ON \
-		-DSDL3D_BUILD_DEMOS=ON \
+		-DSLAYER3D_BUILD_TESTS=ON \
+		-DSLAYER3D_BUILD_DEMOS=ON \
 		$(CMAKE_FLAGS)
 	@cmake --build $(BUILD_DIR)/release --parallel
 
 sanitize:
 	@CC=clang cmake -B $(BUILD_DIR)/sanitize \
 		-DCMAKE_BUILD_TYPE=Debug \
-		-DSDL3D_BUILD_TESTS=ON \
-		-DSDL3D_ENABLE_SANITIZERS=ON \
+		-DSLAYER3D_BUILD_TESTS=ON \
+		-DSLAYER3D_ENABLE_SANITIZERS=ON \
 		$(CMAKE_FLAGS)
 	@cmake --build $(BUILD_DIR)/sanitize
 
@@ -52,8 +52,8 @@ test-release: release
 demos:
 	@cmake -B $(BUILD_DIR)/debug \
 		-DCMAKE_BUILD_TYPE=Debug \
-		-DSDL3D_BUILD_TESTS=ON \
-		-DSDL3D_BUILD_DEMOS=ON \
+		-DSLAYER3D_BUILD_TESTS=ON \
+		-DSLAYER3D_BUILD_DEMOS=ON \
 		$(CMAKE_FLAGS)
 	@cmake --build $(BUILD_DIR)/debug
 

@@ -6,9 +6,9 @@
 set -euo pipefail
 
 APK="${APK:-tests/android/app/build/outputs/apk/debug/app-debug.apk}"
-PKG="${PKG:-com.sdl3d.tests}"
-ACTIVITY="${ACTIVITY:-com.sdl3d.tests.TestActivity}"
-SENTINEL="SDL3D_TEST_RESULT"
+PKG="${PKG:-com.slayer3d.tests}"
+ACTIVITY="${ACTIVITY:-com.slayer3d.tests.TestActivity}"
+SENTINEL="SLAYER3D_TEST_RESULT"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-180}"
 
 if [ ! -f "$APK" ]; then
@@ -30,7 +30,7 @@ LOGFILE="$(mktemp)"
 trap 'rm -f "$LOGFILE"' EXIT
 
 adb logcat -v brief \
-    SDL3D_TEST:V \
+    SLAYER3D_TEST:V \
     SDL:V \
     SDL/APP:V \
     stdout:V \

@@ -1,6 +1,6 @@
 # Media
 
-Shared assets (models, images, audio) used by SDL3D demos and tests.
+Shared assets (models, images, audio) used by Slayer 3D demos and tests.
 
 Each subdirectory contains one asset and must include a `LICENSE.md`
 with source URL, author, and license information.

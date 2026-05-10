@@ -3,7 +3,7 @@
  * and actor animation playback.
  */
 
-#include "sdl3d/animation.h"
+#include "slayer3d/animation.h"
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_stdinc.h>
@@ -12,7 +12,7 @@
 /* Quaternion helpers                                                   */
 /* ------------------------------------------------------------------ */
 
-static void sdl3d_quat_normalize(float *q)
+static void slayer3d_quat_normalize(float *q)
 {
     float len = SDL_sqrtf(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
     if (len > 1e-7f)
@@ -25,7 +25,7 @@ static void sdl3d_quat_normalize(float *q)
     }
 }
 
-static void sdl3d_quat_slerp(const float *a, const float *b, float t, float *out)
+static void slayer3d_quat_slerp(const float *a, const float *b, float t, float *out)
 {
     float dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
     float nb[4];
@@ -55,7 +55,7 @@ static void sdl3d_quat_slerp(const float *a, const float *b, float t, float *out
         out[1] = a[1] + (nb[1] - a[1]) * t;
         out[2] = a[2] + (nb[2] - a[2]) * t;
         out[3] = a[3] + (nb[3] - a[3]) * t;
-        sdl3d_quat_normalize(out);
+        slayer3d_quat_normalize(out);
         return;
     }
 
@@ -69,7 +69,7 @@ static void sdl3d_quat_slerp(const float *a, const float *b, float t, float *out
     out[3] = wa * a[3] + wb * nb[3];
 }
 
-static sdl3d_mat4 sdl3d_mat4_from_trs(const float *t, const float *r, const float *s)
+static slayer3d_mat4 slayer3d_mat4_from_trs(const float *t, const float *r, const float *s)
 {
     /* Build a matrix from translation, rotation (quaternion), scale. */
     float x = r[0], y = r[1], z = r[2], w = r[3];
@@ -77,7 +77,7 @@ static sdl3d_mat4 sdl3d_mat4_from_trs(const float *t, const float *r, const floa
     float xx = x * x2, xy = x * y2, xz = x * z2;
     float yy = y * y2, yz = y * z2, zz = z * z2;
     float wx = w * x2, wy = w * y2, wz = w * z2;
-    sdl3d_mat4 m;
+    slayer3d_mat4 m;
 
     m.m[0] = (1.0f - (yy + zz)) * s[0];
     m.m[1] = (xy + wz) * s[0];
@@ -103,7 +103,7 @@ static sdl3d_mat4 sdl3d_mat4_from_trs(const float *t, const float *r, const floa
 /* Keyframe sampling                                                   */
 /* ------------------------------------------------------------------ */
 
-static void sdl3d_sample_channel(const sdl3d_anim_channel *ch, float time, float *out, int components)
+static void slayer3d_sample_channel(const slayer3d_anim_channel *ch, float time, float *out, int components)
 {
     int i;
     float t;
@@ -144,9 +144,9 @@ static void sdl3d_sample_channel(const sdl3d_anim_channel *ch, float time, float
         t = (t1 > t0) ? (time - t0) / (t1 - t0) : 0.0f;
     }
 
-    if (ch->path == SDL3D_ANIM_ROTATION)
+    if (ch->path == SLAYER3D_ANIM_ROTATION)
     {
-        sdl3d_quat_slerp(ch->keyframes[i].value, ch->keyframes[i + 1].value, t, out);
+        slayer3d_quat_slerp(ch->keyframes[i].value, ch->keyframes[i + 1].value, t, out);
     }
     else
     {
@@ -161,13 +161,13 @@ static void sdl3d_sample_channel(const sdl3d_anim_channel *ch, float time, float
 /* Animation evaluation                                                */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_evaluate_animation(const sdl3d_skeleton *skeleton, const sdl3d_animation_clip *clip, float time,
-                              sdl3d_mat4 *out_joint_matrices)
+bool slayer3d_evaluate_animation(const slayer3d_skeleton *skeleton, const slayer3d_animation_clip *clip, float time,
+                                 slayer3d_mat4 *out_joint_matrices)
 {
     float *local_t = NULL;
     float *local_r = NULL;
     float *local_s = NULL;
-    sdl3d_mat4 *world = NULL;
+    slayer3d_mat4 *world = NULL;
     int jc;
 
     if (skeleton == NULL || out_joint_matrices == NULL)
@@ -185,7 +185,7 @@ bool sdl3d_evaluate_animation(const sdl3d_skeleton *skeleton, const sdl3d_animat
     local_t = (float *)SDL_malloc((size_t)jc * 3 * sizeof(float));
     local_r = (float *)SDL_malloc((size_t)jc * 4 * sizeof(float));
     local_s = (float *)SDL_malloc((size_t)jc * 3 * sizeof(float));
-    world = (sdl3d_mat4 *)SDL_malloc((size_t)jc * sizeof(sdl3d_mat4));
+    world = (slayer3d_mat4 *)SDL_malloc((size_t)jc * sizeof(slayer3d_mat4));
     if (!local_t || !local_r || !local_s || !world)
     {
         SDL_free(local_t);
@@ -208,21 +208,21 @@ bool sdl3d_evaluate_animation(const sdl3d_skeleton *skeleton, const sdl3d_animat
     {
         for (int c = 0; c < clip->channel_count; ++c)
         {
-            const sdl3d_anim_channel *ch = &clip->channels[c];
+            const slayer3d_anim_channel *ch = &clip->channels[c];
             if (ch->joint_index < 0 || ch->joint_index >= jc)
             {
                 continue;
             }
             switch (ch->path)
             {
-            case SDL3D_ANIM_TRANSLATION:
-                sdl3d_sample_channel(ch, time, &local_t[ch->joint_index * 3], 3);
+            case SLAYER3D_ANIM_TRANSLATION:
+                slayer3d_sample_channel(ch, time, &local_t[ch->joint_index * 3], 3);
                 break;
-            case SDL3D_ANIM_ROTATION:
-                sdl3d_sample_channel(ch, time, &local_r[ch->joint_index * 4], 4);
+            case SLAYER3D_ANIM_ROTATION:
+                slayer3d_sample_channel(ch, time, &local_r[ch->joint_index * 4], 4);
                 break;
-            case SDL3D_ANIM_SCALE:
-                sdl3d_sample_channel(ch, time, &local_s[ch->joint_index * 3], 3);
+            case SLAYER3D_ANIM_SCALE:
+                slayer3d_sample_channel(ch, time, &local_s[ch->joint_index * 3], 3);
                 break;
             }
         }
@@ -231,11 +231,11 @@ bool sdl3d_evaluate_animation(const sdl3d_skeleton *skeleton, const sdl3d_animat
     /* Compute world transforms (parent-first order). */
     for (int j = 0; j < jc; ++j)
     {
-        sdl3d_mat4 local = sdl3d_mat4_from_trs(&local_t[j * 3], &local_r[j * 4], &local_s[j * 3]);
+        slayer3d_mat4 local = slayer3d_mat4_from_trs(&local_t[j * 3], &local_r[j * 4], &local_s[j * 3]);
         int parent = skeleton->joints[j].parent_index;
         if (parent >= 0 && parent < jc)
         {
-            world[j] = sdl3d_mat4_multiply(world[parent], local);
+            world[j] = slayer3d_mat4_multiply(world[parent], local);
         }
         else
         {
@@ -246,7 +246,7 @@ bool sdl3d_evaluate_animation(const sdl3d_skeleton *skeleton, const sdl3d_animat
     /* Final skinning matrices: world * inverse_bind. */
     for (int j = 0; j < jc; ++j)
     {
-        out_joint_matrices[j] = sdl3d_mat4_multiply(world[j], skeleton->joints[j].inverse_bind_matrix);
+        out_joint_matrices[j] = slayer3d_mat4_multiply(world[j], skeleton->joints[j].inverse_bind_matrix);
     }
 
     SDL_free(local_t);
@@ -256,9 +256,9 @@ bool sdl3d_evaluate_animation(const sdl3d_skeleton *skeleton, const sdl3d_animat
     return true;
 }
 
-bool sdl3d_compute_bind_pose(const sdl3d_skeleton *skeleton, sdl3d_mat4 *out_joint_matrices)
+bool slayer3d_compute_bind_pose(const slayer3d_skeleton *skeleton, slayer3d_mat4 *out_joint_matrices)
 {
-    return sdl3d_evaluate_animation(skeleton, NULL, 0.0f, out_joint_matrices);
+    return slayer3d_evaluate_animation(skeleton, NULL, 0.0f, out_joint_matrices);
 }
 
 /* ------------------------------------------------------------------ */
@@ -272,48 +272,49 @@ bool sdl3d_compute_bind_pose(const sdl3d_skeleton *skeleton, sdl3d_mat4 *out_joi
  * declared in scene.c. */
 
 /* Forward declarations — implemented in scene.c */
-extern void sdl3d_actor_set_anim_state(sdl3d_actor *actor, int clip, float time, bool playing, bool looping);
-extern void sdl3d_actor_get_anim_state(const sdl3d_actor *actor, int *clip, float *time, bool *playing, bool *looping);
+extern void slayer3d_actor_set_anim_state(slayer3d_actor *actor, int clip, float time, bool playing, bool looping);
+extern void slayer3d_actor_get_anim_state(const slayer3d_actor *actor, int *clip, float *time, bool *playing,
+                                          bool *looping);
 
-bool sdl3d_actor_play_animation(sdl3d_actor *actor, int clip_index, bool loop)
+bool slayer3d_actor_play_animation(slayer3d_actor *actor, int clip_index, bool loop)
 {
     if (actor == NULL)
     {
         return SDL_InvalidParamError("actor");
     }
-    sdl3d_actor_set_anim_state(actor, clip_index, 0.0f, true, loop);
+    slayer3d_actor_set_anim_state(actor, clip_index, 0.0f, true, loop);
     return true;
 }
 
-bool sdl3d_actor_stop_animation(sdl3d_actor *actor)
+bool slayer3d_actor_stop_animation(slayer3d_actor *actor)
 {
     if (actor == NULL)
     {
         return SDL_InvalidParamError("actor");
     }
-    sdl3d_actor_set_anim_state(actor, -1, 0.0f, false, false);
+    slayer3d_actor_set_anim_state(actor, -1, 0.0f, false, false);
     return true;
 }
 
-bool sdl3d_actor_advance_animation(sdl3d_actor *actor, float delta_time)
+bool slayer3d_actor_advance_animation(slayer3d_actor *actor, float delta_time)
 {
     int clip;
     float time;
     bool playing, looping;
-    const sdl3d_model *model;
+    const slayer3d_model *model;
 
     if (actor == NULL)
     {
         return SDL_InvalidParamError("actor");
     }
 
-    sdl3d_actor_get_anim_state(actor, &clip, &time, &playing, &looping);
+    slayer3d_actor_get_anim_state(actor, &clip, &time, &playing, &looping);
     if (!playing || clip < 0)
     {
         return true;
     }
 
-    model = sdl3d_actor_get_model(actor);
+    model = slayer3d_actor_get_model(actor);
     if (model == NULL || clip >= model->animation_count)
     {
         return true;
@@ -341,11 +342,11 @@ bool sdl3d_actor_advance_animation(sdl3d_actor *actor, float delta_time)
         }
     }
 
-    sdl3d_actor_set_anim_state(actor, clip, time, playing, looping);
+    slayer3d_actor_set_anim_state(actor, clip, time, playing, looping);
     return true;
 }
 
-bool sdl3d_actor_is_animation_playing(const sdl3d_actor *actor)
+bool slayer3d_actor_is_animation_playing(const slayer3d_actor *actor)
 {
     int clip;
     float time;
@@ -354,11 +355,11 @@ bool sdl3d_actor_is_animation_playing(const sdl3d_actor *actor)
     {
         return false;
     }
-    sdl3d_actor_get_anim_state(actor, &clip, &time, &playing, &looping);
+    slayer3d_actor_get_anim_state(actor, &clip, &time, &playing, &looping);
     return playing;
 }
 
-int sdl3d_actor_get_animation_clip(const sdl3d_actor *actor)
+int slayer3d_actor_get_animation_clip(const slayer3d_actor *actor)
 {
     int clip;
     float time;
@@ -367,11 +368,11 @@ int sdl3d_actor_get_animation_clip(const sdl3d_actor *actor)
     {
         return -1;
     }
-    sdl3d_actor_get_anim_state(actor, &clip, &time, &playing, &looping);
+    slayer3d_actor_get_anim_state(actor, &clip, &time, &playing, &looping);
     return clip;
 }
 
-float sdl3d_actor_get_animation_time(const sdl3d_actor *actor)
+float slayer3d_actor_get_animation_time(const slayer3d_actor *actor)
 {
     int clip;
     float time;
@@ -380,6 +381,6 @@ float sdl3d_actor_get_animation_time(const sdl3d_actor *actor)
     {
         return 0.0f;
     }
-    sdl3d_actor_get_anim_state(actor, &clip, &time, &playing, &looping);
+    slayer3d_actor_get_anim_state(actor, &clip, &time, &playing, &looping);
     return time;
 }

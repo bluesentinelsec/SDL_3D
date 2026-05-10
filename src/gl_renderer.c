@@ -1,7 +1,7 @@
 /*
- * OpenGL 3.3 Core renderer for SDL3D.
+ * OpenGL 3.3 Core renderer for SLAYER3D.
  *
- * Implements the sdl3d_backend_interface using streaming VAO/VBO draws,
+ * Implements the slayer3d_backend_interface using streaming VAO/VBO draws,
  * a scene UBO for per-frame data, and an offscreen FBO with a
  * fullscreen-triangle copy pass for letterboxed presentation.
  */
@@ -15,8 +15,8 @@
 
 #include "gl_funcs.h"
 #include "render_context_internal.h"
-#include "sdl3d/lighting.h"
-#include "sdl3d/texture.h"
+#include "slayer3d/lighting.h"
+#include "slayer3d/texture.h"
 
 #include <string.h>
 
@@ -24,21 +24,21 @@
 /* Texture cache                                                       */
 /* ------------------------------------------------------------------ */
 
-#define SDL3D_MAX_POINT_SHADOWS 2
+#define SLAYER3D_MAX_POINT_SHADOWS 2
 
-typedef struct sdl3d_gl_tex_entry
+typedef struct slayer3d_gl_tex_entry
 {
-    const sdl3d_texture2d *key;
+    const slayer3d_texture2d *key;
     Uint32 generation; /* generation at upload time */
     GLuint gl_tex;
-    struct sdl3d_gl_tex_entry *next;
-} sdl3d_gl_tex_entry;
+    struct slayer3d_gl_tex_entry *next;
+} slayer3d_gl_tex_entry;
 
 /* ------------------------------------------------------------------ */
 /* Scene UBO (std140 layout, must match GLSL SceneUBO)                 */
 /* ------------------------------------------------------------------ */
 
-typedef struct sdl3d_scene_ubo_data
+typedef struct slayer3d_scene_ubo_data
 {
     float view_projection[16];
     float camera_pos[3];
@@ -66,7 +66,7 @@ typedef struct sdl3d_scene_ubo_data
     float fog_density;
     float fog_color[3];
     int tonemap_mode;
-} sdl3d_scene_ubo_data;
+} slayer3d_scene_ubo_data;
 
 /* ------------------------------------------------------------------ */
 /* Draw list entry                                                     */
@@ -80,21 +80,21 @@ typedef struct sdl3d_scene_ubo_data
 
 /* Persistent overlay atlas — uploaded to GL once, re-uploaded only
  * when the source texture's generation changes. */
-typedef struct sdl3d_overlay_atlas
+typedef struct slayer3d_overlay_atlas
 {
-    const sdl3d_texture2d *source; /* source texture pointer */
-    Uint32 generation;             /* generation at last upload */
-    GLuint gl_tex;                 /* persistent GL texture */
-} sdl3d_overlay_atlas;
+    const slayer3d_texture2d *source; /* source texture pointer */
+    Uint32 generation;                /* generation at last upload */
+    GLuint gl_tex;                    /* persistent GL texture */
+} slayer3d_overlay_atlas;
 
-typedef struct sdl3d_overlay_entry
+typedef struct slayer3d_overlay_entry
 {
     float *positions; /* 3 floats per vertex, heap-allocated copy */
     float *uvs;       /* 2 floats per vertex, heap-allocated copy */
     int vertex_count;
     float mvp[16];
     float tint[4];
-    sdl3d_overlay_effect effect;
+    slayer3d_overlay_effect effect;
     float effect_progress;
     float effect_seed;
     float effect_columns;
@@ -103,9 +103,9 @@ typedef struct sdl3d_overlay_entry
     bool scissor_enabled;
     SDL_Rect scissor_rect;
     int atlas_index; /* index into overlay_atlases */
-} sdl3d_overlay_entry;
+} slayer3d_overlay_entry;
 
-typedef struct sdl3d_draw_entry
+typedef struct slayer3d_draw_entry
 {
     const float *positions;
     const float *normals;
@@ -121,8 +121,8 @@ typedef struct sdl3d_draw_entry
     float metallic;
     float roughness;
     float emissive[3];
-    const sdl3d_texture2d *texture;
-    const sdl3d_texture2d *lightmap_texture;
+    const slayer3d_texture2d *texture;
+    const slayer3d_texture2d *lightmap_texture;
     bool lit;
     bool baked_light_mode;
     bool has_lightmap;
@@ -131,10 +131,10 @@ typedef struct sdl3d_draw_entry
     const char *shader_fragment_source;
     float mvp[16];
     bool owns_arrays;
-    struct sdl3d_gl_mesh_cache_entry *mesh_cache;
-} sdl3d_draw_entry;
+    struct slayer3d_gl_mesh_cache_entry *mesh_cache;
+} slayer3d_draw_entry;
 
-typedef struct sdl3d_custom_shader_cache_entry
+typedef struct slayer3d_custom_shader_cache_entry
 {
     bool lit;
     char *vertex_source;
@@ -162,9 +162,9 @@ typedef struct sdl3d_custom_shader_cache_entry
     GLint pbr_csm_splits_loc;
     GLint pbr_csm_enabled_loc;
     GLint pbr_view_matrix_loc;
-    GLint pbr_point_shadow_map_loc[SDL3D_MAX_POINT_SHADOWS];
-    GLint pbr_point_shadow_light_pos_loc[SDL3D_MAX_POINT_SHADOWS];
-    GLint pbr_point_shadow_far_loc[SDL3D_MAX_POINT_SHADOWS];
+    GLint pbr_point_shadow_map_loc[SLAYER3D_MAX_POINT_SHADOWS];
+    GLint pbr_point_shadow_light_pos_loc[SLAYER3D_MAX_POINT_SHADOWS];
+    GLint pbr_point_shadow_far_loc[SLAYER3D_MAX_POINT_SHADOWS];
     GLint pbr_point_shadow_count_loc;
     GLint pbr_irradiance_map_loc;
     GLint pbr_prefilter_map_loc;
@@ -175,10 +175,10 @@ typedef struct sdl3d_custom_shader_cache_entry
     GLint overlay_effect_progress_loc;
     GLint overlay_effect_seed_loc;
     GLint overlay_effect_columns_loc;
-    struct sdl3d_custom_shader_cache_entry *next;
-} sdl3d_custom_shader_cache_entry;
+    struct slayer3d_custom_shader_cache_entry *next;
+} slayer3d_custom_shader_cache_entry;
 
-typedef struct sdl3d_gl_mesh_cache_entry
+typedef struct slayer3d_gl_mesh_cache_entry
 {
     bool lit;
     GLenum primitive_mode;
@@ -201,21 +201,21 @@ typedef struct sdl3d_gl_mesh_cache_entry
     GLuint shadow_vao;
     GLuint shadow_position_vbo;
     GLuint shadow_ebo;
-    struct sdl3d_gl_mesh_cache_entry *next;
-} sdl3d_gl_mesh_cache_entry;
+    struct slayer3d_gl_mesh_cache_entry *next;
+} slayer3d_gl_mesh_cache_entry;
 
 /* ------------------------------------------------------------------ */
 /* Context                                                             */
 /* ------------------------------------------------------------------ */
 
-#define SDL3D_MAX_POINT_SHADOWS 2
-#define SDL3D_POINT_SHADOWS_ENABLED 1
+#define SLAYER3D_MAX_POINT_SHADOWS 2
+#define SLAYER3D_POINT_SHADOWS_ENABLED 1
 
-struct sdl3d_gl_context
+struct slayer3d_gl_context
 {
     SDL_Window *window;
     SDL_GLContext gl_context;
-    sdl3d_gl_funcs gl;
+    slayer3d_gl_funcs gl;
     bool is_es;
     Uint64 frame_index;
     bool ubo_dirty;
@@ -223,7 +223,7 @@ struct sdl3d_gl_context
     GLuint pbr_program;
     GLuint unlit_program;
     GLuint copy_program;
-    sdl3d_custom_shader_cache_entry *custom_shader_cache;
+    slayer3d_custom_shader_cache_entry *custom_shader_cache;
 
     /* PBR uniform locations */
     GLint pbr_model_loc;
@@ -262,7 +262,7 @@ struct sdl3d_gl_context
     GLint transition_melt_offsets_loc;
     GLuint transition_melt_offsets_tex;
     bool transition_pending;
-    sdl3d_transition pending_transition;
+    slayer3d_transition pending_transition;
 
     /* Scene UBO */
     GLuint scene_ubo;
@@ -298,9 +298,9 @@ struct sdl3d_gl_context
     float shadow_light_vp[16];
     float shadow_bias;
 
-#define SDL3D_CSM_CASCADE_COUNT 4
-    float csm_light_vp[SDL3D_CSM_CASCADE_COUNT][16];
-    float csm_split_depths[SDL3D_CSM_CASCADE_COUNT];
+#define SLAYER3D_CSM_CASCADE_COUNT 4
+    float csm_light_vp[SLAYER3D_CSM_CASCADE_COUNT][16];
+    float csm_split_depths[SLAYER3D_CSM_CASCADE_COUNT];
     bool csm_fragment_enabled;
 
     /* PBR shadow uniform locations */
@@ -317,35 +317,35 @@ struct sdl3d_gl_context
 
     /* Point light shadows */
     GLuint point_shadow_fbo;
-    GLuint point_shadow_cubemap[SDL3D_MAX_POINT_SHADOWS];
+    GLuint point_shadow_cubemap[SLAYER3D_MAX_POINT_SHADOWS];
     GLuint point_shadow_program;
     GLint point_shadow_model_loc;
     GLint point_shadow_light_vp_loc;
     GLint point_shadow_light_pos_loc;
     GLint point_shadow_far_loc;
-    int point_shadow_light_index[SDL3D_MAX_POINT_SHADOWS];
-    float point_shadow_far_plane[SDL3D_MAX_POINT_SHADOWS];
-    float point_shadow_vp[SDL3D_MAX_POINT_SHADOWS][6][16];
+    int point_shadow_light_index[SLAYER3D_MAX_POINT_SHADOWS];
+    float point_shadow_far_plane[SLAYER3D_MAX_POINT_SHADOWS];
+    float point_shadow_vp[SLAYER3D_MAX_POINT_SHADOWS][6][16];
     int point_shadow_count;
 
-    GLint pbr_point_shadow_map_loc[SDL3D_MAX_POINT_SHADOWS];
-    GLint pbr_point_shadow_light_pos_loc[SDL3D_MAX_POINT_SHADOWS];
-    GLint pbr_point_shadow_far_loc[SDL3D_MAX_POINT_SHADOWS];
+    GLint pbr_point_shadow_map_loc[SLAYER3D_MAX_POINT_SHADOWS];
+    GLint pbr_point_shadow_light_pos_loc[SLAYER3D_MAX_POINT_SHADOWS];
+    GLint pbr_point_shadow_far_loc[SLAYER3D_MAX_POINT_SHADOWS];
     GLint pbr_point_shadow_count_loc;
 
     /* Deferred draw list */
-    sdl3d_draw_entry *draw_list;
+    slayer3d_draw_entry *draw_list;
     int draw_count;
     int draw_capacity;
-    sdl3d_gl_mesh_cache_entry *mesh_cache;
+    slayer3d_gl_mesh_cache_entry *mesh_cache;
 
     /* Overlay draw list — rendered after FBO blit, no post-processing */
-    sdl3d_overlay_entry *overlay_list;
+    slayer3d_overlay_entry *overlay_list;
     int overlay_count;
     int overlay_capacity;
 
     /* Per-frame atlas snapshots shared across overlay entries */
-    sdl3d_overlay_atlas *overlay_atlases;
+    slayer3d_overlay_atlas *overlay_atlases;
     int overlay_atlas_count;
     int overlay_atlas_capacity;
 
@@ -353,7 +353,7 @@ struct sdl3d_gl_context
     GLuint black_texture;
     GLuint black_cubemap;
 
-    sdl3d_gl_tex_entry *tex_cache;
+    slayer3d_gl_tex_entry *tex_cache;
 
     float *white_colors;
     int white_colors_capacity;
@@ -391,7 +391,7 @@ struct sdl3d_gl_context
     GLint ssao_scene_loc, ssao_depth_loc, ssao_texel_size_loc, ssao_near_loc, ssao_far_loc;
 
     /* Cached render context pointer for lazy UBO upload */
-    sdl3d_render_context *current_ctx;
+    slayer3d_render_context *current_ctx;
 
     /* IBL (Image-Based Lighting) */
     GLuint ibl_irradiance_map; /* diffuse irradiance cubemap */
@@ -1066,7 +1066,7 @@ static const char k_ssao_frag[] = "in vec2 vTexCoord;\n"
                                   "    fragColor = vec4(color, 1.0);\n"
                                   "}\n";
 
-static GLuint compile_shader(sdl3d_gl_funcs *gl, GLenum type, const char *version, const char *body)
+static GLuint compile_shader(slayer3d_gl_funcs *gl, GLenum type, const char *version, const char *body)
 {
     GLuint s = gl->CreateShader(type);
     const char *srcs[2] = {version, body};
@@ -1079,14 +1079,14 @@ static GLuint compile_shader(sdl3d_gl_funcs *gl, GLenum type, const char *versio
     {
         char buf[1024];
         gl->GetShaderInfoLog(s, sizeof(buf), NULL, buf);
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL shader compile error: %s", buf);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL shader compile error: %s", buf);
         gl->DeleteShader(s);
         return 0;
     }
     return s;
 }
 
-static GLuint compile_shader_multi(sdl3d_gl_funcs *gl, GLenum type, int count, const char **srcs)
+static GLuint compile_shader_multi(slayer3d_gl_funcs *gl, GLenum type, int count, const char **srcs)
 {
     GLuint s = gl->CreateShader(type);
     gl->ShaderSource(s, count, srcs, NULL);
@@ -1098,14 +1098,14 @@ static GLuint compile_shader_multi(sdl3d_gl_funcs *gl, GLenum type, int count, c
     {
         char buf[1024];
         gl->GetShaderInfoLog(s, sizeof(buf), NULL, buf);
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL shader compile error: %s", buf);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL shader compile error: %s", buf);
         gl->DeleteShader(s);
         return 0;
     }
     return s;
 }
 
-static GLuint link_program(sdl3d_gl_funcs *gl, GLuint vert, GLuint frag)
+static GLuint link_program(slayer3d_gl_funcs *gl, GLuint vert, GLuint frag)
 {
     GLuint p = gl->CreateProgram();
     gl->AttachShader(p, vert);
@@ -1118,7 +1118,7 @@ static GLuint link_program(sdl3d_gl_funcs *gl, GLuint vert, GLuint frag)
     {
         char buf[1024];
         gl->GetProgramInfoLog(p, sizeof(buf), NULL, buf);
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL program link error: %s", buf);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL program link error: %s", buf);
         gl->DeleteProgram(p);
         return 0;
     }
@@ -1306,7 +1306,7 @@ static const unsigned int k_cube_indices[] = {
     0, 1, 2, 2, 3, 0, 1, 5, 6, 6, 2, 1, 5, 4, 7, 7, 6, 5, 4, 0, 3, 3, 7, 4, 3, 2, 6, 6, 7, 3, 4, 5, 1, 1, 0, 4,
 };
 
-static GLuint build_program(sdl3d_gl_funcs *gl, const char *version, const char *vert_body, const char *frag_body)
+static GLuint build_program(slayer3d_gl_funcs *gl, const char *version, const char *vert_body, const char *frag_body)
 {
     GLuint vs = compile_shader(gl, GL_VERTEX_SHADER, version, vert_body);
     if (!vs)
@@ -1323,7 +1323,7 @@ static GLuint build_program(sdl3d_gl_funcs *gl, const char *version, const char 
     return prog;
 }
 
-static const char *gl_version_prefix_for_context(const sdl3d_gl_context *ctx)
+static const char *gl_version_prefix_for_context(const slayer3d_gl_context *ctx)
 {
     return (ctx != NULL && ctx->is_es) ? "#version 300 es\nprecision highp float;\n" : "#version 330\n";
 }
@@ -1337,7 +1337,7 @@ static bool shader_source_has_version_prefix(const char *source)
     return SDL_strncmp(source, "#version", 8) == 0;
 }
 
-static GLuint compile_shader_source(sdl3d_gl_funcs *gl, GLenum type, const char *version, const char *source)
+static GLuint compile_shader_source(slayer3d_gl_funcs *gl, GLenum type, const char *version, const char *source)
 {
     GLuint shader;
     const char *srcs[2];
@@ -1377,14 +1377,14 @@ static GLuint compile_shader_source(sdl3d_gl_funcs *gl, GLenum type, const char 
         char buf[1024];
         GLsizei len = 0;
         gl->GetShaderInfoLog(shader, (GLsizei)sizeof(buf), &len, buf);
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL shader compile error: %s", buf);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL shader compile error: %s", buf);
         gl->DeleteShader(shader);
         return 0;
     }
     return shader;
 }
 
-static GLuint build_program_from_sources(sdl3d_gl_funcs *gl, const char *version, const char *default_vert_source,
+static GLuint build_program_from_sources(slayer3d_gl_funcs *gl, const char *version, const char *default_vert_source,
                                          const char *vertex_source, const char *fragment_source)
 {
     GLuint vs = compile_shader_source(gl, GL_VERTEX_SHADER, version,
@@ -1408,10 +1408,10 @@ static GLuint build_program_from_sources(sdl3d_gl_funcs *gl, const char *version
 /* Texture cache                                                       */
 /* ------------------------------------------------------------------ */
 
-static GLuint tex_cache_lookup(sdl3d_gl_context *ctx, const sdl3d_texture2d *tex)
+static GLuint tex_cache_lookup(slayer3d_gl_context *ctx, const slayer3d_texture2d *tex)
 {
-    sdl3d_gl_tex_entry **prev = &ctx->tex_cache;
-    for (sdl3d_gl_tex_entry *e = ctx->tex_cache; e; prev = &e->next, e = e->next)
+    slayer3d_gl_tex_entry **prev = &ctx->tex_cache;
+    for (slayer3d_gl_tex_entry *e = ctx->tex_cache; e; prev = &e->next, e = e->next)
     {
         if (e->key == tex)
         {
@@ -1428,9 +1428,9 @@ static GLuint tex_cache_lookup(sdl3d_gl_context *ctx, const sdl3d_texture2d *tex
     return 0;
 }
 
-static GLuint tex_cache_upload(sdl3d_gl_context *ctx, const sdl3d_texture2d *tex)
+static GLuint tex_cache_upload(slayer3d_gl_context *ctx, const slayer3d_texture2d *tex)
 {
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
     GLuint id;
     gl->GenTextures(1, &id);
     gl->BindTexture(GL_TEXTURE_2D, id);
@@ -1446,7 +1446,7 @@ static GLuint tex_cache_upload(sdl3d_gl_context *ctx, const sdl3d_texture2d *tex
         gl->TexParameterfv(GL_TEXTURE_2D, 0x84FE /* GL_TEXTURE_MAX_ANISOTROPY_EXT */, &aniso);
     }
 
-    sdl3d_gl_tex_entry *entry = SDL_calloc(1, sizeof(*entry));
+    slayer3d_gl_tex_entry *entry = SDL_calloc(1, sizeof(*entry));
     entry->key = tex;
     entry->generation = tex->generation;
     entry->gl_tex = id;
@@ -1455,7 +1455,7 @@ static GLuint tex_cache_upload(sdl3d_gl_context *ctx, const sdl3d_texture2d *tex
     return id;
 }
 
-static GLuint resolve_texture(sdl3d_gl_context *ctx, const sdl3d_texture2d *tex)
+static GLuint resolve_texture(slayer3d_gl_context *ctx, const slayer3d_texture2d *tex)
 {
     if (!tex)
         return ctx->white_texture;
@@ -1463,13 +1463,13 @@ static GLuint resolve_texture(sdl3d_gl_context *ctx, const sdl3d_texture2d *tex)
     return id ? id : tex_cache_upload(ctx, tex);
 }
 
-static void tex_cache_free(sdl3d_gl_context *ctx)
+static void tex_cache_free(slayer3d_gl_context *ctx)
 {
-    sdl3d_gl_funcs *gl = &ctx->gl;
-    sdl3d_gl_tex_entry *e = ctx->tex_cache;
+    slayer3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_tex_entry *e = ctx->tex_cache;
     while (e)
     {
-        sdl3d_gl_tex_entry *next = e->next;
+        slayer3d_gl_tex_entry *next = e->next;
         gl->DeleteTextures(1, &e->gl_tex);
         SDL_free(e);
         e = next;
@@ -1481,7 +1481,7 @@ static void tex_cache_free(sdl3d_gl_context *ctx)
 /* White color buffer                                                  */
 /* ------------------------------------------------------------------ */
 
-static const float *ensure_white_colors(sdl3d_gl_context *ctx, int vertex_count)
+static const float *ensure_white_colors(slayer3d_gl_context *ctx, int vertex_count)
 {
     int need = vertex_count * 4;
     if (need <= ctx->white_colors_capacity)
@@ -1498,11 +1498,11 @@ static const float *ensure_white_colors(sdl3d_gl_context *ctx, int vertex_count)
 /* Draw list helpers                                                   */
 /* ------------------------------------------------------------------ */
 
-static void free_draw_list(sdl3d_gl_context *ctx)
+static void free_draw_list(slayer3d_gl_context *ctx)
 {
     for (int i = 0; i < ctx->draw_count; i++)
     {
-        sdl3d_draw_entry *e = &ctx->draw_list[i];
+        slayer3d_draw_entry *e = &ctx->draw_list[i];
         if (e->owns_arrays)
         {
             SDL_free((void *)e->positions);
@@ -1516,18 +1516,18 @@ static void free_draw_list(sdl3d_gl_context *ctx)
     ctx->draw_count = 0;
 }
 
-static sdl3d_draw_entry *append_draw_entry(sdl3d_gl_context *ctx)
+static slayer3d_draw_entry *append_draw_entry(slayer3d_gl_context *ctx)
 {
     if (ctx->draw_count == ctx->draw_capacity)
     {
         int cap = ctx->draw_capacity ? ctx->draw_capacity * 2 : 64;
-        sdl3d_draw_entry *buf = SDL_realloc(ctx->draw_list, (size_t)cap * sizeof(sdl3d_draw_entry));
+        slayer3d_draw_entry *buf = SDL_realloc(ctx->draw_list, (size_t)cap * sizeof(slayer3d_draw_entry));
         if (!buf)
             return NULL;
         ctx->draw_list = buf;
         ctx->draw_capacity = cap;
     }
-    sdl3d_draw_entry *e = &ctx->draw_list[ctx->draw_count++];
+    slayer3d_draw_entry *e = &ctx->draw_list[ctx->draw_count++];
     SDL_memset(e, 0, sizeof(*e));
     return e;
 }
@@ -1536,11 +1536,11 @@ static sdl3d_draw_entry *append_draw_entry(sdl3d_gl_context *ctx)
 /* Overlay draw list helpers                                           */
 /* ------------------------------------------------------------------ */
 
-static void free_overlay_list(sdl3d_gl_context *ctx)
+static void free_overlay_list(slayer3d_gl_context *ctx)
 {
     for (int i = 0; i < ctx->overlay_count; i++)
     {
-        sdl3d_overlay_entry *e = &ctx->overlay_list[i];
+        slayer3d_overlay_entry *e = &ctx->overlay_list[i];
         SDL_free(e->positions);
         SDL_free(e->uvs);
     }
@@ -1548,30 +1548,31 @@ static void free_overlay_list(sdl3d_gl_context *ctx)
     /* Atlases are persistent — not freed per frame. */
 }
 
-static sdl3d_overlay_entry *append_overlay_entry(sdl3d_gl_context *ctx)
+static slayer3d_overlay_entry *append_overlay_entry(slayer3d_gl_context *ctx)
 {
     if (ctx->overlay_count == ctx->overlay_capacity)
     {
         int cap = ctx->overlay_capacity ? ctx->overlay_capacity * 2 : 64;
-        sdl3d_overlay_entry *buf = SDL_realloc(ctx->overlay_list, (size_t)cap * sizeof(sdl3d_overlay_entry));
+        slayer3d_overlay_entry *buf = SDL_realloc(ctx->overlay_list, (size_t)cap * sizeof(slayer3d_overlay_entry));
         if (!buf)
             return NULL;
         ctx->overlay_list = buf;
         ctx->overlay_capacity = cap;
     }
-    sdl3d_overlay_entry *e = &ctx->overlay_list[ctx->overlay_count++];
+    slayer3d_overlay_entry *e = &ctx->overlay_list[ctx->overlay_count++];
     SDL_memset(e, 0, sizeof(*e));
     return e;
 }
 
 static float *copy_floats(const float *src, size_t count);
 
-bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, const float *uvs, int vertex_count,
-                             const float *mvp, const float *tint, const sdl3d_texture2d *texture, bool scissor_enabled,
-                             const SDL_Rect *scissor_rect, sdl3d_overlay_effect effect, float effect_progress,
-                             Uint32 effect_seed, const char *shader_vertex_source, const char *shader_fragment_source)
+bool slayer3d_gl_append_overlay(slayer3d_gl_context *ctx, const float *positions, const float *uvs, int vertex_count,
+                                const float *mvp, const float *tint, const slayer3d_texture2d *texture,
+                                bool scissor_enabled, const SDL_Rect *scissor_rect, slayer3d_overlay_effect effect,
+                                float effect_progress, Uint32 effect_seed, const char *shader_vertex_source,
+                                const char *shader_fragment_source)
 {
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
 
     int atlas_idx = -1;
     if (texture != NULL)
@@ -1579,7 +1580,7 @@ bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, cons
         /* Find or create a persistent GL texture for this atlas. */
         for (int i = 0; i < ctx->overlay_atlas_count; i++)
         {
-            sdl3d_overlay_atlas *a = &ctx->overlay_atlases[i];
+            slayer3d_overlay_atlas *a = &ctx->overlay_atlases[i];
             if (a->source == texture)
             {
                 /* Re-upload if the texture has changed. */
@@ -1599,14 +1600,15 @@ bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, cons
             if (ctx->overlay_atlas_count == ctx->overlay_atlas_capacity)
             {
                 int cap = ctx->overlay_atlas_capacity ? ctx->overlay_atlas_capacity * 2 : 16;
-                sdl3d_overlay_atlas *buf = SDL_realloc(ctx->overlay_atlases, (size_t)cap * sizeof(sdl3d_overlay_atlas));
+                slayer3d_overlay_atlas *buf =
+                    SDL_realloc(ctx->overlay_atlases, (size_t)cap * sizeof(slayer3d_overlay_atlas));
                 if (!buf)
                     return SDL_OutOfMemory();
                 ctx->overlay_atlases = buf;
                 ctx->overlay_atlas_capacity = cap;
             }
             atlas_idx = ctx->overlay_atlas_count++;
-            sdl3d_overlay_atlas *a = &ctx->overlay_atlases[atlas_idx];
+            slayer3d_overlay_atlas *a = &ctx->overlay_atlases[atlas_idx];
             a->source = texture;
             a->generation = texture->generation;
             gl->GenTextures(1, &a->gl_tex);
@@ -1620,7 +1622,7 @@ bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, cons
         }
     }
 
-    sdl3d_overlay_entry *e = append_overlay_entry(ctx);
+    slayer3d_overlay_entry *e = append_overlay_entry(ctx);
     if (!e)
         return SDL_OutOfMemory();
 
@@ -1654,7 +1656,7 @@ bool sdl3d_gl_append_overlay(sdl3d_gl_context *ctx, const float *positions, cons
     return true;
 }
 
-bool sdl3d_gl_append_line(sdl3d_gl_context *ctx, const float *positions, const float *colors, const float *mvp)
+bool slayer3d_gl_append_line(slayer3d_gl_context *ctx, const float *positions, const float *colors, const float *mvp)
 {
     static const float k_zero_uvs[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     static const float k_white_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -1664,7 +1666,7 @@ bool sdl3d_gl_append_line(sdl3d_gl_context *ctx, const float *positions, const f
         return false;
     }
 
-    sdl3d_draw_entry *e = append_draw_entry(ctx);
+    slayer3d_draw_entry *e = append_draw_entry(ctx);
     if (!e)
         return false;
 
@@ -1682,7 +1684,7 @@ bool sdl3d_gl_append_line(sdl3d_gl_context *ctx, const float *positions, const f
 
 /* Check for potential z-fighting: warn if two lit draw entries have
  * overlapping axis-aligned bounding boxes with coplanar faces. */
-static void check_z_fighting(sdl3d_gl_context *ctx, const sdl3d_draw_entry *new_entry)
+static void check_z_fighting(slayer3d_gl_context *ctx, const slayer3d_draw_entry *new_entry)
 {
     if (!new_entry->lit || new_entry->vertex_count == 0)
         return;
@@ -1717,7 +1719,7 @@ static void check_z_fighting(sdl3d_gl_context *ctx, const sdl3d_draw_entry *new_
     /* Compare against all previous lit entries. */
     for (int i = 0; i < ctx->draw_count - 1; i++)
     {
-        const sdl3d_draw_entry *other = &ctx->draw_list[i];
+        const slayer3d_draw_entry *other = &ctx->draw_list[i];
         if (!other->lit || other->vertex_count == 0)
             continue;
 
@@ -1819,7 +1821,7 @@ static unsigned int *copy_indices(const unsigned int *src, size_t count)
     return dst;
 }
 
-static bool mesh_cache_matches(const sdl3d_gl_mesh_cache_entry *entry, bool lit, GLenum primitive_mode,
+static bool mesh_cache_matches(const slayer3d_gl_mesh_cache_entry *entry, bool lit, GLenum primitive_mode,
                                const float *positions, const float *normals, const float *uvs,
                                const float *lightmap_uvs, const float *colors, const unsigned int *indices,
                                int vertex_count, int index_count, bool has_lightmap_uvs)
@@ -1830,7 +1832,7 @@ static bool mesh_cache_matches(const sdl3d_gl_mesh_cache_entry *entry, bool lit,
            entry->index_count == index_count && entry->has_lightmap_uvs == has_lightmap_uvs;
 }
 
-static void mesh_cache_bind_float_attrib(sdl3d_gl_funcs *gl, GLuint *buffer, GLuint attrib, GLint components,
+static void mesh_cache_bind_float_attrib(slayer3d_gl_funcs *gl, GLuint *buffer, GLuint attrib, GLint components,
                                          const float *data, size_t count)
 {
     gl->GenBuffers(1, buffer);
@@ -1840,13 +1842,14 @@ static void mesh_cache_bind_float_attrib(sdl3d_gl_funcs *gl, GLuint *buffer, GLu
     gl->VertexAttribPointer(attrib, components, GL_FLOAT, GL_FALSE, 0, NULL);
 }
 
-static sdl3d_gl_mesh_cache_entry *mesh_cache_lookup_or_create(sdl3d_gl_context *ctx, bool lit, GLenum primitive_mode,
-                                                              const float *positions, const float *normals,
-                                                              const float *uvs, const float *lightmap_uvs,
-                                                              const float *colors, const unsigned int *indices,
-                                                              int vertex_count, int index_count, bool has_lightmap_uvs)
+static slayer3d_gl_mesh_cache_entry *mesh_cache_lookup_or_create(slayer3d_gl_context *ctx, bool lit,
+                                                                 GLenum primitive_mode, const float *positions,
+                                                                 const float *normals, const float *uvs,
+                                                                 const float *lightmap_uvs, const float *colors,
+                                                                 const unsigned int *indices, int vertex_count,
+                                                                 int index_count, bool has_lightmap_uvs)
 {
-    for (sdl3d_gl_mesh_cache_entry *entry = ctx->mesh_cache; entry != NULL; entry = entry->next)
+    for (slayer3d_gl_mesh_cache_entry *entry = ctx->mesh_cache; entry != NULL; entry = entry->next)
     {
         if (mesh_cache_matches(entry, lit, primitive_mode, positions, normals, uvs, lightmap_uvs, colors, indices,
                                vertex_count, index_count, has_lightmap_uvs))
@@ -1855,14 +1858,14 @@ static sdl3d_gl_mesh_cache_entry *mesh_cache_lookup_or_create(sdl3d_gl_context *
         }
     }
 
-    sdl3d_gl_mesh_cache_entry *entry = (sdl3d_gl_mesh_cache_entry *)SDL_calloc(1, sizeof(*entry));
+    slayer3d_gl_mesh_cache_entry *entry = (slayer3d_gl_mesh_cache_entry *)SDL_calloc(1, sizeof(*entry));
     if (entry == NULL)
     {
         SDL_OutOfMemory();
         return NULL;
     }
 
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
     entry->lit = lit;
     entry->primitive_mode = primitive_mode;
     entry->positions = positions;
@@ -1916,13 +1919,13 @@ static sdl3d_gl_mesh_cache_entry *mesh_cache_lookup_or_create(sdl3d_gl_context *
     return entry;
 }
 
-static void mesh_cache_free(sdl3d_gl_context *ctx)
+static void mesh_cache_free(slayer3d_gl_context *ctx)
 {
-    sdl3d_gl_funcs *gl = &ctx->gl;
-    sdl3d_gl_mesh_cache_entry *entry = ctx->mesh_cache;
+    slayer3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_mesh_cache_entry *entry = ctx->mesh_cache;
     while (entry != NULL)
     {
-        sdl3d_gl_mesh_cache_entry *next = entry->next;
+        slayer3d_gl_mesh_cache_entry *next = entry->next;
         GLuint buffers[] = {entry->position_vbo,        entry->normal_vbo, entry->uv_vbo,
                             entry->lightmap_uv_vbo,     entry->color_vbo,  entry->ebo,
                             entry->shadow_position_vbo, entry->shadow_ebo};
@@ -1937,13 +1940,13 @@ static void mesh_cache_free(sdl3d_gl_context *ctx)
     ctx->mesh_cache = NULL;
 }
 
-static void custom_shader_cache_free(sdl3d_gl_context *ctx)
+static void custom_shader_cache_free(slayer3d_gl_context *ctx)
 {
-    sdl3d_custom_shader_cache_entry *entry = ctx->custom_shader_cache;
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_custom_shader_cache_entry *entry = ctx->custom_shader_cache;
+    slayer3d_gl_funcs *gl = &ctx->gl;
     while (entry != NULL)
     {
-        sdl3d_custom_shader_cache_entry *next = entry->next;
+        slayer3d_custom_shader_cache_entry *next = entry->next;
         if (entry->program)
             gl->DeleteProgram(entry->program);
         SDL_free(entry->vertex_source);
@@ -1963,18 +1966,18 @@ static bool shader_source_matches_cache(const char *a, const char *b)
     return SDL_strcmp(a, b) == 0;
 }
 
-static sdl3d_custom_shader_cache_entry *custom_shader_lookup_or_create(sdl3d_gl_context *ctx, bool lit,
-                                                                       const char *vertex_source,
-                                                                       const char *fragment_source)
+static slayer3d_custom_shader_cache_entry *custom_shader_lookup_or_create(slayer3d_gl_context *ctx, bool lit,
+                                                                          const char *vertex_source,
+                                                                          const char *fragment_source)
 {
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
     const char *version = gl_version_prefix_for_context(ctx);
     const char *default_vertex = lit ? k_pbr_vert : k_unlit_vert;
 
     if (fragment_source == NULL || fragment_source[0] == '\0')
         return NULL;
 
-    for (sdl3d_custom_shader_cache_entry *entry = ctx->custom_shader_cache; entry != NULL; entry = entry->next)
+    for (slayer3d_custom_shader_cache_entry *entry = ctx->custom_shader_cache; entry != NULL; entry = entry->next)
     {
         if (entry->lit != lit)
             continue;
@@ -1983,8 +1986,8 @@ static sdl3d_custom_shader_cache_entry *custom_shader_lookup_or_create(sdl3d_gl_
             return entry;
     }
 
-    sdl3d_custom_shader_cache_entry *entry =
-        (sdl3d_custom_shader_cache_entry *)SDL_calloc(1, sizeof(sdl3d_custom_shader_cache_entry));
+    slayer3d_custom_shader_cache_entry *entry =
+        (slayer3d_custom_shader_cache_entry *)SDL_calloc(1, sizeof(slayer3d_custom_shader_cache_entry));
     if (entry == NULL)
         return NULL;
 
@@ -2045,7 +2048,7 @@ static sdl3d_custom_shader_cache_entry *custom_shader_lookup_or_create(sdl3d_gl_
         SDL_snprintf(name, sizeof(name), "uCSMVP[%d]", c);
         entry->pbr_csm_vp_loc[c] = gl->GetUniformLocation(entry->program, name);
     }
-    for (int ps = 0; ps < SDL3D_MAX_POINT_SHADOWS; ps++)
+    for (int ps = 0; ps < SLAYER3D_MAX_POINT_SHADOWS; ps++)
     {
         char name[32];
         SDL_snprintf(name, sizeof(name), "uPointShadowMap[%d]", ps);
@@ -2124,16 +2127,16 @@ static bool mat4_inverse(const float *m, float *out)
 /* CSM cascade computation                                             */
 /* ------------------------------------------------------------------ */
 
-static void compute_csm_matrices(sdl3d_gl_context *ctx, const sdl3d_render_context *rc)
+static void compute_csm_matrices(slayer3d_gl_context *ctx, const slayer3d_render_context *rc)
 {
     float near_p = rc->near_plane;
     float far_p = rc->far_plane;
     /* Use the camera's far plane so shadows cover the entire visible scene. */
 
     /* Practical split scheme: lambda=0.5 blend of log and uniform. */
-    for (int i = 0; i < SDL3D_CSM_CASCADE_COUNT; i++)
+    for (int i = 0; i < SLAYER3D_CSM_CASCADE_COUNT; i++)
     {
-        float p = (float)(i + 1) / (float)SDL3D_CSM_CASCADE_COUNT;
+        float p = (float)(i + 1) / (float)SLAYER3D_CSM_CASCADE_COUNT;
         float log_split = near_p * SDL_powf(far_p / near_p, p);
         float uni_split = near_p + (far_p - near_p) * p;
         ctx->csm_split_depths[i] = 0.5f * log_split + 0.5f * uni_split;
@@ -2147,17 +2150,17 @@ static void compute_csm_matrices(sdl3d_gl_context *ctx, const sdl3d_render_conte
     float fovy = 2.0f * SDL_atanf(1.0f / f);
 
     /* Light direction (normalized). */
-    sdl3d_vec3 light_dir = sdl3d_vec3_normalize(rc->lights[0].direction);
+    slayer3d_vec3 light_dir = slayer3d_vec3_normalize(rc->lights[0].direction);
 
-    for (int i = 0; i < SDL3D_CSM_CASCADE_COUNT; i++)
+    for (int i = 0; i < SLAYER3D_CSM_CASCADE_COUNT; i++)
     {
         float c_near = (i == 0) ? rc->near_plane : ctx->csm_split_depths[i - 1];
         float c_far = ctx->csm_split_depths[i];
 
         /* Build sub-frustum projection and invert (proj * view). */
-        sdl3d_mat4 sub_proj;
-        sdl3d_mat4_perspective(fovy, aspect, c_near, c_far, &sub_proj);
-        sdl3d_mat4 pv = sdl3d_mat4_multiply(sub_proj, rc->view);
+        slayer3d_mat4 sub_proj;
+        slayer3d_mat4_perspective(fovy, aspect, c_near, c_far, &sub_proj);
+        slayer3d_mat4 pv = slayer3d_mat4_multiply(sub_proj, rc->view);
 
         float inv_pv[16];
         mat4_inverse(pv.m, inv_pv);
@@ -2171,11 +2174,11 @@ static void compute_csm_matrices(sdl3d_gl_context *ctx, const sdl3d_render_conte
             {
                 for (int x = 0; x < 2; x++)
                 {
-                    sdl3d_vec4 ndc =
-                        sdl3d_vec4_make((float)x * 2.0f - 1.0f, (float)y * 2.0f - 1.0f, (float)z * 2.0f - 1.0f, 1.0f);
-                    sdl3d_mat4 inv_m;
+                    slayer3d_vec4 ndc = slayer3d_vec4_make((float)x * 2.0f - 1.0f, (float)y * 2.0f - 1.0f,
+                                                           (float)z * 2.0f - 1.0f, 1.0f);
+                    slayer3d_mat4 inv_m;
                     SDL_memcpy(inv_m.m, inv_pv, sizeof(inv_pv));
-                    sdl3d_vec4 ws = sdl3d_mat4_transform_vec4(inv_m, ndc);
+                    slayer3d_vec4 ws = slayer3d_mat4_transform_vec4(inv_m, ndc);
                     corners[ci][0] = ws.x / ws.w;
                     corners[ci][1] = ws.y / ws.w;
                     corners[ci][2] = ws.z / ws.w;
@@ -2197,15 +2200,15 @@ static void compute_csm_matrices(sdl3d_gl_context *ctx, const sdl3d_render_conte
         cz /= 8.0f;
 
         /* Light view: lookAt(center + lightDir, center, up). */
-        sdl3d_vec3 center = sdl3d_vec3_make(cx, cy, cz);
-        sdl3d_vec3 eye = sdl3d_vec3_add(center, light_dir);
-        sdl3d_vec3 up = sdl3d_vec3_make(0, 1, 0);
+        slayer3d_vec3 center = slayer3d_vec3_make(cx, cy, cz);
+        slayer3d_vec3 eye = slayer3d_vec3_add(center, light_dir);
+        slayer3d_vec3 up = slayer3d_vec3_make(0, 1, 0);
         /* If light is nearly vertical, use alternative up. */
-        if (SDL_fabsf(sdl3d_vec3_dot(sdl3d_vec3_normalize(light_dir), up)) > 0.99f)
-            up = sdl3d_vec3_make(1, 0, 0);
+        if (SDL_fabsf(slayer3d_vec3_dot(slayer3d_vec3_normalize(light_dir), up)) > 0.99f)
+            up = slayer3d_vec3_make(1, 0, 0);
 
-        sdl3d_mat4 light_view;
-        sdl3d_mat4_look_at(eye, center, up, &light_view);
+        slayer3d_mat4 light_view;
+        slayer3d_mat4_look_at(eye, center, up, &light_view);
 
         /* Transform corners to light view space, find AABB. */
         float minX = 1e30f, maxX = -1e30f;
@@ -2213,8 +2216,8 @@ static void compute_csm_matrices(sdl3d_gl_context *ctx, const sdl3d_render_conte
         float minZ = 1e30f, maxZ = -1e30f;
         for (int j = 0; j < 8; j++)
         {
-            sdl3d_vec4 lv = sdl3d_mat4_transform_vec4(
-                light_view, sdl3d_vec4_make(corners[j][0], corners[j][1], corners[j][2], 1.0f));
+            slayer3d_vec4 lv = slayer3d_mat4_transform_vec4(
+                light_view, slayer3d_vec4_make(corners[j][0], corners[j][1], corners[j][2], 1.0f));
             if (lv.x < minX)
                 minX = lv.x;
             if (lv.x > maxX)
@@ -2240,45 +2243,45 @@ static void compute_csm_matrices(sdl3d_gl_context *ctx, const sdl3d_render_conte
         else
             maxZ *= z_mult;
 
-        sdl3d_mat4 light_proj;
-        sdl3d_mat4_orthographic(minX, maxX, minY, maxY, minZ, maxZ, &light_proj);
+        slayer3d_mat4 light_proj;
+        slayer3d_mat4_orthographic(minX, maxX, minY, maxY, minZ, maxZ, &light_proj);
 
-        sdl3d_mat4 lp_lv = sdl3d_mat4_multiply(light_proj, light_view);
+        slayer3d_mat4 lp_lv = slayer3d_mat4_multiply(light_proj, light_view);
         SDL_memcpy(ctx->csm_light_vp[i], lp_lv.m, 16 * sizeof(float));
     }
 
     /* Use cascade 0 VP as the main shadow VP for the fragment shader (layer 0).
-     * NOTE: ctx->shadow_light_vp is already set from sdl3d_enable_shadow in gl_clear.
+     * NOTE: ctx->shadow_light_vp is already set from slayer3d_enable_shadow in gl_clear.
      * We keep that original VP as fallback. CSM fragment path is now active. */
     ctx->csm_fragment_enabled = true;
 }
 
-static void compute_point_shadow_matrices(sdl3d_gl_context *ctx, const sdl3d_render_context *rc)
+static void compute_point_shadow_matrices(slayer3d_gl_context *ctx, const slayer3d_render_context *rc)
 {
     ctx->point_shadow_count = 0;
-    for (int i = 0; i < rc->light_count && ctx->point_shadow_count < SDL3D_MAX_POINT_SHADOWS; i++)
+    for (int i = 0; i < rc->light_count && ctx->point_shadow_count < SLAYER3D_MAX_POINT_SHADOWS; i++)
     {
-        if (rc->lights[i].type != SDL3D_LIGHT_POINT)
+        if (rc->lights[i].type != SLAYER3D_LIGHT_POINT)
             continue;
         int s = ctx->point_shadow_count;
         ctx->point_shadow_light_index[s] = i;
 
-        const sdl3d_light *l = &rc->lights[i];
+        const slayer3d_light *l = &rc->lights[i];
         float far = l->range > 0 ? l->range : 25.0f;
         ctx->point_shadow_far_plane[s] = far;
 
-        sdl3d_mat4 proj;
-        sdl3d_mat4_perspective(3.14159265f * 0.5f, 1.0f, 0.1f, far, &proj);
+        slayer3d_mat4 proj;
+        slayer3d_mat4_perspective(3.14159265f * 0.5f, 1.0f, 0.1f, far, &proj);
 
-        sdl3d_vec3 pos = l->position;
-        sdl3d_vec3 targets[6] = {{pos.x + 1, pos.y, pos.z}, {pos.x - 1, pos.y, pos.z}, {pos.x, pos.y + 1, pos.z},
-                                 {pos.x, pos.y - 1, pos.z}, {pos.x, pos.y, pos.z + 1}, {pos.x, pos.y, pos.z - 1}};
-        sdl3d_vec3 ups[6] = {{0, -1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}, {0, -1, 0}};
+        slayer3d_vec3 pos = l->position;
+        slayer3d_vec3 targets[6] = {{pos.x + 1, pos.y, pos.z}, {pos.x - 1, pos.y, pos.z}, {pos.x, pos.y + 1, pos.z},
+                                    {pos.x, pos.y - 1, pos.z}, {pos.x, pos.y, pos.z + 1}, {pos.x, pos.y, pos.z - 1}};
+        slayer3d_vec3 ups[6] = {{0, -1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}, {0, -1, 0}};
         for (int f = 0; f < 6; f++)
         {
-            sdl3d_mat4 view;
-            sdl3d_mat4_look_at(pos, targets[f], ups[f], &view);
-            sdl3d_mat4 vp = sdl3d_mat4_multiply(proj, view);
+            slayer3d_mat4 view;
+            slayer3d_mat4_look_at(pos, targets[f], ups[f], &view);
+            slayer3d_mat4 vp = slayer3d_mat4_multiply(proj, view);
             SDL_memcpy(ctx->point_shadow_vp[s][f], vp.m, 16 * sizeof(float));
         }
         ctx->point_shadow_count++;
@@ -2289,15 +2292,15 @@ static void compute_point_shadow_matrices(sdl3d_gl_context *ctx, const sdl3d_ren
 /* Draw list replay                                                    */
 /* ------------------------------------------------------------------ */
 
-static void replay_draw_list_shadow(sdl3d_gl_context *ctx)
+static void replay_draw_list_shadow(slayer3d_gl_context *ctx)
 {
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
     gl->UseProgram(ctx->shadow_program);
     /* lightVP uniform is set by the caller per cascade. */
 
     for (int i = 0; i < ctx->draw_count; i++)
     {
-        sdl3d_draw_entry *e = &ctx->draw_list[i];
+        slayer3d_draw_entry *e = &ctx->draw_list[i];
         if (!e->lit)
             continue;
 
@@ -2329,18 +2332,18 @@ static void replay_draw_list_shadow(sdl3d_gl_context *ctx)
     gl->BindVertexArray(0);
 }
 
-static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
+static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
 {
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
 
     for (int i = 0; i < ctx->draw_count; i++)
     {
-        sdl3d_draw_entry *e = &ctx->draw_list[i];
+        slayer3d_draw_entry *e = &ctx->draw_list[i];
         GLuint tex = resolve_texture(ctx, e->texture);
 
         if (e->lit)
         {
-            sdl3d_custom_shader_cache_entry *custom =
+            slayer3d_custom_shader_cache_entry *custom =
                 (e->shader_fragment_source != NULL && e->shader_fragment_source[0] != '\0')
                     ? custom_shader_lookup_or_create(ctx, true, e->shader_vertex_source, e->shader_fragment_source)
                     : NULL;
@@ -2413,7 +2416,7 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
                 }
                 gl->ActiveTexture(GL_TEXTURE0);
 
-                for (int ps = 0; ps < SDL3D_MAX_POINT_SHADOWS; ps++)
+                for (int ps = 0; ps < SLAYER3D_MAX_POINT_SHADOWS; ps++)
                 {
                     gl->ActiveTexture(GL_TEXTURE0 + 2 + (GLenum)ps);
                     gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->point_shadow_cubemap[ps]);
@@ -2421,7 +2424,7 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
                         gl->Uniform1i(custom->pbr_point_shadow_map_loc[ps], 2 + ps);
                     if (ps < ctx->point_shadow_count && ctx->current_ctx != NULL)
                     {
-                        const sdl3d_light *pl = &ctx->current_ctx->lights[ctx->point_shadow_light_index[ps]];
+                        const slayer3d_light *pl = &ctx->current_ctx->lights[ctx->point_shadow_light_index[ps]];
                         if (custom->pbr_point_shadow_light_pos_loc[ps] >= 0)
                             gl->Uniform3f(custom->pbr_point_shadow_light_pos_loc[ps], pl->position.x, pl->position.y,
                                           pl->position.z);
@@ -2526,14 +2529,14 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
                 gl->ActiveTexture(GL_TEXTURE0);
 
                 /* Point shadow uniforms. */
-                for (int ps = 0; ps < SDL3D_MAX_POINT_SHADOWS; ps++)
+                for (int ps = 0; ps < SLAYER3D_MAX_POINT_SHADOWS; ps++)
                 {
                     gl->ActiveTexture(GL_TEXTURE0 + 2 + (GLenum)ps);
                     gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->point_shadow_cubemap[ps]);
                     gl->Uniform1i(ctx->pbr_point_shadow_map_loc[ps], 2 + ps);
                     if (ps < ctx->point_shadow_count)
                     {
-                        const sdl3d_light *pl = &ctx->current_ctx->lights[ctx->point_shadow_light_index[ps]];
+                        const slayer3d_light *pl = &ctx->current_ctx->lights[ctx->point_shadow_light_index[ps]];
                         gl->Uniform3f(ctx->pbr_point_shadow_light_pos_loc[ps], pl->position.x, pl->position.y,
                                       pl->position.z);
                         gl->Uniform1f(ctx->pbr_point_shadow_far_loc[ps], ctx->point_shadow_far_plane[ps]);
@@ -2611,7 +2614,7 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
         }
         else
         {
-            sdl3d_custom_shader_cache_entry *custom =
+            slayer3d_custom_shader_cache_entry *custom =
                 (e->shader_fragment_source != NULL && e->shader_fragment_source[0] != '\0')
                     ? custom_shader_lookup_or_create(ctx, false, e->shader_vertex_source, e->shader_fragment_source)
                     : NULL;
@@ -2674,9 +2677,9 @@ static void replay_draw_list_geometry(sdl3d_gl_context *ctx)
     }
 }
 
-static void apply_geometry_cull_state(sdl3d_gl_context *ctx)
+static void apply_geometry_cull_state(slayer3d_gl_context *ctx)
 {
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
     gl->Enable(GL_DEPTH_TEST);
     gl->CullFace(GL_BACK);
     gl->FrontFace(GL_CCW);
@@ -2695,9 +2698,9 @@ static void apply_geometry_cull_state(sdl3d_gl_context *ctx)
 /* FBO helpers                                                         */
 /* ------------------------------------------------------------------ */
 
-static bool create_fbo(sdl3d_gl_context *ctx, int w, int h)
+static bool create_fbo(slayer3d_gl_context *ctx, int w, int h)
 {
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
 
     gl->GenTextures(1, &ctx->fbo_color);
     gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
@@ -2721,7 +2724,7 @@ static bool create_fbo(sdl3d_gl_context *ctx, int w, int h)
     GLenum status = gl->CheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL FBO incomplete: 0x%x", status);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL FBO incomplete: 0x%x", status);
         return false;
     }
 
@@ -2735,20 +2738,20 @@ static bool create_fbo(sdl3d_gl_context *ctx, int w, int h)
 /* Lazy UBO upload                                                     */
 /* ------------------------------------------------------------------ */
 
-static void flush_scene_ubo(sdl3d_gl_context *ctx)
+static void flush_scene_ubo(slayer3d_gl_context *ctx)
 {
     if (!ctx->ubo_dirty)
         return;
     ctx->ubo_dirty = false;
 
-    sdl3d_render_context *rc = ctx->current_ctx;
-    sdl3d_scene_ubo_data ubo;
+    slayer3d_render_context *rc = ctx->current_ctx;
+    slayer3d_scene_ubo_data ubo;
     SDL_memset(&ubo, 0, sizeof(ubo));
 
     SDL_memcpy(ubo.view_projection, rc->view_projection.m, 16 * sizeof(float));
 
     /* Extract camera position from view matrix inverse translation. */
-    const sdl3d_mat4 v = rc->view;
+    const slayer3d_mat4 v = rc->view;
     ubo.camera_pos[0] = -(v.m[0] * v.m[12] + v.m[1] * v.m[13] + v.m[2] * v.m[14]);
     ubo.camera_pos[1] = -(v.m[4] * v.m[12] + v.m[5] * v.m[13] + v.m[6] * v.m[14]);
     ubo.camera_pos[2] = -(v.m[8] * v.m[12] + v.m[9] * v.m[13] + v.m[10] * v.m[14]);
@@ -2763,7 +2766,7 @@ static void flush_scene_ubo(sdl3d_gl_context *ctx)
     ubo.light_count = lc;
     for (int i = 0; i < lc; i++)
     {
-        const sdl3d_light *l = &rc->lights[i];
+        const slayer3d_light *l = &rc->lights[i];
         ubo.lights[i].type = (int)l->type;
         ubo.lights[i].position[0] = l->position.x;
         ubo.lights[i].position[1] = l->position.y;
@@ -2789,7 +2792,7 @@ static void flush_scene_ubo(sdl3d_gl_context *ctx)
     ubo.fog_color[2] = rc->fog.color[2];
     ubo.tonemap_mode = (int)rc->tonemap_mode;
 
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
     gl->BindBuffer(GL_UNIFORM_BUFFER, ctx->scene_ubo);
     gl->BufferData(GL_UNIFORM_BUFFER, (GLsizeiptr)sizeof(ubo), &ubo, GL_DYNAMIC_DRAW);
     gl->BindBufferBase(GL_UNIFORM_BUFFER, 0, ctx->scene_ubo);
@@ -2805,15 +2808,15 @@ static void flush_scene_ubo(sdl3d_gl_context *ctx)
 /* IBL: load HDRI and generate irradiance + prefilter + BRDF LUT       */
 /* ------------------------------------------------------------------ */
 
-static void ibl_render_cube(sdl3d_gl_funcs *gl, GLuint vao)
+static void ibl_render_cube(slayer3d_gl_funcs *gl, GLuint vao)
 {
     gl->BindVertexArray(vao);
     gl->DrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, NULL);
 }
 
-bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
+bool slayer3d_gl_load_environment_map(slayer3d_gl_context *ctx, const char *hdr_path)
 {
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
     int w, h, nc;
 
     extern float *stbi_loadf(const char *, int *, int *, int *, int);
@@ -2823,7 +2826,7 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
     {
         return SDL_SetError("IBL: failed to load HDR '%s'", hdr_path);
     }
-    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D IBL: loaded HDR %dx%d (%d ch)", w, h, nc);
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D IBL: loaded HDR %dx%d (%d ch)", w, h, nc);
 
     /* Upload equirectangular HDR texture */
     GLuint hdr_tex;
@@ -2859,18 +2862,18 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
     /* Capture projection + 6 view matrices */
     float cap_proj[16];
     {
-        sdl3d_mat4 pm;
-        sdl3d_mat4_perspective(3.14159265f * 0.5f, 1.0f, 0.1f, 10.0f, &pm);
+        slayer3d_mat4 pm;
+        slayer3d_mat4_perspective(3.14159265f * 0.5f, 1.0f, 0.1f, 10.0f, &pm);
         SDL_memcpy(cap_proj, pm.m, sizeof(cap_proj));
     }
-    sdl3d_vec3 o = {0, 0, 0};
-    sdl3d_vec3 tgts[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
-    sdl3d_vec3 ups[6] = {{0, -1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}, {0, -1, 0}};
+    slayer3d_vec3 o = {0, 0, 0};
+    slayer3d_vec3 tgts[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    slayer3d_vec3 ups[6] = {{0, -1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}, {0, -1, 0}};
     float cap_views[6][16];
     for (int i = 0; i < 6; i++)
     {
-        sdl3d_mat4 v;
-        sdl3d_mat4_look_at(o, tgts[i], ups[i], &v);
+        slayer3d_mat4 v;
+        slayer3d_mat4_look_at(o, tgts[i], ups[i], &v);
         SDL_memcpy(cap_views[i], v.m, sizeof(cap_views[i]));
     }
 
@@ -2910,7 +2913,7 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
         gl->Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         ibl_render_cube(gl, cube_vao);
     }
-    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D IBL: equirect -> cubemap done");
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D IBL: equirect -> cubemap done");
 
     /* ---- Step 2: Irradiance convolution (32x32) ---- */
     GLuint irr_prog = build_program(gl, ver, k_cube_vert, k_irradiance_frag);
@@ -2940,7 +2943,7 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
         gl->Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         ibl_render_cube(gl, cube_vao);
     }
-    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D IBL: irradiance done");
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D IBL: irradiance done");
 
     /* ---- Step 3: Prefilter (128, 5 mip levels) ---- */
     GLuint pf_prog = build_program(gl, ver, k_cube_vert, k_prefilter_frag);
@@ -2977,7 +2980,7 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
             ibl_render_cube(gl, cube_vao);
         }
     }
-    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D IBL: prefilter done");
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D IBL: prefilter done");
 
     /* ---- Step 4: BRDF LUT (512x512) ---- */
     GLuint brdf_prog = build_program(gl, ver, k_brdf_vert, k_brdf_frag);
@@ -2996,7 +2999,7 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
     gl->UseProgram(brdf_prog);
     gl->BindVertexArray(ctx->fullscreen_vao);
     gl->DrawArrays(GL_TRIANGLES, 0, 3);
-    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D IBL: BRDF LUT done");
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D IBL: BRDF LUT done");
 
     /* Cleanup */
     gl->BindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -3018,11 +3021,11 @@ bool sdl3d_gl_load_environment_map(sdl3d_gl_context *ctx, const char *hdr_path)
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
 
     ctx->ibl_ready = true;
-    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D IBL: environment map ready");
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D IBL: environment map ready");
     return true;
 }
 
-sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
+slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int height)
 {
     /* Request GL 3.3 Core. */
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -3032,7 +3035,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     SDL_GLContext glctx = SDL_GL_CreateContext(window);
     if (!glctx)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: failed to create context: %s", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL: failed to create context: %s", SDL_GetError());
         return NULL;
     }
     SDL_GL_MakeCurrent(window, glctx);
@@ -3044,7 +3047,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
         SDL_GL_SetSwapInterval(1);
     }
 
-    sdl3d_gl_context *ctx = SDL_calloc(1, sizeof(*ctx));
+    slayer3d_gl_context *ctx = SDL_calloc(1, sizeof(*ctx));
     if (!ctx)
     {
         SDL_GL_DestroyContext(glctx);
@@ -3055,15 +3058,15 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->gl_context = glctx;
     ctx->frame_index = 1;
 
-    if (!sdl3d_gl_load_funcs(&ctx->gl))
+    if (!slayer3d_gl_load_funcs(&ctx->gl))
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: failed to load GL functions");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL: failed to load GL functions");
         SDL_GL_DestroyContext(glctx);
         SDL_free(ctx);
         return NULL;
     }
 
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
 
     /* Detect ES. */
     ctx->is_es = false;
@@ -3089,8 +3092,8 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
 
     if (!ctx->pbr_program || !ctx->unlit_program || !ctx->copy_program || !ctx->transition_program)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: shader compilation failed");
-        sdl3d_gl_destroy(ctx);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL: shader compilation failed");
+        slayer3d_gl_destroy(ctx);
         return NULL;
     }
 
@@ -3136,7 +3139,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     /* Point shadow PBR uniform locations. */
     {
         char name[64];
-        for (int s = 0; s < SDL3D_MAX_POINT_SHADOWS; s++)
+        for (int s = 0; s < SLAYER3D_MAX_POINT_SHADOWS; s++)
         {
             SDL_snprintf(name, sizeof(name), "uPointShadowMap[%d]", s);
             ctx->pbr_point_shadow_map_loc[s] = gl->GetUniformLocation(ctx->pbr_program, name);
@@ -3172,7 +3175,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     {
         gl->GenTextures(1, &ctx->transition_melt_offsets_tex);
         gl->BindTexture(GL_TEXTURE_2D, ctx->transition_melt_offsets_tex);
-        gl->TexImage2D(GL_TEXTURE_2D, 0, GL_R32F, SDL3D_TRANSITION_MELT_COLUMNS, 1, 0, GL_RED, GL_FLOAT, NULL);
+        gl->TexImage2D(GL_TEXTURE_2D, 0, GL_R32F, SLAYER3D_TRANSITION_MELT_COLUMNS, 1, 0, GL_RED, GL_FLOAT, NULL);
         gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -3182,7 +3185,7 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     /* Scene UBO — create, allocate, bind to point 0. */
     gl->GenBuffers(1, &ctx->scene_ubo);
     gl->BindBuffer(GL_UNIFORM_BUFFER, ctx->scene_ubo);
-    gl->BufferData(GL_UNIFORM_BUFFER, (GLsizeiptr)sizeof(sdl3d_scene_ubo_data), NULL, GL_DYNAMIC_DRAW);
+    gl->BufferData(GL_UNIFORM_BUFFER, (GLsizeiptr)sizeof(slayer3d_scene_ubo_data), NULL, GL_DYNAMIC_DRAW);
     gl->BindBufferBase(GL_UNIFORM_BUFFER, 0, ctx->scene_ubo);
 
     /* Bind SceneUBO block in PBR program to binding point 0. */
@@ -3286,10 +3289,10 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     }
 
     /* Point light shadow: 1024x1024 depth cubemaps. */
-    for (int s = 0; s < SDL3D_MAX_POINT_SHADOWS; s++)
+    for (int s = 0; s < SLAYER3D_MAX_POINT_SHADOWS; s++)
         ctx->point_shadow_light_index[s] = -1;
     gl->GenFramebuffers(1, &ctx->point_shadow_fbo);
-    for (int s = 0; s < SDL3D_MAX_POINT_SHADOWS; s++)
+    for (int s = 0; s < SLAYER3D_MAX_POINT_SHADOWS; s++)
     {
         gl->GenTextures(1, &ctx->point_shadow_cubemap[s]);
         gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->point_shadow_cubemap[s]);
@@ -3354,8 +3357,8 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     /* ---- Main FBO ---- */
     if (!create_fbo(ctx, width, height))
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: FBO creation failed");
-        sdl3d_gl_destroy(ctx);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL: FBO creation failed");
+        slayer3d_gl_destroy(ctx);
         return NULL;
     }
 
@@ -3379,8 +3382,9 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
             GLenum status = gl->CheckFramebufferStatus(GL_FRAMEBUFFER);
             if (status != GL_FRAMEBUFFER_COMPLETE)
             {
-                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: post-process FBO %d incomplete: 0x%x", i, status);
-                sdl3d_gl_destroy(ctx);
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL: post-process FBO %d incomplete: 0x%x", i,
+                             status);
+                slayer3d_gl_destroy(ctx);
                 return NULL;
             }
         }
@@ -3393,8 +3397,8 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->composite_program = build_program(gl, version_prefix, k_fullscreen_vert, k_composite_frag);
     if (!ctx->bloom_program || !ctx->bloom_blur_program || !ctx->composite_program)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: post-process shader compilation failed");
-        sdl3d_gl_destroy(ctx);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL: post-process shader compilation failed");
+        slayer3d_gl_destroy(ctx);
         return NULL;
     }
     ctx->bloom_scene_loc = gl->GetUniformLocation(ctx->bloom_program, "uScene");
@@ -3420,8 +3424,8 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     }
     if (!ctx->retro_program)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: retro shader compilation failed");
-        sdl3d_gl_destroy(ctx);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL: retro shader compilation failed");
+        slayer3d_gl_destroy(ctx);
         return NULL;
     }
     ctx->retro_scene_loc = gl->GetUniformLocation(ctx->retro_program, "uScene");
@@ -3433,8 +3437,8 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     ctx->ssao_program = build_program(gl, version_prefix, k_fullscreen_vert, k_ssao_frag);
     if (!ctx->ssao_program)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL: SSAO shader compilation failed");
-        sdl3d_gl_destroy(ctx);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL: SSAO shader compilation failed");
+        slayer3d_gl_destroy(ctx);
         return NULL;
     }
     ctx->ssao_scene_loc = gl->GetUniformLocation(ctx->ssao_program, "uScene");
@@ -3450,19 +3454,20 @@ sdl3d_gl_context *sdl3d_gl_create(SDL_Window *window, int width, int height)
     gl->CullFace(GL_BACK);
     gl->FrontFace(GL_CCW);
 
-    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL create: ctx=%p logical=%dx%d fbo=%u", (void *)ctx, width,
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL create: ctx=%p logical=%dx%d fbo=%u", (void *)ctx, width,
                  height, ctx->fbo);
-    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL renderer created: %dx%d pbr=%u unlit=%u copy=%u fbo=%u ubo=%u",
-                 width, height, ctx->pbr_program, ctx->unlit_program, ctx->copy_program, ctx->fbo, ctx->scene_ubo);
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                 "SLAYER3D GL renderer created: %dx%d pbr=%u unlit=%u copy=%u fbo=%u ubo=%u", width, height,
+                 ctx->pbr_program, ctx->unlit_program, ctx->copy_program, ctx->fbo, ctx->scene_ubo);
 
     return ctx;
 }
 
-void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
+void slayer3d_gl_destroy(slayer3d_gl_context *ctx)
 {
     if (!ctx)
         return;
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
 
     free_draw_list(ctx);
     SDL_free(ctx->draw_list);
@@ -3525,7 +3530,7 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
         gl->DeleteProgram(ctx->point_shadow_program);
     if (ctx->point_shadow_fbo)
         gl->DeleteFramebuffers(1, &ctx->point_shadow_fbo);
-    gl->DeleteTextures(SDL3D_MAX_POINT_SHADOWS, ctx->point_shadow_cubemap);
+    gl->DeleteTextures(SLAYER3D_MAX_POINT_SHADOWS, ctx->point_shadow_cubemap);
 
     /* Post-process resources. */
     if (ctx->retro_program)
@@ -3570,10 +3575,10 @@ void sdl3d_gl_destroy(sdl3d_gl_context *ctx)
 /* Backend interface implementations                                   */
 /* ================================================================== */
 
-static bool gl_clear(sdl3d_render_context *context, sdl3d_color color)
+static bool gl_clear(slayer3d_render_context *context, slayer3d_color color)
 {
-    sdl3d_gl_context *ctx = context->gl;
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_context *ctx = context->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
 
     free_draw_list(ctx);
 
@@ -3582,9 +3587,9 @@ static bool gl_clear(sdl3d_render_context *context, sdl3d_color color)
     ctx->ubo_dirty = true;
 
     ctx->active_retro_profile = (int)context->display_profile;
-    if (ctx->active_retro_profile < (int)SDL3D_DISPLAY_PROFILE_MODERN ||
-        ctx->active_retro_profile > (int)SDL3D_DISPLAY_PROFILE_GAMEBOY)
-        ctx->active_retro_profile = (int)SDL3D_DISPLAY_PROFILE_MODERN;
+    if (ctx->active_retro_profile < (int)SLAYER3D_DISPLAY_PROFILE_MODERN ||
+        ctx->active_retro_profile > (int)SLAYER3D_DISPLAY_PROFILE_GAMEBOY)
+        ctx->active_retro_profile = (int)SLAYER3D_DISPLAY_PROFILE_MODERN;
     ctx->active_retro_virtual_w = context->display_width;
     ctx->active_retro_virtual_h = context->display_height;
     ctx->active_retro_filter = (int)context->display_filter;
@@ -3605,13 +3610,13 @@ static bool gl_clear(sdl3d_render_context *context, sdl3d_color color)
     return true;
 }
 
-static bool gl_draw_mesh_unlit(sdl3d_render_context *context, const sdl3d_draw_params_unlit *params)
+static bool gl_draw_mesh_unlit(slayer3d_render_context *context, const slayer3d_draw_params_unlit *params)
 {
-    sdl3d_gl_context *ctx = context->gl;
+    slayer3d_gl_context *ctx = context->gl;
 
     const float *colors = params->colors ? params->colors : ensure_white_colors(ctx, params->vertex_count);
 
-    sdl3d_draw_entry *e = append_draw_entry(ctx);
+    slayer3d_draw_entry *e = append_draw_entry(ctx);
     if (!e)
         return false;
 
@@ -3644,13 +3649,13 @@ static bool gl_draw_mesh_unlit(sdl3d_render_context *context, const sdl3d_draw_p
     return true;
 }
 
-static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_params_lit *params)
+static bool gl_draw_mesh_lit(slayer3d_render_context *context, const slayer3d_draw_params_lit *params)
 {
-    sdl3d_gl_context *ctx = context->gl;
+    slayer3d_gl_context *ctx = context->gl;
 
     const float *colors = params->colors ? params->colors : ensure_white_colors(ctx, params->vertex_count);
 
-    sdl3d_draw_entry *e = append_draw_entry(ctx);
+    slayer3d_draw_entry *e = append_draw_entry(ctx);
     if (!e)
         return false;
 
@@ -3703,7 +3708,7 @@ static bool gl_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
 /* Shadow pass                                                         */
 /* ------------------------------------------------------------------ */
 
-void sdl3d_gl_begin_shadow_pass(sdl3d_gl_context *ctx, const float *light_vp, float bias)
+void slayer3d_gl_begin_shadow_pass(slayer3d_gl_context *ctx, const float *light_vp, float bias)
 {
     if (!ctx || !light_vp || !ctx->shadow_fbo)
         return;
@@ -3711,7 +3716,7 @@ void sdl3d_gl_begin_shadow_pass(sdl3d_gl_context *ctx, const float *light_vp, fl
     ctx->shadow_bias = bias;
     ctx->in_shadow_pass = true;
 
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
     gl->Viewport(0, 0, 1024, 1024);
     gl->Clear(GL_DEPTH_BUFFER_BIT);
@@ -3719,13 +3724,13 @@ void sdl3d_gl_begin_shadow_pass(sdl3d_gl_context *ctx, const float *light_vp, fl
     gl->Disable(GL_CULL_FACE);
 }
 
-void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx)
+void slayer3d_gl_end_shadow_pass(slayer3d_gl_context *ctx)
 {
     if (!ctx)
         return;
     ctx->in_shadow_pass = false;
 
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
     /* Restore main FBO and normal culling. */
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
     gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
@@ -3738,9 +3743,9 @@ void sdl3d_gl_end_shadow_pass(sdl3d_gl_context *ctx)
 /* alpha blending, no depth test, no post-processing.                  */
 /* ------------------------------------------------------------------ */
 
-static void replay_overlay_list(sdl3d_gl_context *ctx, int vp_x, int vp_y, int vp_w, int vp_h)
+static void replay_overlay_list(slayer3d_gl_context *ctx, int vp_x, int vp_y, int vp_w, int vp_h)
 {
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
     if (ctx->overlay_count == 0)
         return;
 
@@ -3751,7 +3756,7 @@ static void replay_overlay_list(sdl3d_gl_context *ctx, int vp_x, int vp_y, int v
 
     for (int i = 0; i < ctx->overlay_count; i++)
     {
-        sdl3d_overlay_entry *e = &ctx->overlay_list[i];
+        slayer3d_overlay_entry *e = &ctx->overlay_list[i];
 
         if (e->scissor_enabled)
         {
@@ -3770,7 +3775,7 @@ static void replay_overlay_list(sdl3d_gl_context *ctx, int vp_x, int vp_y, int v
             gl->Disable(GL_SCISSOR_TEST);
         }
 
-        sdl3d_custom_shader_cache_entry *custom =
+        slayer3d_custom_shader_cache_entry *custom =
             (e->shader_fragment_source != NULL && e->shader_fragment_source[0] != '\0')
                 ? custom_shader_lookup_or_create(ctx, false, e->shader_vertex_source, e->shader_fragment_source)
                 : NULL;
@@ -3853,7 +3858,7 @@ static void replay_overlay_list(sdl3d_gl_context *ctx, int vp_x, int vp_y, int v
     gl->Enable(GL_DEPTH_TEST);
 }
 
-bool sdl3d_gl_queue_transition(sdl3d_gl_context *ctx, const sdl3d_transition *transition)
+bool slayer3d_gl_queue_transition(slayer3d_gl_context *ctx, const slayer3d_transition *transition)
 {
     if (ctx == NULL)
     {
@@ -3873,21 +3878,21 @@ bool sdl3d_gl_queue_transition(sdl3d_gl_context *ctx, const sdl3d_transition *tr
     return true;
 }
 
-static void apply_transition_pass(sdl3d_gl_context *ctx)
+static void apply_transition_pass(slayer3d_gl_context *ctx)
 {
     if (ctx == NULL || !ctx->transition_pending || ctx->transition_program == 0)
     {
         return;
     }
 
-    sdl3d_gl_funcs *gl = &ctx->gl;
-    const sdl3d_transition *transition = &ctx->pending_transition;
+    slayer3d_gl_funcs *gl = &ctx->gl;
+    const slayer3d_transition *transition = &ctx->pending_transition;
 
-    if (transition->type == SDL3D_TRANSITION_MELT && ctx->transition_melt_offsets_tex != 0)
+    if (transition->type == SLAYER3D_TRANSITION_MELT && ctx->transition_melt_offsets_tex != 0)
     {
         gl->ActiveTexture(GL_TEXTURE0 + 1);
         gl->BindTexture(GL_TEXTURE_2D, ctx->transition_melt_offsets_tex);
-        gl->TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SDL3D_TRANSITION_MELT_COLUMNS, 1, GL_RED, GL_FLOAT,
+        gl->TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SLAYER3D_TRANSITION_MELT_COLUMNS, 1, GL_RED, GL_FLOAT,
                           transition->melt_offsets);
     }
 
@@ -3903,7 +3908,7 @@ static void apply_transition_pass(sdl3d_gl_context *ctx)
     gl->Uniform1i(ctx->transition_melt_offsets_loc, 1);
     gl->Uniform1i(ctx->transition_type_loc, (int)transition->type);
     gl->Uniform1i(ctx->transition_direction_loc, (int)transition->direction);
-    gl->Uniform1f(ctx->transition_progress_loc, sdl3d_transition_progress(transition));
+    gl->Uniform1f(ctx->transition_progress_loc, slayer3d_transition_progress(transition));
     gl->Uniform4f(ctx->transition_color_loc, (float)transition->color.r / 255.0f, (float)transition->color.g / 255.0f,
                   (float)transition->color.b / 255.0f, (float)transition->color.a / 255.0f);
     gl->Uniform2f(ctx->transition_resolution_loc, (float)ctx->logical_w, (float)ctx->logical_h);
@@ -3922,10 +3927,10 @@ static void apply_transition_pass(sdl3d_gl_context *ctx)
     ctx->transition_pending = false;
 }
 
-static bool gl_present(sdl3d_render_context *context)
+static bool gl_present(slayer3d_render_context *context)
 {
-    sdl3d_gl_context *ctx = context->gl;
-    sdl3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_gl_context *ctx = context->gl;
+    slayer3d_gl_funcs *gl = &ctx->gl;
 
     /* Flush UBO before any replay. */
     flush_scene_ubo(ctx);
@@ -3941,7 +3946,7 @@ static bool gl_present(sdl3d_render_context *context)
         gl->Enable(GL_DEPTH_TEST);
         gl->Disable(GL_CULL_FACE);
 
-        for (int cascade = 0; cascade < SDL3D_CSM_CASCADE_COUNT; cascade++)
+        for (int cascade = 0; cascade < SLAYER3D_CSM_CASCADE_COUNT; cascade++)
         {
             gl->FramebufferTextureLayer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, ctx->shadow_depth_tex, 0, cascade);
             gl->Clear(GL_DEPTH_BUFFER_BIT);
@@ -3969,7 +3974,7 @@ static bool gl_present(sdl3d_render_context *context)
 
         for (int s = 0; s < ctx->point_shadow_count; s++)
         {
-            const sdl3d_light *pl = &context->lights[ctx->point_shadow_light_index[s]];
+            const slayer3d_light *pl = &context->lights[ctx->point_shadow_light_index[s]];
             gl->Uniform3f(ctx->point_shadow_light_pos_loc, pl->position.x, pl->position.y, pl->position.z);
             gl->Uniform1f(ctx->point_shadow_far_loc, ctx->point_shadow_far_plane[s]);
 
@@ -3982,7 +3987,7 @@ static bool gl_present(sdl3d_render_context *context)
                 gl->UniformMatrix4fv(ctx->point_shadow_light_vp_loc, 1, GL_FALSE, ctx->point_shadow_vp[s][face]);
                 for (int i = 0; i < ctx->draw_count; i++)
                 {
-                    sdl3d_draw_entry *e = &ctx->draw_list[i];
+                    slayer3d_draw_entry *e = &ctx->draw_list[i];
                     if (!e->lit)
                         continue;
                     gl->UniformMatrix4fv(ctx->point_shadow_model_loc, 1, GL_FALSE, e->model_matrix);
@@ -4151,7 +4156,7 @@ static bool gl_present(sdl3d_render_context *context)
     gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
     {
         const GLint profile_filter =
-            ctx->active_retro_filter == (int)SDL3D_DISPLAY_FILTER_NEAREST ? GL_NEAREST : GL_LINEAR;
+            ctx->active_retro_filter == (int)SLAYER3D_DISPLAY_FILTER_NEAREST ? GL_NEAREST : GL_LINEAR;
         gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, profile_filter);
         gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, profile_filter);
     }
@@ -4187,9 +4192,9 @@ static bool gl_present(sdl3d_render_context *context)
 /* Lifecycle adapter                                                   */
 /* ------------------------------------------------------------------ */
 
-static void gl_destroy_adapter(sdl3d_render_context *context)
+static void gl_destroy_adapter(slayer3d_render_context *context)
 {
-    sdl3d_gl_destroy(context->gl);
+    slayer3d_gl_destroy(context->gl);
     context->gl = NULL;
 }
 
@@ -4197,8 +4202,8 @@ static void gl_destroy_adapter(sdl3d_render_context *context)
 /* Backend interface initializer                                       */
 /* ------------------------------------------------------------------ */
 
-void sdl3d_gl_post_process(sdl3d_gl_context *ctx, int effects, float bloom_threshold, float bloom_intensity,
-                           float vignette_intensity, float contrast, float brightness, float saturation)
+void slayer3d_gl_post_process(slayer3d_gl_context *ctx, int effects, float bloom_threshold, float bloom_intensity,
+                              float vignette_intensity, float contrast, float brightness, float saturation)
 {
     (void)ctx;
     (void)effects;
@@ -4210,7 +4215,7 @@ void sdl3d_gl_post_process(sdl3d_gl_context *ctx, int effects, float bloom_thres
     (void)saturation;
 }
 
-void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgba)
+void slayer3d_gl_read_pixel(slayer3d_gl_context *ctx, int x, int y, unsigned char *rgba)
 {
     if (ctx == NULL || rgba == NULL)
     {
@@ -4219,7 +4224,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
     /* Flush any pending draw list so pixels are up to date. */
     if (ctx->draw_count > 0)
     {
-        sdl3d_gl_funcs *gl = &ctx->gl;
+        slayer3d_gl_funcs *gl = &ctx->gl;
         flush_scene_ubo(ctx);
         if (0 && ctx->shadow_program)
         {
@@ -4230,7 +4235,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
             gl->Enable(GL_DEPTH_TEST);
             gl->Disable(GL_CULL_FACE);
 
-            for (int cascade = 0; cascade < SDL3D_CSM_CASCADE_COUNT; cascade++)
+            for (int cascade = 0; cascade < SLAYER3D_CSM_CASCADE_COUNT; cascade++)
             {
                 gl->FramebufferTextureLayer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, ctx->shadow_depth_tex, 0, cascade);
                 gl->Clear(GL_DEPTH_BUFFER_BIT);
@@ -4255,7 +4260,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
             gl->UseProgram(ctx->point_shadow_program);
             for (int s = 0; s < ctx->point_shadow_count; s++)
             {
-                const sdl3d_light *pl = &ctx->current_ctx->lights[ctx->point_shadow_light_index[s]];
+                const slayer3d_light *pl = &ctx->current_ctx->lights[ctx->point_shadow_light_index[s]];
                 gl->Uniform3f(ctx->point_shadow_light_pos_loc, pl->position.x, pl->position.y, pl->position.z);
                 gl->Uniform1f(ctx->point_shadow_far_loc, ctx->point_shadow_far_plane[s]);
                 for (int face = 0; face < 6; face++)
@@ -4267,7 +4272,7 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
                     gl->UniformMatrix4fv(ctx->point_shadow_light_vp_loc, 1, GL_FALSE, ctx->point_shadow_vp[s][face]);
                     for (int i = 0; i < ctx->draw_count; i++)
                     {
-                        sdl3d_draw_entry *e = &ctx->draw_list[i];
+                        slayer3d_draw_entry *e = &ctx->draw_list[i];
                         if (!e->lit)
                             continue;
                         if (e->model_matrix[12] == 0.0f && e->model_matrix[13] == 0.0f && e->model_matrix[14] == 0.0f &&
@@ -4313,12 +4318,12 @@ void sdl3d_gl_read_pixel(sdl3d_gl_context *ctx, int x, int y, unsigned char *rgb
     ctx->gl.ReadPixels(x, y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
 }
 
-int sdl3d_gl_active_retro_profile(const sdl3d_gl_context *ctx)
+int slayer3d_gl_active_retro_profile(const slayer3d_gl_context *ctx)
 {
-    return ctx != NULL ? ctx->active_retro_profile : (int)SDL3D_DISPLAY_PROFILE_MODERN;
+    return ctx != NULL ? ctx->active_retro_profile : (int)SLAYER3D_DISPLAY_PROFILE_MODERN;
 }
 
-void sdl3d_gl_active_retro_virtual_resolution(const sdl3d_gl_context *ctx, int *out_width, int *out_height)
+void slayer3d_gl_active_retro_virtual_resolution(const slayer3d_gl_context *ctx, int *out_width, int *out_height)
 {
     if (out_width != NULL)
         *out_width = ctx != NULL ? ctx->active_retro_virtual_w : 0;
@@ -4326,12 +4331,12 @@ void sdl3d_gl_active_retro_virtual_resolution(const sdl3d_gl_context *ctx, int *
         *out_height = ctx != NULL ? ctx->active_retro_virtual_h : 0;
 }
 
-int sdl3d_gl_active_retro_filter(const sdl3d_gl_context *ctx)
+int slayer3d_gl_active_retro_filter(const slayer3d_gl_context *ctx)
 {
-    return ctx != NULL ? ctx->active_retro_filter : (int)SDL3D_DISPLAY_FILTER_LINEAR;
+    return ctx != NULL ? ctx->active_retro_filter : (int)SLAYER3D_DISPLAY_FILTER_LINEAR;
 }
 
-void sdl3d_gl_backend_init(sdl3d_backend_interface *iface)
+void slayer3d_gl_backend_init(slayer3d_backend_interface *iface)
 {
     iface->destroy = gl_destroy_adapter;
     iface->clear = gl_clear;

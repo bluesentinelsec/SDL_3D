@@ -7,7 +7,7 @@
 //
 // gtest writes its pass/fail output to stdout via printf. On Android
 // stdout is not wired to logcat, so we install a TestEventListener that
-// mirrors per-test results into the SDL3D_TEST log tag — otherwise a CI
+// mirrors per-test results into the SLAYER3D_TEST log tag — otherwise a CI
 // failure would only surface as "exit code 1" with no indication of
 // which test failed.
 
@@ -20,7 +20,7 @@
 
 namespace
 {
-constexpr const char *kLogTag = "SDL3D_TEST";
+constexpr const char *kLogTag = "SLAYER3D_TEST";
 
 class AndroidLogListener : public ::testing::EmptyTestEventListener
 {
@@ -52,7 +52,7 @@ int main(int argc, char **argv)
     ::testing::InitGoogleTest(&argc, argv);
     ::testing::UnitTest::GetInstance()->listeners().Append(new AndroidLogListener());
     int rc = RUN_ALL_TESTS();
-    __android_log_print(ANDROID_LOG_INFO, kLogTag, "SDL3D_TEST_RESULT: %d", rc);
+    __android_log_print(ANDROID_LOG_INFO, kLogTag, "SLAYER3D_TEST_RESULT: %d", rc);
     SDL_Delay(500);
     return rc;
 }

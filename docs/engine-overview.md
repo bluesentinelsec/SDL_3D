@@ -1,7 +1,8 @@
 # Engine Overview
 
-SDL3D is an alpha-stage game engine built in C on top of SDL. Its intended
-shape is a data-driven, general-purpose runtime for both 2D and 3D games.
+Slayer 3D is an alpha-stage game engine built in C on top of SDL and OpenGL.
+Its intended shape is a data-driven, general-purpose runtime for both 2D and
+3D games.
 
 ## Goals
 
@@ -16,7 +17,7 @@ shape is a data-driven, general-purpose runtime for both 2D and 3D games.
 
 ## Current Architecture
 
-SDL3D is layered:
+Slayer 3D is layered:
 
 1. Platform and loop: SDL window, renderer, timing, events, input, audio, and
    the outer callback loop.
@@ -42,6 +43,6 @@ add or improve the engine primitive in C and expose it back through JSON/Lua.
 
 ## Alpha Expectations
 
-SDL3D is not yet 1.0. Breaking changes are acceptable when they improve
+Slayer 3D is not yet 1.0. Breaking changes are acceptable when they improve
 correctness, remove demo-specific assumptions, or clarify the API. When
 behavior changes, update the demos, tests, and docs together.

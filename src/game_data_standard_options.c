@@ -276,7 +276,7 @@ static yyjson_mut_val *create_scene(yyjson_mut_doc *doc, const standard_options_
                                     bool include_lr)
 {
     yyjson_mut_val *scene = yyjson_mut_obj(doc);
-    if (scene == NULL || !add_str(doc, scene, "schema", "sdl3d.scene.v0") || !add_str(doc, scene, "name", name) ||
+    if (scene == NULL || !add_str(doc, scene, "schema", "slayer3d.scene.v0") || !add_str(doc, scene, "name", name) ||
         !yyjson_mut_obj_add_bool(doc, scene, "updates_game", false) ||
         !yyjson_mut_obj_add_bool(doc, scene, "renders_world", config->background_renders_world) ||
         (config->background_camera != NULL && !add_str(doc, scene, "camera", config->background_camera)) ||
@@ -896,9 +896,9 @@ static bool load_config(yyjson_val *game_root, const char *package_name, standar
     return true;
 }
 
-bool sdl3d_standard_options_build_scene_docs(yyjson_val *game_root, const char *package_name,
-                                             sdl3d_standard_options_scene_docs *out_docs, char *error_buffer,
-                                             int error_buffer_size)
+bool slayer3d_standard_options_build_scene_docs(yyjson_val *game_root, const char *package_name,
+                                                slayer3d_standard_options_scene_docs *out_docs, char *error_buffer,
+                                                int error_buffer_size)
 {
     if (out_docs != NULL)
         SDL_zero(*out_docs);
@@ -912,7 +912,7 @@ bool sdl3d_standard_options_build_scene_docs(yyjson_val *game_root, const char *
     if (!load_config(game_root, package_name, &config, error_buffer, error_buffer_size))
         return false;
 
-    yyjson_doc **docs = (yyjson_doc **)SDL_calloc(SDL3D_STANDARD_OPTIONS_SCENE_COUNT, sizeof(*docs));
+    yyjson_doc **docs = (yyjson_doc **)SDL_calloc(SLAYER3D_STANDARD_OPTIONS_SCENE_COUNT, sizeof(*docs));
     if (docs == NULL)
     {
         set_error(error_buffer, error_buffer_size, "failed to allocate standard options scenes");
@@ -925,23 +925,24 @@ bool sdl3d_standard_options_build_scene_docs(yyjson_val *game_root, const char *
     docs[3] = build_mouse_scene(&config);
     docs[4] = build_gamepad_scene(&config);
     docs[5] = build_audio_scene(&config);
-    for (int i = 0; i < SDL3D_STANDARD_OPTIONS_SCENE_COUNT; ++i)
+    for (int i = 0; i < SLAYER3D_STANDARD_OPTIONS_SCENE_COUNT; ++i)
     {
         if (docs[i] == NULL)
         {
-            sdl3d_standard_options_scene_docs partial = {.docs = docs, .count = SDL3D_STANDARD_OPTIONS_SCENE_COUNT};
-            sdl3d_standard_options_scene_docs_free(&partial);
+            slayer3d_standard_options_scene_docs partial = {.docs = docs,
+                                                            .count = SLAYER3D_STANDARD_OPTIONS_SCENE_COUNT};
+            slayer3d_standard_options_scene_docs_free(&partial);
             set_error(error_buffer, error_buffer_size, "failed to build standard options scene");
             return false;
         }
     }
 
     out_docs->docs = docs;
-    out_docs->count = SDL3D_STANDARD_OPTIONS_SCENE_COUNT;
+    out_docs->count = SLAYER3D_STANDARD_OPTIONS_SCENE_COUNT;
     return true;
 }
 
-void sdl3d_standard_options_scene_docs_free(sdl3d_standard_options_scene_docs *docs)
+void slayer3d_standard_options_scene_docs_free(slayer3d_standard_options_scene_docs *docs)
 {
     if (docs == NULL)
         return;

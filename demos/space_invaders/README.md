@@ -1,4 +1,4 @@
-# SDL3D Space Invaders Demo
+# Slayer 3D Space Invaders Demo
 
 This demo is authored as runner data: JSON scenes/fragments plus Lua gameplay
 rules. It intentionally starts with 3D geometry instead of sprites so the demo
@@ -7,13 +7,13 @@ can stress dynamic lighting, bloom, pooled actors, and particles.
 Run from the repository root:
 
 ```sh
-./build/default/sdl3d_runner --root demos/space_invaders/data --data asset://space_invaders.game.json
+./build/default/slayer3d_runner --root demos/space_invaders/data --data asset://space_invaders.game.json
 ```
 
 Launch directly into gameplay:
 
 ```sh
-./build/default/sdl3d_runner --root demos/space_invaders/data --data asset://space_invaders.game.json --scene scene.play
+./build/default/slayer3d_runner --root demos/space_invaders/data --data asset://space_invaders.game.json --scene scene.play
 ```
 
 Controls:

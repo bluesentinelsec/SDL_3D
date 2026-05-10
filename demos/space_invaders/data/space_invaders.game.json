@@ -1,5 +1,5 @@
 {
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "imports": [
     { "path": "fragments/assets.json", "sections": ["assets"] },
     { "path": "fragments/scripts.json", "sections": ["scripts", "adapters"] },
@@ -15,7 +15,7 @@
     "description": "Data-authored fixed-screen arcade shooter using 3D geometry, pooled actors, Lua gameplay rules, dynamic lighting, and particles."
   },
   "app": {
-    "title": "SDL3D Space Invaders",
+    "title": "Slayer 3D Space Invaders",
     "logical_width": 1280,
     "logical_height": 720,
     "backend": "opengl",
