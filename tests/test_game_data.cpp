@@ -7089,6 +7089,22 @@ TEST(GameDataRuntime, MeshPrimitivesDojoLoadsGrayboxShowcase)
     for (int kind = SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE; kind <= SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE; ++kind)
         EXPECT_TRUE(capture.seen[kind]) << kind;
 
+    struct UiCapture
+    {
+        bool saw_fps = false;
+    } ui_capture;
+    auto capture_ui = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        auto *capture = static_cast<UiCapture *>(userdata);
+        if (std::string(text->name) == "ui.mesh_primitives.fps")
+        {
+            capture->saw_fps = true;
+            EXPECT_NE(text->format, nullptr);
+        }
+        return true;
+    };
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui, &ui_capture));
+    EXPECT_TRUE(ui_capture.saw_fps);
+
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
 }

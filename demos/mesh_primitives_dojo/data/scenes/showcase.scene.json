@@ -68,6 +68,18 @@
         "scale": 0.65
       },
       {
+        "name": "ui.mesh_primitives.fps",
+        "font": "font.mesh_primitives.hud",
+        "format": "FPS %.0f",
+        "bindings": [
+          { "type": "metric", "metric": "fps" }
+        ],
+        "position": [0.985, 0.03],
+        "anchor": "top_right",
+        "color": [180, 235, 190, 230],
+        "scale": 0.72
+      },
+      {
         "name": "ui.mesh_primitives.reticle",
         "text": "+",
         "font": "font.mesh_primitives.hud",

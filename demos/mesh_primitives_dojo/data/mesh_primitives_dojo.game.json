@@ -50,6 +50,11 @@
     "bloom": false,
     "clear_color": [0.045, 0.05, 0.06]
   },
+  "presentation": {
+    "metrics": {
+      "fps_sample_seconds": 0.25
+    }
+  },
   "scenes": {
     "initial": "scene.mesh_primitives.showcase",
     "files": ["scenes/showcase.scene.json"]
