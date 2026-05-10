@@ -588,6 +588,7 @@ the active scene's brush-world instances:
       "player_radius": 0.35,
       "step_height": 0.65,
       "ceiling_clearance": 0.1,
+      "walkable_normal_y": 0.7,
       "mouse_sensitivity": 0.002
     }
   ]
@@ -597,10 +598,28 @@ the active scene's brush-world instances:
 The actor transform is the player's eye position. The controller sweeps an AABB
 body through `world.brush_worlds` in active-scene world space, slides along
 brush planes, supports basic stair stepping, gravity, jumping, and mouse-look,
-and writes the same diagnostic properties as `controller.fps_sector`.
+and writes the same base diagnostic properties as `controller.fps_sector`.
 `brush_world` is validated as the intended collision world; runtime collision
 uses all active brush-world instances so multi-part brush scenes compose
 naturally. Missing `contents_mask` defaults to `["solid", "player_clip"]`.
+`walkable_normal_y` controls floor classification; the default `0.7` treats
+surfaces up to roughly 45 degrees as walkable.
+
+Brush FPS controllers also publish brush-specific diagnostics for tuning and
+debug UI:
+
+- `brush_collision_kind` (`none`, `wall`, `floor`, `ceiling`, or `solid`)
+- `brush_collision_normal`
+- `brush_collision_brush`
+- `brush_collision_material`
+- `brush_collision_contents`
+- `brush_collision_surface_flags`
+- `brush_floor_normal`
+- `brush_floor_brush`
+- `brush_step_up`
+
+Each diagnostic property name can be overridden with the corresponding
+`*_property` field, for example `brush_collision_kind_property`.
 
 ## Sector Levels
 
@@ -1383,15 +1402,18 @@ clears `reload_pending`. If `consume_reserve` is `false`, the clip fills
 without reducing reserve ammo, which is useful for energy weapons or prototypes.
 
 `weapon.hitscan` traces instantly from an actor. It can trace against sector
-geometry through `sector_level`, select the nearest active actor with
-`target_tag`, consume the same clip/ammo fields as projectiles, and run authored
-actions with a payload:
+geometry through `sector_level`, brush geometry through `trace_brush_worlds`
+and `brush_contents_mask`, select the nearest active actor with `target_tag`,
+consume the same clip/ammo fields as projectiles, and run authored actions with
+a payload:
 
 ```json
 {
   "type": "weapon.hitscan",
   "target": "entity.player",
   "sector_level": "sector.e1m1",
+  "trace_brush_worlds": true,
+  "brush_contents_mask": ["solid", "projectile_clip"],
   "direction_from_property": "camera_forward",
   "target_tag": "enemy",
   "range": 64.0,
@@ -1409,10 +1431,13 @@ actions with a payload:
 ```
 
 Hitscan payloads include `source_actor_name`, `actor_name` / `hit_actor_name`,
-`origin`, `direction`, `hit_position`, `hit_distance`, `hit_actor`, and
-`hit_wall`. Use these fields for damage, particles, lights, sounds, decals, or
-debug UI. Actor hit tests use a target actor's `hit_radius` or `radius`
-property, falling back to the action's `hit_radius` value.
+`origin`, `direction`, `hit_position`, `hit_distance`, `hit_actor`, `hit_wall`,
+`hit_brush`, `hit_brush_world`, `hit_brush_name`, `hit_material`,
+`hit_normal`, `hit_contents`, and `hit_surface_flags`. Use these fields for
+damage, particles, lights, sounds, decals, or debug UI. Actor hit tests use a
+target actor's `hit_radius` or `radius` property, falling back to the action's
+`hit_radius` value. Brush hits block actor hits behind the wall because the
+actor query is limited to the nearest wall distance.
 
 ## Sector Level Fragments
 

@@ -16907,7 +16907,8 @@ static slayer3d_vec3 weapon_direction_from_action(const slayer3d_registered_acto
 static slayer3d_properties *weapon_hitscan_payload(const slayer3d_registered_actor *source,
                                                    const slayer3d_registered_actor *hit, slayer3d_vec3 origin,
                                                    slayer3d_vec3 direction, slayer3d_vec3 hit_position, float distance,
-                                                   bool wall_hit)
+                                                   bool wall_hit,
+                                                   const slayer3d_game_data_brush_trace_result *brush_hit)
 {
     slayer3d_properties *payload = slayer3d_properties_create();
     if (payload == NULL)
@@ -16922,6 +16923,21 @@ static slayer3d_properties *weapon_hitscan_payload(const slayer3d_registered_act
     slayer3d_properties_set_float(payload, "hit_distance", distance);
     slayer3d_properties_set_bool(payload, "hit_actor", hit != NULL);
     slayer3d_properties_set_bool(payload, "hit_wall", wall_hit);
+    slayer3d_properties_set_bool(payload, "hit_brush", brush_hit != NULL && brush_hit->hit);
+    slayer3d_properties_set_string(payload, "hit_brush_world",
+                                   brush_hit != NULL && brush_hit->world_name != NULL ? brush_hit->world_name : "");
+    slayer3d_properties_set_string(payload, "hit_brush_name",
+                                   brush_hit != NULL && brush_hit->brush_name != NULL ? brush_hit->brush_name : "");
+    slayer3d_properties_set_string(
+        payload, "hit_material", brush_hit != NULL && brush_hit->material_name != NULL ? brush_hit->material_name : "");
+    slayer3d_properties_set_vec3(payload, "hit_normal",
+                                 brush_hit != NULL ? brush_hit->normal : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_int(payload, "hit_contents",
+                                brush_hit != NULL ? (int)SDL_min(brush_hit->contents, (unsigned int)SDL_MAX_SINT32)
+                                                  : 0);
+    slayer3d_properties_set_int(payload, "hit_surface_flags",
+                                brush_hit != NULL ? (int)SDL_min(brush_hit->surface_flags, (unsigned int)SDL_MAX_SINT32)
+                                                  : 0);
     return payload;
 }
 
@@ -16943,6 +16959,9 @@ static bool execute_weapon_hitscan_action(slayer3d_game_data_runtime *runtime, y
                                                     origin.z + direction.z * range);
 
     const sector_level_runtime *level = find_sector_level_runtime(runtime, json_string(action, "sector_level", NULL));
+    slayer3d_game_data_brush_trace_result brush_result;
+    SDL_zero(brush_result);
+    bool has_brush_result = false;
     if (level != NULL)
     {
         const slayer3d_level_trace_result trace =
@@ -16950,6 +16969,29 @@ static bool execute_weapon_hitscan_action(slayer3d_game_data_runtime *runtime, y
         wall_distance = SDL_clamp(trace.fraction, 0.0f, 1.0f) * range;
         wall_hit = trace.hit;
         hit_position = trace.end_point;
+    }
+    if (obj_get(action, "brush_contents_mask") != NULL || json_bool(action, "trace_brush_worlds", false))
+    {
+        slayer3d_game_data_brush_trace_desc brush_trace;
+        SDL_zero(brush_trace);
+        brush_trace.start = origin;
+        brush_trace.end = slayer3d_vec3_make(origin.x + direction.x * range, origin.y + direction.y * range,
+                                             origin.z + direction.z * range);
+        brush_trace.shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
+        brush_trace.contents_mask = brush_flags_from_json(
+            obj_get(action, "brush_contents_mask"), brush_content_flag_from_string,
+            SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PROJECTILE_CLIP);
+        if (slayer3d_game_data_trace_active_brush_worlds(runtime, &brush_trace, &brush_result) && brush_result.hit)
+        {
+            const float brush_distance = SDL_clamp(brush_result.fraction, 0.0f, 1.0f) * range;
+            if (brush_distance < wall_distance)
+            {
+                wall_distance = brush_distance;
+                wall_hit = true;
+                hit_position = brush_result.end_position;
+                has_brush_result = true;
+            }
+        }
     }
 
     float actor_distance = wall_distance;
@@ -16964,9 +17006,9 @@ static bool execute_weapon_hitscan_action(slayer3d_game_data_runtime *runtime, y
     }
 
     weapon_fire_commit(runtime, action, source);
-    slayer3d_properties *hit_payload =
-        weapon_hitscan_payload(source, hit_actor, origin, direction, hit_position,
-                               hit_actor != NULL ? actor_distance : wall_distance, wall_hit);
+    slayer3d_properties *hit_payload = weapon_hitscan_payload(
+        source, hit_actor, origin, direction, hit_position, hit_actor != NULL ? actor_distance : wall_distance,
+        wall_hit, has_brush_result && hit_actor == NULL ? &brush_result : NULL);
     const bool ok =
         execute_optional_action_array(runtime,
                                       hit_actor != NULL || wall_hit || json_bool(action, "run_actions_on_miss", false)
@@ -19563,6 +19605,99 @@ static unsigned int fps_brush_contents_mask(yyjson_val *component)
                                  SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP);
 }
 
+static float fps_brush_walkable_normal_y(yyjson_val *component)
+{
+    return SDL_clamp(json_float(component, "walkable_normal_y", 0.7f), 0.0f, 1.0f);
+}
+
+typedef struct fps_brush_diagnostics
+{
+    const char *collision_kind;
+    slayer3d_vec3 collision_normal;
+    const char *collision_brush;
+    const char *collision_material;
+    unsigned int collision_contents;
+    unsigned int collision_surface_flags;
+    slayer3d_vec3 floor_normal;
+    const char *floor_brush;
+    bool stepped_up;
+} fps_brush_diagnostics;
+
+static void fps_brush_diagnostics_init(fps_brush_diagnostics *diagnostics)
+{
+    if (diagnostics == NULL)
+        return;
+    SDL_zero(*diagnostics);
+    diagnostics->collision_kind = "none";
+    diagnostics->collision_normal = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    diagnostics->floor_normal = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+}
+
+static const char *fps_brush_collision_kind(slayer3d_vec3 normal, float walkable_normal_y)
+{
+    if (normal.y >= walkable_normal_y)
+        return "floor";
+    if (normal.y <= -walkable_normal_y)
+        return "ceiling";
+    return "wall";
+}
+
+static void fps_brush_record_collision(fps_brush_diagnostics *diagnostics,
+                                       const slayer3d_game_data_brush_trace_result *result, float walkable_normal_y)
+{
+    if (diagnostics == NULL || result == NULL || !result->hit)
+        return;
+    diagnostics->collision_kind =
+        result->start_solid ? "solid" : fps_brush_collision_kind(result->normal, walkable_normal_y);
+    diagnostics->collision_normal = result->normal;
+    diagnostics->collision_brush = result->brush_name;
+    diagnostics->collision_material = result->material_name;
+    diagnostics->collision_contents = result->contents;
+    diagnostics->collision_surface_flags = result->surface_flags;
+}
+
+static void fps_brush_record_floor(fps_brush_diagnostics *diagnostics,
+                                   const slayer3d_game_data_brush_trace_result *result)
+{
+    if (diagnostics == NULL || result == NULL || !result->hit)
+        return;
+    diagnostics->floor_normal = result->normal;
+    diagnostics->floor_brush = result->brush_name;
+}
+
+static void fps_brush_publish_diagnostics(const fps_brush_diagnostics *diagnostics, yyjson_val *component,
+                                          slayer3d_registered_actor *actor)
+{
+    if (diagnostics == NULL || component == NULL || actor == NULL)
+        return;
+    slayer3d_properties_set_string(actor->props,
+                                   json_string(component, "brush_collision_kind_property", "brush_collision_kind"),
+                                   diagnostics->collision_kind != NULL ? diagnostics->collision_kind : "none");
+    slayer3d_properties_set_vec3(actor->props,
+                                 json_string(component, "brush_collision_normal_property", "brush_collision_normal"),
+                                 diagnostics->collision_normal);
+    slayer3d_properties_set_string(actor->props,
+                                   json_string(component, "brush_collision_brush_property", "brush_collision_brush"),
+                                   diagnostics->collision_brush != NULL ? diagnostics->collision_brush : "");
+    slayer3d_properties_set_string(
+        actor->props, json_string(component, "brush_collision_material_property", "brush_collision_material"),
+        diagnostics->collision_material != NULL ? diagnostics->collision_material : "");
+    slayer3d_properties_set_int(actor->props,
+                                json_string(component, "brush_collision_contents_property", "brush_collision_contents"),
+                                (int)SDL_min(diagnostics->collision_contents, (unsigned int)SDL_MAX_SINT32));
+    slayer3d_properties_set_int(
+        actor->props, json_string(component, "brush_collision_surface_flags_property", "brush_collision_surface_flags"),
+        (int)SDL_min(diagnostics->collision_surface_flags, (unsigned int)SDL_MAX_SINT32));
+    slayer3d_properties_set_vec3(actor->props,
+                                 json_string(component, "brush_floor_normal_property", "brush_floor_normal"),
+                                 diagnostics->floor_normal);
+    slayer3d_properties_set_string(actor->props,
+                                   json_string(component, "brush_floor_brush_property", "brush_floor_brush"),
+                                   diagnostics->floor_brush != NULL ? diagnostics->floor_brush : "");
+    slayer3d_properties_set_bool(actor->props, json_string(component, "brush_step_up_property", "brush_step_up"),
+                                 diagnostics->stepped_up);
+}
+
 static slayer3d_vec3 fps_brush_body_extents(const slayer3d_fps_mover *mover)
 {
     const float skin = 0.01f;
@@ -19615,7 +19750,8 @@ static bool fps_brush_slide_body(const slayer3d_game_data_runtime *runtime, cons
 }
 
 static bool fps_brush_snap_to_ground(const slayer3d_game_data_runtime *runtime, slayer3d_fps_mover *mover,
-                                     unsigned int contents_mask, slayer3d_vec3 *body_center)
+                                     unsigned int contents_mask, float walkable_normal_y,
+                                     fps_brush_diagnostics *diagnostics, slayer3d_vec3 *body_center)
 {
     if (runtime == NULL || mover == NULL || body_center == NULL)
         return false;
@@ -19625,17 +19761,19 @@ static bool fps_brush_snap_to_ground(const slayer3d_game_data_runtime *runtime, 
     slayer3d_game_data_brush_trace_result probe;
     if (!fps_brush_trace_body(runtime, mover, contents_mask, *body_center, probe_end, &probe))
         return false;
-    if (!probe.hit || probe.start_solid || probe.normal.y < 0.7f)
+    if (!probe.hit || probe.start_solid || probe.normal.y < walkable_normal_y)
         return false;
 
     *body_center = slayer3d_vec3_add(probe.end_position, slayer3d_vec3_scale(probe.normal, 0.01f));
     mover->vertical_velocity = 0.0f;
     mover->on_ground = true;
+    fps_brush_record_floor(diagnostics, &probe);
     return true;
 }
 
 static bool fps_brush_try_step_move(const slayer3d_game_data_runtime *runtime, slayer3d_fps_mover *mover,
-                                    unsigned int contents_mask, slayer3d_vec3 start, slayer3d_vec3 end,
+                                    unsigned int contents_mask, float walkable_normal_y,
+                                    fps_brush_diagnostics *diagnostics, slayer3d_vec3 start, slayer3d_vec3 end,
                                     slayer3d_vec3 *out_position)
 {
     if (runtime == NULL || mover == NULL || out_position == NULL || mover->config.step_height <= 0.0f)
@@ -19652,14 +19790,16 @@ static bool fps_brush_try_step_move(const slayer3d_game_data_runtime *runtime, s
     if (!fps_brush_slide_body(runtime, mover, contents_mask, raised_start, raised_end, &slide_trace) ||
         slide_trace.start_solid)
     {
+        fps_brush_record_collision(diagnostics, &slide_trace, walkable_normal_y);
         return false;
     }
+    fps_brush_record_collision(diagnostics, &slide_trace, walkable_normal_y);
 
     slayer3d_game_data_brush_trace_result down_trace;
     const slayer3d_vec3 down_end = slayer3d_vec3_make(
         slide_trace.end_position.x, slide_trace.end_position.y - step_height - 0.05f, slide_trace.end_position.z);
     if (!fps_brush_trace_body(runtime, mover, contents_mask, slide_trace.end_position, down_end, &down_trace) ||
-        !down_trace.hit || down_trace.start_solid || down_trace.normal.y < 0.7f)
+        !down_trace.hit || down_trace.start_solid || down_trace.normal.y < walkable_normal_y)
     {
         return false;
     }
@@ -19667,6 +19807,9 @@ static bool fps_brush_try_step_move(const slayer3d_game_data_runtime *runtime, s
     *out_position = slayer3d_vec3_add(down_trace.end_position, slayer3d_vec3_scale(down_trace.normal, 0.01f));
     mover->on_ground = true;
     mover->vertical_velocity = 0.0f;
+    if (diagnostics != NULL)
+        diagnostics->stepped_up = true;
+    fps_brush_record_floor(diagnostics, &down_trace);
     return true;
 }
 
@@ -19697,8 +19840,11 @@ static void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyj
     mover->pitch = fps_brush_clampf(mover->pitch - mouse_dy * mouse_sensitivity, -1.4f, 1.4f);
 
     const unsigned int contents_mask = fps_brush_contents_mask(component);
+    const float walkable_normal_y = fps_brush_walkable_normal_y(component);
+    fps_brush_diagnostics diagnostics;
+    fps_brush_diagnostics_init(&diagnostics);
     slayer3d_vec3 body_center = fps_brush_eye_to_body_center(mover, mover->position);
-    (void)fps_brush_snap_to_ground(runtime, mover, contents_mask, &body_center);
+    (void)fps_brush_snap_to_ground(runtime, mover, contents_mask, walkable_normal_y, &diagnostics, &body_center);
 
     if (fps_controller_action_pressed(runtime, input, jump_action))
         slayer3d_fps_mover_jump(mover);
@@ -19731,13 +19877,20 @@ static void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyj
             if (mover->on_ground && slide.hit)
             {
                 slayer3d_vec3 stepped;
-                if (fps_brush_try_step_move(runtime, mover, contents_mask, body_center, horizontal_end, &stepped))
+                if (fps_brush_try_step_move(runtime, mover, contents_mask, walkable_normal_y, &diagnostics, body_center,
+                                            horizontal_end, &stepped))
+                {
                     body_center = stepped;
+                }
                 else
+                {
+                    fps_brush_record_collision(&diagnostics, &slide, walkable_normal_y);
                     body_center = slayer3d_vec3_add(slide.end_position, slayer3d_vec3_scale(slide.normal, 0.01f));
+                }
             }
             else
             {
+                fps_brush_record_collision(&diagnostics, &slide, walkable_normal_y);
                 body_center = slide.hit
                                   ? slayer3d_vec3_add(slide.end_position, slayer3d_vec3_scale(slide.normal, 0.01f))
                                   : slide.end_position;
@@ -19755,10 +19908,15 @@ static void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyj
         body_center = vertical.end_position;
         if (vertical.hit)
         {
-            if (mover->vertical_velocity < 0.0f && vertical.normal.y >= 0.7f)
+            if (mover->vertical_velocity < 0.0f && vertical.normal.y >= walkable_normal_y)
             {
                 body_center = slayer3d_vec3_add(body_center, slayer3d_vec3_scale(vertical.normal, 0.01f));
                 mover->on_ground = true;
+                fps_brush_record_floor(&diagnostics, &vertical);
+            }
+            else
+            {
+                fps_brush_record_collision(&diagnostics, &vertical, walkable_normal_y);
             }
             mover->vertical_velocity = 0.0f;
         }
@@ -19769,7 +19927,7 @@ static void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyj
     }
 
     if (!mover->on_ground && mover->vertical_velocity <= 0.0f)
-        (void)fps_brush_snap_to_ground(runtime, mover, contents_mask, &body_center);
+        (void)fps_brush_snap_to_ground(runtime, mover, contents_mask, walkable_normal_y, &diagnostics, &body_center);
 
     mover->position = fps_brush_body_center_to_eye(mover, body_center);
     mover->current_sector = -1;
@@ -19779,6 +19937,7 @@ static void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyj
         mover->has_last_good = true;
     }
     fps_controller_publish_actor_state(controller, component, actor);
+    fps_brush_publish_diagnostics(&diagnostics, component, actor);
 }
 
 static void update_sector_doors(slayer3d_game_data_runtime *runtime, float dt)
