@@ -429,6 +429,25 @@ extern "C"
                                                            const slayer3d_camera3d *camera);
 
     /**
+     * @brief Draw active-scene authored brush worlds.
+     *
+     * Scene files declare brush world instances under `world.brush_worlds`.
+     * Call inside an active 3D pass. Brush worlds are compiled to immutable
+     * static meshes at game-data load time and are affected by the current
+     * renderer lighting state.
+     */
+    bool slayer3d_game_data_draw_brush_worlds(const slayer3d_game_data_runtime *runtime,
+                                              slayer3d_render_context *renderer);
+
+    /**
+     * @brief Draw active-scene brush worlds and resolve `asset://` material
+     * textures through an asset resolver.
+     */
+    bool slayer3d_game_data_draw_brush_worlds_with_assets(const slayer3d_game_data_runtime *runtime,
+                                                          slayer3d_render_context *renderer,
+                                                          const slayer3d_asset_resolver *assets);
+
+    /**
      * @brief Draw authored UI text for the active scene.
      *
      * Built-in font assets are loaded on demand through @p font_cache. Text is

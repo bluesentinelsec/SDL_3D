@@ -1,0 +1,137 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.brush_geometry.showcase",
+      "units": "meters",
+      "meters_per_unit": 1.0,
+      "materials": [
+        { "name": "mat.floor", "albedo": [0.24, 0.25, 0.27, 1.0], "roughness": 0.9, "tex_scale": 4.0 },
+        { "name": "mat.wall", "albedo": [0.42, 0.44, 0.47, 1.0], "roughness": 0.86, "tex_scale": 4.0 },
+        { "name": "mat.ceiling", "albedo": [0.33, 0.34, 0.38, 1.0], "roughness": 0.92, "tex_scale": 4.0 },
+        { "name": "mat.ramp", "albedo": [0.64, 0.48, 0.32, 1.0], "roughness": 0.78, "tex_scale": 3.0 },
+        { "name": "mat.accent_blue", "albedo": [0.20, 0.40, 0.86, 1.0], "roughness": 0.72, "tex_scale": 3.0 },
+        { "name": "mat.accent_red", "albedo": [0.78, 0.22, 0.18, 1.0], "roughness": 0.76, "tex_scale": 3.0 }
+      ],
+      "brushes": [
+        {
+          "name": "brush.room.floor",
+          "contents": "solid",
+          "tags": ["room", "floor"],
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 18.0 }, "material": "mat.floor" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 18.0 }, "material": "mat.floor" },
+            { "plane": { "normal": [0, 1, 0], "distance": 0.0 }, "material": "mat.floor" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.5 }, "material": "mat.floor" },
+            { "plane": { "normal": [0, 0, 1], "distance": 18.0 }, "material": "mat.floor" },
+            { "plane": { "normal": [0, 0, -1], "distance": 18.0 }, "material": "mat.floor" }
+          ]
+        },
+        {
+          "name": "brush.room.ceiling",
+          "contents": "solid",
+          "tags": ["room", "ceiling"],
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 18.0 }, "material": "mat.ceiling" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 18.0 }, "material": "mat.ceiling" },
+            { "plane": { "normal": [0, 1, 0], "distance": 7.4 }, "material": "mat.ceiling" },
+            { "plane": { "normal": [0, -1, 0], "distance": -7.0 }, "material": "mat.ceiling" },
+            { "plane": { "normal": [0, 0, 1], "distance": 18.0 }, "material": "mat.ceiling" },
+            { "plane": { "normal": [0, 0, -1], "distance": 18.0 }, "material": "mat.ceiling" }
+          ]
+        },
+        {
+          "name": "brush.room.wall_west",
+          "contents": "solid",
+          "tags": ["room", "wall"],
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": -17.5 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 18.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 1, 0], "distance": 7.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 0, 1], "distance": 18.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 0, -1], "distance": 18.0 }, "material": "mat.wall" }
+          ]
+        },
+        {
+          "name": "brush.room.wall_east",
+          "contents": "solid",
+          "tags": ["room", "wall"],
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 18.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1, 0, 0], "distance": -17.5 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 1, 0], "distance": 7.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 0, 1], "distance": 18.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 0, -1], "distance": 18.0 }, "material": "mat.wall" }
+          ]
+        },
+        {
+          "name": "brush.room.wall_south",
+          "contents": "solid",
+          "tags": ["room", "wall"],
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 18.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 18.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 1, 0], "distance": 7.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 0, 1], "distance": -17.5 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 0, -1], "distance": 18.0 }, "material": "mat.wall" }
+          ]
+        },
+        {
+          "name": "brush.room.wall_north",
+          "contents": "solid",
+          "tags": ["room", "wall"],
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 18.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 18.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 1, 0], "distance": 7.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 0, 1], "distance": 18.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 0, -1], "distance": -17.5 }, "material": "mat.wall" }
+          ]
+        },
+        {
+          "name": "brush.ramp.wedge",
+          "contents": "solid",
+          "tags": ["showcase", "ramp"],
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 4.0 }, "material": "mat.ramp" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 4.0 }, "material": "mat.ramp" },
+            { "plane": { "normal": [-0.25, 1.0, 0.0], "distance": 2.5 }, "material": "mat.ramp" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat.ramp" },
+            { "plane": { "normal": [0, 0, 1], "distance": 2.25 }, "material": "mat.ramp" },
+            { "plane": { "normal": [0, 0, -1], "distance": 2.25 }, "material": "mat.ramp" }
+          ]
+        },
+        {
+          "name": "brush.bridge.overhang",
+          "contents": "solid",
+          "tags": ["showcase", "overhang"],
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 10.0 }, "material": "mat.accent_blue" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 10.0 }, "material": "mat.accent_blue" },
+            { "plane": { "normal": [0, 1, 0], "distance": 4.25 }, "material": "mat.accent_blue" },
+            { "plane": { "normal": [0, -1, 0], "distance": -3.55 }, "material": "mat.accent_blue" },
+            { "plane": { "normal": [0, 0, 1], "distance": 1.0 }, "material": "mat.accent_blue" },
+            { "plane": { "normal": [0, 0, -1], "distance": 1.0 }, "material": "mat.accent_blue" }
+          ]
+        },
+        {
+          "name": "brush.pillar.center",
+          "contents": "solid",
+          "tags": ["showcase", "pillar"],
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1.0 }, "material": "mat.accent_red" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1.0 }, "material": "mat.accent_red" },
+            { "plane": { "normal": [0, 1, 0], "distance": 5.0 }, "material": "mat.accent_red" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat.accent_red" },
+            { "plane": { "normal": [0, 0, 1], "distance": 1.0 }, "material": "mat.accent_red" },
+            { "plane": { "normal": [0, 0, -1], "distance": 1.0 }, "material": "mat.accent_red" }
+          ]
+        }
+      ]
+    }
+  ]
+}

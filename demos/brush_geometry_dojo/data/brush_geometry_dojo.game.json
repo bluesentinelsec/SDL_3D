@@ -1,0 +1,72 @@
+{
+  "schema": "slayer3d.game.v0",
+  "metadata": {
+    "name": "Slayer 3D Brush Geometry Dojo",
+    "id": "demo.brush_geometry_dojo",
+    "version": "0.1.0"
+  },
+  "imports": [
+    { "path": "fragments/world/showcase.brushes.json", "sections": ["brush_worlds"] },
+    { "path": "fragments/actors/lights.json", "sections": ["entities"] }
+  ],
+  "app": {
+    "title": "Slayer 3D Brush Geometry Dojo",
+    "logical_width": 1280,
+    "logical_height": 720,
+    "backend": "opengl",
+    "window": { "renderer": "opengl", "vsync": true },
+    "quit": { "action": "action.exit" },
+    "input_policy": { "global_actions": ["action.exit"] }
+  },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.brush_geometry_dojo",
+        "actions": [
+          {
+            "name": "action.exit",
+            "bindings": [
+              { "device": "keyboard", "key": "ESCAPE" }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "world": {
+    "name": "world.brush_geometry_dojo",
+    "kind": "brush",
+    "units": "meters",
+    "meters_per_unit": 1.0,
+    "ambient_light": [0.16, 0.17, 0.18],
+    "cameras": [
+      {
+        "name": "camera.brush_geometry.overview",
+        "type": "perspective",
+        "position": [15.0, 8.0, 17.0],
+        "target": [0.0, 2.2, 0.0],
+        "up": [0.0, 1.0, 0.0],
+        "fov": 90.0,
+        "fov_axis": "horizontal",
+        "active": true
+      }
+    ]
+  },
+  "assets": {
+    "fonts": [
+      { "id": "font.brush_geometry.hud", "builtin": "Inter", "size": 22 }
+    ]
+  },
+  "render": {
+    "lighting": true,
+    "bloom": false,
+    "clear_color": [0.035, 0.04, 0.05]
+  },
+  "presentation": {
+    "metrics": { "fps_sample_seconds": 0.25 }
+  },
+  "scenes": {
+    "initial": "scene.brush_geometry.showcase",
+    "files": ["scenes/showcase.scene.json"]
+  }
+}

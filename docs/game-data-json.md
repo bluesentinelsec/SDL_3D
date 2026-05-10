@@ -459,9 +459,9 @@ overhangs, ramps, clips, trigger volumes, and future brush collision/render
 acceleration. Sector worlds remain supported; choose brush worlds when a level
 needs real 3D geometry rather than a sector/portal floor plan.
 
-Slice 1 loads and validates brush data. Mesh compilation, collision traces,
-lighting integration, and FPS controller support are intentionally layered on
-top in later slices.
+Brush worlds load, validate, and compile visible brush faces into immutable
+static meshes. Collision traces and FPS controller support are layered on top
+in later slices.
 
 ```json
 {
@@ -510,8 +510,9 @@ Validation requires:
 - optional material `texture` as a non-empty existing asset path
 - non-empty `brushes` with unique names
 - optional unique non-empty brush `tags`
-- `contents` as one value or an array of unique values: `solid`,
-  `player_clip`, `projectile_clip`, `trigger`, `water`, `lava`, or `sky`
+- optional `contents` as one value or an array of unique values: `solid`,
+  `player_clip`, `projectile_clip`, `trigger`, `water`, `lava`, or `sky`;
+  omitted contents default to `solid`
 - each brush to contain at least four `faces`
 - each face to declare `plane.normal` as a non-zero vec3 and
   `plane.distance` as a number
@@ -539,9 +540,11 @@ Scenes instantiate brush worlds through `world.brush_worlds`:
 ```
 
 `acceleration_key` and `debug_wireframe_key` may name scene-state booleans that
-override the authored defaults. Runtime, editor, and future renderer/collision
-code should use `slayer3d_game_data_get_brush_world()` and
+override the authored defaults. Runtime and editor code should use
+`slayer3d_game_data_get_brush_world()` and
 `slayer3d_game_data_for_each_brush_world_instance()` rather than reparsing JSON.
+Brush render meshes are available through `brush_world.render_model` and are
+drawn by the generic data-game frame path.
 
 ## Sector Levels
 

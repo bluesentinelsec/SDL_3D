@@ -1,0 +1,31 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "entities": [
+    {
+      "name": "entity.brush_geometry.sun",
+      "active": true,
+      "transform": { "position": [0.0, 10.0, 0.0] },
+      "components": [
+        {
+          "type": "light.directional",
+          "direction": [-0.35, -1.0, -0.42],
+          "color": [1.0, 0.94, 0.84],
+          "intensity": 2.15
+        }
+      ]
+    },
+    {
+      "name": "entity.brush_geometry.blue_fill",
+      "active": true,
+      "transform": { "position": [-7.5, 3.0, -5.0] },
+      "components": [
+        {
+          "type": "light.point",
+          "color": [0.25, 0.45, 1.0],
+          "intensity": 1.15,
+          "range": 11.0
+        }
+      ]
+    }
+  ]
+}
