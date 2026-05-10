@@ -1,0 +1,62 @@
+{
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.brush_geometry.showcase",
+  "camera": "camera.brush_geometry.overview",
+  "updates_game": true,
+  "renders_world": true,
+  "entities": [
+    "entity.brush_geometry.sun",
+    "entity.brush_geometry.blue_fill"
+  ],
+  "input": {
+    "actions": ["action.exit"]
+  },
+  "world": {
+    "brush_worlds": [
+      {
+        "world": "brush.brush_geometry.showcase",
+        "position": [0.0, 0.0, 0.0],
+        "acceleration": true,
+        "debug_wireframe": false
+      }
+    ]
+  },
+  "ui": {
+    "text": [
+      {
+        "name": "ui.brush_geometry.title",
+        "text": "Brush Geometry Dojo",
+        "font": "font.brush_geometry.hud",
+        "x": 0.02,
+        "y": 0.03,
+        "normalized": true,
+        "color": [235, 240, 250, 230],
+        "scale": 0.85
+      },
+      {
+        "name": "ui.brush_geometry.help",
+        "text": "Static brush mesh showcase: room slabs, ramp wedge, overhang, pillar  Esc quit",
+        "font": "font.brush_geometry.hud",
+        "x": 0.02,
+        "y": 0.075,
+        "normalized": true,
+        "color": [205, 215, 230, 210],
+        "scale": 0.62
+      },
+      {
+        "name": "ui.brush_geometry.fps",
+        "font": "font.brush_geometry.hud",
+        "format": "FPS %.0f",
+        "bindings": [
+          { "type": "metric", "metric": "fps" }
+        ],
+        "x": 0.985,
+        "y": 0.03,
+        "normalized": true,
+        "align": "right",
+        "color": [180, 235, 190, 230],
+        "scale": 0.72
+      }
+    ]
+  }
+}

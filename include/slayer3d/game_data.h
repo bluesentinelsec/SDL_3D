@@ -25,6 +25,7 @@
 #include "slayer3d/game.h"
 #include "slayer3d/level.h"
 #include "slayer3d/lighting.h"
+#include "slayer3d/model.h"
 #include "slayer3d/network.h"
 #include "slayer3d/network_replication.h"
 #include "slayer3d/properties.h"
@@ -441,6 +442,8 @@ extern "C"
         const slayer3d_game_data_brush *brushes;
         /** @brief Number of entries in @p brushes. */
         int brush_count;
+        /** @brief Runtime-compiled static render mesh for visible brush faces, or NULL when empty. */
+        const slayer3d_model *render_model;
     } slayer3d_game_data_brush_world;
 
     /** @brief Active-scene instance of an authored brush world. */

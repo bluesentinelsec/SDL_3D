@@ -183,6 +183,16 @@ build/debug/slayer3d_runner \
   --data asset://lighting_dojo.game.json
 ```
 
+`demos/brush_geometry_dojo` is a data-only brush-world rendering showcase. It
+demonstrates true 3D convex brush slabs, ramps, overhangs, per-face materials,
+and dynamic lighting through the same generic runner frame path:
+
+```sh
+build/debug/slayer3d_runner \
+  --root demos/brush_geometry_dojo/data \
+  --data asset://brush_geometry_dojo.game.json
+```
+
 ## Data-Only Parity Checklist
 
 Before treating a game as data-only, validate the runner-backed game path:

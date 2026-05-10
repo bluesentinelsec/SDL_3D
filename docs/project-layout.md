@@ -197,6 +197,12 @@ showcases. It uses connected sector rooms and hallways with varied brightness
 and tint values, plus lit primitives and dynamic lights, so lighting behavior
 can be inspected from the same generic runner path as gameplay.
 
+`demos/brush_geometry_dojo` is the reference shape for brush-world rendering
+showcases. It keeps authored brush data separate from scene wiring, uses
+convex slabs for walls/floors/ceilings plus showcase ramp and overhang brushes,
+and verifies the generic runner renders brush meshes through the same lit 3D
+path as actors and procedural primitives.
+
 Use optional `editor` metadata beside the authored object it describes. This
 keeps future editor palettes and prefab browsers grounded in the same JSON that
 runtime validation sees. Metadata should describe categories, previews, bounds,

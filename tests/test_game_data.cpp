@@ -398,6 +398,11 @@ std::filesystem::path lighting_dojo_data_path()
     return demo_data_path("lighting_dojo", "lighting_dojo.game.json");
 }
 
+std::filesystem::path brush_geometry_dojo_data_path()
+{
+    return demo_data_path("brush_geometry_dojo", "brush_geometry_dojo.game.json");
+}
+
 std::filesystem::path fps_template_data_path()
 {
     return demo_data_path("templates/fps", "fps_template.game.json");
@@ -7334,6 +7339,64 @@ TEST(GameDataRuntime, LightingDojoLoadsSectorLocalLightingShowcase)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
+{
+    const std::filesystem::path dojo_path = brush_geometry_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_config config{};
+    char title[128]{};
+    char app_error[512]{};
+    ASSERT_TRUE(slayer3d_game_data_load_app_config_file(dojo_path.string().c_str(), &config, title, sizeof(title),
+                                                        app_error, sizeof(app_error)))
+        << app_error;
+    EXPECT_STREQ(config.title, "Slayer 3D Brush Geometry Dojo");
+    EXPECT_EQ(config.backend, SLAYER3D_BACKEND_OPENGL);
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.brush_geometry.showcase"));
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.brush_geometry.showcase", &world));
+    ASSERT_NE(world.render_model, nullptr);
+    EXPECT_EQ(world.material_count, 6);
+    EXPECT_GE(world.brush_count, 9);
+    EXPECT_GE(world.render_model->mesh_count, 6);
+    int rendered_vertices = 0;
+    for (int i = 0; i < world.render_model->mesh_count; ++i)
+    {
+        const slayer3d_mesh *mesh = &world.render_model->meshes[i];
+        EXPECT_GE(mesh->material_index, 0);
+        EXPECT_LT(mesh->material_index, world.render_model->material_count);
+        EXPECT_NE(mesh->positions, nullptr);
+        EXPECT_NE(mesh->normals, nullptr);
+        EXPECT_NE(mesh->uvs, nullptr);
+        EXPECT_EQ(mesh->vertex_count, mesh->index_count);
+        EXPECT_TRUE(mesh->has_local_bounds);
+        rendered_vertices += mesh->vertex_count;
+    }
+    EXPECT_GT(rendered_vertices, 150);
+
+    BrushWorldInstanceCapture capture{};
+    ASSERT_TRUE(slayer3d_game_data_for_each_brush_world_instance(runtime, capture_brush_world_instance, &capture));
+    EXPECT_EQ(capture.count, 1);
+    EXPECT_EQ(capture.world_name, "brush.brush_geometry.showcase");
+    EXPECT_TRUE(capture.acceleration_enabled);
+
+    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 2);
+    slayer3d_camera3d camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.brush_geometry.overview", &camera));
+    EXPECT_EQ(camera.fov_axis, SLAYER3D_CAMERA_FOV_HORIZONTAL);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, UsesDefaultWorldUnitsAndPerspectiveFovy)
 {
     const std::filesystem::path dir = unique_test_dir("world_camera_defaults");
@@ -10377,6 +10440,11 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
           "metallic": 0.0,
           "roughness": 0.8,
           "tex_scale": 2.0
+        },
+        {
+          "name": "mat.trim",
+          "albedo": [0.85, 0.55, 0.20, 1.0],
+          "roughness": 0.7
         }
       ],
       "brushes": [
@@ -10389,7 +10457,7 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
             { "plane": { "normal": [-1.0,  0.0,  0.0], "distance":  0.0 }, "material": 0 },
             { "plane": { "normal": [ 0.0,  1.0,  0.0], "distance":  3.0 }, "material": "mat.wall", "surface_flags": ["slick"] },
             { "plane": { "normal": [ 0.0, -1.0,  0.0], "distance":  0.0 }, "material": "mat.wall" },
-            { "plane": { "normal": [ 0.0,  0.0,  1.0], "distance":  4.0 }, "material": "mat.wall", "surface_flags": "emissive" },
+            { "plane": { "normal": [ 0.0,  0.0,  1.0], "distance":  4.0 }, "material": "mat.trim", "surface_flags": "emissive" },
             { "plane": { "normal": [ 0.0,  0.0, -1.0], "distance":  0.0 }, "material": "mat.wall" }
           ]
         }
@@ -10413,11 +10481,12 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
     EXPECT_STREQ(world.name, "brush.test");
     EXPECT_STREQ(world.units, "meters");
     EXPECT_FLOAT_EQ(world.meters_per_unit, 1.0f);
-    ASSERT_EQ(world.material_count, 1);
+    ASSERT_EQ(world.material_count, 2);
     EXPECT_STREQ(world.materials[0].name, "mat.wall");
     EXPECT_FLOAT_EQ(world.materials[0].albedo.z, 0.45f);
     EXPECT_FLOAT_EQ(world.materials[0].roughness, 0.8f);
     EXPECT_FLOAT_EQ(world.materials[0].tex_scale, 2.0f);
+    EXPECT_STREQ(world.materials[1].name, "mat.trim");
     ASSERT_EQ(world.brush_count, 1);
     EXPECT_STREQ(world.brushes[0].name, "brush.room");
     EXPECT_EQ(world.brushes[0].contents,
@@ -10430,7 +10499,20 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
     EXPECT_EQ(world.brushes[0].faces[1].material_index, 0);
     EXPECT_STREQ(world.brushes[0].faces[1].material_name, "mat.wall");
     EXPECT_EQ(world.brushes[0].faces[2].surface_flags, SLAYER3D_GAME_DATA_BRUSH_SURFACE_SLICK);
+    EXPECT_EQ(world.brushes[0].faces[4].material_index, 1);
     EXPECT_EQ(world.brushes[0].faces[4].surface_flags, SLAYER3D_GAME_DATA_BRUSH_SURFACE_EMISSIVE);
+    ASSERT_NE(world.render_model, nullptr);
+    ASSERT_EQ(world.render_model->material_count, 2);
+    ASSERT_EQ(world.render_model->mesh_count, 2);
+    EXPECT_EQ(world.render_model->meshes[0].material_index, 0);
+    EXPECT_EQ(world.render_model->meshes[0].vertex_count, 30);
+    EXPECT_EQ(world.render_model->meshes[0].index_count, 30);
+    EXPECT_EQ(world.render_model->meshes[1].material_index, 1);
+    EXPECT_EQ(world.render_model->meshes[1].vertex_count, 6);
+    EXPECT_EQ(world.render_model->meshes[1].index_count, 6);
+    EXPECT_NE(world.render_model->meshes[0].normals, nullptr);
+    EXPECT_NE(world.render_model->meshes[0].uvs, nullptr);
+    EXPECT_TRUE(world.render_model->meshes[0].has_local_bounds);
 
     slayer3d_game_data_brush_world missing{};
     EXPECT_FALSE(slayer3d_game_data_get_brush_world(runtime, "brush.missing", &missing));

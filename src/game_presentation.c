@@ -43,6 +43,13 @@ typedef struct sector_level_draw_context
     bool ok;
 } sector_level_draw_context;
 
+typedef struct brush_world_draw_context
+{
+    slayer3d_render_context *renderer;
+    const slayer3d_asset_resolver *assets;
+    bool ok;
+} brush_world_draw_context;
+
 typedef struct ui_draw_context
 {
     const slayer3d_game_data_runtime *runtime;
@@ -2238,6 +2245,79 @@ bool slayer3d_game_data_draw_sector_levels_with_assets(const slayer3d_game_data_
     return iterated && context.ok;
 }
 
+static bool draw_brush_world_instance(void *userdata, const slayer3d_game_data_brush_world_instance *instance)
+{
+    brush_world_draw_context *context = (brush_world_draw_context *)userdata;
+    if (context == NULL || context->renderer == NULL || instance == NULL || instance->world == NULL)
+        return false;
+    if (instance->world->render_model == NULL || instance->world->render_model->mesh_count <= 0)
+        return true;
+
+    bool pushed = false;
+    bool ok = true;
+    if (instance->position.x != 0.0f || instance->position.y != 0.0f || instance->position.z != 0.0f)
+    {
+        if (!slayer3d_push_matrix(context->renderer))
+        {
+            context->ok = false;
+            return false;
+        }
+        pushed = true;
+        ok = slayer3d_translate(context->renderer, instance->position.x, instance->position.y, instance->position.z);
+    }
+
+    if (ok)
+    {
+        ok = slayer3d_draw_model_ex_with_assets(
+            context->renderer, context->assets, instance->world->render_model, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+            slayer3d_vec3_make(0.0f, 1.0f, 0.0f), 0.0f, slayer3d_vec3_make(1.0f, 1.0f, 1.0f),
+            (slayer3d_color){255, 255, 255, 255});
+    }
+    if (ok && instance->debug_wireframe && !slayer3d_is_wireframe_enabled(context->renderer))
+    {
+        if (slayer3d_set_wireframe_enabled(context->renderer, true))
+        {
+            ok = slayer3d_draw_model_ex_with_assets(
+                context->renderer, context->assets, instance->world->render_model, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                slayer3d_vec3_make(0.0f, 1.0f, 0.0f), 0.0f, slayer3d_vec3_make(1.0f, 1.0f, 1.0f),
+                (slayer3d_color){30, 35, 40, 220});
+            if (!slayer3d_set_wireframe_enabled(context->renderer, false))
+                ok = false;
+        }
+        else
+        {
+            ok = false;
+        }
+    }
+    if (pushed && !slayer3d_pop_matrix(context->renderer))
+        ok = false;
+    if (!ok)
+        context->ok = false;
+    return context->ok;
+}
+
+bool slayer3d_game_data_draw_brush_worlds(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer)
+{
+    return slayer3d_game_data_draw_brush_worlds_with_assets(runtime, renderer, NULL);
+}
+
+bool slayer3d_game_data_draw_brush_worlds_with_assets(const slayer3d_game_data_runtime *runtime,
+                                                      slayer3d_render_context *renderer,
+                                                      const slayer3d_asset_resolver *assets)
+{
+    if (runtime == NULL || renderer == NULL)
+        return false;
+
+    brush_world_draw_context context;
+    SDL_zero(context);
+    context.renderer = renderer;
+    context.assets = assets;
+    context.ok = true;
+    const bool iterated =
+        slayer3d_game_data_for_each_brush_world_instance(runtime, draw_brush_world_instance, &context);
+    return iterated && context.ok;
+}
+
 static bool draw_active_scene_skybox(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
                                      slayer3d_game_data_image_cache *image_cache)
 {
@@ -3325,6 +3405,9 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
             ok = slayer3d_game_data_draw_sector_levels_with_assets(
                      frame->runtime, frame->renderer, frame->image_cache != NULL ? frame->image_cache->assets : NULL,
                      &camera) &&
+                 ok;
+            ok = slayer3d_game_data_draw_brush_worlds_with_assets(
+                     frame->runtime, frame->renderer, frame->image_cache != NULL ? frame->image_cache->assets : NULL) &&
                  ok;
             if (frame->particle_cache != NULL)
                 ok = slayer3d_game_data_draw_particles(frame->runtime, frame->renderer, frame->particle_cache) && ok;
