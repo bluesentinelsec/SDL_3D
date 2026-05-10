@@ -160,12 +160,22 @@
         "signal": "signal.dojo.damage_dummy",
         "actions": [
           {
-            "type": "combat.damage",
-            "target": "entity.dojo.combat_dummy",
-            "source": "entity.player",
-            "amount": 25.0,
-            "damage_type": "dojo",
-            "on_death": "signal.dojo.dummy_dead"
+            "type": "weapon.hitscan",
+            "target": "entity.player",
+            "sector_level": "sector.dojo.arena",
+            "target_tag": "combat_target",
+            "range": 40.0,
+            "cooldown": 0.15,
+            "actions": [
+              {
+                "type": "combat.damage",
+                "target_from_payload": "actor_name",
+                "source_from_payload": "source_actor_name",
+                "amount": 25.0,
+                "damage_type": "dojo_hitscan",
+                "on_death": "signal.dojo.dummy_dead"
+              }
+            ]
           }
         ]
       }

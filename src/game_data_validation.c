@@ -2821,6 +2821,7 @@ static bool is_supported_component_type(const char *type)
         "particles.emitter",  "pickup.respawn",      "property.decay",
         "render.cube",        "render.model",        "render.sphere",
         "render.sprite",      "status_effect.timer", "weapon.projectile",
+        "weapon.state",
     };
 
     if (type == NULL)
@@ -2949,6 +2950,28 @@ static bool validate_status_effect_timer_component(validation_context *ctx, yyjs
     return validate_optional_signal_field(ctx, component, path, names, "on_expire");
 }
 
+static bool validate_weapon_state_component(validation_context *ctx, yyjson_val *component, const char *path)
+{
+    const char *string_fields[] = {"clip_property",         "clip_size_property",      "reserve_property",
+                                   "reload_timer_property", "reload_pending_property", "cooldown_property"};
+    for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
+    {
+        if (!validate_non_empty_string_field(ctx, component, path, "weapon.state", string_fields[i]))
+            return false;
+    }
+    yyjson_val *clip_size = obj_get(component, "clip_size");
+    yyjson_val *cooldown_rate = obj_get(component, "cooldown_rate");
+    if ((clip_size != NULL && (!yyjson_is_num(clip_size) || yyjson_get_num(clip_size) < 0.0)) ||
+        (cooldown_rate != NULL && (!yyjson_is_num(cooldown_rate) || yyjson_get_num(cooldown_rate) < 0.0)))
+    {
+        return validation_error(ctx, path, "weapon.state numeric values must be non-negative");
+    }
+    yyjson_val *consume_reserve = obj_get(component, "consume_reserve");
+    if (consume_reserve != NULL && !yyjson_is_bool(consume_reserve))
+        return validation_error(ctx, path, "weapon.state consume_reserve must be a boolean");
+    return true;
+}
+
 static bool validate_projectile_fire_shape(validation_context *ctx, yyjson_val *value, const char *path,
                                            validation_names *names, bool require_target)
 {
@@ -3002,6 +3025,24 @@ static bool validate_projectile_fire_shape(validation_context *ctx, yyjson_val *
         (!yyjson_is_str(cooldown_property) || yyjson_get_str(cooldown_property)[0] == '\0'))
     {
         return validation_error(ctx, path, "projectile cooldown_property must be a non-empty string");
+    }
+    const char *weapon_string_fields[] = {"clip_property", "ammo_resource", "ammo_property", "reload_timer_property",
+                                          "direction_from_property"};
+    for (size_t i = 0; i < SDL_arraysize(weapon_string_fields); ++i)
+    {
+        yyjson_val *field = obj_get(value, weapon_string_fields[i]);
+        if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
+            return validation_error(ctx, path, "projectile weapon fields must be non-empty strings");
+    }
+    yyjson_val *ammo_per_shot = obj_get(value, "ammo_per_shot");
+    if (ammo_per_shot != NULL && (!yyjson_is_num(ammo_per_shot) || yyjson_get_num(ammo_per_shot) < 0.0))
+        return validation_error(ctx, path, "projectile ammo_per_shot must be non-negative");
+    const char *signal_keys[] = {"on_fire", "on_empty", "on_cooldown", "on_reloading"};
+    for (size_t i = 0; i < SDL_arraysize(signal_keys); ++i)
+    {
+        const char *signal = json_string(value, signal_keys[i]);
+        if (signal != NULL && !require_ref(ctx, &names->signals, "signal", signal, path))
+            return false;
     }
     yyjson_val *properties = obj_get(value, "properties");
     if (properties != NULL && !yyjson_is_obj(properties))
@@ -4713,6 +4754,11 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 if (!validate_status_effect_timer_component(ctx, component, path, names))
                     return false;
             }
+            else if (SDL_strcmp(type, "weapon.state") == 0)
+            {
+                if (!validate_weapon_state_component(ctx, component, path))
+                    return false;
+            }
             else if (SDL_strcmp(type, "weapon.projectile") == 0)
             {
                 if (!require_ref(ctx, &names->actions, "input action", json_string(component, "action"), path) ||
@@ -5071,6 +5117,11 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
             else if (SDL_strcmp(type, "status_effect.timer") == 0)
             {
                 if (!validate_status_effect_timer_component(ctx, component, component_path, names))
+                    return false;
+            }
+            else if (SDL_strcmp(type, "weapon.state") == 0)
+            {
+                if (!validate_weapon_state_component(ctx, component, component_path))
                     return false;
             }
             else if (SDL_strcmp(type, "weapon.projectile") == 0)
@@ -5973,6 +6024,101 @@ static bool validate_status_effect_apply_action(validation_context *ctx, yyjson_
     return validate_optional_signal_field(ctx, action, json_path, names, "on_apply");
 }
 
+static bool validate_weapon_common_fire_fields(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                               validation_names *names, const char *type)
+{
+    const char *string_fields[] = {"cooldown_property", "reload_timer_property", "clip_property",
+                                   "ammo_resource",     "ammo_property",         "direction_from_property"};
+    for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
+    {
+        if (!validate_non_empty_string_field(ctx, action, json_path, type, string_fields[i]))
+            return false;
+    }
+    yyjson_val *cooldown = obj_get(action, "cooldown");
+    yyjson_val *ammo_per_shot = obj_get(action, "ammo_per_shot");
+    if ((cooldown != NULL && (!yyjson_is_num(cooldown) || yyjson_get_num(cooldown) < 0.0)) ||
+        (ammo_per_shot != NULL && (!yyjson_is_num(ammo_per_shot) || yyjson_get_num(ammo_per_shot) < 0.0)))
+    {
+        return validation_error(ctx, json_path, "%s cooldown and ammo_per_shot must be non-negative", type);
+    }
+    const char *signal_keys[] = {"on_fire", "on_empty", "on_cooldown", "on_reloading"};
+    for (size_t i = 0; i < SDL_arraysize(signal_keys); ++i)
+    {
+        if (!validate_optional_signal_field(ctx, action, json_path, names, signal_keys[i]))
+            return false;
+    }
+    return true;
+}
+
+static bool validate_weapon_reload_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                          validation_names *names)
+{
+    if (!validate_actor_target_action(ctx, action, json_path, names, "weapon.reload", "target", "target_from_payload"))
+        return false;
+    const char *string_fields[] = {"clip_property", "clip_size_property", "reserve_property", "reload_timer_property",
+                                   "reload_pending_property"};
+    for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
+    {
+        if (!validate_non_empty_string_field(ctx, action, json_path, "weapon.reload", string_fields[i]))
+            return false;
+    }
+    yyjson_val *clip_size = obj_get(action, "clip_size");
+    yyjson_val *reload_seconds = obj_get(action, "reload_seconds");
+    if ((clip_size != NULL && (!yyjson_is_num(clip_size) || yyjson_get_num(clip_size) < 0.0)) ||
+        (reload_seconds != NULL && (!yyjson_is_num(reload_seconds) || yyjson_get_num(reload_seconds) < 0.0)))
+    {
+        return validation_error(ctx, json_path, "weapon.reload numeric values must be non-negative");
+    }
+    yyjson_val *consume_reserve = obj_get(action, "consume_reserve");
+    if (consume_reserve != NULL && !yyjson_is_bool(consume_reserve))
+        return validation_error(ctx, json_path, "weapon.reload consume_reserve must be a boolean");
+    return validate_optional_signal_field(ctx, action, json_path, names, "on_reload") &&
+           validate_optional_signal_field(ctx, action, json_path, names, "on_failure");
+}
+
+static bool validate_weapon_hitscan_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                           validation_names *names)
+{
+    if (!validate_actor_target_action(ctx, action, json_path, names, "weapon.hitscan", "target",
+                                      "target_from_payload") ||
+        !validate_weapon_common_fire_fields(ctx, action, json_path, names, "weapon.hitscan"))
+    {
+        return false;
+    }
+    const char *sector_level = json_string(action, "sector_level");
+    if (sector_level != NULL && !require_ref(ctx, &names->sector_levels, "sector level", sector_level, json_path))
+        return false;
+    if (!validate_non_empty_string_field(ctx, action, json_path, "weapon.hitscan", "target_tag") ||
+        !validate_non_empty_string_field(ctx, action, json_path, "weapon.hitscan", "hit_tag"))
+    {
+        return false;
+    }
+    yyjson_val *direction = obj_get(action, "direction");
+    yyjson_val *offset = obj_get(action, "offset");
+    if (direction != NULL && !is_vec_array(direction, 3))
+        return validation_error(ctx, json_path, "weapon.hitscan direction must be a vec3");
+    if (offset != NULL && !is_vec_array(offset, 3))
+        return validation_error(ctx, json_path, "weapon.hitscan offset must be a vec3");
+    yyjson_val *range = obj_get(action, "range");
+    yyjson_val *hit_radius = obj_get(action, "hit_radius");
+    if ((range != NULL && (!yyjson_is_num(range) || yyjson_get_num(range) < 0.0)) ||
+        (hit_radius != NULL && (!yyjson_is_num(hit_radius) || yyjson_get_num(hit_radius) < 0.0)))
+    {
+        return validation_error(ctx, json_path, "weapon.hitscan range and hit_radius must be non-negative");
+    }
+    yyjson_val *exclude_source = obj_get(action, "exclude_source");
+    yyjson_val *run_actions_on_miss = obj_get(action, "run_actions_on_miss");
+    if ((exclude_source != NULL && !yyjson_is_bool(exclude_source)) ||
+        (run_actions_on_miss != NULL && !yyjson_is_bool(run_actions_on_miss)))
+    {
+        return validation_error(ctx, json_path, "weapon.hitscan boolean fields must be booleans");
+    }
+    yyjson_val *actions = obj_get(action, "actions");
+    yyjson_val *miss_actions = obj_get(action, "miss_actions");
+    return (actions == NULL || validate_action_array(ctx, actions, json_path, names)) &&
+           (miss_actions == NULL || validate_action_array(ctx, miss_actions, json_path, names));
+}
+
 static bool validate_one_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                 validation_names *names)
 {
@@ -6144,6 +6290,10 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         return validate_resource_station_use_action(ctx, action, json_path, names);
     if (SDL_strcmp(type, "status_effect.apply") == 0)
         return validate_status_effect_apply_action(ctx, action, json_path, names);
+    if (SDL_strcmp(type, "weapon.reload") == 0)
+        return validate_weapon_reload_action(ctx, action, json_path, names);
+    if (SDL_strcmp(type, "weapon.hitscan") == 0)
+        return validate_weapon_hitscan_action(ctx, action, json_path, names);
     if (SDL_strcmp(type, "sector_door.open") == 0 || SDL_strcmp(type, "sector_door.close") == 0 ||
         SDL_strcmp(type, "sector_door.toggle") == 0)
     {

@@ -7580,6 +7580,342 @@ TEST(GameDataRuntime, WeaponProjectileComponentFiresFromOwningActor)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, WeaponStateReloadsAndProjectileFireConsumesClips)
+{
+    const std::filesystem::path dir = unique_test_dir("weapon_state_projectile");
+    write_text(dir / "weapon_state.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Weapon State", "id": "test.weapon_state", "version": "0.1.0" },
+  "world": { "name": "world.weapon_state", "kind": "fixed_screen" },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [1.0, 1.0, 1.0] },
+      "properties": {
+        "camera_forward": { "type": "vec3", "value": [0.0, 0.0, -1.0] },
+        "clip": { "type": "int", "value": 1 },
+        "clip_size": { "type": "int", "value": 2 },
+        "ammo_reserve": { "type": "int", "value": 3 },
+        "reload_timer": { "type": "float", "value": 0.0 },
+        "reload_pending": { "type": "bool", "value": false },
+        "fire_timer": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        {
+          "type": "weapon.state",
+          "clip_property": "clip",
+          "clip_size_property": "clip_size",
+          "reserve_property": "ammo_reserve",
+          "reload_timer_property": "reload_timer",
+          "reload_pending_property": "reload_pending",
+          "cooldown_property": "fire_timer",
+          "cooldown_rate": 10.0
+        }
+      ]
+    }
+  ],
+  "actor_archetypes": [
+    {
+      "name": "archetype.shot",
+      "properties": {
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.0] }
+      }
+    }
+  ],
+  "actor_pools": [
+    { "name": "pool.shots", "archetype": "archetype.shot", "capacity": 2, "scene": "scene.play" }
+  ],
+  "signals": ["signal.fire", "signal.reload"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.fire",
+        "actions": [
+          {
+            "type": "projectile.fire",
+            "target": "entity.player",
+            "pool": "pool.shots",
+            "velocity_from_property": "camera_forward",
+            "speed": 10.0,
+            "clip_property": "clip",
+            "reload_timer_property": "reload_timer",
+            "cooldown": 0.1
+          }
+        ]
+      },
+      {
+        "signal": "signal.reload",
+        "actions": [
+          {
+            "type": "weapon.reload",
+            "target": "entity.player",
+            "clip_property": "clip",
+            "clip_size_property": "clip_size",
+            "reserve_property": "ammo_reserve",
+            "reload_timer_property": "reload_timer",
+            "reload_pending_property": "reload_pending",
+            "reload_seconds": 0.2
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(
+        dir / "scenes" / "play.scene.json",
+        R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "updates_game": true, "entities": ["entity.player"] })json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "weapon_state.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int fire = sdl3d_game_data_find_signal(runtime, "signal.fire");
+    const int reload = sdl3d_game_data_find_signal(runtime, "signal.reload");
+    ASSERT_GE(fire, 0);
+    ASSERT_GE(reload, 0);
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    sdl3d_registered_actor *shot0 = sdl3d_game_data_find_actor(runtime, "pool.shots.0");
+    sdl3d_registered_actor *shot1 = sdl3d_game_data_find_actor(runtime, "pool.shots.1");
+    ASSERT_NE(player, nullptr);
+    ASSERT_NE(shot0, nullptr);
+    ASSERT_NE(shot1, nullptr);
+
+    sdl3d_signal_emit(bus, fire, nullptr);
+    EXPECT_TRUE(shot0->active);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "clip", -1), 0);
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "fire_timer", 0.0f), 0.1f, 0.0001f);
+
+    sdl3d_signal_emit(bus, fire, nullptr);
+    EXPECT_FALSE(shot1->active);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.1f));
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "fire_timer", 1.0f), 0.0f, 0.0001f);
+    sdl3d_signal_emit(bus, fire, nullptr);
+    EXPECT_FALSE(shot1->active);
+
+    sdl3d_signal_emit(bus, reload, nullptr);
+    EXPECT_TRUE(sdl3d_properties_get_bool(player->props, "reload_pending", false));
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "reload_timer", 0.0f), 0.2f, 0.0001f);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.1f));
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "clip", -1), 0);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.1f));
+    EXPECT_FALSE(sdl3d_properties_get_bool(player->props, "reload_pending", true));
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "clip", -1), 2);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "ammo_reserve", -1), 1);
+
+    sdl3d_signal_emit(bus, fire, nullptr);
+    EXPECT_TRUE(shot1->active);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "clip", -1), 1);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, WeaponHitscanTracesSectorAndRunsImpactActions)
+{
+    const std::filesystem::path dir = unique_test_dir("weapon_hitscan");
+    write_text(dir / "weapon_hitscan.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Weapon Hitscan", "id": "test.weapon_hitscan", "version": "0.1.0" },
+  "world": { "name": "world.weapon_hitscan", "kind": "sector" },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [2.0, 1.5, 8.0] },
+      "properties": {
+        "camera_forward": { "type": "vec3", "value": [0.0, 0.0, -1.0] },
+        "energy": { "type": "int", "value": 1 },
+        "fire_timer": { "type": "float", "value": 0.0 }
+      }
+    },
+    {
+      "name": "entity.enemy",
+      "active": true,
+      "tags": ["enemy"],
+      "transform": { "position": [2.0, 1.5, 4.0] },
+      "properties": {
+        "hit_radius": { "type": "float", "value": 0.5 },
+        "health": { "type": "float", "value": 50.0 },
+        "max_health": { "type": "float", "value": 50.0 },
+        "alive": { "type": "bool", "value": true }
+      },
+      "components": [{ "type": "combat.health" }]
+    }
+  ],
+  "signals": ["signal.fire"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.fire",
+        "actions": [
+          {
+            "type": "weapon.hitscan",
+            "target": "entity.player",
+            "sector_level": "sector.test",
+            "target_tag": "enemy",
+            "range": 20.0,
+            "ammo_resource": "energy",
+            "cooldown": 0.0,
+            "actions": [
+              {
+                "type": "combat.damage",
+                "target_from_payload": "actor_name",
+                "source_from_payload": "source_actor_name",
+                "amount": 15.0,
+                "damage_type": "hitscan"
+              },
+              {
+                "type": "property.set",
+                "target": "entity.player",
+                "key": "last_hit_distance",
+                "value_from_payload": "hit_distance"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "sector_levels": [
+    {
+      "name": "sector.test",
+      "materials": [{ "name": "wall" }],
+      "sectors": [
+        {
+          "name": "room",
+          "points": [[0, 0], [4, 0], [4, 10], [0, 10]],
+          "floor_y": 0.0,
+          "ceil_y": 4.0,
+          "wall_material": "wall"
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "entities": ["entity.player", "entity.enemy"],
+  "world": { "sector_levels": [{ "level": "sector.test", "variant": "unlit" }] }
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "weapon_hitscan.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int fire = sdl3d_game_data_find_signal(runtime, "signal.fire");
+    ASSERT_GE(fire, 0);
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    sdl3d_registered_actor *enemy = sdl3d_game_data_find_actor(runtime, "entity.enemy");
+    ASSERT_NE(player, nullptr);
+    ASSERT_NE(enemy, nullptr);
+
+    sdl3d_signal_emit(bus, fire, nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "energy", -1), 0);
+    EXPECT_NEAR(sdl3d_properties_get_float(enemy->props, "health", 0.0f), 35.0f, 0.001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "last_hit_distance", 0.0f), 3.5f, 0.251f);
+
+    sdl3d_signal_emit(bus, fire, nullptr);
+    EXPECT_NEAR(sdl3d_properties_get_float(enemy->props, "health", 0.0f), 35.0f, 0.001f);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidWeaponPrimitives)
+{
+    const std::filesystem::path dir = unique_test_dir("invalid_weapon_primitives");
+    write_text(dir / "invalid_weapon.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Weapon", "id": "test.invalid_weapon", "version": "0.1.0" },
+  "world": { "name": "world.invalid_weapon", "kind": "fixed_screen" },
+  "entities": [
+    {
+      "name": "entity.player",
+      "components": [
+        { "type": "weapon.state", "clip_size": -1.0 }
+      ]
+    }
+  ],
+  "signals": ["signal.fire"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.fire",
+        "actions": [
+          { "type": "weapon.hitscan", "target": "entity.player", "range": -1.0 }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.player"] })json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_weapon.game.json").string().c_str(), session, &runtime,
+                                           error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("weapon.state numeric values must be non-negative"), std::string::npos) << error;
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+
+    write_text(dir / "invalid_hitscan.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Hitscan", "id": "test.invalid_hitscan", "version": "0.1.0" },
+  "world": { "name": "world.invalid_hitscan", "kind": "fixed_screen" },
+  "entities": [{ "name": "entity.player" }],
+  "signals": ["signal.fire"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.fire",
+        "actions": [
+          { "type": "weapon.hitscan", "target": "entity.player", "range": -1.0 }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    runtime = nullptr;
+    SDL_zeroa(error);
+    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_hitscan.game.json").string().c_str(), session, &runtime,
+                                           error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("weapon.hitscan range and hit_radius must be non-negative"), std::string::npos)
+        << error;
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, ActivePooledActorsRenderAndEmitParticles)
 {
     const std::filesystem::path dir = unique_test_dir("actor_pool_render");

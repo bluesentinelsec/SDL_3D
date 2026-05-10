@@ -956,6 +956,79 @@ not accept `target` or `target_from_payload`. This is the preferred shape for
 FPS and shooter player weapons because it keeps input-to-projectile behavior
 declarative.
 
+Projectiles can also participate in the generic weapon state convention. Add
+`clip_property` to consume from a magazine, or `ammo_resource` / `ammo_property`
+to consume directly from a numeric resource. `ammo_per_shot` defaults to `1`.
+`reload_timer_property` prevents firing while a reload is pending.
+`cooldown_property` defaults to `fire_timer`, preserving the older projectile
+cooldown behavior. Optional `on_fire`, `on_empty`, `on_cooldown`, and
+`on_reloading` signals receive `actor_name`, `source_actor_name`,
+`weapon_status`, and `ammo_per_shot`.
+
+`weapon.state` completes data-authored reloads and can decay a weapon cooldown:
+
+```json
+{
+  "type": "weapon.state",
+  "clip_property": "clip",
+  "clip_size_property": "clip_size",
+  "reserve_property": "ammo_reserve",
+  "reload_timer_property": "reload_timer",
+  "reload_pending_property": "reload_pending",
+  "cooldown_property": "fire_timer",
+  "cooldown_rate": 1.0
+}
+```
+
+Start a reload with `weapon.reload`:
+
+```json
+{
+  "type": "weapon.reload",
+  "target": "entity.player",
+  "clip_property": "clip",
+  "clip_size_property": "clip_size",
+  "reserve_property": "ammo_reserve",
+  "reload_seconds": 0.8
+}
+```
+
+When the timer reaches zero, `weapon.state` fills the clip from the reserve and
+clears `reload_pending`. If `consume_reserve` is `false`, the clip fills
+without reducing reserve ammo, which is useful for energy weapons or prototypes.
+
+`weapon.hitscan` traces instantly from an actor. It can trace against sector
+geometry through `sector_level`, select the nearest active actor with
+`target_tag`, consume the same clip/ammo fields as projectiles, and run authored
+actions with a payload:
+
+```json
+{
+  "type": "weapon.hitscan",
+  "target": "entity.player",
+  "sector_level": "sector.e1m1",
+  "direction_from_property": "camera_forward",
+  "target_tag": "enemy",
+  "range": 64.0,
+  "clip_property": "clip",
+  "actions": [
+    {
+      "type": "combat.damage",
+      "target_from_payload": "actor_name",
+      "source_from_payload": "source_actor_name",
+      "amount": 15.0,
+      "damage_type": "hitscan"
+    }
+  ]
+}
+```
+
+Hitscan payloads include `source_actor_name`, `actor_name` / `hit_actor_name`,
+`origin`, `direction`, `hit_position`, `hit_distance`, `hit_actor`, and
+`hit_wall`. Use these fields for damage, particles, lights, sounds, decals, or
+debug UI. Actor hit tests use a target actor's `hit_radius` or `radius`
+property, falling back to the action's `hit_radius` value.
+
 ## Sector Level Fragments
 
 Large sector worlds can be split by authoring concern without duplicating a
