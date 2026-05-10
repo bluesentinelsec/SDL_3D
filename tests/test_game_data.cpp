@@ -131,6 +131,7 @@ struct SectorLevelInstanceCapture
     const slayer3d_level *level = nullptr;
     slayer3d_vec3 position{};
     bool portal_culling = true;
+    bool sector_lighting_enabled = true;
 };
 
 struct SectorDoorRenderCapture
@@ -1520,6 +1521,7 @@ bool capture_sector_level_instance(void *userdata, const slayer3d_game_data_sect
     capture->level = instance->level;
     capture->position = instance->position;
     capture->portal_culling = instance->portal_culling;
+    capture->sector_lighting_enabled = instance->sector_lighting_enabled;
     return true;
 }
 
@@ -7236,10 +7238,22 @@ TEST(GameDataRuntime, LightingDojoLoadsSectorLocalLightingShowcase)
 
     ASSERT_GE(slayer3d_game_data_world_light_count(runtime), 5);
 
+    SectorLevelInstanceCapture sector_capture{};
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_sector_level_instance(runtime, capture_sector_level_instance, &sector_capture));
+    ASSERT_EQ(sector_capture.count, 1);
+    EXPECT_TRUE(sector_capture.sector_lighting_enabled);
+    const slayer3d_level *sector_lit_level = sector_capture.level;
+
+    slayer3d_game_data_render_settings render_settings{};
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render_settings));
+    EXPECT_TRUE(render_settings.bloom_enabled);
+
     struct LightingDojoCapture
     {
         bool saw_green_sample = false;
         bool saw_lab_robot = false;
+        bool green_sample_lighting_enabled = false;
         slayer3d_color green_sample{};
     } capture;
     auto capture_lighting_dojo = [](void *userdata, const slayer3d_game_data_render_primitive *primitive) -> bool {
@@ -7249,6 +7263,7 @@ TEST(GameDataRuntime, LightingDojoLoadsSectorLocalLightingShowcase)
         {
             data->saw_green_sample = true;
             data->green_sample = primitive->color;
+            data->green_sample_lighting_enabled = primitive->lighting_enabled;
         }
         if (name == "entity.mock.lab_robot" && primitive->type == SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
             data->saw_lab_robot = true;
@@ -7257,8 +7272,37 @@ TEST(GameDataRuntime, LightingDojoLoadsSectorLocalLightingShowcase)
     ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_lighting_dojo, &capture));
     EXPECT_TRUE(capture.saw_green_sample);
     EXPECT_TRUE(capture.saw_lab_robot);
+    EXPECT_TRUE(capture.green_sample_lighting_enabled);
     EXPECT_GT(capture.green_sample.g, capture.green_sample.r);
     EXPECT_GT(capture.green_sample.g, capture.green_sample.b);
+
+    auto emit_signal = [session, runtime](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), signal, nullptr);
+    };
+
+    emit_signal("signal.lighting.dynamic.toggle");
+    EXPECT_EQ(slayer3d_game_data_world_light_count(runtime), 0);
+
+    emit_signal("signal.lighting.bloom.toggle");
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render_settings));
+    EXPECT_FALSE(render_settings.bloom_enabled);
+
+    emit_signal("signal.lighting.actor.toggle");
+    LightingDojoCapture actor_toggle_capture{};
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_lighting_dojo, &actor_toggle_capture));
+    EXPECT_TRUE(actor_toggle_capture.saw_green_sample);
+    EXPECT_FALSE(actor_toggle_capture.green_sample_lighting_enabled);
+    EXPECT_GT(actor_toggle_capture.green_sample.b, actor_toggle_capture.green_sample.g);
+
+    emit_signal("signal.lighting.sector.toggle");
+    sector_capture = {};
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_sector_level_instance(runtime, capture_sector_level_instance, &sector_capture));
+    ASSERT_EQ(sector_capture.count, 1);
+    EXPECT_FALSE(sector_capture.sector_lighting_enabled);
+    EXPECT_NE(sector_capture.level, sector_lit_level);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

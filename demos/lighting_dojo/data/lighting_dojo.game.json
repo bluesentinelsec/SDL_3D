@@ -7,6 +7,7 @@
   },
   "imports": [
     { "path": "fragments/input/fps_controls.json", "sections": ["input"] },
+    { "path": "fragments/logic/lighting_toggles.json", "sections": ["signals", "logic"] },
     { "path": "fragments/world/sector_lighting_showcase.json", "sections": ["sector_level_fragments"] },
     { "path": "fragments/actors/player.json", "sections": ["entities"] },
     { "path": "fragments/actors/showcase_props.json", "sections": ["entities"] }
@@ -48,6 +49,7 @@
   "render": {
     "lighting": true,
     "bloom": true,
+    "bloom_key": "lighting.dojo.bloom",
     "clear_color": [0.015, 0.018, 0.024],
     "tonemap": "aces"
   },

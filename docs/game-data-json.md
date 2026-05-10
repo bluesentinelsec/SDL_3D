@@ -88,6 +88,7 @@ The root `render` object configures frame-level presentation defaults:
     "lighting": true,
     "lighting_key": "render_lighting_enabled",
     "bloom": true,
+    "bloom_key": "render_bloom_enabled",
     "ssao": true,
     "profile": "modern",
     "profile_key": "render_profile"
@@ -612,6 +613,8 @@ Scenes render sector levels by declaring instances under `world.sector_levels`:
         "variant": "lightmapped",
         "variant_key": "render_sector_variant",
         "position": [0.0, 0.0, 0.0],
+        "sector_lighting": true,
+        "sector_lighting_key": "render_sector_lighting",
         "portal_culling": true,
         "portal_culling_key": "render_portal_culling"
       }
@@ -628,11 +631,15 @@ world primitives. Use `asset://` image paths for pack-file and embedded builds.
 `level` references a top-level sector level. `variant` defaults to
 `lightmapped` and may be `lightmapped`, `vertex_baked`, or `unlit`.
 `position` defaults to the origin and translates the level as a whole.
-`portal_culling` defaults to `true`; when enabled, generic presentation
-computes visibility from the active camera before drawing the level.
-`variant_key` and `portal_culling_key` are optional scene-state keys. When
-present, they override `variant` and `portal_culling` at runtime. This supports
-data-authored debug/profile controls without custom host-side input code.
+`sector_lighting` defaults to `true`; when disabled, the instance uses matching
+runtime variants built without sector-local lighting and actor primitives in the
+instance no longer receive sector-local color modulation. `portal_culling`
+defaults to `true`; when enabled, generic presentation computes visibility from
+the active camera before drawing the level. `variant_key`,
+`sector_lighting_key`, and `portal_culling_key` are optional scene-state keys.
+When present, they override `variant`, `sector_lighting`, and `portal_culling`
+at runtime. This supports data-authored debug/profile controls without custom
+host-side input code.
 
 Renderer, controller, and editor phases should consume runtime descriptors
 instead of parsing JSON directly. `world.kind` remains a high-level statement
@@ -1450,7 +1457,10 @@ Reusable components include:
 - `motion.oscillate` and `motion.spin`: simple authored movement effects.
 - `light.point`, `light.spot`, and `light.directional`: actor-attached light
   components. They work on static actors and active pooled actors. Component
-  lights inherit the actor transform and may use an `offset`.
+  lights inherit the actor transform and may use an `offset`. `enabled` defaults
+  to `true`; `enabled_key` reads a scene-state boolean at draw time so debug
+  menus and data-authored profile controls can disable a light group without
+  removing actors.
 - `particles.emitter`: actor-attached particle emitter. On pooled actors, the
   emitter is active only while the actor is active.
 - `render.cube`: renders a cube using authored `size`, or a vec3 actor property
@@ -1466,8 +1476,11 @@ Reusable components include:
   `tube_segment`. `billboard_plane` is a flat 3D placeholder plane; use
   `render.sprite` when you need an actual texture-backed camera-facing
   billboard. These descriptors use the same transform, `color`, `texture`,
-  `lighting`, and `emissive` fields as other render primitives where
-  applicable, and add `draw_mode`: `solid` (default), `wire`, or `solid_wire`.
+  `lighting`, `lighting_key`, and `emissive` fields as other render primitives
+  where applicable, and add `draw_mode`: `solid` (default), `wire`, or
+  `solid_wire`. `lighting_key` reads a scene-state boolean and is useful for
+  isolating whether actor primitives, sector-local lighting, or dynamic lights
+  are driving a scene.
   Dimension fields include `size`, `radius`, `height`, `radius_top`,
   `radius_bottom`, `major_radius`, `minor_radius`, `bevel_radius`, `arc_angle`,
   `segments`/`slices`, `rings`, and `tube_segments`. This is the stable

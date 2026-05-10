@@ -339,6 +339,8 @@ extern "C"
         slayer3d_vec3 position;
         /** @brief Whether renderers should compute portal visibility for this instance. */
         bool portal_culling;
+        /** @brief Whether authored sector-local lighting is applied to this instance. */
+        bool sector_lighting_enabled;
     } slayer3d_game_data_sector_level_instance;
 
     /**

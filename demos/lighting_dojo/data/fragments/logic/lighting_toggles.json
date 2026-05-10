@@ -1,0 +1,59 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "signals": [
+    "signal.lighting.sector.toggle",
+    "signal.lighting.dynamic.toggle",
+    "signal.lighting.actor.toggle",
+    "signal.lighting.bloom.toggle"
+  ],
+  "logic": {
+    "sensors": [
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.lighting.sector.toggle",
+        "on_pressed": "signal.lighting.sector.toggle"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.lighting.dynamic.toggle",
+        "on_pressed": "signal.lighting.dynamic.toggle"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.lighting.actor.toggle",
+        "on_pressed": "signal.lighting.actor.toggle"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.lighting.bloom.toggle",
+        "on_pressed": "signal.lighting.bloom.toggle"
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.lighting.sector.toggle",
+        "actions": [
+          { "type": "scene_state.toggle", "key": "lighting.dojo.sector_lighting", "default": true }
+        ]
+      },
+      {
+        "signal": "signal.lighting.dynamic.toggle",
+        "actions": [
+          { "type": "scene_state.toggle", "key": "lighting.dojo.dynamic_lights", "default": true }
+        ]
+      },
+      {
+        "signal": "signal.lighting.actor.toggle",
+        "actions": [
+          { "type": "scene_state.toggle", "key": "lighting.dojo.actor_primitives", "default": true }
+        ]
+      },
+      {
+        "signal": "signal.lighting.bloom.toggle",
+        "actions": [
+          { "type": "scene_state.toggle", "key": "lighting.dojo.bloom", "default": true }
+        ]
+      }
+    ]
+  }
+}

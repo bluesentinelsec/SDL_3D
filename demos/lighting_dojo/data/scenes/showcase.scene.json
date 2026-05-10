@@ -26,6 +26,10 @@
       "action.move.left",
       "action.move.right",
       "action.jump",
+      "action.lighting.sector.toggle",
+      "action.lighting.dynamic.toggle",
+      "action.lighting.actor.toggle",
+      "action.lighting.bloom.toggle",
       "action.pause"
     ]
   },
@@ -35,6 +39,7 @@
         "level": "sector.lighting_dojo.showcase",
         "variant": "lightmapped",
         "position": [0.0, 0.0, 0.0],
+        "sector_lighting_key": "lighting.dojo.sector_lighting",
         "portal_culling": true
       }
     ]
@@ -53,7 +58,7 @@
       },
       {
         "name": "ui.lighting_dojo.help",
-        "text": "WASD move  Mouse look  Space jump  P pause  Esc quit",
+        "text": "WASD move  Mouse look  Space jump  1 sector  2 point lights  3 actor lighting  4 bloom",
         "font": "font.lighting_dojo.hud",
         "x": 0.02,
         "y": 0.075,
@@ -70,6 +75,50 @@
         "normalized": true,
         "color": [185, 200, 220, 200],
         "scale": 0.52
+      },
+      {
+        "name": "ui.lighting_dojo.toggle_sector",
+        "font": "font.lighting_dojo.hud",
+        "format": "1 Sector %d",
+        "bindings": [{ "type": "scene_state", "key": "lighting.dojo.sector_lighting", "default": true }],
+        "x": 0.02,
+        "y": 0.155,
+        "normalized": true,
+        "color": [210, 225, 240, 210],
+        "scale": 0.48
+      },
+      {
+        "name": "ui.lighting_dojo.toggle_dynamic",
+        "font": "font.lighting_dojo.hud",
+        "format": "2 Point %d",
+        "bindings": [{ "type": "scene_state", "key": "lighting.dojo.dynamic_lights", "default": true }],
+        "x": 0.125,
+        "y": 0.155,
+        "normalized": true,
+        "color": [210, 225, 240, 210],
+        "scale": 0.48
+      },
+      {
+        "name": "ui.lighting_dojo.toggle_actor",
+        "font": "font.lighting_dojo.hud",
+        "format": "3 Actors %d",
+        "bindings": [{ "type": "scene_state", "key": "lighting.dojo.actor_primitives", "default": true }],
+        "x": 0.23,
+        "y": 0.155,
+        "normalized": true,
+        "color": [210, 225, 240, 210],
+        "scale": 0.48
+      },
+      {
+        "name": "ui.lighting_dojo.toggle_bloom",
+        "font": "font.lighting_dojo.hud",
+        "format": "4 Bloom %d",
+        "bindings": [{ "type": "scene_state", "key": "lighting.dojo.bloom", "default": true }],
+        "x": 0.335,
+        "y": 0.155,
+        "normalized": true,
+        "color": [210, 225, 240, 210],
+        "scale": 0.48
       },
       {
         "name": "ui.lighting_dojo.fps",
