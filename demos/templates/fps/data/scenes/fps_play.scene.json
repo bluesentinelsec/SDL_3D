@@ -1,0 +1,77 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.fps.play",
+  "camera": "camera.fps.player",
+  "updates_game": true,
+  "renders_world": true,
+  "entities": [
+    "entity.player",
+    "entity.fps.health_pickup",
+    "entity.fps.resource_station"
+  ],
+  "input": {
+    "mouse_capture": "unpaused",
+    "actions": [
+      "action.move.forward",
+      "action.move.back",
+      "action.move.left",
+      "action.move.right",
+      "action.jump",
+      "action.interact",
+      "action.fire",
+      "action.pause",
+      "action.menu.up",
+      "action.menu.down",
+      "action.menu.select"
+    ]
+  },
+  "world": {
+    "sector_levels": [
+      {
+        "level": "sector.fps.template_room",
+        "variant": "lightmapped",
+        "position": [0.0, 0.0, 0.0],
+        "portal_culling": true
+      }
+    ]
+  },
+  "menus": [
+    {
+      "name": "menu.fps.pause",
+      "active_if": { "type": "app.paused", "equals": true },
+      "up_action": "action.menu.up",
+      "down_action": "action.menu.down",
+      "select_action": "action.menu.select",
+      "selected": 0,
+      "items": [
+        { "label": "Resume", "pause": "resume" },
+        { "label": "Quit", "quit": true }
+      ]
+    }
+  ],
+  "ui": {
+    "menus": [
+      {
+        "name": "ui.fps.pause.menu",
+        "menu": "menu.fps.pause",
+        "visible_if": { "type": "app.paused", "equals": true },
+        "font": "font.fps.hud",
+        "x": 0.5,
+        "y": 0.5,
+        "gap": 0.07,
+        "normalized": true,
+        "align": "center",
+        "color": [225, 236, 255, 245],
+        "selected_color": [255, 245, 208, 255],
+        "selected_pulse_alpha": true,
+        "cursor": {
+          "text": ">",
+          "offset_x": -0.08,
+          "align": "center",
+          "color": [255, 222, 140, 255],
+          "pulse_alpha": true
+        }
+      }
+    ]
+  }
+}

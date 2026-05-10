@@ -125,6 +125,25 @@ Demo targets may compile the same runner source with embedded assets and a
 default root data path. That wrapper should only supply build-time defaults; it
 should not contain game rules.
 
+## FPS Starter Template
+
+`demos/templates/fps` is a project-agnostic starter for sector/FPS games. It is
+designed to be copied into a new project rather than imported as a hidden engine
+dependency. The template loads through the generic runner:
+
+```sh
+build/debug/sdl3d_runner \
+  --root demos/templates/fps/data \
+  --data asset://fps_template.game.json
+```
+
+The starter proves the data-only shape for common FPS primitives: WASD/mouse
+input, an FPS sector controller, a 90-degree FOV camera, a sector room,
+navigation graph, reticle/FPS/resource HUD text, pause menu, projectile weapon,
+projectile pool, pickup archetype, resource-station archetype, and editor
+palette metadata. It uses colored geometry and built-in fonts so it remains
+lightweight and game-agnostic.
+
 ## Data-Only Parity Checklist
 
 Before treating a game as data-only, validate the runner-backed game path:

@@ -375,6 +375,11 @@ std::filesystem::path fps_mechanics_dojo_data_path()
     return demo_data_path("fps_mechanics_dojo", "fps_mechanics_dojo.game.json");
 }
 
+std::filesystem::path fps_template_data_path()
+{
+    return demo_data_path("templates/fps", "fps_template.game.json");
+}
+
 std::string read_fixture_file(const char *filename)
 {
     std::ifstream in(fixture_path(filename), std::ios::binary);
@@ -9708,6 +9713,106 @@ return nav
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
     remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, FpsTemplateLoadsDataOnlyStarter)
+{
+    const std::filesystem::path template_path = fps_template_data_path();
+    ASSERT_TRUE(std::filesystem::exists(template_path)) << template_path;
+
+    char validate_error[512]{};
+    ASSERT_TRUE(
+        sdl3d_game_data_validate_file(template_path.string().c_str(), nullptr, validate_error, sizeof(validate_error)))
+        << validate_error;
+
+    sdl3d_game_config config{};
+    char title[128]{};
+    char config_error[512]{};
+    ASSERT_TRUE(sdl3d_game_data_load_app_config_file(template_path.string().c_str(), &config, title, sizeof(title),
+                                                     config_error, sizeof(config_error)))
+        << config_error;
+    EXPECT_STREQ(config.title, "SDL3D FPS Template");
+    EXPECT_EQ(config.logical_width, SDL3D_GAME_DEFAULT_LOGICAL_WIDTH);
+    EXPECT_EQ(config.logical_height, SDL3D_GAME_DEFAULT_LOGICAL_HEIGHT);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(template_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    ASSERT_NE(runtime, nullptr);
+
+    EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), "scene.fps.play");
+    const char *units = nullptr;
+    float meters_per_unit = 0.0f;
+    ASSERT_TRUE(sdl3d_game_data_get_world_units(runtime, &units, &meters_per_unit));
+    EXPECT_STREQ(units, SDL3D_GAME_DATA_DEFAULT_WORLD_UNITS);
+    EXPECT_FLOAT_EQ(meters_per_unit, SDL3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
+
+    sdl3d_game_data_sector_level level{};
+    ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.fps.template_room", &level));
+    ASSERT_EQ(level.sector_count, 2);
+    ASSERT_NE(level.sector_names, nullptr);
+    EXPECT_STREQ(level.sector_names[0], "spawn_room");
+    EXPECT_STREQ(level.sector_names[1], "test_lane");
+    EXPECT_EQ(level.light_count, 2);
+    EXPECT_TRUE(sdl3d_game_data_sector_nav_path_available(
+        runtime, "nav.fps.template_room", sdl3d_vec3_make(4.0f, 1.0f, 5.0f), sdl3d_vec3_make(22.0f, 1.0f, 5.0f)));
+
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    sdl3d_registered_actor *pickup = sdl3d_game_data_find_actor(runtime, "entity.fps.health_pickup");
+    sdl3d_registered_actor *station = sdl3d_game_data_find_actor(runtime, "entity.fps.resource_station");
+    sdl3d_registered_actor *projectile = sdl3d_game_data_find_actor(runtime, "pool.fps.player_projectiles.0");
+    ASSERT_NE(player, nullptr);
+    ASSERT_NE(pickup, nullptr);
+    ASSERT_NE(station, nullptr);
+    ASSERT_NE(projectile, nullptr);
+    EXPECT_TRUE(player->active);
+    EXPECT_TRUE(pickup->active);
+    EXPECT_TRUE(station->active);
+    EXPECT_FALSE(projectile->active);
+
+    struct FpsTemplateUiCapture
+    {
+        bool saw_reticle = false;
+        bool saw_fps = false;
+        bool saw_resources = false;
+        bool saw_pause = false;
+    } ui_capture;
+    auto capture_fps_template_ui = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        auto *capture = static_cast<FpsTemplateUiCapture *>(userdata);
+        if (std::string(text->name) == "ui.fps.reticle")
+            capture->saw_reticle = true;
+        else if (std::string(text->name) == "ui.fps.fps_counter")
+            capture->saw_fps = true;
+        else if (std::string(text->name) == "ui.fps.resources")
+            capture->saw_resources = true;
+        else if (std::string(text->name) == "ui.fps.pause.title")
+            capture->saw_pause = true;
+        return true;
+    };
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_fps_template_ui, &ui_capture));
+    EXPECT_TRUE(ui_capture.saw_reticle);
+    EXPECT_TRUE(ui_capture.saw_fps);
+    EXPECT_TRUE(ui_capture.saw_resources);
+    EXPECT_TRUE(ui_capture.saw_pause);
+
+    const int fire_action = sdl3d_game_data_find_action(runtime, "action.fire");
+    ASSERT_GE(fire_action, 0);
+    sdl3d_input_manager *input = sdl3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    sdl3d_input_set_action_override(input, fire_action, 1.0f);
+    ASSERT_NE(sdl3d_input_update(input, 1), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_TRUE(projectile->active);
+    EXPECT_EQ(sdl3d_properties_get_int(player->props, "ammo", -1), 23);
+    const sdl3d_vec3 projectile_velocity =
+        sdl3d_properties_get_vec3(projectile->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(sdl3d_vec3_length(projectile_velocity), 22.0f, 0.001f);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, ResolvesActiveSceneSectorLevelInstances)

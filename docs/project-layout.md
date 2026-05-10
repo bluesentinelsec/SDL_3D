@@ -152,6 +152,26 @@ templates for reusable primitives such as FPS controls, render profile toggles,
 pause/HUD widgets, reticles, and sector interactions. Keep game-specific rules
 in the game project's fragments and Lua scripts.
 
+The repository includes a data-only FPS starter at `demos/templates/fps`. It
+demonstrates the expected split for a small sector/FPS game:
+
+- `fragments/input/fps_controls.json` for reusable movement, interaction, fire,
+  pause, and menu actions.
+- `fragments/world/fps_room.json` for a mock sector room plus sector navigation
+  graph.
+- `fragments/actors/fps_player.json` for a controller-equipped player and
+  data-authored projectile weapon.
+- `fragments/actors/combat_pickups_projectiles.json` for projectile, pickup,
+  and resource-station archetypes, instances, and pools.
+- `fragments/ui/fps_hud.json` for reticle, FPS counter, resource text, and
+  pause overlay text.
+- `fragments/editor/fps_templates.json` for project-agnostic editor palette
+  metadata.
+
+The template is intentionally mock-media only. A real game should copy the
+shape, rename ids, and replace geometry/colors/assets without introducing a
+custom C host.
+
 ## Dojos And Editor Metadata
 
 Mechanic dojos are small data-only projects or scenes used to tune reusable
